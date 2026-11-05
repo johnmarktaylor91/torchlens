@@ -228,7 +228,7 @@ def _make_layer_log_entry(
                     activation_transform,
                 )
     if predicate_spec is not None and self._options_save_args and not fields_dict["has_saved_args"]:
-        # Admit BEFORE the clones allocate (r8 R34, sol 2).
+        # Admit BEFORE the clones allocate.
         arg_reservations = _admit_saved_args_budget(self, fields_dict, t_args, t_kwargs)
         fields_dict["has_saved_args"] = True
         fields_dict["saved_args"] = [_recursive_safe_copy(arg) for arg in t_args]
@@ -236,7 +236,7 @@ def _make_layer_log_entry(
             key: _recursive_safe_copy(value) for key, value in t_kwargs.items()
         }
         _commit_saved_args_budget(self, fields_dict, arg_reservations)
-    # r29 F3b: seal this record's capture-time (slot -> producer) truth on the
+    # Seal this record's capture-time (slot -> producer) truth on the
     # Trace, keyed by raw label. The witness (``dropped_edge_tensor_args``) is
     # stamped at CAPTURE, so an edge dropped DOWNSTREAM of it -- anywhere in the
     # 20-step postprocess pipeline or later -- was invisible whenever the
@@ -273,7 +273,7 @@ def _make_layer_log_entry(
     )
     _settle_lookback_and_aten_values(self, predicate_ctx, save_this_activation, fields_dict, t)
     _record_nonfinite_if_requested(self, t, new_entry)
-    # Echo narrator slot (snoop D1): exactly once per committed op, after the
+    # Echo narrator slot: exactly once per committed op, after the
     # commit and the nonfinite recording, BEFORE the raise_on_nan settlement
     # so the minting op is the last narrated line when the tripwire trips.
     _emit_op_echo(self, fields_dict, t, predicate_ctx, fire_results)
@@ -406,7 +406,7 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
             # tripwire SILENTLY declined to check every fp8 activation. Widening keeps
             # the verdict identical (see fp8_widen_for_numeric_ops).
             #
-            # TWO-STAGE CHECK (snoop D4, shared-kernel consumer 4): stage 1 is
+            # TWO-STAGE CHECK: stage 1 is
             # a cheap fused screen -- one reduction, no full-size clone or
             # inverted mask temporary (the shipped form full-cloned per op;
             # measured 2.4x-35x dearer on the clean path). IEEE propagation
@@ -450,7 +450,7 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
     shape = tuple(tensor.shape)
     dtype = tensor.dtype
     parents = list(getattr(entry, "parents", []) or [])
-    # Reuse rung, tripwire arm (snoop D4): the tripwire HAS the tensor, so the
+    # Reuse rung, tripwire arm: the tripwire HAS the tensor, so the
     # crash line carries the full exact nonfinite census even in metadata
     # mode -- reuse of an already-paid-for scan, never a second hidden one.
     echo_session = self.__dict__.get("_echo_session")

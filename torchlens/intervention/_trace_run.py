@@ -383,7 +383,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
         # range) raises the typed precondition lane, not torch's raw ``RuntimeError``;
         # the failed call leaves global torch RNG untouched.
         validate_run_seed(seed)
-    # R06: the settled-outcome gate is the FIRST authority on run(). The
+    # The settled-outcome gate is the FIRST authority on run(). The
     # outcome sidecar lives in ``__dict__`` and survives cleanup()-husking,
     # while the ``trace._runnable`` read below trips the husk
     # ``TraceCleanedUpError`` (and the analysis-load arm its capability
@@ -412,7 +412,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     # refuses typed. Narrow by design: unmeasured/legacy episode
     # artifacts keep their shipped replay behavior.
     refuse_broken_join_claim(trace)
-    # Coupled-episode replay gate (lane F42), beside the join gate: a
+    # Coupled-episode replay gate, beside the join gate: a
     # COUPLED product's ledger attests one PERTURBED execution, and no
     # run provider re-arms the capture-time intervention, so no engine
     # can derive a fresh ledger -- the verdict's refusal arm. Uncoupled
@@ -441,10 +441,10 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
             remedy="call trace.run_transaction(inputs=...) on the loaded trace",
         )
     if use_unified_provider:
-        # C03 honesty gate, narrowed to the loaded providers: a loaded artifact
+        # Honesty gate, narrowed to the loaded providers: a loaded artifact
         # has no model to install the staged intervention spec on, and silently
         # returning an un-intervened run was a measured silent wrong answer. The
-        # live provider (fast or not) applies the spec. D1 carve-out: sticky hooks
+        # live provider (fast or not) applies the spec. Carve-out: sticky hooks
         # the selection-do() plan attached are engine-owned residue of an edit
         # already applied to the saved values; their inertness on a new-input run
         # is the PendingValueEditsWarning disclosure below, never a refusal.

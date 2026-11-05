@@ -247,7 +247,7 @@ def _torchvision_member(constructor_name: str) -> Callable[[], tuple[Any, Any]]:
     """Return a guarded random-init torchvision builder (geometry strata).
 
     Random init serves the STRUCTURAL strata (geometry, budget, coverage);
-    the battery's real-weights legs are D03's, per the memo corpus rules.
+    the battery's real-weights legs are separate.
     """
 
     def _build() -> tuple[Any, Any]:
@@ -283,7 +283,7 @@ def toy_builders() -> dict[str, Callable[[], tuple[Any, Any]]]:
 #: The corpus rows. Real members are torchvision random-init builders for
 #: the structural strata; the HF real-checkpoint legs (gpt2, vit-base, t5,
 #: clip, convit, the 2,802-op generation episode) are named in the gallery
-#: spec and executed by D03 with pinned revisions.
+#: spec and executed by with pinned revisions.
 CORPUS: tuple[CorpusMember, ...] = (
     CorpusMember("two_node_minimal", _two_node_minimal, "toy", ("minimal",)),
     CorpusMember("residual_diamond", _residual_diamond, "toy", ("structure",)),

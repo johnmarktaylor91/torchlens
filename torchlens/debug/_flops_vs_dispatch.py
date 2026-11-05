@@ -1,4 +1,4 @@
-"""PyTorch dispatch-formula FLOP cross-check (torchnative 6.4 / W2.6).
+"""PyTorch dispatch-formula FLOP cross-check.
 
 Two independent formula registries disagreeing loudly is the FEATURE:
 ``torch.utils.flop_counter.FlopCounterMode`` counts by dispatched overload,

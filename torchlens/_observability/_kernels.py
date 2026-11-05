@@ -1,4 +1,4 @@
-"""Spine and signed-log2 Histogram StreamingStat kernels (explorer D8/D9).
+"""Spine and signed-log2 Histogram StreamingStat kernels (explorer).
 
 These are the two reduction kernels every per-step history observation is
 built from:
@@ -8,8 +8,8 @@ built from:
   absmax, sum, sum-of-squares, sum-of-abs, plus stable-merge moments
   (Chan's parallel mean/M2). Integer counts merge EXACTLY; floating fields
   merge with the documented stable pairwise algorithm and are never called
-  "exact" (D8's language rule).
-- :class:`Histogram` -- ONE immutable, universal, SIGNED log2 grid (D9): no
+  "exact".
+- :class:`Histogram` -- ONE immutable, universal, SIGNED log2 grid: no
   collapsing store, no rebinning, ever. Gate-ratified build values
   ``bpo=4``, window ``[2^-48, 2^16]`` per sign (the numeric gate may retune
   them; a retune is a value change). Specials (exact zero, per-side
@@ -20,7 +20,7 @@ built from:
 
 Both kernels implement the ``torchlens.stats`` ``StreamingStat`` protocol
 (``update`` / ``result``), so ``tl.stats.aggregate`` gets dataset-mode histograms
-free (D18). Neither kernel consumes RNG (model or global), and half/bf16
+free. Neither kernel consumes RNG (model or global), and half/bf16
 inputs reduce in float32-or-wider with the reduction dtype recorded.
 
 Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
@@ -39,7 +39,7 @@ from ._errors import StatKernelError
 __tl_layer__ = "L5"
 
 #: Widest signed-integer count representable in the artifact's int32
-#: per-observation encoding (D9: int32 per observation only where the
+#: per-observation encoding (int32 per observation only where the
 #: population bound proves fit; int64 in merged arrays).
 INT32_COUNT_MAX = 2**31 - 1
 
@@ -58,7 +58,7 @@ _SPECIAL_KEYS = (
 def _refuse_dtype(kernel: str, dtype: torch.dtype, *, code: str) -> StatKernelError:
     """Build the typed refusal for an unsupported input dtype.
 
-    ``code`` is passed AT each raise site so the S-17 census sees the code
+    ``code`` is passed AT each raise site so the census sees the code
     where the raise happens, not buried in this factory.
     """
 
@@ -104,7 +104,7 @@ def _as_reduction_tensor(kernel: str, value: Any) -> tuple[torch.Tensor, str]:
 
 @dataclass(frozen=True)
 class HistogramDescriptor:
-    """The immutable signed-log2 grid descriptor (D9).
+    """The immutable signed-log2 grid descriptor.
 
     The manifest records the full descriptor
     ``(base, bins_per_octave, lo_exp, hi_exp, signed, bin_encoding)`` so a
@@ -133,7 +133,7 @@ class HistogramDescriptor:
         if self.base != 2:
             raise StatKernelError(
                 f"HistogramDescriptor base={self.base} is not supported; the "
-                "universal grid is log2 (D9).",
+                "universal grid is log2.",
                 code="sketch_descriptor_invalid",
                 remedy="Use base=2.",
             )
@@ -173,7 +173,7 @@ class HistogramDescriptor:
         return tuple(2.0 ** (self.lo_exp + i / bpo) for i in range(self.bins_per_side + 1))
 
 
-#: The default grid (D9), gate-ratified build values: bpo=4, window
+#: The default grid, gate-ratified build values: bpo=4, window
 #: [2^-48, 2^16] per sign. The numeric gate may retune them; because the full
 #: descriptor travels with every result, a retune is a value change.
 DEFAULT_DESCRIPTOR = HistogramDescriptor()
@@ -185,7 +185,7 @@ class RunningStatsResult:
 
     Integer counts are exact. Floating fields carry the recorded reduction
     dtype and merge with a documented stable pairwise algorithm; they are
-    never claimed exact across merges (D8).
+    never claimed exact across merges.
 
     Examples
     --------
@@ -228,7 +228,7 @@ class RunningStatsResult:
 
 
 class RunningStats:
-    """Always-on scalar spine accumulator (StreamingStat; D8).
+    """Always-on scalar spine accumulator (StreamingStat).
 
     ``num, min, max, sum, sum_squares`` map verbatim onto five of
     TensorBoard ``add_histogram_raw``'s nine arguments.
@@ -266,7 +266,7 @@ class RunningStats:
     def update(self, value: Any) -> None:
         """Fold one tensor-like batch into the spine.
 
-        Empty inputs are a specified no-op outcome (D14: reducers are total).
+        Empty inputs are a specified no-op outcome (reducers are total).
         """
 
         tensor, dtype_tag = _as_reduction_tensor("RunningStats", value)
@@ -335,7 +335,7 @@ class RunningStats:
 
         Integer counts merge exactly; floating fields merge with the stable
         pairwise algorithm (Chan for moments, plain compensated-order adds for
-        sums) and are documented approximate, never exact (D8).
+        sums) and are documented approximate, never exact.
         """
 
         if not isinstance(other, RunningStats):
@@ -448,7 +448,7 @@ class HistogramResult:
 
 
 class Histogram:
-    """Fixed signed-log2 grid histogram accumulator (StreamingStat; D9).
+    """Fixed signed-log2 grid histogram accumulator (StreamingStat).
 
     Examples
     --------
@@ -516,15 +516,15 @@ class Histogram:
         """Fold another histogram into this one; integer adds, EXACT.
 
         Unequal descriptors refuse typed: comparability IS the product and
-        there is no rebinning path (D9).
+        there is no rebinning path.
         """
 
         if not isinstance(other, Histogram) or other.descriptor != self.descriptor:
             other_desc = getattr(other, "descriptor", None)
             raise StatKernelError(
                 "Histogram.merge requires an identical grid descriptor; got "
-                f"{other_desc!r} vs {self.descriptor!r}. Rebinning is banned "
-                "(D9): a merged figure must mean the same thing as its parts.",
+                f"{other_desc!r} vs {self.descriptor!r}. Rebinning is banned: "
+                "a merged figure must mean the same thing as its parts.",
                 code="sketch_descriptor_mismatch",
                 mine=repr(self.descriptor),
                 theirs=repr(other_desc),
@@ -549,7 +549,7 @@ class Histogram:
         )
 
 
-# -- Device-side staged reduction vectors (D16) -------------------------------
+# -- Device-side staged reduction vectors -------------------------------
 #
 # The collector never calls ``.item()`` per site: each site's reduction is a
 # fixed-width device vector written into a preallocated staging buffer, and
@@ -579,7 +579,7 @@ def spine_vector(value: torch.Tensor) -> torch.Tensor:
     """Reduce one tensor to the 15-slot spine vector ON ITS DEVICE.
 
     No host sync happens here: every slot is a device scalar gathered into
-    one float64 vector. Batch M2 uses the stable two-pass centered form,
+    one float64 vector. Batch uses the stable two-pass centered form,
     never the cancellation-prone ``E[x^2] - E[x]^2``.
     """
 
@@ -630,9 +630,9 @@ def spine_vector_fused(value: torch.Tensor) -> torch.Tensor:
     float64 via ``sum(dtype=)`` without materializing the converted tensor.
     Integer counts and finite extrema are EXACTLY equal to the naive
     kernel's; floating sums/moments agree to reduction-order tolerance
-    (the artifact already documents floats as approximate, D8).
+    (the artifact already documents floats as approximate).
 
-    Adoption is gated by the D25 harness: the collector keeps the naive
+    Adoption is gated by the harness: the collector keeps the naive
     kernel as canonical unless this variant measures OUTSIDE the box's
     noise band (tests pin parity either way). No host sync happens here.
     """

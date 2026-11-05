@@ -223,9 +223,9 @@ def _accelerate_dispatch_row(model: nn.Module) -> DoctorCheck:
     # ("cpu"/"disk" backing stores) and "meta". ONE execution device (or none:
     # a pure cpu/disk map executes on CPU) is the supported envelope: hook
     # infrastructure runs under pause_logging and offloaded weights re-stamp
-    # (lane F37, verified CPU-side). Two or more real devices mean cross-device
-    # activation moves the capture path has not yet verified -- the C-DEPLOY
-    # GPU campaign is the acceptance authority there.
+    # (verified CPU-side). Two or more real devices mean cross-device
+    # activation moves the capture path has not yet verified -- a GPU
+    # campaign is the acceptance authority there.
     real_devices: set[str] = set()
     if detected and device_map is not None:
         real_devices = {
@@ -520,7 +520,7 @@ def _serving_engine_row(model: nn.Module) -> DoctorCheck:
 
 
 def _peft_row(model: nn.Module) -> DoctorCheck:
-    """Build the PEFT/LoRA adapter row (lane F37).
+    """Build the PEFT/LoRA adapter row.
 
     Detection is structural: a ``peft``-namespaced wrapper class or any
     ``peft``-namespaced submodule (LoRA/IA3/prefix layers), never an import
@@ -1345,8 +1345,8 @@ def _mechanical_belt_row() -> DoctorCheck:
     Returns
     -------
     DoctorCheck
-        Disclosure row for belt probe failures and unprobed candidates
-        (grind-r6 b3 R02, sol MED). A candidate whose mode visibility could
+        Disclosure row for belt probe failures and unprobed candidates.
+        A candidate whose mode visibility could
         not be measured is neither belt-patched nor proven protocol-visible,
         so a stale pre-wrap reference to it can drop ops with zero signal
         while the capture still reports ``capture_verified=True``.
@@ -1375,7 +1375,7 @@ def _mechanical_belt_row() -> DoctorCheck:
         )
     # Unprobed candidates are a STANDING recipe-coverage limitation (hundreds
     # of in-place variants have no probe recipe on every healthy build):
-    # disclosed as a count, never a warning (r-b4 R26-4 false-alarm rule).
+    # disclosed as a count, never a warning (a false-alarm rule).
     # A probe FAILURE is unexpected breakage on this build and drives the
     # warning severity.
     unprobed_detail = f"unprobed_candidates={report_data.unprobed_candidate_count}"

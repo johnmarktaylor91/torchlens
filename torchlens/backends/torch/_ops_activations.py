@@ -278,11 +278,11 @@ def _log_output_tensor_info(
         # still detected while a non-mutating identity return (``x.cpu()`` / ``x.contiguous()``,
         # which has no mutation-signature name) is not, and does not crash. Baselines are
         # session-scoped: a snapshot recorded by an EARLIER capture never serves as this
-        # session's baseline (the tensor may have been mutated between captures -- W3 F7).
+        # session's baseline (the tensor may have been mutated between captures).
         baseline = _label_version_baseline(t)
         # TorchLens bookkeeping ``_version`` read; on an in-place op ``t`` IS
         # the user's receiver, so an unmarked read on registered state would
-        # record a phantom read-kind (r65 unread-bit contract).
+        # record a phantom read-kind (the unread-bit contract).
         with internal_scalar_read():
             current_version = tensor_version_or_none(t)
         if same_object_mutation is not None:
@@ -295,7 +295,7 @@ def _log_output_tensor_info(
                 _is_inplace_augmented_assignment_dunder(name)
                 or name in _SETTER_MUTATION_FUNC_NAMES
                 or (name.endswith("_") and not name.startswith("__"))
-                # Mutating property setters (``t.real = rhs``, round-31 M6)
+                # Mutating property setters (``t.real = rhs``)
                 # keep the property's plain name; their descriptor ``__set__``
                 # callable is the mutation signature.
                 or str(getattr(fields_dict.get("func"), "__name__", "")) == "__set__"
@@ -310,19 +310,19 @@ def _log_output_tensor_info(
         # TARGET is an invisible ``.data`` / foreign alias (``y.data.add_(5.0)``, unlabelled) OR a
         # LABELLED VIEW of one (``y.data.view(-1)[0] = 9``, whose ``__setitem__`` targets a labelled
         # view yet is still input-disconnected and pruned). Keying the flag on ``prior_label is None``
-        # missed the labelled-view family (r14-H2), so record EVERY in-place op as a candidate and let
+        # would miss the labelled-view family, so record EVERY in-place op as a candidate and let
         # orphan removal (``_record_pruned_alias_mutation``) keep only the ones ACTUALLY pruned ->
         # UNVERIFIABLE, instead of a false VERIFIED with the mutation gone. An in-place op that stays
         # graph-connected (``y.add_(2); return y``) is never in the pruned set, so it is not flagged
         # and is replayed normally.
         if fields_dict["is_inplace"]:
             record_alias_mutation_candidate(self, _label_raw)
-    # Round-31 M5: same-object in-place returns and pass-through container
+    # Same-object in-place returns and pass-through container
     # members are logged against a safe copy whose ``grad_fn`` is TorchLens's
     # own ``CloneBackward`` node. The wrapper stamped the USER op's live
     # autograd node on the copy; that snapshot is the operation's metadata.
     user_grad_fn = pop_user_grad_fn(t)
-    # TorchLens bookkeeping ``grad_fn`` read (same r65 receiver aliasing note
+    # TorchLens bookkeeping ``grad_fn`` read (same receiver aliasing note
     # as the ``_version`` read above).
     with internal_scalar_read():
         op_grad_fn = recorded_op_grad_fn(user_grad_fn, t)
@@ -457,7 +457,7 @@ def _save_call_args_fields(
     """Snapshot the call's arguments into ``fields_dict`` under the save budget."""
 
     if trace._options_save_args:
-        # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
+        # Admit BEFORE the clones allocate: the snapshot
         # used to clone every tensor argument first and charge after.
         from ._ops_retention import _admit_saved_args_budget, _commit_saved_args_budget
         from ._ops_saved_arg_copies import _copy_saved_call_args, _saved_parent_values
@@ -562,7 +562,7 @@ def _save_activation_fields(
         elif dedup_cached_out is not None:
             raw_out = dedup_cached_out
         else:
-            # Single-transport retention (r8 b5 R35): ``"copy"`` mode
+            # Single-transport retention: ``"copy"`` mode
             # materializes directly on the retention device (one copy); the
             # other save modes ignore the target and keep the follow-up move.
             raw_out = safe_copy(

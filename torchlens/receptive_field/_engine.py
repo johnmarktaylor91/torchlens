@@ -111,7 +111,7 @@ class _SchemaOperandSlots:
 # in the bounded FIFO companion below so an unrecognized func name (loaded
 # traces, custom ops, non-aten labels) neither grows this dict without bound
 # NOR re-enters the C++ operator registry on every edge of every solve
-# (~12x slower than a cached read, measured grind-p3).
+# (~12x slower than a cached read, as measured).
 _SCHEMA_OPERAND_SLOTS_CACHE: dict[str, _SchemaOperandSlots] = {}
 _SCHEMA_OPERAND_MISS_NAMES: dict[str, None] = {}
 _SCHEMA_OPERAND_MISS_NAMES_MAX_ENTRIES = 1024
@@ -1147,11 +1147,11 @@ def _apply_axis_map(
                 # ``parent = step * out + start``; composing it here is what
                 # keeps the descriptor's window offsets in the CURRENT frame
                 # (the historical rank-changing path dropped the slice offset
-                # under an exact claim; disputed-r2 b6/R20-2).
+                # under an exact claim).
                 step, start = int(edge[0]), int(edge[1])
                 # A strided slice keeps only every ``step``-th parent index:
                 # the true support has holes, so the axis must disclose
-                # ``sparse_possible`` (round-3 b6-fable R20-1).
+                # ``sparse_possible``.
                 local = _Mapped(
                     _Affine(Fraction(step), Fraction(start)),
                     _Affine(Fraction(step), Fraction(start)),

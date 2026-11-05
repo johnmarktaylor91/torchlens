@@ -225,7 +225,7 @@ def _reduced_rows(  # noqa: PLR0913 - one reduction record's fields, never posit
     max_rows: int,
     rank_by: str | None,
 ) -> tuple[list[dict[str, Any]], int]:
-    """Per-index rows along ONE retained dimension (memo 3.6's one axis).
+    """Per-index rows along ONE retained dimension.
 
     Full extent when it fits ``max_rows``; otherwise the TOP ``max_rows`` by
     the required ranking metric, so the interesting rows survive the cap.

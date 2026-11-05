@@ -15,7 +15,7 @@ The skeleton's order (it matters for correctness):
    or interrupted (``BaseException``), each ending in settlement and handing
    the trace to the FINALIZE stage through ``ForwardResult``.
 7. The ``finally``: the ``_drop_semantic_output_transients`` backstop every
-   arm passes through (B1-02; the completed arm drops earlier, right after the
+   arm passes through (the completed arm drops earlier, right after the
    decode consumer, in ``finalize.arms.finalize_completed``), the teardown
    ladder, the RNG restore and the slot release.
 """
@@ -258,8 +258,8 @@ def _claim_slot_and_seed(self: "Trace", run: _RunState, reservation_resume: obje
     run those mutations first and orphan the admitted winner's session. R54
     moved the claim ahead of the RNG snapshot, reseed and input setup too, so
     a refused loser never reseeds the process-global engines mid-window. A
-    same-thread re-entry passes only on the recorder's continuation token
-    (R55); the reservation is released in the outermost ``finally``.
+    same-thread re-entry passes only on the recorder's continuation token;
+    the reservation is released in the outermost ``finally``.
     """
 
     run.capture_slot = _state.capture_reservation(resume=reservation_resume)
@@ -273,7 +273,7 @@ def _claim_slot_and_seed(self: "Trace", run: _RunState, reservation_resume: obje
                     self, run.model, run.input_args, run.input_kwargs
                 )
             )
-            # B3R4-R12-1: a non-total namedtuple ``_fields`` schema on any input
+            # a non-total namedtuple ``_fields`` schema on any input
             # site refuses typed HERE, for every capture: the tensor-extraction
             # BFS cannot see positional slots of tuple subclasses, so such an
             # input used to lose its tensor leaves silently while settling COMPLETE.
@@ -427,18 +427,18 @@ def _snapshot_runnable_state(self: "Trace", run: _RunState) -> None:
         )
 
         model = run.model
-        # r37 corr2-4: the live bound-state alias topology (object identity,
+        # The live bound-state alias topology (object identity,
         # storage overlap) must be captured BEFORE ``snapshot_capture_state``'s
         # clones erase it; the runnable producer refuses unsupported topologies
         # at save and reproduces identity groups from this record.
         self._runnable.state_alias_topology = snapshot_state_alias_topology(model)
-        # r63 C1: per-slot metadata signatures are stamped from the LIVE tensors
+        # Per-slot metadata signatures are stamped from the LIVE tensors
         # PRE-clone: the clone compacts ``storage_offset`` and materializes
         # conj/neg, so a post-clone signature is blind to two of the four
         # transport-lossy physical dims.
         self._runnable.capture_state_signatures = snapshot_capture_state_signatures(model)
         self._runnable.capture_state = snapshot_capture_state(model)
-        # r77 F2: the persistent-buffer NAME universe survives non-tensor state
+        # The persistent-buffer NAME universe survives non-tensor state
         # (``get_extra_state()`` / packed entries), so a dead-model
         # include_weights=False save declares the SAME slot universe as the
         # live lane instead of silently dropping never-forward-used buffers.
@@ -465,7 +465,7 @@ def _log_inputs(self: "Trace", run: _RunState) -> None:
     _record_runnable_input_structure(self, input_args, input_kwargs)
     _record_runnable_module_training_modes(self, run.model)
     if bool(getattr(self, "is_replayable", False)):
-        # r35 decision E: capture the ambient backend execution context the
+        # decision E: capture the ambient backend execution context the
         # forward is about to run under (defaults, matmul precision,
         # determinism, TF32/cuDNN flags, SDP toggles) so the sparse runnable
         # descriptor can restore it explicitly at replay.
@@ -492,7 +492,7 @@ def _run_exhaustive_forward(self: "Trace", run: _RunState) -> Any:
 
     The host-RNG bracket lets a runnable descriptor record honestly whether
     Python ``random`` / NumPy control flow ran (TorchLens itself draws no host
-    RNG here). r37 hon1_2: the channel monitor additionally observes
+    RNG here). The channel monitor additionally observes
     non-global channels (RNG instances, SystemRandom, os entropy, clocks, the
     default_rng factory); any touch is permanently unreplayable, and monitor
     uncertainty downgrades completeness, never reads as no-consumption. The
@@ -642,7 +642,7 @@ def _teardown_ladder(self: "Trace", run: _RunState) -> None:
 
     Path 7: a teardown failure demotes the already-settled COMPLETE/HALTED
     outcome to FAILED/TEARDOWN in both homes and the teardown exception
-    propagates. R63 (B8-23 one frame out): an ordinary teardown Exception
+    propagates. An ordinary teardown Exception
     must not replace an unwinding KeyboardInterrupt/SystemExit; the demotion
     stays, the failure is attached, and the ORIGINAL interrupt re-raises.
     """
@@ -686,7 +686,7 @@ def _teardown_ladder(self: "Trace", run: _RunState) -> None:
 def _finish_run(self: "Trace", run: _RunState) -> None:
     """The outermost ``finally``: transient drop, teardown, RNG restore, slot release."""
 
-    # B1-02: the backstop every settlement path passes through (the completed
+    # the backstop every settlement path passes through (the completed
     # arm already dropped in ``finalize_completed``; the drop is idempotent),
     # placed before the teardown ladder so a teardown double-fault cannot skip it.
     _drop_semantic_output_transients(self)
@@ -699,7 +699,7 @@ def _finish_run(self: "Trace", run: _RunState) -> None:
         run.exc_info = (None, None, None)
         # Outermost: a teardown double-fault must not leak the capture
         # reservation, or every later admission refuses forever. The RNG
-        # restore (R57) runs first but can never displace the release.
+        # restore runs first but can never displace the release.
         try:
             run.restore_rng()
         finally:
@@ -749,7 +749,7 @@ def run_and_log_inputs_through_model(
         run.exc_info = sys.exc_info()
         _failed_arm(self, run, e)
         # Unreachable (the arm is ``NoReturn``: ``finalize_failed`` re-raises
-        # ``e`` itself). Kept because the blind-except ratchet (BLE001) reads
+        # ``e`` itself). Kept because the blind-except ratchet reads
         # a broad handler as legitimate only when the handler re-raises; the
         # explicit raise is what keeps these two handlers out of its count.
         raise e

@@ -257,7 +257,7 @@ def _emit_predicate_operation_events(
                         tensor=out,
                         predicate_matched=False,
                     )
-                # Echo narrator slot (snoop D1): exactly once per committed event, after the
+                # Echo narrator slot: exactly once per committed event, after the
                 # append, outside the predicate-failure pipeline (a narrator failure
                 # warns-and-disables inside the session; only the typed stats-budget refusal
                 # propagates). Duck-typed session read: the hot path imports nothing.
@@ -344,7 +344,7 @@ def _build_graph_relationship_fields(
     # cummax, ...) carry the SAME contract per element as the single-tensor
     # spelling; handling only ``isinstance(out_kwarg, torch.Tensor)`` dropped
     # every tuple-destination edge AND let the pre-allocated producer op get
-    # orphan-pruned — an executed op vanished silently (W3 audit F3).
+    # orphan-pruned — an executed op vanished silently.
     out_kwarg = kwargs.get("out")
     if isinstance(out_kwarg, torch.Tensor):
         out_destinations: tuple[torch.Tensor, ...] = (out_kwarg,)
@@ -417,7 +417,7 @@ def _extract_arg_tensors_and_params(
     trusted only when they cover every shallow tensor in the live call
     (``dynamic_spec_covers_call``); otherwise the call re-crawls and the cache
     union-merges, so a scalar-RHS first observation can never freeze away the
-    tensor-RHS parent of a later call (round-22 F3). Names whose crawled tensors
+    tensor-RHS parent of a later call. Names whose crawled tensors
     exceed ArgSpec's representable shapes are marked ``DYNAMIC_SPEC_UNCACHEABLE``
     and re-crawl every call.
 
@@ -470,9 +470,9 @@ def _build_param_fields(
 ) -> dict[str, int]:
     """Populate parameter-involvement fields. Returns parent_param_ops dict.
 
-    r79 session-leak defense (r78 wrong-bind closure): a parameter resolves by
+    Session-leak defense: a parameter resolves by
     address ONLY when the address maps in THIS session AND the recorded log's
-    live object IS the value (exact identity, never ``==``). Pre-fix, a foreign
+    live object IS the value (exact identity, never ``==``). Without the check, a foreign
     parameter carrying a stale leaked stamp whose address collided with one of
     THIS model's own parameters resolved into this trace's ``param_logs`` with
     no object check, so the save bound the call's tensor slot to the model's own
@@ -493,7 +493,7 @@ def _build_param_fields(
         if addr is not None and addr in self._param_logs:
             param_log = self._param_logs[addr]
             if getattr(param_log, "_param_ref", None) is not param:
-                # Offload rebind rung (lane F37): accelerate offload hooks
+                # Offload rebind rung: accelerate offload hooks
                 # replace the prep-stamped meta parameter with a fresh
                 # real-valued object each forward; the offload shim registers
                 # exactly that materialization in the session-scoped

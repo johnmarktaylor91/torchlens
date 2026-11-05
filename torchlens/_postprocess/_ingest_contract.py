@@ -62,7 +62,7 @@ class IngestInputs:
       (``input_tensor_addresses`` consumed by input-role assignment), not
       merely a mutation-payload target.
     * ``buffer_initial_values`` — declared buffer state universe.
-    * ``op_equivalence_classes`` — the shared-set identity source (M7 keys on
+    * ``op_equivalence_classes`` — the shared-set identity source (the shared-set tables key on
       object identity, so the SAME mapping object must flow through).
     * ``source_model_ref`` — weakref to the source model.
     * ``param_logs`` — the params registry.

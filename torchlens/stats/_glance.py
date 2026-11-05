@@ -1,4 +1,4 @@
-"""glance: the stats line as a function on arbitrary tensors (F10; FORK-C).
+"""glance: the stats line as a function on arbitrary tensors.
 
 The panel's answer to "why not monkey-patch": TorchLens ships the FUNCTION,
 never the mutation (``lt.monkey_patch``-style global ``Tensor.__repr__``
@@ -6,7 +6,7 @@ replacement is a permanent skip -- out of identity, hostile in a library,
 fights ``torch.compile``). ``glance(t)`` renders the same byte-checked core
 grammar the record surfaces use, over any tensor, captured or not.
 
-DOCUMENTED STRICT-SUBSET caveat (memo section 13, FORK-C): a glanced line
+DOCUMENTED STRICT-SUBSET caveat: a glanced line
 has NO envelope (no trace/address/pass provenance), NO deviation marks,
 NO graph-proven semantic role, and NO trace-declared sampling budget; the
 sample seed cannot derive from record identity, so sampled families seed
@@ -14,7 +14,7 @@ from the tensor's geometry -- deterministic per shape/dtype, NOT per
 record identity across processes.
 
 Submodule spelling (``torchlens.stats.glance``): the root-name budget is
-frozen (C01 surface law); hoisting to ``tl.glance`` is a naming-session
+frozen; hoisting to ``tl.glance`` is a naming-session
 decision through the sanctioned surface generator, not a lane's.
 Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -36,12 +36,12 @@ def glance(
     ----------
     tensor:
         Tensor to summarize. Never mutated; autograd/RNG state untouched;
-        the kernel is allocation-free and single-sync per the C02 contract.
+        the kernel is allocation-free and single-sync per the contract.
     style:
         ``"ascii"`` (canonical) or ``"unicode"`` -- the two byte-checked
         renderings of identical content (``ascii == degrade(unicode)``).
     max_width:
-        Optional width bound; degradation follows the D14 retention order
+        Optional width bound; degradation follows the retention order
         (bytes, then ``n=``, then the sparkline -- never
         shape/dtype/extrema/health).
 

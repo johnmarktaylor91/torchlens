@@ -1,4 +1,4 @@
-"""Label-membership group tables with cached immutable views (M7).
+"""Label-membership group tables with cached immutable views.
 
 One group row per distinct membership group (equivalence class, recurrence
 group). Every member op's cell holds THE one shared :class:`GroupRef` for its
@@ -64,7 +64,7 @@ class MembershipGroups:
         """Rebind one group's membership (the removal-scrub path).
 
         Every holder of the group's :class:`GroupRef` observes the new
-        membership on its next read — the LIVE semantics of the M7 views.
+        membership on its next read — the LIVE semantics of the views.
         """
 
         self._views[group_id] = self.view_type(members)

@@ -1,6 +1,6 @@
-"""Backward three-state gating and the named counterfactual door (F09).
+"""Backward three-state gating and the named counterfactual door.
 
-Costreport D14: the executed-backward answer is keyed on grad state AND
+The executed-backward answer is keyed on grad state AND
 observation -- the historical number was byte-identical under five
 configurations where the true executed answer is 0 in four. The three
 states:
@@ -26,15 +26,14 @@ states:
   implicit pass, an artifact saved before the count was kept) or a pass that
   raised before finishing leaves the executed answer UNKNOWN.
 
-D15/D23 plumbing (derived live-only; F09 holds no adjudicated persisted
-fields): ``grad_enabled_at_capture``, per-op ``needs_param_grad`` /
-``needs_input_grad``, and the recompute observation all DERIVE from facts
+Supporting facts (derived live-only, not persisted): ``grad_enabled_at_capture``, per-op
+``needs_param_grad`` / ``needs_input_grad``, and the recompute observation all DERIVE from facts
 the capture already persists (grad_fn class names, per-op trainable/frozen
-param counts, the L9 checkpoint witness). The MFU/HFU recompute
+param counts, the checkpoint witness). The MFU/HFU recompute
 classification stays ``unknown`` unless checkpoint context was observed.
 
 Every quantity declares its execution precondition; a counterfactual
-never prints in an actual-cost slot (memo 3.8).
+never prints in an actual-cost slot.
 """
 
 from __future__ import annotations
@@ -49,18 +48,18 @@ from ._backward_attribution import node_resolver_missing, pass_failed
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
-#: Closed state vocabulary (D14).
+#: Closed state vocabulary.
 BACKWARD_STATES: tuple[str, ...] = (
     "grad_disabled",
     "grad_enabled_unobserved",
     "backward_observed",
 )
 
-#: The multiplier table the named door cites (D14): backward of a
+#: The multiplier table the named door cites: backward of a
 #: MAC-family op computes two GEMM-shaped products (dX = W^T dY and
 #: dW = dY X^T), so the standard training estimate is 2.0x forward for
 #: MAC-family work. Ops outside the table are EXCLUDED AND NAMED -- a 1.0
-#: default is not an estimate of anything (D14).
+#: default is not an estimate of anything.
 BACKWARD_MULTIPLIER_TABLE: dict[str, float] = {"mac_family": 2.0}
 
 
@@ -88,7 +87,7 @@ def _has_grad_fn(op: Any) -> bool:
 
 
 def op_needs_param_grad(op: Any) -> bool | None:
-    """Whether this op's own parameters require grad (derived, D15).
+    """Whether this op's own parameters require grad (derived).
 
     ``None`` when the op owns no parameters (the question does not apply).
     """
@@ -103,7 +102,7 @@ def op_needs_param_grad(op: Any) -> bool | None:
 
 
 def op_needs_input_grad(op: Any) -> bool | None:
-    """Whether grad flowed into this op at capture (derived, D15).
+    """Whether grad flowed into this op at capture (derived).
 
     Reads the recorded autograd evidence: an op with a recorded
     ``grad_fn`` participated in the graph. ``None`` when the capture
@@ -117,9 +116,9 @@ def op_needs_input_grad(op: Any) -> bool | None:
 
 
 def recompute_observation(trace: Any) -> str:
-    """The D23 checkpoint-recompute observation: never guessed.
+    """The checkpoint-recompute observation: never guessed.
 
-    ``"observed"`` when the L9 checkpoint witness recorded checkpoint
+    ``"observed"`` when the checkpoint witness recorded checkpoint
     context during capture (a minted checkpoint invocation, or a reentrant
     checkpoint node in the walked graph); ``"none_observed"`` when the
     witness exists and recorded nothing; ``"unknown"`` when no witness is
@@ -158,7 +157,7 @@ _STATUS_LINE_NAME_LIMIT = 5
 
 @dataclass(frozen=True)
 class BackwardStatus:
-    """The always-visible backward STATUS facts (D14).
+    """The always-visible backward STATUS facts.
 
     ``executed_flops`` is the ACTUAL executed backward compute: ``0``
     (exact) in the ``grad_disabled`` state; ``None`` (unknown) in the
@@ -444,7 +443,7 @@ def backward_status(trace: Trace) -> BackwardStatus:
 
 @dataclass(frozen=True)
 class BackwardEstimate:
-    """The named-door training-backward counterfactual (D14): HYPOTHETICAL.
+    """The named-door training-backward counterfactual: HYPOTHETICAL.
 
     ``hypothetical_flops`` multiplies MAC-family forward work by the cited
     table; ops outside the table are EXCLUDED AND NAMED in
@@ -471,7 +470,7 @@ class BackwardEstimate:
     is_grad_disabled_at_capture: bool
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): the label leads, exclusions count.
+        """Bounded identity card: the label leads, exclusions count.
 
         ``excluded_ops`` scales with the model, so the card counts it and
         points at ``.disclosure`` -- the HYPOTHETICAL label is never dropped.
@@ -514,7 +513,7 @@ class BackwardEstimate:
 
 
 def backward_estimate(trace: Trace) -> BackwardEstimate:
-    """Request the training-backward counterfactual (the named door, D14).
+    """Request the training-backward counterfactual (the named door).
 
     Requestable in every grad state; the result is ALWAYS labeled
     hypothetical and never enters an actual-cost slot.

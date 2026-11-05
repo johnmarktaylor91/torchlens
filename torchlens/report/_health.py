@@ -1,27 +1,26 @@
-"""Serialized HealthFacts + the three-state nonfinite verdict (C02; sumfam 8).
+"""Serialized HealthFacts + the three-state nonfinite verdict.
 
-D9: capture-basis per-op verdicts normalize into an immutable,
+Capture-basis per-op verdicts normalize into an immutable,
 serializable record (basis, pass-qualified identities, coverage counts,
 capture revision) persisted at ``trace.annotations["health_facts"]`` --
 two labs independently measured the DROP-on-save policy that made a
 payload-stripped all-NaN artifact answer ``()`` to ``nonfinite_ops``.
 
-D5: every health claim renders one of THREE states -- ``found`` /
+Every health claim renders one of THREE states -- ``found`` /
 ``checked_and_clean`` / ``not_checked``; silence is not a state, and
 ``nonfinite_verdict`` is the ONLY thing a surface may branch on (the
 no-truthiness lint in tests/test_factcore_import_lint.py bans builder
 reads of ``nonfinite_ops`` truthiness).
 
-D19: alias rows (input/output mirrors, buffer state rows) are EXCLUDED
+Alias rows (input/output mirrors, buffer state rows) are EXCLUDED
 from the identity partition of the health counts and disclosed as a
 separately named alias view -- checked=6/nonfinite=4 on a 3-op defect was
 the panel's central claim in miniature.
 
 Normalization runs at first derivation on a live finished trace and via
-the explicit :func:`normalize_health_facts` seam; the capture-finalization
-call site belongs to the capture-core fence (A05->A06->F20) and is filed
-as an owner amendment -- until it lands, a capture saved with NO health
-read serves the saved-payload basis on load (never a false clean).
+the explicit :func:`normalize_health_facts` seam; a capture saved with NO health
+read (capture finalization does not normalize it) serves the saved-payload
+basis on load (never a false clean).
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ from .._data_classes._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._utils._record_group_table import record_member
 
-#: Annotations key carrying the persisted record (field_intent.tsv row C02).
+#: Annotations key carrying the persisted record.
 HEALTH_FACTS_ANNOTATIONS_KEY = "health_facts"
 #: HealthFacts payload schema version.
 HEALTH_FACTS_SCHEMA_VERSION = 1
@@ -52,7 +51,7 @@ def _health_text(verdict: str) -> str:
 class HealthFacts:
     """Immutable normalized health observations for one capture.
 
-    An observation store, never a judgment producer (D14): severities and
+    An observation store, never a judgment producer: severities and
     follow-ups belong to audit's FindingSet. ``basis`` is ``capture``
     (per-op capture-time checks), ``saved_payloads`` (post-hoc scan over
     retained payloads), or ``persisted`` (loaded from the artifact record,
@@ -86,7 +85,7 @@ class HealthFacts:
 
     @property
     def verdict(self) -> str:
-        """The three-state verdict (D5) -- the ONE branchable health fact.
+        """The three-state verdict -- the ONE branchable health fact.
 
         ``found`` on any nonfinite evidence (alias-view hits count: a hit
         is a hit, wherever disclosed); ``checked_and_clean`` ONLY when
@@ -138,7 +137,7 @@ def _not_checked(basis: str, revision: str, *, unexamined: int = 0) -> HealthFac
 
 
 def _alias_labels(trace: Any) -> set[str]:
-    """Pass-qualified labels of alias rows (D19 exclusion set)."""
+    """Pass-qualified labels of alias rows (the exclusion set)."""
 
     labels: set[str] = set()
     for op in (trace._layer_list if is_live_trace(trace) else None) or ():
@@ -210,7 +209,7 @@ def health_facts(trace: Any, *, allow_scan: bool = True) -> HealthFacts:
     Order of authority: the persisted artifact record (validated
     fail-closed), then a live derivation over the strongest available
     basis -- which is also ATTACHED to the annotations channel so a later
-    save carries it (D9).
+    save carries it.
 
     Parameters
     ----------
@@ -218,7 +217,7 @@ def health_facts(trace: Any, *, allow_scan: bool = True) -> HealthFacts:
         Finished trace-like object.
     allow_scan:
         ``True`` (the explicit door) may pay for a first saved-payload
-        scan. ``False`` is the D4 render-surface contract: serve only the
+        scan. ``False`` is the render-surface contract: serve only the
         basis already in hand (capture-time record, prior scan memo, or
         the persisted artifact record) and otherwise return the honest
         NOT-CHECKED shape (basis ``"unscanned"``) -- a render never
@@ -253,7 +252,7 @@ def health_facts(trace: Any, *, allow_scan: bool = True) -> HealthFacts:
 
 
 def normalize_health_facts(trace: Any) -> HealthFacts:
-    """Derive AND persist HealthFacts on the annotations channel (D9).
+    """Derive AND persist HealthFacts on the annotations channel.
 
     The capture-finalization seam: idempotent, safe on any finished trace.
     Returns the derived record; attaches its payload so ``save`` carries
@@ -281,7 +280,7 @@ def normalize_health_facts(trace: Any) -> HealthFacts:
 
 
 def nonfinite_verdict(trace: Any) -> str:
-    """The three-state health verdict (D5): the ONE branchable spelling.
+    """The three-state health verdict: the ONE branchable spelling.
 
     ``found`` / ``checked_and_clean`` / ``not_checked``. Builders branch on
     THIS, never on ``nonfinite_ops`` truthiness -- a payload-stripped

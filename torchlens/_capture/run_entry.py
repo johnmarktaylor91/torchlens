@@ -448,7 +448,7 @@ def _with_plan_defaults(request: CaptureRequest) -> CaptureRequest:
 def _configure_runtime_context(r: SimpleNamespace) -> None:
     """Reset and configure the process-global capture runtime context.
 
-    r8 R54 (sol 2-thread repro): this reset and configure used to run BEFORE
+    R54 (sol 2-thread repro): this reset and configure used to run BEFORE
     any admission check, so a concurrent capture destined for the typed
     refusal first RESET the admitted winner's live context (clearing its
     replay-template flag and intervention plan mid-capture). The caller claims
@@ -471,7 +471,7 @@ def _configure_runtime_context(r: SimpleNamespace) -> None:
 def _forward_under_minter(trace: Trace, r: SimpleNamespace, reservation_token: object) -> None:
     """Run the forward, arming the live site-key minter when a predicate needs it.
 
-    C03 live site-key minting (surgery Build 0c): when a configured predicate
+    live site-key minting (surgery Build 0c): when a configured predicate
     addresses by structural site (tl.site), arm one streaming minter for
     exactly this capture; captures are single-threaded, so the ContextVar
     scope is exact and unarmed surfaces keep their typed capability refusal.
@@ -499,7 +499,7 @@ def _forward_under_minter(trace: Trace, r: SimpleNamespace, reservation_token: o
 def _abort_streaming_writer(trace: Trace, exc: BaseException) -> None:
     """Abort the streaming writer of a failed forward; wrap ordinary errors as artifact errors.
 
-    F5: postprocess pops ``_out_writer`` at its transient-state seam, so a
+    Postprocess pops ``_out_writer`` at its transient-state seam, so a
     post-seam failure (teardown, streaming tail) reaches this handler on a
     trace WITHOUT the attribute; the unguarded read used to mask the real
     exception with AttributeError.
@@ -527,7 +527,7 @@ def _finish_run_entry(
     """
 
     if isinstance(r.model, TLBoundMethodRoot):
-        # F41 TL-authored-root disclosure (tlspec v9 entry-dark slot, C07X
+        # TL-authored-root disclosure (tlspec v9 entry-dark slot, C07X
         # item (iv)): the marker lands on the root op record -- the
         # output-boundary op records, the terminal records of the wrapper's
         # DAG -- coherent only beside the bound_method entry-point fact
@@ -590,12 +590,12 @@ def _build_trace_for_run(r: SimpleNamespace, release_slot: Callable[[], None]) -
         _stamp_identity_and_sinks(trace, r)
         _configure_predicate_options(trace, r)
         _open_streaming_writer(trace, r)
-        # Echo narrator (snoop D1): one read-only observer per capture
+        # Echo narrator: one read-only observer per capture
         # (runtime-only state). Opened INSIDE the guarded region: the echo
         # sink opens its path eagerly, and a sink-open failure (missing
         # directory, unwritable path) used to escape between the slot claim
         # and the forward's own guard, leaking the capture reservation for as
-        # long as the exception object lived (AUD-CODE 2.15) -- the next
+        # long as the exception object lived -- the next
         # tl.trace then refused reentrant_trace on an idle process.
         echo_session = open_echo_session(trace, r.echo_options)
     except BaseException:
@@ -608,7 +608,7 @@ def _build_trace_for_run(r: SimpleNamespace, release_slot: Callable[[], None]) -
 def _run_resolved_request(r: SimpleNamespace) -> Trace:
     """The run half: slot claim, runtime context, Trace build, forward, tail.
 
-    The slot is claimed FIRST (r8 R54, see ``_configure_runtime_context``); the
+    The slot is claimed FIRST (see ``_configure_runtime_context``); the
     inner claim in ``run_and_log_inputs_through_model`` passes on the token.
     """
 
@@ -635,7 +635,7 @@ def _run_resolved_request(r: SimpleNamespace) -> Trace:
         try:
             _forward_under_minter(trace, r, reservation_token)
         except BaseException as exc:
-            # Crash tail (snoop D5 tail 2): synchronous flush; note rides PEP 678.
+            # Crash tail (snoop tail 2): synchronous flush; note rides PEP 678.
             echo_forward_failure(echo_session, exc)
             _abort_streaming_writer(trace, exc)
             raise

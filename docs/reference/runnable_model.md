@@ -193,7 +193,7 @@ scope statement, not an undetected gap in witness coverage.
 
 Within an artifact, record stripping must fail closed as a typed refusal, divergence, or
 unverifiable verdict. The exact reauthoring boundary and residuals are frozen in
-[the threat-model subsection of contract section 11](runnable_tlspec_contract.md#threat-model-scope-coherent-reauthoring-is-out-of-contract-scope-r71).
+[the threat-model subsection of contract section 11](runnable_tlspec_contract.md#threat-model-scope-coherent-reauthoring-is-out-of-contract-scope).
 
 ## Change discipline
 

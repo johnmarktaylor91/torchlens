@@ -501,18 +501,17 @@ DOCS: dict[str, str] = {
         str
             HTML fragment for IPython/Jupyter display.
         
-        Document composition (F08 x C05 x F16): the Trace card (treescope
-        memo B1/B2 -- identity, honesty badge, NaN/Inf line, and the
+        Document composition: the Trace card (identity, honesty badge, NaN/Inf line, and the
         budgeted lookup-key index, assembled through
         ``torchlens.report._notebook.cards``) renders first, and on finished
-        traces the rebuilt summary table (F08; summary memo 3.11 -- the
+        traces the rebuilt summary table (the
         bare ``trace`` cell is the most likely first touch in Jupyter)
         follows as a sibling fragment. A summary failure degrades to the
         card alone; any failure THERE degrades inside ``safe_card_html``
         to a one-line ``card unavailable`` fragment (never-raise
         boundary). The treescope-bridge suppression sentinel replaces the
         WHOLE document exactly when the bridge just rendered this object
-        (memo 3.6) -- appending the summary there would duplicate the
+        -- appending the summary there would duplicate the
         render treescope owns.
         """
     ),
@@ -580,7 +579,7 @@ DOCS: dict[str, str] = {
         """
     ),
     "narrate": (
-        """Render this trace's events in the live-narration grammar (snoop D5).
+        """Render this trace's events in the live-narration grammar.
         
         Post-hoc narration works when ``narrate=`` was never enabled: the same
         renderer serves ``Trace``, ``PartialTrace``, and ``Recording``. Final

@@ -1,4 +1,4 @@
-"""Edge-grain plumbing bought NOW for the deferred EAP stage (item 7, D16).
+"""Edge-grain plumbing bought NOW for the deferred EAP stage (item 7).
 
 The edge-attribution-patching requirement needs a trustworthy map from each
 backward grad-INPUT slot to the exact forward consumption it corresponds to.
@@ -43,7 +43,7 @@ __all__ = [
     "backward_pass_origins",
 ]
 
-# Closed correspondence-status vocabulary (D16 / section 8 plumbing).
+# Closed correspondence-status vocabulary.
 GRAD_INPUT_USE_STATUSES: tuple[str, ...] = ("exact", "ambiguous", "unsupported")
 
 # Closed origin vocabulary for backward-pass stamps.

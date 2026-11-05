@@ -48,7 +48,7 @@ def _reset_run_diagnostics(self: Trace) -> None:
     # Diagnostics side-channel: clear any stale failure from a prior run so a
     # report reflects THIS validation only. ADD-ONLY -- never affects the result.
     reset_validation_failure(self)
-    # THIS-run semantics for the diagnostics ledger too (b8 B8-43): only the
+    # THIS-run semantics for the diagnostics ledger too: only the
     # failure slot was reset here, so diagnostics accumulated across runs.
     reset_validation_diagnostics(self)
 

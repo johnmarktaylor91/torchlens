@@ -66,7 +66,7 @@ class GraphvizRenderer:
         source_path = Path(dot.save(target.outpath))
         image_source = self._image_source(dot, target)
         output_path = Path(f"{target.outpath}.{target.fileformat}")
-        # Atomic publish + exit-0 stderr surfacing (vizmech D20/D24): a
+        # Atomic publish + exit-0 stderr surfacing (vizmech): a
         # failed layout leaves nothing at the user's path, and the cairo
         # clamp warning is never silently discarded.
         with atomic_render_target(str(output_path)) as temp_output_path:

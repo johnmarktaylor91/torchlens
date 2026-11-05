@@ -60,7 +60,7 @@ def _numpy_frame_candidate_children(value: Any) -> tuple[Any, ...]:
         return (*dict.keys(value), *dict.values(value))
     if value_type in (list, tuple, set, frozenset):
         return tuple(value)
-    # r39: match weakref PROXIES on EXACT type BEFORE any isinstance branch below
+    # match weakref PROXIES on EXACT type BEFORE any isinstance branch below
     # -- ``isinstance`` consults the proxy's forwarded ``__class__``, so a proxy
     # whose referent is a deque/local/partial would otherwise be dispatched into a
     # base-C read that raises (or, worse, forwards). NO inert deref exists (see
@@ -68,7 +68,7 @@ def _numpy_frame_candidate_children(value: Any) -> tuple[Any, ...]:
     # this shape to INCOMPLETE.
     if type(value) in _WEAKREF_PROXY_TYPES:
         return ()
-    # r38 stdlib-instance holder edges, mirroring the deep-inventory parity
+    # Stdlib-instance holder edges, mirroring the deep-inventory parity
     # branches: every read below is base-C (deref / member descriptor /
     # ``tp_traverse`` / base ``__iter__``), so no user code can fire.
     if isinstance(value, _weakref_module.ref):
@@ -96,7 +96,7 @@ def _numpy_frame_candidate_children(value: Any) -> tuple[Any, ...]:
         return tuple(interior)
     if isinstance(value, _collections_module.deque):
         return tuple(_collections_module.deque.__iter__(value))
-    # r39 C-holder parity branches (round-39 executed false-VERIFIEDs V9a-V9f):
+    # C-holder parity branches:
     # a generator reached ONLY through a C-implemented holder with a C accessor
     # path never enters a Python frame. Every read below is base-C
     # (``tp_traverse`` / base getset / C ``Context`` lookup); no user code fires.

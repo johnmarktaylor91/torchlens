@@ -1,13 +1,13 @@
-"""Module-arg payload stubbing for release-at-emission (F20 W1a).
+"""Module-arg payload stubbing for release-at-emission.
 
-Split out of ``model_prep.py`` under the R43 file-size ratchet. The
+Split out of ``model_prep.py``. The
 module-arg stash and the ``ModuleEnterEvent`` used to pin every module
 call's live input tensors for the whole forward -- a dominant capture-floor
-holder (brainpipe memo section 3.3). Tensor leaves are replaced at module
+holder. Tensor leaves are replaced at module
 entry with :class:`~torchlens._ir.workspaces.ReleasedTensorStub` surrogates
 carrying exactly what the torch trace path's consumers read (shape/dtype
 facts for ``format_call_arg`` summaries and quantized-FLOPs estimation;
-GC-11 nulls ``ModuleCall.forward_args`` before the trace is returned).
+``ModuleCall.forward_args`` is nulled before the trace is returned).
 """
 
 from __future__ import annotations

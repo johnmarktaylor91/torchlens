@@ -1,4 +1,4 @@
-"""``torchlens.neuro.datasets``: the per-site rsatoolbox Dataset handoff (F22).
+"""``torchlens.neuro.datasets``: the per-site rsatoolbox Dataset handoff.
 
 Memo 4.1 (item 5): descriptors are the product. rsatoolbox promotes Dataset
 descriptors into RDM descriptors automatically (measured at 0.1.5 and
@@ -160,7 +160,7 @@ def _build_dataset(  # noqa: PLR0913 -- mirrors the datasets() door's knob set v
     obs_descriptors: dict[str, Any] = {
         "stimulus_id": np.asarray(ids),
         "tl_stimulus_identity": np.asarray([identity] * n_rows),
-        # ALWAYS written (memo D10): the original-row-index descriptor that
+        # ALWAYS written: the original-row-index descriptor that
         # survives rsatoolbox's condition sorting.
         PRESENTATION_INDEX_KEY: np.arange(n_rows),
     }
@@ -168,7 +168,7 @@ def _build_dataset(  # noqa: PLR0913 -- mirrors the datasets() door's knob set v
         obs_descriptors[name] = np.asarray(column)
 
     # A neutral flat feature index -- never "neuroid": an artificial unit is
-    # not a biological one (memo 4.1). Unravelled coordinates ride along
+    # not a biological one. Unravelled coordinates ride along
     # where the recorded per-stimulus shape makes them factual (the
     # searchlight plumbing).
     channel_descriptors: dict[str, Any] = {"feature_index": np.arange(n_features)}
@@ -195,7 +195,7 @@ def single_dataset(source: Any, site: str | None = None) -> Any:
 
     The single-Dataset special case of :func:`datasets`, kept so
     ``torchlens.bridge.rsatoolbox.dataset`` shares one flattening and
-    descriptor code path with the plural constructor (memo D2). The
+    descriptor code path with the plural constructor. The
     historical silent flatten is now the disclosed ``pool="flatten"``
     descriptor, the ``"neuroid"`` channel label is retired (an artificial
     unit is not a biological one), and presentation-order recoverability is

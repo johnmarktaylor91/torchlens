@@ -1,4 +1,4 @@
-"""The TLens-agreement demo (mikit D19's first public demo; RG21 interim).
+"""The TLens-agreement demo (the first public demo).
 
 Run: ``python -m torchlens.mechinterp._demo`` (needs the gpt2 checkpoint in
 the local HF cache and, for the parity section, transformer-lens installed).

@@ -85,10 +85,9 @@ class SuperParam(Super["Param"], _TensorBearing):
     Parameter members carry live handles, never capture-time bytes, so every
     cross-member tensor read on this view (two or more members) refuses with
     the stable code ``checkpoint_series_live_params`` unless every member has
-    immutable capture-time parameter evidence (R8(b) snapshots, future). The
-    guard lives at the one ``_tensor_dict`` funnel (A-CKPT; foldB D7);
-    single-member views keep the documented live-handle read, disclosed by
-    ``Param.value_basis``.
+    immutable capture-time parameter evidence (not yet available). The guard lives at the one ``_tensor_dict``
+    funnel; single-member views keep the documented live-handle read,
+    disclosed by ``Param.value_basis``.
     """
 
     _cross_member_param_claim = True

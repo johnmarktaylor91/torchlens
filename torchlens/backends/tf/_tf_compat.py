@@ -110,7 +110,7 @@ def get_tf_capability_snapshot() -> TFCapabilitySnapshot:
     -------
     TFCapabilitySnapshot
         Mapping from ``HAS_*`` flag name to boolean availability. EMPTY when
-        TensorFlow itself is not installed (r-b4 R26-4): this module imports
+        TensorFlow itself is not installed: this module imports
         cleanly without TF (the tf import is deferred inside
         ``_import_op_callbacks_module``), so torch-only installs used to merge
         a permanent ``HAS_TF_OP_CALLBACKS=False`` into every doctor/compat

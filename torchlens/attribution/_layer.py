@@ -49,7 +49,7 @@ from torchlens.receptive_field._viz import _blend_heatmap
 
 LayerAttributionMethod: TypeAlias = Literal["activation_x_grad", "grad"]
 
-# D21 (attrib memo): a layer-space completeness residual is expected near zero
+# A layer-space completeness residual is expected near zero
 # only when the selected layer output is a true bottleneck for the scored
 # path; on non-bottleneck layers the residual measures the bypassed signal,
 # not an implementation defect.
@@ -610,8 +610,8 @@ def _layer_path_run(
     path points (pairing firing ``i`` across points is otherwise meaningless)
     and uniform across firings (per-firing contributions are accumulated into
     one activation-shaped result). With ``chunk_size > 1`` path points are
-    stacked on the ordinary batch axis (attrib memo D16) and the randomized
-    audit ladder guards row coupling (D18).
+    stacked on the ordinary batch axis and the randomized
+    audit ladder guards row coupling.
 
     Parameters
     ----------

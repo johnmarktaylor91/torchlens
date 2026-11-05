@@ -1,6 +1,6 @@
-"""Human-facing collapse disclosure warnings (collapse memo D4).
+"""Human-facing collapse disclosure warnings (collapse).
 
-Extracted from ``auto_collapse.py`` (C05 fix cycle, R43 file-size ratchet):
+Extracted from ``auto_collapse.py`` (a file-size ratchet):
 the no-silent-floor rule's warning half. The typed facts ride
 ``OptimizerResult`` (``planner``/``k_cap_exhausted``/``root_own_units``) and
 the render caption carries a visible notice; these warnings are the
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 #: Fraction of the full rendered universe above which a "collapsed" plan is
-#: disclosed as near-uncollapsed (collapse memo D4 release invariant: ``auto``
+#: disclosed as near-uncollapsed (collapse release invariant: ``auto``
 #: never returns a plan within a small factor of U without disclosure).
 NEAR_UNCOLLAPSED_FRACTION = 0.9
 
@@ -36,7 +36,7 @@ def _warn_undisclosed_floor(
     result: OptimizerResult,
     context: RenderContext,
 ) -> None:
-    """Disclose floor-fallback and near-uncollapsed plans (memo D4).
+    """Disclose floor-fallback and near-uncollapsed plans.
 
     A 1,688-of-1,712-node "plan" returned with no message is a silent
     contract violation worse than any refusal: the user asked for
@@ -65,7 +65,7 @@ def _warn_undisclosed_floor(
     from .auto_collapse import _readable_band_high  # deferred: cycle _visualization
 
     total_units = _optimizer_total_units(trace, context)
-    # F11 auto unfreeze (memo D8): an in-band full graph is the CORRECT auto
+    # auto unfreeze: an in-band full graph is the CORRECT auto
     # answer (auto = first ladder point meeting the cap), so the
     # near-uncollapsed disclosure fires only under band pressure -- the
     # measured silent-violation shape it exists for (141-unit fan floods).
@@ -99,12 +99,12 @@ def _defensive_constant() -> int:
 
 
 #: Once-per-trace dedupe for the budget-fallback disclosure on the default
-#: ``auto`` path (explicit ``max`` re-warns every call, N15).
+#: ``auto`` path (explicit ``max`` re-warns every call).
 _BUDGET_WARNED_TRACES: weakref.WeakSet = weakref.WeakSet()
 
 
 def _warn_budget_fallback(trace: Trace, mode: str, result: OptimizerResult) -> None:
-    """Disclose a budget/watchdog degrade to the fallback planner (memo D5).
+    """Disclose a budget/watchdog degrade to the fallback planner.
 
     Explicit ``max`` requests re-warn on EVERY call (N15: an explicit
     compaction request must never silently degrade); the default ``auto``

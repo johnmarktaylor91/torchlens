@@ -169,7 +169,7 @@ def _json_safe_value(value: Any) -> Any:
 
     if isinstance(value, float):
         # Non-finite floats are not JSON: tag them the way every agent-surface
-        # envelope does (AUD-CODE 2.6) so ``json.dumps(..., allow_nan=False)``
+        # envelope does, so ``json.dumps(..., allow_nan=False)``
         # -- the documented JSON-serializable promise -- holds.
         return json_safe(value)
     if value is None or isinstance(value, bool | int | str):
@@ -225,7 +225,7 @@ def _json_shape(shape: Any) -> list[int] | None:
 
 
 def _memory_scopes(log: Any) -> dict[str, Any]:
-    """Both payload-scope byte figures, named (C02; sumfam D8)."""
+    """Both payload-scope byte figures, named."""
 
     memory = _memory(log)
     return {
@@ -239,7 +239,7 @@ def _memory_scopes(log: Any) -> dict[str, Any]:
 
 
 def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
-    """The counts block from the ONE numbers core (F09; sumfam D3/D17).
+    """The counts block from the ONE numbers core.
 
     Both grains print under their names -- ``operations`` counts every
     tracked tensor row (the historical meaning) while ``compute_ops`` and
@@ -270,9 +270,9 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
 
 
 def _health_summary(log: Any) -> dict[str, Any]:
-    """The three-state health verdict + coverage (C02; sumfam D5/D9).
+    """The three-state health verdict + coverage.
 
-    D4 (F09 item 13): a machine dump never implicitly pays for a payload
+    a machine dump never implicitly pays for a payload
     scan -- this serves the basis in hand and reads NOT-CHECKED otherwise
     (the explicit scan spelling is ``trace.health_facts``).
     """
@@ -327,7 +327,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
     device_ref = getattr(op, "device_ref", None)
     dtype = getattr(op, "dtype", None)
     call_stack = [str(m) for m in record_member(op, "module_call_stack", ()) or ()]
-    # FF1 (agent memo 3.5): `module_address` is the ATOMIC-module address and
+    # FF1 (agent memo): `module_address` is the ATOMIC-module address and
     # is null on 90-91% of real-transformer rows, so every module-grain
     # rollup collapsed into one None bucket. `module_containment` is the
     # call-stack-derived innermost containing module -- populated on every
@@ -461,7 +461,7 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
         "device_summary": getattr(log, "backend_runtime_device_summary", None),
         # Poison, episode, and advisory facts are honesty disclosures: a
         # diverged sparse run or a forced-tokens episode must never dump as an
-        # ordinary clean forward (WT1 A-V row 23).
+        # ordinary clean forward.
         **poison_facts(log),
     }
     if capture["structure_only"]:
@@ -472,7 +472,7 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
     episode = episode_facts(log)
     if episode is not None:
         capture["episode"] = episode
-    # M5: an intervened capture stays ``complete`` while the values at the fired
+    # an intervened capture stays ``complete`` while the values at the fired
     # sites are counterfactual; the dump must say so or an agent reads a
     # zero-ablated forward as the model's own numbers.
     interventions = intervention_facts(log)
@@ -508,11 +508,11 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
         "guide": guide,
         "capture": capture,
         "logged_values": logged_values,
-        # ONE machine core (sumfam D17/item 14): counts read the same
+        # ONE machine core: counts read the same
         # FactCore sections explain-json reads; the parity gate pins every
         # overlapping field so the two vocabularies cannot drift apart.
         "counts": _factcore_counts(log, module_row_count=len(module_rows)),
-        # Payload-scope law (C02; sumfam D8): every byte figure names its
+        # Payload-scope law: every byte figure names its
         # scope -- at_capture (immutable capture fact) vs retained_now
         # (what THIS object holds; zero on a payload-stripped artifact).
         "memory": _memory_scopes(log),

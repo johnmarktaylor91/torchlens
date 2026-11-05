@@ -1,11 +1,11 @@
-"""Module-granularity netron projection (lane F14, netron memo D-11/D-12).
+"""Module-granularity netron projection.
 
 The model's module hierarchy exports as nested per-CALL FunctionProtos: the
-root graph shows the calls at the chosen depth (interim default 1 per the
-memo's DISSENT D1 ruling), every deeper call nests recursively as its own
-FunctionProto, dissolved levels above the depth flatten into the root, and
-single-node calls inline with their FunctionProto DELETED (an empty or
-one-box drill-down room is noise, not navigation).
+root graph shows the calls at the chosen depth (interim default 1), every
+deeper call nests recursively as its own FunctionProto, dissolved levels
+above the depth flatten into the root, and single-node calls inline with
+their FunctionProto DELETED (an empty or one-box drill-down room is noise,
+not navigation).
 
 Per-call keying makes function-call cycles structurally impossible; the
 explicit DAG check stays as the named assertion with fail-soft to the valid
@@ -61,7 +61,7 @@ class _Scope:
     body_sources: list[Any] = field(default_factory=list)
     imports: list[str] = field(default_factory=list)  # outer values consumed
     exports: list[str] = field(default_factory=list)  # values leaving the call
-    hidden_note: str = ""  # per-call hidden-buffer disclosure (memo D-10)
+    hidden_note: str = ""  # per-call hidden-buffer disclosure
 
 
 def _call_levels(module_calls: Any) -> tuple[dict[str, int], dict[str, Any]]:
@@ -123,7 +123,7 @@ def _display_name(label: str, records: dict[str, Any]) -> str:
 def _inline_single_node_scopes(
     scopes: dict[str, _Scope], root_body: list[NetronNode], root_sources: list[Any]
 ) -> int:
-    """Inline calls whose body is one node; DELETE their FunctionProto (D-11).
+    """Inline calls whose body is one node; DELETE their FunctionProto.
 
     Runs bottom-up to a fixpoint so wrapper chains collapse: a call whose
     only child inlined to a single op becomes single-node itself.
@@ -216,7 +216,7 @@ def _route_cross_scope_values(
 
 
 def _formal_names(scope: _Scope) -> dict[str, str]:
-    """Choose signature-style formal input names for one function (D-11).
+    """Choose signature-style formal input names for one function.
 
     ``forward_arg_names`` supplies real signature names when they align
     one-to-one with the imported values; the fallback is ``x``, ``x2``, ...
@@ -243,7 +243,7 @@ def _formal_names(scope: _Scope) -> dict[str, str]:
 
 
 def _module_call_attrs(scope: _Scope, display: str) -> list[NetronAttr]:
-    """Curated inclusive-metric attributes for one module-call node (D-17)."""
+    """Curated inclusive-metric attributes for one module-call node."""
 
     call = scope.call
     attrs: list[NetronAttr] = []

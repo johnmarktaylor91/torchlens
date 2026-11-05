@@ -24,7 +24,7 @@ _NON_GRAD_DTYPES = {
     torch.uint8,
     torch.bool,
 }
-# r47 secD_1: resolve the optional unsigned integer dtypes through ``torch_attr`` (no bare
+# resolve the optional unsigned integer dtypes through ``torch_attr`` (no bare
 # ``hasattr``/``getattr(torch, <var>)``, which would fire ``torch.__getattr__``). ``torch_attr``
 # reads ``torch.__dict__`` directly and returns ``None`` for a dtype absent on this torch.
 for _dtype_name in ("uint16", "uint32", "uint64"):

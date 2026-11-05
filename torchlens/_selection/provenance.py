@@ -28,7 +28,7 @@ _FIELD_STATUSES: tuple[str, ...] = ("exact", "whole_input", "upper_bound", "empi
 
 
 # ---------------------------------------------------------------------------
-# Provenance relation lattice (closed, S2-routed) + composition tables.
+# Provenance relation lattice (closed) + composition tables.
 # ---------------------------------------------------------------------------
 
 _FLIP: dict[str, str] = {

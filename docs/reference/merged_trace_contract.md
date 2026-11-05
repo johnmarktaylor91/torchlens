@@ -1,4 +1,4 @@
-# Merged Trace Contract (`merged-directory` artifacts, rung C1)
+# Merged Trace Contract (`merged-directory` artifacts)
 
 This document is the **frozen specification** for cross-rank merged traces
 produced by `tl.merge_ranks()` and persisted as `merged-directory` artifacts.
@@ -8,7 +8,7 @@ finding-kind tables below are release-gated against the code by
 ordered-list-equality tests (`tests/test_merged_engine.py::TestContractLockstep`).
 Editing either side without the other turns the gate red.
 
-## 1. Scope (rung C1)
+## 1. Scope
 
 `tl.merge_ranks([trace_or_path, ...])` merges N rank-local captures of one
 SPMD program at their **explicit in-forward `torch.distributed` python
@@ -17,21 +17,21 @@ collectives** on symmetric-issue (`coll`) channels.
 Refused typed in this release, with `fields["code"] = "merge_scope_unsupported"`:
 
 - point-to-point boundaries (`send`/`recv`, any `p2p/...` channel) — pipeline
-  pairing is rung C3;
+  pairing is out of scope;
 - boundaries carrying DTensor dual geometry — sharded-topology capture stays
-  refused until rung C2's capture-fidelity census is green (relaxation follows
+  refused until the capture-fidelity census is green (relaxation follows
   fidelity, never the other way around);
 - functional-collective boundaries (the documented-unstable
-  `functional_collective_boundary_v0` payload recorded by the C2 recording
-  slice) — C1 joins the frozen `collective_boundary_v1` payload only; funcol
-  boundary joining is rung-C2 merged-side scope behind its own authorizing
+  `functional_collective_boundary_v0` payload recorded by the recording
+  slice) — merging joins the frozen `collective_boundary_v1` payload only; funcol
+  boundary joining is later merged-side scope behind its own authorizing
   ruling. Refusing the member core typed is strictly fail-closed: the
   pre-recording alternative was a merge with the funcol traffic invisibly
   absent.
 
 Merged replay does not exist (`merge_run_unsupported`); merged runnable
 export, merged `validate()`, receptive/projective fields, and intervention
-chaining are refused typed. Backward/gradient merging is fork F1 (deferred).
+chaining are refused typed. Backward/gradient merging is deferred.
 
 Member cores must carry a mergeable settled capture outcome: a member whose
 settled outcome is FAILED, ABORTED_NONFINITE, or UNKNOWN refuses typed at
@@ -148,7 +148,7 @@ interchangeable refuse.
 - Join identity: `(membership_digest, lifetime_ordinal, channel, seq_delta)`.
   `membership_digest` = SHA-256 over sorted global ranks;
   `lifetime_ordinal` = the TorchLens-owned ever-created group generation
-  (see the C0 lifecycle ledger). `ordinal_source` is diagnostic, never keyed.
+  (see the lifecycle ledger). `ordinal_source` is diagnostic, never keyed.
 - **Seq counters are absolute from arm time and rank-local.** Ranks align as
   seq DELTAS from each rank's first recorded key per `(group_uid, channel)`;
   absolute bases are never compared (arming histories legitimately differ).
@@ -171,7 +171,7 @@ interchangeable refuse.
   The journal's `boundaries` container itself must be a list (or tuple) of
   boundary records: an int/bool/mapping/string container refuses
   `merged_schema_invalid` at merge entry, live and loaded cores alike, with
-  the container named (W051-CAPT3; previously a bare `TypeError`).
+  the container named.
 - Presence expectations and gaps derive from the group memberships recorded
   INSIDE the surviving rank cores' boundary records. A declared
   `expected_ranks` input can only WIDEN expectations, never narrow them.
@@ -191,11 +191,11 @@ Semantic authority is this versioned public-contract table, not CI probes
 | `scatter` | member *i*'s destination equals root's contribution list slice *i* | definitional data movement |
 | `all_to_all` | rank *j*'s destination *i* equals rank *i*'s contribution *j* | definitional data movement |
 | `reduce`, `reduce_scatter`, `reduce_scatter_tensor` | none | no cross-rank identity property exists |
-| `all_to_all_single` | none in C1 | whole-tensor digests cannot witness intra-tensor slice reciprocity |
+| `all_to_all_single` | none | whole-tensor digests cannot witness intra-tensor slice reciprocity |
 | `barrier`, object collectives | none | no digestable tensor payload |
 
 `distributed_witness="payload"` remains a typed construction refusal in this
-release: the C1 artifact story ships digest witnesses only; payload witnesses
+release: the artifact story ships digest witnesses only; payload witnesses
 are tensor-valued and require their own blob family (deferred; a future rung
 must define it as a schema change here).
 
@@ -267,7 +267,7 @@ members is byte-identical across runs; the determinism test pins this.
   enums exactly (ordered) — `TestContractLockstep`.
 - The `_distributed.py` refusal suggestion strings must reference
   `tl.merge_ranks` truthfully (dense explicit-collective captures merge;
-  DTensor/TP/PP capture stays refused pending C2/C3).
+  DTensor/TP/PP capture stays refused).
 
 ## 8. Lifetime and release
 

@@ -206,7 +206,7 @@ def _live_run_ctx() -> dict[str, Any]:
     else:
         run_ctx.setdefault("engine", "live")
         run_ctx.setdefault("timestamp", time.monotonic())
-    # Seed law D5 (F02): the capture's recorded seed rides the run context so
+    # Seed law: the capture's recorded seed rides the run context so
     # seed='auto' stochastic edits can canonicalize their base seed without
     # ever touching ambient RNG.
     trace_seed = trace._options_seed if is_live_trace(trace) else None

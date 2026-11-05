@@ -25,7 +25,7 @@ def _tf_runtime_supported(tf: object, keras: object) -> bool:
 
     Notes
     -----
-    r-b4 R26-6b: feature-probed, not version-parsed. The historical
+    feature-probed, not version-parsed. The historical
     ``Version(...) >= 2.16 and >= 3`` gate returned ``False`` on
     ``InvalidVersion``, so an odd/custom build string silently made
     ``backend="tf"`` unavailable. ``keras.ops`` ships only in Keras 3 and the

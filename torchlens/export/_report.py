@@ -1,10 +1,10 @@
-"""The single-file offline HTML trace report (B5, F16; treescope memo s6).
+"""The single-file offline HTML trace report.
 
 Upgrades ``tl.export.html`` IN PLACE -- no second exporter. Use case:
 capture on a cluster, ``scp`` ONE file, open from ``file://`` with no
 Python, kernel, server, font, or network.
 
-Anatomy (memo decision 4): sticky identity + outcome banner -> capture
+Anatomy: sticky identity + outcome banner -> capture
 facts and every honesty disclosure -> the summary lane's typed table
 (embedded, never rebuilt) -> the graph (module-collapsed REAL SVG by
 default, disclosed depth; the 8-column canvas survives as a LABELED
@@ -74,7 +74,7 @@ _HOME = os.path.expanduser("~")
 
 @dataclass(frozen=True)
 class HtmlReportOptions:
-    """Emission plumbing for the offline HTML report (C06 house pattern).
+    """Emission plumbing for the offline HTML report (a frozen options record).
 
     The content doors (``arrays=`` / ``graph=``) stay flat keywords on
     ``tl.export.html`` / ``write_report``; everything about HOW the bytes

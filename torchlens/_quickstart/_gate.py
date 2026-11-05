@@ -1,6 +1,6 @@
-"""The non-gold capability gate and the warn-once raw-read machinery (B10).
+"""The non-gold capability gate and the warn-once raw-read machinery.
 
-Memo D7: on any non-gold trace (synthesized values), structural topology,
+On any non-gold trace (synthesized values), structural topology,
 observed shapes/dtypes, parameter facts, and measured costs are legitimate
 claims; DERIVED-SEMANTICS claims (decoded labels / top-k, attention
 interpretation, nonfinite conclusions, value-stat tables, value-driven render

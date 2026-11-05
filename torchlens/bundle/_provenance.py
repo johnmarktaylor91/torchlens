@@ -1,4 +1,4 @@
-"""The provenance join: ``bundle.why()`` / ``bundle.provenance()`` (F03 item 4).
+"""The provenance join: ``bundle.why`` / ``bundle.provenance``.
 
 A PURE DERIVED VIEW over the repaired material record (ledger memo D1b):
 nothing here is stored, loads recompute the projection, and ancestry is
@@ -10,10 +10,10 @@ distinct.
 Evidence sources, in precedence order:
 
 1. **Event lineage** — the trace-side envelope rows
-   (``state_history`` ``op="intervention_event"`` rows; the C03 substrate).
+   (``state_history`` ``op="intervention_event"`` rows; the substrate).
    Forks copy ``state_history``, so a shared lineage id with an ordinal
    prefix of digest-equal rows is exact shared history.
-2. **Container operations** — the bundle-side chronology (F03 item 3): a
+2. **Container operations** — the bundle-side chronology: a
    ``member_construction`` anchor naming the reference as ``source_member``,
    or one operation row that created both members (a sweep/vary that also
    minted the pristine baseline), is container-attested ancestry; the basis

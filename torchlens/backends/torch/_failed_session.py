@@ -26,7 +26,7 @@ def cleanup_stopped_forward_session(
 ) -> None:
     """Clean up torch metadata after a halted forward capture."""
     self.cleanup_model_session(session, prepared_model)
-    # F5: the raw-graph workspace may already be gone when the halt fired
+    # the raw-graph workspace may already be gone when the halt fired
     # around a postprocess-tail boundary; a missing workspace must degrade
     # gracefully instead of masking the in-flight signal with
     # AttributeError.
@@ -47,9 +47,9 @@ def _stamp_actual_buffer_writes(session: object, exc: Exception) -> None:
     # journal events) on the exception while the journal is still live —
     # ``cleanup_model_session`` below clears ``capture_events``, and the
     # rescue driver needs this record to refuse a double-forward re-run
-    # after an output-attribution failure (R16-2 for the failed-primary
-    # trigger). Only an exhaustive session arms the tracker, so only there
-    # is an empty journal proof of "no writes".
+    # after an output-attribution failure (the failed-primary trigger). Only an
+    # exhaustive session arms the tracker, so only there is an empty journal
+    # proof of "no writes".
     if cast("Trace", session)._options_mode == "exhaustive":
         events = getattr(getattr(session, "capture_events", None), "buffer_write_events", None)
         if events is not None:
@@ -114,7 +114,7 @@ def _attach_partial_trace(
     else:
         try:
             attach_partial_trace(exc, partial_trace)
-            # B8-45: the SUCCESS path tells the user the recovery exists. A
+            # the SUCCESS path tells the user the recovery exists. A
             # TraceCaptureError says so in its message; a TorchLens error
             # propagating as itself gets a note.
             if not isinstance(exc, TraceCaptureError):
@@ -138,7 +138,7 @@ def _attach_partial_trace(
 def _clear_raw_graph_meta(session: object) -> None:
     """Strip TorchLens metadata from any leftover raw-graph output tensors."""
 
-    # F5: a postprocess-tail failure (step 18-20 or the relation freeze)
+    # a postprocess-tail failure (step 18-20 or the relation freeze)
     # arrives here AFTER the transient-state seam popped the raw-graph
     # workspace. The unguarded read used to double-fault with
     # AttributeError, MASKING the original exception (it survived only as
@@ -156,13 +156,11 @@ def _clear_raw_graph_meta(session: object) -> None:
 def _capture_attempt_failed_message(exc: Exception) -> str:
     """Return the routed capture-failure advisory text for ``exc``."""
 
-    # B8-44 follow-up (quickstart memo 4.6): the restoration sentence is
-    # scoped to what teardown actually restores -- TorchLens
-    # instrumentation and the torch environment. Model state mutated by
-    # the partially-executed forward (a materialized lazy module, updated
-    # BatchNorm running stats) is NOT rolled back, so the historical
-    # "the model ... restored" claim was false exactly when a forward
-    # materialized a module and then failed.
+    # The restoration sentence is scoped to what teardown actually restores --
+    # TorchLens instrumentation and the torch environment. Model state mutated
+    # by the partially-executed forward (a materialized lazy module, updated
+    # BatchNorm running stats) is NOT rolled back, so the message does not
+    # claim the model itself is restored.
     return (
         "TorchLens capture attempt failed "
         f"({type(original_exception(exc)).__name__}); TorchLens instrumentation is removed "
@@ -209,7 +207,7 @@ def cleanup_failed_forward_session(
     finally:
         self.cleanup_model_session(session, prepared_model)
     _clear_raw_graph_meta(session)
-    # B8-35/B8-44: the historical unconditional stdout banner ("Feature
+    # the historical unconditional stdout banner ("Feature
     # extraction failed; returning model and environment to normal") was
     # factually false on rescue-recovered captures and supported
     # return_partial flows, corrupted machine-readable stdout, and was

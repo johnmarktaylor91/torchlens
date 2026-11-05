@@ -100,7 +100,7 @@ class _ProbeCall:
     def substituted(self, substitute: torch.Tensor) -> tuple[list[Any], dict[str, Any]]:
         """Return fresh call arguments with the perturbed slot replaced.
 
-        Every retained tensor operand is cloned per call (r8 R08, fable MH):
+        Every retained tensor operand is cloned per call:
         the probed universe includes IN-PLACE ops (``logical_and_``,
         ``bitwise_*_`` masks), and executing one against the record's retained
         ``saved_args`` would mutate the capture evidence itself.
@@ -298,7 +298,7 @@ def _bool_probe_battery(parent_saved: torch.Tensor) -> tuple[torch.Tensor, ...]:
 
 
 def _bool_predicate_influence_probe(layer: Op, layers_to_perturb: list[str]) -> bool | None:
-    """Probe a NON-comparison bool-output op with a substitution battery (R08-2).
+    """Probe a NON-comparison bool-output op with a substitution battery.
 
     The comparison family gets the threshold-straddle probe; the rest of the
     bool universe (``logical_*``, ``isnan``/``isfinite``, ``isclose``,

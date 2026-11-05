@@ -1,4 +1,4 @@
-"""The frozen ``NarrationEvent`` record behind every narration line (snoop D2).
+"""The frozen ``NarrationEvent`` record behind every narration line.
 
 Narration is data first: every rendered line is backed by one immutable,
 backend-neutral record. The record -- not the text -- is the parser channel,
@@ -31,7 +31,7 @@ NARRATION_KINDS = (
 
 @dataclass(frozen=True, slots=True)
 class NarrationEvent:
-    """One immutable narration record (snoop D2; the structured channel).
+    """One immutable narration record (the structured channel).
 
     ``label`` is TIER-HONEST: the spelling THE OBJECT RETURNED BY THIS CALL
     will accept for lookup (the raw in-flight label on both live tiers;

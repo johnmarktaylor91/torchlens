@@ -11,10 +11,10 @@ This module owns the ONE device-token gate every non-torch payload codec routes
 an *artifact*-supplied device string through, so no codec can smuggle a
 filesystem path / URL / scheme into a materialization sink. Admission is layered
 and deliberately contains NO hand-maintained accelerator vocabulary -- both
-static-list directions were falsified in practice (round-56 ``corr_1``: the r55
+static-list directions were falsified in practice (a
 positive allowlist omitted legit ``NV``/``AMD``/``WEBGPU``/``QCOM``/``DSP``/
 ``NPY`` and silently relocated their payloads to the runtime default, commonly
-CPU; round-57 probe D: a static ``{disk, ext}`` denylist named a base tinygrad
+CPU; a static ``{disk, ext}`` denylist named a base tinygrad
 0.13 no longer ships (``ext``) while wrongly admitting its NEW ``tinyfs`` socket
 sink). Either static list drifts from the installed runtime; the gate below
 cannot:
@@ -56,7 +56,7 @@ from ..backends.registry import TINYGRAD_BACKEND_NAME
 # BEFORE the runtime-membership check. This is the one small hand-maintained
 # set; it is security-motivated (each entry names a base whose device *open*
 # performs filesystem/network I/O), NOT an accelerator vocabulary:
-#   disk   -> os.open(<token filename>, O_CREAT) on device open (r54 sec_2);
+#   disk   -> os.open(<token filename>, O_CREAT) on device open;
 #   tinyfs -> socket.connect(TINYFS_ENDPOINT) on device open;
 #   rdma   -> NIC / RDMA fabric setup on device open;
 #   ext    -> historical file-backed base (gone in tinygrad 0.13; denied

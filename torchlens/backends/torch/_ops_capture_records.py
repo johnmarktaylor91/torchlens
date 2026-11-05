@@ -221,7 +221,7 @@ def _record_label_version_snapshot(t: Any, *, mutated_via: tuple[Any, Any] | Non
             get_tensor_label(t),
             id(view),
         )
-    # ``_version`` is a WITNESSED input-metadata property (r33): the scoped patch
+    # ``_version`` is a WITNESSED input-metadata property: the scoped patch
     # records a genuine USER ``x._version`` read on a model-input leaf. This snapshot is
     # TorchLens's OWN bookkeeping read, so it must run under the internal marker or it
     # spuriously records a ``_version`` fact for every model, falsely diverging any

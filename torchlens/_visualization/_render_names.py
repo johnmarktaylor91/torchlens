@@ -50,7 +50,7 @@ def call_collapsed_spec_fn(
 #: Stem a bare ``Trace.draw()`` (no ``vis_outpath``) writes under.
 DEFAULT_DRAW_STEM = "modelgraph"
 
-#: Preflight compute ceiling for the v2 collapse selection (b8 R60). The
+#: Preflight compute ceiling for the v2 collapse selection. The
 #: frontier DP is measured superlinear (~n^1.75) in rendered op count with no
 #: internal time budget, so above this many ops the optimizer DECLINES with a
 #: disclosed warning instead of silently burning CPU-hours: ``draw`` renders

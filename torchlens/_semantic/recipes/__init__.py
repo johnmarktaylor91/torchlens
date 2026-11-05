@@ -1,6 +1,6 @@
 """Built-in TorchLens semantic facet recipes.
 
-Entry points: discover everything, execute nothing (architecture memo 6.4).
+Entry points: discover everything, execute nothing.
 The historical module-scope autoloader called ``entry_point.load()`` on every
 installed ``torchlens.recipes`` provider at import time -- and because the
 lazy root facade reaches this module, ``hasattr(tl, "facets")`` executed
@@ -171,7 +171,7 @@ def activate_entrypoint_recipes(
 ) -> tuple[str, ...]:
     """Explicitly load installed ``torchlens.recipes`` providers.
 
-    THE one provider-load operation (architecture memo 6.4): each selected
+    THE one provider-load operation: each selected
     entry point is loaded (this imports and executes the provider's module),
     and a loaded callable marked ``_torchlens_recipe_autoload`` is invoked
     for registration side effects. Broken providers warn and are skipped,

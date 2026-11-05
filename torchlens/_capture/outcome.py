@@ -184,7 +184,7 @@ def _frame_zone(filename: str) -> str:
 
 
 def _qualified_type_name(exc: BaseException) -> str:
-    """Return ``module.qualname`` for a failure's exception type (R67).
+    """Return ``module.qualname`` for a failure's exception type.
 
     The docstring contract promises a QUALIFIED name; the bare ``__name__``
     made same-named exception classes from different libraries
@@ -220,7 +220,7 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
     # A user-supplied intervention payload failing validation is the USER's
     # bad tensor, not a TorchLens bug -- but the raise happens inside a
     # torchlens frame, so the innermost-frame walk below misattributed it as
-    # TORCHLENS (R67). Classify by exception type instead of frame zone.
+    # TORCHLENS. Classify by exception type instead of frame zone.
     try:
         from ..intervention.errors import HookValueError
     except Exception:  # noqa: BLE001 - classifier must never raise
@@ -430,7 +430,7 @@ def _is_clean_nonfinite_abort(
         # The latch records the raised exception's IDENTITY: only the exact
         # nonfinite CaptureError classifies ABORTED_NONFINITE. An unrelated
         # CaptureError arriving after a swallowed abort settles FAILED below
-        # with its own reason/error_type instead of being misattributed (R06).
+        # with its own reason/error_type instead of being misattributed.
         and stop_request.error_ref is not None
         and stop_request.error_ref() is exc
         # A SWALLOWED nonfinite abort is a FAILED capture, never a clean
@@ -657,7 +657,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
     early stamp must demote through :func:`demote_outcome` on post-stamp
     teardown failure; premature stamping is closed by rule.
 
-    HALT-AWARE BY CONSTRUCTION (B1-01). A preview backend that supports
+    HALT-AWARE BY CONSTRUCTION. A preview backend that supports
     ``halt=`` (paddle's shipped capability, MLX's ``_mlx_halt_selector``)
     catches its ``HaltSignal``, writes the structural halt fields, and then
     falls through the SAME tail to this one stamp. Reading ``trace.is_stopped``
@@ -668,7 +668,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
     with no halt path are unaffected: ``halted`` is falsey and the COMPLETE
     arm is byte-identical to before.
 
-    SWALLOW-PROOF (F6 parity, R06 round 3). The halt-capable preview raise
+    SWALLOW-PROOF. The halt-capable preview raise
     sites latch a :class:`StopRequest` on the trace before raising their
     ``HaltSignal`` -- exactly the torch ``evaluate_halt`` contract. A user
     broad-``except`` that eats the signal leaves the latch set with no

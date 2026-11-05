@@ -1,6 +1,6 @@
 """Artifact session: manifest-first facts, content identity, bounded loads.
 
-The agent surface's ONE loading seam (agent memo 3.1-3.2). Manifest facts are
+The agent surface's ONE loading seam. Manifest facts are
 TORCH-FREE: a validated ``manifest.json`` read answers kind, identity,
 fingerprint, declared payload bytes, and site counts in ~60 ms without
 unpickling anything -- the only safe first look at an artifact the caller did
@@ -399,7 +399,7 @@ def build_load_plan(manifest: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def artifact_block(path: Path, digest: str, manifest: dict[str, Any] | None) -> dict[str, Any]:
-    """Build the envelope's artifact identity block (agent memo 3.9).
+    """Build the envelope's artifact identity block.
 
     ``basename`` is a human courtesy only -- no absolute or cwd-derived path
     ever appears in a machine payload.
@@ -493,7 +493,7 @@ def load_trace(path_arg: str) -> tuple[Any, dict[str, Any], dict[str, Any]]:
         )
     # Settle the health basis ONCE at the cache seam through the explicit
     # scan door (health_facts default). Renders/dumps stay no-implicit-scan
-    # (D4); without this, the basis a cached trace serves would depend on
+    # ; without this, the basis a cached trace serves would depend on
     # WHICH tool touched payloads first, and repeated identical tool calls
     # would not be byte-identical. The cost is bounded by the load plan's
     # declared-entry refusal above.

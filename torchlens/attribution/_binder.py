@@ -1,6 +1,6 @@
 """The attribution wrapping contract: primitive + sugar, one private binder.
 
-Attrib memo D1-D3. The kit's method-of-methods contract has exactly two
+The kit's method-of-methods contract has exactly two
 public routes and NO public registry or explainer object:
 
 * the PRIMITIVE: a closed callable ``attribute(inputs, input_kwargs) ->
@@ -17,7 +17,7 @@ mapping kills the ambiguity and IS the disclosure record.
 
 Both routes normalize to the private, export-ready ``_BoundMethod``. A public
 ``explainer()`` export is [UI-SPRINT]; the binder is written so exposure is a
-one-line decision later (memo D2).
+one-line decision later.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ class _BoundMethod:
     model_identity
         Model class name for provenance on the sugar route; ``None`` on the
         primitive route (a wrapper handed a closed callable cannot inspect a
-        model, memo D3).
+        model).
     """
 
     call: Callable[[Any, dict[str, Any] | None], Attribution]
@@ -145,7 +145,7 @@ def _bind_method(
     Raises
     ------
     AttributionError
-        If the route selection or its arguments violate the D1 contract.
+        If the route selection or its arguments violate the contract.
     """
 
     if (attribute is None) == (method is None):
@@ -248,7 +248,7 @@ def _bind_method(
         frozen_randomness=frozen,
         # The sugar layer may add model identity because it SAW the model; a
         # primitive-route user can write the same fact into their own child
-        # extra (memo D3 keeps the two routes' disclosure equally rich).
+        # extra (so the two routes' disclosure stays equally rich).
         model_identity=type(model).__name__,
     )
 

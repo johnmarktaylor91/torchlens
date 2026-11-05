@@ -92,7 +92,7 @@ def _state_contract_checks(
                 ),
             )
         )
-        # r37 R5 in-transaction tripwire: staging is the sole placement authority,
+        # R5 in-transaction tripwire: staging is the sole placement authority,
         # so a device mismatch HERE is a broken staging/state hook -- a typed state
         # failure before any callable, never a mid-call runtime_signature_mismatch.
         device_ok = value.device.type == slot.device_type and (
@@ -126,7 +126,7 @@ def _state_contract_checks(
                 ),
             )
         )
-        # r63 C1 in-transaction tripwire: the canonical staging clone is the sole state
+        # in-transaction tripwire: the canonical staging clone is the sole state
         # placement authority, so every staged runtime state tensor must still exhibit the
         # full canonical metadata signature (admitted exact class, strided dense layout,
         # unnamed, default stride, zero offset, no lazy conj/neg) before any recorded
@@ -239,7 +239,7 @@ def _pre_call_contract_checks(
         for path in referenced_paths
         if len(path) >= 2 and path[0] == "kwargs" and isinstance(path[1], str)
     }
-    # r53 free_1: allocation-free dense pigeonhole. A set of nonnegative ints
+    # free_1: allocation-free dense pigeonhole. A set of nonnegative ints
     # equals ``set(range(n))`` iff it has exactly ``n`` members spanning
     # ``[0, n-1]`` -- checked WITHOUT materializing ``set(range(n))`` from the
     # persisted integer, so an in-memory descriptor bypassing parse anchoring
@@ -275,7 +275,7 @@ def _pre_call_contract_checks(
             ),
         ),
     )
-    # r37 hon1_4: inference tensors carry NO version counter (reading ``_version``
+    # inference tensors carry NO version counter (reading ``_version``
     # raises), so a slot whose version is unavailable records NO baseline. The
     # mutation tripwire then enforces only its version-independent legs for that
     # slot (alias identity for in-place calls); value fidelity remains guarded by
@@ -329,7 +329,7 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
         "flash_sdp_enabled": ambient.flash_sdp_enabled,
         "mem_efficient_sdp_enabled": ambient.mem_efficient_sdp_enabled,
         "math_sdp_enabled": ambient.math_sdp_enabled,
-        # r53 hon_2: deterministic uninit-memory fill restores transactionally
+        # deterministic uninit-memory fill restores transactionally
         # (setter-based) so a deterministic+fill capture NaN-fills identically.
         "fill_uninitialized_memory": ambient.fill_uninitialized_memory,
     }
@@ -338,7 +338,7 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
     # (torch >= 2.9), which re-applying ``saved`` cannot restore ('none' reads
     # back as 'ieee'): snapshot them separately and re-pin them after ``saved``.
     saved_fp32_precision = snapshot_fp32_precision_controls()
-    # r37 R4 (corr2-3/corr2-2): the recorded DEFAULT DEVICE is entered as a SCOPED
+    # The recorded DEFAULT DEVICE is entered as a SCOPED
     # ``with torch.device(recorded)`` mode nested above the caller's existing mode
     # stack -- never via ``torch.set_default_device`` (which mutates process-global
     # mode bookkeeping and, measured, leaks/clobbers DeviceContext modes on every
@@ -366,7 +366,7 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
             pass
         raise _context_unavailable_error("ambient_context", str(exc)) from exc
     try:
-        # r53 hon_1: the recorded GLOBAL autograd/inference mode is entered as
+        # the recorded GLOBAL autograd/inference mode is entered as
         # SCOPED contexts around the whole sparse run (outside every per-call
         # context), so a Python branch on ``torch.is_grad_enabled()`` /
         # ``is_inference_mode_enabled()`` inside replayed code observes the
@@ -416,7 +416,7 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
 
 @contextmanager
 def _call_execution_context_entered(context: Any) -> Any:
-    """Enter the REQUIRED recorded per-call execution context tightly (corr2_8).
+    """Enter the REQUIRED recorded per-call execution context tightly.
 
     Autocast: an ``enabled=True`` record enters autocast with the recorded
     dtype; an explicit ``enabled=False`` record actively enters a DISABLED
@@ -433,7 +433,7 @@ def _call_execution_context_entered(context: Any) -> Any:
         for entry in context.autocast:
             if entry.enabled:
                 dtype_name = str(entry.dtype or "").removeprefix("torch.")
-                # r45 secC_1 (defense-in-depth): route through the single ``torch_attr`` helper
+                # (defense-in-depth): route through the single ``torch_attr`` helper
                 # so this decode site cannot fire ``torch.__getattr__`` (lazy import /
                 # deprecated ``replacement()``) even if a context is ever built off the parser
                 # path. The subsequent ``isinstance(..., torch.dtype)`` gate is unchanged.
@@ -516,7 +516,7 @@ def _is_allocator_death(exc: BaseException) -> bool:
 def _fake_tensor_mode_class() -> type[Any] | None:
     """Return torch's ``FakeTensorMode`` class if importable, else ``None``.
 
-    Routed through ``_torch_compat`` (``HAS_FAKE_TENSOR_MODE``, r-b4 R26-2):
+    Routed through ``_torch_compat`` (``HAS_FAKE_TENSOR_MODE``):
     the projection is a runtime allocation preflight, not a capture-hot probe,
     so an absent ``FakeTensorMode`` still fails OPEN to the run-prep
     recorded-output bound rather than refusing a legitimate run -- but the
@@ -545,12 +545,12 @@ def _count_fake_tensor_leaves(tree: Any) -> int:
 
 @lru_cache(maxsize=1)
 def _count_bounded_fake_tensor_mode_class() -> type[Any] | None:
-    """Return a ``FakeTensorMode`` subclass that caps realized fake-output arity (r59).
+    """Return a ``FakeTensorMode`` subclass that caps realized fake-output arity.
 
     The subclass counts fake tensor leaves produced by EACH ``__torch_dispatch__`` and
     raises ``_ProjectionCountExceeded`` the instant the running total passes the per-call
     ceiling -- DURING fanout construction, before the whole fake output tree materializes.
-    This kills the ``tensor_split(x, N)`` self-DoS (r58 free_1): projecting the real op to
+    This kills the ``tensor_split(x, N)`` self-DoS: projecting the real op to
     "see" its size would itself build N fake objects; counting during construction aborts
     at ``ceiling + 1`` fakes regardless of N. Data-dependent ops (``nonzero``/``unique``)
     still raise their own ``DynamicOutputShapeException`` through ``super()`` untouched, so

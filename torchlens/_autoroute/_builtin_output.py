@@ -90,7 +90,7 @@ def decode_outputs_for_trace(trace: Trace, outputs: Any) -> None:
         # just a warning: the warning is the most losable disclosure kind,
         # and without the annotation a failed decode was byte-
         # indistinguishable from "decode not applicable" on the returned AND
-        # saved Trace (grind-r5 b1 R22-2, sibling of the zero-match ledger).
+        # saved Trace (sibling of the zero-match ledger).
         # Roll back the partial-write window first: the unguarded body
         # assigns decoded_output BEFORE output_postprocessor, so a raise
         # between the two would otherwise leave a decoded output with no
@@ -347,7 +347,7 @@ def semantic_output_cache_key(model: Any) -> dict[str, Any]:
         Stable-ish metadata that affects output auto-detection and labels.
     """
 
-    # grind-r5 b7 R22-C(a): this fingerprint participates in the capture-cache
+    # This fingerprint participates in the capture-cache
     # EQUALITY key (user_funcs folds it under cache=True), so a raising
     # ``config``/``default_cfg`` getter must NOT silently drop the whole
     # config axis -- two models differing only in config (id2label,
@@ -731,7 +731,7 @@ def _safe_last_dim(tensor: torch.Tensor) -> int | None:
 
     Nested tensors raise ``RuntimeError`` from ``.shape`` and other exotic
     subclasses may refuse metadata reads entirely; an opportunistic output
-    sniffer treats those as "not logits" rather than aborting capture (R65).
+    sniffer treats those as "not logits" rather than aborting capture.
     """
 
     try:

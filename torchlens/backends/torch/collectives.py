@@ -12,7 +12,7 @@ runs inside ``pause_logging()`` (interior collapse), the node is emitted by
 the ordinary producer, and downstream ops parent on it through the standard
 label machinery.
 
-Every boundary carries the C0 ``collective_boundary_v1`` payload in its
+Every boundary carries the ``collective_boundary_v1`` payload in its
 portable ``annotations["collective"]`` namespace: the two-field
 ``group_uid`` correlation key with an issue-ticked per-``(uid, channel)``
 seq, role-indexed tensor entries with dual-geometry slots, the three-phase
@@ -308,7 +308,7 @@ def _digest_tensor(tensor: torch.Tensor) -> str:
     """Byte-exact SHA-256 of a tensor's values (dtype-agnostic)."""
 
     # detach-ok: read-only digest snapshot; no retained gradient payload crosses this boundary.
-    # Buffer-protocol digest (r7 R35-3): identical bytes to the old
+    # Buffer-protocol digest: identical bytes to the old
     # ``tobytes`` spelling (this digest PERSISTS in collective annotations,
     # so byte identity is load-bearing) without the whole-payload copy.
     return hashlib.sha256(digest_byte_view(tensor)).hexdigest()
@@ -318,7 +318,7 @@ def _role_entry(role: str, index: int, tensor: torch.Tensor) -> dict[str, Any]:
     """One role-indexed entry; dual-geometry slots stay None for plain tensors.
 
     The physical ``shape`` is ALWAYS the local bytes actually held; for a
-    DTensor value (reachable once C2 relaxes the dtensor refusal) the logical
+    DTensor value (reachable once the dtensor refusal is relaxed) the logical
     side is declared explicitly alongside it.
     """
 
@@ -361,7 +361,7 @@ def _resolve_root(bound: dict[str, Any], group: Any, src_or_dst: str) -> int | N
 def _c10d_group_seq(group: Any) -> tuple[int | None, str | None]:
     """Read c10d's private per-group sequence number, or disclose why not.
 
-    Routed through ``_torch_compat`` (``HAS_C10D_GROUP_SEQ``, r-b4 R26-2
+    Routed through ``_torch_compat`` (``HAS_C10D_GROUP_SEQ``
     shape): a private-API rename used to silently and permanently disable
     this redundant correlation cross-check -- the only in-band detector in
     the base-misalignment neighborhood -- with zero visibility in

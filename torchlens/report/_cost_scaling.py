@@ -1,4 +1,4 @@
-"""Position-scaling classes and the padding-waste disclosure (F09; D12).
+"""Position-scaling classes and the padding-waste disclosure.
 
 Costreport item 10: each counted op gets a POSITION-SCALING CLASS --
 ``linear_in_tokens`` | ``quadratic_in_sequence`` | ``invariant`` |
@@ -13,9 +13,9 @@ which dims of the op's RECORDED shapes equal the padded sequence length
 op's parameter consumption as a cross-check (a param-consuming GEMM is
 linear in tokens; an activation-activation matmul is the quadratic
 family). When the two signals conflict the class is ``unknown`` -- a
-confident wrong class is worse than an honest unknown (D3).
+confident wrong class is worse than an honest unknown.
 
-The disclosure line is three-part (D12): the estimated pad-position
+The disclosure line is three-part: the estimated pad-position
 FLOPs with its share of the forward, the largest single contributor
 named, and the note that 6ND's D counts pads by construction.
 """
@@ -31,7 +31,7 @@ from .._utils._record_group_table import record_member
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
-#: Closed position-scaling vocabulary (D12).
+#: Closed position-scaling vocabulary.
 POSITION_SCALING_CLASSES: tuple[str, ...] = (
     "linear_in_tokens",
     "quadratic_in_sequence",
@@ -93,7 +93,7 @@ def position_scaling_class(op: Any, padded_length: int) -> str:
 
 @dataclass(frozen=True)
 class PaddingWaste:
-    """The class-split padding-waste estimate (D12): a DISCLOSURE.
+    """The class-split padding-waste estimate: a DISCLOSURE.
 
     ``waste_flops`` is the estimated forward FLOPs attributable to pad
     positions; ``unclassified_flops`` is the known mass whose scaling
@@ -121,7 +121,7 @@ class PaddingWaste:
     real_lengths: tuple[int, ...]
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): lengths count, never dump.
+        """Bounded identity card: lengths count, never dump.
 
         ``real_lengths`` scales with the batch, so the card counts it and
         keeps the estimate/disclosure vocabulary intact.
@@ -144,7 +144,7 @@ class PaddingWaste:
 
     @property
     def disclosure(self) -> str:
-        """The three-part padding disclosure line (D12)."""
+        """The three-part padding disclosure line."""
 
         fraction = self.waste_fraction
         share = "" if fraction is None else f" ({100.0 * fraction:.1f}% of the known forward)"
@@ -172,7 +172,7 @@ def padding_waste(
     padded_length: int,
     real_lengths: tuple[int, ...] | list[int],
 ) -> PaddingWaste:
-    """Estimate pad-position forward FLOPs via the class-split rule (D12).
+    """Estimate pad-position forward FLOPs via the class-split rule.
 
     Parameters
     ----------

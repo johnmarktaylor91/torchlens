@@ -33,9 +33,9 @@ from .inventory_types import (
 
 
 def _is_recursable_custom_holder(value: Any) -> bool:
-    """Return whether ``value`` is a holder to recurse into (r42 corr2_1 / r51 hon1_1).
+    """Return whether ``value`` is a holder to recurse into.
 
-    Recurse into plain user objects that carry an attribute surface AND (r51 hon1_1) into
+    Recurse into plain user objects that carry an attribute surface AND into
     every reachable ``nn.Module`` -- its own ``__dict__`` / ``__slots__`` (which hold
     ``_parameters`` / ``_buffers`` / ``_modules`` plus arbitrary user attributes). A REGISTERED
     submodule is additionally seeded via the top ``model.modules()`` loop (and premarked in
@@ -43,14 +43,14 @@ def _is_recursable_custom_holder(value: Any) -> bool:
     plain attribute, ``list`` / ``dict`` / nested container, or custom holder -- the "modules
     must live in an ``nn.ModuleList``" footgun) is reachable ONLY through this branch, so a
     numpy Generator behind it is finally witnessed. Skips scalars, classes (walked through
-    the class-surface edge instead, r53 corr), modules, tensors, ndarrays, and any
+    the class-surface edge instead), modules, tensors, ndarrays, and any
     stdlib/torch/numpy implementation object (:data:`_CUSTOM_HOLDER_SKIP_MODULES`). A
     digestable RNG never reaches here (it is snapshotted before this branch).
 
-    r53 corr/F1: the former blanket ``callable(value) -> False`` gate is GONE -- it made a
+    There is deliberately no blanket ``callable(value) -> False`` gate: it would make a
     user-defined CALLABLE INSTANCE (``self.op = CallableSampler()``, the idiomatic callable
     transform/sampler object) a hard leaf, leaving its held generator unwitnessed (false
-    VERIFIED). r55 C6: this predicate now gates ONLY the dual-walk of container/weakref
+    VERIFIED). This predicate gates ONLY the dual-walk of container/weakref
     SUBCLASS own-attribute surfaces (the Mapping / Collection / ``weakref.ref`` branches);
     the sweep's terminal fallback expands every other node through the authoritative
     ``gc.get_referents`` enumerator (:meth:`_inert_gc_children`) instead of this
@@ -59,10 +59,10 @@ def _is_recursable_custom_holder(value: Any) -> bool:
 
     if value is None or isinstance(value, (str, bytes, bytearray, int, float, bool, complex)):
         return False
-    # r51 hon1_1: an nn.Module is a recursable holder. This branch MUST precede the
+    # An nn.Module is a recursable holder. This branch MUST precede the
     # module / torch-namespace gates below because a torch built-in module (``nn.Linear``)
     # lives in the skipped ``torch`` top-level namespace -- the gate would otherwise
-    # short-circuit it to a hard leaf, the hon_1 hole.
+    # short-circuit it to a hard leaf.
     if isinstance(value, torch.nn.Module):
         return True
     if isinstance(value, type):
@@ -71,8 +71,8 @@ def _is_recursable_custom_holder(value: Any) -> bool:
         return False
     if isinstance(value, (np.ndarray, np.generic)):
         return False
-    if isinstance(value, torch.Tensor):  # r51 hon1_1: was ``(torch.Tensor, torch.nn.Module)``;
-        return False  # nn.Module is now recursable via the branch above.
+    if isinstance(value, torch.Tensor):
+        return False  # nn.Module is recursable via the branch above.
     module = getattr(type(value), "__module__", "") or ""
     if module.split(".", 1)[0] in _CUSTOM_HOLDER_SKIP_MODULES:
         return False
@@ -85,15 +85,15 @@ def _is_recursable_custom_holder(value: Any) -> bool:
 
 
 def _custom_holder_children(value: Any) -> list[Any]:
-    """Return an inert custom holder's attribute values (r42 corr2_1).
+    """Return an inert custom holder's attribute values.
 
     Reads only ``__dict__`` values and ``__slots__`` slot values (via the slot member
     descriptor, never ``getattr`` -- so no property getter and no ``__getattr__`` fires).
-    r61 corr_1: slot descriptors resolve through :func:`_resolve_slot_member`, so a
+    Slot descriptors resolve through :func:`_resolve_slot_member`, so a
     PRIVATE slot (``__slots__ = ("__rng",)`` -- class-dict key ``_Class__rng`` via
     CPython name mangling) is read like any other; every caller (registered-module
     seed, Mapping/Collection dual-walk, weakref-subclass, numeric-payload branch)
-    inherits the fix at this single choke point. r63: the resolver prefers the
+    inherits the fix at this single choke point. The resolver prefers the
     mangled private descriptor over any raw class-dict shadow and returns ONLY an
     inert ``MemberDescriptorType`` (or ``None`` -- slot skipped), so a planted raw
     shadow can neither hide the real slot value nor execute a hostile ``__get__``.
@@ -130,29 +130,29 @@ def _custom_holder_children(value: Any) -> list[Any]:
 
 
 def _is_trusted_leaf_class(klass: type) -> bool:
-    """Return whether the class-surface edge treats ``klass`` as a trusted leaf (r53 corr).
+    """Return whether the class-surface edge treats ``klass`` as a trusted leaf.
 
     ``object`` / ``type`` and any class whose OWN raw ``__module__`` roots in
     :data:`_CUSTOM_HOLDER_SKIP_MODULES` (torch / numpy / stdlib runtime internals) OR in
-    :data:`_STDLIB_CLASS_LEAF_MODULES` (r56 amb_1: the WHOLE stdlib, structurally, not a
+    :data:`_STDLIB_CLASS_LEAF_MODULES` (the WHOLE stdlib, structurally, not a
     hand-maintained denylist) are leaves -- their class dicts are implementation noise,
-    mirroring the instance-side module gate. The r45 removal of ``collections`` from the
-    INSTANCE-side skip set (so ``deque`` / ``UserList`` contents descend) must not walk
+    mirroring the instance-side module gate. ``collections`` is absent from the
+    INSTANCE-side skip set (so ``deque`` / ``UserList`` contents descend), which must not walk
     stdlib CLASS dicts: ``collections.abc`` ABCs in a container subclass's MRO carry
     ``_abc_impl`` whose caches are process-global registries (the ambient escape).
     Instance-side descent never needed the stdlib class-dict surface; a generator
     monkeypatched ONTO a stdlib class object is shared runtime state, the same
     documented residual family as a shared module global. ``__main__`` is explicitly
     NOT a leaf even though ``sys.stdlib_module_names`` lists it -- a model class defined
-    in a script/notebook must keep its r53 class-attribute coverage. ``__module__`` is
+    in a script/notebook must keep its class-attribute coverage. ``__module__`` is
     read through the base ``type`` getset (``type.__dict__["__module__"].__get__``),
     never ``getattr``, so a hostile metaclass property never fires (probed). The getset
     is pure C on both class shapes: a HEAP class reads its ``tp_dict`` entry (identical
-    to the former raw-dict read), while a STATIC C extension type (``np.ndarray`` /
+    to a raw-dict read), while a STATIC C extension type (``np.ndarray`` /
     ``np.float64`` / ``builtin_function_or_method``) derives it from ``tp_name`` -- those
-    types store NO dict entry, so the former raw-dict read returned ``None`` and walked
-    every C extension implementation class; r63 requires the stock numeric-payload
-    classes leafed once the payload branch enqueues ``type(value)``. An
+    types store NO dict entry, so a raw-dict read would return ``None`` and walk
+    every C extension implementation class; the stock numeric-payload
+    classes must be leafed because the payload branch enqueues ``type(value)``. An
     unreadable or non-string ``__module__`` fails toward WALKING the class -- the walk
     is inert, so the unprovable case errs toward MORE coverage, never code execution.
     """
@@ -170,7 +170,7 @@ def _is_trusted_leaf_class(klass: type) -> bool:
 
 
 def _shared_namespace_dict_ids() -> frozenset[int]:
-    """Identity keys of every loaded module's ``__dict__`` (r55 C6 exclusion set).
+    """Identity keys of every loaded module's ``__dict__`` (the exclusion set).
 
     A function's ``__globals__`` / ``__builtins__`` and any other reference
     into a live module namespace are SHARED state, not model state: expanding
@@ -179,7 +179,7 @@ def _shared_namespace_dict_ids() -> frozenset[int]:
     "a generator held in a shared module global, drawn on a pre-existing
     non-hooked thread" the explicit documented residual of the inert sweep.
 
-    r57 C6 follow-up: this registry is NOT the only wall for a function's
+    This registry is NOT the only wall for a function's
     namespace -- ``_inert_gc_children`` additionally drops a ``FunctionType``
     node's own ``__globals__`` / ``__builtins__`` referents by ROLE, so an
     ``exec``/``torch.fx``-generated function whose synthetic globals dict is
@@ -195,7 +195,7 @@ def _shared_namespace_dict_ids() -> frozenset[int]:
 
 
 def _inert_gc_children(value: Any, shared_namespace_ids: frozenset[int]) -> list[Any]:
-    """Return a node's AUTHORITATIVE inert reference edges (r55 C6, corr_2/corr_4).
+    """Return a node's AUTHORITATIVE inert reference edges.
 
     ``gc.get_referents(value)`` runs CPython ``tp_traverse`` -- pure C field
     enumeration that NEVER executes Python: no property getter, descriptor
@@ -203,8 +203,8 @@ def _inert_gc_children(value: Any, shared_namespace_ids: frozenset[int]) -> list
     ``@property``/``__getattr__`` counter stays at zero). Unlike the replaced
     hand-maintained callable-interior vocabulary (closure/defaults/kwdefaults/
     partial/property/...bound-method fields), the traverse exposes EVERY inert
-    reference field an object type declares -- ``__annotations__`` (r54
-    corr_2), ``functools`` wrapper ``__wrapped__`` chains (r54 corr_4),
+    reference field an object type declares -- ``__annotations__``,
+    ``functools`` wrapper ``__wrapped__`` chains,
     ``__dict__``, slots, cells -- so a new hiding field is unreachable only if
     CPython itself cannot reach it for garbage collection. This is a ROOTED
     per-object enumerator feeding the existing cycle-guarded, node-capped
@@ -218,19 +218,19 @@ def _inert_gc_children(value: Any, shared_namespace_ids: frozenset[int]) -> list
     identity, registry-independent). Everything else is enqueued and handled
     by the sweep's typed branches (a referent dict via the Mapping protocol, a
     referent class via the trusted-leaf-gated class-surface branch, a referent
-    RNG via the digest). r61 hon_1: a :data:`_NUMERIC_PAYLOAD_LEAF_TYPES`
+    RNG via the digest). A :data:`_NUMERIC_PAYLOAD_LEAF_TYPES`
     node (tensor / ndarray / numpy scalar) is NOT dropped -- as a referent it
     is enqueued like any other node, and on its own visit it contributes
     EXACTLY its Python instance ``__dict__`` / ``__slots__`` values via
     :meth:`_custom_holder_children` PLUS its class-surface edge
-    (``type(value)``, r63 -- routed through the trusted-leaf-gated class
+    (``type(value)``, routed through the trusted-leaf-gated class
     branch so a class-attribute generator on a user-defined subclass is
     inventoried while stock torch/numpy classes stay leaves); never
     ``gc.get_referents`` on the C object, so the numeric buffer / autograd
     internals stay unwalked while ``weight.rng = default_rng()`` is
     inventoried.
 
-    r57 C6 (r56 hon_1): a BOUND C callable (``BuiltinFunctionType`` /
+    A BOUND C callable (``BuiltinFunctionType`` /
     ``MethodWrapperType``) contributes exactly its ``__self__`` RECEIVER --
     for ``gen.random`` / ``RandomState().rand`` /
     ``random.Random(0).random`` the receiver IS the RNG state holder, and
@@ -239,13 +239,13 @@ def _inert_gc_children(value: Any, shared_namespace_ids: frozenset[int]) -> list
     node: a module-level C function (``math.sqrt`` / ``np.array`` -- module
     ``__self__``; ``torch.relu`` / ``torch.zeros`` -- ``None``/absent
     ``__self__``) stays a leaf, a shared-namespace or expansion-leaf
-    receiver stays walled (the r47/r56 ambient-escape closes are untouched),
+    receiver stays walled (the ambient-escape closes are untouched),
     and a class receiver (``int.from_bytes``) is enqueued into the
     trusted-leaf-gated class branch. The node NEVER expands generically:
     ``gc.get_referents(torch.relu)`` would enqueue its defining
     ``torch._C`` type -- targeted receiver-enqueue beats blanket expansion.
 
-    r57 C6 follow-up (callable-ambient-escape close): a ``FunctionType``
+    A ``FunctionType``
     node -- a plain Python function, a lambda, a ``functools.wraps``-style
     wrapper, or a TorchLens-wrapped torch op (after ANY capture in the
     process, ``wrap_torch()`` rebinds ``torch.relu`` / ``torch.zeros`` from
@@ -256,12 +256,12 @@ def _inert_gc_children(value: Any, shared_namespace_ids: frozenset[int]) -> list
     ``__builtins__``. Registry membership (``shared_namespace_ids``) is NOT
     relied on for these two edges, because an ``exec``/``torch.fx``/dynamo-
     generated function carries a SYNTHETIC globals dict that is no loaded
-    module's ``__dict__`` -- pre-fix, one such attribute walked its entire
-    namespace (the r47/r56 ambient-escape class: under a large ambient
+    module's ``__dict__`` -- without the role-based drop, one such attribute would walk
+    its entire namespace (the ambient-escape class: under a large ambient
     graph the node cap is exhausted BEFORE the model's own generator).
     Every OTHER function edge stays enqueued, exactly like the generic
     fallback: ``__defaults__`` / ``__kwdefaults__`` / ``__closure__`` /
-    ``__annotations__`` (r54 corr_2) / the function's own ``__dict__``
+    ``__annotations__`` / the function's own ``__dict__``
     (``fn.stash = gen``) keep their pinned generator coverage, and the
     ``__module__`` / ``__name__`` / ``__qualname__`` / ``__doc__`` metadata
     referents are inert terminals (a ``str`` has no referents). Builtin-vs-
@@ -293,7 +293,7 @@ def _inert_gc_children(value: Any, shared_namespace_ids: frozenset[int]) -> list
             or isinstance(receiver, _AMBIENT_BRIDGE_LEAF_TYPES)
         ):
             return []
-        # r61 hon_1: a NUMERIC-PAYLOAD receiver (``tensor.add.__self__`` is the
+        # A NUMERIC-PAYLOAD receiver (``tensor.add.__self__`` is the
         # tensor) is enqueued -- its own visit walks instance state only.
         return [receiver]
     if isinstance(value, FunctionType):
@@ -318,10 +318,10 @@ def _inert_gc_children(value: Any, shared_namespace_ids: frozenset[int]) -> list
     if isinstance(value, _AMBIENT_BRIDGE_LEAF_TYPES):
         return []
     if isinstance(value, _NUMERIC_PAYLOAD_LEAF_TYPES):
-        # r61 hon_1: never ``gc.get_referents`` on a tensor/ndarray (the C
+        # Never ``gc.get_referents`` on a tensor/ndarray (the C
         # buffer / autograd internals stay unwalked), but the Python instance
         # ``__dict__`` / ``__slots__`` surfaces are real inert holder state.
-        # r63 (r62 class-surface MED): the node's CLASS surface flows too --
+        # The node's CLASS surface flows too --
         # ``type(value)`` is enqueued into the sweep's trusted-leaf-gated
         # class branch (raw mappingproxy reads, per-class dedup), so a
         # class-attribute generator on a USER-defined Tensor / Parameter /
@@ -343,7 +343,7 @@ def _inert_gc_children(value: Any, shared_namespace_ids: frozenset[int]) -> list
 
 
 def _exposes_queue_protocol(value: Any) -> bool:
-    """Return whether ``value``'s TYPE implements the standard queue protocol (r45 hon1_1).
+    """Return whether ``value``'s TYPE implements the standard queue protocol.
 
     Duck-typed on the CLASS (never the instance, so no property getter or ``__getattr__``
     side effect fires): ``get`` + ``put`` + (``qsize`` or ``empty``) as callables. This
@@ -361,7 +361,7 @@ def _exposes_queue_protocol(value: Any) -> bool:
 
 
 def _opaque_queue_provably_empty(value: Any) -> bool:
-    """Return whether an opaque queue is NON-MUTATINGLY provably empty (r47 hon1_2).
+    """Return whether an opaque queue is NON-MUTATINGLY provably empty.
 
     ``queue.SimpleQueue`` / ``multiprocessing.Queue`` expose no non-mutating payload snapshot
     (``.get`` would DRAIN), so their contents cannot be inventoried. But ``empty()`` and
@@ -482,7 +482,7 @@ def _module_namespace_class_attr_eligible(value: Any) -> bool:
 
 
 def _class_attr_surface(klass: type) -> tuple[Any, ...]:
-    """Eligible raw class-dict values across ``klass``'s MRO plus its metaclass MRO (r39).
+    """Eligible raw class-dict values across ``klass``'s MRO plus its metaclass MRO.
 
     ``CLS.gen`` resolves through ``type(CLS).__mro__`` and then ``CLS.__mro__``
     entirely in C -- no Python frame -- so a generator stored as a BASE-class or

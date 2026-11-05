@@ -1,15 +1,15 @@
-"""The profiler span registry: one stack, three altitudes (torchnative W1.1).
+"""The profiler span registry: one stack, three altitudes (torchnative.1).
 
 Spans are registered AT ENTRY with identity-carrying names -- a crash
 mid-span leaves an honest open record instead of nothing -- and popped in
 ``finally``. Every span carries ``(pid, tid, device, rank, clock_domain)``
 and an owner classification including the MANDATORY named
-``torchlens_internal`` bucket (TN-D11: half the markers on a real capture
+``torchlens_internal`` bucket (half the markers on a real capture
 are our own bookkeeping; without the bucket they would be published under
 torch's name).
 
 Timestamps are ``time.monotonic_ns()`` and stay in that clock domain; they
-are never projected onto Kineto's clock (W1.4 boundary).
+are never projected onto Kineto's clock.
 
 Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -34,7 +34,7 @@ __tl_layer__ = "L5"
 ALTITUDES = ("op", "grad_fn_fire", "aten")
 
 #: Closed owner classification. ``torchlens_internal`` is mandatory
-#: vocabulary (TN-D11); ``user_region`` is the tl.region bucket; ``model``
+#: vocabulary; ``user_region`` is the tl.region bucket; ``model``
 #: is captured model work; ``unknown`` never masquerades as any of them.
 OWNER_KINDS = ("model", "user_region", "torchlens_internal", "unknown")
 
@@ -143,7 +143,7 @@ class SpanRegistry:
                 f"owner={owner!r} is not one of {OWNER_KINDS}; the owner "
                 "classification (incl. the mandatory torchlens_internal "
                 "bucket) is what keeps our own bookkeeping from being "
-                "published under torch's name (TN-D11).",
+                "published under torch's name.",
                 code="span_owner_invalid",
                 owner=owner,
                 remedy=f"Use one of {OWNER_KINDS}.",

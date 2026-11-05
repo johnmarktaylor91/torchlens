@@ -69,7 +69,7 @@ class RunnableTraceState:
     input_metadata_reads: dict[Any, Any] = field(default_factory=dict)
     input_label_layouts: Mapping[str, Any] | None = None
     module_training_modes: Mapping[str, bool] | None = None
-    #: Session-scoped STATE-COMPROMISED latch (L4 5.4, never persisted): set when
+    #: Session-scoped STATE-COMPROMISED latch (never persisted): set when
     #: a declared-state restore failed AFTER execution, leaving the LIVE MODEL's
     #: state unknown. Deliberately NOT the poison bit -- the trace's recorded
     #: path facts are not a lie; only live/fast re-execution is refused.

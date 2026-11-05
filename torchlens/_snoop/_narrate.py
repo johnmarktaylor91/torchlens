@@ -1,4 +1,4 @@
-"""Post-hoc narration: one renderer, three carriers (snoop D5, tail 1).
+"""Post-hoc narration: one renderer, three carriers.
 
 ``Trace.narrate()``, ``PartialTrace.narrate()``, and ``Recording.narrate()``
 all render the same grammar from the same formatter. This is the headline

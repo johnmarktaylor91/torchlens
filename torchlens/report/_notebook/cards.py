@@ -34,7 +34,7 @@ __all__ = [
 ]
 
 #: One-line sentinel returned instead of the full card when the treescope
-#: bridge just rendered this object (memo 3.6; wording is [UI-SPRINT]).
+#: bridge just rendered this object (wording is provisional).
 BRIDGE_SENTINEL_HTML = (
     '<div class="tl-card-sentinel">card omitted: rendered by the treescope bridge above</div>'
 )

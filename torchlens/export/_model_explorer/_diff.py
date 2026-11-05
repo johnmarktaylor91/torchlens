@@ -1,6 +1,6 @@
-"""Bundle value diff for Model Explorer's split pane (memo D15).
+"""Bundle value diff for Model Explorer's split pane.
 
-With the universal D2 id rule, two captures of the same architecture have
+With the universal node-id rule, two captures of the same architecture have
 IDENTICAL id sets, so Model Explorer's own machinery does the matching: the
 app's "Match node id" sync dropdown costs one documented step and the embed
 self-activates config sync when ``syncNavigationData`` is present.

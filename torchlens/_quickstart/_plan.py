@@ -1,11 +1,10 @@
-"""Input-rung law and the normalized pre-capture call description (quickstart B4).
+"""Input-rung law and the normalized pre-capture call description.
 
-This module is the BOTTOM of the four-layer quickstart split (quickstart memo
-D1): it depends only on torch and the L0 error basis, so the resolver ->
-inference -> capture import cycle is impossible by construction. Everything
-here is DOCUMENTED-UNSTABLE pending the naming sprint.
+This module is the BOTTOM of the four-layer quickstart split: it depends only on torch and the L0
+error basis, so the resolver -> inference -> capture import cycle is impossible by construction.
+Everything here is DOCUMENTED-UNSTABLE pending the naming sprint.
 
-The ladder's law (memo D2): a real input XOR ``input_shape=`` XOR nothing.
+The ladder's law: a real input XOR ``input_shape=`` XOR nothing.
 Mixing is a typed refusal before any forward; a failed explicit size never
 falls through to inference; a failed inference never falls through to a stock
 tensor.
@@ -22,8 +21,8 @@ from .._errors import ArgumentConflictError
 
 __tl_layer__ = "L2"
 
-#: Closed rung vocabulary (memo D4). Rung 4 (meta) is reserved behind the D8
-#: ruling; the resolver refuses it typed rather than guessing.
+#: Closed rung vocabulary. Rung 4 (meta) is reserved and not yet
+#: supported; the resolver refuses it typed rather than guessing.
 RUNG_GOLD = 1
 RUNG_DECLARED = 2
 RUNG_INFERRED = 3
@@ -43,7 +42,7 @@ class InputPlan:
     An ``InputPlan`` always holds CONCRETE forward arguments: synthesis (for
     the declared rung) and inference (for the zero-argument rung) happen
     before a plan exists. The concrete-input capture primitive consumes plans
-    and nothing else, so it can never invoke zero-input resolution (memo D1).
+    and nothing else, so it can never invoke zero-input resolution.
 
     Attributes
     ----------
@@ -57,7 +56,7 @@ class InputPlan:
     verified_trace:
         On the inferred rung only: the exact verification ``Trace`` the
         inference search already captured, consumed by the surface that asked
-        instead of recapturing (memo D9 in-call reuse). ``None`` elsewhere.
+        instead of recapturing (in-call reuse). ``None`` elsewhere.
     """
 
     rung: int
@@ -84,7 +83,7 @@ def resolve_rung(
     input_kwargs: dict[str, Any] | None,
     input_size: Any,
 ) -> int:
-    """Apply the precedence law and return the resolved rung (memo D2).
+    """Apply the precedence law and return the resolved rung.
 
     Parameters
     ----------

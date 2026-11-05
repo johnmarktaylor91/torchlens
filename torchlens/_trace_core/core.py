@@ -122,15 +122,15 @@ class TraceCore:
         """Create an empty core."""
 
         self.tables: dict[str, KindTable] = {}
-        # The Op row store (op_store.OpRowStore) once the M5 ingress binds it;
+        # The Op row store (op_store.OpRowStore) once the ingress binds it;
         # None until materialize step 0 creates it for a captured run.
         self.ops: Any = None
-        # The M8 non-Op kind tables (param/buffer/module/module_call/
+        # The non-Op kind tables (param/buffer/module/module_call/
         # func_call_location), populated by the build passes' adopt_records.
         self.kind_rows: dict[str, Any] = {}
         # The canonical label -> op-row index, bound at the relation freeze
         # (final layer_label per live core-backed op). The core-side index
-        # the M10 Trace decomposition resolves lookups through.
+        # the Trace decomposition resolves lookups through.
         self.label_rows: dict[str, int] = {}
         self.pool = InternPool()
         self.closures = ClosurePool()
@@ -138,7 +138,7 @@ class TraceCore:
         self.groups: dict[str, MembershipGroups] = {}
         self.payloads = PayloadArena()
         self.overlay = RowOverlay()
-        # Weak-valued facade cache (the M11 strong->weak flip): identity is
+        # Weak-valued facade cache (the strong->weak flip): identity is
         # stable while ANY reference lives, and an uninspected row retains no
         # facade. Record lifetime stays pinned by the trace-side lookup
         # containers (aliases-v1 row 1b), never by this cache. ``Op`` is
@@ -266,7 +266,7 @@ class TraceCore:
         child.ops = OpStoreView(self.ops, group_tables) if self.ops is not None else None
         if child.ops is not None:
             # The fork core is a co-owner of the shared sealed base: payload
-            # eviction (fix/fork F4) must wait for the LAST core -- parent or
+            # eviction must wait for the LAST core -- parent or
             # any fork -- to be garbage-collected, or a live fork's reads
             # through the base would lose their payloads.
             child.ops.base.adopt_payload_owner(child)

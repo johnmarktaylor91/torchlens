@@ -305,7 +305,7 @@ def _is_halt_only_capture(options: _RecordingConfig) -> bool:
     The fast path is deliberately narrow: no save predicate, no default
     retention, no intervention, no gradient capture, and no armed echo
     narrator (narration needs the full per-event context build and the
-    committed-event ordering, snoop D1). That preserves the save-then-halt
+    committed-event ordering). That preserves the save-then-halt
     ordering for every configuration that can retain payloads or metadata.
     """
 

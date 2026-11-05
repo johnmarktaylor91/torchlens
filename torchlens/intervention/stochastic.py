@@ -1,25 +1,25 @@
-"""Stochastic/population edit verbs and the derived-seed law (F02, edits memo).
+"""Stochastic/population edit verbs and the derived-seed law.
 
 The stochastic donor family causal scrubbing needs, built on ONE primitive
-(edits memo D1): :func:`sample_from` returns an immutable donor-sampling PLAN;
+::func:`sample_from` returns an immutable donor-sampling PLAN;
 ``tl.patch_from(plan)`` applies it; every other stochastic verb is a named
 lowering onto the same substrate, and every mean is a deterministic reduction
 over the same population noun -- never a draw in disguise, never a fake seed.
 Every spelling is DOCUMENTED-UNSTABLE pending naming-session ratification.
 
-THE HONEST DRAW LAW (D4-D7), the panel's centerpiece. Both shipped behaviors
+THE HONEST DRAW LAW, the panel's centerpiece. Both shipped behaviors
 were measured defective: an unseeded stochastic edit is silently re-rolled by
 later unrelated edits, and a seeded one draws the IDENTICAL sample at every
 pass, step, and site. The fix is one stateless mechanism:
 
 - ``seed=`` is a REQUIRED int or the literal ``"auto"``; ``None`` never
-  reaches a hook (D4).
+  reaches a hook.
 - ``"auto"`` canonicalizes ONCE per capture into
   ``base_seed = H(trace._options_seed, rule_identity, population_identity)``
-  (D5 with the DIS-4 adjudication: the identity component is PERSISTED helper
+  (the identity component is PERSISTED helper
   identity, never a transient construction ordinal) -- never the ambient
   global RNG, and recorded.
-- Every logical firing derives its own seed statelessly (D6)::
+- Every logical firing derives its own seed statelessly::
 
       derived_seed = H(base_seed, population_identity, donor_group_id,
                        logical_firing_coordinate, target_row, draw_index,
@@ -29,12 +29,12 @@ pass, step, and site. The fix is one stateless mechanism:
 
 - ``donor_group_id`` is itself a CONTENT DIGEST of the plan's declared inputs
   (population identity, seed spelling, share_draw, agreement condition),
-  never a transient construction artifact (the D5 anti-transient rule scaled
+  never a transient construction artifact (the anti-transient rule scaled
   down to the group key): rerunning the same declared experiment -- fresh
   process, fresh objects, same declarations -- reproduces every draw, which
   is what the stateless law MEANS. Identical declarations are the same
   experiment by extensionality; deliberate cross-clause donor sharing stays
-  plan OBJECT reuse (D8), and the selection-batch normalizer disambiguates
+  plan OBJECT reuse, and the selection-batch normalizer disambiguates
   distinct equal-content ``per_rule``/``per_group`` plan objects inside one
   transaction with suffixes derived from each object's CLAUSE SELECTIONS
   (:func:`assign_batch_donor_groups`) -- never the clause ordinal, so a
@@ -44,26 +44,26 @@ pass, step, and site. The fix is one stateless mechanism:
   (fable51 audit AUD-CODE 2.2). Accidental kwargs-coincidence sharing
   within a batch still cannot happen.
 
-- ``share_draw=`` is a named, defaulted, RECORDED choice (D7):
+- ``share_draw=`` is a named, defaulted, RECORDED choice:
   ``"per_firing"`` (default -- each firing is a distinct node in the
   treeified scrub graph), ``"per_rule"`` (one draw for every firing --
   today's accidental behavior, now a choice), ``"per_group"`` (donor sharing
   across sites via one plan identity). The shipped ``noise`` /
   ``scramble_elements`` keep their frozen ``per_rule`` behavior forever.
 
-Every firing routes its audit through C03's ONE FireRecord builder: each realized
+Every firing routes its audit through the ONE FireRecord builder: each realized
 draw lands as a typed :class:`~torchlens.intervention._types.SamplingRecord` that
 ``build_fire_record`` lifts into the persisted ``FireRecord.sampling``, and as a
 ``ledger_notes`` line lifted into ``determinism_note``. No draw is session-only.
 
-Axis law (D24/D25): axes are NEVER inferred from rank. The ladder is explicit
+Axis law: axes are NEVER inferred from rank. The ladder is explicit
 ``axis=`` > facet/recipe-declared semantic role > registered model/site
 metadata > typed ``axis_semantics_unknown`` refusal. No axis-role evidence
 source is registered in v1, so named tokens (``"batch"``/``"position"``/
 ``"feature"``) refuse with the ladder in the message until the positions lane
 lands curated axis facts.
 
-Backend law (D36): the family executes on torch only. Construction, repr,
+Backend law: the family executes on torch only. Construction, repr,
 equality, and save-identity work everywhere; execution on a preview backend
 refuses at that backend's helper-resolution preflight (helper name not in the
 backend's supported table), BEFORE any forward or mutation.
@@ -96,7 +96,7 @@ __all__ = [
 
 _SHARE_DRAW_TOKENS = ("per_firing", "per_rule", "per_group")
 
-#: Closed named-axis tokens of the ``over=`` vocabulary (D17). They resolve
+#: Closed named-axis tokens of the ``over=`` vocabulary. They resolve
 #: through the axis ladder and refuse until axis-role evidence exists.
 _NAMED_AXIS_TOKENS = ("batch", "position", "feature")
 
@@ -121,7 +121,7 @@ def _mint_donor_group_id(
 ) -> str:
     """Mint the plan's donor group key as a CONTENT DIGEST of declared inputs.
 
-    Deterministic by design (D5's anti-transient rule applied to the group
+    Deterministic by design (the anti-transient rule applied to the group
     key): the same declared experiment reconstructed in a fresh process mints
     the same key, so the derived-seed law reproduces every draw on a rerun.
     ``agree_on`` callables have no stable content hash, so they contribute a
@@ -131,7 +131,7 @@ def _mint_donor_group_id(
     ``repr`` -- a repr is print-option dependent and rounds two different
     tensors to one string (fable51 audit AUD-CODE 3.8). Distinct
     equal-content plan objects inside ONE selection-batch transaction are
-    disambiguated by :func:`assign_batch_donor_groups` (D8), never at
+    disambiguated by:func:`assign_batch_donor_groups`, never at
     construction.
     """
 
@@ -194,7 +194,7 @@ def _datum_digest(value: Any) -> str:
 
 
 def _require_seed(seed: Any, verb: str) -> int | str:
-    """Enforce the D4 seed law at construction: an int or the literal ``"auto"``.
+    """Enforce the seed law at construction: an int or the literal ``"auto"``.
 
     Parameters
     ----------
@@ -236,7 +236,7 @@ def _base_seed(
     ctx: HookContext,
     verb: str,
 ) -> int:
-    """Resolve the base seed for one firing (D5, DIS-4 spelling).
+    """Resolve the base seed for one firing.
 
     An explicit int is its own base. ``"auto"`` derives from the capture's
     recorded ``trace.options.seed`` (threaded through ``run_ctx`` by the
@@ -260,7 +260,7 @@ def _base_seed(
 
 
 def _firing_coordinate(ctx: HookContext, share_draw: str) -> tuple[Any, ...]:
-    """Build the LOGICAL firing coordinate (D6) for one hook fire.
+    """Build the LOGICAL firing coordinate for one hook fire.
 
     ``per_firing``: ``(site, pass_index, generation_step)`` where ``site`` is
     the L1 site key when minted, else the pass-qualified label. ``per_group``
@@ -270,7 +270,7 @@ def _firing_coordinate(ctx: HookContext, share_draw: str) -> tuple[Any, ...]:
     idempotent and checkpoint recompute reuses the same draw. The
     ``generation_step`` slot reads ``run_ctx["generation_step"]``, which no
     door writes yet (the episode door owns that threading); it is ``None``
-    on every shipped path and stays in the formula so the D6 law's shape is
+    on every shipped path and stays in the formula so the law's shape is
     stable when it lands. The live door stamps ``site_key`` (and the module
     call pass) on its site proxy so both doors derive one coordinate; a
     door that cannot mint a key falls back to the pass-qualified label.
@@ -297,7 +297,7 @@ def _derived_seed(  # noqa: PLR0913 -- the D6 formula's seven NAMED components A
     draw_index: int = 0,
     leaf_path: tuple[int, ...] = (),
 ) -> int:
-    """Derive one firing's stateless seed (the D6 centerpiece formula)."""
+    """Derive one firing's stateless seed (the centerpiece formula)."""
 
     return _hash_seed(
         base_seed,
@@ -311,7 +311,7 @@ def _derived_seed(  # noqa: PLR0913 -- the D6 formula's seven NAMED components A
 
 
 def _leaf_path(ctx: HookContext) -> tuple[int, ...]:
-    """Read the composed-leaf path threaded by ``tl.compose`` (D6/D20)."""
+    """Read the composed-leaf path threaded by ``tl.compose``."""
 
     path = ctx.state.get("compose_leaf_path", ())
     return tuple(path) if isinstance(path, (tuple, list)) else ()
@@ -368,7 +368,7 @@ def _draw_digest(indices: Sequence[int]) -> str:
 
 
 # ----------------------------------------------------------------------
-# axis ladder (D24/D25) + the over= vocabulary (D17)
+# axis ladder + the over= vocabulary
 # ----------------------------------------------------------------------
 def _resolve_over_axes(
     over: Any, ndim: int | None, *, verb: str
@@ -450,7 +450,7 @@ def _normalize_over_axes(axes: tuple[Any, ...], ndim: int, verb: str) -> tuple[i
 
 
 def _require_explicit_axis(axis: Any, verb: str) -> int:
-    """Enforce the D24/D25 axis law at construction: explicit int or refuse."""
+    """Enforce the axis law at construction: explicit int or refuse."""
 
     if isinstance(axis, int) and not isinstance(axis, bool):
         return axis
@@ -482,7 +482,7 @@ def _normalize_fire_axis(axis: int, out: torch.Tensor, verb: str) -> int:
 
 
 # ----------------------------------------------------------------------
-# the sampling PLAN (D1, D8) and its patch application
+# the sampling PLAN and its patch application
 # ----------------------------------------------------------------------
 @dataclass(frozen=True)
 class SamplingPlan:
@@ -494,7 +494,7 @@ class SamplingPlan:
     law. ``donor_group_id`` is a CONTENT DIGEST of the declared inputs, so
     reconstructing the same declaration reproduces the same draws (the
     stateless law's whole point); deliberate donor sharing across clauses is
-    plan OBJECT reuse (D8), and the selection-batch normalizer
+    plan OBJECT reuse, and the selection-batch normalizer
     (:func:`assign_batch_donor_groups`) suffixes distinct equal-content
     ``per_rule``/``per_group`` plan objects inside one transaction by their
     clause selections so kwargs coincidence never shares a group.
@@ -522,7 +522,7 @@ class SamplingPlan:
         return f"sample_from|{self.population.identity}|{self.share_draw}|{self.donor_group_id}"
 
     def identity_kwargs(self) -> dict[str, Any]:
-        """JSON-scalar identity facts persisted on the helper spec (D14).
+        """JSON-scalar identity facts persisted on the helper spec.
 
         Identity travels, payloads never: the population payload itself rides
         the closure only (an ``opaque_audit`` helper), while these scalars
@@ -592,7 +592,7 @@ def _check_agreement_pair(agree_on: Any, matching: Any, verb: str) -> None:
 def _disclose_class_size(
     eligible_count: int, *, strict: bool, verb: str, ctx: HookContext | None
 ) -> None:
-    """Apply the D15 class-size-one rule: disclose by default, refuse strict.
+    """Apply the class-size-one rule: disclose by default, refuse strict.
 
     A conditioned "resample" over a class of one is a fixed patch wearing a
     sampler's name -- a reviewer must be able to SEE that.
@@ -647,12 +647,12 @@ def sample_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D1/D7/D
         The subject's datum: a bare value or ``OneDatum`` for whole-event
         donors (``PerRowDatums`` belongs to ``resample_rows_from``).
     seed:
-        REQUIRED int or ``"auto"`` (the D4 seed law).
+        REQUIRED int or ``"auto"`` (the seed law).
     share_draw:
         Recorded draw-sharing policy: ``"per_firing"`` (default),
-        ``"per_rule"``, or ``"per_group"`` (D7).
+        ``"per_rule"``, or ``"per_group"``.
     strict:
-        Refuse (rather than disclose) agreement classes of size 1 (D15).
+        Refuse (rather than disclose) agreement classes of size 1.
 
     Returns
     -------
@@ -730,7 +730,7 @@ def _resolve_trace_donor(member: Any, ctx: HookContext, out: torch.Tensor) -> to
 def _prove_event_geometry(
     donor: torch.Tensor, out: torch.Tensor, *, verb: str, axis: int | None = None
 ) -> None:
-    """Prove the D9 event geometry: whole-site match, or row match minus axis.
+    """Prove the event geometry: whole-site match, or row match minus axis.
 
     Anything else refuses printing BOTH shapes and the axis proof -- there is
     no elementwise fallback (that is ``scramble_elements``, and keeping the
@@ -766,10 +766,10 @@ def _prove_event_geometry(
 def plan_patch_helper(plan: SamplingPlan) -> Edit:
     """Lower ``tl.patch_from(plan)`` onto the sampling substrate.
 
-    One coherent donor per logical firing event (D1): the derived-seed law
+    One coherent donor per logical firing event: the derived-seed law
     picks one eligible member; tensor members must match the site geometry
-    exactly (D9); trace members resolve pass-qualified at the firing site.
-    Identity persists, payloads never (D14: ``opaque_audit``).
+    exactly; trace members resolve pass-qualified at the firing site.
+    Identity persists, payloads never (``opaque_audit``).
     """
 
     from ._helpers import _helper_spec
@@ -833,7 +833,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
                     "recomputation": bool(ctx.run_state.get("recomputation", False)),
                 },
             )
-            # External donors are detached snapshots by design (D37): target
+            # External donors are detached snapshots by design: target
             # upstream gradients cut, downstream preserved, both facts recorded.
             return donor.detach().to(device=out.device, dtype=out.dtype).clone()
 
@@ -847,7 +847,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
         is_batch_independent=True,
         metadata={"stochastic": True, "seeded": True},
     )
-    # Session-only handle for the D8 batch normalizer (object-identity
+    # Session-only handle for the batch normalizer (object-identity
     # grouping needs the live plan; the _tl_frozen_cache precedent). Never
     # a dataclass field: it must not persist, compare, or repr.
     object.__setattr__(spec, "_tl_sampling_plan", plan)
@@ -871,7 +871,7 @@ def _clause_selection_key(selection: Any) -> str:
 def assign_batch_donor_groups(
     pairs: Sequence[tuple[Any, Any]],
 ) -> list[tuple[Any, Any]]:
-    """Normalize donor groups across one selection-batch transaction (D8).
+    """Normalize donor groups across one selection-batch transaction.
 
     Donor sharing is a deliberate act: reusing ONE plan object across
     clauses keeps one ``donor_group_id`` (all its clauses share draws under
@@ -947,7 +947,7 @@ def assign_batch_donor_groups(
 def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
     """Create the self-population batch-row exchange (a draw WITHOUT replacement).
 
-    D24: REFUSES without a derived-or-explicit axis (a positional default is a
+    REFUSES without a derived-or-explicit axis (a positional default is a
     silent wrong-axis edit on ``batch_first=False`` stacks); batch extent 1
     refuses; identity permutations are legal and DISCLOSED, never silently
     excluded; gradients are graph-connected and permuted (an ``index_select``,
@@ -1029,7 +1029,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
                 "axis_proof": "explicit",
             }
             if indices == list(range(extent)):
-                # Identity permutations are legal and DISCLOSED (D24): a
+                # Identity permutations are legal and DISCLOSED: a
                 # derangement default would silently exclude legal draws.
                 record["identity_permutation"] = True
             _record_sampling(ctx, "permute_batch", record)
@@ -1055,7 +1055,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
     )
 
 
-def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D16/D24): the six declared inputs ARE the plan
+def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature: the six declared inputs ARE the plan
     source: Population,
     *,
     seed: int | str,
@@ -1069,7 +1069,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
     THE field-standard resampling ablation (never the elementwise scramble --
     that is ``scramble_elements``): each subject row is replaced by one
     coherent donor row drawn from the population, independently per row under
-    the derived-seed law (D6's ``target_row`` component).
+    the derived-seed law (its ``target_row`` component).
 
     DOCUMENTED-UNSTABLE spelling pending naming-session ratification.
 
@@ -1081,13 +1081,13 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
     seed:
         REQUIRED int or ``"auto"``.
     axis:
-        The subject value's batch axis, explicit (the D24/D25 axis law).
+        The subject value's batch axis, explicit (the axis law).
     group_by:
         Optional datum -> key callable over population datums.
     matching:
         Subject datums: ``PerRowDatums`` (one per batch row) or ``OneDatum``.
     strict:
-        Refuse agreement classes of size 1 (D15).
+        Refuse agreement classes of size 1.
 
     Examples
     --------
@@ -1250,7 +1250,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
 
 
 # ----------------------------------------------------------------------
-# directional dataset mean (D12 of the roster): set_direction_mean
+# directional dataset mean: set_direction_mean
 # ----------------------------------------------------------------------
 def _direction_mean_coefficient64(
     members: Sequence[torch.Tensor], axes: Sequence[int], unit64: torch.Tensor
@@ -1277,9 +1277,9 @@ def set_direction_mean(
     ``out - proj_v(out) + mean(coef(ref)) * v_hat``: the site's component
     along ``direction`` is replaced by the population's MEAN coefficient
     along the same direction -- a composition of the shipped project/steer
-    semantics with the D3 reducer (the mean coefficient is computed eagerly
+    semantics with the reducer (the mean coefficient is computed eagerly
     at construction and enters the hook as a detached constant).
-    Gradients flow through the orthogonal component only (D37).
+    Gradients flow through the orthogonal component only.
 
     Precision follows the site: a float64 site value uses a unit direction
     and mean coefficient computed in float64; any other floating dtype uses
@@ -1295,7 +1295,7 @@ def set_direction_mean(
         Tensor-membered population supplying the coefficient evidence.
     dim:
         Explicit axis of the site value that ``direction`` lives on (the
-        D24/D25 axis law: never guessed from rank).
+        explicit axis law: never guessed from rank).
 
     Examples
     --------
@@ -1394,7 +1394,7 @@ def set_direction_mean(
                     "mean_coefficient": site_coef,
                 },
             )
-            # Gradients through the orthogonal component only (D37): the
+            # Gradients through the orthogonal component only: the
             # projection subtraction stays graph-connected; the added mean
             # term is a detached constant.
             return out - projection + site_coef * aligned

@@ -1,22 +1,22 @@
-"""Semantic pooling builtins: token pooling + spatial presets (memo B5).
+"""Semantic pooling builtins: token pooling + spatial presets.
 
 Every preset here resolves RECORDED axis roles or refuses with a teaching
 message naming both remedies (declare roles, or use the explicit-axis
-primitive) — rank is never evidence (T-C5). Token pooling implements the
-three-valued mask policy (transforms memo decision 12):
+primitive) — rank is never evidence. Token pooling implements the
+three-valued mask policy:
 
 1. mask present and CONTRADICTING the tensor -> typed refusal;
 2. mask present -> mask-aware (``last`` gathers each row's GREATEST VALID
    index, never physical ``[:, -1]``);
 3. no mask anywhere -> refuse unless ``assume_no_padding=True``, which is
    recorded in the spec params (and thus the manifest) as the user's
-   assertion that batch-composition independence (T-C10) holds.
+   assertion that batch-composition independence holds.
 
 ``cls_token`` is a DISTINCT semantic name gated on recorded special-token
 facts — gpt2 REFUSES a fictional CLS — while ``first`` stays purely
 positional (first VALID index under the mask). A right-padded gpt2 run
-measured near-zero correlation between mask-blind and masked means (memo
-decision 12), so the naive spelling is silently wrong on real tokenizers.
+measured near-zero correlation between mask-blind and masked means, so the
+naive spelling is silently wrong on real tokenizers.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 """
@@ -38,7 +38,7 @@ __tl_layer__ = "L4"
 
 __all__ = ["channel_mean", "cls_token", "pool_spatial", "pool_tokens"]
 
-#: Closed token-pooling op vocabulary (memo section 4 roster).
+#: Closed token-pooling op vocabulary.
 _TOKEN_OPS: tuple[str, ...] = ("mean", "max", "first", "last")
 
 #: Closed spatial-pooling op vocabulary.
@@ -75,7 +75,7 @@ def _require_bool(name: str, key: str, value: Any) -> bool:
 
 
 def _require_float_domain(name: str, op: str, dtype: str) -> None:
-    """Refuse mean-family pooling over non-float domains (T-C7).
+    """Refuse mean-family pooling over non-float domains.
 
     Parameters
     ----------
@@ -99,7 +99,7 @@ def _require_float_domain(name: str, op: str, dtype: str) -> None:
 
 
 def _mean_accumulate(tensor: torch.Tensor) -> torch.Tensor:
-    """Return the fp32-accumulation view of ``tensor`` for mean-family math (T-C7).
+    """Return the fp32-accumulation view of ``tensor`` for mean-family math.
 
     Parameters
     ----------
@@ -116,7 +116,7 @@ def _mean_accumulate(tensor: torch.Tensor) -> torch.Tensor:
 
 
 def _resolve_token_axis(spec_name: str, ctx: TransformContext | None, rank: int) -> int:
-    """Resolve the token axis from recorded roles or refuse teaching (T-C5).
+    """Resolve the token axis from recorded roles or refuse teaching.
 
     Parameters
     ----------
@@ -132,7 +132,7 @@ def _resolve_token_axis(spec_name: str, ctx: TransformContext | None, rank: int)
     -------
     int
         The token axis (guaranteed ``>= 1`` — ``"batch"`` conventionally
-        labels axis 0 and a token role on axis 0 would violate T-C2).
+        labels axis 0 and a token role on axis 0 would violate the stimulus-axis rule).
     """
 
     axis = axis_for_role(ctx.roles if ctx is not None else None, rank, "token")
@@ -463,7 +463,7 @@ def pool_tokens(op: str, assume_no_padding: bool = False) -> TransformSpec:
         mask, never physical endpoints (those need the recorded assertion).
     assume_no_padding:
         Recorded caller assertion that every position is valid; the only
-        licence for mask-free pooling (three-valued policy, decision 12).
+        licence for mask-free pooling (three-valued policy).
 
     Returns
     -------
@@ -567,7 +567,7 @@ def _cls_token_apply(
 def cls_token(assume_no_padding: bool = False) -> TransformSpec:
     """Gather the CLS token (first VALID position, gated on recorded facts).
 
-    A DISTINCT semantic name (memo decision 12): it requires recorded
+    A DISTINCT semantic name: it requires recorded
     special-token evidence via ``TransformContext(special_tokens=...)`` —
     gpt2 REFUSES a fictional CLS — and gathers the first valid index under
     the mask, which is the CLS position under both padding sides.

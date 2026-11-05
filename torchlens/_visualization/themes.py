@@ -6,7 +6,7 @@ semantic palette (N4: the rendered node-role colors resolve through the
 active skin at :func:`apply_theme_to_spec`, replacing the dead
 ``legend_items`` data deleted in the same change), a sequential ramp stop
 list (low value first, blended in OKLab; ``_ramps``), and the declared
-NEUTRAL "aggregate, not encoded" fill (N17) for collapsed boxes under an
+NEUTRAL "aggregate, not encoded" fill for collapsed boxes under an
 active channel.
 
 The default ``torchlens`` skin and the ``colorblind`` skin render the
@@ -57,7 +57,7 @@ RELEASED_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     }
 )
 
-#: The Okabe-Ito semantic role palette (memo FORK-2 branch A set) with the
+#: The Okabe-Ito semantic role palette (memo branch A set) with the
 #: ruled grey weights (no blue in any skin: trainable light grey, frozen dark
 #: grey, generic a paler neutral grey). Each grey pair sits at least 40 apart
 #: under every colour-vision simulation; the frozen grey keeps black ink
@@ -119,12 +119,12 @@ _DARK_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
 
 #: The dark skin's neutral near-black page (no blue tint).
 DARK_PAGE = "#141414"
-#: The declared "aggregate, not encoded" fills (N17): a pale warm stone on the
+#: The declared "aggregate, not encoded" fills: a pale warm stone on the
 #: light skins and a dark warm stone on the dark one, never a role colour.
 LIGHT_AGGREGATE_FILL = "#EDE7DE"
 DARK_AGGREGATE_FILL = "#2E2A25"
 
-#: Theme fields deleted outright (lane F12; no alias kept).
+#: Theme fields deleted outright (no alias kept).
 _REMOVED_THEME_MEMBERS: dict[str, str] = {
     "legend_items": (
         "legends now derive from the active encoding channels; style them through "
@@ -163,10 +163,10 @@ class VisualizationTheme:
         an encoded-lowest node indistinguishable from an unencoded one).
     neutral_aggregate_fill:
         The declared "aggregate, not encoded" fill for collapsed boxes and
-        fold ellipses while a channel is active (N17) -- never a fill that
+        fold ellipses while a channel is active -- never a fill that
         already carries a semantic meaning elsewhere in the same picture.
     typography:
-        The one typography record (vizmech D29): pinned family plus semantic
+        The one typography record (vizmech): pinned family plus semantic
         size roles. Attribute builders inject the family into any scope the
         preset dicts leave unset, so no theme can regress to the engine's
         serif fallback.
@@ -199,7 +199,7 @@ class VisualizationTheme:
 
 
 # Every preset pins a font family on ALL THREE scopes (graph covers cluster
-# captions and the graph caption). Before vizmech D29 the default preset
+# captions and the graph caption). Before the default preset
 # pinned nothing, making it the only serif theme (Graphviz falls back to
 # Times) and the theme sweep alone moved measured label geometry (59 -> 68
 # violations). The family choice is fork FK3; the pinning is decided.
@@ -225,7 +225,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_border="#222222",
         default_font="#111111",
         semantic_palette=LEGACY_SEMANTIC_PALETTE,
-        # Grayscale ramp (review r3 working anchors): print-safe by design.
+        # Grayscale ramp (review working anchors): print-safe by design.
         ramp=("#F0F0F0", "#969696", "#252525"),
         neutral_aggregate_fill=LIGHT_AGGREGATE_FILL,
     ),
@@ -279,7 +279,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
 }
 
 
-#: FORK-5 two-step flip switch (megaplan; collapse memo item 10): the
+#: two-step flip switch (megaplan; collapse memo item 10): the
 #: kind-word title rows, K3 peripheries, and reuse accents ship as machinery
 #: behind this flag until the legibility protocol (collapse memo item 11,
 #: run by the themes lane's evaluator battery) ratifies the default flip.
@@ -290,7 +290,7 @@ COLLAPSE_KIND_TOKENS_DEFAULT = False
 
 @dataclass(frozen=True)
 class CollapseTokens:
-    """Per-kind visual tokens for collapsed units (collapse memo D10).
+    """Per-kind visual tokens for collapsed units (collapse).
 
     ONE table holds every kind's marks and wording so the naming sprint
     renames in one place and a compact-label mode is a table change (memo
@@ -396,7 +396,7 @@ def resolve_theme(theme: str) -> VisualizationTheme:
 
 
 #: Reverse map from the rendered module constants to semantic ROLES: the one
-#: table that makes every skin's palette LIVE (N4). The constants stay the
+#: table that makes every skin's palette LIVE. The constants stay the
 #: renderer-side spelling; the skin owns the pixels.
 _CONSTANT_ROLES: dict[str, str] = {
     "#98FB98": "input",
@@ -488,7 +488,7 @@ def apply_theme_to_spec(spec: NodeSpec, theme: VisualizationTheme) -> NodeSpec:
     through the skin's LIVE palette here -- the N4 wiring: every rendered
     node spec passes through this seam, so a skin actually themes the
     colours that matter. The default skin's palette is the identity mapping
-    of the historical constants (FORK-2, the flip, is a maintainer fork).
+    of the historical constants (the flip, is a maintainer fork).
 
     Parameters
     ----------
@@ -704,7 +704,7 @@ def theme_graph_attrs(
     font_size:
         Optional graph font size.
     dpi:
-        Optional output DPI. RASTER-ONLY (vizmech D23): on vector formats
+        Optional output DPI. RASTER-ONLY (vizmech): on vector formats
         graphviz's ``dpi`` attribute multiplies the coordinate space itself,
         so ``draw(dpi=300)`` produced a 36-inch PDF page and an SVG whose
         ``viewBox`` and declared size disagreed. When ``fileformat`` names a

@@ -4,7 +4,7 @@ Three entry-time guards that run before (or instead of) the per-trace save
 pipeline: the two PERMANENT erasure-prevention invariants (edge-substitution
 carriers and the shard-local disclosure, both keyed on the ACTIVE SCHEMA so a
 regression re-fires them), and the Bundle container-door delegation that
-routes ``bundle.save(path, ...)`` through ``Bundle.save`` (foldB D8/D9); plus
+routes ``bundle.save(path, ...)`` through ``Bundle.save``; plus
 the blob-loop refusal of a tensor a strict (portable) save cannot write. Split
 out of ``torchlens/_io/bundle.py`` to respect its size ceiling (R43
 split-never-raise); ``bundle.py`` re-exports these names, so the monkeypatch
@@ -55,14 +55,14 @@ __tl_layer__ = "L3"
 
 
 def _refuse_edge_intervened_save(trace: Any) -> None:
-    """PERMANENT erasure-prevention invariant for edge substitutions (L6 4.3).
+    """PERMANENT erasure-prevention invariant for edge substitutions.
 
     The tlspec v8 coordinated bump persists ``Op.edge_substitutions``
     (BLOB_RECURSIVE) and ``Op.edge_replacement_stamps`` (KEEP), so ordinary
     saves of edge-intervened traces now proceed. Like the shard-local guard
     below, the predicate keys on the ACTIVE SCHEMA rather than being deleted:
     it refuses typed IFF tier-(ii) entries are present AND the active policy
-    would drop them (a schema regression re-dropping the carrier, with the S3
+    would drop them (a schema regression re-dropping the carrier, with the
     switch inactive). Any such regression re-fires this refusal instead of
     silently presenting post-edit values with zero edge provenance.
     """
@@ -104,13 +104,13 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
 def _refuse_shard_local_erasure(trace: Any) -> None:
     """PERMANENT erasure-prevention invariant for the shard-local disclosure.
 
-    L8/F6 (census plan 3.2b): an ordinary bundle write must NEVER complete if
+    An ordinary bundle write must NEVER complete if
     it would silently drop the shard-local disclosure -- a saved shard-local
     trace reloading as a plain dense-looking trace is the marker-free-artifact
     class this invariant keeps EMPTY BY CONSTRUCTION. Refuses typed IFF the
     trace carries ``distributed_scope == "rank_local_shard"`` AND the marker
     is not persisted by the active schema (still ``FieldPolicy.DROP`` with the
-    S3 pre-release switch inactive). The wave-3 coordinated bump changes the
+    pre-release switch inactive). The wave-3 coordinated bump changes the
     ENVIRONMENT, not this predicate: once the policy persists, the second
     conjunct goes false by construction and ordinary saves proceed; the code,
     predicate, and forced-DROP tamper red all REMAIN so any schema regression
@@ -174,7 +174,7 @@ def _save_bundle_via_container_door(
 
     Both public save doors resolve to ``Bundle.save`` (the container door),
     so they agree on every settled bundle by construction: the N1 capture-
-    outcome gate runs PER MEMBER inside each member's own save (foldB D8/D9),
+    outcome gate runs PER MEMBER inside each member's own save,
     never against the container. Per-trace payload options the container door
     cannot honor refuse typed rather than being silently dropped.
 
@@ -308,8 +308,8 @@ _RUNNABLE_ACTIVATION_KIND = "runnable_activation"
 def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) -> None:
     """Refuse a runnable payload family whose entry labels load would reject.
 
-    r79 (r78 free LOW): ``self._parameters[""] = nn.Parameter(...)`` bypasses
-    ``register_parameter``'s empty-name validation, captures, and SAVED an
+    ``self._parameters[""] = nn.Parameter(...)`` bypasses
+    ``register_parameter``'s empty-name validation and captures, so a save could write an
     artifact whose weight tensor entry carried label ``""`` -- which
     ``validate_tlspec`` categorically refuses at load ("requires a canonical
     label"). A save door must never produce a stillborn artifact, so this
@@ -366,7 +366,7 @@ def _capture_weight_blob_specs(
     StateBindingError
         If the full state dict disagrees with the descriptor contract.
     RunnablePreflightError
-        If a state name is not a canonical (non-empty) label (r79 save-side
+        If a state name is not a canonical (non-empty) label (save-side
         mirror of the load door's canonical-label check).
     """
 
@@ -412,7 +412,7 @@ def _capture_nonpersistent_buffer_blob_specs(
     StateBindingError
         If a required captured value is missing or violates its slot contract.
     RunnablePreflightError
-        If a buffer name is not a canonical (non-empty) label (r79 save-side
+        If a buffer name is not a canonical (non-empty) label (save-side
         mirror of the load door's canonical-label check).
     """
 
@@ -604,7 +604,7 @@ _NONPERSISTENT_DISCLOSURE_WARNED = False
 """One-time process flag for the non-persistent buffer save disclosure."""
 
 _UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED = False
-"""One-time process flag for the unattestable-activation-archive save disclosure (r6 H2)."""
+"""One-time process flag for the unattestable-activation-archive save disclosure."""
 
 
 def _warn_nonpersistent_buffer_disclosure_once() -> None:
@@ -633,7 +633,7 @@ def _warn_nonpersistent_buffer_disclosure_once() -> None:
 
 
 def _warn_unattestable_activation_archive_once() -> None:
-    """Disclose an activation archive saved without any original-input eligibility (r6 H2).
+    """Disclose an activation archive saved without any original-input eligibility.
 
     ``_capture_activation_blob_specs`` can only record ``original_input_digests`` /
     ``input_fingerprints`` for a model input that the capture actually SELECTED. With a

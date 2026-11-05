@@ -843,8 +843,7 @@ class MissingFacetError(KeyError):
         The default ``Exception.__reduce__`` replays ``cls(*args)`` with the
         one formatted message string, so pickle and deepcopy both died with
         ``TypeError: missing 1 required positional argument: 'reason'``,
-        losing the structured payload (r3 b1-fable R64 finding 2 — the same
-        defect class as the cfdce77b strict-constructor sweep).
+        losing the structured payload.
         """
 
         return (type(self), (self.name, self.reason))
@@ -1354,7 +1353,7 @@ _REGISTRY_VERSION = 0
 _RECIPE_COUNTER = itertools.count()
 
 #: Serializes registry mutation (append/reset + version bump) against
-#: ``snapshot()``'s (recipes, version) read (r5 b2-sol R54): unlocked, a
+#: ``snapshot()``'s (recipes, version) read: unlocked, a
 #: thread switch between either pair yielded new-recipes/old-version or
 #: old-recipes/new-version, defeating provenance identity.
 _REGISTRY_LOCK = threading.Lock()
@@ -1742,7 +1741,7 @@ def _merge_missing(
 
     previous_tier = facet_tiers.get(name)
     if name in values and previous_tier is not None and previous_tier >= tier:
-        # A produced value beats an equal-tier absence (F2): a facet a recipe
+        # A produced value beats an equal-tier absence: a facet a recipe
         # actually computed must never be popped by a sibling absence claim of
         # the same or weaker priority -- only a strictly higher-tier absence
         # may displace a value.

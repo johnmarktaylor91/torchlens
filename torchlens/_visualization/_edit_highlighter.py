@@ -2,9 +2,8 @@
 
 With ``vis_show_cone=True`` every arrow leaving the edited node or a node the
 edit changed keeps its normal stroke and gets a wide translucent purple
-underlay, and so does each changed node's outline (option F2, JMT 29 Oct
-2026). Graphviz cannot stack two strokes on one edge, so this is an SVG step
-after layout: the node callback tags edited nodes ``tl_edited`` and changed
+underlay, and so does each changed node's outline. Graphviz cannot stack two strokes on one edge, so this is an
+SVG step after layout: the node callback tags edited nodes ``tl_edited`` and changed
 ones ``tl_downstream`` (Graphviz writes the ``class`` attribute onto each SVG
 group), and :func:`highlight_svg` duplicates the tagged shapes underneath
 with the highlighter stroke. PDF and PNG are produced from the processed SVG

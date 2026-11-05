@@ -1,11 +1,11 @@
-"""The lazy extraction reader: the documented read path (extract D14).
+"""The lazy extraction reader: the documented read path.
 
 Opening reads BOUNDED manifest/ledger metadata only. The reader supplies
 metadata, keys, logical shapes, ledger-order ``iter_batches``, integer /
 slice / fancy row access via cumulative offsets, duplicate-aware ID lookup,
 exact ragged rows, explicit materialization behind an exact byte guard,
 trusted-prefix monitoring of in-progress artifacts, and graded verification
-(extract D7 read side: structural by default, ``verify="first_access"``
+(extract read side: structural by default, ``verify="first_access"``
 verifies each shard once and caches the verdict for the handle's lifetime,
 ``verify_all()`` streams everything — never a full-shard scan per row
 slice).
@@ -56,7 +56,7 @@ _RAGGED_SUBKEYS = ("values", "offsets", "shapes")
 
 
 def _crc32_file(path: Path) -> int:
-    """Stream one file's CRC-32 (the D7 accidental-corruption fact).
+    """Stream one file's CRC-32 (the accidental-corruption fact).
 
     Parameters
     ----------
@@ -79,7 +79,7 @@ def _crc32_file(path: Path) -> int:
 
 
 class _ShardHandles:
-    """Bounded cache of per-shard read handles (D14).
+    """Bounded cache of per-shard read handles.
 
     safetensors shards cache ``safe_open`` objects (keyed row slicing
     without materializing the file); ``pt`` shards cache the mmap-loaded
@@ -125,7 +125,7 @@ class _ShardHandles:
 
 
 class ExtractionReader:
-    """Lazy reader over one extraction artifact (extract D14).
+    """Lazy reader over one extraction artifact.
 
     Construct through :func:`open_extraction`. Opening reads bounded
     manifest and ledger metadata only; payload bytes move on demand.
@@ -363,7 +363,7 @@ class ExtractionReader:
         return rows[0]
 
     # ------------------------------------------------------------------
-    # Verification (D7 read side)
+    # Verification (read side)
     # ------------------------------------------------------------------
 
     def _check_shard(self, shard_index: int) -> None:
@@ -791,7 +791,7 @@ class ExtractionReader:
     def to_padded(
         self, key: str, *, pad_value: float = 0.0, max_len: int | None = None
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Materialize one trimmed key as padded values + mask (D4).
+        """Materialize one trimmed key as padded values + mask.
 
         Value-equivalent within the cross-batch tolerance, NOT
         byte-identical to a historical padded pipeline.
@@ -1145,7 +1145,7 @@ def check_layout_coherence(manifest: Mapping[str, Any], rows: list[dict[str, Any
     row's ``keys[key].layout`` (absent = dense) must agree. A mixed artifact
     -- dense shards under a trimmed key or the reverse -- made
     ``materialize()``/``load_extraction`` return a subset of the rows on a
-    ``status=complete`` artifact (audit 1.3), so the contradiction refuses
+    ``status=complete`` artifact, so the contradiction refuses
     at open, before any payload is read.
 
     Parameters
@@ -1297,7 +1297,7 @@ def open_extraction(
     verify: str = "structural",
     in_progress: bool = False,
 ) -> ExtractionReader:
-    """Open one extraction artifact lazily (the documented read path, D14).
+    """Open one extraction artifact lazily (the documented read path).
 
     Opening reads bounded manifest/ledger metadata only; payload bytes move
     on demand through the reader.

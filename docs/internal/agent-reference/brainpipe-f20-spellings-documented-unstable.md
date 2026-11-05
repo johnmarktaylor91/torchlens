@@ -1,4 +1,4 @@
-## Brainpipe (F20; spellings DOCUMENTED-UNSTABLE)
+## Brainpipe (spellings DOCUMENTED-UNSTABLE)
 
 `torchlens.neuro` is the whole-model extraction planner:
 `plan_extraction` (warm-up + two measured probes, per-site linear byte fits with

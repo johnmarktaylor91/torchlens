@@ -1,9 +1,9 @@
-"""Bundle-level retained-bytes aggregation + retention preflight (F03 item 5c).
+"""Bundle-level retained-bytes aggregation + retention preflight.
 
 The shipped byte accountant is PER-CAPTURE (every fork gets its own
 ``SaveBudget``), so before this module no object knew a bundle's total
 retained footprint — a user with ``save_budget="auto"`` running a 144-capture
-sweep got no protection (ledger memo 3.5). Two repairs:
+sweep got no protection. Two repairs:
 
 - :func:`bundle_retained_bytes` — the cross-member aggregation, explicitly
   labelled a LOWER BOUND: per-capture accountants meter retained activation

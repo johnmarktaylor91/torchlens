@@ -1,4 +1,4 @@
-"""Netron ``netron:attachment`` sidecar writer (lane F14, memo D-15).
+"""Netron ``netron:attachment`` sidecar writer.
 
 Netron 9.2.2 implements a first-class metrics sidecar: a second JSON file
 whose ``metadata`` and ``metrics`` containers render in dedicated sidebar

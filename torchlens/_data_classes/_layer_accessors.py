@@ -124,7 +124,7 @@ class OpAccessor(Accessor["Op"]):
     def __setitem__(self, key: int, value: "Op") -> None:
         """Set an Op by 1-based pass index (``set_pass`` is the explicit spelling).
 
-        KNOWN ASYMMETRY (AUD-CODE 4.4, pinned by
+        KNOWN ASYMMETRY (pinned by
         ``tests/test_w051_gate_layer_accessors.py``): ``__getitem__(int)``
         is the 0-based position while this write is the 1-based pass index,
         so ``ops[1] = op`` is read back as ``ops[0]``. The write basis is
@@ -148,7 +148,7 @@ class OpAccessor(Accessor["Op"]):
             return True
         return False
 
-    # BREAKING (lovely bug 27, C02; MIGRATIONS entry owed): iteration now
+    # BREAKING (lovely bug 27; MIGRATIONS entry owed): iteration now
     # inherits the base value semantics (yields Ops), where the deleted
     # override yielded 1-BASED call-index ints while ``[]`` indexed 0-based
     # Ops -- a silent off-by-one on multi-pass layers. ``get`` and ``repr``
@@ -364,7 +364,7 @@ class LayerAccessor(Accessor["Layer"]):
 
         return len(self)
 
-    # F10 (lovely bug 6): the per-member dump repr is gone -- 553 lines on real
+    # (lovely bug 6): the per-member dump repr is gone -- 553 lines on real
     # gpt2. LayerAccessor inherits the one-line composition card from Accessor
     # (with the ops/buffers breakdown via ``_composition_note``); ``str()``
     # shows the first bounded members with an exact remainder.

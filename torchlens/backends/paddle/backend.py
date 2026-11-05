@@ -1231,7 +1231,7 @@ class PaddleBackend:
                 site = reserved[output_index]
                 ctx = self.build_record_context(trace, site, func_event_input, tensor)
                 if runtime.evaluate_halt(ctx):
-                    # F6 latch parity with torch's evaluate_halt: latch the
+                    # Latch parity with torch's evaluate_halt: latch the
                     # stop request on the trace BEFORE raising, so a user
                     # broad-except that swallows the HaltSignal can never
                     # settle COMPLETE at the one preview stamp.

@@ -646,7 +646,7 @@ def _record_from_record_context(
     """Sparse-pipeline decomposed freeze: ``OpCore`` + facets, no ``OpEvent``.
 
     Value computation routes through ``_sparse_freeze_values``; facet PRESENCE mirrors ``op_record_from_event``
-    applied to the equivalent compat event (S5: an absent facet is never
+    applied to the equivalent compat event (an absent facet is never
     fabricated empty, and a facet is present exactly when the legacy event
     carries non-default values — plus ``graph``/``policy``, which the adapter
     constructs unconditionally).

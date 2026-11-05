@@ -1,4 +1,4 @@
-"""Selector-valued ``layers=``: resolve on batch zero, freeze, attest (D12).
+"""Selector-valued ``layers=``: resolve on batch zero, freeze, attest.
 
 ``layers=`` accepts capture's selector/predicate algebra plus extraction's
 string lookups and selector-valued mappings. Batch zero resolves in
@@ -39,7 +39,7 @@ _MAX_SELECTOR_SITES = 1024
 
 @dataclasses.dataclass(frozen=True)
 class SelectorPlan:
-    """The frozen batch-zero selector resolution (extract D12).
+    """The frozen batch-zero selector resolution.
 
     Attributes
     ----------
@@ -101,7 +101,7 @@ def _is_selector(value: Any) -> bool:
 
 
 def _refuse_partial_units(value: Any) -> None:
-    """Refuse element-level Selections with the teaching remedy (D12).
+    """Refuse element-level Selections with the teaching remedy.
 
     Parameters
     ----------
@@ -278,7 +278,7 @@ def freeze_selector_plan(
     envelope_kwargs: dict[str, Any],
     layers: Any,
 ) -> tuple[SelectorPlan, dict[str, torch.Tensor]]:
-    """Resolve a selector request against batch zero and FREEZE it (D12).
+    """Resolve a selector request against batch zero and FREEZE it.
 
     Parameters
     ----------
@@ -384,7 +384,7 @@ def _resolve_mapping_sites(
 
 
 def _refuse_no_sites(key: str | None, selector: Any) -> None:
-    """Raise the zero-site refusal (D12).
+    """Raise the zero-site refusal.
 
     Parameters
     ----------
@@ -417,7 +417,7 @@ def _refuse_no_sites(key: str | None, selector: Any) -> None:
 def _refuse_excess_fanout(
     key: str | None, sites: list[tuple[str, str | None, torch.Tensor]]
 ) -> None:
-    """Raise the excess-fanout refusal above the site ceiling (D12).
+    """Raise the excess-fanout refusal above the site ceiling.
 
     Parameters
     ----------
@@ -455,7 +455,7 @@ def attest_selector_batch(
     plan: SelectorPlan,
     batch_index: int,
 ) -> dict[str, torch.Tensor]:
-    """Re-run the selector on one batch and attest the frozen plan (D12).
+    """Re-run the selector on one batch and attest the frozen plan.
 
     Parameters
     ----------

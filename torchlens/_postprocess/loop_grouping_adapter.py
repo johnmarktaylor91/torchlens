@@ -31,7 +31,7 @@ _MIN_PARAM_FREE_LOOP_BODY_OPS = 2
 # reaches the O(1) mask lane after two bounded probes.
 _DENSE_SOURCE_DISTINCT_QUERIES = 2
 
-# Node-count ceiling for the whole-graph descendant-mask batch DP (r8 R60-3):
+# Node-count ceiling for the whole-graph descendant-mask batch DP:
 # the batch stores one N-bit int per node, an O(N^2/8)-byte table -- ~32MB at
 # the ceiling, but ~1.25GB at 100k nodes and ~125GB at 1M, reached by a plain
 # straight-line loop (the common case). Above the ceiling, dense sources keep
@@ -45,7 +45,7 @@ _DENSE_BATCH_MAX_NODES = 16_384
 # makes every source dense on a huge graph.
 _DESCENDANT_MASK_BYTE_BUDGET = 64 * 2**20
 
-# Work budget for the param-free refinement fixpoint (r8 R60-5): the loop
+# Work budget for the param-free refinement fixpoint: the loop
 # terminates (refinement only splits), but the round count is O(N) and each
 # round is O(E), so a deep unrolled chain paid O(N*E). The budget counts
 # member-signature rebuilds across rounds; realistic graphs converge far
@@ -56,7 +56,7 @@ _DESCENDANT_MASK_BYTE_BUDGET = 64 * 2**20
 _PF_FIXPOINT_WORK_BUDGET = 50_000_000
 
 # Reachability-probe ceiling for one equal-signature cohort's pair triangle
-# (r8 R60-4): mutually-unreachable siblings sharing one signature (``ys =
+# : mutually-unreachable siblings sharing one signature (``ys =
 # [x * i for i in range(N)]``) ran the FULL O(k^2) triangle -- ~5e11 probes at
 # 1M ops -- because the ``distinct_roots == 1`` early break only helps when
 # unions fire. Genuine loop cohorts chain through the consecutive-pair window
@@ -1223,7 +1223,7 @@ class _ReachabilityCache:
                 self._sparse_query_counts[src_label] = queries_seen + 1
                 return self._bounded_pair_query(src_label, dst_label)
             if self._mask_budget_exhausted():
-                # Mask retention budget spent (r8 R60-3): stay on the exact
+                # Mask retention budget spent: stay on the exact
                 # bounded pair lane instead of growing the cache further.
                 return self._bounded_pair_query(src_label, dst_label)
             mask = self._acquire_descendant_mask(src_label)
@@ -1248,7 +1248,7 @@ class _ReachabilityCache:
         """
         if not self._batch_attempted:
             self._batch_attempted = True
-            # Node-count ceiling (r8 R60-3): the batch stores one N-bit int
+            # Node-count ceiling: the batch stores one N-bit int
             # per node -- an O(N^2/8)-byte table that reaches ~1.25GB at 100k
             # nodes on a plain straight-line loop. Above the ceiling the
             # demand-driven per-source BFS keeps memory proportional to
@@ -1492,7 +1492,7 @@ def _param_free_adjacency_merge_allowed(
 #   Colors carry no pass index, so lockstep iterations of one source-code site
 #   produce EQUAL signatures, while a site whose parameterized direct parents
 #   differ in LAYER (``enc`` versus ``dec``) is split by construction -- the exact
-#   DAG evidence the r22/r23/r24 seals demanded.
+#   DAG evidence the seals demanded.
 # * Classes start maximally coarse (one class per equivalence key and output slot)
 #   and are only ever SPLIT, so every division is backed by definite evidence and
 #   iteration converges. Signatures reference the classes themselves (a ``tanh``
@@ -1976,7 +1976,7 @@ def _pf_partition_class(
                 continue
             pair_probes += 1
             if pair_probes > _PF_COHORT_PAIR_PROBE_CEILING:
-                # Bounded sweep (r8 R60-4): see the ceiling's rationale. The
+                # Bounded sweep: see the ceiling's rationale. The
                 # consecutive-pair window has already run in full, so genuine
                 # loop chains are unified; what remains is the exhaustive
                 # cross-check over (overwhelmingly parallel) siblings.
@@ -2192,7 +2192,7 @@ def _assign_param_free_layers(workspace: _GroupingWorkspace) -> None:
     fixpoint_work = 0
     while True:
         if fixpoint_work > _PF_FIXPOINT_WORK_BUDGET:
-            # Budget exhausted (r8 R60-5): dissolve every remaining
+            # Budget exhausted: dissolve every remaining
             # multi-member class -- the partition may still be too coarse,
             # and a coarse class would CLAIM recurrence the evidence has not
             # settled, so the honest degradation is no claim at all.
@@ -2422,7 +2422,7 @@ def _merge_iso_groups_to_layers(
             subgraphs_by_param_type: dict[str, list[str]] = subgraphs_by_param_type,
             candidate_sg_pairs: set[tuple[str, str]] = candidate_sg_pairs,
         ) -> Iterator[tuple[str, str]]:
-            """Yield the shared-param-type subgraph triangle LAZILY (r8 R29).
+            """Yield the shared-param-type subgraph triangle LAZILY.
 
             The eager ``candidate_sg_pairs.update(combinations(...))`` build
             materialized O(G^2) tuples per tied-weight iso group (~2M pairs
@@ -2465,15 +2465,13 @@ def _merge_iso_groups_to_layers(
 
         # strict=False is deliberate: the consecutive-pairs sliding window is
         # ragged by construction (see the cohort sweep above).
-        # Relation-driven candidates replace the C(N,2) triangle (r5 b4-opus
-        # F29-A, measured: the full triangle walked on a plain feed-forward
-        # chain of N identical bare ops -- 35% of capture CPU at 3200 ops,
-        # rising as N^2, for ZERO produced groupings). Every union arm below
-        # requires the pair's subgraphs to be ADJACENT or (the parameterized
-        # arm only) to share at least one param type, so pairs outside those
-        # two relations are provably inert ``continue``s: enumerating only
-        # related pairs preserves the union transitive closure -- and with it
-        # the final partition and its min-label roots -- exactly.
+        # Relation-driven candidates replace the C(N,2) triangle (measured: the full triangle walked
+        # on a plain feed-forward chain of N identical bare ops -- 35% of capture CPU at 3200 ops,
+        # rising as N^2, for ZERO produced groupings). Every union arm below requires the pair's
+        # subgraphs to be ADJACENT or (the parameterized arm only) to share at least one param type,
+        # so pairs outside those two relations are provably inert ``continue``s: enumerating only
+        # related pairs preserves the union transitive closure -- and with it the final partition
+        # and its min-label roots -- exactly.
         pair_iter = it.chain(
             zip(iso_nodes, iso_nodes[1:], strict=False),
             _bucketed_candidate_pairs(),

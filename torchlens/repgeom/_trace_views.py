@@ -1,4 +1,4 @@
-"""Trace-facing repgeom views: evolution tables + node visuals (C01 item 18).
+"""Trace-facing repgeom views: evolution tables + node visuals.
 
 Consumes the math kernel in ``_geometry`` and the PIL node-plot primitives;
 holds every Trace-reading and image-writing helper.
@@ -46,7 +46,7 @@ __tl_layer__ = "L6"
 class _PayloadBasisDict(OrderedDict):
     """Ordered result mapping with a payload-provenance side table.
 
-    F20 D-19 disclosure: geometry computed from a TRANSFORMED payload is a
+    Disclosure: geometry computed from a TRANSFORMED payload is a
     different scientific object than raw-payload geometry, so every
     evolution result records which payload fed each key on
     ``result.payload_basis`` (``key -> "raw" | "transformed"``).
@@ -128,7 +128,7 @@ def mds_evolution(
         coords_by_key[key] = coords.copy()
         previous_coords = coords
     # Annotations commit only after the WHOLE sweep succeeds; a failed site
-    # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
+    # leaves zero blobs behind (gated ATOMIC write).
     _commit_annotation_tensors(trace, staged)
     return coords_by_key
 
@@ -205,7 +205,7 @@ def rdm_evolution(
         staged[f"rdm:{key}"] = tensor_from_numpy(matrix.copy())
         matrices_by_key[key] = matrix.copy()
     # Annotations commit only after the WHOLE sweep succeeds; a failed site
-    # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
+    # leaves zero blobs behind (gated ATOMIC write).
     _commit_annotation_tensors(trace, staged)
     return matrices_by_key
 
@@ -271,7 +271,7 @@ def scree_evolution(
         staged[f"scree:{key}"] = tensor_from_numpy(eigenvalues)
         eigenvalues_by_key[key] = eigenvalues
     # Annotations commit only after the WHOLE sweep succeeds; a failed site
-    # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
+    # leaves zero blobs behind (gated ATOMIC write).
     _commit_annotation_tensors(trace, staged)
     return eigenvalues_by_key
 
@@ -283,8 +283,8 @@ def _selected_mds_sites(
 
     Only stimulus-indexed sites qualify: a default sweep SKIPS ineligible
     sites with one summarized disclosure, while an explicit ``save=``
-    selection REFUSES them actionably (neuro MEMO D4/D5 -- previously a
-    stock resnet18 sweep fabricated 78 buffer pseudo-RDMs). See
+    selection REFUSES them actionably (an ungated sweep over a stock
+    resnet18 fabricated 78 buffer pseudo-RDMs). See
     :func:`_site_ineligibility` for the evidence order and the named
     coincidental-equality residual.
 
@@ -445,7 +445,7 @@ def _saved_pass_sites(
 
 
 def _saved_payload_with_kind(record: Any, label: str, *, verb: str) -> tuple[Any, str]:
-    """Return a site's retained payload plus its provenance kind (F20 D-19).
+    """Return a site's retained payload plus its provenance kind.
 
     Geometry collectors historically read ``.out`` only, so the composition
     reduce-then-geometry was broken on exactly the traces the sweep

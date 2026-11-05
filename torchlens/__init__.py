@@ -1,7 +1,7 @@
 """TorchLens - extract outs and metadata from PyTorch models.
 
 Importing torchlens has **no side effects** on the torch namespace -- and no
-torch import at all until first use (agent memo 3.11: tier-0 CLI verbs and
+torch import at all until first use (tier-0 CLI verbs and
 manifest preflights stay torch-free). Torch functions are wrapped lazily on
 the first call to ``trace()`` and stay wrapped afterward. TorchLens 2.0 keeps
 the top-level namespace intentionally small; historical spellings live in
@@ -22,11 +22,11 @@ if _typing.TYPE_CHECKING:
 __version__ = "2.38.1"
 
 _LAZY_ATTRS = {
-    # Import cold-start laziness (P4, rebaselined 2026-08-19): the former
+    # Import cold-start laziness (rebaselined 2026-08-19): the former
     # eager import block (options/captured_run+ir/observers/quantities/errors
     # and their transitive chains) is fully deferred behind these rows -- the
     # marginal-import guard in tests/test_import_hygiene.py holds the line.
-    # Agent surface (F29): the read-only inspection core. Deliberately NOT in
+    # Agent surface: the read-only inspection core. Deliberately NOT in
     # __all__ (frozen root budget); reachable as tl.agent per the docs.
     "agent": ("torchlens.agent", None),
     "errors": ("torchlens.errors", None),
@@ -40,8 +40,7 @@ _LAZY_ATTRS = {
     "Trace": ("torchlens._data_classes.trace", "Trace"),
     "add": ("torchlens.intervention._predicates", "add"),
     "attribution": ("torchlens.attribution", None),
-    # Entry/facade repair (workstream A10; WT1 A-VI item 27, neuro memo item
-    # 2): the integration and appliance namespaces were absent from this map,
+    # Entry/facade repair: the integration and appliance namespaces were absent from this map,
     # so `tl.bridge` resolved only after an unrelated capture side effect
     # imported it and `tl.callbacks` never resolved at all. All four package
     # __init__ modules are import-inert by design (foreign dependencies stay
@@ -52,7 +51,7 @@ _LAZY_ATTRS = {
     "clamp": ("torchlens.intervention._helpers", "clamp"),
     "compat": ("torchlens.compat", None),
     "label_contains": ("torchlens._selection.selectors", "label_contains"),
-    # Dataset extraction (D7/V5): the implementation module is lazy so the
+    # Dataset extraction: the implementation module is lazy so the
     # manifest/resume machinery costs nothing until first use.
     "dataset_extraction": ("torchlens.dataset_extraction", None),
     "extract_dataset": ("torchlens.dataset_extraction", "extract_dataset"),
@@ -179,11 +178,11 @@ def _resolve_top_level(name: str) -> _typing.Any:
     return __getattr__(name)
 
 
-# Five-step facade tables (architecture memo 5.4; mechanism owned by
+# Five-step facade tables (mechanism owned by
 # torchlens._utils.facade). The redirect table is the teaching compensator for
 # the 2026-08 shim-removal pass (docs/migration/v2.0_api_changes.md): every
 # removed top-level spelling raises a typed ``facade_redirect`` AttributeError
-# naming its canonical home instead of a bare "no attribute" (AUD-CODE 3.14).
+# naming its canonical home instead of a bare "no attribute".
 # A redirect row wins over a real name (step 2 precedes step 4), so no row may
 # name a LIVE top-level attribute; tests/test_w051_gate_facade_redirects.py
 # pins that and that every canonical dotted path resolves. The refusal table
@@ -295,7 +294,7 @@ _REFUSALS: dict[str, str] = {}
 def __getattr__(name: str) -> _typing.Any:
     """Return lazy package attributes through the five-step facade order.
 
-    The order (architecture memo 5.4, testable spec): (1) underscore-prefixed
+    The order (testable spec): (1) underscore-prefixed
     names raise plain ``AttributeError`` immediately; (2) redirect-table rows
     raise a typed teaching ``AttributeError`` naming the canonical spelling,
     with no dependency check; (3) refusal-table rows raise a typed
@@ -432,7 +431,7 @@ __all__ = [
     "stable_across_passes",
     "pass_variance",
     "subspace",
-    # F39 unhide (conflict-ledger row 8: the promotion claimed by five memos):
+    # unhide (conflict-ledger row 8: the promotion claimed by five memos):
     # the streaming-statistics namespace and its dataloader aggregation door
     # were shipped, documented-unstable, and root-reachable but undeclared.
     "stats",

@@ -1,6 +1,6 @@
-"""``torchlens.neuro.rdms``: RDM handoff with provenance that cannot lie (F22).
+"""``torchlens.neuro.rdms``: RDM handoff with provenance that cannot lie.
 
-Memo 4.2 (item 7): ONE name, two type-distinct modes, one shared condensed
+One name, two type-distinct modes, one shared condensed
 converter. Source mode (the taught path) computes through the canonical
 ``tl.repgeom`` distance arithmetic and records the metric it actually used --
 when the function computes, the label cannot lie. Matrix mode (the escape
@@ -43,7 +43,7 @@ from ._handoff import (
 #: source-mode default) instead of silently ignoring a mixed-mode argument.
 _UNSET: Any = object()
 
-#: The convention each computed metric records in words (memo D9):
+#: The convention each computed metric records in words:
 #: ``dissimilarity_measure`` keeps the plain metric word (rsatoolbox's own
 #: field; downstream code switches on it) and ``measure_convention`` carries
 #: the formula, telling users exactly how to reproduce their number.
@@ -67,7 +67,7 @@ _MEASURE_CONVENTIONS: dict[str, str] = {
 }
 
 
-def rdms(  # noqa: PLR0913 -- memo-specified public door: one name, two type-distinct modes; the knob union IS the spec'd surface
+def rdms(  # noqa: PLR0913 -- one name, two type-distinct modes
     source: Any,
     sites: Any = None,
     *,
@@ -132,7 +132,7 @@ def rdms(  # noqa: PLR0913 -- memo-specified public door: one name, two type-dis
         In matrix mode this is the ONLY identity door; absent, rows carry a
         positional index disclosed as positional.
     chunked:
-        Reserved execution seam (NSD-scale streaming; memo section 8).
+        Reserved execution seam (NSD-scale streaming).
         Launch is eager: any non-``None`` value refuses typed.
 
     Returns
@@ -279,7 +279,7 @@ def _source_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
     obs: Any,
     pattern_descriptors: Any,
 ) -> Any:
-    """Compute RDMs from a Trace or extraction artifact (memo 4.2).
+    """Compute RDMs from a Trace or extraction artifact.
 
     Parameters
     ----------
@@ -441,7 +441,7 @@ def _source_pattern_descriptors(
 
     Pattern identity: recorded artifact ids when every site carries the
     same recording, else a positional index disclosed as synthetic. The
-    presentation-index descriptor is ALWAYS written (memo D10).
+    presentation-index descriptor is ALWAYS written.
 
     Parameters
     ----------
@@ -538,7 +538,7 @@ def _matrix_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
     obs: Any,
     pattern_descriptors: Any,
 ) -> Any:
-    """Convert precomputed square matrices into RDMs (memo 4.2 escape hatch).
+    """Convert precomputed square matrices into RDMs (escape hatch).
 
     Parameters
     ----------
@@ -625,7 +625,7 @@ def _matrix_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
 
 
 def _validated_matrix(key: str, value: Any, earlier: list[np.ndarray]) -> np.ndarray:
-    """Validate ONE matrix-mode entry (the full refusal ladder, memo 4.2).
+    """Validate ONE matrix-mode entry (the full refusal ladder).
 
     Parameters
     ----------

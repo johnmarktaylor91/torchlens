@@ -1,4 +1,4 @@
-"""Semantic axis labels, token decoding, and the SDPA hint (B3, F16).
+"""Semantic axis labels, token decoding, and the SDPA hint.
 
 Treescope memo section 4:
 

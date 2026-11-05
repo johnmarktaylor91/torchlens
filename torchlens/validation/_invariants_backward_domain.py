@@ -211,7 +211,7 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
     onward crosses a grad-severing op (one with no recorded
     ``grad_fn_object_id``, e.g. ``detach``), is therefore never visited and
     legitimately has no GradFn backpointer — that is autograd's contract, not
-    a capture gap (b7-opus R24-X). The backward roots themselves usually pair
+    a capture gap. The backward roots themselves usually pair
     to a USER-side loss op outside the trace, so the reachability anchor is
     the set of ops autograd provably VISITED (those retaining a live
     ``grad_fn`` backpointer): if autograd walked any op downstream of this
@@ -440,8 +440,8 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     values. Preview backends do not yet route every lane through the writer;
     they join this check in the ports phase.
 
-    DENSITY (finding B1-08). Stamped/monotone/unique/counter-bounded are all
-    preserved by DELETING an event, so popping ``op_events[1]`` used to pass
+    DENSITY. Stamped/monotone/unique/counter-bounded are all
+    preserved by DELETING an event, so popping ``op_events[1]`` would pass
     both this check and the full metadata gate -- an omission is exactly what a
     tampered or lossy journal looks like. ``next_seq()`` is called ONLY by the
     nine single-writer append methods, so every consumed seq lands on an

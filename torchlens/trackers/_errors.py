@@ -1,9 +1,9 @@
-"""Typed refusal classes for the tracker family (workstream F26).
+"""Typed refusal classes for the tracker family.
 
 Every raise site in ``torchlens.trackers`` carries a stable
 ``fields["code"]`` plus a non-empty ``fields["remedy"]`` and is ledgered in
 ``docs/reference/error_refusal_contract.md``. Callers branch on the code,
-never on message text. The loud-failure contract (trackers memo 3.13) lives
+never on message text. The loud-failure contract lives
 in these classes: nothing in this package ever becomes an empty dashboard
 panel without a typed explanation.
 """
@@ -52,7 +52,7 @@ class SinkDeliveryError(TrackersError):
 
 
 class TagGrammarError(TrackersError):
-    """Raised for tag-safety and namespace-grammar refusals (D4 majority).
+    """Raised for tag-safety and namespace-grammar refusals.
 
     Examples
     --------

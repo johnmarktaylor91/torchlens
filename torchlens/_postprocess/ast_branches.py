@@ -79,7 +79,7 @@ _file_cache: OrderedDict[_FileCacheKey, FileIndex] = OrderedDict()
 #: First-read source digests, pinned for the process lifetime (NOT LRU-evicted
 #: with the index): a rebuild after eviction must prove the on-disk content
 #: still matches what the running code objects were attributed against, or
-#: fail closed (deep-hunt C4). Cleared only by explicit ``invalidate_cache``.
+#: fail closed. Cleared only by explicit ``invalidate_cache``.
 _pinned_source_digests: dict[str, bytes] = {}
 _source_drift_warned: set[str] = set()
 
@@ -298,7 +298,7 @@ class ScopeEntry:
                 # or ``elif t: body``), line-only matching cannot tell a TEST
                 # op from an arm-BODY op. Attributing a test op into the arm
                 # records the arm as fired even though its body never ran
-                # (round-24 condbranch seal, S1). The AST separates the test
+                # The AST separates the test
                 # from the body by column, so column-carrying runtimes still
                 # attribute precisely; degraded mode must fail closed.
                 test_spans = self.test_spans_by_key.get(interval.conditional_key, [])
@@ -541,7 +541,7 @@ class FileIndex:
         Returns
         -------
         Optional[ScopeEntry]
-            Resolved scope entry, or ``None`` when the D14 fail-closed rules
+            Resolved scope entry, or ``None`` when the fail-closed rules
             require the frame to be skipped.
 
         Notes
@@ -605,7 +605,7 @@ def get_file_index(filename: str) -> FileIndex | None:
     lifetime: runtime line numbers come from code objects loaded before any
     later on-disk edit, so silently re-parsing changed disk content would
     re-attribute ops and bools to whatever now happens to occupy those lines
-    (fail-open; deep-hunt C4). A live cached index is therefore returned
+    (fail-open). A live cached index is therefore returned
     regardless of the file's current mtime, and a rebuild after LRU eviction
     verifies the on-disk content still matches the pinned first-read digest —
     a mismatch warns once and fails closed to ``None`` (honest
@@ -855,7 +855,7 @@ def classify_bool(filename: str, line: int, col: int | None = None) -> BoolClass
     Returns
     -------
     BoolClassification
-        Classification result following the D3/D18 rules.
+        Classification result following the rules.
     """
 
     file_index = get_file_index(filename)
@@ -1101,8 +1101,8 @@ def _resolve_frame_var_names(frame: FuncCallLocation, func_name: str | None) -> 
         # candidates WITH assignment targets, which discarded the candidate's
         # POSITION: an inner nested call (no targets -- its parent is the
         # outer call) skipped through to the enclosing assignment, so both
-        # relu ops in ``y = relu(relu(x))`` reported ``['y']`` (deep-hunt
-        # C2). Ambiguous same-name candidates fail closed to no name.
+        # relu ops in ``y = relu(relu(x))`` reported ``['y']``.
+        # Ambiguous same-name candidates fail closed to no name.
         return []
     return list(candidates[0].assignment_targets)
 
@@ -1190,7 +1190,7 @@ def _span_source_segment(source_lines: list[str], span: SourceRange) -> str | No
     (``padded=False``) over the node's recorded span, reusing the per-file
     line split instead of re-splitting the whole source character by
     character on every call -- the line split dominates
-    ``to_pandas()``/``arg_expressions`` cost when resolved per argument (S1).
+    ``to_pandas``/``arg_expressions`` cost when resolved per argument.
 
     Parameters
     ----------

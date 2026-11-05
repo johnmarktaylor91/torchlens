@@ -90,7 +90,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
     exists, its referenced parent label must resolve. This invariant never
     asserts that every parent edge has a corresponding edge-use record.
 
-    Edge-occurrence MULTIPLICITY witness (b9-opus R75-1): on live frozen
+    Edge-occurrence MULTIPLICITY witness: on live frozen
     torch traces the canonical CSR dataflow edge-occurrence table
     (``_trace_core/relations.py``) is additionally cross-checked per
     (child, parent) against the independently stored roots -- the row's
@@ -230,13 +230,12 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
                     continue
                 positions = position_counts.get(parent_label, 0)
                 expected[source_row] += positions if positions else 1
-            # Child-direction MULTIPLICITY witness (b3-opus R05): the frozen
+            # Child-direction MULTIPLICITY witness: the frozen
             # children view is DEDUPED by construction (genuine double
             # consumption records ONE children entry; multiplicity lives in
             # the parent-side arg positions checked above), so a duplicated
             # entry in a children sequence is producer/shadow corruption the
-            # name-based symmetry checks cannot see -- the twice-fixed
-            # duplicated-child-edge producer bug had no tripwire. Unresolved
+            # name-based symmetry checks cannot see. Unresolved
             # (cross-pass) spellings are counted too: dedup is a property of
             # the label sequence itself, not of resolution.
             child_counts: Counter = Counter(
@@ -312,13 +311,13 @@ def _check_op_log_fields(ml: Trace) -> None:
         # functionless: the user substituted an opaque tensor for a module's
         # output, so there is no torch function to validate. This exemption is
         # deliberately narrow -- it must NOT cover auto-synthesized placeholders
-        # during plain capture (a previous band-aid widened it to silence the
-        # vmap-built attention mask, disarming this tripwire). Round-26 W3-2
-        # hardening: the per-op attributes below are written by the placeholder
+        # during plain capture (widening it would silence the
+        # vmap-built attention mask and disarm this tripwire). The per-op
+        # attributes below are written by the placeholder
         # synthesizer itself, so the exemption additionally requires the
         # trace-level replacement-event ledger to corroborate the claim; a
         # placeholder stamped during PLAIN capture (no recorded replacement
-        # event) now fails this invariant, per the 2026-06-02 lesson.
+        # event) fails this invariant.
         is_functionless_replacement = (
             lpl.func_name == "intervention_replacement"
             and getattr(lpl, "is_edited", False)
@@ -345,7 +344,7 @@ def _check_op_log_fields(ml: Trace) -> None:
             or is_functionless_replacement
         ):
             if ml.__dict__.get("_loaded_from_bundle", False):  # no Trace miss path per op
-                # Loaded-artifact arm (R10-3): ``Op.func`` is FieldPolicy.DROP
+                # Loaded-artifact arm: ``Op.func`` is FieldPolicy.DROP
                 # and ``__getstate__`` hard-nulls it, so ``callable(func)``
                 # false-fired on EVERY loaded torch trace. The loaded arm
                 # asserts the known load-time shape POSITIVELY -- a non-None
@@ -364,7 +363,7 @@ def _check_op_log_fields(ml: Trace) -> None:
                 raise MetadataInvariantError(name, f"Layer {label}: func_name is empty")
             if str(lpl.func_name).lower() == "none":
                 # The functionless sentinel on an op that carries a real
-                # callable is name corruption (deephunt M2): "none" is only
+                # callable is name corruption: "none" is only
                 # minted for output bookkeeping nodes and functionless
                 # internal sources, both excluded from this block above.
                 raise MetadataInvariantError(
@@ -405,12 +404,12 @@ def _check_op_log_fields(ml: Trace) -> None:
                 f"derived as modules[-1], so an empty roster with a named module means "
                 f"the module attribution was DROPPED",
             )
-        # B3R7-R05-1: ``module_call_stack`` is the root-first ModuleCall
+        # ``module_call_stack`` is the root-first ModuleCall
         # labels ACTIVE for this op (the glossary sentence), i.e. exactly the
-        # containment fact ``modules`` carries -- the historical tri-fact
-        # (fed-call stack for module inputs, containment addresses for module
-        # outputs, empty otherwise) is gone. The three facts are tied here so
-        # the class cannot regress: the stack must equal ``modules`` entry for
+        # containment fact ``modules`` carries (not a mix of fed-call stack for
+        # module inputs, containment addresses for module outputs, and empty
+        # otherwise). The facts are tied here so the class cannot regress:
+        # the stack must equal ``modules`` entry for
         # entry, and ``module_call_depth`` must be its length. Membership of
         # the entries themselves is ``module_containment_logic``'s check (via
         # ``modules``); equality makes it cover this field too.

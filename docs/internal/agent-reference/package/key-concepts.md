@@ -42,7 +42,7 @@ subscript/slice/augmented writes, `del`, and mutating list methods; a new writer
 until consciously ledgered.
 grad-fn handles live only in the journal side index (`grad_fn_handles_by_label_raw`).
 The legacy `OpEvent` torch producer and its dual-path env switch were
-deleted (P7); preview backends keep emitting compat `OpEvent`s until S15 and adapt at the
+deleted; preview backends keep emitting compat `OpEvent`s until and adapt at the
 one ingest boundary (`op_record_from_event`), with `PATH_TO_FLAT` as the amendment fold
 guard and `_clone_op_event_for_replay` record-shape-aware, all retained-with-schedule.
 
@@ -68,7 +68,7 @@ physical), random-state, and nondeterministic-capture-context runs report `not_a
 `attested` always implies `verified`.
 The frozen `ReadinessStatus`, `RunProvider`, `StateSource`, `PathFaithfulness`, `DivergencePolicy`,
 `NumericAttestationStatus`, and `RunnableErrorCode` vocabularies live in `torchlens._runnable` and are
-documented exhaustively in `docs/reference/runnable_tlspec_contract.md`. r37 additions:
+documented exhaustively in `docs/reference/runnable_tlspec_contract.md`. Additions:
 `state_alias_topology_unsupported` (save-time state-topology refusal; tied live-identity state
 stages as one alias-group allocation) and `context_field_invalid` (parse-time closed-vocabulary
 context refusal); zero-tensor-leaf and instance-stateful container outputs refuse at save with

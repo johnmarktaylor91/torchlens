@@ -1,15 +1,15 @@
-"""Attention picture renderers: single head, grids, atlas (tviz roster).
+"""Attention picture renderers: single head, grids, atlas.
 
 Every panel is a rect mesh (``pcolormesh``), never ``imshow``; the fixed
 shared ``[0, 1]`` probability domain is the default color scale; masked cells
 fill with a color OUTSIDE the data colormap plus a legend line; cropping is
 disclosed, never renormalized; the routing-not-causal footer is permanent.
-Annotations follow the D16 grammar: a whole-head effect is a printed number
+Annotations follow the grammar: a whole-head effect is a printed number
 plus its own diverging border channel -- effects NEVER color attention cells.
 
-File output paginates and drops nothing (D21); the atlas emits an all-member
-overview plus numbered detail pages. Atlas constants below are R0 tuning
-candidates frozen through the themes gate, not memo constants.
+File output paginates and drops nothing; the atlas emits an all-member
+overview plus numbered detail pages. Atlas constants below are tuning
+candidates frozen through the themes gate, not fixed constants.
 
 All spellings are DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -52,13 +52,13 @@ from ._wording import (
 
 __all__ = ["render_attention", "render_attention_atlas"]
 
-#: Panels per page in head-grid output (R0 tuning candidate).
+#: Panels per page in head-grid output (a tuning candidate).
 PANELS_PER_PAGE = 12
 
-#: Maximum token labels drawn per axis before decimation (R0 candidate).
+#: Maximum token labels drawn per axis before decimation.
 MAX_TICK_LABELS = 32
 
-#: Kind glyph prefixes (ASCII; D16 -- four visually distinct annotations).
+#: Kind glyph prefixes (ASCII; four visually distinct annotations).
 _KIND_GLYPHS = {
     "descriptive_head_score": "score",
     "additive_logit_contribution": "logit+",
@@ -119,7 +119,7 @@ def _annotation_for(annotation: Annotation | None, head: int) -> tuple[str, floa
 
 
 def _effect_border(ax: Any, value: float | None, scale: float) -> None:
-    """Color the panel border from the diverging channel (D16 grammar).
+    """Color the panel border from the diverging channel.
 
     Effects never color attention cells; the border/header IS the effect
     channel.
@@ -175,7 +175,7 @@ def _disclosure_lines(view: AttentionView, annotation: Annotation | None) -> lis
 
 
 def _outline_step_row(ax: Any, view: AttentionView) -> None:
-    """Outline the last query row of a decode step's view (tviz memo D22).
+    """Outline the last query row of a decode step's view.
 
     A cached decode forward computes exactly one row, the newest position,
     which is the last row of the view; the prefill computes every row and
@@ -336,7 +336,7 @@ def render_attention(
     heads:
         Optional subset of ORIGINAL head indices to render.
     annotation:
-        Optional typed annotation (D16); ``intervention_effect`` requires a
+        Optional typed annotation; ``intervention_effect`` requires a
         valid receipt and renders as printed numbers plus a diverging
         border -- never recolored attention cells.
     svg_fonttype:
@@ -468,7 +468,7 @@ def _render_atlas_overview(
 
     n_layers = len(views)
     n_heads = max(len(view.heads) for view in views)
-    tile = 0.62  # inches per tile; R0 floor candidate (cell edge >= 2x seq len px)
+    tile = 0.62  # inches per tile; floor candidate (cell edge >= 2x seq len px)
     fig = figure(width=max(4.0, n_heads * tile + 1.6), height=max(3.0, n_layers * tile + 1.6))
     axes = fig.subplots(n_layers, n_heads, squeeze=False)
     vmin, vmax = 0.0, 1.0

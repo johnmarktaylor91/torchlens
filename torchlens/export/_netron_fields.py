@@ -1,7 +1,7 @@
-"""Field extraction for the netron projection (lane F14, netron memo D-16..D-18).
+"""Field extraction for the netron projection.
 
 Everything here reads finished-``Trace`` records and returns small python
-values; the wording contract (memo D-17) is enforced at this one seam:
+values; the wording contract is enforced at this one seam:
 
 - attribute names are chosen knowing netron sorts them alphabetically,
   case-insensitively -- names ARE the display order;
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 __tl_layer__ = "L8"
 
 #: torch dtype name -> ONNX ``TensorProto.DataType`` integer. Unknown dtypes
-#: OMIT the type and keep the exact dtype string as a property (memo D-05);
+#: OMIT the type and keep the exact dtype string as a property;
 #: elemType 0 is UNDEFINED pretending to be information and is never emitted.
 _ONNX_ELEM_TYPES: dict[str, int] = {
     "float32": 1,
@@ -83,14 +83,14 @@ def build_leaf_attrs(
     intervened: bool = False,
     rolled_members: list[Any] | None = None,
 ) -> list[NetronAttr]:
-    """Build the curated ~8-fact attribute set for one leaf node (memo D-17).
+    """Build the curated ~8-fact attribute set for one leaf node.
 
     Parameters
     ----------
     entry:
         Layer-pass entry (or the first pass of a rolled group).
     intervened:
-        Whether the intervention audit marks this node (compo row C2).
+        Whether the intervention audit marks this node.
     rolled_members:
         All passes of a rolled group; duration and flops then sum across
         passes and per-pass facts (``pass``) are skipped.
@@ -136,7 +136,7 @@ def build_leaf_attrs(
 
 
 def rolled_variance_attrs(members: list[Any], *, feedback_sources: list[str]) -> list[NetronAttr]:
-    """Disclose cross-pass variance for one rolled node (memo D-13).
+    """Disclose cross-pass variance for one rolled node.
 
     A rolled edge is typed only when every member pass agrees on shape and
     dtype; otherwise the variants ride these properties and the edge stays
@@ -184,13 +184,13 @@ def module_path_of(entry: Any) -> str:
 
 
 def _strip_single_pass(call_label: str) -> str:
-    """Drop the gratuitous ``:1`` from single-call spellings (memo D-18)."""
+    """Drop the gratuitous ``:1`` from single-call spellings."""
 
     return call_label[:-2] if call_label.endswith(":1") else call_label
 
 
 def node_doc(entry: Any) -> str:
-    """Build the one-line, privacy-normalized docString (memo D-18).
+    """Build the one-line, privacy-normalized docString.
 
     Source locations emit basename+line only, never absolute home or temp
     paths. The location is the frame a display names as the line that ran
@@ -216,7 +216,7 @@ def node_doc(entry: Any) -> str:
 
 
 def port_names(entry: Any, inputs: list[str]) -> list[str] | None:
-    """Derive netron ``input_names`` port labels with strict alignment (D-16).
+    """Derive netron ``input_names`` port labels with strict alignment.
 
     Names come from ``arg_names`` indexed by ``parent_arg_positions``; on any
     mismatch the hook is omitted -- a numeric port beats a wrong name.

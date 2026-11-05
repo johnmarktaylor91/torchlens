@@ -4,15 +4,15 @@ The one front door that turns (trace, lens row, explicit user kwargs, skin)
 into concrete ``Trace.draw`` parameters, enforcing the themes memo's
 honesty terms:
 
-- Defaults-not-overrides with the full precedence chain (C05's
+- Defaults-not-overrides with the full precedence chain (the
   ``resolve_lens_request`` merge; ``preset_spec_fn`` composes BEFORE the
   user's ``node_spec_fn``, which keeps the last word).
-- HEADLINE / SECONDARY semantics (N2): missing headline evidence refuses
+- HEADLINE / SECONDARY semantics: missing headline evidence refuses
   typed naming the capture remedy; a missing SECONDARY degrades with a
   coded warning AND a rendered notice. Silence is never an option.
-- View-aware source-family resolution (N16) with the zero-coverage refusal
+- View-aware source-family resolution with the zero-coverage refusal
   and the mandatory rolled aggregation line.
-- The visible-detail budget resolver (N10) for rows that compact.
+- The visible-detail budget resolver for rows that compact.
 - Refusal taxonomy (memo section 2 item 5): overview never
   refuses; speed/memory/compute/dims refuse on missing EVIDENCE;
   transformer/sequence refuse on factual absence of SUBJECT. Every refusal
@@ -70,8 +70,8 @@ LENS_DETAIL_CEILING = 2000
 #: Lenses the legibility gate ruled legend-DEPENDENT: naive readers could
 #: not identify the channel without the legend, so explicit
 #: ``show_legend=False`` refuses typed citing the gate result. EMPTY until
-#: the battery rules a lens in (the mechanism ships entry-dark; D03 runs
-#: the battery).
+#: the battery rules a lens in (the mechanism ships entry-dark; the battery
+#: runs separately).
 LEGEND_DEPENDENT_LENSES: set[str] = set()
 
 #: Request-field name -> Trace.draw kwarg name, where they differ.
@@ -737,7 +737,7 @@ def resolve_lens(
     """
 
     request_kwargs, passthrough = _split_request_kwargs(_request_dialect(dict(user_kwargs or {})))
-    # The surgery row (lane F43) registers at its module's import; resolving
+    # The surgery row registers at its module's import; resolving
     # it by name must not depend on the caller having imported that module.
 
     resolved_lens = lens if isinstance(lens, LensPreset) else get_lens(lens)

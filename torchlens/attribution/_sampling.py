@@ -1,15 +1,15 @@
 """Serial sample runner shared by noise tunnel, GradientShap, and the metrics.
 
-Attrib memo B1/D4-D5: one substrate owns input-tree perturbation (repeated
+One substrate owns input-tree perturbation (repeated
 tensor references get ONE perturbed object reused at every reference; integer
 ids, masks, booleans, and strings pass through unchanged), per-device
 generators, sample banks, cross-sample invariance validation, aggregation,
-failure naming, and cost counters. Wave-1 sampling is deliberately SERIAL
-behind this replaceable executor seam (D5): once a wrapped method arrives as
+failure naming, and cost counters. Sampling is deliberately SERIAL
+behind this replaceable executor seam: once a wrapped method arrives as
 a closed callable the runner cannot know whether it is batchable, so there is
 no public sample-batch knob.
 
-Complex-noise rule (documented, D4): complex leaves draw ``torch.randn`` with
+Complex-noise rule (documented): complex leaves draw ``torch.randn`` with
 the leaf's complex dtype, i.e. a standard complex normal whose real and
 imaginary components each carry variance 1/2 (total variance 1 per element).
 """
@@ -35,7 +35,7 @@ def _resolve_stdevs(
     stdevs: float | Sequence[float],
     inputs: _PreparedInputs,
 ) -> tuple[float, ...]:
-    """Resolve the absolute noise scale per attributed leaf (attrib memo D4).
+    """Resolve the absolute noise scale per attributed leaf.
 
     ``stdevs`` is ABSOLUTE and nonnegative -- range-relative noise is a docs
     recipe, never a hidden inference. Repeated references to one tensor must
@@ -109,7 +109,7 @@ class _NoiseSource:
 
     Draw order is deterministic: one draw per UNIQUE attributed leaf per
     sample, in first-occurrence traversal order -- bit-identical to the
-    historical SmoothGrad draw sequence (memo D7).
+    historical SmoothGrad draw sequence.
 
     Parameters
     ----------
@@ -427,7 +427,7 @@ def _run_serial_samples(
     ------
     AttributionError
         If a child call fails; the refusal names the zero-based sample and no
-        partial result is returned (memo D4).
+        partial result is returned.
     """
 
     results: list[Attribution] = []
@@ -541,7 +541,7 @@ def _scalar_distribution(values: list[float]) -> dict[str, float]:
 
 
 def _completeness_distributions(results: list[Attribution]) -> dict[str, Any]:
-    """Build the D4 per-sample completeness distributions when disclosed.
+    """Build the per-sample completeness distributions when disclosed.
 
     Parameters
     ----------

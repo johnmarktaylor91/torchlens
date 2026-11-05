@@ -256,7 +256,7 @@ class DiskStorageBackend:
             self.abort(_scrubbed_abort_reason("Failed to finalize fastlog bundle", exc))
             raise
         except BaseException as exc:
-            # Safety net (round-8 F3 class, parity with BundleStreamWriter.finalize):
+            # Safety net (parity with BundleStreamWriter.finalize):
             # a hand-enumerated except tuple misses shapes like a TypeError from
             # json.dump or a KeyboardInterrupt unwinding mid-finalize. Mark the
             # .tmp dir PARTIAL for ANY failure so cleanup_partial()/recover() can
@@ -272,7 +272,7 @@ class DiskStorageBackend:
         except OSError as exc:
             self.abort(_scrubbed_abort_reason("Failed to flush fastlog bundle", exc))
             raise
-        # R59 TOCTOU: re-check target absence at publish time, not just at writer
+        # TOCTOU guard: re-check target absence at publish time, not just at writer
         # init -- POSIX rename onto a concurrently-created empty directory would
         # silently replace it.
         if self.writer.final_path.exists():

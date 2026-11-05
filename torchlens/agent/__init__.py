@@ -1,15 +1,6 @@
-"""torchlens.agent -- the read-only agent inspection surface (agent memo 3.1).
+"""The read-only agent inspection surface: one tool registry exposed through Python (:func:`call_tool`), the MCP server (``torchlens.bridge.mcp``) and the CLI (``python -m torchlens``).
 
-One inspection core, one registry, three transports: Python
-(:func:`call_tool`), the MCP server (``torchlens.bridge.mcp``), and the CLI
-(``python -m torchlens``) are thin adapters over the SAME tool registry.
-Transports may override DEFAULTS, never semantics. Every tool is read-only
-and idempotent; nothing here executes user code, writes files, or mutates
-artifacts -- unconditionally (memo 3.12).
-
-DOCUMENTED-UNSTABLE spellings pending naming ratification. Deliberately NOT
-in ``torchlens.__all__`` (frozen root budget): reach it as ``tl.agent``.
-"""
+Every tool is read-only and idempotent; nothing here executes user code, writes files, or mutates artifacts. Reach it as ``tl.agent``; it is deliberately not in ``torchlens.__all__``."""
 
 from __future__ import annotations
 

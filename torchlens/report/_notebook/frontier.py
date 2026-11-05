@@ -1,4 +1,4 @@
-"""The diagnostic frontier: first-dirty sites plus one hop (B6, F16).
+"""The diagnostic frontier: first-dirty sites plus one hop.
 
 "Flagged ops" is unbounded -- one injected NaN flags 65% of distilgpt2's
 ops because nonfinite values propagate, so the flagged set is the whole
@@ -8,13 +8,13 @@ parents (the last clean values), and its direct children. The frontier
 contains the clean-to-dirty transition -- the picture that answers "where
 did it come from".
 
-This module is the ONE reusable graph query (memo B6): the offline
+This module is the ONE reusable graph query: the offline
 report's default array policy, the card's "where did this come from"
 link, and any future viewer all consume it.
 
-Distribution-sketch slot disposition (memo B6's second half): the typed
+Distribution-sketch slot disposition: the typed
 optional slot ships as ``TensorStats.histogram_counts`` /
-``histogram_edges`` / ``histogram_evidence`` (C02) -- method, bounds, and
+``histogram_edges`` / ``histogram_evidence`` -- method, bounds, and
 exact/sampled evidence ride the record, absent (``None``) by default on
 unsupported payloads. This lane CONSUMES that slot rather than minting a
 second one.

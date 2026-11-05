@@ -39,9 +39,9 @@ def _call_site_explicit_time_value(frame: Any, time_arg_index: int) -> bool:
     and its RUNTIME VALUE is resolved from the frame (constants directly;
     names from the frame's locals/globals, still bound at ``c_call`` time).
 
-    The previous argcount-only decode was VALUE-BLIND (r5 b8-fable R57): a
+    An argcount-only decode would be VALUE-BLIND: a
     held alias called with an explicit ``None`` (``localtime(None)``, or the
-    common idiom ``def fmt(ts=None): return ctime(ts)``) decoded as
+    common idiom ``def fmt(ts=None): return ctime(ts)``) would decode as
     "explicit time" and read the current clock unmarked -- a false VERIFIED.
     Resolving the value keeps a genuine held ``localtime(t)`` a pure
     transform (no over-ceiling) while a ``None`` value, a star-call, a
@@ -79,9 +79,9 @@ def _call_site_time_arg_proof(frame: Any, argcount: int, time_arg_index: int) ->
     The positional-count decode alone is VALUE-BLIND: ``localtime(None)`` (and
     the common idiom ``def fmt(ts=None): return ctime(ts)``) passes the
     explicit-time slot yet still reads the current clock, so counting
-    positionals let a held pre-window alias escape unmarked (grind-r5 b8
-    R57). The decode is VALUE-resolving (r5 b8-fable R57, unified with
-    :func:`_call_site_explicit_time_value` at fixwave-5 integration):
+    positionals would let a held pre-window alias escape unmarked.
+    The decode is VALUE-resolving (shared with
+    :func:`_call_site_explicit_time_value`):
     constants resolve directly and simple names resolve from the frame's
     locals/globals, which are still bound at ``c_call`` time -- nothing can
     rebind a simple name between its argument load and the call in the same

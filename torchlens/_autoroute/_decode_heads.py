@@ -82,7 +82,7 @@ def _tensor_candidates(
             width = int(value.shape[-1])
         except Exception:
             # Exotic tensor subclasses may refuse metadata reads; they are
-            # not logits candidates and must never abort the sniff (R65).
+            # not logits candidates and must never abort the sniff.
             continue
         if expected_width is None or width == expected_width:
             candidates.append((value, name))

@@ -372,7 +372,7 @@ def _preflight_retention_floor(
     descriptor: SparseRunDescriptor,
     admitted_view_slot_ids: frozenset[str] = frozenset(),
 ) -> None:
-    """Refuse a run whose GUARANTEED retained bytes provably exceed the budget (r59).
+    """Refuse a run whose GUARANTEED retained bytes provably exceed the budget.
 
     Loaded-sparse replay keeps every taken-path op output alive in its slot values until
     the run ends (plus an ``Op.out`` clone for each saved op), and one reconstruct clone
@@ -382,7 +382,7 @@ def _preflight_retention_floor(
     live budget could never complete on this host: every honest per-op allocation may
     pass the per-slot bound (``_runnable_state._preflight_run_allocation``) and every clone may pass
     its per-clone byte guard, yet their cumulative retention guarantees a mid-replay
-    allocator death (r58 free_1/free_2 accumulation seam: e.g. 40 honest 4 GB output
+    allocator death (accumulation seam: e.g. 40 honest 4 GB output
     slots = 160 GB floor > a 105 GB host budget). This refuses that typed at
     ``run_retention_preflight`` before any call executes.
 

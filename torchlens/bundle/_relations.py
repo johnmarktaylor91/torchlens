@@ -1,8 +1,8 @@
-"""Bundle member-relation table (S6, grammar v2): typed, closed, OPTIONAL relations.
+"""Bundle member-relation table (grammar v2): typed, closed, OPTIONAL relations.
 
 One optional relation table per :class:`~torchlens.bundle.Bundle`. Absence
 means a plain Bundle with unchanged semantics; membership NEVER requires
-alignment or relations (the S6 flexibility invariant). The table is DATA,
+alignment or relations (the flexibility invariant). The table is DATA,
 not derivation: loads never recompute it, but its invariants (R1/R2/R3) are
 re-checked on every load and every mutation.
 
@@ -40,7 +40,7 @@ control kind (:mod:`._selected_by`): "writer selected_by router" persists as
 relation rows ORDER members; they never license cross-member parameter VALUE
 reads (``checkpoint_series_live_params``).
 
-UNKNOWN-KIND LOADING (loader doctrine leg (a), D5): builtin kinds are BARE
+UNKNOWN-KIND LOADING (loader doctrine leg (a)): builtin kinds are BARE
 names; extension kinds are NAMESPACED (``"<ns>.<name>"``, at least one dot —
 the sidecar family-id grammar). A well-formed row of an unknown NAMESPACED
 kind loads OPAQUE and DISCLOSED under ``unknown_kinds="opaque"`` (an
@@ -52,7 +52,7 @@ unknown kind keeps refusing in every mode, and ``unknown_kinds="refuse"``
 namespaced kinds too. CONSTRUCTION (``Bundle.relate`` / the constructor)
 always refuses unknown kinds: opaque rows enter from artifacts only.
 
-Payload spelling: PAIR rows persist their endpoints under the S6 keys
+Payload spelling: PAIR rows persist their endpoints under the keys
 ``from``/``to`` (``from`` is a Python keyword, so the dataclass attributes
 are ``from_member``/``to_member``); MEMBER rows persist under ``member``.
 
@@ -106,11 +106,11 @@ __all__ = [
     "RelationKindSpec",
 ]
 
-#: Closed relation claim-grade vocabulary (C07X item 9; foldB D12 axis 2).
-#: Reserved NOW so the D8 composition rule (outcomes gate whether a check
+#: Closed relation claim-grade vocabulary.
+#: Reserved NOW so the composition rule (outcomes gate whether a check
 #: RUNS; evidence never adjudicates an outcome) is expressible without a
 #: later coordinated bump. Users extend the RELATION vocabulary, never this
-#: TRUST vocabulary -- and they never MINT trust either (W051-HONESTY M8):
+#: TRUST vocabulary -- and they never MINT trust either:
 #: every evidence item that reaches a row today is user-authored (no
 #: TorchLens producer writes evidence envelopes yet), so the MEASUREMENT
 #: grades in :data:`RELATION_MEASURED_GRADES` are clamped to ``disclosed`` at
@@ -128,16 +128,16 @@ RELATION_MEASURED_GRADES = frozenset({"verified", "consistent", "divergent"})
 #: Item key preserving the grade a user declared before the clamp.
 RELATION_DECLARED_GRADE_KEY = "declared_grade"
 
-#: Closed unchecked-reason menu (C07X items 9-10). D15: a teaching refusal
-#: must never state something false, and no lane may invent an uncontracted
-#: reason string — new reasons enter by contract change only.
+#: Closed unchecked-reason menu. A teaching refusal must never state
+#: something false, and no caller may invent an uncontracted reason string;
+#: new reasons enter by contract change only.
 #:
 #: - ``incomparable_basis``: statistical fingerprints without a matching
-#:   ``basis.recipe`` id never condemn (foldB D14).
+#:   ``basis.recipe`` id never condemn.
 #: - ``no_param_snapshot``: the producer is present and healthy; the
-#:   parameter snapshot was simply never taken (foldB D15).
+#:   parameter snapshot was simply never taken.
 #: - ``member_outcome_refused``: the cited member's settled outcome refused
-#:   the N2 validation entry, so the item's check never ran (foldB D8).
+#:   the N2 validation entry, so the item's check never ran.
 #: - ``schema_unknown``: the evidence envelope's schema id is not known to
 #:   this process; items load opaque (loader doctrine leg (b)).
 #: - ``kind_unregistered``: the row's namespaced kind is not registered in
@@ -171,7 +171,7 @@ _EVIDENCE_ENVELOPE_KEYS = frozenset({"schema", "items", "facts_digest"})
 
 #: Namespaced-kind grammar: ``<ns>.<name>`` lowercase identifiers with at
 #: least one dot — the sidecar family-id grammar, one namespace grammar for
-#: both extension doors (foldB D16).
+#: both extension doors.
 _NAMESPACED_KIND_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
 
@@ -182,7 +182,7 @@ class RelationKindSpec:
     Both sets are CLOSED: a key outside their union refuses
     (``bundle_relation_schema_invalid``) exactly as the v1 exact-set check
     did — the required/optional split does not weaken the undeclared-key
-    refusal (foldB D4).
+    refusal.
     """
 
     required: frozenset[str]
@@ -255,7 +255,7 @@ def _validated_params(kind: str, params: Any) -> dict[str, Any]:
     ------
     ValueError
         On a non-mapping, an undeclared or missing-required param key, or an
-        ill-typed param value (the S6 R2 refusal family; callers convert
+        ill-typed param value (the R2 refusal family; callers convert
         into ``bundle_relation_schema_invalid``).
     BundleRelationError
         ``bundle_relation_evidence_over_budget`` when an evidence envelope
@@ -358,7 +358,7 @@ def _validate_param_value(kind: str, key: str, value: Any) -> None:
             f"vocabulary {sorted(_EPISODE_ROLES)}"
         )
     elif key in ("carry_mode", "state_source"):
-        # D16 spellings, reserved at amendment time. ``carry_mode`` is the
+        # Reserved spellings. ``carry_mode`` is the
         # closed carry-mode vocabulary (``none`` is a declared fresh start that
         # grades disclosed); ``state_source`` keeps the type envelope only.
         if not isinstance(value, str) or not value:
@@ -471,17 +471,17 @@ def _enforce_evidence_budget(
 
 @dataclass(frozen=True)
 class MemberRelationRow:
-    """One frozen S6 relation row; ``kind`` selects one of TWO closed shapes.
+    """One frozen relation row; ``kind`` selects one of TWO closed shapes.
 
     PAIR rows (kinds ``alternative_of`` / ``forked_from`` / ``successor_of``
     / ``escalates`` / ``fed_by`` / ``selected_by``) carry ``from_member``/``to_member`` (persisted as the
-    S6 ``from``/``to`` keys) and leave ``member`` unset. MEMBER rows (kind
+    ``from``/``to`` keys) and leave ``member`` unset. MEMBER rows (kind
     ``episode_member``) carry ``member`` and leave the endpoints unset.
     ``params`` holds only keys the kind declares — per-kind closed
     REQUIRED/OPTIONAL sets (grammar v2), validated at construction and again
     at every load.
 
-    DIRECTION PIN (C07X item 8): on a ``successor_of`` row ``from_member``
+    DIRECTION PIN: on a ``successor_of`` row ``from_member``
     is ALWAYS the LATER member (the successor) and ``to_member`` the earlier
     member it succeeds — "B succeeds A" is
     ``MemberRelationRow(kind="successor_of", from_member="B", to_member="A")``.
@@ -525,7 +525,7 @@ class MemberRelationRow:
         return (str(self.member),)
 
     def to_payload(self) -> dict[str, Any]:
-        """Return a JSON-serializable payload in the S6 key spelling."""
+        """Return a JSON-serializable payload in the key spelling."""
 
         if self.kind in PAIR_ROW_KINDS:
             return {
@@ -592,7 +592,7 @@ class MemberRelationRow:
 class OpaqueRelationRow:
     """One preserved-and-disclosed relation row of an unknown NAMESPACED kind.
 
-    Loader doctrine leg (a) (C07X item 2, foldB D5): a well-formed row whose
+    Loader doctrine leg (a): a well-formed row whose
     namespaced kind is not registered in this process loads OPAQUE — the raw
     payload is preserved verbatim for byte-exact re-save, the row is
     DISCLOSED (one load warning; :attr:`MemberRelationTable.opaque_kinds`),
@@ -637,7 +637,7 @@ UnknownKindPolicy = Literal["opaque", "refuse"]
 
 
 class MemberRelationTable:
-    """Immutable S6 relation table: an identity-stable tuple of frozen rows.
+    """Immutable relation table: an identity-stable tuple of frozen rows.
 
     Mutation never happens in place (R4): ``Bundle.relate`` and the R5
     cascade paths build a NEW validated table, so views handed out never

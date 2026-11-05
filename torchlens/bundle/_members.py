@@ -60,8 +60,8 @@ def parse_members(
 
     for member_name, log in pairs:
         require_trace(log, arg_name=f"member {member_name!r}")
-    # O(n) duplicate detection (r8 R52): the prior per-member full
-    # name-list rebuild + count was quadratic (measured 4.1s at 8k
+    # O(n) duplicate detection: a per-member full
+    # name-list rebuild + count would be quadratic (measured 4.1s at 8k
     # members on the all-valid path).
     name_counts = Counter(name for name, _ in pairs)
     duplicate_names = sorted(name for name, count in name_counts.items() if count > 1)

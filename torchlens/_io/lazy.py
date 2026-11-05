@@ -159,7 +159,7 @@ class LazyActivationRef:
 
         if blob_size <= _INLINE_LOAD_MAX_BYTES:
             try:
-                # Stat-sized bounded read (R33-1, same fix as
+                # Stat-sized bounded read (same approach as
                 # _json._bounded_read_bytes): reading the CEILING+1 made
                 # BufferedReader pre-allocate a ~500 MiB bytes object for
                 # every inline blob regardless of its actual size. Read the
@@ -191,7 +191,7 @@ class LazyActivationRef:
                 raise ArtifactError(f"Failed to materialize blob at {blob_path}.") from exc
         else:
             # Large blobs are stream-hashed and memory-mapped for load to keep
-            # peak memory bounded (IO-S9), which unavoidably means two reads of
+            # peak memory bounded, which unavoidably means two reads of
             # the same path -- unlike the single-read small-blob branch above,
             # whose hash and load observe identical in-memory bytes. Bracket the
             # hash with the file identity and re-check it immediately before the

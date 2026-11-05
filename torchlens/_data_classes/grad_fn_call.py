@@ -40,7 +40,7 @@ projection revision, so a full ordinal sweep over N calls is O(N) instead of
 the historical O(N^2) (``list(trace.autograd.grad_fn_calls).index(self)`` rebuilt the
 accessor AND ran an equality scan per access; measured exponent 2.02).
 Identity keys are sound because GradFnCall facades are identity-stable while
-referenced (the M9 weak-valued facade cache), and a stale/missing id triggers
+referenced (the weak-valued facade cache), and a stale/missing id triggers
 one rebuild rather than a wrong answer.
 """
 
@@ -152,14 +152,14 @@ class GradFnCall:
             self.timestamp = self._time_finished
 
     def __tl_state_items__(self) -> Any:
-        """Yield live state pairs from the backing row (M9 facade hook)."""
+        """Yield live state pairs from the backing row (facade hook)."""
 
         from .._trace_core.record_rows import record_state_items
 
         return record_state_items(self)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
-        """Install a state mapping through the cell descriptors (M9 hook)."""
+        """Install a state mapping through the cell descriptors (hook)."""
 
         from .._trace_core.record_rows import record_state_restore
 
@@ -364,7 +364,7 @@ class GradFnCall:
         return pd.DataFrame([row], columns=GRAD_FN_PASS_LOG_FIELD_ORDER)
 
 
-# The M9 facade: the declared stored fields become row-cell descriptors
+# The facade: the declared stored fields become row-cell descriptors
 # (dataclass defaults are baked into the generated __init__, so replacing
 # the class-attribute defaults is behavior-preserving); the instance dict
 # keeps only the store binding + user extras. Rows adopt into the owning

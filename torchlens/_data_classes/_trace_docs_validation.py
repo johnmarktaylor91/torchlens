@@ -21,7 +21,7 @@ DOCS: dict[str, str] = {
             normalized to ``[tensor]``: iterating it directly counted the
             tensor's ROWS as expected outputs, so a byte-correct capture
             reported a validation FAILURE (``"1 logged vs <batch> expected"``)
-            for a caller-arity slip (r7 b1-opus R08-3). A tripwire that fails
+            for a caller-arity slip. A tripwire that fails
             on correct captures trains users to ignore it.
         verbose, validate_metadata:
             Forwarded unchanged to

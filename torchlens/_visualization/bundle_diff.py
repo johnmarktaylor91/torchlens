@@ -248,7 +248,7 @@ def _build_dot(
         comment="TorchLens bundle diff",
         format="svg",
     )
-    # dpi is raster-only now (vizmech D23), and this graph renders SVG: the
+    # dpi is raster-only now (vizmech), and this graph renders SVG: the
     # historical ``dpi=72`` workaround (pinning viewBox units to layout
     # coords) is the identity value, so passing the format simply drops it.
     graph_attrs = theme_graph_attrs(theme, font_size=18, dpi=72, fileformat="svg")

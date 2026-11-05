@@ -229,7 +229,7 @@ def _run_refresh_forward(
             inference_only=self._options_inference_only,
             # A refresh retains payloads like any capture: keep the configured budget.
             save_budget=getattr(self, "save_budget", "auto"),
-            # A refresh re-arms the nonfinite tripwire (F2).
+            # A refresh re-arms the nonfinite tripwire.
             raise_on_nan=bool(self._options_on_nonfinite),
             # A refresh measures CPU peaks only if the source opted in.
             measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),
@@ -300,7 +300,7 @@ def _project_refreshed(
         projected_layer_nums,
         projected_grad_layer_nums,
     ).project(refreshed)
-    # r39 corr2_5: copy the FRESH refresh forward's output-losslessness proof onto the
+    # copy the FRESH refresh forward's output-losslessness proof onto the
     # projected fork. A changed input may select a different return-container KIND than the
     # original capture, so the live provider must gate its bare-tensor fast path on the fresh
     # proof (``bare_tensor_root``), not the stale capture-time one. Missing/malformed fresh
@@ -310,7 +310,7 @@ def _project_refreshed(
         self._replay_arg_version_data_complete = True
 
 
-#: Session-time semantic-output scratch (B1-02). Written at capture entry
+#: Session-time semantic-output scratch. Written at capture entry
 #: (``user_funcs.py``) and consumed ONLY by ``decode_outputs_for_trace`` on the
 #: normal forward-return arm. Both pin LIVE USER OBJECTS -- an HF
 #: tokenizer (``bridge/hf.py``) and a model-derived metadata key -- so a copy
@@ -350,7 +350,7 @@ def _drop_semantic_output_transients(self: "Trace") -> None:
 def _publish_streamed_bundle_at_settlement(self: "Trace") -> None:
     """Publish a staged streamed bundle with its just-settled outcome.
 
-    WT1 A-IV item 18 (lane A08): postprocess step 18 STAGES the streamed
+    A-IV item 18: postprocess step 18 STAGES the streamed
     bundle and this seam -- immediately after ``settle_completed`` /
     ``settle_halted`` -- performs the tmp->final publish, injecting the
     settled capture-outcome attestation into ``metadata.pkl`` (the same
@@ -370,7 +370,7 @@ def _publish_streamed_bundle_at_settlement(self: "Trace") -> None:
 
 
 def _scrub_failed_capture_transients(self: "Trace") -> None:
-    """Failure-axis twin of the success arms' transient drops (R11/R32).
+    """Failure-axis twin of the success arms' transient drops.
 
     The success arms pop ``_output_attribution_input_tensors`` (live USER
     INPUT tensors) and postprocess replaces the mutable ``capture_events``
@@ -400,7 +400,7 @@ def _scrub_failed_capture_transients(self: "Trace") -> None:
     """
 
     # A failed forward may leave in-flight cpu_async D2H copies whose
-    # pinned host buffers escape on ``exc.partial_trace`` (R36-1): fence them
+    # pinned host buffers escape on ``exc.partial_trace``: fence them
     # before anything reads the partial's payloads.
     synchronize_pending_cpu_async_copies()
     self.__dict__.pop("_output_attribution_input_tensors", None)
@@ -471,7 +471,7 @@ def _settle_interrupted_halted_arm(
     Mirrors the outer ``except BaseException`` arm's guarded settlement: the
     stamp is FAILED/interrupted with the halt boundary disclosed, and an
     ordinary settlement/scrub failure attaches as a note instead of replacing
-    the unwinding KeyboardInterrupt/SystemExit (B8-23 discipline).
+    the unwinding KeyboardInterrupt/SystemExit.
     """
 
     try:

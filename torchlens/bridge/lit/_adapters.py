@@ -2,13 +2,13 @@
 
 This module imports ``lit_nlp`` at module level and is therefore only imported
 AFTER the factory's dependency gate; ``import torchlens.bridge.lit`` stays
-import-inert without the peer (the L8 rule).
+import-inert without the peer.
 
-Two task adapters ship in v1 (LIT-panel memo D3): sequence classification and
+Two task adapters ship in v1: sequence classification and
 basic causal LM with deterministic generation. Every output field routes
-through the field-converter registry (memo section 8 plumbing) -- which ships
+through the field-converter registry -- which ships
 with ZERO attention entries: LIT deleted its attention panel upstream and a
-field no panel renders must not exist (memo D12).
+field no panel renders must not exist.
 """
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ def _embeddings_spec(config: dict[str, Any]) -> Any:
 def _token_salience_spec(config: dict[str, Any]) -> Any:
     """Build the model-provided token-salience field spec.
 
-    ``autorun=False`` is cost semantics, not naming (memo D11): salience costs
+    ``autorun=False`` is cost semantics, not naming: salience costs
     a backward pass per minibatch, and ``autorun=True`` would fire it for the
     whole dataset at load.
 
@@ -154,10 +154,10 @@ def _token_salience_spec(config: dict[str, Any]) -> Any:
     return lit_types.TokenSalience(autorun=False, signed=True)
 
 
-# The v1 field-converter registry (memo section 8): predictions, embeddings,
+# The v1 field-converter registry: predictions, embeddings,
 # and salience route through it. Deliberately ZERO attention entries -- landing
 # attention requires a maintained visible renderer upstream plus real
-# facets-pattern, alignment, shape, and browser-render tests (memo D12);
+# facets-pattern, alignment, shape, and browser-render tests;
 # successful serialization is explicitly insufficient.
 FIELD_CONVERTERS: dict[str, FieldConverter] = {
     "multiclass_preds": FieldConverter("multiclass_preds", ("classification",), _multiclass_spec),
@@ -184,7 +184,7 @@ class AdapterConfig:
     name:
         Display name LIT shows for the model.
     specs:
-        The pinned site quads (memo D4).
+        The pinned site quads.
     pooling:
         Validated pooling strategy.
     salience_layer:
@@ -208,8 +208,8 @@ class _TorchLensLitModel(lit_model.BatchedModel):
     """Shared base for the TorchLens LIT adapters.
 
     TorchLens wraps a LIVE model: every ``predict_minibatch`` tokenizes the
-    request, runs ONE padded traced forward (memo D9), re-resolves the pinned
-    sites structurally (memo D4/D5), and reads activations per-op (memo D6).
+    request, runs ONE padded traced forward, re-resolves the pinned
+    sites structurally, and reads activations per-op.
     """
 
     def __init__(self, net: nn.Module, tokenizer: Any, config: AdapterConfig) -> None:
@@ -244,7 +244,7 @@ class _TorchLensLitModel(lit_model.BatchedModel):
 
         The factory takes live Python objects (model, tokenizer), so LIT's UI
         cannot instantiate new copies; returning the explicit literal keeps
-        LIT's constructor-inference warning out of the logs (memo D19).
+        LIT's constructor-inference warning out of the logs.
 
         Returns
         -------
@@ -270,7 +270,7 @@ class _TorchLensLitModel(lit_model.BatchedModel):
 
     @property
     def supports_concurrent_predictions(self) -> bool:
-        """Return False: TorchLens tracing is not re-entrant (memo D18).
+        """Return False: TorchLens tracing is not re-entrant.
 
         Returns
         -------
@@ -350,7 +350,7 @@ class _TorchLensLitModel(lit_model.BatchedModel):
     ) -> torch.Tensor:
         """Compute signed per-token salience at the input-embedding site.
 
-        Semantics per memo D11: signed activation-times-gradient of the target
+        Semantics: signed activation-times-gradient of the target
         logits with respect to the input-embedding output, summed over the
         hidden axis -- never called "integrated gradients". Computed with one
         extra forward + backward per minibatch. (The attribution kit's
@@ -452,7 +452,7 @@ class _TorchLensLitModel(lit_model.BatchedModel):
 
 
 class TorchLensLitClassifier(_TorchLensLitModel):
-    """Sequence-classification adapter (memo build item 5).
+    """Sequence-classification adapter.
 
     Right-padded batched predict throughout; probabilities from the SAME
     traced forward that serves the activation fields; mask-aware pooling.
@@ -476,7 +476,7 @@ class TorchLensLitClassifier(_TorchLensLitModel):
         config:
             Shared adapter configuration.
         labels:
-            Validated class-label vocabulary (memo D19 ``labels=`` override).
+            Validated class-label vocabulary (the ``labels=`` override).
         """
 
         super().__init__(net, tokenizer, config)
@@ -505,7 +505,7 @@ class TorchLensLitClassifier(_TorchLensLitModel):
         return spec
 
     def predict_minibatch(self, inputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Serve one LIT minibatch from one traced forward (memo D9).
+        """Serve one LIT minibatch from one traced forward.
 
         Parameters
         ----------
@@ -645,9 +645,9 @@ class _GenerationProducts:
 
 
 class TorchLensLitCausalLM(_TorchLensLitModel):
-    """Basic causal-LM adapter with deterministic generation (memo item 6).
+    """Basic causal-LM adapter with deterministic generation.
 
-    The two-tokenization coherent set (memo D9): LEFT-padded batch for ONE
+    The two-tokenization coherent set: LEFT-padded batch for ONE
     ``generate()`` call (byte-identical to unbatched HF generation), and
     RIGHT-padded batch for ONE traced forward with ``use_cache=False`` serving
     next-token top-k, activations, and salience. The halves never mix.
@@ -748,7 +748,7 @@ class TorchLensLitCausalLM(_TorchLensLitModel):
         )
 
     def _generate(self, id_lists: list[list[int]], device: torch.device) -> list[str]:
-        """Run ONE batched deterministic generation, left-padded (memo D9).
+        """Run ONE batched deterministic generation, left-padded.
 
         Parameters
         ----------
@@ -783,7 +783,7 @@ class TorchLensLitCausalLM(_TorchLensLitModel):
         """Read each row's next-token logits at ``[i, L_i - 1]``.
 
         Under right padding without ``position_ids`` the last REAL token's
-        position carries the next-token distribution (memo D9 coherent set).
+        position carries the next-token distribution (one coherent padding set).
 
         Parameters
         ----------
@@ -859,7 +859,7 @@ class TorchLensLitCausalLM(_TorchLensLitModel):
         list per token in the aligned ``tokens`` field (position ``t`` carries
         the model's distribution for the token AFTER ``t``; the last real
         position is the next-token prediction). The validator rejects list
-        candidates (memo D19): each candidate must be a tuple with a string
+        candidates: each candidate must be a tuple with a string
         first element, in descending order.
 
         Parameters
@@ -961,7 +961,7 @@ def _spec_dict(examples: Iterable[Any], labels: tuple[str, ...] | None) -> dict[
 
 
 def build_dataset(examples: Iterable[Any], labels: tuple[str, ...] | None, description: str) -> Any:
-    """Build the tiny native LIT dataset (memo D19).
+    """Build the tiny native LIT dataset.
 
     Parameters
     ----------
@@ -1009,7 +1009,7 @@ def build_dataset(examples: Iterable[Any], labels: tuple[str, ...] | None, descr
 def build_layout() -> Any:
     """Build the pure-Python LIT layout foregrounding TorchLens fields.
 
-    Custom ``LitCanonicalLayout``s are the whole frontend leverage (memo D16):
+    Custom ``LitCanonicalLayout``s are the whole frontend leverage:
     LIT panels are compiled TypeScript, but layouts are plain Python and need
     no client rebuild.
 

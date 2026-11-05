@@ -2,20 +2,20 @@
 
 The midpoint Riemann grid used to live inline at exactly two sites
 (``_core.py`` and ``_layer.py``, both spelled ``(step + 0.5) / n_steps``).
-This module is the ONE owner of that schedule (attrib memo D19): every
+This module is the ONE owner of that schedule: every
 IG-family consumer (input IG, layer IG, layer conductance, the text helper)
 reads its path points from :func:`_midpoint_schedule`, so a future quadrature
 rule is one function body here, never API churn. Wave 1 deliberately ships
 midpoint Riemann semantics only; captum's default Gauss-Legendre differs
 (measured 22.5% at n=16 on resnet18), and captum oracle rows must request
-``method="riemann_middle"`` (attrib memo D20).
+``method="riemann_middle"``.
 
 The step runner (:func:`_run_step_batches`) stacks path points on the ordinary
 batch axis for throughput (measured 4.25x unguarded, 3.03x with per-chunk
 audit on real gpt2 CPU). Batching is a SPEED feature, not a memory feature:
 larger chunks trade throughput for live activation memory. Correctness under
-batching is guarded by a randomized, seeded, disclosed audit (attrib memo
-D18) -- a sampled test, never a proof; the only proof is sequential execution.
+batching is guarded by a randomized, seeded, disclosed audit
+-- a sampled test, never a proof; the only proof is sequential execution.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ _STEP_AUDIT_MODES = ("off", "per_call", "per_chunk")
 
 # Cross-batch-size comparisons use a relative tolerance, never exact equality:
 # reduction-order changes under stacking measured 1.3e-07..8.5e-06 relative on
-# the funded real-model paths (attrib memo D16). The audit tolerance is
+# the funded real-model paths. The audit tolerance is
 # dtype-aware: float32 transformer gradients show up to ~1e-4 infinity-norm-
 # relative kernel noise between batched and unbatched matmuls, while the
 # coupling classes the audit exists to catch deviate by >= 2e-2 (measured) --
@@ -63,7 +63,7 @@ def _midpoint_alphas(n_steps: int) -> list[float]:
 def _midpoint_schedule(n_steps: int) -> list[tuple[float, float]]:
     """Return ``(alpha, weight)`` pairs for the midpoint Riemann rule.
 
-    This is the quadrature seam (attrib memo D19): a future rule replaces this
+    This is the quadrature seam: a future rule replaces this
     one function body with rule-specific nodes and weights. Midpoint weights
     are uniform ``1 / n_steps``.
 
@@ -90,7 +90,7 @@ def _validate_step_batch_size(step_batch_size: int | None) -> int:
     step_batch_size
         Requested number of path points stacked per forward/backward. ``None``
         and ``1`` both mean sequential execution (the general default; numbers
-        never change under people's feet -- attrib memo D17).
+        never change under people's feet).
 
     Returns
     -------
@@ -179,7 +179,7 @@ def _chunk_steps(alphas: Sequence[float], chunk_size: int) -> list[list[float]]:
 
 @dataclass(frozen=True)
 class _StepAuditRecord:
-    """Disclosure record for one step-batching audit run (attrib memo D18).
+    """Disclosure record for one step-batching audit run.
 
     Attributes
     ----------
@@ -249,7 +249,7 @@ def _relative_deviation(batched: tuple[Tensor, ...], sequential: tuple[Tensor, .
 
 
 class _StepAuditor:
-    """Randomized step-batching audit ladder (attrib memo D18).
+    """Randomized step-batching audit ladder.
 
     A fixed-index audit is defeatable by construction (an adversary coupling
     ``rows[1:]`` leaves row 0 decoupled: silent at 9.7e-08 while the batched

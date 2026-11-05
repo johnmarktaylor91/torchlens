@@ -46,7 +46,7 @@ _REFRESH_SOURCES: WeakKeyDictionary[Any, Any] = WeakKeyDictionary()
 
 #: Pinned refresh graph-change message term. Historical ``save_new_outs`` callers
 #: match on the literal phrase "computational graph changed", so every projector
-#: refusal -- the generic signature arm and the typed D18 buffer-sink arms alike
+#: refusal -- the generic signature arm and the typed buffer-sink arms alike
 #: -- carries this exact base message. The phrase is a compatibility floor, not
 #: the branching contract: the generic arm stamps ``refresh_graph_change_detail``
 #: on the raised ``ValueError`` (AUD-HONESTY H3) so the live ``run()`` provider
@@ -198,7 +198,7 @@ class RefreshProjector:
             If the refreshed computational graph differs from the target graph.
         """
 
-        # D18: the typed buffer-sink arms run BEFORE the generic signature arm so
+        # the typed buffer-sink arms run BEFORE the generic signature arm so
         # every buffer-sink-shaped refusal (train-mode writer, claim/evidence
         # contradiction, refresh write tripwire, evidence asymmetry) raises the
         # TYPED BufferSinkRoutingError -- a mode flip between runs changes the
@@ -212,7 +212,7 @@ class RefreshProjector:
                 refreshed,
                 self._graph_signature_mismatch_detail(refreshed),
             )
-        # B8-36: one aggregated warning per refresh. A per-layer warning with the
+        # one aggregated warning per refresh. A per-layer warning with the
         # label interpolated into the message defeats Python's warning dedup
         # (hundreds of warnings on a real CNN, and ``-W error`` aborts the
         # refresh at layer one), so labels are collected during the sweep and
@@ -274,12 +274,12 @@ class RefreshProjector:
                     self._clear_payload(layer)
 
     def project_prefix(self, refreshed: Any, plan: Any) -> None:
-        """Prefix-scoped projection for a truncated (until=) live refresh (L4 2.3).
+        """Prefix-scoped projection for a truncated (until=) live refresh.
 
         The refreshed argument is the HALTED internal capture covering the
         executed prefix. All projector tripwires run at full strength on that
         prefix -- the graph signature over executed non-output ops, and the
-        typed D18 buffer-sink arms scoped to in-prefix sinks -- and a prefix
+        typed buffer-sink arms scoped to in-prefix sinks -- and a prefix
         mismatch refuses exactly like a full mismatch (the projector is never
         loosened to make a truncated projection pass). Target ops beyond the
         stop are retained STRUCTURE-ONLY: their value payloads are cleared so a
@@ -379,7 +379,7 @@ class RefreshProjector:
         error.partial_trace = PartialTrace(refreshed, error)  # type: ignore[attr-defined]
         # H3 marker: the live provider identifies the generic graph-change arm by
         # this attribute (never by message text) and routes it through the shared
-        # divergence-policy spine. The D18 buffer-sink arms are already typed and
+        # divergence-policy spine. The buffer-sink arms are already typed and
         # deliberately do NOT carry it.
         error.refresh_graph_change_detail = (  # type: ignore[attr-defined]
             "graph signature changed" if detail is None else str(detail)
@@ -388,9 +388,9 @@ class RefreshProjector:
 
     @staticmethod
     def _buffer_sink_routing_error(refreshed: Any, detail: str) -> Exception:
-        """Build the typed D18 buffer-sink routing refusal.
+        """Build the typed buffer-sink routing refusal.
 
-        All four D18 arms (train-mode writer, unproven evidence, mode-claim
+        All four arms (train-mode writer, unproven evidence, mode-claim
         contradiction, refresh write tripwire / evidence asymmetry) raise this
         one typed class with the one frozen ``RunnableErrorCode`` member.
         ``ValueError`` stays in the MRO and the message keeps the pinned
@@ -522,14 +522,14 @@ class RefreshProjector:
     def _check_buffer_sink_routing(
         self, refreshed: Any, executed_raw_labels: frozenset[str] | None = None
     ) -> None:
-        """Enforce the D18 mode-aware buffer-sink routing contract (typed).
+        """Enforce the mode-aware buffer-sink routing contract (typed).
 
         Refuse iff any buffer sink carries unproven evidence
         (``buffer_value_changed is None``, fail closed), a value-changing write
         (``True``) that is not a proven train-mode norm writer, a recorded mode
         claim contradicting the write evidence, the refreshed rerun's own
-        journal recording a value-changing write the target does not prove
-        (O1), or diverging target-vs-refreshed evidence (O2). Eval-mode
+        journal recording a value-changing write the target does not prove,
+        or diverging target-vs-refreshed evidence. Eval-mode
         BatchNorm (``False`` with agreeing eval claims) and train-mode BatchNorm
         (``True`` from a mode-sensitive norm call whose every recorded mode
         claim says train, plus its in-place counter in the same module call)

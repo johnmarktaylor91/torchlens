@@ -18,7 +18,7 @@ def _canonical_entry_order(entries: Iterable[Site]) -> tuple[Site, ...]:
 
 
 def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
-    """Return entries in GRAPH ORDER (F10; lovely matrix row, bug 14).
+    """Return entries in GRAPH ORDER (lovely matrix row, bug 14).
 
     ACT entries order by the trace's execution order of their
     ``(layer_label, pass_index)`` address — a resolved selection reads in

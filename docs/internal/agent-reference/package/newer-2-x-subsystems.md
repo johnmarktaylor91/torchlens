@@ -2,7 +2,7 @@
 
 - `_trace_core/`: private columnar store substrate (typed columns, per-trace intern
   pools, canonical edge-occurrence table + CSR, identity-preserving payload arena,
-  sparse overlays, `TraceCore` with COW fork). The M5 Op seam is LIVE: `Op` is a
+  sparse overlays, `TraceCore` with COW fork). The Op seam is LIVE: `Op` is a
   `(_core, _row)` facade with one generated data descriptor per stored field; captured
   ops share the per-trace `OpRowStore` (`trace._trace_core`, `FieldPolicy.DROP`,
   sealed after the final postprocess step, key `20`), while copy/pickle/fork/preview paths use detached

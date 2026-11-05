@@ -6,13 +6,15 @@ containers and callables reachable through module attributes, and from the
 globals of decorated forwards, so no tensor outlives its session carrying
 provenance a later capture could mistake for its own (split out of
 ``model_prep.py`` under the file-size ratchet; this is the teardown seam,
-not preparation). ``model_prep`` re-exports the three ``_clear_*`` walkers
+not preparation). ``model_prep`` re-exports the ``_clear_*`` walkers
 under their original names.
 """
 
+import functools
+import gc
 import types
 from collections import OrderedDict, deque
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from types import ModuleType
 from typing import Any
 
@@ -25,6 +27,7 @@ __all__ = [
     "_clear_callable_session_tensor_metadata",
     "_clear_container_tree_tensor_metadata",
     "_clear_module_attribute_tensor_metadata",
+    "_clear_module_callables_tensor_metadata",
     "_clear_session_tensor_metadata",
 ]
 
@@ -33,6 +36,13 @@ _SCALAR_LEAF_TYPES = frozenset({str, bytes, int, float, bool})
 #: Exact plain container types whose emptiness is a sound inline skip.
 _PLAIN_CONTAINER_TYPES = frozenset({dict, OrderedDict, list, tuple, set, frozenset, deque})
 _SCALAR_SEQUENCE_TYPES = frozenset({list, tuple})
+#: The C ``functools.lru_cache`` wrapper type (``None`` where only the pure-Python
+#: fallback exists; its cache lives in a closure cell the callable walk already reads).
+_LRU_CACHE_WRAPPER_TYPE: type | None = getattr(functools, "_lru_cache_wrapper", None)
+#: Descriptor wrappers whose ``__func__`` may be a cached function (``@staticmethod @lru_cache``).
+_METHOD_DESCRIPTOR_TYPES = frozenset({staticmethod, classmethod})
+#: Referents of a cache wrapper the sweep never walks: its type and the wrapped function.
+_LRU_REFERENT_SKIP_TYPES = frozenset({type, types.FunctionType})
 # Exact types a module namespace holds that can never be a tensor or a
 # container: skipping them by ``type()`` avoids the ``isinstance`` (and the
 # reduce_op shim check) for the bulk of ``torch``'s ~2k names on every sweep.
@@ -59,7 +69,7 @@ def _is_isinstance_hostile_deprecation_shim(value: Any) -> bool:
     ``__getattribute__`` emits a ``FutureWarning`` on ANY attribute access --
     including the ``__class__`` read every ``isinstance()`` performs -- so an
     initialized distributed process running under ``-W error`` had its capture
-    CLEANUP aborted by the namespace walks below (SF-45). ``type()`` bypasses
+    CLEANUP aborted by the namespace walks below. ``type`` bypasses
     the instance's ``__getattribute__``, so this exact-name check is silent;
     structural matching (not an import of the private class) follows the
     ``_distributed.py`` fallback convention.
@@ -89,7 +99,7 @@ def _clear_module_attribute_tensor_metadata(
     the sweep found). An empty container is also never memoised in ``seen``:
     revisiting it is the same no-op. EXACT ``type()`` membership on purpose,
     as in the walker (the reduce_op shim answers ``isinstance`` with a
-    FutureWarning, SF-45); subclasses take the guarded walker call.
+    FutureWarning); subclasses take the guarded walker call.
 
     Parameters
     ----------
@@ -180,11 +190,10 @@ def _clear_module_namespace_tensor_metadata(
 ) -> None:
     """Clear stamps on tensors and plain containers stored directly in a module namespace."""
 
-    # r81 (r80 F1 root B): a stamped tensor stashed as a DIRECT attribute of
-    # a ``types.ModuleType`` escaped the belt entirely (this walk returned
-    # immediately for modules). r33/r83: a stamp nested inside a plain
-    # CONTAINER in the module namespace escaped the shallow sweep too and
-    # laundered provenance across sessions, so namespace containers now get
+    # A stamped tensor stashed as a DIRECT attribute of a ``types.ModuleType``
+    # must be reached by this walk, and a stamp nested inside a plain
+    # CONTAINER in the module namespace would escape a shallow sweep and
+    # launder provenance across sessions, so namespace containers get
     # a dedicated PURE container-tree descent (tensors + plain containers
     # only). The descent deliberately never enters objects or nested
     # modules: this walk reaches broadly-imported modules (``torch``,
@@ -199,11 +208,11 @@ def _clear_module_namespace_tensor_metadata(
     seen.add(obj_id)
     namespace = getattr(value, "__dict__", None)
     if isinstance(namespace, dict):
-        # No slot memo (r8 b4 R39, sol probe): the memo invalidated on
-        # ``len(namespace)`` only, so REPLACING a value at a constant
-        # length (``mod.stash = 5`` becoming ``mod.stash = tensor``) kept
-        # the stale slot list and the stamped tensor escaped the session
-        # clear -- provenance laundering across sessions. No cheaper
+        # No slot memo: a memo invalidated on ``len(namespace)`` only would
+        # miss REPLACING a value at a constant length (``mod.stash = 5``
+        # becoming ``mod.stash = tensor``), keep the stale slot list, and let
+        # the stamped tensor escape the session clear -- provenance laundering across
+        # sessions. No cheaper
         # invalidation is sound: detecting a new tensor/container slot
         # requires type-inspecting every item, which IS the rebuild, so
         # the filter runs fresh each walk (one isinstance pass per
@@ -236,11 +245,11 @@ def _clear_reachable_tensor_metadata(
 
     # Scalar leaves cannot carry tl_* stamps; skipping them INLINE (instead of
     # paying a full call that immediately returns) halves the cost of walking
-    # broadly-imported module namespaces like ``torch`` (round-3 b4 F1: the
-    # pre-forward ownership snapshot made every capture pay this walk twice).
+    # broadly-imported module namespaces like ``torch`` (the pre-forward
+    # ownership snapshot makes every capture pay this walk twice).
     # EXACT type() membership on purpose: isinstance() falls back to reading
     # ``__class__`` on a non-matching type, which the reduce_op deprecation
-    # shim answers with a FutureWarning (SF-45) -- the recursion's entry guard
+    # shim answers with a FutureWarning -- the recursion's entry guard
     # never runs for inline-skipped items, so this check must stay hostile-safe.
     # Non-exact scalar subclasses fall through to the guarded recursive call.
     _scalar_leaves = (str, bytes, int, float, bool)
@@ -257,6 +266,10 @@ def _clear_reachable_tensor_metadata(
                 _clear_session_tensor_metadata(item, seen, depth + 1, visit)
         return
     if isinstance(value, nn.Module):
+        return
+    if _LRU_CACHE_WRAPPER_TYPE is not None and type(value) is _LRU_CACHE_WRAPPER_TYPE:
+        for entry in _lru_cache_entries(value):
+            _clear_session_tensor_metadata(entry, seen, depth + 1, visit)
         return
     namespace = getattr(value, "__dict__", None)
     if namespace is None:
@@ -319,10 +332,10 @@ def _clear_container_tree_tensor_metadata(
         items = list(value)
     # Inline scalar-leaf skip: module-namespace container trees are dominated
     # by strings (``torch.__all__`` alone is ~1400), and each full call here
-    # costs more than the check (round-3 b4 F1 walk-cost finding). EXACT
+    # costs more than the check (a measured walk cost). EXACT
     # type() membership on purpose: isinstance() reads ``__class__`` on a
     # non-matching type, which the reduce_op deprecation shim answers with a
-    # FutureWarning (SF-45); subclasses fall through to the guarded recursion.
+    # FutureWarning; subclasses fall through to the guarded recursion.
     for item in items:
         if item is None or type(item) in (str, bytes, int, float, bool):
             continue
@@ -414,3 +427,80 @@ def _clear_callable_session_tensor_metadata(
     for name in code.co_names:
         if name in globals_dict:
             _clear_session_tensor_metadata(globals_dict[name], seen, visit=visit)
+
+
+def _lru_cache_entries(wrapper: Any) -> list[Any]:
+    """Return what a C ``lru_cache`` wrapper holds: cached keys, results and its ``__dict__``.
+
+    The C wrapper keeps its cache off every attribute: a warm cache returns a
+    tensor built in an earlier pass with no op and no attribute read, so neither
+    the ownership snapshot nor the session-end clear saw it. Its ``tp_traverse``
+    visits every cache link's key and result, the cache dict and the wrapper's
+    ``__dict__`` without running user code. The wrapped function (its globals are
+    walked from the forward that names it) and the wrapper's type are dropped.
+    """
+
+    return [
+        referent
+        for referent in gc.get_referents(wrapper)
+        if type(referent) not in _LRU_REFERENT_SKIP_TYPES
+    ]
+
+
+def _class_lru_caches(owner: type) -> Iterator[Any]:
+    """Yield the C ``lru_cache`` wrappers the user classes of ``owner``'s MRO hold.
+
+    A cached class attribute (``@staticmethod @lru_cache``, ``@lru_cache`` on a
+    method) is the wrapper itself; a decorator that wraps the cache in a Python
+    function (transformers' ``compile_compatible_method_lru_cache``) holds it in a
+    closure cell. Classes defined by torch hold no model cache and are skipped.
+    Runs for every module of every sweep, so it builds no container: it yields
+    instead of collecting, and its type tests read module-level frozensets
+    rather than tuple literals built per attribute.
+    """
+
+    if _LRU_CACHE_WRAPPER_TYPE is None:
+        return
+    for klass in owner.__mro__:
+        if klass is object or str(getattr(klass, "__module__", "")).startswith("torch."):
+            continue
+        for attr in vars(klass).values():
+            if type(attr) in _METHOD_DESCRIPTOR_TYPES:
+                attr = attr.__func__
+            if type(attr) is _LRU_CACHE_WRAPPER_TYPE:
+                yield attr
+            elif type(attr) is types.FunctionType:
+                for cell in attr.__closure__ or ():
+                    try:
+                        held = cell.cell_contents
+                    except ValueError:
+                        continue
+                    if type(held) is _LRU_CACHE_WRAPPER_TYPE:
+                        yield held
+
+
+def _clear_module_callables_tensor_metadata(
+    module: nn.Module,
+    seen: set[int],
+    visit: Callable[[torch.Tensor], None] | None = None,
+) -> None:
+    """Walk one module's forward callable, then the ``lru_cache`` contents its class holds.
+
+    The callable half of the pre-forward ownership snapshot and of the session-end
+    clear, so both reach the same cached tensors: the snapshot records a warm
+    cache's tensor as a pre-forward constant, and the clear strips the label a
+    capture left on a tensor it computed into a cold cache.
+
+    Parameters
+    ----------
+    module
+        One module of the prepared model tree.
+    seen
+        Object ids already visited during this sweep.
+    visit
+        Optional per-tensor action replacing the default ``clear_meta``.
+    """
+
+    _clear_callable_session_tensor_metadata(getattr(module, "forward", None), seen, visit=visit)
+    for cache in _class_lru_caches(type(module)):
+        _clear_session_tensor_metadata(cache, seen, visit=visit)

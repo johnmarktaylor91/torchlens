@@ -120,7 +120,7 @@ or total that the hidden content does not support.*
 ## The compute ceiling
 
 Smart-collapse admission is now gated on the RENDERED UNIVERSE, not raw op count
-(collapse memo D5): the gate variable is `U` — the full plan's rendered node count after
+(collapse): the gate variable is `U` — the full plan's rendered node count after
 `module=` focus, `depth=`, and rolled reductions — tiered by a measured
 `(U, W)` work estimator (`0.0095 * U**1.43 * W**1.02` ms, W = widest rendered sibling
 group). `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) survives as the defensive constant: the
@@ -132,11 +132,11 @@ quality planner is admitted when `U <= 2000` AND the predicted cost fits the bud
   never an uncollapsed wall.
 - Only PATHOLOGICAL inputs (raw ops above 20x the constant) still decline outright:
   `draw` warns (`collapse_pathological_skip`) and renders a bounded top-level
-  module overview plus an expansion manifest (forks.11 FK4; uncollapsed only when
+  module overview plus an expansion manifest (uncollapsed only when
   the root has no child module), a forward drawing's `Drawing.collapse_plan` refuses typed
   (`collapse_plan_unavailable`, reason `collapse_ops_ceiling`), and its `Drawing.collapse_schedule`
   degrades to a single full-graph step.
-- Over-ceiling residuals (forks.11 FK4, DOCUMENTED-UNSTABLE): when the served
+- Over-ceiling residuals (DOCUMENTED-UNSTABLE): when the served
   overview is still above the readable band -- a floor-fallback plan, or the
   pathological top-level overview -- `draw` writes `<outpath>.expansion.json` beside
   the picture (schema `torchlens_expansion_manifest_v1`: one entry per collapsed unit

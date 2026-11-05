@@ -1,15 +1,15 @@
-"""Causal receipt grids: attachment validation + visual grammar (D11-D14).
+"""Causal receipt grids: attachment validation + visual grammar.
 
-The mech-interp kit EXECUTES counterfactuals; tviz owns attachment
+The mech-interp kit EXECUTES counterfactuals; this module owns attachment
 validation, the visual grammar, and the artifact. A receipt refuses at
 construction (see :class:`torchlens.transformer.CausalReceipt`) on zero fires, a
 moved negative control, or an unmoved positive control -- and the GRID
 figure additionally refuses without the measured joint effect, because a
 grid of large per-head numbers invites "remove them all and get the sum"
-and the truth can have the opposite sign (memo D13: measured on gpt2 layer
+and the truth can have the opposite sign (measured on gpt2 layer
 0, one head +13.27 alone, all twelve together -0.68).
 
-Grammar (D16): effects are printed numbers on a diverging-colored effect
+Grammar: effects are printed numbers on a diverging-colored effect
 matrix of their OWN -- effects never recolor attention cells; annotated
 attention figures keep the pattern channel for the pattern and put the
 effect on headers/borders (see ``render_attention``'s ``annotation=``).
@@ -43,7 +43,7 @@ from ._wording import (
 __all__ = ["receipt_from_patch_grid", "render_receipt_grid"]
 
 
-def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence field is explicit
+def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory evidence field is explicit
     grid: Any,
     *,
     layer: str,
@@ -78,7 +78,7 @@ def receipt_from_patch_grid(  # noqa: PLR0913 -- every mandatory D12 evidence fi
     joint_effect:
         Measured joint effect of the same intervention on all the row's
         heads together, as a delta from the same corrupted baseline;
-        required later by the grid FIGURE (D13).
+        required later by the grid FIGURE.
     intervention:
         Intervention wording; the default says what a patch grid does
         ("clean activation of one head patched into the corrupted run", or
@@ -233,7 +233,7 @@ def _grid_matrix(receipts: list[CausalReceipt]) -> tuple[np.ndarray, tuple[int, 
 
 
 def _joint_line(receipts: list[CausalReceipt], joint_effect: float | None) -> str:
-    """Return the mandatory joint-measurement line (D13); refuse without it."""
+    """Return the mandatory joint-measurement line; refuse without it."""
 
     if len(receipts) == 1 and joint_effect is None:
         joint_effect = receipts[0].joint_effect

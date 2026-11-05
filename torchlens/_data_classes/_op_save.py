@@ -546,7 +546,7 @@ def _log_tensor_grad(
         prebuilt: Budget-charged ``(raw_payload, transformed_payload)`` pair already built
             (and transform-validated) by the event-sidecar path for this exact grad. When
             given, the slot REUSES those objects: no second clone, no second
-            ``grad_transform`` execution, no uncharged retention (grind-r6 b5 R34-N1/R35-N1).
+            ``grad_transform`` execution, no uncharged retention.
     """
     trace = op._source_trace
     raw_grad = grad
@@ -570,7 +570,7 @@ def _log_tensor_grad(
         op.has_grad = True
         stream_grad_blobs(op, trace, writer)
         return
-    # Admit BEFORE the transform/clone allocate (r8 R34, fable F1): a
+    # Admit BEFORE the transform/clone allocate: a
     # policy-DENIED label reaching this legacy slot (callable/selector
     # save_grads with _grad_op_nums_to_save == "all") used to retain a
     # full uncharged grad clone -- invisible to a tight save_budget.

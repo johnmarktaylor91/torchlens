@@ -1239,7 +1239,7 @@ url = tl.attribution.upload_to_neuronpedia(path, api_key=os.environ["NEURONPEDIA
 print(url)
 ```
 
-## The F06 attribution kit (DOCUMENTED-UNSTABLE)
+## The attribution kit (DOCUMENTED-UNSTABLE)
 
 The nine-method completion of the kit (attrib panel memo, 2026-08-26). Every spelling below is
 documented-unstable pending the naming session; the inventory is locked in the
@@ -1336,7 +1336,7 @@ pad content tokens while scaffolding specials at their true embeddings
 (`keep_special_tokens=True`); anything unreliable falls back to zeros-all with a NAMED
 disclosure (a missing pad token is never guessed). `n_steps=128` fixed default;
 `num_steps="auto"` runs the 64-128-256-512 ladder stopping ONLY on the dual criterion
-(residual AND max(L1, L2) successive-grid stability, both <= 1%; rank stability is banned as
+(residual AND max successive-grid stability, both <= 1%; rank stability is banned as
 a signal). `converged=False` is a first-class outcome with a footer line the user cannot
 miss. A bare int target is the vocab id at the final non-padding position, warning in the one
 band where it is also a valid position index. `steps_per_batch=8` rides the randomized

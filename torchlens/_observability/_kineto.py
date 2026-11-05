@@ -1,4 +1,4 @@
-"""In-memory Kineto extraction adapter (torchnative W2.1).
+"""In-memory Kineto extraction adapter (torchnative.1).
 
 The join consumes normalized profiler events extracted from in-memory
 ``_KinetoEvent`` objects -- integer nanoseconds, runtime correlation IDs,
@@ -72,7 +72,7 @@ class NormalizedEvent:
     """One normalized profiler event in Kineto's own clock domain.
 
     ``start_ns``/``end_ns`` stay on the profiler's clock; they are never
-    projected onto TorchLens's host clocks (W1.4 boundary). ``scope`` is the
+    projected onto TorchLens's host clocks. ``scope`` is the
     profiler's typed per-event record scope when the build exposes it
     (``None`` otherwise -- absence degrades the backward body witness, never
     the join).
@@ -250,7 +250,7 @@ def _extract_chrome_stream(profiler: Any) -> ExtractionResult:
 
 
 def extract_events(profiler: Any) -> ExtractionResult:
-    """Extract normalized events from one CLOSED profiler (W2.1).
+    """Extract normalized events from one CLOSED profiler.
 
     Tries the in-memory ``_KinetoEvent`` seam first (feature-detected at the
     ``_torch_compat`` boundary); demotes to the bounded chrome-stream

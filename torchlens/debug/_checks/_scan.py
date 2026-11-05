@@ -3,7 +3,7 @@
 One kernel, two spellings: ``tl.debug.param_health`` shapes rows into a
 :class:`~torchlens.debug.ParamHealthReport`, and the registry's scheduled scan
 consumes the same rows with report shaping skipped. Engineering contract
-(memo 4.4): batched per ``(device, dtype)`` group with ~1 host sync per
+: batched per ``(device, dtype)`` group with ~1 host sync per
 group, integer counts exact, extrema carried as float64 SCALARS only --
 NEVER a whole-tensor float64 widening (the fp16 peak-allocated-bytes
 regression test pins this; the known bad widen-everything helper is in the
@@ -34,7 +34,7 @@ _STATS_PER_TENSOR = 11
 
 @dataclass(frozen=True)
 class ScanRow:
-    """Health facts for one unique tensor (checks memo 4.4).
+    """Health facts for one unique tensor.
 
     ``name`` is the canonical qualified name; ``aliases`` preserves every
     other name bound to the SAME tensor object (tied weights, double-
@@ -163,9 +163,9 @@ def _dedup_by_identity(
 ) -> list[tuple[str, tuple[str, ...], str, Any]]:
     """Collapse identical tensor objects into one canonical row.
 
-    Tied tensors dedup by OBJECT identity with every alias preserved
-    (memo 4.4); the first-seen name is canonical, matching iteration order
-    of ``named_parameters``.
+        Tied tensors dedup by OBJECT identity with every alias preserved
+    ; the first-seen name is canonical, matching iteration order
+        of ``named_parameters``.
     """
 
     seen: dict[int, int] = {}
@@ -253,30 +253,30 @@ def scan_named_tensors(
 ) -> list[ScanRow]:
     """Scan named tensors for numeric-health facts, batched per group.
 
-    Parameters
-    ----------
-    entries:
-        ``(name, kind, tensor)`` triples in caller order; ``kind`` is a
-        free label such as ``"parameter"`` / ``"buffer"`` / ``"mapping"``.
-    bounds:
-        Optional exact-name bounds mapping ``name -> (low, high)`` with
-        either side ``None`` for one-sided bounds. Unknown names REFUSE
-        (memo 4.4) at the caller (:func:`torchlens.debug.param_health`),
-        which validates against the full inventory before dedup.
+       Parameters
+       ----------
+       entries:
+           ``(name, kind, tensor)`` triples in caller order; ``kind`` is a
+           free label such as ``"parameter"`` / ``"buffer"`` / ``"mapping"``.
+       bounds:
+           Optional exact-name bounds mapping ``name -> (low, high)`` with
+           either side ``None`` for one-sided bounds. Unknown names REFUSE
+    at the caller (:func:`torchlens.debug.param_health`),
+           which validates against the full inventory before dedup.
 
-    Returns
-    -------
-    list[ScanRow]
-        One row per UNIQUE tensor object (tied aliases preserved), rows in
-        first-seen order; unscannable entries carry ``skip_reason``.
+       Returns
+       -------
+       list[ScanRow]
+           One row per UNIQUE tensor object (tied aliases preserved), rows in
+           first-seen order; unscannable entries carry ``skip_reason``.
 
-    Notes
-    -----
-    All arithmetic runs under ``torch.no_grad()`` + ``pause_logging()`` so a
-    concurrent TorchLens capture never records scan traffic and no autograd
-    state is touched (memo 4.2). One host sync per ``(device, dtype)``
-    group: every per-tensor stat stays a 0-dim device tensor until the
-    group's single stacked ``.tolist()``.
+       Notes
+       -----
+       All arithmetic runs under ``torch.no_grad()`` + ``pause_logging()`` so a
+       concurrent TorchLens capture never records scan traffic and no autograd
+       state is touched. One host sync per ``(device, dtype)``
+       group: every per-tensor stat stays a 0-dim device tensor until the
+       group's single stacked ``.tolist()``.
     """
 
     deduped = _dedup_by_identity(entries)
@@ -376,7 +376,7 @@ def _row_from_stats(  # noqa: PLR0913 -- one row's identity + measured stats; th
 def tensor_digest(tensor: torch.Tensor) -> str:
     """Return a deterministic content digest of a tensor's bytes.
 
-    The frozen-check digest tier (memo D5): digest scalars differing PROVES
+    The frozen-check digest tier: digest scalars differing PROVES
     change (one-sided soundness -- a false raise is impossible); equal
     digests are labeled probabilistic evidence and may NEVER emit an exact
     pass. Runs under ``pause_logging`` and syncs once (the ``.cpu()`` copy).
@@ -395,7 +395,7 @@ def named_entries_from_target(
 ) -> list[tuple[str, str, Any]]:
     """Normalize an ``nn.Module`` or name->tensor Mapping into scan entries.
 
-    The Mapping door is the declared extension point (memo D15): live
+    The Mapping door is the declared extension point: live
     gradients, flattened optimizer state, EMA weights, checkpoints, and
     shards are all the same recipe through the same kernel; the caller
     names the mapping and therefore owns the phase label.
@@ -403,7 +403,7 @@ def named_entries_from_target(
 
     if isinstance(target, torch.nn.Module):
         # remove_duplicate=False so tied tensors surface EVERY alias; the
-        # kernel dedups by identity and keeps the alias names (memo 4.4).
+        # kernel dedups by identity and keeps the alias names.
         entries: list[tuple[str, str, Any]] = [
             (name, "parameter", parameter)
             for name, parameter in target.named_parameters(remove_duplicate=False)

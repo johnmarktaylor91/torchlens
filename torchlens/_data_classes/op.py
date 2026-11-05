@@ -174,7 +174,7 @@ _object_setattr = object.__setattr__
 # Fields whose reads go through the lazy-materialization path in
 # ``Op.__getattribute__``; every other name short-circuits straight to the slot.
 _LAZY_READ_FIELDS = frozenset({"grad", "out"})
-# ``equivalent_ops``/``recurrent_ops`` were copy-on-read fields here; the M7
+# ``equivalent_ops``/``recurrent_ops`` were copy-on-read fields here; the
 # live group views (shared ``GroupRef`` cells, cached immutable ``_GroupViewField``
 # reads) make sharing alias-safe without per-read copies.
 _INTERCEPTED_READ_FIELDS = _LAZY_READ_FIELDS
@@ -244,7 +244,7 @@ _LAYER_PASS_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "transform_config": {},
     "unattributed_tensor_args": (),
     "dropped_edge_tensor_args": (),
-    # Relation view fields (M6, FORK-1): the declared restore type is the
+    # Relation view fields: the declared restore type is the
     # IMMUTABLE view — ``coerce_container_typed_state`` normalizes legacy
     # list/set state to tuple/frozenset on load, so loaded traces present the
     # same immutable relation surface as live finished captures.
@@ -326,7 +326,7 @@ _OP_SLOT_NAMES = tuple(
         ]
     )
 )
-# The M5 seam: ``_OP_SLOT_NAMES`` is no longer a ``__slots__`` tuple but the
+# The seam: ``_OP_SLOT_NAMES`` is no longer a ``__slots__`` tuple but the
 # declared stored-field universe of the Op row store. One shared layout maps
 # each stored field to its column id; ``Op`` itself carries only
 # ``(_core, _row)`` and one generated data descriptor per stored field (see
@@ -421,7 +421,7 @@ _UNPOOLED_SLOTS = frozenset(
         "edits",
         # Per-op UNIQUE injected-op identity record (tlspec v9 entry-dark
         # slot): a mutable mapping distinct per injected op, never a shared
-        # internable value. None on every model op until F01 writes it.
+        # internable value. None on every model op until writes it.
         "injection_provenance",
         "parent_params",
         "_param_logs",
@@ -459,7 +459,7 @@ _POOLED_SLOTS = tuple(
 _POOL_MAX_DEPTH = 2
 
 # ---------------------------------------------------------------------------
-# Mutable-container CELL pooling (the M14 memory slice).
+# Mutable-container CELL pooling (the memory slice).
 #
 # The freeze-seam compaction additionally replaces whole mutable-container
 # CELLS -- exact ``dict``/``list``/``set`` (and top-level ``defaultdict``)
@@ -657,7 +657,7 @@ def _pool_container_cells(
         if cell is None:
             cell = container_pool[key] = PooledCell.from_value(value)
         row_cells[fid] = cell
-    # Singleton-label compaction (M14 slice 2, kind tables only): a
+    # Singleton-label compaction (kind tables only): a
     # one-element list holding exactly one str (per-record label/address
     # lists — distinct content per row, so PooledCell's >= 3 threshold never
     # reaches them) stores the bare element, registered on the store so
@@ -1470,12 +1470,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         # site_key_v1 structural-position identity: persists as of tlspec v8
         # with byte-exact recomputation at load (_io/forgery_validation.py).
         "site_key": FieldPolicy.KEEP,
-        # tlspec v9 entry-dark injected-op identity (C07; surgery memo 3.5):
-        # None on every model op until the F01 log_injections writer lands;
+        # tlspec v9 entry-dark injected-op identity:
+        # None on every model op until the log_injections writer lands;
         # fail-closed shape validation at load (_io/forgery_validation.py).
         "injection_provenance": FieldPolicy.KEEP,
-        # tlspec v9 entry-dark slots (C07X): the episode-step stamp
-        # (F-EPISODE writes) and the TL-authored-root marker (F41 writes);
+        # tlspec v9 entry-dark slots: the episode-step stamp
+        # and the TL-authored-root marker;
         # None on every op today, fail-closed load validation from day one.
         "episode_step": FieldPolicy.KEEP,
         "tl_authored_root": FieldPolicy.KEEP,
@@ -2404,8 +2404,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         pickle strips the weakref; cleanup clears it) refuses with the same
         typed ``RecordBindingError`` family as the collected-Trace case, so
         no ``None`` can escape behind the ``-> Trace`` signature and crash a
-        caller untyped -- the r4 ``Layer`` fix (1a2b715e) applied to the
-        sibling record class it never reached (r5 b7-opus R52-B).
+        caller untyped -- the ``Layer`` fix (1a2b715e) applied to the
+        sibling record class it never reached.
         """
         ref = self._slot("_source_trace_ref")
         if ref is None:
@@ -2493,7 +2493,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def __tl_state_items__(self) -> Any:
         """Yield live state ``(field_name, value)`` pairs in declared order.
 
-        The M2 state-protocol hook. Enumeration follows the declared
+        The state-protocol hook. Enumeration follows the declared
         ``_OP_SLOT_NAMES`` order and reads through
         ``object.__getattribute__`` -- exactly what the former per-slot walk
         did -- so class-level compatibility overlays (the ancestor-bitset
@@ -2540,7 +2540,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         state.pop("_projective_field_cache", None)
         state["func"] = None
         state["grad_fn_handle"] = None
-        # R10-7: user transform callables (FieldPolicy.DROP) serialize to the
+        # user transform callables (FieldPolicy.DROP) serialize to the
         # loaded-artifact form (None) -- a lambda transform= made pickle.dumps
         # crash on every op record while Trace.save succeeded on the same trace.
         if state.get("activation_transform") is not None:
@@ -2892,14 +2892,14 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return _op_relations.get_parents(self)
 
     def _repr_html_(self) -> str:
-        """Return the notebook Op card (treescope memo B2).
+        """Return the notebook Op card.
 
         Identity / value / context zones with the PROOF row; cost wrappers
         pass through ``str()`` untouched; the budgeted array view rides the
         ported truncation protocol. Never raises: any internal failure
         degrades to a one-line ``card unavailable`` fragment, and the
         treescope-bridge suppression sentinel replaces the card exactly
-        when the bridge just rendered this object (memo 3.6).
+        when the bridge just rendered this object.
         """
 
         from ..report._notebook.cards import op_repr_html
@@ -3021,7 +3021,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
 
 
 # ---------------------------------------------------------------------------
-# The M5 facade: generated per-field data descriptors over (_core, _row)
+# The facade: generated per-field data descriptors over (_core, _row)
 #
 # ``Op`` stores nothing per instance beyond the store handle and its row id.
 # Each declared stored field is a real data descriptor (visible to dir(),
@@ -3081,7 +3081,7 @@ class _OpField:
     def __get__(self, op: Any, owner: Any = None) -> Any:
         """Read the backing cell; unset cells raise like an unset slot.
 
-        A ``PooledCell`` (the M14 duplicate/empty-container pooling) hydrates
+        A ``PooledCell`` (the duplicate/empty-container pooling) hydrates
         a fresh exact-type container on first read and caches it back, so
         identity is stable across reads and per-row in-place mutation stays
         isolated — the ``_FACT`` semantics.
@@ -3132,7 +3132,7 @@ def register_relation_cell_encoding(encoding_type: type) -> None:
 
 
 class _RelationViewField(_OpField):
-    """Descriptor for one immutable-view relation field (M6, FORK-1).
+    """Descriptor for one immutable-view relation field.
 
     While a shared ``OpRowStore`` is BUILDING, writes stage raw mutable
     containers (postprocess mutates them in place). Once the store is sealed
@@ -3185,7 +3185,7 @@ class _RelationViewField(_OpField):
 
 
 class _GroupViewField(_RelationViewField):
-    """Descriptor for the two group-membership fields (M7, FORK-1).
+    """Descriptor for the two group-membership fields.
 
     A finished cell holds THE one shared ``GroupRef`` of its membership
     group; reads resolve to the group's cached immutable view (``frozenset``
@@ -3251,13 +3251,13 @@ class _DataflowField(_RelationViewField):
 
 
 class _FactField(_OpField):
-    """Descriptor for one shared-fact field (M7 FunctionCall/ParamAlias blocks).
+    """Descriptor for one shared-fact field (FunctionCall/ParamAlias blocks).
 
     A ``_FACT`` cell means the value lives in the store's shared fact block:
     the first read hydrates the field's exact public container type for THIS
     row and caches it back, so identity is stable across reads, per-row
     in-place mutation stays isolated (a fresh container per row, exactly the
-    pre-M7 semantics), and uninspected rows retain no per-row container. A
+    earlier per-row semantics), and uninspected rows retain no per-row container. A
     direct write replaces the sentinel with a per-row cell value and never
     mutates the shared block.
     """
@@ -3292,7 +3292,7 @@ def _install_op_field_descriptors() -> None:
     Most stored fields get a plain ``_OpField``; the declared relation
     families get view-normalizing descriptors (``_RelationViewField``), the
     dataflow pair additionally rematerializes from the CSR
-    (``_DataflowField``), and the shared-fact fields hydrate from the M7
+    (``_DataflowField``), and the shared-fact fields hydrate from the
     fact blocks (``_FactField``).
     """
 
@@ -3329,6 +3329,6 @@ _ROW_RELEASE_FIELD_CLASSES = frozenset(
 bind_op_facade(Op, (attr for _, attr in _OP_STATE_ATTRS), _ROW_RELEASE_FIELD_CLASSES)
 
 
-# The tlspec v8 coordinated bump retired this class's S3 pre-release
+# The tlspec v8 coordinated bump retired this class's pre-release
 # registrations (site_key, edge_substitutions, edge_replacement_stamps);
 # their persisting policies are declared directly in _FIELD_POLICY above.

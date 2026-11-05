@@ -1,4 +1,4 @@
-"""Read-side backward suppression (M(reads) item 0b, decision D2).
+"""Read-side backward suppression.
 
 Every one-backward read runs its ``autograd.grad`` call inside this context.
 Without it, the read's own first backward is captured as a TorchLens backward
@@ -54,7 +54,7 @@ def read_suppressed(trace: Any) -> Iterator[None]:
     backward-event counters snapshotted and asserted unchanged; state restored
     in ``finally``) with the read tripwire: the pinned autograd-ref count must
     be exactly unchanged, because ref growth is the measured leak axis of an
-    unsuppressed read (D2). A failed tripwire is an internal contract breach,
+    unsuppressed read. A failed tripwire is an internal contract breach,
     never a user error.
 
     Parameters

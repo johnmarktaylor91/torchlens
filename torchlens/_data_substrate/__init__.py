@@ -1,16 +1,16 @@
-"""Extraction data substrates: digest primitives + artifact v2 + model identity.
+"""Extraction data substrates: digest primitives, artifact v2 and model identity.
 
-The C04 substrate half of dataset extraction (extract memo items 1, 2, 6):
+The substrate half of dataset extraction:
 :mod:`digests` builds the two pinned digest primitives once (threaded Merkle
 crypto fold, order-sensitive value reduction) for every consumer;
 :mod:`artifact` owns the v2 artifact layout (bounded manifest, append-only
 fsynced ledger, commit protocol, completed-v1 migration, field-by-field
-signature compare); :mod:`model_identity` computes the D6 identity record
-whose resume comparison kills the random-init T-MODELSWAP hazard.
+signature compare); :mod:`model_identity` computes the identity record
+whose resume comparison kills the random-init model-swap hazard.
 
 Private substrate: the public doors are :func:`torchlens.extract_dataset` /
 :func:`torchlens.load`. Every spelling is DOCUMENTED-UNSTABLE
-pending the naming sprint.
+pending naming ratification.
 """
 
 from __future__ import annotations

@@ -1715,7 +1715,7 @@ class MLXBackend:
         )
         events.extend(emitted)
         if halt_label is not None:
-            # F6 latch parity with torch's evaluate_halt: the stop request is
+            # Latch parity with torch's evaluate_halt: the stop request is
             # latched on the trace BEFORE the signal is raised, so a user
             # broad-except that swallows the HaltSignal can never reach the
             # settlement stamp as a blessable COMPLETE -- the one preview

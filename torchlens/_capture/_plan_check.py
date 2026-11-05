@@ -1,4 +1,4 @@
-"""The audit-only plan checker (weightsfree memo D14, face 4).
+"""The audit-only plan checker (face 4).
 
 nnsight-scan parity: resolve selectors against a trace, check multiplicity
 (a bare selector must name at least one site; a declared replacement is ONE
@@ -212,7 +212,7 @@ def _multiplicity_verdict(labels: tuple[str, ...], replacement: Any) -> tuple[bo
     ``module.output = value`` names one call), so an entry that resolves to
     several sites is a multiplicity finding, never ``multiplicity_ok`` --
     the historical ``len(labels) > 0`` blessed a selector fanning one
-    replacement out over 50 sites (AUD-CODE 4.2).
+    replacement out over 50 sites.
     """
 
     count = len(labels)

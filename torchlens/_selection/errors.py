@@ -49,8 +49,8 @@ def _message_from_fields(class_name: str, fields: dict[str, object]) -> str:
 class BindingPreflightError(ConfigurationError, ValueError):
     """Raised when ``spec.bind(model)`` refuses before constructing a binding.
 
-    Bind-time refusals fire before ANY forward runs (surgery memo 3.3 item
-    8): unresolved static anchors, rule classes the capture-free lane cannot
+    Bind-time refusals fire before ANY forward runs:
+    unresolved static anchors, rule classes the capture-free lane cannot
     execute, and invalid spec/model operands. Branch on
     ``exc.fields["code"]``, never message text.
 

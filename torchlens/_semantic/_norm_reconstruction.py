@@ -1,8 +1,8 @@
-"""Shared, validated norm linearization record (mikit D8, build item 3).
+"""Shared, validated norm linearization record.
 
 ONE record -- :class:`NormReconstruction` -- serves every consumer that folds a
 normalization layer: the norm facets, ``logit_lens``, and the mech-interp
-kit's DLA. The rules, verbatim from the panel memo:
+kit's DLA. The rules:
 
 - The frozen SCALE is computed from the CAPTURED norm input per (batch,
   position): LayerNorm ``sqrt(mean((x - mean(x))^2) + eps)`` (centering
@@ -135,7 +135,7 @@ class NormReconstruction:
         return value
 
     def folded_directions(self, directions: torch.Tensor) -> torch.Tensor:
-        """Fold gamma into unembedding-side DIRECTIONS (mikit D9).
+        """Fold gamma into unembedding-side DIRECTIONS.
 
         ``directions`` is ``[d_model, n_dirs]``; gamma folds elementwise on
         the feature axis before any vocabulary-sized tensor can exist.

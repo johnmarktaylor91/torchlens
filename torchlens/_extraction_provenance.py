@@ -29,7 +29,7 @@ INPUT_PREPROCESSING_SCHEMA = "tl_input_preprocessing_v1"
 
 
 def _preprocessing_versions() -> dict[str, str | None]:
-    """Collect the upstream versions the provenance block discloses (B4).
+    """Collect the upstream versions the provenance block discloses.
 
     Returns
     -------
@@ -58,7 +58,7 @@ def _input_preprocessing_block(
     unknown_reasons: list[str],
     applied_by: str | None,
 ) -> dict[str, Any]:
-    """Assemble the schema-versioned manifest block (tvscope B4/D10).
+    """Assemble the schema-versioned manifest block.
 
     The block is ALWAYS present in new manifests -- a manifest that omitted
     it would be indistinguishable from one asserting nothing was done -- and
@@ -314,7 +314,7 @@ def apply_input_transform(fn: Any, batch: Any) -> Any:
 
 
 def input_preprocessing_of(manifest: Mapping[str, Any]) -> dict[str, Any]:
-    """Read a manifest's input-preprocessing block (tvscope B4/D10).
+    """Read a manifest's input-preprocessing block.
 
     Legacy artifacts (v1, and v2 written before the block existed) read as
     UNKNOWN with the legacy reason disclosed -- an absent block is never

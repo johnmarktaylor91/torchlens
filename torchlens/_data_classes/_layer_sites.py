@@ -9,7 +9,7 @@ L1 design memo's typed refusals:
   shares exactly one; a site-SPANNING layer (within-call-instance
   recurrence, root loops) refuses typed -- a silent single-key read on a
   spanning layer is exactly the failure the tripwire exists to catch
-  (invariant I-S3').
+  (the site-key invariant).
 * ``Layer.site_peers`` indexes the trace live (recomputed per call, never
   persisted -- storing it would be a coherence liability) and refuses typed
   when this layer carries no valid keys: a legacy artifact must never
@@ -17,12 +17,12 @@ L1 design memo's typed refusals:
 * ``Layer.shape_summary`` is DERIVED, never persisted (memo RQ4): a plain
   data string summarizing output shapes ACROSS PASSES of one layer (the
   internal ``ModuleRepeatFold.shape_summary`` summarizes across a repeated
-  module RUN -- a different axis). Rendering/escaping is L5 territory (S5):
+  module RUN -- a different axis). Rendering/escaping is L5 territory:
   the value may legitimately contain ``->`` and must be HTML-escaped at
   render, never asserted absent.
 
-Refusal codes here are PROVISIONAL pending the S2 vocabulary amendment
-(design memo 4.3): ``layer_site_ambiguous``, ``site_key_unavailable``.
+Refusal codes here are PROVISIONAL pending the vocabulary amendment:
+``layer_site_ambiguous``, ``site_key_unavailable``.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from .._errors import InvalidArgumentError
 if TYPE_CHECKING:
     from .layer import Layer
 
-#: Characters legal in a shape_summary string (the S5 handoff character-class
+#: Characters legal in a shape_summary string (the handoff character-class
 #: pin): digits, the axis separator, the monotone arrow, the range dash.
 SHAPE_SUMMARY_CHARACTER_CLASS = frozenset("0123456789x->-")
 
@@ -50,7 +50,7 @@ def _pass_ordered_ops(layer: Layer) -> list[Any]:
 
 
 def layer_site_key(layer: Layer) -> str:
-    """Return the layer's single site key, or refuse typed (I-S3').
+    """Return the layer's single site key, or refuse typed.
 
     Raises
     ------

@@ -1,10 +1,10 @@
-"""Dependency-free summary HTML renderer (F08; summary memo item 15).
+"""Dependency-free summary HTML renderer.
 
 One escaped, self-contained fragment: sticky header, numeric right
 alignment, dark-mode-safe colors via ``prefers-color-scheme``, zero
 JavaScript, zero CDN. Interactivity plumbing for the deferred notebook
-wave rides as ``data-*`` attributes (stable row IDs, depth, kind, fold
-and ownership metadata) so wave-2 sort/expand needs no schema change.
+view rides as ``data-*`` attributes (stable row IDs, depth, kind, fold
+and ownership metadata) so later sort/expand needs no schema change.
 
 All values arrive from the typed report (raw ints); malicious content in
 model/module/op names is neutralized by escaping at this one boundary.

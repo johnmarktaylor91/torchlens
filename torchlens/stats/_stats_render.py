@@ -1,13 +1,13 @@
-"""Stats-line renderers: the core grammar over TensorStats (C02; lovely 4).
+"""Stats-line renderers: the core grammar over TensorStats.
 
-The core (fixed semantic order, memo 4.1):
+The core (fixed semantic order):
 
 ``<dtype><shape>@<device>  <n= if rank>=2>  <IEC bytes if >=1KiB>
 <distribution>  <health>  <evidence deviations>``
 
 ASCII is CANONICAL; the unicode upgrade differs ONLY through the declared
-glyph table (the 9-glyph ramp -- D3/D4), and CI asserts
-``ascii == degrade(unicode)`` byte-for-byte. The precision law (D7/D22):
+glyph table (the 9-glyph ramp), and CI asserts
+``ascii == degrade(unicode)`` byte-for-byte. The precision law:
 4 significant digits with trailing zeros KEPT, scientific outside
 [1e-4, 1e4), exact integers never gain a decimal point, and a sampled
 scalar prints only the digits its own standard error supports.
@@ -22,7 +22,7 @@ import math
 from .._utils._display_numbers import format_count, format_iec_bytes, format_sig
 from ._tensor_stats import TensorStats
 
-#: The package glyph table IS the ramp and nothing else (D4): nine ASCII
+#: The package glyph table IS the ramp and nothing else: nine ASCII
 #: glyphs and their unicode upgrades, plus nothing.
 GLYPH_RAMP_ASCII = " .:-=+*#%"
 GLYPH_RAMP_UNICODE = " ▁▂▃▄▅▆▇█"
@@ -41,7 +41,7 @@ def degrade(text: str) -> str:
 
 
 def format_sampled(value: float, se: float | None, digits: int = 4) -> str:
-    """Sampled-scalar precision law (D22).
+    """Sampled-scalar precision law.
 
     Bound form below ``2*se``; otherwise ``clamp(1, 4,
     floor(log10(|v|/se)))`` supported digits. The ``~`` method mark is the
@@ -80,7 +80,7 @@ def sparkline(counts: tuple[int, ...], *, style: str = "ascii") -> str:
 
 
 def _zero_field(stats: TensorStats) -> str | None:
-    """The D10 zero field: FORM is the control, never a threshold."""
+    """The zero field: FORM is the control, never a threshold."""
 
     if stats.num_zero is None or stats.num_zero == 0 or stats.num_true is not None:
         return None
@@ -92,7 +92,7 @@ def _zero_field(stats: TensorStats) -> str | None:
 
 
 def _health_fields(stats: TensorStats) -> list[str]:
-    """NaN / +Inf / -Inf, separate, printed whenever nonzero (D11)."""
+    """NaN / +Inf / -Inf, separate, printed whenever nonzero."""
 
     if stats.nonfinite_evidence.policy == "verdict":
         return ["nonfinite present"]
@@ -118,7 +118,7 @@ def _distribution_zone(stats: TensorStats, style: str, *, spark: bool = True) ->
     """The distribution zone: special cases, sparkline bracket, moments.
 
     ``spark=False`` is the width-degradation form: the bracket keeps the
-    EXTREMA (never droppable, D14) and loses only the ramp glyphs.
+    EXTREMA (never droppable) and loses only the ramp glyphs.
     """
 
     integer_family = stats.dtype.startswith(("i8", "i16", "i32", "i64", "u8"))
@@ -126,7 +126,7 @@ def _distribution_zone(stats: TensorStats, style: str, *, spark: bool = True) ->
     def value_token(value: float) -> str:
         """Format one value under the integer-family exactness rule."""
 
-        # Exact integers never gain a decimal point (D7): "i64 constant=
+        # Exact integers never gain a decimal point: "i64 constant=
         # 1.0000 is a number that cannot exist".
         if integer_family and float(value).is_integer():
             return str(int(value))
@@ -159,9 +159,9 @@ def _distribution_zone(stats: TensorStats, style: str, *, spark: bool = True) ->
         return [special]
     parts: list[str] = []
     # Small-n raw values inline when they fit the ~40-column distribution
-    # budget (D13): at that size the values ARE the summary; integer
+    # budget: at that size the values ARE the summary; integer
     # families show ONLY the values (moments of 8 ints are noise dressed
-    # as a distribution, but exact integer moments still print per D8/D12
+    # as a distribution, but exact integer moments still print
     # when the values do not fit).
     if stats.small_values is not None:
         inline = "[" + " ".join(value_token(value) for value in stats.small_values) + "]"
@@ -205,9 +205,9 @@ def render_core_line(
     style: str = "ascii",
     max_width: int | None = None,
 ) -> str:
-    """Render the core stats line (memo 4.1 grammar).
+    """Render the core stats line.
 
-    Width degradation (D14) drops bytes, then ``n=``, then the sparkline --
+    Width degradation drops bytes, then ``n=``, then the sparkline --
     never shape/dtype/extrema/health.
     """
 

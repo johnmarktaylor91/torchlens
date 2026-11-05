@@ -137,7 +137,7 @@ def _torch_type_denied(pickled_module: str, pickled_name: str, obj: type) -> boo
     return any(token in haystack for token in _DENIED_TORCH_TYPE_NAME_TOKENS)
 
 
-# STORAGE-CONSTRUCTOR identity denylist (r49, secA_1). The torch-``type`` branch of
+# STORAGE-CONSTRUCTOR identity denylist. The torch-``type`` branch of
 # ``find_class`` admits any resolved torch DATA ``type`` on the premise that
 # "constructing a torch data type executes no attacker code". That premise HOLDS for
 # tensor / Size / Parameter / dtype / nn-module classes, but is FALSE for a torch
@@ -202,7 +202,7 @@ def _is_torch_storage_instance(obj: Any) -> bool:
         return False
 
 
-# ALLOCATION-CONSTRUCTOR TYPE surface (r63, tensor/ndarray-construct regap). The r49
+# ALLOCATION-CONSTRUCTOR TYPE surface (tensor/ndarray-construct regap). The
 # belt denies only STORAGE construction, but a torch storage is NOT the only
 # pickle-reachable attacker-sized allocator: a bare REDUCE/NEWOBJ of ``torch.Tensor(N)``
 # / ``torch.FloatTensor(N)`` / ``numpy.ndarray((N,))`` with an attacker-supplied size
@@ -252,8 +252,8 @@ _TORCH_TENSORTYPE_METACLASSES: tuple[type, ...] = tuple(
 def _is_alloc_constructor_type(obj: Any) -> bool:
     """Return whether ``obj`` is a type whose bare construction allocates attacker-sized memory.
 
-    Superset of ``_is_torch_storage_type`` (r49) that ALSO catches the two other
-    pickle-reachable attacker-sized allocators (r63): a torch tensor type (a
+    Superset of ``_is_torch_storage_type`` that ALSO catches the two other
+    pickle-reachable attacker-sized allocators: a torch tensor type (a
     ``torch.Tensor`` subclass such as ``Parameter``, OR a legacy ``tensortype``-metaclass
     ``torch.<dtype>Tensor`` such as ``torch.FloatTensor``) and a ``numpy.ndarray``
     subclass. REDUCE/NEWOBJ-constructing any of these with a pickle-supplied size
@@ -470,7 +470,7 @@ def _alloc_refusal_reason(func: Any, args: Any, kwargs: Any = None) -> str | Non
     any admitted callable that constructs on that type's behalf: at REDUCE time the stack
     holds the MEDIATOR, not the allocating type. This closes that indirection CLASS.
 
-    Enumerated mediators (r6; every ``_SAFE_EXPLICIT_GLOBALS`` entry and every other
+    Enumerated mediators (every ``_SAFE_EXPLICIT_GLOBALS`` entry and every other
     surface ``find_class`` admits was assessed -- see the audit ledger):
 
     * numpy ``_reconstruct`` -- ``_reconstruct(numpy.ndarray, (N,), b"b")`` runs

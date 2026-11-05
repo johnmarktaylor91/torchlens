@@ -1,4 +1,4 @@
-"""Intervention spec state and history records of a ``Trace`` (L1).
+"""Intervention spec state and history records of a ``Trace``.
 
 ``intervention._trace_edits.record_do_intervention_event`` writes the ONE
 InterventionEvent envelope of a ``do()`` transaction; the helpers here build the
@@ -77,7 +77,7 @@ def do_event_edit_names(trace: Trace, site: Any, value_or_hook: Any) -> tuple[tu
     """
 
     if trace._is_selection_batch(site):
-        # One transactional envelope for the whole batch (D33): per-pair
+        # One transactional envelope for the whole batch: per-pair
         # edits named in order, plus the kind-specific staged-store slots
         # disclosure so cross-kind completion needs no schema change.
         edit_names = tuple(_edit_identity(pair_edit) for _sel, pair_edit in site)
@@ -134,7 +134,7 @@ def do_event_extra(
         extra["selection_batch"] = {
             "pairs": len(site),
             "kinds": kinds,
-            # Kind-specific staged-store slots (D33), one count per door.
+            # Kind-specific staged-store slots, one count per door.
             "staged_stores": {
                 door: sum(kind == door.upper() for kind in kinds)
                 for door in ("act", "param", "edge")

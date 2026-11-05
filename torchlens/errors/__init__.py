@@ -220,7 +220,7 @@ _LAZY_EXCEPTION_PATHS = {
         "CaptureAttemptFailedWarning",
     ),
     "CaptureNotActiveError": ("torchlens._errors", "CaptureNotActiveError"),
-    # r3 b1-opus R64-3: the default-deny output-container tripwire escapes to
+    # The default-deny output-container tripwire escapes to
     # users from the public ``Op.multi_output_type`` property, so its except
     # must be spellable from the public error surface.
     "ContainerReconstructionError": (
@@ -285,11 +285,11 @@ _LAZY_EXCEPTION_PATHS = {
     # Taxonomy closure: user-reachable typed refusals defined in subpackage
     # error modules, bound lazily so every user-facing class has one public
     # catch spelling. The defining module stays the import home.
-    # -- intervention binding (spec.bind) and regions (F01) --
+    # -- intervention binding (spec.bind) and regions --
     "BindingPreflightError": ("torchlens.intervention.errors", "BindingPreflightError"),
     "BindingRuntimeError": ("torchlens.intervention.errors", "BindingRuntimeError"),
     "RegionError": ("torchlens.intervention.errors", "RegionError"),
-    # -- observability substrate (F25) and trackers (F26); every class is in
+    # -- observability substrate and trackers; every class is in
     # its subpackage __all__ and carries contract-doc codes --
     "HistoryArtifactError": ("torchlens._observability._errors", "HistoryArtifactError"),
     "HistorySchemaError": ("torchlens._observability._errors", "HistorySchemaError"),

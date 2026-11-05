@@ -99,23 +99,23 @@ class RunPreconditionError(RunnableTLSPECError, ConfigurationError, ValueError):
 class BufferSinkRoutingError(RunnableTLSPECError, ConfigurationError, ValueError):
     """The live refresh projector refused mutable or unproven buffer-sink routing.
 
-    Raised with ``fields["code"] == "buffer_sink_routing_unsupported"`` (a
-    ``RunnableErrorCode`` member; provisional spelling, documented-unstable)
-    by all four typed buffer-sink arms of the mode-aware refresh projector
-    (D18): a train-mode buffer WRITER (``buffer_value_changed=True``),
-    unproven write evidence (``None``, fail closed), a recorded mode claim
-    contradicting the write evidence, and the refresh write tripwire (the
-    refreshed rerun's own journal recorded a value-changing buffer write on
-    the newly-allowed no-write path). ``ValueError`` stays in the MRO and the
-    message keeps the pinned "computational graph changed" term, so every
-    historical ``except ValueError`` caller and pinned match survive.
+        Raised with ``fields["code"] == "buffer_sink_routing_unsupported"`` (a
+        ``RunnableErrorCode`` member; provisional spelling, documented-unstable)
+        by all four typed buffer-sink arms of the mode-aware refresh projector
+    : a train-mode buffer WRITER (``buffer_value_changed=True``),
+        unproven write evidence (``None``, fail closed), a recorded mode claim
+        contradicting the write evidence, and the refresh write tripwire (the
+        refreshed rerun's own journal recorded a value-changing buffer write on
+        the newly-allowed no-write path). ``ValueError`` stays in the MRO and the
+        message keeps the pinned "computational graph changed" term, so every
+        historical ``except ValueError`` caller and pinned match survive.
 
-    Examples
-    --------
-    >>> issubclass(BufferSinkRoutingError, tl.errors.RunnableTLSPECError)
-    True
-    >>> issubclass(BufferSinkRoutingError, ValueError)
-    True
+        Examples
+        --------
+        >>> issubclass(BufferSinkRoutingError, tl.errors.RunnableTLSPECError)
+        True
+        >>> issubclass(BufferSinkRoutingError, ValueError)
+        True
     """
 
 
@@ -134,7 +134,7 @@ class RuntimeSignatureDriftError(RunnableTLSPECError, CompatibilityError, Runtim
 class PathDivergenceError(RunnableTLSPECError, ValidationError, RuntimeError, ValueError):
     """A structure, shape, mutation, or control witness contradicted the path.
 
-    ``ValueError`` lineage (W051-HONESTY H3): the historical ``except ValueError``
+    ``ValueError`` lineage: the historical ``except ValueError``
     callers and the pinned ``match="computational graph changed"`` on a refresh
     graph change keep holding while the RAISE policy surfaces the TYPED error
     (structured ``fields``) instead of the projector's bare ``ValueError``.

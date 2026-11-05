@@ -65,7 +65,7 @@ _SCHEMA_REMEDY = "re-save the artifact with trace.save(); do not hand-edit manif
 def _schema_refuse(detail: str, **fields: Any) -> ArtifactError:
     """Typed refusal for a manifest that parses as JSON but violates the schema.
 
-    One constructor for the whole malformed-manifest family (R65-1): every
+    One constructor for the whole malformed-manifest family: every
     site stamps ``code="manifest_schema_invalid"`` plus the re-save remedy so
     callers branch on ``exc.fields["code"]``, never message text. ``read()``
     adds the artifact path to refusals that bubble out of ``from_dict``.
@@ -514,7 +514,7 @@ class Manifest:
         if raw_version is None:
             # An absent tlspec_version predates portable I/O versioning; map it to
             # the below-floor refusal for consistency with the pickle-path
-            # counterpart (R10-10) instead of a generic missing-field error. A
+            # counterpart instead of a generic missing-field error. A
             # present-but-non-int value stays a required-field type error below.
             raise below_floor_error(
                 observed="no tlspec_version (predates portable I/O versioning)",
@@ -526,7 +526,7 @@ class Manifest:
                 code="artifact_version_below_floor",
             )
         if isinstance(raw_version, int) and raw_version > TLSPEC_VERSION:
-            # Symmetric with the below-floor check above (G3): a FUTURE
+            # Symmetric with the below-floor check above: a FUTURE
             # manifest may carry renamed/extra fields, and without this gate
             # it refuses with a misleading missing-required-field error
             # instead of the above-ceiling refusal that names the remedy.
@@ -692,7 +692,7 @@ class Manifest:
             with manifest_path.open("r", encoding="utf-8") as handle:
                 raw_data = _json.load_bounded(handle)
         except FileNotFoundError as exc:
-            # Stable codes on the tl.load front door (R65): a missing, unreadable,
+            # Stable codes on the tl.load front door: a missing, unreadable,
             # and malformed/over-limit manifest are distinct causes a caller (or
             # operator log reader) must be able to tell apart.
             raise ArtifactError(
@@ -723,7 +723,7 @@ class Manifest:
             return cls.from_dict(raw_data)
         except ArtifactError as exc:
             # Schema refusals from from_dict know the field, never the file;
-            # the read seam is where the artifact path is known (R65-1).
+            # the read seam is where the artifact path is known.
             if exc.file_path is None:
                 exc.file_path = str(manifest_path)
             raise

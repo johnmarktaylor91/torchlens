@@ -60,7 +60,7 @@ def join(trace: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any
     {'aten::unrelated': 1}
     """
 
-    # D22 (F09): host-side event times fill labeled diagnostic columns only and
+    # host-side event times fill labeled diagnostic columns only and
     # are FORBIDDEN as a rate denominator; device time enters report schemas
     # only via the correlation-ID join.
     kineto = _load_trace(kineto_trace)

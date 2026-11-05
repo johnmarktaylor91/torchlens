@@ -1,6 +1,6 @@
 """Tokenization, padding conventions, state guard, and the traced forward.
 
-The padding conventions are ONE coherent set per path (LIT-panel memo D9):
+The padding conventions are ONE coherent set per path:
 classification right-pads throughout; the causal-LM adapter uses TWO
 tokenizations -- LEFT-padded for one batched ``generate()`` (right-padded
 batched generation fails by fluently echoing the prompt) and RIGHT-padded for
@@ -8,8 +8,7 @@ one traced forward with ``use_cache=False`` (there ``position_ids`` are
 unnecessary and the naive pooling index is correct). Mixing halves is silent
 wrongness whose worst measured case is cosine 0.40 -- which is why the gates
 assert ``cos == 1.0``, never "close enough". Padding is applied manually from
-per-example encodings so the user's tokenizer object is never mutated
-(memo D18 hygiene).
+per-example encodings so the user's tokenizer object is never mutated.
 """
 
 from __future__ import annotations
@@ -161,7 +160,7 @@ def model_device(net: nn.Module) -> torch.device:
 def operation_state(net: nn.Module) -> Iterator[None]:
     """Enter eval mode for one operation and restore every module's prior mode.
 
-    The restore runs after success AND failure (memo D18); parameters,
+    The restore runs after success AND failure; parameters,
     gradients, the tokenizer, and device placement are never written by the
     bridge, so recording per-module ``training`` flags is the complete guard.
 

@@ -1,4 +1,4 @@
-"""Per-step attention pictures from a recorded generation (tviz memo D22).
+"""Per-step attention pictures from a recorded generation.
 
 A generation recorded with ``tl.record(model, input_ids, save=tl.func("softmax"),
 generate_kwargs={...})`` keeps every attention softmax each forward ran. The
@@ -13,8 +13,8 @@ the model produced at the step that computed that position.
 
 A row computed at an earlier step is shorter than the keys at step ``s``;
 the cells to its right are keys that did not exist yet. They hold zero, and
-the view carries no mask source unless the caller passes ``mask=`` (D6:
-zero-valued cells are never read as a mask).
+the view carries no mask source unless the caller passes ``mask=`` (zero-valued
+cells are never read as a mask).
 
 The public door is ``tl.transformer.attention_view(generation, layer, step=k)``,
 which calls :func:`generation_attention_view`. The every-layer form

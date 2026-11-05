@@ -90,7 +90,7 @@ class InterventionValidationReport:
     details: dict[str, Any]
 
     def __repr__(self) -> str:
-        """Bounded identity card (D31): the five verdicts lead, ``details`` is counted."""
+        """Bounded identity card: the five verdicts lead, ``details`` is counted."""
 
         axes = (
             self.is_invariant,
@@ -539,9 +539,9 @@ def validate(
     A metadata-invariant failure on the forward/saved scopes (a
     :class:`~torchlens.validation._invariants.MetadataInvariantError` raised by
     the invariant pass) is ONE more way the verdict is ``False``: the bool
-    contract holds for every failure class (W051-HONESTY L9 -- stale-parent
-    models returned ``False`` while a worker-thread escape raised through the
-    same door, so callers branching on the bool missed the second class). The
+    contract holds for every failure class (a stale-parent model returning
+    ``False`` while a worker-thread escape raised through the same door would
+    make callers branching on the bool miss the second class). The
     invariant itself is untouched and still records its identity on the side
     channel; the lower-level :func:`torchlens.validation.validate_forward_pass`
     door keeps raising it.
@@ -608,10 +608,10 @@ def validate(
     from .._user_public_impls import validate_forward_pass
 
     if normalized_scope in {"forward", "saved"}:
-        # R33-2: validation is the product's largest transient peak and had no
+        # validation is the product's largest transient peak and had no
         # instrumentation. Record cheap peak observations around the run and
         # publish them through ``last_validation_peak_memory()``; measurement
-        # only, never part of the verdict. R33 follow-up: the probes are an
+        # only, never part of the verdict. The probes are an
         # OPT-IN (TORCHLENS_VALIDATE_PEAK_MEMORY=1), mirroring the
         # measure_python_peak_memory capture-side design -- the
         # torch.cuda.is_available() probe can trigger driver init on some
@@ -627,7 +627,7 @@ def validate(
         cuda_armed = peaks_enabled and torch.cuda.is_available() and torch.cuda.is_initialized()
         cuda_peak_before = 0
         if cuda_armed:
-            # R36-2: snapshot the peak instead of reset_peak_memory_stats,
+            # snapshot the peak instead of reset_peak_memory_stats,
             # which clobbers the caller's process-wide high-water counter.
             # A run that stays under the pre-existing peak honestly reads 0.
             cuda_peak_before = int(torch.cuda.max_memory_allocated())
@@ -646,7 +646,7 @@ def validate(
                     **save_options,
                 )
             except MetadataInvariantError as invariant_error:
-                # L9: the bool contract covers EVERY failure class. The
+                # The bool contract covers EVERY failure class. The
                 # invariant pass already recorded its identity on the side
                 # channel before re-raising (validation/_core.py); make sure a
                 # record exists for the R67 warning below, then settle False.
@@ -661,11 +661,11 @@ def validate(
                 _LAST_RUN_PEAKS["cuda_peak_allocated_bytes"] = (
                     cuda_peak_after if cuda_peak_after > cuda_peak_before else 0
                 )
-            # R33 (r7 b6-opus, 3rd round): validate's high-water phase sits on
+            # validate's high-water phase sits on
             # the WRONG side of the internal trims -- the comparison/report
             # phase reallocates AFTER second_trace.cleanup() trimmed, so
-            # ~180-225 MB of freed glibc arena stayed resident per call
-            # (measured: manual malloc_trim recovered it). One more trim at
+            # ~180-225 MB of freed glibc arena would stay resident per call
+            # (measured: manual malloc_trim recovers it). One more trim at
             # the END of the scope; correctness-neutral (releases only
             # allocator-free pages, ~1 ms next to a multi-second validate),
             # and after the peak reads above, which are high-water maxima the

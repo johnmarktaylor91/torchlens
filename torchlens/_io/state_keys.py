@@ -13,7 +13,7 @@ The filter is deliberately NARROW. The portable dataclasses expose their real
 serialized fields as ``@property`` / slot descriptors, so a *broad* "shadows any
 class attribute" filter would reject legitimate state by construction (round-51
 over-catch: 336 real ``@property`` collisions). Refusing only callable *methods*
-had zero legitimate collisions across all portable classes (probe C2) while still
+had zero legitimate collisions across all portable classes (probe) while still
 catching ``_internal_set``/``save``/``run``/``draw`` impersonation.
 """
 
@@ -48,7 +48,7 @@ class PortableStateKeyError(_ActionableErrorMixin, TorchLensError, ValueError):
     attacker ``.tlspec`` carried a key whose name resolves to a plain method on the
     portable class, which rehydrate would otherwise be able to read-then-call.
     ``_ActionableErrorMixin`` supplies ``__reduce__`` so the strict two-argument
-    constructor survives pickle/deepcopy/process boundaries (R64-F1) instead of
+    constructor survives pickle/deepcopy/process boundaries instead of
     degrading to a bare ``TypeError``.
     """
 
@@ -110,7 +110,7 @@ def invalidate_static_class_attr_cache() -> None:
 
     global _CACHE_GENERATION
     _CACHE_GENERATION += 1
-    # R37 (b2-sol): a cached answer that strongly reaches its own weak key (a
+    # A cached answer that strongly reaches its own weak key (a
     # class-valued attribute, or any container holding the class) makes weak
     # eviction structurally impossible. Clearing at every load boundary bounds
     # that retention to one load session instead of process lifetime; answers
@@ -199,7 +199,7 @@ def static_class_attr(cls: type, name: str, default: Any = _MISSING) -> Any:
             resolved = _resolve_static_class_attr(cls, name)
             if isinstance(resolved, type):
                 # A class-valued answer (e.g. ``cls.self_ref = cls``) stored
-                # strongly reaches the weak KEY and pins it forever (R37);
+                # strongly reaches the weak KEY and pins it forever;
                 # classes are weakref-able, so hold the answer weakly and
                 # keep the memo hit.
                 answers[name] = _WeakClassAnswer(weakref.ref(resolved))
@@ -282,7 +282,7 @@ def refuse_callable_shadowing_state_keys(cls: type, state: Mapping[str, Any]) ->
     """Refuse a portable ``state`` dict that shadows any class-owned method of ``cls``.
 
     Call immediately before ``self.__dict__.update(state)`` in every portable
-    ``__setstate__``. Narrow by design (probe C2: 0 legitimate collisions), it
+    ``__setstate__``. Narrow by design (0 legitimate collisions), it
     closes the read-then-call enabler class for every non-slotted portable class at
     once without touching the ``@property``-backed real state keys.
     """

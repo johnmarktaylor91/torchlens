@@ -1,15 +1,15 @@
 """Site-key JOIN (guarded, witness-corroborated, verdict-tiered) and the
-tier-(a) fold closure -- the S2-INDEPENDENT pure functions of the L1
-grouping core.
+tier-(a) fold closure -- pure functions of the grouping core that do not depend
+on the stamp vocabulary.
 
 INTERNAL MODULE: the verdict tiers ride as internal enum values; their
-public spellings (and every stamp-consuming surface) wait on the S2
+public spellings (and every stamp-consuming surface) wait on a stamp
 vocabulary amendment. Nothing here is wired into capture defaults --
 the join backs the cross-stamp exit-gate machinery and future consumers,
-and the closure is entry-dark on plain captures until an affirmative D1
-ruling (the flip PR).
+and the closure is entry-dark on plain captures until within-capture
+folding is enabled.
 
-THE JOIN RULE (memo 3.1 R1, three layers): the site key is a
+THE JOIN RULE (three layers): the site key is a
 STRUCTURAL-POSITION identity -- it proves two ops occupy the same
 (module site, type, slot, ordinal) position, never that they originate
 from the same source operation. Therefore:
@@ -28,11 +28,11 @@ from the same source operation. Therefore:
    agree) / ``positional`` (guard passes, witness absent on either side) /
    refused (cardinality or witness). NOTHING is ever verdicted
    "guaranteed" -- same-line re-execution with a count-preserving order
-   swap joins as corroborated by design (the disclosed R4 residual:
+   swap joins as corroborated by design (a disclosed residual:
    "corroborated" means position + call-site provenance agree, never
    "same semantic operation").
 
-TIER-(A) FOLD CLOSURE (memo 5.1, normative): fold group = connected
+TIER-(A) FOLD CLOSURE (normative): fold group = connected
 component of (same recurrent_ops group) UNION (same site_key AND same
 equivalence_class). The equivalence side condition is NORMATIVE -- an
 unguarded closure mints groups violating the live shared-equivalence
@@ -60,7 +60,7 @@ _Witness = tuple[str | None, int | None]
 
 
 class _SiteJoinVerdict(str, enum.Enum):
-    """Internal join-verdict tiers (public spellings wait on S2)."""
+    """Internal join-verdict tiers (public spellings wait on the stamp vocabulary amendment)."""
 
     CORROBORATED = "corroborated"
     POSITIONAL = "positional"
@@ -237,12 +237,12 @@ def fold_rows_from_trace(trace: Any) -> list[FoldRow]:
 
 
 def fold_site_groups(rows: Iterable[FoldRow]) -> dict[str, frozenset[str]]:
-    """Tier-(a) fold closure: label -> its fold group (memo 5.1).
+    """Tier-(a) fold closure: label -> its fold group.
 
     Union of the existing recurrence relation with (same ``site_key`` AND
     same ``equivalence_class``); keyless rows never fold beyond their
     recurrence group. Pure function; entry-dark on plain captures until an
-    affirmative D1 ruling activates a `grouping="fold_sites"` entry path.
+    within-capture folding is enabled via a `grouping="fold_sites"` entry path.
     """
 
     rows = list(rows)

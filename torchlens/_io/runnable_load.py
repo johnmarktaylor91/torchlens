@@ -161,7 +161,7 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
     )
     calls = tuple(_parse_call(item) for item in _mapping_sequence(value, "calls"))
     slots = tuple(_parse_slot(item) for item in _mapping_sequence(value, "tensor_slots"))
-    # slot_id uniqueness was enforced NOWHERE (R10-15) while every sibling
+    # slot_id uniqueness was enforced NOWHERE while every sibling
     # namespace dup-checks (call ids, witness families, registry ids, boundary
     # positions). All slot indexes are last-wins dicts (e.g. slot_by_id at the
     # SparseRunDescriptor build), but consumers iterate the slot LIST -- so a
@@ -182,12 +182,12 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
     )
     _validate_state_metadata_fact_witnesses(witnesses)
     _validate_input_structure_witnesses(witnesses)
-    # r71 A: the REQUIRED witness-free replay-structure records + the explicit gap
+    # The REQUIRED witness-free replay-structure records + the explicit gap
     # ledger parse BEFORE the presence ledger; the comprehensive obligation/discharge
     # validation runs on the fully typed descriptor below.
     input_boundary = _parse_input_boundary(value.get("input_boundary"))
     coverage_gaps = _parse_coverage_gaps(value.get("coverage_gaps"))
-    # r69 A parse order: slots/witness syntax first (above), then the REQUIRED
+    # A parse order: slots/witness syntax first (above), then the REQUIRED
     # descriptor-native presence ledger, then independently derived/cross-family
     # sets and exact family/member equality (inside the validator).
     inventory = _parse_required_witness_inventory(value.get("required_witness_inventory"))
@@ -241,7 +241,7 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
             _parse_diagnostic(item) for item in _mapping_sequence(value, "unsupported_sites")
         ),
     )
-    # r71 A: the comprehensive obligation/discharge validation on the fully typed
+    # The comprehensive obligation/discharge validation on the fully typed
     # descriptor -- independent structural derivation, terminal-slot totality, gap
     # ledger coherence, and the parser-derived completeness floor. The container
     # family's independent anchor is enforced at readiness attach (where the
@@ -251,7 +251,7 @@ def parse_sparse_run_descriptor(value: Mapping[str, Any]) -> SparseRunDescriptor
 
 
 class ContextFieldInvalidError(_ActionableErrorMixin, TorchLensError, ValueError):
-    """A persisted execution-context field failed closed-vocabulary validation (INV-4).
+    """A persisted execution-context field failed closed-vocabulary validation.
 
     Raised at PARSE time -- before readiness, staging, or any torch setter/callable
     can observe the attacker-controllable bytes -- and surfaced as the frozen
@@ -262,7 +262,7 @@ class ContextFieldInvalidError(_ActionableErrorMixin, TorchLensError, ValueError
     branchable (R65: it was a plain ``ValueError`` with no code, invisible to the
     house error contract). ``_ActionableErrorMixin`` supplies ``__reduce__`` so
     the strict two-argument constructor survives pickle/deepcopy/process
-    boundaries (R64-F1) instead of degrading to a bare ``TypeError``.
+    boundaries instead of degrading to a bare ``TypeError``.
     """
 
     def __init__(self, field: str, detail: str) -> None:
@@ -281,7 +281,7 @@ class ContextFieldInvalidError(_ActionableErrorMixin, TorchLensError, ValueError
 
 
 _STATE_METADATA_FACT_ALLOWED_NAMES = frozenset({"requires_grad", "grad_fn"})
-"""CLOSED parse-side vocabulary of declared state-metadata fact names (r65 F-1).
+"""CLOSED parse-side vocabulary of declared state-metadata fact names.
 
 Mirrors ``torchlens._io.runnable._STATE_METADATA_FACT_NAMES``; any other name -- or a
 non-bool value, a malformed envelope, a site label disagreeing with the embedded state
@@ -295,7 +295,7 @@ _INPUT_STRUCTURE_NODE_KINDS = INPUT_CONTAINER_KINDS
 
 
 def _validate_input_structure_witnesses(witnesses: Sequence[ControlWitness]) -> None:
-    """Validate the REQUIRED input-boundary structure facts at PARSE time (r67 C2).
+    """Validate the REQUIRED input-boundary structure facts at PARSE time.
 
     The complete structure block is required and parse-validated inside existing v2:
     missing, duplicate, malformed, stripped, or internally inconsistent site/node/key
@@ -382,7 +382,7 @@ def _validate_input_structure_witnesses(witnesses: Sequence[ControlWitness]) -> 
 
 
 def _validate_state_metadata_fact_witnesses(witnesses: Sequence[ControlWitness]) -> None:
-    """Validate every declared state-metadata fact witness at PARSE time (r65 F-1).
+    """Validate every declared state-metadata fact witness at PARSE time.
 
     Fact names validate against the closed two-name vocabulary and values must be bools;
     run preparation applies ``requires_grad`` facts to staged state, so a malformed fact is
@@ -426,11 +426,11 @@ def _validate_state_metadata_fact_witnesses(witnesses: Sequence[ControlWitness])
 
 
 _REQUIRED_WITNESS_INVENTORY_FIELD = "required_witness_inventory"
-"""Manifest/diagnostic field name of the r69 A presence ledger."""
+"""Manifest/diagnostic field name of the presence ledger."""
 
 
 def _parse_required_witness_inventory(value: Any) -> RequiredWitnessInventory:
-    """Parse the REQUIRED descriptor-native presence ledger (r69 A).
+    """Parse the REQUIRED descriptor-native presence ledger.
 
     Missing inventory, unknown registry discriminator, malformed rows, missing/extra/
     duplicate families, non-string or duplicate member IDs, a disposition disagreeing
@@ -499,7 +499,7 @@ def _validate_required_witness_inventory(
     witnesses: Sequence[ControlWitness],
     slots: Sequence[TensorSlotDescriptor],
 ) -> None:
-    """Require EXACT family+member coverage plus the independent cross-checks (r69 A).
+    """Require EXACT family+member coverage plus the independent cross-checks.
 
     The present member sets are re-derived from the parsed witnesses with the SAME
     single-source function the producer authored the inventory from
@@ -662,7 +662,7 @@ def _validate_required_witness_inventory(
 
 
 def _fact_path_tuple(field: str, raw: Any, description: str) -> tuple[Any, ...]:
-    """Return a decoded fact's path/position components, refusing non-sequences typed (r75 L1).
+    """Return a decoded fact's path/position components, refusing non-sequences typed.
 
     An int-encoded (or otherwise non-sequence) ``path`` in a foreign artifact's
     metadata/literal envelope crashed ``tuple(...)`` with a ``TypeError`` into the
@@ -671,11 +671,11 @@ def _fact_path_tuple(field: str, raw: Any, description: str) -> tuple[Any, ...]:
     checks use. A string is refused too: iterating it would silently shred one
     component into characters instead of refusing the malformed encoding.
 
-    r77 L1 extends the same check one nesting level down: the COMPONENTS are decoded
+    L1 extends the same check one nesting level down: the COMPONENTS are decoded
     literals that may be nested list/mapping/slice values -- all unhashable -- which
     crashed the first downstream ``set``/``dict`` consumer with a ``TypeError`` into
     the same untyped catch-all. Every component must be a ``str``/``int`` scalar
-    (the r67 structure-node-path precedent); anything else refuses typed here.
+    (the structure-node-path precedent); anything else refuses typed here.
     """
 
     if raw is None:
@@ -693,7 +693,7 @@ def _fact_path_tuple(field: str, raw: Any, description: str) -> tuple[Any, ...]:
 
 
 def _fact_position_tuple(field: str, raw: Any, description: str) -> tuple[Any, ...]:
-    """Return a decoded fact's site position as a component-validated tuple (r77 L1).
+    """Return a decoded fact's site position as a component-validated tuple.
 
     The former inline coercions (``tuple(raw) if isinstance(raw, (list, tuple)) else
     (raw,)``) validated only the CONTAINER type; a position carrying a nested
@@ -714,7 +714,7 @@ def _fact_position_tuple(field: str, raw: Any, description: str) -> tuple[Any, .
 
 
 def _parse_input_boundary(value: Any) -> tuple[InputBoundarySite, ...]:
-    """Parse the REQUIRED input-boundary record (r71 A2).
+    """Parse the REQUIRED input-boundary record.
 
     Missing record, malformed sites, duplicate positions, or malformed tensor-site
     entries refuse ``context_field_invalid`` (analysis-only). Absence never means the
@@ -779,7 +779,7 @@ def _parse_input_boundary(value: Any) -> tuple[InputBoundarySite, ...]:
 
 
 def _parse_coverage_gaps(value: Any) -> tuple[WitnessCoverageGap, ...]:
-    """Parse the REQUIRED explicit gap ledger against the closed gap registry (r71 A3).
+    """Parse the REQUIRED explicit gap ledger against the closed gap registry.
 
     Unknown gap kinds, a source family or resulting completeness disagreeing with the
     registry row, non-dense orders, or malformed members refuse
@@ -1374,7 +1374,7 @@ def validate_witness_obligations(
     *,
     container_members: tuple[str, ...] | None,
 ) -> None:
-    """Enforce the r71 obligation/discharge invariant over one typed descriptor.
+    """Enforce the obligation/discharge invariant over one typed descriptor.
 
     THE shared comprehensive validator: the parser runs it on every load (with the
     container anchor deferred to readiness attach, where the rehydrated container
@@ -1385,7 +1385,7 @@ def validate_witness_obligations(
     an exact witness XOR a typed source-linked gap per the family's registry-v2
     discharge rule -- plus:
 
-    * witness ``order`` density (0..N-1) and ``witness:<order+1>`` id consistency
+    * witness ``order`` density and ``witness:<order+1>`` id consistency
       (any raw deletion trips; renumbering = coherent reauthoring);
     * strictly increasing unique ``call:<n>`` ids and full referential closure
       (obligation slots, arm-edge labels, boundary slots resolve against the
@@ -1440,7 +1440,7 @@ def validate_container_witness_anchor(
     descriptor: SparseRunDescriptor,
     container_members: tuple[str, ...],
 ) -> None:
-    """Anchor container witnesses to the rehydrated container records (r71 A).
+    """Anchor container witnesses to the rehydrated container records.
 
     Runs at readiness attach, where the loaded trace's container records are in
     scope: the descriptor's ``container:*`` witnesses must equal, bidirectionally,
@@ -1466,7 +1466,7 @@ def validate_container_witness_anchor(
 
 
 class DescriptorStructuralBoundError(_ActionableErrorMixin, TorchLensError, ValueError):
-    """A persisted runnable-descriptor integer failed structural cross-validation (r53 free_1).
+    """A persisted runnable-descriptor integer failed structural cross-validation.
 
     Raised at PARSE time -- before readiness resolution, signature binding, state
     staging, or any allocation whose size is a function of the persisted integer
@@ -1483,7 +1483,7 @@ class DescriptorStructuralBoundError(_ActionableErrorMixin, TorchLensError, Valu
     (R65: it was a plain ``ValueError`` whose code never reached ``.fields``).
     ``_ActionableErrorMixin`` supplies ``__reduce__`` so the strict
     three-argument constructor survives pickle/deepcopy/process boundaries
-    (R64-F1) instead of degrading to a bare ``TypeError``.
+    instead of degrading to a bare ``TypeError``.
     """
 
     def __init__(self, code: RunnableErrorCode, field: str, detail: str) -> None:
@@ -1505,7 +1505,7 @@ _INT64_MAX = 2**63 - 1
 """Signed 64-bit ceiling: torch sizes/storage byte counts are int64 quantities."""
 
 _MAX_LITERAL_NESTING_DEPTH = 200
-"""Structural nesting ceiling for the recursive non-tensor literal grammar (r55 free_2).
+"""Structural nesting ceiling for the recursive non-tensor literal grammar.
 
 Independent belt to the bounded-JSON depth prescan: a hand-edited or
 depth-tolerant front end could hand ``_parse_literal`` a nesting bomb that the
@@ -1523,7 +1523,7 @@ def _validate_call_arity(
     tensor_arguments: tuple[TensorArgumentRef, ...],
     literal_arguments: tuple[LiteralArgumentRef, ...],
 ) -> None:
-    """Anchor persisted call arity to the DENSE first-level argument leaves (r53 free_1).
+    """Anchor persisted call arity to the DENSE first-level argument leaves.
 
     A legitimate producer records ``num_positional_args`` equal to the count of distinct dense
     first-level positional roots and ``num_keyword_args`` equal to the count of distinct keyword
@@ -1557,7 +1557,7 @@ def _validate_call_arity(
         else:
             if not isinstance(head, str):
                 raise _refuse(f"keyword argument root {head!r} is not a string")
-            if _rawptr.is_raw_pointer_parameter_name(head):  # r50 raw-pointer family
+            if _rawptr.is_raw_pointer_parameter_name(head):  # raw-pointer family
                 detail = _rawptr.pointer_keyword_refusal_detail(head, f"call {call_id!r}")
                 raise _refuse(detail, code=RunnableErrorCode.CALL_ARITY_MISMATCH)
             keyword_names.add(head)
@@ -1586,7 +1586,7 @@ def _validate_slot_shape(
 ) -> None:
     """Anchor a persisted slot shape to its declared rank and an int64-safe byte product.
 
-    Structural bounds only (r53 free_1): nonnegative dimensions, ``rank ==
+    Structural bounds only: nonnegative dimensions, ``rank ==
     len(shape)``, rank within torch's practical ceiling, and a total byte count
     that fits signed 64-bit (torch storage sizes are int64). Deliberately NO
     absolute byte cap here -- real slots (multi-GiB LLM embeddings) must keep
@@ -1673,7 +1673,7 @@ def _validated_dtype_literal(field: str, raw: str) -> str:
     """
 
     name = raw.removeprefix("torch.")
-    # r42 secC_1 / r45: the shared ``torch_attr`` helper never fires ``torch.__getattr__`` (no
+    # the shared ``torch_attr`` helper never fires ``torch.__getattr__`` (no
     # lazy submodule import, no deprecated-attr call). Every real dtype is a ``torch.__dict__``
     # entry.
     resolved = torch_attr(name)
@@ -1686,8 +1686,8 @@ def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
     """Parse the required v2 capture-scoped ambient execution context.
 
     Every field must be present explicitly; ``None`` means the producing runtime
-    did not expose that control. Missing keys raise (fail closed). r37 INV-4:
-    every VALUE validates here against a closed vocabulary -- device literals
+    did not expose that control. Missing keys raise (fail closed).
+    Every VALUE validates here against a closed vocabulary -- device literals
     against the type[:index] grammar, dtype literals against the live dtype
     table, matmul precision against torch's exact accepted set, Booleans
     strictly -- so no torch setter (and no callable) ever receives an
@@ -1703,7 +1703,7 @@ def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
         """
 
         if name not in value:
-            # r53 hon_1 posture: an absent ambient field is a typed parse
+            # posture: an absent ambient field is a typed parse
             # refusal (analysis-only load), never a defaulted control.
             raise ContextFieldInvalidError(
                 f"ambient_context.{name}",
@@ -1720,7 +1720,7 @@ def _parse_ambient_context(value: Mapping[str, Any]) -> AmbientExecutionContext:
         return raw
 
     def _required_bool_field(name: str) -> bool:
-        # r53 hon_1: the global autograd/inference mode is REQUIRED and strictly
+        # the global autograd/inference mode is REQUIRED and strictly
         # boolean -- there is NO honest default (a defaulted grad mode could
         # bless a different-ambient comparison as verified), and ``null`` is not
         # a legal producer value (every supported torch exposes both queries).
@@ -1935,7 +1935,7 @@ def attach_sparse_run_readiness(
     try:
         descriptor = parse_sparse_run_descriptor(raw_descriptor)
     except ContextFieldInvalidError as exc:
-        # r37 INV-4: an invalid persisted context VALUE is its own frozen refusal
+        # an invalid persisted context VALUE is its own frozen refusal
         # class -- refused at parse, before readiness/staging, so no torch setter
         # or resolved callable ever observes the bytes.
         diagnostic = _diagnostic(
@@ -1958,7 +1958,7 @@ def attach_sparse_run_readiness(
         _store_readiness(trace, None, report, None)
         return report
     except DescriptorStructuralBoundError as exc:
-        # r53 free_1: a structurally impossible persisted integer (arity not
+        # free_1: a structurally impossible persisted integer (arity not
         # matching the dense argument leaves, shape contradicting rank, an
         # int64-overflowing byte product) is refused at PARSE with its frozen
         # code -- before readiness resolution or any allocation the integer
@@ -2003,7 +2003,7 @@ def attach_sparse_run_readiness(
         return report
 
     try:
-        # r71 A: the container family's INDEPENDENT anchor -- the descriptor's
+        # The container family's INDEPENDENT anchor -- the descriptor's
         # ``container:*`` witnesses must equal the snapshot identities the
         # REHYDRATED trace's own container records imply (the replay consumes those
         # records for input binding and output reconstruction), so a lockstep
@@ -2035,12 +2035,12 @@ def attach_sparse_run_readiness(
         _store_readiness(trace, None, report, None)
         return report
 
-    # r83 S3: the execution authority (``run.callable_registry``) reconciled
+    # The execution authority (``run.callable_registry``) reconciled
     # against the name the rehydrated trace independently records for the same
     # op. A single-field registry edit otherwise leaves a self-contradictory
     # artifact that runs and reports VERIFIED with different numbers. This is
     # threaded THROUGH the resolver rather than checked here, so it fires ONLY
-    # for a registry key that RESOLVES to a real callable (the S3 threat: a
+    # for a registry key that RESOLVES to a real callable (the threat: a
     # swap between two valid ops that silently runs). An UNRESOLVABLE key is
     # left to the resolver's own richer readiness/``ReattachError`` path.
     recorded_func_names = {
@@ -2057,7 +2057,7 @@ def attach_sparse_run_readiness(
 def _device_capability_diagnostics(
     descriptor: SparseRunDescriptor,
 ) -> tuple[RunnableDiagnostic, ...]:
-    """Capability-check every recorded slot device WITHOUT allocation (r37 R5).
+    """Capability-check every recorded slot device WITHOUT allocation.
 
     Validates device class existence and index bounds against this runtime. Only
     accelerator classes with runtime probes are gated; the check must never
@@ -2118,7 +2118,7 @@ def preflight_sparse_run_descriptor(
     descriptor:
         Parsed sparse descriptor.
     recorded_func_names:
-        r83 S3: the op function name the REHYDRATED trace records for each
+        The op function name the REHYDRATED trace records for each
         op, keyed by layer label. When provided, a callable that RESOLVES but
         whose registry key contradicts the recorded name is refused as a
         self-contradictory (corrupted) artifact. ``None`` (the default, used by
@@ -2134,7 +2134,7 @@ def preflight_sparse_run_descriptor(
     version_diagnostics = _descriptor_version_diagnostics(descriptor)
     device_diagnostics = _device_capability_diagnostics(descriptor)
     if device_diagnostics:
-        # r37 R5 readiness gate: recorded slot devices are capability-checked
+        # R5 readiness gate: recorded slot devices are capability-checked
         # WITHOUT allocating anything -- a CPU-only host loads a CUDA artifact for
         # analysis fine, reports UNAVAILABLE here, and ``.run()`` refuses typed
         # before any callable resolution or payload transfer.
@@ -2451,7 +2451,7 @@ def _resolved_callable(
             ),
         )
         return _unavailable_resolution(entry, diagnostic, provenance)
-    # r83 S3: the callable RESOLVED and is signature-compatible -- exactly the
+    # The callable RESOLVED and is signature-compatible -- exactly the
     # class that would otherwise RUN. Reconcile the execution authority
     # (``entry.key.qualname``, the persisted registry name) against the name the
     # rehydrated trace independently records for the SAME op. A single-field
@@ -2562,7 +2562,7 @@ def _resolve_exact_key(
     if property_getter is not None:
         return property_getter, f"torch.Tensor.{key.qualname}"
     if key.namespace in ALLOWED_EXACT_ROOTS:
-        # r49 secF_1: resolve through the shared allowlisted reader, which special-cases the
+        # resolve through the shared allowlisted reader, which special-cases the
         # top-level ``torch`` root to ``torch_attr`` (no PEP-562 lazy ``torch.__getattr__``
         # submodule import / deprecated ``replacement()``). The prior direct
         # ``getattr(ALLOWED_EXACT_ROOTS[key.namespace], ...)`` fired that lazy hazard on an
@@ -2677,7 +2677,7 @@ def _reverse_index() -> Mapping[str, tuple[_ReverseCandidate, ...]]:
         root = torch_namespace(namespace) if namespace != "torch" else torch
         if root is None:
             continue
-        # r49 secF_1: reading a top-level torch qualname via ``getattr`` can fire the PEP-562
+        # reading a top-level torch qualname via ``getattr`` can fire the PEP-562
         # lazy ``__getattr__``; route the torch root through ``torch_attr`` (proven behavior-
         # preserving over TorchLens's own top-level torch qualname inventory). Submodule roots
         # carry no lazy hazard and stay on ``getattr``.
@@ -2753,7 +2753,7 @@ def _signature_accepts_call(
         *(argument.argument_path for argument in call.tensor_arguments),
         *(argument.argument_path for argument in call.literal_arguments),
     )
-    # r53 free_1: the placeholder count derives from the VALIDATED positional
+    # free_1: the placeholder count derives from the VALIDATED positional
     # leaf roots, never directly from the persisted ``num_positional_args``
     # integer -- parse anchoring guarantees the two agree for any loaded
     # descriptor, and an in-memory descriptor that bypassed parsing can no
@@ -2924,7 +2924,7 @@ def _readiness_report(
         capability=descriptor.capability,
         resolver_records=records,
         state_sources_available=tuple(state_sources),
-        # r71 A3: readiness republishes the parser-DERIVED completeness floor (equal
+        # Readiness republishes the parser-DERIVED completeness floor (equal
         # to the persisted summary by the parse-time equality check), never a raw
         # summary read (source-scan tripwire).
         witness_completeness=derived_witness_completeness(descriptor.coverage_gaps),
@@ -3021,7 +3021,7 @@ def _parse_registry_key(value: Mapping[str, Any]) -> FunctionRegistryKey:
 def _parse_call(value: Mapping[str, Any]) -> RunnableCallDescriptor:
     """Parse one runnable computational call descriptor.
 
-    r53 free_1: the persisted arity integers are anchored to the actual dense
+    free_1: the persisted arity integers are anchored to the actual dense
     argument leaves BEFORE the descriptor is constructed, so no downstream
     consumer (`_signature_accepts_call`, `_pre_call_contract_checks`,
     `_execute_sparse_call`) ever scales an allocation by an unvalidated
@@ -3048,7 +3048,7 @@ def _parse_call(value: Mapping[str, Any]) -> RunnableCallDescriptor:
     _validate_call_arity(
         call_id, num_positional_args, num_keyword_args, tensor_arguments, literal_arguments
     )
-    # r71 A2: the per-call obligation fields are REQUIRED (call-recipe v3); absence is
+    # The per-call obligation fields are REQUIRED (call-recipe v3); absence is
     # a parse failure (analysis-only load), never a defaulted empty obligation set.
     obligations: list[CallControlObligation] = []
     for item in _mapping_sequence(value, "control_obligations"):
@@ -3187,16 +3187,16 @@ def _parse_slot(value: Mapping[str, Any]) -> TensorSlotDescriptor:
     slot_id = _string(value, "slot_id")
     shape = tuple(_integer_item(item, "shape") for item in _sequence(value, "shape"))
     rank = _integer(value, "rank")
-    # r47 secD_1/secF_1: the tensor-slot dtype is attacker-controlled. Parse-validate it against
+    # the tensor-slot dtype is attacker-controlled. Parse-validate it against
     # the live dtype table (closed vocabulary, like the ambient/autocast dtypes) so a hazardous
     # ``"onnx"`` / ``"_dynamo"`` / ``"has_cuda"`` slot-dtype is refused at PARSE -- before the
     # ``.run()`` random-initializer would resolve it -- via ``torch_attr`` (no lazy import).
     dtype = _validated_dtype_literal("tensor_slots.dtype", _string(value, "dtype"))
-    # r53 free_1: anchor the persisted shape/rank BEFORE the descriptor exists, so
+    # free_1: anchor the persisted shape/rank BEFORE the descriptor exists, so
     # the ``.run()`` random role-initializer's ``torch.empty(slot.shape)`` can never
     # be scaled by a structurally impossible manifest integer.
     _validate_slot_shape(slot_id, shape, rank, dtype)
-    # r55 FORK D: the tensor-slot ``device_type`` is attacker-controlled and feeds
+    # FORK D: the tensor-slot ``device_type`` is attacker-controlled and feeds
     # ``torch.device(...)`` at run-preparation (state alloc + output-slot preflight).
     # Anchor it to the SAME closed torch device-type vocabulary the ambient/autocast
     # device literals use, so a bogus/path-bearing device token is refused at PARSE
@@ -3237,7 +3237,7 @@ def _parse_slot(value: Mapping[str, Any]) -> TensorSlotDescriptor:
             if state_value is None
             else _parse_state_binding(_mapping_item(state_value, "state_binding"))
         ),
-        # r71 A2: REQUIRED owner-record obligations -- absence is a parse failure.
+        # REQUIRED owner-record obligations -- absence is a parse failure.
         host_escape=_boolean(value, "host_escape"),
         inert_sink=_boolean(value, "inert_sink"),
     )
@@ -3256,7 +3256,7 @@ def _parse_input_binding(value: Mapping[str, Any]) -> InputSlotBinding:
     else:
         raise TypeError("model_site_position must be a string, integer, or path array.")
     # ``io_role`` is a Literal["model_input"] field; it was the one Literal-typed
-    # descriptor field parsed with a bare cast and never validated (R10-17).
+    # descriptor field parsed with a bare cast and never validated.
     # Refuse an out-of-vocabulary value at parse, like every other closed-vocab
     # descriptor field.
     io_role = _string(value, "io_role")
@@ -3275,7 +3275,7 @@ def _parse_input_binding(value: Mapping[str, Any]) -> InputSlotBinding:
 
 
 def _parse_state_binding(value: Mapping[str, Any]) -> StateSlotBinding:
-    """Parse one named parameter or buffer binding (r71: + totalized declared facts)."""
+    """Parse one named parameter or buffer binding (+ totalized declared facts)."""
 
     disposition = value.get("host_escape_disposition")
     if disposition is not None and disposition not in {"escaped", "inert"}:
@@ -3285,7 +3285,7 @@ def _parse_state_binding(value: Mapping[str, Any]) -> StateSlotBinding:
         )
     captured_grad_fn = _boolean(value, "captured_grad_fn")
     if captured_grad_fn:
-        # No staged leaf can carry a grad_fn (r65 F-1): a True fact can never be
+        # No staged leaf can carry a grad_fn: a True fact can never be
         # reproduced by any staged or fresh-oracle state, so an artifact claiming it
         # is refused at parse -- fail closed, analysis-only.
         raise ContextFieldInvalidError(
@@ -3398,7 +3398,7 @@ def _parse_diagnostic(value: Mapping[str, Any]) -> RunnableDiagnostic:
     """Parse one persisted producer diagnostic."""
 
     # Refuse a malformed ``details`` entry rather than silently filtering it
-    # (R10-18): this was the one parse site that continued with partial state
+    # this was the one parse site that continued with partial state
     # instead of failing closed like every sibling parser.
     details: list[tuple[str, str]] = []
     for item in _sequence(value, "details"):
@@ -3463,7 +3463,7 @@ def _validate_literal_atom_value(kind: LiteralAtomKind, value: Any) -> None:
                 f"Runnable literal atom kind 'int' requires an int value, "
                 f"got {type(value).__name__}."
             )
-        # r55 CLASS 3 (free_1): close the literal/slot magnitude asymmetry. A slot
+        # CLASS 3 (free_1): close the literal/slot magnitude asymmetry. A slot
         # shape is bounded to a signed-64-bit byte product at parse; a literal int
         # (e.g. the ``n`` in a taken-path ``torch.arange(n)``/``zeros(n)``) carried
         # NO magnitude bound, so a self-consistent descriptor could drive an
@@ -3539,7 +3539,7 @@ def _parse_literal(value: Any, *, _depth: int = 0) -> NonTensorLiteral:
 
 
 def _validate_torch_device_literal_shape(qualname: str) -> None:
-    """Refuse a malformed ``torch.device(...)`` literal payload at descriptor parse (r41 secC).
+    """Refuse a malformed ``torch.device(...)`` literal payload at descriptor parse.
 
     Parse-time belt for the run-time typed wrap in
     ``torchlens._runnable.execution._decode_torch_symbol``: only the DEVICE literal's
@@ -3548,7 +3548,7 @@ def _validate_torch_device_literal_shape(qualname: str) -> None:
     cannot over-refuse) -- while the symbol ALLOWLIST stays exclusively the runtime
     decoder's job (no duplication). Raising ``ValueError`` routes through
     ``parse_sparse_run_descriptor``'s existing descriptor-parse refusal, degrading the
-    load to ANALYSIS-ONLY with the typed diagnostic intact (the corr2_3 disposition),
+    load to ANALYSIS-ONLY with the typed diagnostic intact (the disposition),
     never a hard load failure.
     """
 

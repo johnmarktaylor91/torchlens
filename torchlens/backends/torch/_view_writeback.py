@@ -44,7 +44,7 @@ def view_mutation_propagation_enabled(trace: Any) -> bool:
 def _alias_shares_elements(mutated: torch.Tensor, alias: torch.Tensor, storage_ptr: Any) -> bool:
     """Return whether ``alias`` provably shares storage elements with ``mutated``.
 
-    Element-exact where provable (round-31 M4): interleaved element-disjoint
+    Element-exact where provable: interleaved element-disjoint
     views must not inherit the mutation edge. A probe failure reads as no.
     """
 
@@ -81,7 +81,7 @@ def overlapping_labeled_aliases(
     """
 
     try:
-        # Meta-safe key (D20): data_ptr() reads 0 for EVERY meta storage.
+        # Meta-safe key: data_ptr reads 0 for EVERY meta storage.
         storage_ptr = storage_alias_index_key(mutated.untyped_storage())
     except Exception:
         return []

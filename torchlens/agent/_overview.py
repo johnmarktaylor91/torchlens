@@ -1,4 +1,4 @@
-"""Structured overview records and dump views (agent memo 3.3-3.4).
+"""Structured overview records and dump views.
 
 ``overview(mode="manifest")`` is the torch-free bounded digest read from
 validated manifest JSON only -- the only safe first look at an artifact the

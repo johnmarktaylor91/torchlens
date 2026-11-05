@@ -1,6 +1,6 @@
 """Forward/backward hook pairing store: the permanent LRP-adjacent surface.
 
-Attrib memo D30: the ENTIRE permanent surface TorchLens ships for
+the ENTIRE permanent surface TorchLens ships for
 relevance-rule recipes is a stash/fetch mechanism whose pairing is keyed on
 stable site/call identity -- NO rule registry, NO composites, NO canonizers,
 NO architecture support table (twice reaffirmed). Maintained research-rule
@@ -17,8 +17,8 @@ pinned by test.
 The incoming gradient tuple itself needs no accessor here: plain
 ``register_full_backward_hook`` hands it to the recipe directly. The
 intervention-engine ``hook.stash`` spelling and its grad-output accessor ride
-the externally-owned engine-defect conversation (attrib memo section 6:
-F4/F5/S10/S11) and adopt THIS store's semantics when they land.
+an externally-owned engine change and adopt THIS store's semantics
+when it lands.
 """
 
 from __future__ import annotations

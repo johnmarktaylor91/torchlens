@@ -1,7 +1,6 @@
 """Namespaced typed SIDECAR families: out-of-tree persistence at L1.
 
-The persistence half of out-of-tree equal citizenship (architecture memo 6.3
-seam 1, C01 item 14): an appliance -- in-tree or out-of-tree -- persists its
+The persistence half of out-of-tree equal citizenship: an appliance -- in-tree or out-of-tree -- persists its
 own data on a Trace WITHOUT editing ``Trace``/``Op`` schemas, through one
 typed door. Each family declares a schema ID, version, owner, validator, and
 size budget at registration; payloads ride the persisting
@@ -11,12 +10,11 @@ self-describing envelopes.
 Missing-provider behavior is ANALYSIS-ONLY, declared at the registry domain:
 loading an artifact whose sidecar family is not registered in this process
 returns an :class:`AnalysisOnlySidecar` view (raw envelope, no validation
-claim) and never imports provider code (memo 6.4: artifact load never
+claim) and never imports provider code (artifact load never
 imports a provider).
 
 Persistence status: the ``"sidecar"`` annotations sub-key persists plainly
-as of the coordinated tlspec v9 write (lane C07; the C01-era pre-release
-gating retired at the bump). Loads validate the namespace and envelope
+as of the coordinated tlspec v9 write. Loads validate the namespace and envelope
 shape fail-closed (:mod:`torchlens._io.forgery_validation`); payload
 semantics stay with the owning family's validator at read time.
 """
@@ -45,11 +43,11 @@ DEFAULT_SIDECAR_BUDGET_BYTES = 1_048_576
 #: families collision-free by construction.
 _FAMILY_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
-#: RESERVED TorchLens sidecar family ids (the C07X amendment, foldB s4.4
-#: items 6 + 11 per D17): id registrations, not schema slots. The owning
+#: RESERVED TorchLens sidecar family ids (the amendment, foldB s4.4
+#: items 6 + 11): id registrations, not schema slots. The owning
 #: lanes register the real families later (``torchlens.input_digest``'s
 #: writer is A-GATE/digest; ``torchlens.input_origin`` and
-#: ``torchlens.boundary_facts`` follow the D17 pattern for span geometry and
+#: ``torchlens.boundary_facts`` follow the pattern for span geometry and
 #: boundary facts); until then the ids are squat-proof — the ``torchlens.``
 #: namespace refuses registration from any non-TorchLens provider — and an
 #: artifact carrying one written by a NEWER torchlens reads back here as the
@@ -147,7 +145,7 @@ _SIDECAR_REGISTRY = create_registry(
 )
 
 # The reserved namespace persists plainly as of the coordinated tlspec v9
-# write (C07): the C01-era pre-release gating retired at the bump, and loads
+# write, and loads
 # validate the envelope shape fail-closed (_io/forgery_validation.py).
 
 
@@ -164,7 +162,7 @@ def _ensure_builtin_families() -> None:
     ``sys.modules`` hit, the owner's own registration (which consults this
     door mid-import) gets the partly initialized module back, and another
     thread waits until the import finishes. Only TorchLens's own modules
-    load; out-of-tree provider code is never imported (memo 6.4).
+    load; out-of-tree provider code is never imported.
     """
 
     # Importing the owner registers ``torchlens.boundary_facts``.
@@ -226,7 +224,7 @@ def register_sidecar_family(
         family.family_id.startswith("torchlens.")
         and effective_provider.provider_id != TORCHLENS_PROVIDER.provider_id
     ):
-        # Squat prevention (C07X/D17): the ``torchlens.`` namespace — the
+        # Squat prevention: the ``torchlens.`` namespace — the
         # reserved ids above included — belongs to the TorchLens provider;
         # out-of-tree families register under their own namespace.
         raise SidecarError(

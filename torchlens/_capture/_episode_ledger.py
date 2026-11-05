@@ -1,7 +1,6 @@
 """Episode ledger: per-step status disclosure for ``capture_kind=episode``.
 
-An EPISODE is one wrapped session capture product (the L2 SESSION ruling,
-ratified at S2 2026-08-16): a wrapper ``nn.Module`` whose ``forward`` steps a
+An EPISODE is one wrapped session capture product: a wrapper ``nn.Module`` whose ``forward`` steps a
 declared STEPPED MODULE N times is captured as ONE product carrying
 ``capture_kind=episode`` and this ledger ON the product, attached at
 ``trace.annotations["episode"]``. The ledger is a DISCLOSURE, never a
@@ -10,15 +9,15 @@ by the existing authority (``torchlens._capture.outcome``) with its vocabulary
 unchanged, and no derivation here may bless COMPLETE or revise a settled
 record (the R06 discipline).
 
-Pattern-of-record: :mod:`torchlens._distributed._ledger` (S7 instruction) —
+Pattern-of-record: :mod:`torchlens._distributed._ledger` —
 closed ``Literal`` vocabularies, frozen payload key sets, fail-closed
 ``from_payload``, write-once container, derived views that refuse
 out-of-vocabulary tokens. Parse boundaries raise ``ValueError``; callers
 convert into the typed episode refusal family (stable codes, see
 :mod:`torchlens.errors`).
 
-Schema of record: the S6/S7 drafts in the L2 spike memo, BINDING as of the
-S2 ratification. Every spelling here is DOCUMENTED-UNSTABLE pending the
+Schema of record: the drafts in the L2 spike memo, BINDING as of the
+ratification. Every spelling here is DOCUMENTED-UNSTABLE pending the
 rolling naming session (spike section 6.5); semantics are pinned.
 
 PERSISTENCE: ``annotations["episode"]`` persists plainly as of the
@@ -26,7 +25,7 @@ coordinated tlspec v8 bump (the pre-release registrar retired empty); loads
 validate the ledger payload fail-closed (illegal attachment refuses
 ``episode_ledger_without_declaration``, geometry violations quarantine
 ``episode_ledger_incoherent``), and a grammar-v1 payload quarantines typed
-rather than normalizing (the C07X grammar-v2 amendment).
+rather than normalizing (the grammar-v2 amendment).
 """
 
 from __future__ import annotations
@@ -88,7 +87,7 @@ __all__ = [
 EPISODE_ANNOTATIONS_KEY = "episode"
 
 #: Lane F40c landed the live + settlement ``step_join`` measurement, flipping
-#: the F40a claim-off switch: NEW episode captures measure cross-step
+#: the claim-off switch: NEW episode captures measure cross-step
 #: continuity through the boundary hooks (:mod:`._episode_join`) and persist
 #: the ``episode_step_join_v1`` envelope in the header's reserved slot. The
 #: claim stays PER-ARTIFACT: a ledger without the envelope (pre-measurement
@@ -111,7 +110,7 @@ def episode_step_join_claim() -> str:
     return "measured" if EPISODE_STEP_JOIN_MEASURED else STEP_JOIN_UNMEASURED
 
 
-#: Declared-step cost ceiling for the wrapped episode tier (lane F40a).
+#: Declared-step cost ceiling for the wrapped episode tier.
 #: The wrapped tier's cost is SUPERLINEAR in step count -- measured on
 #: gpt2-124M (CPU): N=20 = 79 s / 1.9 GB peak RSS; N=100 = 657 s (323x
 #: native) / 5.4 GB. A declaration beyond this ceiling refuses typed
@@ -123,7 +122,7 @@ EPISODE_DECLARED_STEP_CEILING = 100
 #: The capture-kind marker value stamped in the ledger header.
 CAPTURE_KIND_EPISODE = "episode"
 
-#: Episode-family grammar version (foldA s5 item 3(v), the C07X amendment).
+#: Episode-family grammar version (foldA s5 item 3(v), the amendment).
 #: Grammar v2 is the row grammar of record: declared step-output kind +
 #: source, generic step-output/step-axis names, ``cache_len`` DELETED for
 #: the measured carried-state witness slots, capture-digest and reserved
@@ -133,7 +132,7 @@ CAPTURE_KIND_EPISODE = "episode"
 EPISODE_LEDGER_VERSION = 2
 
 StepOutputKind = Literal["tokens", "digest", "none"]
-"""Declared step-output kind (foldA D8; default ``tokens``). The evidence
+"""Declared step-output kind (default ``tokens``). The evidence
 derivation is DECLARATION-DRIVEN (lane F40b): ``tokens`` reads per-step
 emitted token ids from the declared source, ``digest`` reads per-step
 content digests of the declared source (any dtype -- the float-root /
@@ -146,7 +145,7 @@ Role = Literal["prefill", "decode"]
 """Row role: row 0 is the prefill (the stepped module's call 1); later rows decode."""
 
 RowStatus = Literal["complete", "interrupted", "absent"]
-"""Closed row-status vocabulary (S7).
+"""Closed row-status vocabulary.
 
 ``complete`` is row-scoped FORWARD-STEP truth (did step k's forward return),
 never a claim about the PRODUCT — product truth is the settled
@@ -160,7 +159,7 @@ EscalationReason = Literal["step_failed", "divergence", "requested"]
 FidelityBasis = Literal["tokens", "diverged", "none", "forced", "perturbed"]
 """Token-fidelity disclosure basis (E-A3; ``forced`` = teacher-forced feed,
 an explicitly NON-VERIFYING disclosed mode — never a settlement input).
-``perturbed`` is the coupling basis (foldA s5 item 3(iii), lane F42):
+``perturbed`` is the coupling basis:
 written when a fired intervention REPLACED a value -- the evidence column is
 true of the perturbed execution and of nothing else."""
 
@@ -169,7 +168,7 @@ TokenFeed = Literal["free", "forced"]
 teacher-forced from a declared token sequence (``forced``)."""
 
 ProvenanceTier = Literal["exact", "ledger_only"]
-"""Per-step provenance tier (S2 combination table). A session product is
+"""Per-step provenance tier (see the combination table). A session product is
 uniformly ``exact``; mixed tiers arise only in the floor, where the episode
 tier is the MINIMUM of its members' tiers, never the maximum."""
 
@@ -215,7 +214,7 @@ _HEADER_PAYLOAD_KEYS = frozenset(
         "intervention_digest",
     }
 )
-# Optional at LOAD (W051 FIX2): pre-disclosure v2 artifacts lack the key (None = tail).
+# Optional at LOAD: pre-disclosure v2 artifacts lack the key (None = tail).
 _OPTIONAL_HEADER_PAYLOAD_KEYS = frozenset({"step_output_positions"})
 _ROW_PAYLOAD_KEYS = frozenset(
     {
@@ -292,11 +291,11 @@ def _parse_state_digest(payload: Mapping[str, Any], key: str) -> dict[str, str] 
 
     The MEASURED GENERIC carried-state witness slots (SV-6 = generic, the
     maintainer semantic ruling; persisted spellings ``entry_state_digest`` /
-    ``exit_state_digest`` per foldB D16 — "witness" is triple-booked).
+    ``exit_state_digest`` — "witness" is triple-booked).
     ``None`` = NOT MEASURED (the only writer-free value; nothing may imply
     an unmeasured cache fact); a present value maps channel names to digest
     strings and is written only by a lane that actually measured the
-    carried state at the step boundary (F-WITNESS, after the F20 seam).
+    carried state at the step boundary (F-WITNESS, after the seam).
     """
 
     value = payload.get(key)
@@ -325,12 +324,12 @@ def _require_str(payload: Mapping[str, Any], key: str) -> str:
 
 @dataclass(frozen=True)
 class EpisodeLedgerHeader:
-    """Episode-level ledger header (S7).
+    """Episode-level ledger header.
 
     Parameters
     ----------
     episode_id:
-        Opaque identifier naming this episode entity; the S6 ``episode_member``
+        Opaque identifier naming this episode entity; the ``episode_member``
         relation rows reference it.
     stepped_module:
         Module identity (address within the episode root) whose successive
@@ -348,7 +347,7 @@ class EpisodeLedgerHeader:
         ``ledger_only``).
     structure_only:
         Mirror of the capture's structure-only marker. Episodes with
-        ``structure_only=True`` TYPED-REFUSE at entry this sprint (S2 table);
+        ``structure_only=True`` TYPED-REFUSE at entry at entry;
         the field exists so a loaded ledger can validate the token presence
         rule in both directions.
     escalated_from:
@@ -357,15 +356,14 @@ class EpisodeLedgerHeader:
     reason:
         Escalation reason (closed vocabulary); present iff escalation.
     fidelity_basis:
-        Token-fidelity disclosure (E-A3); present iff escalation, forced,
-        or perturbed (lane F42's coupling: a fired edit replaced a value).
+        Token-fidelity disclosure; present iff escalation, forced,
+        or perturbed (the coupling: a fired edit replaced a value).
     episode_ledger_version:
         Episode-family grammar version (C07X item (v)); always
         :data:`EPISODE_LEDGER_VERSION` on live writes, validated at load.
     step_output_kind:
-        Declared step-output kind (``tokens``/``digest``/``none``; foldA
-        D8). The settlement derivation is driven by this declaration
-        (lane F40b), never by root-output-shape guessing.
+        Declared step-output kind (``tokens``/``digest``/``none``). The settlement derivation is driven by this declaration,
+        never by root-output-shape guessing.
     step_output_from:
         The step-output SOURCE disclosure: which root-output slot the
         per-step evidence derives from. The declared
@@ -377,11 +375,10 @@ class EpisodeLedgerHeader:
         ``None`` when ``step_output_kind="none"``.
     step_output_positions:
         The step-axis positions each row's ``step_output`` was read from
-        (W051 FIX2): the tail on the one-emission-per-step shapes, the measured
+        : the tail on the one-emission-per-step shapes, the measured
         chain positions under the declared-crossing arm; ``None`` = no column.
     step_join:
-        Measured cross-step continuity envelope (``episode_step_join_v1``,
-        lane F40c): per-row join grades from the closed
+        Measured cross-step continuity envelope (``episode_step_join_v1``): per-row join grades from the closed
         continuous/forced/transformed/declared/exogenous/unchecked vocabulary,
         the first break step, live-detection disclosure, exogenous position
         counts, and unchecked reasons. ABSENT (``None``) = UNMEASURED (a
@@ -391,12 +388,12 @@ class EpisodeLedgerHeader:
         against the rows.
     capture_digest:
         Capture digest binding the ledger to THIS capture product (C07X
-        item (ii), foldA D7): minted at settlement by
+        item (ii), foldA): minted at settlement by
         :func:`mint_capture_digest` over the product's recomputable
-        identity facts. Lane F42's attested coupling consumes it (the
+        identity facts. The attested coupling consumes it (the
         positive "this ledger belongs to this product" claim).
     intervention_digest:
-        Coupling slot (C07X item (iii), lane F42): the deterministic digest
+        Coupling slot (C07X item (iii)): the deterministic digest
         over the armed rule identity and ordered fire facts
         (``episode_intervention_digest_v1``), written on intervened
         (COUPLED) captures; ``None`` on uncoupled episodes.
@@ -572,7 +569,7 @@ class EpisodeLedgerHeader:
 
 @dataclass(frozen=True)
 class EpisodeLedgerRow:
-    """One per-step ledger row (S7).
+    """One per-step ledger row.
 
     Parameters
     ----------
@@ -589,7 +586,7 @@ class EpisodeLedgerRow:
         the Bundle-key sense.
     step_output:
         Per-step evidence under the header's declared ``step_output_kind``
-        (grammar v2's generic name; C07X): emitted token ids
+        (grammar v2's generic name): emitted token ids
         (``kind="tokens"``), a ``sha256:``-prefixed content digest of the
         per-step source slice (``kind="digest"``), or ``None``
         (``kind="none"``). REQUIRED on complete rows of completed
@@ -603,9 +600,9 @@ class EpisodeLedgerRow:
         item (i)): channel-keyed digests of the carried state at the step's
         entry/exit boundaries. ``None`` = NOT MEASURED — the only value any
         shipped writer emits; no field may imply an unmeasured cache fact.
-        Lane F-WITNESS writes real digests after the F20 retention seam.
+        Lane F-WITNESS writes real digests after the retention seam.
     fire_count:
-        Coupling slot (C07X item (iii), lane F42): the step's MEASURED
+        Coupling slot (C07X item (iii)): the step's MEASURED
         intervention fire count on coupled captures -- ``0`` on zero-fire
         started rows (a first-class fact, never ``None``); ``None`` on
         uncoupled episodes and rows that never started.
@@ -616,7 +613,7 @@ class EpisodeLedgerRow:
     rng_digest:
         Optional declared-scope RNG snapshot digest (floor escalation E-B3).
     escalation:
-        Optional reference to an S6 ``escalates`` relation row (floor home).
+        Optional reference to an ``escalates`` relation row (floor home).
     """
 
     episode_step: int
@@ -768,9 +765,9 @@ def _parse_row_frontier(frontier_value: Any) -> dict[str, str] | None:
 class EpisodeLedger:
     """Write-once episode ledger: one header plus ordered per-step rows.
 
-    Rows are written ONCE at settlement/finalize (S7 L3); the finalized view
+    Rows are written ONCE at settlement/finalize; the finalized view
     is identity-stable and immutable. No post-hoc row edits: escalation
-    annotates via S6 relation rows, never rewrites history, and demotion
+    annotates via relation rows, never rewrites history, and demotion
     replaces the outcome record, never these rows.
     """
 
@@ -813,7 +810,7 @@ class EpisodeLedger:
 
         Returns the ordered per-step evidence column (one entry per row) as
         ONE series, which claims the rows form one closed feed. The claim
-        door (lane F40c): a measured broken join refuses with the verbatim
+        door: a measured broken join refuses with the verbatim
         teaching text (``episode_feed_break_exogenous`` /
         ``episode_join_declared_crossing``); an unmeasured or unchecked join
         refuses ``episode_join_unmeasured``. Per-row ``rows[k].step_output``
@@ -891,7 +888,7 @@ class EpisodeLedger:
 
 
 def _check_monotone_prefix_law(rows: Sequence[EpisodeLedgerRow]) -> None:
-    """Enforce the MONOTONE PREFIX LAW (S7 L1), refusing violations.
+    """Enforce the MONOTONE PREFIX LAW, refusing violations.
 
     Rows 0..k-1 complete, row k in {complete, interrupted}, rows k+1.. absent.
     At most one interrupted row; it is the last non-absent row. Steps must be
@@ -933,7 +930,7 @@ def _check_monotone_prefix_law(rows: Sequence[EpisodeLedgerRow]) -> None:
 def _check_step_output_presence_rule(
     header: EpisodeLedgerHeader, rows: Sequence[EpisodeLedgerRow]
 ) -> None:
-    """Enforce the S7 step-output PRESENCE RULE in both directions (v2).
+    """Enforce the step-output PRESENCE RULE in both directions (v2).
 
     Structure-only episodes must not carry step-output payloads
     (``episode_ledger_payload_in_structure_only``). Value-mode ``tokens``
@@ -1115,20 +1112,20 @@ class ResolvedEpisode:
     escalated_from: str | None
     reason: EscalationReason | None
     expected_tokens: tuple[tuple[int, ...], ...] | None = None
-    # Join arms (lane F40c). Defaults keep pre-existing keyword construction
+    # Join arms. Defaults keep pre-existing keyword construction
     # (the four-clause price probe) valid: an undeclared resolution has open
-    # feed, the FORK-4 2-1 disclose default, no crossings, and no live
+    # feed, the disclose default, no crossings, and no live
     # session (settlement then writes NO envelope -- unmeasured, disclosed).
     feed: str = "open"
     on_feed_break: str = "disclose"
     crossings: tuple[int, ...] = ()
     join_session: Any = None
-    # W051 (audit 3.3): the declared entry argument the join measures
+    #: the declared entry argument the join measures
     # (positional index or keyword name); None selects by the disclosed
     # preference rule. Read from ``EpisodeOptions.step_input_from`` when the
     # spec carries it (the spec field itself is the options owner's).
     step_input_from: str | int | None = None
-    # Attested coupling (lane F42): the live fire-attribution session, set
+    # Attested coupling: the live fire-attribution session, set
     # by the trace entry exactly when intervene= rides an episode capture.
     # None = uncoupled (the reserved slots stay entry-dark None).
     coupling_session: Any = None
@@ -1146,8 +1143,8 @@ def _resolved_stepped_address(stepped: Any, model: Any) -> str:
     import torch.nn as nn
 
     if stepped is None:
-        # F41 bound-method roots: the stepped module DEFAULTS to the bound
-        # method's owner (foldA MEMO s5 item 9); on a module root it stays
+        # bound-method roots: the stepped module DEFAULTS to the bound
+        # method's owner; on a module root it stays
         # required -- an unowned None has no honest default.
         if isinstance(model, TLBoundMethodRoot):
             stepped = model.tl_owner
@@ -1185,7 +1182,7 @@ def _resolved_stepped_address(stepped: Any, model: Any) -> str:
 
 
 def _validate_step_output_declaration(spec: EpisodeOptions) -> None:
-    """Validate the declared step-output evidence triple (foldA D8, F40b).
+    """Validate the declared step-output evidence triple.
 
     Raises
     ------
@@ -1386,7 +1383,7 @@ def resolve_episode_declaration(spec: EpisodeOptions, model: Any) -> ResolvedEpi
         # The join session hooks the RESOLVED stepped module (the module at
         # the validated address), never the raw spec value -- on a
         # bound-method root the spec's stepped_module is None and defaults
-        # to the owner (F41), which only the address resolution sees.
+        # to the owner, which only the address resolution sees.
         join_session=EpisodeJoinSession(
             module_at_address(model, address),
             feed=spec.feed,
@@ -1436,7 +1433,7 @@ def _fidelity_basis(
 
     session = resolved.coupling_session
     if session is not None and getattr(session, "any_replaced", False):
-        # Lane F42: a fired-and-replacing intervention PERTURBED the run --
+        # A fired-and-replacing intervention PERTURBED the run --
         # the evidence column is true of the perturbed execution only.
         # Outranks forced/escalation (both keep their own slots).
         return "perturbed"
@@ -1477,13 +1474,13 @@ def _build_header(
     coupling = resolved.coupling_session
     intervention_digest = None
     if coupling is not None:
-        # Lane F42: binds the ORDERED fire evidence + armed rule identity to
+        # Binds the ORDERED fire evidence + armed rule identity to
         # this product; minted iff a coupling session ran, zero fires included.
         from ._episode_coupling import mint_intervention_digest
 
         intervention_digest = mint_intervention_digest(coupling)
-    # Grammar v2 (C07X): kind/source/axis are written from the declaration
-    # (the F40b derivation consumes them); the capture digest is minted here
+    # Grammar v2: kind/source/axis are written from the declaration
+    # (the derivation consumes them); the capture digest is minted here
     # and binds the ledger to this product; step_join rides the F40c
     # settlement grade -- entry-dark slots, never guessed values.
     return EpisodeLedgerHeader(
@@ -1502,7 +1499,7 @@ def _build_header(
         step_axis=resolved.step_axis if consumes_source else None,
         step_output_positions=positions if consumes_source else None,
         step_join=step_join,
-        # The content-binding digest (W051, audit 3.2) is minted over the
+        # The content-binding digest is minted over the
         # FINISHED ledger payload, so the header is built unbound here and
         # bound in ``_write_settled_episode_ledger`` once the rows exist.
         capture_digest=None,
@@ -1539,7 +1536,7 @@ class _RowDecorations:
 
     evidence_by_row: list[tuple[int, ...]] | list[str] | None
     frontier: dict[str, str] | None
-    # Lane F42: the measured per-row fire counts of a coupled capture
+    # The measured per-row fire counts of a coupled capture
     # (None = uncoupled; the rows keep their entry-dark None slots).
     fire_counts: list[int | None] | None = None
 
@@ -1587,7 +1584,7 @@ def _build_ledger_rows(
 
 
 def write_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> EpisodeLedger:
-    """Write the finalized episode ledger onto the settled product (S7 L3).
+    """Write the finalized episode ledger onto the settled product.
 
     Runs ONCE at settlement/finalize, after postprocess, reading only the
     settled ``CaptureOutcome`` (via the public accessor) and the finished
@@ -1604,7 +1601,7 @@ def write_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> EpisodeLedger
     EpisodeCaptureError
         Every settlement refusal (ledger incoherence, token-derivation
         refusals) carries the settled product on ``exc.partial_trace``
-        (lane F40a): the capture already ran and postprocessed, so the
+        : the capture already ran and postprocessed, so the
         refusal names the declaration mismatch WITHOUT discarding the
         product.
     """
@@ -1685,7 +1682,7 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
     ):
         evidence_by_row, positions = _derive_step_column(trace, resolved, started)
 
-    # Settlement join grading (lane F40c): re-grade every join exactly
+    # Settlement join grading: re-grade every join exactly
     # against the evidence column; the envelope rides the header's reserved
     # slot. No session (a bare ResolvedEpisode) writes NO envelope --
     # unmeasured, disclosed as such on every surface.
@@ -1723,7 +1720,7 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
 
     try:
         unbound = EpisodeLedger(header, rows)
-        # Bind LAST (W051, audit 3.2): the digest covers every persisted
+        # Bind LAST: the digest covers every persisted
         # ledger fact, so it is minted over the validated unbound payload
         # and written into the header the product carries.
         header = dataclasses.replace(
@@ -1816,8 +1813,7 @@ def episode_ledger_for(trace: Any) -> EpisodeLedger | None:
 
     Returns ``None`` for non-episode products, pre-finalize declarations,
     and quarantined (load-degraded) payloads. This is the implementation
-    behind the public step-access spelling ``Trace.episode`` (lane F40a;
-    DOCUMENTED-UNSTABLE pending the naming session).
+    behind the public step-access spelling ``Trace.episode`` (DOCUMENTED-UNSTABLE pending the naming session).
     """
 
     payload = getattr(trace, "annotations", {}).get(EPISODE_ANNOTATIONS_KEY)
@@ -1845,7 +1841,7 @@ def capture_kind_for(trace: Any) -> str:
     otherwise, including fresh re-execution products whose episode evidence
     the annotations travel policy dropped (those are not episode products;
     the in-key note is the disclosure). Implementation behind the public
-    ``Trace.provenance.kind`` spelling (lane F40a; DOCUMENTED-UNSTABLE).
+    ``Trace.provenance.kind`` spelling (DOCUMENTED-UNSTABLE).
     """
 
     annotations = getattr(trace, "annotations", None)
@@ -1886,7 +1882,7 @@ def _loaded_ledger_version(payload: Mapping[str, Any]) -> Any:
 def validate_loaded_episode_annotations(trace: Trace) -> None:
     """Validate a loaded ``annotations["episode"]`` payload, FAIL-CLOSED.
 
-    Load semantics (S7 L1/L2/L4 + the S2 combination table):
+    Load semantics (with the combination table):
 
     - A payload whose header does not declare ``capture_kind=episode``
       refuses typed (``episode_ledger_without_declaration``): an episode
@@ -1897,7 +1893,7 @@ def validate_loaded_episode_annotations(trace: Trace) -> None:
       by a diagnostic record; rows stop being claims) with ONE warning, and
       records the fail-closed degrade signal the outcome derivation consumes
       at the coordinated schema bump (the ledger never upgrades an outcome;
-      the degrade wiring in the settlement authority is the S2 author's bump
+      the degrade wiring in the settlement authority is the author's bump
       change, tracked on the record written here).
     - On UNATTESTED/UNKNOWN products a valid ledger loads as an UNVERIFIED
       disclosure — kept as-is; nothing gates on it.
@@ -1922,7 +1918,7 @@ def validate_loaded_episode_annotations(trace: Trace) -> None:
                 "the declaration is illegal.",
                 code="episode_ledger_without_declaration",
             )
-        # Cross-grammar quarantine (C07X item (v), lane F40b): the family
+        # Cross-grammar quarantine (C07X item (v)): the family
         # version is consumed BEFORE the full parse so a foreign-grammar
         # payload quarantines with the grammar named, never as an incidental
         # unknown-key finding -- and it NEVER normalizes.
@@ -1947,7 +1943,7 @@ def validate_loaded_episode_annotations(trace: Trace) -> None:
                     ) from exc
                 parse_error = message
             else:
-                # Structural anchors (W051, audit 2.19/3.2): a grammatically
+                # Structural anchors: a grammatically
                 # valid ledger must also describe THIS product.
                 parse_error = _anchor_loaded_ledger(trace, payload)
                 if parse_error is None:
@@ -1968,7 +1964,7 @@ def validate_loaded_episode_annotations(trace: Trace) -> None:
 # Deferring the back-import to first ATTRIBUTE ACCESS means both modules have
 # finished loading by then, however the caller entered.
 def __getattr__(name: str) -> Any:
-    """Lazily resolve the re-exported S6-floor fold names."""
+    """Lazily resolve the re-exported fold names."""
 
     if name in ("EpisodeFoldResult", "derive_episode_status"):
         from . import _episode_fold

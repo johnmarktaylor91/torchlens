@@ -1,9 +1,9 @@
 """Typed teaching refusals for the LIT bridge.
 
 Every refusal the bridge can issue lives here as one function with one stable
-machine-readable code, so the S-17 census, the error-refusal contract doc, and
+machine-readable code, so the census, the error-refusal contract doc, and
 the raise sites stay in lockstep. Codes are DOCUMENTED-UNSTABLE spellings
-pending naming-session ratification (LIT-panel memo, sections 3 and 11).
+pending naming-session ratification.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def refuse_trace_passed(value: Any) -> NoReturn:
     """Refuse a finished Trace where a live model is required.
 
     LIT calls ``predict()`` on NEW inputs -- edited text, counterfactuals -- so
-    a historical trace is insufficient by construction (LIT-panel memo D2):
+    a historical trace is insufficient by construction:
     nothing can execute edited text without the live model.
 
     Parameters
@@ -116,9 +116,9 @@ def refuse_tokenizer_invalid(problem: str, remedy: str) -> NoReturn:
 def refuse_sites_unspecified(candidates: tuple[str, ...]) -> NoReturn:
     """Refuse a factory call with no ``sites=`` (DEFAULT-SITES refusal branch).
 
-    Explicit ``sites=`` is the contract (LIT-panel memo D7); the memo's
-    [UI-SPRINT] item 4 records both one-line branches and this build ships the
-    teaching-refusal branch: name the preset, list the candidates, never guess.
+    Explicit ``sites=`` is the contract. The factory could either default the
+    sites or refuse; this build refuses with a teaching message: name the
+    preset, list the candidates, never guess.
 
     Parameters
     ----------
@@ -213,7 +213,7 @@ def refuse_site_unresolvable(site: str, available: tuple[str, ...]) -> NoReturn:
 def refuse_site_ambiguous(site: str, passes: tuple[int, ...]) -> NoReturn:
     """Refuse an explicit site whose module-output op has multiple passes.
 
-    Explicit sites carry their pass in the key or refuse (LIT-panel memo D8);
+    Explicit sites carry their pass in the key or refuse;
     only the ``blocks`` preset applies the tested last-pass rule.
 
     Parameters
@@ -247,8 +247,8 @@ def refuse_site_ambiguous(site: str, passes: tuple[int, ...]) -> NoReturn:
 def refuse_site_key_drift(field_name: str, address: str, site_key: str) -> NoReturn:
     """Refuse a predict-time trace that does not reproduce a pinned site.
 
-    The refusal names both the module address and the structural key (LIT-panel
-    memo D4): ``site_key`` is root-relative, so a different wrapper class or a
+    The refusal names both the module address and the structural key:
+    ``site_key`` is root-relative, so a different wrapper class or a
     module-tree rename correctly lands here rather than silently rebinding.
 
     Parameters
@@ -307,7 +307,7 @@ def refuse_pooling_unsupported(field_name: str, detail: str) -> NoReturn:
     """Refuse a site payload the pooling contract cannot honestly reduce.
 
     Never batch-zero, never PAD positions averaged in, never silent flattening
-    (LIT-panel memo D10): a payload outside the supported shape contract is a
+    a payload outside the supported shape contract is a
     refusal, not a guess.
 
     Parameters
@@ -333,7 +333,7 @@ def refuse_pooling_unsupported(field_name: str, detail: str) -> NoReturn:
 
 
 def refuse_attention_requested() -> NoReturn:
-    """Refuse the ``attention=`` argument (LIT-panel memo D12).
+    """Refuse the ``attention=`` argument.
 
     LIT removed its attention-visualization module upstream on 2024-06-20; the
     ``AttentionHeads`` type still serializes -- into nothing. Shipping a field no

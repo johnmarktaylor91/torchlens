@@ -445,7 +445,7 @@ _AGNOSTIC_KINDS = frozenset(
         "site",
         "followed_by",
         "preceded_by",
-        # Step qualification is a position fact (lane F42): it narrows forward
+        # Step qualification is a position fact: it narrows forward
         # subjects by episode step, like the other position selectors.
         "episode_step",
     }
@@ -644,7 +644,7 @@ def _flatten_same_operator(
 ) -> tuple[SelectorLike, ...]:
     """Merge same-operator composite operands into one flat child tuple.
 
-    r-b4 R27-6a: ``&``/``|`` used to nest one binary composite per operator, so
+    ``&``/``|`` used to nest one binary composite per operator, so
     a programmatically composed predicate (``functools.reduce(operator.or_,
     [tl.func(n) for n in names])``) built a 500-deep binary tree and blew the
     interpreter stack at trace entry. Composites are documented n-ary with

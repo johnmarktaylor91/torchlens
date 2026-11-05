@@ -67,8 +67,8 @@ def _add_autograd_saved_tensor(
         return 0, 0
     try:
         # TorchLens-internal autograd-saved-tensor dedup read: mark it as an internal read so
-        # the r14-H3 storage-bridge host-write watch (which patches ``Tensor.data_ptr``) does not
-        # mistake this bookkeeping pointer read for a user storage-alias exposure. W8C: also
+        # the storage-bridge host-write watch (which patches ``Tensor.data_ptr``) does not
+        # mistake this bookkeeping pointer read for a user storage-alias exposure. Also
         # pause logging -- ``data_ptr`` is a wrapped tensor method and an unpaused read pays the
         # full per-op dispatch while emitting no op. The bypassed wrapped call still consumes
         # its ``next_func_call_id()`` so the id sequence stamped on real ops is unchanged.
@@ -109,7 +109,7 @@ def _get_autograd_saved_stats_by_output(
     seen_data_ptrs: set[int] = set()
 
     for output_index, maybe_tensor in enumerate(ensure_iterable(output)):
-        # TorchLens bookkeeping ``grad_fn`` read (same r65 receiver aliasing
+        # TorchLens bookkeeping ``grad_fn`` read (same receiver aliasing
         # note as _partition_output_entries_with_autograd_stats).
         with internal_scalar_read():
             grad_fn_handle = (
@@ -221,7 +221,7 @@ def _partition_output_entries_with_autograd_stats(
         # TorchLens's own bookkeeping read: an in-place op's output IS its
         # receiver, so an unmarked ``grad_fn`` read on a registered buffer
         # (BN ``num_batches_tracked.add_(1)``) would record a phantom
-        # declared-state fact (r65 unread-bit contract).
+        # declared-state fact (the unread-bit contract).
         with internal_scalar_read():
             grad_fn_handle = (
                 maybe_tensor.grad_fn if isinstance(maybe_tensor, torch.Tensor) else None

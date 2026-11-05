@@ -26,8 +26,8 @@ and must land on an identical index space.
 
 Every spelling here ships DOCUMENTED-UNSTABLE pending naming-session
 ratification. Refusals ride ``SelectionError`` with the single new code
-``selection_alignment_invalid`` and a CLOSED reason set (S2-routed,
-provisional): ``kind_unsupported | grouping_stamp_degraded |
+``selection_alignment_invalid`` and a CLOSED reason set (provisional):
+``kind_unsupported | grouping_stamp_degraded |
 grouping_stamp_mismatch | site_key_unavailable | site_not_in_target |
 index_space_mismatch``.
 """
@@ -44,8 +44,8 @@ if TYPE_CHECKING:
 
 __all__ = ["ALIGNMENT_REASONS", "align_resolved_selection"]
 
-#: Closed reason vocabulary for ``selection_alignment_invalid`` (S2-routed,
-#: provisional pending the amendment that also covers the stage-1 codes).
+#: Closed reason vocabulary for ``selection_alignment_invalid`` (provisional
+#: pending the amendment that also covers the stage-1 codes).
 ALIGNMENT_REASONS: tuple[str, ...] = (
     "kind_unsupported",
     "grouping_stamp_degraded",
@@ -126,7 +126,7 @@ def _require_same_policy(resolved: Selection, target: Any) -> None:
 
 
 def _target_op_for_entry(entry: Any, target: Any, source_trace: Any = None) -> Any:
-    """Find the ONE target op for an entry, SITE-KEY-FIRST (C03 / leverage B4).
+    """Find the ONE target op for an entry, SITE-KEY-FIRST.
 
     The fast path keeps the shipped behavior: the same-policy
     ``(layer_label, pass_index)`` address resolves and its structural key
@@ -261,7 +261,7 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
         )
         target_address = (op.layer_label, getattr(op, "pass_number", 1) or 1)
         if target_address != entry.key:
-            # Site-key-first rebind under label drift (C03/B4): the aligned
+            # Site-key-first rebind under label drift: the aligned
             # entry addresses the TARGET op's same-policy address; the
             # provenance line above already discloses the cross-run origin.
             entries.append(dataclasses.replace(entry, key=target_address, provenance=provenance))

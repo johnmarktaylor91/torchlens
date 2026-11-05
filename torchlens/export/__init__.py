@@ -1,7 +1,6 @@
 """Static export helpers for TorchLens logs.
 
-Promoted to a real subpackage (architecture memo rule 4 corollary, C01 items
-17-18): tracker sinks live in ``_trackers``, foreign graph-viewer writers in
+A subpackage: tracker sinks live in ``_trackers``, foreign graph-viewer writers in
 ``_graphs``, shared helpers in ``_common``, and EVERY member -- builtin or
 out-of-tree -- registers through the ONE export-target door
 (:mod:`torchlens.export._registry`) with a per-member tier row.
@@ -10,7 +9,7 @@ Every exporter here carries the shared capture-honesty facts
 (:mod:`torchlens._capture_honesty`) in the most format-appropriate slot --
 comment preamble, metadata block, ``DataFrame.attrs``, or a dedicated key --
 so an exported file never presents a possibly-unverified, poisoned, or
-episode capture as clean data (WT1 A-V row 24).
+episode capture as clean data.
 """
 
 from __future__ import annotations
@@ -227,7 +226,7 @@ def html(
     graph: str = "collapsed",
     options: Any = None,
 ) -> Path:
-    """Export the single-file offline HTML trace report (F16, memo s6).
+    """Export the single-file offline HTML trace report.
 
     Upgraded IN PLACE from the minimal canvas viewer: one file, no
     network, metadata for every op, the real module-collapsed graph with
@@ -276,7 +275,7 @@ def html(
 
 
 #: The clock-basis disclosure every TorchLens host-clock export carries
-#: (torchnative W0.1). These artifacts time WRAPPED CALLS on the host wall
+#: . These artifacts time WRAPPED CALLS on the host wall
 #: clock under instrumentation; they are not device kernel time and share no
 #: clock basis with a torch.profiler/Kineto trace, so values must never be
 #: subtracted across the two.
@@ -316,7 +315,7 @@ def chrome_trace(trace: Any, path: str | Path) -> Path:
     >>> "torchlens.chrome_trace.v1" in text
     True
     """
-    # D15 (weightsfree memo): measurement-shaped output refuses on a
+    # Measurement-shaped output refuses on a
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
@@ -408,7 +407,7 @@ def speedscope(trace: Any, path: str | Path) -> Path:
     >>> "evented" in text
     True
     """
-    # D15 (weightsfree memo): measurement-shaped output refuses on a
+    # Measurement-shaped output refuses on a
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
@@ -476,7 +475,7 @@ def flamegraph(trace: Any, path: str | Path) -> Path:
     >>> ";" in text
     True
     """
-    # D15 (weightsfree memo): measurement-shaped output refuses on a
+    # Measurement-shaped output refuses on a
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
@@ -538,7 +537,7 @@ def memory_timeline(trace: Any, path: str | Path) -> Path:
     >>> "torchlens.memory_timeline.v1" in text
     True
     """
-    # D15 (weightsfree memo): measurement-shaped output refuses on a
+    # Measurement-shaped output refuses on a
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
@@ -719,7 +718,7 @@ def xarray(trace: Any) -> Any:
     >>> dataset["out"].sizes["presentation"]
     1
     """
-    # D15: a Recording cooks first; the value-payload capability refuses (no synthetic array).
+    # a Recording cooks first; the value-payload capability refuses (no synthetic array).
     trace = _cook_recording(trace)
     _require_structure_only_capability(trace, "value_payloads")
 

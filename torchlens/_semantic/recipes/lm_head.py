@@ -223,7 +223,7 @@ def _norm_input_spec(norm: Any) -> FacetSpec | AbsenceReason:
     so this derivation uses OP-LEVEL parent edges, which are pass-qualified:
     the norm's input is the unique op OUTSIDE the norm that its interior ops
     consume. More than one distinct external parent refuses rather than
-    guesses (mikit D4: pass-qualified identity, never a last-pass default).
+    guesses (pass-qualified identity, never a last-pass default).
 
     Parameters
     ----------

@@ -245,7 +245,7 @@ def address_preflight(layers_to_save: Any, trace: Any = None) -> AddressPrefligh
 
 
 def cone_preflight(trace: Any, origins: Any) -> dict[str, Any]:
-    """Report the EXACT planned replay work before running it (leverage B11/D-12).
+    """Report the EXACT planned replay work before running it.
 
     The returned mapping discloses the replay lane's planned work set — the
     exact pass-qualified labels ``push``/``do`` would recompute for these

@@ -85,7 +85,7 @@ class ValidationStatus:
     decisions: Sequence[Mapping[str, Any]] = field(default_factory=tuple, repr=False)
 
     def __repr__(self) -> str:
-        """Bounded identity card (D31): the state leads, counts point, decisions never dump."""
+        """Bounded identity card: the state leads, counts point, decisions never dump."""
 
         from .validation._display import status_repr  # deferred: validation package import cycle
 

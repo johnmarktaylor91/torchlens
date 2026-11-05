@@ -1,82 +1,6 @@
-"""torchlens.neuro: the treaty desk between network and brain (neuro memo).
+"""The seam between a captured network and neuroscience tooling: hands per-site representations to rsatoolbox and Brain-Score with provenance, and raises teaching refusals for work those tools own.
 
-torchlens owns everything that touches the network; rsatoolbox and
-Brain-Score own everything that touches the brain or the hypothesis. This
-namespace hands representations across that seam with provenance that
-cannot lie, and teaches where everything else lives. The map, in six
-sections:
-
-1. EXTRACT (upstream, needs no extra): capture with ``tl.trace(model, x,
-   save=...)`` or write a disk artifact with ``tl.extract_dataset(...,
-   path=...)`` and read it back with ``tl.load``. The
-   manifest records stimulus ids, ordering, dtypes, and preprocessing
-   provenance -- everything downstream descriptors are built from.
-2. GEOMETRY (needs no extra): RDMs and friends live in their canonical
-   homes -- ``tl.repgeom.rdm`` / ``classical_mds`` / ``scree`` /
-   ``effective_dimensionality`` / ``procrustes_align``, and ``tl.stats.cka``.
-   Nothing is re-exported here: an extras-gated alias for a numpy-only
-   function would poison the dependency gate and split the docs home.
-3. HANDOFF (this namespace; requires the ``neuro`` extra = rsatoolbox):
-   ``neuro.datasets(source, ...)`` turns every stimulus-indexed site of a
-   Trace, LoadedExtraction, or extraction directory into per-site
-   rsatoolbox Datasets whose descriptors carry the full identity story;
-   ``neuro.rdms(source, ...)`` computes RDMs through the canonical
-   tl.repgeom arithmetic and records the metric it ACTUALLY used -- plus a
-   matrix mode that converts precomputed matrices and REQUIRES the declared
-   measure.
-4. SCORE (requires the ``brainscore`` extra = brainscore-vision, Python
-   >= 3.11): ``neuro.activations_extractor(model, preprocessing, ...)``
-   builds a ``PytorchWrapper``-shaped Brain-Score activations model over
-   TorchLens capture (its ``_extractor`` is a real
-   ``ActivationsExtractorHelper``; it goes into a plugin's
-   ``ModelCommitment``), and ``neuro.get_activations_fn(model, ...)`` is the underlying
-   per-batch callable. Both are exposed here because the live end-to-end
-   gate PASSED (2026-08-29): a real resnet18 checkpoint through a real
-   ``ActivationsExtractorHelper`` and ``StimulusSet`` against a live
-   brainscore-vision 2.3.22 install on Python 3.12, with values,
-   presentation order, layer coordinates, logits, dotted module paths, a
-   functional-op mapping, a short final batch, and CPU behavior matching
-   direct torchlens extraction, plus default sites on a PARTIALLY saved
-   trace. A plugin wrapping it in ``ModelCommitment`` was scored end to
-   end on MajajHong2015public.IT-pls and Geirhos2021colour-top1
-   (2026-10-14, brainscore-vision 2.4.1, Python 3.11, CPU). CUDA is not
-   claimed (no covered runner). The offline
-   ``per_layer`` recipe deliberately gets no neuro name (a generic
-   score-a-callable loop must not borrow a benchmark's authority).
-5. COMPARE (needs no extra): ``neuro.compare(source, target,
-   analyses=("rsa", "ridge", "cka"))`` reads each site's activations once
-   and scores every site against one target with RSA, a cross-validated
-   ridge score and linear CKA, all descriptive (optional stimulus-bootstrap
-   intervals with ``num_resamples=``); ``.disagreement()`` reports where the
-   analyses rank sites differently.
-6. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
-   inferential bootstrap/permutation/model fitting (descriptive intervals
-   are tl.repgeom.compare_rdms_interval / cka_interval), encoding-model
-   inference, CCA/SVCCA/PWCCA,
-   non-metric MDS, model zoos, and brain data itself are deliberately NOT
-   here. Each attempted name raises a teaching refusal naming the owning
-   neighbour, the missing ingredient, and the torchlens spelling that
-   feeds it. (One reverse fact: rsatoolbox has no cosine RDM; ours is real
-   and tested.)
-
-Import time stays inert: this module must NOT import ``rsatoolbox`` (the
-``neuro`` extra's foreign third-party dependency) as a side effect of
-``import torchlens.neuro``. A bare package import can happen incidentally --
-e.g. a portable ``.tlspec`` bundle's metadata unpickler resolving a pickled
-global whose module path names ``torchlens.neuro`` -- and an eager
-import-time dependency check would run that foreign code with no trust
-opt-in.
-
-Attribute access resolves through the shared five-step facade order (neuro
-memo D15; ``torchlens._utils.facade``). Dependency checks are PER-NAME,
-probed with ``importlib.util.find_spec`` so answering never executes
-foreign code, and every typed refusal subclasses ``AttributeError`` so
-``hasattr``/IPython canary probes degrade instead of erroring. The facade
-is pickle-safe: resolving this module imports nothing foreign.
-
-The neuro extra installs ``rsatoolbox`` (``pip install "torchlens[neuro]"``).
-Every spelling is DOCUMENTED-UNSTABLE pending the naming sprint.
-"""
+Importing this package must not import ``rsatoolbox``; each name checks its optional dependency when it is first used."""
 
 from __future__ import annotations
 
@@ -130,7 +54,7 @@ _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
     "get_activations_fn": ("torchlens.bridge.brain_score", "get_activations_fn"),
 }
 
-#: Redirect table (facade step 2; neuro memo 4.5): names that live elsewhere
+#: Redirect table: names that live elsewhere
 #: in torchlens and need NO extra. A pinned test walks this table and
 #: asserts every named spelling resolves, so redirects cannot rot.
 _REDIRECTS: dict[str, str] = {
@@ -165,7 +89,7 @@ _REDIRECTS: dict[str, str] = {
     ),
 }
 
-#: Refuse-and-point table (facade step 3; neuro memo 4.5): each entry names
+#: Refuse-and-point table: each entry names
 #: the ask, the owning neighbour, the missing ingredient, and the torchlens
 #: spelling that feeds it.
 _REFUSALS: dict[str, str] = {
@@ -279,7 +203,7 @@ _REFUSALS: dict[str, str] = {
 _DEPENDENCIES: dict[str, _DependencyGate] = {
     "datasets": _DependencyGate("rsatoolbox", _INSTALL_NEURO, _check_rsatoolbox_conflict),
     "rdms": _DependencyGate("rsatoolbox", _INSTALL_NEURO, _check_rsatoolbox_conflict),
-    # Gated on brainscore_vision ALONE (memo D17/4.3): brainscore_core is
+    # Gated on brainscore_vision ALONE: brainscore_core is
     # named nowhere -- pinning brainscore-vision gets core for free.
     "activations_extractor": _DependencyGate("brainscore_vision", _INSTALL_BRAINSCORE),
     "get_activations_fn": _DependencyGate("brainscore_vision", _INSTALL_BRAINSCORE),

@@ -473,7 +473,7 @@ def _allclose_sdpa(
     formatting slack. The former hand-picked absolute floors (atol 2e-2 for
     fp16/bf16, 1e-5 for fp32) blessed an ALL-ZERO and a SIGN-FLIPPED
     reconstruction of any payload living below the floor -- post-softmax
-    attention values do exactly that (b4-opus F13-1, probe-proven). The
+    attention values do exactly that (probe-proven). The
     replay-table pair that replaced them (denormal-scale absolute term) then
     refused numerically CORRECT reconstructions wherever the summation behind
     the target CANCELLED (measured: 19 of 36 correct SDPA reconstructions,

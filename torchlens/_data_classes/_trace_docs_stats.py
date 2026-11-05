@@ -14,7 +14,7 @@ DOCS: dict[str, str] = {
         """Session-time (live, resident) forward peak pair with backend named.
         
         Full contract: :func:`torchlens._capture.peak_memory.read_peak_pair`
-        (F20 brainpipe D-7; spelling DOCUMENTED-UNSTABLE). ``None`` on loaded
+        (spelling DOCUMENTED-UNSTABLE). ``None`` on loaded
         artifacts, which never re-measure.
         """
     ),
@@ -50,7 +50,7 @@ DOCS: dict[str, str] = {
         """
     ),
     "episode_coupling": (
-        """Return the attested coupling verdict, or ``None`` (lane F42).
+        """Return the attested coupling verdict, or ``None``.
         
         The coupling read door (spelling DOCUMENTED-UNSTABLE pending the
         naming session): recomputes the capture digest from this product's
@@ -66,7 +66,7 @@ DOCS: dict[str, str] = {
     "_cost_total_flops_forward": (
         """Total forward FLOPs (the canonical identity-partition aggregation).
         
-        Reads the ONE aggregation service (costreport D1) -- never a
+        Reads the ONE aggregation service -- never a
         private re-sum over raw per-op fields.
         """
     ),
@@ -86,20 +86,20 @@ DOCS: dict[str, str] = {
         """
     ),
     "factcore": (
-        """The ONE numbers substrate for this trace (C02; sumfam D1/D6).
+        """The ONE numbers substrate for this trace.
         
         DOCUMENTED-UNSTABLE spelling. Counts (with the explicit grain
         menu), the identity spine with refusing joins, parameter truth,
-        the canonical compute aggregation, and the D8 payload-scope
+        the canonical compute aggregation, and the payload-scope
         memory figures -- every reporting surface reads THIS, never raw
         trace attributes.
         """
     ),
     "health_facts": (
-        """Normalized, serializable health observations (C02; sumfam D9).
+        """Normalized, serializable health observations.
         
         DOCUMENTED-UNSTABLE spelling. Basis + pass-qualified nonfinite
-        identities (alias rows excluded per D19, disclosed separately) +
+        identities (alias rows excluded, disclosed separately) +
         coverage counts + capture revision; persists through save/load on
         the annotations channel; an artifact without a re-derivable basis
         renders NOT-CHECKED, never clean.
@@ -108,7 +108,7 @@ DOCS: dict[str, str] = {
     "nonfinite_verdict": (
         """Three-state health verdict: found / checked_and_clean / not_checked.
         
-        DOCUMENTED-UNSTABLE spelling (C02; sumfam D5). The ONLY health
+        DOCUMENTED-UNSTABLE spelling. The ONLY health
         fact a builder may branch on -- ``nonfinite_ops`` truthiness is a
         false-negative trap on payload-stripped artifacts and is linted
         against in builder code.
@@ -117,7 +117,7 @@ DOCS: dict[str, str] = {
     "unknown_flop_ops": (
         """Named ledger of ops with unknown FLOPs, grouped by op name.
         
-        DOCUMENTED-UNSTABLE spelling (A07; costreport D3). Each group carries
+        DOCUMENTED-UNSTABLE spelling. Each group carries
         count, example labels/shapes, and the exact ``register_op_rule``
         remedy invocation -- a work queue, never an anonymous exclusion.
         """
@@ -125,7 +125,7 @@ DOCS: dict[str, str] = {
     "compute_coverage": (
         """Four-way compute coverage counts over every layer-list row.
         
-        DOCUMENTED-UNSTABLE spelling (A07; costreport D2/D3). Keys:
+        DOCUMENTED-UNSTABLE spelling. Keys:
         ``known`` / ``zero_by_rule`` / ``not_applicable`` / ``unknown`` --
         every row lands in exactly one class (totality is pinned).
         """
@@ -247,7 +247,7 @@ DOCS: dict[str, str] = {
         """
     ),
     "capabilities": (
-        """Return the report-family capability card for THIS trace (F09/D24).
+        """Return the report-family capability card for THIS trace.
         
         DOCUMENTED-UNSTABLE spelling (pending naming-session ratification).
         The SurfaceRegistry filtered by the object in hand: which family
@@ -379,7 +379,7 @@ DOCS: dict[str, str] = {
     "_autograd_grad_fn_fire_timings": (
         """Return live per-fire backward timing spans keyed like ``grad_fn_calls``.
         
-        DOCUMENTED-UNSTABLE spelling (L9 memo 1.3; pending naming-session
+        DOCUMENTED-UNSTABLE spelling (pending naming-session
         ratification). Serves the paired ``time.perf_counter()`` stamps
         carried by the runtime ``GradFnFired`` events: a timed fire yields
         its span as a :class:`~torchlens._quantities.Duration`, an untimed
@@ -399,7 +399,7 @@ DOCS: dict[str, str] = {
     "grad_fn_site_summary": (
         """Return the read-only per-site rollup of backward grad-fn facts.
         
-        DOCUMENTED-UNSTABLE spelling (L9 memo 1.1 grouped-backward floor;
+        DOCUMENTED-UNSTABLE spelling (grouped-backward floor;
         pending naming-session ratification). Aggregates GradFn/GradFnCall
         facts per L1 ``site_key`` (read-only L1 consumption -- reused-module
         grad-fns share one entry): per entry ``grad_fn_labels``,

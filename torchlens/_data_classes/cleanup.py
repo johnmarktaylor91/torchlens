@@ -77,7 +77,7 @@ def cleanup(self: "Trace") -> None:
 
     if self.__dict__.get("_tl_cleaned_up", False):
         # Idempotent: a second cleanup() has nothing left to husk and must
-        # not crash on its own output (b6-opus R25).
+        # not crash on its own output.
         return
     if _state._active_trace is self:
         raise CaptureNotActiveError(
@@ -102,11 +102,11 @@ def cleanup(self: "Trace") -> None:
     # ``forward_memory_backend`` (after which the fact reads as unknown and
     # fails toward the historical flush).
     touched_cuda = capture_touched_cuda(self)
-    # GC-1: Release parameter references to allow model GC.
+    # Release parameter references to allow model GC.
     if "_param_logs" in self.__dict__:
         for pl in self._param_logs:
             pl._release_param_ref()
-    # Materialize the M8 Layer mirror fields BEFORE husking the ops that back
+    # Materialize the Layer mirror fields BEFORE husking the ops that back
     # them: a user-held Layer keeps exactly the readable metadata the dict-era
     # per-layer copies kept after cleanup (the copies existed at this point in
     # the dict era, so post-cleanup memory is unchanged).
@@ -123,7 +123,7 @@ def cleanup(self: "Trace") -> None:
     for attr in MODEL_LOG_FIELD_ORDER:
         if attr in self.__dict__ or hasattr(self, attr):  # stored first: a getter may refuse
             delattr(self, attr)
-    # GC-5/GC-12: Also clear internal containers not in MODEL_LOG_FIELD_ORDER.
+    # Also clear internal containers not in MODEL_LOG_FIELD_ORDER.
     # These hold back-references (e.g. _module_logs -> Module -> _source_trace)
     # and large data structures (layer_logs, layer_dict_all_keys).
     for attr in [
@@ -150,7 +150,7 @@ def cleanup(self: "Trace") -> None:
         # trace) lives outside MODEL_LOG_FIELD_ORDER, so it survived the
         # husking above with no eviction path at all.
         "_receptive_field_solution",
-        # r8 R50 (sol): the save-budget accountant lives outside
+        # R50 (sol): the save-budget accountant lives outside
         # MODEL_LOG_FIELD_ORDER too (session-time FieldPolicy.DROP), so it
         # survived cleanup with its per-device ledgers and weak payload
         # watches -- dead weight on a husked trace the :42 contract says is
@@ -168,7 +168,7 @@ def cleanup(self: "Trace") -> None:
     self._tl_backward_triggers_disarmed = True
     # Gated behind cached cuda.is_available() so CPU-only runs don't pay the
     # CUDA driver / NVML probe cost (per profiling audit 2026-04-27 finding #4),
-    # AND on the capture having touched CUDA (R36-3): a CPU-only trace cleaned
+    # AND on the capture having touched CUDA: a CPU-only trace cleaned
     # up inside a GPU training loop must not flush the caller's allocator.
     # This was the third empty_cache site; the backend teardown and
     # postprocess step-13 sites were already gated.
@@ -421,7 +421,7 @@ def _scrub_layer_log_conditional_fields(
     for layer_log in self._layer_logs.values():
         if "conditional_entry_children" not in getattr(layer_log, "__dict__", {}):
             continue
-        # Layer is dict-backed (no normalizing descriptors until M8), so the
+        # Layer is dict-backed (no normalizing descriptors until), so the
         # scrub itself preserves the finished-trace immutable relation
         # surface: tuple views in, tuple views out.
         aggregate_entry_children: list[str] = []
@@ -725,7 +725,7 @@ _OP_LABEL_FIELDS_TO_CLEAN = (
     "recurrent_ops",
 )
 
-#: The M7 group-membership fields: scrubbed via their shared group row.
+#: The group-membership fields: scrubbed via their shared group row.
 _OP_GROUP_FIELDS = frozenset({"equivalent_ops", "recurrent_ops"})
 
 
@@ -796,7 +796,7 @@ def _substitute_conditional_branch_edges(
         dropped, substituted duplicates deduplicated in order.
     """
     filtered_edges: list[tuple[str, str]] = []
-    # Set-backed dedup (round-7 R52, wave-introduced 1e211f81): the list
+    # Set-backed dedup (wave-introduced 1e211f81): the list
     # membership test made this O(E^2) PER REMOVED LAYER (probe-measured
     # exponent ~2.3 on trace-level IF edges); the arm-edge filter above
     # already uses the seen-set idiom.
@@ -845,7 +845,7 @@ def _scrub_op_label_collections(op: "Op", labels_to_remove: set[str]) -> None:
 
     core = getattr(op, "_core", None)
     for field_name in _OP_LABEL_FIELDS_TO_CLEAN:
-        # M7 group fields: the raw cell holds ONE GroupRef shared by every
+        # group fields: the raw cell holds ONE GroupRef shared by every
         # member. Scrub the GROUP ROW once — every member's next read
         # reflects the filtered membership (live views), sharing intact.
         # Idempotent: the second member sees a disjoint view and skips.

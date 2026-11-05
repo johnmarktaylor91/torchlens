@@ -1,4 +1,4 @@
-"""Save-dtype routing: explicit, routed, disclosed (extract D11 + item 9).
+"""Save-dtype routing: explicit, routed, disclosed.
 
 ``dtype=`` is global or per-key; ``None`` preserves the captured dtype. The
 cast runs AFTER pool and postprocess transforms, BEFORE the CPU-contiguous
@@ -201,7 +201,7 @@ def _check_store_dtype(key: str, cast: torch.Tensor, shard_format: str) -> None:
         torch.float8_e5m2,
     ):
         # fp8 is measured byte-exact through the shard codec on the pinned
-        # stack (extract D11) but excluded from the tlspec bundle policy;
+        # stack but excluded from the tlspec bundle policy;
         # every OTHER dtype routes through the ONE _io/tensor_policy door.
         from .._io import tensor_policy
 

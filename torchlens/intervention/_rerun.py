@@ -1259,7 +1259,7 @@ def _rerun_save_scope(log: Trace) -> tuple[str | list[int | str] | None, Any | N
                 "all",
                 keep_op,
                 int(getattr(options, "lookback", 0)),
-                # R47-11: direct attribute access, not getattr-with-default -- a
+                # direct attribute access, not getattr-with-default -- a
                 # RecordingOptions field rename must raise here, never silently
                 # fall back to "metadata_only".
                 str(options.lookback_payload_policy),
@@ -1398,7 +1398,7 @@ def _reconcile_rerun_hook_fires(
         unfired.extend([plan_id] * (shortfall - consumed))
     if unfired:
         _refuse_source_matched_zero_fire(source_log, new_log, hook_plan, unfired)
-        # First CONTRACTED S-18 row (compo wave 0): the disclosure standing between a user and a
+        # The disclosure standing between a user and a
         # silently un-applied intervention carries a stable machine-readable code and a structured
         # remedy -- consumers branch on ``fields["code"]``, never on message text. The typed
         # refusals above fire first, whatever the on_zero_fire policy says; the policy settles the

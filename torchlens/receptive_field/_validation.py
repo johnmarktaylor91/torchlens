@@ -1,6 +1,6 @@
 """Exact gradient-inside-geometric receptive-field validation.
 
-Oracle scope (R74/75-7): the empirical gradients probed here flow through the
+Oracle scope: the empirical gradients probed here flow through the
 autograd graph recorded during the wrapped capture forward — the same root the
 geometric solution was derived from. The cross-check is independent of the
 geometric derivation (TL indexing/sampling/rule bugs fail it) but is
@@ -397,11 +397,11 @@ def _box_membership_contains(box: ReceptiveFieldBox, unit: tuple[int, ...]) -> b
     Any axis with concrete clipped bounds must contain the coordinate;
     pointwise and unbounded axes are treated as containing, so an upper-bound
     or partially-unbounded reverse box can never produce a false violation.
-    Non-windowed axes joined the comparison in the disputed-r2 b6/R20-3
-    strengthening: walk-narrowed full axes (for example a scalar-selected
-    getitem axis) carry sound over-approximate bounds, so a coordinate outside
-    them is truly outside the influence set — the historical windowed-only
-    test made over-approximated non-windowed axes tripwire-blind.
+    Non-windowed axes take part in the comparison too: walk-narrowed full axes
+    (for example a scalar-selected getitem axis) carry sound over-approximate
+    bounds, so a coordinate outside them is truly outside the influence set.
+    Comparing windowed axes only would leave over-approximated non-windowed
+    axes unchecked.
     """
 
     if box.empty:
@@ -504,7 +504,7 @@ def _exact_box_adjoint_violations(
     saturating-model slack battery in tests. Reverse queries that refuse with
     a typed error are skipped: the check only ever adds failure power.
 
-    Non-windowed axes join the corner enumeration (grind-p3 T7): when every
+    Non-windowed axes join the corner enumeration: when every
     axis of the box yields a claimed source coordinate — windowed hull
     endpoints, concrete-bounded FULL-axis endpoints, and the POINTWISE
     same-index coordinate — corners are seeded as COMPLETE far-grid units
@@ -934,7 +934,7 @@ def check_for_unit(
         Keep the armed autograd graph alive after the check. The default
         ``False`` FREES the graph -- disclosed here and on ``rf.check`` --
         so a later ``gradient(..., retain_graph=True)`` on the same armed
-        capture needs ``retain_graph=True`` here first (b3 R14-N1).
+        capture needs ``retain_graph=True`` here first.
 
     Returns
     -------
@@ -989,7 +989,7 @@ def check(
         finite nonzero gradient support.
     retain_graph:
         Keep the armed autograd graph alive after the check (default frees
-        it, like ``gradient()``'s default; b3 R14-N1).
+        it, like ``gradient()``'s default).
 
     Returns
     -------

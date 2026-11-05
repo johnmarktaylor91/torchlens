@@ -185,7 +185,7 @@ class CaptureOutcomeError(TorchLensError, ValueError):
     ``fields["code"]`` carries the stable gate code (``"N1"``..``"N5"``);
     branch on it, never on message text.
 
-    ``ValueError`` lineage (R64-4): the sibling refusals at the same public
+    ``ValueError`` lineage: the sibling refusals at the same public
     doors (``Trace.save`` raises ``RunnablePreflightError`` /
     ``InvalidArgumentError`` for its other three refusal reasons) are all
     ``ValueError``-lineage, so a caller's natural ``except ValueError`` used
@@ -199,12 +199,12 @@ class CaptureOutcomeError(TorchLensError, ValueError):
 
 
 class StopSignalSwallowedError(CaptureError, RuntimeError):
-    """A halt/nonfinite stop request was swallowed by user code (F6).
+    """A halt/nonfinite stop request was swallowed by user code.
 
     Raised at the capture boundary when the stop-request latch is set but the
     forward returned normally: a user ``except``/``except BaseException`` ate
     the control signal, so the capture can never be blessed COMPLETE.
-    ``RuntimeError`` lineage (R64-4): it reports an invalid runtime state at
+    ``RuntimeError`` lineage: it reports an invalid runtime state at
     the capture boundary, like its ``CaptureNotActiveError`` sibling; it was one
     of only two concrete publicly-raised classes with no builtin lineage.
 
@@ -219,7 +219,7 @@ class StopSignalSwallowedError(CaptureError, RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class StopRequest:
-    """One latched stop request (F6), set on the active trace at raise time.
+    """One latched stop request, set on the active trace at raise time.
 
     Parameters
     ----------
@@ -236,7 +236,7 @@ class StopRequest:
         Settlement matches the terminal exception against it by IDENTITY, so
         an unrelated later ``CaptureError`` (after the latched abort was
         swallowed) settles FAILED with its own diagnostics instead of being
-        misattributed as the clean ABORTED_NONFINITE (R06). Weak so the
+        misattributed as the clean ABORTED_NONFINITE. Weak so the
         latch never extends the exception's (traceback-carrying) lifetime;
         within the raise-to-settle window the terminal exception is alive.
     """
@@ -367,7 +367,7 @@ _REFUSAL_HINTS: dict[str, str] = {
 }
 
 
-# Ceiling on persisted failure reasons (R67): generous for real messages,
+# Ceiling on persisted failure reasons: generous for real messages,
 # small next to any artifact.
 _MAX_REASON_CHARS = 4096
 
@@ -389,7 +389,7 @@ def safe_exception_str(exc: BaseException) -> str:
     if len(text) > _MAX_REASON_CHARS:
         # The reason persists verbatim into every artifact (tlspec v7): a user
         # exception embedding a tensor repr or a multi-MB assert message must
-        # not bloat the artifact. Truncation is disclosed, never silent (R67).
+        # not bloat the artifact. Truncation is disclosed, never silent.
         text = f"{text[:_MAX_REASON_CHARS]}... [truncated, {len(text)} chars total]"
     return text or type(exc).__name__
 
@@ -412,18 +412,18 @@ def outcome_for(trace: object) -> CaptureOutcome | None:
     (``PartialTrace.trace``). Without it every capability gate read the
     WRAPPER's empty ``__dict__`` and treated a shipped FAILED partial as
     UNKNOWN with a false hand-built-object warning, while ``p.outcome``
-    forwarded the inner trace's FAILED stamp -- two answers for one product
-    (b1-opus-R06-1). The hop is single-level by construction: the delegate is
+    forwarded the inner trace's FAILED stamp -- two answers for one product.
+    The hop is single-level by construction: the delegate is
     read through its own ``__dict__`` only, never recursed.
 
     A SLOTS-BACKED product whose validating ``outcome`` property is itself
     the settlement-truth reader declares ``_OUTCOME_SELF_AUTHORITY = True``
-    (``Recording``: R10-5 re-parse of the stamped record plus the
+    (``Recording``: re-parse of the stamped record plus the
     conservative construction-status derivation, never blessing COMPLETE).
     Without it the gate read the missing ``__dict__`` as UNKNOWN and refused
     every settled Recording with a false hand-built-object warning while
     ``recording.outcome`` reported the real status -- the same two-answers
-    disease, WT1 A-IV item 21 (lane A08).
+    disease, A-IV item 21.
 
     A CONTAINER product declares the same self-authority flag over a DERIVED
     fold (``Bundle``: the worst-of-members fold, COMPLETE never blessed above
@@ -431,9 +431,9 @@ def outcome_for(trace: object) -> CaptureOutcome | None:
     gate treated every ``tl.Bundle()``-built product as UNKNOWN and
     ``Trace.save`` false-refused every bundle with the same false hand-built
     warning while ``bundle.save()`` worked -- the same two-answers disease,
-    instance three (foldB D9). The fold is reported beside results and never
+    instance three. The fold is reported beside results and never
     gates a read on a member it does not describe: capability gating stays
-    PER MEMBER at the member whose facts a read cites (foldB D8).
+    PER MEMBER at the member whose facts a read cites.
     """
 
     outcome = getattr(trace, "__dict__", {}).get("_capture_outcome")

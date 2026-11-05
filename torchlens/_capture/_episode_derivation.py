@@ -1,18 +1,18 @@
 """Episode step-output derivation: the declaration-driven evidence readers.
 
-The F40b derivation family (foldA D8), split from
+The derivation family, split from
 :mod:`torchlens._capture._episode_ledger` along the derivation/validation seam
 (R43 file-size ratchet): per-step evidence derives from the DECLARED
 ``step_output_kind`` / ``step_output_from`` / ``step_axis``, never from
 root-output-shape guessing, with per-step positions TAIL-ALIGNED along the
 declared axis. The capture digest minted here binds a ledger to ITS product
-(the F42 attested-coupling input). Ledger construction, settlement wiring,
+(the attested-coupling input). Ledger construction, settlement wiring,
 and load validation stay in the ledger module; this leaf reads only the
 settled trace and the resolved declaration.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the rolling naming
-session; semantics are pinned by the ratified S2/S6/S7 contracts and the
-F40b declared-derivation doc of record (``docs/reference/episode_capture.md``).
+session; semantics are pinned by the ratified contracts and the
+declared-derivation doc of record (``docs/reference/episode_capture.md``).
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ __all__ = [
     "validate_step_output_positions",
 ]
 
-#: Schema tag of the CONTENT-BINDING capture digest (W051, audit 3.2): the
+#: Schema tag of the CONTENT-BINDING capture digest: the
 #: product's recomputable identity facts PLUS the finished ledger content
 #: (header minus the digest slot, every row). The v1 form hashed identity
 #: alone, so two equal-length prompts minted identical digests and a rewritten
@@ -277,7 +277,7 @@ def _measured_chain_positions(
     """The DECLARED-CROSSING chain arm: per-step emission positions, or ``None``.
 
     Licensed when the root output reproduces the MEASURED entry chain and
-    every surplus position is a declared crossing (W051 FIX2):
+    every surplus position is a declared crossing :
 
     - the join session snapshotted exact token ids for every step's entry,
       one id row per batch row matching the root's rows, and the source is
@@ -313,7 +313,7 @@ def _measured_chain_positions(
 
 
 def _licensed_positions(resolved: ResolvedEpisode, out: Any, axis: int, n_rows: int) -> list[int]:
-    """The per-step evidence positions the license admits (W051, 3.1 + FIX2).
+    """The per-step evidence positions the license admits (3.1 + FIX2).
 
     Tail alignment reads the LAST ``n_rows`` positions as one emission per
     step. That is only licensed when the source carries exactly the
@@ -472,7 +472,7 @@ def _derive_step_evidence(
 def _derive_step_column(
     trace: Any, resolved: Any, n_rows: int, *, check_license: bool = True
 ) -> tuple[list[tuple[int, ...]] | list[str] | None, tuple[int, ...] | None]:
-    """Derive per-step evidence under the DECLARED kind and source (foldA D8).
+    """Derive per-step evidence under the DECLARED kind and source.
 
     Returns ``(evidence_by_row, positions)``: the per-row evidence column and
     the step-axis positions it was read from (both ``None`` under kind
@@ -509,7 +509,7 @@ def _derive_step_column(
         carries fewer positions than the episode ran steps, or the source
         width is neither the emitted-only, the measured entry-plus-one-
         per-step, nor the declared-crossing chain shape (alignment
-        unlicensed; W051, audit 3.1 + FIX2).
+        unlicensed, audit 3.1 + FIX2).
     """
 
     import torch
@@ -563,7 +563,7 @@ def _derive_step_column(
 
 
 def _product_identity(trace: Any, address: str, started: int) -> dict[str, Any]:
-    """The D4-clause recomputable identity facts of one episode product."""
+    """The four-clause recomputable identity facts of one episode product."""
 
     labels = [str(getattr(op, "label", op)) for op in (trace._layer_list or ())]
     return {
@@ -586,7 +586,7 @@ def _ledger_content(ledger_payload: Mapping[str, Any]) -> dict[str, Any]:
     header = dict(ledger_payload.get("header") or {})
     header.pop("capture_digest", None)
     # The episode_id is a per-capture random identifier (never a fact about
-    # the execution); identical re-runs must mint identical digests (the F42
+    # the execution); identical re-runs must mint identical digests (the coupling
     # compare-digests contract), so it is excluded from the bound content.
     header.pop("episode_id", None)
     return {"header": header, "rows": list(ledger_payload.get("rows") or [])}
@@ -599,12 +599,12 @@ def mint_capture_digest(
 
     Hex SHA-256 over canonical JSON. With ``ledger_payload`` (the finished
     ledger's ``to_payload()`` form, digest slot ignored) the digest is the
-    CONTENT-BINDING v2 form (W051, audit 3.2): the product's recomputable
+    CONTENT-BINDING v2 form: the product's recomputable
     identity facts -- ordered recorded op labels, stepped-module address and
-    call count, the managed entry seed (foldA D7, the F40b middle third) --
+    call count, the managed entry seed (the middle third) --
     PLUS every persisted ledger fact (header declaration and disclosure
     fields, the step_join envelope, the intervention digest, every row's
-    status/coord/step_output/witness slots). A consumer (lane F42's attested
+    status/coord/step_output/witness slots). A consumer (the attested
     coupling, the load anchor) recomputes it from the product and its
     persisted ledger and compares; any post-mint rewrite of ledger content
     reads unbound. It is an INTEGRITY binding, not a signature: a forger who

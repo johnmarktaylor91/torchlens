@@ -1,13 +1,13 @@
-"""The one-backward read orchestrator (M(reads) item 2: D3/D4/D9/D10/D14/D15).
+"""The one-backward read orchestrator.
 
 ``read(trace, target=..., within=..., frozen=..., method=..., reduce=...,
 target_batch_size=..., result_byte_budget=...)`` is the one door. Population
-law (D9, verbatim): explicit enumeration is a contract; implicit population
+law: explicit enumeration is a contract; implicit population
 is a filter. An explicit ``within=`` naming an unretained site refuses at
 preflight with the first missing addresses and a concrete recapture recipe;
 an implicit population serves the eligible sites and records excluded counts
 by reason. Under an intermediate target the implicit population defaults to
-the target's ancestor cone (D10) -- rows autograd returns ``None`` for are
+the target's ancestor cone -- rows autograd returns ``None`` for are
 excluded WITH COUNTS, while explicitly-named sites keep honest
 ``unreachable`` rows. A numeric zero stays ``ok``; ``None`` never becomes a
 zero.
@@ -53,7 +53,7 @@ def _reduce_mean(value: torch.Tensor) -> torch.Tensor:
 
 
 def _reduce_sum_of_abs(value: torch.Tensor) -> torch.Tensor:
-    """Sum of absolute values -- DISTINCT from abs_of_sum (D15)."""
+    """Sum of absolute values -- DISTINCT from abs_of_sum."""
 
     return value.abs().sum()
 
@@ -143,7 +143,7 @@ def _validate_reduce(reduce: str | None) -> None:
 
 
 class _SitePayloads:
-    """Per-site payload access with save-mode honesty (D14)."""
+    """Per-site payload access with save-mode honesty."""
 
     def __init__(self, trace: Any) -> None:
         """Index ops by pass-qualified label for payload reads."""
@@ -170,7 +170,7 @@ class _SitePayloads:
         """Return the saved payload tensor, or ``None`` when unretained.
 
         ``save_mode='reference'`` mutation validation runs inside the ``out``
-        read and its ``MutatedReferenceError`` propagates unchanged (D14).
+        read and its ``MutatedReferenceError`` propagates unchanged.
         """
 
         if label in self._cache:
@@ -189,7 +189,7 @@ def _preflight_view_mode(payloads: _SitePayloads, method: str) -> None:
 
     A view payload can be silently mutated after capture with no recorded
     baseline version to prove it unchanged, so activation-bearing methods
-    refuse rather than multiply untrustworthy values (D14).
+    refuse rather than multiply untrustworthy values.
     """
 
     if method in ("activation_x_grad", "activation") and payloads.save_mode == "view":
@@ -257,7 +257,7 @@ def _explicit_preflight(
     population: dict[str, torch.Tensor | None],
     method: str,
 ) -> None:
-    """Enforce the D9 explicit-population contract at preflight.
+    """Enforce the explicit-population contract at preflight.
 
     Explicit sites must exist on the trace; for activation-bearing methods
     they must also be retained -- the refusal names the FIRST missing

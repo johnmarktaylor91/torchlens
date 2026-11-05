@@ -73,8 +73,8 @@ def _resolve_svg_image_path(href: str, image_root: Path | None = None) -> Path:
         SVG image href value.
     image_root:
         Directory a relative href is resolved against — the graph-level
-        ``imagepath`` root Graphviz itself used (r-b6 R19-6 emits node image
-        attrs relative to the visualizer scratch dir). Falls back to the
+        ``imagepath`` root Graphviz itself used (node image
+        attrs are emitted relative to the visualizer scratch dir). Falls back to the
         working directory when the root is unset or the rooted file does not
         exist, matching Graphviz's own search order.
 
@@ -1760,7 +1760,7 @@ def _assert_sibling_backstops(
 ) -> None:
     """Check sibling-ordering structural backstops, raising on violation.
 
-    r-b7 R24-3: raises, not asserts — ``order_siblings=True`` is the shipped
+    Raises, not asserts — ``order_siblings=True`` is the shipped
     DEFAULT, and under ``python -O`` an assert-based backstop vanishes
     entirely, so an invisible ordering edge coinciding with real dataflow
     would no longer be rejected.

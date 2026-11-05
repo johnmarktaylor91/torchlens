@@ -222,8 +222,8 @@ def _inline_svg_local_images(svg_text: str, image_root: Path | None = None) -> s
         SVG text produced by Graphviz.
     image_root:
         Directory relative hrefs are resolved against — the graph-level
-        ``imagepath`` root the DOT source carried (r-b6 R19-6 relativizes
-        node image attrs, and Graphviz copies them into the SVG verbatim).
+        ``imagepath`` root the DOT source carried (node image attrs are
+        relativized, and Graphviz copies them into the SVG verbatim).
 
     Returns
     -------

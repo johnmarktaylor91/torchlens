@@ -1,6 +1,6 @@
-"""The transforms domain door over the private registry kernel (memo B1).
+"""The transforms domain door over the private registry kernel.
 
-One registry in the S4 predicate-registry shape: shipped populated and live,
+One registry in the predicate-registry shape: shipped populated and live,
 refusals name the registry, builtin names are a CLOSED SET and
 non-replaceable, custom registrations are versioned and cannot shadow them.
 Registration is what makes a transform countable (and rehydratable from an

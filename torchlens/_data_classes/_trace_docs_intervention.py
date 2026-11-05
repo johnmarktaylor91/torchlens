@@ -11,18 +11,18 @@ __all__ = ["DOCS"]
 
 DOCS: dict[str, str] = {
     "injected_ops": (
-        """Injected-op records from ``log_injections=True`` hooks (F01 stage 1).
+        """Injected-op records from ``log_injections=True`` hooks.
         
         The injected half of the query split: computation performed INSIDE
         intervention hooks, recorded as anchored ``InjectedOp`` records
         clustering under their intervention (never inside the model's module
         hierarchy). Empty tuple when the option was never armed or no hook
-        executed torch calls. Session-only at stage 1 (save refuses typed,
-        naming lane F44). Spelling DOCUMENTED-UNSTABLE.
+        executed torch calls. Session-only for now (save refuses typed).
+        Spelling DOCUMENTED-UNSTABLE.
         """
     ),
     "model_ops": (
-        """The MODEL half of the injections query split (F01 stage 1).
+        """The MODEL half of the injections query split.
         
         Exactly the trace's ordinary executed op records (``layer_list``);
         injected ops never enter this family, the label counters, or the
@@ -172,7 +172,7 @@ DOCS: dict[str, str] = {
         """
     ),
     "_fork_trace": (
-        """Build a copy-on-write fork of this Trace (the M11 builder).
+        """Build a copy-on-write fork of this Trace.
         
         Parameters
         ----------

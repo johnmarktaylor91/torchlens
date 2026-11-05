@@ -1,7 +1,7 @@
-"""File-target writer for the Model Explorer export family (memo D16).
+"""File-target writer for the Model Explorer export family.
 
 ``tl.export.model_explorer`` always emits the app's file-ingest contract:
-one strict graph-collection JSON at ``path``. Node-data overlays (memo D8)
+one strict graph-collection JSON at ``path``. Node-data overlays
 are separate vendor-format sidecar files disclosed by a small manifest --
 the app ingests them through its node-data upload door, the embed registers
 them from the manifest.

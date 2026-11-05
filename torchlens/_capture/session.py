@@ -808,7 +808,7 @@ class CaptureSession:
                 # watermark on BOTH the live journal and the pre-seal
                 # projection clone stored by snapshot_recording_projection —
                 # the clone predates this seal, so stamping only the live
-                # object would strand it without a filter anchor (S-N2).
+                # object would strand it without a filter anchor.
                 events = tuple(journal.amended_op_records())
                 watermark = int(journal.amendment_seq or 0)
                 journal.core_seal_watermark = watermark

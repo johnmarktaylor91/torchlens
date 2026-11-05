@@ -1108,8 +1108,8 @@ def _splice_param_substitutions(
     substituted value here — otherwise a later push (a second edge edit on
     another arg of the same child, an upstream act edit, a param edit whose
     cone reaches the child) silently reverts the edit while the store, the
-    stamp, and the audit row keep asserting it (AUD-CODE 2.9b). Param and
-    region entries (F01, nested container paths included) and edge-selection
+    stamp, and the audit row keep asserting it. Param and
+    region entries (nested container paths included) and edge-selection
     entries all re-splice: a tier-(ii) entry IS the value the child consumes
     at that occurrence until it is removed or overwritten.
 

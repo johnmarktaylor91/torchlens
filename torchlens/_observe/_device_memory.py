@@ -3,7 +3,7 @@
 Opt-in ``CaptureOptions(track_device_memory=True)`` samples device allocator
 counters around each op call: allocated/reserved before/after with SIGNED
 deltas plus the high-water ADVANCE -- never resetting the counters (repo law
-R36-2: resets clobber the caller's process-wide peak; ``peak_advance`` is the
+resets clobber the caller's process-wide peak; ``peak_advance`` is the
 better quantity anyway -- monotone, composes with the pass bracket, and
 mutation-free). The v1 provider is the PyTorch CUDA caching allocator,
 factored behind ONE interface so record-tier sampling and other allocators

@@ -1,8 +1,8 @@
-"""Freeze-seam Op metadata compaction (M11 fold of the standalone pass).
+"""Freeze-seam Op metadata compaction.
 
 ``compact_op_metadata`` pools repeated immutable Op metadata onto shared
-instances. It used to live on ``Trace`` as ``_compact_op_metadata``; the M11
-fold moved it here as a module function invoked from the core freeze seam
+instances. It used to live on ``Trace`` as ``_compact_op_metadata``; it
+moved here as a module function invoked from the core freeze seam
 (torch postprocess) and the preview-backend finalizers, so the Trace surface
 carries no compaction method and the freeze owns the compaction role
 (trace_core_design.md section 3.3).
@@ -54,7 +54,7 @@ def compact_op_metadata(trace: Trace) -> None:
         # paying the attribute protocol per field.
         _compact_store_rows(store, pool)
     if core is not None:
-        # Whole-cell container pooling (the M14 memory slice): duplicate and
+        # Whole-cell container pooling (the memory slice): duplicate and
         # empty provably-immutable mutable-container cells collapse onto one
         # shared PooledCell per distinct content — allowlisted op fields,
         # every kind-table field (Module hook lists, custom_attributes...).

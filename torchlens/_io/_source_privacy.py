@@ -81,7 +81,7 @@ def _relativize_source_text(value: Any) -> Any:
 # ``backward_*`` are only present on ``GradFn`` logs (for Python-inspectable custom
 # autograd Functions); Trace/Module logs lack them, and each field is guarded by an
 # ``in scrubbed_state`` check, so listing them here is inert where absent. Including
-# them closes B8-21: the backward source path/docstring were outside the belt and
+# them closes the gap where the backward source path/docstring were outside the belt and
 # persisted an absolute path unscrubbed.
 _SOURCE_FILE_FIELDS = (
     "class_source_file",
@@ -106,7 +106,7 @@ _DOCSTRING_FIELDS = (
 # every parameter default via ``repr(default)`` -- so a default like
 # ``cfg='/home/user/x.yaml'`` embeds an absolute host path verbatim, and a
 # ``token='SECRET'`` default ships source-derived VALUES, both surviving
-# ``include_source=False`` (B8 R62). ``_func_signature`` is the FuncCallLocation
+# ``include_source=False``. ``_func_signature`` is the FuncCallLocation
 # owner; the rest ride Trace / Module / GradFn logs (guarded by presence).
 _SIGNATURE_FIELDS = (
     "init_signature",

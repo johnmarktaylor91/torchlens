@@ -1,4 +1,4 @@
-"""The generic patching-grid driver + thin presets (mikit section 7).
+"""The generic patching-grid driver + thin presets.
 
 Rides the live-hook rerun route (the shipped ``torchlens._semantic.patching``
 primitives, receipts included): every cell earns a positive fire ledger --
@@ -8,7 +8,7 @@ provenance. Cost honesty: the cell count and a measured-baseline time
 estimate are printed BEFORE the run, and a hard ``budget=`` refuses rather
 than running for a day. ``engine="replay"`` refuses typed until FIX-A lands
 (exact path patching then becomes a one-line addition, not a redesign).
-Degeneracy WARNS (mikit D21): a genuinely flat effect is a finding;
+Degeneracy WARNS: a genuinely flat effect is a finding;
 refusals are reserved for receipt failures.
 
 Spellings DOCUMENTED-UNSTABLE pending the naming session.
@@ -98,7 +98,7 @@ def _estimate_cost(n_cells: int, baseline_seconds: float) -> str:
     return f"patching grid: {n_cells} cells x ~{baseline_seconds:.2f}s/rerun ~= {total:.0f}s total"
 
 
-def patch_grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
+def patch_grid(  # noqa: PLR0913 -- the driver signature is the public surface
     model: Any,
     clean_input: Any,
     corrupted_input: Any,
@@ -112,7 +112,7 @@ def patch_grid(  # noqa: PLR0913 -- the memo-normative driver signature (section
     engine: str = "rerun",
     trace_kwargs: Any = None,
 ) -> PatchGrid:
-    """Run a labelled activation-patching grid (mikit section 7).
+    """Run a labelled activation-patching grid.
 
     Patches CLEAN values into CORRUPTED reruns cell by cell (the standard
     denoising direction) and scores each patched run with ``metric``.

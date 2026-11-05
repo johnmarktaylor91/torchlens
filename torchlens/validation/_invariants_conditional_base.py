@@ -292,7 +292,7 @@ def _valid_conditional_child_labels(ml: Trace) -> set[str]:
 
 
 def _check_conditional_invariants(ml: Trace) -> None:
-    """Check F2 conditional metadata invariants.
+    """Check the conditional metadata invariants.
 
     Parameters
     ----------

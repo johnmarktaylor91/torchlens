@@ -507,7 +507,7 @@ def decode_output(
 ) -> Any:
     """Body of ``Trace.decode_output``; the method docstring is the contract."""
 
-    # Capability gate (quickstart memo D7, F17): decoded labels on
+    # Capability gate: decoded labels on
     # synthesized input values would be a statement about random numbers
     # presented as a statement about data. One chokepoint for every
     # decode door (output_table, to_pandas decoded summary, direct calls).

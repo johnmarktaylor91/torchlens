@@ -1,4 +1,4 @@
-"""SRP sizing + fidelity helpers (memo B7): honest advisors, never transforms.
+"""SRP sizing + fidelity helpers: honest advisors, never transforms.
 
 ``srp_dims_for`` is the DENSE-JL L2 sizing heuristic — the sklearn
 ``johnson_lindenstrauss_min_dim`` practice with its scope relabeled: it is a
@@ -8,7 +8,7 @@ candidate width on the USER'S OWN pilot batch, because the measured spread
 BETWEEN corpora (0.28 vs 0.91 at the same site and k) is larger than the
 spread across k — the only honest advisor is a probe on your own stimuli.
 The probe's report is a storable, provenance-bearing object carrying the
-T-C12 scope fields, so pasted numbers come with their scope for free.
+scope fields, so pasted numbers come with their scope for free.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 """
@@ -269,7 +269,7 @@ def _condensed_corr_rdm(features: torch.Tensor, *, context: str) -> torch.Tensor
 
 @dataclass(frozen=True)
 class ProbeReport:
-    """Fidelity-probe result: rows per candidate width + T-C12 scope fields.
+    """Fidelity-probe result: rows per candidate width + scope fields.
 
     Attributes
     ----------

@@ -1,4 +1,4 @@
-"""Scoped meta admission for weights-free capture (W2, weightsfree memo D2).
+"""Scoped meta admission for weights-free capture.
 
 Meta state/inputs are admitted IF AND ONLY IF structure-only is in force:
 ``admit_meta`` derives once from resolved ``CaptureOptions.structure_only``
@@ -9,13 +9,13 @@ captures an unbannered value-free trace with full save/replay reach
 
 This module owns the admission record, the weak-keyed session registries
 (the ledger pattern of ``completeness_witness``; a Trace object is never
-mutated with unregistered attributes), the D20 meta identity self-test, and
-the D22 settlement invariants. The admission decision itself runs inside
+mutated with unregistered attributes), the meta identity self-test, and
+the settlement invariants. The admission decision itself runs inside
 :func:`torchlens._robustness.check_model_and_input_variants` so entry-order
 guarantees (wrapper -> lazy -> distributed -> variants) are unchanged.
 
-Every spelling is DOCUMENTED-UNSTABLE pending naming-session/S2
-ratification; every refusal code here is S2-gated.
+Every spelling is DOCUMENTED-UNSTABLE pending naming-session
+ratification; every refusal code here is gated by that ratification.
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ def admission_record_for(trace: Any) -> MetaAdmissionRecord | None:
 
 
 def stamp_wrap_generation(trace: Any, generation: int) -> None:
-    """Stamp the capture-time wrap generation (W1-ORD) on a live trace."""
+    """Stamp the capture-time wrap generation on a live trace."""
 
     _WRAP_GENERATIONS[trace] = generation
 
@@ -95,14 +95,14 @@ def wrap_generation_of(trace: Any) -> int | None:
 
 
 # ---------------------------------------------------------------------------
-# D20: meta-safe identity, feature-detected or refuse
+# meta-safe identity, feature-detected or refuse
 # ---------------------------------------------------------------------------
 
 _IDENTITY_SELF_TEST_RESULT: str | None = None
 
 
 def self_test_meta_identity() -> None:
-    """Verify a trustworthy storage-identity primitive exists on meta (D20).
+    """Verify a trustworthy storage-identity primitive exists on meta.
 
     No meta path may key identity on ``data_ptr() == 0``. Storage ``_cdata``
     is measured to distinguish sibling meta allocations and preserve view
@@ -177,7 +177,7 @@ def meta_storage_key(tensor: torch.Tensor) -> int | None:
 
 
 # ---------------------------------------------------------------------------
-# D22: settlement invariants (the net, not the fix)
+# settlement invariants (the net, not the fix)
 # ---------------------------------------------------------------------------
 
 _SETTLEMENT_REMEDY: Final[str] = (
@@ -187,7 +187,7 @@ _SETTLEMENT_REMEDY: Final[str] = (
 
 
 def enforce_settlement_invariants(trace: Any) -> None:
-    """Enforce the D22 settlement invariants on a finished admitted capture.
+    """Enforce the settlement invariants on a finished admitted capture.
 
     Before a weights-free capture settles COMPLETE: declared parameter
     counts reconcile across the live totals and module records; no value
@@ -221,7 +221,7 @@ def enforce_settlement_invariants(trace: Any) -> None:
 
 
 def _first_settlement_violation(trace: Any) -> str | None:
-    """The first violated D22 invariant, or ``None`` when coherent."""
+    """The first violated invariant, or ``None`` when coherent."""
 
     if not bool(trace._options_structure_only):
         return "admitted meta capture lost its structure_only marker (fails closed)"
@@ -278,7 +278,7 @@ class _PendingAdmission(threading.local):
 # forward scope; inventoried by scripts/checks/global_state_inventory.py.
 _PENDING = _PendingAdmission()
 
-# Live admitted-meta captures (consumed by the W1 transparency gate on the
+# Live admitted-meta captures (consumed by the transparency gate on the
 # wrapper hot path; a WeakSet so a dropped trace disarms automatically).
 _META_ACTIVE: weakref.WeakSet[Any] = weakref.WeakSet()
 
@@ -302,7 +302,7 @@ def pending_admission(record: MetaAdmissionRecord | None) -> Iterator[None]:
 
 
 def weightsfree_meta_active(trace: Any) -> bool:
-    """Whether ``trace`` is a LIVE admitted-meta capture (W1 gate check)."""
+    """Whether ``trace`` is a LIVE admitted-meta capture (gate check)."""
 
     return trace in _META_ACTIVE
 
@@ -313,10 +313,10 @@ def weightsfree_forward_scope(trace: Any) -> Iterator[None]:
 
     No-op unless the entry gate admitted a meta substrate for this capture
     (the pending slot holds the record). When armed: binds the admission
-    record to the trace, activates the W1 transparency gate, arms the owned
-    factory-device slot (W1-CTX), maps the exact null-autocast call to
-    ``nullcontext`` (W1-AC), and absorbs any caller-active ``DeviceContext``
-    for the duration of the forward (D19). Everything restores on
+    record to the trace, activates the transparency gate, arms the owned
+    factory-device slot, maps the exact null-autocast call to
+    ``nullcontext``, and absorbs any caller-active ``DeviceContext``
+    for the duration of the forward. Everything restores on
     ``BaseException``.
 
     Before the slot arms, torch's lazy ``torch._dynamo`` import is forced
@@ -355,7 +355,7 @@ def weightsfree_forward_scope(trace: Any) -> Iterator[None]:
 
 @contextlib.contextmanager
 def _null_autocast_scope() -> Iterator[None]:
-    """W1-AC: map EXACTLY (meta device AND enabled=False) to ``nullcontext``.
+    """Map EXACTLY (meta device AND enabled=False) to ``nullcontext``.
 
     Semantically null: disabled autocast performs no dtype coercion and no
     numerics exist on meta — yet torch validates the device string even for
@@ -390,7 +390,7 @@ def _null_on_meta_autocast_class(original: type[Any]) -> type[Any]:
     ``issubclass``, ``inspect.isclass(torch.autocast)``, decorator use
     ``@torch.autocast(...)``) must see the same kind of object it does outside
     the admitted forward. The historical FUNCTION swap broke every such check
-    inside the scope (AUD-CODE 4.3). Exactly the null call -- ``meta`` device
+    inside the scope. Exactly the null call -- ``meta`` device
     AND ``enabled=False`` -- skips the base initializer (which validates the
     device string and raises on meta) and enters/exits as a no-op; every
     other call constructs and behaves as the shipped class.
@@ -429,7 +429,7 @@ def _null_on_meta_autocast_class(original: type[Any]) -> type[Any]:
 
 @contextlib.contextmanager
 def _absorbed_ambient_device_context() -> Iterator[None]:
-    """D19: no torch ``DeviceContext`` mode survives into an admitted forward.
+    """No torch ``DeviceContext`` mode survives into an admitted forward.
 
     Where the mode-stack surgery primitives exist (feature-detected
     ``HAS_TORCH_FUNCTION_STACK_SURGERY``), every caller-active

@@ -64,8 +64,8 @@ def _until_dependency_closure(
     seed_call_ids: list[str],
     state_slot_ids: set[str],
 ) -> set[str]:
-    """Widened dependency closure: C1 tensor deps, C5 control-witness deps,
-    then the C3 declared-state widening over shared state slots."""
+    """Widened dependency closure: tensor deps, control-witness deps,
+    then the declared-state widening over shared state slots."""
 
     closure: set[str] = set()
     frontier = list(seed_call_ids)

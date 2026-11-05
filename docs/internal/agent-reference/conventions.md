@@ -31,7 +31,7 @@
 - Line length: 100
 - `tl.receptive_field` is lazy; entity-level `receptive_field` / `projective_field` siblings
   pair with `Trace.receptive_fields()` / `Trace.projective_fields()` tables.
-- BOUND-METHOD ROOTS (F41, spellings DOCUMENTED-UNSTABLE): `tl.trace`/`tl.validate` accept an
+- BOUND-METHOD ROOTS (spellings DOCUMENTED-UNSTABLE): `tl.trace`/`tl.validate` accept an
   `nn.Module` OR a bound method of one (`tl.trace(model.generate, ids, ...)`): owner via
   `method.__self__`, registered as the `owner` submodule of a TL-authored wrapper root, method
   called exactly once; identity reads `type(owner).__name__`;
@@ -46,14 +46,14 @@
   multi-step generation run as ONE product with a per-step status ledger at
   `trace.annotations["episode"]` (disclosure, never a settlement authority; persists
   plainly as of the tlspec v8 coordinated bump, load-validated fail-closed). Cross-step
-  joins are MEASURED (F40c): per-row `step_join` grades (continuous/forced/
+  joins are MEASURED: per-row `step_join` grades (continuous/forced/
   transformed/declared/exogenous/unchecked) in the `episode_step_join_v1` header envelope; a
   measured break refuses episode-dependent claims (series reads, whole-episode replay,
   the blessing fold, escalation) while ops/values/graph/per-segment reads stay usable;
   `EpisodeOptions(feed="closed")` is the strict halt-at-next-entry arm,
-  `on_feed_break="refuse"` the built FORK-4 typed-refusal arm, `crossings=(k,...)` the
+  `on_feed_break="refuse"` the built typed-refusal arm, `crossings=(k,...)` the
   declared tool-call crossings; envelope-less artifacts read unmeasured, never
-  measured. ATTESTED COUPLING (F42): `episode=` x `intervene=` runs COUPLED —
+  measured. ATTESTED COUPLING: `episode=` x `intervene=` runs COUPLED —
   per-row measured `fire_count` (zero and multiple fires first-class), the
   deterministic header `intervention_digest`, `fidelity_basis="perturbed"` on
   replacing fires, the step-qualified selector `torchlens.at_step(...)`
@@ -62,7 +62,7 @@
   measured break), and the replay law: `run()` on coupled products refuses
   `episode_coupled_replay_underivable` (both engines) and `do()` edits quarantine
   inherited episode evidence. DIAGNOSTIC-TIER: cost is superlinear
-  in step count — tens of steps, never hundreds. Bundles carry the optional S6
+  in step count — tens of steps, never hundreds. Bundles carry the optional
   member-relation table (`relations=`, `Bundle.relate`,
   `Bundle.episode_status`; harness bundles add the `fed_by` content-provenance kind
   with token-stream-bound spans, automatic `token_spans="auto"` matching and the strict
@@ -74,7 +74,7 @@
   `docs/reference/harness_bundles.md`). Doc of record:
   `docs/reference/episode_capture.md`;
   refusal codes in `docs/reference/error_refusal_contract.md`.
-- Experiments remember (F03; spellings documented-unstable; doc of record
+- Experiments remember (spellings documented-unstable; doc of record
   `docs/reference/experiments.md`): Bundles carry persisted lineage
   (random `bundle_id`, `member_construction` origin anchors, hash-chained
   `operations` chronology; fork carries relations + anchors both ways);

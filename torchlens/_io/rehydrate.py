@@ -173,7 +173,7 @@ def rehydrate_trace(
             seen=seen,
         )
 
-    # F44 injections stage 2: the rows split out of layer_list during
+    # injections stage 2: the rows split out of layer_list during
     # __setstate__ live in the session-transient injection state, which the
     # policy-driven walk above never materializes (FieldPolicy.DROP), so
     # their payload references materialize explicitly here -- eagerly even
@@ -618,7 +618,7 @@ def _assign_rehydrated_field(value: Any, field_name: str, field_value: Any) -> N
         Rehydrated field value.
     """
 
-    # r54 sec_3: resolve the ``_internal_set`` protocol setter off the CLASS, never
+    # resolve the ``_internal_set`` protocol setter off the CLASS, never
     # off the (attacker-controllable) instance ``__dict__``. ``getattr_static``
     # walks the class MRO without triggering descriptors, so a planted instance
     # ``_internal_set`` key can never substitute for the real slotted-class method.
@@ -890,7 +890,7 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
         If the dtype string is unknown to the runtime.
     """
 
-    # r45 secC_1: the manifest ``dtype`` field is attacker-controlled. ``torch_attr`` reads
+    # the manifest ``dtype`` field is attacker-controlled. ``torch_attr`` reads
     # ``torch.__dict__`` directly, so an arbitrary attribute name (``onnx`` / ``_dynamo`` /
     # deprecated ``has_cuda``) fires NO lazy submodule import, NO deprecated ``replacement()``,
     # and leaks NO raw ``ImportError`` before the ``isinstance`` value gate below. Every real
@@ -973,7 +973,7 @@ def _set_payload_load_status(
         setattr(trace, "payload_load_status", "loaded_device_best_effort")
         return
     if _has_pending_lazy_payload(trace):
-        # Distinct lazy state (agent memo P0 part 4): "loaded" used to mean
+        # Distinct lazy state: "loaded" used to mean
         # both payloads-resident and payloads-behind-lazy-refs, so consumers
         # could not tell a materialized artifact from one whose reads hit
         # disk. Reads on a loaded_lazy trace either materialize sha-verified

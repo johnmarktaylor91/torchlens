@@ -25,7 +25,7 @@ from .._selection.selectors import (
 )
 from ._affine_source import set_affine_coordinates
 
-# F01 surgery live lanes: the capture-free bound executor (``recipe.bind(model)``
+# Surgery live lanes: the capture-free bound executor (``recipe.bind(model)``
 # returns a ``BoundModel`` whose ``.generate`` is the generation door; the
 # ``steer`` attribute is the helper from .helpers) and the region noun (derived
 # admissibility on the existing verbs).
@@ -45,7 +45,7 @@ from ._metrics import (
 from ._population import Population, population
 from ._regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget
 
-# The PUBLIC immutable multi-clause spec (C03 substrate; surgery memo 3.1)
+# The PUBLIC immutable multi-clause spec
 # claims the package-level ``InterventionSpec`` name. The historical mutable
 # sticky-hook recipe keeps its identity at ``.types.InterventionSpec`` --
 # internal code and persisted pickles are untouched.

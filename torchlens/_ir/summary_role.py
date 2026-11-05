@@ -1,4 +1,4 @@
-"""The non-differentiable summary-transform role (explorer P1; lane F25).
+"""The non-differentiable summary-transform role (explorer P1).
 
 A SUMMARY transform is a user reducer that is contractually OUTSIDE the
 autograd graph: TorchLens applies it to a DETACHED VIEW of the saved tensor
@@ -110,7 +110,7 @@ def summary(fn: Callable[[Any], Any], *, name: str | None = None) -> SummaryTran
             model, x,
             capture=tl.options.CaptureOptions(
                 activation_transform=summary(lambda t: torch.histc(t.float(), 64)),
-                save_raw_activations=False,   # reduce-only: raw clone skipped (P2)
+                save_raw_activations=False,   # reduce-only: raw clone skipped
                 backward_ready=True,
             ),
         )

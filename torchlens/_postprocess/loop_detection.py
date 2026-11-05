@@ -271,7 +271,7 @@ def _mint_site_keys(self: "Trace") -> None:
     (``recurrence_detection=False``) paths -- site keys are structural facts
     computed from raw records BEFORE any grouping verdict, so both paths
     produce byte-identical key multisets (property P4). Orphan ops consume
-    no ordinals and keep ``site_key=None`` (the SF-63 ruling).
+    no ordinals and keep ``site_key=None`` (the ruling).
 
     Parameters
     ----------

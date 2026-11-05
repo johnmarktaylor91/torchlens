@@ -1,13 +1,13 @@
-"""Derived worst-of-members capture-outcome fold for ``Bundle`` (foldB D9).
+"""Derived worst-of-members capture-outcome fold for ``Bundle``.
 
 A ``Bundle`` has no settlement of its own -- members remain the settlement
 authority -- so the container speaks through the DERIVED fold in this module:
 ``Bundle.outcome`` reports the most severe member status (COMPLETE never
 blessed above the weakest member), ``derived=True``, disclosure-only. The
 fold is reported beside results and never gates a read on a member it does
-not describe (foldB D8: capability gating stays PER MEMBER at the member
+not describe (capability gating stays PER MEMBER at the member
 whose facts a read cites). Split out of ``torchlens/bundle/__init__.py`` to
-respect its size ceiling (R43 split-never-raise).
+respect its size ceiling.
 """
 
 from __future__ import annotations
@@ -42,9 +42,9 @@ def _fold_member_outcomes(
 ) -> CaptureOutcome:
     """Fold member outcomes into one derived worst-of-members disclosure.
 
-    This is the Bundle outcome-authority fold (foldB D9): a DERIVED
+    This is the Bundle outcome-authority fold: a DERIVED
     container-level status reported beside results, never a settlement and
-    never a gate on a member it does not describe (D8 -- capability gating
+    never a gate on a member it does not describe (capability gating
     stays PER MEMBER at the member whose facts a read cites). COMPLETE is
     never blessed above the weakest member; a member with no settled outcome
     contributes UNKNOWN fail-closed; an empty domain (unreachable through the

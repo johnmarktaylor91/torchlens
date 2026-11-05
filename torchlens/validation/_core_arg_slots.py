@@ -65,7 +65,7 @@ def _matches_own_parameter(target_layer: Op, value: torch.Tensor) -> bool:
         if not isinstance(param_value, torch.Tensor):
             continue
         if param_value.device.type == "meta":
-            # Offloaded model (accelerate hooks, lane F37): the live handle is
+            # Offloaded model (accelerate hooks): the live handle is
             # meta between forwards and carries no value evidence, so it can
             # never CONFIRM a match. Fail closed: the slot keeps whatever
             # classification it already has.

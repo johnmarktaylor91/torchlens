@@ -1,6 +1,6 @@
 # Native PyTorch tools: what each is authoritative for
 
-<!-- torchnative W0.4: the authorities page. TorchLens defers BY NAME where
+<!-- torchnative.4: the authorities page. TorchLens defers BY NAME where
      the native tool is the authority our addressing cannot honestly improve.
      Verified against torch 2.13.0; every "verified" note names the version
      it was checked on. Python fences on this page must compile and their

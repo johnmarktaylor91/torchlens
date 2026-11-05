@@ -1,9 +1,9 @@
-"""Typed refusal classes for the training-checks kit (lane F23).
+"""Typed refusal classes for the training-checks kit.
 
 Every raise site in ``torchlens.debug._checks`` carries a stable ``fields["code"]``
 plus a non-empty ``fields["remedy"]`` and is ledgered in
 ``docs/reference/error_refusal_contract.md``. Callers branch on the code,
-never on message text (checks memo 4.5).
+never on message text.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class CheckLifecycleError(CaptureError):
 
 
 class CheckViolationError(CaptureError):
-    """The one raise-class check exception (checks memo 4.5).
+    """The one raise-class check exception.
 
     Carries the triggering finding, a stable code, step ids, offending
     names, a remedy, and the partial report on ``fields`` so callers can

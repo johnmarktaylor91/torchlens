@@ -1,6 +1,6 @@
 """Structure-only capture: typed refusals, capability authority, discharge.
 
-L7a wave-0 module (D8-default branch). One in-code capability authority
+One in-code capability authority
 (:data:`STRUCTURE_ONLY_CAPABILITIES`) with ONE chokepoint
 (:func:`require_structure_only_capability`), mirrored by the human table in
 ``docs/reference/structure_only_capabilities.md``; the teaching-refusal error
@@ -10,12 +10,12 @@ discharge machinery (:func:`discharge_against`, surfaced as
 ``Trace.discharge_against``).
 
 NAMING: every public spelling in this module is DOCUMENTED-UNSTABLE pending
-the rolling naming session, and every refusal code is additionally S2-gated
-(the slate ratifies SPELLING, S2 ratifies EXISTENCE and regime). No
-deprecation shim is owed on rename. S2 SEAM (labeled): registration of these
+the rolling naming session, and every refusal code is additionally gated
+(the slate ratifies SPELLING, ratifies EXISTENCE and regime). No
+deprecation shim is owed on rename. Registration of these
 error classes in ``torchlens.errors`` and the settlement-side marker stamp in
-``torchlens/_capture/outcome.py`` ride the S2 author's ratification PR — this
-module never touches the S2 fence files.
+``torchlens/_capture/outcome.py`` ride the ratification — this
+module never touches the fence files.
 """
 
 from __future__ import annotations
@@ -90,15 +90,15 @@ class StructureOnlyCapabilityError(CaptureError, RuntimeError):
 
 
 # ---------------------------------------------------------------------------
-# Claim vocabulary (memo sec 3.2; S2-gated, documented-unstable)
+# Claim vocabulary (gated, documented-unstable)
 # ---------------------------------------------------------------------------
 
 
 class StructureClaimStatus(str, enum.Enum):
     """Tri-state evidence class of a structure-only trace's value-bearing
-    claims. Never silently promoted (G4): ``CORROBORATED`` is written only by
+    claims. Never silently promoted: ``CORROBORATED`` is written only by
     the discharge authority, and a registered refuted discharge flips the
-    in-session state to ``REFUTED`` (G5)."""
+    in-session state to ``REFUTED``."""
 
     HYPOTHESIS = "hypothesis"
     CORROBORATED = "corroborated"
@@ -109,7 +109,7 @@ class StructureClaimStatus(str, enum.Enum):
 # Chokepoint refusal codes raised only through the capability rows below
 # (constant-spelled so the error-contract lockstep sees them; enrolled in
 # tests/test_error_contract_lockstep.py::_CONSTANT_SPELLED_CODES). All
-# S2-gated, DOCUMENTED-UNSTABLE.
+# Gated, DOCUMENTED-UNSTABLE.
 # ---------------------------------------------------------------------------
 
 STRUCTURE_ONLY_MEASUREMENTS_UNSUPPORTED = "structure_only_measurements_unsupported"
@@ -605,7 +605,7 @@ def registered_discharge(trace: Any) -> StructureDischarge | None:
 def claim_status_for(trace: Any) -> StructureClaimStatus:
     """Return the in-session claim status of a structure-only trace.
 
-    Born ``HYPOTHESIS``; flipped only by a registered discharge (G4/G5).
+    Born ``HYPOTHESIS``; flipped only by a registered discharge.
     """
 
     discharge = _DISCHARGE_REGISTRY.get(trace)
@@ -617,12 +617,12 @@ def claim_status_for(trace: Any) -> StructureClaimStatus:
 
 
 # ---------------------------------------------------------------------------
-# THE chokepoint (memo sec 6.1; G1)
+# THE chokepoint (memo sec 6.1)
 # ---------------------------------------------------------------------------
 
 
 def meta_admission_open() -> bool:
-    """Whether the ``meta_admission`` row is D8-flipped (weightsfree W2).
+    """Whether the ``meta_admission`` row is flipped.
 
     The capability table is the ONE code authority for the flip (memo build
     item 16): the admission plumbing in ``torchlens._robustness`` reads the
@@ -647,7 +647,7 @@ def require_structure_only_capability(
     ``refuse:<code>`` row raises :class:`StructureOnlyCapabilityError` with
     the row's stable code, a ``supported_hypothesis`` row additionally
     refuses when a registered REFUTED discharge has flipped the trace's claim
-    state (G5), and supported/verify rows return the row.
+    state, and supported/verify rows return the row.
 
     The pre-bump ``save_analysis_artifact`` switch bypass is retired: the
     marker persists plainly as of tlspec v8 and the row is supported.
@@ -715,13 +715,13 @@ class ClaimComparison:
     verdict: StructureClaimStatus
 
 
-#: The versioned comparison vocabulary (D5): IDENTITY in v1 — comparison
+#: The versioned comparison vocabulary: IDENTITY in v1 — comparison
 #: digests equal the public digests and unknown spelling pairs fail closed as
 #: refutations. A populated vocabulary is the named fallback only if the
 #: owned-context/absorption mechanism fails feature detection somewhere.
 COMPARISON_VOCABULARY_V1: Final[str] = "identity-v0"
 
-#: Reserved comparison row kinds (D9): the one-sided-knowledge join rule is
+#: Reserved comparison row kinds: the one-sided-knowledge join rule is
 #: endorsed policy, guarded, and DEFERRED — nothing emits these in v1.
 RESERVED_COMPARISON_ROW_KINDS: Final[tuple[str, ...]] = ("op_identity_unverified",)
 
@@ -733,13 +733,13 @@ class StructureDischarge:
     (first contradiction wins the overall floor); ``claims`` is the per-claim
     table; the digest pairs witness which graphs were joined.
 
-    The comparison envelope (D5, identity-v0): ``structure_digest`` /
+    The comparison envelope (identity-v0): ``structure_digest`` /
     ``real_digest`` are the RAW PUBLIC digests (``tl.fingerprint.trace``, untouched
     byte-for-byte by this wave); the ``comparison_*`` digests are the
     vocabulary-normalized pair — equal to the public pair at identity-v0.
     ``claim_counts`` breaks the per-claim table down by kind;
     ``unavailable_evidence`` counts claims neither side could make (empty at
-    identity-v0; the D9 row kinds are reserved, never emitted).
+    identity-v0; the row kinds are reserved, never emitted).
     """
 
     verdict: StructureClaimStatus
@@ -756,7 +756,7 @@ class StructureDischarge:
     reserved_row_kinds: tuple[str, ...] = RESERVED_COMPARISON_ROW_KINDS
 
     def report(self) -> str:
-        """One-screen human projection (W1-RPT): verdict, vocabulary, both
+        """One-screen human projection: verdict, vocabulary, both
         digest pairs, claim counts by kind, unavailable-evidence counts, and
         the first contradiction — measured to be the difference between a
         20-minute diff hunt and a one-line answer (3 phantom records once
@@ -789,7 +789,7 @@ class StructureDischarge:
 
 
 def _refuse_incomparable(reason: str, detail: str) -> None:
-    """Raise the typed comparable-twins preflight refusal (D10).
+    """Raise the typed comparable-twins preflight refusal.
 
     REFUSE IS NOT REFUTE: the discharge registry is untouched, the structure
     trace keeps its HYPOTHESIS status, and the remedy names the comparability
@@ -809,17 +809,17 @@ def _refuse_incomparable(reason: str, detail: str) -> None:
 
 
 def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
-    """The comparable-twins preflight (D10/D8): refuses typed, never refutes.
+    """The comparable-twins preflight: refuses typed, never refutes.
 
     Conditions checked against session and trace facts: same model class,
     same input geometry, same backend runtime version, same wrap generation
-    (W1-ORD — both twins captured under the same torch patch state; honest
+    (both twins captured under the same torch patch state; honest
     twins constructed on opposite sides of a wrap flip refute each other on
     saved-reference bindings alone), no rescue-flag asymmetry, and a real
     oracle carrying no opaque host-write completeness witness (an oracle
     whose own value truth is UNVERIFIABLE cannot corroborate anything).
     Training-mode asymmetry has no dedicated trace fact and is caught
-    structurally by the W1-RPT alignment (dropout/BN-stat records diverge).
+    structurally by the alignment (dropout/BN-stat records diverge).
     """
 
     structure_class = structure_trace._source_class_name if is_live_trace(structure_trace) else None
@@ -879,9 +879,9 @@ _ADOPTION_MARKER: Final[str] = "internalsource"
 
 
 def _structural_alignment_contradiction(structure_trace: Any, real_trace: Any) -> str:
-    """W1-RPT: name the count/position delta structurally, never bare digests.
+    """Name the count/position delta structurally, never bare digests.
 
-    Also the D8 discriminant: when the first divergence pairs an ADOPTION
+    Also the discriminant: when the first divergence pairs an ADOPTION
     record against a NAMED op, the refutation is a construction-order
     artifact (a saved pre-wrap function reference on exactly one twin) and
     the preflight refusal fires instead of a verdict.
@@ -985,7 +985,7 @@ def discharge_against(structure_trace: Any, real_trace: Any) -> StructureDischar
 
     Structurally different graphs settle ``REFUTED`` at the graph level
     without any per-claim comparison. The result registers in the weak-keyed
-    side table (G5) and NEVER mutates either trace.
+    side table and NEVER mutates either trace.
     """
 
     from .. import fingerprint as tl_hash
@@ -995,7 +995,7 @@ def discharge_against(structure_trace: Any, real_trace: Any) -> StructureDischar
     structure_digest = tl_hash.trace(structure_trace)
     real_digest = tl_hash.trace(real_trace)
     if structure_digest != real_digest:
-        # W1-RPT: align the two record sequences structurally and name the
+        # align the two record sequences structurally and name the
         # count/position delta BEFORE any "digests differ" fallback. The
         # construction-order discriminant inside may refuse typed instead
         # (refuse is not refute — nothing registers below in that case).

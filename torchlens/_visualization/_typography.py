@@ -1,4 +1,4 @@
-"""The one typography record for graph rendering (vizmech D29, wave-2 item 14).
+"""The one typography record for graph rendering (vizmech, wave-2 item 14).
 
 Before this module, font decisions were scattered literals: ``labelfontsize="8"``
 in four edge builders, ``_EDGE_LABEL_FONT_SIZE = 8`` and
@@ -16,7 +16,7 @@ This module is the single authority those channels consult:
 - ``DEFAULT_TYPOGRAPHY`` pins the family to ``"Helvetica"`` -- the family the
   non-default presets already used. WHICH family ships long-term is maintainer fork
   FK3 ([UI-SPRINT]); THAT a family is pinned everywhere, including the default
-  theme, is decided (D29) and implemented here.
+  theme, is decided and implemented here.
 
 Every spelling in this module is DOCUMENTED-UNSTABLE pending the naming
 session (the memo's "one typography record" is a placeholder name).
@@ -45,7 +45,7 @@ __all__ = [
 
 
 #: Height in points of the blank row between a node's label and its edit rows
-#: (the F2 spec's 4 pt gap; it holds a space, so only its size matters).
+#: (the spec's 4 pt gap; it holds a space, so only its size matters).
 EDIT_GAP_SIZE = 4.0
 
 

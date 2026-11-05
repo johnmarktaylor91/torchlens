@@ -1,4 +1,4 @@
-"""The DOCUMENTED sink protocol: capabilities, delivery states (memo 3.1/3.10).
+"""The DOCUMENTED sink protocol: capabilities, delivery states.
 
 A sink is a SERIALIZER over the shared emission view, never an engine.
 The protocol is documented so third parties (Comet, in-house) write
@@ -6,7 +6,7 @@ their own receivers -- TorchLens owns the engine, they own the sink. A
 requested capability a sink does not advertise refuses BY NAME before any
 partial emission; a sink failure latches and can never corrupt collection.
 
-Delivery states (memo 3.10) are the honest vocabulary for "where did my
+Delivery states are the honest vocabulary for "where did my
 data go": ``computed`` (record produced), ``emitted`` (a named sink accepted
 it and flush/close succeeded), ``relay_configured`` (best-effort
 configuration evidence), ``relay_verified`` (downstream observer evidence).
@@ -24,7 +24,7 @@ from ._records import HistogramPoint, ScalarPoint, TextPoint
 
 __tl_layer__ = "L8"
 
-#: The closed capability vocabulary (memo 3.1). ``embedding`` is reserved
+#: The closed capability vocabulary. ``embedding`` is reserved
 #: plumbing for the projector bridge (deferred table, section 9): declared
 #: now so adding it later is a value change, not a protocol change.
 CAPABILITIES = (
@@ -38,7 +38,7 @@ CAPABILITIES = (
     "embedding",
 )
 
-#: The closed delivery-state vocabulary (memo 3.10).
+#: The closed delivery-state vocabulary.
 DELIVERY_STATES = ("computed", "emitted", "relay_configured", "relay_verified")
 
 
@@ -157,7 +157,7 @@ def require_capabilities(sink: Any, needed: tuple[str, ...]) -> None:
 
 @dataclass
 class SinkLedger:
-    """Per-sink delivery accounting for the close report (memo 3.13).
+    """Per-sink delivery accounting for the close report.
 
     ``name`` is the DISPLAY name (the sink's class name, disambiguated with
     ``#2``, ``#3``, ... when several sinks of one class share a session);

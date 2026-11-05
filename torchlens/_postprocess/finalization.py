@@ -183,7 +183,7 @@ def _finalize_param_logs(self: "Trace") -> None:
         pl.num_calls = len(pl.used_by_ops)
         pl.trace = self
 
-    # Adopt the finished Param rows into the per-trace kind table (M8): each
+    # Adopt the finished Param rows into the per-trace kind table: each
     # record's detached single row moves into ONE shared store owned by the
     # trace core; facade behavior is unchanged.
     _core = self.__dict__.get("_trace_core")
@@ -195,7 +195,7 @@ def _finalize_param_logs(self: "Trace") -> None:
     # Param grad metadata is populated lazily via backward hooks in _log_tensor_grad.
     # Param._param_ref is intentionally released later, after module finalization has
     # consumed param metadata; Param re-fetches from Trace._source_model_ref on demand.
-    # _param_logs (GC-9) and func (GC-10) are still needed by validation.
+    # _param_logs and func are still needed by validation.
 
     # Clear actual Parameter tensor references from Op entries to save memory.
     for layer_entry in self._layer_list:
@@ -657,7 +657,7 @@ def _build_module_logs(self: "Trace") -> None:
     # quadratic and dominates validation postprocessing.
     _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
     for te in self._layer_list:
-        # B3R7-R05-1: iterate the fed-call fact directly; the old
+        # Iterate the fed-call fact directly; the old
         # ``module_call_stack`` emptiness guard was an enter-lane proxy.
         for call_label in te._module_context_input_to_module_calls:
             _pass_input_layers_by_call[call_label].append(te.layer_label)
@@ -799,7 +799,7 @@ def _build_module_logs(self: "Trace") -> None:
     _compute_call_depths(module_dict, root_module)
 
     # Adopt the finished Module/ModuleCall rows into the per-trace kind
-    # tables (M8) before the accessors are rebuilt around them.
+    # tables before the accessors are rebuilt around them.
     _core = self.__dict__.get("_trace_core")
     if _core is not None:
         from .._trace_core.record_rows import adopt_records
@@ -818,7 +818,7 @@ def _build_module_logs(self: "Trace") -> None:
 
     self._module_capture_ws.module_build_data = _init_module_hierarchy_data()
 
-    # GC-11: Clear forward_args/kwargs from ModuleCallLogs to release tensor references.
+    # Clear forward_args/kwargs from ModuleCallLogs to release tensor references.
     # These can hold large tensors from the model's forward() call args.
     keep_forward_args = self._options_module_identity_mode in {
         "pytree_module",
@@ -1057,7 +1057,7 @@ def _build_conditional_records(self: "Trace") -> None:
                 # unrolled multi-pass loops) cannot be represented by ONE
                 # scalar: promoting an arbitrary evaluation's value
                 # contradicts ``fired`` whenever the values differ across
-                # passes (round-24 condbranch seal, S3). Mirror the
+                # passes. Mirror the
                 # compound-test refusal and stay None; per-pass values remain
                 # queryable on the bool ops themselves.
                 bool_value = None
@@ -1157,7 +1157,7 @@ def _set_tracing_finished(self: "Trace") -> None:
 def _finalize_streamed_bundle(self: "Trace") -> None:
     """Step 18: Finalize any in-progress streamed tensor bundle.
 
-    Streamed bundles ENTER SETTLEMENT (WT1 A-IV item 18): an UNSETTLED trace (the
+    Streamed bundles ENTER SETTLEMENT: an UNSETTLED trace (the
     step-18 call, before ``settle_completed``) only STAGES the bundle in the temp
     directory, and the publish happens at the settlement seam in ``_capture/trace.py``
     with the settled capture-outcome attestation. A SETTLED trace (the deferred
@@ -1181,7 +1181,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
 
     from ..intervention._injection import refuse_injection_logged_stream_finalize
 
-    # F44: the streamed writer skips the save door that appends the injected family.
+    # the streamed writer skips the save door that appends the injected family.
     refuse_injection_logged_stream_finalize(self)
     settle_live_side(self)
     record_pairs: list[tuple[Any, Any]] = []
@@ -1339,7 +1339,7 @@ def _reuse_streamed_blob_ids(
 
     skipped_blob_ids: set[str] = set()
     for live_layer, scrubbed_layer in zip(trace._layer_list, scrubbed_layers, strict=True):
-        # One lazy snapshot per layer (r8 R29); the four keys are distinct, so it never goes stale.
+        # One lazy snapshot per layer; the four keys are distinct, so it never goes stale.
         scrubbed_items: dict[str, Any] | None = None
         for tensor_field, pending_field in (
             ("out", "_pending_blob_id"),

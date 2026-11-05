@@ -1,23 +1,6 @@
-"""torchlens.transformer -- transformer pictures (tviz memo).
+"""Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measured ablation effects.
 
-The CircuitsVis/BertViz/Ecco/inspectus picture families rebuilt on torchlens:
-token-labeled attention heatmaps and grids, the attention atlas, colored-token
-strips, logit-lens prediction pictures, per-token loss/entropy strips, the
-term-complete score decomposition, and the one picture none of them shipped --
-attention annotated with MEASURED ablation effects (causal receipts).
-
-Static is the product (memo D1): every picture saves genuine paper-ready
-PNG/SVG/PDF through matplotlib (resolved at call time; absent, the typed
-refusal prints the install command, and the zero-dependency SVG/HTML token
-emitters still work). One rendering stack, no new frameworks (D2/D3): typed
-display records underneath, rect meshes never ``imshow`` (D4), honesty
-wording centralized in ``_wording.py``.
-
-Import as ``import torchlens.transformer`` -- the root-name budget is frozen; the
-root spelling awaits the F35 registration sweep. Records are session-only
-display values, never persisted. Every spelling is DOCUMENTED-UNSTABLE
-pending the naming session.
-"""
+Pictures render through matplotlib resolved at call time; the SVG and HTML token emitters need no extra dependency."""
 
 from __future__ import annotations
 

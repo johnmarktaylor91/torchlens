@@ -1,12 +1,12 @@
 """Shard codecs: safetensors default behind the manifest field (item 11).
 
-The shard format is a MANIFEST FIELD (extract D1), so a format change is a
+The shard format is a MANIFEST FIELD, so a format change is a
 value change, never a layout break: ``safetensors`` is the v2 default
 (keyed row slicing, third-party readable, bf16/fp8 byte-exact), ``pt``
 stays readable forever and writable for one deprecation cycle via the
 explicit ``shard_format="pt"`` opt-out.
 
-Dense keys store one batch-major tensor per key. Trimmed keys (D4) store
+Dense keys store one batch-major tensor per key. Trimmed keys store
 the Arrow triplet under reserved subkeys — ``<key>/values``,
 ``<key>/offsets``, ``<key>/shapes`` — a collision-free namespace because
 user keys refuse path separators at call time (item 4).

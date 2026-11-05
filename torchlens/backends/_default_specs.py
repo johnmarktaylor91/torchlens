@@ -448,7 +448,7 @@ def _simple_leaves(
 
     Runs at backend RESOLUTION on the raw user input, so it is the first walker a
     hostile/degenerate input tree reaches. Depth and cycles refuse typed through
-    the shared input-boundary guard (r-b4 R27-1) instead of dying in a raw
+    the shared input-boundary guard instead of dying in a raw
     ``RecursionError`` (probe: ~350 user levels crossed the interpreter limit).
 
     Parameters

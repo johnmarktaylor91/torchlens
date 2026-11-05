@@ -809,14 +809,14 @@ class Param:
         return self.num_params
 
     def __tl_state_items__(self) -> Any:
-        """Yield live state pairs from the backing row (M8 facade hook)."""
+        """Yield live state pairs from the backing row (facade hook)."""
 
         from .._trace_core.record_rows import record_state_items
 
         return record_state_items(self)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
-        """Install a state mapping through the cell descriptors (M8 hook)."""
+        """Install a state mapping through the cell descriptors (hook)."""
 
         from .._trace_core.record_rows import record_state_restore
 
@@ -876,7 +876,7 @@ class Param:
         record_state_restore(self, state)
 
 
-# The M8 facade: every declared stored field becomes a row-cell descriptor
+# The facade: every declared stored field becomes a row-cell descriptor
 # (the literal ``_PORTABLE_STATE_SPEC`` keys above, in declared order); the
 # instance ``__dict__`` keeps only the store binding and user extras.
 _PARAM_STORED_FIELDS: tuple[str, ...] = (
@@ -1057,7 +1057,7 @@ class ParamAccessor(Accessor["Param"]):
         return True
 
     def _composition_note(self) -> str | None:
-        """Composition breakdown for the one-line card (F10; never a dump)."""
+        """Composition breakdown for the one-line card (never a dump)."""
 
         trainable = sum(1 for pl in self._list if pl.is_trainable)
         frozen = len(self._list) - trainable

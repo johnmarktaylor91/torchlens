@@ -186,11 +186,11 @@ CELL_SOURCES: dict[str, str] = {
     "equivalent_ops": "JOIN:equivalence",
     "recurrent_ops": "DEFAULT",
     "site_key": "DEFAULT",  # STEP:7 mints the site_key_v1 value
-    # tlspec v9 entry-dark injected-op identity (C07): default None on every
-    # model op; the F01 log_injections writer stamps injected ops post-hoc.
+    # tlspec v9 entry-dark injected-op identity: default None on every
+    # model op; the log_injections writer stamps injected ops post-hoc.
     "injection_provenance": "DEFAULT",
-    # tlspec v9 entry-dark slots (C07X): both default None on every op; the
-    # F-EPISODE read-axis lane stamps episode_step and lane F41 stamps the
+    # tlspec v9 entry-dark slots: both default None on every op; the
+    # F-EPISODE read-axis lane stamps episode_step and stamps the
     # TL-authored-root marker post-hoc.
     "episode_step": "DEFAULT",
     "tl_authored_root": "DEFAULT",
@@ -254,7 +254,7 @@ CELL_SOURCES: dict[str, str] = {
     "modules": "FACET:modules",
     "fx_qualpath": "DEFAULT",
     "fx_call_index": "DEFAULT",
-    # B3R7-R05-1: ``module_call_stack`` is the op's OWN containment stack (the
+    # ``module_call_stack`` is the op's OWN containment stack (the
     # glossary's "ModuleCall labels active for this Op"), so it derives from
     # the creation-time modules facet -- NOT from the module-enter join, whose
     # fed-call stack made the one persisted field mean three different things
@@ -338,7 +338,7 @@ def scatter_record_to_cells(record: OpRecord, extras: IngestExtras, owning_trace
     Covers the CORE / FACET / EXTRAS / DEFAULT classes plus the
     payload-disposition cells under NEUTRAL joins; JOIN/STEP cells belong to
     the ingest joins and later steps. Values byte-match today's
-    ``_fields_from_event`` output for the same journal record (the P1 gate).
+    ``_fields_from_event`` output for the same journal record.
     """
 
     core = record.core

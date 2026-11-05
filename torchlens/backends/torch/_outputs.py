@@ -134,7 +134,7 @@ def _retain_output_parent_payloads(
     # the save-budget accountant like every other RAM retention: this path
     # kept ram/transformed payloads with no admit/commit, silently
     # undercounting on every selective capture whose outputs were not
-    # selected (grind-r6 b5 R34-N2). Admit BEFORE the copy allocates;
+    # selected. Admit BEFORE the copy allocates;
     # disk-only routes stay exempt like the other predicate disk saves.
     budget = getattr(trace, "_save_budget_accountant", None)
     reservation = None
@@ -609,7 +609,7 @@ def _collect_output_addresses(
     # the model-output snapshot (below): the live ``run()`` provider rebuilds
     # the exact tuple/dict/ModelOutput the model returned from that one
     # snapshot, so a default capture settles VERIFIED instead of the
-    # remedy-only ``container_contract_unrecorded`` (W051-HONESTY H2).
+    # remedy-only ``container_contract_unrecorded``.
     persist_container_spec = getattr(self_trace, "is_replayable", False) or getattr(
         self_trace, "_capture_container_structure", False
     )
@@ -743,7 +743,7 @@ def extract_and_mark_outputs(
 
     self_trace = cast("Trace", session)
     output_entries = list(_walk_output_tensors_with_paths(outputs))
-    # r35 I1 (subsumes r33 R32-B1): stamp the POSITIVE model-output losslessness
+    # Stamp the POSITIVE model-output losslessness
     # proof -- exact root kind, recursively supported children, encodable literal
     # leaves, and a tensor-leaf/typed-path bijection (duplicate paths and any BFS
     # fallback break the proof). The runnable producer refuses any save whose

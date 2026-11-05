@@ -265,7 +265,7 @@ def _predicate_module_enter(trace: Trace, state: Any, frame: Any, halt_only: boo
             ):
                 append_projected_event(trace, enter_ctx, skipped_spec, predicate_matched=False)
             state.append_context(enter_ctx)
-            # Echo narrator slot (snoop D1, module seam): structure lines ride
+            # Echo narrator slot (module seam): structure lines ride
             # the events already in the stream. Duck-typed session read: the
             # hot path imports nothing.
             echo_session = trace.__dict__.get("_echo_session")

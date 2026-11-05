@@ -1,10 +1,10 @@
-"""Preprocessing provenance + verification (tvscope lane; NeuroAI audience).
+"""Preprocessing provenance + verification (NeuroAI audience).
 
 The verified-capture story for feature extraction: RESOLVE the preprocessing
-authority the user's own loader ships (never a TorchLens-hosted recipe --
-memo D1/D7), AUDIT what actually ran against it field-by-field (the verdict
-oracle -- memo D3), and optionally DIAGNOSE the concrete tensor batch with
-opt-in checks that may never claim a match (memo D4). On request only,
+authority the user's own loader ships (never a TorchLens-hosted recipe),
+AUDIT what actually ran against it field-by-field (the verdict
+oracle), and optionally DIAGNOSE the concrete tensor batch with
+opt-in checks that may never claim a match. On request only,
 :func:`check_card` compares what a capture recorded with the model's known card
 (HF processor, torchvision weights, timm, open_clip) and warns on a mismatch;
 :func:`attach_authority` records an authority a model cannot carry itself

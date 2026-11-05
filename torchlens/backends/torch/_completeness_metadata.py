@@ -47,7 +47,7 @@ __all__ = (
 
 
 def _observe_input_derived_layout_read(trace: Any, source: torch.Tensor) -> None:
-    """Attribute a layout read on an INPUT-DERIVED activation to its rooting input(s) (r73 F1).
+    """Attribute a layout read on an INPUT-DERIVED activation to its rooting input(s).
 
     Called only from the layout-trio fall-through of :func:`_observe_input_metadata_read`
     (receiver already proven NOT an input leaf, storage alias, or ``_base``-linked view).
@@ -55,11 +55,11 @@ def _observe_input_derived_layout_read(trace: Any, source: torch.Tensor) -> None
     storage-pointer read under the internal marker -- so it can never recurse back into the
     metadata patches.
 
-    COVERAGE NOTE (r75 F1, LOCKED): any unlabeled-or-unresolvable-receiver layout consumer
-    in this fall-through MUST FAIL CLOSED -- a silent no-record here is exactly the r74
-    ``.data``-alias false-VERIFIED reopening. The r73 version fail-OPENED on three rungs
-    (label ``None``, event ``None``, empty ``input_ancestors``); each now either resolves
-    POSITIVELY or downgrades completeness through ``_INPUT_METADATA_VIEW_READ`` (the same
+    COVERAGE NOTE (LOCKED): any unlabeled-or-unresolvable-receiver layout consumer
+    in this fall-through MUST FAIL CLOSED -- a silent no-record here would reopen the
+    ``.data``-alias false-VERIFIED. The three rungs that could fail OPEN (label ``None``,
+    event ``None``, empty ``input_ancestors``) each either resolve
+    POSITIVELY or downgrade completeness through ``_INPUT_METADATA_VIEW_READ`` (the same
     presence-only weak set the sibling escape nets use for this receiver class).
 
     Resolution ladder (:func:`_resolve_layout_rooting_labels`), then per rooting label:
@@ -120,25 +120,25 @@ def _observe_input_derived_layout_read(trace: Any, source: torch.Tensor) -> None
 def _resolve_layout_rooting_labels(
     trace: Any, by_raw_label: Mapping[str, Any], source: torch.Tensor
 ) -> set[str] | None:
-    """Resolve a layout-read receiver to the raw labels its VALUE roots through (r75 F1).
+    """Resolve a layout-read receiver to the raw labels its VALUE roots through.
 
     Ladder, first positive resolution wins; ``None`` means the caller MUST fail closed:
 
     * OWN LABEL (or the ``_base`` fallback for an unlogged view of a logged activation),
       accepted only when its traced ancestry is INTACT (:func:`_layout_ancestry_tainted`).
-    * DISPATCH-ORIGIN LEDGER leaf origins (r37 mechanism A): an unlabeled ``.data``-style
+    * DISPATCH-ORIGIN LEDGER leaf origins: an unlabeled ``.data``-style
       alias -- or a labeled receiver whose traced ancestry broke at one -- carries a
       positive record of the terminal leaves its value derives from. ``rng`` / ``uninit``
       taints fail closed (layout attribution through nondeterminism would launder it);
       ``unknown`` falls through to the storage rung. A pure ``state:``/empty leaf set
       resolves to ZERO labels -- a positive state-rooted/literal-only signal the caller
-      maps to "record nothing" (residual (3)), never a silent fail-open. r29 F1: that
+      maps to "record nothing" (residual (3)), never a silent fail-open. That
       positive reading is honored only for an UNLABELED receiver; a labeled receiver
       that reached this rung through a TAINTED rung 1 fails closed instead (its
       identity-keyed ledger entry may predate the taint event), and a receiver whose
       current label is a storage-rebind BARRIER resolves ``unknown`` at the ledger
       itself (:func:`_operand_leaf_origins`).
-    * STORAGE IDENTITY (r31 leaf / r63 state precedent): the receiver's true-original
+    * STORAGE IDENTITY: the receiver's true-original
       storage pointer matched against live captured producer tensors
       (``_CAPTURED_STORAGE_PTRS``) -- an alias mechanism the dispatch interpose never saw
       still resolves to the logged activation whose bytes it shares.
@@ -161,7 +161,7 @@ def _resolve_layout_rooting_labels(
             if origin.startswith(_ORIGIN_LABEL_PREFIX)
         }
         if not rooting and label is not None:
-            # r29 F1 (defense in depth): the receiver HAS a label but its traced
+            # Defense in depth: the receiver HAS a label but its traced
             # ancestry is TAINTED, and the ledger resolved a pure-``state:``/
             # literal (empty-label) basis. The identity-keyed ledger entry may
             # predate the taint event (a non-dispatch mutation of the same
@@ -177,9 +177,9 @@ def _resolve_layout_rooting_labels(
 
 
 def _layout_storage_rooting_labels(trace: Any, source: torch.Tensor) -> set[str] | None:
-    """Resolve an unlabeled receiver to live captured producers by STORAGE IDENTITY (r75 F1).
+    """Resolve an unlabeled receiver to live captured producers by STORAGE IDENTITY.
 
-    Liveness-verified exactly like the r43 cross-thread belt: a pointer matches only while
+    Liveness-verified exactly like the cross-thread belt: a pointer matches only while
     a captured producing tensor is still alive AND still occupies that address, so a freed-
     then-reused allocation can never misattribute. Pointer reads use the wrapper-free
     true-original accessors under the internal marker (no observer recursion). ``None`` --
@@ -230,7 +230,7 @@ def storage_rebind_barrier_labels(trace: Any) -> frozenset[str]:
 
 
 def _layout_ancestry_tainted(trace: Any, by_raw_label: Mapping[str, Any], label: str) -> bool:
-    """Return whether a logged event's transitive traced ancestry is BROKEN (r75 F1).
+    """Return whether a logged event's transitive traced ancestry is BROKEN.
 
     ``OpEvent.input_ancestors`` unions only LABELED parents, so an op that consumed an
     unlabeled tensor arg (``unattributed_tensor_args`` non-empty -- the ``.data`` alias, a
@@ -263,8 +263,8 @@ def _layout_ancestry_tainted(trace: Any, by_raw_label: Mapping[str, Any], label:
             return True
         if record_member(event, "unattributed_tensor_args", None):
             return True
-        # r28 reconcile: a storage-SWAPPING ``.data=`` rebind op is an ancestry
-        # barrier -- the r79/r81 belt posture never attributes verdict-steering
+        # A storage-SWAPPING ``.data=`` rebind op is an ancestry
+        # barrier -- the belt posture never attributes verdict-steering
         # facts across a storage-pointer swap, even though the capture graph
         # honestly threads the rebind's consumers to its RHS producer.
         if rebind_barriers and current in rebind_barriers:
@@ -275,7 +275,7 @@ def _layout_ancestry_tainted(trace: Any, by_raw_label: Mapping[str, Any], label:
 
 
 def _state_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:
-    """Resolve ``source`` to the registered-state addresses whose storage it aliases (r63 C1).
+    """Resolve ``source`` to the registered-state addresses whose storage it aliases.
 
     Positive-attribution ladder, first hit wins: the buffer meta address stamped at forward
     start (a DIRECT registered-buffer receiver; model inputs carry a label but never an
@@ -284,7 +284,7 @@ def _state_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:
     storage index (the ``.data`` / view alias twin for buffers). A miss returns empty --
     an activation receiver records nothing (its geometry is recomputed by the replayed DAG).
 
-    r81: the direct-stamp rung requires the SESSION-VALIDATED stamp (current-session
+    the direct-stamp rung requires the SESSION-VALIDATED stamp (current-session
     object + live storage identity); a stale or ``.data``-rebound stamp falls through
     to the storage-index rungs, which are anchored on live registered storage.
     """
@@ -304,13 +304,13 @@ def _state_derived_addresses(trace: Any, source: torch.Tensor) -> set[str]:
 
 
 def _observe_state_metadata_read(trace: Any, source: torch.Tensor, read_kind: str) -> None:
-    """Attribute one PHYSICAL-metadata read on registered state as a state escape (r63 C1).
+    """Attribute one PHYSICAL-metadata read on registered state as a state escape.
 
-    Closes the four r62/r63 attribution gaps: ``is_contiguous`` / ``stride`` /
-    ``storage_offset`` / ``is_conj`` (+ the ``is_neg`` lazy-bit sibling) on a registered
-    param/buffer previously routed ONLY through the model-input observer, which ignores
-    state -- so a model branching on ``self.weight.is_contiguous()`` produced no witness and
-    the transport-normalized replay reported a false ``verified``. A resolved read now:
+    ``is_contiguous`` / ``stride`` / ``storage_offset`` / ``is_conj`` (+ the ``is_neg``
+    lazy-bit sibling) on a registered param/buffer must not route ONLY through the
+    model-input observer, which ignores state -- a model branching on
+    ``self.weight.is_contiguous()`` would produce no witness and the transport-normalized
+    replay would report a false ``verified``. A resolved read:
 
     * joins ``_HOST_ESCAPE_STATE_SOURCE_NAMES`` -- the slot is digest-witnessed by PASS A
       (``unbound_state_escape:<name>`` fact; changed staged state -> ``unverifiable``),
@@ -342,7 +342,7 @@ def host_escape_state_metadata_reads(trace: Any) -> dict[str, frozenset[str]]:
 
 
 def _state_direct_address(trace: Any, source: torch.Tensor) -> str | None:
-    """Resolve ``source`` to a state address ONLY when it IS the registered object (r65).
+    """Resolve ``source`` to a state address ONLY when it IS the registered object.
 
     The DIRECT-receiver discriminator for the autograd/structural family
     (``_STATE_METADATA_DIRECT_ONLY_NAMES``): a registered buffer carries the buffer meta
@@ -354,7 +354,7 @@ def _state_direct_address(trace: Any, source: torch.Tensor) -> str | None:
     object and attributes correctly). A miss returns ``None`` -- the read is the documented
     alias/view residual, never misattributed.
 
-    r81: "IS the registered object" is enforced with the session belt (current-session
+    "IS the registered object" is enforced with the session belt (current-session
     stamp + live storage identity), never the raw static stamp.
     """
 
@@ -364,15 +364,15 @@ def _state_direct_address(trace: Any, source: torch.Tensor) -> str | None:
     if type(source) is torch.nn.Parameter:
         addresses = _param_derived_addresses(trace, source)
         if addresses:
-            # r67 C6: the former ``len(addresses) == 1`` restriction silently DROPPED a
-            # tied parameter's direct read. Any resolved membership attributes; the
-            # recording layer fans out to the complete r37 alias group.
+            # A ``len(addresses) == 1`` restriction would silently DROP a tied
+            # parameter's direct read. Any resolved membership attributes; the
+            # recording layer fans out to the complete alias group.
             return next(iter(sorted(addresses)))
     return None
 
 
 def _observe_state_metadata_read_direct(trace: Any, source: torch.Tensor, read_kind: str) -> None:
-    """Attribute one DIRECT-receiver-only metadata read on registered state (r65).
+    """Attribute one DIRECT-receiver-only metadata read on registered state.
 
     The autograd/structural twin of :func:`_observe_state_metadata_read`: joins the same
     escape-source and read-kind ledgers, but ONLY when the receiver is the registered object
@@ -390,11 +390,11 @@ def _observe_state_metadata_read_direct(trace: Any, source: torch.Tensor, read_k
 
 
 def _expand_state_alias_addresses(trace: Any, addresses: set[str]) -> set[str]:
-    """Fan resolved state addresses out to their COMPLETE r37 alias groups (r67 C6).
+    """Fan resolved state addresses out to their COMPLETE alias groups.
 
     A direct read on ONE canonical name of a tied parameter / double-registered buffer is a
     read of the shared allocation: every name in the identity-tied alias group carries the
-    fact. The r37 topology snapshot (``groups``: name -> group id) is the authority; a trace
+    fact. The topology snapshot (``groups``: name -> group id) is the authority; a trace
     without one keeps the resolved set unchanged (fail-safe: no expansion, the resolved
     address still records).
     """
@@ -412,9 +412,9 @@ def _expand_state_alias_addresses(trace: Any, addresses: set[str]) -> set[str]:
 
 
 def _record_state_metadata_read(trace: Any, addresses: set[str], read_kind: str) -> None:
-    """Join resolved state addresses into the escape-source + read-kind ledgers (r63/r65).
+    """Join resolved state addresses into the escape-source + read-kind ledgers.
 
-    r67 C6: fans out to the complete alias group -- a tied-parameter direct read marks
+    fans out to the complete alias group -- a tied-parameter direct read marks
     every canonical name sharing the allocation.
     """
 
@@ -435,7 +435,7 @@ def _record_state_metadata_read(trace: Any, addresses: set[str], read_kind: str)
 def _record_state_metadata_observation(
     trace: Any, addresses: set[str], read_kind: str, observed: bool | None
 ) -> None:
-    """Record one placement accessor's ACTUAL return against its state alias group (r67 C3)."""
+    """Record one placement accessor's ACTUAL return against its state alias group."""
 
     _record_state_metadata_read(trace, addresses, read_kind)
     addresses = _expand_state_alias_addresses(trace, addresses)
@@ -452,7 +452,7 @@ def _record_state_metadata_observation(
 
 
 def host_escape_state_metadata_observations(trace: Any) -> dict[str, dict[str, bool | None]]:
-    """Return the per-state-name OBSERVED placement accessor returns for one trace (r67 C3)."""
+    """Return the per-state-name OBSERVED placement accessor returns for one trace."""
 
     observations = _HOST_ESCAPE_STATE_METADATA_OBSERVATIONS.get(trace)
     if not observations:
@@ -463,7 +463,7 @@ def host_escape_state_metadata_observations(trace: Any) -> dict[str, dict[str, b
 def _observe_state_placement_read(
     trace: Any, source: torch.Tensor, name: str, observed: bool | None
 ) -> None:
-    """Attribute one placement accessor's ACTUAL return on a state receiver (r67 C3).
+    """Attribute one placement accessor's ACTUAL return on a state receiver.
 
     Same storage-identity attribution family as :func:`_observe_state_metadata_read`
     (placement is a pure function of the slot's storage), with the observed value carried
@@ -482,7 +482,7 @@ def _observe_state_placement_read(
 
 
 def _placement_read_witnessed(trace: Any, source: torch.Tensor) -> bool:
-    """Return whether a placement accessor's receiver is positively attributed (r67 C3).
+    """Return whether a placement accessor's receiver is positively attributed.
 
     True for a model-input leaf (fact recorded / alias-safe path), an input storage alias
     (fact recorded, or derived-view fail-closed downgrade -- both honest), or a resolved
@@ -515,7 +515,7 @@ def _discharge_placement_dispatch(state: _WitnessState, base_operator: str) -> N
 def _observe_state_metadata_fact(
     trace: Any, source: torch.Tensor, fact_name: str, fact_value: bool
 ) -> None:
-    """Record one DECLARED-STATE fact for a DIRECT registered param/buffer receiver (r65 F-1).
+    """Record one DECLARED-STATE fact for a DIRECT registered param/buffer receiver.
 
     ``requires_grad`` records its bool value; ``grad_fn`` records presence. The fact ledger is
     separate from the escape machinery by design (see ``_STATE_METADATA_FACTS``): recording is
@@ -534,7 +534,7 @@ def _observe_state_metadata_fact(
     if facts is None:
         facts = {}
         _STATE_METADATA_FACTS[trace] = facts
-    # r67 C6: a tied slot's declared fact belongs to every canonical name sharing the
+    # a tied slot's declared fact belongs to every canonical name sharing the
     # allocation (one allocation, one autograd bit).
     for name in _expand_state_alias_addresses(trace, {address}):
         facts.setdefault(name, {})[fact_name] = bool(fact_value)
@@ -550,9 +550,9 @@ def host_escape_state_metadata_facts(trace: Any) -> dict[str, dict[str, bool]]:
 
 
 def _observe_state_property_read(trace: Any, source: torch.Tensor, name: str, value: Any) -> None:
-    """Dispatch one getset-PROPERTY read on a state receiver through the mirror (r65).
+    """Dispatch one getset-PROPERTY read on a state receiver through the mirror.
 
-    The property wrapper's state branch (the r64 gap: it had NONE): ``requires_grad`` /
+    The property wrapper's state branch (the gap: it had NONE): ``requires_grad`` /
     ``grad_fn`` route to the declared-fact ledger; every other property routes to the
     escape-gated read-kind ledger. All property names are autograd-family, so attribution is
     DIRECT-receiver-only throughout; a non-state receiver records nothing.
@@ -573,12 +573,12 @@ def _observe_state_property_read(trace: Any, source: torch.Tensor, name: str, va
 
 
 def _tensor_receiver_origin(trace: Any, source: torch.Tensor) -> tuple[str, Any]:
-    """Classify a storage-bridge RECEIVER tensor as input-site / state-group / other (r67 C3).
+    """Classify a storage-bridge RECEIVER tensor as input-site / state-group / other.
 
     Storage-level facts (byte count, sharing, pinning) are pure functions of the BASE storage,
     invariant across every view/alias, so ANY input-storage-aliasing receiver (the leaf, a
     ``.data``/``.detach()`` alias, a derived view) attributes to the leaf site, and any
-    state-storage-aliasing receiver attributes to the COMPLETE r37 alias group. An unrelated
+    state-storage-aliasing receiver attributes to the COMPLETE alias group. An unrelated
     receiver (a genuine activation) is ``("other", None)`` -- its storage geometry is
     re-derived by the replayed DAG, so reads on it record nothing.
     """
@@ -617,12 +617,12 @@ def _register_storage_handle_origin(
 
 
 def _register_storage_origin(state: _WitnessState, source: torch.Tensor, storage: Any) -> None:
-    """Attribute one bridge-returned storage handle at ACQUISITION time (r67 C3/C6).
+    """Attribute one bridge-returned storage handle at ACQUISITION time.
 
-    Acquisition records ORIGIN (+ the caller's existing writeback watch) ONLY -- no read
-    kind, no geometry fact, no input fact: a discarded handle is not an observation
-    (corr1-4). The actual accessor call on the handle records through
-    ``STORAGE_METADATA_ACCESSOR_DISPOSITIONS``.
+        Acquisition records ORIGIN (+ the caller's existing writeback watch) ONLY -- no read
+        kind, no geometry fact, no input fact: a discarded handle is not an observation
+    . The actual accessor call on the handle records through
+        ``STORAGE_METADATA_ACCESSOR_DISPOSITIONS``.
     """
 
     with _state.pause_logging(), internal_scalar_read():
@@ -632,7 +632,7 @@ def _register_storage_origin(state: _WitnessState, source: torch.Tensor, storage
 
 
 def _lazy_storage_state_ptr_names(state: _WitnessState) -> dict[int, frozenset[str]]:
-    """Build (once per forward) the ptr -> full state-name-set fallback index (r67 C3).
+    """Build (once per forward) the ptr -> full state-name-set fallback index.
 
     Covers handles acquired BEFORE the accessor wrappers armed (a pre-forward
     ``model.w.untyped_storage()`` held by the caller): live registered param/buffer storage
@@ -662,7 +662,7 @@ def _lazy_storage_state_ptr_names(state: _WitnessState) -> dict[int, frozenset[s
 
 
 def _resolve_storage_origin(state: _WitnessState, storage: Any) -> tuple[str, Any] | None:
-    """Resolve a storage RECEIVER to its origin, or ``None`` when unattributable (r67 C3).
+    """Resolve a storage RECEIVER to its origin, or ``None`` when unattributable.
 
     Ladder: the capture-scoped weak origin map (the handle itself, then a typed handle's
     untyped backing), then the pointer fallback (state index, input index). ``None`` means
@@ -708,7 +708,7 @@ def _record_input_storage_nbytes(trace: Any, site: Any, storage: Any) -> None:
     """Record the BASE-storage byte-count fact for a resolved input site at ACTUAL read time.
 
     ``x.untyped_storage().nbytes()`` / ``.size()`` / ``len(...)`` return the input's BASE
-    storage byte count, which the shape+dtype input contract does NOT pin (r29-C1 F4): a
+    storage byte count, which the shape+dtype input contract does NOT pin: a
     same-shape input that is a slice of a larger buffer differs from a freshly-allocated
     contiguous twin. The recorded fact is ALWAYS the base untyped byte count (a typed
     handle's element count is derived from the same base), re-checked against the RAW

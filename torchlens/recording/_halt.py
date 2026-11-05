@@ -80,7 +80,7 @@ def stop(reason: str = "") -> NoReturn:
     (True, 'enough')
     """
 
-    # F6 stop-request latch: the direct-raise public spelling must be as
+    # Stop-request latch: the direct-raise public spelling must be as
     # swallow-proof as the predicate spellings. With no active capture the
     # latch no-ops and the signal propagates to the user exactly as before.
     from .. import _state

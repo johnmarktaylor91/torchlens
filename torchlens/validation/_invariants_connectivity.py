@@ -411,9 +411,9 @@ def _check_distance_closure(name: str, entries: list[Any], resolve: Any, key: An
             if not neighbours:
                 # The flood seeds ONLY at boundary nodes and propagates along
                 # recorded edges, so a populated non-boundary distance with
-                # zero distance-populated neighbours is FABRICATED (R73
-                # generative-sweep find: the former skip here accepted any
-                # stored distance on a flood-unreached record).
+                # zero distance-populated neighbours is FABRICATED (skipping the
+                # check here would accept any stored distance on a flood-unreached
+                # record).
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{key(lpl)}': {min_field}/{max_field}=({stored_min}, "
@@ -465,14 +465,14 @@ def _check_graph_connectivity(ml: Trace) -> None:
                 f"internally initialized, or output",
             )
 
-        # Round-26 W3-4c: the ``is_internal_source`` exemption above is only
+        # The ``is_internal_source`` exemption above is only
         # legitimate for GENUINE graph sources (factories such as
         # ``torch.ones``, vmap-built masks, buffers). Capture stamps
         # ``is_internal_source = (len(parents) == 0)``, so a parentless op
         # that in fact CONSUMED an unaccounted tensor at a data-operand slot
         # (the capture-side witness recorded it in ``unattributed_tensor_args``,
         # e.g. the consumer of a silently-dropped ``torch.ops.aten.*`` call)
-        # was blessed as a "source" and dodged the dangling-node check
+        # would be blessed as a "source" and dodge the dangling-node check
         # entirely -- letting a silent op drop validate as ``passed``. A
         # demonstrated tensor CONSUMER is not a source; fail it. Genuine
         # sources have no tensor-data args and keep the exemption, and an op

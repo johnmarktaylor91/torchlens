@@ -400,6 +400,6 @@ def outcome(trace: Trace) -> Any | None:
         # cleanup() deletes the settled sidecar with every other field.
         # The frozen vocabulary designates UNKNOWN as the most-restrictive
         # value and the save gate already lands there; ``None`` is outside
-        # the vocabulary and was the one unsettled read (b6-opus R25).
+        # the vocabulary and was the one unsettled read.
         return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_derived=True)
     return outcome_for(trace)

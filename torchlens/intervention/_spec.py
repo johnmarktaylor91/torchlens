@@ -1,9 +1,9 @@
-"""The ONE immutable public intervention spec (C03 substrate).
+"""The ONE immutable public intervention spec.
 
 Surgery memo section 3.1: ``tl.when(...)`` is promoted to return the
 immutable, public :class:`InterventionSpec` -- one multi-clause noun accepted
 unchanged by ``fork.do``, ``intervene=``, Bundle
-operations, generalized ``sweep``, save/load, and (F01) ``spec.bind(model)``.
+operations, generalized ``sweep``, save/load, and ``spec.bind(model)``.
 Lane options (``strict``, ``log_injections``, fast tiers) never enter the
 spec: a spec means the same experiment in every lane.
 
@@ -540,7 +540,7 @@ class Recipe:
         """Return the single rule matching one op context, or ``None``.
 
         The rule-attributing form of :meth:`__call__` (the capture door reads
-        the decision; the F01 bind engine needs the RULE for per-rule fire
+        the decision; the bind engine needs the RULE for per-rule fire
         counts and zero-fire settlement). Both spellings share this one
         matcher, so the overlap law holds identically in every lane.
 
@@ -636,9 +636,9 @@ class Recipe:
         return [(rule.target, rule.edit) for rule in self.rules]
 
     def bind(self, model: Any, *, on_zero_fire: str = "warn") -> Any:
-        """Bind this spec to a model as a capture-free live executor (F01).
+        """Bind this spec to a model as a capture-free live executor.
 
-        Surgery memo 3.3: the result is a bound intervention executor -- a
+        The result is a bound intervention executor -- a
         serial, non-reentrant, capture-free callable (never an ``nn.Module``)
         that transparently returns the base model's own output, supports real
         HF ``generate``, retains ``.last_report``, and atomically installs and
@@ -674,7 +674,7 @@ class Recipe:
 def when(condition: Callable[[Any], bool], action: Any) -> Recipe:
     """Build a one-clause immutable :class:`InterventionSpec`.
 
-    The promoted public constructor (surgery memo 3.1): the returned spec is
+    The promoted public constructor: the returned spec is
     the durable noun every intervention door accepts. It remains directly
     usable as a capture-time ``intervene=`` predicate, and single-clause
     specs keep the historical ``.selector`` / ``.decision`` surface.

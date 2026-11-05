@@ -1,4 +1,4 @@
-"""The summary charset contract (F08; summary memo item 14, 3.9).
+"""The summary charset contract.
 
 ``str(result)`` is canonical byte-stable ASCII with no ANSI or OSC-8
 bytes -- the equality, logging, snapshot, and issue-paste contract.
@@ -43,7 +43,7 @@ NON_ASCII_STAND_IN = "?"
 
 
 def _ascii_char(char: str) -> str:
-    """One ASCII character for one non-ASCII character (summary D1).
+    """One ASCII character for one non-ASCII character.
 
     A letter with an ASCII base (``é``) keeps the base (``e``); anything
     else becomes :data:`NON_ASCII_STAND_IN`. Always exactly one character,
@@ -60,7 +60,7 @@ def degrade(unicode_text: str) -> str:
     The declared glyph table maps the render's own glyphs; any other
     non-ASCII character (a model, class or module name such as
     ``café_προβολή``) maps through :func:`_ascii_char`, so the result is
-    always pure ASCII (summary D1). The structured data (``rows``,
+    always pure ASCII. The structured data (``rows``,
     ``to_dict()``) keeps the real names.
     """
 
@@ -117,7 +117,7 @@ def detect_style(stream: Any = None) -> str:
 
 
 def assert_no_escape_bytes(text: str) -> str:
-    """A11 guard: no ESC byte in any returned string, ever."""
+    """Guard: no ESC byte in any returned string, ever."""
 
     if "\x1b" in text:
         raise AssertionError("summary render produced an ESC byte (A11 violation)")

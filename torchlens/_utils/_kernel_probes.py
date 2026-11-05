@@ -538,7 +538,7 @@ def probe_sdpa_empty_row_zero() -> bool:
 def probe_attention_causal_bias() -> bool:
     """Return whether ``torch.nn.attention.bias.CausalBias`` is discoverable.
 
-    NEVER executes ``torch.nn.attention.bias`` (r45/r49 lazy-import belt): that
+    NEVER executes ``torch.nn.attention.bias`` (lazy-import belt): that
     module's top level calls ``torch._dynamo.allow_in_graph(...)``, dragging the
     whole ``_dynamo``/``_inductor`` tree into every ``import torchlens``. When
     the USER has already imported the module, the class is inspected exactly;
@@ -560,7 +560,7 @@ def probe_attention_causal_bias() -> bool:
     -----
     This probe NEVER imports ``torch.nn.attention.bias``: on torch 2.13 its
     module body reaches ``torch._dynamo``, whose import tree also drags in
-    ``torch.distributed.fsdp`` -- breaking the W21 cold-start guarantee that a
+    ``torch.distributed.fsdp`` -- breaking the cold-start guarantee that a
     plain eager capture pays neither import. ``find_spec`` imports only the
     parent ``torch.nn.attention`` package (verified dynamo-free), and a process
     that never imported the module cannot hold a ``CausalBias`` instance, so

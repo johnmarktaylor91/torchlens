@@ -32,7 +32,7 @@ def _materialize_layer_mirrors_for_removed(
 ) -> None:
     """Materialize Layer mirror fields whose representative op is being removed.
 
-    A Layer's M8 mirror descriptors read through to its first-pass op; husking
+    A Layer's mirror descriptors read through to its first-pass op; husking
     that op would otherwise change what a still-held Layer reads. Materializing
     first preserves the dict-era post-removal surface (the copies existed at
     this point in the dict era). Layers whose representative op survives keep

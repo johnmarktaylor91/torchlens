@@ -53,7 +53,7 @@ class BundleLoadContext(NamedTuple):
     tlspec_version: Any = None
 
 
-# SECURITY (secF-2). Hard cap on nested-bundle recursion depth. Nested bundles are
+# SECURITY. Hard cap on nested-bundle recursion depth. Nested bundles are
 # shallow by construction; a deep chain is a hand-edited attacker artifact. The
 # resolved-path visited set closes self-reference and mutual cycles exactly; this
 # cap is the belt-and-suspenders bound on any deep acyclic chain that would still
@@ -77,8 +77,8 @@ def _load_unified_bundle(
         Directory containing a unified bundle manifest and metadata payload.
     bundle_visited:
         Internal set of already-in-progress bundle-root real paths, threaded to
-        detect self-referential / mutually-recursive nested-bundle members
-        (secF-2). ``None`` at the top level.
+        detect self-referential / mutually-recursive nested-bundle members.
+        ``None`` at the top level.
     unknown_relations:
         Loader-doctrine policy for unknown NAMESPACED member-relation kinds:
         ``"opaque"`` (default) preserves them as opaque rows, ``"refuse"``
@@ -113,7 +113,7 @@ def _load_unified_bundle(
     _reject_symlink_path(legacy_pickle_path, context="bundle metadata")
     try:
         with legacy_pickle_path.open("rb") as handle:
-            # Same coarse allocation guard as the trace metadata path (B8-16):
+            # Same coarse allocation guard as the trace metadata path:
             # the legacy kind=bundle branch fed the unpickler an uncapped file,
             # so an absurd on-disk pickle was an alloc/time DoS at tl.load even
             # though the SafeBundleUnpickler still blocked code execution.
@@ -186,7 +186,7 @@ def _resolve_bundle_member_path(bundle_path: Path, relative_path: str) -> Path:
         raise ArtifactError(
             f"Bundle rejected member path traversal outside bundle root: {relative_path!r}."
         ) from exc
-    # SECURITY (secF-2). A member path that resolves to the bundle root itself
+    # SECURITY. A member path that resolves to the bundle root itself
     # (``"."`` / ``""`` / any path collapsing onto the root) is a self-reference
     # that would re-enter this same directory and recurse without bound. The
     # containment check above passes for it (it stays inside the root), so it must
@@ -278,7 +278,7 @@ def _load_unified_bundle_directory(
         load cycle or exceeds the nesting-depth cap.
     """
 
-    # SECURITY (secF-2). Record THIS bundle root before loading any member so a
+    # SECURITY. Record THIS bundle root before loading any member so a
     # member that points back at us (or at an ancestor already being loaded) is
     # caught as a cycle instead of recursing forever. The depth cap bounds any deep
     # acyclic chain that would still blow the stack before a ``RecursionError``.
@@ -326,7 +326,7 @@ def assemble_bundle(
 
     Writer-owned keys are bare; an unknown bare key refuses (``bundle_section_unknown``),
     namespaced keys load opaque and re-save verbatim, member relations are checked against
-    the loaded member names, and the lineage sections restore verbatim (a pre-F03 artifact
+    the loaded member names, and the lineage sections restore verbatim (an older artifact
     reads as origin ``loaded``).
     """
 

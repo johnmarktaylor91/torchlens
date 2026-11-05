@@ -328,7 +328,7 @@ final-callback queue is available (the queued callback identity-checks its captu
 and graph-task id, so a stale callback can never close a newer pass), with the
 synchronization-point backstop always armed — final callbacks skip the engine's error path, so
 the drain is opportunistic, never presumed. The close routine is a journal/scavenge/finalize
-split with the finalize guard IN-ROUTINE: the R36-1 D2H fence and the full projection never run
+split with the finalize guard IN-ROUTINE: the D2H fence and the full projection never run
 inside an engine invocation; a deferred finalize runs at the next qualifying sync point or
 non-engine read, and a read from inside an engine invocation journals without materializing.
 The `BackwardPassEnd` sidecar event discloses which close path fired (`engine_drain` /

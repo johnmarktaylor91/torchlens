@@ -63,14 +63,12 @@ def _check_trace_self_consistency(ml: Trace) -> None:
             f"num_ops={ml._num_ops} != expected computational layers={expected_ops}",
         )
 
-    # Param counts follow PARAMETER OBJECT IDENTITY (A07 numbers truth,
-    # summary memo 3.3): param_logs is object-deduplicated at the pre-forward
-    # scan, so trace totals must equal its sums exactly. The historical
-    # per-unique-layer summation double-counted a parameter consumed by more
-    # than one layer (tied embeddings, weight-reused layers) and silently
-    # dropped declared-but-never-executed parameters; the tripwire now checks
-    # the identity partition it once contradicted. This matches the summation
-    # logic in labeling.py (_tally_params_by_identity).
+    # Param counts follow PARAMETER OBJECT IDENTITY: param_logs is
+    # object-deduplicated at the pre-forward scan, so trace totals must equal
+    # its sums exactly. A per-unique-layer summation would double-count a
+    # parameter consumed by more than one layer (tied embeddings, weight-reused
+    # layers) and silently drop declared-but-never-executed parameters. This
+    # matches the summation logic in labeling.py (_tally_params_by_identity).
     param_logs = list(ml._param_logs or [])
     expected_param_sum = len(param_logs)
     expected_num_params = sum(int(pl.num_params) for pl in param_logs)
@@ -275,12 +273,12 @@ def _check_special_layer_lists(ml: Trace) -> None:
 
 
 def _check_capture_edge_survival(trace: Trace) -> None:
-    """Reconcile the final graph against the sealed capture-time edge truth (r29 F3b).
+    """Reconcile the final graph against the sealed capture-time edge truth.
 
     The per-op identity witness (``dropped_edge_tensor_args``) is stamped at
     CAPTURE, so an edge dropped anywhere DOWNSTREAM of it -- the 20-step
-    postprocess pipeline, a later graph mutation -- was invisible whenever the
-    payload was trivial (the value sweep's blind class): removing an edge from
+    postprocess pipeline, a later graph mutation -- is invisible whenever the
+    payload is trivial (the value sweep's blind class): removing an edge from
     ``parents`` + ``parent_arg_positions`` symmetrically left every
     self-consistency check green. This invariant closes that stage gap: every
     capture-observed (slot -> producer) pair sealed on the Trace at op-record
@@ -332,7 +330,7 @@ def _check_capture_edge_survival(trace: Trace) -> None:
             for domain in ("args", "kwargs")
             for label in (positions.get(domain) or {}).values()
         )
-        # r33 F-1: reconcile each sealed triplet AT ITS EXACT SLOT, not by
+        # reconcile each sealed triplet AT ITS EXACT SLOT, not by
         # label-set membership. Set membership let two corruptions through:
         # a slot PERMUTATION between value-identical surviving producers (the
         # swapped labels are both still "present somewhere"), and an argpos
@@ -522,16 +520,13 @@ def _check_graph_topology(ml: Trace) -> None:
     - Every Op's final labels resolve through ``trace.ops`` to that same Op
       (``_check_op_label_resolution``, run last).
 
-    Round-26 W3-3 note: this check previously also "compared"
-    ``has_parents``/``has_siblings``/``has_co_parents`` against
-    ``len(parents)``/``len(siblings)``/``len(co_parents)``. Those three are
-    read-only ``Op`` PROPERTIES defined as exactly those length tests
-    (op.py), so the comparisons were tautologies that could never fail on any
-    trace -- security theater, not a tripwire. They were removed rather than
-    kept; ``has_children`` is the only stored capture-time flag with
-    independent information, and the ``parent_arg_positions`` cross-check
-    below is a real two-independent-structures consistency test that replaces
-    them.
+    Note: ``has_parents``/``has_siblings``/``has_co_parents`` are deliberately
+    NOT compared against ``len(parents)``/``len(siblings)``/``len(co_parents)``.
+    Those three are read-only ``Op`` PROPERTIES defined as exactly those length
+    tests (op.py), so such comparisons would be tautologies that could never
+    fail on any trace. ``has_children`` is the only stored capture-time flag
+    with independent information, and the ``parent_arg_positions`` cross-check
+    below is a real two-independent-structures consistency test.
     """
     name = "graph_topology"
     label_set = set(ml.layer_labels) | set(ml.op_labels)
@@ -546,7 +541,7 @@ def _check_graph_topology(ml: Trace) -> None:
 
         # Parent-child bidirectionality. Stored edge labels must EXACT-MATCH a
         # canonical layer/op label, and that membership test fires BEFORE any
-        # ``ml[...]`` resolution (B3R7-R05 sol): ``Trace.__getitem__`` is the
+        # ``ml[...]`` resolution: ``Trace.__getitem__`` is the
         # user-facing INTELLIGENT lookup, so a corrupted-but-fuzzy-resolvable
         # spelling (``'input'`` for ``'input_1'``) resolves successfully and a
         # post-resolution guard on the RESOLVED record's ``layer_label`` can
@@ -592,7 +587,7 @@ def _check_graph_topology(ml: Trace) -> None:
         # ONLY stored flag with independent information; the derived
         # has_parents/has_siblings/has_co_parents properties recompute from the
         # very lists a comparison would use, so checking them is vacuous -- see
-        # the round-26 W3-3 note in the docstring.)
+        # the note in the docstring.)
         non_output_children = [
             c for c in lpl.children if c not in output_set and ml[c].layer_label not in output_set
         ]
@@ -618,7 +613,7 @@ def _check_graph_topology(ml: Trace) -> None:
         # The arg map's top-level domain is CLOSED: every writer uses exactly
         # the "args"/"kwargs" buckets, and the per-entry checks below iterate
         # only those two, so a foreign top-level key (e.g. a label used as a
-        # domain, the B3R7-R05-2 plant shape) would otherwise never be
+        # domain) would otherwise never be
         # examined at all -- an unguarded domain on relation metadata.
         foreign_domains = set(lpl.call.parent_arg_positions) - {"args", "kwargs"}
         if foreign_domains:
@@ -676,12 +671,12 @@ def _check_graph_topology(ml: Trace) -> None:
 def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any) -> None:
     """Derive ``siblings``/``co_parents`` from the edge tables and compare.
 
-    The round-26 W3-3 removal deleted the ``has_siblings``/``has_co_parents``
-    tautologies (property vs its own length) but left the WHOLE relation family
-    with no tripwire at all: an ``Op.siblings`` implementation drifting from its
-    documented semantics -- exactly the pass-spelling self-inclusion bug, where
-    every multi-pass op listed ITSELF as its own sibling -- shipped through
-    repr, ``to_pandas()``, and every consumer with zero invariant hits.
+    Comparing ``has_siblings``/``has_co_parents`` to their own lengths would be
+    tautological, so this check covers the WHOLE relation family instead: an
+    ``Op.siblings`` implementation drifting from its documented semantics --
+    for example the pass-spelling self-inclusion bug, where every multi-pass
+    op lists ITSELF as its own sibling -- would otherwise ship through repr,
+    ``to_pandas()``, and every consumer with zero invariant hits.
 
     This is an independent re-derivation of the documented spec from the
     ``parents``/``children`` edge tables (a second implementation, not a call

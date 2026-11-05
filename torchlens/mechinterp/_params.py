@@ -1,4 +1,4 @@
-"""Parameter facets + head-indexed weight views (mikit item 5, D17 plumbing).
+"""Parameter facets + head-indexed weight views.
 
 Head-indexed views over the model's projection weights, derived from the
 captured graph and VERIFIED against captured payloads before anything is
@@ -9,7 +9,7 @@ handed out:
   question), ``w_o`` as ``[q_heads, d_head, d_model]``.
 - Orientation metadata: HF ``Conv1D`` stores ``[in, out]``, ``nn.Linear``
   ``[out, in]`` -- the exact confusion behind the measured 18.80 per-head
-  sum-check error (fix F5); orientation is decided by MODULE CLASS, and an
+  sum-check error; orientation is decided by MODULE CLASS, and an
   unknown class with a square weight refuses rather than guesses.
 - Fused-QKV slicing evidence: the roles' facet ops are traced back to their
   projection weight; when all three share one weight, the slice boundaries
@@ -105,8 +105,8 @@ class HeadWeightViews:
     ``w_q``: ``[n_q_heads, d_model, d_head]``; ``w_k`` / ``w_v``:
     ``[n_kv_heads, d_model, d_head]``; ``w_o``: ``[n_q_heads, d_head,
     d_model]``. Biases are head-indexed where the parameter exists
-    (``b_o`` stays ``[d_model]`` -- it is not attributable per head; mikit
-    D10 keeps it a verified remainder, never spread).
+    (``b_o`` stays ``[d_model]`` -- it is not attributable per head; it is
+    kept as a verified remainder, never spread).
 
     Examples
     --------

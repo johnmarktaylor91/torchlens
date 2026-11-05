@@ -1,4 +1,4 @@
-"""Derived quantiles from the signed-log2 sketch (explorer D10; lane F25).
+"""Derived quantiles from the signed-log2 sketch (explorer).
 
 The DEFAULT quantile mode: interpolated from the full-population sketch,
 always marked approximate, with the grid resolution and overflow state
@@ -17,7 +17,7 @@ Within a magnitude bin the estimate interpolates log-linearly between the
 bin edges; underflow bands interpolate linearly between 0 and the window
 floor; an overflow band CLAMPS to the window edge and sets
 ``clamped_to_window=True`` -- the exact out-of-range count survives the
-window choice (D9), so the clamp is disclosed, never silent.
+window choice, so the clamp is disclosed, never silent.
 
 Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -33,7 +33,7 @@ __tl_layer__ = "L5"
 
 
 class WatchRenderError(ObservabilityError):
-    """Raised for watch renderer / derived-read refusals (lane F25).
+    """Raised for watch renderer / derived-read refusals.
 
     Examples
     --------
@@ -110,7 +110,7 @@ def _interpolate(band: _Band, fraction: float) -> float:
 
 
 def derived_quantile(hist: HistogramResult, q: float) -> DerivedQuantile:
-    """Estimate the ``q``-quantile of the sketched population (D10 default).
+    """Estimate the ``q``-quantile of the sketched population (default).
 
     Parameters
     ----------
@@ -148,7 +148,7 @@ def derived_quantile(hist: HistogramResult, q: float) -> DerivedQuantile:
     if total == 0:
         raise WatchRenderError(
             "The sketched population has no finite elements; a quantile of "
-            "nothing would invent a number (missing is never zero, D6).",
+            "nothing would invent a number (missing is never zero).",
             code="watch_population_empty",
             remedy="Check presence/nonfinite disclosures before deriving quantiles.",
         )

@@ -71,10 +71,9 @@ def capability_snapshot() -> dict[str, bool]:
 def format_capability_summary(snapshot: dict[str, bool]) -> str:
     """Return the grouped absences-first summary of a capability snapshot.
 
-    ONE shared renderer (sumfam wave-0 item 2): the full ``name=value`` dump
-    used to sit in a report data cell, so every renderer inherited a
-    ~1,900-character line. Absences are the signal and are named first; the
-    full dump moves to the detail accessors.
+    ONE shared renderer: the full ``name=value`` dump would be a
+    ~1,900-character line in a report data cell. Absences are the signal and
+    are named first; the full dump lives in the detail accessors.
 
     Parameters
     ----------
@@ -100,7 +99,7 @@ def format_capability_summary(snapshot: dict[str, bool]) -> str:
 # skip-audit ledger's optional-preview rows, the TransformerLens oracle rows, the
 # tracker relay-fidelity pins) and never advertised to users; probing them also
 # imports peft/transformer_lens/wandb/clearml for real (the probe IS an import),
-# which pushed the doctor past the MCP doctor tool's 12 s budget (D05, 2026-09-02).
+# which pushed the doctor past the MCP doctor tool's 12 s budget.
 _DOCTOR_EXCLUDED_EXTRAS = frozenset(
     {"all", "all-stretch", "dev", "test", "deploy", "tlens-oracle", "trackers-relay-test"}
 )
@@ -228,7 +227,7 @@ def _probe_graphviz() -> _EnvironmentCheck:
 
     python_graphviz = _module_is_installed("graphviz")
     try:
-        # R40: routed through the ONE bounded spawn seam. subprocess.run's
+        # Routed through the ONE bounded spawn seam. subprocess.run's
         # timeout killed only the direct child, so a wedged ``dot`` wrapper's
         # grandchild survived the "bounded" probe for the life of the box;
         # the shared runner tears down the whole process group.
@@ -349,12 +348,12 @@ def _classify_capability_absences(
     -------
     tuple[list[str], list[str], list[str]]
         ``(missing, unprobed, optional_absent)``. Only ``missing`` is a genuine
-        degradation (r-b4 R26-4): an absent OPTIONAL feature (interpreter-version
+        degradation: an absent OPTIONAL feature (interpreter-version
         surface, upstream-removed API, an optional backend that is not
         installed) keeps a healthy install at PASS, and a lazily probed flag
         whose probe has never run (kineto event fields, the memory profile, ...)
         is UNPROBED, not missing: nothing has consumed the capability yet, so
-        nothing has degraded (D04 integration fix).
+        nothing has degraded.
     """
 
     def _probe_latched(name: str) -> bool:
@@ -459,7 +458,7 @@ def _probe_mechanical_belt() -> _EnvironmentCheck:
         or no probe recipe exists) is neither belt-patched nor proven
         protocol-visible, so a stale pre-wrap reference to it can drop ops
         with zero signal while the capture still reports
-        ``capture_verified=True`` (grind-r6 b3 R02, sol MED).
+        ``capture_verified=True``.
     """
 
     if not _state._is_decorated:
@@ -474,7 +473,7 @@ def _probe_mechanical_belt() -> _EnvironmentCheck:
     # Unprobed candidates are a STANDING recipe-coverage limitation (hundreds
     # of in-place variants have no probe recipe on every healthy build), so
     # they are disclosed as a count with examples but never flip the status —
-    # a permanent false alarm trains users to ignore the row (r-b4 R26-4).
+    # a permanent false alarm trains users to ignore the row.
     # A probe FAILURE is unexpected breakage on this build and drives WARN.
     unprobed_examples = ", ".join(f"{ns}.{fn}" for ns, fn in report.unprobed_candidates[:5])
     unprobed_detail = f"unprobed_candidates={report.unprobed_candidate_count}"

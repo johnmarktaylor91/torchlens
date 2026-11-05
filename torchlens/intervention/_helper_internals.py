@@ -673,10 +673,10 @@ def _source_mean_spec(
 
         return _hook
 
-    # DERIVED, never tabled (edits memo D18): True only when the fill value
+    # DERIVED, never tabled: True only when the fill value
     # provably never reads the traced batch. An external source qualifies;
     # the self-mean reads every batch row and fails closed, and couples the
-    # rows (D34), so a chunked capture refuses it at attach.
+    # rows, so a chunked capture refuses it at attach.
     batch_independent = source is not None
     return _helper_spec(
         "mean_ablate",
@@ -702,7 +702,7 @@ def _population_mean_spec(
     """Build the ``mean_ablate`` spec whose source is a population.
 
     The fill is computed eagerly at construction (populations are prepared
-    before hooks install, D10); the record says ``stochastic=False`` and no
+    before hooks install); the record says ``stochastic=False`` and no
     seed is ever invented. ``axes="members"`` is the elementwise
     across-member mean, which must match the site's geometry exactly;
     ``"all"`` reduces that mean to one scalar and explicit axes reduce it

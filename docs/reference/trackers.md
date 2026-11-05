@@ -129,7 +129,7 @@ were exactly the rows that vanished.
   offering sink's grid for every sink of the session: `WandbSink` offers
   `WANDB_SAFE_DESCRIPTOR` (497 buckets), so
   `watch(model, to=WandbSink(run), hist_every=...)` attaches on the default
-  path. Any caller grid, including the C06 default carried by a bare
+  path. Any caller grid, including the default carried by a bare
   `WatchSettings()`, is kept and each sink's preflight judges it, so an
   over-cap grid still refuses (`tracker_histogram_bucket_cap`).
 - `watch_close_empty` counts DATA points only: heartbeat, manifest, and

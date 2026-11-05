@@ -1,4 +1,4 @@
-"""Facade-side echo entry helpers (lane F28, snoop memo D1/D5).
+"""Facade-side echo entry helpers.
 
 ``tl.trace`` calls these at its seams so the echo feature's
 option-composition refusals, session lifecycle, and crash-tail flush live
@@ -114,7 +114,7 @@ def refuse_echo_non_torch(echo: Any, resolved_spec: Any) -> None:
 
 
 def open_echo_session(trace: Any, echo_options: Any) -> EchoSession | None:
-    """Open the per-capture echo observer session (snoop D1).
+    """Open the per-capture echo observer session.
 
     One read-only observer per capture, installed as runtime-only state on
     the trace (never a declared Trace field).
@@ -140,7 +140,7 @@ def open_echo_session(trace: Any, echo_options: Any) -> EchoSession | None:
 
 
 def echo_forward_failure(echo_session: EchoSession | None, exc: BaseException) -> None:
-    """Flush the crash tail on a failed forward (snoop D5 tail 2).
+    """Flush the crash tail on a failed forward.
 
     Synchronous flush; the note rides the exception via PEP 678. Interrupts
     and halt signals get a best-effort flush and stay what they are. The

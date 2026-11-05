@@ -1,4 +1,4 @@
-"""Static watch renderers on the SVG/PIL chassis (explorer D23/D24; F25).
+"""Static watch renderers on the SVG/PIL chassis (explorer).
 
 Four paper-ready views over the per-step history artifact, all
 deterministic SVG from a small pure-python composer (base dependencies
@@ -44,7 +44,7 @@ from ._svg import _C_TEXT, _Svg
 
 __tl_layer__ = "L5"
 
-#: The one named v1 ranking score (D24): sites with nonfinite events rank
+#: The one named v1 ranking score: sites with nonfinite events rank
 #: first (by event count), then by relative drift of the spine mean between
 #: the first and last observed steps; ties break on site_id.
 RANKING_SCORE = "nonfinite_first_drift_v1"
@@ -441,7 +441,7 @@ def render_fan(
     (approximate, resolution disclosed in the caption); the dotted min/max
     envelope is EXACT from the spine, so true extremes are never lost --
     quantiles are outlier-robust by construction and need no
-    outlier-rejection knob (D24). Strip height is fixed (``width`` is the
+    outlier-rejection knob. Strip height is fixed (``width`` is the
     one geometry knob, matching :func:`render_detail`).
 
     Examples
@@ -773,7 +773,7 @@ def render_contact_sheet(
     tiles_per_page: int = 12,
     width: int = 900,
 ) -> ContactSheet:
-    """Render one page of the ranked overview contact sheet (D24).
+    """Render one page of the ranked overview contact sheet.
 
     Hierarchically ordered tiles (catalog order within equal rank), ranked
     by :data:`RANKING_SCORE` with nonfinite events first; a mandatory
@@ -910,7 +910,7 @@ def color_by_watch(
     stream: str = "activation",
     stat: str = "finite_absmax",
 ) -> Any:
-    """Graph join (D24): a ``draw(color_by=...)`` callable from watch stats.
+    """Graph join: a ``draw(color_by=...)`` callable from watch stats.
 
     Maps each drawn op node to the named spine stat of the watch site whose
     module path matches the node's owning module at ``step``. Nodes without

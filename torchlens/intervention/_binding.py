@@ -1,6 +1,6 @@
-"""``spec.bind(model)`` -- the capture-free bound intervention executor (F01).
+"""``spec.bind(model)`` -- the capture-free bound intervention executor.
 
-Surgery memo section 3.3, amended lane brief foldA D12: lane 3 of the ONE-SPEC
+Lane 3 of the ONE-SPEC
 design -- "really run, record nothing (~1x; hand it to anything that calls a
 model)". The binding pairs one immutable :class:`InterventionSpec` with one
 base model, changing neither. One engine underneath: WHERE terms evaluate
@@ -94,7 +94,7 @@ _TRAINING_SURFACE_NAMES: frozenset[str] = frozenset(
     }
 )
 
-#: The engine-set execution-effect value for this lane (foldA D17).
+#: The engine-set execution-effect value for this lane.
 _BIND_EXECUTION_EFFECT = "values_replaced_after_execution"
 
 

@@ -518,7 +518,7 @@ def compute_raw_event_shape_hash(capture_events: Any) -> str:
 
     # Read through the canonical reducer view, never the raw list: the hash is
     # a persisted change-detection key and must keep seeing AMENDED parents
-    # (register_tensor_connection) when the raw list becomes append-only (P4).
+    # (register_tensor_connection) when the raw list becomes append-only.
     # Today the reducer is a no-op passthrough, so this is byte-identical.
     folded_events = (
         capture_events.amended_op_records()

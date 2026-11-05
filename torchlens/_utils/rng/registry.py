@@ -27,7 +27,7 @@ from .._torch_compat import (
 from . import engine_state
 
 # ======================================================================================
-# Host-nondeterminism channel monitor (r37 hon1_2; r39 CLASS A enumeration completeness).
+# Host-nondeterminism channel monitor (data-driven, enumeration-complete).
 #
 # The global-engine snapshots above cover only the two REPLAYABLE engines (module
 # ``random``, legacy ``np.random``). Every OTHER host entropy / clock / RNG-instance
@@ -41,7 +41,7 @@ from . import engine_state
 #
 # A negative witness (``host_rng_consumed=False``) is honest ONLY when every required
 # observer over the declared channel/thread surface installed, classified, stayed
-# installed, and restored exactly. This is the r39 enumeration-completeness invariant:
+# installed, and restored exactly. This is the enumeration-completeness invariant:
 # "one more RNG/clock name" is a failing registry meta-test, not a false VERIFIED.
 #
 # Residual tail (outside any Python-visible call surface, disclaimed in contract s11):
@@ -70,7 +70,7 @@ class HostNondeterminismRow:
     classification: str
 
 
-# ---- Clock vocabulary (r39 R2/R2b) ----------------------------------------------------
+# ---- Clock vocabulary ----------------------------------------------------
 #
 # The current-clock readers below all read the CURRENT wall/monotonic clock; a positive
 # marks on ANY covered thread. Module-attr readers fire thread-independently; the
@@ -115,7 +115,7 @@ _DATETIME_CLOCK_READERS: tuple[tuple[Any, str], ...] = (
 )
 
 
-# ---- Torch global-RNG API surface (r65 CLUSTER Z) --------------------------------------
+# ---- Torch global-RNG API surface --------------------------------------
 #
 # torch's OWN Python-level RNG APIs are host-nondeterminism channels too. The asymmetry
 # that decides every disposition below: sparse replay RE-EXECUTES the recorded tensor RNG
@@ -126,9 +126,9 @@ _DATETIME_CLOCK_READERS: tuple[tuple[Any, str], ...] = (
 # through the existing snapshot compare). Every public name of the torch / torch.random /
 # torch.cuda(.random) / torch.mps / torch.mtia / torch.xpu(.random) RNG surfaces carries
 # an EXPLICIT disposition in the frozen closed vocabulary below; the independent no-list
-# module-discovery meta-test (r67) makes a torch upgrade that grows this surface -- or
+# module-discovery meta-test makes a torch upgrade that grows this surface -- or
 # loads one more RNG-bearing module -- a FAILING test, never a silent false-VERIFIED
-# (the r39 "one more name" doctrine, now covering torch itself).
+# (the "one more name" doctrine, applied to torch itself).
 
 TORCH_RNG_DISPOSITIONS: frozenset[str] = frozenset(
     {"entropy", "mutation", "replayable_read", "structurally_covered", "op_captured"}
@@ -150,7 +150,7 @@ captured DAG calls replayed seeded; never enumerated here (the capture spine own
 
 @dataclass(frozen=True)
 class TorchRngSurfaceRow:
-    """One torch RNG API endpoint with its frozen honesty disposition (r65 CLUSTER Z).
+    """One torch RNG API endpoint with its frozen honesty disposition.
 
     ``target`` is the dotted module-attribute spelling (each re-export spelling gets its
     own row so patch installation and the held-reference layer cover every alias);
@@ -165,10 +165,10 @@ class TorchRngSurfaceRow:
 
 # Per-module endpoint specs, feature-detected at build. ``get_rng_state`` family rows are
 # deliberately structurally_covered (NO monitor row): the returned state TENSOR is already
-# covered by the r39 tensor->host escape belt (branch-on-state-bytes ->
+# covered by the tensor->host escape belt (branch-on-state-bytes ->
 # INCOMPLETE_SCALAR_ESCAPE, never VERIFIED; a store-only read stays VERIFIED), and a row
 # would over-ceiling ``torch.utils.checkpoint(preserve_rng_state=True)``, which
-# round-trips VERIFIED+ATTESTED today (r65 probe za4).
+# round-trips VERIFIED+ATTESTED.
 _TORCH_RNG_CORE_SPEC: tuple[tuple[str, str, str], ...] = (
     ("seed", "entropy", "draws OS entropy and reseeds the global engine"),
     ("manual_seed", "mutation", "in-forward host mutation of the global engine"),
@@ -206,13 +206,13 @@ _TORCH_RNG_MODULE_SPECS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...
     ("torch.cuda", _TORCH_RNG_DEVICE_SPEC),
     ("torch.cuda.random", _TORCH_RNG_DEVICE_SPEC),
     ("torch.mps", _TORCH_RNG_CORE_SPEC),
-    # r67 C1 (hon1-F6): ``torch.mtia`` carries the full feature-detected device RNG
+    # ``torch.mtia`` carries the full feature-detected device RNG
     # spec -- on torch 2.8 only ``get_rng_state``/``set_rng_state`` resolve, and any
     # torch upgrade that grows the mtia surface lights up through the same
     # ``hasattr`` feature detection instead of a hand-list edit.
     ("torch.mtia", _TORCH_RNG_DEVICE_SPEC),
     ("torch.xpu", _TORCH_RNG_DEVICE_SPEC),
-    # r67 C1: ``torch.xpu.random`` re-exports the xpu RNG surface exactly like
+    # ``torch.xpu.random`` re-exports the xpu RNG surface exactly like
     # ``torch.cuda.random`` does for cuda; found by the independent no-list module
     # discovery immunizer (the same shared-blind-spot class as mtia).
     ("torch.xpu.random", _TORCH_RNG_DEVICE_SPEC),
@@ -285,7 +285,7 @@ _TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
 # sys.modules by the time torch/torchlens finish their own imports): requiring
 # sys.modules presence here would make coverage depend on which OTHER test
 # happened to import the module first in the session. find_spec proves existence
-# without paying the module's own import cost (W21 cold-start guarantee).
+# without paying the module's own import cost (keeps cold start cheap).
 _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS: tuple[tuple[str, str], ...] = (
     (
         "torch.distributed.tensor.parallel.api.TensorParallelRNGTracker",
@@ -363,7 +363,7 @@ def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
         # the time torch/torchlens finish their own imports), these modules
         # are never eagerly imported by anything; sys.modules-gating them
         # would make coverage depend on which OTHER test imported them first
-        # (W21). The spec walk proves existence without importing the module
+        # . The spec walk proves existence without importing the module
         # or a missing ancestor (find_spec would import the ancestor, and an
         # ancestor guard would bring the order dependence back); the
         # attribute itself is trusted present.
@@ -374,7 +374,7 @@ def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
 
 
 TORCH_RNG_SURFACE: tuple[TorchRngSurfaceRow, ...] = _build_torch_rng_surface()
-"""Frozen disposition table for the torch Python-level RNG API surface (r65).
+"""Frozen disposition table for the torch Python-level RNG API surface.
 
 Every ``entropy`` / ``mutation`` / ``replayable_read`` row here becomes a
 ``module_patch`` row of :data:`HOST_NONDETERMINISM_REGISTRY` (same builder), so the
@@ -383,21 +383,21 @@ ONE table. ``structurally_covered`` rows carry their covering-mechanism proof in
 ``note`` and deliberately install nothing.
 """
 
-# ---- All-receiver Generator method table (r67 C1) --------------------------------------
+# ---- All-receiver Generator method table --------------------------------------
 #
-# r65 classified Generator method c_calls by RECEIVER IDENTITY (process defaults only),
-# which let scalar-returning methods on user-constructed / held / RETURNED generators
-# escape unwitnessed (r66 free-F1 ``torch.Generator().seed()``, corr1-1
-# ``default.clone_state().initial_seed()``, hon1-F5 ``get_offset()``): the returned
+# Classifying Generator method c_calls by RECEIVER IDENTITY alone (process defaults only)
+# would let scalar-returning methods on user-constructed / held / RETURNED generators
+# escape unwitnessed (``torch.Generator.seed``,
+# ``default.clone_state().initial_seed()``, ``get_offset()``): the returned
 # Python int leaks OS entropy or engine/instance history into control flow with no
-# channel recorded -> false VERIFIED+ATTESTED. r67 replaces the default-only dict with
-# ONE authoritative method table dispatched for EVERY ``isinstance(receiver,
+# channel recorded -> false VERIFIED+ATTESTED. Instead ONE authoritative method table
+# is dispatched for EVERY ``isinstance(receiver,
 # torch.Generator)`` c_call (subclasses included -- an inherited C method's c_call
 # receiver is the subclass instance). Each row is CLOSED UNDER ITS RETURN VALUE:
 #
 # * ``host_scalar`` returns carry a marking disposition in BOTH receiver columns
 #   (nothing downstream can see a bare Python int);
-# * ``state_tensor`` returns are structural ONLY because the r39 tensor->host
+# * ``state_tensor`` returns are structural ONLY because the tensor->host
 #   escape belt covers the returned tensor's value use;
 # * ``generator`` / ``self_generator`` returns are structural ONLY because the
 #   returned Generator re-enters this same all-receiver classifier (closure) --
@@ -584,7 +584,7 @@ GENERATOR_METHOD_TABLE: tuple[GeneratorMethodRow, ...] = tuple(
     for row in _GENERATOR_METHOD_ROWS
     if _OPTIONAL_GENERATOR_METHOD_CAPABILITIES.get(row.method, True)
 )
-"""The live-surface all-receiver ``torch.Generator`` method table (r67 C1)."""
+"""The live-surface all-receiver ``torch.Generator`` method table."""
 
 _GENERATOR_METHOD_ROWS_BY_NAME: dict[str, GeneratorMethodRow] = {
     row.method: row for row in GENERATOR_METHOD_TABLE
@@ -601,7 +601,7 @@ def _resolve_default_generator_ids() -> frozenset[int]:
     """Identity set of the CURRENTLY populated process/device default generators.
 
     Called at monitor install (routing-cache seed) and again on any Generator-receiver
-    cache miss (r67 C1 dynamic membership): a device default generator populated
+    cache miss (dynamic membership): a device default generator populated
     MID-FORWARD (lazy device init) still selects the default-receiver column, without
     imports and without forcing device initialization.
     """
@@ -691,7 +691,7 @@ def _build_host_nondeterminism_registry() -> tuple[HostNondeterminismRow, ...]:
             "instance_draw",
         )
     )
-    # r65 CLUSTER Z: torch's own Python-level RNG APIs, derived from the ONE frozen
+    # torch's own Python-level RNG APIs, derived from the ONE frozen
     # disposition table so the monitor install, the held-reference layer, and the
     # coverage meta-tests can never drift apart. ``replayable_read`` rows mark the
     # NON-ceiling ``replayable_reads`` result set (consumed-flag only; run at the
@@ -709,7 +709,7 @@ def _build_host_nondeterminism_registry() -> tuple[HostNondeterminismRow, ...]:
                     family, surface_row.target, "module_patch", "any", surface_row.disposition
                 )
             )
-    # r67 C1: ONE all-receiver row -- method c_calls on ANY ``torch.Generator``
+    # ONE all-receiver row -- method c_calls on ANY ``torch.Generator``
     # (process/device defaults, user-constructed, held, cloned, subclass) dispatch
     # through GENERATOR_METHOD_TABLE; the default identity set is only the
     # column-routing cache, re-resolved dynamically on a miss.
@@ -722,7 +722,7 @@ def _build_host_nondeterminism_registry() -> tuple[HostNondeterminismRow, ...]:
             "generator_method",
         )
     )
-    # W051 (2.17): the Python / legacy-NumPy GLOBAL-engine state surface (consumed-only).
+    # The Python / legacy-NumPy GLOBAL-engine state surface (consumed-only).
     for family, target, strategy, scope, classification in engine_state.registry_rows():
         rows.append(HostNondeterminismRow(family, target, strategy, scope, classification))
     return tuple(rows)
@@ -738,13 +738,13 @@ every row has a valid strategy + thread policy and that no numpy draw-method NAM
 enumerated anywhere (receiver typing + state digests cover new draw-method names). A
 future stdlib clock/RNG endpoint is a failing meta-test until it is given a registry row.
 
-r41 (hon1_1): every ``module_patch`` row (and the construction-entropy alias) carries a
+Every ``module_patch`` row (and the construction-entropy alias) carries a
 SECOND observation layer -- the ORIGINAL builtin's identity is registered at monitor
 install, before the module attribute is replaced, so a pre-window held reference
 (``from time import time`` / ``from os import urandom`` at the top of a model or helper
 module) is classified from the ``c_call`` profile event on the owner and every in-window
 hooked thread. The held-ref layer adds NO new rows and NO new strategy vocabulary; the
-r41 held-ref immunizer derives its obligations from ``strategy == "module_patch"``, so a
+held-ref meta-test derives its obligations from ``strategy == "module_patch"``, so a
 future module-patch row without identity registration (or without a probe recipe) is a
 RED test, not a silent gap.
 """

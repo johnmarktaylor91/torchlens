@@ -57,9 +57,9 @@ deliberately NOT used (they would wrongly deny ``Tensor.module_load`` /
 ``_preload_cuda_deps``) are enumerated exactly instead. ``from_numpy`` and
 ``frombuffer`` are pure and stay resolvable (they match none of the patterns).
 
-GENERAL INVARIANT (the denylist-completeness class -- r5/r6 ``from_file`` / ``resize_``;
-r26 ``apply_`` / ``map_``; r39 ``map2_`` / ``register_hook``; r41 ``cond`` /
-``while_loop`` / ``autocast_increment_nesting``; r50 the ``cdata=`` raw-pointer
+GENERAL INVARIANT (the denylist-completeness class -- ``from_file`` / ``resize_``;
+``apply_`` / ``map_``; ``map2_`` / ``register_hook``; ``cond`` /
+``while_loop`` / ``autocast_increment_nesting``; the ``cdata=`` raw-pointer
 constructor families, closed in ``_raw_pointer_denial``). A callable reachable in the
 allowed namespace is NOT a pure forward op -- and must NOT resolve from an untrusted
 bundle -- if it does ANY of the following, regardless of whether it was individually
@@ -90,8 +90,8 @@ sibling gadget is denied by shape even when it is never added to a list:
 
 * callable-INVOKE -- the ``(map|apply)\\d*_`` runner / leading-``register`` name guard
   AND a SIGNATURE guard (``_signature_invokes_callable``: any ``Callable``-annotated or
-  callable-named parameter). The signature guard is what makes r39's "denied by shape
-  even when never enumerated" claim TRUE for the higher-order ops (``cond`` /
+  callable-named parameter). The signature guard is what makes the "denied by shape
+  even when never enumerated" claim true for the higher-order ops (``cond`` /
   ``while_loop`` / ...) that carry no ``map`` / ``register`` name marker;
 * storage-REALLOC -- the ``resize`` substring guard;
 * global-MUTATE -- the ``set_`` / ``_set_`` prefix guard PLUS the non-``set_`` verb close
@@ -108,15 +108,15 @@ resolvable; the SIGNATURE guard leaves every pure forward op (no pure tensor op 
 callable parameter) resolvable. The sole benign structural false-deny remains the inert
 functionalization introspection query ``_functionalize_was_inductor_storage_resized`` (a boolean read, never captured).
 
-R43 STRUCTURAL INVERSION (the denylist-of-verbs approach reached its limit). The
+STRUCTURAL INVERSION (the denylist-of-verbs approach reached its limit). The
 denylist above closes the CLASS "callable is a stdlib/builtin module" structurally, but
 for the internal-builtin torch roots ``torch`` / ``torch._C`` / ``torch._tensor`` it
 still relied on a growing verb denylist to subtract the non-forward builtins those roots
 host alongside the pure op catalog. Successive audits kept defeating that with a sibling
-the verb list never enumerated (r41 ``autocast_increment_nesting``; r42
+the verb list never enumerated (``autocast_increment_nesting``,
 ``_enable_functionalization`` / ``_functionalize_enable_reapply_views`` /
-``share_memory_`` / ``_sobol_engine_initialize_state_``). r43 inverts the decision on
-those EXACT roots to DEFAULT-DENY with a positive STRUCTURAL recognized-operator
+``share_memory_`` / ``_sobol_engine_initialize_state_``). The gate therefore inverts the
+decision on those EXACT roots to DEFAULT-DENY with a positive STRUCTURAL recognized-operator
 predicate (``_is_recognized_operator`` -- torch-overridable identity / aten schema /
 pure factory / audited ``to_sparse_coo`` wrapper), decided against torch's OWN operator
 authority (``get_overridable_functions`` / ``torch.ops.aten``) which is independent of
@@ -173,7 +173,7 @@ _ALLOWED_FORWARD_OP_MODULES: frozenset[str] = frozenset(
         "torch._C._linalg",
         "torch._C._nested",
         "torch._C._special",
-        # r49 hon2_1: ENUMERATION-COMPLETENESS ONLY (gate-NEUTRAL). ``torch._C._sparse`` is
+        # ENUMERATION-COMPLETENESS ONLY (gate-NEUTRAL). ``torch._C._sparse`` is
         # ALREADY admitted by the ``torch._C`` prefix entry above (``_matches`` prefix-covers
         # it), so adding it changes NO admission outcome; it is listed so the private-C
         # forward-op MODULE enumeration (the single source of truth consumed by the
@@ -196,7 +196,7 @@ _OPERATOR_MODULES: frozenset[str] = frozenset({"operator", "_operator"})
 
 
 def private_c_forward_op_module_names() -> tuple[str, ...]:
-    """Return the canonical ``torch._C._*`` private-C forward-op MODULE names (r49 hon2_1).
+    """Return the canonical ``torch._C._*`` private-C forward-op MODULE names.
 
     Single source of truth for the cross-thread witness's private-C free-function belt
     (:func:`torchlens.backends.torch.completeness_witness._private_c_forward_op_modules`): the
@@ -281,7 +281,7 @@ _DENIED_MODULES: frozenset[str] = frozenset(
         # Code execution / imports.
         "builtins",
         "importlib",
-        # The real import machinery behind ``importlib`` (r28, E-r28-1): under trust
+        # The real import machinery behind ``importlib``: under trust
         # these expose ``_frozen_importlib:__import__``, ``_call_with_frames_removed``
         # (a universal call gadget), and ``exec_module`` reachable via dotted walk.
         # Prefix matching then also covers their submodules.
@@ -291,7 +291,7 @@ _DENIED_MODULES: frozenset[str] = frozenset(
         "code",
         "codeop",
         "ctypes",
-        # Exec / spawn / install (r26): stdlib entry points that EXECUTE
+        # Exec / spawn / install: stdlib entry points that EXECUTE
         # arbitrary code strings/callables (debuggers, tracers, profilers,
         # timeit), spawn processes or browsers (pydoc/webbrowser/antigravity/
         # platform/asyncio), or install packages (pip/setuptools/venv). Denied
@@ -356,7 +356,7 @@ _DENIED_CALLABLE_NAMES: frozenset[str] = frozenset(
         "_load_global_deps",
         "_preload_cuda_deps",
         # Arbitrary-code-execution vectors reachable in the allowlisted torch
-        # surface (r26): ``torch.compile`` wraps/compiles an arbitrary callable
+        # surface: ``torch.compile`` wraps/compiles an arbitrary callable
         # (and mutates process-global dynamo state), and the elementwise
         # Python-callable runners ``Tensor.apply_`` / ``Tensor.map_`` each
         # INVOKE an attacker-supplied callable per element. Terminal names, per
@@ -364,15 +364,15 @@ _DENIED_CALLABLE_NAMES: frozenset[str] = frozenset(
         "compile",
         "apply_",
         "map_",
-        # r39 (secE-r38-1): the SAME arbitrary-callable-INVOKE class that r26
-        # denied ``apply_`` / ``map_`` for, but MISSED. ``Tensor.map2_`` is the
+        # The SAME arbitrary-callable-INVOKE class that ``apply_`` / ``map_`` are
+        # denied for. ``Tensor.map2_`` is the
         # 3-tensor elementwise Python-callable runner (identical primitive to
         # ``map_``); ``torch.vmap`` (real module ``torch.func``, reachable as
         # ``torch.vmap``) is a transform that INVOKES an attacker fn; and
         # ``Tensor.register_hook`` / ``register_post_accumulate_grad_hook``
         # register an arbitrary callback fired on backward. Also caught by the
         # structural ``(map|apply)\d*_`` / leading-``register`` guards below, but
-        # pinned here as the confirmed named misses.
+        # pinned here by name.
         "map2_",
         "vmap",
         "register_hook",
@@ -440,16 +440,16 @@ _DENIED_STATE_MUTATOR_NAMES: frozenset[str] = frozenset(
         "set_float32_matmul_precision",
         "set_warn_always",
         "set_vital",
-        # r39 (secE-r38-1): registers an arbitrary object as a device-backend
+        # Registers an arbitrary object as a device-backend
         # module -- a persistent process-global registry mutation. Its terminal
         # name does not lead with ``set_`` (it is ``_register_device_module``), so
         # it is pinned here AND caught by the leading-``register`` structural guard.
         "_register_device_module",
-        # r41 (secE-r40-1): NON-``set_`` process-global mutators the r6 ``set_*``
-        # audit MISSED because none leads with ``set_``. All MUTATE process-global
+        # NON-``set_`` process-global mutators that the ``set_*`` prefix guard does
+        # not cover because none leads with ``set_``. All MUTATE process-global
         # torch state that OUTLIVES ``Trace.run`` and are directly reachable via the
-        # run-path (zero/low-arg, take no callable). Pinned here as the confirmed
-        # named misses AND closed structurally by ``_is_global_state_mutator_name``
+        # run-path (zero/low-arg, take no callable). Pinned here by name
+        # AND closed structurally by ``_is_global_state_mutator_name``
         # below (``nesting`` / ``clear``+``cache`` / ``set_plan_cache`` verbs).
         # ``autocast_increment_nesting`` / ``autocast_decrement_nesting`` bump the
         # process-global autocast nesting counter (NOT restored by the run's
@@ -483,33 +483,33 @@ _STORAGE_UNSAFE_NAMES: frozenset[str] = frozenset(
         "resize_as_sparse_",
         "sparse_resize_",
         "sparse_resize_and_clear_",
-        # r39 (secE-r38-1): private reallocators and the non-underscore deprecated
+        # Private reallocators and the non-underscore deprecated
         # ``resize`` / ``resize_as`` that escaped the exact set above. All are
-        # covered by the ``resize`` substring guard too; pinned here as the
-        # confirmed named misses. ``_resize_output_`` reallocates an output tensor's
+        # covered by the ``resize`` substring guard too; pinned here by name.
+        # ``_resize_output_`` reallocates an output tensor's
         # storage; ``_copy_from_and_resize`` reallocates then copies.
         "_resize_output_",
         "_copy_from_and_resize",
         "resize",
         "resize_as",
-        # r43 (secE-r42-2): ``Tensor.share_memory_`` REBINDS the tensor's storage to a
+        # ``Tensor.share_memory_`` REBINDS the tensor's storage to a
         # shared-memory-backed allocation (``data_ptr()`` changes, ``is_shared() -> True``)
         # -- an OS-level shared mapping / IPC data-exposure surface that outlives
         # ``Trace.run``, directly parallel to the denied ``set_`` (repoint) and ``resize_``
-        # (reallocate). It is torch-OVERRIDABLE, so the r43 structural operator predicate
+        # (reallocate). It is torch-OVERRIDABLE, so the structural operator predicate
         # would ADMIT it on identity; this storage belt runs FIRST and closes it. Also
-        # covered by the ``share_memory`` substring guard below; pinned here as the
-        # confirmed named miss. The pure boolean reader ``is_shared`` leads ``is_`` and is
+        # covered by the ``share_memory`` substring guard below; pinned here by name.
+        # The pure boolean reader ``is_shared`` leads ``is_`` and is
         # never a rebind -- it stays resolvable.
         "share_memory_",
         "_share_memory_",
     }
 )
 
-# STRUCTURAL close of the arbitrary-callable-INVOKE class (r39, secE-r38-1). The
+# STRUCTURAL close of the arbitrary-callable-INVOKE class. The
 # ``_DENIED_CALLABLE_NAMES`` enumeration kept missing siblings of the same
-# elementwise Python-callable RUNNER / callback-REGISTRATION class (r26 denied
-# ``apply_`` / ``map_``; ``map2_`` and the ``register_*hook`` family escaped). These
+# elementwise Python-callable RUNNER / callback-REGISTRATION class (``apply_`` /
+# ``map_`` were denied first; ``map2_`` and the ``register_*hook`` family escaped). These
 # POSITIVE structural rules deny a FUTURE sibling by SHAPE even if never enumerated.
 # Verified by exhaustive enumeration of the fixed roots (2234 callables): NO pure
 # forward op matches either pattern.
@@ -528,7 +528,7 @@ _CALLABLE_INVOKER_NAME_STEMS: tuple[str, ...] = ("map", "apply")
 def _is_callable_invoker_name(name: str) -> bool:
     """Return whether ``name`` is an arbitrary-Python-callable INVOKER by SHAPE.
 
-    Closes the callable-runner / callback-registration class structurally (r39):
+    Closes the callable-runner / callback-registration class structurally:
     the ``(map|apply)\\d*_`` elementwise runners and the ``register_*`` /
     ``_register_*`` registration family. Verified against the fixed roots to match NO
     pure forward op (the aten ``_sparse_semi_structured_apply`` is excluded by the
@@ -569,11 +569,11 @@ _DENIED_STATE_SETTER_PREFIXES: tuple[str, ...] = (
 
 
 def _is_global_state_mutator_name(name: str) -> bool:
-    """Return whether ``name`` marks a NON-``set_`` process-global-state MUTATOR (r41).
+    """Return whether ``name`` marks a NON-``set_`` process-global-state MUTATOR.
 
-    The r6 ``set_*`` prefix guard closes only the leading-``set_`` global-setter class.
-    It MISSED a sibling family of process-global torch mutators whose names do NOT lead
-    with ``set_`` (secE-r40-1): the autocast nesting counters, the autocast / cuFFT cache
+    The ``set_*`` prefix guard closes only the leading-``set_`` global-setter class.
+    A sibling family of process-global torch mutators has names that do NOT lead
+    with ``set_``: the autocast nesting counters, the autocast / cuFFT cache
     flushers, and the ``_cufft_``-prefixed plan-cache SIZER (whose ``set_`` is embedded
     after the ``_cufft_`` prefix, so ``startswith('set_')`` never fires). These VERB
     markers were verified by exhaustive enumeration of the fixed roots to have ZERO
@@ -599,14 +599,14 @@ def _is_global_state_mutator_name(name: str) -> bool:
     return "set_plan_cache" in low
 
 
-# STRUCTURAL close of the arbitrary-callable-INVOKE class by SIGNATURE (r41,
-# secE-r40-1). ``_is_callable_invoker_name`` (below) closes the class by NAME shape
+# STRUCTURAL close of the arbitrary-callable-INVOKE class by SIGNATURE.
+# ``_is_callable_invoker_name`` (below) closes the class by NAME shape
 # (``(map|apply)\\d*_`` / leading-``register``) -- but the higher-order control-flow and
 # callback-taking ops carry NO such name marker (``torch.cond`` / ``torch.while_loop`` /
 # ``handle_torch_function`` / ``triplet_margin_with_distance_loss`` / ``_check_with`` /
-# ``_disable_dynamo``), so r39's "denied by shape even when never enumerated" claim was
-# FALSE for them. They are unified instead by SIGNATURE: each takes an arbitrary Python
-# callable as a parameter. ``_signature_invokes_callable`` denies any op whose
+# ``_disable_dynamo``), so the name guard's "denied by shape even when never enumerated"
+# claim does not hold for them. They are unified instead by SIGNATURE: each takes an arbitrary
+# Python callable as a parameter. ``_signature_invokes_callable`` denies any op whose
 # ``inspect.signature`` exposes a ``Callable``-annotated parameter OR a callable-NAMED
 # parameter (``fn`` / ``func`` / ``callback`` / ``hook`` / ``if_true`` / ``if_false`` /
 # any ``*_fn`` / ``*_func``). Verified by exhaustive enumeration of the fixed roots to
@@ -629,9 +629,9 @@ def _annotation_takes_callable(annotation: Any) -> bool:
 def _signature_invokes_callable(func: Callable[..., Any]) -> bool:
     """Return whether ``func``'s signature exposes an arbitrary-Python-callable parameter.
 
-    Closes the higher-order / callback-taking INVOKE class structurally (r41): a torch
+    Closes the higher-order / callback-taking INVOKE class structurally: a torch
     op that accepts a Python callable is NOT a pure forward op and must not resolve from
-    an untrusted bundle -- it is the same class as the r39-denied ``vmap`` (both invoke an
+    an untrusted bundle -- it is the same class as the denied ``vmap`` (both invoke an
     attacker fn), just carrying no ``map`` / ``register`` name marker. Detected by BOTH a
     ``Callable``-typed annotation AND a callable-conventional parameter NAME, so an op
     with unannotated callable params (``torch.while_loop(cond_fn, body_fn, ...)``) is
@@ -673,7 +673,7 @@ def _is_side_effecting_callable_name(func: Callable[..., Any]) -> bool:
 
     * file-I/O / serialization / import gadgets (round-5): ``torch.from_file`` and
       its audited siblings, plus the structural file/serial/import name guard;
-    * process-global-state MUTATORS (round-6, r41): ``set_default_dtype`` /
+    * process-global-state MUTATORS: ``set_default_dtype`` /
       ``manual_seed`` / ``set_num_threads`` and the whole ``set_*`` / ``_set_*``
       setter class, caught by exact name AND leading-``set_`` prefix; PLUS the
       NON-``set_`` global mutators the ``set_`` prefix missed
@@ -681,10 +681,10 @@ def _is_side_effecting_callable_name(func: Callable[..., Any]) -> bool:
       ``clear_autocast_cache`` / ``_cufft_clear_plan_cache`` /
       ``_cufft_set_plan_cache_max_size``), caught by exact name AND the
       ``nesting`` / ``clear``+``cache`` / ``set_plan_cache`` verb close;
-    * storage-unsafe / REALLOCATING ops (round-6, r39): ``set_`` / ``resize_`` /
+    * storage-unsafe / REALLOCATING ops: ``set_`` / ``resize_`` /
       ``set_source_*`` / ``_resize_output_`` / ``_copy_from_and_resize`` (info-leak /
       storage rebind), caught by exact name AND a ``resize`` substring guard;
-    * arbitrary-callable INVOKERS (r26, r39): the elementwise runners ``apply_`` /
+    * arbitrary-callable INVOKERS: the elementwise runners ``apply_`` /
       ``map_`` / ``map2_``, the transform ``vmap``, and the callback / device-module
       registration family ``register_*``, caught by exact name AND the
       ``(map|apply)\\d*_`` / leading-``register`` structural guard.
@@ -704,20 +704,20 @@ def _is_side_effecting_callable_name(func: Callable[..., Any]) -> bool:
         return True
     if any(name.startswith(prefix) for prefix in _DENIED_STATE_SETTER_PREFIXES):
         return True
-    # r41: structural close of the NON-``set_`` process-global mutator class
+    # structural close of the NON-``set_`` process-global mutator class
     # (``nesting`` counters / ``clear``+``cache`` flushers / ``set_plan_cache`` sizer)
     # so a future sibling is denied by shape even if never enumerated.
     if _is_global_state_mutator_name(name):
         return True
-    # r39: structural close of the arbitrary-callable-INVOKE and storage-REALLOC
+    # structural close of the arbitrary-callable-INVOKE and storage-REALLOC
     # classes so a future sibling (``map3_`` / a new ``register_*hook`` / a new
     # ``*_resize_*`` reallocator) is denied by shape even if never enumerated.
     if _is_callable_invoker_name(name):
         return True
     lowered = name.lower()
-    # r43 (secE-r42-2): the ``resize`` storage-realloc guard did not cover the
-    # ``share_memory`` storage-REBIND primitive; broaden to both storage-rebind verbs so
-    # a future ``*_share_memory*`` sibling is denied by shape even if never enumerated.
+    # The ``resize`` storage-realloc guard alone would not cover the
+    # ``share_memory`` storage-REBIND primitive, so the check covers both storage-rebind
+    # verbs; a future ``*_share_memory*`` sibling is denied by shape even if never enumerated.
     # The only sibling carrying the token is the pure reader ``is_shared`` (leads ``is_``,
     # no ``share_memory`` token), so no pure forward op is denied.
     if "resize" in lowered or "share_memory" in lowered:
@@ -729,7 +729,7 @@ def _tensor_method_owners() -> frozenset[type]:
     """Return the class objects that own genuine C-level tensor method descriptors.
 
     The C tensor base resolves through the ONE ``_torch_compat`` accessor
-    (``HAS_TENSORBASE_CLASS``, r-b4 R26-2) instead of a duplicated local probe.
+    (``HAS_TENSORBASE_CLASS``) instead of a duplicated local probe.
     """
 
     owners: set[type] = {torch.Tensor}
@@ -792,19 +792,19 @@ def _is_tensor_method_descriptor(func: Callable[..., Any]) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# STRUCTURAL RECOGNIZED-OPERATOR predicate (r43). Closes the CLASS the r6/r39/r41
-# name-and-verb denylists could only chase instance-by-instance (secE-r42-1/2/3).
+# STRUCTURAL RECOGNIZED-OPERATOR predicate. Closes the CLASS that name-and-verb
+# denylists could only chase instance-by-instance.
 # --------------------------------------------------------------------------- #
 #
 # The three internal-builtin roots ``torch`` / ``torch._C`` / ``torch._tensor`` are
 # the whack-a-mole surface: they host the entire pure forward-op catalog AND thousands
 # of non-forward internal builtins (functionalization dispatch-mode controls, JIT / IR
 # type constructors, Storage + legacy ``*Tensor`` type ctors, accelerator / device
-# hooks, process-global state getters, deprecated Tensor methods). The pre-r43 gate
-# admitted any callable whose ``__module__`` was one of these roots by PREFIX, then
+# hooks, process-global state getters, deprecated Tensor methods). A prefix-based gate
+# would admit any callable whose ``__module__`` was one of these roots by PREFIX, then
 # tried to subtract the dangerous ones with an ever-growing verb denylist -- which
 # successive audits kept defeating with a sibling the verb list never enumerated
-# (r41 ``autocast_increment_nesting``; r42 ``_enable_functionalization`` /
+# (``autocast_increment_nesting``; ``_enable_functionalization`` /
 # ``share_memory_`` / ``_sobol_engine_initialize_state_``). Chasing verbs never
 # terminates.
 #
@@ -836,9 +836,9 @@ def _is_tensor_method_descriptor(func: Callable[..., Any]) -> bool:
 # NOT in the exact-root set and keep their module-PREFIX admission, so no deep-surface
 # forward op is over-denied.
 #
-# Reconciliation (torch 2.8.0, exhaustive surface enumeration): of the pre-r43
-# gate-passers on these roots, the structural predicate DENIES 234 and admits ZERO new
-# -- every one of the 234 is a non-forward internal builtin (functionalization family,
+# Reconciliation (torch 2.8.0, exhaustive surface enumeration): of the callables a
+# prefix-based gate would pass on these roots, the structural predicate DENIES 234 and admits ZERO
+# new -- every one of the 234 is a non-forward internal builtin (functionalization family,
 # JIT/IR type ctors, Storage/legacy ``*Tensor`` ctors, docstring/torch-function plumbing,
 # state getters, deprecated ``eig`` / ``lstsq`` / ``solve`` / ``symeig`` / ``reinforce``),
 # and the ONLY genuine forward method the raw predicate lost -- ``to_sparse_coo`` -- is
@@ -875,23 +875,22 @@ _PURE_TENSOR_WRAPPER_NAMES: frozenset[str] = frozenset({"to_sparse_coo"})
 # ``("torch.Tensor", <name>, "method")`` property key to a SYNTHETIC Python getter
 # (``torchlens._io.runnable_load._safe_tensor_property_getter``) whose ``__module__`` is
 # ``"torch._tensor"``, so it lands on the operator-gated roots with a FRESH function id
-# (never torch-overridable) and no aten schema by terminal name -- the r43 inversion
-# denied the whole class (a regression; pre-r43 module-prefix admission allowed it).
+# (never torch-overridable) and no aten schema by terminal name -- the inversion
+# denied the whole class (a regression a module-prefix admission would not have had).
 # This is the CANONICAL copy of the safe-property allowlist; the capture-side keyer
 # (``torchlens.backends.torch.ops``) and the load-side resolver import it, so the three
 # surfaces cannot drift.
 #
-# STRUCTURAL, not hand-listed (r45): the set is COMPUTED by probing every live
+# STRUCTURAL, not hand-listed: the set is COMPUTED by probing every live
 # ``TensorBase`` getset descriptor against ``_pure_view`` -- a descriptor is admitted
 # iff its getter returns a storage-sharing, autograd-PRESERVING, non-mutating tensor
 # view. This admits ``{T, mT, H, mH, real, imag}`` and DENIES ``data`` by construction
 # (``.data`` shares storage but DETACHES from autograd and is a live lvalue mutation
 # channel -- the autograd-bypass alias, not a pure forward read). A FUTURE torch tensor
 # property is auto-classified: admitted-if-pure-view / denied-otherwise, with no per-name
-# edit. The r45 immunizer (``tests/test_r45_property_classification.py``) pins the full
-# classification of every descriptor so drift goes RED. Recognizing ``.H``/``.mH`` closed
-# the r44 corr1_1 / secF_1 over-deny (a real capture used them; the frozen 4-name set
-# refused them).
+# edit. A property-classification test pins the full
+# classification of every descriptor so drift goes RED. Recognizing ``.H``/``.mH`` avoids
+# an over-deny (a real capture uses them; a frozen 4-name set would refuse them).
 
 
 def _iter_tensor_getset_descriptor_names() -> tuple[str, ...]:
@@ -924,7 +923,7 @@ def _mode_free_probe_context() -> Iterator[None]:
       ``torch.randn`` build meta tensors and ``aten::equal`` raise; disabled via
       the feature-detected ``torch._C.DisableTorchFunction`` (CPU-device fallback
       on an unexpected build). Neither path mutates the caller's default device.
-    * ``torch.inference_mode()`` (r55 corr_3): an inference tensor does NOT track a
+    * ``torch.inference_mode()``: an inference tensor does NOT track a
       version counter, so ``probe._version`` raises
       ``RuntimeError: Inference tensors do not track version counter`` and the
       first inference-mode capture crashes before recording. Enter
@@ -936,7 +935,7 @@ def _mode_free_probe_context() -> Iterator[None]:
     """
 
     with ExitStack() as stack:
-        # r-b4 R26-2: resolved through _torch_compat (HAS_DISABLE_TORCH_FUNCTION).
+        # resolved through _torch_compat (HAS_DISABLE_TORCH_FUNCTION).
         # The CPU-device fallback does NOT neutralize an ambient torch-FUNCTION
         # mode, so its use is now disclosed by the flipped flag in doctor/compat
         # rather than silently absorbed.
@@ -979,7 +978,7 @@ def _pure_view(name: str) -> bool:
         # crash import. ``DisableTorchFunction`` does NOT alter the default device, so no
         # state leaks (verified: the caller's default device is untouched).
         with _mode_free_probe_context():
-            # Deterministic constructors, never ``torch.randn`` (B8-7): the
+            # Deterministic constructors, never ``torch.randn``: the
             # probes used to draw from the user's GLOBAL default generator at
             # first-capture lazy import, perturbing even a ``seed=``-
             # pinned capture. Distinct element values keep the pure-read
@@ -1104,8 +1103,8 @@ def _is_recognized_operator(real: Callable[..., Any], terminal_name: str) -> boo
     safe pure-read tensor PROPERTY name (the loader's synthetic ``x.T`` / ``x.mT`` /
     ``x.H`` / ``x.mH`` / ``x.real`` / ``x.imag`` getters -- see
     ``_PURE_TENSOR_PROPERTY_NAMES``, structurally computed). Every
-    other internal builtin on those roots is default-DENIED (the r43 inversion). Note the
-    name/verb belts in ``_is_side_effecting_callable_name`` AND the r47 forward-dunder shape
+    other internal builtin on those roots is default-DENIED (the inversion). Note the
+    name/verb belts in ``_is_side_effecting_callable_name`` AND the forward-dunder shape
     gate (``_is_denied_forward_dunder_name``, positive ``_ALLOWED_FORWARD_DUNDERS`` allowlist)
     run BEFORE this and catch the overridable-but-unsafe cases (e.g. ``share_memory_``, and the
     non-forward pickle-protocol ``__setstate__`` storage rebind), so identity-recognition here
@@ -1128,7 +1127,7 @@ def _is_recognized_operator(real: Callable[..., Any], terminal_name: str) -> boo
     return terminal_name in _PURE_TENSOR_PROPERTY_NAMES
 
 
-# POSITIVE forward-dunder allowlist (r47, secE_1). The r43 recognized-operator gate
+# POSITIVE forward-dunder allowlist. The recognized-operator gate
 # admits a callable by torch-OVERRIDABLE identity / aten schema; a NON-forward dunder
 # that satisfies overridable identity therefore slips (``Tensor.__setstate__`` -- the
 # pickle-protocol state restorer whose legacy tuple form REBINDS the tensor's storage to
@@ -1154,7 +1153,7 @@ def _is_recognized_operator(real: Callable[..., Any], terminal_name: str) -> boo
 # is a member) and newly denies EXACTLY the 10 dangerous non-forward dunders above. The
 # absent members (``__divmod__`` / ``__imatmul__`` / ``__rdivmod__`` / ``__round__`` /
 # ``__trunc__`` / ``__floor__`` / ``__ceil__``) are future-compatible siblings that harm
-# nothing when unbound. This is the same closure posture as the r43 ``share_memory_`` pin:
+# nothing when unbound. This is the same closure posture as the ``share_memory_`` pin:
 # an overridable-but-non-forward op denied by shape, not by growing an enumeration.
 _ALLOWED_FORWARD_DUNDERS: frozenset[str] = frozenset(
     {
@@ -1239,7 +1238,7 @@ _ALLOWED_FORWARD_DUNDERS: frozenset[str] = frozenset(
 
 
 def _is_denied_forward_dunder_name(name: str) -> bool:
-    """Return whether a dunder terminal name is a NON-forward protocol method to DENY (r47).
+    """Return whether a dunder terminal name is a NON-forward protocol method to DENY.
 
     secE_1: a captured forward op node legitimately resolves to an OPERATOR-PROTOCOL dunder
     (arithmetic / reflected / in-place / comparison / bitwise / index-item / numeric-
@@ -1262,16 +1261,16 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
 
     The callable is unwrapped to its real identity, then admitted only if (a) its
     terminal NAME is not a side-effecting callable (file-I/O / serialization / import
-    gadget, process-global-state mutator, or storage-unsafe in-place op incl. the r43
+    gadget, process-global-state mutator, or storage-unsafe in-place op incl. the
     ``share_memory_`` storage rebind), (a2) its terminal name, if a dunder, is one of
     the operator-protocol forward dunders (``_ALLOWED_FORWARD_DUNDERS``: arithmetic /
     reflected / in-place / comparison / bitwise / index-item / numeric-conversion) --
-    every OTHER ``__x__`` (the r47 secE_1 storage-REBIND ``__setstate__`` and its
+    every OTHER ``__x__`` (the storage-REBIND ``__setstate__`` and its
     pickle / copy / array / dlpack / format / repr / reversed siblings) is denied by
     shape even when torch-OVERRIDABLE, (b) its signature exposes neither an
     arbitrary-callable nor a raw-pointer parameter, and (c) its module clears the gate.
 
-    Module resolution (r43): the exact internal-builtin roots ``torch`` / ``torch._C``
+    Module resolution: the exact internal-builtin roots ``torch`` / ``torch._C``
     / ``torch._tensor`` are gated by the STRUCTURAL recognized-operator predicate
     (``_is_recognized_operator``) -- DEFAULT-DENY, admit ONLY torch-overridable
     identities, aten-schema ops, the small pure tensor factories, the audited
@@ -1279,7 +1278,7 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     (``T`` / ``mT`` / ``real`` / ``imag``). This closes, as a CLASS, the non-forward
     internal builtins those roots host (functionalization dispatch controls, JIT / type
     constructors, Storage / legacy ``*Tensor`` ctors, state getters, deprecated Tensor
-    methods) that the pre-r43 module-prefix admission let through.
+    methods) that the earlier module-prefix admission let through.
     DEEPER allowlisted operator submodules (``torch.nn.functional`` / ``torch._VF`` /
     ``torch._C._nn`` / ``torch.linalg`` / ...) keep their module-PREFIX admission. The
     ``operator`` / ``_operator`` root is gated separately by a POSITIVE NAME allowlist
@@ -1289,7 +1288,7 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     still resolve. Module-less C tensor method descriptors are admitted when bound to a
     Tensor class (so the whole C tensor-op surface keeps resolving).
 
-    Raw-pointer family (r50): every torch tensor / storage CLASS, every inspectable
+    Raw-pointer family: every torch tensor / storage CLASS, every inspectable
     pointer / address / handle-taking callable and every builtin of a ``torch._C.*``
     submodule not EXACTLY listed is denied before the module gate (``_raw_pointer_denial``),
     closing the ``cdata=`` constructor families and the pybind pointer adopters as a CLASS.
@@ -1307,7 +1306,7 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     real = _unwrap_capture_wrapper(func)
     if _is_side_effecting_callable_name(real):
         return False
-    # r47 (secE_1): deny NON-forward protocol dunders by SHAPE (positive forward-dunder
+    # Deny NON-forward protocol dunders by SHAPE (positive forward-dunder
     # allowlist), before every module branch, so it covers BOTH the module-less
     # ``_is_tensor_method_descriptor`` path AND the gated-root path -- closing
     # ``Tensor.__setstate__`` (an overridable storage-REBIND whose leading ``__`` carries
@@ -1317,13 +1316,13 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     # ``_is_side_effecting_callable_name`` (whose second caller gates facet recipes).
     if _is_denied_forward_dunder_name(_terminal_callable_name(real)):
         return False
-    # r41: deny higher-order / callback-taking ops by SIGNATURE shape (``torch.cond`` /
+    # deny higher-order / callback-taking ops by SIGNATURE shape (``torch.cond`` /
     # ``while_loop`` / ``handle_torch_function`` / ``_check_with`` / ``_disable_dynamo``),
     # which carry no ``map`` / ``register`` name marker, BEFORE the module gate so one in
     # the allowlisted ``torch`` namespace cannot slip; no-signature C ops fall through.
     if _signature_invokes_callable(real):
         return False
-    # r50/r64: deny RAW-POINTER and BOUNDS-UNCHECKED kernels structurally BEFORE the module gate,
+    # deny RAW-POINTER and BOUNDS-UNCHECKED kernels structurally BEFORE the module gate,
     # whose bare ``torch`` / ``torch._C`` prefixes admit deeper submodules.
     if _unchecked.is_unchecked_memory_kernel(real):
         return False
@@ -1339,10 +1338,10 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
         # / index operators are admitted; every generic gadget or mutation primitive (``call`` /
         # ``attrgetter`` / ``setitem`` / ``iadd`` / ...) is default-denied.
         return _terminal_callable_name(real) in _ALLOWED_OPERATOR_NAMES
-    # r43: on the EXACT internal-builtin roots (``torch`` / ``torch._C`` /
+    # on the EXACT internal-builtin roots (``torch`` / ``torch._C`` /
     # ``torch._tensor``) DEFAULT-DENY and admit ONLY structurally-recognized genuine
     # forward operators (overridable identity / aten schema / pure factory / audited
-    # wrapper), inverting the pre-r43 prefix admission that let every non-forward
+    # wrapper), inverting the earlier prefix admission that let every non-forward
     # internal builtin through. Checked BEFORE the prefix ``_matches`` so DEEPER
     # allowlisted operator submodules keep their module-prefix admission.
     if module in _OPERATOR_GATED_ROOTS:
@@ -1360,9 +1359,8 @@ def real_callable_module(func: Callable[..., Any]) -> str:
     callable's REAL identity, never the surface ``__module__``:
 
     * a C tensor-method descriptor (``resize_`` / ``set_`` / ``apply_`` / ``map_``)
-      reports ``__module__ is None``, and the foreign branches historically fell back to
-      the (benign) trusted module name -- so a string check treated a side-effecting
-      method as a benign foreign recipe (secE-r36-1);
+      reports ``__module__ is None``, and a fallback to the (benign) trusted module name
+      would make a string check treat a side-effecting method as a benign foreign recipe;
     * WORSE, a torch op TorchLens has capture-wrapped reports
       ``__module__ == 'torchlens.backends.torch.wrappers'`` -- a truthy, non-torch
       string -- so BOTH a ``__module__``-missing check AND a raw torch-prefix check are
@@ -1432,8 +1430,8 @@ FACET_RECIPE_MARKER_ATTR = "_torchlens_facet_recipe"
 # POSITIVE allowlist of the genuinely-INERT public first-party callables that
 # legitimately appear as pickle-REDUCE / resolver targets in real bundles, keyed by
 # the callable's REAL ``(module, qualname)`` (decided AFTER capture-unwrap, never by
-# the attacker-controlled pickled path). This REPLACES the pre-r22 "any PUBLIC
-# torchlens.* callable is inert" fallthrough, which was unsound: that policy admitted
+# the attacker-controlled pickled path). It is used instead of an "any PUBLIC
+# torchlens.* callable is inert" fallthrough, which is unsound: that policy would admit
 # side-effecting PUBLIC callables (``fastlog.cleanup.cleanup_partial`` ->
 # ``shutil.rmtree`` of an attacker-named directory on plain ``tl.load``;
 # ``mark_torch_capability_missing`` / ``register_payload_codec`` / ``save_intervention``
@@ -1486,16 +1484,16 @@ def is_inert_first_party_callable(func: Callable[..., Any]) -> bool:
 
     A pickle ``REDUCE`` (and an intervention ``custom`` import ref) INVOKES the
     admitted callable with attacker-supplied args. Trusting *every* torchlens-owned
-    callable (the pre-r21 policy) was a confirmed load-time RCE: the private helper
+    callable would be a load-time RCE: the private helper
     ``torchlens.report._environment._module_is_installed`` performs ``importlib.import_module`` on
-    its argument. The pre-r22 narrowing kept a "PUBLIC name proves inertness"
-    fallthrough, which was STILL unsound: the verb denylist omitted the filesystem /
+    its argument. A "PUBLIC name proves inertness"
+    fallthrough is also unsound: a verb denylist can omit the filesystem /
     registry / capability-mutation verb class, so PUBLIC side-effecting callables such
     as ``torchlens.recording._cleanup.cleanup_partial`` (``shutil.rmtree`` of an
     attacker-named directory) and ``mark_torch_capability_missing`` (global HAS_*
-    flag poison) were admitted and INVOKED on a plain ``tl.load(path)``.
+    flag poison) could be admitted and INVOKED on a plain ``tl.load(path)``.
 
-    This is now a POSITIVE ALLOWLIST (default-DENY), keyed on the callable's REAL,
+    This is a POSITIVE ALLOWLIST (default-DENY), keyed on the callable's REAL,
     capture-unwrapped identity -- never the attacker-controlled pickled path:
 
     * FIRST-PARTY only -- the real ``__module__`` is genuinely ``torchlens.*`` and is

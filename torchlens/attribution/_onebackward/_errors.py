@@ -1,4 +1,4 @@
-"""Typed errors for the one-backward read surface (M(reads) lane F04).
+"""Typed errors for the one-backward read surface.
 
 One public error class with stable ``fields["code"]`` values -- consumers
 branch on codes or structured fields, never message text. Spellings are

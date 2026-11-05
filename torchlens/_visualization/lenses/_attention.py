@@ -58,7 +58,7 @@ def _module_facets_say_attention(trace: Trace) -> bool:
 
     ``Module.facets`` is single-call and refuses ``module_call_ambiguous``
     on any reused module; that per-module accessor limitation is never the
-    TRACE-level fact and must not surface as the user's refusal (D03-R1)
+    TRACE-level fact and must not surface as the user's refusal
     -- the op scan in :func:`_has_attention_subject` still probes those
     modules' calls.
     """

@@ -65,7 +65,7 @@ def _postprocess_requested(result: ForwardResult) -> bool:
 
 
 def _raise_if_stop_swallowed(trace: Trace) -> None:
-    """Refuse a normal return whose stop-request latch is still set (F6 boundary checkpoint).
+    """Refuse a normal return whose stop-request latch is still set (boundary checkpoint).
 
     A "normal" forward return with the stop-request latch set means user code
     swallowed the control signal (halt or nonfinite abort) in a broad except.
@@ -98,7 +98,7 @@ def _fence_device_work(trace: Trace) -> None:
     so the record costs one batch of scalar reads instead of a per-op device
     synchronization (the flags' kernels are long done).
     """
-    # R36-1 (the fence) and the deferred-flag drain, in that order.
+    # (the fence) and the deferred-flag drain, in that order.
     from ..._data_classes._nonfinite import drain_pending_nonfinite
 
     synchronize_pending_cpu_async_copies()
@@ -144,7 +144,7 @@ def finalize_completed(result: ForwardResult) -> Any:
     decode_outputs_for_trace(trace, outputs)
     # Tight window on the normal arm: drop immediately after the only
     # consumer. RUN's outer ``finally`` repeats this for the arms that never
-    # reach here (halt, failure, interrupt) -- see B1-02.
+    # reach here (halt, failure, interrupt) --.
     _drop_semantic_output_transients(trace)
 
     trace._cost_forward_duration = Duration(
@@ -410,14 +410,14 @@ def _cleanup_failed_session(result: ForwardResult, e: BaseException) -> None:
             backend.cleanup_failed_forward_session(trace, _model_session_args(result), e)
         trace.__dict__.pop("_capture_producer_policy", None)
     except Exception as cleanup_exc:
-        # grind-r6 b1 R06 (sol MED, probe): the PRIMARY user error must
+        # The PRIMARY user error must
         # propagate. An ordinary seal/cleanup double-fault used to
         # escape INSTEAD of ``raise e`` -- the settled CaptureOutcome
         # named the primary while the escaping exception was the
         # secondary and carried no partial trace. Mirror the interrupt
         # arm: attach the secondary as a note and re-raise the primary.
         # A BaseException secondary (Ctrl-C during cleanup) keeps
-        # escaping -- interrupts always win (B8-23 doctrine).
+        # escaping -- interrupts always win.
         annotate_guarded(
             e,
             "TorchLens failed-forward cleanup also failed while handling "
@@ -449,7 +449,7 @@ def finalize_interrupted(result: ForwardResult) -> NoReturn:
         try:
             result.backend.cleanup_model_session(trace, _model_session_args(result))
         except Exception as cleanup_exc:
-            # B8-23: the PRIMARY control-flow exception (KeyboardInterrupt /
+            # the PRIMARY control-flow exception (KeyboardInterrupt /
             # SystemExit) must propagate. Letting an ordinary cleanup
             # Exception escape here demoted the KI to ``__context__``, and
             # a caller's ``except Exception`` retry loop swallowed Ctrl-C
@@ -473,7 +473,7 @@ def finalize_interrupted(result: ForwardResult) -> NoReturn:
             )
             _scrub_failed_capture_transients(trace)
         except Exception as settle_exc:
-            # B8-23 applies here too: an ordinary settlement/scrub failure
+            # applies here too: an ordinary settlement/scrub failure
             # inside this ``finally`` would replace the unwinding
             # KeyboardInterrupt/SystemExit (demoting it to __context__),
             # letting a caller's ``except Exception`` swallow Ctrl-C.

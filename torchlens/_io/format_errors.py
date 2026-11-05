@@ -1,6 +1,6 @@
 """Portable-I/O error vocabulary (logical L0; physically homed with _io).
 
-The persistence four-way ruling (architecture memo 3.2) sends IO error
+The persistence four-way ruling sends IO error
 CLASSES to L0: they are frozen vocabulary consumed by every stratum that
 touches an artifact. They stay physically inside ``torchlens._io`` under
 Rule V's single-lower-consumer clause (declared logical layer, printed in

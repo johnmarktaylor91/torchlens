@@ -6,7 +6,7 @@ an identity-preserving payload arena, sparse versioned mutation overlays,
 and the facade cache. Nothing in this package is public API; public classes
 (`Trace`, `Op`, ...) present rows from here as facades.
 
-Zero production consumers until the M5 Op seam; the substrate ships with
+Zero production consumers until the Op seam; the substrate ships with
 its own unit suite (tests/test_trace_core_substrate.py) and executable
 prototypes of every hard seam (copy, fork, payload identity, hydration).
 """

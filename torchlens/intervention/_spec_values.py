@@ -448,7 +448,7 @@ def _serialize_callable(value: Callable[..., Any], save_level: SaveLevel) -> dic
     """
 
     if isinstance(value, LazyImportRef):
-        # R10-12: load->resave round-trip. The loader mints LazyImportRef for
+        # load->resave round-trip. The loader mints LazyImportRef for
         # import-ref callables precisely so execution-time trust gating can
         # defer the import; the instance exposes no __module__/__qualname__,
         # so the generic path below read None and refused a spec that

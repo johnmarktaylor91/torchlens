@@ -1,4 +1,4 @@
-"""Netron export projection records (lane F14, netron memo B1).
+"""Netron export projection records.
 
 The projection layer turns a finished ``Trace`` into small internal records
 (nodes, values, functions, disclosures) that the emitter serializes into
@@ -8,10 +8,10 @@ byte encodings, so a future exporter can reuse the same projection.
 
 Granularity builders:
 
-- :func:`project_op` -- the flat leaf-op projection (memo D-04..D-06).
+- :func:`project_op` -- the flat leaf-op projection.
 - :func:`project_rolled` -- repeated passes merged by rolled identity with
-  the variance rule (memo D-13); lives here beside the op builder.
-- module granularity lives in :mod:`._netron_module` (memo D-11).
+  the variance rule; lives here beside the op builder.
+- module granularity lives in:mod:`._netron_module`.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ __tl_layer__ = "L8"
 #: Custom op domain marking these records as non-runnable TorchLens captures.
 NETRON_OP_DOMAIN = "ai.torchlens.lossy"
 
-#: Domain for module-call FunctionProtos (memo D-02).
+#: Domain for module-call FunctionProtos.
 NETRON_MODULE_DOMAIN = "ai.torchlens.module"
 
 
@@ -76,7 +76,7 @@ class NetronNode:
 
 @dataclass
 class NetronFunction:
-    """One per-call module FunctionProto (memo D-11)."""
+    """One per-call module FunctionProto."""
 
     name: str
     formal_inputs: list[str]
@@ -96,11 +96,11 @@ class NetronProjection:
     graph_outputs: list[NetronValueInfo]
     value_infos: list[NetronValueInfo]
     functions: list[NetronFunction] = field(default_factory=list)
-    #: Owning-module address -> hidden buffer names (memo D-10 disclosure).
+    #: Owning-module address -> hidden buffer names (disclosure).
     hidden_buffers: dict[str, list[str]] = field(default_factory=dict)
     hidden_op_count: int = 0
     omitted_value_count: int = 0
-    #: Longest root-graph path in boxes; proxy for netron's rank count (D-12).
+    #: Longest root-graph path in boxes; proxy for netron's rank count.
     extent_ranks: int = 0
     module_depth: int | None = None
     fallback_reason: str | None = None
@@ -178,7 +178,7 @@ def _hide_counter_chains(classified: _Classified, policy: str) -> None:
 
     The counter-update chains (the zero-dim ``add`` ops between
     ``num_batches_tracked`` reads and writes) are ops, not buffers, so the
-    buffer policy alone misses them (memo D-10). The rule is a fixpoint so
+    buffer policy alone misses them. The rule is a fixpoint so
     multi-op chains collapse too; an op keeping any visible neighbor stays.
     """
 
@@ -245,7 +245,7 @@ def classify(log: Any, show_buffers: str) -> _Classified:
 
 
 def value_info_for(entry: Any, name: str) -> NetronValueInfo:
-    """Build the type disclosure for one entry's produced value (memo D-05)."""
+    """Build the type disclosure for one entry's produced value."""
 
     shape = getattr(entry, "shape", None)
     dims: tuple[Any, ...] | None = None if shape is None else tuple(shape)
@@ -255,7 +255,7 @@ def value_info_for(entry: Any, name: str) -> NetronValueInfo:
 
 
 def _resolve_intervened_ids(log: Any, classified: _Classified) -> set[str]:
-    """Return node ids of ops marked by the intervention audit (compo row C2)."""
+    """Return node ids of ops marked by the intervention audit."""
 
     audit = getattr(log, "intervention_audit", None) or []
     if not audit:
@@ -306,7 +306,7 @@ def compute_extent_ranks(nodes: list[NetronNode], io_boxes: int) -> int:
     """Estimate netron's rank count as the longest path over root boxes.
 
     Netron lays ranks top-to-bottom, one per topological level, at roughly
-    55 px per rank (memo D-12), so the longest dataflow chain over the root
+    55 px per rank, so the longest dataflow chain over the root
     graph's boxes -- graph I/O draw as boxes too -- is the extent proxy the
     budget warning checks.
     """
@@ -439,7 +439,7 @@ def _rolled_group_edges(
 
 
 def project_rolled(log: Any, show_buffers: str) -> NetronProjection:
-    """Build the rolled projection: passes merged, variance-gated types (D-13)."""
+    """Build the rolled projection: passes merged, variance-gated types."""
 
     classified = classify(log, show_buffers)
     projection = NetronProjection(

@@ -1,6 +1,6 @@
-"""Hash-seed-independent metadata pickling for portable bundles (B3R4-R21-2).
+"""Hash-seed-independent metadata pickling for portable bundles.
 
-Split out of ``scrub.py`` under the R43 file-size ratchet: this is the
+Split out of ``scrub.py``: this is the
 byte-determinism seam for ``metadata.pkl``, consumed by the bundle and
 streaming writers, independent of the scrub walk itself.
 """
@@ -27,12 +27,12 @@ def _canonical_member_key(member: Any) -> tuple[int, str, str]:
 
 
 class _CanonicalMetadataPickler(pickle._Pickler):
-    """Pickler that emits exact set/frozenset members in sorted order (B3R4-R21-2).
+    """Pickler that emits exact set/frozenset members in sorted order.
 
     A ``frozenset`` pickles in its hash-table iteration order, which for str
     elements is salted by ``PYTHONHASHSEED`` -- so two processes capturing the
     identical program emitted byte-different ``metadata.pkl`` for identical
-    logical content (the M6 relation views are exact frozensets of labels).
+    logical content (the relation views are exact frozensets of labels).
     Rewriting the reduction as ``cls(sorted_members)`` makes the persisted
     bytes hash-seed independent; ``builtins.set``/``builtins.frozenset`` are
     already on the safe-unpickler's explicit-globals allowlist, so loads
@@ -82,8 +82,8 @@ class _CanonicalMetadataPickler(pickle._Pickler):
                 # NaN members defeat ``sorted``'s comparison-based order (every
                 # comparison is False), silently leaving hash/iteration order in
                 # the bytes -- the exact instability this pickler exists to
-                # kill. Order them by their IEEE bit pattern instead (b3-sol
-                # hardening note: closed by construction, not by probe).
+                # kill. Order them by their IEEE bit pattern instead (closed
+                # by construction, not by probe).
                 members = sorted(members_list, key=_canonical_member_key)
             else:
                 try:

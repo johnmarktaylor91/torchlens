@@ -1,17 +1,9 @@
-"""Extraction v2 runtime (lane F18; extract memo items 4-19).
+"""Private implementation of dataset extraction.
 
-The private implementation package behind :mod:`torchlens.dataset_extraction`:
-the typed batch envelope + collate door (:mod:`envelope`), the batch context
-with row and key validation (:mod:`context`), mask-aware pool presets
-(:mod:`pool`), save-dtype routing (:mod:`dtype_policy`), the D-RAGGED gate
-and trimmed carrier (:mod:`ragged`), the shard codecs (:mod:`shards`), the
-lazy reader + views (:mod:`reader`, :mod:`views`), selector
-resolve-and-freeze (:mod:`selector_plan`), the streaming exporters
-(:mod:`export`), and the callable-identity classifier
-(:mod:`callable_identity`).
-
-Public doors live on :mod:`torchlens.dataset_extraction`; every spelling is
-DOCUMENTED-UNSTABLE pending the naming sprint.
+Holds the batch envelope, pooling, shard codecs, lazy reader, selector plan,
+exporters and callable-identity classifier. The public doors live on
+:mod:`torchlens.dataset_extraction`; every spelling is DOCUMENTED-UNSTABLE
+pending naming ratification.
 """
 
 from __future__ import annotations

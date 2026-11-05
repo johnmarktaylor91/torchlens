@@ -1,9 +1,9 @@
 """Canonical forward-compute aggregation (the ONE numbers source).
 
-Lane A07 (2026-08-27); costreport memo D1-D3 seed. Every reporting
+Every reporting
 surface (summary footer, profile, flop_count) derives its forward compute
 totals from this ONE walk over the identity partition -- never from a private
-re-sum -- so two surfaces can no longer agree by sharing a bug. The C02
+re-sum -- so two surfaces can no longer agree by sharing a bug. The
 FactCore substrate absorbs this module; spellings are DOCUMENTED-UNSTABLE.
 
 The aggregation returns rows' classification counts alongside the totals:
@@ -154,7 +154,7 @@ class UnknownOpGroup:
 def unknown_op_ledger(trace: Trace) -> tuple[UnknownOpGroup, ...]:
     """Group the trace's unknown-FLOPs ops by op name, with named remedies.
 
-    The ledger is a WORK QUEUE (costreport D3): every unknown op is named,
+    The ledger is a WORK QUEUE: every unknown op is named,
     reasoned, and remedied -- never a bare count over an anonymous exclusion.
     """
 
@@ -180,8 +180,8 @@ def unknown_op_ledger(trace: Trace) -> tuple[UnknownOpGroup, ...]:
     return tuple(ledger)
 
 
-#: Phase enum for compute rows (costreport item 2). Backward rows land when
-#: the C07 backward-fire fields persist (F09); the vocabulary is closed NOW
+#: Phase enum for compute rows. Backward rows land when
+#: the backward-fire fields persist; the vocabulary is closed NOW
 #: so consumers never invent a third spelling.
 COMPUTE_PHASES: tuple[str, ...] = ("forward", "backward")
 
@@ -192,7 +192,7 @@ COMPUTE_ROW_KINDS: tuple[str, ...] = ("op", "boundary", "buffer")
 
 @dataclass(frozen=True)
 class ComputeRow:
-    """One accounting-unit row of the canonical aggregation (D1/D5/D7).
+    """One accounting-unit row of the canonical aggregation.
 
     Boundary and buffer rows RENDER but own nothing: every additive value
     is ``None`` there, and the CI plant pins that a non-``None`` additive
@@ -217,9 +217,9 @@ class ComputeRow:
     reason: str | None
     #: Pass-qualified op label (``label:pass``) -- unique per row even on
     #: recurrent models, where ``label`` (the layer label) collides across
-    #: passes. F09 consumers key per-op maps on THIS field.
+    #: passes. Consumers key per-op maps on THIS field.
     op_label: str | None = None
-    #: RESERVED device-attribution slots (costreport D22 / item 17): the
+    #: RESERVED device-attribution slots: the
     #: correlation-ID Kineto join fills COLUMNS, never schemas. They stay
     #: ``None`` until that join lands its real-GPU acceptance gate; the
     #: name-substring bridge is a labeled approximate diagnostic and is
@@ -237,7 +237,7 @@ def row_mac_flops(row: ComputeRow) -> int:
 
 @dataclass(frozen=True)
 class RatioFact:
-    """A ratio with NAMED numerator/denominator row/section IDs (D6).
+    """A ratio with NAMED numerator/denominator row/section IDs.
 
     A percent without its denominator identity is how the 3.878x naive-sum
     class of error ships; the IDs make the scope auditable.
@@ -251,12 +251,12 @@ class RatioFact:
 
 @dataclass(frozen=True)
 class ComputeAggregation:
-    """The canonical aggregation service result (costreport item 2 / D1).
+    """The canonical aggregation service result.
 
     ``partition_total`` is returned SEPARATELY and is never a column sum;
     ``rows`` carry per-cell evidence and applicability; ``coverage`` is the
     four-way classification; ``convention`` and ``scope`` are explicit.
-    This object is the compute FACE of the C02 FactCore -- summary,
+    This object is the compute FACE of the FactCore -- summary,
     profile, flop_count, and the report family are projections of it, and
     the import lint (tests/test_factcore_import_lint.py) keeps this module
     the only aggregation-layer reader of raw per-op compute fields.
@@ -273,7 +273,7 @@ class ComputeAggregation:
 
     @display_guard
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): rows point, never dump."""
+        """Bounded identity card: rows point, never dump."""
 
         return clipped(f"ComputeAggregation {self.scope}: {plural(len(self.rows), 'row')}")
 
@@ -319,15 +319,15 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
     ONE walk over the identity partition; every reporting surface derives
     from these rows or the separately-returned partition total -- never a
     private re-sum. Backward rows are honestly ABSENT until the persisted
-    backward-fire fields land (C07/F09); the phase vocabulary is closed
+    backward-fire fields land; the phase vocabulary is closed
     already.
     """
 
     rows: list[ComputeRow] = []
     by_dtype: dict[str, int] = {}
     execution_modes: dict[str, int] = {}
-    # F27 (torchnative W2.3): the session-time Kineto join fills the reserved
-    # D22 device slots as COLUMNS, never schemas. Absent join -> all None
+    # the session-time Kineto join fills the reserved
+    # device slots as COLUMNS, never schemas. Absent join -> all None
     # (missing is None, never zero); the name-substring bridge stays banned.
     _join = _joined_result_or_none(trace)
     for index, op in enumerate(trace._layer_list):
@@ -353,10 +353,10 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
             evidence, applicability = "formula_exact", "applicable"
             reason = "zero by named rule"
         else:
-            # Per-cell evidence (costreport D2): read the two-term compute
+            # Per-cell evidence: read the two-term compute
             # record's own evidence -- SDPA and per-element-cost rules carry
             # "estimated", and a mixed surface must label the two cells
-            # differently (the T-HONESTY failing-first gate).
+            # differently (a pinned gate).
             record_evidence = None if record is None else getattr(record, "evidence", None)
             evidence = (
                 record_evidence

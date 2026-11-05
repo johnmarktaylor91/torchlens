@@ -125,7 +125,7 @@ full_structure = recording.to_trace()
 card = recording.to_agent_json()
 recording.save("sparse.tlspec", overwrite=True)  # same artifact Trace.save writes
 
-# Selection algebra (L6): compose regions, resolve explicitly, edit with do().
+# Selection algebra: compose regions, resolve explicitly, edit with do().
 log = tl.trace(model, x)
 u1, u2 = log["relu_1_2"], log["conv2d_2_3"]
 inter = u1.receptive_field.at((3, 3)) & u2.receptive_field.at((5, 5))  # a Selection

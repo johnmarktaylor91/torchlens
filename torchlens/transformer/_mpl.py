@@ -1,4 +1,4 @@
-"""matplotlib gate + shared figure chrome (tviz memo D3/D4, FORK-T1 branch A).
+"""matplotlib gate + shared figure chrome.
 
 matplotlib is resolved at CALL time through :func:`require_matplotlib`; when
 absent, every save-format request refuses typed (``tv_matplotlib_missing``)
@@ -41,7 +41,7 @@ ATTENTION_CMAP = "viridis"
 #: Diverging colormap for signed scores/effects (zero-centered).
 DIVERGING_CMAP = "RdBu_r"
 
-#: The advertised save formats (tviz memo D1: genuine paper-ready outputs).
+#: The advertised save formats (genuine paper-ready outputs).
 SUPPORTED_FORMATS = ("png", "svg", "pdf")
 
 #: Fill color for masked cells -- OUTSIDE the data colormap, so a masked
@@ -67,8 +67,8 @@ def require_matplotlib() -> Any:
     ------
     RenderError
         ``tv_matplotlib_missing`` with the exact install command when
-        matplotlib is not importable (FORK-T1 branch A: call-time
-        resolution; the dependency-free token-strip emitters still work).
+        matplotlib is not importable (resolved at call time; the dependency-free
+        token-strip emitters still work).
     """
 
     try:
@@ -113,7 +113,7 @@ def colorbar(fig: Any, mesh: Any, ax: Any, *, label: str) -> Any:
     """Attach a VECTOR colorbar (matplotlib rasterizes its solids by default).
 
     A default colorbar embeds an ``<image>`` element in SVG output -- exactly
-    the raster-inside-vector class Stage 0 rejects -- so every tviz colorbar
+    the raster-inside-vector class Stage 0 rejects -- so every colorbar
     goes through this wrapper, which de-rasterizes the solids.
 
     Parameters
@@ -157,7 +157,7 @@ def save_figure(
     svg_fonttype: str = "path",
     dpi: int = 200,
 ) -> Path:
-    """Save a figure with the tviz output contract applied.
+    """Save a figure with the output contract applied.
 
     Parameters
     ----------
@@ -195,7 +195,7 @@ def save_figure(
 
 
 def paged_paths(path: Path | str, pages: int) -> list[Path]:
-    """Return numbered page paths for multi-page file output (D21).
+    """Return numbered page paths for multi-page file output.
 
     Parameters
     ----------

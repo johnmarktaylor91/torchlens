@@ -126,6 +126,7 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
     direct_transform_decorator,
     transform_builder_decorator,
 )
+from ._user_grad_fn import grad_fn_read_refused
 from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
 from ._warm_originals import originals_exposed
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
@@ -357,11 +358,10 @@ def _maybe_inject_device_kwarg(func_name: str, kwargs: dict[str, Any]) -> dict[s
     # injection, silently placing meta-context tensors on CPU.
     if kwargs.get("device") is not None:
         return kwargs
-    # W1-CTX (weightsfree memo D4): during an ADMITTED weights-free capture
-    # TorchLens owns the factory device through its thread-scoped slot — no
-    # torch DeviceContext mode is on the stack (its catch-all re-entry
-    # respells dunder ops, defect L3), so the slot supplies the placement a
-    # native device context would have injected. A caller-pinned non-None
+    # During an admitted weights-free capture TorchLens owns the factory
+    # device through its thread-scoped slot -- no torch DeviceContext mode is
+    # on the stack (its catch-all re-entry respells dunder ops), so the slot
+    # supplies the placement a native device context would have injected. A caller-pinned non-None
     # device above always wins.
     slot_device = _active_factory_device()
     if slot_device is not None:
@@ -476,8 +476,8 @@ def _canonical_capture_callable(
     returns the same storage-sharing, autograd-detached value as ``Tensor.detach``.
     Record that operation under the canonical detach callable so live validation
     and portable replay agree without admitting the unsafe ``data`` descriptor
-    through the callable resolver. The SETTER (``t.data = rhs``, round-31 M6 +
-    r28 reconcile) rebinds the receiver onto RHS's storage: the receiver's old
+    through the callable resolver. The SETTER (``t.data = rhs``) rebinds the
+    receiver onto RHS's storage: the receiver's old
     value has zero dataflow into the result, so the op is RECORDED as the
     canonical single-argument ``detach(rhs)`` call (the wrapper logs only the
     RHS argument; see ``wrapped_func``) while keeping the user-facing ``"data"``
@@ -704,17 +704,16 @@ def _register_inplace_live_grad_hook(
     """Hook the live in-place result so its gradient is captured under ``raw_label``.
 
     In-place ops log their output against a ``safe_copy`` whose grad_fn is a
-    dead-end ``CloneBackward`` node. When same-object identity is preserved the
-    live tensor (the original, in-place-modified one) is what downstream ops
-    consume, so the real gradient flows through it -- not the logged copy. This
-    registers the standard backward grad hook on the live tensor so the grad is
-    captured. ``_add_tensor_backward_hook`` dedups by ``(label, id(tensor))`` and
-    only hooks autograd-participating tensors, so the call is safe and cheap.
-    ``owning_backward_only`` is for a hook on model state that outlives the pass
-    (see ``_add_tensor_backward_hook``).
+    dead-end ``CloneBackward`` node; the live, in-place-modified tensor is what
+    downstream ops consume, so the real gradient flows through it and this hooks
+    it (``_add_tensor_backward_hook`` dedups by ``(label, id(tensor))`` and only
+    hooks autograd-participating tensors). A tensor whose ``grad_fn`` read raises
+    or warns (``grad_fn_read_refused``: a stale multi-output or custom-Function
+    view of the written base) is skipped: eager raises on any use of it, so it
+    carries no gradient. ``owning_backward_only``: see ``_add_tensor_backward_hook``.
     """
 
-    if not isinstance(tensor, torch.Tensor):
+    if not isinstance(tensor, torch.Tensor) or grad_fn_read_refused(tensor):
         return
 
     # The live tensor is what downstream ops consume, so it takes gradient
@@ -737,7 +736,7 @@ def _propagate_mutation_label_to_storage_aliases(
     BASE tensor's content, but the base is a different Python object: only the
     view's label used to advance, so the mutation op was a dead end and later
     consumers of the base bound to the stale pre-mutation parent while storing
-    the post-mutation value (W3 audit F1, silent). Resolve every OTHER live
+    the post-mutation value (a silent error). Resolve every OTHER live
     labeled tensor whose storage byte range overlaps the mutated target and
     advance its label to the mutating op, exactly like the direct same-object
     propagation. Value replay is untouched: the consumer's version-snapshot
@@ -758,16 +757,16 @@ def _propagate_mutation_label_to_storage_aliases(
 
     from ._ops_capture_records import _record_label_version_snapshot
 
-    # SCOPE (r26 reconcile): descriptor/grad-bound captures keep the HISTORICAL
+    # SCOPE: descriptor/grad-bound captures keep the unadvanced (historical)
     # topology. The runnable recipe + numeric attestation key payloads PER
     # LABEL, and advancing a base tensor's label to a view-mutation op makes
     # one label denote two different values (the op's view-shaped output AND
     # the full post-mutation base as the consumer's parent) -- byte-exact
-    # attestation then fails on a genuinely-verifiable run (r29 suite).
-    # Those modes stay honest without the edge: the r29 view-lineage gate
+    # attestation then fails on a genuinely-verifiable run.
+    # Those modes stay honest without the edge: the view-lineage gate
     # fail-closes view-mediated input mutation, and validation's
     # version-snapshot replay is green with EITHER topology. Default captures
-    # (receptive fields, influence geometry, collapse -- the W3-F1 impact
+    # (receptive fields, influence geometry, collapse -- the impact
     # surface) get the mutation edge. Follow-up: teach the runnable reader
     # per-(label, consumer) payload keying, then lift this scope.
     if not view_mutation_propagation_enabled(trace):
@@ -775,8 +774,8 @@ def _propagate_mutation_label_to_storage_aliases(
 
     # ``untyped_storage()`` / ``data_ptr()`` / ``stride()`` / ``storage_offset()``
     # are WITNESSED host-escape / metadata surfaces, and a genuine user
-    # ``data_ptr()`` read fail-closes runnable captures to UNVERIFIABLE
-    # (r15-H1). These are TorchLens's OWN bookkeeping reads, so they run under
+    # ``data_ptr()`` read fail-closes runnable captures to UNVERIFIABLE.
+    # These are TorchLens's OWN bookkeeping reads, so they run under
     # ``pause_logging`` (no spurious op capture) plus ``internal_scalar_read``
     # (kept off the escape census / metadata patches) -- the same sanctioned
     # pattern as ``completeness_witness``'s storage-site indexers.
@@ -868,7 +867,7 @@ def _call_unlogged_off_owner(
 ) -> Any:
     """Run a wrapped call that no trace owns on this thread, unrecorded.
 
-    r45 hon2_1: while a runnable capture is armed, a NON-owner thread's op that
+    While a runnable capture is armed, a NON-owner thread's op that
     consumes a captured tensor as an operand ceilings replay proof to
     ``unverifiable`` (the worker-DERIVED cross-thread escape sibling: fresh
     worker-side storage the owner-only census never registered).
@@ -967,11 +966,11 @@ def _call_print_func(
 ) -> Any:
     """Format a captured tensor, recording the host string escape first.
 
-    r39 hon2_1: stringifying a captured tensor extracts its VALUES into the
+    Stringifying a captured tensor extracts its VALUES into the
     returned string (a tensor-to-host value escape the user can fold back into
     control flow). ``print_override`` runs that extraction under
     ``pause_logging()``, blinding the ordinary escape observers, so the source
-    is recorded BEFORE the paused format. r43 hon2_4: a NON-OWNER thread must
+    is recorded BEFORE the paused format. A NON-OWNER thread must
     never flip the global pause toggle mid-forward, so a worker calls the
     original torch string function unchanged.
     """
@@ -1054,7 +1053,7 @@ def _register_first_use_state(trace: Any, arg_tensorlike: Iterable[torch.Tensor]
             if watched_lazy_slots is not None and t in watched_lazy_slots:
                 late_register_forward_created_parameter(trace, t)
             continue
-        # The r81 identity ladder + F20 lazy late-index live in
+        # The identity ladder + lazy late-index live in
         # buffer_writes.resolve_or_late_index_buffer_address.
         address = resolve_or_late_index_buffer_address(trace, t)
         if address is not None and get_tensor_label(t) is None:
@@ -1185,7 +1184,7 @@ def torch_func_decorator(
         canonical_capture_callable = (copy.deepcopy, func_name)
     elif func_name != "data" or property_accessor == "del":
         canonical_capture_callable = (func, func_name)
-    # See the barcode-transparency note inside ``wrapped_func`` (R16-5).
+    # See the barcode-transparency note inside ``wrapped_func``.
     is_barcode_transparent = func_name in _BARCODE_TRANSPARENT_FUNCS
     # TorchLens's synthetic ``identity`` op (Identity modules, pass-through tensors)
     # never occurs in a native forward, so it stays out of the call fingerprint.
@@ -1203,7 +1202,7 @@ def torch_func_decorator(
         if fingerprint is not None and fingerprint_token is not None:
             fingerprint.note(fingerprint_token)
         # ---- Fast path ---- (logging off: pass through; DeviceContext injection still runs for
-        # torch.device('meta') contexts). r43 hon2_4: op-logging is OWNER-thread-scoped, so a
+        # torch.device('meta') contexts). Op-logging is OWNER-thread-scoped, so a
         # NON-owner thread's ops are never logged; its host escapes still meet the method belt.
         if not _state._logging_enabled:
             # Deferred payload clones: pending aliases stay zero-copy for the process lifetime,
@@ -1281,7 +1280,7 @@ def torch_func_decorator(
         if _is_inside_dynamo_compilation():
             return _call_inside_dynamo_region(trace, func, args, kwargs)
 
-        # F20 lazy-module completion: torch's materialization plumbing on a
+        # Lazy-module completion: torch's materialization plumbing on a
         # pending slot receiver passes through unlogged (``_call_lazy_slot_plumbing``;
         # the materialized state registers later), as the region guards above.
         if args and isinstance(args[0], torch.Tensor) and _is_uninitialized_param(args[0]):
@@ -1297,7 +1296,7 @@ def torch_func_decorator(
             )
 
         # Reset barcode; skip metadata-only functions that would cause recursion.
-        # R16-5: ``as_subclass`` (and ``__index__``) is barcode-TRANSPARENT. Torch's default
+        # ``as_subclass`` (and ``__index__``) is barcode-TRANSPARENT. Torch's default
         # ``__torch_function__`` return conversion calls ``ret.as_subclass(cls)``
         # INSIDE the enclosing wrapped call (``torch.tanh(subclass_tensor)``),
         # which used to steal the enclosing call's bottom-level barcode: the
@@ -1356,7 +1355,7 @@ def torch_func_decorator(
 
         buffer_snapshots = snapshot_buffer_args(trace, func_name, arg_tensorlike, kwargs, args)
 
-        # ---- Storage-rebinding setter pre-call snapshot (r28 reconcile) ----
+        # ---- Storage-rebinding setter pre-call snapshot ----
         # ``t.data = rhs`` rebinds the receiver onto RHS's storage. Whether the
         # rebind SWAPS the storage object (rhs on foreign storage) or PRESERVES
         # it (rhs a view of the receiver's own storage) decides the ancestry
@@ -1418,17 +1417,16 @@ def torch_func_decorator(
         pauses_owned_modes = constructs_tensor_subclass and _pauses_for_subclass_conversion(
             func_name, args, _logged_subclass_cls_index
         )
-        # W3 F8: per-op duration must measure the USER op, not TorchLens
+        # per-op duration must measure the USER op, not TorchLens
         # bookkeeping. The clock starts here -- after RNG/autocast snapshots
         # and container/intervention-site registration -- and stops right
         # after the call returns, so ``func_duration`` no longer
         # systematically overstates cheap ops in instrumented captures.
-        # Attempted-op marker (snoop D5): pushed BEFORE execution (one dict
+        # Attempted-op marker: pushed BEFORE execution (one dict
         # read when echo is off); semantics on EchoSession.attempted_push.
         _echo = trace.__dict__.get("_echo_session")
         _echo_depth = _echo.attempted_push(func_name, args, kwargs) if _echo is not None else 0
-        # W0.3 (TN-D12, hygiene -- not a misattribution fix): the markers
-        # open exactly where the op clock opens, so a range never encloses
+        # The markers open exactly where the op clock opens, so a range never encloses
         # TorchLens's own pre-call bookkeeping (RNG/autocast snapshots,
         # container registration).
         op_marker_tokens = _push_op_markers(trace, func_name, func_call_id)
@@ -1699,18 +1697,17 @@ def torch_func_decorator(
                     if was_inplace:
                         set_tensor_label(args[0], out_label)
                         _register_inplace_live_grad_hook(trace, args[0], out_label)
-                        # r28 reconcile: a storage-SWAPPING ``.data=`` rebind
-                        # threads its consumers to the RHS producer (correct
-                        # dataflow), but verdict-steering attribution must
-                        # never root THROUGH the swap -- the r79/r81 belt
-                        # posture. Register the op label as an ancestry
-                        # barrier so layout/witness rooting fails closed
-                        # exactly like the pre-M6 unattributed break.
+                        # A storage-SWAPPING ``.data=`` rebind threads its
+                        # consumers to the RHS producer (correct dataflow),
+                        # but verdict-steering attribution must never root
+                        # THROUGH the swap. Register the op label as an
+                        # ancestry barrier so layout/witness rooting fails
+                        # closed, as for an unattributed break.
                         if is_storage_rebinding_setter and rebind_setter_swaps_storage:
                             from ._completeness_metadata import record_storage_rebind_barrier
 
                             record_storage_rebind_barrier(trace, out_label)
-                        # W3 F1: the write may have gone through a VIEW; every
+                        # the write may have gone through a VIEW; every
                         # other live labeled alias whose storage bytes overlap
                         # the target (its base, an overlapping sibling view)
                         # saw its content change too, so consumers of THOSE
@@ -1730,7 +1727,7 @@ def torch_func_decorator(
                 # logged op's output, so later reads bind to that op.
                 _label_mutated_prepared_parameter(trace, args[0], get_tensor_label(out_orig))
 
-            # W3 F6: the module-boundary identity mint (force_distinct_return)
+            # the module-boundary identity mint (force_distinct_return)
             # logs against a distinct safe copy so the boundary op attaches to
             # the module's output_ops -- but the CALLER keeps the original
             # object. Without advancing the live original's label, every
@@ -1762,7 +1759,7 @@ def torch_func_decorator(
                             live_label_before_mint, boundary_label
                         )
 
-            # W3 F1 (out= family): an ``out=`` destination may itself be a view
+            # ``out=`` family: an ``out=`` destination may itself be a view
             # of a larger live tensor (``torch.add(x, 1, out=y[0])``); the
             # destination object's label advances at logging time, but its
             # overlapping aliases need the same mutation-provenance advance.
@@ -1797,7 +1794,7 @@ def torch_func_decorator(
             producer_label = get_tensor_label(output_tensors[0])
         record_buffer_writes_here = is_bottom_level_func
         if not record_buffer_writes_here and buffer_snapshots:
-            # W1-BUF-2 (weightsfree memo D7): on an ADMITTED meta capture the
+            # On an ADMITTED meta capture the
             # fused mutator's Python decomposition strips the USER call of its
             # bottom-level status (the inner allocator calls claim it), so the
             # declared buffer writes would silently vanish. The snapshot-holding
@@ -1999,7 +1996,7 @@ def decorate_all_once() -> None:
     # ---- DeviceContext bypass ----
     # ``_DEVICE_CONSTRUCTOR_NAMES`` was collected from the PRE-wrap warm above,
     # and torch's ``_device_constructors()`` lru-cache deliberately stays keyed
-    # by ORIGINALS (B8-4). ``DeviceContext.__torch_function__`` always receives
+    # by ORIGINALS. ``DeviceContext.__torch_function__`` always receives
     # the original C function, so re-materializing the cache with wrappers here
     # (the historical behavior) made the C-level membership test miss and
     # silently skipped device injection for stale pre-wrap factory references
@@ -2032,7 +2029,7 @@ _AT_FORK_HYGIENE_INSTALLED = False
 def _install_fork_capture_hygiene() -> None:
     """Clear inherited capture state in ``os.fork()`` children, once per process.
 
-    b8-sol R56-8: a fork DURING a traced forward (e.g. a fork-start
+    a fork DURING a traced forward (e.g. a fork-start
     ``DataLoader`` constructed inside ``forward``) inherits
     ``_logging_enabled=True`` and ``_active_trace``, and -- because the
     forking thread's ident is preserved as the child's main thread -- passes
@@ -2069,15 +2066,15 @@ _DYNAMO_IDENTITY_RULE_CACHE_NAMES = ("get_torch_obj_rule_map", "get_tensor_metho
 def _warm_derived_identity_caches() -> None:
     """Warm torch's identity-keyed DERIVED caches while the namespace holds originals.
 
-    B8-4 invariant: no torchlens path may FIRST-call a cached torch
+    Invariant: no torchlens path may FIRST-call a cached torch
     introspection table while wrappers are installed. Both install paths call
     this before their setattr loop; ``originals_exposed`` also shows originals
     on slots a failed decoration pass left wrapped (the #138 retry). Covered:
 
-    - the two ``torch.overrides`` tables (the original B8-4 pair);
+    - the two ``torch.overrides`` tables;
     - torch's ``_device_constructors()`` set -- ``DeviceContext.__torch_function__``
       always receives the ORIGINAL C function, so a wrapper-keyed set silently
-      skips device injection for stale pre-wrap factory references (R56); the
+      skips device injection for stale pre-wrap factory references; the
       warm also collects ``_DEVICE_CONSTRUCTOR_NAMES`` for the wrapper-side
       injection path;
     - dynamo's identity-keyed rule tables, when dynamo is already imported
@@ -2124,7 +2121,7 @@ def _dynamo_identity_rule_caches() -> list[Any]:
 
     ``torch._dynamo.trace_rules`` memoizes rule tables keyed by the live
     callable objects resolved from the torch namespace at materialization
-    time. Like the ``torch.overrides`` tables (B8-4) these are DERIVED caches:
+    time. Like the ``torch.overrides`` tables these are DERIVED caches:
     the attribute-identity restore census cannot see them, so a table built
     while torchlens wrappers are installed silently poisons ``torch.compile``
     for the rest of the process (``lookup(torch.cos)`` degrades to
@@ -2151,7 +2148,7 @@ def _stamp_wrapper_provenance(
 
     ``@wraps`` copies the ORIGINAL's metadata, which for torch's C descriptors
     names classes that are not importable attributes (``pickle.dumps(torch.cos)``
-    died on ``_VariableFunctionsClass.cos`` — B8-1a). The install-site stamp
+    died on ``_VariableFunctionsClass.cos``). The install-site stamp
     makes a bare wrapper pickle by reference to its public torch name while
     wrappers are installed (loading as the ORIGINAL in a fresh process), and
     introspection reports the namespace the user actually reached the callable
@@ -2166,8 +2163,8 @@ def _stamp_wrapper_provenance(
     module. Stamping them ``"torch"`` would make a wrapped storage-unsafe
     method (``Tensor.resize_``/``set_``/``apply_``/``map_``) CLAIM torch
     purity to every string-based safety gate — the exact spoof surface the
-    r36 smuggling defense (tests/test_r36_tensor_method_smuggling.py, LOCKED)
-    pins as denied on REAL identity with the wrappers module visible. The
+    tensor-method smuggling defense pins as denied on REAL identity with the
+    wrappers module visible. The
     security disclosure wins over introspection fidelity there; a bare wrapped
     tensor method staying unpicklable-by-reference is the accepted residual.
     """
@@ -2254,7 +2251,7 @@ def _decorate_torch_func_pairs(func_pairs: list[tuple[str, str]]) -> None:
     # Tensor.bool first, then inspect Tensor.dim_order, the annotation
     # bool | list[...] resolves bool to our wrapper -> TypeError (#138).
     for namespace_name, func_name in func_pairs:
-        # Exact-name dedup (W3 F9): ``add``, ``add_``, and ``__add__`` have
+        # Exact-name dedup: ``add``, ``add_``, and ``__add__`` have
         # meaningfully different signatures, so each registers its own entry.
         # The historical stripped-key dedup made whichever spelling appeared
         # first swallow all the others' registrations.
@@ -2456,7 +2453,7 @@ def _unwrap_torch_locked() -> None:
         return
 
     for namespace_name, func_name in get_orig_torch_funcs():
-        # r-b4 R26-5b: install tolerates namespace drift; teardown/re-install must
+        # install tolerates namespace drift; teardown/re-install must
         # too, or unwrap_torch() dies mid-loop on the exact drift install absorbs,
         # leaving torch partially wrapped (a process-global leak).
         local_func_namespace = get_optional_torch_namespace(namespace_name)
@@ -2465,7 +2462,7 @@ def _unwrap_torch_locked() -> None:
         current = getattr(local_func_namespace, func_name)
         orig = _state._decorated_to_orig.get(id(current))
         if orig is None:
-            # B8-6: a drifted slot whose foreign wrapper chains to a live
+            # a drifted slot whose foreign wrapper chains to a live
             # torchlens wrapper is rebased onto the restored original; only a
             # burial that survives the rebase is reported (at the very end).
             if (
@@ -2545,7 +2542,7 @@ def _unwrap_torch_locked() -> None:
     _renormalize_released_models_after_flip()
 
     # Teardown is complete here; the report may raise under a warning filter,
-    # so it comes after the flag flip and the cache clears (B8-6).
+    # so it comes after the flag flip and the cache clears.
     warn_buried_sites(buried_sites)
 
 
@@ -2648,7 +2645,7 @@ def _reinstall_torch_func_wrappers() -> None:
     """
 
     for namespace_name, func_name in get_orig_torch_funcs():
-        # r-b4 R26-5b: install tolerates namespace drift; teardown/re-install must
+        # install tolerates namespace drift; teardown/re-install must
         # too, or unwrap_torch() dies mid-loop on the exact drift install absorbs,
         # leaving torch partially wrapped (a process-global leak).
         local_func_namespace = get_optional_torch_namespace(namespace_name)
@@ -2727,11 +2724,11 @@ def _wrap_torch_locked(
         return
 
     # Re-install from existing maps (after a prior unwrap_torch).
-    # B8-4 holds per EPOCH: unwrap_torch() cleared the derived identity caches
-    # (device constructors, any dynamo rule tables), so they must be re-warmed
-    # against the restored originals BEFORE the setattr loop repoints the
-    # namespace -- the historical asymmetry left epoch 2+ correct only when
-    # something happened to materialize them between unwrap and re-wrap.
+    # The warm invariant holds per EPOCH: unwrap_torch() cleared the derived
+    # identity caches (device constructors, any dynamo rule tables), so they
+    # must be re-warmed against the restored originals BEFORE the setattr loop
+    # repoints the namespace; otherwise epoch 2+ is correct only if something
+    # happened to materialize them between unwrap and re-wrap.
     _warm_derived_identity_caches()
 
     _reinstall_torch_func_wrappers()

@@ -146,7 +146,7 @@ PROBE_RECIPES: dict[tuple[str, str], Callable[[], tuple[tuple[Any, ...], dict[st
     # Exact sibling of ``as_subclass``: builds a subclass VIEW from raw
     # storage below the override protocol, so a stale pre-wrap
     # ``_make_subclass`` reference loses the op with zero signal. Without a
-    # recipe the pair sat disclosed-but-unprobed forever (b6-fable carried).
+    # recipe the pair would sit disclosed-but-unprobed forever.
     ("torch.Tensor", "_make_subclass"): lambda: (
         (_ProbeSubTensor, torch.tensor([0.25, 0.5])),
         {},
@@ -165,11 +165,11 @@ def _probe_rng_bracket() -> Iterator[None]:
     (``manual_seed`` already has a recipe that would call ``manual_seed(7)``;
     it is merely dead on current builds) would silently clobber the user's
     global seed. The bracket makes probe evaluation RNG-neutral by
-    construction (b8-fable R56 latent-reseed hardening).
+    construction.
     """
 
-    # Route through the W11-F1-guarded snapshot pair: gating on
-    # ``torch.cuda.is_available()`` alone re-created the visible-but-unusable
+    # Route through the guarded snapshot pair: gating on
+    # ``torch.cuda.is_available()`` alone would re-create the visible-but-unusable
     # CUDA abort on pure-CPU captures (the snapshot never touches CUDA until
     # the process has actually initialized it, and latches on a failed read).
     from ..._utils.rng import log_current_rng_states, set_rng_from_saved_states
@@ -405,7 +405,7 @@ def belt_report() -> BeltReport | None:
 
     From a NON-OWNER thread while a capture is live (``doctor()`` /
     ``report.doctor()`` polled during a long forward), the cached report is
-    served READ-ONLY (r8 R54 belt pair): deriving would evaluate probe
+    served READ-ONLY: deriving would evaluate probe
     originals under the global-RNG snapshot/restore bracket, and the restore
     would REWIND any draws the capture made in between -- silently repeating
     its dropout/noise stream -- while the stale-generation reversal would
@@ -509,9 +509,8 @@ def sweep_stale_belt_references() -> int:
         Number of slots patched by this sweep.
     """
 
-    # grind-r5 b3 R02 (opus+sol corroborated LOW, 2 rounds): NO length
-    # watermark. ``len(sys.modules)`` equality is not identity -- a same-length
-    # mutation (del one key + insert another) skipped the sweep and left a
+    # NO length watermark. ``len(sys.modules)`` equality is not identity -- a same-length
+    # mutation (del one key + insert another) would skip the sweep and leave a
     # protocol-invisible stale ``from_numpy``/``frombuffer``/``as_subclass``
     # reference unpatched, exactly the zero-signal class the belt exists to
     # close. The per-module memo below already makes every sweep O(modules)

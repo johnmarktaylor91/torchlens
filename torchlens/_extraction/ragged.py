@@ -1,4 +1,4 @@
-"""D-RAGGED: refuse by default; trimmed is the only ragged carrier (D4).
+"""D-RAGGED: refuse by default; trimmed is the only ragged carrier.
 
 The entry gate is ``ragged="refuse"`` (an enum, not a bool). On first width
 drift the run refuses BEFORE committing the offending shard, in one typed
@@ -46,7 +46,7 @@ __all__ = [
     "trim_batch",
 ]
 
-#: Closed ragged-mode vocabulary (D4). ``as_captured`` is the never-default
+#: Closed ragged-mode vocabulary. ``as_captured`` is the never-default
 #: byte-exact reproduction mode (item 19, sequenced LAST; the enum makes it
 #: additive).
 RAGGED_MODES: tuple[str, ...] = ("refuse", "trim", "as_captured")
@@ -203,7 +203,7 @@ def raise_ragged_refusal(
     *,
     late_mask_shaped: bool = False,
 ) -> None:
-    """Raise the D4 entry-gate refusal on first width drift.
+    """Raise the entry-gate refusal on first width drift.
 
     Fired BEFORE the offending shard commits. Honest about the preserved
     prefix: on real text the first drift arrives at batch index 1, so the
@@ -283,7 +283,7 @@ def trim_batch(
     tensor: torch.Tensor,
     geometry: dict[str, Any],
 ) -> RaggedBatch:
-    """Trim one batch tensor to its true per-row extents (the D4 carrier).
+    """Trim one batch tensor to its true per-row extents (the carrier).
 
     Slicing uses ``(start, extent)`` — never extent alone: left padding
     shifts each row's first valid index (measured starts ``[4, 0, 2]`` on
@@ -364,7 +364,7 @@ def to_padded(
     pad_value: float = 0.0,
     max_len: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Materialize trimmed rows as one padded tensor plus its mask (D4).
+    """Materialize trimmed rows as one padded tensor plus its mask.
 
     Documented as VALUE-equivalent within the cross-batch tolerance, NOT
     byte-identical to a historical padded pipeline (padded positions here

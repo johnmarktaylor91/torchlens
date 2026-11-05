@@ -1,6 +1,6 @@
 """Load-time anchors: does a grammatically valid episode ledger describe THIS product?
 
-Split out of :mod:`._episode_ledger` (W051 lint fix; the ledger module sat
+Split out of :mod:`._episode_ledger` (the ledger module sat
 over the 2000-line unledgered-module cap). ONE responsibility: the structural
 anchoring a loaded ``annotations["episode"]`` payload must pass AFTER its
 grammar parse (audit 2.19: a valid ledger grafted onto any artifact used to
@@ -63,7 +63,7 @@ def _recorded_module_passes(trace: Any, address: str) -> frozenset[int]:
 
 
 def _anchor_loaded_ledger(trace: Any, payload: Mapping[str, Any]) -> str | None:
-    """Anchor a grammatically valid loaded ledger to ITS product (W051).
+    """Anchor a grammatically valid loaded ledger to ITS product.
 
     Audit 2.19: a valid ledger grafted onto any artifact loaded clean and
     made the product an "episode" -- the presence of the key was the only
@@ -156,7 +156,7 @@ def quarantine_loaded_ledger(annotations: dict[str, Any], detail: str, *, stackl
 
 
 def reanchor_loaded_episode_evidence(trace: Any) -> None:
-    """Re-run anchor 4 AFTER payload attach on a ``.tlspec`` load (W051-CAPT3).
+    """Re-run anchor 4 AFTER payload attach on a ``.tlspec`` load.
 
     Inside ``Trace.__setstate__`` the root output is still an unmaterialized
     blob handle, so the fourth anchor of :func:`_anchor_loaded_ledger` had

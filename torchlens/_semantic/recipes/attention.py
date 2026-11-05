@@ -336,7 +336,7 @@ def _op_facet_spec(op: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
 #: Weight-storage orientation by projection class: transformers' Conv1D stores
 #: ``[in, out]``; ``nn.Linear`` stores ``[out, in]``. Never guessed for other
 #: classes -- a square weight cannot disambiguate, and a wrong orientation
-#: produces plausibly-ranked WRONG per-head rows (mikit F5, measured 18.80
+#: produces plausibly-ranked WRONG per-head rows (measured 18.80
 #: sum-check error on GPT-2).
 _PROJECTION_ORIENTATION_BY_CLASS: dict[str, Literal["in_out", "out_in"]] = {
     "Conv1D": "in_out",
@@ -349,7 +349,7 @@ def _eager_result_spec(module: Any, z_op: Any) -> FacetSpec | AbsenceReason:
 
     ``result[b, s, h, :] = z[b, h, s, :] @ W_O[h]`` per QUERY head, pre-bias.
     No model materializes per-head outputs, so this is a computed read-only
-    view on every implementation (mikit D10); the read validates the summed
+    view on every implementation; the read validates the summed
     rows (+ bias) against the CAPTURED output-projection value and refuses on
     mismatch rather than serving a wrong decomposition.
     """
@@ -458,8 +458,8 @@ def _eager_result_checked(
                 summed = summed + bias
         # Cancellation-aware summation-error bound, LOCAL to this identity
         # (never the shared replay tolerance table, whose denormal atol is
-        # load-bearing THERE and input-dependently refuses correct sums here,
-        # the mikit F4 class): both sides fold the same |z||W| products in
+        # load-bearing THERE and input-dependently refuses correct sums here):
+        # both sides fold the same |z||W| products in
         # different reduction orders, so the honest per-element bound scales
         # with eps times the SUM OF PRODUCT MAGNITUDES folded -- the per-head
         # partial sums (and the target itself) can cancel internally to near

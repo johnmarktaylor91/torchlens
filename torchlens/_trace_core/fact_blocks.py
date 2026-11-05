@@ -1,4 +1,4 @@
-"""Shared-fact column blocks: the M7 FunctionCall / ParamAlias group tables.
+"""Shared-fact column blocks: the FunctionCall / ParamAlias group tables.
 
 One fact family holds the call-level (or param-level) container facts of a
 finished trace ONCE per group instead of once per op row. At the core freeze
@@ -10,7 +10,7 @@ point each declared field converts exactly once:
   ``non_tensor_pos_args``, ``non_tensor_kwargs``, ``func_non_tensor_args``,
   ``func_config``, and ``arg_names``;
 * the **param** family groups rows by value (the ``ParamAliasGroup`` block
-  scoped to what M6 interning does not already share): ``param_shapes``.
+  scoped to what value interning does not already share): ``param_shapes``.
 
 Canonical snapshots are immutable (`tuple`, or a tuple of items for a dict)
 and interned through the trace's shared view pool, so equal facts collapse
@@ -21,7 +21,7 @@ first read and caches it back, so reads are identity-stable, per-row in-place
 mutation stays isolated (today's fresh-container-per-row semantics exactly),
 and uninspected rows retain no per-row container.
 
-Like M6, the conversion is differential by construction: a group member whose
+Like value interning, the conversion is differential by construction: a group member whose
 value does not equal the group's first-seen value (or whose equality probe
 raises) keeps its explicit cell — the block is authoritative only where it
 provably reproduces the public surface. A direct write to one Op replaces the
@@ -139,7 +139,7 @@ def convert_fact_cells(store: Any, pool: dict[Any, Any]) -> None:
         Building-phase ``OpRowStore``; no-op once frozen.
     pool:
         Shared view-intern pool (canonicals dedup across groups and against
-        the M6 relation views).
+        the relation views).
     """
 
     from .relation_views import intern_view
@@ -179,7 +179,7 @@ def convert_fact_cells(store: Any, pool: dict[Any, Any]) -> None:
                         column.append(_MISSING)
                 continue
             # Sibling member: convert only where it provably equals the
-            # group canonical (differential discipline, like M6).
+            # group canonical (differential discipline, like value interning).
             for name, fid in call_fids.items():
                 canonical = call_family.columns[name][gid]
                 if canonical is _MISSING:

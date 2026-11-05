@@ -71,7 +71,7 @@ def logged_receiver_output(
     """Return the output a receiver-mutating call logs: its mutated receiver(s) when needed.
 
     ``__setitem__``, ``zero_`` and ``__delitem__`` (``always_receiver``) and a mutating
-    property setter that returned ``None`` (``t.real = rhs``, round-31 M6) log the receiver
+    property setter that returned ``None`` (``t.real = rhs``) log the receiver
     tensor ``args[0]``. An in-place foreach call (``torch._foreach_add_`` and family) that
     returned ``None`` logs a new list of its receiver members: torch 2.1 binds these
     operators as returning nothing, while later torch returns that same list, so both

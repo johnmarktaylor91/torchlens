@@ -58,11 +58,11 @@ def _has_numeric_literal(value: Any, _depth: int = 0) -> bool:
     """Return whether a decoded argument tree carries a size-relevant numeric literal.
 
     One of the two size sources ``_projection_required_by_arguments`` recognizes
-    (the other is a tensor operand -- ``_has_tensor_operand``, r61). "Carries a
+    (the other is a tensor operand -- ``_has_tensor_operand``). "Carries a
     size-relevant literal" means the decoded tree holds any non-bool ``int`` or
     any *finite* ``float`` -- the float branch covers multiplier parameters such as
-    ``F.interpolate(scale_factor=<float>)`` that an integer-only gate missed
-    (r56 free_1). ``bool`` is excluded (never a size argument), and non-finite
+    ``F.interpolate(scale_factor=<float>)`` that an integer-only gate missed.
+    ``bool`` is excluded (never a size argument), and non-finite
     float sentinels (``inf``/``nan``) are not size authorities and fall through to
     the existing literal validation. Bounded recursion mirrors the literal-nesting
     ceiling. Whether such a call is *actually* size-driving is then decided
@@ -93,8 +93,8 @@ def _has_tensor_operand(value: Any, _depth: int = 0) -> bool:
     broadcast-``mul``/``cartesian_prod``/``tensordot(dims=0)``/``einsum``/``diag`` --
     and the zero-numel family ``mm``/``matmul``/``einsum`` on ``[N,0] @ [0,N]``,
     where numel is a PRODUCT so a 0 dim hides arbitrarily large sibling dims)
-    carries a tensor operand, so no amplifier can be pre-filtered out: the r60
-    free_1 has-literal premise hole is closed structurally, not by an op list.
+    carries a tensor operand, so no amplifier can be pre-filtered out: the
+    has-literal premise hole is closed structurally, not by an op list.
     Over-depth returns True (fail-closed: project).
     """
 
@@ -112,7 +112,7 @@ def _has_tensor_operand(value: Any, _depth: int = 0) -> bool:
 def _projection_required_by_arguments(args: Sequence[Any], kwargs: Mapping[str, Any]) -> bool:
     """Whether this replay call carries any size source (tensor operand or numeric literal).
 
-    The ONLY sound projection skip is "no size source at all" (r61): a call with
+    The ONLY sound projection skip is "no size source at all": a call with
     neither a tensor operand nor a numeric literal gives no fake/meta kernel
     anything to size an output tree from, so it is provably allocation-trivial.
     Any richer skip heuristic (has-literal-only, numel/arity thresholds) gaps on a
@@ -198,7 +198,7 @@ def _new_allocation_bytes(
     An output tensor whose fake ``untyped_storage()._cdata`` aliases a fake-INPUT
     storage allocates nothing -- it is a pure view, an input-returning op, or an
     in-place op -- so it contributes ZERO new bytes and is skipped. This structural
-    storage-aliasing test replaces the r55 hardcoded view-name exclusion
+    storage-aliasing test replaces the hardcoded view-name exclusion
     (``expand``/``broadcast_to``/``as_strided``/``unfold``) with no op/view list,
     and correctly charges only the NEW tensors of a mixed-output op (e.g.
     ``split`` -> views of the input are skipped; a fresh concat is charged). An
@@ -220,7 +220,7 @@ def _new_allocation_bytes(
                 nbytes = int(node.numel()) * int(node.element_size())
                 device = node.device
             except Exception as size_error:
-                # grind-r5 b7 R22 (sol HIGH): an unreadable projected size
+                # An unreadable projected size
                 # must never charge ZERO -- that converts "unknown
                 # allocation" into an empty byte charge and lets the real
                 # call allocate before any backstop. Refuse typed upstream.
@@ -248,16 +248,16 @@ def _preflight_call_allocation(
     Runs the resolved callable under a count-instrumented
     ``FakeTensorMode(allow_non_fake_inputs=True)`` (ZERO allocation) for EVERY taken-path
     call carrying a size source: a non-bool numeric literal (``_has_numeric_literal``) OR
-    a tensor operand (``_has_tensor_operand``, r61 -- the has-literal-only gate's premise,
+    a tensor operand (``_has_tensor_operand`` -- the has-literal-only gate's premise,
     "no literal implies bounded by live shapes", is FALSE for shape amplifiers such as
     ``outer``/``kron``/broadcast-``mul``/``cartesian_prod``/``tensordot(dims=0)``/
     ``einsum``/``diag`` and the zero-numel ``mm``/``matmul``/``einsum`` on ``[N,0]@[0,N]``).
-    The r55 op-name allowlist is deleted, so "size-relevance" is decided structurally by
+    The op-name allowlist is deleted, so "size-relevance" is decided structurally by
     the projection, not guessed; the ONLY skip is a call with NO size source at all
     (``_projection_required_by_arguments``). Two structural bounds fire before the real
     call:
 
-    * output COUNT (r59 free_1): the count-bounded mode caps realized fake outputs at
+    * output COUNT: the count-bounded mode caps realized fake outputs at
       ``max(recorded * 8, 4096)`` DURING fanout construction and raises
       ``_ProjectionCountExceeded`` -- caught here BEFORE the generic fail-open and
       converted to a typed ``op_output_count_preflight`` refusal, so a
@@ -271,15 +271,15 @@ def _preflight_call_allocation(
     If the projection RAISES a NON-allocation error -- a data-dependent op with no
     fake/meta impl (``nonzero``/``unique`` -> ``DynamicOutputShapeException``, or ``fold``
     with capture-invalid ``output_size``) -- it FAILS OPEN to the run-prep bound, so a
-    legitimate such op is never over-refused (the r51 over-catch anti-pattern). But an
+    legitimate such op is never over-refused (the over-catch anti-pattern). But an
     ALLOCATION-classed projection failure (``std::bad_alloc`` in the C++ prelude at
-    int-limit N) fails CLOSED typed (r59 section 2.4): the real op's identical prelude
+    int-limit N) fails CLOSED typed: the real op's identical prelude
     would die too, so failing open just runs the death twice. An unavailable
     ``FakeTensorMode`` fails open identically. ``entry`` is retained for call-site
     stability but no longer gates the projection.
     """
 
-    del entry  # r57: no op-name gate; r61: no has-literal gate either -- any size source projects.
+    del entry  # No op-name gate: no has-literal gate either -- any size source projects.
     # A call producing a view run-prep admitted past the budget has no recorded-output
     # bound behind it, so every fail-open below fails CLOSED for it instead.
     if not _projection_required_by_arguments(args, kwargs):
@@ -315,7 +315,7 @@ def _preflight_call_allocation(
             output_count_ceiling=count_ceiling,
         ) from exc
     except Exception as exc:
-        # r59 section 2.4: an ALLOCATION-classed projection failure (std::bad_alloc in
+        # section 2.4: an ALLOCATION-classed projection failure (std::bad_alloc in
         # the O(N) C++ prelude at int-limit N) fails CLOSED -- the real op's identical
         # prelude dies too. Every OTHER failure (data-dependent nonzero/unique, fold
         # output_size inconsistency) keeps today's FAIL OPEN so a legitimate op runs.
@@ -468,7 +468,7 @@ def _execute_sparse_call(
                 slot_id=tensor_argument.slot_id,
             ) from exc
         _write_argument(args, kwargs, tensor_argument.argument_path, value)
-    # r55 C3: op-agnostic allocation preflight BEFORE the real dispatch. A typed
+    # Op-agnostic allocation preflight BEFORE the real dispatch. A typed
     # refusal here replaces the raw allocator OOM-kill a hostile literal would
     # otherwise cause; it never masks a genuine signature drift (the drift path
     # below still runs the real call for every non-refused request).
@@ -481,7 +481,7 @@ def _execute_sparse_call(
         # signature drift.
         raise
     except Exception as exc:
-        # r59 section 2.4: an allocation-classed death from the REAL call is a capability
+        # section 2.4: an allocation-classed death from the REAL call is a capability
         # fact, not signature drift -- re-type it typed at ``op_allocation_execution`` so a
         # gate-4-passing run whose live+transient peak still overruns the host reports an
         # allocation refusal, never a misleading ``runtime_signature_mismatch``.
@@ -559,7 +559,7 @@ def _write_argument(
             code=RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value,
         )
     if path[0] == "kwargs":
-        # r50 (raw-pointer family): defense in depth for an in-memory descriptor that
+        # (raw-pointer family): defense in depth for an in-memory descriptor that
         # never went through the loader's parse-time refusal. A keyword naming a raw
         # memory address (the legacy constructors' keyword-only ``cdata`` overload and
         # its siblings) is refused BEFORE the value is written, so no call can hand

@@ -218,7 +218,7 @@ expert contributions from routing indices alone.
   included, and records the same rows (the same spelling as
   `trace.run_transaction(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
   buffers it changed, not random state. Train-mode BatchNorm runs through
-  `run` and `run(until=)` (D18); `backward()` through a default run's activations works without
+  `run` and `run(until=)`; `backward()` through a default run's activations works without
   `carry_state=True`.
 - **Conditionals keep source arms; `Conditional.outcome` says which way it went** (doc of
   record `docs/conditional_attribution.md`). An `if` with no `else` never gains one; when every
@@ -267,7 +267,7 @@ expert contributions from routing indices alone.
   refuses the combination typed. Session-time knob (`FieldPolicy.DROP`): load
   restores the default and loaded traces serve the saved-payload basis. Doc:
   `docs/reference/capture_outcomes.md` ("The queryable nonfinite record").
-- QUICKSTART INPUT LADDER (F17; every quickstart spelling DOCUMENTED-UNSTABLE pending the
+- QUICKSTART INPUT LADDER (every quickstart spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.trace`/`tl.summary`/the render facade share ONE input resolver --
   a real input (gold rung) XOR `input_shape=` (declared shape, seed-0 local synthesis,
   fail-closed static dtype facts with `torchlens.types.InputSpec` as the override;
@@ -286,12 +286,12 @@ expert contributions from routing indices alone.
   verified, `collapse="auto"` as its default (by design: THERE ONLY -- `Trace.draw`
   keeps `"none"`), detached `Drawing` (owns DOT/bytes/path/provenance/receipt,
   `save()` re-renders without the trace), never auto-opens a viewer, collision-safe
-  `<ModelClass>-graph.<fmt>` default filename in scripts (fork F1 branch A constant).
+  `<ModelClass>-graph.<fmt>` default filename in scripts (fork branch A constant).
   Lazy completion: gold/declared rungs materialize executed lazy modules during the ONE
   captured forward with truthful totals (the metadata-invariant flip signal passes);
   zero-arg refuses before probing; armed captures refuse `state_baseline_unavailable`.
   Doc of record: `docs/quickstart.md`.
-- BOUND-METHOD ROOTS (F41, by design; spellings DOCUMENTED-UNSTABLE): `tl.trace`
+- BOUND-METHOD ROOTS (by design; spellings DOCUMENTED-UNSTABLE): `tl.trace`
   (and `tl.validate`) accept an `nn.Module` OR a bound method of one — `tl.trace(model.generate,
   ids, ...)`. The owner resolves via `method.__self__` and is the root `self` of a TL-authored
   wrapper root (`torchlens/backends/torch/bound_root.py`) whose forward calls the exact bound
@@ -305,7 +305,7 @@ expert contributions from routing indices alone.
   a module root refuses typed). The entry-point fact is joined to the ONE rerun/append identity
   gate FAIL-CLOSED: an absent fact refuses `root_entry_point_unavailable` (legacy artifacts) and
   a non-`module_call` root refuses `rerun_entry_point_unsupported` — interim posture per foldA
-  D11 (supplying `owner` for a capture of `owner.generate` would run `__call__`, a DIFFERENT
+  (supplying `owner` for a capture of `owner.generate` would run `__call__`, a DIFFERENT
   entry point, under a fidelity-claiming report), never widened past the ruling; replay engines
   are unaffected. Closures/bare functions refuse `model_type_unsupported` teaching the ruled
   spelling.
@@ -313,16 +313,16 @@ expert contributions from routing indices alone.
   generation run is ONE product — `tl.trace(episode_root, x,
   episode=tl.options.EpisodeOptions(stepped_module=model, num_steps=N))` stamps
   `capture_kind=episode` and lands the per-step status ledger (GRAMMAR v2 as of the
-  C07X amendment, `episode_ledger_version=2` family-local: header carries the declared
+  amendment, `episode_ledger_version=2` family-local: header carries the declared
   `step_output_kind` tokens|digest|none + the `step_output_from` source disclosure /
-  `step_axis`, the minted `capture_digest` binding (F40b), the MEASURED `step_join`
-  envelope (F40c), and on coupled captures the `intervention_digest` (F42); rows carry
+  `step_axis`, the minted `capture_digest` binding, the MEASURED `step_join`
+  envelope, and on coupled captures the `intervention_digest`; rows carry
   complete/interrupted/absent status, the generic `step_output` from the root output,
   the measured carried-state witness slots `entry_state_digest`/`exit_state_digest`
   (channel-keyed, None = NOT MEASURED; the arithmetic `cache_len` is DELETED), and the
   measured `fire_count` on coupled captures (a first-class 0 on zero-fire started
   rows; None = uncoupled/never-started); managed-RNG entry_seed) at `trace.annotations["episode"]`
-  after settlement. EVIDENCE DERIVATION IS DECLARATION-DRIVEN (F40b, foldA D8):
+  after settlement. EVIDENCE DERIVATION IS DECLARATION-DRIVEN:
   tokens/digest/none per the declared kind, `step_output_from` resolves
   dict/ModelOutput/tuple root slots by container path, and per-step positions are
   TAIL-ALIGNED along `step_axis` (last `num_steps` positions) — real `generate()`
@@ -330,15 +330,14 @@ expert contributions from routing indices alone.
   refusing; declaration mismatches refuse teaching (`episode_declaration_invalid`);
   `step_output_kind="none"` admits value-free save policies. The family version is
   CONSUMED at load: a grammar v1 payload (`tokens`/`cache_len` rows) or any foreign
-  version quarantines typed, never normalizes. CROSS-STEP JOINS ARE MEASURED (F40c,
-  live boundary hooks under pause_logging + exact settlement re-grade): per-row grades
+  version quarantines typed, never normalizes. CROSS-STEP JOINS ARE MEASURED (live boundary hooks under pause_logging + exact settlement re-grade): per-row grades
   continuous/forced/transformed/declared/exogenous/unchecked in the `episode_step_join_v1`
   header envelope; the DEFAULT arm returns the one Trace with the break marked and
   refuses episode-dependent claims across a measured break (step-series reads via
   `EpisodeLedger.step_output_series()`, whole-episode `run()`, the blessing fold,
   escalation — `episode_feed_break_exogenous`/`episode_join_declared_crossing`; ops/
   values/graph/per-segment reads unaffected); `EpisodeOptions(on_feed_break="refuse")` is
-  the built FORK-4 arm (b) (settlement raises typed with the product on
+  the built arm (b) (settlement raises typed with the product on
   `exc.partial_trace`); `EpisodeOptions(feed="closed")` is the strict arm (undeclared
   crossing halts at the NEXT step entry — one-step detection latency —
   `episode_feed_closed_violation`; declared crossing stops before entry,
@@ -362,7 +361,7 @@ expert contributions from routing indices alone.
   `last_run["fast_refused"] == "<code>:<stage>"` on any typed refusal (value replacements,
   non-module targets, structural divergence); `fast=True` on a live or loaded-activation
   trace applies the staged spec the same way. Glossary: "Guarded fast rerun". ATTESTED COUPLING
-  (F42, the foldA D5 flip; spellings DOCUMENTED-UNSTABLE): `episode=` x `intervene=`
+  (the foldA flip; spellings DOCUMENTED-UNSTABLE): `episode=` x `intervene=`
   runs COUPLED — a fire-attribution session attributes every live FireRecord to its
   step (root-loop fires bucket outside-step, disclosed in the digest, never guessed
   into a row), settlement writes per-row `fire_count` + the deterministic header
@@ -384,7 +383,7 @@ expert contributions from routing indices alone.
   (`forced_tokens=`) is a disclosed NON-VERIFYING mode; escalation re-runs the WHOLE episode
   wrapped with `escalated_from`/`reason`/`fidelity_basis` disclosed (E-A3: mismatch records
   `diverged`, never a settlement input); declared unsnapshotable state refuses at declaration
-  time (`episode_state_unsnapshotable`). Bundles gain the optional S6 member-relation table
+  time (`episode_state_unsnapshotable`). Bundles gain the optional member-relation table
   (`relations=`, `Bundle.relate`, `Bundle.episode_status` — a derived fold,
   never Bundle-level settlement; `Bundle.relation_grades` — per-row `RelationGrade` derived
   from the evidence, `broken` on exactly two premises, seam-local divergences never escalate;
@@ -447,7 +446,7 @@ expert contributions from routing indices alone.
   `b.draw("members.svg", nodes="members")` draws members and relation rows;
   `b.draw("bundle.svg", theme="dark", show_legend=True)` takes draw's skin, shapes, fills and key, and `trace.draw(graph="backward", theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
-- EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
+- EXPERIMENTS REMEMBER (every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiments.md`):
   the Bundle is the MATERIAL record — persisted random `bundle_id` (never a
   content hash), per-member `member_construction` origin anchors (closed
@@ -614,7 +613,7 @@ expert contributions from routing indices alone.
   (bools and non-scalar tensors refuse — a bool is not a magnitude), `encoding_callable_error`
   (chains the user exception), `encoding_requires_dot_layout`.
 - `Trace.draw(size_by=..., size_scale="sqrt"|"linear")` (UNSTABLE spellings, keyword-only) is the
-  wave-1 SIZE channel, shipped with the D4 DEFAULT APPLIED (D4 unruled at merge: sqrt scale +
+  wave-1 SIZE channel, shipped with the DEFAULT APPLIED (sqrt scale +
   conservative area-only mapping + typed refusal on rolled varying sources). Sources: a scalar
   record field, the `color_by` builtin tokens (same meaning and units; field-backed ones take
   the field path), the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
@@ -673,7 +672,7 @@ expert contributions from routing indices alone.
 - `Trace.draw(collapse="none"|"auto"|"max"|t, fold_repeats=None|True|False)` controls v2 smart
   collapse for rolled and unrolled graphs, where float `t` in `[0.0, 1.0]` follows the public
   monotone schedule (`0.0 == "none"`, `1.0 == "max"`). `auto` IS the first schedule point whose
-  visible count enters the readable band (unfrozen, F11 memo D8: auto, float levels, and the
+  visible count enters the readable band (unfrozen: auto, float levels, and the
   public schedule all read one typed event ladder; interior t maps geometrically in realized
   count; band misses serve the disclosed strongest point).
   `None` preserves defaults (`"none"` has no run folding; `"auto"`/`"max"` use band-pressure
@@ -683,7 +682,7 @@ expert contributions from routing indices alone.
   the diagnostic plan it rendered from (mode = the draw's `collapse=`, context = the render
   request the draw resolved), and `Drawing.collapse_schedule` returns the float schedule
   metadata under that context. Smart-collapse
-  admission (F11, memo D5) gates on U -- the rendered universe of the full plan -- tiered by
+  admission gates on U -- the rendered universe of the full plan -- tiered by
   a measured (U, W) work estimator, with `COLLAPSE_OPTIMIZER_MAX_OPS` (2000,
   `torchlens._visualization.collapse_optimizer`) as the defensive constant: over-budget
   requests DEGRADE to a deterministic compact fallback plan (coded
@@ -700,7 +699,7 @@ expert contributions from routing indices alone.
 - Smart-collapse metadata is computed at access time: `Module.collapse_score`,
   `Trace.module_collapse_order`, and the per-mode ranking a forward drawing's
   `Drawing.collapse_plan` carries (the public per-mode order accessor is gone; its
-  documented-inert `weights=` parameter went earlier -- collapse memo D9, clean-v2). These are
+  documented-inert `weights=` parameter went earlier -- collapse, clean-v2). These are
   not portable fields and must not be added to `*_FIELD_ORDER` without an explicit schema change.
 - `Trace.cost.forward_peak_memory` is a real runtime measurement, never a portable fact. CUDA
   reports the device peak; MPS reports the allocator delta. CPU peaks are opt-in:
@@ -762,17 +761,17 @@ expert contributions from routing indices alone.
   `completion_binding="unobserved"` + `read_of_inflight_destination`; never guessed), witness
   fields, and `lifetime_evidence` -- and the trace serializes its group-lifecycle ledger under
   `trace.annotations["distributed"]`. `CaptureOptions(distributed_witness="digest")` is the
-  session-time witness knob (`FieldPolicy.DROP`; `"payload"` reserved for C1). Typed refusals:
+  session-time witness knob (`FieldPolicy.DROP`; `"payload"` reserved for). Typed refusals:
   `ambiguous_group_lifetime` (unprovable pre-arming group lifetime),
   `uncaptured_collective_op` (arm-time recognizer set-inequality or dispatcher schema-scan hit),
   `wildcard_recv_unsupported`, and `collective_boundary_unsupported` (runnable save +
   forward-replay validation refuse on collective-crossing traces; metadata invariants run in
   full). The pre-join membership-lineage audit over per-rank ledgers lives in
-  `torchlens.distributed.verify_membership_lineages` and is run by the C1 merge engine. Arming
-  relaxes NO tier-(a) refusal: DTensor/TP/FSDP2/PP capture stays refused until the C2/C3 census
+  `torchlens.distributed.verify_membership_lineages` and is run by the merge engine. Arming
+  relaxes NO tier-(a) refusal: DTensor/TP/FSDP2/PP capture stays refused until the census
   proves fidelity. Distributed rank processes (initialized process group, non-daemonic) are the
   one sanctioned exception to the no-child-process capture guard.
-- CROSS-RANK MERGING (rung C1): `tl.merge_ranks([trace_or_path, ...])` stitches N rank cores into
+- CROSS-RANK MERGING: `tl.merge_ranks([trace_or_path, ...])` stitches N rank cores into
   a `MergedTrace` presenter (never a `Trace`/`Bundle` subclass) at their explicit collective
   boundaries; `tl.merge_report(...)` is the graph-free diagnostic that never raises on conflicts.
   The one pure derivation (audit-first: conflicted memberships never join and never become
@@ -785,8 +784,8 @@ expert contributions from routing indices alone.
   artifact (canonical-JSON descriptor CACHE + per-member tree hashes + byte-identical rank
   cores); every load reruns the derivation and requires EXACT cache equality (tamper refuses
   typed, never degrades to a gap); an unparseable member enters `degradations` and caps the
-  effective alignment at `partial`. Refused typed in C1: p2p/pipeline boundaries (C3), DTensor
-  dual geometry (C2), merged-level selectors, merged replay/runnable export/validate.
+  effective alignment at `partial`. Refused typed: p2p/pipeline boundaries, DTensor
+  dual geometry, merged-level selectors, merged replay/runnable export/validate.
   `distributed_witness="payload"` remains a typed construction refusal (digest witnesses only).
 - `CaptureOptions(save_budget=...)` bounds retained activation bytes per device, defaulting to
   `"auto"` (half of each device's available memory measured at its first save). Crossing it raises
@@ -867,7 +866,7 @@ expert contributions from routing indices alone.
   `tlspec_version`, a pickled 2.x module path, or the 2.16 ModelLog format refuses at
   `tl.load` with the typed `tl.errors.ArtifactTooOldError` ("saved by torchlens 2.x"; the
   remedy names 2.36.x and re-capture). There is no reader, ledger or migration. The 2.16
-  intervention spec format also refuses at this floor. WRITE/READ SYMMETRY (W051-IO): the
+  intervention spec format also refuses at this floor. WRITE/READ SYMMETRY: the
   save path writes typed JSON with no pickle and, before publish, parses and decodes the
   written records with the reader's decoder; a value with no typed encoding is stringified
   with a manifest disclosure, a value with no 3.0 form at all refuses typed
@@ -883,19 +882,19 @@ expert contributions from routing indices alone.
   (v9 and v10 keep their frozen texts); `reserved_vocabularies.step_scores`
   reserves the generation step-score names, credited to inseq. Contract of record:
   `torchlens/schemas/writer_contract_v10.json`; the v9 contract stays frozen beside it.
-- TLSPEC V9 (the C07 coordinated schema write, 2026-08-27): the
+- TLSPEC V9 (the coordinated schema write, 2026-08-27): the
   `intervention_audit` grammar admits the shipped per-site `source` disclosure, PARAM
   rows/recipes (pre-v9 readers refused a saved selection- or param-intervened artifact's OWN
   load), and the EVENT (`intervention_event_v2`) row kind with its optional hash-chain
-  extension (`seq`/`prev_event_digest`, the F03 ledger's slots); the `"sidecar"` annotations
+  extension (`seq`/`prev_event_digest`, the ledger's slots); the `"sidecar"` annotations
   namespace persists plainly (envelope-shape load validation, provider-absent reads stay
   analysis-only); `"health_facts"` and `"capture_advisories"` are reserved annotation
   families with their validation rows; and three ENTRY-DARK slots are declared with
   fail-closed load validation so their Phase-3 writers need no further bump:
-  `Op.call.injection_provenance` (F01 log_injections), `Trace.source.snapshots` (F30),
-  `Trace.graph.structure_evidence` (F33). Contract of record:
+  `Op.call.injection_provenance` (log_injections), `Trace.source.snapshots`,
+  `Trace.graph.structure_evidence`. Contract of record:
   `torchlens/schemas/writer_contract_v10.json` (the v9 and v8 contracts left with the 2.x readers);
-  the C07-adjudicated field-intent census is maintained privately. The C07X
+  the adjudicated field-intent census is maintained privately. The C07X
   AMENDMENT rides the SAME v9 window (TLSPEC_VERSION stays 9; JF-9 ratified): bundle
   relation grammar v2 (required/optional split; `successor_of` admits the optional
   evidence envelope `{schema, items[], facts_digest}` + `carry_mode` (closed:
@@ -905,7 +904,7 @@ expert contributions from routing indices alone.
   vocabulary with the contracted unchecked-reason menu incl. `no_param_snapshot` --
   user-authored MEASUREMENT grades (verified/consistent/divergent) are clamped to
   `disclosed` at row construction, relate-time and load-time alike, with the declared
-  grade preserved under `declared_grade` (users never mint trust; M8); a
+  grade preserved under `declared_grade` (users never mint trust); a
   1 MiB per-row evidence budget refuses `bundle_relation_evidence_over_budget`; the
   successor_of direction pin: `from` = the LATER member), the three-leg
   preserve-and-disclose loader doctrine (unknown NAMESPACED relation kinds load opaque
@@ -918,13 +917,13 @@ expert contributions from routing indices alone.
   guard), episode ledger grammar v2 (the EPISODE CAPTURE bullet above), and three more
   entry-dark slots with fail-closed validation: `Trace.provenance.root_entry_point` (the closed
   `module_call|bound_method|function_call` root descriptor, written UNCONDITIONALLY on
-  every capture; joined to the rerun identity gate FAIL-CLOSED — the F41 bullet above),
-  `Op.episode_step` (F-EPISODE writes), `Op.call.tl_authored_root` (F41 writes it on
+  every capture; joined to the rerun identity gate FAIL-CLOSED — the bullet above),
+  `Op.episode_step` (F-EPISODE writes), `Op.call.tl_authored_root` (written on
   bound-method captures, live). The Bundle-side ledger rows
-  join (foldB s4.4 item 12) SPLIT OFF per the review proviso: the C07 ledger shape stays
-  unresolved pre-F03 and must not hold the amendment past V9-FREEZE.
-- SITE KEYS + GROUPING SURFACE (L1 wave 0; every spelling DOCUMENTED-UNSTABLE
-  pending naming-session/S2 ratification): every retained op carries
+  join SPLIT OFF per the review proviso: the ledger shape stays
+  unresolved and must not hold the amendment past V9-FREEZE.
+- SITE KEYS + GROUPING SURFACE (every spelling DOCUMENTED-UNSTABLE
+  pending naming-session ratification): every retained op carries
   `op.graph.site_key` (`site_key_v1`) — a portable, policy-independent
   STRUCTURAL-POSITION identity minted at grouping time on every backend
   (`"s1|" + module-site/type/slot/ordinal`, percent-escaped; ordinals restart
@@ -932,23 +931,23 @@ expert contributions from routing indices alone.
   keys across instances). It is a BRIDGING relation (cross-capture joins on
   position, never proven source identity: per-call-instance cardinality guard
   + source-location witness + corroborated/positional/refused verdict tiers,
-  internal until S2). Per-pass keys read as `layer.ops[k].graph.site_key`
+  internal for now). Per-pass keys read as `layer.ops[k].graph.site_key`
   (within-call recurrence groups span sites); `Layer.graph.site_peers` indexes same-site layers live; keyless legacy
   artifacts refuse `site_key_unavailable`. `Layer.shape_summary` is the
   derived across-pass shape string ("2->4" monotone / "2-4" min-max /
   first->last full shapes; contains `->`, escape at render). The
   `grouping=` trace kwarg is closed-vocabulary ("structural" default;
-  "strict_shapes"/"fold_sites" refuse typed until their designs/D1 rule);
+  "strict_shapes"/"fold_sites" refuse typed until their designs land);
   `trace.options.grouping` mirrors the request and `trace.options.grouping_policy` is the
   load-validated `grouping_policy_v1` stamp (coherence rules C1-C8;
   invalid/legacy stamps settle to the canonical degraded representation and
   refuse stamp-consuming operations typed). All persisted rows are
   persisted as of the tlspec v8 coordinated bump (load-validated). Invariants
   I-S1/I-S2/I-S3' are live tripwires; folding stays OFF everywhere except
-  future episode products (D1 default) — the tier-(a) fold closure ships
+  future episode products (by default) — the tier-(a) fold closure ships
   entry-dark as a pure function.
-- STRUCTURE-ONLY CAPTURE (L7a wave 0, D8-DEFAULT branch; every spelling
-  DOCUMENTED-UNSTABLE pending naming-session/S2 ratification):
+- STRUCTURE-ONLY CAPTURE (every spelling
+  DOCUMENTED-UNSTABLE pending naming-session ratification):
   `tl.trace(model, x, capture=CaptureOptions(structure_only=True))` records the
   op graph, module hierarchy, parameter geometry, and per-op shape/dtype with
   every value-bearing claim a HYPOTHESIS — value payloads are never retained,
@@ -960,11 +959,11 @@ expert contributions from routing indices alone.
   refuse `meta_kernel_unavailable`). Option conflicts (`on_nonfinite='raise'`,
   `replayable`, not-provably-value-free `stop_after=`) refuse
   `structure_only_option_conflict` at entry. `trace.options.structure_only` mirrors
-  the flag (persisted as of the tlspec v8 bump with M-C2/M-C3 load-validation
+  the flag (persisted as of the tlspec v8 bump with load-validation
   rows); `trace.discharge_against(real_trace)` corroborates or refutes the
   hypotheses against a real capture, and a REFUTED discharge flips hypothesis
-  consumers to typed refusals. WEIGHTS-FREE ADMISSION IS LIVE (D8 granted
-  2026-08-26, F33): meta-materialized models are admitted IFF structure-only
+  consumers to typed refusals. WEIGHTS-FREE ADMISSION IS LIVE (granted
+  2026-08-26): meta-materialized models are admitted IFF structure-only
   is in force AND the substrate is uniform (all-meta inputs + state; mixed
   cells refuse `structure_only_substrate_mismatch` in both directions, and a
   real tensor minted mid-forward refuses through the same family at the
@@ -991,8 +990,8 @@ expert contributions from routing indices alone.
   `sdpa` mask builder reads mask values and refuses typed
   `value_dependent_branch_unsupported` naming that remedy (never an automatic
   backend switch). Doc of record: `docs/reference/weightsfree_capture.md`.
-- SELECTION ALGEBRA (L6 stage 1; Selector/Selection/`trace[selector]`/
-  `__selection__`/operators slate-ratified subject to D7, producer
+- SELECTION ALGEBRA (Selector/Selection/`trace[selector]`/
+  `__selection__`/operators slate-ratified, producer
   constructors + members DOCUMENTED-UNSTABLE): `tl.Selector` is the
   composable trace-independent query AST; `trace[selector]` (the one
   resolution door) returns the frozen trace-bound `tl.Selection` (ordered `Site(site_key,
@@ -1160,7 +1159,7 @@ expert contributions from routing indices alone.
   selections (`selection_trace_mismatch` -- alignment is the one explicit
   door), and `align_to` + `tl.patch_from(source)` is the cross-run patching
   spelling the acceptance gallery pins.
-- EDGE SUBSTITUTION (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
+- EDGE SUBSTITUTION (DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
   dataflow edge family (EdgeUseRecords; replayable-gated, refusal
   `edge_provenance_unavailable`); canonical occurrence address
   `(child_func_call_id, arg_kind, arg_path)`. `do(edge_selection, edit)`
@@ -1185,7 +1184,7 @@ expert contributions from routing indices alone.
   stores per-site masks on TapRecords; `values(masked=True)` returns fresh
   masked copies.
 - PARAMETER SUBSTITUTION (param-operand, decided 2026-08-17, supersedes the
-  D3 typed-refusal default on the replay path; DOCUMENTED-UNSTABLE):
+  typed-refusal default on the replay path; DOCUMENTED-UNSTABLE):
   `fork.do(tl.param(name, mask=None), edit)` applies the edit "AS IF" the
   parameter were changed, for replay only — the value each consuming op sees
   is substituted at its derived occurrence address and the live
@@ -1273,7 +1272,7 @@ expert contributions from routing indices alone.
   pass-qualified); `param_substitution_occurrence_underivable` still fires
   fail-closed on bare pass-ambiguous consumer spellings and
   pass-incomplete consumer inventories.
-- BACKWARD RESIDUALS (L9; every spelling DOCUMENTED-UNSTABLE pending
+- BACKWARD RESIDUALS (every spelling DOCUMENTED-UNSTABLE pending
   naming-session routing): PER-FIRE TIMING -- every hooked grad_fn
   gets a timing prehook; ONE clock (`perf_counter`) paired at capture by a
   per-node keyed LIFO (stale entries discarded, untimed fires `(None,
@@ -1283,7 +1282,7 @@ expert contributions from routing indices alone.
   the tlspec v8 coordinated bump the persisted `GradFnCall` timing fields
   carry the per-fire `perf_counter` semantics, discriminated by the
   persisted `Trace.grad_fn_timing_provenance`; timing
-  registration failure degrades to untimed, never a coverage gap (D15 A/B
+  registration failure degrades to untimed, never a coverage gap (A/B
   measured ~4-5%, under the 10% gate; universal path shipped). CHECKPOINT
   TOKENS -- classified non-reentrant `_checkpoint_hook` enters mint one
   per-trace ordinal token (armed owner thread, outside engine invocations;
@@ -1301,11 +1300,11 @@ expert contributions from routing indices alone.
   `torchlens._ir.events.BackwardPassEnd.close_path` disclosure is sidecar-event-only in wave 2.
   GROUPED FLOOR -- `trace.grad_fn_site_summary` rolls backward facts up per
   L1 site_key (read-only; keyless legacy refuses `site_key_unavailable`).
-- NETRON EXPORT v2 (F14; every kwarg spelling DOCUMENTED-UNSTABLE pending the
+- NETRON EXPORT v2 (every kwarg spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.export.netron(log, path=None, *, granularity="module"|"op"|"rolled",
   depth=1, show_buffers="never"|"meaningful"|"always", attachment=None, serve=False,
   baseline=None)` emits schema-v2 ONNX protobuf-JSON (irVersion 10, custom domains
-  `ai.torchlens.lossy`/`ai.torchlens.module` — NEVER re-domained for colour, ruling N1)
+  `ai.torchlens.lossy`/`ai.torchlens.module` — NEVER re-domained for colour)
   with typed values + native graph I/O, per-call module FunctionProtos (module is the FILE
   default per ruling N2; interim fixed depth 1, single-op modules inlined with their
   FunctionProto DELETED, DAG belt fail-softs to op with coded warning), tri-state buffer
@@ -1322,7 +1321,7 @@ expert contributions from routing indices alone.
   `onnx.ModelProto` parse + `check_model(full_check=True)`; netron 9.2.2's own parser
   executes over it in CI (tests/test_netron_export_*.py). Doc:
   `docs/reference/netron_export.md`.
-- SUMMARY REBUILD (F08; every spelling DOCUMENTED-UNSTABLE pending
+- SUMMARY REBUILD (every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification): bare `trace.summary()` / `tl.summary(model, x)`
   render the AUTO VIEW LADDER (coalesced hybrid -> strictly folded module tree
   -> descending depth -> protected totals-conserving elision) under a derived
@@ -1373,7 +1372,7 @@ expert contributions from routing indices alone.
   naming session): the CircuitsVis/BertViz/Ecco/inspectus picture families on typed
   session-only display records -- `attention_views(trace, tokens=)` reads the semantic
   `pattern` facet into canonical `[query_head, destination, source]` `AttentionView`s
-  (provenance captured/reconstructed/user_supplied; mask provenance is the D6
+  (provenance captured/reconstructed/user_supplied; mask provenance is the
   three-source hierarchy: recorded SDPA call args, the captured eager additive-mask
   operand keyed on `finfo(dtype).min` never `-inf`, explicit user metadata -- absent all
   three the picture renders "zero and masked positions are not distinguished"; zeros
@@ -1407,7 +1406,7 @@ expert contributions from routing indices alone.
   without `step=`, or `query_tokens=`/`key_tokens=` with `step=` refuse
   `tv_record_invalid`. Doc: `docs/field-guide/generation_attention.md`.
   Records are session-only, never persisted. Doc: `docs/reference/tviz.md`.
-- MECHINTERP KIT (F05; every spelling DOCUMENTED-UNSTABLE pending the naming
+- MECHINTERP KIT (every spelling DOCUMENTED-UNSTABLE pending the naming
   session): `torchlens.mechinterp` is the transformer analysis kit validated
   against TransformerLens oracles -- `residual_accumulation` /
   `residual_decomposition` / `full_decomposition` (bitwise-closed),
@@ -1462,8 +1461,8 @@ expert contributions from routing indices alone.
   site value's batch axis, required and never guessed. Example:
   `report = tl.mechinterp.ablation_controls(model, x, tl.module("gain"), metric, axis=0)`
   then `report.survives`.
-- TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
-  attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
+- TRAINING-TIME WATCH (DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
+  attach-once watch engine over the records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
   WandbSink, JSONLSink, MemorySink; `MLflowSink(client=None, *,
   run_id=None)` and `CometSink(experiment)` over a user-created run, caller step kept,
@@ -1510,19 +1509,19 @@ expert contributions from routing indices alone.
   `LayerProfilerCallback` records carry `run_id` (fresh per Lightning `setup`,
   or `run_id=`) and `disclosure`; an untraceable batch warns
   `lightning_profile_skipped` and training continues.
-- OBSERVABILITY HOME (C06 + F24/F25/F27; DOCUMENTED-UNSTABLE):
+- OBSERVABILITY HOME (DOCUMENTED-UNSTABLE):
   `torchlens._observability` (~100 names) carries the L5 record schema,
   summary transforms, `HistoryView` (bounded exactly-mergeable training
   history), contact sheets, `measure_ab`, pass peaks, the categorized
   memory-timeline v2, and the Kineto/native-profile join (`kernel_profile`;
   `hot_path(by="device_time")`; `tl.region` correlation). `torchlens._observe`
   is the user-facing verbs door.
-- ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens._ecosystem` --
+- ECOSYSTEM RUNTIME (DOCUMENTED-UNSTABLE): `torchlens._ecosystem` --
   `plugins` (entry-point discovery that NEVER executes third-party code at discovery; kill
   switch). A file saved by torchlens 2.x refuses at `tl.load` with one typed error.
   `tests/conformance/` (a test-side harness, not shipped in the wheel) holds the C0-C2 packs and the
   preview-backend scorecard builder; the shipped records stay in `torchlens/backends/<name>/scorecard.json`.
-- LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
+- LIVE NARRATION (DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
   `EchoSession` and the sinks (the event record is `tl.types.NarrationEvent`);
@@ -1606,7 +1605,7 @@ expert contributions from routing indices alone.
   `tools/docs/generated/llms.txt` are generated from `docs/field-guide/task_cards.yaml` by
   `tools/docs/build_agent_index.py` (`--check` in tests); `tools/agent_evals/first_call.py`
   grades whether a fresh agent's first TorchLens call is each card's canonical call.
-- DATASET EXTRACTION (D7/V5; `resume=`, `stimulus_ids=`, and the loader
+- DATASET EXTRACTION (`resume=`, `stimulus_ids=`, and the loader
   DOCUMENTED-UNSTABLE): disk-mode `tl.extract_dataset(..., path=)` writes atomic
   shards plus a self-describing `manifest.json` (run signature, per-site identity with
   L1 site keys where derivable, stimulus ordering/provenance, axis semantics, dtypes,
@@ -1629,7 +1628,7 @@ expert contributions from routing indices alone.
   `tl.export.safetensors(trace, path)` writes one pickle-free safetensors file (payload
   tensors plus a JSON header of the writer contract's KEEP fields, honesty facts and the
   contract digest); `tl.io.read_safetensors(path)` reads it back bit-equal.
-- BRAINPIPE (F20; every spelling DOCUMENTED-UNSTABLE): `torchlens.neuro` is the
+- BRAINPIPE (every spelling DOCUMENTED-UNSTABLE): `torchlens.neuro` is the
   whole-model extraction planner over the extraction artifact --
   `plan_extraction(model, probe_inputs, sites=, num_stimuli=, batch_size=, output_transform=,
   memory_budget=, engine="trace")` runs one unmeasured warm-up + TWO measured probes
@@ -1659,7 +1658,7 @@ expert contributions from routing indices alone.
   `docs/reference/brain_benchmarking_seam.md`. Lazy-BUFFER models (`LazyBatchNorm*`)
   now capture without pre-materialization (the entry refusal flipped off with the
   buffer-side completion).
-- PREPROCESSING PROVENANCE + SITE INVENTORY (tvscope F21; every spelling
+- PREPROCESSING PROVENANCE + SITE INVENTORY (tvscope; every spelling
   DOCUMENTED-UNSTABLE pending the naming sprint): `torchlens.preprocessing` is the
   verified-capture story for the NeuroAI feature-extraction audience -- `resolve()`
   reads the preprocessing authority the user's OWN loader ships (torchvision Weights
@@ -1761,7 +1760,7 @@ expert contributions from routing indices alone.
   `docs/reference/stats.md`, Trajectory statistics.
 - Appliance packages `notebook` and `neuro` reserve extras boundaries and enforce
   import gating for their optional dependencies.
-- NEURO TREATY DESK (F22; every spelling DOCUMENTED-UNSTABLE pending the naming
+- NEURO TREATY DESK (every spelling DOCUMENTED-UNSTABLE pending the naming
   sprint): `torchlens.neuro` is a thin landing zone, never a second home for the
   geometry/stats vocabulary (no re-exports). `tl.neuro.datasets(source, sites=None,
   pool=None, obs=None, stimulus_ids=None)` converts every STIMULUS-INDEXED saved site
@@ -1788,7 +1787,7 @@ expert contributions from routing indices alone.
   brain data), all AttributeError-lineage typed; `__all__`/`dir()` advertise only
   dependency-present names. Brain-Score alias branch LIVE (gate passed):
   `tl.neuro.activations_extractor`/`get_activations_fn` gated on brainscore_vision
-  alone (extras split D17: neuro = rsatoolbox, never Brain-Score; new `brainscore` extra, filed).
+  alone (extras split: neuro = rsatoolbox, never Brain-Score; new `brainscore` extra, filed).
   repgeom riders: `rdm(metric="gaussian")` (thingsvision's `1 - exp(-D / mean(D))`,
   credited; fixed 2026-10-14 from a `2 * mean(D)` bandwidth), `rank_transform_rdm` +
   `rdm_node_spec(display="rank"|"percentile")`. `rdm_evolution` expands recurrent layers
@@ -1803,8 +1802,7 @@ expert contributions from routing indices alone.
   never scored), documented ValueError contract live, `sites=` accepts module dotted
   paths; `per_layer` returns `ScoreParts` per layer (`raw` always named, with
   `ceiling_normalised`/`ceiling`/`error`/`note` beside it; `score_parts(score)` reads
-  one Brain-Score `Score`; nothing recomputed). Reliable comparison (neuro.1,
-  DOCUMENTED-UNSTABLE): `tl.neuro.compare(source, target, analyses=("rsa", "ridge",
+  one Brain-Score `Score`; nothing recomputed). Reliable comparison (DOCUMENTED-UNSTABLE): `tl.neuro.compare(source, target, analyses=("rsa", "ridge",
   "cka"))` is ungated and numpy-only, reads each site once (never re-runs the model)
   and returns descriptive RSA, a cross-validated ridge score (seeded folds, per-fold
   exact leave-one-out penalty, mean Pearson r over target columns) and linear CKA,
@@ -2019,12 +2017,12 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.mechinterp.LogitLensPrediction`: Streaming per-layer prediction summary (one row per projected layer).
 - `tl.mechinterp.LogitLensPredictions`: Result of a streaming :func:`logit_lens_predictions` sweep.
 - `tl.mechinterp.PatchedRun`: The receipted product of one lowered counterfactual.
-- `tl.mechinterp.SavePlan`: A priced, composable retention plan (mikit D15).
+- `tl.mechinterp.SavePlan`: A priced, composable retention plan (mikit).
 - `tl.mechinterp.patch_grid`: Run a labelled activation-patching grid (mikit section 7).
 - `tl.mechinterp.patching`: Prebuilt activation and attribution patching helpers for facets.
 - `tl.neuro.ExtractionPlan`: Immutable measured plan for one whole-model extraction sweep.
 - `tl.neuro.PlanSite`: One requested site's measured plan row.
-- `tl._observability.RunningStats`: Always-on scalar spine accumulator (StreamingStat; D8).
+- `tl._observability.RunningStats`: Always-on scalar spine accumulator (StreamingStat).
 - `tl._observability.RunningStatsResult`: Finalized spine statistics for one population.
 - `tl.recording.ActivationRecord`: One retained recording event.
 - `tl.recording.CaptureSpec`: Capture policy returned by predicate callbacks.
@@ -2141,7 +2139,7 @@ object's docstring):
 - `tl.io.list_traces`: Return a snapshot of currently live TorchLens traces.
 - `tl.io.materialize_nested`: Replace any remaining nested portable blob refs on a loaded model log.
 - `tl.model_output`: Create an output selector.
-- `tl.options.HtmlReportOptions`: Emission plumbing for the offline HTML report (C06 house pattern).
+- `tl.options.HtmlReportOptions`: Emission plumbing for the offline HTML report (house options pattern).
 - `tl.postprocessing.register`: Decorator registering a custom output detector (`name=`, `priority=`); the namespace also exports `unregister`, `list`, `info`, `snapshot`, `Detector` and `ResolvedPostprocessing`.
 - `tl.preprocessing.PreprocessingComparison`: The field-level audit report.
 - `tl.preprocessing.register`: Decorator registering a custom input detector (`name=`, `priority=`) that receives `(model, payload, **kwargs)` and returns a `Trace` by re-entering `tl.trace`, or `None`; the namespace also exports `unregister`. Guide: `docs/guides/model_conveniences.md`.

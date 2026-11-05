@@ -192,10 +192,7 @@ def _payloads_close(a: Any, b: Any) -> bool:
         return False
     if a_np.dtype.kind in ("f", "c"):
         # Eps-derived per-dtype band, shared with every sibling oracle
-        # (b5-opus R17-1: this ladder had hardcoded 1e-5 for EVERY >=4-byte
-        # float while the replay oracle went eps-derived, leaving the fp64
-        # validation band ~5e8 of fp64's own ULPs; ``np.finfo`` reports
-        # component precision for complex).
+        # (``np.finfo`` reports component precision for complex).
         rtol, atol = float_replay_tolerances(np.finfo(a_np.dtype))
         return bool(np.allclose(a_np, b_np, rtol=rtol, atol=atol, equal_nan=True))
     return bool(np.array_equal(a_np, b_np))

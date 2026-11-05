@@ -113,7 +113,7 @@ def layer_total_macs_forward(layer: Layer) -> Macs | None:
 def relation_no_pass_label(layer: Layer, label: str) -> str | None:
     """Resolve one per-op relation label to its no-pass layer label.
 
-    Mirrors the op-level orphan tolerance (r3 b3-fable R05-N1): the
+    Mirrors the op-level orphan tolerance: the
     per-op ``siblings``/``co_parents`` properties deliberately resolve
     relation labels through the ``orphans`` fallback on
     ``keep_orphans=True`` traces, so the Layer aggregate must fold the
@@ -297,7 +297,7 @@ def layer_parent_arg_positions(layer: Layer) -> dict[str, dict[Any, str]]:
 def resolve_relation_record(layer: Layer, label: str) -> Layer | None:
     """Resolve one relation label through the mainline, then orphans.
 
-    Mirrors the op-level orphan tolerance (b3 R05-N2): the aggregates on
+    Mirrors the op-level orphan tolerance: the aggregates on
     a ``keep_orphans=True`` trace include orphan relation labels, so the
     object-resolving surfaces must fold the ``orphans`` fallback instead
     of crashing on the bare mainline lookup. An orphan label resolves to

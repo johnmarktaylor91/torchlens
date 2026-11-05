@@ -1,4 +1,4 @@
-"""Sparse random projection: two constructions, one honest contract (memo B6).
+"""Sparse random projection: two constructions, one honest contract.
 
 ``srp(num_components=REQUIRED, seed=0, density="auto",
 construction="very_sparse_fixed", mode="flatten", share="by_extent")``.
@@ -10,11 +10,11 @@ construction="very_sparse_fixed", mode="flatten", share="by_extent")``.
   the i.i.d. Bernoulli matrix of the JL literature (measured per-column
   nonzero variance 0.41-0.53 against the hypothesis' 44-316), so it records
   ``distance_claim="empirical_only"`` at every density — the empirical
-  oracle suite is its entire warrant (T-C13: the citation is selected WITH
+  oracle suite is its entire warrant (the citation is selected WITH
   the construction).
-- ``iid_bernoulli`` IS the i.i.d. matrix (O1f proves the distribution
-  identity) but ALSO records ``empirical_only`` until the section 11
-  literature task verifies Achlioptas 2003 against the paper itself; its
+- ``iid_bernoulli`` IS the i.i.d. matrix (the oracle suite checks the distribution
+  identity) but ALSO records ``empirical_only`` until the literature claim
+  is verified (Achlioptas 2003) against the paper itself; its
   O(D*k) generation cost rides the plan's disclosures.
 - ``share="by_extent"`` (default): equal-width sites share one projection —
   determinism over statistics (a matrix keyed on a user's dict label means
@@ -23,7 +23,7 @@ construction="very_sparse_fixed", mode="flatten", share="by_extent")``.
   weaker source is DISCLOSED in the realized facts.
 - Flatten-mode SRP binds ONE input extent at first use per (chain, site)
   and REFUSES drift: projecting different rows through DIFFERENT matrices
-  as a function of ``batch_size`` was the measured D-5 laundering (values
+  as a function of ``batch_size`` was measured to launder results (values
   moved 132-153% with two of six rows bit-identical).
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
@@ -63,13 +63,13 @@ __tl_layer__ = "L4"
 
 __all__ = ["srp", "srp_realized_facts", "srp_verify_matrix"]
 
-#: Closed construction vocabulary (memo decision 7; T-C13).
+#: Closed construction vocabulary.
 _CONSTRUCTIONS: tuple[str, ...] = ("very_sparse_fixed", "iid_bernoulli")
 
 #: Closed projection-mode vocabulary.
 _MODES: tuple[str, ...] = ("flatten", "features")
 
-#: Closed matrix-sharing vocabulary (memo decision 5).
+#: Closed matrix-sharing vocabulary.
 _SHARES: tuple[str, ...] = ("by_extent", "by_site")
 
 #: Dense materialization ceiling (bytes) below which the planner picks the
@@ -80,7 +80,7 @@ _DENSE_PATH_BYTES = 64 * 1024 * 1024
 _CACHE_MAX_ENTRIES = 8
 _CACHE_MAX_BYTES = 128 * 1024 * 1024
 
-#: Extent-binding registry bound (drift protection for the D-5 laundering).
+#: Extent-binding registry bound (drift protection for the laundering).
 _BINDINGS_MAX_ENTRIES = 4096
 
 _HALF_DTYPES = (torch.float16, torch.bfloat16)
@@ -148,8 +148,8 @@ _MATRIX_CACHE = _MatrixCache(_CACHE_MAX_ENTRIES, _CACHE_MAX_BYTES)
 #: First-use extent bindings: (spec INSTANCE id, site identity) -> extent.
 #: Instance-keyed on purpose: a fresh spec (a fresh run) legitimately binds a
 #: new extent, while ONE chain applied to heterogeneous SITES binds per site
-#: (the D-3 mixed-rank sweep); only a ragged re-resolution of the SAME
-#: (instance, site) is the D-5 laundering and refuses.
+#: (the mixed-rank sweep); only a ragged re-resolution of the SAME
+#: (instance, site) is the laundering and refuses.
 _EXTENT_BINDINGS: OrderedDict[tuple[int, str | None], int] = OrderedDict()
 
 
@@ -357,7 +357,7 @@ def _effective_seed(
     m: int,
     ctx: TransformContext | None,
 ) -> tuple[int, str, str]:
-    """Derive the effective seed key (memo section 6, sharing and seeding).
+    """Derive the effective seed key (sharing and seeding).
 
     The by_extent key is a canonical function of (base seed,
     algorithm_version, input extent, ordered projected roles where declared,
@@ -429,7 +429,7 @@ def _binding_key(spec: TransformSpec, ctx: TransformContext | None) -> tuple[int
 
 
 def _bind_extent(spec: TransformSpec, ctx: TransformContext | None, extent: int) -> None:
-    """Bind the first-use extent and REFUSE drift (the D-5 guard).
+    """Bind the first-use extent and REFUSE drift (the guard).
 
     Parameters
     ----------
@@ -445,8 +445,8 @@ def _bind_extent(spec: TransformSpec, ctx: TransformContext | None, extent: int)
     TransformContractError
         ``transform_extent_drift`` when a later batch resolves a different
         extent for the same (spec, site) — projecting different rows
-        through different matrices as a function of batch composition is
-        the measured D-5 laundering.
+        through different matrices as a function of batch composition would
+        launder the result.
     """
 
     key = _binding_key(spec, ctx)
@@ -724,7 +724,7 @@ def _project_rows(rows: torch.Tensor, entry: dict[str, Any], path: str) -> torch
     ``rows[i, p] * w`` over column ``c``'s nonzeros, built only from
     elementwise multiplies and adds (each exactly rounded per element). A
     row's bytes therefore depend on that row alone, never on which other rows
-    share its batch (T-C10). A BLAS / sparse matmul cannot promise this: its
+    share its batch. A BLAS / sparse matmul cannot promise this: its
     kernel and blocking change with the row count (a single-row call takes a
     different kernel than a batch), which moved projected rows by an ulp
     between batch splits.
@@ -769,7 +769,7 @@ def _project_rows(rows: torch.Tensor, entry: dict[str, Any], path: str) -> torch
 def _srp_apply(
     spec: TransformSpec, tensor: torch.Tensor, ctx: TransformContext | None
 ) -> torch.Tensor:
-    """Apply srp: bind extent, fetch the matrix, project (T-C7 accumulation).
+    """Apply srp: bind extent, fetch the matrix, project (fp32 accumulation for half inputs).
 
     Parameters
     ----------
@@ -820,7 +820,7 @@ def srp(
     mode: str = "flatten",
     share: str = "by_extent",
 ) -> TransformSpec:
-    """Build a seeded sparse random projection step (memo section 6).
+    """Build a seeded sparse random projection step.
 
     Parameters
     ----------
@@ -896,7 +896,7 @@ def srp_realized_facts(
     input_spec: TensorSpec | torch.Tensor,
     ctx: TransformContext | None = None,
 ) -> dict[str, Any]:
-    """Return the per-site realized facts the manifest embeds (memo 3.17).
+    """Return the per-site realized facts the manifest embeds.
 
     Parameters
     ----------

@@ -2,7 +2,7 @@
 
 One-call `tl.summary(model, x)` cost decomposed against a plain
 uninstrumented forward (min-of-N, CPU, single process). The RATIO
-column is the published figure the summary memo's F1 engine-floor
+column is the published figure the summary memo's engine-floor
 trigger reads: a second capture engine is considered only if the
 optimized single-engine summary stays above ~5x a plain forward.
 
@@ -19,10 +19,10 @@ Notes:
   target the summary memo measured at ~64% of capture cost on the
   pre-speedening baseline (f74e4a9e). The post-speedening share is
   what THIS page reports.
-- `render` is the rebuilt view ladder + hairline renderer (F08).
+- `render` is the rebuilt view ladder + hairline renderer.
 - Numbers vary by host AND by concurrent load (both the plain forward
   and the capture inflate together under load, compressing the ratio
   less than either absolute); regenerate on a quiet host with
   `python tools/benchmark_summary.py` and commit the page.
-- F1 disposition: a second hook-based capture engine goes
+- disposition: a second hook-based capture engine goes
   to a maintainer decision only if the optimized single-engine ratio stays above ~5x.

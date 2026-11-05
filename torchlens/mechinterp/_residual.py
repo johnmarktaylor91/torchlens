@@ -1,16 +1,16 @@
-"""Residual accumulation + decomposition (mikit item 8; TLens
+"""Residual accumulation + decomposition (TLens
 ``accumulated_resid`` / ``decompose_resid``, exact where theirs is
 conventional).
 
 ``residual_accumulation`` returns the ACTUAL captured running residual
 states, in execution order -- reads from capture, never recomputes.
 ``residual_decomposition`` returns every literal upstream writer once, with
-coefficients, graded per mikit D7, and (strict mode, the default) enforces
+coefficients, graded (``complete`` / ``closed_*``), and (strict mode, the default) enforces
 the execution-order BITWISE identity: accumulating the literal captured
 writers in execution order replays the forward's own fp32 add sequence, so
 all partial sums equal the captured spine states under ``torch.equal``
-(measured on five model/gauge/implementation combinations; per-dtype degrade
-clause D5 applies off fp32/CPU).
+(measured on five model/gauge/implementation combinations; the gate
+degrades per dtype off fp32/CPU).
 
 Spellings DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -71,7 +71,7 @@ def _writer_kind(trace: Any, op: Any) -> str:
 def _deepest_value_ancestor(trace: Any, op: Any) -> tuple[Any, str]:
     """Return the deepest value-identical ancestor and its verification.
 
-    Implements the mikit D6 LABEL rule: the writer's label comes from the
+    Implements the LABEL rule: the writer's label comes from the
     innermost containing module of the deepest ancestor the value grammar
     can reach (post-dropout writers honestly label the dropout in train
     mode, the projection in eval mode).
@@ -272,7 +272,7 @@ def _writer_row(
     positions: Any,
     payloads: dict[str, torch.Tensor],
 ) -> ComponentRow:
-    """Build one writer row: literal operand value, D6 module label."""
+    """Build one writer row: literal operand value, module label."""
 
     writer_op = trace.ops[writer_label]
     value = payloads[str(getattr(writer_op, "label", writer_label))]
@@ -298,7 +298,7 @@ def _writer_row(
 def _assert_bitwise_identity(
     trace: Any, walk: SpineWalk, strict: bool, payloads: dict[str, torch.Tensor]
 ) -> dict[str, Any]:
-    """Run the execution-order equality gate (mikit D5).
+    """Run the execution-order equality gate.
 
     Accumulates the literal writer operands in execution order and asserts
     every partial sum ``torch.equal`` to its captured spine state. Returns
@@ -359,7 +359,7 @@ def residual_decomposition(
     conventional: writer VALUES are the literal operands that entered each
     spine addition (post-dropout in train mode -- and the identity still
     closes, which TLens's train-mode ``decompose_resid`` cannot claim);
-    writer LABELS are module addresses per mikit D6, never op names.
+    writer LABELS are module addresses, never op names.
 
     Parameters
     ----------
@@ -372,7 +372,7 @@ def residual_decomposition(
         Enforce the execution-order bitwise identity (default). A failing
         strict walk refuses OPEN; ``strict=False`` instead appends an
         ``unresolved_remainder`` row, stamps the stack ``diagnostic_only``,
-        and is rejected by DLA, gallery, and launch claims (mikit D7).
+        and is rejected by DLA, gallery, and launch claims.
     positions:
         Optional position indices; row VIEWS are sliced on axis 1 after the
         identity gate runs on the full tensors.

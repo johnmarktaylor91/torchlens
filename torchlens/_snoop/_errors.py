@@ -1,4 +1,4 @@
-"""Typed refusal classes for live narration (lane F28, snoop memo D1-D5).
+"""Typed refusal classes for live narration.
 
 Every raise site in ``torchlens._snoop`` (and every echo refusal raised from
 the entry layers) carries a stable ``fields["code"]`` plus a non-empty

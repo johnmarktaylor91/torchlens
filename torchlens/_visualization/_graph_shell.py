@@ -72,7 +72,7 @@ def _graph_attrs(
         # A rolled recurrence is a self-loop whose width dot takes from half
         # the node separation: wider ranks give the loop room to read as one.
         graph_args["nodesep"] = ROLLED_NODESEP
-    # r-b6 R19-6 / T9: node images are RELATIVE to the trace scratch root, which
+    # Node images are RELATIVE to the trace scratch root, which
     # Graphviz gets out of band (subprocess cwd), never as an in-source
     # ``imagepath``: a baked temp path broke saved DOT once the dir was GC'd.
     graph_args.update(

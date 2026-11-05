@@ -27,7 +27,7 @@ strict walk refuses OPEN; `strict=False` appends an `unresolved_remainder`
 row, stamps the stack diagnostic-only, and is refused by DLA, gallery, and
 launch claims.
 
-Stack grading (D7): `complete` (every row a named writer) /
+Stack grading: `complete` (every row a named writer) /
 `closed_constant` (non-writer rows are VERIFIED constants) /
 `closed_unresolved` (diagnostic). OPEN never constructs.
 

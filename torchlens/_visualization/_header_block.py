@@ -239,12 +239,12 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
     caption_body += _honesty_banner_rows(trace, request, edited=edit_line is not None)
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
-        # Stacking disclosure is part of the contract (memo 4.1): the
+        # Stacking disclosure is part of the contract: the
         # rendered output captions which annotation produced the columns.
         caption_body += (
             f"stacked by: {html_escape(encoding_state.stack_spec.display_name)}<br align='left'/>"
         )
-    # No silent floor (collapse memo D4): a floor-fallback plan renders with a
+    # No silent floor (collapse): a floor-fallback plan renders with a
     # VISIBLE notice, never as if the optimizer had chosen it.
     collapse_result = getattr(request.collapse_fn, "_torchlens_v2_result", None)
     if collapse_result is not None and getattr(collapse_result, "planner", "") == "floor_fallback":
@@ -294,7 +294,7 @@ def _honesty_banner_rows(trace: Trace, request: ResolvedRenderRequest, *, edited
     """Return the capture-honesty banner rows as caption HTML.
 
     A poisoned/diverged sparse run, an unverified capture, or an episode
-    capture must not RENDER clean (WT1 A-V row 23): the graph is a publishable
+    capture must not RENDER clean: the graph is a publishable
     artifact, so the caption carries the facts. The picture keeps a cited
     source location's file name and line only. A view may move named lines
     to its own record (:data:`LENS_BANNER_OMIT_KEY`; the interventions census);

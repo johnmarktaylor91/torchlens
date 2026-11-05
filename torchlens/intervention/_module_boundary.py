@@ -246,10 +246,10 @@ def _fire_boundary_predicate_hooks(
         decision.hook,
         default_site_target=site_target,
     )
-    # F01 log_injections: anchor this boundary firing's injected ops to the
+    # Injection logging: anchor this boundary firing's injected ops to the
     # PERSISTED rule id (the public spec threads it through the decision),
     # exactly as the op door does; without it the recorder fell back to
-    # ``adhoc:<helper>`` for every tl.module(...) rule (AUD-CODE 2.3b).
+    # ``adhoc:<helper>`` for every tl.module(...) rule.
     with (
         _current_injection_rule(_armed_injection_state(trace), getattr(decision, "rule_id", None)),
         active_intervention_context(
@@ -331,7 +331,7 @@ def _apply_module_boundary_live_hooks(
         call_kwargs=call_kwargs,
         predicate=_resolve_boundary_predicate(trace),
     )
-    # r43 class: `_active_hook_plan` has no accessor by design (same raw
+    # `_active_hook_plan` has no accessor by design (same raw
     # single-field hot-path load `runtime.py` keeps at six sites this split
     # relocated from); reviewed and ledgered rather than converted.
     if not _state._active_hook_plan and boundary.predicate is None:

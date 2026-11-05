@@ -1,9 +1,9 @@
 """Save-level payload policy: include-flag resolution + write-side coherence.
 
-Lane A08 (WT1 A-IV items 19 + 22; weightsfree W3), split out of
+Lane, split out of
 ``_io/bundle.py`` per the file-size ratchet's split-preferred rule. Owns the
 per-level include-flag defaults/requirements tables, the explicit-conflict
-refusals (``save_payload_level_conflict``), and the save-side M-C2 mirror
+refusals (``save_payload_level_conflict``), and the save-side mirror
 that refuses to WRITE a structure-only artifact its own load would refuse.
 """
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 def _refuse_incoherent_structure_only_write(scrubbed_state: dict[str, Any]) -> None:
     """Refuse to WRITE a structure-only artifact its own load would refuse.
 
-    Save-side mirror of the M-C2 load coherence gate (W3: "save-side coherence
+    Save-side mirror of the load coherence gate ("save-side coherence
     validation before writing"): a scrubbed structure-only state carrying any
     retained value payload would persist a poison artifact -- every future
     load refuses ``artifact_structure_only_incoherent`` -- so the save refuses
@@ -42,8 +42,8 @@ def _refuse_incoherent_structure_only_write(scrubbed_state: dict[str, Any]) -> N
                 raise ArtifactError(
                     "Refusing to write a structure-only artifact that its own "
                     f"load would refuse: op {label!r} retains a value payload "
-                    f"in {field_name!r} under the structure-only marker "
-                    "(M-C2). This is a capture/scrub defect, not a user "
+                    f"in {field_name!r} under the structure-only marker. "
+                    "This is a capture/scrub defect, not a user "
                     "error; re-capture and report it if it persists."
                 )
 
@@ -80,7 +80,7 @@ _LEVEL_INCLUDE_FLAG_DEFAULTS: dict[str, dict[str, bool]] = {
 }
 
 #: Include-flag values each level REQUIRES. An EXPLICIT contradicting value is
-#: a typed refusal (WT1 A-IV item 19), never a silent override: the historical
+#: a typed refusal, never a silent override: the historical
 #: behavior forced these assignments after the fact, so
 #: ``level="executable_with_callables", include_saved_args=False`` shipped raw
 #: input tensors against an explicit opt-out, and ``level="audit",
@@ -110,20 +110,19 @@ def _resolve_include_flags(
     Returns the five resolved boolean flags in signature order. Raises
     :class:`InvalidArgumentError` (code ``save_payload_level_conflict``) when
     an EXPLICIT flag contradicts a level requirement or the structure-only
-    capture mode -- the two historical silent-override holes (WT1 A-IV items
-    19 and 22; M(weightsfree) W3).
+    capture mode -- the two historical silent-override holes.
     """
 
     structure_only = bool(trace._options_structure_only if is_live_trace(trace) else False)
     if structure_only and save_level == "executable_with_callables":
         # Item 22: this level's required saved-args/RNG payloads land under
-        # the structure-only marker and the M-C2 load coherence gate refuses
+        # the structure-only marker and the load coherence gate refuses
         # them, so the save used to write an artifact that could NEVER load.
         raise InvalidArgumentError(
             "level='executable_with_callables' cannot save a structure-only "
             "capture: the level ships saved-args/RNG payloads so the artifact "
             "can re-execute, but a structure-only capture retains no values "
-            "and its loads refuse value payloads (M-C2). The historical save "
+            "and its loads refuse value payloads. The historical save "
             "wrote a poison artifact here.",
             code="save_payload_level_conflict",
             remedy=(
@@ -180,8 +179,8 @@ def _resolve_include_flags(
         raise InvalidArgumentError(
             "include_buffer_values=True cannot be used with a structure-only "
             "capture: pre-forward buffer values are training-data-derived "
-            "state a weights-free artifact must not carry (W3), and the M-C2 "
-            "load coherence gate refuses value payloads under the marker.",
+            "state a weights-free artifact must not carry, and the load "
+            "coherence gate refuses value payloads under the marker.",
             code="save_payload_level_conflict",
             remedy="omit include_buffer_values (structure-only saves drop the channel)",
             arguments=("include_buffer_values",),
