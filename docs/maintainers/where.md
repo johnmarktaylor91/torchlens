@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1606 modules, 683973 lines, 0 modules without a docstring.
+83 packages, 1606 modules, 684003 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 15 | 4507 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 56 | 18487 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6360 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 91 | 47397 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 91 | 47427 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2480 |
@@ -954,7 +954,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (91 modules, 47397 lines)
+Computational graph visualization via Graphviz. (91 modules, 47427 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -995,7 +995,7 @@ Computational graph visualization via Graphviz. (91 modules, 47397 lines)
 | `_geometry_audit` | Geometry audit v2: the vizmech wave-3 oracle set (items 18-20). | 974 |
 | `_graph_shell` | The Graphviz graph shell of a forward draw: caption, graph, node and edge defaults. | 92 |
 | `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 788 |
-| `_intervention_sites` | Intervention-site lookup shared by the draw path and the interventions view. | 86 |
+| `_intervention_sites` | Intervention-site lookup shared by the draw path and the interventions view. | 97 |
 | `_label_format` | Formatting helpers for TorchLens visualization node labels. | 662 |
 | `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 342 |
 | `_loop_edges` | Ports that make a rolled recurrence read as a loop. | 139 |
@@ -1038,7 +1038,7 @@ Computational graph visualization via Graphviz. (91 modules, 47397 lines)
 | `fastlog_live` | Live visualization helpers for fastlog dry-run traces. | 311 |
 | `fastlog_preview` | Preview fastlog predicate decisions on a full Trace graph. | 355 |
 | `modes` | Node-mode presets for TorchLens graph visualization. | 515 |
-| `node_spec` | NodeSpec helpers for TorchLens graph visualization labels. | 402 |
+| `node_spec` | NodeSpec helpers for TorchLens graph visualization labels. | 421 |
 | `node_universe` | Presentation-free visible node universe for forward visualization. | 359 |
 | `overlays` | Per-node overlay helpers for TorchLens graph rendering. | 472 |
 | `render_execution` | Shared Graphviz layout-execution honesty seam (vizmech wave 1). | 351 |
