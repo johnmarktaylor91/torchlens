@@ -46,6 +46,21 @@ block's output ``linear`` reads the mutated weight through them.
   llama is 180 (eager) / 144 (sdpa) and qwen2 180 / 144 there, against 183 / 147
   and 186 / 150 on the pinned 5.18.0. The op diff was checked to be exactly that
   rotary block on torch 2.7.1 and 2.14.1 (2026-10-07, next-release CI round).
+- ``variants``: optional list of complete expectation sets (the five fields
+  above plus ``recorded_on``) recorded on another transformers band, chosen by
+  :func:`expectation_for_fingerprint` when the built model's resolved-config
+  fingerprint (and, where the op count depends on it, transformers' sdpa mask
+  builder, ``sdpa_mask_builder``) matches. Every HF row carries one recorded on
+  transformers 4.55.4 at the torch floor (2026-11-05); the sdpa rows of gpt2,
+  distilgpt2, llama, qwen2 and whisper carry two, because 4.55.4 builds sdpa
+  masks with ``sdpa_mask_older_torch`` below torch 2.6 and with the vmap
+  ``sdpa_mask_recent_torch`` from 2.6 on (7 more ops). The 4.x variants record
+  real coverage differences of that band: bert/eager and whisper/eager encoder
+  layers return two outputs, so ``resid_pre`` (and bert layer 1's
+  ``resid_post``) settle as typed ambiguous-output absences that the
+  adjudicator marks known-false; whisper's decoder layers and t5's
+  decoder-side embeddings are not classified there; vit's layers also
+  classify as ``transformer_residuals`` and ``vit_self_attention``.
 
 Ownership of the known-false rows (for the teaching message):
 ``final_norm_present`` -> lane A02 (semantic RESIDUAL slice, final-norm
@@ -358,6 +373,54 @@ def expected_n_ops(expected: dict) -> int:
     if not applicable:
         return int(expected["n_ops"])
     return int(max(applicable, key=lambda entry: Version(entry["min_version"]))["n_ops"])
+
+
+VARIANT_KEYS = frozenset(
+    {"false_claims", "fingerprint", "floors", "n_ops", "recipes", "recorded_on"}
+)
+OPTIONAL_VARIANT_KEYS = frozenset({"sdpa_mask_builder"})
+
+
+def expectation_for_fingerprint(
+    expected: dict, fingerprint: str | None, mask_builder: str = ""
+) -> dict:
+    """Return the expectation recorded under the model's resolved-config fingerprint.
+
+    A family/impl row may carry ``variants``: complete expectation sets
+    (recipes, floors, false-claims manifest, op count) measured on another
+    transformers band whose resolved config differs, each keyed by the
+    fingerprint of that config and naming the run it was recorded from in
+    ``recorded_on``. The resolved config is the key the op-count golden
+    already uses, so the variant is chosen by what the installed package
+    builds, never by its version string. A variant whose op count also
+    depends on how transformers builds sdpa masks names that builder in
+    ``sdpa_mask_builder`` and answers only when ``mask_builder`` (the
+    ``tests.support.hf_capabilities.sdpa_mask_builder`` probe) matches. An
+    unknown key selects the primary row, whose fingerprint check then fails
+    as drift.
+
+    Parameters
+    ----------
+    expected:
+        One family/impl row of ``expectations_r0.json``.
+    fingerprint:
+        ``resolved_config_fingerprint`` of the built model, or ``None`` for a
+        model without a config.
+    mask_builder:
+        Name of the installed transformers' sdpa mask builder.
+
+    Returns
+    -------
+    dict
+        The matching variant, else ``expected`` itself.
+    """
+
+    for variant in expected.get("variants", ()):
+        if variant["fingerprint"] != fingerprint:
+            continue
+        if variant.get("sdpa_mask_builder", mask_builder) == mask_builder:
+            return variant
+    return expected
 
 
 def load_expectations() -> dict:
