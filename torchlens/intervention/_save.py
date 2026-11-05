@@ -8,7 +8,6 @@ import shutil
 import uuid
 import warnings
 from collections.abc import Callable, Collection, Iterable, Mapping
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -32,13 +31,12 @@ from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
 from .._selection.resolver import _resolve_sites
-from .._utils._record_group_table import record_member
 from ..intervention._resolver_registry import (
-    function_registry_key_from_callable,
     resolve_function_registry_key,
 )
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from ._rerun_predicate import spec_from_recipe
+from ._save_function_keys import _serialize_function_registry_keys
 from ._spec_codec import _target_spec_to_json, _validate_format_version
 from ._spec_compat import (
     SpecCompat,
@@ -713,53 +711,6 @@ def _normalized_address(target: TargetSpec) -> str | None:
     if target.selector_kind not in {"module", "in_module"}:
         return None
     return str(target.selector_value).strip(".")
-
-
-def _serialize_function_registry_keys(log: Any) -> list[dict[str, Any]]:
-    """Serialize function registry keys from a model log.
-
-    Parameters
-    ----------
-    log:
-        Model log.
-
-    Returns
-    -------
-    list[dict[str, Any]]
-        Function registry key entries.
-    """
-
-    entries: list[dict[str, Any]] = []
-    for layer in log._layer_list:
-        key = _function_key_for_layer(layer)
-        if key is None:
-            continue
-        entries.append({"layer_label": str(layer.layer_label), "key": asdict(key)})
-    return entries
-
-
-def _function_key_for_layer(layer: Any) -> FunctionRegistryKey | None:
-    """Return or infer a layer's function registry key.
-
-    Parameters
-    ----------
-    layer:
-        Layer pass log-like object.
-
-    Returns
-    -------
-    FunctionRegistryKey | None
-        Function registry key or ``None`` for source nodes.
-    """
-
-    template = record_member(layer, "args_template", None)
-    key = record_member(template, "func_id", None)
-    if isinstance(key, FunctionRegistryKey):
-        return key
-    func = getattr(layer, "func", None)
-    if func is None:
-        return None
-    return function_registry_key_from_callable(func)
 
 
 def _verify_loaded_function_keys(

@@ -43,7 +43,6 @@ from .._selection.module_alias_guard import (
     model_module_aliases,
     refuse_module_alias_spellings,
 )
-from .._utils._record_group_table import record_member
 from ._audit import EXECUTION_EFFECTS, build_fire_record, rules_payload
 from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
 from ._binding_calls import _alias_disclosure, _bound_leaves, _has_tensor, _is_in_place_call
@@ -667,7 +666,7 @@ def _consider_op(
             capture_start_time=session.start,
             include_source_events=False,
             sample_id=None,
-            address=record_member(module_frame, "address", None) if module_frame else None,
+            address=getattr(module_frame, "address", None) if module_frame else None,
             module_type=getattr(module_frame, "module_type", None) if module_frame else None,
             module_pass_number=(
                 getattr(module_frame, "pass_number", None) if module_frame else None
@@ -681,7 +680,7 @@ def _consider_op(
             raise BindingRuntimeError(
                 f"rule WHERE evaluation failed at {raw_label} "
                 f"(func {func_name!r}, module "
-                f"{record_member(module_frame, 'address', None)!r}) during a bound "
+                f"{getattr(module_frame, 'address', None)!r}) during a bound "
                 f"{session.door}",
                 code="bind_rule_runtime_error",
                 remedy="fix the predicate/selector to tolerate live capture "

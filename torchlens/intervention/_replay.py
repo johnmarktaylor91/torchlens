@@ -55,6 +55,7 @@ from ._replay_context import (
     _record_capture_digest,
     _replay_site_key,
 )
+from ._replay_grad_clear import _clear_op_gradient_projection, _clear_param_gradient_projection
 from ._replay_sites import (
     _buffer_thread_candidate,
     _frontier_leaf,
@@ -331,46 +332,6 @@ def _reset_backward_projection(log: Trace) -> None:
         _clear_op_gradient_projection(op)
     for param_log in log._param_logs.values():
         _clear_param_gradient_projection(param_log)
-
-
-def _clear_op_gradient_projection(site: Op) -> None:
-    """Clear inherited gradient fields from one replay-fork op.
-
-    Parameters
-    ----------
-    site:
-        Operation record copied onto the replay fork.
-    """
-
-    site._clear_gradient_records()
-    site._internal_set("grad", None)
-    site._internal_set("transformed_grad", None)
-    site.has_grad = False
-    site._autograd_grad_shape = None
-    site._autograd_grad_dtype = None
-    site.gradient_memory = Bytes(0)
-    site._payload_transformed_grad_shape = None
-    site._payload_transformed_grad_dtype = None
-    site.transformed_gradient_memory = Bytes(0)
-
-
-def _clear_param_gradient_projection(param_log: Any) -> None:
-    """Clear inherited captured-gradient state from one replay-fork Param.
-
-    The captured AccumulateGrad records, their cached metadata, AND any
-    backend-derived gradient payload are reset: ``_check_param_grad`` treats a
-    surviving ``_derived_grad_payload`` as proof of a gradient, so leaving it
-    would resurrect the exact stale ``has_grad = True`` this reset exists to
-    kill. The lazy live-model read-through remains a deliberately distinct
-    view and repopulates from the live parameter.
-    """
-
-    param_log._grad_records = []
-    param_log._derived_grad_payload = None
-    param_log._has_grad = False
-    param_log._grad_shape = None
-    param_log._grad_dtype = None
-    param_log._grad_memory = Bytes(0)
 
 
 @dataclass(frozen=True)

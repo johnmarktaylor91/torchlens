@@ -30,27 +30,22 @@ ratification.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._utils._record_group_table import record_member
 from ._compute_truth import ComputeAggregation, compute_aggregation, row_mac_flops
-from ._cost_tree_helpers import _call_display, _label_spellings, _structure_digest
+from ._cost_tree_helpers import (
+    _call_display,
+    _label_spellings,
+    _pct,
+    _RemainderMass,
+    _structure_digest,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-
-
-class _RemainderMass(NamedTuple):
-    """The conserved mass one REMAINDER row folds in (D5/D6)."""
-
-    flops: int
-    n_ops: int
-    n_unknown: int
-    passes: int | None
-    forward_mac: int = 0
-    backward: int | None = None
 
 
 #: Row roles (D5, closed): an OWNER row's self family is additive mass; a
@@ -215,14 +210,6 @@ class CostTree:
         """Render the tree as an ASCII table."""
 
         return format_cost_tree(self)
-
-
-def _pct(value: int | None, total: int) -> float | None:
-    """Percent of the known partition total (D4); None-safe."""
-
-    if value is None or total <= 0:
-        return None
-    return 100.0 * value / total
 
 
 def _innermost_call(op_row_label: str, label_to_call: dict[str, str]) -> str | None:

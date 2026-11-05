@@ -23,7 +23,7 @@ from typing import Any
 from .._capture.structure_only import (
     require_structure_only_capability as _require_structure_only_capability,
 )
-from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
+from .._capture_honesty import capture_honesty_facts
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._entry_refusals import require_xarray_presentations
 from .._io._json import loads_bounded
@@ -31,6 +31,7 @@ from .._utils._record_group_table import record_member
 from .._utils.display import atomic_write_text
 from ._common import _cook_recording, _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
+from ._honesty_comments import _bundle_member_honesty, _honesty_comment_block, _honesty_xml_comment
 from ._naming import _duration_us, _layer_display_name, _safe_id, _sanitize_flamegraph_frame
 from ._registry import (
     describe_target,
@@ -180,66 +181,6 @@ def model_explorer_serve(source: Any, **kwargs: Any) -> Path:
     from ._model_explorer import model_explorer_serve as _impl
 
     return _impl(source, **kwargs)
-
-
-def _honesty_comment_block(log: Any, prefix: str) -> str:
-    """Format the shared honesty preamble as comment lines.
-
-    Parameters
-    ----------
-    log:
-        Capture object being exported.
-    prefix:
-        Comment marker of the destination format (e.g. ``"# "``).
-
-    Returns
-    -------
-    str
-        Newline-terminated comment block.
-    """
-
-    return "".join(f"{prefix}{line}\n" for line in honesty_preamble_lines(log))
-
-
-def _honesty_xml_comment(log: Any) -> str:
-    """Format the shared honesty preamble as one XML/HTML comment.
-
-    Returns
-    -------
-    str
-        Single-line-per-fact comment; ``--`` is collapsed because XML
-        comments must not contain double hyphens.
-    """
-
-    body = "\n".join(line.replace("--", "-") for line in honesty_preamble_lines(log))
-    return f"<!-- {body} -->\n"
-
-
-def _bundle_member_honesty(bundle: Any) -> dict[str, Any]:
-    """Return per-member honesty facts for a Bundle export.
-
-    Parameters
-    ----------
-    bundle:
-        TorchLens ``Bundle``.
-
-    Returns
-    -------
-    dict[str, Any]
-        Member-name-keyed honesty fact blocks (best effort per member).
-    """
-
-    members: dict[str, Any] = {}
-    for member_name in getattr(bundle, "names", ()) or ():
-        # Per-member disclosure fallback: a member the bundle cannot serve (or
-        # whose facts cannot be read) gets an explicit error row, never a
-        # silent omission. The fact reader is getattr-defensive, so the
-        # realistic raise surface is the member lookup itself.
-        try:
-            members[str(member_name)] = capture_honesty_facts(bundle[member_name])
-        except (AttributeError, KeyError, TypeError):
-            members[str(member_name)] = {"error": "member honesty facts unavailable"}
-    return {"members": members}
 
 
 def svg(trace: Any, path: str | Path, *, editable: bool = True) -> Path:

@@ -44,6 +44,42 @@ def _is_unowned_gap_diagnostic(entry: dict[str, Any]) -> bool:
     )
 
 
+def _buffer_write_dispatch_count(diagnostics: Any) -> int:
+    """Count the buffer-write ``.data`` accessor dispatches the witness flagged.
+
+    Parameters
+    ----------
+    diagnostics:
+        The trace's completeness diagnostics entries.
+
+    Returns
+    -------
+    int
+        Number of ``state_view_accessor`` unowned dispatches outside a replacement hook.
+    """
+
+    # Buffer-WRITE accessor dispatches: the ``aten.detach``/``aten.alias`` a registered
+    # buffer's ``.data`` property getter emits during the ``self.b.data.copy_(x)`` write idiom.
+    # ``.data`` is a C-level tensor property (not a wrapped torch function), so the detach has
+    # NO python-wrapper owner and is counted above as an ``unowned_dispatch`` in
+    # ``unowned_gap_dispatch_count``. The write itself (``copy_``) IS captured; only this
+    # accessor view is legitimately uncaptured -- a THIRD not-in-captured-count category
+    # alongside orphan-pruned dead computation. The witness flags each such event
+    # (``state_view_accessor``: unowned, non-mutating, pure view of a buffer or pending lazy slot),
+    # so counting them here is apples-to-apples with the census: it is a strict SUBSET of the
+    # exact ``unowned_dispatch`` entries already added to the dispatch census, so crediting it
+    # in the backstop exactly offsets its own contribution. A genuine untraced dispatch (a
+    # value-producing or mutating op, or an unowned dispatch on a non-buffer tensor) is never
+    # flagged and stays unaccounted -- the tripwire remains armed.
+    return sum(
+        1
+        for entry in diagnostics
+        if entry.get("reason") == "unowned_dispatch"
+        and entry.get("state_view_accessor") is True
+        and entry.get("in_replacement_hook") is not True
+    )
+
+
 def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
     """Return ``(dispatch_census, captured_census)`` for the completeness backstop.
 
@@ -216,26 +252,7 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
     except (AttributeError, TypeError):
         pass
 
-    # Buffer-WRITE accessor dispatches: the ``aten.detach``/``aten.alias`` a registered
-    # buffer's ``.data`` property getter emits during the ``self.b.data.copy_(x)`` write idiom.
-    # ``.data`` is a C-level tensor property (not a wrapped torch function), so the detach has
-    # NO python-wrapper owner and is counted above as an ``unowned_dispatch`` in
-    # ``unowned_gap_dispatch_count``. The write itself (``copy_``) IS captured; only this
-    # accessor view is legitimately uncaptured -- a THIRD not-in-captured-count category
-    # alongside orphan-pruned dead computation. The witness flags each such event
-    # (``state_view_accessor``: unowned, non-mutating, pure view of a buffer or pending lazy slot),
-    # so counting them here is apples-to-apples with the census: it is a strict SUBSET of the
-    # exact ``unowned_dispatch`` entries already added to the dispatch census, so crediting it
-    # in the backstop exactly offsets its own contribution. A genuine untraced dispatch (a
-    # value-producing or mutating op, or an unowned dispatch on a non-buffer tensor) is never
-    # flagged and stays unaccounted -- the tripwire remains armed.
-    buffer_write_dispatch_count = sum(
-        1
-        for entry in diagnostics
-        if entry.get("reason") == "unowned_dispatch"
-        and entry.get("state_view_accessor") is True
-        and entry.get("in_replacement_hook") is not True
-    )
+    buffer_write_dispatch_count = _buffer_write_dispatch_count(diagnostics)
     try:
         trace._validation_buffer_write_dispatch_op_count = buffer_write_dispatch_count
     except (AttributeError, TypeError):

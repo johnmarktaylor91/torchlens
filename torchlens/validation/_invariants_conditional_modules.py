@@ -63,24 +63,22 @@ def _check_conditional_arm_edges_match_graph(
                 )
 
 
-def _check_conditional_branch_membership_records(
+def _conditional_event_maps(
     ml: Trace,
-    name: str,
-) -> None:
-    """Check per-op conditional branch membership records agree.
+) -> tuple[dict[str, int], dict[tuple[str, int], str]]:
+    """Map each conditional to its event id and each conditional arm to its branch kind.
 
     Parameters
     ----------
     ml:
         Trace containing conditional metadata.
-    name:
-        Invariant check name for raised errors.
+
+    Returns
+    -------
+    tuple[dict[str, int], dict[tuple[str, int], str]]
+        ``conditional id -> event id`` and ``(conditional id, arm index) -> branch kind``.
     """
 
-    # Invariant 15: per-op conditional-branch membership records agree.
-    # ``conditional_branch_stack`` is the canonical per-op record of arm
-    # membership; the depth counter and any 'body' roles in
-    # ``in_conditionals`` must be consistent with it.
     event_id_by_bool_label: dict[str, int] = {}
     for event in ml._graph_conditional_records:
         for bool_label in event.bool_layers:
@@ -99,6 +97,28 @@ def _check_conditional_branch_membership_records(
                 branch_kind_by_conditional_arm[(conditional.id, arm_index)] = f"elif_{arm_index}"
             else:
                 branch_kind_by_conditional_arm[(conditional.id, arm_index)] = arm.kind
+    return event_id_by_conditional_id, branch_kind_by_conditional_arm
+
+
+def _check_conditional_branch_membership_records(
+    ml: Trace,
+    name: str,
+) -> None:
+    """Check per-op conditional branch membership records agree.
+
+    Parameters
+    ----------
+    ml:
+        Trace containing conditional metadata.
+    name:
+        Invariant check name for raised errors.
+    """
+
+    # Invariant 15: per-op conditional-branch membership records agree.
+    # ``conditional_branch_stack`` is the canonical per-op record of arm
+    # membership; the depth counter and any 'body' roles in
+    # ``in_conditionals`` must be consistent with it.
+    event_id_by_conditional_id, branch_kind_by_conditional_arm = _conditional_event_maps(ml)
     stack_entries_by_layer_label: dict[str, set[tuple[int, str]]] = {}
     for layer in ml._layer_list:
         stack_entries_by_layer_label.setdefault(layer.layer_label, set()).update(

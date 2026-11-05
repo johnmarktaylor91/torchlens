@@ -39,6 +39,7 @@ from ._rerun_predicate import (
     settle_predicate_rerun,
     translate_staged_final_labels,
 )
+from ._rerun_streaming import _is_streaming_append_active, _streaming_append_error_message
 from ._runtime import active_intervention_context
 from ._zero_fire import (
     current_zero_fire_policy,
@@ -518,52 +519,6 @@ def _append_rerun(
         new_graph_shape_hash=new_log._provenance_fingerprint,
     )
     return log
-
-
-def _is_streaming_append_active(log: Trace) -> bool:
-    """Return whether append would need to update active streaming state.
-
-    Parameters
-    ----------
-    log:
-        Trace inspected before append capture.
-
-    Returns
-    -------
-    bool
-        True when a bundle writer or out sink is still attached.
-    """
-
-    return (
-        getattr(log, "_out_writer", None) is not None or getattr(log, "_out_sink", None) is not None
-    )
-
-
-def _streaming_append_error_message(log: Trace) -> str:
-    """Build a descriptive streaming append rejection message.
-
-    Parameters
-    ----------
-    log:
-        Trace whose active streaming handles block append.
-
-    Returns
-    -------
-    str
-        User-facing exception message.
-    """
-
-    details = []
-    if getattr(log, "_out_writer", None) is not None:
-        details.append("path streaming")
-    if getattr(log, "_out_sink", None) is not None:
-        details.append("on_save streaming")
-    details_text = ", ".join(details) if details else "streaming"
-    return (
-        f"Trace {log._source_class_name!r} has active {details_text}; "
-        "rerun(append=True) cannot update streamed activation storage. Save and reload "
-        "the trace before appending, or disable streaming for this capture."
-    )
 
 
 def _preflight_append(log: Trace, model: nn.Module) -> None:
