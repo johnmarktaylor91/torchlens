@@ -17,13 +17,13 @@ from typing import Any
 import pytest
 import torch
 from torch import nn
-from torchlens.backends.torch._ops_row_cells import op_row_cells, write_op_row
 
 import torchlens as tl
 from torchlens._ir.op_record import IngestExtras
 from torchlens._ir.op_record_scatter import scatter_record_to_cells
 from torchlens._trace_core.op_store import _MISSING
 from torchlens.backends.torch import ops as torch_ops
+from torchlens.backends.torch._ops_row_cells import op_row_cells, write_op_row
 
 
 class _InplaceMLP(nn.Module):
