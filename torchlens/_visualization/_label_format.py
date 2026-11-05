@@ -446,6 +446,21 @@ def compact_count(count: int, full_below: int = COMPACT_COUNT_FROM) -> str:
     return f"{count:,}"
 
 
+#: Parameter counts print compact from this size in every drawn label (the
+#: header's parameter line, collapsed module boxes, segment chips), so one
+#: drawing never shows ``3.77K params`` beside ``3,600 params``.
+PARAM_COMPACT_FROM = 1000
+
+
+def param_count(count: int) -> str:
+    """Return a drawn parameter count: in full below 1,000, else 3 significant figures.
+
+    ``999`` stays ``"999"``; ``3600`` is ``"3.6K"`` and ``85798656`` is ``"85.8M"``.
+    """
+
+    return compact_count(count, full_below=PARAM_COMPACT_FROM)
+
+
 def header_count(count: int) -> str:
     """Return a header count: thousands separators below 10,000, compact from there."""
 
@@ -458,11 +473,11 @@ def collapsed_param_detail(num_params: int, num_frozen: int) -> str:
     if num_params == 0:
         return "0 parameters"
     if num_frozen == 0:
-        return f"{compact_count(num_params)} params (all trainable)"
+        return f"{param_count(num_params)} params (all trainable)"
     if num_frozen == num_params:
-        return f"{compact_count(num_params)} params (all frozen)"
-    trainable = compact_count(num_params - num_frozen)
-    return f"{compact_count(num_params)} params ({trainable} trainable, {compact_count(num_frozen)} frozen)"
+        return f"{param_count(num_params)} params (all frozen)"
+    trainable = param_count(num_params - num_frozen)
+    return f"{param_count(num_params)} params ({trainable} trainable, {param_count(num_frozen)} frozen)"
 
 
 def format_collapsed_module_contents(num_layers: int, num_buffer_layers: int) -> str:
