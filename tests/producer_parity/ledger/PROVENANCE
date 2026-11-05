@@ -5004,14 +5004,6 @@ torch: 2.13.0+cpu
 source: unknown (git unavailable)
 recorded: 2026-11-04T23:51:09.753298+00:00
 ---
-generator: producer_parity/test_ledger.py (static half)
-flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: C-216 fixq1: _torch_compat swap_hop_entry_compile sys.modules read site
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
-source: 88d387d484d5379fb67ddc15416b7b6529ed7fc8 (clean)
-recorded: 2026-11-05T00:53:30.210426+00:00
----
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: column-b2-finalize: step 15.5 body moved to _postprocess/_column_passes_finalize.py; the multi-pass reconcile reads Op fields through a getattr-shaped reader, so finalization.py's literal getattr(op, 'modules', None) consumer site is gone (the read is unchanged, now read(op, 'modules', None))
@@ -5070,46 +5062,6 @@ recorded: 2026-11-05T01:31:09.168625+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: view-door rename: the attention-role and focus-block reads (Op modules; Module address, address_parent, class_name) moved from lenses/_resolve.py to the new lenses/_attention.py; surgery_visuals.py reads a SurgeryMark .kind (ambiguous by name with Op kind) to skip fired-edit rows; no read site of any other field added
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
-source: 2a9bb10198a44d1b8a2468ebb49fb69154a78611 (clean)
-recorded: 2026-11-05T03:34:22.519368+00:00
----
-generator: producer_parity/test_ledger.py (full closure)
-flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: view-door rename: the attention-role and focus-block reads (Op modules; Module address, address_parent, class_name) moved from lenses/_resolve.py to the new lenses/_attention.py; surgery_visuals.py reads a SurgeryMark .kind (ambiguous by name with Op kind) to skip fired-edit rows; no read site of any other field added
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
-source: 2a9bb10198a44d1b8a2468ebb49fb69154a78611 (clean)
-recorded: 2026-11-05T03:34:29.243513+00:00
----
-generator: producer_parity/test_ledger.py (full closure)
-flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: reload-output-refusal: reconstruct_output single-output guard reads has_saved_activation/layer_label/label; _opaque_member_text (node.kind) moved to _container_labels
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
-source: 1746cbfb9b0eb37cee04cdb3db0f905bb79be824 (dirty)
-recorded: 2026-11-05T01:56:36.044347+00:00
----
-generator: producer_parity/test_ledger.py (static half)
-flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: capture-c2d-arg-slots: the per-op argument slot snapshot (new torchlens/backends/torch/_ops_arg_slots.py, snapshot_arg_slots in _ops_shared_fields.py, witness_from_slots in _ops_emission.py) moved the parent, parent_arg_positions, witness and template Op read sites between the _ops_* capture files; _ops_arguments.py gains one ambiguous label_raw match, a TensorMeta read in the template label skip, not an Op read; no Op field gained or lost a reader
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
-source: 393e674d4f67a08917051a85e6c1f9bff8966010 (dirty)
-recorded: 2026-11-05T02:03:44.996806+00:00
----
-generator: producer_parity/test_ledger.py (full closure)
-flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: capture-c2d-arg-slots: the per-op argument slot snapshot (new torchlens/backends/torch/_ops_arg_slots.py, snapshot_arg_slots in _ops_shared_fields.py, witness_from_slots in _ops_emission.py) moved the parent, parent_arg_positions, witness and template Op read sites between the _ops_* capture files; _ops_arguments.py gains one ambiguous label_raw match, a TensorMeta read in the template label skip, not an Op read; no Op field gained or lost a reader
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
-source: 393e674d4f67a08917051a85e6c1f9bff8966010 (dirty)
-recorded: 2026-11-05T02:03:52.335701+00:00
----
-generator: producer_parity/test_ledger.py (static half)
-flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: draw-collapse-max-container: the edge-owner LCA moved from visualization/_render_edges.py to visualization/_render_module_scope.py and the trace.modules membership reads of _collapsed_module_owner_key and _segment_owner_key now go through one shared helper, _is_recorded_module_key in visualization/_segment_descriptors.py (Trace.modules membership, field already recorded)
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
@@ -5163,3 +5115,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 3440ebe0d4b52a85728369374cd12cfec73415fd (dirty)
 recorded: 2026-11-05T04:25:16.733999+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: reload-output-refusal: reconstruct_output single-output guard reads has_saved_activation/layer_label/label; _opaque_member_text (node.kind) moved to _container_labels
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1746cbfb9b0eb37cee04cdb3db0f905bb79be824 (dirty)
+recorded: 2026-11-05T01:56:36.044347+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-216 fixq1: _torch_compat swap_hop_entry_compile sys.modules read site
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 88d387d484d5379fb67ddc15416b7b6529ed7fc8 (clean)
+recorded: 2026-11-05T00:53:30.210426+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: view-door rename: the attention-role and focus-block reads (Op modules; Module address, address_parent, class_name) moved from lenses/_resolve.py to the new lenses/_attention.py; surgery_visuals.py reads a SurgeryMark .kind (ambiguous by name with Op kind) to skip fired-edit rows; no read site of any other field added
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2a9bb10198a44d1b8a2468ebb49fb69154a78611 (clean)
+recorded: 2026-11-05T03:34:22.519368+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: view-door rename: the attention-role and focus-block reads (Op modules; Module address, address_parent, class_name) moved from lenses/_resolve.py to the new lenses/_attention.py; surgery_visuals.py reads a SurgeryMark .kind (ambiguous by name with Op kind) to skip fired-edit rows; no read site of any other field added
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2a9bb10198a44d1b8a2468ebb49fb69154a78611 (clean)
+recorded: 2026-11-05T03:34:29.243513+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture-c2d-arg-slots: the per-op argument slot snapshot (new torchlens/backends/torch/_ops_arg_slots.py, snapshot_arg_slots in _ops_shared_fields.py, witness_from_slots in _ops_emission.py) moved the parent, parent_arg_positions, witness and template Op read sites between the _ops_* capture files; _ops_arguments.py gains one ambiguous label_raw match, a TensorMeta read in the template label skip, not an Op read; no Op field gained or lost a reader
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 393e674d4f67a08917051a85e6c1f9bff8966010 (dirty)
+recorded: 2026-11-05T02:03:44.996806+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture-c2d-arg-slots: the per-op argument slot snapshot (new torchlens/backends/torch/_ops_arg_slots.py, snapshot_arg_slots in _ops_shared_fields.py, witness_from_slots in _ops_emission.py) moved the parent, parent_arg_positions, witness and template Op read sites between the _ops_* capture files; _ops_arguments.py gains one ambiguous label_raw match, a TensorMeta read in the template label skip, not an Op read; no Op field gained or lost a reader
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 393e674d4f67a08917051a85e6c1f9bff8966010 (dirty)
+recorded: 2026-11-05T02:03:52.335701+00:00
