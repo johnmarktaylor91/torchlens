@@ -5187,3 +5187,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 8c8a7df32a72e3c17e01c2a77d0c337daac54187 (dirty)
 recorded: 2026-11-05T07:41:49.814460+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-263 fixq2: port train code to rulings-gap-5 spellings on train e54273ea73
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7e79a733ed00f5d6179cde33f794166f3e454835 (dirty)
+recorded: 2026-11-05T08:26:31.654544+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-263 fixq2: port train code to rulings-gap-5 spellings on train e54273ea73
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7e79a733ed00f5d6179cde33f794166f3e454835 (dirty)
+recorded: 2026-11-05T08:26:35.104395+00:00

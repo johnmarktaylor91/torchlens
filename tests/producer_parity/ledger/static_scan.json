@@ -10456,14 +10456,6 @@
   "via_getattr": true
  },
  {
-  "ambiguous": false,
-  "field": "parent_arg_positions",
-  "file": "torchlens/validation/_mask_builder_dependence.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/validation/_pre_replay.py",
