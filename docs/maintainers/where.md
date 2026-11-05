@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1598 modules, 681726 lines, 0 modules without a docstring.
+83 packages, 1598 modules, 681790 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 15 | 4507 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 55 | 18360 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6360 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46767 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46769 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2300 |
@@ -65,7 +65,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9166 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2032 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 27 | 10914 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 27 | 10937 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2278 |
 | `torchlens.errors` | Public TorchLens exception classes. | 5 | 1428 |
@@ -82,7 +82,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4149 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2812 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 31 | 14163 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 31 | 14202 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1965 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7651 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3906 |
@@ -951,7 +951,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (89 modules, 46767 lines)
+Computational graph visualization via Graphviz. (89 modules, 46769 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1008,7 +1008,7 @@ Computational graph visualization via Graphviz. (89 modules, 46767 lines)
 | `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2198 |
 | `_render_module_scope` | Module-scope placement for rendered edges and rolled endpoints. | 187 |
 | `_render_names` | Render names shared by the renderer and the lens and surgery layers above it. | 39 |
-| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2083 |
+| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2085 |
 | `_render_ordering` | Sibling-ordering resolution and verification for the forward DOT pipeline. | 714 |
 | `_render_regions` | Nested module-cluster (region) emission for the forward DOT pipeline. | 517 |
 | `_render_utils` | Internal Graphviz rendering helpers shared across rendering paths. | 676 |
@@ -1585,7 +1585,7 @@ Compatibility adapters for TorchLens 2.37 and earlier. (5 modules, 2032 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (27 modules, 10914 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (27 modules, 10937 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1607,7 +1607,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_graph_breaks` | Correlate TorchDynamo graph breaks with eager TorchLens operations. | 470 |
 | `_infer_failure_classify` | Evidence-led probe-diary failure classification (quickstart ). | 99 |
 | `_infer_input_shape` | Input-shape inference helpers for TorchLens debug utilities. | 2183 |
-| `_infer_report` | The report :func:'torchlens.debug.guess_input_shape' returns, and its one-line repr. | 112 |
+| `_infer_report` | The report :func:'torchlens.debug.guess_input_shape' returns, and its one-line repr. | 135 |
 | `_infer_training_states` | Module training flags saved and restored around shape-inference probes. | 60 |
 | `_nan` | NaN and Inf bisection helpers for TorchLens traces. | 862 |
 | `_nan_backward` | Backward NaN bisector: a fire-order transition ledger with healing. | 624 |
@@ -1925,7 +1925,7 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (9 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (31 modules, 14163 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (31 modules, 14202 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1959,7 +1959,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (31 modules, 14163
 | `_types` | Public immutable data types for receptive-field analysis. | 918 |
 | `_validation` | Exact gradient-inside-geometric receptive-field validation. | 1409 |
 | `_view` | Entity-level receptive-field query view. | 805 |
-| `_viz` | PIL and graph visualization helpers for receptive-field queries. | 651 |
+| `_viz` | PIL and graph visualization helpers for receptive-field queries. | 690 |
 
 ### `torchlens.receptive_field.rules`
 
