@@ -589,7 +589,7 @@ torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86
 torchlens/_visualization/_render_module_scope.py::_get_lowest_module_for_two_nodes	77
-torchlens/_visualization/_render_nodes.py	2031
+torchlens/_visualization/_render_nodes.py	2030
 torchlens/_visualization/_render_nodes.py::_add_node_to_graphviz	157
 torchlens/_visualization/_render_nodes.py::_build_collapsed_module_node	217
 torchlens/_visualization/_render_nodes.py::_build_layer_node	151
