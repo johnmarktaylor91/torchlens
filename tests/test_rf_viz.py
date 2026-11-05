@@ -297,6 +297,66 @@ def test_show_draws_the_captured_pil_photo_not_the_tensor(as_list: bool) -> None
     assert rendered.convert("RGB").getpixel((0, 0)) == photo_color
 
 
+_BOX_RGB = (255, 59, 48)
+
+
+@pytest.mark.parametrize("as_list", [False, True], ids=["single_image", "list_of_one"])
+def test_show_replays_the_declared_crop_so_the_box_matches_the_tensor_grid(
+    tmp_path: Any, as_list: bool
+) -> None:
+    """A path-captured photo is resized and cropped as declared before the box is drawn.
+
+    The box lands on exactly the pixels it occupies on a blank image of the model-input size,
+    so the overlay agrees with the tensor the model saw, for one image or a list of images.
+    """
+
+    torchvision_models = pytest.importorskip("torchvision.models")
+    import torchlens.preprocessing
+
+    model = torchlens.preprocessing.attach_authority(
+        _StemStage().eval(), torchvision_models.ResNet18_Weights.IMAGENET1K_V1
+    )
+    photo_color = (12, 200, 34)
+    path = tmp_path / "photo.png"
+    Image.new("RGB", (320, 240), photo_color).save(path)
+    trace = tl.trace(model, str(path))
+    assert isinstance(trace.input, Image.Image)
+    if as_list:
+        trace.input = [trace.input]
+    input_op = next(op for op in trace._layer_list if op.is_input)
+    height, width = (int(side) for side in input_op.out.shape[-2:])
+    assert (width, height) != (320, 240), "the fixture must exercise a resize and crop"
+    target = trace.ops["stem"]
+    unit = target.receptive_field.center_unit(batch_index=0)
+
+    on_grid = target.receptive_field.show(unit, image=Image.new("RGB", (width, height), "white"))
+    on_photo = target.receptive_field.show(unit).convert("RGB")
+
+    assert on_photo.size == on_grid.size == (width, height)
+    grid_pixels = list(on_grid.convert("RGB").getdata())
+    photo_pixels = list(on_photo.getdata())
+    box = [index for index, pixel in enumerate(grid_pixels) if pixel == _BOX_RGB]
+    assert box, "the box must be drawn on the model-input grid"
+    assert all(photo_pixels[index] == _BOX_RGB for index in box)
+    assert on_photo.getpixel((0, 0)) == photo_color
+
+
+def test_show_keeps_the_tensor_rendering_when_the_photo_cannot_align() -> None:
+    """A photo at another size with no declared crop to replay never carries the box."""
+
+    torch.manual_seed(0)
+    trace = tl.trace(_StemStage().eval(), torch.rand(1, 3, 8, 8))
+    photo_color = (12, 200, 34)
+    trace.input = Image.new("RGB", (16, 12), photo_color)
+    target = trace.ops["stem"]
+    unit = target.receptive_field.center_unit(batch_index=0)
+
+    rendered = target.receptive_field.show(unit).convert("RGB")
+
+    assert rendered.size == (8, 8)
+    assert rendered.getpixel((0, 0)) != photo_color
+
+
 def test_node_spec_resolves_layer_call_and_module_handles_like_the_op(tmp_path: Any) -> None:
     """``node_spec`` takes an Op, Layer, ModuleCall or Module and styles the same cone."""
 
