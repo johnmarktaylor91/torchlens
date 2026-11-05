@@ -229,3 +229,126 @@ def test_annotation_image_sets_nodespec_image_hook(tmp_path: Path) -> None:
     ).dot
 
     assert str(image_path) in dot
+    assert "annotation_images" not in dot  # a PNG is drawn as is, never copied
+
+
+def _drawn_image_sources(trace: Trace, tmp_path: Path) -> list[Path]:
+    """Draw ``trace`` and return every node-image file its DOT source names.
+
+    Parameters
+    ----------
+    trace:
+        Annotated trace to draw.
+    tmp_path:
+        Folder receiving the rendered file.
+
+    Returns
+    -------
+    list[Path]
+        The ``SRC`` of every ``<IMG>`` cell, resolved the way Graphviz resolves
+        it (a relative path names a file in the trace's visualizer folder).
+    """
+
+    import re
+
+    dot = trace.draw(file_format="svg", path=str(tmp_path / "graph")).dot
+    sources = re.findall(r'<IMG SRC="([^"]+)"', dot)
+    return [Path(trace._visualizer_dir) / src for src in sources]
+
+
+def test_jpeg_annotation_draws_from_a_png_copy(tmp_path: Path) -> None:
+    """A JPEG annotation keeps its path on the record and draws from a PNG copy."""
+
+    from PIL import Image as image_module
+
+    jpeg_path = tmp_path / "annotation.jpg"
+    image_module.new("RGB", (12, 9), color=(200, 40, 10)).save(jpeg_path, format="JPEG")
+    trace, _model, _x = _trace_tiny()
+
+    trace.annotate(tl.func("relu"), image=jpeg_path)
+    relu = trace[trace[tl.func("relu")].labels[0]]
+    assert relu.annotations["user"]["image"] == str(jpeg_path)
+
+    sources = _drawn_image_sources(trace, tmp_path)
+    assert len(sources) == 1, sources
+    png_path = sources[0]
+    assert png_path.suffix == ".png" and png_path.is_file(), sources
+    assert png_path.parent == Path(trace._visualizer_dir) / "annotation_images"
+    with image_module.open(png_path) as drawn:
+        assert drawn.format == "PNG" and drawn.size == (12, 9)
+
+
+def test_pil_image_annotation_draws_from_a_png(tmp_path: Path) -> None:
+    """A PIL image annotation is written once as a PNG and drawn from it."""
+
+    from PIL import Image as image_module
+
+    picture = image_module.new("CMYK", (6, 5), color=(0, 80, 80, 0))
+    trace, _model, _x = _trace_tiny()
+
+    trace.annotate(tl.func("relu"), image=picture)
+    relu = trace[trace[tl.func("relu")].labels[0]]
+    stored = Path(relu.annotations["user"]["image"])
+    assert stored.suffix == ".png" and stored.is_file()
+    assert _drawn_image_sources(trace, tmp_path) == [stored]
+    with image_module.open(stored) as drawn:
+        assert drawn.mode == "RGB" and drawn.size == (6, 5)
+
+    trace.save(tmp_path / "pil.tlspec")
+    loaded = tl.load(tmp_path / "pil.tlspec")
+    loaded_sources = _drawn_image_sources(loaded, tmp_path)
+    assert len(loaded_sources) == 1 and loaded_sources[0].is_file(), loaded_sources
+    assert loaded_sources[0].parent == Path(loaded._visualizer_dir) / "annotation_images"
+
+
+@pytest.mark.parametrize("kind", ["not-an-image", "missing"])
+def test_unreadable_annotation_image_refuses_typed(tmp_path: Path, kind: str) -> None:
+    """A file Pillow cannot open refuses ``image_path_unreadable`` and annotates nothing."""
+
+    from torchlens._errors import InvalidArgumentError
+
+    bad_path = tmp_path / "broken.jpg"
+    if kind == "not-an-image":
+        bad_path.write_text("not a picture", encoding="utf-8")
+    trace, _model, _x = _trace_tiny()
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        trace.annotate(tl.func("relu"), image=bad_path)
+    assert excinfo.value.fields["code"] == "image_path_unreadable"
+    relu = trace[trace[tl.func("relu")].labels[0]]
+    assert "user" not in relu.annotations
+
+
+def test_saved_jpeg_annotation_keeps_the_path_not_the_pixels(tmp_path: Path) -> None:
+    """A saved trace carries the annotation path only, draws after loading, and
+    drops a picture whose file is gone instead of failing the render."""
+
+    from PIL import Image as image_module
+
+    noise = torch.randint(0, 256, (96, 96, 3), dtype=torch.uint8).numpy()
+    jpeg_path = tmp_path / "noise.jpg"
+    image_module.fromarray(noise).save(jpeg_path, format="JPEG", quality=95)
+    assert jpeg_path.stat().st_size > 8_000
+    trace, _model, _x = _trace_tiny()
+
+    def _bundle_bytes(name: str) -> int:
+        """Save ``trace`` under ``name`` and return the bundle's total size."""
+
+        bundle = tmp_path / name
+        trace.save(bundle)
+        files = [bundle] if bundle.is_file() else [p for p in bundle.rglob("*") if p.is_file()]
+        return sum(path.stat().st_size for path in files)
+
+    plain_bytes = _bundle_bytes("plain.tlspec")
+    trace.annotate(tl.func("relu"), image=jpeg_path)
+    annotated_bytes = _bundle_bytes("annotated.tlspec")
+    assert annotated_bytes - plain_bytes < 4_000, (plain_bytes, annotated_bytes)
+
+    loaded = tl.load(tmp_path / "annotated.tlspec")
+    loaded_relu = loaded[loaded[tl.func("relu")].labels[0]]
+    assert loaded_relu.annotations["user"]["image"] == str(jpeg_path)
+    sources = _drawn_image_sources(loaded, tmp_path)
+    assert len(sources) == 1 and sources[0].suffix == ".png" and sources[0].is_file(), sources
+
+    jpeg_path.unlink()
+    assert _drawn_image_sources(tl.load(tmp_path / "annotated.tlspec"), tmp_path) == []

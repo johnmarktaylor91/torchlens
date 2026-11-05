@@ -5284,6 +5284,14 @@ torch: 2.13.0+cpu
 source: 52696d3648ba53af4c35ef573933899af2d3cd7e (dirty)
 recorded: 2026-11-05T06:46:44.004314+00:00
 ---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: input-photo-land: the input-photo follow-up reads op.modules and trace.modules in _visualization/_header_block.py (focus address match; whole-network module count), the static scan also sees sys.modules in _data_classes/_annotation_image.py (lazy PIL lookup), and the header drops three unit.kind reads in _header_block.py (5 to 2) with the node-unit census it replaced; no producer moved; reviewed against the 9080f922cf merge diff
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0a99743dc0d8f69a827246e4c89474b04af91be2 (dirty)
+recorded: 2026-11-05T07:40:10.447692+00:00
+---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: capture C2b row-backed journal: new read sites in _ir/_row_journal.py (row handle fast reads and the lazy record build) and backends/torch/_ops_row_journal.py (commit-time residual snapshot); _function_boundary.py label and parent reads moved off record.core onto the flat names; journal_record unwraps added in _ir/capture_events.py, _captured_run.py, _postprocess/__init__.py, _capture/_multipass_cook.py and _partial/__init__.py; reviewed against the C2b diff over C2a 39a39ec7ed

@@ -92,9 +92,8 @@ What each view sets:
 
 ## The caption
 
-Each view prints its caption lines under the header block. The first line is
-`view: <name> -- <question>`; the lines after it say what the picture does and does not
-show, for example:
+Each view prints any caption lines it needs under the header block; there is no line naming
+the view. The lines say what the picture does and does not show, for example:
 
 - `speed`, `memory` and `compute` report coverage ("encoded N of M ops") and the colour
   unit; on a rolled drawing the caption says the value is summed over passes. `speed` adds

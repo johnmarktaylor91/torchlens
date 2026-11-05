@@ -170,10 +170,11 @@ TRANSFORMER_LENS = register_lens(
             # The resolver focuses the draw on the first repeated block that
             # holds attention (module=), so its wiring is drawn in full;
             # folding repeats would draw that block as one closed box.
+            # show_legend stays AUTO: the focused draw shows the colour key
+            # without the reading-key notes.
             "collapse": "none",
-            "show_legend": True,
         },
-        disclosure=("attention rows come from module names and op types",),
+        disclosure=(),
     )
 )
 

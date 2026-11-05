@@ -11,5 +11,7 @@ torchlens/_utils/_callable_safety.py::_torch_overridable_callable_ids
 torchlens/_visualization/_fonts.py::_fontconfig_file_for
 torchlens/_visualization/_header_block.py::_private_swatch_dir
 torchlens/_visualization/_header_block.py::_text_width
+torchlens/_visualization/_oklab.py::hex_to_oklab
+torchlens/_visualization/_oklab.py::stop_positions
 torchlens/agent/_example_bank.py::load_bank
 torchlens/agent/_example_bank.py::load_fixtures
