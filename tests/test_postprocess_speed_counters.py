@@ -132,8 +132,20 @@ class _Wrapper:
     note: str = "n"
 
 
+class _Entry(SimpleNamespace):
+    """Stand-in Op: the call-group templates live under their storage attributes."""
+
+    @property
+    def args_template(self) -> Any:
+        return self._call_args_template
+
+    @property
+    def kwargs_template(self) -> Any:
+        return self._call_kwargs_template
+
+
 def _entry(args_template: Any, kwargs_template: Any) -> SimpleNamespace:
-    return SimpleNamespace(args_template=args_template, kwargs_template=kwargs_template)
+    return _Entry(_call_args_template=args_template, _call_kwargs_template=kwargs_template)
 
 
 def test_scrub_still_replaces_removed_parent_refs_at_any_depth() -> None:

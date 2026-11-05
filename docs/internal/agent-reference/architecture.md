@@ -290,7 +290,7 @@ Key entry points:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
   `torchlens._kernel_telemetry` correlates CUDA launches to rows of
-  the ATen execution profile (no public reader: `Op.gpu_kernels` and `AtenOp.gpu_kernels`
+  the ATen execution profile (no public reader: the former per-op and per-call kernel views
   are removed and refuse typed; `_aten_gpu_kernels` / `_op_gpu_kernels` are the private readers) (recorded by `CaptureOptions(aten_ops=True)`, or `"values"` to
   keep each call's returned tensors in `AtenOp.out`; served by
   `Trace.aten_ops` / `Op.aten_ops`, read in `_completeness_finalize._resolve_witness_requests`
