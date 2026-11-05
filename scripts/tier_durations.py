@@ -31,9 +31,10 @@ is the body of the ``tier-durations`` repository check. ``shards`` balances the
 test files on disk over ``--count`` shards by their whole-suite measured seconds
 (longest processing time first); ``--index`` prints one shard's files. With
 ``--items`` (a selection's collect-only output) it balances that selection's
-tests the way ``--tier-shard`` does: the rows measure every tier, so each
-selected test is weighted by its file's mean capped at the test's own tier
-budget, and a file heavier than a quarter of a shard is split test by test.
+tests exactly as ``--tier-shard`` does: the rows measure every tier, so each
+selected test is weighted by its file's mean capped at its file tier's budget
+(the unmarked budget for a slow or rare file), and a file heavier than a
+quarter of a shard is split test by test.
 ``files --tier smoke`` prints the smoke file list: every ``test_*.py`` whose
 source spells a smoke mark, computed from the tree on each call (nothing is
 stored, so it cannot go stale). Every smoke run collects only these files.
@@ -368,35 +369,52 @@ SPLIT_FILE_SHARE = 0.25
 
 @dataclass(frozen=True)
 class ShardItem:
-    """One selected test: its file, node id and own tier (``unmarked`` when it carries none)."""
+    """One selected test: its file (relative to the repository root) and node id."""
 
     file: str
     nodeid: str
-    tier: str
 
 
-def item_weights(rows: list[FileRow], items: Iterable[ShardItem]) -> dict[str, float]:
-    """Estimate each selected test's seconds from its file's row, capped by the test's own tier.
+def selected_test_cap(file: str, root: Path = REPO_ROOT) -> float:
+    """Return the per-test seconds cap of a selected test from ``file``: its file tier's budget.
+
+    A ``slow`` or ``rare`` file (unbounded) takes the unmarked budget: the
+    tiers ``--tier-shard`` serves deselect ``slow`` and ``rare``, so the tests
+    they select from such a file are bounded tests. Only the file's source is
+    read, so a plain collect-only listing reproduces the plugin's split.
+    """
+
+    path = root / file
+    budget = TIER_BUDGETS.get(file_tier(path)) if path.is_file() else None
+    return SMOKE_DURATION_BUDGET_SECONDS if budget is None else budget
+
+
+def item_weights(
+    rows: list[FileRow], items: Iterable[ShardItem], root: Path = REPO_ROOT
+) -> dict[str, float]:
+    """Estimate each selected test's seconds: its file's mean, capped by ``selected_test_cap``.
 
     The ledger measures every tier, so a file's mean seconds per test is mostly
-    its slow tests' time when it has any. A selected test that is not slow or
-    rare is bounded by its tier budget, so its estimate is the smaller of the
-    file mean and that budget. Files without a row take the median file mean.
+    its slow tests' time when it has any; the cap bounds a selected test by
+    its tier budget instead. Files without a row take the median file mean.
     """
 
     means = {
         row.file: row.seconds / row.tests for row in rows if row.tests and row.tier != "missing"
     }
     fallback = statistics.median(means.values()) if means else 1.0
+    caps: dict[str, float] = {}
     weights: dict[str, float] = {}
     for item in items:
-        mean = means.get(item.file, fallback)
-        budget = TIER_BUDGETS.get(item.tier, SMOKE_DURATION_BUDGET_SECONDS)
-        weights[item.nodeid] = mean if budget is None else min(mean, budget)
+        if item.file not in caps:
+            caps[item.file] = selected_test_cap(item.file, root)
+        weights[item.nodeid] = min(means.get(item.file, fallback), caps[item.file])
     return weights
 
 
-def balanced_item_shards(rows: list[FileRow], count: int, items: list[ShardItem]) -> dict[str, int]:
+def balanced_item_shards(
+    rows: list[FileRow], count: int, items: list[ShardItem], root: Path = REPO_ROOT
+) -> dict[str, int]:
     """Assign every selected test to one of ``count`` shards; return node id to shard index.
 
     Balances the session's own selection, not the whole-suite rows: tests are
@@ -408,7 +426,7 @@ def balanced_item_shards(rows: list[FileRow], count: int, items: list[ShardItem]
     """
 
     ordered = sorted(items, key=lambda item: item.nodeid)
-    weights = item_weights(rows, ordered)
+    weights = item_weights(rows, ordered, root)
     by_file: dict[str, list[str]] = {}
     for item in ordered:
         by_file.setdefault(item.file, []).append(item.nodeid)
@@ -431,15 +449,10 @@ def balanced_item_shards(rows: list[FileRow], count: int, items: list[ShardItem]
 
 
 def read_collected_items(path: Path) -> list[ShardItem]:
-    """Read ``pytest --collect-only -q`` output (``nodeid`` or ``nodeid<TAB>tier`` lines)."""
+    """Read ``pytest --collect-only -q`` output: one node id per line, other lines ignored."""
 
-    items: list[ShardItem] = []
-    for line in path.read_text().splitlines():
-        nodeid, _, tier = line.strip().partition("\t")
-        if "::" not in nodeid:
-            continue
-        items.append(ShardItem(nodeid.split("::", 1)[0], nodeid, tier.strip() or "unmarked"))
-    return items
+    nodeids = (line.strip() for line in path.read_text().splitlines())
+    return [ShardItem(nodeid.split("::", 1)[0], nodeid) for nodeid in nodeids if "::" in nodeid]
 
 
 # ----------------------------------------------------------------------- CLI
@@ -603,8 +616,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--items",
         type=Path,
         help=(
-            "a selection's collect-only output (pytest --collect-only -q, optionally "
-            "nodeid<TAB>tier): balance its tests exactly as --tier-shard does"
+            "a selection's collect-only output (pytest --collect-only -q): balance its "
+            "tests exactly as --tier-shard does"
         ),
     )
     shards.set_defaults(func=_shards)

@@ -360,7 +360,7 @@ jobs:
     # here safely, on the pinned environment. `--tier-shard INDEX/COUNT`
     # (tests/_tiers_plugin.py) balances the selected tests by the tracked
     # per-file durations in tests/tiers/durations.csv, each test capped at its
-    # own tier's budget (the file rows also measure the slow tests this tier
+    # file tier's budget (the file rows also measure the slow tests this tier
     # deselects), splitting any file heavier than a quarter of a shard,
     # exactly as `python scripts/tier_durations.py shards --count 8 --items
     # <collect-only listing>` prints them; regenerate that file with

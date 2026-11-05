@@ -179,20 +179,6 @@ def parse_tier_shard(spec: str) -> tuple[int, int]:
     return int(match.group(1)), int(match.group(2))
 
 
-#: Tier markers an item can carry, loosest first; an item with none is ``unmarked``.
-_ITEM_TIER_MARKERS = ("rare", "slow", "heavy")
-
-
-def item_tier(item: Any) -> str:
-    """Return the loosest tier marker on ``item`` (``unmarked`` when it carries none)."""
-
-    closest = getattr(item, "get_closest_marker", None)
-    for name in _ITEM_TIER_MARKERS:
-        if closest is not None and closest(name) is not None:
-            return name
-    return "unmarked"
-
-
 def tier_shard_items(
     items: list[pytest.Item], index: int, count: int, root: Path
 ) -> tuple[list[pytest.Item], list[pytest.Item]]:
@@ -200,22 +186,18 @@ def tier_shard_items(
 
     The shards balance this session's own selection (``tier_durations.py shards
     --items`` prints the same split from a collect-only listing): each test is
-    weighted by its file's measured mean capped at its own tier's budget, files
-    heavier than a quarter of a shard are split test by test, the rest stay
-    whole. Every item lands in exactly one shard.
+    weighted by its file's measured mean capped at its file tier's budget,
+    files heavier than a quarter of a shard are split test by test, the rest
+    stay whole. Every item lands in exactly one shard.
     """
 
     from scripts.tier_durations import ShardItem, balanced_item_shards, read_rows
 
     selected = [
-        ShardItem(
-            Path(str(item.path)).resolve().relative_to(root).as_posix(),
-            item.nodeid,
-            item_tier(item),
-        )
+        ShardItem(Path(str(item.path)).resolve().relative_to(root).as_posix(), item.nodeid)
         for item in items
     ]
-    assignment = balanced_item_shards(read_rows(), count, selected)
+    assignment = balanced_item_shards(read_rows(), count, selected, root)
     kept: list[pytest.Item] = []
     dropped: list[pytest.Item] = []
     for item, shard_item in zip(items, selected, strict=True):
