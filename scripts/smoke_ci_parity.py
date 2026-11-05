@@ -16,7 +16,9 @@ same answer as the GitHub Tests workflow, for two environment reasons:
 
 This script builds (once, then reuses) a venv pinned to that enforcing row
 and runs the same commands as the workflow's "Run smoke tests and
-compatibility coverage" and "Fail on an under-executed smoke suite" steps.
+compatibility coverage" step (the smoke selection, the serial tier, the
+compatibility file and the release guard tests) and its executed-test floor.
+``tests/test_ci_packaging_gates.py`` holds the two command lists equal.
 The pins below are kept in lockstep with ``.github/workflows/pr.yml`` by
 ``tests/test_ci_packaging_gates.py``. Requires ``uv`` and the Graphviz
 ``dot`` binary.
@@ -61,6 +63,12 @@ SMOKE_ENV = {"CI": "true", "OMP_NUM_THREADS": "1", "TORCHLENS_ORACLE_ENFORCE": "
 #: The executed-floor attestation step's arguments.
 EXECUTED_FLOOR = "tier:smoke"
 SKIP_FRACTION = "0.15"
+
+#: The release guard tests the smoke step runs by name (not smoke-marked).
+RELEASE_GUARD_TESTS = (
+    "tests/test_major_version_guard.py",
+    "tests/test_no_breaking_markers_arming.py",
+)
 
 DEFAULT_VENV = PROJECT_ROOT / ".venv-ci-smoke"
 _STAMP_NAME = "torchlens-ci-smoke.stamp"
@@ -182,6 +190,7 @@ def gate_commands(python: Path, workers: int, extra_args: list[str], junit: str)
         [*pytest, *serial_test_files(), "-m", "serial and not slow and not rare and not heavy"]
         + ["--tb=short", "-q"],
         [*pytest, "tests/test_torch_compat.py", "-m", "not smoke", "--tb=short", "-q"],
+        [*pytest, *RELEASE_GUARD_TESTS, "--tb=short", "-q"],
         [str(python), "scripts/check_ci_executed_tests.py", junit, EXECUTED_FLOOR]
         + [SKIP_FRACTION],
     ]
