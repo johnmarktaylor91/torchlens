@@ -72,6 +72,13 @@ the [collapse](#collapsing-large-models) drawings). A double-bordered rectangle
 (`batchnorm_1_3` in the first drawing) is such a module that also uses buffers. A three-dimensional box is a whole module drawn as one node (see
 [module depth](#module-depth)), and a cylinder is a buffer (see [buffers](#buffers)).
 
+When the trace was captured from a photo, `tl.trace(model, "cat.jpg")` or a PIL image, the
+input node shows a small thumbnail of it above its rows. `trace.batch_render = "shape_only"`
+(or `CaptureOptions(batch_render="shape_only")`) draws the plain node instead. Any node that
+carries a picture (the input photo, an `annotate(image=...)` picture, a layer thumbnail) draws
+as a rounded box in its usual fill with the picture in its own cell above the text, and so does
+an output node that lists decoded labels.
+
 ## Fill colors
 
 [![One node of each fill: input, trainable, frozen and mixed weights, a branch test and the output](../images/visualization/fills.png)](../images/visualization/fills.png)

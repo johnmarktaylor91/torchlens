@@ -561,6 +561,11 @@ expert contributions from routing indices alone.
   static FuncGraph path stays ungrouped and keeps `False`. Validation sidecars stay keyed to raw
   capture identities and oracles compare in raw-label space; per-backend tamper tests prove a
   stale-label sidecar FAILS validation rather than silently passing.
+- A trace captured from one photo (`tl.trace(model, "cat.jpg")` or a PIL image, kept as
+  `trace.input`) draws a PNG thumbnail of it (at most 160 px) above the input node's rows
+  (`torchlens/_visualization/_input_photo.py`); tensor inputs, several input nodes and
+  `batch_render="shape_only"` keep the plain node. A saved trace keeps the bounded copy the
+  `save_raw_input="small"` policy writes (at most 256 px), which still draws after loading.
 - `Trace.draw(view=...)` (keyword-only; default `None`, the plain graph) draws a premade view,
   each answering one question: `"overview"`, `"debug"`, `"speed"`, `"dims"`, `"transformer"`,
   `"memory"`, `"sequence"`, `"compute"`, `"interventions"` (spelled once in
