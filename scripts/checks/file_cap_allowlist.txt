@@ -43,7 +43,7 @@ torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
 torchlens/_capture/projections.py	1502
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	66
-torchlens/_capture/projections.py::_record_from_record_context	92
+torchlens/_capture/projections.py::_record_from_record_context	93
 torchlens/_capture/projections.py::_sparse_freeze_values	68
 torchlens/_capture/projectors.py	1004
 torchlens/_capture/projectors.py::RefreshProjector._check_buffer_sink_routing	117
@@ -331,10 +331,10 @@ torchlens/_plots/_heatmap_axes.py::_axis_selection_with_marker	90
 torchlens/_plots/_heatmap_axes.py::_draw_heatmap_axis_items	88
 torchlens/_plots/_heatmap_axes.py::_heatmap_axis_selection_fits	88
 torchlens/_plots/_heatmap_axes.py::_select_heatmap_axis_indices	76
-torchlens/_plots/node_plots.py	1397
+torchlens/_plots/node_plots.py	1394
 torchlens/_plots/node_plots.py::_spread_close_centers	67
-torchlens/_plots/node_plots.py::heatmap	142
-torchlens/_plots/node_plots.py::image_scatter	110
+torchlens/_plots/node_plots.py::heatmap	141
+torchlens/_plots/node_plots.py::image_scatter	106
 torchlens/_plots/node_plots.py::lineplot	173
 torchlens/_postprocess/__init__.py::_drop_transient_capture_state	72
 torchlens/_postprocess/__init__.py::_postprocess_body	135
@@ -502,7 +502,7 @@ torchlens/_utils/_callable_safety.py	1557
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
-torchlens/_utils/_tensor_label.py	1784
+torchlens/_utils/_tensor_label.py	1749
 torchlens/_utils/_torch_compat.py	4390
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	63
@@ -568,7 +568,7 @@ torchlens/_visualization/_rank_layout_internal/layout.py::_compute_topological_l
 torchlens/_visualization/_rank_layout_internal/layout.py::_run_neato_with_fallbacks	84
 torchlens/_visualization/_rank_layout_internal/layout.py::render_rank_layout	392
 torchlens/_visualization/_render_common.py	906
-torchlens/_visualization/_render_dot.py	1849
+torchlens/_visualization/_render_dot.py	1850
 torchlens/_visualization/_render_dot.py::_emit_and_finish_forward	183
 torchlens/_visualization/_render_dot.py::_finalize_forward_ir	88
 torchlens/_visualization/_render_dot.py::_populate_forward_ir	158
@@ -576,7 +576,7 @@ torchlens/_visualization/_render_dot.py::_publish_forward_render	107
 torchlens/_visualization/_render_dot.py::_rank_layout_cost_inputs	61
 torchlens/_visualization/_render_dot.py::_resolve_collapse_request	96
 torchlens/_visualization/_render_dot.py::_resolve_forward_context	106
-torchlens/_visualization/_render_dot.py::draw	182
+torchlens/_visualization/_render_dot.py::draw	184
 torchlens/_visualization/_render_edges.py	1923
 torchlens/_visualization/_render_edges.py::_add_edges_for_node	531
 torchlens/_visualization/_render_edges.py::_add_intervention_hook_nodes	65
@@ -782,7 +782,7 @@ torchlens/backends/mlx/interventions.py::_resolve_helper_applier	63
 torchlens/backends/mlx/model_prep.py::discover_mlx_module_tree	68
 torchlens/backends/mlx/wrappers.py::_MLXWrapperRegistry._wrap_installed	83
 torchlens/backends/mlx/wrappers.py::_MLXWrapperRegistry.wrap_attr	70
-torchlens/backends/paddle/backend.py	2751
+torchlens/backends/paddle/backend.py	2750
 torchlens/backends/paddle/backend.py::PaddleBackend._attach_derived_grads	135
 torchlens/backends/paddle/backend.py::PaddleBackend._build_event	136
 torchlens/backends/paddle/backend.py::PaddleBackend._build_op_capture	78
@@ -794,7 +794,7 @@ torchlens/backends/paddle/backend.py::_PaddleIntermediateTapObserver.call	62
 torchlens/backends/paddle/model_prep.py::discover_paddle_module_tree	82
 torchlens/backends/paddle/validation.py::_rebuild_inputs	77
 torchlens/backends/paddle/wrappers.py::_PaddleWrapperRegistry.wrap_attr	71
-torchlens/backends/tf/backend.py	1368
+torchlens/backends/tf/backend.py	1367
 torchlens/backends/tf/backend.py::TFBackend._new_trace	128
 torchlens/backends/tf/backend.py::TFBackend.capture_trace	361
 torchlens/backends/tf/backend.py::_reject_unsupported_options	76
@@ -823,7 +823,7 @@ torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._record_cont
 torchlens/backends/tf/validation.py	1076
 torchlens/backends/tf/validation.py::_validate_self_consistency	85
 torchlens/backends/tf/validation.py::validate_tf_trace_detailed	80
-torchlens/backends/tinygrad/backend.py	3148
+torchlens/backends/tinygrad/backend.py	3147
 torchlens/backends/tinygrad/backend.py::TinygradBackend._append_event	176
 torchlens/backends/tinygrad/backend.py::TinygradBackend._attach_derived_grads	90
 torchlens/backends/tinygrad/backend.py::TinygradBackend._derive_intermediate_grads_no_realize	74
@@ -894,7 +894,6 @@ torchlens/backends/torch/_ops_retention.py::_save_predicate_activation_fields	91
 torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	152
 torchlens/backends/torch/_ops_shared_fields.py::_get_parent_output_version_snapshot	75
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	107
-torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	60
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	71
 torchlens/backends/torch/_predicate_forward.py::_record_predicate_module_boundary_outputs	131
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator	98
@@ -1065,7 +1064,7 @@ torchlens/experiment/_engine.py	903
 torchlens/experiment/_engine.py::sweep_sites	81
 torchlens/experiment/_head_sugar.py::head_ablation_candidates	74
 torchlens/export/__init__.py	1166
-torchlens/export/__init__.py::xarray	116
+torchlens/export/__init__.py::xarray	115
 torchlens/export/_model_explorer/_build.py::build_rolled_graph	86
 torchlens/export/_model_explorer/_collection.py::to_model_explorer_dict	100
 torchlens/export/_model_explorer/_diff.py::model_explorer_diff	61
@@ -1182,7 +1181,7 @@ torchlens/intervention/stochastic.py::resample_rows_from.factory._hook	88
 torchlens/intervention/stochastic.py::sample_from	72
 torchlens/intervention/stochastic.py::set_direction_mean	143
 torchlens/intervention/sweep.py::sweep	176
-torchlens/intervention/types.py	819
+torchlens/intervention/types.py	822
 torchlens/inventory.py::SiteInventory.resolve	71
 torchlens/inventory.py::sites_of_trace	64
 torchlens/mechinterp/_compose.py::apply_norm_scale	85
@@ -1230,7 +1229,7 @@ torchlens/options.py::VisualizationOptions.__init__	129
 torchlens/options.py::_merge_grouped_options	74
 torchlens/preprocessing/_audit.py::_field_finding	63
 torchlens/preprocessing/_audit.py::compare	82
-torchlens/preprocessing/_authorities.py	806
+torchlens/preprocessing/_authorities.py	807
 torchlens/preprocessing/_authorities.py::resolve	64
 torchlens/preprocessing/_card.py::check_card	76
 torchlens/preprocessing/_diagnostics.py::_check_confinement	62
@@ -1266,7 +1265,6 @@ torchlens/receptive_field/_gradient.py::_select_inputs	71
 torchlens/receptive_field/_gradient.py::gradient_for_unit	171
 torchlens/receptive_field/_gradient_forward.py::_build_projective_result	72
 torchlens/receptive_field/_gradient_forward.py::projective_gradient_for_unit	89
-torchlens/receptive_field/_path.py::resolve_graph_point	58
 torchlens/receptive_field/_query.py	925
 torchlens/receptive_field/_query.py::_build_box	163
 torchlens/receptive_field/_query.py::_map_passthrough	64
@@ -1387,14 +1385,13 @@ torchlens/transforms/_srp.py::_srp_normalize	75
 torchlens/transforms/_srp.py::srp	68
 torchlens/transforms/_srp.py::srp_verify_matrix	76
 torchlens/transforms/_srp_hash.py::generate_fixed_columns	85
-torchlens/validation/__init__.py	1278
+torchlens/validation/__init__.py	1277
 torchlens/validation/__init__.py::_validate_body_index	70
 torchlens/validation/__init__.py::_validate_manifest_against_schema	95
 torchlens/validation/__init__.py::_validate_runnable_payload_entries	170
 torchlens/validation/__init__.py::_validate_schema_properties	92
-torchlens/validation/__init__.py::_validate_sparse_run_descriptor	123
+torchlens/validation/__init__.py::_validate_sparse_run_descriptor	127
 torchlens/validation/__init__.py::_validate_v2_backend_fields	68
-torchlens/validation/__init__.py::validate_tlspec	60
 torchlens/validation/_completeness_backstop.py::completeness_backstop_counts	196
 torchlens/validation/_destination_coverage.py::_index_put_destination_is_fully_overwritten	75
 torchlens/validation/_edge_boundary.py::_splice_edge_substitution_args	83
@@ -1439,7 +1436,6 @@ torchlens/validation/_invariants_topology.py::_check_sibling_relation_derivation
 torchlens/validation/_invariants_topology.py::_check_trace_self_consistency	91
 torchlens/validation/_layer_grad_report.py::_compare_module_output_grads	212
 torchlens/validation/_operand_value_proofs.py::operand_value_proof_decision	85
-torchlens/validation/_pristine.py::pristine_torch_oracle	58
 torchlens/validation/backward.py	821
 torchlens/validation/backward.py::_clone_inputs_with_grad	64
 torchlens/validation/backward.py::_sum_tensors	73
@@ -1472,7 +1468,7 @@ torchlens/validation/exemptions.py::_softmax_singleton_dim_decision	65
 torchlens/viz/_node_visualizers.py::channel_grid	75
 torchlens/viz/_node_visualizers.py::histogram	62
 torchlens/viz/_tensor_display.py::show_tensor	92
-torchlens/viz/feature_maps.py	1029
+torchlens/viz/feature_maps.py	1026
 torchlens/viz/feature_maps.py::_render_feature_map_grid	84
 torchlens/viz/feature_maps.py::feature_map_node_spec	137
 torchlens/viz/feature_maps.py::feature_map_node_spec.node_spec_fn	85
