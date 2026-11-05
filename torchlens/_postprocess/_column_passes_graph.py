@@ -80,8 +80,8 @@ def flood_orphan_reachability(trace: Trace, node_stack: list[str]) -> set[str]:
     # Cognitive complexity is over 15 on purpose (hot path, once per op): the
     # sink logging is inlined, not called per visited node.
     # Shadow sets over the two trace-level list[str] sink ledgers: the former
-    # per-node `label not in <list>` scans were O(k^2) in sink count
-    # (hunt-6 R52-2). The lists stay the portable source of truth.
+    # per-node `label not in <list>` scans were O(k^2) in sink count.
+    # The lists stay the portable source of truth.
     seen_sink_labels = set(trace.internal_sink_ops)
     seen_terminated_bool_labels = set(trace.internally_terminated_bool_ops)
     lookup = _graph_lookup(trace)
@@ -157,8 +157,7 @@ def log_internally_terminated_tensor(
     ``seen_sink_labels`` / ``seen_terminated_bool_labels`` are the caller's
     persistent shadow sets over ``internal_sink_ops`` /
     ``internally_terminated_bool_ops``; the membership guards read them
-    instead of rescanning the growing lists once per visited node
-    (hunt-6 R52-2).
+    instead of rescanning the growing lists once per visited node.
     """
 
     layer_entry = trace[tensor_label]
