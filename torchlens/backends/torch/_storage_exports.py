@@ -40,6 +40,7 @@ from ... import _state
 from ..._utils._internal_read import _internal_read_state
 from ..._utils._tensor_label import (
     active_label_session_token,
+    get_tensor_label,
     get_tensor_meta,
     raw_tensor_label,
     session_label_storage_intact,
@@ -252,3 +253,39 @@ def note_alias_rebound_snapshot(
 
     if slots and all(relabeled_onto_parent(_slot_value(sources[k], p)) for k, p in slots):
         foreign_journal(trace).alias_slots[key] = frozenset(slots)
+
+
+def note_alias_rebound_outputs(
+    trace: Any,
+    tensors: list[torch.Tensor],
+    addresses: list[str],
+    relabels: Mapping[Any, tuple[Any, ...]],
+) -> tuple[list[torch.Tensor], list[str]]:
+    """Record the returned tensors a view write of this session relabeled, and pass them through.
+
+    Output nodes are built in postprocess, after capture released ``relabels``
+    (``ops._VIEW_MUTATION_RELABELS``), so a returned sibling view bound to the write by
+    the propagation would leave its output node's snapshot unmarked. The address of each
+    returned tensor whose current label is the one this session's propagation gave it is
+    kept in ``alias_outputs``; :func:`mark_alias_rebound_output` turns it into the mark.
+    """
+
+    token = active_label_session_token()
+    for tensor, address in zip(tensors, addresses, strict=True):
+        entry = relabels.get(tensor) if relabels else None
+        if entry is not None and entry[0] == token and entry[2] == get_tensor_label(tensor):
+            foreign_journal(trace).alias_outputs[address] = entry[2]
+    return tensors, addresses
+
+
+def mark_alias_rebound_output(trace: Any, address: str, key: tuple[str, str]) -> None:
+    """Mark an output node's snapshot whose returned tensor a view write relabeled onto its parent.
+
+    ``key`` is ``(parent raw label, output node raw label)``; an output node binds its one
+    parent at ``args[0]``. Nothing is marked unless capture recorded, for this output
+    address, a relabel onto exactly that parent (:func:`note_alias_rebound_outputs`).
+    """
+
+    journal = trace.__dict__.get(FOREIGN_DATA_DEPARTURES_ATTR)
+    if isinstance(journal, ForeignJournal) and journal.alias_outputs.get(address) == key[0]:
+        journal.alias_slots[key] = frozenset({("args", 0)})
