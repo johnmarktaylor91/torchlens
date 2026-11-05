@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -429,3 +430,69 @@ def _module_address(op: Op) -> str | None:
     if isinstance(module, str):
         return module.rsplit(":", 1)[0]
     return None
+
+
+def _op_by_any_label(trace: Trace) -> dict[str, Op]:
+    """Build a lookup of final and raw labels to trace ops.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose graph labels should be indexed.
+
+    Returns
+    -------
+    dict[str, Op]
+        Label lookup for parent traversal.
+    """
+
+    lookup: dict[str, Op] = {}
+    for op in _ordered_ops(trace):
+        for label in (
+            getattr(op, "label", None),
+            getattr(op, "layer_label", None),
+            getattr(op, "_label_raw", None),
+        ):
+            if isinstance(label, str):
+                lookup[label] = op
+    return lookup
+
+
+def _unsaved_ancestors(trace: Trace, op: Op, label_of: Callable[[Op], str]) -> tuple[str, ...]:
+    """Return unsaved computational ancestors of an op in execution order.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing ``op``.
+    op:
+        First saved non-finite op.
+    label_of:
+        Renders an op's public label; ancestors are keyed and returned by it.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Labels of ancestor ops that do not retain output payloads.
+    """
+
+    by_label = _op_by_any_label(trace)
+    pending = list(getattr(op, "parents", ()) or ())
+    visited: set[str] = set()
+    unsaved: set[str] = set()
+    while pending:
+        parent_label = pending.pop()
+        if parent_label in visited:
+            continue
+        visited.add(parent_label)
+        parent = by_label.get(parent_label)
+        if parent is None:
+            continue
+        pending.extend(getattr(parent, "parents", ()) or ())
+        if not bool(getattr(parent, "is_input", False)) and not bool(
+            getattr(parent, "has_saved_activation", False)
+        ):
+            unsaved.add(label_of(parent))
+    return tuple(
+        label_of(candidate) for candidate in _ordered_ops(trace) if label_of(candidate) in unsaved
+    )

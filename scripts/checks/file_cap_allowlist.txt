@@ -940,7 +940,7 @@ torchlens/backends/torch/prehook_provenance.py::_ensure_observer	66
 torchlens/backends/torch/prehook_provenance.py::_interpose_registration_apis	66
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper	88
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper.wrapped	71
-torchlens/backends/torch/rescue.py	933
+torchlens/backends/torch/rescue.py	918
 torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
 torchlens/backends/torch/sources.py::log_source_tensor_predicate	120
@@ -1032,7 +1032,6 @@ torchlens/debug/_infer_input_shape.py::_run_search.finalize	106
 torchlens/debug/_infer_input_shape.py::_shape_from_prior	138
 torchlens/debug/_infer_input_shape.py::_verified_result	65
 torchlens/debug/_nan.py::bisect_nan	61
-torchlens/debug/_nan.py::find_nan	93
 torchlens/debug/_nan.py::nonfinite_origin	91
 torchlens/debug/_nan_backward.py::bisect_nan_backward	86
 torchlens/debug/_params.py::compare_params	123
