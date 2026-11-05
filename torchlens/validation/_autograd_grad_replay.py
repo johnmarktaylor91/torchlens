@@ -35,6 +35,7 @@ from ..backends.torch._autograd_grad_marker import (
     is_autograd_backward_recorder,
     is_autograd_grad_recorder,
 )
+from ._loaded_callables import refuse_pointer_keywords
 from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
 from ._replay_storage_context import check_view_context_receiver
 
@@ -513,6 +514,7 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
         The func's return value, restored RNG and autocast state applied.
     """
 
+    refuse_pointer_keywords(layer, input_args["kwargs"])
     if is_autograd_grad_recorder(layer.func):
         # An autograd.grad call cannot have run under inference_mode, and an
         # ambient one would leave the rebuilt subgraph without autograd graph.

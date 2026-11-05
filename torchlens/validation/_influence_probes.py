@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ._loaded_callables import refuse_pointer_keywords
 from ._replay_warnings import replay_warnings_ignored
 
 if TYPE_CHECKING:
@@ -160,6 +161,8 @@ def _substitutes_move_output(
         return None
     from .._utils.tensor_utils import tensor_nanequal
 
+    # Raised OUTSIDE the probe refusals: a probe that cannot run keeps an exemption.
+    refuse_pointer_keywords(layer, call.kwargs)
     try:
         with torch.no_grad(), replay_warnings_ignored():
             substitutes = build_substitutes()
