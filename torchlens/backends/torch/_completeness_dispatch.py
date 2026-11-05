@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import weakref
 from collections.abc import Mapping
 from typing import Any
 
@@ -21,7 +20,6 @@ from .escape_detection import (
 __all__ = (
     "record_uncaptured_owner_callsite",
     "_dispatch_result_holds_tensor",
-    "_dispatch_credit_refs",
     "_event_builds_boundary_output",
     "_event_is_capture_accounted",
     "runnable_ledger_facts",
@@ -71,33 +69,6 @@ def _dispatch_result_holds_tensor(result: Any) -> bool:
     if isinstance(result, (list, tuple)):
         return any(isinstance(item, torch.Tensor) for item in result)
     return False
-
-
-def _dispatch_credit_refs(
-    owner: ExpectedOriginalToken | None, func: Any, args: tuple[Any, ...], result: Any
-) -> tuple[weakref.ref[torch.Tensor], ...]:
-    """Return weak references to the tensors that can tie this dispatch to a boundary.
-
-    Those are the tensor results (one level deep) and, for a pure alias operator
-    (``aten.detach`` / ``aten.alias``), its operand. Recorded only for owners whose
-    boundary credit is output-scoped; the dispatch hot path tests that field before
-    calling, so other dispatches pay one attribute read and allocate nothing.
-    """
-
-    if owner is None or not owner.boundary_credit_is_output_scoped:
-        return ()
-    refs: list[weakref.ref[torch.Tensor]] = []
-    if isinstance(result, torch.Tensor):
-        refs.append(weakref.ref(result))
-    elif isinstance(result, (list, tuple)):
-        refs.extend(weakref.ref(item) for item in result if isinstance(item, torch.Tensor))
-    if (
-        args
-        and isinstance(args[0], torch.Tensor)
-        and _operator_base_name(func) in _PURE_VIEW_DISPATCH_OPERATORS
-    ):
-        refs.append(weakref.ref(args[0]))
-    return tuple(refs)
 
 
 def _event_builds_boundary_output(
@@ -773,7 +744,6 @@ from ._completeness_cross_thread import (  # noqa: E402
 from ._completeness_dispatch_names import (  # noqa: E402
     _dispatch_callsite,
     _iter_dispatch_tensors,
-    _operator_base_name,
     _record_escape_source_tensor,
 )
 from ._completeness_metadata import (  # noqa: E402

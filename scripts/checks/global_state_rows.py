@@ -804,6 +804,10 @@ they carry an epoch/version counter where downstream caches must invalidate.
 
 _PROCESS_CACHES = frozenset(
     {
+        # Code objects of the unwrapped Function.apply frame (one per apply slot
+        # shape), registered at install so the census can tell a dispatch made by the
+        # C++ apply epilogue from one inside the user's forward; process-stable.
+        ("torchlens/backends/torch/_function_epilogue.py", "_APPLY_CODES"),
         # tl.errors.quiet: one quieted subclass per warning class, built on first use.
         ("torchlens/errors/_base.py", "_QUIETED_CLASSES"),
         # Routed tensor reads: last resolution per routed name (ten keys), held with the
