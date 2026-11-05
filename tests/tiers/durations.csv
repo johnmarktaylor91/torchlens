@@ -323,7 +323,7 @@ tests/test_capture_outcome_semantic_transients.py,3,0.08,0.04,smoke
 tests/test_capture_outcome_validation_side_channel.py,1,0.85,0.85,unmarked
 tests/test_capture_overhead_counters.py,6,0.28,0.08,unmarked
 tests/test_capture_pure_observer.py,11,1.75,0.43,unmarked
-tests/test_capture_row_commit_cost.py,4,107.37,49.45,unmarked
+tests/test_capture_row_commit_cost.py,4,107.37,49.45,slow
 tests/test_capture_row_ingest.py,10,0.71,0.12,unmarked
 tests/test_capture_row_journal.py,8,1.31,0.30,unmarked
 tests/test_capture_same_object_reference.py,10,0.53,0.18,unmarked
@@ -1042,7 +1042,7 @@ tests/test_pass_number_spelling.py,4,0.31,0.16,unmarked
 tests/test_pass_token_short_labels.py,2,0.19,0.15,unmarked
 tests/test_patch_from_facet_slice.py,11,9.41,4.69,unmarked
 tests/test_patching_heads_fused_attention.py,7,60.85,18.75,unmarked
-tests/test_patching_helper_memory.py,5,50.08,25.35,unmarked
+tests/test_patching_helper_memory.py,5,50.08,25.35,heavy
 tests/test_peak_memory_counter_lag.py,2,0.67,0.57,unmarked
 tests/test_per_file_sharded_runner.py,4,0.18,0.14,unmarked
 tests/test_perf5_rf_invariant_cost.py,6,1.01,0.38,unmarked
