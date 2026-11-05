@@ -22,6 +22,7 @@ from safetensors import safe_open
 from safetensors.torch import save_file
 
 from ..._utils.hashing import sha256_file
+from ..._utils.tensor_leaves import flat_byte_view
 from .._durability import fsync_file
 from ..format_errors import ArtifactError
 from ..paths import reject_symlink_path
@@ -124,7 +125,9 @@ def payload_identity(tensor: torch.Tensor, host: torch.Tensor, kind: str) -> tup
     plain = type(host) is torch.Tensor and type(tensor) in (torch.Tensor, torch.nn.Parameter)
     if not plain or tensor.layout != torch.strided or host.is_quantized:
         return None
-    data = host.reshape(-1).view(torch.uint8).numpy()
+    # flat_byte_view, not reshape(-1).view(uint8): a one-element slice keeps its source
+    # stride through contiguous() and reshape(-1), which view(uint8) refuses.
+    data = flat_byte_view(host).numpy()
     return (
         kind,
         str(tensor.dtype),

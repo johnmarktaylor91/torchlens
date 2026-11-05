@@ -25,7 +25,7 @@ from transformers import GPT2Config, GPT2LMHeadModel
 
 import torchlens as tl
 from torchlens._io.format3 import writer
-from torchlens._io.format3.payloads import PayloadStore
+from torchlens._io.format3.payloads import PayloadStore, read_tensor
 
 
 class _Twins(nn.Module):
@@ -211,6 +211,55 @@ def test_payload_identity_separates_every_declared_field(tmp_path: Path) -> None
     assert keys[0] == keys[1] == keys[4] == keys[6]
     assert len(set(keys)) == 4
     assert store.payload_counts == {"submitted": 7, "stored": 4}
+
+
+def _stride_layouts() -> dict[str, torch.Tensor]:
+    """Payloads in every stride layout a capture hands the writer."""
+
+    grid = torch.arange(8, dtype=torch.int64).reshape(2, 4)
+    return {
+        "one_element_slice": grid[0:1, 1],
+        "one_element_2d_slice": grid[1:2, 2:3],
+        "one_element_stepped": torch.arange(10)[3::4][:1],
+        "scalar_from_slice": grid[1, 3],
+        "transposed": grid.t(),
+        "stepped": torch.arange(12, dtype=torch.float32)[::3],
+        "expanded": torch.tensor([[1.5], [2.5]]).expand(2, 3),
+        "offset_row": grid[1],
+        "bfloat16_column": torch.arange(6, dtype=torch.bfloat16).reshape(3, 2)[:, 1],
+        "empty_slice": grid[:, 4:],
+        "contiguous": grid.clone(),
+    }
+
+
+@pytest.mark.parametrize("layout", sorted(_stride_layouts()))
+def test_every_stride_layout_saves_and_loads_byte_identically(tmp_path: Path, layout: str) -> None:
+    """Any stride layout is stored as its contiguous bytes and loads equal, dtype and shape kept."""
+
+    tensor = _stride_layouts()[layout]
+    store = PayloadStore(tmp_path)
+    blob, key, nbytes = store.submit_payload(tensor, kind="out")
+    store.close()
+    back = read_tensor(tmp_path, blob=blob, key=key)
+    assert nbytes == tensor.numel() * tensor.element_size()
+    assert (back.dtype, back.shape) == (tensor.dtype, tensor.shape)
+    written = back.clone(memory_format=torch.contiguous_format).reshape(-1).view(torch.uint8)
+    source = tensor.clone(memory_format=torch.contiguous_format).reshape(-1).view(torch.uint8)
+    assert torch.equal(written, source)
+    assert torch.equal(back, tensor)
+
+
+def test_one_element_slices_share_by_value(tmp_path: Path) -> None:
+    """Equal one-element slices with different source strides share one entry; unequal ones do not."""
+
+    grid = torch.arange(8, dtype=torch.int64).reshape(2, 4)
+    store = PayloadStore(tmp_path)
+    first = store.submit_payload(grid[0:1, 1], kind="out")[:2]
+    same = store.submit_payload(torch.tensor([1]), kind="out")[:2]
+    other = store.submit_payload(grid[0:1, 2], kind="out")[:2]
+    assert grid[0:1, 1].stride() != (1,)
+    assert first == same != other
+    assert store.payload_counts == {"submitted": 3, "stored": 2}
 
 
 def test_file_digests_hash_in_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
