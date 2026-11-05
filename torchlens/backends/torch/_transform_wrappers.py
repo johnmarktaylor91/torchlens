@@ -194,6 +194,8 @@ def _set_transform_metadata(
         "__tl_transform_fn_name__": getattr(inner_fn, "__name__", None),
         "__tl_transform_fn_qualname__": getattr(inner_fn, "__qualname__", None),
         "__tl_transform_fn_source__": _callable_source_location(inner_fn),
+        # The callable handed to the builder, so validation can name what a vmap boundary maps.
+        "__tl_transform_inner_fn__": inner_fn,
     }
     for name, value in metadata.items():
         try:
