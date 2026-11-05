@@ -288,22 +288,6 @@ def _relation_label(node: GraphNode) -> str:
         return str(source.label)
     return str(source.layer_label)
 
-    @property
-    def graph(self) -> "BoundaryNode":
-        """Answer the record graph-group spelling (``node.graph.is_buffer``) from own fields.
-
-        Render code reads ``node.graph.<leaf>`` on every graph node; an Op or Layer
-        answers through its graph group, a boundary stub through its flat fields.
-        """
-
-        return self
-
-    @property
-    def module_context(self) -> "BoundaryNode":
-        """Answer ``node.module_context.<leaf>`` (``is_atomic_module``) from own fields."""
-
-        return self
-
 
 def _render_node_name(node: GraphNode, vis_mode: str) -> str:
     """Return the DOT node name the renderer declares for ``node``.

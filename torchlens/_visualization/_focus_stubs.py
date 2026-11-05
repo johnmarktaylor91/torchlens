@@ -93,6 +93,22 @@ class BoundaryNode:
         self.layer_type = self.boundary_kind
         self.io_role = self.boundary_kind
 
+    @property
+    def graph(self) -> BoundaryNode:
+        """Answer the record graph-group spelling (``node.graph.is_buffer``) from own fields.
+
+        Render code reads ``node.graph.<leaf>`` on every graph node; an Op or Layer
+        answers through its graph group, a boundary stub through its flat fields.
+        """
+
+        return self
+
+    @property
+    def module_context(self) -> BoundaryNode:
+        """Answer ``node.module_context.<leaf>`` (``is_atomic_module``) from own fields."""
+
+        return self
+
 
 def _get_or_create_boundary_node(
     boundary_nodes: dict[str, BoundaryNode],
