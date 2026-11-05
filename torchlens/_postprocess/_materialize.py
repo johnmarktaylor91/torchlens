@@ -31,7 +31,7 @@ from .._data_classes._module_role_hints import (
 from .._ir.workspaces import _init_module_hierarchy_data
 from .._utils._display_bounded import short_dataclass_repr
 from .._utils._torch_compat import tensor_version_or_none
-from .._utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import _resolve_dtype
 from .._utils.display import _record_phase_timing
 from .._utils.introspection import get_vars_of_type_from_obj
 from ..backends.torch._tl import get_buffer_address, get_tensor_label, get_tensor_meta
@@ -1742,27 +1742,3 @@ def _event_io_role(event: OpEvent, input_io_role: str | None) -> str | None:
     if event.layer_type == "input":
         return input_io_role
     return None
-
-
-def _resolve_dtype(dtype: object | None) -> object | None:
-    """Convert serialized torch dtype names back to dtype objects.
-
-    Parameters
-    ----------
-    dtype
-        Dtype object or serialized dtype name from an event ref.
-
-    Returns
-    -------
-    object | None
-        Runtime dtype when resolvable, otherwise the original value.
-    """
-
-    if dtype is None or not isinstance(dtype, str):
-        return dtype
-    if dtype.startswith("torch."):
-        dtype_name = dtype.split(".", 1)[1]
-        # r47 secD_1: ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``);
-        # fall back to the original string when the name is not a real top-level torch symbol.
-        return torch_attr(dtype_name) or dtype
-    return dtype

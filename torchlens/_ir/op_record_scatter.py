@@ -34,7 +34,7 @@ from typing import Any
 
 from .op_record import FACET_DEFAULTS, IngestExtras, OpRecord
 
-#: ``_io.BlobRef`` and ``_postprocess._materialize._resolve_dtype``, bound on
+#: ``_io.BlobRef`` and ``_utils._torch_symbols._resolve_dtype``, bound on
 #: first use (both packages import the IR at module level, so module-level
 #: imports here would cycle); the per-op scatter reads them for every record.
 _PORTABLE_BLOB_REF: Any = None
@@ -544,7 +544,7 @@ def _resolve_dtype(dtype: object) -> object:
     global _MATERIALIZE_RESOLVE_DTYPE
     materialize_resolve_dtype = _MATERIALIZE_RESOLVE_DTYPE
     if materialize_resolve_dtype is None:
-        from .._postprocess._materialize import _resolve_dtype as materialize_resolve_dtype
+        from .._utils._torch_symbols import _resolve_dtype as materialize_resolve_dtype
 
         _MATERIALIZE_RESOLVE_DTYPE = materialize_resolve_dtype
     return materialize_resolve_dtype(dtype)
