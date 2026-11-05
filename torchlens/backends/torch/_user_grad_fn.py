@@ -10,7 +10,9 @@ An in-place write through a view also rebases the view's autograd history:
 ``rebase_history`` gives the base a fresh ``CopySlices`` node that takes the
 place of the view's own node in the graph. ``rebind_rebased_view_producers``
 records ``CopySlices`` as the in-place op's node and moves the ops whose
-recorded node autograd discarded onto it.
+recorded node autograd discarded onto it. Every other live view of the same base
+is rebased too: autograd gives it a regenerated view node over ``CopySlices`` at
+its next read, so its op moves onto that node.
 """
 
 from __future__ import annotations
@@ -27,7 +29,11 @@ from ..._utils._autograd_view_nodes import (
     is_view_backward_class as _is_view_backward_class,
 )
 from ..._utils._internal_read import internal_scalar_read
-from ..._utils._tensor_label import get_tensor_label
+from ..._utils._tensor_label import (
+    get_tensor_label,
+    session_storage_alias_candidates,
+    storage_alias_index_key,
+)
 
 _USER_GRAD_FN_ATTR = "tl_user_grad_fn"
 
@@ -188,10 +194,27 @@ def _view_write_node(start: Any, copy_slices: Any, handles: Mapping[str, Any]) -
     of this is unproven.
     """
 
-    chain = _view_chain_to_prior(start, copy_slices)
-    if not chain or not _copy_slices_is_newest(copy_slices, handles, set()):
+    proven = bool(_view_chain_to_prior(start, copy_slices)) or _rewrites_previous_write(
+        start, copy_slices
+    )
+    if not proven or not _copy_slices_is_newest(copy_slices, handles, set()):
         return None
     return copy_slices
+
+
+def _rewrites_previous_write(start: Any, copy_slices: Any) -> bool:
+    """Return whether the receiver's recorded node is the base's previous ``CopySlices``.
+
+    A view written a second time carries the first write's label, whose node is
+    the ``CopySlices`` of that write; the second write's ``CopySlices`` reads it as
+    the base's prior node. A chain of zero view nodes: anything else is ``False``.
+    """
+
+    return (
+        start is not None
+        and type(start).__name__ == "CopySlices"
+        and _first_input_node(copy_slices) is start
+    )
 
 
 def _fresh_view_write(trace: Any, receiver: Any) -> tuple[dict[str, Any], Any, Any] | None:
@@ -222,6 +245,85 @@ def _fresh_view_write(trace: Any, receiver: Any) -> tuple[dict[str, Any], Any, A
     return handles, handles.get(label), copy_slices
 
 
+def _live_sibling_views(receiver: Any) -> list[tuple[Any, str]]:
+    """Return ``(view, label)`` for every other live labeled grad view of the receiver's base.
+
+    Read from the session's storage-alias index; one entry per label, in session
+    order. The caller holds ``pause_logging`` and ``internal_scalar_read``.
+    """
+
+    base = receiver._base
+    try:
+        storage_key = storage_alias_index_key(receiver.untyped_storage())
+    except (RuntimeError, ValueError, AttributeError):
+        return []
+    if storage_key is None:
+        return []
+    found: list[tuple[Any, str]] = []
+    seen_labels: set[str] = set()
+    for alias in session_storage_alias_candidates(storage_key):
+        if (
+            alias is receiver
+            or not isinstance(alias, torch.Tensor)
+            or not alias.requires_grad
+            or not alias._is_view()
+            or alias._base is not base
+        ):
+            continue
+        label = get_tensor_label(alias)
+        if label is not None and label not in seen_labels:
+            seen_labels.add(label)
+            found.append((alias, label))
+    return found
+
+
+def _regenerated_sibling_node(
+    alias: Any, label: str, copy_slices: Any, handles: Mapping[str, Any]
+) -> Any | None:
+    """Return the node a sibling view's op moves to after the write, or ``None``.
+
+    Proven only when the op's recorded node is a pre-write view chain down to
+    ``CopySlices``'s first input that no other recorded op reads (as for the
+    written view's producers), and the sibling's regenerated node is a view node
+    over ``CopySlices`` that no op records. Reading ``alias.grad_fn`` regenerates
+    the node now, as autograd does at the sibling's next read.
+    """
+
+    chain = _view_chain_to_prior(handles.get(label), copy_slices)
+    if not chain or _chain_has_recorded_reader(chain, handles):
+        return None
+    try:
+        node = alias.grad_fn
+    except RuntimeError:
+        return None
+    if (
+        node is None
+        or not _is_view_backward_class(type(node).__name__)
+        or _first_input_node(node) is not copy_slices
+        or any(handle is node for handle in handles.values())
+    ):
+        return None
+    return node
+
+
+def _rebind_sibling_views(receiver: Any, copy_slices: Any, handles: dict[str, Any]) -> list[Any]:
+    """Move each provable sibling view's op onto its regenerated node; return the nodes.
+
+    The write rebases the whole base, so a view of it taken before the write and
+    read after it goes through a node autograd regenerates over ``CopySlices``;
+    the view's pre-write node is no longer in the graph.
+    """
+
+    moved: list[Any] = []
+    with pause_logging(), internal_scalar_read():
+        for alias, label in _live_sibling_views(receiver):
+            node = _regenerated_sibling_node(alias, label, copy_slices, handles)
+            if node is not None:
+                handles[label] = node
+                moved.append(node)
+    return moved
+
+
 def rebind_rebased_view_producers(trace: Any, receiver: Any) -> Any | None:
     """Bind an in-place view write to the base's ``CopySlices``; return the writer's node.
 
@@ -239,6 +341,10 @@ def rebind_rebased_view_producers(trace: Any, receiver: Any) -> Any | None:
     view, every view op on the chain shares it), since its backward is folded
     into the write's. A recorded reader of the view before the write keeps the
     view producers on their own nodes.
+
+    Every other live view of the same base whose op recorded a pre-write view
+    node moves onto the node autograd regenerates for it over ``CopySlices``
+    (``_rebind_sibling_views``), under the same proof rules.
 
     The binding is fail-closed: ``_fresh_view_write`` and the proof helpers must
     establish the shape. Anything else returns ``None`` and leaves the records
@@ -269,7 +375,8 @@ def rebind_rebased_view_producers(trace: Any, receiver: Any) -> Any | None:
     for raw_label, handle in list(handles.items()):
         if any(handle is node for node in orphaned):
             handles[raw_label] = copy_slices
-    # Pin the node for the trace's lifetime, as ``backward._strong_grad_fn_refs``
-    # pins every recorded node, so its ``id()`` (the GradFn key) is never reused.
-    trace.__dict__.setdefault("_backward_gradfn_refs", []).append(copy_slices)
+    siblings = _rebind_sibling_views(receiver, copy_slices, handles)
+    # Pin the nodes for the trace's lifetime, as ``backward._strong_grad_fn_refs``
+    # pins every recorded node, so their ``id()`` (the GradFn key) is never reused.
+    trace.__dict__.setdefault("_backward_gradfn_refs", []).extend([copy_slices, *siblings])
     return writer_node
