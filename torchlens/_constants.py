@@ -1127,22 +1127,16 @@ IGNORED_FUNCS = [
         )
         if hasattr(torch.sparse, _sparse_op_name)
     ),
+    # ``torch.nn.utils.rnn.pad_sequence`` delegates to this C builtin, a namespace the crawl never
+    # reads: its full/select/copy_ kernel dispatched unowned and the padded tensor lost its parents.
+    ("torch._C._nn", "pad_sequence"),
     # ``torch.signal.windows``: only the legacy ``*_window`` twins were rows, so ``windows.hann``
     # recorded as an unattributed literal. Pure factories: the node was missing, no edge.
     *(
         ("torch.signal.windows", _window_name)
         for _window_name in (
-            "bartlett",
-            "blackman",
-            "cosine",
-            "exponential",
-            "gaussian",
-            "general_cosine",
-            "general_hamming",
-            "hamming",
-            "hann",
-            "kaiser",
-            "nuttall",
+            *("bartlett", "blackman", "cosine", "exponential", "gaussian", "general_cosine"),
+            *("general_hamming", "hamming", "hann", "kaiser", "nuttall"),
         )
     ),
     # Public FP8/MoE entry points (torch 2.13+): each delegates to a wrapped ``torch._VF``
