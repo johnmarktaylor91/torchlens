@@ -1,6 +1,5 @@
 """Exhaustive drafts and foundational output-container helpers."""
 
-import copy
 from collections import OrderedDict, defaultdict
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
@@ -26,6 +25,14 @@ from ..._utils._torch_compat import (
 from ..._utils.introspection import (
     get_vars_of_type_from_obj,
 )
+from ._ops_freeze_refs import (
+    _copy_parent_arg_positions,
+    _exhaustive_capture_policy,
+    _exhaustive_freeze_refs,
+    _exhaustive_output_ref,
+    _param_refs_from_fields,
+    _resolve_call_function_ref,
+)
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -47,31 +54,6 @@ __all__ = (
     "_object_holds_tensor",
     "_leaf_is_reconstructable",
 )
-
-
-def _is_plain_position_key(key: Any) -> bool:
-    """Return whether an argument-position key is an int, a str, or a tuple of them."""
-
-    if type(key) in (int, str):
-        return True
-    return type(key) is tuple and all(type(part) in (int, str) for part in key)
-
-
-def _copy_parent_arg_positions(positions: Any) -> Any:
-    """Copy an op's ``{"args": {...}, "kwargs": {...}}`` parent label map.
-
-    The usual map holds int, str or tuple keys and str labels, all immutable, so
-    copying the inner dicts gives what ``copy.deepcopy`` gave, without its
-    per-object dispatch and memo. Any other shape still goes through ``deepcopy``.
-    """
-
-    if type(positions) is dict and all(
-        type(inner) is dict
-        and all(type(label) is str and _is_plain_position_key(key) for key, label in inner.items())
-        for inner in positions.values()
-    ):
-        return {kind: dict(inner) for kind, inner in positions.items()}
-    return copy.deepcopy(positions)
 
 
 def _op_record_from_log(
@@ -518,12 +500,7 @@ from ._ops_arguments import (  # noqa: E402
     _literal_value_supported,
 )
 from ._ops_capture_records import (  # noqa: E402
-    _exhaustive_capture_policy,
-    _exhaustive_freeze_refs,
-    _exhaustive_output_ref,
-    _param_refs_from_fields,
     _parent_edges_from_fields,
-    _resolve_call_function_ref,
 )
 from ._ops_containers import (  # noqa: E402
     _build_container_spec,

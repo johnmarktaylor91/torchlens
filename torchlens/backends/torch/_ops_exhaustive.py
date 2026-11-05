@@ -24,6 +24,7 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ._completeness_origins import internal_scalar_read
+from ._ops_freeze_refs import _module_frames_from_fields
 from ._tl import (
     get_tensor_label,
     set_tensor_label,
@@ -589,7 +590,6 @@ from ._ops_autograd import (  # noqa: E402
     _register_call_output_container_snapshot,
 )
 from ._ops_capture_records import (  # noqa: E402
-    _module_frames_from_fields,
     _should_keep_alias_mutation_contract,
 )
 from ._ops_finalize import (  # noqa: E402

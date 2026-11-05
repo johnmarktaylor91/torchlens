@@ -53,6 +53,7 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes._nonfinite import record_op_nonfinite
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._data_classes.op import (
+    _OP_STORE_LAYOUT,
     Op,
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
@@ -507,16 +508,6 @@ class _OutputTensorEntry:
     autograd_band: dict[str, int] | None = None
 
 
-#: FunctionCallRef fields the per-output logging path genuinely rewrites
-#: (``_log_output_tensor_info``): FLOPs derive from the output shape and
-#: ``is_inplace`` from the output tensor's version. Everything else on the
-#: ref is a call-level fact, so sibling outputs of one wrapped call share
-#: ONE frozen ref (M7); a sibling whose per-output facts differ gets a
-#: ``dataclasses.replace`` derivative that still shares every container
-#: field by reference.
-_FUNCTION_REF_PER_OUTPUT_FIELDS = ("flops_forward", "flops_backward", "is_inplace")
-
-
 @dataclass(slots=True)
 class ExhaustiveOpDraft:
     """Exhaustive-pipeline draft (the three ``_make_layer_log_entry`` sites)."""
@@ -537,9 +528,25 @@ class ExhaustiveOpDraft:
         return self.fields_dict["grad_fn_handle"]
 
     def freeze(self) -> Any:
-        """Commit the final draft ONCE as a row-backed journal handle (capture C2b)."""
+        """Commit the final draft ONCE as a row-backed journal handle (capture C2b).
 
-        return _ops_row_journal.commit_row_record(self)
+        The op store layout and the edge-use records come from modules inside the
+        package's largest import cycle, so they are read here and passed to the
+        commit, whose module imports no cycle module.
+        """
+
+        fields_dict = self.fields_dict
+        edge_uses = tuple(
+            fields_dict["_edge_uses"]
+            or _build_edge_use_records(
+                self.trace,
+                fields_dict["parent_arg_positions"],
+                fields_dict["_label_raw"],
+                fields_dict["func_call_id"],
+                func_name=fields_dict.get("func_name"),
+            )
+        )
+        return _ops_row_journal.commit_row_record(self, _OP_STORE_LAYOUT, edge_uses)
 
 
 # Canonical set lives in ``torchlens._utils._callable_safety`` so this capture-side
@@ -591,6 +598,6 @@ setattr(
 for _ancestor_field_name in _ANCESTOR_FIELD_NAMES:
     register_row_release_property(_ancestor_field_name)
 del _ancestor_field_name
-# Module import: a cold import of ``_ops_row_journal`` reaches this module (through
-# ``_ops_arguments``) before it defines ``commit_row_record``.
+# Module import (tests patch ``_ops_row_journal.commit_row_record``).
 from . import _ops_row_journal  # noqa: E402
+from ._ops_arguments import _build_edge_use_records  # noqa: E402
