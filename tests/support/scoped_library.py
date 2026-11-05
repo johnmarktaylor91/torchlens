@@ -39,17 +39,34 @@ def _register(lib: Any, namespace: str, schema: str, kernel: Callable[..., Any])
     return defined
 
 
-def _release(lib: Any, namespace: str, name: str, defined: bool) -> None:
-    """Undo a pre-``_scoped_library`` fragment: registrations, impl keys and the cached op."""
+def release_library(lib: Any) -> None:
+    """Remove every registration ``lib`` made, as ``Library._destroy`` does where it exists.
 
+    Parameters
+    ----------
+    lib:
+        A ``torch.library.Library``. Without ``_destroy`` (the torch floor) the C++
+        registration handle is dropped, which removes its ``define`` and ``impl`` rows,
+        and its impl keys leave ``torch.library``'s bookkeeping set.
+    """
+
+    destroy = getattr(lib, "_destroy", None)
+    if destroy is not None:
+        destroy()
+        return
     torch.library._impls.difference_update(lib._op_impls)
     lib._op_impls.clear()
     lib.m = None
+
+
+def _evict_op(namespace: str, name: str) -> None:
+    """Forget the cached ``torch.ops.<namespace>.<name>`` packet of a removed operator."""
+
     ops_namespace = getattr(torch.ops, namespace)
-    if defined and name in vars(ops_namespace):
+    if name in vars(ops_namespace):
         delattr(ops_namespace, name)
-        if name in ops_namespace._dir:
-            ops_namespace._dir.remove(name)
+    if name in ops_namespace._dir:
+        ops_namespace._dir.remove(name)
 
 
 @contextlib.contextmanager
@@ -85,4 +102,6 @@ def scoped_cpu_op(namespace: str, schema: str, kernel: Callable[..., Any]) -> It
         defined = _register(lib, namespace, schema, kernel)
         yield getattr(getattr(torch.ops, namespace), name)
     finally:
-        _release(lib, namespace, name, defined)
+        release_library(lib)
+        if defined:
+            _evict_op(namespace, name)

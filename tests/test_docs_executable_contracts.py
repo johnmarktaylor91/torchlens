@@ -156,7 +156,12 @@ def test_performance_python_fence_runs(block_index: int, code: str, tmp_path: Pa
         "__name__": f"docs_performance_{block_index}",
         "DOCS_TMPDIR": str(tmp_path),
     }
-    exec(compile(code, namespace["__file__"], "exec"), namespace)
+    from tests.support.capability_routes import capability_route
+
+    # A fence needing a torch surface this build lacks (``torch.nn.attention``) stops at
+    # that surface's named refusal; any other exception fails here.
+    with capability_route():
+        exec(compile(code, namespace["__file__"], "exec"), namespace)
 
 
 def test_root_agent_runnable_example_runs(tmp_path: Path) -> None:
@@ -202,3 +207,23 @@ def test_root_agent_receptive_gradient_and_overlay_run() -> None:
 
     assert any(result.support_mask.any() for result in gradient.values())
     assert overlay.size == (5, 5)
+
+
+def test_nn_attention_route_accepts_only_that_missing_module() -> None:
+    """Graceful floor test for the ``HAS_NN_ATTENTION_MODULE`` docs-fence route.
+
+    On a torch without ``torch.nn.attention`` the import fails with ``ModuleNotFoundError``
+    naming that module and the route accepts exactly that; any other missing module is
+    refused, and on a torch that has the module the route accepts nothing.
+    """
+
+    from tests.support.capability_routes import ROUTES
+
+    route = ROUTES["HAS_NN_ATTENTION_MODULE"]
+    assert not route.accepts(ModuleNotFoundError("x", name="torch.nn.no_such_module"))
+    try:
+        importlib.import_module("torch.nn.attention")
+    except ModuleNotFoundError as exc:
+        assert route.accepts(exc)
+    else:
+        assert not route.accepts(ModuleNotFoundError("x", name="torch.nn.attention"))
