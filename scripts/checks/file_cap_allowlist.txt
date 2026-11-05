@@ -1432,7 +1432,7 @@ torchlens/validation/backward.py::_sum_tensors	73
 torchlens/validation/backward.py::validate_backward_pass	283
 torchlens/validation/consolidated.py::_intervention_report	69
 torchlens/validation/consolidated.py::validate	233
-torchlens/validation/core.py	3766
+torchlens/validation/core.py	3765
 torchlens/validation/core.py::_check_arglocs_correct_for_arg	127
 torchlens/validation/core.py::_check_layer_arguments_logged_correctly	80
 torchlens/validation/core.py::_check_unattributed_arg_slots	193
@@ -1442,7 +1442,7 @@ torchlens/validation/core.py::_deep_numeric_replay_matches_saved	117
 torchlens/validation/core.py::_directional_step_perturb	112
 torchlens/validation/core.py::_foreach_sibling_attributes_slot	64
 torchlens/validation/core.py::_ground_truth_output_matches_saved	68
-torchlens/validation/core.py::_prepare_input_args_for_validating_layer	122
+torchlens/validation/core.py::_prepare_input_args_for_validating_layer	120
 torchlens/validation/core.py::validate_parents_of_saved_layer	255
 torchlens/validation/diagnostics.py::describe_tensor_mismatch	97
 torchlens/validation/exemptions.py	2614
