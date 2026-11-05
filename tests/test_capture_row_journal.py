@@ -3,7 +3,8 @@
 An exhaustive op commits as a row handle; its full ``OpRecord`` is built lazily,
 once. These tests pin the build count (none through capture, seal and the raw
 shape hash; each record once per trace), that the lazy record equals the eager
-freeze field for field (raw and amended), that values read at commit are
+freeze field for field (raw and amended) as does every value a handle answers
+from its row, that values read at commit are
 snapshotted (a later ``requires_grad`` flip cannot leak in), and that the
 commit-time residual is released once the record is built.
 """
@@ -121,6 +122,15 @@ def record_diffs(left: Any, right: Any) -> list[str]:
     return diffs
 
 
+def fast_read_diffs(handle: Any, record: OpRecord) -> list[str]:
+    """Return the names a handle answers from its row differently from ``record``."""
+
+    diffs: list[str] = []
+    for name in _row_journal._FAST_READS:
+        _same(getattr(handle, name), getattr(record, name), f"{handle.label_raw}.{name}", diffs)
+    return diffs
+
+
 class _CommitSpy:
     """Records, per committed handle, the eager record the freeze builds at commit."""
 
@@ -133,6 +143,7 @@ class _CommitSpy:
         self.on_ingest: Any = None
         self.ingest_seen = False
         self.build_eager = True
+        self.fast_diffs: list[str] = []
 
     def commit(self, real: Any, draft: Any) -> Any:
         """Build the eager record from ``draft``, then commit the row as production does."""
@@ -153,6 +164,7 @@ class _CommitSpy:
             call_ref_box=draft.call_ref_box,
         )
         handle = real(draft)
+        self.fast_diffs.extend(f"commit {d}" for d in fast_read_diffs(handle, eager))
         self.eager.append((handle, eager))
         self.residuals.append(weakref.ref(handle._rest))
         return handle
@@ -267,6 +279,7 @@ def test_lazy_record_equals_eager_raw_and_amended(subject: int, commit_spy: _Com
         folded = spy.journal.amended_op_records()
         assert len(folded) == len(folded_expected)
         for event in folded:
+            diffs.extend(f"fast {d}" for d in fast_read_diffs(event, folded_expected[event.seq]))
             built = _row_journal.journal_record(event)
             diffs.extend(f"folded {d}" for d in record_diffs(built, folded_expected[event.seq]))
         for handle, eager in spy.eager:
@@ -281,6 +294,7 @@ def test_lazy_record_equals_eager_raw_and_amended(subject: int, commit_spy: _Com
     trace = tl.trace(model, x, **kwargs)
     try:
         assert commit_spy.ingest_seen, f"{name}: ingest hook never ran"
+        assert commit_spy.fast_diffs == [], f"{name}: {commit_spy.fast_diffs[:10]}"
         assert diffs == [], f"{name}: {diffs[:10]}"
     finally:
         trace.cleanup()
