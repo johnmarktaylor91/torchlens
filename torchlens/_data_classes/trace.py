@@ -552,8 +552,6 @@ class Trace(TraceOutputMixin, TraceLike):
     (1, 4, 8, 8)
     """
 
-    _cooked_from: str | None = None  # "recording" on a Trace that Recording.to_trace cooked
-
     @property
     def readiness(self) -> "ReadinessReport | None":
         """Return non-executing sparse-run readiness for a loaded artifact.
@@ -807,6 +805,7 @@ class Trace(TraceOutputMixin, TraceLike):
     _receptive_field_solution: Any
     _rf_directional_solutions: Any
     _tl_rf_probe_active: Any
+    _cooked_from: str | None = None  # "recording" on a Trace that Recording.to_trace cooked
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = TRACE_PORTABLE_STATE_SPEC
     _FIELD_POLICY = build_record_field_policy_table(
