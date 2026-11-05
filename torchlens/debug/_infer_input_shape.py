@@ -382,7 +382,7 @@ def _shape_has_executed_adaptive_pool(trace: Trace) -> bool:
     return any(
         "adaptive" in str(getattr(op, "func_name", "")).lower()
         and "pool" in str(getattr(op, "func_name", "")).lower()
-        for op in trace.layers
+        for op in trace.ops
     )
 
 
@@ -1240,7 +1240,10 @@ def _executed_constraint(trace: Trace) -> _ExecutedConstraint | None:
         Executed constraint metadata, or ``None``.
     """
 
-    for op in trace.layers:
+    # Per-pass Op records in execution order, never aggregate Layers: a layer
+    # that runs more than once (a loop, a shared module) refuses per-pass
+    # fields such as ``input_shapes`` on its aggregate record.
+    for op in trace.ops:
         func_name = str(getattr(op, "func_name", "")).lower()
         input_shapes = tuple(_shape_tuple(shape) for shape in getattr(op, "input_shapes", ()) or ())
         input_dtypes = tuple(getattr(op, "input_dtypes", ()) or ())
