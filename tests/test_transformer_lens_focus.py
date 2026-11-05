@@ -9,13 +9,17 @@ attention, names it in the caption, and leaves an explicit ``module=`` alone.
 
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens._visualization import lenses
+from torchlens._visualization._header_block import KEY_TABLE_ID
 from torchlens._visualization.lenses._attention import first_attention_block
 
 
@@ -92,6 +96,27 @@ def test_transformer_lens_focuses_the_first_block_and_says_so() -> None:
         # A repeat fold would draw the focused block as one closed box.
         assert not resolution.draw_kwargs.get("fold_repeats")
         assert any("first of 3 _Block blocks" in line for line in resolution.disclosure)
+    finally:
+        log.cleanup()
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="graphviz dot not installed")
+def test_transformer_view_header_carries_no_explanation_lines(tmp_path: Path) -> None:
+    """No view line, attention-row note or reading key; the colour key stays."""
+
+    log = tl.trace(_Stack(), torch.randn(1, 4, 8))
+    try:
+        resolution = lenses.resolve_lens(log, "transformer")
+        assert not any(line.startswith("view: ") for line in resolution.disclosure)
+        dot = log.draw(view="transformer", path=str(tmp_path / "tf"), file_format="svg").dot
+        for line in (
+            "view: transformer",
+            "attention rows",
+            "@name: a module address",
+            " call, op ",
+        ):
+            assert line not in dot, line
+        assert KEY_TABLE_ID in dot
     finally:
         log.cleanup()
 

@@ -22,6 +22,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.support.pickled_weights_guard import requires_pickled_weight_loading
 from torchlens.bridge.lit import _sites
 
 transformers = pytest.importorskip("transformers")
@@ -130,6 +131,7 @@ def _trace(entry: dict[str, Any], texts: list[str]) -> Any:
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of _autoroute/_builtin_output.py, bridge/lit/_sites.py.
 # Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
+@requires_pickled_weight_loading
 @pytest.mark.parametrize("name", ["hf-internal-testing/tiny-random-roberta"])
 def test_blocks_preset_matches_config_depth(matrix: dict[str, dict[str, Any]], name: str) -> None:
     """The preset discovers exactly the config-declared consecutive stack."""
@@ -145,6 +147,7 @@ def test_blocks_preset_matches_config_depth(matrix: dict[str, dict[str, Any]], n
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of bridge/lit/_sites.py.
+@requires_pickled_weight_loading
 def test_gpt2_last_block_closes_under_ln_f(matrix: dict[str, dict[str, Any]]) -> None:
     """GPT-2 blocks are exact vs hidden states; the LAST needs ``ln_f`` (T24).
 

@@ -1,4 +1,4 @@
-"""Capability probes that run one real tensor op each (a torch-only leaf).
+"""Capability probes that run one real tensor op (or one non-importing lookup) each (a torch-only leaf).
 
 The ``HAS_*`` flags these answer, their lazy latches and their capability-snapshot
 rows stay in ``torchlens._utils._torch_compat``, which imports this module at probe
@@ -9,11 +9,12 @@ missing, so any other failure still surfaces.
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from collections.abc import Callable
 from typing import Any
 
 import torch
-from torch.utils._python_dispatch import TorchDispatchMode
 
 from ._cuda_probe import _is_cuda_available
 
@@ -181,6 +182,27 @@ def probe_reduce_tuple_dim() -> bool:
     return True
 
 
+def probe_torch_cpp_extension() -> bool:
+    """Return whether ``torch.utils.cpp_extension`` imports cleanly.
+
+    Torch 2.1's extension builder imports ``pkg_resources`` when it loads, and current
+    setuptools no longer ships that module, so on such an install inductor's CPU backend and
+    ``torch.utils.benchmark`` fail at import. Later torch dropped the import (torch 2.2
+    through 2.9 still need setuptools itself to be installed).
+
+    Returns
+    -------
+    bool
+        ``True`` when the import succeeds.
+    """
+
+    try:
+        import torch.utils.cpp_extension  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def probe_meta_item_guard() -> bool:
     """Return whether ``Tensor.item()`` raises its own guard on meta tensors.
 
@@ -283,40 +305,57 @@ def probe_gradient_edge() -> bool:
     return True
 
 
-class _ParameterAsSubclassProbeMode(TorchDispatchMode):
-    """Redispatch operations unchanged for the Parameter subclass capability probe."""
+def _redispatch_probe_mode(mode_base: type[Any]) -> Any:
+    """Return a dispatch mode built on ``mode_base`` that redispatches every op unchanged.
 
-    def __torch_dispatch__(
-        self,
-        func: Any,
-        types: tuple[type[Any], ...],
-        args: tuple[Any, ...] = (),
-        kwargs: dict[str, Any] | None = None,
-    ) -> Any:
-        """Redispatch one probe operation without changing its result.
+    Parameters
+    ----------
+    mode_base:
+        Torch's dispatch-mode base class. ``_torch_compat`` (the one module that imports
+        it) hands it in, so this leaf touches no private torch module.
 
-        Parameters
-        ----------
-        func:
-            Dispatcher operator invoked by the probe.
-        types:
-            Participating tensor subclass types.
-        args:
-            Positional operator arguments.
-        kwargs:
-            Keyword operator arguments.
+    Returns
+    -------
+    Any
+        A fresh mode instance, entered with ``with``.
+    """
 
-        Returns
-        -------
-        Any
-            Unmodified operator result.
-        """
+    class _RedispatchProbeMode(mode_base):
+        """Redispatch operations unchanged for the Parameter subclass capability probe."""
 
-        del types
-        return func(*args, **(kwargs or {}))
+        def __torch_dispatch__(
+            self,
+            func: Any,
+            types: tuple[type[Any], ...],
+            args: tuple[Any, ...] = (),
+            kwargs: dict[str, Any] | None = None,
+        ) -> Any:
+            """Redispatch one probe operation without changing its result.
+
+            Parameters
+            ----------
+            func:
+                Dispatcher operator invoked by the probe.
+            types:
+                Participating tensor subclass types.
+            args:
+                Positional operator arguments.
+            kwargs:
+                Keyword operator arguments.
+
+            Returns
+            -------
+            Any
+                Unmodified operator result.
+            """
+
+            del types
+            return func(*args, **(kwargs or {}))
+
+    return _RedispatchProbeMode()
 
 
-def probe_parameter_as_subclass_in_dispatch_mode() -> bool:
+def probe_parameter_as_subclass_in_dispatch_mode(mode_base: type[Any]) -> bool:
     """Return whether Parameter-to-Tensor subclass conversion works in a dispatch mode.
 
     Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a
@@ -326,6 +365,11 @@ def probe_parameter_as_subclass_in_dispatch_mode() -> bool:
     behavioral probe mirrors the dynamic-parameter logging context without parsing a
     version string.
 
+    Parameters
+    ----------
+    mode_base:
+        Torch's dispatch-mode base class, handed in by ``_torch_compat``.
+
     Returns
     -------
     bool
@@ -334,7 +378,7 @@ def probe_parameter_as_subclass_in_dispatch_mode() -> bool:
 
     parameter = torch.nn.Parameter(torch.empty(0))
     try:
-        with _ParameterAsSubclassProbeMode():
+        with _redispatch_probe_mode(mode_base):
             plain_tensor = parameter.as_subclass(torch.Tensor)
     except (RuntimeError, TypeError):
         return False
@@ -345,7 +389,7 @@ class _SubclassCtorProbe(torch.Tensor):
     """Plain strict Tensor subclass used only by the ctor-in-mode probe below."""
 
 
-def probe_subclass_ctor_in_dispatch_mode() -> bool:
+def probe_subclass_ctor_in_dispatch_mode(mode_base: type[Any]) -> bool:
     """Return whether constructing a STRICT Tensor subclass works in a dispatch mode.
 
     Torch 2.1 and 2.2 reject ``Tensor.as_subclass``/``_make_subclass`` (and the
@@ -361,6 +405,11 @@ def probe_subclass_ctor_in_dispatch_mode() -> bool:
     Tensor, the opposite direction, also version-gated but independently):
     :func:`probe_parameter_as_subclass_in_dispatch_mode`.
 
+    Parameters
+    ----------
+    mode_base:
+        Torch's dispatch-mode base class, handed in by ``_torch_compat``.
+
     Returns
     -------
     bool
@@ -369,7 +418,7 @@ def probe_subclass_ctor_in_dispatch_mode() -> bool:
 
     base = torch.empty(0)
     try:
-        with _ParameterAsSubclassProbeMode():
+        with _redispatch_probe_mode(mode_base):
             converted = base.as_subclass(_SubclassCtorProbe)
     except (RuntimeError, TypeError):
         return False
@@ -395,3 +444,86 @@ def probe_roll_tensor_shifts() -> bool:
     except (RuntimeError, TypeError):
         return False
     return True
+
+
+def probe_sdpa_gqa() -> bool:
+    """Return whether ``scaled_dot_product_attention`` accepts ``enable_gqa`` (torch 2.5+).
+
+    Older torch rejects the keyword with ``TypeError``; the probe runs one call with
+    two query heads over one key/value head.
+
+    Returns
+    -------
+    bool
+        ``True`` when the grouped-query call executes.
+    """
+
+    query, key_value = torch.ones(1, 2, 1, 1), torch.ones(1, 1, 1, 1)
+    sdpa: Any = torch.nn.functional.scaled_dot_product_attention
+    try:
+        sdpa(query, key_value, key_value, enable_gqa=True)
+    except TypeError:
+        return False
+    return True
+
+
+def probe_sdpa_empty_row_zero() -> bool:
+    """Return whether SDPA writes zero, not NaN, for a query row with no admissible key.
+
+    Torch 2.5+ softmax leaves such a row all zero, so the output row is zero; older
+    torch returns NaN. Both spellings of an empty row are probed: a fully masked row
+    and a row whose only key scores ``-inf``.
+
+    Returns
+    -------
+    bool
+        ``True`` when both empty rows come out zero over a zero value.
+    """
+
+    sdpa = torch.nn.functional.scaled_dot_product_attention
+    query, value = torch.ones(1, 1, 1, 1), torch.zeros(1, 1, 1, 1)
+    masked = sdpa(query, query, value, attn_mask=torch.zeros(1, 1, dtype=torch.bool))
+    non_finite = sdpa(query, torch.full((1, 1, 1, 1), float("-inf")), value)
+    return bool((masked == 0).all()) and bool((non_finite == 0).all())
+
+
+def probe_attention_causal_bias() -> bool:
+    """Return whether ``torch.nn.attention.bias.CausalBias`` is discoverable.
+
+    NEVER executes ``torch.nn.attention.bias`` (r45/r49 lazy-import belt): that
+    module's top level calls ``torch._dynamo.allow_in_graph(...)``, dragging the
+    whole ``_dynamo``/``_inductor`` tree into every ``import torchlens``. When
+    the USER has already imported the module, the class is inspected exactly;
+    otherwise ``find_spec`` proves existence without execution (the parent
+    ``torch.nn.attention`` package body is dynamo-free) and the exact
+    ``__torch_function__`` site check is deferred to causal-bias shim install,
+    which resolves only through ``sys.modules``.
+
+    Returns
+    -------
+    bool
+        ``True`` when the module is already imported and the class defines its
+        own ``__torch_function__`` (the identity-dispatch site the causal-bias
+        identity shim normalizes), or when the module exists but has not been
+        imported yet (the shim installer re-reads ``sys.modules`` at each wrap).
+        Absent on torch builds predating the ``torch.nn.attention`` namespace.
+
+    Notes
+    -----
+    This probe NEVER imports ``torch.nn.attention.bias``: on torch 2.13 its
+    module body reaches ``torch._dynamo``, whose import tree also drags in
+    ``torch.distributed.fsdp`` -- breaking the W21 cold-start guarantee that a
+    plain eager capture pays neither import. ``find_spec`` imports only the
+    parent ``torch.nn.attention`` package (verified dynamo-free), and a process
+    that never imported the module cannot hold a ``CausalBias`` instance, so
+    the deferred read is exact, not heuristic.
+    """
+
+    module = sys.modules.get("torch.nn.attention.bias")
+    if module is not None:
+        causal_bias = getattr(module, "CausalBias", None)
+        return causal_bias is not None and "__torch_function__" in vars(causal_bias)
+    try:
+        return importlib.util.find_spec("torch.nn.attention.bias") is not None
+    except (ImportError, AttributeError, ValueError):
+        return False

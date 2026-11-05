@@ -183,6 +183,44 @@ def test_resolved_config_fingerprint_still_moves_on_a_real_config_change():
     assert resolved_config_fingerprint(config=base) != resolved_config_fingerprint(config=changed)
 
 
+def test_expectation_variant_is_chosen_by_the_resolved_config_fingerprint():
+    """A recorded variant answers only for its own fingerprint; anything else gets the primary."""
+
+    from tests.real_model.r0.expectations import expectation_for_fingerprint
+
+    variant = {"fingerprint": "f-older", "n_ops": 7, "recorded_on": "a real run"}
+    row = {"fingerprint": "f-primary", "n_ops": 9, "variants": [variant]}
+    assert expectation_for_fingerprint(row, "f-older") is variant
+    assert expectation_for_fingerprint(row, "f-primary") is row
+    assert expectation_for_fingerprint(row, "f-unknown") is row
+    assert expectation_for_fingerprint(row, None) is row
+    keyed = {"fingerprint": "f-older", "sdpa_mask_builder": "older", "recorded_on": "run"}
+    row = {"fingerprint": "f-primary", "variants": [keyed, variant]}
+    assert expectation_for_fingerprint(row, "f-older", "older") is keyed
+    assert expectation_for_fingerprint(row, "f-older", "recent") is variant
+
+
+def test_expectation_variants_are_complete_recorded_sets():
+    """Every committed variant is a full expectation set from a named run, never a partial patch."""
+
+    from tests.real_model.r0.expectations import (
+        OPTIONAL_VARIANT_KEYS,
+        VARIANT_KEYS,
+        load_expectations,
+    )
+
+    for family, impls in load_expectations().items():
+        for impl, row in impls.items():
+            seen = {(row["fingerprint"], None)}
+            for variant in row.get("variants", ()):
+                assert set(variant) >= VARIANT_KEYS, (family, impl, sorted(variant))
+                assert set(variant) <= VARIANT_KEYS | OPTIONAL_VARIANT_KEYS, (family, impl)
+                assert variant["recorded_on"], (family, impl)
+                key = (variant["fingerprint"], variant.get("sdpa_mask_builder"))
+                assert key not in seen, (family, impl, "duplicate variant key")
+                seen.add(key)
+
+
 def test_consumes_never_constructs_ast_lint():
     """No test under tests/real_model/ constructs an artifact ad hoc.
 

@@ -18,6 +18,7 @@ from torch import Tensor, nn
 import torchlens as tl
 import torchlens._user_public_impls as _public_impls
 import torchlens.attribution as attribution
+from tests.support.hf_capabilities import vit_blocks_path
 
 
 class SmallCnn(nn.Module):
@@ -135,7 +136,9 @@ def test_curves_accept_grad_cam_results(family: str) -> None:
     else:
         model, target = _tiny_vit()
         x = torch.randn(1, 3, 32, 32)
-        cam = attribution.grad_cam(model, x, target=target, layer="vit.layers.0", overlay=False)
+        cam = attribution.grad_cam(
+            model, x, target=target, layer=f"vit.{vit_blocks_path()}.0", overlay=False
+        )
         assert cam.extra["grid_route"] == "derived"
 
     for curve_fn in (attribution.deletion_curve, attribution.insertion_curve):

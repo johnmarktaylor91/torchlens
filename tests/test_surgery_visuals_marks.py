@@ -274,7 +274,8 @@ def test_view_interventions_census_travels_with_figure(chain_capture, tmp_path) 
     assert figure.exists()
     assert sidecar.exists()
     svg = figure.read_text()
-    assert "purple outline: edited" in svg  # the census key renders into the figure
+    assert ">edited</text>" in svg  # the key's colour chip names the edit mark
+    assert "purple outline" not in svg  # no legend line in the caption
     assert ".census.txt" not in svg  # the sidecar is not named on the drawing
     assert "pyvene" not in svg  # CREDIT rows travel in the sidecar only
     _assert_no_banned_verbs(svg)

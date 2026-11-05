@@ -163,7 +163,7 @@ print("forward_source_file", os.path.basename(fc1.forward_source_file))
 print("forward_source_line", isinstance(fc1.forward_source_line, int))
 print("forward_source_location", fc1.forward_source_location.startswith(fc1.forward_source_file))
 print("forward_signature has input", "input" in fc1.forward_signature)
-print("has forward_docstring", isinstance(fc1.forward_docstring, str))
+print("forward_docstring is the class forward's", fc1.forward_docstring == type(model.fc1).forward.__doc__)
 # Output:
 # class_source_file linear.py
 # class_source_line True
@@ -172,7 +172,7 @@ print("has forward_docstring", isinstance(fc1.forward_docstring, str))
 # forward_source_line True
 # forward_source_location True
 # forward_signature has input True
-# has forward_docstring True
+# forward_docstring is the class forward's True
 ```
 
 ### module-source-init

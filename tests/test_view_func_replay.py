@@ -21,6 +21,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._constants import get_orig_torch_funcs
+from torchlens._utils._torch_compat import HAS_REV_VIEW_FUNC_UNSAFE
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.options import CaptureOptions
 from torchlens.validation.core import validate_saved_outs
@@ -30,6 +31,12 @@ _VIEW_FUNCS = tuple(
     name
     for name in ("_view_func", "_view_func_unsafe", "_rev_view_func_unsafe")
     if hasattr(torch.Tensor, name)
+)
+
+
+_REQUIRES_REV_VIEW_FUNC = pytest.mark.skipif(
+    not HAS_REV_VIEW_FUNC_UNSAFE,
+    reason="Tensor._rev_view_func_unsafe postdates the torch 2.1 floor (2.3+)",
 )
 
 
@@ -281,6 +288,7 @@ def _rev_view_func_two_step_trace() -> tuple[tl.Trace, torch.Tensor, object]:
     return trace, ground_truth, _view_func_op(trace, "_rev_view_func_unsafe")
 
 
+@_REQUIRES_REV_VIEW_FUNC
 def test_rev_view_func_new_view_keeps_its_storage() -> None:
     """The reverse of ``select`` reads the new view's whole storage, so capture keeps it."""
 
@@ -295,6 +303,7 @@ def test_rev_view_func_new_view_keeps_its_storage() -> None:
         trace.cleanup()
 
 
+@_REQUIRES_REV_VIEW_FUNC
 def test_compact_new_view_is_a_replay_error() -> None:
     """A new view saved without its storage cannot be mapped back to the base: replay fails."""
 
@@ -309,6 +318,19 @@ def test_compact_new_view_is_a_replay_error() -> None:
         assert "raised an exception" in failure.message
     finally:
         trace.cleanup()
+
+
+def test_reverse_view_func_is_decorated_exactly_where_torch_has_it() -> None:
+    """Graceful floor test for ``HAS_REV_VIEW_FUNC_UNSAFE``: decoration follows torch.
+
+    Torch before 2.3 has no ``Tensor._rev_view_func_unsafe``; TorchLens decorates the
+    view-function methods this torch has and leaves the missing one out, so ``_view_func``
+    still decorates and replays (``test_view_func_method_validates_and_replays``).
+    """
+
+    decorated = set(get_orig_torch_funcs())
+    assert (("torch.Tensor", "_rev_view_func_unsafe") in decorated) is HAS_REV_VIEW_FUNC_UNSAFE
+    assert ("torch.Tensor", "_view_func") in decorated
 
 
 def _wrapped_view_and_base() -> tuple[torch.Tensor, torch.Tensor]:
