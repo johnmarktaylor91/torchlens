@@ -174,7 +174,7 @@ torchlens/_io/_safe_unpickle.py::_BundleAllowlistPolicy._resolve_global	314
 torchlens/_io/_save_gates.py::_capture_activation_blob_specs	107
 torchlens/_io/_scrub_identities.py::_scrub_nondeterministic_identities	218
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
-torchlens/_io/bundle.py	3709
+torchlens/_io/bundle.py	3708
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64
 torchlens/_io/bundle.py::_bind_archived_activation_payload	103
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	73
