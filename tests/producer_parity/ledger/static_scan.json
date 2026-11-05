@@ -7074,6 +7074,14 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/backends/torch/_held_late_index.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
   "file": "torchlens/backends/torch/_held_refs.py",
   "has_default": false,
   "sites": 1,
@@ -11365,6 +11373,14 @@
   "file": "torchlens/validation/_script_metadata_proof.py",
   "has_default": true,
   "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_setitem_index_probe.py",
+  "has_default": true,
+  "sites": 2,
   "via_getattr": true
  },
  {

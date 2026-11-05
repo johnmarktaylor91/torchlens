@@ -10,6 +10,8 @@ Seam. Capture, replay and validation reach every RNG stream through this package
 * :mod:`.restore`: the one door for preserving the user's streams across TorchLens work
   (:class:`RngStreamsRestore`, :func:`restores_rng_streams`) and the replay bracket
   :func:`execute_with_restored_rng_autocast`.
+* :mod:`.explicit_generators`: the pre-call state of a ``torch.Generator`` passed to an
+  op as an argument, recorded per op and re-entered at replay.
 * :mod:`.autocast`: autocast and execution-mode state captured per op and re-entered at
   replay.
 * :mod:`.monitor` with :mod:`.registry`, :mod:`.channels`, :mod:`.engine_state`,
@@ -27,6 +29,7 @@ Nothing here is public surface; the names below are the package's import seam.
 from __future__ import annotations
 
 from .autocast import _AUTOCAST_DEVICES, AutocastRestore, log_current_autocast_state
+from .explicit_generators import log_op_rng_states
 from .monitor import host_nondeterminism_monitor
 from .registry import HOST_NONDETERMINISM_REGISTRY
 from .restore import RngStreamsRestore, execute_with_restored_rng_autocast, restores_rng_streams
@@ -52,6 +55,7 @@ __all__ = [
     "host_rng_advanced",
     "log_current_autocast_state",
     "log_current_rng_states",
+    "log_op_rng_states",
     "restore_host_rng",
     "restores_rng_streams",
     "set_random_seed",

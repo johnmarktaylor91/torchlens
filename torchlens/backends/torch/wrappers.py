@@ -66,7 +66,7 @@ from ..._utils._torch_symbols import tensor_read
 from ..._utils.display import identity
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import get_vars_of_type_from_obj
-from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ..._utils.rng import log_current_autocast_state, log_op_rng_states
 from ..._utils.tensor_utils import (
     _DEFER_ENABLED as _COW_ENABLED,
     _DEFER_PENDING as _COW_PENDING,
@@ -1395,7 +1395,7 @@ def torch_func_decorator(
         # matching barcode => this is the bottom-level (leaf) function.
         func_call_barcode = make_random_barcode()
         trace._wrapper_runtime_ws.current_func_barcode = func_call_barcode
-        rng_states = log_current_rng_states(torch_only=True) if trace._options_save_rng else {}
+        rng_states = log_op_rng_states(args, kwargs) if trace._options_save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
         register_call_input_container_snapshots(

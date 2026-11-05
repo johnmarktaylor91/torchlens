@@ -309,14 +309,28 @@ class FunctionalCallBufferModel(nn.Module):
         return torch.func.functional_call(self.inner, buffers, (x,))
 
 
+_FOREIGN_STORE: dict[str, torch.Tensor] = {}
+
+
+def _foreign_tensor() -> torch.Tensor:
+    """Return the test-supplied tensor from a store no model state or forward reaches."""
+
+    return _FOREIGN_STORE["tensor"]
+
+
 class ForeignArgTensorModel(nn.Module):
-    """Consume a tensor held outside the module as an op argument."""
+    """Consume a tensor held outside the module as an op argument.
+
+    The tensor lives in a module-level store read through a helper function, so it
+    is neither model state (any module attribute, private ones included, is) nor a
+    global the forward references directly (a closure constant).
+    """
 
     def __init__(self, foreign: torch.Tensor) -> None:
-        """Store a foreign tensor supplied by the test."""
+        """Store a foreign tensor supplied by the test outside the module."""
 
         super().__init__()
-        self._foreign = foreign
+        _FOREIGN_STORE["tensor"] = foreign
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Add the foreign tensor to the input.
@@ -332,7 +346,7 @@ class ForeignArgTensorModel(nn.Module):
             Shifted tensor.
         """
 
-        return x + self._foreign
+        return x + _foreign_tensor()
 
 
 class ModuleAttrTensorModel(nn.Module):
