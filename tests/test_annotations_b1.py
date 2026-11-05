@@ -251,8 +251,8 @@ def _drawn_image_sources(trace: Trace, tmp_path: Path) -> list[Path]:
     import re
 
     dot = trace.draw(file_format="svg", path=str(tmp_path / "graph")).dot
-    root = Path(trace._visualizer_dir)
-    return [root / src for src in re.findall(r'<IMG SRC="([^"]+)"', dot)]
+    sources = re.findall(r'<IMG SRC="([^"]+)"', dot)
+    return [Path(trace._visualizer_dir) / src for src in sources]
 
 
 def test_jpeg_annotation_draws_from_a_png_copy(tmp_path: Path) -> None:
