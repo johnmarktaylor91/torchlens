@@ -52,10 +52,10 @@ _BUILD_OPCODES = frozenset(
 )
 # Per function-call op on the tiny GPT-2 generate (416 ops), CI's pinned
 # environment (torch 2.13.0+cpu). Trace = capture plus postprocess. The trace
-# builds pin is the higher of the serial (989.46) and xdist (991.00) runs; each
+# builds pin is the higher of the serial (982.49) and xdist (984.03) runs; each
 # pin is the printed two-decimal value plus 0.01 (the print rounds).
-_MAX_TRACE_CALLS_PER_OP = 3363.14
-_MAX_TRACE_BUILDS_PER_OP = 991.01
+_MAX_TRACE_CALLS_PER_OP = 3335.06
+_MAX_TRACE_BUILDS_PER_OP = 984.04
 _MAX_COMMIT_CALLS_PER_OP = 35.72
 _MAX_COMMIT_BUILDS_PER_OP = 30.91
 
