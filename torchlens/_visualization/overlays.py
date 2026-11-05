@@ -15,7 +15,7 @@ from .._selection.selection import Selection, Selector
 from .._utils._multipass_access import get_multipass_attr
 from .._utils.display import format_flops
 from ..errors._base import TorchLensWarning
-from ._label_format import binary_size
+from ._label_format import decimal_size
 
 OverlayScores = Mapping[str, Any]
 
@@ -296,7 +296,7 @@ def legend_domain_text(spec: Any, value: float) -> str:
     if overlay is not None:
         return format_overlay_value(overlay, value).split(": ", 1)[-1]
     if value == int(value) and abs(value) < 1e15:
-        return str(int(value))
+        return f"{int(value):,}"
     return f"{value:.4g}"
 
 
@@ -326,11 +326,13 @@ def format_overlay_value(name: str, value: Any) -> str:
     if display_name == "time":
         return f"time: {float(value or 0.0) * 1000:.3g} ms"
     if display_name == "bytes":
-        return f"bytes: {binary_size(int(value or 0))}"
+        return f"bytes: {decimal_size(int(value or 0))}"
     if isinstance(value, float):
         if math.isnan(value):
             return f"{display_name}: nan"
         return f"{display_name}: {value:.4g}"
+    if isinstance(value, int):
+        return f"{display_name}: {value:,}"
     return f"{display_name}: {value}"
 
 

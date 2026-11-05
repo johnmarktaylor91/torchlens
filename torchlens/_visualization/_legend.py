@@ -28,6 +28,7 @@ from ._edit_change import CHANGED_NODE_CLASS
 from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
 from ._encoding_key import RampKey, color_key, ramp_row_html, size_key_line, stack_key_line
 from ._endpoint_rings import endpoint_ring_role
+from ._header_block import _text_width
 from ._render_common import (
     BACKWARD_HIGHER_ORDER_COLOR,
     BACKWARD_NODE_COLOR,
@@ -323,8 +324,6 @@ def build_legend_table_label(sections: tuple[LegendSection, ...], theme: Visuali
 
 def _ramp_row(row: LegendRow, theme: VisualizationTheme) -> str:
     """Return the key's colour-bar row, measured in the skin's key face."""
-
-    from ._header_block import _text_width
 
     size = theme.typography.secondary_size
     bold = "bold" in theme.typography.family.lower()
