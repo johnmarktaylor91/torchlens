@@ -28,8 +28,10 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from .._utils.facade import refuse_removed_member
 from .._vocab.node_spec import NodeSpec
 from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, TypographyRecord
+from .render_execution import is_raster_format
 
 #: The default ``torchlens`` skin's palette: the released look, ruled on
 #: 3 Nov 2026 to stay exactly as released. Pale green input, salmon output,
@@ -195,8 +197,6 @@ class VisualizationTheme:
 
         def __getattr__(self, name: str) -> Any:
             """Name the replacement for a removed public member, else fail as usual."""
-
-            from .._utils.facade import refuse_removed_member
 
             refuse_removed_member("VisualizationTheme", name, _REMOVED_THEME_MEMBERS)
             return object.__getattribute__(self, name)
@@ -664,8 +664,6 @@ def theme_graph_attrs(
     dict[str, str]
         Graphviz graph attributes.
     """
-
-    from .render_execution import is_raster_format
 
     attrs: dict[str, str] = dict(theme.graph)
     attrs.setdefault("fontname", theme.typography.family)

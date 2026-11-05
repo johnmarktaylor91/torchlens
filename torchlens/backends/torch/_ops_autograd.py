@@ -19,14 +19,14 @@ from ..._ir.container_registry import (
     walk_container,
 )
 from ..._state import pause_logging
+from ..._utils._tensor_label import (
+    get_tensor_label,
+)
 from ..._utils.collections import ensure_iterable
 from ..._utils.tensor_utils import (
     is_functorch_wrapped_tensor,
 )
 from ._completeness_origins import internal_scalar_read
-from ._tl import (
-    get_tensor_label,
-)
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

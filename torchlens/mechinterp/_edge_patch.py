@@ -46,6 +46,7 @@ from typing import Any
 
 import torch
 
+from ..intervention.edge_substitution import _recompute_with_substitution
 from ._errors import refuse
 
 __all__ = ["patch_edges", "receiver_selection"]
@@ -54,7 +55,7 @@ __all__ = ["patch_edges", "receiver_selection"]
 def _input_edge_record(trace: Any, receiver: Any) -> Any:
     """Return the op edge that carries the receiver's pre-norm input into its norm."""
 
-    from ._residual import _innermost_module
+    from ._residual import _innermost_module  # deferred: cycle mechinterp
 
     matches = [
         record
@@ -134,8 +135,6 @@ def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) ->
     that share a norm input and a projection (one layer's heads and roles)
     share one path search.
     """
-
-    from ..intervention.edge_substitution import _recompute_with_substitution
 
     groups: dict[tuple[str, str, str], list[int]] = {}
     for index, (receiver, _value) in enumerate(attention):
@@ -230,7 +229,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> An
     True
     """
 
-    from ._edges import component_graph
+    from ._edges import component_graph  # deferred: cycle mechinterp
 
     stages = _stages(list(edges))
     result = None

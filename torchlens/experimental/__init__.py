@@ -11,11 +11,15 @@ from typing import Any, cast
 
 from torch import nn
 
+import torchlens
+
 from .._entry_refusals import (
     refuse_attribute_walk_segment,
     refuse_auto_environment,
     refuse_if_nonpositive_every,
 )
+from .._utils.env_flags import closed_bool_env
+from ..bundle import Bundle
 
 _ATTRIBUTE_PART_RE = re.compile(r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<indexes>(?:\[[0-9]+\])*)")
 _STOP_AFTER_SITE: Any | None = None
@@ -187,8 +191,6 @@ class Session:
             Captured ``Trace`` for this invocation.
         """
 
-        import torchlens
-
         index = len(self.traces)
         trace_fn = cast(Callable[..., Any], torchlens.trace)
         log = trace_fn(
@@ -214,8 +216,6 @@ class Session:
         Any
             ``torchlens.Bundle`` keyed by invocation name.
         """
-
-        from ..bundle import Bundle
 
         return Bundle(
             {str(metadata["name"]): log for metadata, log in zip(self.invocations, self.traces)}
@@ -312,13 +312,9 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
     (4, 2)
     """
 
-    from .._utils.env_flags import closed_bool_env
-
     if closed_bool_env("TORCHLENS_AUTO"):
         refuse_auto_environment()
     refuse_if_nonpositive_every(every)
-
-    import torchlens
 
     session = AutoCaptureSession(model=model, every=every)
     original_forward = model.forward

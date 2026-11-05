@@ -10,7 +10,7 @@ import torch
 from .._comparison_tensor import _comparison_tensor
 from .._data_classes._lookup_kinds import op_at
 from .._data_classes.func_call_location import display_frame
-from .._utils._multipass_access import is_multipass_layer
+from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from ..backends.registry import TORCH_BACKEND_NAME, resolve_backend_spec
 
 if TYPE_CHECKING:
@@ -109,8 +109,6 @@ def _op_label(op: Op) -> str:
     str
         Op label, or the aggregate ``layer_label`` for a multi-pass Layer.
     """
-
-    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(op, "label", None, multipass=None)
     if isinstance(label, str) and label:

@@ -161,7 +161,7 @@ def resolve_runnable_torch_alias(
         when the path has no explicit monotonic alias.
     """
 
-    from ._producer_version import _torch_minor_version
+    from ._producer_version import _torch_minor_version  # deferred: vocabulary closure
     from ._runnable_torch_aliases import _RUNNABLE_TORCH_ALIASES
 
     parsed_version = _torch_minor_version(recorded_version)

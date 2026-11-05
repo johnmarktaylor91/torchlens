@@ -47,6 +47,8 @@ from collections.abc import Callable, Iterator, Sequence
 from functools import partial
 from typing import Any, Literal, cast
 
+from torchlens._data_classes.grad_fn import GradFn
+
 from .._selection.errors import (
     LiveModeLabelError,
     SelectorCapabilityError,
@@ -96,6 +98,7 @@ from ._selector_universe import (
     sanitize_transform_kind as sanitize_transform_kind,
 )
 from .container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .container_registry import Role
 
 Lifecycle = Literal["capture", "site", "live"]
 
@@ -1024,8 +1027,6 @@ def _raise_for_finalized_live_label(selector_kind: str, label_value: str) -> Non
 def _is_grad_fn(subject: Any) -> bool:
     """Return whether a site subject is a backward ``GradFn`` log."""
 
-    from torchlens._data_classes.grad_fn import GradFn
-
     return isinstance(subject, GradFn)
 
 
@@ -1119,8 +1120,6 @@ def _input_path_subject_matches(
 
 def _site_input_path_matches(subject: Any, requested_path: tuple[Any, ...]) -> bool:
     """Return whether a finalized site produced a model-input leaf at ``requested_path``."""
-
-    from .container_registry import Role
 
     trace = getattr(subject, "trace", None)
     site_labels = _site_label_spellings(subject)

@@ -119,6 +119,7 @@ forbidden_modules =
     torchlens.callbacks
     torchlens.examples
     torchlens.export
+    torchlens.mechinterp
     torchlens.neuro
     torchlens.trackers
 
@@ -128,10 +129,11 @@ type = forbidden
 source_modules =
     torchlens._extraction
 forbidden_modules =
+    torchlens._visualization
     torchlens.bridge
+    torchlens.experiment
     torchlens.report
     torchlens._semantic
-    torchlens._visualization
     torchlens.viz
 allow_indirect_imports = true
 
@@ -261,6 +263,7 @@ forbidden_modules =
     torchlens.callbacks
     torchlens.examples
     torchlens.export
+    torchlens.mechinterp
     torchlens.trackers
 
 [importlinter:contract:_notebook-no-direct]
@@ -269,6 +272,7 @@ type = forbidden
 source_modules =
     torchlens.report._notebook
 forbidden_modules =
+    torchlens.experiment
     torchlens.report._agent_json
     torchlens.report._backward_attribution
     torchlens.report._compute_truth
@@ -313,6 +317,7 @@ forbidden_modules =
     torchlens.callbacks
     torchlens.examples
     torchlens.export
+    torchlens.mechinterp
     torchlens.neuro
     torchlens.trackers
 
@@ -322,10 +327,11 @@ type = forbidden
 source_modules =
     torchlens._observability
 forbidden_modules =
+    torchlens._visualization
     torchlens.bridge
+    torchlens.experiment
     torchlens.report
     torchlens._semantic
-    torchlens._visualization
     torchlens.viz
 allow_indirect_imports = true
 
@@ -638,10 +644,11 @@ type = forbidden
 source_modules =
     torchlens.attribution
 forbidden_modules =
+    torchlens._visualization
     torchlens.bridge
     torchlens.report
     torchlens._semantic
-    torchlens._visualization
+    torchlens.viz
 allow_indirect_imports = true
 
 [importlinter:contract:backends-no-path]
@@ -838,6 +845,7 @@ forbidden_modules =
     torchlens.callbacks
     torchlens.examples
     torchlens.export
+    torchlens.mechinterp
     torchlens.neuro
     torchlens.trackers
 
@@ -848,6 +856,7 @@ source_modules =
     torchlens.debug
 forbidden_modules =
     torchlens.bridge
+    torchlens.experiment
     torchlens.report._notebook
     torchlens._semantic
     torchlens.viz
@@ -1057,6 +1066,7 @@ forbidden_modules =
     torchlens.callbacks
     torchlens.examples
     torchlens.export
+    torchlens.mechinterp
     torchlens.neuro
     torchlens.trackers
 
@@ -1066,10 +1076,12 @@ type = forbidden
 source_modules =
     torchlens.receptive_field
 forbidden_modules =
+    torchlens._visualization
     torchlens.bridge
+    torchlens.experiment
     torchlens.report
     torchlens._semantic
-    torchlens._visualization
+    torchlens.viz
 allow_indirect_imports = true
 
 [importlinter:contract:repgeom-no-path]
@@ -1078,11 +1090,16 @@ type = forbidden
 source_modules =
     torchlens.repgeom
 forbidden_modules =
+    torchlens._visualization
     torchlens.callbacks
     torchlens.examples
+    torchlens.experiment
     torchlens.export
+    torchlens.mechinterp
     torchlens.neuro
+    torchlens.report
     torchlens.trackers
+    torchlens.viz
 
 [importlinter:contract:repgeom-no-direct]
 name = repgeom (L5) does not import higher layers directly
@@ -1091,7 +1108,6 @@ source_modules =
     torchlens.repgeom
 forbidden_modules =
     torchlens.bridge
-    torchlens.report
     torchlens._semantic
     torchlens._visualization
 allow_indirect_imports = true
@@ -1147,6 +1163,7 @@ forbidden_modules =
     torchlens.callbacks
     torchlens.examples
     torchlens.export
+    torchlens.mechinterp
     torchlens.neuro
     torchlens.trackers
 
@@ -1156,9 +1173,10 @@ type = forbidden
 source_modules =
     torchlens.stats
 forbidden_modules =
-    torchlens.bridge
-    torchlens.report
     torchlens._visualization
+    torchlens.bridge
+    torchlens.experiment
+    torchlens.report
     torchlens.viz
 allow_indirect_imports = true
 
@@ -1212,6 +1230,7 @@ forbidden_modules =
     torchlens.debug._checks
     torchlens.examples
     torchlens.export
+    torchlens.mechinterp
     torchlens.neuro
     torchlens.repgeom
     torchlens.trackers
@@ -1226,14 +1245,15 @@ forbidden_modules =
     torchlens._autoroute
     torchlens._extraction
     torchlens._observability
+    torchlens._visualization
     torchlens.attribution
     torchlens.bridge
     torchlens.bundle
     torchlens.debug
+    torchlens.experiment
     torchlens.report
     torchlens._semantic
     torchlens.stats
-    torchlens._visualization
     torchlens.viz
 allow_indirect_imports = true
 

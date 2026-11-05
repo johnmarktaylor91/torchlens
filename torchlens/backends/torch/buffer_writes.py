@@ -14,19 +14,19 @@ from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._entry_refusals import refuse_if_foreign_workspace
 from ..._ir import BufferWriteEvent
-from ..._utils._torch_compat import tensor_version_or_none
-from ..._utils.tensor_utils import safe_copy
-from ._fused_norm_writes import _fused_update_mode, _is_fused_mutator, fused_call_writes
-from ._identity_cache import IdentityCache, identity_cached
-from ._state_bytes import _whole_storage_uint8
-from ._storage_overlap import _ranges_overlap, _storage_range
-from ._tl import (
+from ..._utils._tensor_label import (
     clear_tensor_label,
     get_buffer_address,
     get_module_meta,
     get_tensor_label,
     set_buffer_address,
 )
+from ..._utils._torch_compat import tensor_version_or_none
+from ..._utils.tensor_utils import safe_copy
+from ._fused_norm_writes import _fused_update_mode, _is_fused_mutator, fused_call_writes
+from ._identity_cache import IdentityCache, identity_cached
+from ._state_bytes import _whole_storage_uint8
+from ._storage_overlap import _ranges_overlap, _storage_range
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

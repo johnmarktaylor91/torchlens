@@ -8,6 +8,9 @@ from typing import Any
 
 import torch
 
+from torchlens._input_walk import encode_mapping_key
+from torchlens._io.runnable import EMPTY_CONTAINER_PATH_MARKER, empty_container_kind
+from torchlens._ir.container import get_registered_container
 from torchlens._runnable import ContractCheck, RunnableDiagnostic
 
 from .. import _state
@@ -605,13 +608,6 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
     r29 ``(BOOL_KEY_PATH_TAG, bool)`` tuple spelling is retired (no producer emits
     it; a decoded-value lookup lane would reopen hash-equality conflation).
     """
-
-    from torchlens._input_walk import encode_mapping_key
-    from torchlens._io.runnable import (
-        EMPTY_CONTAINER_PATH_MARKER,
-        empty_container_kind,
-    )
-    from torchlens._ir.container import get_registered_container
 
     current = value
     for component in path:

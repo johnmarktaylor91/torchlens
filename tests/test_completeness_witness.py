@@ -1252,7 +1252,7 @@ def test_descriptor_compat_property_construction_never_raises_without_a_docstrin
     directly.)
     """
 
-    from torchlens.backends.torch._tl import DescriptorCompatProperty
+    from torchlens._utils._tensor_label import DescriptorCompatProperty
 
     def getter(self: object) -> int:
         return 0

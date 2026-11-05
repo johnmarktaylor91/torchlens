@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 from PIL import Image, ImageDraw
 
+from .._plots import node_plots
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
 from ..errors import InvalidArgumentError
-from ..viz import node_plots
 from ._errors import (
     AmbiguousInputError,
     ReceptiveFieldConfigurationError,
@@ -491,7 +491,7 @@ def _descriptor_for_op(
         view = op.projective_field
         return _select_descriptor(view, selected)
 
-    from ._engine import lookup
+    from ._engine import lookup  # deferred: cycle receptive_field
 
     descriptors = lookup(op.source_trace, op)
     if selected is None:
@@ -509,7 +509,7 @@ def _descriptor_for_op(
 def _projective_cone(op: Op, target_label: str) -> frozenset[str]:
     """Return the source-to-target path slice for a projective graph cone."""
 
-    from ._path import between_labels
+    from ._path import between_labels  # deferred: cycle receptive_field
 
     return between_labels(op.source_trace, op, target_label)
 
@@ -558,7 +558,7 @@ def _rendered_labels(layer: Any) -> frozenset[str]:
 def _descriptor_for_labels(trace: Any, labels: frozenset[str], role: str) -> ReceptiveField | None:
     """Find a selected-role descriptor for a rendered layer's represented operation."""
 
-    from ._engine import lookup
+    from ._engine import lookup  # deferred: cycle receptive_field
 
     for label in labels:
         descriptors = lookup(trace, label)

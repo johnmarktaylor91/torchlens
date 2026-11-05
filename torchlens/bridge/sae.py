@@ -26,6 +26,9 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
+from torchlens._selection.selectors import label as label_selector
+from torchlens.intervention.helpers import splice_module
+
 from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning
 from . import _sae_metrics
@@ -491,9 +494,9 @@ def _clean_trace(model_or_log: Any, inputs: Any) -> Any:
     if isinstance(model_or_log, nn.Module):
         if inputs is None:
             raise TypeError("SAE splice from a live model requires `inputs`.")
-        import torchlens as tl
+        from .._user_public_impls import trace as _capture_trace
 
-        return tl.trace(model_or_log, inputs)
+        return _capture_trace(model_or_log, inputs)
     if inputs is not None:
         raise TypeError(
             "SAE splice from an existing Trace takes no `inputs`; the fork replays the captured "
@@ -521,9 +524,6 @@ def _replayed(clean: Any, site: str, name: str, module: nn.Module) -> Any:
     Any
         Replayed fork.
     """
-
-    from torchlens._selection.selectors import label as label_selector
-    from torchlens.intervention.helpers import splice_module
 
     fork = clean.fork(name)
     fork.do(label_selector(site), splice_module(module, input_route="out"))

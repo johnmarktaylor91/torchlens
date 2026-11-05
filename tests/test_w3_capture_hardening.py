@@ -243,11 +243,11 @@ class IdentityModule(nn.Module):
 
 
 def test_label_version_snapshot_session_scoped():
+    from torchlens._utils._tensor_label import begin_label_session, end_label_session
     from torchlens.backends.torch._ops_capture_records import (
         _label_version_baseline,
         _record_label_version_snapshot,
     )
-    from torchlens.backends.torch._tl import begin_label_session, end_label_session
 
     t = torch.zeros(3)
     try:

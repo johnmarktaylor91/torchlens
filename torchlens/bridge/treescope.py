@@ -57,6 +57,7 @@ from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, MissingDependencyError
+from ..errors._base import TorchLensWarning
 from ..report._notebook._card_suppression import register_card_suppressor
 
 __all__ = [
@@ -517,7 +518,6 @@ def _warn_degraded_once() -> None:
     if _STATE.degraded_warned:
         return
     _STATE.degraded_warned = True
-    from ..errors._base import TorchLensWarning
 
     _probed, reason = _STATE.probe_cache or (None, None)
     # warnings-as-errors must not kill the render the warning accompanies.

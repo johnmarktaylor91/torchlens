@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING as _TYPE_CHECKING
 
+from .._utils.facade import facade_dir, resolve_facade_attr
+
 if _TYPE_CHECKING:
     from types import ModuleType
 
@@ -60,8 +62,6 @@ def __getattr__(name: str) -> ModuleType:
         ``AttributeError``.
     """
 
-    from .._utils.facade import resolve_facade_attr
-
     resolved: ModuleType = resolve_facade_attr(
         owner=__name__,
         name=name,
@@ -79,8 +79,6 @@ def __dir__() -> list[str]:
     list[str]
         Sorted bridge module names plus real public globals.
     """
-
-    from .._utils.facade import facade_dir
 
     return facade_dir(globals(), _BRIDGE_MODULES)
 

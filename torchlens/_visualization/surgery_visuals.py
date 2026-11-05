@@ -643,7 +643,7 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
         Whatever ``Trace.draw`` returns for the resolved keywords.
     """
 
-    from .lenses._resolve import draw_with_lens
+    from .lenses._resolve import draw_with_lens  # deferred: cycle _visualization
 
     result = draw_with_lens(trace, "surgery", **user_kwargs)
     # Nothing was written when the draw wrote no file; a census then would

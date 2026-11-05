@@ -6,6 +6,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes.module import Module
 from .._errors import InvalidArgumentError
 from .request import ResolvedRenderRequest
 
@@ -58,7 +59,7 @@ def build_source_graph(trace: Trace, request: ResolvedRenderRequest) -> SourceGr
     """
 
     from ._render_flow import _build_module_focus_entries, _build_skip_filtered_edge_map
-    from ._render_nodes import _normalize_buffer_visibility
+    from ._render_nodes import _normalize_buffer_visibility  # deferred: cycle _visualization
 
     if request.vis_mode == "unrolled":
         entries_to_plot: dict[str, Any] = dict(trace._layer_dict_main_keys)
@@ -122,8 +123,6 @@ def _resolve_focus_module(trace: Trace, module: Any) -> Any:
     ValueError
         If the module cannot be found or belongs to a different trace.
     """
-
-    from .._data_classes.module import Module
 
     if isinstance(module, str):
         if module not in trace.modules:

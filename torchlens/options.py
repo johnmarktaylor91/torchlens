@@ -26,6 +26,7 @@ from ._literals import (
     FoldRepeatsLiteral,
     OnNonfiniteLiteral,
     OutputDeviceLiteral,
+    SaveBudgetOption,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
     VisNodeModeLiteral,
@@ -47,7 +48,6 @@ from ._options_validation import (
     _validate_visualization_values,
     visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
-from ._save_budget import SaveBudgetOption
 from ._utils._display_options import _OptionsDisplay
 from ._utils.facade import refuse_removed_keywords, refuse_removed_member
 from ._utils.tensor_utils import SaveMode

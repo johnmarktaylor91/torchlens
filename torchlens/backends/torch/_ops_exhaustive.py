@@ -15,6 +15,10 @@ from ..._ir.events import (
     FunctionCallRef,
 )
 from ..._ir.intervention import FunctionEventInput
+from ..._utils._tensor_label import (
+    get_tensor_label,
+    set_tensor_label,
+)
 from ..._utils._torch_compat import (
     saved_tensors_default_hooks_active,
 )
@@ -24,10 +28,6 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ._completeness_origins import internal_scalar_read
-from ._tl import (
-    get_tensor_label,
-    set_tensor_label,
-)
 from ._user_grad_fn import stamp_user_grad_fn
 from .aliasing import (
     detect_torch_alias_contract,
@@ -245,7 +245,7 @@ def _emit_exhaustive_operation_events(
             samples_store = self.__dict__.get("_device_memory_samples")
             if isinstance(samples_store, dict):
                 call_samples = samples_store.pop(f"call:{func_call_id}", None)
-                if call_samples is not None:
+                if call_samples is not None:  # deferred import: cycle _observe
                     from ..._observe._device_memory import flat_field_projection
 
                     samples_store[fields_dict_onetensor["_label_raw"]] = call_samples

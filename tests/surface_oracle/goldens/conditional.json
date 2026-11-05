@@ -5547,7 +5547,7 @@
    "unknown_flop_ops": [
     "<torchlens.report._compute_truth.UnknownOpGroup>"
    ],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens._validation_status.ValidationStatus>"
   }
  },
  "live": {
@@ -11099,7 +11099,7 @@
    "unknown_flop_ops": [
     "<torchlens.report._compute_truth.UnknownOpGroup>"
    ],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens._validation_status.ValidationStatus>"
   }
  },
  "pickle": {
@@ -16644,7 +16644,7 @@
    "unknown_flop_ops": [
     "<torchlens.report._compute_truth.UnknownOpGroup>"
    ],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens._validation_status.ValidationStatus>"
   }
  },
  "run": {
@@ -22212,7 +22212,7 @@
    "unknown_flop_ops": [
     "<torchlens.report._compute_truth.UnknownOpGroup>"
    ],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens._validation_status.ValidationStatus>"
   }
  },
  "tlspec": {
@@ -27627,7 +27627,7 @@
    "unknown_flop_ops": [
     "<torchlens.report._compute_truth.UnknownOpGroup>"
    ],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens._validation_status.ValidationStatus>"
   }
  }
 }

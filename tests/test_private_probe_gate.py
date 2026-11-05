@@ -70,7 +70,7 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
     # bracket; the l3 aten wave 0 mode-pop unification MOVED the import here
     # from completeness_witness.py, and the stack getter already routes
     # through _torch_compat (get_current_dispatch_mode_stack).
-    "torchlens/backends/torch/_modes.py": frozenset({"from torch.utils._python_dispatch"}),
+    "torchlens/_utils/_dispatch_modes.py": frozenset({"from torch.utils._python_dispatch"}),
     # The fail-closed torch.ops enumeration (the TorchDispatchMode base-class
     # import moved to _modes.py with the l3 mode-pop unification).
     "torchlens/backends/torch/completeness_witness.py": frozenset({"import torch._ops"}),

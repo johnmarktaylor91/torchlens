@@ -10,7 +10,7 @@ import torch
 from ... import _state as _st
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes.internal_types import FuncExecutionContext
-from ._tl import (
+from ..._utils._tensor_label import (
     get_tensor_label,
     get_tensor_meta,
     is_tensor_data_alias,
