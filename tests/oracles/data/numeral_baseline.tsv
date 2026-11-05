@@ -2917,7 +2917,6 @@ docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1826
 docs-md	docs/maintainers/where.md	183
 docs-md	docs/maintainers/where.md	18311
-docs-md	docs/maintainers/where.md	18315
 docs-md	docs/maintainers/where.md	1834
 docs-md	docs/maintainers/where.md	184
 docs-md	docs/maintainers/where.md	1843
@@ -2927,6 +2926,7 @@ docs-md	docs/maintainers/where.md	1850
 docs-md	docs/maintainers/where.md	186
 docs-md	docs/maintainers/where.md	1860
 docs-md	docs/maintainers/where.md	187
+docs-md	docs/maintainers/where.md	18767
 docs-md	docs/maintainers/where.md	188
 docs-md	docs/maintainers/where.md	189
 docs-md	docs/maintainers/where.md	1896
@@ -3249,8 +3249,8 @@ docs-md	docs/maintainers/where.md	4359
 docs-md	docs/maintainers/where.md	436
 docs-md	docs/maintainers/where.md	437
 docs-md	docs/maintainers/where.md	438
+docs-md	docs/maintainers/where.md	4388
 docs-md	docs/maintainers/where.md	439
-docs-md	docs/maintainers/where.md	4396
 docs-md	docs/maintainers/where.md	44
 docs-md	docs/maintainers/where.md	440
 docs-md	docs/maintainers/where.md	441
@@ -3369,7 +3369,7 @@ docs-md	docs/maintainers/where.md	57
 docs-md	docs/maintainers/where.md	571
 docs-md	docs/maintainers/where.md	572
 docs-md	docs/maintainers/where.md	574
-docs-md	docs/maintainers/where.md	57426
+docs-md	docs/maintainers/where.md	57594
 docs-md	docs/maintainers/where.md	577
 docs-md	docs/maintainers/where.md	580
 docs-md	docs/maintainers/where.md	581
@@ -3450,7 +3450,7 @@ docs-md	docs/maintainers/where.md	676
 docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
-docs-md	docs/maintainers/where.md	680577
+docs-md	docs/maintainers/where.md	681197
 docs-md	docs/maintainers/where.md	683
 docs-md	docs/maintainers/where.md	687
 docs-md	docs/maintainers/where.md	688
@@ -9953,6 +9953,7 @@ test-docstrings	tests/test_hf_attention_backend.py	64
 test-docstrings	tests/test_hon_crash_notes.py	3.10
 test-docstrings	tests/test_hon_crash_notes.py	3.11
 test-docstrings	tests/test_hon_xarray_export.py	18
+test-docstrings	tests/test_hop_cond_closure_params.py	2.0
 test-docstrings	tests/test_hop_grad_trace.py	2.0
 test-docstrings	tests/test_identity_shims.py	56
 test-docstrings	tests/test_import_hygiene.py	10
