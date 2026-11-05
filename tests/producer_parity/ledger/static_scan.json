@@ -4417,6 +4417,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_utils/_kernel_probes.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_utils/_onramp.py",
   "has_default": false,
@@ -4444,7 +4452,7 @@
   "field": "modules",
   "file": "torchlens/_utils/_torch_compat.py",
   "has_default": false,
-  "sites": 16,
+  "sites": 19,
   "via_getattr": false
  },
  {
@@ -6612,7 +6620,7 @@
   "field": "func_call_id",
   "file": "torchlens/backends/torch/_function_boundary.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -6699,6 +6707,14 @@
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/backends/torch/_held_refs.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/_jit_identity_shims.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false

@@ -44,7 +44,9 @@ from ._memory_probes import (  # noqa: F401  (``_available_host_bytes`` is read 
     available_device_bytes,
 )
 from ._state import pause_logging
+from ._utils._byte_format import format_bytes
 from ._utils._display_bounded import short_dataclass_repr
+from ._utils._storage_refs import payload_weakref_is_safe
 from ._utils._torch_symbols import tensor_read
 from .errors._base import CaptureError
 
@@ -73,8 +75,6 @@ pass itself, which allocates live intermediates alongside every payload
 TorchLens retains.
 """
 
-_BYTES_UNITS = (("TB", 1024**4), ("GB", 1024**3), ("MB", 1024**2), ("KB", 1024), ("B", 1))
-
 
 class SaveBudgetExceededError(CaptureError, RuntimeError):
     """Raised when retained activation bytes cross the configured save budget.
@@ -93,28 +93,6 @@ class SaveBudgetExceededError(CaptureError, RuntimeError):
     ...     print(type(err).__name__)
     SaveBudgetExceededError
     """
-
-
-def format_bytes(num_bytes: float) -> str:
-    """Render a byte count in the largest unit that keeps it readable.
-
-    Parameters
-    ----------
-    num_bytes:
-        Byte count.
-
-    Returns
-    -------
-    str
-        Human-readable size such as ``"1.44 GB"``.
-    """
-
-    for unit, scale in _BYTES_UNITS:
-        if abs(num_bytes) >= scale or unit == "B":
-            if unit == "B":
-                return f"{int(num_bytes)} B"
-            return f"{num_bytes / scale:.2f} {unit}"
-    return f"{int(num_bytes)} B"
 
 
 @dataclass(frozen=True)
@@ -667,8 +645,13 @@ class SaveBudget:
         The watcher holds the budget weakly so the accountant never keeps itself
         alive through its own callbacks. A payload that cannot be weak-referenced
         keeps the historical permanent charge (conservative: never a zero-commit).
+        So does a storage payload on a torch without a retained storage wrapper
+        (``HAS_CACHED_UNTYPED_STORAGE_WRAPPER`` false, torch 2.1): a weak reference
+        to such a wrapper can leave freed memory behind and crash CPython later.
         """
 
+        if not payload_weakref_is_safe(payload):
+            return
         budget_ref = self._self_ref
         if budget_ref is None:
             budget_ref = self._self_ref = weakref.ref(self)

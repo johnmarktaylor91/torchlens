@@ -244,6 +244,55 @@ def test_ordinary_custom_function_is_captured_as_before() -> None:
     _assert_validates_clean(model, x)
 
 
+class _ReturnInputFunction(torch.autograd.Function):
+    """Identity Function whose forward hands back its input object, like a backward hook's."""
+
+    @staticmethod
+    def forward(ctx: object, x: torch.Tensor) -> torch.Tensor:
+        """Return the input unchanged."""
+
+        return x
+
+    @staticmethod
+    def backward(ctx: object, grad: torch.Tensor) -> torch.Tensor:
+        """Pass the gradient through."""
+
+        return grad
+
+
+class _ReturnInputModel(nn.Module):
+    """Doubles, applies the identity Function, and returns the result or its relu."""
+
+    def __init__(self, function_output_is_model_output: bool) -> None:
+        """Store whether the Function's output is returned as is."""
+
+        super().__init__()
+        self.function_output_is_model_output = function_output_is_model_output
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Double, apply the identity Function, then maybe relu."""
+
+        out = _ReturnInputFunction.apply(x * 2)
+        return out if self.function_output_is_model_output else torch.relu(out)
+
+
+@pytest.mark.parametrize("function_output_is_model_output", [True, False])
+def test_function_returning_its_input_records_the_view_torch_makes(
+    function_output_is_model_output: bool,
+) -> None:
+    """Torch hands back ``input.view_as(input)``; the trace records it with the input as parent."""
+
+    model = _ReturnInputModel(function_output_is_model_output)
+    x = torch.rand(3, requires_grad=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        trace = tl.trace(model, x)
+    (view,) = [op for op in trace._layer_list if op.func_name == "view_as"]
+    assert {trace[label].func_name for label in view.parents} == {"__mul__"}
+    assert _boundary_ops(trace) == []
+    _assert_validates_clean(model, x)
+
+
 def test_plain_numpy_round_trip_is_not_collapsed() -> None:
     """Armed negative: without a Function nothing is collapsed into an ``autogradfunction`` op.
 

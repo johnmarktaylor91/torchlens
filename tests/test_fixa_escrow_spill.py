@@ -27,6 +27,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.support.pickled_weights_guard import requires_pickled_weight_loading
 from torchlens._capture.plan import CapturePlan, RetentionKind, RetentionProfile
 from torchlens._capture.session import CaptureSession
 
@@ -324,6 +325,7 @@ def test_vit_b_16_op_label_selective_save_completes():
 
 @pytest.mark.heavy
 @pytest.mark.real_model
+@requires_pickled_weight_loading
 def test_real_clip_linear_73_288_bit_equal_to_visual_projection():
     """tvscope B13 red test 2: CLIP ``linear_73_288`` bit-equal to the projected
     image embedding (real openai/clip-vit-base-patch32 weights, batch 8 images).

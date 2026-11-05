@@ -29,9 +29,7 @@ from .._ir.intervention import FireResult
 from .._ir.live_index import LiveIndexWindowError
 from .._ir.selector_eval import selector_contains_kind
 from .._selection.selectors import BaseSelector
-from .._state import pause_logging
 from .._utils._tensor_label import clear_tensor_label, get_tensor_label
-from .._utils._torch_symbols import tensor_read
 from ._rule_match import _match_rules, _rule_decision
 from ._spec import Recipe
 from ._zero_fire import note_capture_rule_fired
@@ -408,8 +406,8 @@ def _record_tensor_live_fire_results(
 def _peek_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...]:
     """Return (without consuming) live fire results attached to ``tensor``.
 
-    Checks the plain attribute first, then the storage-owned side table the
-    robust setter falls back to for attr-rejecting replacement tensors. The
+    Checks the plain attribute first, then the weakly owned out-of-band table
+    the robust setter falls back to for attr-rejecting replacement tensors. The
     module-exit consumer gates its replacement-vs-internal-source
     classification on this peek, so it must see both channels.
 
@@ -425,19 +423,7 @@ def _peek_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ..
         fire_results = ()
     if fire_results:
         return fire_results
-    intervention_state = _ops_interventions()
-    try:
-        with pause_logging():
-            storage = tensor_read(tensor, "untyped_storage")(tensor)
-        records = getattr(storage, intervention_state._LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
-    except Exception:
-        return ()
-    if not isinstance(records, dict):
-        return ()
-    entry = records.get(id(tensor))
-    if entry is not None and entry[0]() is tensor:
-        return tuple(entry[1])
-    return ()
+    return tuple(_ops_interventions()._peek_out_of_band_fire_results(tensor))
 
 
 def _record_module_intervention_parent_labels(

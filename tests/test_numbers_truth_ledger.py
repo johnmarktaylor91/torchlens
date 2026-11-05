@@ -13,6 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests.support.hf_capabilities import cache_layers_initialize_lazily
 
 
 @pytest.mark.smoke
@@ -60,7 +61,10 @@ def test_gpt2_reaches_full_coverage_sentence() -> None:
         # The 25 former "unknowns" (tensor x24, arange x1) are zero-by-rule.
         assert coverage["zero_by_rule"] >= 25
         assert coverage["known"] + coverage["zero_by_rule"] == log._num_ops
-        # Reclassification adds ZERO FLOPs: the partition pin is unchanged.
-        assert int(log.cost.total_flops_forward) == 3_974_725_648
+        # Reclassification adds ZERO FLOPs: the partition pin is unchanged. The
+        # 5.x cache layer adds one 16-element add to the graph; the 4.x pin was
+        # recorded at transformers 4.55.4 (torch 2.1.2 floor row).
+        expected_flops = 3_974_725_648 if cache_layers_initialize_lazily() else 3_974_725_632
+        assert int(log.cost.total_flops_forward) == expected_flops
     finally:
         log.cleanup()

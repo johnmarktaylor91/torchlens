@@ -49,7 +49,7 @@ from ._runnable.verification import _contract_check
 from ._utils._module_call_dispatch import forward_entered_through_module_call
 from ._utils._record_group_table import record_member
 from ._utils.introspection import get_vars_of_type_from_obj
-from .backends.torch import _session_forwards, _tl as _tl_meta
+from .backends.torch import _logged_arguments, _session_forwards, _tl as _tl_meta
 from .backends.torch.model_prep import shared_module_addresses
 from .backends.torch.wrappers import _MUTATING_TENSOR_PROPERTY_SETTERS
 from .errors import RunCapabilityUnavailableError
@@ -521,21 +521,17 @@ def collected_function_output(
     """Return the output a functional event is collected as.
 
     Capture records a None-returning mutator (``__setitem__``, ``__delitem__``,
-    a mutating property setter) with its mutated receiver as the output; the
-    collector sees the same.
+    a mutating property setter, an in-place foreach call) with its mutated
+    receiver as the output (``logged_receiver_output``); the collector sees the same.
     """
 
-    if (
-        output is None
-        and (
-            func_name in {"__setitem__", "zero_", "__delitem__"}
-            or (property_accessor == "set" and func_name in _MUTATING_TENSOR_PROPERTY_SETTERS)
-        )
-        and len(args) > 0
-        and isinstance(args[0], torch.Tensor)
-    ):
-        return args[0]
-    return output
+    return _logged_arguments.logged_receiver_output(
+        output,
+        args,
+        func_name,
+        func_name in {"__setitem__", "zero_", "__delitem__"},
+        property_accessor == "set" and func_name in _MUTATING_TENSOR_PROPERTY_SETTERS,
+    )
 
 
 def save_payload_paused(session: Any, op: Any, value: torch.Tensor) -> None:

@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests.support.hf_capabilities import causal_lm_returns_cache_object
 from torchlens._utils._record_group_table import record_member
 from torchlens._visualization.collapse_optimizer import select_collapse_plan
 from torchlens._visualization.collapse_plan import (
@@ -112,11 +113,17 @@ def test_gpt2_lm_head_cache_bundles_when_the_transformer_is_one_box(tmp_path: Pa
         unbundled = count(
             collapse_plan_for_trace(trace, _boxes("transformer"), {}, RenderContext())
         )
+        source = _dot(trace, tmp_path, "gpt2", collapse="auto", collapse_fn=_boxes("transformer"))
+        assert "OUTPUTS: logits" not in source
+        if not causal_lm_returns_cache_object():
+            # 4.x returns the cache as per-layer ``(key, value)`` tuples: the 8 KV
+            # leaves share one ``past_key_values`` family and bundle as one, 8 -> 1.
+            assert unbundled - boxed == 7
+            assert "OUTPUTS: past_key_values" in source
+            return
         # 8 KV leaves: keys and values bundle separately (4 each), so 8 -> 2.
         assert unbundled - boxed == 6
-        source = _dot(trace, tmp_path, "gpt2", collapse="auto", collapse_fn=_boxes("transformer"))
         assert "OUTPUTS: past_key_values.keys" in source
         assert "OUTPUTS: past_key_values.values" in source
-        assert "OUTPUTS: logits" not in source
     finally:
         trace.cleanup()

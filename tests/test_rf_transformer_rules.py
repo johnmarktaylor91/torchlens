@@ -23,6 +23,7 @@ from support.rf_isolation import preserved_rf_registry
 from torch import nn
 
 import torchlens as tl
+from tests.support.hf_capabilities import causal_lm_returns_cache_object
 from torchlens.receptive_field._types import ReceptiveFieldValidationStatus
 
 cross_validate = importlib.import_module("torchlens.receptive_field._validation").cross_validate
@@ -684,7 +685,10 @@ def test_gpt2_at_without_target_answers_the_logits() -> None:
         assert default[0] != AmbiguousTargetError.__name__
         assert default == _outcome(lambda: view.at((3, 0), target="output.logits"))
         assert view.axes == view["output.logits"].axes
-        keys = next(role for role in caches if role.endswith("keys"))
+        # 5.x returns a cache object (``past_key_values.layers.0.keys``); 4.x
+        # returns the legacy ``(key, value)`` tuple per layer (``.0.0`` is a key).
+        key_suffix = "keys" if causal_lm_returns_cache_object() else ".0"
+        keys = next(role for role in caches if role.endswith(key_suffix))
         assert view[keys].io_role == keys
         selected = _outcome(lambda: view.at((3, 0), target=keys))
         assert selected[0] != AmbiguousTargetError.__name__

@@ -27,6 +27,7 @@ from ..._utils.arg_handling import normalize_input_args, safe_copy_input_tree
 from ..._utils.input_leaves import flatten_input_tensor_addresses
 from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
 from ..._utils.tensor_utils import safe_copy
+from ...errors._base import transparent_contextmanager
 from ...recording._types import ModuleStackFrame
 from . import _ops_capture_records as _ops_capture_records_mod
 from ._completeness_finalize import capture_completeness_witness
@@ -232,7 +233,7 @@ class TorchBackend:
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Compose owner-thread/detector guard with the logging context."""
 
-        @contextlib.contextmanager
+        @transparent_contextmanager
         def guarded_logging() -> Iterator[None]:
             """Enter detector state before enabling wrapper logging."""
 

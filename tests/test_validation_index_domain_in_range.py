@@ -141,7 +141,10 @@ def _tiny_vjepa2(frames: int = 4):
         num_attention_heads=4,
         pred_hidden_size=32,
         pred_num_hidden_layers=2,
-        pred_num_attention_heads=4,
+        # Two predictor heads (head dim 16): each rotary band keeps two
+        # frequencies. With four heads (head dim 8) a band keeps one, and the
+        # 4.x rotary squeezes that axis away and cannot run at all.
+        pred_num_attention_heads=2,
         crop_size=32,
         image_size=32,
         frames_per_clip=frames,

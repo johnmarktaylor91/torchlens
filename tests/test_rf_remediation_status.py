@@ -12,6 +12,7 @@ from support.rf_isolation import preserved_rf_registry
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import HAS_SDPA_GQA
 from torchlens.receptive_field._types import (
     ReceptiveFieldStatus,
     ReceptiveFieldValidationStatus,
@@ -95,6 +96,7 @@ class _GroupedQueryAttention(nn.Module):
 
 
 # Kept: sole branch coverage of receptive_field/_builtin_rules/attention.py.
+@pytest.mark.skipif(not HAS_SDPA_GQA, reason="SDPA enable_gqa postdates the torch 2.1 floor (2.5+)")
 def test_sdpa_grouped_query_attention_widens_key_value_heads() -> None:
     """Contain key/value support under grouped-query attention; value stays feature-pointwise."""
 

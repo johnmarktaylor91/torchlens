@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from tests.support.hf_capabilities import cache_layers_initialize_lazily
 from torchlens._postprocess._site_key import (
     operation_witness,
     parse_site_key,
@@ -143,10 +144,14 @@ def test_gpt2_4l_structural_facts() -> None:
     model.eval()
     with torch.no_grad():
         log = tl.trace(model, torch.randint(0, 512, (1, 16)))
-    assert len(log.op_labels) == 199
+    # 199 on the 5.x cache layer (each block adds two empty-tensor allocations
+    # and two concatenations, the q/k/v contiguous copies are gone, one more
+    # add); 194 recorded at transformers 4.55.4 (torch 2.1.2 floor row).
+    expected_ops = 199 if cache_layers_initialize_lazily() else 194
+    assert len(log.op_labels) == expected_ops
     assert _site_spanning_recurrent_groups(log) == (0, 0)
     keys = [log.ops[label].graph.site_key for label in log.op_labels]
-    assert len(set(keys)) == 199
+    assert len(set(keys)) == expected_ops
 
 
 # ---------------------------------------------------------------------------

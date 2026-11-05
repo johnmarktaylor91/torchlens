@@ -23,6 +23,7 @@ import torchlens as tl
 pytest.importorskip("transformers")
 
 from tests.real_model.r0.families import build_distilgpt2  # noqa: E402
+from tests.support.hf_capabilities import causal_lm_returns_cache_object  # noqa: E402
 from torchlens.recording import GenerationOptions, TokenSeries, reducers  # noqa: E402
 from torchlens.recording._generation import GenerationRecording  # noqa: E402
 
@@ -177,9 +178,13 @@ def _kv_oracle(model: nn.Module, sequence: torch.Tensor, layer: int) -> dict[str
     with torch.no_grad():
         out = model(sequence, use_cache=True)
     cache = out.past_key_values
-    entry = cache.layers[layer] if hasattr(cache, "layers") else None
-    keys = entry.keys if entry is not None else cache.key_cache[layer]
-    values = entry.values if entry is not None else cache.value_cache[layer]
+    if causal_lm_returns_cache_object():
+        entry = cache.layers[layer] if hasattr(cache, "layers") else None
+        keys = entry.keys if entry is not None else cache.key_cache[layer]
+        values = entry.values if entry is not None else cache.value_cache[layer]
+    else:
+        # 4.x returns the legacy per-layer ``(key, value)`` tuple.
+        keys, values = cache[layer]
     return {
         f"kv.{layer}.key": torch.movedim(keys[0], 1, 0),
         f"kv.{layer}.value": torch.movedim(values[0], 1, 0),
