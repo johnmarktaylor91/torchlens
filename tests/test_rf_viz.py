@@ -175,6 +175,46 @@ def test_show_2d_overlay_with_gradient_and_unknown_honesty() -> None:
     assert show(_View(unknown), (0, 0, 3, 3), image=base).tobytes() == base.tobytes()
 
 
+def test_show_draws_a_single_pil_input_as_the_base_image() -> None:
+    """A trace captured from one photo keeps a bare PIL image as its input; show() draws it.
+
+    Before the fix the single image was not recognised as a batch of one, so the overlay fell
+    back to a heatmap of the normalized input tensor instead of the photo.
+    """
+
+    from types import SimpleNamespace
+
+    from torchlens.repgeom._node_visuals import _matching_pil_image_batch
+
+    photo = Image.new("RGB", (8, 8), "white")
+    assert _matching_pil_image_batch(photo, 1) == (photo,)
+    assert _matching_pil_image_batch(photo, 2) is None
+    assert _matching_pil_image_batch([photo], 1) == [photo]
+
+    view = _View(_descriptor(2))
+    view._op = SimpleNamespace(source_trace=SimpleNamespace(input=photo))
+    rendered = show(view, (0, 0, 3, 3))
+    assert rendered.size == photo.size
+    pixels = set(rendered.getdata())
+    assert (255, 255, 255) in pixels and len(pixels) > 1  # the photo, with the box drawn on it
+
+    # A raw photo of another size than the model input (resized or cropped by preprocessing)
+    # cannot carry the box; the overlay then draws the preprocessed input tensor as the photo.
+    class _Trace:
+        input = Image.new("RGB", (40, 30), "white")
+        provenance = SimpleNamespace(
+            input_preprocessor=SimpleNamespace(config={"mean": [0.5] * 3, "std": [0.5] * 3})
+        )
+
+        def __getitem__(self, label: str) -> Any:
+            return SimpleNamespace(out=torch.full((1, 3, 8, 8), -1.0))  # de-normalizes to black
+
+    view._op = SimpleNamespace(source_trace=_Trace())
+    rendered = show(view, (0, 0, 3, 3))
+    assert rendered.size == (8, 8)
+    assert (0, 0, 0) in set(rendered.getdata())
+
+
 def test_show_3d_requires_explicit_slice() -> None:
     """Require a plane selection before rendering a 3-D spatial input."""
 
@@ -355,6 +395,34 @@ def test_show_keeps_the_tensor_rendering_when_the_photo_cannot_align() -> None:
 
     assert rendered.size == (8, 8)
     assert rendered.getpixel((0, 0)) != photo_color
+
+
+def test_show_draws_the_first_seen_image_for_a_list_of_photos_at_another_size() -> None:
+    """A list of photos at another size, with no crop to replay, draws the first image seen.
+
+    That is the first preprocessed image the model saw: not the raw photo, and not another
+    item of the batch.
+    """
+
+    torch.manual_seed(0)
+    first = torch.rand(3, 8, 8)
+    batch = torch.stack([first, 1.0 - first])
+    trace = tl.trace(_StemStage().eval(), batch)
+    photo_colors = [(12, 200, 34), (200, 12, 34)]
+    trace.input = [Image.new("RGB", (16, 12), color) for color in photo_colors]
+    target = trace.ops["stem"]
+    unit = target.receptive_field.center_unit(batch_index=0)
+
+    rendered = target.receptive_field.show(unit).convert("RGB")
+
+    low = first.amin(dim=(1, 2), keepdim=True)
+    high = first.amax(dim=(1, 2), keepdim=True)
+    scaled = ((first - low) / (high - low) * 255.0).round().to(torch.uint8)
+    expected = tuple(int(value) for value in scaled[:, 0, 0])
+    assert rendered.size == (8, 8)
+    assert rendered.getpixel((0, 0)) == expected
+    assert rendered.getpixel((0, 0)) not in photo_colors
+    assert _BOX_RGB in set(rendered.getdata())
 
 
 def test_node_spec_resolves_layer_call_and_module_handles_like_the_op(tmp_path: Any) -> None:

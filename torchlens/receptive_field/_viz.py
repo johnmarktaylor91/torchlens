@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from .._data_classes.layer import Layer
     from .._data_classes.module import Module, ModuleCall
     from .._data_classes.op import Op
+    from ..preprocessing._records import DeclaredPreprocessing
     from ._types import ReceptiveFieldView
 
 
@@ -410,12 +411,14 @@ def _base_image(
 def _aligned_photo(
     trace: Any, photo: Image.Image, descriptor: ReceptiveField, axes: tuple[int, ...]
 ) -> Image.Image | None:
-    """Return a captured photo in model-input pixel space, or ``None`` when it cannot align.
+    """Return the captured photo in model-input pixel space, or ``None`` when none exists.
 
     The box is drawn in model-input coordinates scaled to the base image, so a photo is a
-    usable base only at the input's spatial size: as captured, or after replaying the
-    trace's declared resize and center crop (geometry only, never normalization). Anything
-    else keeps the tensor rendering rather than drawing the box in the wrong place.
+    usable base only at the input's spatial size. In order: the photo as captured when it
+    already has that size; the photo after replaying the trace's declared resize and center
+    crop (geometry only); else the preprocessed input tensor itself, de-normalized with the
+    same declaration, which is the photo exactly as the model saw it. ``None`` (the caller
+    keeps the plain tensor rendering) when none of these is a 3-channel image of that size.
     """
 
     if len(axes) != 2:
@@ -430,7 +433,43 @@ def _aligned_photo(
     replayed = None if geometry is None else geometry(rgb)
     if isinstance(replayed, Image.Image) and replayed.size == size:
         return replayed.convert("RGB")
-    return None
+    try:
+        tensor = trace[descriptor.input_op_label].out
+    except (KeyError, AttributeError):
+        return None
+    if not isinstance(tensor, torch.Tensor):
+        return None
+    seen = _tensor_rgb_image(tensor, declared, axes)
+    return seen if seen is not None and seen.size == size else None
+
+
+def _tensor_rgb_image(
+    tensor: torch.Tensor, declared: DeclaredPreprocessing | None, axes: tuple[int, ...]
+) -> Image.Image | None:
+    """Render the first image of a preprocessed ``(batch, 3, height, width)`` tensor as RGB.
+
+    Undoes the declared per-channel normalization (``mean`` and ``std``) when there is one;
+    otherwise scales each channel to its own range. ``None`` for any other tensor layout.
+    """
+
+    if tensor.ndim != 4 or int(tensor.shape[1]) != 3 or axes != (2, 3):
+        return None
+    data = tensor[0].detach().float().cpu()
+    mean = None if declared is None else declared.mean
+    std = None if declared is None else declared.std
+    if (
+        isinstance(mean, (list, tuple))
+        and isinstance(std, (list, tuple))
+        and len(mean) == len(std) == 3
+    ):
+        data = data * torch.tensor([float(s) for s in std]).view(3, 1, 1)
+        data = data + torch.tensor([float(m) for m in mean]).view(3, 1, 1)
+    else:
+        low = data.amin(dim=(1, 2), keepdim=True)
+        high = data.amax(dim=(1, 2), keepdim=True)
+        data = (data - low) / (high - low).clamp_min(1e-12)
+    array = (data.clamp(0.0, 1.0) * 255.0).round().to(torch.uint8).permute(1, 2, 0).numpy()
+    return Image.fromarray(array, mode="RGB")
 
 
 def _tensor_image(

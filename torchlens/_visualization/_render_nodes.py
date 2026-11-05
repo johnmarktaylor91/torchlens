@@ -781,6 +781,8 @@ def _render_raw_input(
     max_items = _batch_render_limit(batch_render)
     if max_items == 0:
         return None
+    if isinstance(value, Image.Image):  # one photo (a path or PIL input) is a batch of one
+        return _render_raw_input_image_batch(trace, [value], max_items=1, total=1)
     if isinstance(value, str):
         text = _truncate_raw_input_text(value, limit=80)
         return {
