@@ -17,6 +17,7 @@ the remaining part of the regrouping and change nothing yet.
 from __future__ import annotations
 
 import dis
+import functools
 from collections.abc import Mapping
 from typing import Any
 
@@ -480,13 +481,7 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
     True
     """
 
-    cls = type(obj)
-    by_name = _STORED_MEMBER_ATTRS.get(cls)
-    if by_name is None:
-        by_name = _STORED_MEMBER_ATTRS[cls] = {}
-    stored = by_name.get(name, _NO_DEFAULT)
-    if stored is _NO_DEFAULT:
-        stored = by_name[name] = _resolve_stored_member(cls, name)
+    stored = _resolve_stored_member(type(obj), name)
     if stored is None:
         return _record_member_via_view(obj, name, default)
     try:
@@ -497,10 +492,7 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
         return default
 
 
-#: Record class -> ``former name -> attribute read directly`` (``None``: read through the view).
-_STORED_MEMBER_ATTRS: dict[type, dict[str, str | None]] = {}
-
-
+@functools.cache
 def _resolve_stored_member(cls: type, name: str) -> str | None:
     """Return the attribute ``record_member`` reads for ``name`` on ``cls``, or ``None``.
 

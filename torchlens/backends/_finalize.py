@@ -647,10 +647,8 @@ def _apply_recurrence_relabel_epilogue(
                 )
 
     equivalent_labels_by_key: dict[str, set[str]] = {}
-    for op_log in raw_dict.values():
-        equivalent_labels_by_key.setdefault(op_log._graph_equivalence_class, set()).add(
-            op_log.label
-        )
+    for op in raw_dict.values():
+        equivalent_labels_by_key.setdefault(op._graph_equivalence_class, set()).add(op.label)
     for label, op_log in raw_dict.items():
         op_log._graph_equivalent_ops = equivalent_labels_by_key[op_log._graph_equivalence_class]
         recurrent_labels = (

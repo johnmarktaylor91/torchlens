@@ -902,14 +902,11 @@ def _merge_buffer_entries(
             self[child_layer]._graph_internal_source_parents.remove(buffer_to_remove._label_raw)
             self[child_layer]._graph_internal_source_parents.append(source_buffer._label_raw)
 
+        child_positions = self[child_layer]._call_parent_arg_positions
         for arg_type in ["args", "kwargs"]:
-            for arg_label, arg_val in (
-                self[child_layer]._call_parent_arg_positions[arg_type].items()
-            ):
+            for arg_label, arg_val in child_positions[arg_type].items():
                 if arg_val == buffer_to_remove._label_raw:
-                    self[child_layer]._call_parent_arg_positions[arg_type][arg_label] = (
-                        source_buffer._label_raw
-                    )
+                    child_positions[arg_type][arg_label] = source_buffer._label_raw
 
     # The survivor now owns the removed duplicate's child edges, so it reaches
     # every output the duplicate reached: merge the child-direction ancestry

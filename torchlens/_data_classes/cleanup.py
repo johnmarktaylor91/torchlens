@@ -29,12 +29,7 @@ from .._constants import MODEL_LOG_FIELD_ORDER
 from .._trace_core.groups import GroupRef
 from .._trace_core.op_store import mark_op_row_released
 from .._utils._cuda_probe import _is_cuda_available
-from .._utils._record_group_table import (
-    OP_STORAGE_ATTRS,
-    op_attr,
-    record_member,
-    record_storage_attr,
-)
+from .._utils._record_group_table import OP_STORAGE_ATTRS, record_member, record_storage_attr
 from .._utils.collections import remove_entry_from_list
 from .._utils.display import cleanup_trace_visualizer_dir
 from .._utils.tensor_utils import capture_touched_cuda
@@ -865,8 +860,9 @@ def _scrub_op_label_collections(op: "Op", labels_to_remove: set[str]) -> None:
                         [label for label in view if label not in labels_to_remove],
                     )
                 continue
-        # The storage-map lookup inline (``op_attr`` without its call): this runs per Op per field.
-        value = getattr(op, OP_STORAGE_ATTRS.get(field_name, field_name), None)
+        # ``op_attr`` inlined (this runs per Op per field); the rebinds below write it back.
+        attr = OP_STORAGE_ATTRS.get(field_name, field_name)
+        value = getattr(op, attr, None)
         if not value:
             continue
         if isinstance(value, (list, tuple)):
@@ -880,11 +876,7 @@ def _scrub_op_label_collections(op: "Op", labels_to_remove: set[str]) -> None:
             # view back, so removal can never resurrect through the edge
             # table.
             if not labels_to_remove.isdisjoint(value):
-                setattr(
-                    op,
-                    op_attr(field_name),
-                    [label for label in value if label not in labels_to_remove],
-                )
+                setattr(op, attr, [label for label in value if label not in labels_to_remove])
         elif isinstance(value, (set, frozenset)):
             # Only rebind when a dead label is actually present. ``equivalent_ops``
             # shares ONE set object across every Op of an equivalence class, and
@@ -892,7 +884,7 @@ def _scrub_op_label_collections(op: "Op", labels_to_remove: set[str]) -> None:
             # so an unconditional ``value - labels_to_remove`` would hand every Op
             # its own equal-but-distinct copy and undo that sharing for nothing.
             if not value.isdisjoint(labels_to_remove):
-                setattr(op, op_attr(field_name), value - labels_to_remove)
+                setattr(op, attr, value - labels_to_remove)
 
 
 def _scrub_parent_arg_positions(op: "Op", labels_to_remove: set[str]) -> None:

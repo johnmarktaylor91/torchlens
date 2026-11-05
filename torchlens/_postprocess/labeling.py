@@ -751,12 +751,10 @@ def _relabel_module_calls(layer_entry: Op) -> None:
     """
 
     layer_entry._module_context_output_of_module_calls = [
-        _module_call_label(module_call)
-        for module_call in layer_entry._module_context_output_of_module_calls
+        _module_call_label(call) for call in layer_entry._module_context_output_of_module_calls
     ]
     layer_entry._module_context_input_to_module_calls = [
-        _module_call_label(module_call)
-        for module_call in layer_entry._module_context_input_to_module_calls
+        _module_call_label(call) for call in layer_entry._module_context_input_to_module_calls
     ]
     if layer_entry.module is not None:
         layer_entry.module = _module_call_label(layer_entry.module)
