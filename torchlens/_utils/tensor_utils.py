@@ -18,7 +18,7 @@ import copy
 import threading
 import weakref
 from collections.abc import Callable, Iterable, Iterator
-from contextlib import AbstractContextManager, contextmanager, nullcontext
+from contextlib import contextmanager
 from functools import cache, partial
 from math import prod
 from typing import Any, Literal, cast, get_args
@@ -27,8 +27,11 @@ import torch
 
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
 from ._sparse_parts import sparse_component_tensors
+from ._subclass_mode_pause import (
+    _pause_dispatch_modes_for_subclass_clone,
+    _subclass_compare_pause,
+)
 from ._torch_compat import (
-    HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     get_fp8_dtypes,
     get_functorch_wrapped_tensor_checker,
 )
@@ -538,7 +541,7 @@ def tensor_nanequal(
     if tensor_a.is_meta or tensor_b.is_meta:
         return tensor_a.is_meta and tensor_b.is_meta
 
-    with _state_module().pause_logging():
+    with _state_module().pause_logging(), _subclass_compare_pause(tensor_a, tensor_b):
         if tensor_a.device != tensor_b.device:
             # Equality is device-independent: an output_device capture keeps
             # saved payloads off the op's device, so compare exact host copies.
@@ -820,48 +823,6 @@ def concatenate_batch_tensors(left: torch.Tensor, right: torch.Tensor) -> torch.
 
     with _state_module().pause_logging():
         return torch.cat([left, right], dim=0)
-
-
-def _pause_dispatch_modes_for_subclass_clone(x: Any) -> AbstractContextManager[Any]:
-    """Pause TorchLens dispatch modes around a strict-subclass ``clone()``, when needed.
-
-    Torch's default ``__torch_function__`` subclass-return conversion calls
-    ``ret.as_subclass(cls)`` INSIDE ``x.clone()`` to reconstruct the subclass
-    type (R16-5, see ``torchlens/backends/torch/wrappers.py``). On torch 2.1
-    and 2.2 that reconstruction raises "Creating a new Tensor subclass ...
-    already associated to a python object" whenever a TorchLens dispatch mode
-    (the completeness witness, armed by default; an intervention-ready
-    capture's mode) is active -- reproduced on stock torch with a no-op mode,
-    not something TorchLens's own wrapping causes. Pausing ONCE here, around
-    the whole ``clone()`` call, covers that nested reconstruction in a single
-    non-reentrant bracket (see ``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``); a
-    plain ``torch.Tensor``/``Parameter`` receiver, or a modern torch build
-    that tolerates the reconstruction, pays nothing.
-
-    Parameters
-    ----------
-    x:
-        Tensor about to be cloned with its own type preserved.
-
-    Returns
-    -------
-    AbstractContextManager[Any]
-        The bracket for the ``clone()`` call: a no-op ``nullcontext`` unless a
-        pause is needed, so the common case enters no generator per payload copy.
-    """
-
-    if (
-        HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
-        or type(x) is torch.Tensor
-        or type(x) is torch.nn.Parameter
-    ):
-        return nullcontext()
-    # Deferred: backends.torch is upward of utils in the layer map (C01 item
-    # 1); this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
-    # `import torchlens` never pays for it.
-    from ..backends.torch._modes import pause_own_dispatch_modes
-
-    return pause_own_dispatch_modes()
 
 
 # Memory format for every payload copy. ``preserve_format`` gives a
