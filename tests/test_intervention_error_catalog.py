@@ -336,7 +336,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
     rerun_log = _capture(model, x)
     rerun_log.run(model, x)
     assert rerun_log.state is TraceState.RERUN_PROPAGATED
-    rerun_log.run(model, torch.randn(1, 3), replay=tl.options.ReplayOptions(append=True))
+    rerun_log.append(torch.randn(1, 3), model=model)
     assert rerun_log.state is TraceState.APPENDED
 
 
@@ -387,9 +387,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
         ("rerun", lambda log: log.run(_ReluAdd()), ValueError),
         (
             "append",
-            lambda log: log.run(
-                _ReluAdd(), torch.ones(1, 4), replay=tl.options.ReplayOptions(append=True)
-            ),
+            lambda log: log.append(torch.ones(1, 4), model=_ReluAdd()),
             terrors.AppendMismatchError,
         ),
     ),

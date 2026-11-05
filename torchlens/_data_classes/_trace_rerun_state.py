@@ -1,4 +1,4 @@
-"""Trace rerun-state family: the saved inputs and options a rerun replays."""
+"""Trace rerun-state family: the saved inputs and options a rerun replays, and ``append``."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import torch
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._quantities import Bytes
 from .._utils.fail_open import fail_open
+from . import _doors
 from ._state_adapter import state_items, state_restore
 from ._trace_accessors import (
     _invalidate_trace_module_call_accessor_cache,
@@ -34,6 +35,7 @@ def mark_stateful_run_warning_emitted(trace: Trace) -> None:
 
 
 __all__ = [
+    "TraceAppendMixin",
     "mark_stateful_run_warning_emitted",
     "stateful_run_warning_was_emitted",
     "replace_state_from",
@@ -648,3 +650,56 @@ def discharge_against(trace: Trace, real_trace: Trace) -> Any:
     from .._capture.structure_only import discharge_against as _discharge
 
     return _discharge(trace, real_trace)
+
+
+class TraceAppendMixin:
+    """Add a compatible batch to a live Trace in place (``trace.append``)."""
+
+    def append(self: Any, inputs: Any, *, model: torch.nn.Module | None = None) -> None:
+        """Run ``inputs`` through the captured model and stack the batch onto this Trace.
+
+        The one in-place mutator of the run family. The new batch is captured
+        with this Trace's staged intervention spec, checked against the
+        captured graph, and stacked onto every saved tensor along batch
+        dimension 0. Op counts, pass indexes and labels are unchanged (the
+        graph must be identical); ``provenance.is_appended`` becomes ``True``,
+        ``last_run`` describes the append (``engine="append"``) and
+        ``state_history`` gains an ``"append"`` record. The stored input
+        transform applies as it does for ``run``.
+
+        Parameters
+        ----------
+        inputs:
+            Forward input tree for the new batch, in every form ``run`` takes.
+        model:
+            The captured model. When omitted, the live model this Trace holds
+            (weakly, as for ``run``) is reused.
+
+        Raises
+        ------
+        AppendMismatchError
+            When the new batch's graph, site labels or saved shapes do not
+            match this Trace.
+        AppendStreamingUnsupportedError
+            When this Trace is still streaming activations to disk.
+        RunCapabilityUnavailableError
+            For a loaded Trace when ``model`` is omitted (pass the model).
+        RecordBindingError
+            ``run_source_model_collected`` when ``model`` is omitted and the
+            captured model was garbage-collected.
+        KeywordConflictError
+            ``run_legacy_arguments_conflict`` when ``model`` is not an ``nn.Module``.
+
+        Examples
+        --------
+        >>> import torch
+        >>> import torchlens as tl
+        >>> model = torch.nn.Linear(3, 2)
+        >>> opts = tl.options.CaptureOptions(replayable=True)
+        >>> trace = tl.trace(model, torch.randn(2, 3), capture=opts)
+        >>> trace.append(torch.randn(1, 3), model=model)
+        >>> trace.provenance.is_appended
+        True
+        """
+
+        _doors.intervention()._trace_run.append(self, inputs, model=model)

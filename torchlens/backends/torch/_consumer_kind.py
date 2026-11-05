@@ -10,6 +10,22 @@ modules, which then asked the still-loading belt for this function.
 
 from __future__ import annotations
 
+from types import ModuleType
+
+
+def _ast_branches() -> ModuleType:
+    """Return ``_postprocess.ast_branches``, imported on first use (this module is a leaf).
+
+    Returns
+    -------
+    ModuleType
+        The AST branch-index module both lookups here read.
+    """
+
+    from ..._postprocess import ast_branches
+
+    return ast_branches
+
 
 def _classify_consumer_kind(filename: str, line: int) -> str:
     """Raise-time branch-kind classification (memo sec 2.3).
@@ -21,9 +37,30 @@ def _classify_consumer_kind(filename: str, line: int) -> str:
     """
 
     try:
-        from ..._postprocess.ast_branches import classify_bool
-
-        kind = classify_bool(filename, line).kind
+        kind = _ast_branches().classify_bool(filename, line).kind
     except Exception:  # noqa: BLE001 — classification must never mask the refusal
         return "scalar_escape"
     return "scalar_escape" if kind == "unknown" else kind
+
+
+def _source_unreadable(filename: str) -> bool:
+    """Return whether conditional tracking cannot read ``filename``'s source.
+
+    Step 5 ties a bool read to an ``if`` statement through the AST of the
+    file on disk, or of the text ``linecache`` holds for a notebook cell.
+    Code compiled from an unregistered string or piped on stdin has neither,
+    and a cell name reused for different text fails closed, so no branch in
+    it is recorded.
+
+    Parameters
+    ----------
+    filename:
+        Code-object filename of the bool read's user frame.
+
+    Returns
+    -------
+    bool
+        ``True`` when no AST index can be built for ``filename``.
+    """
+
+    return _ast_branches().get_file_index(filename) is None
