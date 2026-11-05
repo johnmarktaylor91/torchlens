@@ -69,7 +69,7 @@ def _plant(monkeypatch: pytest.MonkeyPatch, func_name: str) -> list[str]:
     def validate_with_plant(trace: Trace, *args: Any, **kwargs: Any) -> Any:
         for op in trace._layer_list:
             if op.func_name == func_name:
-                op.func = _frozen_input(op.func, op.saved_args[0].clone())
+                op.func = _frozen_input(op.func, op.call.saved_args[0].clone())
                 planted_labels.append(op.label)
         return original(trace, *args, **kwargs)
 

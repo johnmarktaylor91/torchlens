@@ -25,7 +25,7 @@ import torch.nn as nn
 from _validation_capture import _capture
 
 from torchlens.validation import validate_forward_pass
-from torchlens.validation.core import (
+from torchlens.validation._core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
     _execute_func_with_restored_state,
     _perturbation_retry_strategies,
@@ -161,7 +161,7 @@ def test_merge_rung_is_only_for_the_unique_family() -> None:
 def test_merge_adjacent_entry_values() -> None:
     """The merge copies the first differing entry's predecessor; a constant splits."""
 
-    from torchlens.validation.core import _directional_step_perturb
+    from torchlens.validation._core import _directional_step_perturb
 
     merged = _directional_step_perturb(torch.tensor([[4, 4], [7, 9]]), "merge_adjacent_entry")
     assert merged.tolist() == [[4, 4], [4, 9]]
@@ -190,7 +190,7 @@ def test_only_the_trim_moves_a_shape_only_output() -> None:
             for op in bag_trace._layer_list
             if op.func_name == "embedding_bag" and op.multi_output_index == output_index
         ][0]
-        indices_label = aux_op.parent_arg_positions["args"][1]
+        indices_label = aux_op.call.parent_arg_positions["args"][1]
         cases.append((bag_trace, aux_op, indices_label))
     for case_trace, child, label in cases:
         strategies = _perturbation_retry_strategies(child, [label])
@@ -219,7 +219,7 @@ def test_sum_mode_placeholder_outputs_still_fail() -> None:
         trace,
         bag_size.label,
         perturb=True,
-        layers_to_perturb=[bag_size.parent_arg_positions["args"][1]],
+        layers_to_perturb=[bag_size.call.parent_arg_positions["args"][1]],
     )
     assert result.decision == "failed"
     assert result.reason == "perturbation_insensitive"
@@ -234,7 +234,7 @@ def test_trim_rung_is_only_for_shape_only_outputs() -> None:
         for op in bag_trace._layer_list
         if op.func_name == "embedding_bag" and op.multi_output_index in (0, None)
     ][0]
-    label = pooled.parent_arg_positions["args"][1]
+    label = pooled.call.parent_arg_positions["args"][1]
     assert "trim_last_entry" not in _perturbation_retry_strategies(pooled, [label])
     trace, _ = _capture(_EndTokenPosition(), _token_ids())
     argmax_op, parent_label = _child_and_parent(trace, "argmax")

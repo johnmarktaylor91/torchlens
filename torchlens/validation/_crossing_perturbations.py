@@ -326,7 +326,7 @@ def _clamp_bound_role(layer: Op, parent_label: str) -> str | None:
     slots = CLAMP_BOUND_SLOTS.get(getattr(layer, "func_name", None) or "")
     if slots is None:
         return None
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     arg_slots = [k for k, v in positions.get("args", {}).items() if v == parent_label]
     kwarg_slots = [k for k, v in positions.get("kwargs", {}).items() if v == parent_label]
     roles = [role for pos, key, role in slots if pos in arg_slots or key in kwarg_slots]
@@ -338,8 +338,8 @@ def _clamp_bound_role(layer: Op, parent_label: str) -> str | None:
 def _clamp_saved_slot(layer: Op, position: int, keyword: str) -> Any:
     """Return the saved clamp argument at ``position`` or ``keyword`` (``None`` when absent)."""
 
-    args = tuple(getattr(layer, "saved_args", None) or ())
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    args = tuple(record_member(layer, "saved_args", None) or ())
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     if keyword in kwargs:
         return kwargs[keyword]
     return args[position] if len(args) > position else None
@@ -458,7 +458,7 @@ def _sdpa_mask_replay_args(
 
     if getattr(layer, "func_name", None) != _SDPA_FUNC or not parent_values.is_floating_point():
         return None
-    args = tuple(getattr(layer, "saved_args", None) or ())
+    args = tuple(record_member(layer, "saved_args", None) or ())
     if parent_values.ndim == 0 or len(args) < 3 or not _sdpa_mask_only_slot(layer, parent_label):
         return None
     return args if sdpa_softmax_rows_well_defined(layer, args) else None
@@ -467,7 +467,7 @@ def _sdpa_mask_replay_args(
 def _sdpa_mask_only_slot(layer: Op, parent_label: str) -> bool:
     """Return whether the parent fills the sdpa ``attn_mask`` slot and no other slot."""
 
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     arg_slots = [k for k, v in positions.get("args", {}).items() if v == parent_label]
     kwarg_slots = [k for k, v in positions.get("kwargs", {}).items() if v == parent_label]
     return arg_slots + kwarg_slots in ([3], ["attn_mask"])

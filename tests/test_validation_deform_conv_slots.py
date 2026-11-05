@@ -20,8 +20,8 @@ import torch.nn as nn
 from _validation_capture import _capture
 
 from torchlens.validation import validate_forward_pass
-from torchlens.validation.core import _check_whether_func_on_saved_parents_yields_saved_tensor
-from torchlens.validation.exemptions import STRUCTURAL_ARG_POSITIONS
+from torchlens.validation._core import _check_whether_func_on_saved_parents_yields_saved_tensor
+from torchlens.validation._exemptions import STRUCTURAL_ARG_POSITIONS
 
 ops = pytest.importorskip("torchvision.ops")
 
@@ -53,7 +53,7 @@ def _deform_op(with_mask: bool):
 
 
 def _perturb(trace, op, slot: int):
-    label = op.parent_arg_positions["args"][slot]
+    label = op.call.parent_arg_positions["args"][slot]
     return _check_whether_func_on_saved_parents_yields_saved_tensor(
         trace, op.label, perturb=True, layers_to_perturb=[label]
     )
@@ -99,6 +99,6 @@ def test_unread_dummy_mask_still_fails() -> None:
     """``mask=None`` passes ``zeros((N, 1))`` with ``use_mask=False``; that edge still fails."""
 
     trace, op = _deform_op(with_mask=False)
-    assert op.saved_args[13] is False
+    assert op.call.saved_args[13] is False
     result = _perturb(trace, op, _MASK_SLOT)
     assert (result.decision, result.reason) == ("failed", "perturbation_insensitive")

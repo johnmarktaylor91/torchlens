@@ -20,8 +20,8 @@ import torch.nn as nn
 from _validation_capture import _capture
 
 from torchlens.validation import validate_forward_pass
+from torchlens.validation._core import _check_whether_func_on_saved_parents_yields_saved_tensor
 from torchlens.validation._saved_value_proofs import _zero_source_add_decision
-from torchlens.validation.core import _check_whether_func_on_saved_parents_yields_saved_tensor
 
 
 class _EdgeAggregate(nn.Module):
@@ -44,7 +44,7 @@ class _EdgeAggregate(nn.Module):
 def _scatter_and_index(model: nn.Module):
     trace, _ = _capture(model, torch.arange(8.0).reshape(4, 2) + 1.0)
     scatter = [op for op in trace._layer_list if op.func_name == "scatter_add_"][0]
-    return trace, scatter, scatter.parent_arg_positions["args"][2]
+    return trace, scatter, scatter.call.parent_arg_positions["args"][2]
 
 
 def _perturb_index(trace, scatter, index_label: str):

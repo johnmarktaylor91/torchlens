@@ -73,9 +73,9 @@ def _plant_frozen_mask(monkeypatch: pytest.MonkeyPatch) -> list[str]:
         for op in trace._layer_list:
             if op.func_name != SDPA:
                 continue
-            saved_kwargs = dict(op.saved_kwargs or {})
+            saved_kwargs = dict(op.call.saved_kwargs or {})
             recorded = (
-                saved_kwargs["attn_mask"] if "attn_mask" in saved_kwargs else op.saved_args[3]
+                saved_kwargs["attn_mask"] if "attn_mask" in saved_kwargs else op.call.saved_args[3]
             )
             frozen_mask = recorded.clone()
             func = op.func

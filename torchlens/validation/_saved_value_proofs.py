@@ -405,7 +405,7 @@ def _zero_source_add_decision(
 
     if keys != {_ACCUMULATE_INDEX_SLOT} or len(args) <= _ACCUMULATE_SOURCE_SLOT:
         return _NOT_PROVED
-    if getattr(layer, "saved_kwargs", None) and "alpha" in layer.saved_kwargs:
+    if "alpha" in (record_member(layer, "saved_kwargs", None) or {}):
         return _NOT_PROVED
     destination, source, out = args[0], args[_ACCUMULATE_SOURCE_SLOT], layer.out
     if not all(isinstance(value, torch.Tensor) for value in (destination, source, out)):

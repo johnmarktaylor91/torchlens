@@ -79,12 +79,12 @@ def _plant_frozen_bounds(monkeypatch: pytest.MonkeyPatch, func_name: str) -> lis
         for op in trace._layer_list:
             if op.func_name != func_name:
                 continue
-            saved_args = list(op.saved_args or ())
+            saved_args = list(op.call.saved_args or ())
             frozen_args = {
                 i: a.clone() for i, a in enumerate(saved_args) if i and torch.is_tensor(a)
             }
             frozen_kwargs = {
-                k: v.clone() for k, v in (op.saved_kwargs or {}).items() if torch.is_tensor(v)
+                k: v.clone() for k, v in (op.call.saved_kwargs or {}).items() if torch.is_tensor(v)
             }
             op.func = _freeze_bounds(op.func, frozen_args, frozen_kwargs)
             planted_labels.append(op.label)

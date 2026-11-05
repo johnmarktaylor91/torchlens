@@ -17,9 +17,9 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.validation import last_validation_failure
+from torchlens.validation._core import _directional_step_perturb
 from torchlens.validation._perturb import perturb_through_values
 from torchlens.validation._shift_probe import VALUE_STEP_STRATEGIES
-from torchlens.validation.core import _directional_step_perturb
 
 _RETRY_STRATEGIES = [*VALUE_STEP_STRATEGIES, "unit_step_up:100", "negate_values", "zero_values"]
 
