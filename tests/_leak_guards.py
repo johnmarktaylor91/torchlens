@@ -378,3 +378,36 @@ def _draw_default_outpath_in_tmp_path(tmp_path: Path) -> Iterator[None]:
     finally:
         for func, defaults in reversed(saved):
             func.__defaults__ = defaults
+
+
+_DISTRIBUTION_VALIDATION_AT_START = pytest.StashKey[bool]()
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Record the ``torch.distributions`` validation default before collection."""
+
+    from torch.distributions import Distribution
+
+    config.stash[_DISTRIBUTION_VALIDATION_AT_START] = Distribution._validate_args
+
+
+def pytest_collection_finish(session: pytest.Session) -> None:
+    """Collection tripwire: importing test modules must not change distribution validation.
+
+    ``torch.compile`` switches the process-wide default off, so a module that
+    compiles at import silently changes the graph of every distribution-building
+    model tested after it. The default is put back before failing so the report
+    names the cause instead of a downstream oracle.
+    """
+
+    from torch.distributions import Distribution
+
+    expected = session.config.stash.get(_DISTRIBUTION_VALIDATION_AT_START, None)
+    if expected is None or Distribution._validate_args is expected:
+        return
+    Distribution.set_default_validate_args(expected)
+    raise pytest.UsageError(
+        "collecting the test modules changed the torch.distributions argument-validation "
+        f"default from {expected} to {not expected}; a module probably calls torch.compile "
+        "at import. Compile on first use inside a test instead."
+    )

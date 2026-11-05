@@ -354,7 +354,7 @@ torchlens/_postprocess/finalization.py::_finalize_param_logs	71
 torchlens/_postprocess/finalization.py::_finalize_streamed_bundle	68
 torchlens/_postprocess/finalization.py::_reconcile_multipass_layer_fields	77
 torchlens/_postprocess/finalization.py::_reuse_streamed_blob_ids	79
-torchlens/_postprocess/graph_traversal.py	888
+torchlens/_postprocess/graph_traversal.py	877
 torchlens/_postprocess/graph_traversal.py::_add_output_layers	288
 torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	90
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	132
