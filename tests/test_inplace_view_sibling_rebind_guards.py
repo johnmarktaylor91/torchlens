@@ -208,6 +208,33 @@ def test_a_warning_or_error_on_the_grad_fn_read_refuses_the_tensor() -> None:
         assert not _user_grad_fn.grad_fn_read_refused(torch.ones(2, requires_grad=True) * 2.0)
 
 
+def test_the_refusal_check_records_a_read_only_for_a_grad_view(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tensor autograd cannot regenerate a node for answers ``False`` with no recorded read.
+
+    The check runs on every in-place live hook, so the ordinary path (a non-view
+    or a view with no grad history) must not enter ``warnings.catch_warnings``;
+    a view of a grad-requiring base still takes the recorded read.
+    """
+
+    entered: list[bool] = []
+    real_catch = warnings.catch_warnings
+
+    def counting_catch(*args: Any, **kwargs: Any) -> Any:
+        entered.append(True)
+        return real_catch(*args, **kwargs)
+
+    monkeypatch.setattr(_user_grad_fn.warnings, "catch_warnings", counting_catch)
+    base = torch.ones(4, 3)
+    assert not _user_grad_fn.grad_fn_read_refused(base)
+    assert not _user_grad_fn.grad_fn_read_refused(base[1:])
+    assert not _user_grad_fn.grad_fn_read_refused(torch.ones(2, requires_grad=True) * 2.0)
+    assert entered == []
+    assert not _user_grad_fn.grad_fn_read_refused((torch.ones(4, requires_grad=True) * 2.0)[1:])
+    assert entered == [True]
+
+
 # --- proof refusals for one sibling ---
 
 

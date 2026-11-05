@@ -313,8 +313,17 @@ def grad_fn_read_refused(t: Any) -> bool:
     must never change the capture's outcome, so any warning is recorded here
     (never shown, never raised by a warnings-as-errors filter) and, like a
     raise, answers ``True``: the caller refuses the tensor (fail closed).
+
+    The ordinary path costs nothing: autograd regenerates (and so checks) a
+    node only for a backward view (``_is_view()``) that has a node or whose
+    base requires grad, and these plain attribute reads never regenerate it,
+    so any other tensor answers ``False`` without the recorded read.
     """
 
+    if isinstance(t, torch.Tensor) and not (
+        t._is_view() and (t.requires_grad or t._base.requires_grad)
+    ):
+        return False
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         try:
