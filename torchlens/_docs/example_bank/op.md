@@ -117,7 +117,7 @@ print("source_trace", op.source_trace is trace)
 ### op-out-facts
 The saved output tensor of one op and its description (per op).
 
-- covers: `Op.out`, `Op.shape`, `Op.dtype`, `Op.has_saved_activation`, `Op.detach_saved_activations`, `Op.cost.activation_memory`, `Op.device_ref`, `Op.dtype_ref`
+- covers: `Op.out`, `Op.shape`, `Op.dtype`, `Op.has_saved_activation`, `Op.cost.activation_memory`, `Op.device_ref`, `Op.dtype_ref`
 - tasks: inspect-op, read-activation
 - fixture: toy
 
@@ -128,7 +128,6 @@ print("out", tuple(op.out.shape), bool((op.out >= 0).all()))
 print("shape", tuple(op.shape))
 print("dtype", op.dtype)
 print("has_saved_activation", op.has_saved_activation)
-print("detach_saved_activations", op.detach_saved_activations)
 print("activation_memory", op.cost.activation_memory)
 print("device_ref", op.device_ref)
 print("dtype_ref", op.dtype_ref)
@@ -137,7 +136,6 @@ print("dtype_ref", op.dtype_ref)
 # shape (3, 8)
 # dtype torch.float32
 # has_saved_activation True
-# detach_saved_activations False
 # activation_memory 96 B
 # device_ref cpu
 # dtype_ref torch.float32
@@ -185,7 +183,7 @@ print("transformed_activation_memory", op.cost.transformed_activation_memory)
 ### op-lazy-out
 A lazy load keeps outputs on disk until you ask for one.
 
-- covers: `Op.out_ref`, `Op.payload.materialize_out`
+- covers: `Op.payload.materialize_out`
 - tasks: save-load, lazy
 - fixture: toy
 
@@ -194,10 +192,8 @@ trace = tl.trace(model, x)
 trace.save("run.tlspec")
 lazy = tl.load("run.tlspec", lazy=True)
 op = lazy.ops["relu_1_2"]
-print("out_ref", op.out_ref is not None)
 print("materialize_out", tuple(op.payload.materialize_out().shape))
 # Output:
-# out_ref True
 # materialize_out (3, 8)
 ```
 
@@ -867,7 +863,7 @@ print("transformed_gradient_memory", op.transformed_gradient_memory)
 ### op-lazy-grad
 A lazy load keeps saved gradients on disk until you ask for one.
 
-- covers: `Op.grad_ref`, `Op.payload.materialize_grad`
+- covers: `Op.payload.materialize_grad`
 - tasks: save-load, lazy, gradients
 - fixture: toy
 
@@ -877,10 +873,8 @@ trace = tl.trace(model, x, capture=opts)
 trace.backward(trace.ops["output_1"].out.sum())
 trace.save("run.tlspec")
 op = tl.load("run.tlspec", lazy=True).ops["relu_1_2"]
-print("grad_ref", op.grad_ref is not None)
 print("materialize_grad", tuple(op.payload.materialize_grad().shape))
 # Output:
-# grad_ref True
 # materialize_grad (3, 8)
 ```
 

@@ -138,7 +138,7 @@ print("source_trace", layer.source_trace is trace)
 ### layer-tensor-facts
 Shape, dtype and memory of a looped layer: per layer, with totals over all passes.
 
-- covers: `Layer.shape`, `Layer.dtype`, `Layer.shape_summary`, `Layer.device_ref`, `Layer.dtype_ref`, `Layer.cost.activation_memory`, `Layer.cost.total_activation_memory`, `Layer.cost.autograd_memory`, `Layer.cost.total_autograd_memory`, `Layer.autograd.num_autograd_tensors`, `Layer.detach_saved_activations`
+- covers: `Layer.shape`, `Layer.dtype`, `Layer.shape_summary`, `Layer.device_ref`, `Layer.dtype_ref`, `Layer.cost.activation_memory`, `Layer.cost.total_activation_memory`, `Layer.cost.autograd_memory`, `Layer.cost.total_autograd_memory`, `Layer.autograd.num_autograd_tensors`
 - tasks: inspect-layer, memory
 - fixture: loop
 
@@ -155,7 +155,6 @@ print("total_activation_memory", layer.cost.total_activation_memory)
 print("autograd_memory", layer.cost.autograd_memory)
 print("total_autograd_memory", layer.cost.total_autograd_memory)
 print("num_autograd_tensors", layer.autograd.num_autograd_tensors)
-print("detach_saved_activations", layer.detach_saved_activations)
 # Output:
 # shape (2, 4)
 # dtype torch.float32
@@ -167,7 +166,6 @@ print("detach_saved_activations", layer.detach_saved_activations)
 # autograd_memory 96 B
 # total_autograd_memory 96 B
 # num_autograd_tensors 3
-# detach_saved_activations False
 ```
 
 ### layer-activation-transform
@@ -419,7 +417,7 @@ print("has_parents", layer.graph.has_parents)
 print("has_children", layer.graph.has_children)
 print("siblings", layer.siblings)
 print("has_siblings", layer.graph.has_siblings)
-print("co_parents", layer.graph.co_parents)
+print("co_parents", layer.co_parents)
 print("has_co_parents", layer.graph.has_co_parents)
 print("parents_per_pass", layer.graph.parents_per_pass)
 print("children_per_pass", layer.graph.children_per_pass)
@@ -545,7 +543,7 @@ print("internal_source_parents", add.graph.internal_source_parents)
 ### layer-module-facts
 Which module a single-pass layer runs inside and which module calls it feeds or ends.
 
-- covers: `Layer.module`, `Layer.modules`, `Layer.module_call_stack`, `Layer.module_context.call_depth`, `Layer.in_submodule`, `Layer.module_context.is_atomic_module`, `Layer.leaf_module_ops`, `Layer.module_context.output_of_modules`, `Layer.module_context.output_of_module_calls`, `Layer.input_to_module_calls`
+- covers: `Layer.module`, `Layer.modules`, `Layer.module_context.call_stack`, `Layer.module_context.call_depth`, `Layer.in_submodule`, `Layer.module_context.is_atomic_module`, `Layer.leaf_module_ops`, `Layer.module_context.output_of_modules`, `Layer.module_context.output_of_module_calls`, `Layer.input_to_module_calls`
 - tasks: modules, inspect-layer
 - fixture: toy
 

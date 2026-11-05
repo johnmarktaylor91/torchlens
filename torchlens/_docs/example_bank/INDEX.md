@@ -5,7 +5,7 @@ format are in `README.md`. `op.md#op-facts` is the `### op-facts` heading in `op
 By name lists the 3 most focused examples first;
 `torchlens api-map --name NAME` prints the first one for a root name.
 
-474 examples, 1216 public names, 147 tasks.
+474 examples, 1212 public names, 147 tasks.
 
 ## By task
 
@@ -409,7 +409,6 @@ By name lists the 3 most focused examples first;
 | `Layer.cost.total_macs_forward` | layer.md#layer-cost-facts |
 | `Layer.cost.total_param_memory` | layer.md#layer-params-facts |
 | `Layer.cost.transformed_activation_memory` | layer.md#layer-activation-transform |
-| `Layer.detach_saved_activations` | layer.md#layer-tensor-facts |
 | `Layer.device_ref` | layer.md#layer-tensor-facts |
 | `Layer.do` | layer.md#layer-do-ablate |
 | `Layer.dtype` | layer.md#layer-tensor-facts |
@@ -468,8 +467,8 @@ By name lists the 3 most focused examples first;
 | `Layer.macs_backward` | layer.md#layer-cost-facts |
 | `Layer.macs_total` | layer.md#layer-cost-facts |
 | `Layer.module` | layer.md#layer-module-facts |
-| `Layer.module_call_stack` | layer.md#layer-module-facts |
 | `Layer.module_context.call_depth` | layer.md#layer-module-facts |
+| `Layer.module_context.call_stack` | layer.md#layer-module-facts |
 | `Layer.module_context.is_atomic_module` | layer.md#layer-module-facts |
 | `Layer.module_context.is_module_input` | layer.md#layer-single-pass-reads |
 | `Layer.module_context.output_of_module_calls` | layer.md#layer-module-facts |
@@ -802,7 +801,6 @@ By name lists the 3 most focused examples first;
 | `Op.cost.macs_forward` | op.md#op-cost-facts |
 | `Op.cost.param_memory` | op.md#op-params-facts |
 | `Op.cost.transformed_activation_memory` | op.md#op-activation-transform |
-| `Op.detach_saved_activations` | op.md#op-out-facts |
 | `Op.device_ref` | op.md#op-out-facts |
 | `Op.do` | op.md#op-do-ablate |
 | `Op.dtype` | op.md#op-out-facts |
@@ -819,7 +817,6 @@ By name lists the 3 most focused examples first;
 | `Op.get_parents` | op.md#op-get-parents-children |
 | `Op.grad` | workflows.md#workflows-gradients-per-pass, op.md#op-grad-facts |
 | `Op.grad_fn_label` | op.md#op-grad-fn-after-backward |
-| `Op.grad_ref` | op.md#op-lazy-grad |
 | `Op.gradient_memory` | op.md#op-grad-facts |
 | `Op.gradient_transform` | op.md#op-gradient-transform |
 | `Op.graph.buffer_sink_ops` | op.md#op-buffer-links |
@@ -913,7 +910,6 @@ By name lists the 3 most focused examples first;
 | `Op.num_passes` | op.md#op-pass-facts |
 | `Op.ordinal_index` | op.md#op-labels-facts |
 | `Op.out` | workflows.md#workflows-loop-pass-values-differ, capture.md#capture-trace-read-op, op.md#op-out-facts |
-| `Op.out_ref` | op.md#op-lazy-out |
 | `Op.out_versions_by_child` | op.md#op-edge-records |
 | `Op.output_containers` | op.md#op-containers |
 | `Op.output_descendants` | op.md#op-ancestry-facts |
