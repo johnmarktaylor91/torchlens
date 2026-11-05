@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1727 modules, 700776 lines, 0 modules without a docstring.
+85 packages, 1728 modules, 700892 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5264 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5421 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 83 | 33741 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 84 | 33857 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2756 |
 
 ## Modules by package
@@ -2316,7 +2316,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (83 modules, 33741 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (84 modules, 33857 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2338,7 +2338,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_diagnostics` | Structured replay-failure diagnostics for forward validation. | 577 |
 | `_display` | Validation printouts; independent of checks, tolerances and verdict production. | 112 |
 | `_domain_perturbations` | Deterministic in-domain parent perturbations for domain-sensitive ops. | 691 |
-| `_edge_boundary` | Edge-intervention boundary validation (L6 4.3), split out of ''core.py''. | 346 |
+| `_edge_boundary` | Edge-intervention boundary validation (L6 4.3), split out of ''core.py''. | 351 |
 | `_exemption_rows_decisions` | Reason-code rows of the validation exemption table. | 655 |
 | `_exemption_rows_ops` | Op-keyed rows of the validation exemption table. | 494 |
 | `_exemption_schema` | Row schema and derived views for the declared validation exemption table. | 160 |
@@ -2397,6 +2397,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_sdpa_value_proofs` | Value proofs for ''scaled_dot_product_attention'' operands that cannot reach the output. | 291 |
 | `_setitem_index_probe` | In-domain index probe for integer and bool-mask index components of ''__setitem__''. | 300 |
 | `_shift_probe` | Non-uniform perturbation probes for children that uniform steps cannot move. | 315 |
+| `_snapshot_binding` | Prove that a parent's per-child version snapshot is explained by the recorded graph. | 111 |
 | `_source_provenance` | Source-provenance completeness: fail forward validation on source-less tensor args. | 127 |
 | `_status` | Compatibility re-export; the status objects live in ''torchlens._validation_status''. | 19 |
 | `_stock_layer_grads` | Stock per-module-output gradient capture for backward validation. | 413 |
