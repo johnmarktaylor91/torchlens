@@ -51,6 +51,19 @@ class _LayerGroup(_RecordGroup):
     __slots__ = ()
     _GROUP = ""
 
+    def __repr__(self) -> str:
+        """Name the group and its layer.
+
+        A single-pass layer is named by its ``label``; a multi-pass layer has no single
+        ``label`` (reading it raises the pass-ambiguity error), so it is named by its
+        ``layer_label``.
+        """
+
+        layer = self._record
+        name = "layer_label" if getattr(layer, "num_passes", 1) > 1 else "label"
+        label = getattr(layer, name, None)
+        return f"<{type(self).__name__} of {type(layer).__name__} {label!r}>"
+
     def __getattr__(self, name: str) -> Any:
         """Read an Op member of this group through the layer's single pass."""
 

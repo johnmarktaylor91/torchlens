@@ -469,6 +469,22 @@ def test_multi_pass_layer_group_refuses_per_pass_members() -> None:
         captured.cleanup()
 
 
+def test_multi_pass_layer_group_repr_names_the_layer() -> None:
+    """Every group of a two-pass Layer has a repr naming the layer, not the refused ``label``."""
+
+    torch.manual_seed(0)
+    captured = tl.trace(_Twice(), torch.ones(1, 3))
+    try:
+        layer = next(lay for lay in captured.layers if lay.num_passes > 1)
+        groups = sorted({row[1] for row in _LAYER_ACTIVE_ROWS})
+        assert groups
+        for group in groups:
+            text = repr(getattr(layer, group))
+            assert f"of Layer {layer.layer_label!r}>" in text, (group, text)
+    finally:
+        captured.cleanup()
+
+
 def test_member_resolver_cache_stays_within_the_group_table(trace: tl.Trace) -> None:
     """The (record class, member) resolver cache is bounded by the group table's size.
 
