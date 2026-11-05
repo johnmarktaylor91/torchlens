@@ -41,11 +41,10 @@ from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption, resolve_save_budget
 from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
 from ._utils.display import warn_parallel
-from ._utils.hashing import compute_graph_shape_hash
 from ._utils.input_leaves import leaf_preserving_input_copies
 from ._utils.introspection import get_vars_of_type_from_obj
 from ._utils.rng import restores_rng_streams, set_random_seed
-from ._validation_divergence import _first_reproducibility_divergence
+from ._validation_retrace_saves import compare_retrace_graphs, retrace_save_indices
 from ._validation_state_snapshot import (
     COPY_FAILED_CODE,
     StateSnapshot,
@@ -720,9 +719,8 @@ def _warn_if_validation_trace_not_reproducible(
     retrace_save_budget = first_trace.save_budget
     second_trace: Trace | None = None
     try:
-        # Buffer-source identity is assigned during postprocessing only when the
-        # relevant activations are saved. Match the validation trace's "all"
-        # selection so the structural comparison does not compare two capture modes.
+        # Save only the outputs the structure hash reads (buffer nodes and sources;
+        # ``_validation_retrace_saves``), failing closed if the save set missed one.
         # the first trace is captured under a FORCED "shadow"
         # completeness-witness mode (validate_forward_pass), so the re-trace
         # must run under the same mode -- comparing a shadow capture against an
@@ -738,7 +736,7 @@ def _warn_if_validation_trace_not_reproducible(
                 model=model,
                 input_args=input_args,
                 input_kwargs=input_kwargs,
-                layers_to_save="all",
+                layers_to_save="none",
                 activation_transform=None,
                 mark_layer_depths=False,
                 detach_saved_activations=False,
@@ -748,14 +746,14 @@ def _warn_if_validation_trace_not_reproducible(
                 save_rng=False,
                 output_device=retrace_output_device,
                 save_budget=retrace_save_budget,
+                _resolved_layer_nums_to_save=retrace_save_indices(first_trace),
             )
         finally:
             _state._completeness_witness_mode = prior_witness_mode
-        first_hash = compute_graph_shape_hash(first_trace, include_module_address=False)
-        second_hash = compute_graph_shape_hash(second_trace, include_module_address=False)
-        if first_hash == second_hash:
+        verdict = compare_retrace_graphs(first_trace, second_trace)
+        if verdict is None:
             return "matched"
-        hint = _first_reproducibility_divergence(first_trace, second_trace)
+        first_hash, second_hash, hint = verdict
         hint_suffix = f" ({hint})" if hint is not None else ""
         message = (
             "TorchLens validation detected a stateful/non-reproducible model: "
