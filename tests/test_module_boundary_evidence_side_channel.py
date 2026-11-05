@@ -6,7 +6,7 @@ replacement tensor with a bare ``setattr`` under ``except: pass``. A
 replacement tensor that rejects dynamic attributes silently DISCARDED the
 evidence: the fresh value was misclassified as an ``internal_source`` op with
 no intervention provenance and no parents. The evidence now routes through the
-op-level storage-owned side table (fire results) and a trace-scoped identity
+op-level tensor-keyed weak side table (fire results) and a trace-scoped identity
 table (parent labels), so classification no longer depends on stamping
 attributes onto the replacement tensor.
 """

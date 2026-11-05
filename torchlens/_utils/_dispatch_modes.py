@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from typing import Any, ClassVar
 
 from torch.utils._python_dispatch import TorchDispatchMode
 
@@ -13,6 +14,18 @@ from ._torch_compat import get_current_dispatch_mode_stack
 
 class _TorchLensDispatchMode(TorchDispatchMode):
     """Marker base for Python dispatch modes owned by TorchLens."""
+
+    #: Re-registers this mode type's higher-order-operator rules on entry while
+    #: some operator's module is not imported yet; set by ``register_witness_hop_rules``.
+    _hop_rules_pending: ClassVar[Callable[[type[Any]], object] | None] = None
+
+    def __enter__(self) -> Any:
+        """Register any newly importable higher-order-operator rule, then enter the mode."""
+
+        pending = type(self)._hop_rules_pending
+        if pending is not None:
+            pending(type(self))
+        return super().__enter__()
 
 
 class TensorSubclassUnsupportedError(CompatibilityError, RuntimeError):

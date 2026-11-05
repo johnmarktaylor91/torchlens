@@ -116,7 +116,7 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         # The two fire-results kinds enter governance in the same change that
         # hoisted their constants (r25 b6-fable carried MED: they were outside
         # every governance surface); provoking them needs a tensor that
-        # accepts neither transient metadata nor a storage side table.
+        # accepts neither transient metadata nor a weak reference.
         "intervention_fire_results_cleanup_failed",
         "intervention_fire_results_unrecordable",
         "intervention_tensor_unsupported",

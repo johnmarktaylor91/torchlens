@@ -5068,6 +5068,14 @@ torch: 2.13.0+cpu
 source: 5b4e5ce3cd30988bd5fbb60b4cd14a876507bbe5 (dirty)
 recorded: 2026-11-05T01:58:56.814888+00:00
 ---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: TorchScript recursive-compile shim split into _jit_identity_shims.py moved one modules read; warning stacklevel fixes add no read site
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c4ce96711d0d8dc5d7eb281c7a2bec3385647add (dirty)
+recorded: 2026-11-05T03:57:24.376848+00:00
+---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: gallery-defects: post-capture module replacement minting (torchlens/intervention/_module_replacement.py) reads op fields; static scan sites moved
@@ -5116,6 +5124,22 @@ torch: 2.13.0+cpu
 source: 3440ebe0d4b52a85728369374cd12cfec73415fd (dirty)
 recorded: 2026-11-05T04:25:16.733999+00:00
 ---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: floor batch FB1a: floor lanes k5b k6 k34 k1 merged onto the train (union of their producer read sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0f84b557a6b15ed5de2718dda096b69b4727e415 (dirty)
+recorded: 2026-11-05T06:51:55.547425+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: floor batch FB1a: floor lanes k5b k6 k34 k1 merged onto the train (union of their producer read sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0f84b557a6b15ed5de2718dda096b69b4727e415 (dirty)
+recorded: 2026-11-05T06:52:02.378568+00:00
+---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: reload-output-refusal: reconstruct_output single-output guard reads has_saved_activation/layer_label/label; _opaque_member_text (node.kind) moved to _container_labels
@@ -5123,6 +5147,38 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 1746cbfb9b0eb37cee04cdb3db0f905bb79be824 (dirty)
 recorded: 2026-11-05T01:56:36.044347+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: floor batch FB1: floor lanes k5b k6 k34 k1 k5a merged onto the train (union of their producer read sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 508b8d87cf14a530e5109ba23a91280833698d05 (dirty)
+recorded: 2026-11-05T06:35:29.528432+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: floor batch FB1: floor lanes k5b k6 k34 k1 k5a merged onto the train (union of their producer read sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 508b8d87cf14a530e5109ba23a91280833698d05 (dirty)
+recorded: 2026-11-05T06:35:36.053140+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: floor batch FB1b: k5a (with its plain-capture import fix) on FB1a onto the train (union of their producer read sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c24663749ed95c76076d11a5e610694ee8d7d4b4 (dirty)
+recorded: 2026-11-05T06:59:53.765171+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: floor batch FB1b: k5a (with its plain-capture import fix) on FB1a onto the train (union of their producer read sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c24663749ed95c76076d11a5e610694ee8d7d4b4 (dirty)
+recorded: 2026-11-05T07:00:00.430501+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
@@ -5163,6 +5219,22 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 393e674d4f67a08917051a85e6c1f9bff8966010 (dirty)
 recorded: 2026-11-05T02:03:52.335701+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-271 fixq1: floor-fb1b (mq-c271b) merged with train 0d9d515fe0 (C-241 hop units; union of producer read sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 908d04757a8878744e7bd3092da2ff023c8023c7 (clean)
+recorded: 2026-11-05T07:39:42.010845+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-271 fixq1: floor-fb1b (mq-c271b) merged with train 0d9d515fe0 (C-241 hop units; union of producer read sites)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 908d04757a8878744e7bd3092da2ff023c8023c7 (clean)
+recorded: 2026-11-05T07:39:49.189197+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1

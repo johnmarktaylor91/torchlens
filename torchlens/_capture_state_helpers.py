@@ -14,7 +14,6 @@ import warnings
 import weakref
 from collections import OrderedDict
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -44,7 +43,7 @@ from ._plain_attr_values import (
     snapshot_rich_value,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
-from ._utils._package_frames import is_torchlens_code
+from ._utils._package_frames import external_warning_stacklevel, is_torchlens_code
 from ._utils._torch_compat import (
     force_eager_stance_scope,
     get_dynamo_optimized_module_type,
@@ -56,6 +55,7 @@ from ._utils.tensor_leaves import iter_tensors
 from ._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 from .backends.torch._tracing_pass import lift_hop_entry_compiles
+from .errors._base import transparent_contextmanager
 
 # Content-fingerprint / attribute-fragment family (split to _capture_fingerprint.py), re-exported:
 # the historical import surface for the capture-cache key helpers is this module.
@@ -322,7 +322,7 @@ def _warn_compiled_model_unwrapped_once() -> None:
         "TorchLens: compiled model detected; tracing the eager source module it wraps "
         "(torch.compile semantics such as fusion are not traced).",
         UserWarning,
-        stacklevel=3,
+        stacklevel=external_warning_stacklevel(),
     )
 
 
@@ -449,7 +449,7 @@ def _make_compiled_callable_bypass(
     return bypass
 
 
-@contextmanager
+@transparent_contextmanager
 def bypass_compiled_plain_callables(model: nn.Module) -> Iterator[None]:
     """Temporarily route direct compiled attributes through a logging pause.
 
@@ -522,7 +522,7 @@ def _restore_callable_swaps(swaps: Any, *, only_if_bypassed: bool) -> None:
         raise first_error
 
 
-@contextmanager
+@transparent_contextmanager
 def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
     """Prepare compiled submodules and plain callables for honest eager capture.
 
@@ -566,7 +566,7 @@ def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
                     )
 
 
-@contextmanager
+@transparent_contextmanager
 def unwrap_compiled_submodules(model: nn.Module) -> Iterator[None]:
     """Temporarily replace compiled child slots with their eager source modules.
 

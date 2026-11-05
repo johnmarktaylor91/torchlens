@@ -179,8 +179,16 @@ class _CompiledAttributeModel(nn.Module):
         return self.compiled_activation(self.fc(x))
 
 
+_REQUIRES_INDUCTOR_CPP_EXTENSION = pytest.mark.skipif(
+    not _torch_compat.get_torch_cpp_extension_support(),
+    reason="HAS_TORCH_CPP_EXTENSION is False: inductor's CPU backend cannot import "
+    "torch.utils.cpp_extension on this install",
+)
+
+
 # Kept by the shrink-r4 coverage proof: sole branch coverage of backends/torch/identity_shims.py and a sole campaign mutation kill.
 @pytest.mark.heavy
+@_REQUIRES_INDUCTOR_CPP_EXTENSION
 def test_compiled_attribute_callable_degrades_instead_of_crashing(_no_stance: None) -> None:
     """Capture completes with an explanatory warning instead of a Dynamo crash."""
 
@@ -200,6 +208,7 @@ def test_compiled_attribute_callable_degrades_instead_of_crashing(_no_stance: No
 
 # Kept by the shrink-r4 coverage proof: a sole campaign mutation kill.
 @pytest.mark.heavy
+@_REQUIRES_INDUCTOR_CPP_EXTENSION
 def test_compiled_region_verdict_survives_a_warm_compile_cache(_no_stance: None) -> None:
     """The verdict must not depend on compilation happening during this capture.
 

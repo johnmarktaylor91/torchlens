@@ -354,3 +354,30 @@ def test_limitations_doc_covers_key_contexts() -> None:
             f"docs/reference/limitations.md should mention '{phrase}'. "
             f"Missing phrase suggests a stale or incomplete limitations doc."
         )
+
+
+def test_compiled_submodule_note_blames_the_caller_not_a_torchlens_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The once-per-process compiled-model note names the user's line, not a TorchLens frame.
+
+    The suite errors on warnings attributed to the torchlens package; the note is
+    emitted while the unwrap context manager enters, so a fixed ``stacklevel``
+    lands on whichever frame drives that manager.
+    """
+    import torchlens._capture_state_helpers as helpers
+
+    parent = nn.Module()
+    parent.child = _WrapperWithOriginal(nn.Linear(4, 4))
+    monkeypatch.setattr(helpers, "get_dynamo_optimized_module_type", lambda: _WrapperWithOriginal)
+    reset_compiled_model_unwrap_warning_state()
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with unwrap_compiled_submodules(parent):
+                pass
+    finally:
+        reset_compiled_model_unwrap_warning_state()
+    notes = [w for w in caught if "compiled model detected" in str(w.message)]
+    assert len(notes) == 1
+    assert Path(notes[0].filename).resolve() == Path(__file__).resolve()
