@@ -47,7 +47,7 @@ def test_summary_includes_input_preprocessing_when_present() -> None:
     )
 
     # Preprocessing provenance lives on provenance() (summary memo 3.6).
-    provenance = log.provenance._summary()
+    provenance = log.provenance.summary()
 
     assert "Input preprocessing:" in provenance
     assert "ImageNet default (UNVERIFIED): resize 256" in provenance

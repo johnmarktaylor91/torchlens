@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1592 modules, 679806 lines, 0 modules without a docstring.
+83 packages, 1592 modules, 679804 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26668 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1495 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 105 | 40070 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 105 | 40068 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
@@ -297,7 +297,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (105 modules, 40070 lines)
+Core data structures for representing a logged forward pass. (105 modules, 40068 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -362,7 +362,7 @@ Core data structures for representing a logged forward pass. (105 modules, 40070
 | `_trace_field_spec` | The persisted-field policy table of ''Trace'' (''Trace._PORTABLE_STATE_SPEC''). | 493 |
 | `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 773 |
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 334 |
-| `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 801 |
+| `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 799 |
 | `_trace_groups_capture` | Capture-side concern groups of a ''Trace'': ''trace.options'', ''trace.source'', ''trace.health''. | 479 |
 | `_trace_intervention_records` | Intervention spec state and history records of a ''Trace'' (L1). | 275 |
 | `_trace_inventory` | Trace-level inventory builders: structural sites table and bill of materials. | 246 |
@@ -1056,7 +1056,7 @@ Text helpers for ''Trace'' objects: the compact repr and the provenance block. (
 | --- | --- | ---: |
 | `__init__` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 6 |
 | `_builder` | The compact ''repr'' of a ''Trace''. | 75 |
-| `_discoverability` | The capture-provenance block served by ''trace.provenance._summary''. | 675 |
+| `_discoverability` | The capture-provenance block served by ''trace.provenance.summary''. | 675 |
 
 ### `torchlens._visualization.lenses`
 

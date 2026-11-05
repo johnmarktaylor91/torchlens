@@ -2,7 +2,7 @@
 
 The historical text-summary builder that once lived here was removed with the
 legacy ``summary()`` spellings; ``trace.summary()`` renders through
-``torchlens.report`` and ``trace.provenance._summary()`` through ``_discoverability``.
+``torchlens.report`` and ``trace.provenance.summary()`` through ``_discoverability``.
 """
 
 from __future__ import annotations
