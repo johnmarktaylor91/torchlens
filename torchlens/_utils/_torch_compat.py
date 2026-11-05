@@ -46,9 +46,10 @@ import types
 import warnings
 from collections.abc import Callable, Iterable, Iterator
 from importlib.machinery import PathFinder
-from typing import Any
+from typing import Any, cast
 
 import torch
+from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
@@ -575,13 +576,13 @@ def _probe_safe_weights_only_load() -> bool:
 def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
     """Return whether ``Parameter.as_subclass(torch.Tensor)`` works in a dispatch mode (see the leaf)."""
 
-    return bool(_real_op_probe_leaf().probe_parameter_as_subclass_in_dispatch_mode())
+    return _real_op_probe_leaf().probe_parameter_as_subclass_in_dispatch_mode(TorchDispatchMode)
 
 
 def _probe_subclass_ctor_in_dispatch_mode() -> bool:
     """Return whether a strict Tensor subclass can be built in a dispatch mode (see the leaf)."""
 
-    return bool(_real_op_probe_leaf().probe_subclass_ctor_in_dispatch_mode())
+    return bool(_real_op_probe_leaf().probe_subclass_ctor_in_dispatch_mode(TorchDispatchMode))
 
 
 def _probe_roll_tensor_shifts() -> bool:
@@ -2034,7 +2035,7 @@ def get_view_func_replay() -> Callable[..., Any]:
     unchecked replay, so the fallback replays identically (``HAS_VIEW_FUNC_UNSAFE``).
     """
     found = _resolve_attribute_path(_ATTRIBUTE_PROBES["HAS_VIEW_FUNC_UNSAFE"][0])
-    return found if found is not None else torch.Tensor._view_func
+    return cast(Callable[..., Any], found or _resolve_attribute_path("torch:Tensor._view_func"))
 
 
 def get_functorch_transform_probe() -> Callable[[], Any] | None:
