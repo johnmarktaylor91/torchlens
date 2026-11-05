@@ -119,6 +119,12 @@
   later name still resolves to the same module. Backward validation of such models now compares module
   gradients under matching addresses.
 
+- **capture**: module-level state that the forward reaches through user helper functions up to three
+  calls deep (a `functools.lru_cache` result or a global dict cache, as in hitnet and DCVC-DC) is now
+  recorded as a closure constant with source provenance instead of being reported as a foreign tensor.
+  State stored deeper than three helper calls still warns, and a cache refilled during the forward still
+  fails validation.
+
 <!-- version list -->
 
 ## v2.38.1 (2026-11-04)
