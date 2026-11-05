@@ -40,6 +40,7 @@ from ... import _state
 from ..._utils._internal_read import _internal_read_state
 from ..._utils._tensor_label import (
     get_tensor_meta,
+    raw_tensor_label,
     session_label_storage_intact,
     session_meta_is_anchored,
 )
@@ -148,7 +149,12 @@ def _on_exported_parent_storage(exported: Mapping[Any, Any], value: Any, parent_
     """
 
     meta = get_tensor_meta(value) if isinstance(value, torch.Tensor) else None
-    if meta is None or meta.label_raw != parent_label or not session_meta_is_anchored(meta):
+    # The stamp is read raw only after the session-anchor check (a foreign stamp never counts).
+    if (
+        meta is None
+        or not session_meta_is_anchored(meta)
+        or raw_tensor_label(value) != parent_label
+    ):
         return False
     if not session_label_storage_intact(meta, value):
         return False
@@ -164,8 +170,7 @@ def note_foreign_written_snapshot(
     parent_label: str,
     child_label: str,
     parent_arg_positions: Mapping[str, Mapping[Any, str]],
-    live_args: Sequence[Any],
-    live_kwargs: Mapping[str, Any],
+    live_call: tuple[Sequence[Any], Mapping[str, Any]],
 ) -> None:
     """Mark a parent's version snapshot whose live slot sits on an exported storage.
 
@@ -182,8 +187,8 @@ def note_foreign_written_snapshot(
         Raw labels of the parent and of the child the snapshot was stored for.
     parent_arg_positions:
         The child's ``{"args": {position: label}, "kwargs": {name: label}}`` binding.
-    live_args, live_kwargs:
-        The child's live positional and keyword arguments.
+    live_call:
+        The child's live ``(args, kwargs)``.
 
     The mark is set only when every slot bound to the parent holds the parent's own
     labeled tensor on its stamp-time storage and that storage was exported
@@ -200,7 +205,7 @@ def note_foreign_written_snapshot(
         for position, label in (parent_arg_positions.get(kind) or {}).items()
         if label == parent_label
     ]
-    sources = {"args": live_args, "kwargs": live_kwargs}
+    sources = {"args": live_call[0], "kwargs": live_call[1]}
     if slots and all(
         _on_exported_parent_storage(journal.exported, _slot_value(sources[kind], pos), parent_label)
         for kind, pos in slots

@@ -319,12 +319,10 @@ def _emit_exhaustive_operation_events(
             args,
             kwargs,
         )
-        # Round-31 H1: the member entry was logged against a minted safe copy (pass-through
-        # protection), but for a list-returning in-place op the LIVE member is the mutated
-        # receiver the caller keeps using. Advance its label to this mutation op, hook its
-        # gradient, and propagate to overlapping storage aliases (the same repair the scalar
-        # same-object in-place path performs), so consumers bind to the mutation instead of
-        # the stale pre-mutation producer.
+        # Round-31 H1: the member entry was logged against a minted safe copy, but for a
+        # list-returning in-place op the LIVE member is the mutated receiver the caller keeps
+        # using. Advance its label to this op, hook its gradient and propagate to overlapping
+        # storage aliases (the scalar in-place repair), so consumers bind to the mutation.
         live_member = output_entry.value
         if (
             id(live_member) in receiver_member_ids
