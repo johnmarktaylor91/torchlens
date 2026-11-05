@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from . import _torch_compat
 from ._torch_compat import get_numpy_bridge_support
 from ._torch_symbols import torch_dtype_named
 from .tensor_leaves import copy_host_bytes, flat_byte_view
@@ -27,9 +28,12 @@ def _bridge_works() -> bool:
 
     The first call runs a real ``torch.from_numpy`` / ``Tensor.numpy`` probe; a
     conversion inside an active capture (the RNG digest) would otherwise record
-    those probe ops into the user's trace.
+    those probe ops into the user's trace. Once probed, the cached flag is read
+    directly so a conversion costs no extra Python calls.
     """
 
+    if _torch_compat._NUMPY_BRIDGE_PROBED:
+        return _torch_compat.HAS_NUMPY_BRIDGE
     from .. import _state  # above ``_utils``: never at module top
 
     with _state.pause_logging():
