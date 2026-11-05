@@ -165,7 +165,8 @@ def embedding_bag_offsets_values(layer: Op, offsets: torch.Tensor) -> torch.Tens
     index count, and with ``include_last_offset`` the closing offset stays put.
     The first interior boundary that can move takes one index from the bag
     after it (or gives one to it), so the pooled output and every bag count
-    the edge is real for change.
+    the edge is real for change. When no boundary can move (a single bag), the
+    last bag is split in two instead.
 
     Parameters
     ----------
@@ -177,8 +178,8 @@ def embedding_bag_offsets_values(layer: Op, offsets: torch.Tensor) -> torch.Tens
     Returns
     -------
     torch.Tensor or None
-        Offsets with one boundary moved, or ``None`` for a single bag (whose
-        only valid offsets are ``[0]``) or a malformed capture.
+        Offsets with one boundary moved or one bag split, or ``None`` for a
+        malformed capture.
     """
 
     count = _saved_numel(layer, _EMBEDDING_BAG_INDICES_SLOT)
@@ -199,7 +200,29 @@ def embedding_bag_offsets_values(layer: Op, offsets: torch.Tensor) -> torch.Tens
         result = offsets.detach().clone()
         result[position] = moved
         return result
-    return None
+    return _split_last_bag(offsets, values, count, _include_last_offset(layer))
+
+
+def _split_last_bag(
+    offsets: torch.Tensor, values: list[int], count: int, include_last: bool
+) -> torch.Tensor | None:
+    """Return the offsets with the last bag split in two (one more bag).
+
+    The fallback when no boundary can move by one, as for a single bag whose
+    offsets ``[0]`` admit no other value of the same length. The new boundary
+    sits at the middle of the last bag, so the call stays valid and the output
+    gains one bag row (a shape the saved output cannot match).
+    """
+
+    if include_last:
+        if len(values) < 2:
+            return None
+        start, end = values[-2], values[-1]
+        split = [*values[:-1], start + (end - start) // 2, end]
+    else:
+        start = values[-1]
+        split = [*values, start + (count - start) // 2]
+    return torch.tensor(split, dtype=offsets.dtype, device=offsets.device)
 
 
 def _include_last_offset(layer: Op) -> bool:

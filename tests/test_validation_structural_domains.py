@@ -119,8 +119,24 @@ def test_offsets_move_keeps_the_contract() -> None:
     op = _op(trace, "embedding_bag")
     moved = embedding_bag_offsets_values(op, torch.tensor([0, 3, 7]))
     assert moved is not None and moved.tolist() == [0, 2, 7]
-    assert embedding_bag_offsets_values(op, torch.tensor([0])) is None
+    assert embedding_bag_offsets_values(op, torch.tensor([0])).tolist() == [0, 6]
     assert embedding_bag_offsets_values(op, torch.tensor([0, 0, 0])).tolist() == [0, 0, 1]
+
+
+def test_single_bag_offsets_edge_is_verified_and_a_frozen_replay_still_fails() -> None:
+    """One bag admits only ``offsets == [0]``; splitting it is the in-domain move."""
+
+    text, _offsets = _bag_inputs()
+    model = _BagWithOffsets().eval()
+    assert _quiet_validate(model, [text, torch.tensor([0])]) is True
+    trace = _capture(model, [text, torch.tensor([0])])
+    op = _op(trace, "embedding_bag")
+    offsets_label = op.call.parent_arg_positions["args"][2]
+    verified = _perturb(trace, op, offsets_label)
+    assert verified.decision == "validated", (verified.decision, verified.reason)
+    _freeze(op)
+    frozen = _perturb(trace, op, offsets_label)
+    assert frozen.decision == "failed", (frozen.decision, frozen.reason)
 
 
 def test_shape_read_view_validates_and_walks_the_receptive_field() -> None:
