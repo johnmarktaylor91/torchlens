@@ -10612,7 +10612,7 @@
   "field": "kind",
   "file": "torchlens/validation/_script_metadata_proof.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 5,
   "via_getattr": false
  },
  {
