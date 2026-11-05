@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from PIL import Image
 
+from .._utils.display import ensure_trace_visualizer_dir
 from ._render_utils import html_escape, relativize_visualizer_image
 
 if TYPE_CHECKING:
@@ -86,8 +87,6 @@ def image_box_args(trace: Trace, node_args: dict[str, str]) -> dict[str, str]:
         with the picture as the label's first row (scaled to fit), the old
         overlay attributes dropped, and the rounded box in the node's fill.
     """
-
-    from .._utils.display import ensure_trace_visualizer_dir
 
     picture = node_args.get("image")
     label = str(node_args.get("label", ""))

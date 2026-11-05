@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any
 
 from PIL import Image
 
+from .._utils.display import ensure_trace_visualizer_dir
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -29,8 +31,6 @@ __all__ = ("INPUT_PHOTO_FILE", "INPUT_PHOTO_MAX_EDGE", "input_photo_attrs", "sin
 
 def _raw_input_visualizer_dir(trace: Trace) -> Path:
     """Return the scratch folder for raw-input drawing artifacts (created on demand)."""
-
-    from .._utils.display import ensure_trace_visualizer_dir
 
     input_dir = ensure_trace_visualizer_dir(trace) / "raw_inputs"
     input_dir.mkdir(parents=True, exist_ok=True)
