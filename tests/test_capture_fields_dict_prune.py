@@ -119,11 +119,11 @@ _UNREAD_KEYS = frozenset(
 # generate: 91 (it was 167 while the unread keys were built).
 _MAX_KEYS_PER_OP = 91
 # Python calls into TorchLens code per function-call op while capture runs
-# (postprocess and the returned trace's teardown excluded). Measured 1074.2 (1090.9
-# while the unread keys were built); the pin sits between the two, leaving margin
-# for call-count drift between torch versions while still failing if the unread-key
-# work returns.
-_MAX_TORCHLENS_CALLS_PER_OP = 1082.0
+# (postprocess and the returned trace's teardown excluded). Lowered from 1082 when the
+# op-time argument snapshot's common path stopped making Python calls: measured 1077.05
+# serial (448052 calls over 416 ops) and up to 1077.10 under xdist, where neighbouring
+# tests' process state moves it; the pin keeps about one call per op for that drift.
+_MAX_TORCHLENS_CALLS_PER_OP = 1078.01
 # Python calls into TorchLens code per function-call op while the returned trace
 # is dropped (it dies by refcount; the payload eviction walk dominates). Pinned at
 # the value measured on CI's pinned environment (torch 2.13.0+cpu): 36163 calls over
