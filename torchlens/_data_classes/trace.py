@@ -131,7 +131,7 @@ from ._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceProvenance
 from ._trace_groups_capture import TraceHealth, TraceSettings, TraceSource
 from ._trace_intervention_records import _DoTransaction
 from ._trace_missing_attrs import _raise_missing_trace_attribute
-from ._trace_output import TraceOutputMixin
+from ._trace_output import TraceAppendMixin, TraceOutputMixin
 from ._trace_pickle_state import _initialize_output_metadata
 from ._trace_pristine import derive_pristine
 from ._trace_profile import ModelProfile
@@ -532,7 +532,7 @@ class ConditionalAccessor:
 
 
 @dataclass(init=False, repr=False, eq=False)
-class Trace(TraceOutputMixin, TraceLike):
+class Trace(TraceOutputMixin, TraceAppendMixin, TraceLike):
     """Top-level container for a logged forward pass.
 
     Serves double duty: during the forward pass it accumulates raw tensor
