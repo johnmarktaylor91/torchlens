@@ -24,6 +24,9 @@ _RAW_CONTAINER_ITEM_LIMIT = 20
 _RAW_INPUT_IMAGE_MAX_EDGE = 256
 _RAW_INPUT_IMAGE_BYTES_LIMIT = 256_000
 _RAW_IMAGE_SENTINEL = "__torchlens_small_raw_image__"
+#: The only formats the writer emits (``_small_raw_image_value``); decoding is held to them
+#: so an artifact cannot reach the other Pillow decoders (EPS runs Ghostscript).
+_RAW_IMAGE_FORMATS = ("PNG", "JPEG")
 # Records keep the save scrub's logger name, as before the move.
 _LOGGER = logging.getLogger("torchlens._io.scrub")
 
@@ -295,7 +298,7 @@ def _rehydrate_small_raw_image(value: dict[str, Any]) -> Any:
     #    bytes, or an early decompression-bomb guard) degrades to the inert raw
     #    sentinel dict instead of propagating out of ``tl.load()``.
     try:
-        image = Image.open(BytesIO(data))
+        image = Image.open(BytesIO(data), formats=_RAW_IMAGE_FORMATS)
         width, height = image.size
         if (
             width > _RAW_INPUT_IMAGE_MAX_EDGE

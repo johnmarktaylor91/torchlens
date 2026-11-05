@@ -321,6 +321,9 @@ def iter_members(
             )
     for member in metadata["members"]:
         member_root = root / member["path"]
-        symlink_guard(member_root, "bundle member")
+        # The member directory AND ``members/`` above it: a symlinked ``members/``
+        # would load every member from outside the container.
+        for ancestor in (member_root, member_root.parent):
+            symlink_guard(ancestor, "bundle member")
         verify_member_reference(member_root, member, required=True)
         yield member["name"], member_root
