@@ -41,6 +41,7 @@ from ..._utils._torch_compat import (
     get_fake_tensor_mode_class,
     get_tracing_tensor_types,
 )
+from ._completeness_hop import hide_witness_hop_rules_from_dynamo
 
 __all__ = (
     "call_inside_tracing_pass",
@@ -110,6 +111,7 @@ def hop_internal_compile_scope() -> Iterator[None]:
     """
 
     global hop_compile_depth
+    hide_witness_hop_rules_from_dynamo()
     hop_compile_depth += 1
     try:
         yield

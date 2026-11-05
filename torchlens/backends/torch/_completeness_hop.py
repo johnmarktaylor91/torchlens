@@ -207,8 +207,56 @@ def register_witness_hop_rules(mode_type: type[_TorchLensDispatchMode]) -> tuple
     registered: list[str] = []
     for op, rule in _witness_hop_rules():
         if mode_type not in op.python_key_table:
-            # The operator pops the mode before the rule; inside a lifted entry compile
-            # Dynamo would otherwise trace the rule's ``with mode:`` (_tracing_pass).
-            op.py_impl(mode_type)(compile_disabled(rule))
+            op.py_impl(mode_type)(_DynamoDeferredRule(rule))
         registered.append(str(op.name()))
     return tuple(registered)
+
+
+class _DynamoDeferredRule:
+    """A witness rule registered plain until a lifted entry compile first runs.
+
+    The operator pops the mode before the rule; inside a lifted entry compile
+    Dynamo would otherwise trace the rule's ``with mode:`` (``_tracing_pass``).
+    ``torch.compiler.disable`` imports ``torch._dynamo``, which a plain import or
+    capture must not, so :func:`hide_witness_hop_rules_from_dynamo` applies it on
+    the lifted-compile path instead.
+    """
+
+    __slots__ = ("rule",)
+
+    def __init__(self, rule: _HopRule) -> None:
+        """Hold ``rule``.
+
+        Parameters
+        ----------
+        rule:
+            The witness rule.
+        """
+
+        self.rule = rule
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Run the rule.
+
+        Parameters
+        ----------
+        *args, **kwargs:
+            The operator's arguments.
+
+        Returns
+        -------
+        Any
+            The rule's result.
+        """
+
+        return self.rule(*args, **kwargs)
+
+
+def hide_witness_hop_rules_from_dynamo() -> None:
+    """Swap each plain witness rule for its ``torch.compiler.disable`` form (idempotent)."""
+
+    for op, _rule in _witness_hop_rules():
+        table = op.python_key_table
+        for mode_type, entry in tuple(table.items()):
+            if isinstance(entry, _DynamoDeferredRule):
+                table[mode_type] = compile_disabled(entry.rule)
