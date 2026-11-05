@@ -36,7 +36,7 @@ from torchlens.attribution._result import AttributionError
 def _is_read_table(claim: Any) -> bool:
     """Return whether ``claim`` is a one-backward ``ReadTable``."""
 
-    from torchlens.attribution.onebackward._table import ReadTable  # deferred: cycle attribution
+    from torchlens.attribution._onebackward._table import ReadTable  # deferred: cycle attribution
 
     return isinstance(claim, ReadTable)
 
@@ -123,7 +123,7 @@ def _seed_scorer(trace: Any, target: Any, recorded: str | None, seed: str) -> An
     """Return ``trace -> target value`` for the read's seed, or refuse a different target."""
 
     # deferred: cycle attribution
-    from torchlens.attribution.onebackward._targets import SeedTarget, _site_label
+    from torchlens.attribution._onebackward._targets import SeedTarget, _site_label
 
     remedy = _read_remedy(seed)
     if not isinstance(target, SeedTarget):

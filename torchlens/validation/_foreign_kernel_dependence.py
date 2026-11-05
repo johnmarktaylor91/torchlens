@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
 from ..backends.torch._foreign_data import (
     OutputDependence,
     known_foreign_kernel_output_dependence,
@@ -62,7 +63,7 @@ def declared_output_dependence(layer: Op) -> OutputDependence | None:
     output_index = getattr(layer, "multi_output_index", None)
     if not isinstance(output_index, int):
         return None
-    config = getattr(layer, "transform_config", None)
+    config = record_member(layer, "transform_config", None)
     if isinstance(config, dict) and "function_module" in config:
         return _boundary_dependence(config, output_index)
     # A native op's ``transform_config`` names no Function (annotations at most).
@@ -95,7 +96,7 @@ def _native_dependence(layer: Op, output_index: int) -> OutputDependence | None:
 def _positions_of(layer: Op, label: str) -> list[Any] | None:
     """Return the positional keys ``label`` occupies, or None when it also fills a keyword."""
 
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     if label in (positions.get("kwargs", {}) or {}).values():
         return None
     return [key for key, parent in (positions.get("args", {}) or {}).items() if parent == label]

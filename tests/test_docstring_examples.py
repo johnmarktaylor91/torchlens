@@ -163,7 +163,8 @@ def test_public_members_do_not_depend_on_a_prior_save_or_load(tmp_path: Path) ->
         f"members only after a save/load: {sorted(after - fresh)}; "
         f"members only before: {sorted(fresh - after)}"
     )
-    assert {"reached:Op.gpu_kernels", "reached:AtenOp.gpu_kernels"} <= fresh
+    # GPU kernel recording is not public in this release: its record member stays off the list.
+    assert not {"reached:Op.gpu_kernels", "reached:AtenOp.gpu_kernels"} & (fresh | after)
 
 
 #: Package cells whose examples build real small models for most symbols and so run past
@@ -246,7 +247,7 @@ def _refusing_read() -> None:
 
     Examples
     --------
-    >>> from torchlens.attribution.onebackward import ReadError
+    >>> from torchlens.attribution._onebackward import ReadError
     >>> raise ReadError("no GradientEdge here", code="onebackward_torch_unsupported")
     >>> name_only_the_refused_read_would_bind
     1
@@ -260,7 +261,7 @@ def _fails_before_refusing() -> None:
     --------
     >>> 1 + 1
     3
-    >>> from torchlens.attribution.onebackward import ReadError
+    >>> from torchlens.attribution._onebackward import ReadError
     >>> raise ReadError("no GradientEdge here", code="onebackward_torch_unsupported")
     """
 
@@ -268,7 +269,7 @@ def _fails_before_refusing() -> None:
 def _accept_refusal(exc: BaseException) -> bool:
     """Accept the typed one-backward refusal regardless of the running torch."""
 
-    from torchlens.attribution.onebackward import ReadError
+    from torchlens.attribution._onebackward import ReadError
 
     return isinstance(exc, ReadError) and exc.fields.get("code") == "onebackward_torch_unsupported"
 

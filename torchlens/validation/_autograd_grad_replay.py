@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from .._state import pause_logging
+from .._utils._record_group_table import record_member
 from .._utils._tensor_layout import relay_to_layout
 from .._utils.collections import assign_to_sequence_or_dict
 from .._utils.rng import execute_with_restored_rng_autocast
@@ -133,7 +134,7 @@ def _parent_slots_under(layer: Op, slot: tuple[str, Any]) -> dict[tuple[Any, ...
 
     arg_domain, root_key = slot
     found: dict[tuple[Any, ...], str] = {}
-    positions = (getattr(layer, "parent_arg_positions", {}) or {}).get(arg_domain, {})
+    positions = (record_member(layer, "parent_arg_positions", {}) or {}).get(arg_domain, {})
     for key, parent_label in positions.items():
         key_path = key if isinstance(key, tuple) else (key,)
         if key_path[0] == root_key:
@@ -144,7 +145,7 @@ def _parent_slots_under(layer: Op, slot: tuple[str, Any]) -> dict[tuple[Any, ...
 def _concrete_label(trace: Trace, label: str) -> str:
     """Return the concrete op label a (possibly pass-less) graph label resolves to."""
 
-    from .core import _op_for_validation_label  # deferred: cycle validation
+    from ._core import _op_for_validation_label  # deferred: cycle validation
 
     return _op_for_validation_label(trace, label).label
 
@@ -185,7 +186,7 @@ def _perturbed_node(replayed: torch.Tensor, perturbed: torch.Tensor) -> torch.Te
 def _select_output(op: Op, output: Any) -> Any:
     """Pick the leaf one op represents out of its func's (possibly multi) return."""
 
-    from .core import _slice_recomputed_output_by_path  # deferred: cycle validation
+    from ._core import _slice_recomputed_output_by_path  # deferred: cycle validation
 
     container_path = tuple(getattr(op, "container_path", ()) or ())
     if container_path and not isinstance(output, torch.Tensor):
@@ -198,7 +199,7 @@ def _select_output(op: Op, output: Any) -> Any:
 def _capture_index_key(op: Op) -> tuple[int, str]:
     """Return an op's place in capture's event order, ``-1`` when it has no index."""
 
-    index = getattr(op, "raw_index", None)
+    index = record_member(op, "raw_index", None)
     return (index if isinstance(index, int) else -1, op.label)
 
 
@@ -265,7 +266,7 @@ class _SubgraphReplay:
     def resolve(self, label: str) -> Op:
         """Resolve a parent label to its concrete op."""
 
-        from .core import _op_for_validation_label  # deferred: cycle validation
+        from ._core import _op_for_validation_label  # deferred: cycle validation
 
         return _op_for_validation_label(self.trace, label)
 
@@ -383,7 +384,7 @@ class _SubgraphReplay:
 
         is_inplace = bool(getattr(op, "is_inplace", False))
         for arg_domain in ("args", "kwargs"):
-            positions = (getattr(op, "parent_arg_positions", {}) or {}).get(arg_domain, {})
+            positions = (record_member(op, "parent_arg_positions", {}) or {}).get(arg_domain, {})
             for key, parent_label in positions.items():
                 replayed = self._connected_value(parent_label)
                 if replayed is None:
@@ -404,7 +405,7 @@ class _SubgraphReplay:
     def _replay_op(self, op: Op) -> torch.Tensor:
         """Re-execute one op from its saved arguments with replayed parents spliced in."""
 
-        from .core import (  # deferred: cycle validation
+        from ._core import (  # deferred: cycle validation
             _execute_func_with_restored_state,
             _prepare_input_args_for_validating_layer,
         )
@@ -597,8 +598,8 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
             layer.func,
             tuple(input_args["args"]),
             dict(input_args["kwargs"]),
-            rng_states=layer.func_rng_states,
-            autocast_state=layer.func_autocast_state,
+            rng_states=layer.call.rng_states,
+            autocast_state=layer.call.autocast_state,
         )
 
 
@@ -624,7 +625,7 @@ def captured_grad_modes(layer: Op) -> tuple[bool, bool]:
         the op carries no execution record (source ops, synthesized records).
     """
 
-    autocast_state = getattr(layer, "func_autocast_state", None)
+    autocast_state = record_member(layer, "func_autocast_state", None)
     execution = autocast_state.get("__execution__") if isinstance(autocast_state, dict) else None
     record = execution if isinstance(execution, dict) else {}
     grad_enabled = record.get("grad_enabled")

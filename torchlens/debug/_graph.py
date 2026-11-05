@@ -11,6 +11,8 @@ import torch
 
 from torchlens._runnable import refuse_poisoned_trace
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
@@ -674,8 +676,8 @@ def _layer_output_ops(trace: Trace) -> list[Op]:
         for op in _compute_ops(trace)
         if not bool(getattr(op, "is_output", False))
         and (
-            bool(getattr(op, "is_module_output", False))
-            or bool(getattr(op, "is_output_parent", False))
+            bool(record_member(op, "is_module_output", False))
+            or bool(record_member(op, "is_output_parent", False))
         )
     ]
 
@@ -717,7 +719,7 @@ def _output_module(op: Op) -> str | None:
         is no module's output.
     """
 
-    addresses = list(getattr(op, "output_of_modules", None) or ())
+    addresses = list(record_member(op, "output_of_modules", None) or ())
     return max(addresses, key=lambda address: address.count("."), default=None)
 
 

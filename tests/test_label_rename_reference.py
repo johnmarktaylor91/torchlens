@@ -20,7 +20,7 @@ from torchlens._postprocess._label_rename import (
     _rename_label_dataclass,
     _rename_template_parent_refs,
 )
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     CapturedArgTemplate,
     LiteralValue,
     ParentRef,

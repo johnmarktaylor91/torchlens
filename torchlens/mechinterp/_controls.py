@@ -32,11 +32,11 @@ import torch
 from torch import nn
 
 from .._user_funcs import trace as _capture
-from ..intervention.helpers import mean_ablate, project_out, zero_ablate
-from ..intervention.population import population
-from ..intervention.spec import when
+from ..intervention._helpers import mean_ablate, project_out, zero_ablate
+from ..intervention._population import population
+from ..intervention._spec import when
+from ..intervention._types import Edit
 from ..intervention.stochastic import resample_rows_from
-from ..intervention.types import Edit
 from ..options import CaptureOptions
 
 __all__ = ("ControlRow", "AblationControlsReport", "FamilyVerdict", "ablation_controls")

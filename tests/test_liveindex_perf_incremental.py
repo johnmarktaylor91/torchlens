@@ -21,7 +21,7 @@ from torch import nn
 from benchmarks.live_index_append_counters import counting
 from torchlens._ir.live_index import LiveIndex
 from torchlens.recording import Recorder
-from torchlens.recording.options import RecordingOptions
+from torchlens.recording._options import RecordingOptions
 
 
 @dataclass(frozen=True)

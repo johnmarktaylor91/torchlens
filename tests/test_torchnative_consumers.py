@@ -39,14 +39,14 @@ def mlp_log() -> Any:
 def _synthetic_join_for(log: Any) -> None:
     """Register a joined result whose kernels land on the first two ops."""
 
-    ops = [op for op in log.ops if op.func_call_id is not None][:2]
+    ops = [op for op in log.ops if op.call.call_id is not None][:2]
     assert len(ops) == 2
     events: list[NormalizedEvent] = []
     for index, op in enumerate(ops):
         base = index * 100_000
         events.append(
             NormalizedEvent(
-                name=f"torchlens::op::{op.func_call_id}",
+                name=f"torchlens::op::{op.call.call_id}",
                 kind="marker",
                 activity="user_annotation",
                 start_ns=base,

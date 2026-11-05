@@ -22,14 +22,14 @@ from ..._errors import TraceCaptureError, original_exception
 from ..._trace_state import TraceState
 from ..._utils._display_errors import lookup_message
 from ...errors._base import TorchLensError
+from ...intervention._predicates import InterventionPredicate
 from ...intervention.errors import (
     AmbiguousBatchInputError,
     AppendMismatchError,
     ChunkedForwardConfigError,
 )
-from ...intervention.predicates import InterventionPredicate
 from ...options import StorageOptions
-from ...recording.options import HaltPredicateFn
+from ...recording._options import HaltPredicateFn
 
 
 def _should_store_auto_coerced_raw_input(original: Any, coerced: Any) -> bool:

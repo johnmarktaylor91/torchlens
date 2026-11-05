@@ -74,7 +74,7 @@ def test_training_instance_norm_projective_maps_running_stat_parents() -> None:
 
     for parent_reference in instance_norm.parents:
         parent = trace._layer_dict_all_keys[parent_reference]
-        state = solution.states[(parent.label, trace.output_ops[0].io_role)]
+        state = solution.states[(parent.label, trace.output_ops[0].graph.io_role)]
         assert state.axes is not None
 
 

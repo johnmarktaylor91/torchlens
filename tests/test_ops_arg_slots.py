@@ -21,7 +21,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.backends.torch import _ops_arg_slots, _ops_shared_fields
-from torchlens.intervention.types import CapturedArgTemplate, LiteralTensor, ParentRef
+from torchlens.intervention._types import CapturedArgTemplate, LiteralTensor, ParentRef
 
 _CLOSURE_CONSTANT = torch.linspace(-1.0, 1.0, 8)
 
@@ -184,11 +184,11 @@ def _derived_fields(model_cls: type[nn.Module], shape: tuple[int, ...]) -> list[
         (
             index,
             list(op.parents),
-            {kind: dict(op.parent_arg_positions[kind]) for kind in ("args", "kwargs")},
-            tuple(op.unattributed_tensor_args),
-            tuple(op.dropped_edge_tensor_args),
-            _norm_template(op.args_template),
-            _norm_template(op.kwargs_template),
+            {kind: dict(op.call.parent_arg_positions[kind]) for kind in ("args", "kwargs")},
+            tuple(op.call.unattributed_tensor_args),
+            tuple(op.call.dropped_edge_tensor_args),
+            _norm_template(op.call.args_template),
+            _norm_template(op.call.kwargs_template),
         )
         for index, op in enumerate(trace.ops)
     ]

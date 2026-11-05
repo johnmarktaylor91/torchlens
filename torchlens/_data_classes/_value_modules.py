@@ -8,6 +8,7 @@ from typing import Any
 from .._utils._display_card import inline_names, one_line, render_card
 from .._utils._display_keys import display_key
 from .._utils._display_numbers import format_exact_count
+from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._value_state import (
     _count_words,
@@ -52,7 +53,7 @@ def module_repr_line(module: Any) -> str:
     )
     if getattr(module, "has_multiple_addresses", False):
         facts += ("(aliased)",)
-    return one_line(f"Module {getattr(module, 'address', '?')}", facts)
+    return one_line(f"Module {record_member(module, 'address', '?')}", facts)
 
 
 def module_card(module: Any) -> str:
@@ -88,7 +89,7 @@ def module_call_repr_line(call: Any) -> str:
         str(cls),
         _count_words(len(getattr(call, "ops", ()) or ()), "layer", compact=True),
     )
-    return one_line(f"ModuleCall {getattr(call, 'address', '?')}", facts)
+    return one_line(f"ModuleCall {record_member(call, 'address', '?')}", facts)
 
 
 def module_call_card(call: Any) -> str:

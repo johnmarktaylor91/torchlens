@@ -54,7 +54,7 @@ from torchlens.attribution._curve_settings import (
 )
 from torchlens.attribution._eval_maps import _DOCS_POINTER, _input_space_maps
 from torchlens.attribution._result import Attribution, AttributionError
-from torchlens.intervention.predicates import replace_with
+from torchlens.intervention._predicates import replace_with
 
 _DEFAULT_STEPS = 20
 _DEFAULT_PATCH = 8

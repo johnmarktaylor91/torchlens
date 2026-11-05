@@ -695,7 +695,7 @@ def test_untraceable_child_output_does_not_mask_observable_mutation(
     assert len(child_owners) == 1
     assert child_owners[0]["capture_accounted"] is True
     assert len(child_owners[0]["capture_accounted_boundary_labels"]) == 1
-    assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
+    assert any(op.func_name == "none" and op.graph.is_internal_source for op in trace.ops)
 
 
 # Kept: sole branch coverage of backends/torch/_predicate_forward.py.
@@ -1079,7 +1079,9 @@ def test_dynamic_parameter_initializers_and_registered_state_writes_are_captured
 def test_is_mutating_operator_reads_schema_not_name() -> None:
     """Mutation detection uses the operator schema, covering out= overloads too."""
 
-    from torchlens.backends.torch._completeness_dispatch_names import _is_mutating_operator
+    from torchlens.backends.torch._completeness_dispatch_names import (
+        _is_mutating_operator,
+    )
 
     assert _is_mutating_operator(torch.ops.aten.mul_.Tensor) is True
     assert _is_mutating_operator(torch.ops.aten.add_.Tensor) is True

@@ -119,7 +119,7 @@ def _saved_weight_args(log: Any, model: nn.Module) -> list[tuple[torch.Tensor, n
         by_shape.setdefault(tuple(parameter.shape), []).append(parameter)
     pairs: list[tuple[torch.Tensor, nn.Parameter]] = []
     for op in log.ops:
-        for value in [*(op.saved_args or ()), *(op.saved_kwargs or {}).values()]:
+        for value in [*(op.call.saved_args or ()), *(op.call.saved_kwargs or {}).values()]:
             if not isinstance(value, torch.Tensor):
                 continue
             for parameter in by_shape.get(tuple(value.shape), ()):

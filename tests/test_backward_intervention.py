@@ -21,10 +21,14 @@ from torchlens.backends.torch.backward import (
     _make_grad_fn_hook,
     _make_grad_fn_prehook,
 )
-from torchlens.intervention.errors import HelperMountError, HookValueError, SelectorCompositionError
-from torchlens.intervention.helpers import _helper_spec
+from torchlens.intervention._helpers import _helper_spec
+from torchlens.intervention._types import FireRecord, InterventionSpec, TargetSpec
+from torchlens.intervention.errors import (
+    HelperMountError,
+    HookValueError,
+    SelectorCompositionError,
+)
 from torchlens.intervention.hooks import normalize_hook_plan
-from torchlens.intervention.types import FireRecord, InterventionSpec, TargetSpec
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 #: Stage a sticky hook on the trace without propagating it.
@@ -184,7 +188,7 @@ def test_grad_fn_hook_records_backward_fire() -> None:
     assert record.replaced is True
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/runtime.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_runtime.py.
 def test_grad_fn_hook_inplace_mutation_records_replaced() -> None:
     """A backward hook mutating a grad slot in place must not record replaced=False.
 
@@ -431,7 +435,7 @@ def test_backward_none_return_helper_records_non_replacing_fire() -> None:
     assert spec.records == [record]
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, intervention/runtime.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, intervention/_runtime.py, campaign mutant kills.
 def test_backward_invalid_replacement_tuple_raises_before_recording_success() -> None:
     """Invalid backward replacement tuples fail before a success record is attached."""
 
@@ -508,7 +512,7 @@ def test_helper_requires_grad_output_at_accumulategrad_raises_helpermounterror()
         normalize_hook_plan(tl.grad_fn(name="AccumulateGrad"), helper)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, intervention/runtime.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, intervention/_runtime.py, campaign mutant kills.
 def test_accumulategrad_none_return_prehook_records_backward_fire() -> None:
     """AccumulateGrad prehooks returning None still attach a non-replacing record."""
 
@@ -543,7 +547,7 @@ def test_accumulategrad_none_return_prehook_records_backward_fire() -> None:
     assert record.replaced is False
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/runtime.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_runtime.py, campaign mutant kills.
 def test_accumulategrad_pending_records_clear_between_passes() -> None:
     """Unpaired AccumulateGrad prehook records are cleared at pass teardown."""
 
@@ -668,7 +672,7 @@ def _run_identity_relu_intervention(selector: Any, helper: Any) -> tuple[torch.T
     return trace[trace.input_layers[0]].grad, records
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/layer.py, intervention/helpers.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/layer.py, intervention/_helpers.py, campaign mutant kills.
 @pytest.mark.parametrize("selector", [tl.grad_fn(name="relu")])
 def test_gradient_action_family_changes_only_gradient_path(selector: Any) -> None:
     """Neutral edits change the gradient through the gradient and node universes."""

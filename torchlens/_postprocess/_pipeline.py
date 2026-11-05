@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ..errors.validation import MetadataInvariantError
+from ..errors._validation import MetadataInvariantError
 from . import _executor as ex
 from ._executor import StepContext
 

@@ -26,7 +26,7 @@ import torch.nn.functional as F
 from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 
 from torchlens import trace as trace_fn
-from torchlens.validation.invariants import check_metadata_invariants
+from torchlens.validation._invariants import check_metadata_invariants
 
 # This suite drives the structural grouper (grouper_v1), which serves captures
 # without call-site evidence; torch captures group by call site
@@ -182,8 +182,8 @@ def test_growing_recurrence_aggregate_is_not_call_1() -> None:
     # OpAccessor get/[] are 0-based positional (C02 basis fix, lovely bug 27).
     first_pass = layer.ops.get(0)
     last_pass = layer.ops.get(layer.num_passes - 1)
-    assert int(first_pass.activation_memory) < int(last_pass.activation_memory)
-    assert int(layer.activation_memory) == int(last_pass.activation_memory)
+    assert int(first_pass.cost.activation_memory) < int(last_pass.cost.activation_memory)
+    assert int(layer.cost.activation_memory) == int(last_pass.cost.activation_memory)
     assert tuple(layer.shape) != tuple(first_pass.shape)
     assert check_metadata_invariants(traced)
 

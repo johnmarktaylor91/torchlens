@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any, NamedTuple
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._netron_fields import _strip_single_pass, build_leaf_attrs, node_doc, port_names
 from ._netron_records import (
     NETRON_MODULE_DOMAIN,
@@ -105,7 +106,7 @@ def _retained_scopes(
 def _entry_scope(entry: Any, scopes: dict[str, _Scope]) -> str:
     """Return the innermost retained scope containing one op entry."""
 
-    for call_label in reversed(list(getattr(entry, "module_call_stack", ()) or ())):
+    for call_label in reversed(list(record_member(entry, "module_call_stack", ()) or ())):
         if str(call_label) in scopes:
             return str(call_label)
     return _ROOT_SCOPE

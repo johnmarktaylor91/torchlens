@@ -24,7 +24,7 @@ from torchlens._io import ArtifactError
 
 # The package re-exports the recover() FUNCTION under the same name, so the
 # module object must come from the import system directly.
-recover_module = importlib.import_module("torchlens.recording.recover")
+recover_module = importlib.import_module("torchlens.recording._recover")
 
 
 def _bundle(tmp_path) -> Path:

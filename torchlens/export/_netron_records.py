@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._common import _iter_layers, _repeated_layer_labels
 from ._netron_fields import (
     build_leaf_attrs,
@@ -149,7 +150,7 @@ def _entry_node_id(entry: Any, repeated: set[str]) -> str:
 def _is_noise_buffer(entry: Any) -> bool:
     """Return whether the buffer's address ends in a ``meaningful``-hidden name."""
 
-    address = getattr(entry, "address", None)
+    address = record_member(entry, "address", None)
     if not address:
         return False
     return str(address).rsplit(".", 1)[-1] in _NOISE_BUFFER_NAMES
@@ -168,7 +169,7 @@ def _buffer_hidden(entry: Any, policy: str) -> bool:
 def _owning_module(entry: Any) -> str:
     """Return the innermost containing module-call address, or ``""`` for root."""
 
-    stack = getattr(entry, "module_call_stack", None) or ()
+    stack = record_member(entry, "module_call_stack", None) or ()
     return str(stack[-1]) if stack else ""
 
 
@@ -190,7 +191,7 @@ def _hide_counter_chains(classified: _Classified, policy: str) -> None:
             node_id = classified.node_ids[id(entry)]
             if node_id in classified.hidden:
                 continue
-            if getattr(entry, "is_buffer", False):
+            if record_member(entry, "is_buffer", False):
                 continue
             if getattr(entry, "is_input", False) or getattr(entry, "is_output", False):
                 continue
@@ -224,7 +225,7 @@ def classify(log: Any, show_buffers: str) -> _Classified:
     hidden: set[str] = set()
     hidden_buffers: dict[str, list[str]] = {}
     for entry in entries:
-        if getattr(entry, "is_buffer", False) and _buffer_hidden(entry, show_buffers):
+        if record_member(entry, "is_buffer", False) and _buffer_hidden(entry, show_buffers):
             node_id = node_ids[id(entry)]
             hidden.add(node_id)
             hidden_buffers.setdefault(_owning_module(entry), []).append(node_id)
@@ -273,7 +274,7 @@ def _resolve_intervened_ids(log: Any, classified: _Classified) -> set[str]:
     for entry in classified.entries:
         ops = getattr(entry, "ops", None) or [entry]
         for op in ops:
-            key = getattr(op, "site_key", None)
+            key = record_member(op, "site_key", None)
             replaced = bool(getattr(op, "is_edited", False))
             if replaced or (key is not None and str(key) in site_keys):
                 marked.add(classified.node_ids[id(entry)])

@@ -25,11 +25,11 @@ def _annotated_source(trace: Trace) -> str:
     lines = source.splitlines()
     labels: defaultdict[int, list[str]] = defaultdict(list)
     for op in trace.ops:
-        if op.is_input or op.is_output or op.is_buffer:
+        if op.is_input or op.is_output or op.graph.is_buffer:
             continue
         # Frames include callers: a child module's ops belong beside the root
         # forward line that invoked it, but a helper's own lines do not.
-        for frame in op.code_context:
+        for frame in op.source.frames:
             if (
                 frame.file == filename
                 and frame.func_name == "forward"

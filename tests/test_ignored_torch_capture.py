@@ -24,8 +24,8 @@ from torchlens._capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_nam
 from torchlens._constants import _TENSOR_IGNORED_FNS, IGNORED_FUNCS, get_orig_torch_funcs
 from torchlens._utils._torch_symbols import torch_attr
 from torchlens.options import CaptureOptions
-from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.diagnostics import get_validation_failure
+from torchlens.validation._core import validate_saved_outs
+from torchlens.validation._diagnostics import get_validation_failure
 
 
 def _decorated_pairs() -> set[tuple[str, str]]:
@@ -334,7 +334,7 @@ def test_planted_key_blind_philox_fill_fails_perturbation(method: str) -> None:
     trace = tl.trace(model, inputs, capture=CaptureOptions(save_args=True, seed=0), save="all")
     try:
         fill = next(op for op in trace._layer_list if op.func_name == method)
-        key_label = fill.parent_arg_positions["args"][1]
+        key_label = fill.call.parent_arg_positions["args"][1]
         frozen = fill.out.detach().clone()
 
         def key_blind_fill(*args: object, **kwargs: object) -> torch.Tensor:

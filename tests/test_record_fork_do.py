@@ -8,7 +8,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._utils.hashing import compute_graph_shape_hash
-from torchlens.recording.exceptions import RecordingConfigError
+from torchlens.recording._exceptions import RecordingConfigError
 
 
 class _ReluNet(nn.Module):

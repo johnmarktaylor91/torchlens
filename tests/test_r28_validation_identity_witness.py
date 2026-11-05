@@ -231,8 +231,8 @@ def test_fn_capture_witness_records_dropped_edge_positions(
     masked_op = next(op for op in trace.ops if op.func_name == "masked_fill")
 
     assert state["dropped"] > 0
-    assert "arg1" in tuple(masked_op.dropped_edge_tensor_args)
-    assert "arg1" in tuple(masked_op.unattributed_tensor_args)
+    assert "arg1" in tuple(masked_op.call.dropped_edge_tensor_args)
+    assert "arg1" in tuple(masked_op.call.unattributed_tensor_args)
 
 
 @pytest.mark.filterwarnings("ignore:TorchLens found tensor arguments:UserWarning")

@@ -25,6 +25,7 @@ from urllib.parse import quote as _percent_quote
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.op import Op
 
+from .._utils._record_group_table import record_member
 from ..backends.torch.wrappers import _func_mutates_receiver
 from ._label_format import _shape_with_trainability
 from ._render_common import (
@@ -88,6 +89,12 @@ class _ParamNodeStub:
     modules: list[str]
     is_atomic_module: bool = False
 
+    @property
+    def module_context(self) -> _ParamNodeStub:
+        """Answer ``module_context.is_atomic_module`` the way an Op's group does."""
+
+        return self
+
 
 def _is_inplace_func_name(func_name: object) -> bool:
     """Return whether ``func_name`` names an in-place tensor operation.
@@ -138,7 +145,7 @@ def _receiver_param(op: Any) -> Any | None:
     param_logs = tuple((op._param_logs if isinstance(op, (Op, Layer)) else ()) or ())
     if not param_logs:
         return None
-    positions = getattr(op, "parent_arg_positions", None) or {}
+    positions = record_member(op, "parent_arg_positions", None) or {}
     arg_positions = positions.get("args", {}) if isinstance(positions, Mapping) else {}
     if 0 in arg_positions:
         return None
@@ -299,7 +306,7 @@ def _owner_module_path(entry: Any, param: Any, vis_mode: str) -> tuple[str, ...]
     modules = [str(module) for module in (getattr(entry, "modules", ()) or ())]
     if vis_mode == "rolled":
         modules = [module.split(":")[0] for module in modules]
-    rendered_scope = modules[:-1] if getattr(entry, "is_atomic_module", False) else modules
+    rendered_scope = modules[:-1] if record_member(entry, "is_atomic_module", False) else modules
     for depth, module in enumerate(rendered_scope):
         if module.split(":")[0] == owner:
             return tuple(rendered_scope[: depth + 1])

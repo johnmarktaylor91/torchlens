@@ -21,6 +21,7 @@ from typing import Any
 from ..._data_classes._accessor_base import Accessor
 from ..._data_classes._schema_bindings import STORAGE_BINDINGS
 from ..._data_classes.field_policy import StorageKind
+from ..._utils._record_group_table import record_member
 from ..field_registry import RECORD_CONTRACT_CLASSES, persisted_field_names
 from ._family_nodes import AUDIT_FAMILIES, COLLECTIVE_FAMILIES, CORE_FAMILIES
 from .contract import JSON_TYPE_BY_STORAGE_KIND, RECORD_INDEX
@@ -250,7 +251,7 @@ class LiveCells:
             )
             source = live if reads_live and live is not None else record
             try:
-                value = getattr(source, column)
+                value = record_member(source, column)
             except _COMPUTED_ERRORS:
                 value = None
         return self._to_copies(_edge_members(value))

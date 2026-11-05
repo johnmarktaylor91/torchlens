@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from .._utils._record_group_table import record_member
 from ._encoding_request import EncodingChannelRequest
 
 
@@ -76,7 +77,7 @@ def _overlay_callable(trace: Any, scores: Mapping[str, Any]) -> EncodingChannelR
         base = str(label).split(":", 1)[0] if label is not None else None
         if base in values:
             return values[base]
-        for address in getattr(node, "output_of_modules", ()) or ():
+        for address in record_member(node, "output_of_modules", ()) or ():
             if address in module_keys:
                 return values[address]
         return None
@@ -89,7 +90,7 @@ def _module_addresses(trace: Any) -> set[str]:
 
     addresses: set[str] = set()
     for label in getattr(trace, "layer_labels", ()) or ():
-        addresses.update(getattr(trace[label], "output_of_modules", ()) or ())
+        addresses.update(record_member(trace[label], "output_of_modules", ()) or ())
     return addresses
 
 

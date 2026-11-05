@@ -20,7 +20,7 @@ from torchlens.bundle._lineage import (
     validate_member_construction,
     validate_operation_chain,
 )
-from torchlens.errors.episode import BundleRelationError
+from torchlens.errors._episode import BundleRelationError
 from torchlens.intervention.errors import BundleMemberError
 
 

@@ -26,11 +26,7 @@ from ._spec_values import (
     _serialize_value,
     _SerializedState,
 )
-from .errors import (
-    OpaqueCallableError,
-    ReplayPreconditionError,
-)
-from .types import (
+from ._types import (
     Edit,
     FireRecord,
     FrozenTargetSpec,
@@ -40,6 +36,10 @@ from .types import (
     TargetSpec,
     TargetValueSpec,
     TensorSliceSpec,
+)
+from .errors import (
+    OpaqueCallableError,
+    ReplayPreconditionError,
 )
 
 

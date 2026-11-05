@@ -37,7 +37,7 @@ from ._subspace_projection import (
     _mask_digest,
     masked_subspace_edit,
 )
-from .types import Edit
+from ._types import Edit
 
 __all__ = ["rebuild_subspace_edit"]
 

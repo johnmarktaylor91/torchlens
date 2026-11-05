@@ -85,7 +85,7 @@ def test_tf_repeated_dense_groups_into_passes() -> None:
     assert [op.pass_number for op in relu_ops] == [1, 2, 3]
     assert {op.layer_label for op in matmul_ops} == {matmul_ops[0].layer_label}
     assert {op.num_passes for op in (*matmul_ops, *relu_ops)} == {3}
-    assert list(relu_ops[0].recurrent_ops) == [op.label for op in relu_ops]
+    assert list(relu_ops[0].graph.recurrent_ops) == [op.label for op in relu_ops]
     assert trace._layer_num_calls[relu_ops[0].layer_label] == 3
     # validate_trace() itself returns the bare pass/fail bool when fully
     # verified (torch-parity convention: see

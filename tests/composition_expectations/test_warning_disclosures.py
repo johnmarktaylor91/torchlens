@@ -69,10 +69,10 @@ def test_first_contracted_row_is_live() -> None:
 
     coded_sites = {site.code: site for site in _censuses.warn_sites() if site.code}
     assert "rerun_zero_fire" in coded_sites, (
-        "the first contracted S-18 site (intervention/rerun.py zero-fire) lost its code"
+        "the first contracted S-18 site (intervention/_rerun.py zero-fire) lost its code"
     )
     site = coded_sites["rerun_zero_fire"]
-    assert site.module == "torchlens.intervention.rerun"
+    assert site.module == "torchlens.intervention._rerun"
     assert site.category == "TorchLensWarning"
 
     # The warning the site constructs carries the machine-readable contract.

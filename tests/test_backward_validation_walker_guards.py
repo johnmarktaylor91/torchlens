@@ -1,4 +1,4 @@
-"""grind-p3 T11: validation/backward.py input/output walkers are guarded.
+"""grind-p3 T11: validation/_backward.py input/output walkers are guarded.
 
 ``_clone_inputs_with_grad`` and ``_sum_tensors`` were unguarded recursion with
 no memo: a legal deep nest or a self-referential container died in a raw
@@ -16,7 +16,7 @@ import torch
 
 from torchlens._errors import InvalidArgumentError
 from torchlens._input_walk import INPUT_TREE_MAX_DEPTH
-from torchlens.validation.backward import _clone_inputs_with_grad, _sum_tensors
+from torchlens.validation._backward import _clone_inputs_with_grad, _sum_tensors
 
 
 def _deep_list(depth: int, leaf: object) -> object:
@@ -31,7 +31,7 @@ def _deep_list(depth: int, leaf: object) -> object:
 class TestCloneInputsWithGrad:
     """DAG/cycle/depth behavior of the backward-validation input cloner."""
 
-    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
+    # Kept: sole branch coverage of validation/_backward.py; a sole mutation kill.
     def test_deep_shared_dag_is_linear_not_exponential(self):
         """A depth-40 shared DAG completes (2^40 walks pre-memo)."""
 
@@ -41,7 +41,7 @@ class TestCloneInputsWithGrad:
         cloned = _clone_inputs_with_grad(node)
         assert cloned[0] is cloned[1]
 
-    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
+    # Kept: sole branch coverage of validation/_backward.py; a sole mutation kill.
     def test_over_deep_nest_refuses_typed(self):
         """Nesting past the shared input ceiling refuses typed, never raw."""
 
@@ -50,7 +50,7 @@ class TestCloneInputsWithGrad:
             _clone_inputs_with_grad(deep)
         assert excinfo.value.fields["code"] == "input_tree_depth_exceeded"
 
-    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
+    # Kept: sole branch coverage of validation/_backward.py; a sole mutation kill.
     def test_grad_enabling_semantics_unchanged(self):
         """Floating clones require grad; ints and non-containers pass through."""
 
@@ -62,7 +62,7 @@ class TestCloneInputsWithGrad:
 class TestSumTensors:
     """DAG/cycle/depth behavior of the default backward-validation loss."""
 
-    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
+    # Kept: sole branch coverage of validation/_backward.py; a sole mutation kill.
     def test_deep_shared_dag_sum_is_linear(self):
         """A depth-40 shared DAG sums in O(nodes) with the exact DAG value."""
 
@@ -71,7 +71,7 @@ class TestSumTensors:
             node = [node, node]
         assert float(_sum_tensors(node)) == float(2**40)
 
-    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
+    # Kept: sole branch coverage of validation/_backward.py; a sole mutation kill.
     def test_cyclic_output_refuses_typed(self):
         """A self-referential output container refuses typed, never raw."""
 
@@ -81,7 +81,7 @@ class TestSumTensors:
             _sum_tensors(cyclic)
         assert excinfo.value.fields["code"] == "output_tree_cycle"
 
-    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
+    # Kept: sole branch coverage of validation/_backward.py; a sole mutation kill.
     def test_over_deep_output_refuses_typed(self):
         """Nesting past the output ceiling refuses typed, never raw."""
 
@@ -92,7 +92,7 @@ class TestSumTensors:
             _sum_tensors(deep)
         assert excinfo.value.fields["code"] == "output_tree_depth_exceeded"
 
-    # Kept: sole branch coverage of validation/backward.py; a sole mutation kill.
+    # Kept: sole branch coverage of validation/_backward.py; a sole mutation kill.
     def test_tensor_free_output_still_raises_value_error(self):
         """The historical no-tensor refusal is preserved."""
 
