@@ -2342,6 +2342,30 @@ def get_fake_tensor_mode_class() -> type[Any] | None:
     return _FAKE_TENSOR_MODE_CLS
 
 
+def stripped_step_hook_wrapper(optimizer: Any) -> Callable[..., Any] | None:
+    """Return torch's step-hook wrapper when ``optimizer``'s class step lost it.
+
+    Torch runs ``register_step_pre_hook``/``register_step_post_hook`` hooks from the
+    ``Optimizer.profile_hook_step`` wrapper it puts on each optimizer class (marked
+    ``step.hooked``). On torch 2.1 the first ``torch.compile`` swaps every optimizer
+    class's step for the unwrapped function, still marked hooked, so those hooks
+    never fire again in the process. Fallback: ``_optimizer_hooks`` binds this
+    wrapper on the instance while a TorchLens session holds the optimizer.
+
+    Returns
+    -------
+    Callable[..., Any] | None
+        ``Optimizer.profile_hook_step``, or ``None`` while the class step runs hooks
+        (or was never hooked by torch).
+    """
+
+    wrap = getattr(torch.optim.Optimizer, "profile_hook_step", None)
+    step = getattr(type(optimizer), "step", None)
+    if not callable(wrap) or not getattr(step, "hooked", False):
+        return None
+    return wrap if getattr(step, "__code__", None) is not wrap(len).__code__ else None
+
+
 def get_higher_order_operator(module: str, attribute: str) -> Any | None:
     """Return a ``torch._higher_order_ops`` operator that has a per-mode rule table.
 
@@ -2355,11 +2379,13 @@ def get_higher_order_operator(module: str, attribute: str) -> Any | None:
     Returns
     -------
     Any | None
-        The ``HigherOrderOperator``, or ``None`` when this torch lacks it or it has
-        no ``python_key_table`` to register a dispatch-mode rule in.
+        The ``HigherOrderOperator``, or ``None`` when this torch lacks it, its module
+        is not imported yet (an operator cannot run before its module is imported, and
+        importing ``cond`` imports ``torch._dynamo`` on torch 2.1), or it has no
+        ``python_key_table`` to register a dispatch-mode rule in.
     """
 
-    op = _import_module_attr_or_none(f"torch._higher_order_ops.{module}", attribute)
+    op = getattr(sys.modules.get(f"torch._higher_order_ops.{module}"), attribute, None)
     hop_type = _nested_getattr_or_none(torch, ["_ops", "HigherOrderOperator"])
     if not isinstance(hop_type, type) or not isinstance(op, hop_type):
         return None
@@ -3440,11 +3466,15 @@ def get_tracing_tensor_types(*, force_probe: bool = False) -> tuple[type[Any], .
     global HAS_TRACING_TENSOR_TYPES, _TRACING_TENSOR_TYPES, _TRACING_TENSOR_TYPES_PROBED
 
     if not _TRACING_TENSOR_TYPES_PROBED:
-        candidate_modules = tuple(name for name, _attr in _TRACING_TENSOR_CANDIDATES)
-        if not force_probe and not any(name in sys.modules for name in candidate_modules):
+        # Per module: one loaded candidate never imports another (torch 2.1 loads
+        # fake_tensor without functional_tensor); the latch closes once all are read.
+        loaded = [
+            pair for pair in _TRACING_TENSOR_CANDIDATES if force_probe or pair[0] in sys.modules
+        ]
+        if not loaded:
             return ()
         found: list[type[Any]] = []
-        for module_name, attr_name in _TRACING_TENSOR_CANDIDATES:
+        for module_name, attr_name in loaded:
             try:
                 candidate = _import_module_attr_or_none(module_name, attr_name)
             except RuntimeError:
@@ -3453,7 +3483,7 @@ def get_tracing_tensor_types(*, force_probe: bool = False) -> tuple[type[Any], .
                 found.append(candidate)
         _TRACING_TENSOR_TYPES = tuple(found)
         HAS_TRACING_TENSOR_TYPES = bool(_TRACING_TENSOR_TYPES)
-        _TRACING_TENSOR_TYPES_PROBED = True
+        _TRACING_TENSOR_TYPES_PROBED = len(loaded) == len(_TRACING_TENSOR_CANDIDATES)
     if not _TRACING_TENSOR_TYPES:
         mark_torch_capability_missing(
             "HAS_TRACING_TENSOR_TYPES",

@@ -11,6 +11,13 @@ entries of its ``_ATTRIBUTE_PROBES``, behavioural checks as functions). This
 module is data only: it imports nothing from torch or TorchLens, and the
 capture stack never imports it, so tests and tooling read it without growing
 any import closure.
+
+Unflagged fallbacks (no ``HAS_*`` row, because torch has the mechanism and only
+loses it at run time): on torch 2.1 the first ``torch.compile`` strips the
+step-hook wrapper from every torch optimizer class, so registered step hooks
+stop firing. ``_torch_compat.stripped_step_hook_wrapper`` detects that per
+optimizer and ``torchlens._utils._optimizer_hooks`` binds torch's own wrapper on
+the instance for the life of a TorchLens session.
 """
 
 from __future__ import annotations
