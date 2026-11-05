@@ -35,8 +35,10 @@ probe answers "not a tracing pass", which leaves capture unchanged.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import contextmanager
+from types import FrameType
 from typing import Any
 
 import torch
@@ -71,6 +73,13 @@ hop_compile_depth = 0
 #: calls the user's own branches; only then may Dynamo trace a module's plain
 #: ``forward`` in place of the session wrapper.
 cond_entry_innermost = False
+
+#: Whether the running capture lifted torch's operator entry compile. Without
+#: it (no ``set_stance``, or a torch whose operators do not enter through
+#: ``_hop_compile_and_call``) a grad-requiring ``map`` under the forced-eager
+#: stance would return one tensor per row, so its tracing pass is not passed
+#: through (:func:`_inside_unsupported_grad_operator`) and capture fails loudly.
+hop_entry_lifted = False
 
 
 def _fake_tensor_mode_active(stack: list[Any]) -> bool:
@@ -155,21 +164,53 @@ def inside_lifted_cond_compile() -> bool:
     return cond_entry_innermost and inside_hop_internal_compile()
 
 
-def lift_hop_entry_compiles() -> AbstractContextManager[bool]:
+@contextmanager
+def lift_hop_entry_compiles() -> Iterator[bool]:
     """Let torch's operator entry compiles run inside the capture's forced-eager scope.
 
-    Returns
-    -------
-    AbstractContextManager[bool]
-        Yields whether the entry was hooked; each lifted compile runs inside
-        :func:`hop_internal_compile_scope`.
+    Yields
+    ------
+    bool
+        Whether the entry was hooked (kept in :data:`hop_entry_lifted` for the
+        scope); each lifted compile runs inside :func:`hop_internal_compile_scope`.
     """
 
-    return hop_compile_stance_lift_scope(
+    global hop_entry_lifted
+    prior = hop_entry_lifted
+    with hop_compile_stance_lift_scope(
         hop_internal_compile_scope,
         enabled=_torch_compat.HAS_SET_STANCE,
         steps_aside=_entry_modes,
-    )
+    ) as hooked:
+        hop_entry_lifted = hooked
+        try:
+            yield hooked
+        finally:
+            hop_entry_lifted = prior
+
+
+def _inside_unsupported_grad_operator() -> bool:
+    """Return whether the running tracing pass belongs to a grad-requiring ``map``.
+
+    Returns
+    -------
+    bool
+        ``True`` when a frame of the module defining ``map_impl`` is on the
+        Python stack: the ``map`` entry point compiling its body, the operator's
+        autograd kernel, or its eager kernel. Asked only when the entry compile
+        was not lifted (:data:`hop_entry_lifted`); see its comment.
+    """
+
+    map_impl = get_higher_order_operator("map", "map_impl")
+    if map_impl is None:
+        return False
+    map_module = type(map_impl).__module__
+    frame: FrameType | None = sys._getframe(1)
+    while frame is not None:
+        if frame.f_globals.get("__name__") == map_module:
+            return True
+        frame = frame.f_back
+    return False
 
 
 def _entry_modes(fn: Any, args: Any) -> tuple[Any, ...]:
@@ -316,16 +357,18 @@ def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) ->
     # FakeTensorMode class.
     for value in (*args, *kwargs.values()):
         if isinstance(value, tracing_types):
-            return True
+            return hop_entry_lifted or not _inside_unsupported_grad_operator()
         if isinstance(value, type):
             if issubclass(value, tracing_types):
-                return True
+                return hop_entry_lifted or not _inside_unsupported_grad_operator()
         elif isinstance(value, (list, tuple)):
             for item in value:
                 if isinstance(item, tracing_types):
-                    return True
+                    return hop_entry_lifted or not _inside_unsupported_grad_operator()
     stack = get_current_dispatch_mode_stack()
-    return bool(stack) and _fake_tensor_mode_active(stack)
+    if not stack or not _fake_tensor_mode_active(stack):
+        return False
+    return hop_entry_lifted or not _inside_unsupported_grad_operator()
 
 
 def call_inside_tracing_pass(

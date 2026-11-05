@@ -39,10 +39,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _capture_state_helpers, _state
-from torchlens._utils import _torch_compat
-from torchlens.backends.torch import rescue, wrappers
+from torchlens._utils import _hop_entry_compile, _torch_compat
+from torchlens.backends.torch import _tracing_pass, rescue, wrappers
 from torchlens.backends.torch.completeness_witness import _CompletenessDispatchMode
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 
 _Mul = Callable[[torch.Tensor, object], torch.Tensor]
@@ -635,6 +636,25 @@ def test_map_grad_operands_backward_runs_through_the_trace() -> None:
     assert source.has_saved_grad
     torch.testing.assert_close(source.grads.for_pass(1).grad, reference_input.grad)
     assert trace[output.parents[0]].out.grad_fn is None
+
+
+def test_map_grad_operand_capture_fails_loudly_without_the_entry_lift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Where the entry compile cannot be lifted, a grad-requiring ``map`` fails capture loudly.
+
+    Under the forced-eager stance torch's eager ``map`` autograd returns one
+    tensor per row; with no lifted entry compile (a torch whose operators do not
+    enter through ``_hop_compile_and_call``) recording that would silently
+    differ from the untraced call, so the capture keeps the base failure.
+    """
+
+    monkeypatch.setattr(_hop_entry_compile, "swap_hop_entry_compile", lambda _replacement: None)
+    torch.manual_seed(0)
+    x = torch.randn(3, 4).requires_grad_(True)
+    with pytest.raises(TraceCaptureError, match="fake_mode"):
+        tl.trace(_MapModel(), x)
+    assert _tracing_pass.hop_entry_lifted is False
 
 
 @contextlib.contextmanager
