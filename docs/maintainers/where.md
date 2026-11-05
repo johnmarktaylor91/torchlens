@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1593 modules, 680036 lines, 0 modules without a docstring.
+83 packages, 1593 modules, 680053 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -21,7 +21,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 105 | 40070 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
-| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10673 |
+| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10689 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 62 | 37006 |
 | `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8995 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11740 |
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 15 | 4500 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 56 | 18401 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6361 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46754 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46755 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2300 |
@@ -429,7 +429,7 @@ TorchLens ecosystem runtime: provider discovery. (2 modules, 606 lines)
 
 ### `torchlens._extraction`
 
-Extraction v2 runtime (extract memo items 4-19). (19 modules, 10673 lines)
+Extraction v2 runtime (extract memo items 4-19). (19 modules, 10689 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -440,7 +440,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10673 lines)
 | `dtype_policy` | Save-dtype routing: explicit, routed, disclosed (extract + item 9). | 218 |
 | `engine` | The extraction v2 store pipeline and run engines (extract + ). | 1847 |
 | `envelope` | The typed batch envelope and the collate door (extract + item 5). | 687 |
-| `export` | Read-only streaming exporters + the self-contained contract. | 758 |
+| `export` | Read-only streaming exporters + the self-contained contract. | 774 |
 | `harvest_schema` | Counterfactual-harvest schema (leverage B17 / ): fields land NOW. | 216 |
 | `intervened` | Intervened dataset extraction (spellings DOCUMENTED-UNSTABLE). | 412 |
 | `pool` | Pool presets: axis-explicit, mask-aware, refuse ambiguity (extract ). | 397 |
@@ -946,7 +946,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (89 modules, 46754 lines)
+Computational graph visualization via Graphviz. (89 modules, 46755 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1003,7 +1003,7 @@ Computational graph visualization via Graphviz. (89 modules, 46754 lines)
 | `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2198 |
 | `_render_module_scope` | Module-scope placement for rendered edges and rolled endpoints. | 187 |
 | `_render_names` | Render names shared by the renderer and the lens and surgery layers above it. | 39 |
-| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2081 |
+| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2082 |
 | `_render_ordering` | Sibling-ordering resolution and verification for the forward DOT pipeline. | 714 |
 | `_render_regions` | Nested module-cluster (region) emission for the forward DOT pipeline. | 517 |
 | `_render_utils` | Internal Graphviz rendering helpers shared across rendering paths. | 676 |
