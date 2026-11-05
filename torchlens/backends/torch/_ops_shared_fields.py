@@ -55,7 +55,7 @@ from .aliasing import (
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,
 )
-from .buffer_writes import resolve_registered_buffer_address, session_validated_buffer_address
+from .buffer_writes import resolve_or_late_index_buffer_address, session_validated_buffer_address
 from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import (
     _add_tensor_backward_hook,
@@ -243,9 +243,7 @@ def _build_shared_fields_dict(
         # storage was rebound to input data mid-forward (F2) would re-root an
         # input-derived value as internal state. The session belt validates
         # object + storage identity; the tracker fallback is storage-anchored.
-        buffer_address = session_validated_buffer_address(self, tensor)
-        if buffer_address is None:
-            buffer_address = resolve_registered_buffer_address(self, tensor)
+        buffer_address = resolve_or_late_index_buffer_address(self, tensor)
         if buffer_address is not None:
             log_source_tensor(self, tensor, "buffer", buffer_address)
         else:
