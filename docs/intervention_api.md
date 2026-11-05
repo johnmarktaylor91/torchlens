@@ -198,6 +198,12 @@ capture: the replacement takes the next unused position number and every other o
 its label. A later push upstream passes the parent's new value through the replacement
 and fires the module's hooks there again.
 
+Comparison reads report a module edit (either kind) at the edited module's last op:
+`tl.debug.compare` and `tl.debug.first_divergence`, `Bundle.compare`,
+`Bundle.rank_changes` and the bundle diff read the replacement's value at that op's
+row, and the replacement op has no row of its own, so the unedited trace (which has no
+replacement op) is compared against the edited value at the site the edit named.
+
 ## Capture-Time Recording
 
 `tl.record(..., save=...)` is the sparse capture sibling of `tl.trace(..., save=...)`.
