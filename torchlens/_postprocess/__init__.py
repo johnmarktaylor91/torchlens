@@ -34,7 +34,6 @@ import torch
 from .._capture.session import capture_session_for_events
 from .._data_classes._compaction import compact_op_metadata as _compact_op_metadata
 from .._ir.capture_events import _clone_op_event_for_replay
-from .._ir.refs import journal_record
 from .._trace_core.relation_views import freeze_trace_relation_views as _freeze_relation_views
 from .._utils.hashing import (
     compute_raw_event_shape_hash,

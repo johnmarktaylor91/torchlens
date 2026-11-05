@@ -28,7 +28,8 @@ from typing import Any
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._ir._op_row_seed import layout_keys, seed_op_values
-from .._ir._row_journal import _RowOpRecord, journal_record
+from .._ir._row_journal import _RowOpRecord
+from .._ir.refs import journal_record
 from .._trace_core.op_store import _MISSING
 
 __all__: tuple[str, ...] = ()
