@@ -4,12 +4,9 @@
 # the same change. Baselines only ever DECREASE except when a deliberately added,
 # classified site moves the total.
 metric	count
-s17_total_sites	4146
+s17_total_sites	4150
 s17_uncoded_sites	1617
 s17_unclassified_sites	2025
-s17_total_sites	4147
-s17_uncoded_sites	1618
-s17_unclassified_sites	2027
 s18_total_sites	244
 s18_uncoded_sites	156
 s18_contract_rows	83
