@@ -185,12 +185,53 @@ def test_regenerate_writes_the_file_and_its_provenance(planted: Path) -> None:
         + ["--out", str(out), "--meta-out", str(meta)]
     )
     assert status == 0
-    assert td.read_rows(out) == _rows()
+    assert td.read_rows(out) == [row for row in _rows() if row.tier != "missing"]
     provenance = json.loads(meta.read_text())
     assert provenance["source_commit"] == "abc1234"
     assert provenance["workers"] == 4 and provenance["instrumented"] is False
     assert provenance["inputs"] == ["run.junit.xml"]
-    assert (provenance["tests"], provenance["files"]) == (4, 3)
+    assert (provenance["tests"], provenance["files"]) == (3, 2)
+    assert (provenance["pruned_missing_files"], provenance["carried_files"]) == (1, 0)
+
+
+def test_regenerate_carries_unmeasured_files_on_disk_and_drops_deleted_ones(planted: Path) -> None:
+    """``--carry`` keeps the previous row of a file the run never reached, re-tiered from source."""
+
+    (planted / "tests" / "test_rare_only.py").write_text("pytestmark = pytest.mark.rare\n")
+    previous = planted / "previous.csv"
+    td.write_rows(
+        [
+            td.FileRow("tests/sub/test_beta.py", 9, 90.0, 50.0, "heavy"),  # measured: replaced
+            td.FileRow("tests/test_gone.py", 1, 9.0, 9.0, "unmarked"),  # deleted: dropped
+            td.FileRow("tests/test_rare_only.py", 3, 40.0, 30.0, "slow"),  # unmeasured: carried
+        ],
+        previous,
+    )
+    junit = planted / "run.junit.xml"
+    junit.write_text(JUNIT)
+    out = planted / "tests" / "tiers" / "durations.csv"
+    meta = planted / "tests" / "tiers" / "durations.meta.json"
+    status = td.main(
+        [
+            "regenerate",
+            "--source-commit",
+            "abc1234",
+            "--junit",
+            str(junit),
+            "--carry",
+            str(previous),
+        ]
+        + ["--out", str(out), "--meta-out", str(meta)]
+    )
+    assert status == 0
+    assert td.read_rows(out) == [
+        td.FileRow("tests/sub/test_beta.py", 1, 3.0, 3.0, "heavy"),
+        td.FileRow("tests/test_alpha.py", 2, 1.75, 1.25, "smoke"),
+        td.FileRow("tests/test_rare_only.py", 3, 40.0, 30.0, "rare"),
+    ]
+    provenance = json.loads(meta.read_text())
+    assert (provenance["tests"], provenance["files"]) == (6, 3)
+    assert (provenance["pruned_missing_files"], provenance["carried_files"]) == (1, 1)
 
 
 def test_committed_durations_file_is_well_formed_and_small() -> None:

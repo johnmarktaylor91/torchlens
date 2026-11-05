@@ -1,14 +1,29 @@
 {
-  "files": 1606,
+  "carried_files": 4,
+  "files": 1900,
   "inputs": [
-    "serial.junit.xml",
-    "durations.csv"
+    "mp-tdr4-mat0-1-mat0.xml",
+    "mp-tdr4-mat1-1-mat1.xml",
+    "mp-tdr4-r61-1-r61.xml",
+    "mp-tdr4-s2-1-shard-2.xml",
+    "mp-tdr4-s3-1-shard-3.xml",
+    "mp-tdr4-s4-1-shard-4.xml",
+    "mp-tdr4-s5-1-shard-5.xml",
+    "mp-tdr4-s6-1-shard-6.xml",
+    "mp-tdr4-s7-1-shard-7.xml",
+    "mp-tdr4-serial-1-serial.xml",
+    "mp-tdr4-rwm-1-rwm.xml",
+    "mp-tdr4-s8-2-shard-8.xml",
+    "mp-tdr4-s9-2-shard-9.xml",
+    "clean-install-from-s8-1.xml",
+    "b46.xml"
   ],
-  "instrumented": true,
-  "measured_on": "2026-11-01",
-  "note": "not-rare, not-slow, not-serial tier at ad2e0300 under -n 8 with line-coverage tracing on (an upper bound), plus the serial tier at 6a9ede91 run alone; rows of the test files shrink round 3 deleted dropped at aa9431fee; rows of the four round-named resolver files converted to tests/test_resolver_refusal_rows.py dropped with their deletion",
+  "instrumented": false,
+  "measured_on": "2026-11-05",
+  "note": "full suite on the final train (mq-b44 5598d6bfb9 + da7a4cac10), 10 shards + serial, axon and runpod, 2026-11-05; shards 8-9 from axon re-runs; B46's changed tests and their data readers re-measured on axon at the B46 merge",
+  "pruned_missing_files": 0,
   "regenerate": "python scripts/tier_durations.py regenerate --source-commit SHA --junit <pytest --junitxml output> [--workers N] [--instrumented]",
-  "source_commit": "ad2e03000",
-  "tests": 24275,
-  "workers": 8
+  "source_commit": "74bd784ee9",
+  "tests": 23144,
+  "workers": 4
 }
