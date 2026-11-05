@@ -53,7 +53,7 @@ Strict mode turns the mismatch into an error:
 try:
     pp.compare(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3}, strict=True)
 except tl.errors.PreprocessingAuditError as err:
-    print(err)   # [preprocessing_audit_mismatch] ... mean: authority=(0.485, 0.456, 0.406) ...
+    print(err)   # strict preprocessing audit found mismatched fields: mean: authority=(0.485, 0.456, 0.406) applied=(0.5, 0.5, 0.5); ...
 ```
 
 The audit compares configurations against your declared authority. It never guesses from tensor statistics, never auto-fixes, and reports `unknown` when the authority declares nothing (torchvision detection presets). Opt-in tensor diagnostics (`pp.diagnose`) catch intrinsic failures such as non-finite values or integer batches under a float declaration; they can only contradict a declaration, never confirm one.
