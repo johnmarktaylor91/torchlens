@@ -558,8 +558,8 @@ def test_view_write_then_alias_read_keeps_invariants(read: str) -> None:
 def _interleaved_sibling_view(y: torch.Tensor) -> torch.Tensor:
     """Take a sibling column view, write a column it does not share, read the sibling.
 
-    The two column views interleave in storage, so the base-label move cannot
-    prove them disjoint and relabels the sibling as if it overlapped.
+    The two column views interleave in storage; the element-exact run-lattice
+    test proves them disjoint, so the base-label move leaves the sibling alone.
     """
 
     sibling = y[:, 0:2]
@@ -664,7 +664,21 @@ def test_a_pre_write_disjoint_sibling_handle_fails_both_entry_points(
     _assert_both_entry_points_reject(lambda: _AliasRead(_disjoint_sibling_view), "getitem")
 
 
-_RELABELED_SIBLINGS = ["overlapping", "interleaved"]
+def test_a_pre_write_interleaved_sibling_handle_fails_both_entry_points(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both entry points reject an interleaved sibling's op left on its pre-write node.
+
+    The written column and the sibling columns interleave in storage but share no
+    element, so no label moves (the managed blind spot below does not reach
+    them) and the missing backpointer raises in both captures.
+    """
+
+    _keep_siblings_on_pre_write_nodes(monkeypatch)
+    _assert_both_entry_points_reject(lambda: _AliasRead(_interleaved_sibling_view), "getitem")
+
+
+_RELABELED_SIBLINGS = ["overlapping"]
 
 
 @pytest.mark.parametrize("read", _RELABELED_SIBLINGS)
@@ -688,8 +702,8 @@ def test_managed_backward_blind_spot_accepts_a_pre_write_relabeled_sibling_handl
 ) -> None:
     """Known blind spot of the managed check, pinned; not desired behaviour.
 
-    The managed capture moves the label of an alias it cannot prove disjoint from
-    the write (an overlapping sibling, or an interleaved column) to the in-place
+    The managed capture moves the label of an alias that shares elements with
+    the write (an overlapping sibling) to the in-place
     op, so the sibling's reader becomes the writer's child and the sibling's op
     has no forward children. The dead-branch carve-out then excuses whatever
     unvisited node the op records, so the managed invariant cannot reject this
