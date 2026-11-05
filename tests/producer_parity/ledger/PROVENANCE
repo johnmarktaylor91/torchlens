@@ -5307,3 +5307,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: bd6482c4452c0ea46f2ea96ff427155aedebf845 (dirty)
 recorded: 2026-11-05T09:40:47.632708+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: conductor run 6: producer-parity static ledger regenerated for the new module torchlens/backends/torch/_held_late_index.py (corpus-c-e7f78e7a late buffer indexing)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1a3f3e9dc98ecf5598c37d701d035eb22c99d862 (dirty)
+recorded: 2026-11-05T10:07:57.585980+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: conductor run 6: producer-parity static ledger regenerated for the new module torchlens/backends/torch/_held_late_index.py (corpus-c-e7f78e7a late buffer indexing)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1a3f3e9dc98ecf5598c37d701d035eb22c99d862 (dirty)
+recorded: 2026-11-05T10:08:04.827273+00:00
