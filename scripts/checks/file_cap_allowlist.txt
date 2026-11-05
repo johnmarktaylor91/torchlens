@@ -332,10 +332,9 @@ torchlens/_postprocess/_materialize.py::ingest_op_records	122
 torchlens/_postprocess/_primitive_profile.py::_materialize_backward_primitive_profile	64
 torchlens/_postprocess/_recurrence.py::_build_preview_recurrence_graph	111
 torchlens/_postprocess/_recurrence.py::relabel_edge_metadata	73
-torchlens/_postprocess/ast_branches.py	2214
+torchlens/_postprocess/ast_branches.py	2202
 torchlens/_postprocess/ast_branches.py::_ScopeIndexer._build_if_record	65
 torchlens/_postprocess/ast_branches.py::classify_bool	87
-torchlens/_postprocess/ast_branches.py::get_file_index	91
 torchlens/_postprocess/control_flow.py	1140
 torchlens/_postprocess/control_flow.py::_classify_bool_layers	95
 torchlens/_postprocess/control_flow.py::_fix_buffer_layers	82
@@ -836,11 +835,11 @@ torchlens/backends/torch/_completeness_patches.py::_make_input_metadata_grad_pro
 torchlens/backends/torch/_completeness_patches.py::_make_input_metadata_wrapper	75
 torchlens/backends/torch/_completeness_patches.py::_observe_invisible_host_escapes	401
 torchlens/backends/torch/_completeness_patches.py::_observe_invisible_host_escapes._restore_installed	108
-torchlens/backends/torch/_completeness_storage.py	870
+torchlens/backends/torch/_completeness_storage.py	866
 torchlens/backends/torch/_completeness_storage.py::_make_plain_scalar_escape_method	65
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper	82
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper.wrapper	75
-torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	151
+torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	146
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	68
 torchlens/backends/torch/_module_class_metadata.py::_get_class_metadata	97
 torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	317
@@ -1116,11 +1115,11 @@ torchlens/intervention/helpers.py::patch_from	110
 torchlens/intervention/helpers.py::scramble_elements	88
 torchlens/intervention/helpers.py::splice_module	81
 torchlens/intervention/helpers.py::swap_with	69
-torchlens/intervention/hooks.py	1709
+torchlens/intervention/hooks.py	1706
 torchlens/intervention/hooks.py::_adapt_tensor_backward_hook	64
 torchlens/intervention/hooks.py::_normalize_sticky_hook_specs	61
 torchlens/intervention/hooks.py::_normalize_value_specs	63
-torchlens/intervention/hooks.py::expand_facet_hook_entries	70
+torchlens/intervention/hooks.py::expand_facet_hook_entries	68
 torchlens/intervention/hooks.py::normalize_hook_plan	69
 torchlens/intervention/injection.py	858
 torchlens/intervention/injection.py::injection_recorder._record_call	63
@@ -1155,7 +1154,7 @@ torchlens/intervention/runtime.py::_apply_live_hooks	155
 torchlens/intervention/runtime.py::_execute_hook	80
 torchlens/intervention/runtime.py::_validate_grad_tuple	66
 torchlens/intervention/runtime.py::validate_hook_output	70
-torchlens/intervention/save.py	851
+torchlens/intervention/save.py	844
 torchlens/intervention/save.py::_build_target_manifest	73
 torchlens/intervention/save.py::save_intervention	131
 torchlens/intervention/stochastic.py	1374
@@ -1449,7 +1448,7 @@ torchlens/validation/core.py::_ground_truth_output_matches_saved	68
 torchlens/validation/core.py::_prepare_input_args_for_validating_layer	122
 torchlens/validation/core.py::validate_parents_of_saved_layer	255
 torchlens/validation/diagnostics.py::describe_tensor_mismatch	97
-torchlens/validation/exemptions.py	2615
+torchlens/validation/exemptions.py	2614
 torchlens/validation/exemptions.py::_addcmul_zero_annihilator_decision	70
 torchlens/validation/exemptions.py::_index_domain_value_irrelevance_decision	108
 torchlens/validation/exemptions.py::_layer_norm_singleton_shape_decision	77
