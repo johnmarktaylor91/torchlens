@@ -75,7 +75,9 @@ torchlens.pass_variance	torchlens._selection.compare	L4	core	1	0
 torchlens.patch_from	torchlens.intervention.helpers	L4	core	1	0
 torchlens.pluck	torchlens	FACADE	facade	1	0
 torchlens.positions	torchlens.intervention._position_edits	L4	core	1	0
+torchlens.postprocessing	torchlens.postprocessing	FACADE	facade	0	0
 torchlens.preceded_by	torchlens._selection.selectors	L4	core	1	0
+torchlens.preprocessing	torchlens.preprocessing	FACADE	facade	0	0
 torchlens.project_onto	torchlens.intervention.helpers	L4	core	1	0
 torchlens.project_out	torchlens.intervention.helpers	L4	core	1	0
 torchlens.random_like	torchlens._selection.selection	L4	core	1	0

@@ -119,6 +119,11 @@ _LAZY_ATTRS = {
     "validation": ("torchlens.validation", None),
     "types": ("torchlens.types", None),
     "appliances": ("torchlens.appliances", None),
+    # The input and output detector registries: the glossary and guides spell
+    # tl.preprocessing.<name> and tl.postprocessing.<name>, which resolved only
+    # after an explicit submodule import until these rows existed.
+    "postprocessing": ("torchlens.postprocessing", None),
+    "preprocessing": ("torchlens.preprocessing", None),
     "backends": ("torchlens.backends", None),
     "viz": ("torchlens.viz", None),
     "site": ("torchlens._selection.selectors", "site"),
