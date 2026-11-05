@@ -87,7 +87,7 @@ def test_undeclared_write_validates() -> None:
 def test_without_the_copy_out_zeros_replay_fails(monkeypatch) -> None:  # noqa: ANN001
     """Planted bug: with the copy-out disabled, replay of ``zeros`` fails as before."""
 
-    monkeypatch.setattr(_ops_calls, "_copy_out_before_undeclared_writes", lambda *a: None)
+    monkeypatch.setattr(_ops_calls, "materialize_deferred_for_call", lambda tensors: None)
     torch.manual_seed(0)
     with _deferred_payload_clones():
         assert not tl.validate(_ScatterIntoZeros(), torch.randn(3, 4), seed=0)
