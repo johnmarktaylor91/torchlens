@@ -30,6 +30,7 @@ from ._crossing_perturbations import (
 from ._ctc_lengths_perturbation import CTC_LOSS_FUNCS, ctc_length_rotation_values
 from ._masked_scatter_perturbation import MASKED_SCATTER_FUNCS, masked_scatter_mask_values
 from ._membership_perturbation import isin_membership_toggle_values
+from ._structural_domains import structural_domain_values
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -179,11 +180,16 @@ def _integer_saturation_crossing_values(
 
     The integer counterpart of the float ``clamp`` rule below: a parent
     saturated against a large constant stays flat under the small integer draw.
-    Bool and complex parents, and every other op, keep the generic draw.
+    An integer slot with a structural contract (``embedding_bag`` offsets, a
+    traced ``view`` size) takes its in-domain move first
+    (``_structural_domains``). Bool and complex parents, and every other op,
+    keep the generic draw.
     """
 
     if parent_values.dtype == torch.bool or parent_values.is_complex():
         return None
+    if (structural := structural_domain_values(layer, parent_label, parent_values)) is not None:
+        return structural
     if layer.func_name in {"maximum", "minimum"}:
         return integer_extrema_crossing_values(layer, parent_label, parent_values)
     if layer.func_name == "clamp" and _parent_label_occupies_arg_position(layer, parent_label, 0):
