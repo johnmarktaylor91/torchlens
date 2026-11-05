@@ -101,7 +101,6 @@ _STRUCTURAL_MEMBERS: dict[str, frozenset[int]] = {
     "new_ones": frozenset({0}),
     "newones": frozenset({0}),
     "nms": frozenset({0}),
-    "deform_conv2d": frozenset({1}),
     "roi_align": frozenset({1}),
     "roi_pool": frozenset({1}),
     "ps_roi_align": frozenset({1}),
@@ -120,7 +119,6 @@ _KWARG_ALIAS_MEMBERS: dict[str, dict[int, frozenset[str]]] = {
     "viewas": {1: frozenset({"other"})},
     "resize_as_": {1: frozenset({"the_template"})},
     "nms": {0: frozenset({"boxes"})},
-    "deform_conv2d": {1: frozenset({"offset"})},
     "roi_align": {1: frozenset({"boxes", "rois"})},
     "roi_pool": {1: frozenset({"boxes", "rois"})},
     "ps_roi_align": {1: frozenset({"boxes", "rois"})},
@@ -173,7 +171,6 @@ _DECLARED_NEGATIVE_GAPS: frozenset[str] = frozenset(
     {
         *(f"skip_perturbation:{name}" for name in _SKIP_PERTURBATION_MEMBERS),
         "structural_position:nms",
-        "structural_position:deform_conv2d",
         "structural_position:roi_align",
         "structural_position:roi_pool",
         "structural_position:ps_roi_align",
