@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1595 modules, 680743 lines, 0 modules without a docstring.
+83 packages, 1596 modules, 681092 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,13 +40,13 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 15 | 4500 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 55 | 18186 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6360 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46938 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 90 | 47270 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
-| `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2462 |
+| `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2476 |
 | `torchlens._visualization.lenses.audit` | The lens validation harness (themes memo build item 17). | 5 | 1896 |
 | `torchlens._visualization.renderers` | Renderer contracts and implementations for visualization RenderIR. | 3 | 298 |
-| `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 4 | 200 |
+| `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 4 | 203 |
 | `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 16 | 5541 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 253 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15092 |
@@ -947,7 +947,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (89 modules, 46938 lines)
+Computational graph visualization via Graphviz. (90 modules, 47270 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -972,6 +972,7 @@ Computational graph visualization via Graphviz. (89 modules, 46938 lines)
 | `_draw_validation` | Draw-option validation (extracted from ''_render_dot'' per the file-size ratchet). | 158 |
 | `_edge_multiplicity` | Rendered-edge multiplicity disclosure: dedupe registry helpers. | 337 |
 | `_edge_shapes` | Optional producer-shape annotations on resolved forward edges. | 97 |
+| `_edit_change` | Value-change marks for the interventions view: which ops an edit changed. | 243 |
 | `_edit_highlighter` | The downstream highlighter: a translucent purple stroke under changed arrows and nodes. | 350 |
 | `_edit_marks` | Edit marks: how a forward picture shows an intervention. | 536 |
 | `_encoding` | Encoding-channel core (/L5): declarative value -> visual channels for draw. | 1830 |
@@ -986,9 +987,9 @@ Computational graph visualization via Graphviz. (89 modules, 46938 lines)
 | `_frame_penwidth` | Module frame border width, shared by the Trace and bundle renderers. | 30 |
 | `_geometry_audit` | Geometry audit v2: the vizmech wave-3 oracle set (items 18-20). | 974 |
 | `_graph_shell` | The Graphviz graph shell of a forward draw: caption, graph, node and edge defaults. | 92 |
-| `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 763 |
+| `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 790 |
 | `_label_format` | Formatting helpers for TorchLens visualization node labels. | 662 |
-| `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 338 |
+| `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 342 |
 | `_loop_edges` | Ports that make a rolled recurrence read as a loop. | 139 |
 | `_mutated_params` | Source nodes for in-place-mutated ''nn.Parameter'' objects in the forward render. | 693 |
 | `_pass_animation` | The ''trace.animate(site)'' picture: an HTML animation of the repeated ops at one site. | 69 |
@@ -1029,7 +1030,7 @@ Computational graph visualization via Graphviz. (89 modules, 46938 lines)
 | `fastlog_live` | Live visualization helpers for fastlog dry-run traces. | 311 |
 | `fastlog_preview` | Preview fastlog predicate decisions on a full Trace graph. | 355 |
 | `modes` | Node-mode presets for TorchLens graph visualization. | 515 |
-| `node_spec` | NodeSpec helpers for TorchLens graph visualization labels. | 466 |
+| `node_spec` | NodeSpec helpers for TorchLens graph visualization labels. | 468 |
 | `node_universe` | Presentation-free visible node universe for forward visualization. | 359 |
 | `overlays` | Per-node overlay helpers for TorchLens graph rendering. | 472 |
 | `render_execution` | Shared Graphviz layout-execution honesty seam (vizmech wave 1). | 351 |
@@ -1037,8 +1038,8 @@ Computational graph visualization via Graphviz. (89 modules, 46938 lines)
 | `renderer_registry` | The renderer registry: every picture passes one capability gate ( item 16). | 147 |
 | `request` | Resolved visualization requests and output targets. | 189 |
 | `source_graph` | Renderer-neutral source graph extraction for visualization. | 232 |
-| `surgery_visuals` | Surgery visuals: ONE mark family over 's audit entries. | 723 |
-| `theme_registry` | Lens preset registry-as-data and preset resolution (themes memo). | 271 |
+| `surgery_visuals` | Surgery visuals: ONE mark family over 's audit entries. | 780 |
+| `theme_registry` | Lens preset registry-as-data and preset resolution (themes memo). | 270 |
 | `themes` | Theme presets (cosmetic SKINS) for TorchLens graph rendering. | 781 |
 
 ### `torchlens._visualization._rank_layout_internal`
@@ -1062,7 +1063,7 @@ Text helpers for ''Trace'' objects: the compact repr and the provenance block. (
 
 ### `torchlens._visualization.lenses`
 
-TorchLens semantic lenses: the themes roster and its honesty machinery. (8 modules, 2462 lines)
+TorchLens semantic lenses: the themes roster and its honesty machinery. (8 modules, 2476 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1072,7 +1073,7 @@ TorchLens semantic lenses: the themes roster and its honesty machinery. (8 modul
 | `_families` | View-aware source-family resolution for performance lenses (knob N16). | 246 |
 | `_filter` | The general display filter (knob N9, themes memo section 6). | 332 |
 | `_nonfinite` | The six-state nonfinite status pattern channel (knob N6, themes memo). | 302 |
-| `_resolve` | Lens resolution: evidence checks, refusal taxonomy, disclosure assembly. | 768 |
+| `_resolve` | Lens resolution: evidence checks, refusal taxonomy, disclosure assembly. | 782 |
 | `_roster` | The premade-view roster (the private lens registry): rows, tiers and subjects. | 182 |
 
 ### `torchlens._visualization.lenses.audit`
@@ -1099,13 +1100,13 @@ Renderer contracts and implementations for visualization RenderIR. (3 modules, 2
 
 ### `torchlens._vocab`
 
-Relocated cross-layer vocabulary closures (L0 BASIS; private home). (4 modules, 200 lines)
+Relocated cross-layer vocabulary closures (L0 BASIS; private home). (4 modules, 203 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 17 |
 | `_package_version` | The package version, shared without importing the public facade. | 5 |
-| `node_spec` | NodeSpec value vocabulary (ratified V2 relocation; item 6). | 138 |
+| `node_spec` | NodeSpec value vocabulary (ratified V2 relocation; item 6). | 141 |
 | `trace_state` | Run-state ownership for TorchLens intervention execution. | 40 |
 
 ### `torchlens.agent`

@@ -722,7 +722,8 @@ SLIDES: tuple[Slide, ...] = (
         title="Interventions: the edit and what it changed",
         rule="A purple 2.5 pt ring and a bold purple \u0394 row name the edited node; with "
         "show_cone=True a translucent purple underlay runs under the arrows and outlines "
-        'it changed; "as_node" draws the hook as a purple delta diamond.',
+        'it changed (keyed "downstream of the edit" when the interventions view also outlines '
+        'changed values); "as_node" draws the hook as a purple delta diamond.',
         panels=(
             Panel(
                 "a",
@@ -780,7 +781,8 @@ SLIDES: tuple[Slide, ...] = (
                 at="cohort",
             ),
         ),
-        footnote="Up to {surgery_cap} citation rows per node; a caption census names the "
+        footnote="Up to {surgery_cap} citation rows per node; a light purple outline marks "
+        "each op whose saved value the edit changed; the .census.txt record names the "
         "replacement lane that ran.",
         rows=("VN19", "VC02", "VC05"),
     ),

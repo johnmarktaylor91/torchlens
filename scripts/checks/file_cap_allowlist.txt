@@ -628,7 +628,7 @@ torchlens/_visualization/collapse_optimizer.py::select_collapse_plan	115
 torchlens/_visualization/collapse_patterns.py::parse_patterns	62
 torchlens/_visualization/lenses/_budget.py::resolve_budget	114
 torchlens/_visualization/lenses/_filter.py::compile_display_filter	62
-torchlens/_visualization/lenses/_resolve.py::resolve_lens	70
+torchlens/_visualization/lenses/_resolve.py::resolve_lens	65
 torchlens/_visualization/lenses/audit/answer_key.py::generate_answer_key	115
 torchlens/_visualization/lenses/audit/battery.py::build_packet	96
 torchlens/_visualization/node_spec.py::make_intervention_node_spec_fn	134

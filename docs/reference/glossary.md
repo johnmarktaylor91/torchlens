@@ -3096,9 +3096,10 @@ deprecation shim owed*
   composes with any view; `"speed"`, `"memory"` and `"compute"` turn on the
   `node_style="profiling"` rows themselves. `"transformer"` focuses the drawing on the first
   repeated block that holds attention (for GPT-2, `transformer.h.0`) and names it in the
-  caption; an explicit `module=` wins. `"interventions"` marks every edited node (solid
-  border = recorded edit, dashed = inferred site), prints a short edit record in the
-  caption, and writes the full record beside a written figure as `<path>.census.txt`. A
+  caption; an explicit `module=` wins. `"interventions"` outlines every edited op in purple
+  (dashed = inferred site) and every other op whose saved value differs from the clean run
+  (the unedited parent trace) in light purple with its largest absolute change, and writes
+  the full record beside a written figure as `<path>.census.txt`. A
   view whose evidence or subject is missing refuses typed with a remedy
   (`view_headline_evidence_missing`, `view_attention_subject_absent`,
   `view_single_pass_no_sequence`, or `surgery_evidence_missing` for `"interventions"` on a

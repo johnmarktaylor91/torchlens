@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
 from ..._utils._display_bounded import short_dataclass_repr
-from ..._vocab.node_spec import LENS_CAPTION_KEY
+from ..._vocab.node_spec import LENS_BANNER_OMIT_KEY, LENS_CAPTION_KEY
 from ...errors._base import TorchLensWarning
 from .._encoding_request import EncodingChannelRequest
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
@@ -676,6 +676,25 @@ def _start_build(trace: Trace, lens: LensPreset, request_kwargs: dict[str, Any])
     return build
 
 
+def _surgery_mount(trace: Trace, build: _LensBuild) -> None:
+    """Mount the surgery stage: marks, plain caption, and the header lines it moves.
+
+    The headline check, mark family and census resolve in the surgery module
+    (missing evidence refuses ``surgery_evidence_missing``); the header's
+    capture-status lines about the edit move to the census sidecar, since the
+    header's edit line already says the trace is edited.
+    """
+
+    from .. import surgery_visuals as _surgery_visuals
+
+    mark_spec_fn, census_lines = _surgery_visuals.surgery_stage(trace)
+    build.preset_fns.append(mark_spec_fn)
+    build.disclosure.extend(census_lines)
+    overrides = dict(build.effective.get("graph_overrides") or {})
+    overrides[LENS_BANNER_OMIT_KEY] = _surgery_visuals.EDIT_VIEW_OMITTED_BANNERS
+    build.effective["graph_overrides"] = overrides
+
+
 def resolve_lens(
     trace: Trace,
     lens: str | LensPreset,
@@ -723,12 +742,7 @@ def resolve_lens(
     budget = _budget_stage(trace, build, channel_values)
     nonfinite = _debug_stage(trace, resolved_lens, build)
     if resolved_lens.name == "interventions":
-        # Surgery lens (lane F43): headline check + mark family + census
-        # disclosure resolve in the surgery module; this stage only mounts
-        # them on the build (missing evidence refuses surgery_evidence_missing).
-        mark_spec_fn, census_lines = _surgery_visuals.surgery_stage(trace)
-        build.preset_fns.append(mark_spec_fn)
-        build.disclosure.extend(census_lines)
+        _surgery_mount(trace, build)
     _secondary_stages(trace, resolved_lens, build)
     compiled_filter = _filter_stage(trace, display_filter, build)
     _skin_stage(skin, build)

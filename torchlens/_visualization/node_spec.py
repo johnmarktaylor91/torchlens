@@ -20,6 +20,7 @@ from .._vocab.node_spec import (  # noqa: F401
     INTERVENTION_HOOK_FILL_COLOR,
     INTERVENTION_OVERRIDE_KEYS,
     INTERVENTION_SITE_COLOR,
+    LENS_BANNER_OMIT_KEY,
     LENS_CAPTION_KEY,
     BackwardNodeSpecFn,
     CollapsedNodeSpecFn,
@@ -181,7 +182,8 @@ def graphviz_graph_overrides(graph_overrides: dict[str, Any] | None) -> dict[str
     return {
         key: value
         for key, value in graph_overrides.items()
-        if key not in INTERVENTION_OVERRIDE_KEYS and key != LENS_CAPTION_KEY
+        if key not in INTERVENTION_OVERRIDE_KEYS
+        and key not in (LENS_CAPTION_KEY, LENS_BANNER_OMIT_KEY)
     }
 
 

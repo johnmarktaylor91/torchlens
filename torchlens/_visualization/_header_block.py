@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .._vocab.node_spec import LENS_CAPTION_KEY
+from .._vocab.node_spec import LENS_BANNER_OMIT_KEY, LENS_CAPTION_KEY
 from ._focus_scope import scope_caption_head
 from ._frame_penwidth import MODULE_PENWIDTH
 from ._label_format import format_memory
@@ -220,28 +220,13 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
         HTML-like caption body without the outer FONT wrapper.
     """
 
-    from .._capture_honesty import honesty_banner_lines
-    from ._render_utils import strip_path_directories
-
     caption_body = _caption_head(trace, count_line, getattr(request, "module", None))
     edit_line = _header_edit_line(trace, request)
     if edit_line is not None:
         caption_body += f"{edit_line}<br align='left'/>"
     if getattr(trace, "_has_direct_writes", False):
         caption_body += "Direct writes detected - recipe propagation will overlay<br align='left'/>"
-    # Capture-honesty banner (WT1 A-V row 23): a poisoned/diverged sparse run,
-    # an unverified capture, or an episode capture must not RENDER clean --
-    # the graph is a publishable artifact, so the caption carries the facts.
-    # The picture keeps a cited source location's file name and line only.
-    for banner_line in honesty_banner_lines(trace):
-        banner_text = html_escape(strip_path_directories(banner_line))
-        if banner_line.startswith("capture advisory:"):
-            # An advisory discloses a gap in source provenance, not a failed
-            # capture: it stays in the header, in the key's text size, unbolded.
-            size = resolve_theme(request.theme).typography.secondary_size
-            caption_body += f"<FONT POINT-SIZE=\"{size:g}\">{banner_text}</FONT><br align='left'/>"
-            continue
-        caption_body += f"<B>{banner_text}</B><br align='left'/>"
+    caption_body += _honesty_banner_rows(trace, request)
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
         # Stacking disclosure is part of the contract (memo 4.1): the
@@ -293,6 +278,35 @@ def _caption_head(trace: Trace, count_line: str, module: Any) -> str:
     """Return the header's first lines: model (or focus scope), drawn count, parameters."""
 
     return scope_caption_head(trace, module, count_line, params_caption_detail(trace))
+
+
+def _honesty_banner_rows(trace: Trace, request: ResolvedRenderRequest) -> str:
+    """Return the capture-honesty banner rows as caption HTML.
+
+    A poisoned/diverged sparse run, an unverified capture, or an episode
+    capture must not RENDER clean (WT1 A-V row 23): the graph is a publishable
+    artifact, so the caption carries the facts. The picture keeps a cited
+    source location's file name and line only. A view may move named lines
+    to its own record (:data:`LENS_BANNER_OMIT_KEY`; the interventions census).
+    """
+
+    from .._capture_honesty import honesty_banner_lines
+    from ._render_utils import strip_path_directories
+
+    omitted = tuple((request.graph_overrides or {}).get(LENS_BANNER_OMIT_KEY, ()))
+    rows = ""
+    for banner_line in honesty_banner_lines(trace):
+        if omitted and banner_line.startswith(omitted):
+            continue
+        banner_text = html_escape(strip_path_directories(banner_line))
+        if banner_line.startswith("capture advisory:"):
+            # An advisory discloses a gap in source provenance, not a failed
+            # capture: it stays in the header, in the key's text size, unbolded.
+            size = resolve_theme(request.theme).typography.secondary_size
+            rows += f"<FONT POINT-SIZE=\"{size:g}\">{banner_text}</FONT><br align='left'/>"
+            continue
+        rows += f"<B>{banner_text}</B><br align='left'/>"
+    return rows
 
 
 def _header_edit_line(trace: Trace, request: ResolvedRenderRequest) -> str | None:
@@ -500,6 +514,7 @@ def _module_frame_swatch(theme: VisualizationTheme) -> KeySwatch:
 def _edit_swatches(theme: VisualizationTheme, drawn: frozenset[str]) -> list[KeySwatch]:
     """Return the edit entries: a ringed oval ``edited`` and the highlighted arrow."""
 
+    from ._edit_change import CHANGED_INK, CHANGED_PENWIDTH
     from ._edit_highlighter import highlighter_rgba
     from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink
 
@@ -515,10 +530,22 @@ def _edit_swatches(theme: VisualizationTheme, drawn: frozenset[str]) -> list[Key
                 line=EDIT_RING_PENWIDTH,
             )
         )
-    if "changed by the edit" in drawn:
+    if "changed value" in drawn:
         swatches.append(
             KeySwatch(
                 text="changed by the edit",
+                shape="oval",
+                fill=theme.default_fill,
+                border=CHANGED_INK,
+                line=CHANGED_PENWIDTH,
+            )
+        )
+    if "changed by the edit" in drawn:
+        # Beside the value-change outline, the cone's arrows say "downstream".
+        cone_text = "downstream of the edit" if "changed value" in drawn else "changed by the edit"
+        swatches.append(
+            KeySwatch(
+                text=cone_text,
                 shape="arrow",
                 fill=highlighter_rgba(theme),
                 border=str(theme.edge.get("color", theme.default_border)),

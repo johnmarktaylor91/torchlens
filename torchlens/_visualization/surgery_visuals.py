@@ -48,6 +48,13 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR, NodeSpec, NodeSpecFn
+from ._edit_change import (
+    ChangeReport,
+    change_census_rows,
+    change_key_rows,
+    change_report,
+    make_change_spec_fn,
+)
 from ._render_names import _SPEC_SLOT_RENDERED_NODE, DEFAULT_DRAW_STEM
 from .theme_registry import GRAPHVIZ_DRAW_SURFACE, LensPreset, register_lens
 
@@ -117,6 +124,10 @@ CREDIT_ROWS: tuple[str, ...] = (
 
 #: Cap on per-node mark rows before the "+N more" fold (label legibility).
 _MAX_MARK_ROWS_PER_NODE = 3
+
+#: Capture-status header lines the interventions view leaves to its census:
+#: the header's edit line already says the trace is edited.
+EDIT_VIEW_OMITTED_BANNERS = ("capture outcome: unattested", "INTERVENED capture")
 
 #: Cap on caption census lines before deferring to the sidecar/text form.
 _MAX_CAPTION_LINES = 12
@@ -487,31 +498,43 @@ class SurgeryCensus:
     credit_rows: tuple[str, ...]
     caption_rows: tuple[str, ...] = ()
     injected_ops: int = 0
+    key_rows: tuple[str, ...] = ()
+    change_rows: tuple[str, ...] = ()
+    header_rows: tuple[str, ...] = ()
 
     def lines(self) -> tuple[str, ...]:
         """Every census line, in render order."""
 
+        header = (
+            ("header lines the figure leaves out (the edit line says it):",) + self.header_rows
+            if self.header_rows
+            else ()
+        )
         return (
             ("surgery census (facts cited from the intervention audit)",)
             + self.lane_rows
             + self.box_lines
             + self.mark_totals
+            + self.change_rows
+            + header
             + self.credit_rows
         )
 
     def caption_lines(self) -> tuple[str, ...]:
         """The short form drawn on the figure; the full census is the sidecar.
 
-        One line per recorded edit with its own lane's wording, plus the
-        injected-op count when there is one. Lane and door names, site keys
-        and acknowledgment rows stay in :meth:`to_text`.
+        The outline key (with the changed-op count, or why changed ops are not
+        shown), declared rules that never fired, edited regions and the
+        injected-op count. Lane wording, site keys, the capture-status header
+        lines and acknowledgment rows stay in :meth:`to_text`.
         """
 
         injected = () if self.injected_ops == 0 else (f"injected ops: {self.injected_ops}",)
         return (
-            ("edit record (full text in the .census.txt file beside the figure)",)
+            self.key_rows
             + self.caption_rows
             + injected
+            + ("full edit record: the .census.txt file beside the figure",)
         )
 
     def to_text(self) -> str:
@@ -520,7 +543,9 @@ class SurgeryCensus:
         return "\n".join(self.lines()) + "\n"
 
 
-def surgery_census(trace: Trace) -> SurgeryCensus:
+def surgery_census(
+    trace: Trace, facts: SurgeryFacts | None = None, report: ChangeReport | None = None
+) -> SurgeryCensus:
     """Build the per-lane census for one trace's recorded surgery.
 
     An un-operated trace yields an honest empty census (the LENS refuses on
@@ -528,7 +553,8 @@ def surgery_census(trace: Trace) -> SurgeryCensus:
     refuses).
     """
 
-    facts = surgery_facts(trace)
+    facts = surgery_facts(trace) if facts is None else facts
+    report = _change_report(trace, facts) if report is None else report
     per_lane: dict[str, tuple[int, int]] = {}
     for transaction in facts.transactions:
         count, fires = per_lane.get(transaction.lane, (0, 0))
@@ -550,42 +576,73 @@ def surgery_census(trace: Trace) -> SurgeryCensus:
         credit_rows=CREDIT_ROWS,
         caption_rows=_caption_rows(facts),
         injected_ops=sum(facts.injected_host_counts.values()),
+        key_rows=change_key_rows(report, heuristic_count),
+        change_rows=change_census_rows(report),
+        header_rows=_omitted_header_rows(trace),
+    )
+
+
+def _change_report(trace: Trace, facts: SurgeryFacts) -> ChangeReport:
+    """Compare the trace's saved values against the clean run, skipping edit sites."""
+
+    from .node_spec import intervention_sites_for_log
+
+    edited: set[str] = set()
+    for site in intervention_sites_for_log(trace):
+        for name in ("label", "layer_label"):
+            value = get_multipass_attr(site, name, None, multipass=None)
+            if isinstance(value, str):
+                edited.add(value)
+    for mark in facts.marks:
+        if mark.basis == "fact":
+            edited.update(label for label in (mark.layer_label, mark.call_label) if label)
+    return change_report(trace, edited, lambda parent: bool(intervention_sites_for_log(parent)))
+
+
+def _omitted_header_rows(trace: Trace) -> tuple[str, ...]:
+    """The capture-status header lines this view leaves off the figure."""
+
+    from .._capture_honesty import honesty_banner_lines
+
+    return tuple(
+        line for line in honesty_banner_lines(trace) if line.startswith(EDIT_VIEW_OMITTED_BANNERS)
     )
 
 
 def _caption_rows(facts: SurgeryFacts) -> tuple[str, ...]:
-    """One plain line per recorded edit for the figure caption.
+    """The caption rows the header edit line does not already say.
 
-    Each line keeps its own lane's effect wording (the replay and live texts
-    are mutually false, so a line never borrows the other's); the node marks
-    already show where each edit sits.
+    A declared rule that never fired, and each edited region with its op
+    count. Each lane's effect wording (the replay and live texts are mutually
+    false) stays in the census sidecar, beside the splice boxes.
     """
 
     rows: list[str] = []
     for transaction in facts.transactions:
-        wording, _source = effect_wording(transaction.lane, transaction.execution_effect)
-        edits = ", ".join(transaction.edit_names) or "edit"
-        rows.append(f"{edits}: {wording}")
         rows.extend(
             f"rule {rule_id} was declared and never fired"
             for rule_id in transaction.zero_fire_rule_ids
         )
     for region_fact in facts.regions:
-        wording, _source = effect_wording("replay", region_fact.execution_effect)
-        rows.append(f"region {region_fact.edit} ({len(region_fact.members)} ops): {wording}")
+        rows.append(f"edited region {region_fact.edit}: {len(region_fact.members)} ops")
     return tuple(rows)
 
 
-def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -> NodeSpecFn:
+def make_surgery_mark_spec_fn(
+    trace: Trace, facts: SurgeryFacts | None = None, report: ChangeReport | None = None
+) -> NodeSpecFn:
     """Build the ONE mark family's node-spec callback.
 
     Line-style law: FACT marks paint a solid border at penwidth 3.0 in the
     intervention site color; HEURISTIC marks paint a DASHED border at
     penwidth 2.25 in the same hue. Each mark appends its citation row to the
-    node label (capped, with an honest "+N more" fold).
+    node label (capped, with an honest "+N more" fold). An unmarked node whose
+    saved value ``report`` says the edit changed gets the light purple
+    change outline instead.
     """
 
     resolved = surgery_facts(trace) if facts is None else facts
+    change_fn = None if report is None else make_change_spec_fn(report)
     by_call: dict[str, list[SurgeryMark]] = {}
     by_layer: dict[str, list[SurgeryMark]] = {}
     for mark in resolved.marks:
@@ -609,7 +666,7 @@ def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -
             if target is not layer_log and is_multipass_layer(layer_log):
                 node_marks = [mark for mark in node_marks if mark.call_label is None]
         if not node_marks:
-            return default_spec
+            return default_spec if change_fn is None else change_fn(layer_log, default_spec)
         any_fact = any(mark.basis == "fact" for mark in node_marks)
         # replace() copies shallowly; give the copy its OWN lines list so the
         # appended mark rows never leak into the caller's default spec.
@@ -653,14 +710,15 @@ def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
             ),
             argument="view",
         )
-    census = surgery_census(trace)
+    report = _change_report(trace, facts)
+    census = surgery_census(trace, facts, report)
     lines = census.caption_lines()
     if len(lines) > _MAX_CAPTION_LINES:
         lines = lines[: _MAX_CAPTION_LINES - 1] + (
             f"+{len(lines) - (_MAX_CAPTION_LINES - 1)} more census line(s): "
             "see the .census.txt sidecar or surgery_census(trace).to_text()",
         )
-    return make_surgery_mark_spec_fn(trace, facts), lines
+    return make_surgery_mark_spec_fn(trace, facts, report), lines
 
 
 def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
@@ -718,6 +776,5 @@ SURGERY_LENS = register_lens(
         members={"show_legend": True},
         surface=GRAPHVIZ_DRAW_SURFACE,
         headline_evidence="intervention_audit",
-        disclosure=("solid border: recorded edit; dashed border: inferred site",),
     )
 )

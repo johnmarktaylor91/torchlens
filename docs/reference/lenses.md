@@ -83,8 +83,11 @@ What each view sets:
 - **sequence**: draws unrolled, colours each node by its pass number, and stacks
   repeated structure into columns where the trace allows it (boxes side by side ran in
   the same pass, not in parallel).
-- **interventions**: marks every edited node (solid border = recorded edit, dashed border
-  = inferred site), prints a short edit record in the caption, and writes the full record
+- **interventions**: outlines every edited op in purple (dashed when the site is inferred,
+  not recorded) and every other op whose saved value differs from the clean run in light
+  purple, with its largest absolute change. The clean values come from the unedited trace
+  the fork came from; when it is gone the caption says so and only the edits are marked.
+  The full record, including the capture-status lines the header leaves out, is written
   beside a written figure as `<path>.census.txt`.
 
 ## The caption

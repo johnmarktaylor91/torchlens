@@ -297,9 +297,12 @@ edit: everything whose value the edit could have changed.
 The shading is drawn into SVG directly; for PNG and PDF output it needs the optional
 `cairosvg` package, and without it TorchLens warns and draws the edit marks alone.
 
-`view="interventions"` draws the record of every edit: each edited node is marked (a solid
-border is a recorded edit, a dashed one an inferred site), and the caption prints a short
-edit record. The full record is written beside the image as `<path>.census.txt`. A trace with
+`view="interventions"` shows what the edits changed: each edited op gets a purple outline
+(dashed when the site is inferred, not recorded), and every other op whose saved value
+differs from the clean run gets a light purple outline and its largest absolute change.
+The clean values come from the unedited trace the fork came from, so keep it alive; when it
+is gone the caption says so and only the edits are marked. The full record is written
+beside the image as `<path>.census.txt`. A trace with
 no recorded edit refuses with `surgery_evidence_missing`.
 
 [![The intervention view, with its caption](../images/visualization/interventions.png)](../images/visualization/interventions.png)

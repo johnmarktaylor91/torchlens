@@ -571,9 +571,11 @@ expert contributions from routing indices alone.
   skin and composes with any view; `"speed"`/`"memory"`/`"compute"` turn on
   `node_style="profiling"` rows themselves. `"transformer"` focuses on the first repeated block
   holding attention (GPT-2 `transformer.h.0`) and names it in the caption; explicit `module=`
-  wins. `"interventions"` marks edited nodes (solid border = recorded edit, dashed = inferred
-  site), prints a short edit record, and writes the full record beside a written figure as
-  `<path>.census.txt` (beside the collision-safe file a bare draw chose). Any other value
+  wins. `"interventions"` outlines edited ops in purple (dashed = inferred site) and ops whose
+  saved value differs from the clean run (`trace.parent_trace`) in light purple with the
+  largest absolute change; without a live unedited parent the caption says so. The full
+  record goes beside a written figure as `<path>.census.txt` (beside the collision-safe file
+  a bare draw chose). Any other value
   refuses `draw_view_invalid` listing the allowed values; a missing subject or evidence refuses
   `view_*` (for example `view_attention_subject_absent`) and an un-edited trace refuses
   `surgery_evidence_missing`. `torchlens._visualization.lenses.draw_with_lens` is private.
