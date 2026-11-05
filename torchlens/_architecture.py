@@ -72,11 +72,11 @@ PACKAGE_LAYERS: dict[str, str] = {
     # The options validators, the receipt and the process state flags are basis
     # vocabulary: every layer reads them and they read nothing above the basis.
     "_options_validation": "L0",
-    "_option_receipt": "L0",
+    "_option_receipt": "L1",  # reads _utils display and memory helpers at import
     "_state": "L0",
     "_deploy_env": "L0",
-    "_episode_spec": "L0",
-    "_memory_probes": "L0",
+    "_episode_spec": "L1",  # reads _utils display and memory helpers at import
+    "_memory_probes": "L1",  # reads _utils display and memory helpers at import
     "_mutate_warnings": "L0",
     "_plain_attr_fidelity": "L0",
     "_record_type": "L0",
