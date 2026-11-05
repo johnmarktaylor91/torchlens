@@ -530,7 +530,7 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/example_models.py": 5500,
     "tests/test_real_world_models.py": 3250,
     "tests/test_toy_models.py": 4400,
-    "tests/test_auto_collapse_metrics.py": 3200,
+    "tests/test_auto_collapse_metrics.py": 3156,
     "tests/test_backward.py": 2550,
     # 2400 -> 2650 (2026-10-01 ci-fix ratchet settle): the M1 raise-arm
     # mutation campaign landed direct arm-specific killers (W3/W4
