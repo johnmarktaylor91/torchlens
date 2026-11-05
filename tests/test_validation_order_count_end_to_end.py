@@ -17,7 +17,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens.validation import core, validate_forward_pass
+from torchlens.validation import _core as core, validate_forward_pass
 
 
 class _EndTokenPosition(nn.Module):
