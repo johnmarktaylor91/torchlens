@@ -150,3 +150,23 @@ def test_doctor_has_one_public_home() -> None:
         assert not hasattr(_utils, name)
         assert name not in _utils.__all__
         assert not hasattr(getattr(tl, "utils", None), name)
+
+
+def test_doctor_cairosvg_row_names_the_missing_library(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The cairosvg row is PASS when importable and SKIP with the import error's library otherwise."""
+
+    from torchlens._visualization import _cairosvg
+
+    for name in ("HAS_CAIROSVG", "_CAIROSVG_PROBED", "_CAIROSVG_UNAVAILABLE_REASON"):
+        monkeypatch.setattr(_cairosvg, name, getattr(_cairosvg, name))
+    missing = 'cairosvg installed but its cairo library is missing (no library called "cairo-2" was found)'
+    monkeypatch.setattr(_cairosvg, "_probe_cairosvg", lambda: (False, missing))
+    row = _environment._probe_cairosvg()
+    assert row.name == "cairosvg" and row.status == "SKIP"
+    assert "HAS_CAIROSVG=False" in row.detail and "cairo-2" in row.detail
+    monkeypatch.setattr(_cairosvg, "_probe_cairosvg", lambda: (True, ""))
+    row = _environment._probe_cairosvg()
+    assert row.status == "PASS" and "HAS_CAIROSVG=True" in row.detail
+    live = next(check for check in tl.report.doctor().checks if check.key == "cairosvg")
+    assert live.status in {"pass", "not_tested"}
+    assert "HAS_CAIROSVG=" in live.details

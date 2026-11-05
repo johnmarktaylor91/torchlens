@@ -327,9 +327,24 @@ def test_shape_field_source_names_dims_remedy(mlp_log: tl.Trace, tmp_path: Path)
 # ---------------------------------------------------------------------------
 
 
-def test_dagua_renderer_with_size_channel_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    with pytest.raises(Exception) as excinfo:
-        _draw(mlp_log, tmp_path, size_by="dims", renderer="dagua")
+def test_renderer_without_encoding_size_channel_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
+    from torchlens._visualization.renderer_registry import (
+        RendererEntry,
+        register_renderer,
+        unregister_renderer,
+    )
+
+    register_renderer(
+        "no_encoding_probe",
+        RendererEntry(name="no_encoding_probe", kind="render_ir"),
+        capabilities={"encoding_channels": False, "formats": ("svg",)},
+        replace=True,
+    )
+    try:
+        with pytest.raises(Exception) as excinfo:
+            _draw(mlp_log, tmp_path, size_by="dims", renderer="no_encoding_probe")
+    finally:
+        unregister_renderer("no_encoding_probe")
     assert excinfo.value.fields["code"] == "encoding_requires_dot_layout"
 
 

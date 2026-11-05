@@ -1,0 +1,6 @@
+{
+  "clean": "When Mary and John went to the store, John gave a drink to",
+  "corrupt": "When John and Mary went to the store, Mary gave a drink to",
+  "positive_token": " Mary",
+  "negative_token": " John"
+}

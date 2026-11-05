@@ -37,13 +37,11 @@ from __future__ import annotations
 
 import copy
 import gc
-import types
 import weakref
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from collections.abc import Iterator
 from dataclasses import fields
-from itertools import islice, repeat
-from operator import is_
+from itertools import islice
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -56,6 +54,7 @@ from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils.env_flags import closed_bool_env
 from ..intervention.types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
 from ._accessor_base import Accessor
+from ._fork_flat_copy import _FLAT_COPY_DEPTH, _NO_FLAT_COPY, _flat_container_copy
 from ._state_adapter import state_items, state_new, state_restore
 from .func_call_location import FuncCallLocation
 from .layer import OpAccessor
@@ -97,6 +96,16 @@ _TRACE_ACCESSOR_CACHE_FIELDS = frozenset(
         "_module_call_accessor",
     }
 )
+
+# Trace fields written only while their own trace captures and never mutated
+# afterwards: the capture-time edge truth (one ``setdefault`` per op entry in the
+# torch op finalizer, read by the topology invariant) and the pre-forward RNG
+# snapshot (assigned at run start, read by bundling). Every capture writes a
+# fresh trace (``tl.trace``, and the rerun and append engines capture into a new
+# trace and then replace or merge state), so no write ever reaches a finished
+# trace's copy. A fork shares them instead of deep-copying them (about 48,000
+# Python calls per fork on GPT-2 small).
+_SEALED_AT_CAPTURE_FIELDS = frozenset({"_capture_parent_edge_truth", "_pre_forward_rng_states"})
 
 _OP_FID_BY_NAME = _OP_STORE_LAYOUT.fid_by_name
 _SOURCE_TRACE_REF_FID = _OP_FID_BY_NAME["_source_trace_ref"]
@@ -221,9 +230,9 @@ class _RecordTranslator:
         self._guards: dict[int, Any] = {}
         self._keepalive: list[Any] = []
         self._fork_ref = fork_ref
-        # Weak parent-trace reference: a bare STRONG parent-trace value in
-        # copied state (ModuleCall._source_trace_strong) translates to the
-        # fork WITHOUT the translator pinning the parent (GC parity).
+        # Weak parent-trace reference: a parent-trace value met in copied
+        # state translates to the fork WITHOUT the translator pinning the
+        # parent (GC parity).
         self._parent_ref: Any = None
 
     def add(self, parent_record: Any, shell: Any) -> None:
@@ -294,97 +303,19 @@ def _copy_fork_value(value: Any, memo: dict[Any, Any] | None = None) -> Any:
     return _memoized_deep_copy(value, memo, on_failure=copy.copy)
 
 
-_NO_FLAT_COPY = object()
-_FLAT_COPY_DEPTH = 3
-_ATOMIC_COPY_TYPES = frozenset({str, bytes, int, float, bool, complex, type(None)})
-_is_atomic_copy_type = _ATOMIC_COPY_TYPES.__contains__
-_FLAT_COPY_TYPES = frozenset({dict, OrderedDict, defaultdict, list, tuple, set, frozenset})
-#: ``default_factory`` values ``copy.deepcopy`` returns unchanged (its atomic dispatch).
-_ATOMIC_FACTORY_TYPES = (type(None), type, types.BuiltinFunctionType, types.FunctionType)
+def _copy_state_history(history: Any, memo: dict[Any, Any]) -> Any:
+    """Copy the parent's ``state_history`` for a fork, exactly as ``copy.deepcopy`` would.
 
-
-def _flat_container_copy(value: Any, memo: dict[Any, Any], depth: int) -> Any:
-    """Copy a flat container exactly as ``copy.deepcopy(value, memo)`` would, without recursing.
-
-    The trace-side fields are mostly large label tables (thousands of string
-    keys mapping to strings, ints or records), where deepcopy's per-element
-    dispatch is most of the fork's fixed cost. This handles exact built-in
-    ``dict``, attribute-free ``OrderedDict``, ``list``, ``tuple``, ``set`` and
-    ``frozenset`` values whose every key and element is atomic (deepcopy
-    returns it unchanged), already in the fork memo (deepcopy returns the
-    memo's copy, a record shell), or itself such a container up to ``depth``
-    levels. The copy is registered in the memo and the original kept alive,
-    as deepcopy does, so later references alias it; an all-identical tuple is
-    returned as itself, as deepcopy returns it. Anything else returns
-    ``_NO_FLAT_COPY`` and takes the ordinary deepcopy path.
+    The parent's history gains one ``fork`` row per fork, so a sweep of N
+    forks used to deep-copy 1, 2, ..., N rows. Rows of strings and numbers
+    take the flat copy (no per-row Python call); anything else deep-copies
+    as before, including the failure behaviour.
     """
 
-    cls = type(value)
-    if cls not in _FLAT_COPY_TYPES:
-        return _NO_FLAT_COPY
-    if cls is not dict and getattr(value, "__dict__", None):
-        return _NO_FLAT_COPY
-    if cls is defaultdict and not isinstance(value.default_factory, _ATOMIC_FACTORY_TYPES):
-        return _NO_FLAT_COPY
-    known = memo.get(id(value), _NO_FLAT_COPY)
-    if known is not _NO_FLAT_COPY:
-        return known
-    result = _flat_copy_contents(value, cls, memo, depth)
-    if result is not _NO_FLAT_COPY and result is not value:
-        memo[id(value)] = result
-        memo.setdefault(id(memo), []).append(value)  # deepcopy's keep-alive list
-    return result
-
-
-def _flat_copy_contents(value: Any, cls: type, memo: dict[Any, Any], depth: int) -> Any:
-    """Build the copy for :func:`_flat_container_copy`, or return ``_NO_FLAT_COPY``.
-
-    The per-member type and identity checks run inside ``map`` (no Python
-    frame per member): most members are atomic labels and counts, which
-    deepcopy returns unchanged, so an all-atomic container is copied without
-    visiting its members one call at a time.
-    """
-
-    mapping = cls is dict or cls is OrderedDict or cls is defaultdict
-    if mapping and not all(map(_is_atomic_copy_type, map(type, value))):
-        return _NO_FLAT_COPY
-    members = value.values() if mapping else value
-    if all(map(_is_atomic_copy_type, map(type, members))):
-        items = list(members)
-    else:
-        items = _flat_copy_members(members, memo, depth)
-        if items is _NO_FLAT_COPY:
-            return _NO_FLAT_COPY
-    if cls is defaultdict:
-        return defaultdict(value.default_factory, zip(value, items, strict=True))
-    if mapping:
-        return cls(zip(value, items, strict=True))
-    if cls is tuple and all(map(is_, items, value)):
-        return value
-    return cls(items)
-
-
-def _flat_copy_members(members: Any, memo: dict[Any, Any], depth: int) -> Any:
-    """Copy the members of a container that holds a non-atomic one, or return ``_NO_FLAT_COPY``."""
-
-    items = [
-        item if type(item) in _ATOMIC_COPY_TYPES else _flat_element_copy(item, memo, depth)
-        for item in members
-    ]
-    if any(map(is_, items, repeat(_NO_FLAT_COPY))):
-        return _NO_FLAT_COPY
-    return items
-
-
-def _flat_element_copy(item: Any, memo: dict[Any, Any], depth: int) -> Any:
-    """Copy one element for :func:`_flat_container_copy`, or return ``_NO_FLAT_COPY``."""
-
-    if type(item) in _ATOMIC_COPY_TYPES:
-        return item
-    known = memo.get(id(item), _NO_FLAT_COPY)
-    if known is not _NO_FLAT_COPY or depth <= 1:
-        return known
-    return _flat_container_copy(item, memo, depth - 1)
+    flat = _flat_container_copy(history, memo, _FLAT_COPY_DEPTH)
+    if flat is not _NO_FLAT_COPY:
+        return flat
+    return copy.deepcopy(history, memo)
 
 
 def _default_fork_policy(value: Any) -> ForkFieldPolicy:
@@ -427,6 +358,8 @@ def _fork_model_field(parent: Trace, field_name: str, value: Any, memo: dict[Any
         # default policy would share them); the fork rebuilds lazily.
         # ``build_fork`` pops these after restore.
         return None
+    if field_name in _SEALED_AT_CAPTURE_FIELDS:
+        return value
     if field_name == "annotations":
         # A plain fork is NOT a fresh execution: its records still hold the
         # capture's own values, so every annotations sub-key (episode ledger,
@@ -686,11 +619,10 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     )
     if fork_core is not None:
         # The module kind's cells embed accessor objects (``Module.ops``/
-        # ``Module.params``) whose members hold STRONG trace references
-        # (``ModuleCall._source_trace_strong``); a view over that table
-        # would keep the parent Trace reachable for the fork's lifetime — a
-        # GC parity break vs the deepcopy fork. Modules are few, so they
-        # fork as detached duplicates with translated cells instead.
+        # ``Module.params``) whose members carry owner back-references; a
+        # view over that table would answer for the parent instead of the
+        # fork. Modules are few, so they fork as detached duplicates with
+        # translated cells instead.
         fork_core.kind_rows.pop("module", None)
     fork = state_new(type(parent))
     fork_ref = weakref.ref(fork)
@@ -788,7 +720,7 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     # Read the parent's spec, never create one: fork() must not mutate its parent.
     # A spec-less parent gives a spec-less fork; staging on it creates one lazily.
     fork._intervention_spec = copy.deepcopy(parent._intervention_spec, memo)
-    fork.state_history = copy.deepcopy(parent.state_history, memo)
+    fork.state_history = _copy_state_history(parent.state_history, memo)
     fork._graph_relationship_evidence = copy.deepcopy(parent._graph_relationship_evidence, memo)
     fork._out_recipe_revision = parent._out_recipe_revision
     fork._spec_revision = parent._spec_revision

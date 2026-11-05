@@ -37,6 +37,15 @@ HEALTH_FACTS_ANNOTATIONS_KEY = "health_facts"
 HEALTH_FACTS_SCHEMA_VERSION = 1
 
 
+def _health_text(verdict: str) -> str:
+    """Describe an already settled health verdict without inspecting payloads."""
+
+    return {
+        "checked_and_clean": "no NaN/Inf (exact)",
+        "found": "NaN/Inf found (see .nonfinite_ops)",
+    }.get(verdict, "NaN/Inf not checked")
+
+
 @dataclass(frozen=True)
 class HealthFacts:
     """Immutable normalized health observations for one capture.

@@ -6,6 +6,8 @@ import weakref
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from .._utils._display_records import backward_repr, backward_str
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -102,6 +104,9 @@ class GradFnCall:
     >>> type(call).__name__, call.grad_fn_label in [fn.label for fn in trace.autograd.grad_fns]
     ('GradFnCall', True)
     """
+
+    __repr__ = backward_repr
+    __str__ = backward_str
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "call_index": FieldPolicy.KEEP,

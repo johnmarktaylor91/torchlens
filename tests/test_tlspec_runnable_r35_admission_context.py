@@ -89,7 +89,7 @@ def test_r35_exotic_inputs_fail_typed_before_any_byte_touch(
     loaded = tl.load(str(path))
     exotic = _exotic_inputs()[kind]
     with pytest.raises(PathDivergenceError) as excinfo:
-        loaded.run(inputs=exotic, on_divergence=policy)
+        loaded.run_transaction(inputs=exotic, on_divergence=policy)
     check = excinfo.value.fields.get("contract_check")
     assert check is not None and check.name.startswith("input_layout:")
 
@@ -175,7 +175,7 @@ def test_r35_autocast_capture_replays_outside_autocast(tmp_path: Path) -> None:
         )
     path = tmp_path / "autocast.tlspec"
     trace.save(str(path), level="runnable", include_weights=True)
-    result = tl.load(str(path)).run(inputs=x)
+    result = tl.load(str(path)).run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.output.dtype is torch.bfloat16
 
@@ -188,6 +188,6 @@ def test_r35_disabled_capture_replays_inside_ambient_autocast(tmp_path: Path) ->
     x = torch.randn(2, 4)
     path = _save(model, x, tmp_path / "noamp.tlspec", include_weights=True)
     with torch.autocast("cpu", dtype=torch.bfloat16):
-        result = tl.load(str(path)).run(inputs=x)
+        result = tl.load(str(path)).run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.output.dtype is torch.float32

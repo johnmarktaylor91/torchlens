@@ -24,14 +24,23 @@ session (the memo's "one typography record" is a placeholder name).
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
+from typing import Any
 
 __all__ = [
     "DEFAULT_TYPOGRAPHY",
     "EDIT_GAP_SIZE",
     "HIGH_CONTRAST_TYPOGRAPHY",
     "TypographyRecord",
+    "active_edge_typography",
+    "edge_annotation_pt",
+    "edge_emphasis_pt",
+    "edge_typography_for_draw",
     "format_pt",
+    "resolve_edge_typography",
 ]
 
 
@@ -65,20 +74,23 @@ class TypographyRecord:
         Ordinary node-label size in points (Graphviz default 14).
     annotation_size:
         Edge annotation channels: argument labels, ``xN`` multiplicity,
-        ``accum``/``bwd`` markers (the historical literal 8).
+        ``accum``/``bwd`` markers. 13 pt (was 8), one point under node text, so
+        ``In 1-3`` and ``arg 0`` stay readable when a drawing is scaled to a
+        notebook pane.
     secondary_size:
         De-emphasized captions such as the orphans cluster (the historical
         literal 10).
     emphasis_size:
-        Emphasized standalone edge labels such as conditional-arm markers
-        (the historical literal 18).
+        Emphasized standalone edge labels such as conditional-arm markers.
+        14 pt (was 18), the node-title size, so a branch marker never
+        outranks the operations it routes between.
     """
 
     family: str
     base_size: float = 14.0
-    annotation_size: float = 8.0
+    annotation_size: float = 13.0
     secondary_size: float = 10.0
-    emphasis_size: float = 18.0
+    emphasis_size: float = 14.0
 
     @property
     def annotation_ratio(self) -> float:
@@ -138,3 +150,95 @@ DEFAULT_TYPOGRAPHY = TypographyRecord(family="Helvetica")
 
 #: The high-contrast preset keeps its bold family across every scope.
 HIGH_CONTRAST_TYPOGRAPHY = TypographyRecord(family="Helvetica-Bold")
+
+
+#: The edge typography of the forward draw in progress. ``None`` outside a draw,
+#: where the edge-annotation builders fall back to :data:`DEFAULT_TYPOGRAPHY`.
+_EDGE_TYPOGRAPHY: ContextVar[TypographyRecord | None] = ContextVar(
+    "torchlens_edge_typography", default=None
+)
+
+
+def active_edge_typography() -> TypographyRecord:
+    """Return the typography the edge-annotation builders size their text with."""
+
+    record = _EDGE_TYPOGRAPHY.get()
+    return DEFAULT_TYPOGRAPHY if record is None else record
+
+
+def edge_annotation_pt() -> str:
+    """Return the active edge-annotation size formatted for DOT emission."""
+
+    return active_edge_typography().annotation_pt
+
+
+def edge_emphasis_pt() -> str:
+    """Return the active emphasized edge-label size formatted for DOT emission."""
+
+    return active_edge_typography().emphasis_pt
+
+
+def _static_point_size(value: object) -> float | None:
+    """Return ``value`` as a positive point size, or ``None`` when it is not one.
+
+    Callables (per-edge overrides), booleans and unparseable strings carry no
+    draw-wide size; Graphviz still receives them verbatim as edge attributes.
+    """
+
+    if value is None or callable(value) or isinstance(value, bool):
+        return None
+    try:
+        size = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return size if size > 0 else None
+
+
+def resolve_edge_typography(
+    record: TypographyRecord,
+    *,
+    edge_overrides: Mapping[str, Any] | None = None,
+    font_size: float | None = None,
+    theme_edge: Mapping[str, Any] | None = None,
+) -> TypographyRecord:
+    """Resolve the edge-annotation sizes of one draw from its edge font setting.
+
+    The edge font size is the first static size among ``edge_overrides["fontsize"]``,
+    ``font_size`` and the theme's edge ``fontsize``. When one is set, edge
+    annotations (pass ranges, argument labels, ``xN`` counts) render at that
+    size and the emphasized branch labels (``IF``/``THEN``) keep their ratio to
+    it; when none is set the theme's record applies unchanged, so the default
+    drawing is byte-identical.
+    """
+
+    candidates = (
+        (edge_overrides or {}).get("fontsize"),
+        font_size,
+        (theme_edge or {}).get("fontsize"),
+    )
+    for candidate in candidates:
+        size = _static_point_size(candidate)
+        if size is not None:
+            return replace(record.scaled(size / record.base_size), annotation_size=size)
+    return record
+
+
+@contextmanager
+def edge_typography_for_draw(theme: Any, request: Any) -> Iterator[TypographyRecord]:
+    """Hold the edge typography of one forward draw for the builders it calls.
+
+    ``theme`` is the resolved theme (``typography`` and ``edge``); ``request`` is
+    the resolved render request (``edge_overrides`` and ``font_size``).
+    """
+
+    record = resolve_edge_typography(
+        theme.typography,
+        edge_overrides=getattr(request, "edge_overrides", None),
+        font_size=getattr(request, "font_size", None),
+        theme_edge=getattr(theme, "edge", None),
+    )
+    token = _EDGE_TYPOGRAPHY.set(record)
+    try:
+        yield record
+    finally:
+        _EDGE_TYPOGRAPHY.reset(token)

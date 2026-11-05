@@ -136,3 +136,67 @@ def test_visualization_options_path_extension_picks_the_format(
     assert drawing.file_format == "png"
     assert (tmp_path / "g.png").exists()
     assert not (tmp_path / "g.pdf").exists()
+
+
+def _draw_keyed(producer: str, trace: tl.Trace, folder: Path) -> tl.viz.Drawing:
+    """Draw with the key to an SVG file through one producer of a ``Drawing``."""
+
+    if producer == "trace":
+        return trace.draw(str(folder / "keyed.svg"), show_legend=True)
+    torch.manual_seed(0)
+    if producer == "quickstart":
+        return tl.draw(_Tiny(), torch.randn(1, 3), path=str(folder / "keyed.svg"), show_legend=True)
+    members = {name: tl.trace(_Tiny(), torch.randn(1, 3)) for name in ("a", "b")}
+    return tl.Bundle(members, baseline="a").draw(str(folder / "keyed.svg"), show_legend=True)
+
+
+def _detached_svg_with_key(
+    producer: str, trace: tl.Trace, tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> tuple[str, str, list[str]]:
+    """Draw with the key to a path, then re-render it as a notebook displays it.
+
+    Returns the displayed SVG, the Graphviz text written to stderr and the
+    warning messages raised by the draw and the display.
+    """
+
+    import gc
+    import warnings
+
+    capfd.readouterr()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        drawing = _draw_keyed(producer, trace, tmp_path)
+        gc.collect()  # the quickstart's and the bundle's traces are gone by display time
+        svg = drawing._repr_svg_()
+    assert svg is not None
+    return svg, capfd.readouterr().err, [str(item.message) for item in caught]
+
+
+_PRODUCERS = pytest.mark.parametrize("producer", ["trace", "quickstart", "bundle"])
+
+
+@_PRODUCERS
+def test_displayed_drawing_with_key_links_no_temp_file(
+    producer: str, trace: tl.Trace, tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """The key's icons are embedded in the displayed SVG, never linked from the temp folder."""
+
+    import re
+    import tempfile
+
+    svg, _, _ = _detached_svg_with_key(producer, trace, tmp_path, capfd)
+    hrefs = re.findall(r'href="([^"]*)"', svg)
+    assert hrefs, "the key draws its swatches as images"
+    assert all(href.startswith("data:image/") for href in hrefs), hrefs[:3]
+    assert tempfile.gettempdir() not in svg
+
+
+@_PRODUCERS
+def test_displayed_drawing_with_key_renders_without_graphviz_warning(
+    producer: str, trace: tl.Trace, tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """Drawing and displaying the key draws no Graphviz warning (the key table fits its words)."""
+
+    _, stderr, messages = _detached_svg_with_key(producer, trace, tmp_path, capfd)
+    assert "Warning" not in stderr, stderr
+    assert not [message for message in messages if "Graphviz" in message], messages

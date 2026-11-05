@@ -10,6 +10,7 @@ L3: the large-blob (mmap) materialize branch brackets its streaming hash with a
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -61,9 +62,66 @@ def test_streaming_writer_drops_dead_saw_first_payload(tmp_path: Path) -> None:
         )
         # Exercise the former line-162 write site: still no vestigial state.
         assert not hasattr(writer, "_saw_first_payload")
-        assert (writer.tmp_path / entry.relative_path).exists()
+        assert entry.relative_path.startswith("blobs/torch_safetensors_v1-")
+        assert writer.get_tensor_reference(entry.blob_id)["key"].startswith("t")
     finally:
         writer.abort("test cleanup")
+
+
+# --- keyed chunk references ---------------------------------------------------
+
+
+def _make_keyed_ref(bundle_dir: Path) -> tuple[LazyActivationRef, Path, torch.Tensor]:
+    """Persist a two-key chunk and return a lazy ref to its second key."""
+
+    blobs = bundle_dir / "blobs"
+    blobs.mkdir(exist_ok=True)
+    relative_path = "blobs/torch_safetensors_v1-0000.safetensors"
+    chunk_path = bundle_dir / relative_path
+    wanted = torch.arange(6, dtype=torch.float32).reshape(2, 3)
+    save_file({"t0": torch.zeros(5), "t1": wanted}, str(chunk_path))
+    ref = LazyActivationRef(
+        blob_id="0000000002",
+        shape=(2, 3),
+        dtype=torch.float32,
+        device_at_save="cpu",
+        source_bundle_path=bundle_dir,
+        relative_path=relative_path,
+        kind="out",
+        expected_sha256=sha256_file(chunk_path),
+        key="t1",
+    )
+    return ref, chunk_path, wanted
+
+
+def test_keyed_ref_reads_its_key_from_a_shared_chunk(tmp_path: Path) -> None:
+    """A keyed reference materializes its own tensor out of a multi-key chunk."""
+
+    ref, _, wanted = _make_keyed_ref(tmp_path)
+
+    assert torch.equal(ref.materialize(), wanted)
+
+
+def test_keyed_ref_detects_chunk_corruption(tmp_path: Path) -> None:
+    """A rewritten chunk is refused by digest before any key is read."""
+
+    ref, chunk_path, _ = _make_keyed_ref(tmp_path)
+    corrupted = bytearray(chunk_path.read_bytes())
+    corrupted[-1] ^= 0x01
+    chunk_path.write_bytes(bytes(corrupted))
+
+    with pytest.raises(ArtifactError, match="sha256 mismatch"):
+        ref.materialize()
+
+
+def test_keyed_ref_refuses_a_missing_key(tmp_path: Path) -> None:
+    """A key absent from an intact chunk raises typed, never a raw safetensors error."""
+
+    ref, _, _ = _make_keyed_ref(tmp_path)
+    missing = dataclasses.replace(ref, key="t9")
+
+    with pytest.raises(ArtifactError, match="Failed to materialize key 't9'"):
+        missing.materialize()
 
 
 # --- L3 ---------------------------------------------------------------------

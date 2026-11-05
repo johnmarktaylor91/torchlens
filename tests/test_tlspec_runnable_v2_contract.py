@@ -8,15 +8,17 @@ ever interpreted as a default.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import read_runnable, write_runnable
 
 import torchlens as tl
+from torchlens._io.format3 import reader
+from torchlens._io.format_errors import ArtifactError
 from torchlens._runnable import (
     RUNNABLE_TLSPEC_SCHEMA_VERSION,
     ReadinessStatus,
@@ -44,10 +46,9 @@ def _save_runnable(tmp_path: Path, **save_kwargs: Any) -> Path:
 
 
 def _rewrite_manifest(bundle: Path, mutate: Any) -> None:
-    manifest_path = bundle / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    mutate(manifest)
-    manifest_path.write_text(json.dumps(manifest))
+    descriptor = read_runnable(bundle)
+    mutate({"run": descriptor})
+    write_runnable(bundle, descriptor)
 
 
 def test_v2_descriptor_round_trips_with_required_context(tmp_path: Path) -> None:
@@ -62,7 +63,7 @@ def test_v2_descriptor_round_trips_with_required_context(tmp_path: Path) -> None
         # Disabled autocast is written affirmatively, never omitted.
         assert call.execution_context.autocast, call.call_id
         assert all(entry.enabled is False for entry in call.execution_context.autocast)
-    result = loaded.run(inputs=torch.randn(2, 4))
+    result = loaded.run_transaction(inputs=torch.randn(2, 4))
     assert result.report.path_faithfulness.value == "verified"
 
 
@@ -107,7 +108,7 @@ def test_legacy_v1_capability_loads_analysis_only(tmp_path: Path) -> None:
     assert "analysis-only" in joined
     assert "context" in joined
     with pytest.raises(RunCapabilityUnavailableError):
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
 
 
 def test_unenterable_recorded_device_refuses_execution_context_unavailable(
@@ -133,7 +134,7 @@ def test_unenterable_recorded_device_refuses_execution_context_unavailable(
     assert loaded._runnable.readiness.status is ReadinessStatus.READY
 
     with pytest.raises(RunPreconditionError) as captured:
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
     assert captured.value.fields["code"] == RunnableErrorCode.EXECUTION_CONTEXT_UNAVAILABLE.value
     assert captured.value.fields["context_field"] == "default_device"
 
@@ -151,17 +152,30 @@ def test_v2_descriptor_missing_call_context_is_rejected(tmp_path: Path) -> None:
     readiness = loaded._runnable.readiness
     assert readiness.status is ReadinessStatus.UNAVAILABLE
     with pytest.raises(RunCapabilityUnavailableError):
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
 
 
-def test_v2_descriptor_missing_ambient_context_is_rejected(tmp_path: Path) -> None:
+def test_v2_descriptor_missing_ambient_context_is_rejected(tmp_path: Path, monkeypatch) -> None:
     """A v2 descriptor with an absent ambient context is refused, not defaulted."""
 
     bundle = _save_runnable(tmp_path)
+    allocated = []
+    original = reader.state_new
+
+    def observed_new(cls):
+        allocated.append(cls.__name__)
+        return original(cls)
+
+    monkeypatch.setattr(reader, "state_new", observed_new)
+    tl.load(bundle)
+    assert "Trace" in allocated
+    allocated.clear()
 
     def _strip_ambient(manifest: dict[str, Any]) -> None:
         manifest["run"].pop("ambient_context", None)
 
     _rewrite_manifest(bundle, _strip_ambient)
-    with pytest.raises(Exception, match="ambient_context|fields mismatch"):
+    with pytest.raises(ArtifactError, match="ambient_context") as refusal:
         tl.load(str(bundle))
+    assert refusal.value.fields["code"] == "manifest_schema_invalid"
+    assert "Trace" not in allocated

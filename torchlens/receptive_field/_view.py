@@ -12,10 +12,10 @@ from .._selection.graph import _DEFAULT_PROBE_BUDGET, _influence
 from .._selection.selection import _find_act_ops, units as _units
 from ._errors import (
     AmbiguousInputError,
-    AmbiguousTargetError,
     ReceptiveFieldError,
     ReceptiveFieldUnavailableError,
 )
+from ._path import _select_target_descriptor
 from ._types import (
     GradReceptiveField,
     GridLayout,
@@ -107,7 +107,8 @@ class ReceptiveFieldView:
 
     Examples
     --------
-    >>> view = tl.trace(model, x)["conv2d_2_3"].receptive_field
+    >>> trace = tl.trace(model, x)
+    >>> view = trace["conv2d_2_3"].receptive_field
     >>> (isinstance(view, ReceptiveFieldView), view.size)
     (True, (5, 5))
     >>> view.at((4, 4)).exact
@@ -229,7 +230,7 @@ class ReceptiveFieldView:
             are reachable.
         AmbiguousTargetError
             If this is a projective view, no target is selected, and several
-            are reachable.
+            are reachable without one being the primary output beside caches.
         ReceptiveFieldError
             If no endpoint is reachable or the requested one is not reachable.
         """
@@ -239,10 +240,8 @@ class ReceptiveFieldView:
             if len(self.per_input) > 1:
                 roles = ", ".join(self.per_input)
                 if projective:
-                    raise AmbiguousTargetError(
-                        f"Source {self._op.label!r} has multiple reachable targets: "
-                        f"{roles}. Select one with view[target_op] or target=<io_role>."
-                    )
+                    order = cast("_ProjectiveFieldSolution", self._solution).target_labels
+                    return _select_target_descriptor(self.per_input, None, order, self._op.label)
                 raise AmbiguousInputError(
                     f"Target {self._op.label!r} has multiple reachable inputs: {roles}. "
                     "Select one with view[input_op] or input_op=<io_role>."
@@ -372,8 +371,8 @@ class ReceptiveFieldView:
             Optional per-call receptive/projective direction override. ``None``
             uses the view's bound direction.
         target:
-            Optional descendant graph point selecting the far endpoint of a
-            projective query. Not permitted together with ``source``.
+            Descendant graph point or output IO role for a projective query (not with
+            ``source``); ``None`` picks the primary output when the other targets are caches.
         clip:
             Whether bounds are clipped to captured input extents.
 
@@ -389,7 +388,7 @@ class ReceptiveFieldView:
         if resolved_direction is ReceptiveFieldDirection.PROJECTIVE:
             if input_op is not None or source is not None:
                 raise TypeError("Projective queries select their far endpoint with target=.")
-            from ._forward_query import _select_target_descriptor, box_for_source_unit
+            from ._forward_query import box_for_source_unit
 
             projective_solution = self._projective_solution(target)
             source_unit: Sequence[int]
@@ -400,7 +399,7 @@ class ReceptiveFieldView:
                         f"No projective-field solution is available from source {self._op.label!r}."
                     )
                 proj_descriptor = _select_target_descriptor(
-                    descriptors, cast("Op | str | None", target)
+                    descriptors, cast("Op | str | None", target), projective_solution.target_labels
                 )
                 source_unit = self._center_unit(proj_descriptor)
             else:
@@ -559,8 +558,8 @@ class ReceptiveFieldView:
             Optional per-call receptive/projective direction override. ``None``
             uses the view's bound direction.
         target:
-            Optional descendant graph point selecting the far endpoint of a
-            projective query. Not permitted together with ``source``.
+            Descendant graph point or output IO role for a projective query (not with
+            ``source``); ``None`` picks the primary output when the other targets are caches.
         atol, rtol:
             Non-negative gradient support thresholds.
         retain_graph:
@@ -640,7 +639,7 @@ class ReceptiveFieldView:
         direction:
             Receptive or projective containment direction.
         target:
-            Optional descendant graph point for projective validation.
+            Optional descendant graph point, or output IO role, for projective validation.
         atol, rtol:
             Accepted for compatibility and ignored. Validation always uses exact
             finite nonzero gradient support.
@@ -757,8 +756,8 @@ class ReceptiveFieldView:
             Optional per-call receptive/projective direction override. ``None``
             uses the view's bound direction.
         target:
-            Optional descendant graph point selecting the far endpoint of a
-            projective overlay.
+            Optional descendant graph point, or output IO role, naming the far
+            endpoint of a projective overlay.
         image:
             Optional source image override.
         grad:

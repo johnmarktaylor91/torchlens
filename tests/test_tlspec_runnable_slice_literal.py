@@ -90,7 +90,7 @@ def test_slice_index_literal_save_load_run_verified_on_changed_input(
     path = _save_runnable(model, capture_input, tmp_path / "slice.tlspec")
 
     changed_input = torch.randn(2, 8)
-    result = tl.load(path).run(inputs=changed_input)
+    result = tl.load(path).run_transaction(inputs=changed_input)
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert torch.allclose(result.output, reference_fn(changed_input))
@@ -245,13 +245,13 @@ def test_r71b_secA_pin_plain_capture_semantic_runtime_diverges(tmp_path: Path) -
     # Plain-slice capture (the admitted lane).
     path = _b_save(_b_capture(_TypeSteer(), [x, slice(0, 3)]), tmp_path / "b_pin.tlspec")
     assert (
-        tl.load(path).run(inputs=[x, slice(0, 3)]).report.path_faithfulness
+        tl.load(path).run_transaction(inputs=[x, slice(0, 3)]).report.path_faithfulness
         is PathFaithfulness.VERIFIED
     )
     # Same-VALUE semantic runtime component diverges (component-by-component compare,
     # never slice.__eq__).
     with pytest.raises((PathDivergenceError, RunPreconditionError)):
-        tl.load(path).run(inputs=[x, slice(_Mode.FAST, 3)])
+        tl.load(path).run_transaction(inputs=[x, slice(_Mode.FAST, 3)])
 
 
 def test_r71b_ratified_stock_wrapper_slice_component_normalizes() -> None:

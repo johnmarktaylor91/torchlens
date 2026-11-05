@@ -52,7 +52,7 @@ def main() -> None:
     edited.do(
         exact_site,
         tl.scale(0.0),
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(),
     )
 
     assert edited.last_run_records()[-1].site_label == exact_label

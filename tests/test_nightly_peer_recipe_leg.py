@@ -1,5 +1,8 @@
 """The nightly peer-recipe leg runs every recipe page with its peer installed.
 
+The docs snippet suite runs in the same pytest session, so the snippets see a
+process where every peer is importable.
+
 ``tests/test_recipe_pages_executed.py`` skips a third-party recipe page when the
 page's tool is not installed, so on an ordinary leg those pages cover nothing.
 The nightly ``peer-recipes`` job is the one place they run: it installs every
@@ -62,6 +65,9 @@ def test_peer_recipe_job_requires_peers_and_fails_on_any_skip() -> None:
         if "tests/test_recipe_pages_executed.py" in step.get("run", "")
     ]
     assert len(runs) == 1, "exactly one step runs the recipe pages"
+    # The docs snippets share the recipe pages' session: a peer that re-wraps a
+    # torch slot at import changes what later captures in the process see.
+    assert "tests/test_docs_snippets.py" in runs[0]["run"], "the snippets run beside the peers"
     assert runs[0].get("env", {}).get("TORCHLENS_RECIPE_PEERS") == "1"
     assert "-rA" in runs[0]["run"] and "--junitxml=" in runs[0]["run"]
     # No marker expression: heavy recipe pages (HEAVY_PAGES) must run here too.

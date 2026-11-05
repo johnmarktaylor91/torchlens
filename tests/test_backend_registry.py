@@ -43,6 +43,7 @@ from torchlens.backends.tf import TFBackend
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.errors import (
     AmbiguousBackendError,
+    ArtifactError,
     BackendMismatchError,
     BackendUnsupportedError,
     UnknownBackendError,
@@ -1025,6 +1026,36 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
         tl.backends.unregister("fake")
 
 
+def test_unregistered_backend_artifact_refuses_at_load(tmp_path: Path) -> None:
+    """A backend name that is neither a contract backend nor registered now refuses."""
+
+    _register_fake_backend()
+    try:
+        trace = tl.trace(_FakeModel(), object(), backend="fake")
+        path = tmp_path / "fake.tlspec"
+        trace.save(path, level="audit")
+    finally:
+        tl.backends.unregister("fake")
+
+    with pytest.raises(ArtifactError, match="unknown backend 'fake'"):
+        tl.load(path)
+
+
+def test_format3_codec_role_admits_own_backend_hint_outside_payload_columns() -> None:
+    """A non-torch artifact's own backend hint is admitted outside payload columns only."""
+
+    from torchlens._io.format3.codec_policy import codec_backend
+
+    hint = {"logical_backend": "tinygrad"}
+    cell = "trace[0]._autograd_derived_grads._dict.inputs.0.grad"
+    codec = "numpy_safetensors_v1"
+    assert codec_backend(codec, hint, cell, manifest_backend="tinygrad") == "tinygrad"
+    assert codec_backend(codec, None, cell, manifest_backend="tinygrad") == "numpy"
+    for manifest_backend in ("torch", "jax"):
+        with pytest.raises(ArtifactError, match="disagrees with the numpy payload"):
+            codec_backend(codec, hint, cell, manifest_backend=manifest_backend)
+
+
 # Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_invariants_entry.py.
 @pytest.mark.parametrize(
     ("mutate", "match"),
@@ -1310,3 +1341,46 @@ def test_registered_backends_list_only_recorded_trace_options() -> None:
         listed = set(spec.capabilities.trace_options)
         assert listed <= recorded, (spec.name, listed - recorded)
         assert not (listed & gated), (spec.name, listed & gated)
+
+
+_FRESH_BACKEND_ATTRIBUTE_SCRIPT = """
+import importlib.util
+import sys
+
+import torchlens as tl
+from torchlens._errors import MissingDependencyError
+
+frameworks = {"jax": "jax", "mlx": "mlx", "paddle": "paddle", "tf": "tensorflow", "tinygrad": "tinygrad"}
+imported = sorted(m for m in frameworks.values() if m in sys.modules)
+assert not imported, f"import torchlens imported frameworks: {imported}"
+for name, module in frameworks.items():
+    try:
+        cls = getattr(tl.backends, name).GradOptions
+    except MissingDependencyError:
+        assert importlib.util.find_spec(module) is None, f"tl.backends.{name} refused with {module} installed"
+        continue
+    assert cls.__name__ == "GradOptions", cls
+assert tl.backends.torch.__name__ == "torchlens.backends.torch"
+assert not hasattr(tl.backends, "no_such_backend")
+print("ok")
+"""
+
+
+def test_backend_packages_resolve_in_a_fresh_process() -> None:
+    """``tl.backends.<name>.GradOptions`` works before any capture (backend-table defect 10).
+
+    The per-framework packages resolve lazily on first access, so the documented
+    spelling needs no prior capture and ``import torchlens`` imports no framework.
+    """
+
+    import subprocess
+
+    completed = subprocess.run(
+        [sys.executable, "-c", _FRESH_BACKEND_ATTRIBUTE_SCRIPT],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr[-3000:]
+    assert completed.stdout.strip().endswith("ok")

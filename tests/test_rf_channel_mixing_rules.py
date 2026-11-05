@@ -288,7 +288,7 @@ def test_convnext_tiny_stem_to_stage_fields_are_exact() -> None:
     torch.manual_seed(0)
     model = models.convnext_tiny(weights=None).eval()
     trace = tl.trace(model, torch.rand(1, 3, 224, 224))
-    stem, stage1, stage2 = trace["features.0"], trace["features.3"], trace["features.5"]
+    stem, stage1, stage2 = trace.ops["features.0"], trace.ops["features.3"], trace.ops["features.5"]
     for op in (stem, stage1, stage2):
         assert op.receptive_field.status is ReceptiveFieldStatus.EXACT
     expected = {

@@ -81,6 +81,7 @@ class Drawing:
     _collapse_source: Any = field(default=None, repr=False)
     _collapse_context: Any = field(default=None, repr=False)
     _collapse_tools: Any = field(default=None, repr=False)
+    _render: Any = field(default=None, repr=False)
 
     @property
     def collapse_plan(self) -> Any:
@@ -164,7 +165,7 @@ class Drawing:
             if self._data is not None and fileformat == self.file_format:
                 payload = self._data
             else:
-                payload = _render_dot_source(self.dot, fileformat)
+                payload = _render_dot_source(self.dot, fileformat, self._render)
         tmp = target.with_name(target.name + ".tl-partial")
         tmp.write_bytes(payload)
         os.replace(tmp, target)
@@ -232,7 +233,9 @@ class Drawing:
         if not self.dot:
             return None
         try:
-            return _render_dot_source(self.dot, "svg").decode("utf-8", errors="replace")
+            return _render_dot_source(self.dot, "svg", self._render).decode(
+                "utf-8", errors="replace"
+            )
         except CaptureNotActiveError:
             return None
 
@@ -247,8 +250,13 @@ class Drawing:
         )
 
 
-def _render_dot_source(dot: str, fileformat: str) -> bytes:
-    """Render a DOT string to bytes via the graphviz pipeline (typed failure)."""
+def _render_dot_source(dot: str, fileformat: str, render: Any = None) -> bytes:
+    """Render a DOT string to bytes (typed failure).
+
+    ``render`` is the renderer the drawing's producer injected (``draw``'s own
+    bounded Graphviz child with the bundled font and SVG image inlining; see
+    ``Drawing._render``); without one, the graphviz pipeline renders it.
+    """
 
     try:
         import graphviz
@@ -259,6 +267,8 @@ def _render_dot_source(dot: str, fileformat: str) -> bytes:
             remedy="pip install graphviz, and install Graphviz (apt install graphviz)",
         ) from error
     try:
+        if render is not None:
+            return bytes(render(dot, fileformat))
         return bytes(graphviz.Source(dot).pipe(format=fileformat))
     except Exception as error:
         raise CaptureNotActiveError(
@@ -292,6 +302,9 @@ class DrawTarget:
     inline:
         ``True`` for a bare call inside a Jupyter kernel: the picture renders to
         memory and no file is left behind.
+    render:
+        The renderer the producer injects into the :class:`Drawing` it finishes
+        (``Drawing._render``), or ``None`` for the graphviz-pipe fallback.
     """
 
     path: str | None
@@ -299,6 +312,7 @@ class DrawTarget:
     stem: str | None = None
     inline: bool = False
     scratch: tempfile.TemporaryDirectory[str] | None = field(default=None, repr=False)
+    render: Any = field(default=None, repr=False)
 
     def finish(self, dot: str, outpath: str, **fields: Any) -> Drawing:
         """Return the call's :class:`Drawing`; an inline render keeps the bytes, not the file.
@@ -307,6 +321,8 @@ class DrawTarget:
         remaining :class:`Drawing` fields (``num_ops``, ``policy``).
         """
 
+        if self.render is not None:
+            fields.setdefault("_render", self.render)
         stem = self.stem if self.stem is not None else outpath
         written = Path(f"{stem}.{self.file_format}")
         if not self.inline:

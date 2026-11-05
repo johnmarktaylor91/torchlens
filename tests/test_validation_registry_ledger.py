@@ -280,6 +280,26 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
             "when the same parent also fills arg 1 (x.view_as(x))"
         ),
     ),
+    # Lead 3 ruling, 4 Nov 2026 2:31 PM PT (view-func-replay): torch reads only the
+    # receiver's view chain (view_func_impl / rev_view_func_impl in
+    # torch/csrc/autograd/python_variable.cpp).
+    *(
+        StructuralPositionExemption(
+            func_name=_view_method,
+            positions=frozenset({0}),
+            contract=_C2,
+            proof_kind="value_irrelevance_proved",
+            justification=(
+                f"Tensor.{_view_method} replays the receiver's recorded view chain; torch "
+                "reads the receiver's view functions and geometry, never its elements"
+            ),
+            refuses=(
+                "arg 1, the new base (or new view) whose values are the output values; a "
+                "replay that ignores it fails the perturbation check"
+            ),
+        )
+        for _view_method in ("_view_func", "_view_func_unsafe", "_rev_view_func_unsafe")
+    ),
     StructuralPositionExemption(
         func_name="resize_as_",
         positions=frozenset({1}),
@@ -937,6 +957,49 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
         refuses=(
             "the arg-0 packed data, the hidden state and the weights, the padded "
             "overload, and a parent that also sits at another slot or a kwarg"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="autogradfunction",
+        check="check_foreign_kernel_dependence_exempt",
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "a known foreign kernel returning several tensors is one autogradfunction op per "
+            "output, each carrying the call's full parent set; the kernel table declares per "
+            "Function and output which positional arguments that output depends on (ruling: "
+            "declare per-output dependence per kernel in a table; FlashAttention 4's "
+            "log-sum-exp, output 1, depends on q and k at positions 0 and 1, not v at 2), and "
+            "a parent is excused for that output only when every position it occupies is "
+            "declared independent"
+        ),
+        refuses=(
+            "every parent of an output with no row (FlashAttention 4's attention output), an "
+            "op whose module, Function name or exit is not in the table, a parent at a "
+            "declared-dependent position or at a position outside the row, a keyword, nested "
+            "or unmapped parent, and an op that did not record multi_output_index"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="_flash_attn_forward",
+        check="check_foreign_kernel_dependence_exempt",
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "FlashAttention 2's custom op flash_attn::_flash_attn_forward is recorded as four "
+            "native sibling ops of one call, each carrying q, k and v; the kernel table "
+            "declares per output which positional arguments reach it (ruling: declare "
+            "per-output dependence per kernel in a table): the log-sum-exp (output 1) and the "
+            "dropout mask (output 2) depend on q and k at positions 0 and 1, not v at 2, and "
+            "the rng state (output 3) on none of the three; a parent is excused for that "
+            "output only when every position it occupies is declared independent"
+        ),
+        refuses=(
+            "every parent of the attention output (output 0, no row), q and k on the "
+            "log-sum-exp and dropout mask, an op whose replay callable is not the declared "
+            "torch.ops operator (another namespace under the same func_name, a loaded bundle "
+            "with no callable), a parent at a position outside 0 to 2, a keyword, nested or "
+            "unmapped parent, and an op that did not record multi_output_index"
         ),
     ),
     CustomCheckExemption(

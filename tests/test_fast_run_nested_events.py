@@ -100,8 +100,8 @@ def test_fast_run_drops_the_outer_call_of_an_inplace_activation(act_name: str) -
     if act_name == "relu":
         assert {"relu_", "relu"} <= {str(op.func_name) for op in trace._layer_list}
     fresh = _inputs(1)
-    fast = trace.run(inputs=fresh, fast=True)
-    full = tl.trace(model, _inputs(0)).run(inputs=fresh)
+    fast = trace.run_transaction(inputs=fresh, fast=True)
+    full = tl.trace(model, _inputs(0)).run_transaction(inputs=fresh)
     assert torch.equal(full.output, fast.output)
     want, have = _saved_payloads(full.trace), _saved_payloads(fast.trace)
     assert want and want.keys() == have.keys()
@@ -120,7 +120,7 @@ def test_fast_run_still_refuses_when_the_inplace_spelling_changes(
     trace = tl.trace(model, _inputs(0))
     model.mlp.inplace = not captured_inplace
     with pytest.raises(PathDivergenceError):
-        trace.run(inputs=_inputs(1), fast=True)
+        trace.run_transaction(inputs=_inputs(1), fast=True)
 
 
 class _Host(_NestedEventTracker):

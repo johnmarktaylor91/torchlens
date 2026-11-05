@@ -87,7 +87,7 @@ def test_a_latent_registered_at_a_selector_site_saves_every_home() -> None:
     tl.bridge.sae.register("both", sae, site=tl.module("fc_a") | tl.module("fc_b"))
     try:
         trace = tl.trace(model, x, save=tl.facet("both").latent(2))
-        assert {trace["fc_a"].layer_label, trace["fc_b"].layer_label} <= _saved(trace)
+        assert {trace.ops["fc_a"].layer_label, trace.ops["fc_b"].layer_label} <= _saved(trace)
         for site in ("fc_a", "fc_b"):
             expected = sae.encode(trace[site].out)[..., 2].detach()
             torch.testing.assert_close(trace[site].facets["both[2]"].value, expected, **TOL)

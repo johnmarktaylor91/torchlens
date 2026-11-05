@@ -6,6 +6,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
+from .._entry_refusals import refuse_region_provenance_missing, refuse_status_not_bool
+from ._display import status_card, status_repr
+
 ValidationReplayState = Literal["available", "passed", "failed", "unavailable", "unverified"]
 ValidationReplaySource = Literal["live", "loaded", "unknown"]
 
@@ -85,17 +88,12 @@ class ValidationStatus:
     def __repr__(self) -> str:
         """Bounded identity card (D31): the state leads, counts point, decisions never dump."""
 
-        reason = "" if self.reason is None else f", reason={self.reason!r}"
-        counts = ""
-        if self.state in ("passed", "failed"):
-            counts = (
-                f", {self.num_replayed_ops} replayed, {self.num_unverified_ops} unverified, "
-                f"{self.num_failed_ops} failed"
-            )
-        return (
-            f"ValidationStatus({self.state!r}, backend={self.backend!r}, "
-            f"source={self.source!r}{reason}{counts}; read .message)"
-        )
+        return status_repr(self)
+
+    def __str__(self) -> str:
+        """Return the recorded result and its detailed counts."""
+
+        return status_card(self)
 
     @property
     def passed(self) -> bool:
@@ -491,10 +489,7 @@ class ValidationStatus:
 
         if self.state in {"passed", "failed"}:
             return self.passed
-        raise TypeError(
-            "ValidationStatus is not a boolean pass/fail result unless "
-            "replay validation has actually run."
-        )
+        refuse_status_not_bool()
 
 
 def is_region_replay_annotation(annotations: Mapping[str, Any] | None) -> bool:
@@ -572,9 +567,7 @@ def count_importer_region_annotations(trace: Any) -> int:
             continue
         if not has_importer_region_provenance(trace_annotations, op_annotations):
             label = getattr(op, "layer_label", getattr(op, "label", type(op).__name__))
-            raise ValueError(
-                f"Region replay annotation on {label!r} is missing importer provenance."
-            )
+            refuse_region_provenance_missing(label)
         region_count += 1
     return region_count
 

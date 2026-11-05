@@ -432,20 +432,6 @@
       ],
       "why": "io: per-test line coverage; these files execute 223 body lines between them, the static list executed 122"
     },
-    "torchlens/_io/_portability_preflight.py": {
-      "tests": [
-        "tests/test_w051_io_portability_preflight.py",
-        "tests/test_episode_capture.py"
-      ],
-      "why": "io: per-test line coverage; these files execute 119 body lines between them, the static list executed 118"
-    },
-    "torchlens/_io/_pre3_module_paths.py": {
-      "tests": [
-        "tests/test_load_refuses_saved_by_2x.py",
-        "tests/test_io_bundle.py"
-      ],
-      "why": "io: per-test line coverage; these files execute 22 body lines between them, the static list executed 21"
-    },
     "torchlens/_io/_rehydrate_lazy_names.py": {
       "tests": [
         "tests/test_tlspec_unified.py",

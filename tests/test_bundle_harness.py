@@ -11,18 +11,22 @@ round trip with spans. Every protective claim tries the forbidden thing.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import redigest
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens._io import ArtifactTooOldError
 from torchlens._io.sidecar import SidecarError
 from torchlens.bundle import Bundle
 from torchlens.bundle._fed_by import (
     TOKEN_BOUNDARY_FAMILY_ID,
     ids_digest,
+    member_binding,
 )
 from torchlens.bundle._relations import MemberRelationRow
 from torchlens.errors.episode import BundleRelationError
@@ -378,3 +382,54 @@ def test_empty_bundle_constructs_and_round_trips(tmp_path: Path, model: _TinyLM)
     assert len(tl.load(tmp_path / "cleared.tlspec")) == 0
     empty.add(_trace(model, [1, 2]), names="first")
     assert empty.names == ["first"]
+
+
+def test_v11_bundle_with_spans_round_trips(tmp_path: Path, model: _TinyLM) -> None:
+    bundle = _bound_harness(model)
+    bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
+    bundle.save(tmp_path / "harness.tlspec")
+    manifest = json.loads((tmp_path / "harness.tlspec" / "manifest.json").read_text())
+    assert manifest["tlspec_version"] == 12
+    loaded = tl.load(tmp_path / "harness.tlspec")
+    assert loaded.relations == bundle.relations
+    assert loaded.relations[0].params["basis"] == "verified", "re-verified at load"
+    assert member_binding(loaded["draft"]) == member_binding(bundle["draft"])
+    assert loaded.upstream("critique") == ("draft",)
+
+
+def test_tampered_artifact_span_refuses_at_load(tmp_path: Path, model: _TinyLM) -> None:
+    bundle = _bound_harness(model)
+    bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN])
+    source = tmp_path / "harness.tlspec"
+    bundle.save(source)
+    tampered = tmp_path / "tampered.tlspec"
+    shutil.copytree(source, tampered)
+    metadata_path = tampered / "relations.json"
+    metadata = json.loads(metadata_path.read_text())
+    metadata["member_relations"][0]["params"]["token_spans"] = [[0, 3, 0, 3]]
+    metadata_path.write_text(json.dumps(metadata))
+    redigest(metadata_path.parent, "relations.json")
+    with pytest.raises(BundleRelationError) as excinfo:
+        tl.load(tampered)
+    assert _code(excinfo) == "bundle_relation_span_unverified"
+
+
+def test_v9_stamped_bundle_refuses_before_relations(tmp_path: Path, model: _TinyLM) -> None:
+    bundle = _harness(model).relate("successor_of", "critique", "draft")
+    path = tmp_path / "v9.tlspec"
+    bundle.save(path)
+    manifest_path = path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["tlspec_version"] = 9
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(ArtifactTooOldError) as caught:
+        tl.load(path)
+    assert caught.value.fields["code"] == "artifact_version_below_floor"
+
+
+def test_writer_contract_records_the_relation_vocabulary() -> None:
+    from torchlens._io.writer_contract import writer_contract
+
+    versions = writer_contract()["component_schema_versions"]
+    assert "fed_by" in versions["bundle_relation_kinds"]
+    assert versions["token_boundary_schema"] == "token_boundary_v1"

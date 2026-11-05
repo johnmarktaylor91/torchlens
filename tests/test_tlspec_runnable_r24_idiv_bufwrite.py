@@ -61,7 +61,7 @@ def _run_loaded(loaded: Any, x: torch.Tensor) -> Any:
         Runnable ``RunResult``.
     """
 
-    return loaded.run(inputs=x.clone(), seed=0, on_divergence="return")
+    return loaded.run_transaction(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 def _live_output(factory: Callable[[], nn.Module], x: torch.Tensor) -> torch.Tensor:

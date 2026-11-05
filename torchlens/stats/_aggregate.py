@@ -98,7 +98,7 @@ def _resolve_metric_out(log: Any, metric_name: str) -> tuple[Any, Any]:
     """
 
     if metric_name == "output" and log.output_layers:
-        site = log[log.output_layers[-1]]
+        site = log.ops[log.output_layers[-1]]
         return site.out, site
     try:
         site = log[metric_name]
@@ -468,7 +468,7 @@ def _rng_snapshot() -> tuple[Any, Any, Any, Any] | None:
             numpy_state = None
         return (
             random.getstate(),
-            torch.random.get_rng_state().clone(),
+            torch.default_generator.get_state().clone(),
             cuda_states,
             numpy_state,
         )

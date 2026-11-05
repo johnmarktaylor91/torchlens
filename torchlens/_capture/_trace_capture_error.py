@@ -13,6 +13,7 @@ themselves and carry the partial capture as ``partial_trace``.
 from __future__ import annotations
 
 import contextlib
+import re
 from types import MappingProxyType
 
 from .._errors import TraceCaptureError, attach_partial_trace, original_exception
@@ -48,6 +49,26 @@ _ORIGIN_SENTENCES = MappingProxyType(
         ),
     }
 )
+
+
+#: Torch's rank check for layers with a fixed input rank (BatchNorm, InstanceNorm):
+#: ``expected 4D input (got 3D input)``. One rank short is the classic missing
+#: batch dimension (an image transform's output passed straight to the model).
+_RANK_SHORTFALL = re.compile(r"expected (\d+)D input \(got (\d+)D input\)")
+
+
+def _missing_batch_hint(text: str) -> str:
+    """Return a what-and-how sentence when ``text`` reports an input one rank short."""
+
+    match = _RANK_SHORTFALL.search(text)
+    if match is None or int(match.group(2)) != int(match.group(1)) - 1:
+        return ""
+    expected, got = match.groups()
+    return (
+        f" A layer expected a {expected}D input and got {got}D: the input is most likely "
+        "missing its batch dimension. Remedy: add one, e.g. pass x.unsqueeze(0) for a "
+        "single example, or stack several examples with torch.stack."
+    )
 
 
 def is_torchlens_exception(exc: BaseException) -> bool:
@@ -161,6 +182,7 @@ def _message(
     if last_op is not None:
         frontier += f"; the last captured op was `{last_op}` and the raising call came after it"
     origin_sentence = _ORIGIN_SENTENCES.get(origin, _ORIGIN_SENTENCES[FailureOrigin.UNKNOWN])
+    origin_sentence += _missing_batch_hint(text)
     return (
         f"{head}. {frontier}. {origin_sentence} The original exception and its "
         "traceback are chained as __cause__; the partial capture is on "

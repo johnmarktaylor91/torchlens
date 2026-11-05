@@ -71,7 +71,9 @@ refusal (`worst_element`).
 - `resolve_alias` / `alias_report`: TLens spellings (2.x, 3.x-bridge and 4.x
   generations) and nnterp `StandardizedTransformer` accessor spellings
   (`generation="nnterp"`: `layers_output[3]`, `attentions_output[3]`,
-  `mlps_input[3]`, `logits`, ...; `translation.json`) resolve to native coordinates with an
+  `mlps_input[3]`, `logits`, ...) and interp-engine point addresses
+  (`generation="interp-engine"`: `resid_post.3`, `attn_out.3`, `mlp_act.3`,
+  `embeddings`, ...; `translation.json`) resolve to native coordinates with an
   honest status: `real` / `reconstructed_read_only` / `needs_capture` /
   `structurally_absent` / `ambiguous`, each with a remedy.
 - `retention_plan`: printable, priced, `save=`-composable plans; every kit

@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING, Any, cast
 from .._constants import BUFFER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import TLSPEC_VERSION, FieldPolicy, default_fill_state, read_tlspec_version
+from .._utils._display_errors import short_name_message
 from ._accessor_base import Accessor
+from ._lookup_kinds import buffer_for_key, converted
 from ._runtime_handles import runtime_handle_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
@@ -424,14 +426,14 @@ class BufferAccessor(Accessor["Buffer"]):
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
-            # Name the bounded candidate set (R65) like the merged-presenter
-            # sibling, instead of telling the user to guess the full address.
-            candidates = ", ".join(match.address for match in matches)
+            candidates = tuple(match.address for match in matches)
             raise AmbiguousOpLookupError(
-                f"Ambiguous short name '{key}' -- use a full address: {candidates}",
-                candidates=tuple(match.address for match in matches),
+                short_name_message(key, candidates),
+                candidates=candidates,
             )
-        return None
+        return converted(
+            self, key, buffer_for_key
+        )  # a module address or version op names its Buffer
 
     def _resolve_pass_qualified(self, key: str) -> Buffer | None:
         """Resolve pass-qualified notation to the parent Buffer."""

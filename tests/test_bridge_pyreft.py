@@ -195,7 +195,7 @@ def test_applied_edit_equals_the_hand_loreft_formula(tmp_path: Path) -> None:
     artifact = tl.bridge.pyreft.read(_write(tmp_path / "artifact"))
     fork = _ready().fork()
     fork.do(artifact.subspace(_SITE, positions=_positions()), artifact.edit)
-    result = fork.push()[_SITE].out
+    result = fork[_SITE].out
     helper = _reloaded_helper(fork, tmp_path)
     kwargs = dict(helper.kwargs)
     rows = kwargs["basis"]

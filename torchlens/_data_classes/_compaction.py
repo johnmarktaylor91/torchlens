@@ -122,7 +122,7 @@ def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
             if value is None or value is _MISSING:
                 continue
             cls = value.__class__
-            if cls in pooled_classes:
+            if cls in pooled_classes and (cls is not Duration or not value):
                 key = (cls, value.hex()) if cls is Duration else (cls, value)
                 pooled = pool_get(key)
                 if pooled is None:

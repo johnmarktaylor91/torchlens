@@ -20,7 +20,7 @@ demo contract.
 
 ## Color Scale
 
-- Use a diverging comparison palette from blue→white→red.
+- Use a sequential magnitude palette from white to red (no blue).
 - The caption legend defines the scale as per-node L2 norm delta.
 
 ## Caption
