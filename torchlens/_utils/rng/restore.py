@@ -13,6 +13,7 @@ import functools as _functools_module
 from collections.abc import Callable
 from typing import Any, ParamSpec, TypeVar
 
+from .._sparse_invariant_guard import call_with_sparse_invariants
 from .autocast import AutocastRestore
 from .explicit_generators import explicit_generators_at
 from .streams import log_current_rng_states, set_rng_from_saved_states
@@ -122,4 +123,4 @@ def execute_with_restored_rng_autocast(
             AutocastRestore(autocast_state or {}),
             explicit_generators_at(rng_states, args, kwargs),
         ):
-            return func(*args, **kwargs)
+            return call_with_sparse_invariants(func, args, kwargs)

@@ -348,10 +348,10 @@ def _tensor_geometry(ref: Mapping[str, Any], at: str) -> tuple[list[int], int, s
     if len(shape) > 64:
         raise cell_error(at, "tensor shape has more than 64 dimensions", code=CELL_CODE)
     numel = math.prod(shape)
-    if numel > MAX_TENSOR_NUMEL:
+    if numel > MAX_TENSOR_NUMEL or any(d > MAX_TENSOR_NUMEL for d in shape):  # a 0 dim hides one
         raise cell_error(
             at,
-            f"tensor shape {shape!r} declares more than {MAX_TENSOR_NUMEL} elements",
+            f"tensor shape {shape!r} declares more than {MAX_TENSOR_NUMEL} elements or per dim",
             code=CELL_CODE,
         )
     device = ref["device"]

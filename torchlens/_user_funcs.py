@@ -97,7 +97,7 @@ register_facet_snapshot_provider(_facet_snapshot_provider, replace=False)
 
 
 def clear_cache(cache_dir: str | Path | None = None) -> int:
-    """Delete authenticated capture-cache entries while preserving the secret.
+    """Delete capture-cache entries; the per-user secret lives elsewhere and is kept.
 
     Parameters
     ----------
