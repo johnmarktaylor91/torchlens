@@ -154,6 +154,39 @@ def serial_test_files() -> list[str]:
     )
 
 
+def gate_commands(python: Path, workers: int, extra_args: list[str], junit: str) -> list[list[str]]:
+    """Return CI's smoke-step commands, in the order the workflow runs them.
+
+    Parameters
+    ----------
+    python:
+        Interpreter of the pinned venv.
+    workers:
+        xdist worker count for the main smoke selection.
+    extra_args:
+        Extra pytest arguments for the main smoke selection.
+    junit:
+        Path the main smoke selection writes its junit report to; the
+        executed-floor attestation reads it.
+
+    Returns
+    -------
+    list[list[str]]
+        One argument vector per command.
+    """
+
+    pytest = [str(python), "-m", "pytest"]
+    return [
+        [*pytest, "tests/", "-m", "smoke", "-n", str(workers), "--tb=short", "-q"]
+        + [f"--junitxml={junit}", *extra_args],
+        [*pytest, *serial_test_files(), "-m", "serial and not slow and not rare and not heavy"]
+        + ["--tb=short", "-q"],
+        [*pytest, "tests/test_torch_compat.py", "-m", "not smoke", "--tb=short", "-q"],
+        [str(python), "scripts/check_ci_executed_tests.py", junit, EXECUTED_FLOOR]
+        + [SKIP_FRACTION],
+    ]
+
+
 def run_gate(python: Path, workers: int, extra_args: list[str]) -> int:
     """Run CI's smoke-step commands in order, stopping at the first failure.
 
@@ -173,19 +206,9 @@ def run_gate(python: Path, workers: int, extra_args: list[str]) -> int:
     """
 
     env = {**os.environ, **SMOKE_ENV}
-    pytest = [str(python), "-m", "pytest"]
     with tempfile.TemporaryDirectory(prefix="torchlens-ci-smoke-") as tmp:
         junit = str(Path(tmp) / "smoke.junit.xml")
-        commands = [
-            [*pytest, "tests/", "-m", "smoke", "-n", str(workers), "--tb=short", "-q"]
-            + [f"--junitxml={junit}", *extra_args],
-            [*pytest, *serial_test_files(), "-m", "serial and not slow and not rare and not heavy"]
-            + ["--tb=short", "-q"],
-            [*pytest, "tests/test_torch_compat.py", "-m", "not smoke", "--tb=short", "-q"],
-            [str(python), "scripts/check_ci_executed_tests.py", junit, EXECUTED_FLOOR]
-            + [SKIP_FRACTION],
-        ]
-        for command in commands:
+        for command in gate_commands(python, workers, extra_args, junit):
             result = subprocess.run(command, cwd=PROJECT_ROOT, env=env, check=False)
             if result.returncode != 0:
                 return result.returncode
