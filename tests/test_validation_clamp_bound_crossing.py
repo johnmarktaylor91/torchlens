@@ -33,7 +33,7 @@ class _TensorFloor(nn.Module):
         self.register_buffer("eps", torch.tensor([1e-3, 2e-3, 3e-3]))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = x.exp()
+        y = x.exp() + 2.0  # above the generic draw's reach around a near-constant bound
         if self.form == "ode_step":  # a 0 floor and an inf ceiling, both 0-d tensors
             return y.clamp(torch.as_tensor(0.0), torch.as_tensor(float("inf")))
         if self.form == "full_like":
