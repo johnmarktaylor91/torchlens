@@ -114,8 +114,13 @@ def test_module_sweep_skips_scalar_and_empty_leaves_inline(monkeypatch: pytest.M
     model = _Stashing()
     _clear_module_attribute_tensor_metadata(model, set())
     # The root owns no Parameter of its own: ``_modules`` and the two stashes with
-    # content are its only slots that can carry a stamp.
-    assert [type(v) for v in calls] == [dict, list, dict]
+    # content are its only slots that can carry a stamp. Pinned by identity, since
+    # ``_modules`` is an OrderedDict on older torch (the 2.1 floor) and a dict after.
+    assert [id(v) for v in calls] == [
+        id(model._modules),
+        id(model.stash_list),
+        id(model.stash_dict),
+    ]
 
 
 def test_pre_forward_snapshot_matches_the_plain_sweep() -> None:

@@ -144,7 +144,11 @@ def _getattr_then_call(name: str, *args: bytes) -> bytes:
 
 
 def _getattr_value_and_call() -> bytes:
-    """A ``getattr`` result stored in the root list AND called: the interpreter must run it."""
+    """A ``getattr`` result stored in the root list AND called: the interpreter must run it.
+
+    The class is named as this torch spells it (``TensorBase``, or the legacy
+    ``_TensorBase`` on older torch such as the 2.1 floor), as a pickle written here would.
+    """
 
     return (
         pickle.PROTO
@@ -152,7 +156,7 @@ def _getattr_value_and_call() -> bytes:
         + pickle.EMPTY_LIST
         + _global("builtins", "getattr")
         + pickle.MARK
-        + _global("torch._C", "TensorBase")
+        + _global("torch._C", get_tensorbase_class().__name__)
         + pickle.SHORT_BINUNICODE
         + b"\x03sum"
         + pickle.TUPLE

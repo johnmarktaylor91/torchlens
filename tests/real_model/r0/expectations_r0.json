@@ -19,7 +19,31 @@
    "recipes": {
     "embedding": 3,
     "layer_norm": 1
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "8070a869b8b27ca57575f70d5ec2a3a97242ec46359505fc8c50bfa8cf8a8a70",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ]
+     },
+     "n_ops": 96,
+     "recipes": {
+      "embedding": 3,
+      "layer_norm": 1
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   },
   "sdpa": {
    "false_claims": [],
@@ -40,7 +64,31 @@
    "recipes": {
     "embedding": 3,
     "layer_norm": 1
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "96c7ed55d68d2b2cee3edce839a7879cc4ffaac58db5627d15c9b1226f90df05",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ]
+     },
+     "n_ops": 78,
+     "recipes": {
+      "embedding": 3,
+      "layer_norm": 1
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   }
  },
  "bert": {
@@ -85,7 +133,57 @@
     "embedding": 3,
     "layer_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [
+      [
+       "encoder.layer.1",
+       "resid_post",
+       "same_recipe_serves_it_elsewhere"
+      ]
+     ],
+     "fingerprint": "50f6250dfba926ad6d10743b66af38aa1a1e27f78ceee2f98f690d3597bb44be",
+     "floors": {
+      "bert_self_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "pattern",
+       "q",
+       "scores",
+       "v",
+       "z"
+      ],
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid"
+      ]
+     },
+     "n_ops": 84,
+     "recipes": {
+      "bert_self_attention": 4,
+      "embedding": 3,
+      "layer_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   },
   "sdpa": {
    "false_claims": [],
@@ -125,7 +223,50 @@
     "embedding": 3,
     "layer_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "9dcb29a7246412c6e205421c3c02bdf0db014ddee7f72abb19321f84e0934bed",
+     "floors": {
+      "bert_self_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 65,
+     "recipes": {
+      "bert_self_attention": 4,
+      "embedding": 3,
+      "layer_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   }
  },
  "clip": {
@@ -185,7 +326,68 @@
     "embedding": 3,
     "layer_norm": 11,
     "transformer_residuals": 4
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "1100f7a3cd5446fed278d1aff60a36825530698ef09ec0cbd89cc7ddebe21028",
+     "floors": {
+      "clip_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "pattern",
+       "q",
+       "result",
+       "scores",
+       "v",
+       "z"
+      ],
+      "contrastive_image_head": [
+       "final_norm_beta",
+       "final_norm_eps",
+       "final_norm_gamma",
+       "final_norm_input",
+       "final_norm_kind",
+       "image_projection_weight",
+       "logit_scale",
+       "logits_per_image",
+       "pooled_position",
+       "text_features",
+       "tower_address"
+      ],
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 183,
+     "recipes": {
+      "clip_attention": 4,
+      "contrastive_image_head": 1,
+      "embedding": 3,
+      "layer_norm": 11,
+      "transformer_residuals": 4
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   },
   "sdpa": {
    "false_claims": [],
@@ -239,7 +441,64 @@
     "embedding": 3,
     "layer_norm": 11,
     "transformer_residuals": 4
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "10febc96c71c401f2eee1f86572814eddef35fb62586ee77d53e0ea0fd65c586",
+     "floors": {
+      "clip_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "contrastive_image_head": [
+       "final_norm_beta",
+       "final_norm_eps",
+       "final_norm_gamma",
+       "final_norm_input",
+       "final_norm_kind",
+       "image_projection_weight",
+       "logit_scale",
+       "logits_per_image",
+       "pooled_position",
+       "text_features",
+       "tower_address"
+      ],
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 171,
+     "recipes": {
+      "clip_attention": 4,
+      "contrastive_image_head": 1,
+      "embedding": 3,
+      "layer_norm": 11,
+      "transformer_residuals": 4
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   }
  },
  "detection": {
@@ -303,7 +562,63 @@
     "embedding": 2,
     "layer_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "0a5c5e097326e597863fd84d1497ca6b185eb46a51f12d8c6bd7a2d7fc97725f",
+     "floors": {
+      "distilbert_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "pattern",
+       "q",
+       "result",
+       "scores",
+       "v",
+       "z"
+      ],
+      "distilbert_ffn": [
+       "down_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "input",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 77,
+     "recipes": {
+      "distilbert_attention": 2,
+      "distilbert_ffn": 2,
+      "embedding": 2,
+      "layer_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   },
   "sdpa": {
    "false_claims": [],
@@ -352,7 +667,59 @@
     "embedding": 2,
     "layer_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "269e7ffa4d5a421785ffe38492f2b723363df59b22b417ad0798bd6ebad7b2c7",
+     "floors": {
+      "distilbert_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "distilbert_ffn": [
+       "down_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "input",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 56,
+     "recipes": {
+      "distilbert_attention": 2,
+      "distilbert_ffn": 2,
+      "embedding": 2,
+      "layer_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   }
  },
  "distilgpt2": {
@@ -411,7 +778,67 @@
     "language_model_head": 1,
     "layer_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "4cf45bd5564b7141a6d86d7908916e372790c767c59a96a09524738b6344d7e2",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gpt2_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "pattern",
+       "q",
+       "result",
+       "scores",
+       "v",
+       "z"
+      ],
+      "gpt2_mlp": [
+       "down_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 132,
+     "recipes": {
+      "embedding": 2,
+      "gpt2_attention": 2,
+      "gpt2_mlp": 2,
+      "language_model_head": 1,
+      "layer_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   },
   "sdpa": {
    "false_claims": [],
@@ -464,7 +891,119 @@
     "language_model_head": 1,
     "layer_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "db61f75db595b11c41292b2df78c36e42045027748f66dcd3dbaed0bc3dd3d35",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gpt2_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "gpt2_mlp": [
+       "down_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 105,
+     "recipes": {
+      "embedding": 2,
+      "gpt2_attention": 2,
+      "gpt2_mlp": 2,
+      "language_model_head": 1,
+      "layer_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu (python 3.11; the torch floor row), recorded 2026-11-05",
+     "sdpa_mask_builder": "sdpa_mask_older_torch"
+    },
+    {
+     "false_claims": [],
+     "fingerprint": "db61f75db595b11c41292b2df78c36e42045027748f66dcd3dbaed0bc3dd3d35",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gpt2_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "gpt2_mlp": [
+       "down_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 112,
+     "recipes": {
+      "embedding": 2,
+      "gpt2_attention": 2,
+      "gpt2_mlp": 2,
+      "language_model_head": 1,
+      "layer_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05",
+     "sdpa_mask_builder": "sdpa_mask_recent_torch"
+    }
+   ]
   }
  },
  "gpt2": {
@@ -523,7 +1062,67 @@
     "language_model_head": 1,
     "layer_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "a0296aaaf81cb5d6d30dd499d69cbc50bdc209c9995500ce9e314caf0a6dc49d",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gpt2_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "pattern",
+       "q",
+       "result",
+       "scores",
+       "v",
+       "z"
+      ],
+      "gpt2_mlp": [
+       "down_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 132,
+     "recipes": {
+      "embedding": 2,
+      "gpt2_attention": 2,
+      "gpt2_mlp": 2,
+      "language_model_head": 1,
+      "layer_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   },
   "sdpa": {
    "false_claims": [],
@@ -576,7 +1175,119 @@
     "language_model_head": 1,
     "layer_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "18800ec52efa722ab9f341b7d6647991799aceeeba0916c8465a155945f48478",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gpt2_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "gpt2_mlp": [
+       "down_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 105,
+     "recipes": {
+      "embedding": 2,
+      "gpt2_attention": 2,
+      "gpt2_mlp": 2,
+      "language_model_head": 1,
+      "layer_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu (python 3.11; the torch floor row), recorded 2026-11-05",
+     "sdpa_mask_builder": "sdpa_mask_older_torch"
+    },
+    {
+     "false_claims": [],
+     "fingerprint": "18800ec52efa722ab9f341b7d6647991799aceeeba0916c8465a155945f48478",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gpt2_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "gpt2_mlp": [
+       "down_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 112,
+     "recipes": {
+      "embedding": 2,
+      "gpt2_attention": 2,
+      "gpt2_mlp": 2,
+      "language_model_head": 1,
+      "layer_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05",
+     "sdpa_mask_builder": "sdpa_mask_recent_torch"
+    }
+   ]
   }
  },
  "llama": {
@@ -648,7 +1359,74 @@
     "language_model_head": 1,
     "rms_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [
+      [
+       "self",
+       "final_norm_beta",
+       "final_norm_present"
+      ]
+     ],
+     "fingerprint": "85b6db35ad30cbcf69cd0d57b65514f1012cad38bd6e8a1b0b485ad96e9ab7ef",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gated_mlp": [
+       "down_out",
+       "gated_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "gqa_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "pattern",
+       "q",
+       "result",
+       "scores",
+       "v",
+       "z"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ],
+      "rms_norm": [
+       "gamma",
+       "input",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 181,
+     "recipes": {
+      "embedding": 1,
+      "gated_mlp": 2,
+      "gqa_attention": 2,
+      "language_model_head": 1,
+      "rms_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   },
   "sdpa": {
    "false_claims": [
@@ -714,7 +1492,133 @@
     "language_model_head": 1,
     "rms_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [
+      [
+       "self",
+       "final_norm_beta",
+       "final_norm_present"
+      ]
+     ],
+     "fingerprint": "4469ce7e1a0a09ba33db4e744fabae15ee250ac22f49bf210baeb205d7cd641d",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gated_mlp": [
+       "down_out",
+       "gated_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "gqa_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ],
+      "rms_norm": [
+       "gamma",
+       "input",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 164,
+     "recipes": {
+      "embedding": 1,
+      "gated_mlp": 2,
+      "gqa_attention": 2,
+      "language_model_head": 1,
+      "rms_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu (python 3.11; the torch floor row), recorded 2026-11-05",
+     "sdpa_mask_builder": "sdpa_mask_older_torch"
+    },
+    {
+     "false_claims": [
+      [
+       "self",
+       "final_norm_beta",
+       "final_norm_present"
+      ]
+     ],
+     "fingerprint": "4469ce7e1a0a09ba33db4e744fabae15ee250ac22f49bf210baeb205d7cd641d",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gated_mlp": [
+       "down_out",
+       "gated_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "gqa_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ],
+      "rms_norm": [
+       "gamma",
+       "input",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 171,
+     "recipes": {
+      "embedding": 1,
+      "gated_mlp": 2,
+      "gqa_attention": 2,
+      "language_model_head": 1,
+      "rms_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05",
+     "sdpa_mask_builder": "sdpa_mask_recent_torch"
+    }
+   ]
   }
  },
  "lstm_gru": {
@@ -753,7 +1657,30 @@
    "recipes": {
     "embedding": 1,
     "language_model_head": 1
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "fae6389be3945c83b06e4d750ec174aa9849921d0ebeadcc73dee11cce15be8d",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ]
+     },
+     "n_ops": 254,
+     "recipes": {
+      "embedding": 1,
+      "language_model_head": 1
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   }
  },
  "qwen2": {
@@ -830,7 +1757,79 @@
     "language_model_head": 1,
     "rms_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [
+      [
+       "self",
+       "final_norm_beta",
+       "final_norm_present"
+      ]
+     ],
+     "fingerprint": "7258692337f986a7f3409baea04b99d026311f55ccc09d0813c641e60e213b48",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gated_mlp": [
+       "down_out",
+       "gated_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "gqa_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "pattern",
+       "q",
+       "result",
+       "scores",
+       "v",
+       "z"
+      ],
+      "language_model_head": [
+       "final_norm_eps",
+       "final_norm_gamma",
+       "final_norm_input",
+       "final_norm_kind",
+       "logits",
+       "logits_position_map",
+       "unembed_weight"
+      ],
+      "rms_norm": [
+       "gamma",
+       "input",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 181,
+     "recipes": {
+      "embedding": 1,
+      "gated_mlp": 2,
+      "gqa_attention": 2,
+      "language_model_head": 1,
+      "rms_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   },
   "sdpa": {
    "false_claims": [
@@ -901,7 +1900,143 @@
     "language_model_head": 1,
     "rms_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [
+      [
+       "self",
+       "final_norm_beta",
+       "final_norm_present"
+      ]
+     ],
+     "fingerprint": "59ba7b31bc02cc46f8de51d20c917912116d0dcbba0af9ca99f1469bff12ea2c",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gated_mlp": [
+       "down_out",
+       "gated_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "gqa_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "language_model_head": [
+       "final_norm_eps",
+       "final_norm_gamma",
+       "final_norm_input",
+       "final_norm_kind",
+       "logits",
+       "logits_position_map",
+       "unembed_weight"
+      ],
+      "rms_norm": [
+       "gamma",
+       "input",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 164,
+     "recipes": {
+      "embedding": 1,
+      "gated_mlp": 2,
+      "gqa_attention": 2,
+      "language_model_head": 1,
+      "rms_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu (python 3.11; the torch floor row), recorded 2026-11-05",
+     "sdpa_mask_builder": "sdpa_mask_older_torch"
+    },
+    {
+     "false_claims": [
+      [
+       "self",
+       "final_norm_beta",
+       "final_norm_present"
+      ]
+     ],
+     "fingerprint": "59ba7b31bc02cc46f8de51d20c917912116d0dcbba0af9ca99f1469bff12ea2c",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "gated_mlp": [
+       "down_out",
+       "gated_out",
+       "input",
+       "intermediate",
+       "output",
+       "up_out"
+      ],
+      "gqa_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "language_model_head": [
+       "final_norm_eps",
+       "final_norm_gamma",
+       "final_norm_input",
+       "final_norm_kind",
+       "logits",
+       "logits_position_map",
+       "unembed_weight"
+      ],
+      "rms_norm": [
+       "gamma",
+       "input",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 171,
+     "recipes": {
+      "embedding": 1,
+      "gated_mlp": 2,
+      "gqa_attention": 2,
+      "language_model_head": 1,
+      "rms_norm": 5,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05",
+     "sdpa_mask_builder": "sdpa_mask_recent_torch"
+    }
+   ]
   }
  },
  "rwkv": {
@@ -929,7 +2064,36 @@
     "embedding": 1,
     "layer_norm": 6,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "2c8c99530597d735577c342fd2724dbc4a2aa29de473f20150da709f0d526ff5",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post"
+      ]
+     },
+     "n_ops": 588,
+     "recipes": {
+      "embedding": 1,
+      "layer_norm": 6,
+      "transformer_residuals": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   }
  },
  "t5": {
@@ -968,7 +2132,47 @@
     "embedding": 4,
     "language_model_head": 1,
     "t5_attention": 6
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "09c03e564b886ca21a63296027d4f17e2b48b2c94133168645fd93074c253645",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "language_model_head": [
+       "logits",
+       "unembed_weight"
+      ],
+      "t5_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "pattern",
+       "q",
+       "result",
+       "scores",
+       "v",
+       "z"
+      ]
+     },
+     "n_ops": 358,
+     "recipes": {
+      "embedding": 2,
+      "language_model_head": 1,
+      "t5_attention": 6
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   }
  },
  "vit": {
@@ -1006,7 +2210,47 @@
     "gqa_attention": 2,
     "layer_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "2e937ecead03e36b9bfc2d2741d9f6814ff0852161523426e9218dd7128c6acd",
+     "floors": {
+      "gqa_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "pattern",
+       "q",
+       "result",
+       "scores",
+       "v",
+       "z"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_post"
+      ]
+     },
+     "n_ops": 72,
+     "recipes": {
+      "gqa_attention": 2,
+      "layer_norm": 5,
+      "transformer_residuals": 2,
+      "vit_self_attention": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   },
   "sdpa": {
    "false_claims": [],
@@ -1038,7 +2282,43 @@
     "gqa_attention": 2,
     "layer_norm": 5,
     "transformer_residuals": 2
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "6ee798ffe9cb061e648430d2d1c81ba44b975c201bdd20014f5ac7894c85d13e",
+     "floors": {
+      "gqa_attention": [
+       "attn_out",
+       "d_head",
+       "head",
+       "input",
+       "k",
+       "n_heads",
+       "n_kv_heads",
+       "n_q_heads",
+       "q",
+       "v"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_post"
+      ]
+     },
+     "n_ops": 66,
+     "recipes": {
+      "gqa_attention": 2,
+      "layer_norm": 5,
+      "transformer_residuals": 2,
+      "vit_self_attention": 2
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   }
  },
  "whisper": {
@@ -1067,7 +2347,47 @@
     "embedding": 2,
     "layer_norm": 16,
     "transformer_residuals": 6
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [
+      [
+       "model.encoder.layers.0",
+       "resid_pre",
+       "same_recipe_serves_it_elsewhere"
+      ],
+      [
+       "model.encoder.layers.1",
+       "resid_pre",
+       "same_recipe_serves_it_elsewhere"
+      ]
+     ],
+     "fingerprint": "31fb6bc7e876101e6380f102e343a16feb397e2d06982444c4b59525d8b89c0d",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post"
+      ]
+     },
+     "n_ops": 231,
+     "recipes": {
+      "embedding": 2,
+      "layer_norm": 12,
+      "transformer_residuals": 4
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
+    }
+   ]
   },
   "sdpa": {
    "false_claims": [],
@@ -1094,7 +2414,67 @@
     "embedding": 2,
     "layer_norm": 16,
     "transformer_residuals": 6
-   }
+   },
+   "variants": [
+    {
+     "false_claims": [],
+     "fingerprint": "049990aa41a4752149a123ae05c9502a838ab07e86293b03c5065bd0a7e66d69",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 208,
+     "recipes": {
+      "embedding": 2,
+      "layer_norm": 12,
+      "transformer_residuals": 4
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu (python 3.11; the torch floor row), recorded 2026-11-05",
+     "sdpa_mask_builder": "sdpa_mask_older_torch"
+    },
+    {
+     "false_claims": [],
+     "fingerprint": "049990aa41a4752149a123ae05c9502a838ab07e86293b03c5065bd0a7e66d69",
+     "floors": {
+      "embedding": [
+       "indices",
+       "lookup",
+       "weight"
+      ],
+      "layer_norm": [
+       "beta",
+       "gamma",
+       "normalized"
+      ],
+      "transformer_residuals": [
+       "resid_mid",
+       "resid_post",
+       "resid_pre"
+      ]
+     },
+     "n_ops": 215,
+     "recipes": {
+      "embedding": 2,
+      "layer_norm": 12,
+      "transformer_residuals": 4
+     },
+     "recorded_on": "transformers 4.55.4 on torch 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05",
+     "sdpa_mask_builder": "sdpa_mask_recent_torch"
+    }
+   ]
   }
  }
 }

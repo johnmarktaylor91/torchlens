@@ -2,7 +2,8 @@
 
 ``benchmarks/save_path_counters.py`` counts the work one saved-format-3 save of the ``tinynet``
 capture does: record-table write passes and encoder calls, verifying re-reads, ``fsync`` calls,
-Python-level opens, files and bytes. The pinned values live beside the ``aux_save`` row of
+Python-level opens (direct, and routed through ``pathlib``, counted apart so the split is the
+same on every Python), files and bytes. The pinned values live beside the ``aux_save`` row of
 ``benchmarks/perf_baselines/linux-cpu-provisional.json`` under
 ``metadata.save_path_counters``. Counters gate by exact equality; the recorded wall clock is
 information only and is never read here.
@@ -45,6 +46,8 @@ STRUCTURAL_COUNTERS = (
     "fsync_calls",
     "read_opens",
     "write_opens",
+    "pathlib_read_opens",
+    "pathlib_write_opens",
     "files_written",
 )
 # Depend on the torch build as well as the save path.

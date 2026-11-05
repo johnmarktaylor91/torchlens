@@ -371,3 +371,25 @@ def test_sparse_partial_alias_charges_the_physical_union() -> None:
     else:
         indices_bytes = sparse_b._indices().untyped_storage().nbytes()
         assert committed_after_second - committed_after_first == values_bytes + indices_bytes
+
+
+def test_storage_payload_keeps_its_charge_without_a_retained_storage_wrapper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without a retained storage wrapper a storage payload is never weakly watched.
+
+    On torch 2.1 (``HAS_CACHED_UNTYPED_STORAGE_WRAPPER`` false) a weak reference to
+    a storage wrapper can crash CPython when it is cleared, so a retained storage
+    keeps the permanent charge, the documented fallback for an unwatchable payload;
+    a tensor payload is still watched and credited back on release.
+    """
+
+    from torchlens._utils import _torch_compat
+
+    monkeypatch.setattr(_torch_compat, "HAS_CACHED_UNTYPED_STORAGE_WRAPPER", False)
+    budget = SaveBudget(resolve_save_budget(1 << 20))
+    budget._watch_payload(torch.ones(4).untyped_storage(), "cpu", ("storage",))
+    assert budget._payload_watchers == {}
+    tensor = torch.ones(4)
+    budget._watch_payload(tensor, "cpu", ("tensor",))
+    assert len(budget._payload_watchers) == 1

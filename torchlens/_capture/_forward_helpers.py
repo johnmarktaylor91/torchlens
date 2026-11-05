@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ._lazy_contexts import LazyContextHistory
 from .._utils.display import _timed_phase
+from ..errors._base import transparent_contextmanager
 
 
 def _cleanup_forward_memory_once(
@@ -94,7 +95,7 @@ def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
         yield
 
 
-@contextlib.contextmanager
+@transparent_contextmanager
 def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "Iterator[None]":
     """Record forward-pass peak memory around the model forward call.
 
