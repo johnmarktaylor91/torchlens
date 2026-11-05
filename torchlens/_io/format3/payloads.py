@@ -97,11 +97,12 @@ def _owning_copy(host: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
 def payload_identity(tensor: torch.Tensor, host: torch.Tensor, kind: str) -> tuple[Any, ...] | None:
     """Return the key under which byte-identical payloads share one stored entry.
 
-    Two payloads share an entry only when their kind, dtype, shape, strides,
-    device, ``requires_grad``, codec and the SHA-256 of the written bytes all
-    agree, so every reference to the entry declares the same tensor (the
+    Two payloads share an entry only when their kind, dtype, shape, device,
+    ``requires_grad``, codec and the SHA-256 of the written (contiguous) bytes
+    all agree, so every reference to the entry declares the same tensor (the
     reader checks repeated references agree) and each still loads as a tensor
-    of its own.
+    of its own. Strides are not part of it: a reference carries none and every
+    payload loads as a contiguous tensor of its shape.
 
     Parameters
     ----------
@@ -128,7 +129,6 @@ def payload_identity(tensor: torch.Tensor, host: torch.Tensor, kind: str) -> tup
         kind,
         str(tensor.dtype),
         tuple(tensor.shape),
-        tuple(tensor.stride()),
         str(tensor.device),
         bool(tensor.requires_grad),
         TORCH_CODEC,

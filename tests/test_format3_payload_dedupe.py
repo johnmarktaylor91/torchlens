@@ -1,9 +1,9 @@
 """Saved format 3 stores byte-identical payloads once and hashes its files in blocks.
 
 A trace often holds the same bytes several times: a clone, an eval-mode dropout's
-copy, a view saved as a payload of its own. The writer stores one entry per
-payload identity (kind, dtype, shape, strides, device, ``requires_grad``, codec and
-the SHA-256 of the bytes) and every cell names that entry; the reader already
+copy, a transposed view beside its contiguous copy. The writer stores one entry per
+payload identity (kind, dtype, shape, device, ``requires_grad``, codec and the
+SHA-256 of the contiguous bytes) and every cell names that entry; the reader already
 checks that repeated references agree and loads each cell as a tensor of its own.
 The counters pinned here (payload references, stored entries, stored bytes) are
 deterministic for a fixed model and input.
@@ -40,6 +40,19 @@ class _Twins(nn.Module):
 
         y = self.lin(x)
         return y.clone() + y.clone()
+
+
+class _Transposed(nn.Module):
+    """A transposed linear output and its contiguous copy: equal values, different strides."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the contiguous copy of the transposed linear output, doubled."""
+
+        return self.lin(x).t().contiguous() * 2.0
 
 
 def _tensor_cells(value: Any) -> list[dict[str, Any]]:
@@ -92,12 +105,19 @@ def _twins() -> tuple[nn.Module, torch.Tensor]:
     return _Twins().eval(), torch.randn(2, 4)
 
 
-_MODELS = {"gpt2": _gpt2, "resnet18": _resnet, "twins": _twins}
+def _transposed() -> tuple[nn.Module, torch.Tensor]:
+    """The transposing model above on a 2x4 input."""
+
+    return _Transposed().eval(), torch.randn(2, 4)
+
+
+_MODELS = {"gpt2": _gpt2, "resnet18": _resnet, "transposed": _transposed, "twins": _twins}
 
 #: Counters measured at the writer that stores each payload identity once.
 _PINNED = {
     "gpt2": {"references": 0, "entries": 0, "stored_bytes": 0},
     "resnet18": {"references": 0, "entries": 0, "stored_bytes": 0},
+    "transposed": {"references": 0, "entries": 0, "stored_bytes": 0},
     "twins": {"references": 0, "entries": 0, "stored_bytes": 0},
 }
 
@@ -125,16 +145,26 @@ def test_pinned_payload_counters(tmp_path: Path, name: str) -> None:
             assert torch.equal(back.out, live.out), live.label
 
 
+def _entries_of(root: Path, func_names: set[str]) -> set[tuple[str, str]]:
+    """Return the stored entries the ``out`` cells of ops named ``func_names`` reference."""
+
+    columns = json.loads((root / "records/op.json").read_text(encoding="utf-8"))["columns"]
+    return {
+        (cell["blob"], cell["key"])
+        for name, cell in zip(columns["func_name"], columns["out"], strict=True)
+        if name in func_names
+    }
+
+
 def test_shared_entry_loads_as_independent_tensors(tmp_path: Path) -> None:
     """Three equal outputs name one entry; each loads as its own tensor, so writes stay local."""
 
     root = tmp_path / "twins.tlspec"
     trace = save_model("twins", root)
-    op_cells = json.loads((root / "records/op.json").read_text(encoding="utf-8"))["columns"]["out"]
+    assert len(_entries_of(root, {"linear", "clone"})) == 1
     ops = list(trace.ops)
     equal = [index for index, op in enumerate(ops) if op.func_name in {"linear", "clone"}]
     assert len(equal) == 3
-    assert len({(op_cells[index]["blob"], op_cells[index]["key"]) for index in equal}) == 1
     loaded_ops = list(tl.load(root).ops)
     first, second, third = (loaded_ops[index].out for index in equal)
     assert len({tensor.untyped_storage().data_ptr() for tensor in (first, second, third)}) == 3
@@ -145,8 +175,23 @@ def test_shared_entry_loads_as_independent_tensors(tmp_path: Path) -> None:
     assert torch.equal(third, expected)
 
 
+def test_transposed_view_shares_its_contiguous_copy(tmp_path: Path) -> None:
+    """A transposed view and its contiguous copy hash the same bytes, share an entry, load equal."""
+
+    root = tmp_path / "transposed.tlspec"
+    trace = save_model("transposed", root)
+    assert len(_entries_of(root, {"t", "contiguous"})) == 1
+    ops = list(trace.ops)
+    loaded_ops = list(tl.load(root).ops)
+    pair = [index for index, op in enumerate(ops) if op.func_name in {"t", "contiguous"}]
+    assert len(pair) == 2
+    assert ops[pair[0]].out.stride() != ops[pair[1]].out.stride()
+    for index in pair:
+        assert torch.equal(loaded_ops[index].out, ops[index].out)
+
+
 def test_payload_identity_separates_every_declared_field(tmp_path: Path) -> None:
-    """Equal bytes share an entry only when kind, strides and grad flag agree too."""
+    """Equal contiguous bytes share an entry when kind and grad flag agree, whatever the strides."""
 
     store = PayloadStore(tmp_path)
     base = torch.arange(6, dtype=torch.float32).reshape(2, 3)
@@ -161,9 +206,9 @@ def test_payload_identity_separates_every_declared_field(tmp_path: Path) -> None
         store.unshared().submit_payload(base.clone(), kind="out")[:2],
         store.submit_payload(base.clone(), kind="out")[:2],
     ]
-    assert keys[1] == keys[0] == keys[6]
-    assert len(set(keys)) == 5
-    assert store.payload_counts == {"submitted": 7, "stored": 5}
+    assert keys[0] == keys[1] == keys[4] == keys[6]
+    assert len(set(keys)) == 4
+    assert store.payload_counts == {"submitted": 7, "stored": 4}
 
 
 def test_file_digests_hash_in_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
