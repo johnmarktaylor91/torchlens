@@ -11,7 +11,7 @@ import copy
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .types import Edit
+    from ._types import Edit
 
 
 def deepcopy_edit(edit: Edit, memo: dict[int, Any]) -> Edit:

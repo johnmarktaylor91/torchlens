@@ -4,7 +4,7 @@ Whole-tensor facts (all zero, all inf, all NaN, all finite, constant along a
 dim) that ``exemptions.py`` reads off saved call arguments and outputs when it
 proves a perturbation cannot move an output.
 
-Split from ``validation/exemptions.py`` along this seam (R43 file-size ratchet);
+Split from ``validation/_exemptions.py`` along this seam (R43 file-size ratchet);
 the predicates are unchanged.
 """
 

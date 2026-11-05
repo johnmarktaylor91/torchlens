@@ -361,7 +361,7 @@ class TestReplayRefusals:
     invariants run in full.
     """
 
-    # Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/__init__.py, validation/core.py.
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/__init__.py, validation/_core.py.
     def test_forward_replay_validation_refuses_typed(self, gloo_world):
         from torchlens.errors import CollectiveBoundaryReplayError
 

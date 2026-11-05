@@ -24,6 +24,8 @@ from __future__ import annotations
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -55,7 +57,7 @@ def _autocast_reason(trace: Trace) -> str | None:
     if not ops:
         return "the trace has no compute ops"
     for op in ops:
-        state = getattr(op, "func_autocast_state", None)
+        state = record_member(op, "func_autocast_state", None)
         if not isinstance(state, dict):
             return "an op recorded no autocast state"
         devices = {key: value for key, value in state.items() if key != "__execution__"}

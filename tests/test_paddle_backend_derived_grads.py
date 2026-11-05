@@ -9,6 +9,7 @@ import pytest
 paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
+from torchlens._utils._record_group_table import op_attr  # noqa: E402
 from torchlens.backends.paddle import GradOptions  # noqa: E402
 from torchlens.backends.paddle.backend import (  # noqa: E402
     PaddleIntermediateSignature,
@@ -236,7 +237,7 @@ def test_paddle_duplicate_trace_signature_group_is_ambiguous() -> None:
 
     trace = tl.trace(model, paddle.ones([2, 2], dtype="float32"), backend="paddle")
     relu_ops = [op for op in trace._layer_list if op.func_name == "functional.relu"]
-    relu_ops[1].func_call_id = relu_ops[0].func_call_id
+    setattr(relu_ops[1], op_attr("func_call_id"), relu_ops[0].call.call_id)
     groups = _paddle_trace_intermediate_signatures(trace)
     # N5: ``op.parents`` holds FINAL pass-qualified labels (every op's edges
     # are relabeled, not only multi-pass group members), but

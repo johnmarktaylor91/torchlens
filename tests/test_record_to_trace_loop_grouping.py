@@ -104,7 +104,7 @@ def test_cooked_recording_groups_loops_like_trace(
     assert _grouping(cooked) == _grouping(exhaustive)
     assert len(cooked.layers) == len(exhaustive.layers)
     assert [op.has_params for op in cooked.ops] == [op.has_params for op in exhaustive.ops]
-    assert all(op.equivalence_class for op in cooked.ops)
+    assert all(op.graph.equivalence_class for op in cooked.ops)
     assert cooked.options.grouping_policy["detector"] == "callsite_v1"
     assert (
         cooked.options.grouping_policy["detector"] == exhaustive.options.grouping_policy["detector"]
@@ -156,6 +156,6 @@ def test_cooked_torchvision_recording_matches_trace(name: str) -> None:
         layer.layer_label for layer in exhaustive.layers
     ]
     assert _grouping(cooked) == _grouping(exhaustive)
-    assert sorted(str(op.address) for op in cooked.ops) == sorted(
-        str(op.address) for op in exhaustive.ops
+    assert sorted(str(op.buffer_address) for op in cooked.ops) == sorted(
+        str(op.buffer_address) for op in exhaustive.ops
     )

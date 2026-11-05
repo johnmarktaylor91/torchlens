@@ -26,6 +26,7 @@ import torch
 
 from .._semantic.recipes._helpers import relays_wrapped_core
 from .._semantic.tolerances import within_reconstruction_tolerance
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._records import ComponentRow, ComponentStack, Coordinate, StackGrading
 
@@ -80,7 +81,7 @@ def _select_layers(modules: list[Any], selector: Any) -> list[Any]:
                 )
             selected.append(modules[entry])
         else:
-            match = [m for m in modules if str(getattr(m, "address", "")) == str(entry)]
+            match = [m for m in modules if str(record_member(m, "address", "")) == str(entry)]
             if not match:
                 refuse(
                     code="mi_head_geometry_unavailable",
@@ -102,7 +103,7 @@ def _result_tensor(module: Any) -> torch.Tensor:
         refuse(
             code="mi_payload_missing",
             message=f"The per-head result view at "
-            f"{getattr(module, 'address', '?')} is not readable "
+            f"{record_member(module, 'address', '?')} is not readable "
             f"({type(value).__name__}).",
             remedy="capture with the attention interior saved (retention_plan or "
             "save='all'); fused SDPA needs "
@@ -126,7 +127,7 @@ def _remainder_row(
     head_sum = result.sum(dim=2)
     remainder = attn_out - head_sum
     bias_param = None
-    for child_address in [str(getattr(module, "address", ""))] + list(
+    for child_address in [str(record_member(module, "address", ""))] + list(
         getattr(module, "address_children", ()) or ()
     ):
         try:
@@ -157,7 +158,7 @@ def _remainder_row(
                         kind="constant",
                         # The ATTENTION address, so consumers (full_decomposition)
                         # can group a layer's head rows + constant as one splice.
-                        module_address=str(getattr(module, "address", "")),
+                        module_address=str(record_member(module, "address", "")),
                         provenance="verified_constant",
                     ),
                     value=bias.expand_as(remainder),
@@ -174,9 +175,9 @@ def _remainder_row(
     return (
         ComponentRow(
             coordinate=Coordinate(
-                label=f"{getattr(module, 'address', '?')}.attention_remainder",
+                label=f"{record_member(module, 'address', '?')}.attention_remainder",
                 kind="unresolved_remainder",
-                module_address=str(getattr(module, "address", "")),
+                module_address=str(record_member(module, "address", "")),
                 provenance="computed_exact_difference; not proven to be the projection "
                 "bias (post-projection scaling/dropout or unproven path)",
             ),
@@ -208,7 +209,7 @@ def _layer_rows(
     n_q_heads = int(view["n_q_heads"])
     n_kv_heads = int(view["n_kv_heads"])
     group = max(1, n_q_heads // max(1, n_kv_heads))
-    address = str(getattr(module, "address", ""))
+    address = str(record_member(module, "address", ""))
     result = _result_tensor(module)  # [b, pos, head, d_model]
     attn_out_facet = view["attn_out"]
     attn_out = attn_out_facet.value if hasattr(attn_out_facet, "value") else attn_out_facet

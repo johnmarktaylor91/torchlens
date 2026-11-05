@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..._utils._record_group_table import record_member
+
 __tl_layer__ = "L8"
 
 #: Reserved prefix for nodes without a mintable site key (memo D2): visibly
@@ -92,7 +94,7 @@ def legacy_v2_spelling(entry: Any) -> str:
 def _id_base(entry: Any) -> str:
     """Return the pre-ordinal id base: the site key, or the legacy spelling."""
 
-    site_key = getattr(entry, "site_key", None)
+    site_key = record_member(entry, "site_key", None)
     if isinstance(site_key, str) and site_key:
         return site_key
     return LEGACY_ID_PREFIX + escape_component(legacy_v2_spelling(entry))

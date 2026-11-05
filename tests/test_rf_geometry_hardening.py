@@ -20,7 +20,10 @@ import torch.nn.functional as F
 
 import torchlens as tl
 from torchlens._postprocess.graph_traversal import output_payload_aliases_parent
-from torchlens.receptive_field import ReceptiveFieldStatus, ReceptiveFieldValidationStatus
+from torchlens.receptive_field import (
+    ReceptiveFieldStatus,
+    ReceptiveFieldValidationStatus,
+)
 
 torch.manual_seed(0)
 
@@ -305,7 +308,7 @@ class _Interp(nn.Module):
         return F.interpolate(x, **self.kwargs)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/rules/_utils.py, receptive_field/rules/interpolation.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_builtin_rules/_utils.py, receptive_field/_builtin_rules/interpolation.py.
 @pytest.mark.parametrize(
     ("mode", "in_size", "kwargs"),
     [
@@ -337,7 +340,7 @@ def test_antialias_interpolate_rf_pf_against_truth(mode: str, in_size: int, kwar
         assert_box_against_truth(box, truth, (2, 3), context=f"AA PF {mode} in{in_size} src{src}")
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/rules/interpolation.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_builtin_rules/interpolation.py.
 def test_antialias_align_corners_true_fails_closed() -> None:
     """Uncertified AA configurations must refuse rather than claim geometry."""
 
@@ -473,7 +476,9 @@ def test_hypernetwork_projective_solve_degrades_typed() -> None:
     claim exactness.
     """
 
-    from torchlens.receptive_field._validation import check_geometric_metadata_invariants
+    from torchlens.receptive_field._validation import (
+        check_geometric_metadata_invariants,
+    )
 
     trace = tl.trace(_HyperLinear(), torch.randn(2, 5, 3))
     assert check_geometric_metadata_invariants(trace) is True
@@ -495,7 +500,9 @@ def test_hypernetwork_projective_solve_degrades_typed() -> None:
 def test_hypernetwork_input_weight_receptive_degrades_typed() -> None:
     """Input-fed computed weights hit the same class in the receptive engine."""
 
-    from torchlens.receptive_field._validation import check_geometric_metadata_invariants
+    from torchlens.receptive_field._validation import (
+        check_geometric_metadata_invariants,
+    )
 
     class HyperInput(nn.Module):
         def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:

@@ -9,9 +9,9 @@ execution, only if/when the helper actually fired.
 
 Implementing real string-label resolution (Route A) requires populating a
 fire-time label -> tensor lookup as the forward pass progresses, which is a
-runtime/replay concern (``torchlens/intervention/runtime.py``,
-``torchlens/intervention/replay.py``), not something reachable from
-``torchlens/intervention/helpers.py`` alone. So this fix takes the honesty
+runtime/replay concern (``torchlens/intervention/_runtime.py``,
+``torchlens/intervention/_replay.py``), not something reachable from
+``torchlens/intervention/_helpers.py`` alone. So this fix takes the honesty
 route (Route B): ``swap_with`` now raises a clear, early ``HookValueError``
 the moment a string label is passed -- at spec-construction time, before any
 trace/hook ever fires -- and the docs were corrected to stop claiming the
@@ -70,14 +70,14 @@ def test_swap_with_string_label_raises_immediately() -> None:
     """
 
     with pytest.raises(HookValueError, match="not implemented"):
-        tl.intervention.helpers.swap_with("linear_1_1")
+        tl.intervention._helpers.swap_with("linear_1_1")
 
 
 def test_swap_with_string_label_error_names_alternatives() -> None:
     """The error message must point at the supported tensor / Op-like forms."""
 
     with pytest.raises(HookValueError) as excinfo:
-        tl.intervention.helpers.swap_with("some_layer")
+        tl.intervention._helpers.swap_with("some_layer")
 
     message = str(excinfo.value)
     assert "torch.Tensor" in message
@@ -102,7 +102,7 @@ def test_swap_with_tensor_form_still_works_in_real_intervention() -> None:
         model,
         x,
         save=tl.func("linear"),
-        intervene=tl.when(tl.in_module("b"), tl.intervention.helpers.swap_with(replacement)),
+        intervene=tl.when(tl.in_module("b"), tl.intervention._helpers.swap_with(replacement)),
     )
 
     result = swapped["linear_2_2"].out
@@ -120,7 +120,7 @@ def test_swap_with_tensor_form_still_works_in_real_intervention() -> None:
         x,
         save=tl.func("linear"),
         intervene=tl.when(
-            tl.in_module("b"), tl.intervention.helpers.swap_with(baseline["linear_1_1"])
+            tl.in_module("b"), tl.intervention._helpers.swap_with(baseline["linear_1_1"])
         ),
     )
     assert torch.allclose(op_swapped["linear_2_2"].out, first_layer_out)

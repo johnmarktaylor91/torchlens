@@ -35,22 +35,24 @@ import warnings
 import pytest
 import torch
 import torch.nn as nn
+from _record_fakes import FlatGroups, FlatNamespace
 from _validation_capture import _capture, _quiet_validate
 from example_models import BufferRewriteModel
 
 import torchlens as tl
 from torchlens._state import pause_logging
+from torchlens._utils._record_group_table import op_attr
 from torchlens.backends.torch import rescue
 from torchlens.errors import TraceNotReproducibleWarning
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
-from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.exemptions import (
+from torchlens.validation._core import validate_saved_outs
+from torchlens.validation._exemptions import (
     _addcmul_zero_annihilator_decision,
     _check_norm_zero_weight_annihilates,
     _multiplicative_zero_annihilator_decision,
 )
-from torchlens.validation.invariants import (
+from torchlens.validation._invariants import (
     MetadataInvariantError,
     check_metadata_invariants,
 )
@@ -109,7 +111,7 @@ def _drop_diamond_edge(trace) -> None:
     c1_op.parents = [v for v in c1_op.parents if v not in p_labels]
     p_op.children = [v for v in p_op.children if v not in c1_labels]
     for domain in ("args", "kwargs"):
-        positions = c1_op.parent_arg_positions.get(domain, {})
+        positions = c1_op.call.parent_arg_positions.get(domain, {})
         for key in [k for k, v in positions.items() if v in p_labels]:
             del positions[key]
     for holder in (c1_op, p_op):
@@ -125,7 +127,7 @@ def _drop_diamond_edge(trace) -> None:
             ]
     for key in [k for k in list(p_op.out_versions_by_child) if k in c1_labels]:
         del p_op.out_versions_by_child[key]
-    p_op.has_children = len(p_op.children) > 0
+    p_op._graph_has_children = len(p_op.children) > 0
 
 
 def test_w31_diamond_baseline_passes() -> None:
@@ -247,7 +249,7 @@ def test_w32_stale_fire_leak_in_plain_capture_stays_refused() -> None:
     ``_tl_live_fire_results`` leak cannot launder a placeholder.
     """
 
-    from torchlens.intervention.types import FireRecord
+    from torchlens.intervention._types import FireRecord
     from torchlens.validation._invariants_backward_flow import (
         _intervention_spec_is_armed,
         op_has_genuine_replacement_evidence,
@@ -264,7 +266,7 @@ def test_w32_stale_fire_leak_in_plain_capture_stays_refused() -> None:
 
 def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
     """Returning an already-traced tensor only rewires the module boundary."""
-    from torchlens.validation.core import _is_intentional_intervention_replacement
+    from torchlens.validation._core import _is_intentional_intervention_replacement
 
     model = nn.Linear(4, 4)
     handle = model.register_forward_hook(lambda _module, _args, out: (out,))
@@ -286,7 +288,7 @@ def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
 def test_callable_op_needs_own_live_fire_to_use_replacement_exemption() -> None:
     """A raw-hook ledger stamp alone cannot exempt a replayable callable op."""
     from torchlens.backends.torch.model_prep import _note_replacement_event
-    from torchlens.validation.core import _is_intentional_intervention_replacement
+    from torchlens.validation._core import _is_intentional_intervention_replacement
 
     trace, _ground_truth = _capture(_Tiny(), torch.randn(3, 4))
     relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
@@ -316,7 +318,7 @@ def test_w33_arg_map_naming_non_parent_now_fails() -> None:
     add_ops = [op for op in trace._layer_list if op.func_name == "__add__"]
     foreign = add_ops[-1].layer_label
     assert foreign not in relu_op.parents
-    relu_op.parent_arg_positions["args"][1] = foreign
+    relu_op.call.parent_arg_positions["args"][1] = foreign
 
     with pytest.raises(MetadataInvariantError) as exc_info:
         check_metadata_invariants(trace)
@@ -329,7 +331,7 @@ def test_w33_has_children_corruption_still_caught() -> None:
     trace, _ = _capture(_Diamond(), torch.randn(3, 4))
     p_op = [op for op in trace._layer_list if op.func_name == "__mul__"][0]
     assert p_op.children
-    p_op.has_children = False
+    p_op._graph_has_children = False
 
     with pytest.raises(MetadataInvariantError) as exc_info:
         check_metadata_invariants(trace)
@@ -342,8 +344,8 @@ def test_w33_derived_flag_properties_are_read_only_truths() -> None:
     trace, _ = _capture(_Diamond(), torch.randn(3, 4))
     op_type = type(trace._layer_list[1])
     for name in ("has_parents", "has_siblings", "has_co_parents"):
-        assert isinstance(getattr(op_type, name), property)
-    assert not isinstance(getattr(op_type, "has_children", None), property)
+        assert isinstance(getattr(op_type, op_attr(name)), property)
+    assert not isinstance(getattr(op_type, op_attr("has_children")), property)
 
 
 # ---------------------------------------------------------------------------
@@ -431,21 +433,21 @@ def test_module_call_stack_is_single_fact_containment() -> None:
 
     # Top-level ops (the model input, an op between modules) run in NO module
     # call: the stack must be empty, not the fed call's stack.
-    assert tuple(by_label["input_1"].module_call_stack) == ()
-    assert tuple(by_label["sigmoid_1_3"].module_call_stack) == ()
+    assert tuple(by_label["input_1"].module_context.call_stack) == ()
+    assert tuple(by_label["sigmoid_1_3"].module_context.call_stack) == ()
     # The fed-call fact lives on input_to_module_calls, un-conflated.
-    assert tuple(by_label["input_1"].input_to_module_calls) == ("a:1", "a.0:1")
-    assert tuple(by_label["sigmoid_1_3"].input_to_module_calls) == ("l2:1",)
+    assert tuple(by_label["input_1"].module_context.input_to_module_calls) == ("a:1", "a.0:1")
+    assert tuple(by_label["sigmoid_1_3"].module_context.input_to_module_calls) == ("l2:1",)
 
     # Interior and module-output ops carry root-first ModuleCall LABELS
     # (pass-qualified), not bare addresses.
-    assert tuple(by_label["linear_1_1"].module_call_stack) == ("a:1", "a.0:1")
-    assert tuple(by_label["relu_1_2"].module_call_stack) == ("a:1", "a.1:1")
+    assert tuple(by_label["linear_1_1"].module_context.call_stack) == ("a:1", "a.0:1")
+    assert tuple(by_label["relu_1_2"].module_context.call_stack) == ("a:1", "a.1:1")
 
     # The three facts are tied on every op: stack == modules, depth == len.
     for op in trace._layer_list:
-        assert tuple(op.module_call_stack) == tuple(op.modules)
-        assert op.module_call_depth == len(op.module_call_stack)
+        assert tuple(op.module_context.call_stack) == tuple(op.modules)
+        assert op.module_context.call_depth == len(op.module_context.call_stack)
 
 
 def test_module_call_stack_corruption_fails_invariants() -> None:
@@ -459,7 +461,7 @@ def test_module_call_stack_corruption_fails_invariants() -> None:
     trace, _ = _capture(_Nested(), torch.randn(2, 4))
     input_op = _op_by_layer_label(trace, "input_1")
     assert tuple(input_op.modules) == ()
-    input_op.module_call_stack = ("a", "a.0")  # the retired fed-call fact
+    input_op._module_context_call_stack = ("a", "a.0")  # the retired fed-call fact
 
     with pytest.raises(MetadataInvariantError) as exc_info:
         check_metadata_invariants(trace)
@@ -476,7 +478,7 @@ def test_parent_arg_positions_foreign_domain_fails() -> None:
 
     trace, _ = _capture(_Diamond(), torch.randn(3, 4))
     relu_op = [op for op in trace._layer_list if op.func_name == "relu"][0]
-    relu_op.parent_arg_positions["nosuchop_9_9"] = {"args": [0]}
+    relu_op.call.parent_arg_positions["nosuchop_9_9"] = {"args": [0]}
 
     with pytest.raises(MetadataInvariantError) as exc_info:
         check_metadata_invariants(trace)
@@ -542,7 +544,7 @@ def test_w34_public_path_census_still_fails_dropped_aten_op() -> None:
 def test_w34_census_unverified_outcome_is_recorded_not_discarded() -> None:
     """An unverified census outcome now leaves an auditable diagnostic."""
 
-    from torchlens.validation.diagnostics import get_validation_diagnostics
+    from torchlens.validation._diagnostics import get_validation_diagnostics
 
     # Bind the model: replay reads parameters through TorchLens' weak model
     # reference, so a temporary model can be collected mid-test and turn the
@@ -699,7 +701,7 @@ def test_addcmul_zero_annihilator_refuses_unproved_cases() -> None:
     output still fails validation.
     """
 
-    class _FakeAddcmulOp:
+    class _FakeAddcmulOp(FlatGroups):
         func_name = "addcmul"
         out = torch.zeros(2)  # a finite saved output
 
@@ -765,9 +767,9 @@ def test_nan_multiplication_proof_still_covers_plain_mul() -> None:
     dispatcher after the addcmul branch was added beside it.
     """
 
-    from torchlens.validation.exemptions import _posthoc_value_proof_decision
+    from torchlens.validation._exemptions import _posthoc_value_proof_decision
 
-    class _FakeMulOp:
+    class _FakeMulOp(FlatGroups):
         func_name = "mul"
         saved_kwargs: dict = {}
 
@@ -830,7 +832,7 @@ def test_check_norm_zero_weight_annihilates_never_exempts_weight_or_bias() -> No
     weight or bias themselves, and never fires when weight is nonzero.
     """
 
-    class _FakeBatchNormOp:
+    class _FakeBatchNormOp(FlatGroups):
         out = torch.zeros(2)  # a finite saved output
 
         def __init__(self, weight) -> None:
@@ -883,9 +885,9 @@ def test_check_norm_zero_weight_reads_the_real_captured_weight_slot() -> None:
         bn.eval()
         trace, _ = _capture(bn, torch.randn(2, 4, 8, 8))
         op = next(op for op in trace._layer_list if op.func_name == "batch_norm")
-        assert torch.equal(op.saved_args[1], bn.weight.detach())
-        assert torch.equal(op.saved_args[3], bn.running_mean)
-        positions = op.parent_arg_positions["args"]
+        assert torch.equal(op.call.saved_args[1], bn.weight.detach())
+        assert torch.equal(op.call.saved_args[3], bn.running_mean)
+        positions = op.call.parent_arg_positions["args"]
         for position in (0, 3, 4):
             if position in positions:
                 decision = _check_norm_zero_weight_annihilates(op, [positions[position]])
@@ -938,9 +940,9 @@ def test_sdpa_zero_query_decision_scoped_correctly() -> None:
     the output), and never exempts anything when query is nonzero.
     """
 
-    from torchlens.validation.exemptions import _sdpa_zero_query_decision
+    from torchlens.validation._exemptions import _sdpa_zero_query_decision
 
-    class _FakeSdpaOp:
+    class _FakeSdpaOp(FlatGroups):
         out = torch.zeros(2)  # a finite saved output
 
         def __init__(self, query) -> None:
@@ -954,13 +956,15 @@ def test_sdpa_zero_query_decision_scoped_correctly() -> None:
     nonzero_query = torch.randn(1, 2, 1, 8)
 
     layer = _FakeSdpaOp(zero_query)
-    assert _sdpa_zero_query_decision(layer, ["key_label"], layer.saved_args).exempt is True
-    assert _sdpa_zero_query_decision(layer, ["query_label"], layer.saved_args).exempt is False
-    assert _sdpa_zero_query_decision(layer, ["value_label"], layer.saved_args).exempt is False
+    assert _sdpa_zero_query_decision(layer, ["key_label"], layer.call.saved_args).exempt is True
+    assert _sdpa_zero_query_decision(layer, ["query_label"], layer.call.saved_args).exempt is False
+    assert _sdpa_zero_query_decision(layer, ["value_label"], layer.call.saved_args).exempt is False
 
     nonzero_layer = _FakeSdpaOp(nonzero_query)
     assert (
-        _sdpa_zero_query_decision(nonzero_layer, ["key_label"], nonzero_layer.saved_args).exempt
+        _sdpa_zero_query_decision(
+            nonzero_layer, ["key_label"], nonzero_layer.call.saved_args
+        ).exempt
         is False
     )
 
@@ -981,9 +985,9 @@ def test_linear_zero_input_annihilates_weight_perturbation() -> None:
     gives plain ``mul``).
     """
 
-    from torchlens.validation.exemptions import _linear_zero_weight_input_decision
+    from torchlens.validation._exemptions import _linear_zero_weight_input_decision
 
-    class _FakeLinearOp:
+    class _FakeLinearOp(FlatGroups):
         out = torch.zeros(2)  # a finite saved output
 
         def __init__(self, input_value, weight_value) -> None:
@@ -998,18 +1002,20 @@ def test_linear_zero_input_annihilates_weight_perturbation() -> None:
 
     layer = _FakeLinearOp(zero_input, nonzero_weight)
     assert (
-        _linear_zero_weight_input_decision(layer, ["weight_label"], layer.saved_args).exempt is True
+        _linear_zero_weight_input_decision(layer, ["weight_label"], layer.call.saved_args).exempt
+        is True
     )
     # Perturbing the (zero) input itself is never exempted by this proof.
     assert (
-        _linear_zero_weight_input_decision(layer, ["input_label"], layer.saved_args).exempt is False
+        _linear_zero_weight_input_decision(layer, ["input_label"], layer.call.saved_args).exempt
+        is False
     )
 
     nonzero_input = torch.randn(2, 4)
     nonzero_layer = _FakeLinearOp(nonzero_input, nonzero_weight)
     assert (
         _linear_zero_weight_input_decision(
-            nonzero_layer, ["weight_label"], nonzero_layer.saved_args
+            nonzero_layer, ["weight_label"], nonzero_layer.call.saved_args
         ).exempt
         is False
     )
@@ -1039,9 +1045,9 @@ def test_softmax_singleton_reduction_dim_validates() -> None:
 def test_softmax_singleton_dim_decision_scoped_correctly() -> None:
     """Armed-proof: only exempts when the reduced dim's size is exactly 1."""
 
-    from torchlens.validation.exemptions import _softmax_singleton_dim_decision
+    from torchlens.validation._exemptions import _softmax_singleton_dim_decision
 
-    class _FakeSoftmaxOp:
+    class _FakeSoftmaxOp(FlatGroups):
         def __init__(self, out_shape, dim) -> None:
             self.saved_args = (None,)
             self.saved_kwargs = {"dim": dim}
@@ -1125,9 +1131,9 @@ def test_layer_norm_singleton_normalized_shape_validates() -> None:
 def test_layer_norm_singleton_shape_decision_scoped_correctly() -> None:
     """Armed-proof: only exempts when normalized_shape's element count is exactly 1."""
 
-    from torchlens.validation.exemptions import _layer_norm_singleton_shape_decision
+    from torchlens.validation._exemptions import _layer_norm_singleton_shape_decision
 
-    class _FakeLayerNormOp:
+    class _FakeLayerNormOp(FlatGroups):
         out = torch.zeros(2)  # a finite saved output
 
         def __init__(self, normalized_shape) -> None:
@@ -1198,7 +1204,7 @@ def test_annihilator_and_singleton_proofs_refuse_a_non_finite_saved_output() -> 
 
     from types import SimpleNamespace
 
-    from torchlens.validation.exemptions import (
+    from torchlens.validation._exemptions import (
         _conv_zero_weight_input_decision,
         _layer_norm_singleton_shape_decision,
         _linear_zero_weight_input_decision,
@@ -1207,7 +1213,7 @@ def test_annihilator_and_singleton_proofs_refuse_a_non_finite_saved_output() -> 
     )
 
     def fake(out: torch.Tensor, positions: dict, **extra) -> SimpleNamespace:
-        return SimpleNamespace(
+        return FlatNamespace(
             out=out,
             parent_arg_positions={"args": positions, "kwargs": {}},
             saved_kwargs=extra.pop("saved_kwargs", {}),
@@ -1299,7 +1305,7 @@ def test_w35_nonzero_literal_never_exempted() -> None:
     any multiplication spelling.
     """
 
-    class _FakeOp:
+    class _FakeOp(FlatGroups):
         saved_args = None
         out = torch.zeros(3)  # a finite saved output
 
@@ -1332,9 +1338,9 @@ def test_f3_tuple_out_destination_keys_accepted() -> None:
     stays strict.
     """
 
-    from torchlens.validation.core import _perturbed_parents_only_occupy_out_kwarg
+    from torchlens.validation._core import _perturbed_parents_only_occupy_out_kwarg
 
-    class _FakeOp:
+    class _FakeOp(FlatGroups):
         def __init__(self, args_map: dict, kwargs_map: dict) -> None:
             self.parent_arg_positions = {"args": args_map, "kwargs": kwargs_map}
 
@@ -1466,7 +1472,7 @@ def test_w35_perturbation_net_still_fails_true_insensitivity() -> None:
     still fail it with ``perturbation_insensitive``.
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -1536,7 +1542,7 @@ def test_unit_step_retry_still_fails_true_insensitivity() -> None:
     without weakening real-bug detection.
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -1602,7 +1608,7 @@ def test_geometric_ladder_still_fails_spurious_discretizing_edge() -> None:
     ADDED influence-detection attempts and introduced no false-VERIFIED path.
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -1631,7 +1637,7 @@ def test_geometric_ladder_scoped_to_value_discretizing_children() -> None:
     exemption.
     """
 
-    from torchlens.validation.core import _perturbation_retry_strategies
+    from torchlens.validation._core import _perturbation_retry_strategies
 
     bucketize_trace, _ = _capture(_WideBucketize(), torch.randn(4, 5))
     bucketize_op = [op for op in bucketize_trace._layer_list if op.func_name == "bucketize"][0]
@@ -1696,7 +1702,7 @@ def test_saturated_softmax_validates_for_the_unlucky_ci_seed() -> None:
 def test_uniform_steps_are_null_for_softmax_and_the_lift_is_not() -> None:
     """The uniform retries cannot move a saturated softmax; the lift always can."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _execute_func_with_restored_state,
         _perturbation_retry_strategies,
         _prepare_input_args_for_validating_layer,
@@ -1729,7 +1735,7 @@ def test_uniform_steps_are_null_for_softmax_and_the_lift_is_not() -> None:
 def test_lift_min_entry_moves_one_entry_above_the_max() -> None:
     """The lift changes exactly one entry, to a strict maximum, and keeps dtype."""
 
-    from torchlens.validation.core import _directional_step_perturb
+    from torchlens.validation._core import _directional_step_perturb
 
     tensor = torch.tensor([[3.0, -2.0], [5.0, 1.0]], dtype=torch.float16)
     lifted = _directional_step_perturb(tensor, "lift_min_entry")
@@ -1756,7 +1762,7 @@ def test_lift_retry_still_fails_a_disconnected_softmax_parent() -> None:
     ``perturbation_insensitive`` for the same unlucky seed's model.
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -1800,7 +1806,7 @@ def test_genuine_raw_hook_replacement_mints_journal_edit_and_validates() -> None
     """
 
     from torchlens._ir.events import InterventionAppliedEvent
-    from torchlens.validation.invariants import check_metadata_invariants
+    from torchlens.validation._invariants import check_metadata_invariants
 
     model = _Tiny()
     injected = torch.ones(3, 4) * 7.0

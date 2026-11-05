@@ -11,7 +11,8 @@ from torch import nn
 from .. import _user_funcs
 from .._errors import InvalidArgumentError
 from .._selection.selectors import BaseSelector, module, site as structural_site
-from ..intervention.spec import classify_where, when
+from .._utils._record_group_table import record_member
+from ..intervention._spec import classify_where, when
 
 
 def _invalid(message: str) -> NoReturn:
@@ -66,7 +67,7 @@ def _resolve_feature_site(model: nn.Module, target: Any, inputs: torch.Tensor) -
         matches = list(trace.find_sites(target))
         if len(matches) != 1:
             _invalid(f"The site resolves to {len(matches)} ops; select exactly one.")
-        return structural_site(matches[0].site_key)
+        return structural_site(record_member(matches[0], "site_key"))
     finally:
         trace.cleanup()
 

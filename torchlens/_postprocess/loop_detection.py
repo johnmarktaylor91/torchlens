@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING, Any
 
 from .._data_classes._site_key import SiteKeyMinter
 from .._record_type import record_type
-from ..errors.validation import MetadataInvariantError
+from .._utils._record_group_table import record_member
+from ..errors._validation import MetadataInvariantError
 from ._call_site_contract import (
     CallSiteEntry,
     call_site_contract_violation,
@@ -191,9 +192,9 @@ def _structural_arg_signature(op: Any) -> str:
     """
 
     tokens: list[str] = []
-    for index, arg in enumerate(getattr(op, "non_tensor_pos_args", ()) or ()):
+    for index, arg in enumerate(record_member(op, "non_tensor_pos_args", ()) or ()):
         _append_signature_tokens(arg, f"pos{index}", tokens)
-    kwargs = getattr(op, "non_tensor_kwargs", None) or {}
+    kwargs = record_member(op, "non_tensor_kwargs", None) or {}
     kwarg_items = kwargs.items() if isinstance(kwargs, dict) else kwargs
     for key, arg in sorted(kwarg_items, key=lambda item: str(item[0])):
         _append_signature_tokens(arg, f"kw_{key}", tokens)
@@ -249,10 +250,10 @@ def _differentiated_param_equivalence_classes(self: "Trace") -> dict[str, str]:
     cohorts: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for label in self._raw_graph_ws.raw_layer_labels_list:
         node = self[label]
-        if getattr(node, "is_orphan", False):
+        if record_member(node, "is_orphan", False):
             continue
         if node.has_params and node._param_barcodes:
-            cohorts[node.equivalence_class].append((label, _structural_arg_signature(node)))
+            cohorts[node._graph_equivalence_class].append((label, _structural_arg_signature(node)))
 
     effective: dict[str, str] = {}
     for eq_class, members in cohorts.items():
@@ -281,9 +282,9 @@ def _mint_site_keys(self: "Trace") -> None:
     minter = SiteKeyMinter()
     for label in self._raw_graph_ws.raw_layer_labels_list:
         node = self[label]
-        if getattr(node, "is_orphan", False):
+        if record_member(node, "is_orphan", False):
             continue
-        node.site_key = minter.mint(
+        node._graph_site_key = minter.mint(
             getattr(node, "modules", None) or (),
             record_type(node),
             getattr(node, "multi_output_index", None),
@@ -309,14 +310,14 @@ def _group_by_shared_params(self: "Trace") -> None:
     _mint_site_keys(self)
     effective_equivalence = _differentiated_param_equivalence_classes(self)
     for label, effective_class in effective_equivalence.items():
-        self[label].equivalence_class = effective_class
+        self[label]._graph_equivalence_class = effective_class
 
     param_barcode_groups: dict[
         tuple[str, tuple[str, ...], int | None, tuple[str, ...], str], list[str]
     ] = defaultdict(list)
     for label in self._raw_graph_ws.raw_layer_labels_list:
         node = self[label]
-        if getattr(node, "is_orphan", False):
+        if record_member(node, "is_orphan", False):
             continue
         if node.has_params and node._param_barcodes:
             # Key on the FULL call identity, not bare parameter identity. Output
@@ -389,7 +390,7 @@ def _has_call_site_evidence(self: "Trace") -> bool:
     if not classes:
         return False
     for label in self._raw_graph_ws.raw_layer_labels_list:
-        if label in classes and not getattr(self[label], "is_orphan", False):
+        if label in classes and not record_member(self[label], "is_orphan", False):
             return True
     return False
 
@@ -413,7 +414,7 @@ def _call_site_group_key(node: Any, classes: dict[str, str]) -> tuple[Any, ...]:
         return ("call_site", site_class)
     if node.is_input or node.is_output:
         return ("single", node._label_raw)
-    return ("position", node.site_key, node.func_name, node.equivalence_class)
+    return ("position", node._graph_site_key, node.func_name, node._graph_equivalence_class)
 
 
 def _buffer_group_keys(
@@ -437,22 +438,22 @@ def _buffer_group_keys(
         if writer is None:
             entries.append(node)
             continue
-        keyed[node._label_raw] = ("buffer", node.address, op_keys[writer])
-        written_by_address[node.address].append(node)
+        keyed[node._label_raw] = ("buffer", node.buffer_address, op_keys[writer])
+        written_by_address[node.buffer_address].append(node)
     sizes: dict[tuple[Any, ...], int] = defaultdict(int)
     for key in keyed.values():
         sizes[key] += 1
     for node in entries:
         later = [
             version
-            for version in written_by_address.get(node.address, ())
+            for version in written_by_address.get(node.buffer_address, ())
             if version.raw_index > node.raw_index
         ]
         first = min(later, key=lambda version: version.raw_index, default=None)
         if first is not None and sizes[keyed[first._label_raw]] > 1:
             keyed[node._label_raw] = keyed[first._label_raw]
         else:
-            keyed[node._label_raw] = ("buffer", node.address, "entry", node._label_raw)
+            keyed[node._label_raw] = ("buffer", node.buffer_address, "entry", node._label_raw)
     return [(node, keyed[node._label_raw]) for node in buffers]
 
 
@@ -479,9 +480,9 @@ def _group_by_call_sites(self: "Trace") -> None:
     classes = self._raw_graph_ws._call_site_classes
     for label in self._raw_graph_ws.raw_layer_labels_list:
         node = self[label]
-        if getattr(node, "is_orphan", False):
+        if record_member(node, "is_orphan", False):
             continue
-        if node.is_buffer and node.address:
+        if node._graph_is_buffer and node.buffer_address:
             buffers.append(node)
             continue
         keys[label] = _call_site_group_key(node, classes)
@@ -512,14 +513,46 @@ def _check_call_site_contract(self: "Trace", classes: dict[str, str]) -> None:
             raw_label=node._label_raw,
             layer=node._layer_label_raw,
             func_name=node.func_name,
-            group=tuple(node.recurrent_ops or ()),
+            group=tuple(node._graph_recurrent_ops or ()),
         )
         for node in (self[label] for label in self._raw_graph_ws.raw_layer_labels_list)
-        if not getattr(node, "is_orphan", False)
+        if not record_member(node, "is_orphan", False)
     ]
     violation = call_site_contract_violation(entries, classes)
     if violation is not None:
         raise MetadataInvariantError("call_site_contract", violation)
+
+
+def _memoized_recurrent_labels(
+    recurrent_labels_memo: dict[int, tuple[Any, tuple[str, ...]]],
+    raw_recurrent_labels: Any,
+) -> tuple[str, ...]:
+    """Return ``raw_recurrent_labels`` as a tuple, shared across ops of one layer.
+
+    Parameters
+    ----------
+    recurrent_labels_memo:
+        Memo keyed by the id of the raw ``recurrent_ops`` container; each value
+        keeps the container alive alongside its tuple.
+    raw_recurrent_labels:
+        One op's raw ``recurrent_ops`` container.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The recurrent labels as a tuple.
+    """
+
+    recurrent_labels_cached = recurrent_labels_memo.get(id(raw_recurrent_labels))
+    if recurrent_labels_cached is None:
+        recurrent_labels = tuple(raw_recurrent_labels)
+        recurrent_labels_memo[id(raw_recurrent_labels)] = (
+            raw_recurrent_labels,
+            recurrent_labels,
+        )
+    else:
+        recurrent_labels = recurrent_labels_cached[1]
+    return recurrent_labels
 
 
 def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
@@ -546,7 +579,7 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
 
     for label in raw_labels:
         node = self[label]
-        effective_key = effective_equivalence.get(label, node.equivalence_class)
+        effective_key = effective_equivalence.get(label, node._graph_equivalence_class)
         raw_equivalent_labels = node._slot("equivalent_ops")
         # ``equivalent_labels`` must agree with ``equivalence_key``: the argsig
         # split subdivides a capture-time equivalence class, and passing the
@@ -562,7 +595,7 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
             equivalent_labels = tuple(
                 member
                 for member in raw_equivalent_labels
-                if effective_equivalence.get(member, node.equivalence_class) == effective_key
+                if effective_equivalence.get(member, node._graph_equivalence_class) == effective_key
             )
             equivalent_labels_memo[memo_key] = (
                 raw_equivalent_labels,
@@ -570,17 +603,10 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
             )
         else:
             equivalent_labels = equivalent_labels_cached[1]
-        raw_recurrent_labels = node._slot("recurrent_ops")
-        recurrent_labels_cached = recurrent_labels_memo.get(id(raw_recurrent_labels))
-        if recurrent_labels_cached is None:
-            recurrent_labels = tuple(raw_recurrent_labels)
-            recurrent_labels_memo[id(raw_recurrent_labels)] = (
-                raw_recurrent_labels,
-                recurrent_labels,
-            )
-        else:
-            recurrent_labels = recurrent_labels_cached[1]
-        is_pruned = bool(getattr(node, "is_orphan", False))
+        recurrent_labels = _memoized_recurrent_labels(
+            recurrent_labels_memo, node._slot("recurrent_ops")
+        )
+        is_pruned = bool(record_member(node, "is_orphan", False))
         retain = not is_pruned
         if retain:
             eligible_labels.append(label)
@@ -600,11 +626,12 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
             retain=retain,
             pruned=is_pruned,
             recurrence_anchored=(
-                bool(getattr(node, "modules", None)) or bool(getattr(node, "is_buffer", False))
+                bool(getattr(node, "modules", None))
+                or bool(record_member(node, "is_buffer", False))
             ),
             module_site=_module_site(node),
             arg_signature=_structural_arg_signature(node) if node.has_params else None,
-            site_key=getattr(node, "site_key", None),
+            site_key=record_member(node, "site_key", None),
         )
 
     return RecurrenceGroupingGraph(
@@ -642,10 +669,10 @@ def _apply_recurrence_assignments(
         else:
             recurrent_labels = recurrent_labels_cached[1]
         node._layer_label_raw = assignment.layer_label
-        node.recurrent_ops = recurrent_labels
+        node._graph_recurrent_ops = recurrent_labels
         node.pass_number = assignment.pass_index
         node.num_passes = assignment.num_passes
-        node.equivalence_class = assignment.equivalence_key
+        node._graph_equivalence_class = assignment.equivalence_key
 
 
 def _rebuild_pass_assignments(self: "Trace") -> None:
@@ -659,7 +686,7 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
 
     groups: dict[str, list[str]] = defaultdict(list)
     for entry in self:
-        if getattr(entry, "is_orphan", False):
+        if record_member(entry, "is_orphan", False):
             continue
         groups[entry._layer_label_raw].append(entry._label_raw)
 
@@ -667,6 +694,6 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
         members_sorted = sorted(members, key=lambda label: self[label].raw_index)
         for pass_index, member_label in enumerate(members_sorted, start=1):
             member = self[member_label]
-            member.recurrent_ops = members_sorted
+            member._graph_recurrent_ops = members_sorted
             member.pass_number = pass_index
             member.num_passes = len(members_sorted)

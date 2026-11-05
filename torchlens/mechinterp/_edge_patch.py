@@ -46,7 +46,7 @@ from typing import Any
 
 import torch
 
-from ..intervention import edge_substitution as _edge_substitution
+from ..intervention import _edge_substitution
 from ._errors import refuse
 
 __all__ = ["patch_edges", "receiver_selection"]

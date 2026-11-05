@@ -21,7 +21,7 @@ import torchlens as tl
 from torchlens import _state
 from torchlens._errors import ArgumentTypeError
 from torchlens.backends.torch.wrappers import wrap_torch
-from torchlens.intervention.runtime import active_intervention_context
+from torchlens.intervention._runtime import active_intervention_context
 
 
 class _TinyModel(nn.Module):

@@ -31,7 +31,7 @@ def _first_transformed_layer(trace: tl.Trace) -> Any:
 
     for label in trace.layer_labels:
         layer = trace[label]
-        if layer.transformed_out is not None:
+        if layer.payload.transformed_out is not None:
             return layer
     raise AssertionError("No transformed out found.")
 
@@ -54,12 +54,12 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
 
     assert layer.grad is not None
-    assert layer.grad_shape == tuple(layer.grad.shape)
-    assert layer.transformed_grad is not None
-    assert layer.transformed_grad_shape == ()
-    assert layer.transformed_grad_dtype == layer.transformed_grad.dtype
-    assert layer.transformed_gradient_memory == layer.transformed_grad.nelement() * (
-        layer.transformed_grad.element_size()
+    assert layer.autograd.grad_shape == tuple(layer.grad.shape)
+    assert layer.payload.transformed_grad is not None
+    assert layer.payload.transformed_grad_shape == ()
+    assert layer.payload.transformed_grad_dtype == layer.payload.transformed_grad.dtype
+    assert layer.transformed_gradient_memory == layer.payload.transformed_grad.nelement() * (
+        layer.payload.transformed_grad.element_size()
     )
 
 
@@ -77,10 +77,10 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
 
     assert layer.grad is None
-    assert layer.grad_shape is not None
-    assert layer.grad_dtype is not None
+    assert layer.autograd.grad_shape is not None
+    assert layer.autograd.grad_dtype is not None
     assert layer.gradient_memory > 0
-    assert layer.transformed_grad is not None
+    assert layer.payload.transformed_grad is not None
 
 
 def test_train_mode_activation_transform_detach_rejected() -> None:
@@ -135,10 +135,13 @@ def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> No
     restored = tl.load(bundle_path)
     restored_layer = restored[layer.layer_label]
 
-    assert torch.equal(restored_layer.transformed_out, layer.transformed_out)
-    assert restored_layer.transformed_out_shape == layer.transformed_out_shape
-    assert restored_layer.transformed_out_dtype == layer.transformed_out_dtype
-    assert restored_layer.transformed_activation_memory == layer.transformed_activation_memory
+    assert torch.equal(restored_layer.payload.transformed_out, layer.payload.transformed_out)
+    assert restored_layer.payload.transformed_out_shape == layer.payload.transformed_out_shape
+    assert restored_layer.payload.transformed_out_dtype == layer.payload.transformed_out_dtype
+    assert (
+        restored_layer.cost.transformed_activation_memory
+        == layer.cost.transformed_activation_memory
+    )
 
 
 def test_streaming_preserves_transformed_out(tmp_path: Path) -> None:
@@ -156,4 +159,4 @@ def test_streaming_preserves_transformed_out(tmp_path: Path) -> None:
     restored = tl.load(bundle_path)
     restored_layer = restored[layer.layer_label]
 
-    assert torch.equal(restored_layer.transformed_out, layer.transformed_out)
+    assert torch.equal(restored_layer.payload.transformed_out, layer.payload.transformed_out)

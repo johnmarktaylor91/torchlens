@@ -28,6 +28,7 @@ from typing import Any, Final, NamedTuple, TypeGuard
 
 import torch
 
+from ..._utils._record_group_table import record_member
 from .. import _json
 from ..format_errors import ArtifactError, OpaqueCallableError
 from .contract import HELPER_REGISTRY_VERSION, INTERVENTION_FILE, TYPED_VALUE_KEY
@@ -644,7 +645,7 @@ def trace_recipe_context(trace: Any) -> dict[str, Any]:
     ]
     keys = []
     for layer in trace._layer_list or ():
-        key = getattr(getattr(layer, "args_template", None), "func_id", None)
+        key = record_member(record_member(layer, "args_template", None), "func_id", None)
         if dataclasses.is_dataclass(key) and not isinstance(key, type):
             keys.append({"layer_label": str(layer.layer_label), "key": dataclasses.asdict(key)})
     spec = trace._intervention_spec

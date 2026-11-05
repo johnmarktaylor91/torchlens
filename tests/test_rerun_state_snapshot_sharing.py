@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.intervention.rerun as rerun_mod
+import torchlens.intervention._rerun as rerun_mod
 from torchlens._data_classes.trace import Trace
 from torchlens._runnable.state import snapshot_capture_state
 from torchlens.options import CaptureOptions, InterventionOptions

@@ -48,7 +48,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
 
-from ..errors.episode import EpisodeJoinError
+from ..errors._episode import EpisodeJoinError
 from ._episode_derivation import _declaration_error, _flat_cpu_snapshot
 
 if TYPE_CHECKING:

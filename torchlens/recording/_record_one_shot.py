@@ -21,14 +21,14 @@ from ..backends.registry import (
     get_backend_spec,
     require_capability_implementation,
 )
-from ..intervention.predicates import InterventionPredicate
+from ..intervention._predicates import InterventionPredicate
 from ..options import CaptureOptions, StorageOptions, _merge_grouped_options
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._generation_options import GenerationOptions
+from ._options import HaltPredicateFn, PredicateFn, RecordingOptions
 from ._recorder import Recorder
+from ._types import Recording
 from ._validation import refuse_episode_on_record, validate_postprocess
-from .options import HaltPredicateFn, PredicateFn, RecordingOptions
-from .types import Recording
 
 
 def _refuse_unread_fields(group: str, unread: list[str], why: str, remedy: str) -> None:

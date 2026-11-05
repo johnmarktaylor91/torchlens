@@ -283,7 +283,7 @@ def _fa4_boundary_ops(trace: tl.Trace) -> list[Any]:
         op
         for op in trace._layer_list
         if op.func_name == FOREIGN_FUNCTION_FUNC_NAME
-        and op.transform_config.get("exits") == [FLASH_ATTENTION_4_EXIT]
+        and op.call.func_transform_config.get("exits") == [FLASH_ATTENTION_4_EXIT]
     ]
 
 
@@ -300,19 +300,23 @@ def _assert_fa4_boundary_shape(trace: tl.Trace, direct: torch.Tensor, num_layers
     assert trace.outcome.status.name == "COMPLETE"
     assert torch.equal(trace.output.logits, direct)
     boundaries = _fa4_boundary_ops(trace)
-    calls = {op.func_call_id for op in boundaries}
+    calls = {op.call.call_id for op in boundaries}
     assert len(calls) == num_layers, calls
     for op in boundaries:
-        assert op.transform_kind == FOREIGN_FUNCTION_TRANSFORM_KIND
-        assert op.transform_config["function_module"] == FLASH_ATTENTION_4_INTERFACE_MODULE
+        assert op.call.func_transform_kind == FOREIGN_FUNCTION_TRANSFORM_KIND
+        assert (
+            op.call.func_transform_config["function_module"] == FLASH_ATTENTION_4_INTERFACE_MODULE
+        )
         assert is_foreign_function_recorder(op.func)
-        assert "self_attn" in str(op.module_call_stack), op.module_call_stack
-        assert sorted(op.parent_arg_positions["args"]) == [0, 1, 2], op.parent_arg_positions
+        assert "self_attn" in str(op.module_context.call_stack), op.module_context.call_stack
+        assert sorted(op.call.parent_arg_positions["args"]) == [0, 1, 2], (
+            op.call.parent_arg_positions
+        )
         assert len(op.parents) == 3, op.parents
     attention_interiors = [
         op.label
         for op in trace._layer_list
-        if op.type in {"empty", "detach"} and "self_attn" in str(op.module_call_stack)
+        if op.type in {"empty", "detach"} and "self_attn" in str(op.module_context.call_stack)
     ]
     assert attention_interiors == []
     return boundaries
@@ -428,7 +432,7 @@ def test_flash_attention_4_boundary_owns_every_dispatch() -> None:
         assert trace.completeness_diagnostics == [], facts
         owners = {entry["owner_wrapper"] for entry in trace.health.completeness_decompositions}
         assert FOREIGN_FUNCTION_WRAPPER_NAME in owners
-        boundary_ids = {op.func_call_id for op in _fa4_boundary_ops(trace)}
+        boundary_ids = {op.call.call_id for op in _fa4_boundary_ops(trace)}
         owned = {
             entry["owner_func_call_id"]
             for entry in trace.health.completeness_decompositions
@@ -490,12 +494,12 @@ def _assert_fa2_capture_shape(trace: tl.Trace, direct: torch.Tensor, num_layers:
     assert trace.outcome.status.name == "COMPLETE"
     assert torch.equal(trace.output.logits, direct)
     kernel_ops = _fa2_kernel_ops(trace)
-    calls = {op.func_call_id for op in kernel_ops}
+    calls = {op.call.call_id for op in kernel_ops}
     assert len(calls) == num_layers, calls
     assert len(kernel_ops) == 4 * num_layers, [op.label for op in kernel_ops]
     for op in kernel_ops:
-        assert op.transform_kind != FOREIGN_FUNCTION_TRANSFORM_KIND, op.label
-        assert "self_attn" in str(op.module_call_stack), op.module_call_stack
+        assert op.call.func_transform_kind != FOREIGN_FUNCTION_TRANSFORM_KIND, op.label
+        assert "self_attn" in str(op.module_context.call_stack), op.module_context.call_stack
         assert len(op.parents) == 3, (op.label, op.parents)
         if op.multi_output_index == 0:
             assert op.dtype == torch.bfloat16 and op.children, op.label
@@ -647,7 +651,7 @@ def test_flash_attention_2_dropout_replays_exactly(seq: int) -> None:
 
     from torchlens.options import CaptureOptions
     from torchlens.validation import last_validation_failure
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 

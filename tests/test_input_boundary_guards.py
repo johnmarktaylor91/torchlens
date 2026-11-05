@@ -1,7 +1,7 @@
 """r-b4 R27-1: capture-entry input walkers are depth-bounded and cycle-guarded.
 
 The four input-boundary walkers (``walk_input_boundary``, ``snapshot_input_boundary``,
-``backends.default_specs._simple_leaves``, ``utils.arg_handling.copy_arg_tree``) share
+``backends._default_specs._simple_leaves``, ``utils.arg_handling.copy_arg_tree``) share
 ONE nesting ceiling (``INPUT_TREE_MAX_DEPTH``) and refuse deep or self-referential
 input trees TYPED (``input_tree_depth_exceeded`` / ``input_tree_cycle``) instead of
 dying in a raw ``RecursionError`` (probe: ~350 user levels crossed the interpreter
@@ -33,7 +33,7 @@ from torchlens._input_walk import (
     walk_input_boundary,
 )
 from torchlens._utils.arg_handling import copy_arg_tree
-from torchlens.backends.default_specs import _simple_leaves
+from torchlens.backends._default_specs import _simple_leaves
 
 
 def _deep_list(depth: int, leaf: object) -> object:
@@ -112,7 +112,7 @@ def test_snapshot_input_boundary_is_total_and_refuses_in_ledger() -> None:
     assert "input_container_too_deep" in {r["reason"] for r in deep_snapshot["refusals"]}
 
 
-# Kept: sole branch coverage of backends/default_specs.py; sole provocation of an error code.
+# Kept: sole branch coverage of backends/_default_specs.py; sole provocation of an error code.
 def test_simple_leaves_depth_and_cycle_refuse_typed() -> None:
     """Backend-resolution leaf sniffing shares the same typed guards."""
 
@@ -225,7 +225,7 @@ def test_copy_arg_tree_stack_exhaustion_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "input_tree_stack_exhausted"
 
 
-# Kept: sole branch coverage of _utils/arg_handling.py, backends/default_specs.py.
+# Kept: sole branch coverage of _utils/arg_handling.py, backends/_default_specs.py.
 def test_simple_leaves_stack_exhaustion_refuses_typed() -> None:
     """Backend-resolution leaf sniffing shares the typed stack-budget refusal."""
 

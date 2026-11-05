@@ -249,7 +249,7 @@ gradients for floating inputs and `trace.params` variables (mirrored onto `param
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` also watches every float op
 output live and attaches exact op-level records: only unambiguous `status == "exact"` matches
 (keyed on stream position, op type, parents and module stack) reach
-`trace.autograd.intermediate_derived_grads` and read-only `op.derived_grad`. `has_backward_pass`
+`trace.autograd.intermediate_derived_grads` and read-only `op.autograd.derived_grad`. `has_backward_pass`
 stays `False`. Graph-only captures refuse `grad_options`, because the replay cannot run inside a
 frozen graph.
 

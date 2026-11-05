@@ -13,6 +13,7 @@ import torch.nn as nn
 
 from torchlens import trace as trace_fn
 from torchlens._data_classes.trace import Trace
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
 
 
@@ -177,8 +178,8 @@ def test_returned_predicate_remains_a_conditional_consumer() -> None:
 
     assert len(trace.graph.conditionals) == 1
     assert trace.graph.conditional_branch_edges
-    assert predicate.is_terminal_bool is True
-    assert predicate.is_terminal_conditional_bool is True
+    assert predicate.control_flow.is_terminal_bool is True
+    assert predicate.control_flow.is_terminal_conditional_bool is True
     assert predicate.label in trace.internally_terminated_bool_ops
 
 
@@ -235,12 +236,12 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
         removed = raw_dict["buffer_2_raw"]
         # Precondition: the step-5 conditional-parent role lives on the node
         # about to be merged away.
-        assert removed.conditional_entry_children
+        assert removed.control_flow.entry_children
         assert any(
             parent == removed._label_raw for parent, _ in trace.graph.conditional_branch_edges
         )
         merged["survivor"] = survivor._label_raw
-        merged["bool_child"] = removed.conditional_entry_children[0]
+        merged["bool_child"] = removed.control_flow.entry_children[0]
         deferred: dict = {}
         cf._merge_buffer_entries(trace, survivor, removed, deferred_removals=deferred)
         cf._finish_deferred_buffer_removals(trace, deferred)
@@ -260,13 +261,13 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
         f"{traced.graph.conditional_branch_edges}"
     )
     surviving_buffer_labels = {
-        op.layer_label for op in traced._layer_list if getattr(op, "is_buffer", False)
+        op.layer_label for op in traced._layer_list if record_member(op, "is_buffer", False)
     }
     for parent, _child in buffer_branch_edges:
         assert parent in surviving_buffer_labels
     entry_children = list(
         chain.from_iterable(
-            traced[label].conditional_entry_children for label in surviving_buffer_labels
+            traced[label].control_flow.entry_children for label in surviving_buffer_labels
         )
     )
     assert entry_children, "conditional_entry_children did not transfer to the survivor"

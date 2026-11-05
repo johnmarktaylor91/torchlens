@@ -427,7 +427,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
             getattr(layer, "layer_label", None),
         }
         candidate_labels.discard(None)
-        layer_func_call_id = getattr(layer, "func_call_id", None)
+        layer_func_call_id = record_member(layer, "func_call_id", None)
         for event in bound_edits:
             if event.label_raw not in candidate_labels:
                 continue
@@ -505,7 +505,7 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
         Whether the layer is synthetic input/output/buffer metadata.
     """
 
-    if layer.is_input or layer.is_output or layer.is_buffer:
+    if layer.is_input or layer.is_output or layer.graph.is_buffer:
         return True
     # A GENUINE raw-forward-hook output replacement is legitimately functionless
     # (the user substituted an opaque tensor for a module's output, so there is
@@ -521,7 +521,7 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     if (
         getattr(layer, "func_name", "") == "intervention_replacement"
         and getattr(layer, "is_edited", False)
-        and not getattr(layer, "is_internal_source", False)
+        and not record_member(layer, "is_internal_source", False)
         and op_has_genuine_replacement_evidence(layer)
     ):
         return True
@@ -538,7 +538,7 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     func_name = str(getattr(layer, "func_name", "")).lower()
     if (
         func_name == "none"
-        and bool(getattr(layer, "is_internal_source", False))
+        and bool(record_member(layer, "is_internal_source", False))
         and getattr(layer, "func", None) is None
     ):
         return True
@@ -572,9 +572,10 @@ def _plain_func_call_group_signature(layer: Op) -> tuple[object, ...]:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
+from ._invariants import (  # noqa: E402
+    MetadataInvariantError,
+)
 from ._invariants_backward_domain import (  # noqa: E402
     _resolve_op_grad_event_label,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantError,
 )

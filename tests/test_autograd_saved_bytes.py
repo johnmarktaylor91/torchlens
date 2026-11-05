@@ -58,10 +58,10 @@ def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
     with torch.no_grad():
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=0), save="all")
 
-    assert all(layer.autograd_memory is None for layer in trace._layer_list)
-    assert all(layer.num_autograd_tensors is None for layer in trace._layer_list)
-    assert all(layer.autograd_memory is None for layer in trace._layer_logs.values())
-    assert all(layer.num_autograd_tensors is None for layer in trace._layer_logs.values())
+    assert all(layer.cost.autograd_memory is None for layer in trace._layer_list)
+    assert all(layer.autograd.num_autograd_tensors is None for layer in trace._layer_list)
+    assert all(layer.cost.autograd_memory is None for layer in trace._layer_logs.values())
+    assert all(layer.autograd.num_autograd_tensors is None for layer in trace._layer_logs.values())
     assert trace.cost.total_autograd_memory is None
 
 

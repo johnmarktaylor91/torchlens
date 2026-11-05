@@ -67,7 +67,7 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     # Removed Trace/Op/Layer/Bundle method spellings (canonical: do/run/
     # span/conditional_arm_entry_edges; push, push_from and attach_hooks
     # folded into do). ``validate_saved_outs`` is absent on
-    # purpose: the INTERNAL ``validation.core.validate_saved_outs`` keeps the
+    # purpose: the INTERNAL ``validation._core.validate_saved_outs`` keeps the
     # name (its zero-reference ``validate_trace_saved_outs`` rename re-export
     # was deleted by the F38 punch list); only the top-level spelling was
     # removed, and the ``tl_moved`` row covers it.
@@ -160,7 +160,7 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     "runnable_package": re.compile(r"\btorchlens[./]_runnable_[a-z]"),
     # Root doors docs kept teaching after they left (remove-and-rename, no
     # shim): ``tl.save(trace, path)`` is ``trace.save(path)``; ``swap_with``
-    # lives at ``torchlens.intervention.helpers.swap_with`` (the interventions
+    # lives at ``torchlens.intervention._helpers.swap_with`` (the interventions
     # rename took it off the root); ``CaptureOptions(intervention_ready=...)``
     # is ``replayable=``.
     "root_doors": re.compile(
@@ -625,7 +625,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         assert any(group == "root_doors" for group, _, _ in hits), resurrected
     for canonical in (
         "trace.save(str(path))\n",
-        "from torchlens.intervention.helpers import swap_with\n",
+        "from torchlens.intervention._helpers import swap_with\n",
         "trace.save_intervention(path)\n",
         "code = 'trace_not_intervention_ready'\n",
         "cap = tl.options.CaptureOptions(replayable=True)\n",

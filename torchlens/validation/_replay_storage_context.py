@@ -26,6 +26,7 @@ from .._storage_bindings import (
     storage_context_arg_index,
     views_part_of_its_storage,
 )
+from .._utils._record_group_table import record_member
 from .._utils._torch_compat import get_force_original_view_tracking, get_view_func_replay
 from .._utils.collections import assign_to_sequence_or_dict
 from ._grad_flags import _mirror_captured_requires_grad, _snapshot_grad_flags
@@ -47,7 +48,7 @@ def restore_receiver_storage_context(layer: Any, input_args: dict[str, Any]) -> 
     if func_name in VIEW_CONTEXT_RECEIVER_FUNCS:
         _restore_receiver_view_context(layer, input_args)
     index = storage_context_arg_index(func_name)
-    saved_args = getattr(layer, "saved_args", None) or ()
+    saved_args = record_member(layer, "saved_args", None) or ()
     args = input_args.get("args")
     if index is None or not args or len(saved_args) <= index or len(args) <= index:
         return
@@ -65,7 +66,7 @@ def _restore_receiver_view_context(layer: Any, input_args: dict[str, Any]) -> No
     compact clone; :func:`check_view_context_receiver` refuses it before the call.
     """
 
-    saved_args = getattr(layer, "saved_args", None)
+    saved_args = record_member(layer, "saved_args", None)
     args = input_args.get("args")
     if not saved_args or not args:
         return
@@ -96,7 +97,7 @@ def check_view_context_receiver(layer: Any, input_args: dict[str, Any]) -> None:
 
     if getattr(layer, "func_name", None) not in VIEW_CONTEXT_RECEIVER_FUNCS:
         return
-    saved_args = getattr(layer, "saved_args", None) or ()
+    saved_args = record_member(layer, "saved_args", None) or ()
     args = input_args.get("args") or ()
     recorded = saved_args[0] if saved_args else None
     receiver = args[0] if args else None

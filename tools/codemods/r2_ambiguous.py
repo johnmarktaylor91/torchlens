@@ -1528,19 +1528,19 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         -1,
     ): "skip",
     (
-        "torchlens/intervention/rerun.py",
+        "torchlens/intervention/_rerun.py",
         '"run(..., x=None) cannot recover the original input",',
         "x",
         0,
     ): "apply",
     (
-        "torchlens/intervention/rerun.py",
+        "torchlens/intervention/_rerun.py",
         "and candidate.layout is torch.strided",
         "layout",
         -1,
     ): "skip",
-    ("torchlens/intervention/rerun.py", 'argument="x",', "x", 0): "apply",
-    ("torchlens/intervention/rerun.py", "value.layout is torch.strided", "layout", -1): "skip",
+    ("torchlens/intervention/_rerun.py", 'argument="x",', "x", 0): "apply",
+    ("torchlens/intervention/_rerun.py", "value.layout is torch.strided", "layout", -1): "skip",
     (
         "torchlens/options.py",
         '(``"encoder.layer.4"``, at that module\'s exit boundary) or function',
@@ -1830,7 +1830,7 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         -1,
     ): "apply",
     (
-        "torchlens/recording/storage_disk.py",
+        "torchlens/recording/_storage_disk.py",
         'raise RecordingConfigError("DiskStorageBackend requires streaming.bundle_path")',
         "bundle_path",
         -1,
@@ -1984,7 +1984,7 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         0,
     ): "apply",
     (
-        "torchlens/recording/storage_disk.py",
+        "torchlens/recording/_storage_disk.py",
         'object.__setattr__(self.recording, "bundle_path", self.writer.final_path)',
         "bundle_path",
         0,

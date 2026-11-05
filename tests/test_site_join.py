@@ -130,7 +130,7 @@ def test_flat_branch_refused_by_witness_not_guard() -> None:
 def test_site_profile_refuses_typed_on_keyless_trace() -> None:
     log = tl.trace(_SameLineLoop(), torch.randn(2, 4))
     for label in log.op_labels:
-        log.ops[label].site_key = None
+        log.ops[label]._graph_site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
         site_profile(log)
     assert excinfo.value.fields["code"] == "site_key_unavailable"
@@ -152,10 +152,10 @@ def test_closure_never_splits_and_stays_equivalence_uniform() -> None:
         groups = fold_site_groups(fold_rows_from_trace(log))
         for label, group in groups.items():
             # Coarsen-only: the recurrence group is always contained.
-            assert set(ops[label].recurrent_ops or ()) <= set(group) | {label}
+            assert set(ops[label].graph.recurrent_ops or ()) <= set(group) | {label}
             # Every fold group shares ONE equivalence class (invariant-safe
             # by construction).
-            assert len({ops[member].equivalence_class for member in group}) == 1
+            assert len({ops[member].graph.equivalence_class for member in group}) == 1
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/_site_join.py.

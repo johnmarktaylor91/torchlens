@@ -129,7 +129,9 @@ def test_box_value_is_exact_member_sum(
     assert targets, "depth=1 drew no module boxes"
     for target in targets.values():
         assert target.op_labels
-        expected = sum(float(getattr(nested_log.ops[label], field)) for label in target.op_labels)
+        expected = sum(
+            float(getattr(nested_log.ops[label].cost, field)) for label in target.op_labels
+        )
         assert state.values[target.key] == pytest.approx(expected)
         assert state.size_values[target.key] == pytest.approx(expected)
     assert LINE_SUM in state.aggregation_lines

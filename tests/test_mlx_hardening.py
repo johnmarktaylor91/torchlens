@@ -153,12 +153,12 @@ def _assert_static_save_summary(trace: tl.Trace, expected_func_names: set[str]) 
     assert {op.func_name for op in saved_ops} == expected_func_names
     assert unsaved_ops
     assert all(op.out is not None for op in saved_ops)
-    assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
+    assert all(op.out is None and op._out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.cost.saved_activation_memory) == sum(
-        int(op.activation_memory or 0) for op in saved_ops
+        int(op.cost.activation_memory or 0) for op in saved_ops
     )
 
 
@@ -324,11 +324,11 @@ def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
         return mx.sum(mx.multiply(shifted, shifted))
 
     expected = mx.grad(suffix)(hidden_op.out)
-    mx.eval(expected, hidden_op.derived_grad)
+    mx.eval(expected, hidden_op.autograd.derived_grad)
 
     assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert hidden_op.label in trace.autograd.intermediate_derived_grads
-    np.testing.assert_allclose(np.asarray(hidden_op.derived_grad), np.asarray(expected))
+    np.testing.assert_allclose(np.asarray(hidden_op.autograd.derived_grad), np.asarray(expected))
     record = trace.autograd.intermediate_derived_grads[hidden_op.label]
     assert record.provenance["mechanism"] == "mlx_custom_vjp_tap_value_and_grad"
     assert record.provenance["status"] == "exact"
@@ -376,8 +376,8 @@ def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
         return _grad_loss(model.l2(boundary))
 
     expected = mx.grad(suffix)(relu_op.out)
-    mx.eval(expected, relu_op.derived_grad)
-    np.testing.assert_allclose(np.asarray(relu_op.derived_grad), np.asarray(expected))
+    mx.eval(expected, relu_op.autograd.derived_grad)
+    np.testing.assert_allclose(np.asarray(relu_op.autograd.derived_grad), np.asarray(expected))
     assert trace.autograd.intermediate_derived_grads[relu_op.label].provenance["status"] == "exact"
 
 
@@ -411,7 +411,7 @@ def test_mlx_intermediate_derived_grads_perturbation_reference_oracle() -> None:
         op for op in trace._layer_list if op.func_name == "multiply" and op.shape == (2,)
     )
 
-    np.testing.assert_allclose(np.asarray(hidden_op.derived_grad), np.asarray(base_grad))
+    np.testing.assert_allclose(np.asarray(hidden_op.autograd.derived_grad), np.asarray(base_grad))
 
 
 @pytest.mark.optional
@@ -447,7 +447,7 @@ def test_mlx_intermediate_derived_grads_duplicate_signature_skip(
     first_multiply = next(op for op in trace._layer_list if op.func_name == "multiply")
 
     assert first_multiply.label not in trace.autograd.intermediate_derived_grads
-    assert first_multiply.derived_grad is None
+    assert first_multiply.autograd.derived_grad is None
 
 
 @pytest.mark.optional
@@ -514,7 +514,7 @@ def test_mlx_intermediate_derived_grads_oracle_fail_skips_public_record(
 
     assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert len(trace.autograd.intermediate_derived_grads) == 0
-    assert all(op.derived_grad is None for op in trace._layer_list)
+    assert all(op.autograd.derived_grad is None for op in trace._layer_list)
 
 
 @pytest.mark.optional
@@ -531,7 +531,7 @@ def test_mlx_intermediate_derived_grads_are_not_backward_capture() -> None:
     )
 
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 @pytest.mark.optional
@@ -591,7 +591,7 @@ def test_mlx_derived_grads_are_not_backward_capture() -> None:
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.saved_grad_ops
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 @pytest.mark.optional
@@ -697,9 +697,9 @@ def test_mlx_save_load_lazy_ref_materializes_public_payloads(tmp_path: Path) -> 
     assert loaded_saved_ops
     for op in loaded_saved_ops:
         assert op.out is None
-        assert op.out_ref is not None
-        assert op.out_ref.logical_backend == "mlx"
-        materialized = op.out_ref.materialize()
+        assert op._out_ref is not None
+        assert op._out_ref.logical_backend == "mlx"
+        materialized = op._out_ref.materialize()
         _assert_mlx_array_equal(materialized, expected_outs[op.layer_label])
 
 
@@ -730,14 +730,14 @@ def test_mlx_save_load_missing_runtime_falls_back_to_audit_metadata(
     assert loaded_saved_ops
     for op in loaded_saved_ops:
         assert op.out is None
-        assert op.out_ref is not None
+        assert op._out_ref is not None
         assert op.shape is not None
         assert op.dtype_ref is not None
         with pytest.raises(
             BackendRuntimeCompatibilityError,
             match="mlx-runtime-missing",
         ):
-            op.out_ref.materialize()
+            op._out_ref.materialize()
 
 
 @pytest.mark.optional

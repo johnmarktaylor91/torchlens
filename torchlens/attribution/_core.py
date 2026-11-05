@@ -30,7 +30,7 @@ from torchlens.attribution._site import (
 )
 
 # Kept private and deliberately distinct from the selector-serialization
-# ``torchlens.intervention.types.TargetSpec``.
+# ``torchlens.intervention._types.TargetSpec``.
 _AttributionTarget: TypeAlias = int | Callable[[Any], Tensor] | SiteTarget
 _DOCS_POINTER = "See docs/reference/attribution.md, section Integer inputs."
 InputKwargs: TypeAlias = dict[str, Any] | None

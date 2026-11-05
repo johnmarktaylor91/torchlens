@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 
 
 def _duration_us(layer: Any) -> int:
@@ -21,7 +22,7 @@ def _duration_us(layer: Any) -> int:
         Duration in microseconds.
     """
 
-    duration = float(getattr(layer, "func_duration", 0.0) or 0.0)
+    duration = float(record_member(layer, "func_duration", 0.0) or 0.0)
     return max(1, int(duration * 1_000_000))
 
 

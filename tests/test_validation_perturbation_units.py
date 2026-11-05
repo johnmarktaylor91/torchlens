@@ -16,13 +16,13 @@ import torchlens as tl
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
-from torchlens.validation._perturb import _perturb_layer_outs
-from torchlens.validation.core import (
+from torchlens.validation._core import (
     _copy_validation_args,
     _deep_clone_tensors,
     validate_saved_outs,
 )
-from torchlens.validation.diagnostics import get_validation_failure
+from torchlens.validation._diagnostics import get_validation_failure
+from torchlens.validation._perturb import _perturb_layer_outs
 
 # =============================================================================
 # Perturbation unit tests
@@ -351,7 +351,7 @@ def test_planted_key_blind_uint64_consumer_fails_perturbation(dtype_name: str) -
     trace = tl.trace(model, inputs, capture=CaptureOptions(save_args=True, seed=0), save="all")
     try:
         view_op = next(op for op in trace._layer_list if op.func_name == "view")
-        key_label = view_op.parent_arg_positions["args"][0]
+        key_label = view_op.call.parent_arg_positions["args"][0]
         frozen = view_op.out.detach().clone()
 
         def key_blind_view(*args: object, **kwargs: object) -> torch.Tensor:
