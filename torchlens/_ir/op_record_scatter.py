@@ -593,7 +593,8 @@ def _write_overlay_cells(row: Any, f: Any, record: OpRecord) -> None:
     of scattering the whole record. ``policy.predicate_matched`` and
     ``recording.capture_spec`` feed no store cell. Values match
     :func:`scatter_record_to_cells` for the same record; ``row`` is a layout
-    row and ``f`` its field ids.
+    row and ``f`` its field ids; ``record`` is a row build's, so its graph and
+    policy facets are set.
     """
 
     output = record.core.output
@@ -607,7 +608,7 @@ def _write_overlay_cells(row: Any, f: Any, record: OpRecord) -> None:
     row[f["multi_output_index"]] = output.multi_output_index
     row[f["container_path"]] = tuple(output.container_path)
     row[f["container_spec"]] = output.container_spec
-    portable = _portable_blob_ref_type()
+    portable = _PORTABLE_BLOB_REF or _portable_blob_ref_type()
     blob_ref = output.tensor.blob_ref
     row[f["_pending_blob_id"]] = blob_ref.blob_id if isinstance(blob_ref, portable) else None
     if transformed is None:
@@ -625,6 +626,9 @@ def _write_overlay_cells(row: Any, f: Any, record: OpRecord) -> None:
         row[f["_pending_transformed_out_blob_id"]] = (
             blob_ref.blob_id if isinstance(blob_ref, portable) else None
         )
-    row[f["is_output_parent"]] = _facet(record, "graph").is_output_parent
-    policy = _facet(record, "policy").policy
+    # A row build always sets the graph and policy facets, so read them directly.
+    graph, policy_facet = record.graph, record.policy_facet
+    assert graph is not None and policy_facet is not None
+    row[f["is_output_parent"]] = graph.is_output_parent
+    policy = policy_facet.policy
     row[f["save_grads"]] = None if policy is None else policy.save_grad
