@@ -281,6 +281,52 @@ def test_one_label_read_per_tensor_slot(
     assert over == [], f"ops reading a label more than once per slot: {over[:6]}"
 
 
+#: Measured ``get_tensor_label`` calls per trace (fixed seed). Before the slot snapshot the
+#: same traces read 91, 186 and 159 labels: every derivation read each tensor again.
+_PINNED_LABEL_READS = (
+    ("inplace_mlp", _InplaceMLP, (2, 8), 73),
+    ("buffer", _BufferModel, (2, 3, 6, 6), 124),
+    ("nested_args", _NestedArgsModel, (3, 4), 104),
+)
+
+
+@pytest.mark.parametrize(
+    ("name", "model_cls", "shape", "expected"),
+    _PINNED_LABEL_READS,
+    ids=[entry[0] for entry in _PINNED_LABEL_READS],
+)
+def test_label_reads_per_trace_are_pinned(
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    model_cls: type[nn.Module],
+    shape: tuple[int, ...],
+    expected: int,
+) -> None:
+    """A whole trace makes exactly the measured number of gated label reads."""
+
+    import sys
+
+    from torchlens.backends.torch import _tl
+
+    real_label = _tl.get_tensor_label
+    reads = [0]
+
+    def counting_label(t: Any) -> Any:
+        """Count one gated label read."""
+        reads[0] += 1
+        return real_label(t)
+
+    for module_name, module in list(sys.modules.items()):
+        if module_name.startswith("torchlens") and module is not None:
+            for attr, value in list(vars(module).items()):
+                if value is real_label:
+                    monkeypatch.setattr(module, attr, counting_label)
+    torch.manual_seed(0)
+    model, x = model_cls(), torch.randn(*shape)
+    tl.trace(model, x)
+    assert reads[0] == expected, f"{name}: {reads[0]} label reads per trace, pinned at {expected}"
+
+
 def test_slot_record_is_frozen() -> None:
     """``_ArgSlot`` records are immutable once the snapshot is taken."""
 
