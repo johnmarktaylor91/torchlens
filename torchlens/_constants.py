@@ -1101,10 +1101,9 @@ IGNORED_FUNCS = [
     # literal with no provenance signal. Protocol-invisible like ``from_numpy`` (see belt.py).
     ("torch", "from_dlpack"),
     ("torch.utils.dlpack", "from_dlpack"),
-    # The PUBLIC sparse-compressed constructors. Only the PRIVATE
-    # ``torch._sparse_csr_tensor`` was re-added, so the whole public family was
-    # undecorated: sparse inputs/params refuse at capture entry, but IN-FORWARD sparse
-    # creation was ungated.
+    # The PUBLIC sparse-compressed constructors. Only the PRIVATE ``torch._sparse_csr_tensor`` was
+    # re-added, so the whole public family was undecorated: sparse inputs/params refuse at capture
+    # entry, but IN-FORWARD sparse creation was ungated.
     ("torch", "sparse_coo_tensor"),
     ("torch", "sparse_csr_tensor"),
     ("torch", "sparse_csc_tensor"),
@@ -1224,7 +1223,8 @@ IGNORED_FUNCS = [
     ),
     # Read ``torch.__dict__`` (as ``torch_attr`` does): no lazy ``torch.__getattr__``, no upward import.
     *(("torch", _name) for _name in _TENSOR_IGNORED_FNS if torch.__dict__.get(_name) is not None),
-    # No-parent factory (CPU RNG state); TorchLens's own snapshots use default_generator.
+    # A no-parent factory (the CPU RNG state as a fresh uint8 tensor). TorchLens's own RNG
+    # snapshots read ``torch.default_generator.get_state()``, so they never record.
     ("torch", "get_rng_state"),
     ("torch.random", "get_rng_state"),
     # ``torch.load`` (both spellings) is wrapped only so the provenance warning names it: its

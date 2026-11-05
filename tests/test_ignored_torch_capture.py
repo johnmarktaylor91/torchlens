@@ -21,7 +21,8 @@ import torch.nn as nn
 import torchlens as tl
 import torchlens._state as _state
 from torchlens._capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_name
-from torchlens._constants import get_orig_torch_funcs
+from torchlens._constants import _TENSOR_IGNORED_FNS, IGNORED_FUNCS, get_orig_torch_funcs
+from torchlens._utils._torch_symbols import torch_attr
 from torchlens.options import CaptureOptions
 from torchlens.validation.core import validate_saved_outs
 from torchlens.validation.diagnostics import get_validation_failure
@@ -428,6 +429,26 @@ def test_dep_token_functions_captured_validate_and_replay() -> None:
     finally:
         log.cleanup()
     _assert_validates_and_replays(model, x)
+
+
+def test_tensor_ignored_fns_presence_matches_torch_attr_and_hasattr() -> None:
+    """The ``torch`` rows from ``_TENSOR_IGNORED_FNS`` match ``torch_attr`` and ``hasattr``.
+
+    ``IGNORED_FUNCS`` keeps a name only when ``torch.__dict__`` holds it, which skips any
+    attribute torch resolves lazily through its module ``__getattr__``. Both presence probes
+    must agree with the kept set, so a lazily resolved name fails here instead of silently
+    going unwrapped.
+    """
+
+    kept = {name for ns, name in IGNORED_FUNCS if ns == "torch" and name in _TENSOR_IGNORED_FNS}
+    by_torch_attr = {name for name in _TENSOR_IGNORED_FNS if torch_attr(name) is not None}
+    by_hasattr = {name for name in _TENSOR_IGNORED_FNS if hasattr(torch, name)}
+    for probe, expected in (("torch_attr", by_torch_attr), ("hasattr(torch, name)", by_hasattr)):
+        assert kept == expected, (
+            f"IGNORED_FUNCS torch rows differ from {probe}: only kept {sorted(kept - expected)}, "
+            f"only {probe} {sorted(expected - kept)}. A lazily resolved torch attribute "
+            "(module __getattr__) is missing from torch.__dict__, so it went unwrapped."
+        )
 
 
 # ---------------------------------------------------------------------------
