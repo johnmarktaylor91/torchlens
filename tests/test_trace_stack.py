@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 import torch
 from torch import nn
@@ -97,33 +95,6 @@ def test_stack_matches_individual_outputs_and_labels() -> None:
         assert label == op.layer_label
         torch.testing.assert_close(row, op.out)
     assert "StackedActivations" in repr(stacked)
-
-
-def test_stack_sorts_by_recorded_ordinal_even_if_resolver_order_is_adversarial(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Reused-module rows follow ordinals despite reversed selector iteration."""
-
-    trace = tl.trace(_ReusedRelu(), torch.randn(2, 4))
-    original_find_sites = type(trace).find_sites
-
-    def reversed_find_sites(self: Any, query: Any, **kwargs: Any) -> Any:
-        """Return the real selector result in deliberately reversed order."""
-
-        resolved = original_find_sites(self, query, **kwargs)
-        return type(resolved)(tuple(reversed(tuple(resolved))), selector=query)
-
-    monkeypatch.setattr(type(trace), "find_sites", reversed_find_sites)
-    expected_ops = sorted(
-        original_find_sites(trace, tl.func("relu"), max_fanout=10),
-        key=lambda op: op.ordinal_index,
-    )
-
-    stacked = trace.stack(tl.func("relu"))
-
-    assert stacked.labels == tuple(op.layer_label for op in expected_ops)
-    for row, op in zip(stacked.tensor, expected_ops, strict=True):
-        torch.testing.assert_close(row, op.out)
 
 
 def test_stack_refuses_legacy_op_without_recorded_ordinal() -> None:

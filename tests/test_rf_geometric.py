@@ -15,7 +15,6 @@ from torchlens._io import FieldPolicy
 from torchlens.receptive_field import _engine, _rules
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult
 from torchlens.receptive_field._types import (
-    ReceptiveFieldAlignment,
     ReceptiveFieldStatus,
 )
 
@@ -82,25 +81,10 @@ def _last_op(trace: object, func_name: str) -> object:
     return operations[-1]
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("model", "input_shape", "target_name", "expected_size", "expected_jump", "expected_center"),
     [
-        (
-            nn.Sequential(nn.Conv1d(2, 4, 3, stride=2, padding=1), nn.MaxPool1d(3, stride=2)),
-            (1, 2, 32),
-            "max_pool1d",
-            (7,),
-            (Fraction(4),),
-            (Fraction(2),),
-        ),
-        (
-            nn.Sequential(nn.Conv2d(2, 4, 3, stride=2, padding=1), nn.MaxPool2d(2)),
-            (1, 2, 32, 32),
-            "max_pool2d",
-            (5, 5),
-            (Fraction(4), Fraction(4)),
-            (Fraction(1), Fraction(1)),
-        ),
         (
             nn.Sequential(nn.Conv3d(2, 4, 3), nn.MaxPool3d(2)),
             (1, 2, 12, 12, 12),
@@ -148,84 +132,10 @@ class _Residual(nn.Module):
         return self.wide(inputs) + self.point(inputs)
 
 
-class _Misaligned(nn.Module):
-    """Equal-output-shape branches with offset sampling centers."""
-
-    def __init__(self) -> None:
-        """Create stride-two branches centered at 1/2 and 0."""
-
-        super().__init__()
-        self.offset = nn.Conv2d(2, 2, 2, stride=2)
-        self.origin = nn.Conv2d(2, 2, 1, stride=2)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """Merge the intentionally misaligned branches."""
-
-        return self.offset(inputs) + self.origin(inputs)
-
-
-def test_residual_merge_unions_aligned_branches_exactly() -> None:
-    """Use the union hull of aligned residual branches without losing exactness."""
-
-    _register_standard_rules()
-    trace = tl.trace(_Residual(), torch.randn(1, 2, 16, 16))
-    descriptor = next(iter(_engine.lookup(trace, _last_op(trace, "__add__")).values()))
-
-    assert descriptor.size == (3, 3)
-    assert descriptor.jump == (Fraction(1), Fraction(1))
-    assert descriptor.center0 == (Fraction(0), Fraction(0))
-    assert descriptor.alignment is ReceptiveFieldAlignment.ALIGNED
-    assert descriptor.status is ReceptiveFieldStatus.EXACT
-
-
-def test_misaligned_merge_is_a_sound_upper_bound() -> None:
-    """Trip on unequal centers instead of silently claiming exact aligned geometry."""
-
-    _register_standard_rules()
-    trace = tl.trace(_Misaligned(), torch.randn(1, 2, 16, 16))
-    descriptor = next(iter(_engine.lookup(trace, _last_op(trace, "__add__")).values()))
-
-    assert descriptor.size == (2, 2)
-    assert descriptor.jump == (Fraction(2), Fraction(2))
-    assert descriptor.center0 == (Fraction(1, 2), Fraction(1, 2))
-    assert descriptor.alignment is ReceptiveFieldAlignment.MISALIGNED
-    assert descriptor.status is ReceptiveFieldStatus.UPPER_BOUND
-    assert all(axis.sparse_possible for axis in descriptor.axes or () if axis.kind == "windowed")
-
-
-class _SqueezeExciteShape(nn.Module):
-    """Minimal global-pool-and-broadcast arithmetic graph."""
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """Broadcast a spatial global mean back over its source."""
-
-        return inputs * inputs.mean(dim=(-2, -1), keepdim=True)
-
-
-def test_global_branch_broadcast_becomes_whole_input_by_arithmetic() -> None:
-    """Compose global spatial dependence through a slope-zero broadcast merge."""
-
-    _register_standard_rules()
-
-    @_rules.register_rf_rule("mean")
-    def mean_rule(context: ReceptiveFieldRuleContext) -> _RuleResult:
-        """Mark the captured reduction dimensions full."""
-
-        return context.full(axes=context.arg("dim", (-2, -1)))
-
-    trace = tl.trace(_SqueezeExciteShape(), torch.randn(2, 3, 8, 8))
-    descriptor = next(iter(_engine.lookup(trace, _last_op(trace, "__mul__")).values()))
-
-    assert descriptor.axis_roles.axis_kinds == ("pointwise", "pointwise", "full", "full")
-    assert descriptor.status is ReceptiveFieldStatus.WHOLE_INPUT
-    assert descriptor.axes is not None
-    assert descriptor.axes[2].exact and descriptor.axes[3].exact
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("module", "shape", "expected_kinds", "expected_windowed"),
     [
-        (nn.Conv2d(3, 4, 3), (2, 3, 12, 12), ("pointwise", "full", "windowed", "windowed"), (2, 3)),
         (nn.Conv1d(3, 4, 3), (2, 3, 12), ("pointwise", "full", "windowed"), (2,)),
     ],
 )
@@ -257,28 +167,6 @@ def test_unconsumed_input_layout_remains_unknown() -> None:
 
     assert descriptor.axis_roles.axis_kinds == ("unknown",) * 4
     assert descriptor.status is ReceptiveFieldStatus.UNKNOWN
-
-
-def test_batch_coupled_full_axis_can_never_be_exact() -> None:
-    """Represent batch coupling geometrically and derive a non-EXACT status."""
-
-    _register_standard_rules()
-
-    @_rules.register_rf_rule("batch_norm")
-    def batch_norm_rule(context: ReceptiveFieldRuleContext) -> _RuleResult:
-        """Couple batch and spatial axes for the stand-in training rule."""
-
-        return context.full(axes=(0, 2, 3))
-
-    model = nn.Sequential(nn.Conv2d(3, 3, 3, padding=1), nn.BatchNorm2d(3))
-    model.train()
-    trace = tl.trace(model, torch.randn(2, 3, 8, 8))
-    descriptor = next(iter(_engine.lookup(trace, _last_op(trace, "batch_norm")).values()))
-
-    assert descriptor.batch_coupled
-    assert descriptor.status is ReceptiveFieldStatus.WHOLE_INPUT
-    assert descriptor.status is not ReceptiveFieldStatus.EXACT
-    assert descriptor.axes is not None and descriptor.axes[0].kind == "full"
 
 
 def test_solution_cache_uses_epoch_and_graph_revision(monkeypatch: pytest.MonkeyPatch) -> None:

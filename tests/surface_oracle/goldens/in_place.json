@@ -1523,6 +1523,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 16,
@@ -1568,7 +1569,7 @@
      "alpha"
     ],
     "args_summary": "2.0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -1625,8 +1626,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -1638,6 +1639,7 @@
       "\"add_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
@@ -1672,6 +1674,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -1741,6 +1746,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -1756,6 +1762,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -1925,7 +1932,7 @@
      "memory_format"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -1982,8 +1989,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -1995,6 +2002,7 @@
       "\"clone_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -2027,6 +2035,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -2096,6 +2107,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -2111,6 +2123,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -2321,8 +2334,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -2332,6 +2345,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -2349,6 +2363,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -2403,6 +2420,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -2418,6 +2436,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -2577,7 +2596,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(2x4, float32)",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -2623,8 +2642,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -2634,6 +2653,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -2666,6 +2686,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -2735,6 +2758,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -2750,6 +2774,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -2926,7 +2951,7 @@
      "input"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -2983,8 +3008,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -2996,6 +3021,7 @@
       "\"relu_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
@@ -3028,6 +3054,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -3097,6 +3126,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -3112,6 +3142,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -3685,7 +3716,6 @@
     "3": 4,
     "4": 5
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 0,
    "_num_ops": 3,
@@ -3717,7 +3747,7 @@
    "_options_on_nonfinite": false,
    "_options_output_device": "same",
    "_options_recurrence_detection": true,
-   "_options_save_arg_templates": false,
+   "_options_save_arg_templates": true,
    "_options_save_args": false,
    "_options_save_grads": null,
    "_options_save_mode": "copy",
@@ -4047,6 +4077,7 @@
     "__ref__": "Trace",
     "label": "inplace_1"
    },
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -4060,7 +4091,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -5592,6 +5623,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 16,
@@ -5637,7 +5669,7 @@
      "alpha"
     ],
     "args_summary": "2.0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -5707,6 +5739,7 @@
       "\"add_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
@@ -5741,6 +5774,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -5810,6 +5846,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -5825,6 +5862,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -5994,7 +6032,7 @@
      "memory_format"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -6064,6 +6102,7 @@
       "\"clone_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -6096,6 +6135,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -6165,6 +6207,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -6180,6 +6223,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -6401,6 +6445,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -6418,6 +6463,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -6472,6 +6520,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -6487,6 +6536,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -6646,7 +6696,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(2x4, float32)",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -6703,6 +6753,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -6735,6 +6786,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -6804,6 +6858,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -6819,6 +6874,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -6995,7 +7051,7 @@
      "input"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -7065,6 +7121,7 @@
       "\"relu_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
@@ -7097,6 +7154,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -7166,6 +7226,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -7181,6 +7242,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -7754,7 +7816,6 @@
     "3": 4,
     "4": 5
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 0,
    "_num_ops": 3,
@@ -7786,7 +7847,7 @@
    "_options_on_nonfinite": false,
    "_options_output_device": "same",
    "_options_recurrence_detection": true,
-   "_options_save_arg_templates": false,
+   "_options_save_arg_templates": true,
    "_options_save_args": false,
    "_options_save_grads": null,
    "_options_save_mode": "copy",
@@ -8112,6 +8173,7 @@
     "label": "self"
    },
    "root_trace": null,
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -8127,7 +8189,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -9659,6 +9721,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 16,
@@ -9774,6 +9837,7 @@
       "\"add_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
@@ -9808,6 +9872,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -9877,6 +9944,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -9892,6 +9960,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -10131,6 +10200,7 @@
       "\"clone_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -10163,6 +10233,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -10232,6 +10305,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -10247,6 +10321,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -10468,6 +10543,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -10485,6 +10561,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -10539,6 +10618,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -10554,6 +10634,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -10770,6 +10851,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -10802,6 +10884,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -10871,6 +10956,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -10886,6 +10972,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -11132,6 +11219,7 @@
       "\"relu_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
@@ -11164,6 +11252,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -11233,6 +11324,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -11248,6 +11340,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -11821,7 +11914,6 @@
     "3": 4,
     "4": 5
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 0,
    "_num_ops": 3,
@@ -11853,7 +11945,7 @@
    "_options_on_nonfinite": false,
    "_options_output_device": "same",
    "_options_recurrence_detection": true,
-   "_options_save_arg_templates": false,
+   "_options_save_arg_templates": true,
    "_options_save_args": false,
    "_options_save_grads": null,
    "_options_save_mode": "copy",
@@ -12177,6 +12269,7 @@
     "label": "self"
    },
    "root_trace": null,
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -12190,7 +12283,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -13722,6 +13815,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 16,
@@ -13767,7 +13861,7 @@
      "alpha"
     ],
     "args_summary": "2.0",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -13824,8 +13918,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -13837,6 +13931,7 @@
       "\"add_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
@@ -13871,6 +13966,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -13940,6 +14038,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -13955,6 +14054,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -14124,7 +14224,7 @@
      "memory_format"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.0",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -14181,8 +14281,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -14194,6 +14294,7 @@
       "\"clone_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -14226,6 +14327,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -14295,6 +14399,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -14310,6 +14415,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -14520,8 +14626,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -14531,6 +14637,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -14548,6 +14655,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -14602,6 +14712,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -14617,6 +14728,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -14776,7 +14888,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(2x4, float32)",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -14822,8 +14934,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [],
     "edits": [],
     "episode_step": null,
@@ -14833,6 +14945,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -14865,6 +14978,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -14934,6 +15050,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -14949,6 +15066,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -15125,7 +15243,7 @@
      "input"
     ],
     "args_summary": "",
-    "args_template": null,
+    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -15182,8 +15300,8 @@
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
-    "edge_replacement_stamps": null,
-    "edge_substitutions": null,
+    "edge_replacement_stamps": {},
+    "edge_substitutions": {},
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -15195,6 +15313,7 @@
       "\"relu_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
@@ -15227,6 +15346,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -15296,6 +15418,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -15311,6 +15434,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -15884,7 +16008,6 @@
     "3": 4,
     "4": 5
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 0,
    "_num_ops": 3,
@@ -15916,7 +16039,7 @@
    "_options_on_nonfinite": false,
    "_options_output_device": "same",
    "_options_recurrence_detection": true,
-   "_options_save_arg_templates": false,
+   "_options_save_arg_templates": true,
    "_options_save_args": false,
    "_options_save_grads": null,
    "_options_save_mode": "copy",
@@ -16255,6 +16378,7 @@
     "__ref__": "Trace",
     "label": "inplace_1"
    },
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -16276,7 +16400,7 @@
     }
    ],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
@@ -17797,6 +17921,7 @@
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
+    "routing_table": null,
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 16,
@@ -17821,7 +17946,7 @@
   "ops": {
    "add_1_2:1": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -17834,7 +17959,9 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
+    "arg_expressions": [
+     "2.0"
+    ],
     "arg_names": [
      "other",
      "alpha"
@@ -17910,6 +18037,7 @@
       "\"add_1_2:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
@@ -17944,6 +18072,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -17998,6 +18129,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -18013,6 +18145,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -18160,7 +18293,7 @@
    },
    "clone_1_1:1": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -18249,6 +18382,7 @@
       "\"clone_1_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -18281,6 +18415,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -18335,6 +18472,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -18350,6 +18488,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -18495,7 +18634,7 @@
    },
    "input_1:1": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [],
     "_label_raw": "input_1_raw",
     "_layer_label_raw": "input_1_raw",
@@ -18568,6 +18707,7 @@
       "\"input_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 0,
@@ -18585,6 +18725,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -18639,6 +18782,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -18654,6 +18798,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": false,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -18796,7 +18941,7 @@
    },
    "output_1:1": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [],
     "_label_raw": "output_1_raw",
     "_layer_label_raw": "output_1_raw",
@@ -18867,6 +19012,7 @@
       "\"output_1:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": null,
     "flops_forward": null,
@@ -18899,6 +19045,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -18953,6 +19102,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": false,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional": false,
@@ -18968,6 +19118,7 @@
     "is_orphan": false,
     "is_output": true,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -19112,7 +19263,7 @@
    },
    "relu_1_3:1": {
     "_address_normalized": null,
-    "_construction_done": false,
+    "_construction_done": true,
     "_edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
@@ -19200,6 +19351,7 @@
       "\"relu_1_3:1\""
      ]
     },
+    "expert": null,
     "facets": "<torchlens._semantic.facets.FacetView>",
     "flops_backward": 0,
     "flops_forward": 8,
@@ -19232,6 +19384,9 @@
     "fx_call_index": 0,
     "fx_label": null,
     "fx_qualpath": null,
+    "gpu_kernels": [
+     "<torchlens._kernel_telemetry.KernelLaunch>"
+    ],
     "grad": null,
     "grad_dtype": null,
     "grad_fn": null,
@@ -19286,6 +19441,7 @@
     "is_buffer": false,
     "is_buffer_source": false,
     "is_compute_op": true,
+    "is_constant": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional": false,
@@ -19301,6 +19457,7 @@
     "is_orphan": false,
     "is_output": false,
     "is_output_parent": true,
+    "is_router": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
     "is_terminal_conditional_bool": false,
@@ -19460,7 +19617,7 @@
    "_autograd_has_grads": false,
    "_backward_pass_logs": {},
    "_buffer_num_calls": {},
-   "_buffer_persistence": {},
+   "_buffer_persistence": null,
    "_by_pass": {
     "1": [
      0,
@@ -19871,7 +20028,6 @@
     "3": 4,
     "4": 5
    },
-   "_module_filter": null,
    "_num_backward_passes": 0,
    "_num_layers_with_params": 0,
    "_num_ops": 3,
@@ -19903,7 +20059,7 @@
    "_options_on_nonfinite": false,
    "_options_output_device": "same",
    "_options_recurrence_detection": true,
-   "_options_save_arg_templates": false,
+   "_options_save_arg_templates": true,
    "_options_save_args": false,
    "_options_save_grads": null,
    "_options_save_mode": "copy",
@@ -19919,7 +20075,7 @@
    "_orphan_labels": [],
    "_orphan_logs": [],
    "_orphan_records": [],
-   "_out_dedup_mode": null,
+   "_out_dedup_mode": "identity",
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
@@ -20013,8 +20169,8 @@
    "_tracing_finished": true,
    "_transform": null,
    "_visualizer_dir": null,
-   "_warned_direct_write": null,
-   "_warned_mutate_in_place": null,
+   "_warned_direct_write": false,
+   "_warned_mutate_in_place": false,
    "activation_payloads_by_raw_label": {
     "\"add_1_3_raw\"": {
      "__tensor__": true,
@@ -20221,6 +20377,7 @@
     "label": "self"
    },
    "root_trace": null,
+   "routing_table": [],
    "save_visualizations": false,
    "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
@@ -20234,7 +20391,7 @@
    "state": "TraceState.PRISTINE",
    "state_history": [],
    "stop_reason": null,
-   "tlspec_version": 11,
+   "tlspec_version": 12,
    "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],

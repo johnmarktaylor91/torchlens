@@ -3,17 +3,188 @@
 
 ## Unreleased
 
+### Fixed
+
+- **intervention**: an element-masked builtin edit (`fork.do(tl.units(site, mask), verb)`, the
+  head edits from `tl.experiment.head_ablation_candidates`) now saves at the default
+  `level="portable"`: the edit keeps its name and stores the dense bool `mask` and its
+  `mask_sha256` among its keywords (written through the tensor sidecar), and a reload applies
+  bit-identically. A malformed or tampered stored mask refuses
+  `intervention_helper_arguments_invalid` at load. An edit that needs user code still refuses
+  `intervention_spec_not_portable`. DOCUMENTED-UNSTABLE persisted form.
+
+- **capture**: `torch.get_rng_state` and `torch.random.get_rng_state` are recorded as source ops
+  with no parents, so a forward that reads the RNG state and uses the bytes gets an attributed
+  node and passes `tl.validate`. TorchLens's own RNG snapshots do not appear in the trace. The
+  private Tensor methods `_to_sparse`, `_to_sparse_csr`, `_to_sparse_csc`, `_to_sparse_bsr`,
+  `_to_sparse_bsc`, `_conj`, `_conj_physical`, `_neg_view`, `_lazy_clone`, `_addmm_activation`,
+  `_is_all_true` and `_is_any_true` are recorded like their `torch.*` twins. Before, each
+  result reached its consumer with no provenance and validation failed.
+
+- **capture**: the in-place philox fills `Tensor._philox_normal_` and `Tensor._philox_uniform_`
+  (torch 2.13+, CUDA) are recorded with the key tensor as a parent. Before, the filled tensor
+  reached its consumer with no provenance. Replays with the same key reproduce the fill exactly, and
+  `tl.validate` passes: the overwritten destination is excused like `normal_`'s, the key is
+  still perturbation-tested.
+
+- **validation**: a `uint16`, `uint32` or `uint64` parent is perturbed as an integer. Before,
+  it reached the float branch and validation crashed with a `torch.finfo` TypeError.
+
+- **validation**: FlashAttention 2 (`attn_implementation="flash_attention_2"`, the
+  `flash-attn` 2.x custom op `flash_attn::_flash_attn_forward`) passes
+  `tl.validate(scope="forward")`. Each attention call is four native sibling ops that all
+  carry q, k and v; the known-kernel table now also declares native custom ops (ruling: "(b)
+  Declare per-output dependence per kernel in a table."): the log-sum-exp and the dropout
+  mask depend on q and k, the rng state on none of q, k and v, so the perturbation check
+  excuses exactly those edges. Before, validation failed on a sibling's v edge. The attention
+  output has no row and stays fully tested; the same operator name in another namespace, a
+  parent at another position or a keyword stays strict.
+
+- **capture**: A FlashAttention 2 call with dropout and `return_attn_probs=True` now replays bit
+  for bit, so `tl.validate(scope="forward")` passes on it. Replay already restored the captured
+  CUDA generator state, which redraws the same dropout mask; what differed was the dropout mask's
+  padding: the kernel returns it rounded up to its block size and leaves the cells past the
+  sequence lengths undefined. TorchLens now zeroes those padding cells where the recorded
+  `flash_attn::_flash_attn_forward` call returns, in the capture and in the replay, so the model,
+  the trace and the replay hold the same values. The defined region and the other outputs are
+  unchanged; other operators, including the varlen entry point, are not touched. Validation still
+  compares the whole tensor.
+
+- **docs**: The FAQ, glossary, error and refusal contract and the saved-format error messages no longer
+  read like a TorchLens 3 release: saved files are described as written by torchlens 2.37 and earlier
+  or in saved format 3, and the FAQ's API-stability answer drops its placeholder and versioning
+  promise. Error codes, return values and labels are unchanged.
+
+<!-- version list -->
+
+## v2.38.1 (2026-11-04)
+
+v2.38.0 was tagged but never published to PyPI: its release checks failed. 2.38.1 is the first
+2.38 release on PyPI and carries everything listed under v2.38.0 below, plus these fixes.
+
+### Fixes
+
+- **capture**: capturing no longer fails with 0 ops after a library installs a module stub that
+  raises on attribute access (for example shap without matplotlib, imported by
+  `tl.report.doctor()`); the wrap step classifies module globals by their real type.
+- **intervention**: `trace.fork().do(selection, edit)` accepts a selection made on the parent
+  trace (for example `trace['layer4'].receptive_field.of(...)`) and resolves it on the fork by
+  site; selections from unrelated, sibling or descendant traces still refuse with
+  `selection_trace_mismatch`.
+- **intervention**: `tl.steer` infers `dim` when exactly one axis of the site matches the
+  direction's length.
+- **receptive field**: validating or querying a loaded trace that contains a matmul or attention
+  op no longer fails; operand shapes fall back to the recorded shapes.
+- **backends**: PaddlePaddle and MLX traces record the root module's class name; TensorFlow
+  parameter addresses no longer carry the Keras root-model prefix; loading a saved TensorFlow
+  trace refuses again when the TensorFlow runtime does not match; the JAX root module lists its
+  children, and a parameter held in an Equinox `Sequential` is named by its path from the owning
+  module (`layers.0.weight`), so the trace saves.
+- **docs**: the learn notebooks use `trace.ops[name]`; the FAQ's version answers are factual.
+- **viz**: a rolled drawing's header counts every pass of the layers it draws, input and output
+  nodes included (the README loop reads `8 layers (11 ops, 149 B)`), and rolled pass labels sit at
+  the end of their own edge.
+- **display**: progress bars fall back to tqdm's text bar in notebooks without ipywidgets instead
+  of printing errors on every `fork().do()`.
+- **docs**: the README's code blocks run as tests, and its printed output matches what the code
+  prints.
+
+## v2.38.0 (2026-11-04)
+
+Saved files: files saved by torchlens 2.37 and earlier do not load in 2.38; install
+`torchlens<2.38` to read them (`pip install "torchlens<2.38"`), or capture the model again.
+
 ### Behavior changes
 
-- **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
-  pickled 2.x module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
-  merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at
+- **viz**: rolled drawings label each edge end with its passes only when a strict subset of that
+  node's passes uses it: an end every pass uses carries no pass label (it used to print, for
+  example, `In 1-3 / Out 1-3` whenever any edge of the node varied). Loops whose edges were
+  unlabelled stay unlabelled; branching and recurrent loops lose the labels on edges every pass
+  uses and keep partial ones such as `Out 1`, `In 2` or `In 3 / Out 2`. A loop's every-pass edge
+  keeps a blank label slot when its back edge joins the same two nodes, so the two curves stay apart.
+- **viz**: no skin draws blue. Backward edges and nodes are raspberry (`#B03A6A` / `#F8E1E7`), the
+  `dark` skin is neutral grey, value ramps run pale yellow to brown, and the `colorblind` skin keeps
+  Okabe-Ito with grey weights. The default `torchlens` skin keeps the released fills. A branch
+  test names its kind and every pass's outcome on its first row (`IF: FALSE, FALSE, TRUE`) instead
+  of labelling an edge, and edge annotations are 13 pt (were 8 pt).
+- **viz**: a 0-d node's shape row reads `scalar, 4 B` instead of `(), 4 B`, and a saved 0-d value
+  prints on the next row (`= 2.31`; one value per pass on a rolled node, `= 0.87, 1.02, 0.95`).
+  If-tests keep their outcome on the first row and get no value row. `(1,)`, kwarg values such as
+  `dim=()`, parameter brackets and `Layer.__repr__` are unchanged.
+
+- **viz**: `tl.viz.bundle_diff` takes `open_viewer=` (`True` opens a viewer after the picture is
+  written; the default never does) in place of `vis_save_only=`.
+- **viz**: The experimental Dagua renderer is removed from TorchLens: `torchlens.experimental.dagua`, `Trace.to_dagua_graph` and `renderer="dagua"` are gone.
+- **api**: `inputs=` replaces `input_args=` on the capture, validation, debug and report entry
+  points, and `x=` on `Bundle.run`, `tl.debug.find_nan` and `tl.debug.nonfinite_origin`.
+- **io**: files saved by torchlens 2.37 and earlier do not load. A saved trace below `tlspec_version` 11, a
+  pickled pre-2.38 module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
+  merged or extraction directory stamped with a pre-2.38 `torchlens_version` refuse at `tl.load` (and at
   `tl.validation.validate_tlspec` and the extraction readers) with one error,
-  `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message names the 2.x
-  origin and the remedy: load the file with torchlens 2.36.x (`pip install 'torchlens>=2.36,<3'`) or
-  capture the model again with this release. Nothing migrates a 2.x file, and there is no
+  `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message names the pre-2.38
+  origin and the remedy: load the file with torchlens 2.36.x or 2.37.x (`pip install "torchlens<2.38"`) or
+  capture the model again with this release. Nothing migrates a pre-2.38 file, and there is no
   `tl.migrate`. The promise made with 2.16.0 that its `.tlspec` files would always load is
   withdrawn; `MIGRATIONS.md` (".tlspec Compatibility") lists every case.
+- **intervention**: `Trace.set`, `Layer.set` and `Op.set` are removed (decision walk api.1, 2 Nov 2026).
+  Stage a one-shot replacement with `trace.do(site, value, intervention=tl.options.InterventionOptions(engine="set_only"))`
+  (on a layer, `layer.do(value, intervention=...)`). The set-only route is unchanged; `do()` gains no new keyword.
+  A set-only `do` given a callable (an `Edit` helper such as `tl.zero_ablate()` or `tl.scale(2.0)`, or a plain
+  function) stages it as a sticky hook that the next propagating `do` or `run` fires (walk ruling names.3, 3 Nov 2026);
+  only static values are stored as one-shot set values.
+  The old `Trace.set` and `Layer.set` refuse with the typed `facade_redirect` error naming the replacement. The
+  `intervention_direction_invalid` refusals that only `set(..., direction=)` raised are gone with it; the code still
+  covers `Rule(direction=)`.
+- **intervention**: the hook, push and set spellings are removed and fold into `do`; each removal
+  below names its replacement through `do`. The removed `Trace`, `Layer` and `Op` members refuse
+  with the typed `facade_redirect` error naming the replacement:
+  - `Trace.attach_hooks`, `Layer.attach_hooks` and `Op.attach_hooks`: `trace.do(site, hook)` attaches
+    the sticky hook and propagates at once; `trace.do(tl.when(site, hook),
+    intervention=tl.options.InterventionOptions(engine="set_only"))` stages it without running.
+  - `Trace.clear_hooks`: `trace.clear_edits(site)` or `trace.clear_edits(handle=ids)` detaches the
+    sticky hooks `do` staged.
+  - `tl.intervention.HookHandle`: `do` returns the trace, not a handle; pass the staged hook ids to
+    `trace.clear_edits(handle=ids)`.
+  - `prepend=`: hooks staged with `do` run in the order they were staged; to run one first, clear
+    the others with `trace.clear_edits` and stage it before them.
+  - `Trace.push`: `trace.do(site, edit)` applies the edit and propagates it.
+  - `Trace.push_from`: `trace.do(site, value)` sets the value and propagates it.
+  - `Trace.set`, `Layer.set` and `Op.set`: `trace.do(site, value,
+    intervention=tl.options.InterventionOptions(engine="set_only"))` stages a value or tensor. A
+    callable passed that way becomes a sticky hook that stays for every later `do` and `run` until
+    `trace.clear_edits(site)` detaches it, where `set` applied a callable once (walk ruling names.3,
+    3 Nov 2026).
+- **intervention**: `torchlens.intervention.sites` (the `sites()` builder with `SiteCollection` and
+  `SiteSpec`) is removed (round-2 walk names.7). Pass selectors to
+  `torchlens.experiment.sweep_sites(...)` directly. The old names refuse with the typed
+  `facade_redirect` error.
+- **draw**: the collapse diagnostics moved off Trace onto the draw result (round-2 walk names.1):
+  `Trace.collapse_plan(mode)` is now `Drawing.collapse_plan(mode)` and `Trace.collapse_schedule()`
+  is now `Drawing.collapse_schedule()`. Draw with `trace.draw(...)` and ask the
+  drawing; a `tl.draw` picture or a closed drawing keeps no trace and refuses typed. `Trace.collapse_order` is unchanged. The old
+  Trace spellings refuse with the typed `facade_redirect` error.
+- **backward**: `Trace.log_backward(loss)` is gone; `trace.backward(loss)` is the one spelling (round-2
+  walk names.5). It was already an alias of `log_backward`, so the behaviour and keywords
+  (`save_grads=`, `retain_graph=`, and the other `torch.Tensor.backward` keywords) are unchanged.
+  The old spelling refuses with the typed `facade_redirect` error naming `trace.backward(loss)`.
+- **backward**: `Trace.disarm_triggers()` is now `trace.autograd.disarm()` (round-2 walk names.4):
+  detaching a Trace from global autograd interception belongs with the other autograd members. The
+  old spelling refuses with the typed `facade_redirect` error naming `trace.autograd.disarm()`.
+- **draw**: `Trace.animate_ops(site)` is now `Trace.animate(site)` (velocity walk names.1: the
+  animation is its own method and `VisualizationOptions.animate` is gone). The old spelling
+  refuses with the typed `facade_redirect` error naming `trace.animate(site)`.
+- **backward**: one word for the pass counter (velocity walk names.6, rename). The hook-context
+  key `backward_pass_index` is now `backward_pass_number`, and so is the saved
+  `GradFnCall.backward_pass_index` field (and the matching field of the per-op gradient
+  records), spelled like `FireRecord.backward_pass_number`; the v11 writer contract and the
+  persisted-field table carry the new spelling. `color_by="pass_index"` is now
+  `color_by="pass_number"`. Other fields named `pass_index` are unchanged.
+- **stats**: `tl.stats.Histogram.result()` is now `compute()` (round-2 walk names.2), so every
+  accumulator in `tl.stats` finalizes with the one verb `compute()`. `result()` is gone.
+- **capture**: `CaptureOptions.module_filter` and `tl.Trace(module_filter=)` are removed; compose the
+  predicate into `save=`. `Trace.save_new_outs` takes `save=` and `save_grads=` in place of
+  `layers_to_save=` and `grad_layers_to_save=`. The `module_filter_zero_saved` warning goes with
+  `module_filter`.
 - **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
   (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
   the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old
@@ -45,7 +216,10 @@
   serves `decode_output(style="my_style")`. The read-time result is returned, not stored in
   `decoded_output`. An unknown style refuses `decode_style_unknown`
   (`tl.errors.DecodeStyleUnknownError`; was `output_style_unknown` /
-  `OutputStyleUnknownError`).
+  `OutputStyleUnknownError`). `style="hf_text"` on a trace captured without a tokenizer
+  returns the argmax `token_ids` with `text` `None` instead of refusing. Passing
+  `output_style=` or `output_head=` to `CaptureOptions` or `tl.trace` refuses
+  (`facade_redirect` / `trace_forward_kwargs_unrouted`) naming the read-time call.
 - **output decode**: `CaptureOptions.output_head` is gone. Name the head of a multi-output
   model at read time instead: `trace.decode_output(head="logits")` or
   `trace.output_table(head="0")`, where the head is an output container path (`"logits"`,
@@ -87,7 +261,7 @@
 
 - **replay**: replay refuses `replay_param_changed_since_capture` when a parameter the replay
   reads changed after capture (an optimizer step, `load_state_dict`, an in-place op under
-  `torch.no_grad()`, `param.data = t`), on `do()` with the replay engine, `push`, `push_from`,
+  `torch.no_grad()`, `param.data = t`), on `do()` with the replay engine,
   differentiable replay and later replays of every fork. Before, it silently computed with the
   new weight. Re-capture, or pass `allow_changed_params=True` (`InterventionOptions` or
   `ReplayOptions`) to replay with the current values; the run lists the parameters in
@@ -165,6 +339,31 @@
   steady-state model.
 
 ### Features
+
+- **capture**: FlashAttention 4 calls (`attn_implementation="flash_attention_4"`, the
+  `flash_attn.cute` package) are captured as one `autogradfunction` boundary op per attention
+  call (`transform_kind="autograd.Function"`, exit `flash_attn.cute`) whose parents are q, k
+  and v and which replays through the Function's `apply`, so the armed completeness witness
+  verifies the trace and `tl.validate(scope="forward")` passes under `torch.no_grad()`;
+  before, the trace recorded the output allocation in place of the attention and validation
+  failed on `bfs_completeness`. With autograd enabled the kernel also returns its log-sum-exp
+  as a second output of the same call, which depends on q and k only; the known-kernel table
+  declares that per-output dependence (ruling: "(b) Declare per-output dependence per kernel
+  in a table.") and the perturbation check excuses exactly the declared edge (the
+  log-sum-exp's v edge), so the grad-enabled capture validates too. Every other edge stays
+  tested: the attention output has no row, an undeclared kernel, output or argument position
+  is strict, and a declared-dependent argument that does not move its output still fails.
+  `tl.report.doctor()` reports the package as `HAS_FLASH_ATTENTION_4_INTERFACE`.
+- **capture**: the `autograd.Function` boundary hook installs on torch 2.14 and later, where
+  `Function.apply` is the C classmethod descriptor of `_C._FunctionBase` rather than a Python
+  classmethod; before, the hook silently stayed uninstalled there and a forward that left
+  torch (NumPy, DLPack, FlashAttention 4) was not collapsed into a boundary op, so the
+  completeness census reported its interior dispatches as unaccounted. The slot shape is the
+  capability `HAS_FUNCTION_APPLY_SLOT`; an unknown shape flips it with a
+  `TorchCapabilityWarning` instead of degrading silently.
+- **validation**: `tl.validate(model, x)` runs the forward scope: `scope=` defaults to
+  `"forward"`, so the call equals `tl.validate(model, x, scope="forward")`. No scope checks
+  anything different.
 
 - **intervention**: `tl.direction_from_pairs(pos_traces, neg_traces, site, method=...)` is a
   root name (also `torchlens.intervention.direction_from_pairs`); `torchlens.__all__` has 116
@@ -485,6 +684,16 @@
   assignment now runs the creator rule and the topology inference to a fixed point, so the nodes
   created by differentiating an inferred-order node sit one order above it. The invariant is
   unchanged.
+- **backward**: a backward pass or `torch.autograd.grad` run inside forward now pairs the GradFn
+  of every captured op it walked with that op (`GradFn.has_op` is True).
+  The walk runs before any layer exists, so every GradFn was left unpaired; the projection rebuild
+  now pairs these discoveries once the final layers are known. Order inference applies to paired
+  nodes as it does to unpaired ones, so the GradFn orders of a second-order gradient inside forward
+  match those of the same math run after the trace.
+- **runnable**: bind checks a direct version alias's recorded shape and dtype against the value it
+  binds, as it already did for the producer slot. A crafted `.tlspec` whose alias recorded a
+  different shape or dtype bound the producer's value unchecked; it now raises
+  `PathDivergenceError` with `OUTPUT_SHAPE_MISMATCH` or `OUTPUT_DTYPE_MISMATCH` naming the alias.
 - **capture, to_disk**: a forward that returns one tensor in two output slots (`return a, a`)
   gets one output op per slot, so the trace rebuilds. A streamed save no longer attaches another
   op's tensor to an output after an orphan op shifted the blob numbering: save-time ids start
@@ -767,6 +976,285 @@
 
 - A nightly `peer-recipes` job runs the executed recipe pages with every peer installed and fails
   on any skip.
+
+## v2.37.1 (2026-11-03)
+
+### Bug Fixes
+
+- **export**: Keep tracker table cells primitive when pandas maps nullable columns
+  ([`0c4c8bc`](https://github.com/johnmarktaylor91/torchlens/commit/0c4c8bcb7d46ff80b8bb987677e1b3591cbf1a76),
+  [`848b86a`](https://github.com/johnmarktaylor91/torchlens/commit/848b86a36f8a079cc578d56c68c1b469b941d328))
+
+pandas 3 keeps a nullable extension dtype through `Series.map`, so a missing cell came back as
+  `pd.NA` and broke the primitive-only contract that strict tracker tables such as the W&B export
+  need. Each tracker column is now built as an object series from the scalarized cells.
+
+- **compat**: Extend the `torch._C._nn.linear` runnable alias through torch 2.15
+  ([`b583576`](https://github.com/johnmarktaylor91/torchlens/commit/b583576d2968e4dbe75327e2ed51277f48038812))
+
+torch 2.15 still exposes `torch.nn.functional.linear` as the `torch._C._nn.linear` builtin, so a
+  capture on 2.15 recorded the private path. The alias now covers torch 2.15.
+
+### Continuous Integration
+
+- **release**: Refuse an unapproved major version at release and commit time
+  ([`7093285`](https://github.com/johnmarktaylor91/torchlens/commit/70932851ad703e08eeeadbfd48ba70fc4fc36935),
+  [`0da1a5b`](https://github.com/johnmarktaylor91/torchlens/commit/0da1a5b54788dec328861cfbfa5261337d859040),
+  [`f9892a5`](https://github.com/johnmarktaylor91/torchlens/commit/f9892a5a91a367dd1f704cd5f8ffdefc8726a0db),
+  [`c5ca42c`](https://github.com/johnmarktaylor91/torchlens/commit/c5ca42ceb46320d54152f9da1e5b96320e07cdca),
+  [`570640d`](https://github.com/johnmarktaylor91/torchlens/commit/570640d094d7b3c5bc66da6dc1647f6b1e2875bf))
+
+The release job computes the next version before `semantic-release version` runs and fails unless
+  `.github/MAJOR_RELEASE_APPROVED` names exactly that version. The commit-msg and pre-push hooks
+  accept major markers only while that file exists, and the environment override is removed. The
+  guard step is tested against real python-semantic-release on a scratch repository and by name in
+  the smoke job.
+
+- Cap python-dateutil below 3 on the numpy 1.26 legs
+  ([`a62befd`](https://github.com/johnmarktaylor91/torchlens/commit/a62befd1deaaabd087cbed482b78fd0c2e31372b))
+
+- **oracle**: Regenerate the plain_cnn disk goldens for the blob-id floor
+  ([`b29cd18`](https://github.com/johnmarktaylor91/torchlens/commit/b29cd1856f7f29ad56454ac7f509eecb4af648cb))
+
+
+## v2.37.0 (2026-11-02)
+
+### Features
+
+- **validation**: Report a degenerate forward as `degenerate_forward`
+  ([`92b8598`](https://github.com/johnmarktaylor91/torchlens/commit/92b859834fd4d1c58da87efa711ee4a99edbfda4),
+  [`4b5bf2f`](https://github.com/johnmarktaylor91/torchlens/commit/4b5bf2f073f9068bfa253eaf9c5dac758a2dc8f4),
+  [`193e8f3`](https://github.com/johnmarktaylor91/torchlens/commit/193e8f36685559182fb59d09462c4be89221d0ec))
+
+A forward whose final outputs are entirely NaN or infinite, or whose gradient is identically zero,
+  cannot show that its recorded graph matches the computation. Validation now fails it with the
+  `degenerate_forward` label (kinds `non_finite_output` and `zero_gradient`) instead of a misleading
+  perturbation failure, and `Trace.validate_forward_pass` runs the same check.
+
+- **capture**: Record an autograd.Function that leaves torch as one boundary op
+  ([`debb6944`](https://github.com/johnmarktaylor91/torchlens/commit/debb6944a1b8d014b905f25d5b488cb9e6b2c746),
+  [`8ae4a2f`](https://github.com/johnmarktaylor91/torchlens/commit/8ae4a2f5ab1981e8712b69e996654a71e3b50cba))
+
+A custom torch.autograd.Function whose forward hands its tensors to another library (a numpy or
+  dlpack round trip, as DGL does) is now logged as one op that replays through the Function's own
+  apply, with a `foreign_kernel_boundary` warning, instead of failing the completeness check. An
+  ordinary custom Function is unchanged, and a plain round trip outside a Function still fails.
+
+### Bug Fixes
+
+- **validation and capture**: Validate real models that failed on 2.36.x
+  ([merge `ac4e653`](https://github.com/johnmarktaylor91/torchlens/commit/ac4e6536811d1cde6c40a8838cfbab34acaff855))
+
+About forty fixes found by running validation over the Model Menagerie's hardest models. Capture
+  now keeps the op behind `Tensor.__index__` slice bounds, binds in-place writes through views and
+  `x[idx] += y` to the right base version, treats tensors held on plain objects of a module as
+  buffers, keeps a collapsed Function's argument provenance, patches module-level references to
+  wrapped torch callables (`from torch import cat` style), and no longer fails on an unhashable
+  non-tensor argument or a string positional input. Validation proves more inputs inert after
+  perturbation instead of failing them (saved zero values, unit-base exponents, single-key
+  attention, all-True boolean masks, empty matrix products, broadcast set-item overwrites, pinned
+  expand sizes, packed RNN batch sizes), keeps Parameter and grad-tracked inputs as leaves in its
+  input copies, replays autograd.grad against the unperturbed input, and records a typed failure for
+  every forward that does not pass. Receptive and projective field queries accept empty inputs and
+  walk deep graphs without recursion.
+
+
+## v2.36.3 (2026-10-31)
+
+### Bug Fixes
+
+- **io**: Write metadata tensors through a TorchLens-owned reduction
+  ([`0370e28`](https://github.com/johnmarktaylor91/torchlens/commit/0370e2869d67ff19e9e1b71e4043c7393806b7ef))
+
+Plain tensors stored in saved metadata (annotation values, such as those logged with
+  tl.observers.log_value, and small raw inputs and outputs under the default
+  save_raw_input="small") are now written as raw bytes with dtype, shape, requires_grad and device,
+  and rebuilt on load with strict checks. A file saved by 2.36.2 or earlier whose metadata embeds
+  such a tensor no longer loads and refuses with a typed error naming the remedy: re-run the capture
+  with this release and save again, or load the file with the release that wrote it, replace the
+  tensors in trace.annotations with plain values, set trace.save_raw_input = False and
+  trace.save_raw_output = False, and save. Files without a metadata tensor are unaffected.
+
+- **io**: Give the embedded-tensor load refusal a remedy this release can follow
+  ([`503d63a`](https://github.com/johnmarktaylor91/torchlens/commit/503d63a8dd96161fd37405eb1adb018d803867b0))
+
+The refusal for such a file names the file shape and the two remedies above, instead of asking
+  for a re-save with the release that cannot read the file.
+
+- **io**: Build the inline-tensor dtype table on first load, without probe warnings
+  ([`e195733`](https://github.com/johnmarktaylor91/torchlens/commit/e195733e5dbbd818d51137d670c53bd072007930))
+
+The table was built at import by allocating one element of each torch dtype, and torch warns for
+  some of them, so the first capture of a session showed two UserWarnings. It is now built on the
+  first load that needs it, with those warnings kept to the probe.
+
+- **streaming**: Number save-time blobs past the capture stream's ids
+  ([`ae83806`](https://github.com/johnmarktaylor91/torchlens/commit/ae838062d7b868be8d59d33d0016399f3f186e45))
+
+With storage=tl.to_disk, an op streamed during capture and then pruned as an orphan shifted the
+  save-time blob numbering, so the model output could silently read another op's tensor, live and
+  after tl.load. Save-time ids now start past the stream's ids, and a colliding id is refused
+  instead of skipped.
+
+- **capture**: Identify TorchLens frames by normalised filename so code context does not depend on the import path
+  ([`647ff3b`](https://github.com/johnmarktaylor91/torchlens/commit/647ff3b83164eeaefc3318b90040d8310dd3abdb))
+
+When torchlens was imported through a relative sys.path entry such as PYTHONPATH=., TorchLens's
+  own frames leaked into every op's code context. Frame filters now compare normalised filenames.
+
+- **capture**: Key the package-frame memo by filename, since equal code objects can come from different files
+  ([`a96dac2`](https://github.com/johnmarktaylor91/torchlens/commit/a96dac21fc56881c3efd2cc202122fe46c63c4e5))
+
+
+## v2.36.2 (2026-10-31)
+
+### Bug Fixes
+
+- **accessor**: `trace.ops` resolves final op labels before raw spellings, so a raw spelling that equals another op's final label no longer returns the wrong op once loop grouping folds a reused module's calls into one multi-pass layer. ([`31da4f0`](https://github.com/johnmarktaylor91/torchlens/commit/31da4f0f0e2fa18920ff84da6c8bc8a6429cf0ee))
+- **layer**: `Layer.do`, `set` and `attach_hooks` address every pass of a multi-pass layer instead of refusing with `SiteAmbiguityError` on a module reused in a loop. ([`274d283`](https://github.com/johnmarktaylor91/torchlens/commit/274d2837711b6645685e9b54a661e55a56e008b7))
+- **backward**: Each `GradFn` resolves to its own pass on a multi-pass layer, so live backward hooks, forward selectors against a `GradFn` site and raw-index, module-address and checkpoint-witness lookups read the right pass. ([`8f7fb1d`](https://github.com/johnmarktaylor91/torchlens/commit/8f7fb1db32a459dfeb769a851009823848ae8452))
+
+
+## v2.36.1 (2026-10-13)
+
+### Bug Fixes
+
+- **rerun**: Rerunning a trace replays the capture's own save request instead of raw op indices, and a raw-index re-save is refused when the rerun graph has shifted. A loaded trace's graph is compared with the rerun graph directly. ([`323b218`](https://github.com/johnmarktaylor91/torchlens/commit/323b218ea2818497180d72d46b04efe815b14c3c), [`52cfc68`](https://github.com/johnmarktaylor91/torchlens/commit/52cfc6883cc732ae0405028c458440bb61c0ee51), [`3871156`](https://github.com/johnmarktaylor91/torchlens/commit/38711565530bdb805a01a6b75d4b7ce44175a5e2))
+- **save**: Every legacy rerun entry point of a loaded intervened trace refuses, staged edits included. The save-time warning about a dropped spec was removed in favour of that refusal. ([`b5da263`](https://github.com/johnmarktaylor91/torchlens/commit/b5da263b0b515e6a48fd2292cfe1bd0b7d234de9), [`de54020`](https://github.com/johnmarktaylor91/torchlens/commit/de54020b91a5b20374b5aa4415a97ab27f4e3a48))
+- **intervention**: A module shared under several names resolves to the same address at every selector entry point, and its alias spelling is refused the same way everywhere. Module-scoped edits on modules that produce the model output apply once. ([`93f0aaf`](https://github.com/johnmarktaylor91/torchlens/commit/93f0aaf3f889a0d12c83f2caff37153faf42abed), [`318b49f`](https://github.com/johnmarktaylor91/torchlens/commit/318b49f1d3e66dde8665162becdf96ccc98a582d), [`aeb4e14`](https://github.com/johnmarktaylor91/torchlens/commit/aeb4e14a16a432056c1186fba1b746571ff8446d))
+- **intervention**: Helper tensors are fingerprinted when an edit is staged and bound. Reruns, bound calls and recipe saves refuse after a helper tensor changes. ([`06b5310`](https://github.com/johnmarktaylor91/torchlens/commit/06b5310f23b1ee5afc81441bbe0de87e47650d61))
+- **bind**: Bound helpers stay live and record their tensor versions on each call, the runtime stays armed for every step of a lazy `generate` output, and `bind` rebuilds tuple outputs from typed paths. ([`1a12048`](https://github.com/johnmarktaylor91/torchlens/commit/1a120484483b6391217cc3dc80f7f34a743d3c5d), [`e17b291`](https://github.com/johnmarktaylor91/torchlens/commit/e17b291a3a62144ea43b9d0198344afb26d890a4), [`3f5d156`](https://github.com/johnmarktaylor91/torchlens/commit/3f5d1560f4957c56b71826303df7c6a42b66adb0))
+- **capture**: `tl.trace` releases the model on every `BaseException`, submodule forward wrappers are scoped to the capture session, and deepcopies or pickles made during a capture no longer carry session forwards. ([`245d835`](https://github.com/johnmarktaylor91/torchlens/commit/245d835b36fffaa039a839e1ca7cb075f0727123), [`a01a0bf`](https://github.com/johnmarktaylor91/torchlens/commit/a01a0bfe3cd5116dd75095b3d4858fe2bbd80c71), [`bf8634f`](https://github.com/johnmarktaylor91/torchlens/commit/bf8634f1113828b31fe68f87839a57d29e05063d))
+- **capture**: Module aliases resolve in deferred `save=` retention and in `record`'s zero-match check, module-boundary edits under `record` are logged as sparse replacement ops, and pass labels resolve at live module boundaries. ([`d6660d2`](https://github.com/johnmarktaylor91/torchlens/commit/d6660d25ffedcf33ae6c24340da4720a7c30adf0), [`504ffa8`](https://github.com/johnmarktaylor91/torchlens/commit/504ffa886bf910de8029909e2668cb43047d59d7), [`7688d8a`](https://github.com/johnmarktaylor91/torchlens/commit/7688d8adaed6580d98fa3f4930887bbdf5e93794))
+- **spec**: A rule's identity comes from the full current content of its tensors. Hook-plan entries merge into a new spec and never into the stored one. ([`d2af827`](https://github.com/johnmarktaylor91/torchlens/commit/d2af827ba5c461557076ebff218da1d05adb22c2), [`568a913`](https://github.com/johnmarktaylor91/torchlens/commit/568a91325edf9532d007c390831e19fce41cb096), [`56b8bb9`](https://github.com/johnmarktaylor91/torchlens/commit/56b8bb969a65729ae23d45e215ead31ffaab2824))
+- **validate**: Validation restores the live model only when it changed it. ([`f7f2be0`](https://github.com/johnmarktaylor91/torchlens/commit/f7f2be062b0ba596db763e91f1b598010c1c34e9))
+- **mlx**: Perturbation candidates include a magnitude shift, so a saturated ReLU can prove its dependency. ([`8e4d8d7`](https://github.com/johnmarktaylor91/torchlens/commit/8e4d8d733437704c4aa6a26a18f47f354a9783fb))
+
+
+## v2.36.0 (2026-10-08)
+
+### Features
+
+- **capture**: Direct `torch.ops` calls are recorded as ordinary ops with their sources. ([`4d3a0e1`](https://github.com/johnmarktaylor91/torchlens/commit/4d3a0e16fe1e8d808ad1211796408b82acaa604e))
+- **capture**: An in-forward `torch.autograd.grad` call is recorded as an `autogradgrad` boundary op and validated by replaying its subgraph. ([`a5db371`](https://github.com/johnmarktaylor91/torchlens/commit/a5db3713c2cb2a3615c075837951faf7d3e041dc))
+- **capture**: In-place ops on a prepared `nn.Parameter` are recorded and later reads bind to them. Interventions apply on these mutation ops, and the drawn graph shows a source node for the mutated Parameter. ([`a92b216`](https://github.com/johnmarktaylor91/torchlens/commit/a92b2164618ed292cca01271f4c6809bf7226bb7), [`7e2e30a`](https://github.com/johnmarktaylor91/torchlens/commit/7e2e30a1534460045f6dcd95729c1168779f2d16), [`4d1ca0e`](https://github.com/johnmarktaylor91/torchlens/commit/4d1ca0e33ecceab1f8fa4e3973e38883c0619656))
+- **capture**: Legacy `torch.<dtype>Tensor` and `Variable` constructors are logged as ops. ([`d45ce8b`](https://github.com/johnmarktaylor91/torchlens/commit/d45ce8bdd213fbec2d75d23b873557ab42d06136))
+- **validation**: `tl.validate` accepts the validator capture's `output_device` and `save_budget`. ([`203e677`](https://github.com/johnmarktaylor91/torchlens/commit/203e67769e06ac45342f0fb7ac9771909efdd020))
+
+### Bug Fixes
+
+- **validation**: Forward validation fails on tensor arguments with no recorded source. The source-provenance check runs after the metadata invariants. ([`b05ec71`](https://github.com/johnmarktaylor91/torchlens/commit/b05ec71bcd892544d05acfcdb0c8a7e5080edfa4), [`8225c96`](https://github.com/johnmarktaylor91/torchlens/commit/8225c96af77a2d940b5f6129cb85e41393c31132), [`8813f22`](https://github.com/johnmarktaylor91/torchlens/commit/8813f221bf66432265cbb6efc6d4e6746327191f))
+- **validation**: Replay uses each op's captured `requires_grad`, grad mode, leafness and inference mode. ([`f362785`](https://github.com/johnmarktaylor91/torchlens/commit/f362785c0613aa40b084d2773fcc85fcb7e5407b), [`f04398c`](https://github.com/johnmarktaylor91/torchlens/commit/f04398c54cf3366c3da5bea69aa6c7d5193ea196), [`d32ca79`](https://github.com/johnmarktaylor91/torchlens/commit/d32ca7937f185ef3b43c3437a21d1d7fa6061af3))
+- **capture**: A `torch.ops` write that no logged op recorded, or that no return aliases, is disclosed instead of leaving a stale graph. ([`00b096d`](https://github.com/johnmarktaylor91/torchlens/commit/00b096d973dc3c46123b57969f993429ae09af5b), [`708e70f`](https://github.com/johnmarktaylor91/torchlens/commit/708e70fab4b5b8678e2f2614e238c17b59d1ae81))
+- **capture**: A frozen Parameter written with a grad operand captures as it does in eager mode. A mutated Parameter's gradient hook records only its own trace's backward and is removed at cleanup, and backward validation restores Parameters that a pass made non-leaf. ([`0eb5bcb`](https://github.com/johnmarktaylor91/torchlens/commit/0eb5bcb6cf0634ae2a99745f2461697d89b43e0d), [`4d0a6e6`](https://github.com/johnmarktaylor91/torchlens/commit/4d0a6e65caeb331c240e5d221ed21dd8ad9f81e8), [`8d51bd2`](https://github.com/johnmarktaylor91/torchlens/commit/8d51bd27d8e602c7d3dc4af4879b1d09d2346304))
+- **removed names**: Removed top-level names, helper spellings, subpackage names and class members raise a typed `facade_redirect` error that names the replacement. ([`00e7790`](https://github.com/johnmarktaylor91/torchlens/commit/00e7790e2d23c1550c34be13f0bd227f4f035821), [`8b9d053`](https://github.com/johnmarktaylor91/torchlens/commit/8b9d05388edf65d00147ba3ee1df289a173411d2), [`e7ab38f`](https://github.com/johnmarktaylor91/torchlens/commit/e7ab38f0f49365fb4ee2e7bc1bdb859e24961d24))
+- **summary**: `trace.summary()` refuses with `trace_not_finished` during the forward pass and with `trace_cleaned_up` on a cleaned trace. ([`049e2bf`](https://github.com/johnmarktaylor91/torchlens/commit/049e2bfa4c65bfad3bc07566bf198ee13ebb19ad), [`d65493e`](https://github.com/johnmarktaylor91/torchlens/commit/d65493edd8dee5a287d754b2e86df5b09159d08d))
+- **bridge**: The depyf, nnsight, inseq, mlflow and wandb bridges work with the real packages, and dialz, repeng and steering-vectors vectors train from saved activations. Bridge refusals are typed and carry codes, and the profiler join counts only outermost aten events. ([`3cd2d3f`](https://github.com/johnmarktaylor91/torchlens/commit/3cd2d3feb09ef1995293c620b873d0d794bd6275), [`98f2f9c`](https://github.com/johnmarktaylor91/torchlens/commit/98f2f9cc73329e4ffac3b5e6ca0cf5f012b89bc2), [`c22f318`](https://github.com/johnmarktaylor91/torchlens/commit/c22f318343ca38cf62d7f90fe1eafb9f242de1f4), [`cca3c34`](https://github.com/johnmarktaylor91/torchlens/commit/cca3c349dde37f1234c5e4e2f4b42812a956871c))
+- **viz**: Sibling rank groups stay inside their members' cluster, with a fallback to the plain layout, and a Parameter mutated outside its owner is drawn in the owner's cluster. ([`b6ee974`](https://github.com/johnmarktaylor91/torchlens/commit/b6ee9740d2a5ecf0400aa03728fea925dd56f5f0), [`cc01ecc`](https://github.com/johnmarktaylor91/torchlens/commit/cc01ecc4bd1244512b66d1719ccda3d7875c0084), [`90a8a91`](https://github.com/johnmarktaylor91/torchlens/commit/90a8a91a63e623f3b2dadf574e24532a07cd11fe))
+- **callbacks**: Every submodule's training flag is restored after Lightning profiling. ([`8f947c9`](https://github.com/johnmarktaylor91/torchlens/commit/8f947c9eb97cbdc0934ae6ee533134de867f6357))
+- **rng**: The host-RNG monitor releases the model graph when it tears down. ([`ed952be`](https://github.com/johnmarktaylor91/torchlens/commit/ed952bec5db0873d4ae2e7b99805a5dc2e7df7b7))
+
+### Performance Improvements
+
+- **introspection**: Column-offset maps are built from `co_positions` without walking frames. ([`9462d25`](https://github.com/johnmarktaylor91/torchlens/commit/9462d250a5dac8784bb9d47d21f51d0f7292b625))
+
+
+## v2.35.4 (2026-10-07)
+
+### Bug Fixes
+
+- **capture**: Module-held references to pristine torch functions are rebound to the wrappers for each capture and restored at cleanup. Held references are rebound outside the trace without breaking aliasing, and restored on a failed forward. ([`c34fb60`](https://github.com/johnmarktaylor91/torchlens/commit/c34fb60c4473adca7012c96e5c33a3cc7f060a56), [`6416553`](https://github.com/johnmarktaylor91/torchlens/commit/6416553ed02bbe213a85a54c0ef6366932af798e), [`7909ca7`](https://github.com/johnmarktaylor91/torchlens/commit/7909ca7c3857ad3b08d74510a35a24e3e4745904))
+- **capture**: A stale torch reference whose output a module returns is disclosed and rescued. A module returning its own Parameter is no longer reported as an escape. ([`71ebf56`](https://github.com/johnmarktaylor91/torchlens/commit/71ebf56f41e85ea2801998f829502fd39fd16f11), [`7009df5`](https://github.com/johnmarktaylor91/torchlens/commit/7009df54216d829cea22bcebad7a78c981ed3a30))
+- **capture**: Payload copies keep the exact strides of a dense source, and the module-level `_weight_norm` alias behind `torch.nn.utils.weight_norm` is tracked. ([`2e36883`](https://github.com/johnmarktaylor91/torchlens/commit/2e368833a0d03a8f5b40d89138148b038d54a0fc), [`51a1ca4`](https://github.com/johnmarktaylor91/torchlens/commit/51a1ca49516e74fa57bd9d8e15a94f78d9173139))
+- **rng**: Torch's lazy imports (`opt_einsum`, `torch._dynamo`) and the observability session reader load before the RNG monitor window arms. ([`9e02837`](https://github.com/johnmarktaylor91/torchlens/commit/9e0283762fe5e056dd8adb0f289a4672daaa59e1), [`b057537`](https://github.com/johnmarktaylor91/torchlens/commit/b057537a0dd2ad3cb558c4a141a5a1157505aaae), [`7b907cd`](https://github.com/johnmarktaylor91/torchlens/commit/7b907cd4609414eca2d80175e26c241f9b180d84))
+- **validation**: Perturbation proofs cover zero-weight `group_norm`, `layer_norm` and `rms_norm` inputs and four more false perturbation failures. Plain attributes that alias a Parameter, or whose value cannot be snapshotted after the forward, are restored correctly. ([`84e2f2c`](https://github.com/johnmarktaylor91/torchlens/commit/84e2f2cfc2f01fc3d1f614387ed7b5f0da9aead0), [`949ac7e`](https://github.com/johnmarktaylor91/torchlens/commit/949ac7ef3b662ea5a6e2a5b0f4be74598f850d67), [`788105f`](https://github.com/johnmarktaylor91/torchlens/commit/788105fc7b1ebe12fa6bec00045a43a65126a818), [`1fc94a2`](https://github.com/johnmarktaylor91/torchlens/commit/1fc94a23385cfd3bdec433d18070df4121ba6c0c))
+- **witness**: A capture that holds no values is never verified. ([`83d3fe0`](https://github.com/johnmarktaylor91/torchlens/commit/83d3fe065f0b946c2b4457cdfbddf0c74fe76b60))
+- **tf**: The TensorFlow preview backend replays `Pad` and depthwise ops with unset attributes, and re-reads variables to verify `ReadVariableOp` only when no op in the forward can write them. ([`561c44f`](https://github.com/johnmarktaylor91/torchlens/commit/561c44f8a75447023464e1d860a06286ab63d207), [`ff67e91`](https://github.com/johnmarktaylor91/torchlens/commit/ff67e912300f7df49c036a487ed29665caccf5d7), [`2d5e241`](https://github.com/johnmarktaylor91/torchlens/commit/2d5e241c2493d608f6d4b89c06c6865bec00603a))
+- **paddle**: The Paddle preview backend captures `BatchNorm2D` through its import-time aliases and never credits a parameter written in place outside a wrapped op. ([`120829f`](https://github.com/johnmarktaylor91/torchlens/commit/120829f536ea46a64b7ea1ac21c2dcf28be9550a), [`89d9f1e`](https://github.com/johnmarktaylor91/torchlens/commit/89d9f1ef8ecb4806be79cacc7c39534836355c81))
+- **agent**: The limits block counts toward the response token budget. ([`ac16a54`](https://github.com/johnmarktaylor91/torchlens/commit/ac16a5408d560f52833caf765cc248d9a3f60ed5))
+
+
+## v2.35.3 (2026-10-04)
+
+### Bug Fixes
+
+- **collapse**: Segment boxes group only consecutive siblings that are directly joined. ([`ea0e8b3`](https://github.com/johnmarktaylor91/torchlens/commit/ea0e8b38bf8747036dd435ec8fb709a1473ccf3e))
+
+
+## v2.35.2 (2026-10-04)
+
+### Bug Fixes
+
+- **validation**: A constant-output proof needs a finite saved output, and the proofs cover more cases: singleton dimensions in `layer_norm` and softmax, zero queries in `scaled_dot_product_attention`, zero-initialised `batch_norm` weights, and zero annihilators in `linear` and `addcmul`. ([`94ab4db`](https://github.com/johnmarktaylor91/torchlens/commit/94ab4dbeef16b69c29c32439319435bdd9d5fa11), [`8ecae63`](https://github.com/johnmarktaylor91/torchlens/commit/8ecae63475eb22dbb77a5fec816fa2f20109ddcf), [`173bd48`](https://github.com/johnmarktaylor91/torchlens/commit/173bd48384337019388975d7389ac9f9c21ed291), [`8a39ff6`](https://github.com/johnmarktaylor91/torchlens/commit/8a39ff655607ee27f7deb4c7eb0c926cb7665ec6))
+- **validation**: A failed retrace or a failed precondition is recorded as a structured failure, so no caller sees a bare `False`. ([`092fe87`](https://github.com/johnmarktaylor91/torchlens/commit/092fe87d3a8a9d6a2a89ad3360917109abf1f40b), [`92e3244`](https://github.com/johnmarktaylor91/torchlens/commit/92e32444ff82f6102855ca5440eee71bb2ca0ebd))
+
+
+## v2.35.1 (2026-10-04)
+
+No package changes.
+
+### Bug Fixes
+
+- **ci**: The release dry run is evaluated as if it were on main and accepts the already-released skip. ([`2ec2cfe`](https://github.com/johnmarktaylor91/torchlens/commit/2ec2cfe0ca7c08546c71975fcb8af114710f4e9d), [`31e32cb`](https://github.com/johnmarktaylor91/torchlens/commit/31e32cbb29ec49e0f8a48bd0230c6a46dd9b7015))
+- **tests**: Real-model config fingerprints leave out the transformers version, and the real-model goldens were re-recorded against transformers 5.18.0. ([`35af014`](https://github.com/johnmarktaylor91/torchlens/commit/35af0140dcf9045f9ab9c1a736cba0fd9362b67c), [`6de8a56`](https://github.com/johnmarktaylor91/torchlens/commit/6de8a563673ba7e9b89350ab2f89f530132ae13e))
+
+
+## v2.35.0 (2026-10-04)
+
+### Features
+
+- **attribution**: `Trace.draw` can overlay attribution values; the attribution kit adds integrated-gradients path sweeps with a completeness residual, occlusion with an explicit baseline, and CAM reduce and overlay. ([`6f84c1a`](https://github.com/johnmarktaylor91/torchlens/commit/6f84c1af275fced16b45d4db570383d9fab04cd9), [`621ee80`](https://github.com/johnmarktaylor91/torchlens/commit/621ee803d6e8c38567beee45a562c0fbf73de5f8))
+- **backends**: The backend capability table now decides which options each backend accepts. Backward accessors on backends without gradients refuse instead of returning empty results. ([`997917f`](https://github.com/johnmarktaylor91/torchlens/commit/997917ff82e72ebe325c3976fab320413826356a))
+- **backward**: Added per-fire GradFn timing, grouped backward attribution rollups, checkpoint invocation tokens, and coverage-gap and failed-walk evidence. ([`0d089e9`](https://github.com/johnmarktaylor91/torchlens/commit/0d089e9b2bb6f06cd7cfcef1794930876fcf7d5b), [`32eda20`](https://github.com/johnmarktaylor91/torchlens/commit/32eda20fece3907e277b505074d324aa57b77764))
+- **bridges**: Added a Brain-Score `ActivationsExtractorHelper` adapter, a Model Context Protocol server over saved traces, and an SAE splice-experiment helper. ([`891c767`](https://github.com/johnmarktaylor91/torchlens/commit/891c767b0dd8f9a2479957a16684abc4f72cd6c2), [`05148a3`](https://github.com/johnmarktaylor91/torchlens/commit/05148a3b1f93b4dbd45da4e20abde6f8873abe91))
+- **capture limits**: Captures that exceed the memory budget are refused instead of OOM-killing the process, and runaway op-record growth is disclosed once at 50k ops. ([`959cb56`](https://github.com/johnmarktaylor91/torchlens/commit/959cb56231cca2b5f3cf8ca7f5461223ab4fc031), [`6c2f297`](https://github.com/johnmarktaylor91/torchlens/commit/6c2f297ac94dec8d082f01b547f1da3856fcdce0))
+- **rescue re-run**: When a finished capture shows escaped ops, it is re-run once to recover them. The trace is marked `capture_verified=False` with a stated reason. ([`4d78e19`](https://github.com/johnmarktaylor91/torchlens/commit/4d78e19d2db69ae8dfecc9ee562285cc20f0a739))
+- **capture records**: `Trace` has a queryable per-op nonfinite record, and unattributed tensor arguments raise a typed `OutputAttributionError` with an escape flag. ([`d5f3fba`](https://github.com/johnmarktaylor91/torchlens/commit/d5f3fba43f574dcc9c6f1b4d3d2826d70ca7cd85), [`f7f38aa`](https://github.com/johnmarktaylor91/torchlens/commit/f7f38aa9e727e66c8018ddaaa592f79f1152e979))
+- **structure_only**: New `structure_only` capture mode with typed refusals on runnable and replay paths. ([`af52915`](https://github.com/johnmarktaylor91/torchlens/commit/af5291570913bedca0a1fdc8d3a8101e333e9d85), [`ad43aa5`](https://github.com/johnmarktaylor91/torchlens/commit/ad43aa59c095957ef9e9c700e8167ba671620352))
+- **compiled and parallel models**: Compiled callables run their original eager Python during capture. Dynamo regions and tracing tensors hit a typed boundary, and DTensor, tensor-parallel and pipeline-parallel models are detected and refused with a typed error. ([`eae2fb1`](https://github.com/johnmarktaylor91/torchlens/commit/eae2fb128f312bb92210cef73588ead627f2ba35), [`44b16cf`](https://github.com/johnmarktaylor91/torchlens/commit/44b16cf17a38f9b693b4c997161dc37419950705), [`dcdc37b`](https://github.com/johnmarktaylor91/torchlens/commit/dcdc37bc7c50d1545dc9ed486d6078bd96e50280))
+- **debug**: Added `compare_params` for weight-space model diffing and `bisect_precision`, an fp64 numerics bisector. ([`20cbad9`](https://github.com/johnmarktaylor91/torchlens/commit/20cbad9ed8c95a93a03dc2957f50bbec47693a81), [`23bb861`](https://github.com/johnmarktaylor91/torchlens/commit/23bb86162ef4597b999e00bd098f637c69dd642b))
+- **distributed**: Explicit c10d collectives and functional collectives appear as collective boundary nodes. Added the `distributed_witness` session knob, shard-local markers, and typed replay refusals. ([`1022d43`](https://github.com/johnmarktaylor91/torchlens/commit/1022d430a0542ffd9ee65edde7463465d9007a3a), [`d7e6ffd`](https://github.com/johnmarktaylor91/torchlens/commit/d7e6ffd49fbf8c917de2715a1172bc1ec4107683))
+- **merged**: Added a cross-rank merge engine, `MergedTrace`, and a merged-directory artifact. ([`c7cc537`](https://github.com/johnmarktaylor91/torchlens/commit/c7cc5371b40ce7191b7de40e1ad02e7fb3ba05f9))
+- **episode**: Added `capture_kind=episode` with an `EpisodeSpec` entry. ([`0a11dad`](https://github.com/johnmarktaylor91/torchlens/commit/0a11dadd83dba0070a6f30757091e90c2d1f6df5))
+- **errors**: User-reachable refusals in capture, io, intervention, fastlog and visualization are typed, with stable codes and remedy text. ([`2e68ef5`](https://github.com/johnmarktaylor91/torchlens/commit/2e68ef5bd1f892d9983ecbce2196e2e6b0c3787e), [`9cdd253`](https://github.com/johnmarktaylor91/torchlens/commit/9cdd253b49d943cccd1707712cc4405ce7938493))
+- **io**: Streaming disk writes are async with bounded backpressure, `extract_dataset` writes resumable self-describing artifacts, and saving moved to tlspec v8. The buffer-value and `custom_attributes` channels are gated and disclosed. ([`d00968b`](https://github.com/johnmarktaylor91/torchlens/commit/d00968be879d58b157bcc9d793d12ef83c2c063e), [`efbd24d`](https://github.com/johnmarktaylor91/torchlens/commit/efbd24da2985540afa5233feb1b64a098e6e879c))
+- **grouping**: Added the `grouping=` knob, `trace.grouping`, and `Layer.site_key`, `site_peers` and `shape_summary`. ([`43f9c37`](https://github.com/johnmarktaylor91/torchlens/commit/43f9c37f014ec7d193c1f540d36b24ad365daa94), [`d884c00`](https://github.com/johnmarktaylor91/torchlens/commit/d884c00e4fbeed80811d393bc67ad7be6cff9cf1))
+- **intervention**: `do()` accepts Selections, with `tl.Edit` and `tl.patch_from`. Edges can be substituted (`trace.edges`), parameter edits replay as if a parameter changed, and bare labels addressing multi-pass layers are refused. ([`2a3845e`](https://github.com/johnmarktaylor91/torchlens/commit/2a3845e2e7e8cf8192ca0eff9c12bed436ba9ceb), [`15fc93b`](https://github.com/johnmarktaylor91/torchlens/commit/15fc93b00a8f71edc06a6db586ae0210fd5bba39))
+- **selection**: Added Selection types with boolean composition, graph-structural producers and a `TraceSlice` view, value-based, statistical, differential and cross-pass producers, and cross-run alignment. ([`0d9143a`](https://github.com/johnmarktaylor91/torchlens/commit/0d9143a7b80c219d0dd1c9141b923bcac5284dcf), [`fa291b4`](https://github.com/johnmarktaylor91/torchlens/commit/fa291b419a97e9f9c797404f2b42d1636a09b2b6))
+- **mlx, paddle, tf, tinygrad**: All four backends group recurrences. mlx, paddle and tf support static-label `intervene=` and `halt=`, and tf adds GradientTape derived gradients. ([`f4aa172`](https://github.com/johnmarktaylor91/torchlens/commit/f4aa17287786654796ee58229dc446f49d9b0ffa), [`221bdb7`](https://github.com/johnmarktaylor91/torchlens/commit/221bdb7d70a03814672f0617ac309a04f9388d93))
+- **report**: Added `Trace.to_agent_json()` and `tl.report.explain(max_tokens=N)`. ([`aca50cb`](https://github.com/johnmarktaylor91/torchlens/commit/aca50cb6a3579e322b9bace9c934f3d0e0147d4b))
+- **runnable**: Added `trace.run(fast=True)`, `carry_state=`, regime-scoped `until=` truncation and run-time `save=`. Eval-mode BatchNorm is runnable on the default `run()` path. ([`120f278`](https://github.com/johnmarktaylor91/torchlens/commit/120f2781c3cb534ed5ef99d5ef57ae3307528f0f), [`0946352`](https://github.com/johnmarktaylor91/torchlens/commit/0946352b9882291fddf894dcaab41dc5053dd567))
+- **semantic and telemetry**: Added a `logit_lens` appliance, a facet-coverage report, and kernel and GPU telemetry correlated onto the aten layer. ([`532d48b`](https://github.com/johnmarktaylor91/torchlens/commit/532d48b8f21757ad8f42663dad4ed9dbf5be1516), [`568a2e4`](https://github.com/johnmarktaylor91/torchlens/commit/568a2e435e01503d950414ebb27dd7c0e317345d))
+- **viz**: Added `color_by`, `size_by` with `scale=`, `stack_by`, a tri-state `show_legend`, and a saved-for-backward annotation that shows autograd memory. ([`ded46cf`](https://github.com/johnmarktaylor91/torchlens/commit/ded46cf4d0640e7e8bb03d1a0864a8cbfd7effed), [`db916f2`](https://github.com/johnmarktaylor91/torchlens/commit/db916f25b4a41e6d9f54e891a6c8496f48980889))
+- **trace storage**: Trace data is held in a shared store, the default capture producer is the decomposed record model, and loaded traces rehydrate into the store. ([`368bed6`](https://github.com/johnmarktaylor91/torchlens/commit/368bed6c5dc040babe2827b37eddfeb98d601b20), [`1bcd44b`](https://github.com/johnmarktaylor91/torchlens/commit/1bcd44b4667d4bc5afeab74381f844a4b2db6063))
+### Bug Fixes
+
+- **capture cache**: Cache keys now include device placement, `requires_grad`, module hooks, instance attributes and the model implementation. Entries commit atomically and cache pickles are authenticated. ([`826dfa8`](https://github.com/johnmarktaylor91/torchlens/commit/826dfa8dade6c7cd92fa9db14b3b6c461a1ad562), [`530996d`](https://github.com/johnmarktaylor91/torchlens/commit/530996d4a19835427059b06a1552b43798466409))
+- **capture teardown**: The user's host and torch RNG streams are restored after every capture. Interrupts survive cleanup, and failure advisories no longer replace the forward exception. ([`f168c96`](https://github.com/johnmarktaylor91/torchlens/commit/f168c961e01a7bbb6af3e5fedc49d43e0c0e614c), [`ae49fc4`](https://github.com/johnmarktaylor91/torchlens/commit/ae49fc4abae170f2724a006c17afabf7b9e23249))
+- **concurrency**: Concurrent and nested captures are refused before side effects, and unwrapping mid-capture is refused. ([`90a18b0`](https://github.com/johnmarktaylor91/torchlens/commit/90a18b0a325c1dac04f428f0723b8ff4511ed16d), [`c24f2ff`](https://github.com/johnmarktaylor91/torchlens/commit/c24f2ff55747f276aea7ebcb5336be80b201c282))
+- **capture inputs**: Input walkers share a depth ceiling and cycle guard with typed refusals, non-total namedtuple schemas are refused, and a device-less model's inputs are no longer moved to the CPU. ([`bca6398`](https://github.com/johnmarktaylor91/torchlens/commit/bca6398ab5df86891a187c5c078c21addffd7d93), [`b6c5770`](https://github.com/johnmarktaylor91/torchlens/commit/b6c5770e388f4d8240661cc64dc631e5c273b93d))
+- **capture**: `inplace=True` functionals are recorded as mutating. `raise_on_nan` no longer recurses on buffer sources, and zero-match `layers_to_save` and `halt=` selections are disclosed. ([`b63bd26`](https://github.com/johnmarktaylor91/torchlens/commit/b63bd26ed42895328ced851c36ee87eda2780a96), [`f49f4ab`](https://github.com/johnmarktaylor91/torchlens/commit/f49f4ab1cca629bde25afd365803b546cda70d4a))
+- **backward**: Parameter gradients follow the retention policy and are charged to the save budget, selective `save_grads` predicates are honored, and hooks unwind after a rewalk failure. ([`04cdfb4`](https://github.com/johnmarktaylor91/torchlens/commit/04cdfb4e21bcdb7520d4b408b723d65bb2adbe25), [`0fed43f`](https://github.com/johnmarktaylor91/torchlens/commit/0fed43f03114ca0db0d99181ec1fd7e25712d52d))
+- **io save**: Saves fsync, write bundles with 0700 and 0600 permissions, and mark failed streaming renames partial. `draw()` no longer breaks a later `tl.save` or pickle. ([`9be6dd8`](https://github.com/johnmarktaylor91/torchlens/commit/9be6dd8b339ceb210bb13f48bff9b4aa651e8f91), [`b3db4da`](https://github.com/johnmarktaylor91/torchlens/commit/b3db4da89d61892bf7eb6a64975e0ca100b559ef))
+- **io load**: Load-side validation is stricter, metadata and JSON reads are bounded, corrupt payloads give typed refusals, and `tl.load` failures have distinct codes. ([`7666526`](https://github.com/johnmarktaylor91/torchlens/commit/7666526cea90536bb467e05acd5eddcd768b110b), [`af083bd`](https://github.com/johnmarktaylor91/torchlens/commit/af083bd31e6e11c40692fb970b246f35d594e48c))
+- **io privacy**: Absolute paths, heap addresses and bound `functools.partial` values are redacted from saved metadata, and the saver is warned about embedded custom attributes. ([`251db6d`](https://github.com/johnmarktaylor91/torchlens/commit/251db6db3a0bb93d95b767fa5d95ddd701307cff), [`c6ecbe8`](https://github.com/johnmarktaylor91/torchlens/commit/c6ecbe8ade6e000bba8d33f4b23a618cc4848496))
+- **io fidelity**: `defaultdict` factories, frozensets and tuple subclass metadata are preserved, saves no longer depend on hash seed, and saving multi-pass traces no longer fails. ([`45256b9`](https://github.com/johnmarktaylor91/torchlens/commit/45256b9abc4cfbb65fe24df72b3b811360c95780), [`f3ff6bd`](https://github.com/johnmarktaylor91/torchlens/commit/f3ff6bd520c1c0ccc9f902663bfae997a780970d))
+- **merged**: Loading checks rank identity, roles and digests. Cross-rank backend disagreement is refused, `save_merged` no longer dereferences symlinks, and overwrites are staged atomically. ([`18b4e48`](https://github.com/johnmarktaylor91/torchlens/commit/18b4e4812df842e8a64ad1d6223b1df14d23497e), [`3a2d3ef`](https://github.com/johnmarktaylor91/torchlens/commit/3a2d3ef05a2c11507d7a348dff540ce40f56959d))
+- **rescue and intervention**: The rescue re-run is refused for intervened or hooked captures and restores state after failed re-runs. Replay no longer corrupts in-place arguments, and unmatched backward selectors are reported. ([`8f357ba`](https://github.com/johnmarktaylor91/torchlens/commit/8f357ba167fcf992d955ae04988677d719cec53e), [`10cba00`](https://github.com/johnmarktaylor91/torchlens/commit/10cba00acf06cdec251132d54bd96858132fb453))
+- **runnable**: Fast recapture refuses unsafe state, `run()` restores `fp32_precision`, runnable save refuses intervention-replaced captures, and zip-arity divergence is refused instead of truncated. ([`bdcb5bc`](https://github.com/johnmarktaylor91/torchlens/commit/bdcb5bc05a7b7608dfb5e3de0b71849c0564aff8), [`c54d5b9`](https://github.com/johnmarktaylor91/torchlens/commit/c54d5b9fa79e89b8916c802785e824d30555f9b4))
+- **viz**: Feature-map grids disclose K-of-N subsetting and per-cell normalization, NaN and Inf values in feature maps are no longer hidden, and a missing Graphviz binary gives a typed refusal. ([`377a8ac`](https://github.com/johnmarktaylor91/torchlens/commit/377a8aca489d4fc544dbee7daf6e81d9d58ff191), [`1f22a43`](https://github.com/johnmarktaylor91/torchlens/commit/1f22a433cdc3080a7db2a449b820d567a3b7722d), [`5865c1c`](https://github.com/johnmarktaylor91/torchlens/commit/5865c1cdccca2df2c2b342fc62222b386161f5c4))
+- **viz rendering**: Fixed a `show_containers` leak on recurrent traces, a profiling node-mode crash on collapsed nodes, and 4-d payload slicing in `show(method='channels')`. Stale annotation blobs are invalidated on fork and rerun. ([`7af15a0`](https://github.com/johnmarktaylor91/torchlens/commit/7af15a05af48f8a0eb87e54c8e97610923ea8a08), [`f35ecea`](https://github.com/johnmarktaylor91/torchlens/commit/f35eceae92b381e3e8ba828570149e77afefac53))
+- **wrappers**: `torch.jit.script` keeps working while wrapped, `unwrap_torch` is atomic against capture, and fork children clear inherited capture state. ([`365b13e`](https://github.com/johnmarktaylor91/torchlens/commit/365b13e7ba6c3b8b73dff3626f08f2b68b014ee7), [`25bc22d`](https://github.com/johnmarktaylor91/torchlens/commit/25bc22d4f795ae2fe72b5c48b3b04b2d54402ee7))
+- **validation**: Replay and gradient tolerances derive from tensor dtype, and all-NaN or all-zero backward gradient evidence is refused. ([`2e6f914`](https://github.com/johnmarktaylor91/torchlens/commit/2e6f914ee123c0e69637f79e2d5b5372ebfc4e68), [`dce8094`](https://github.com/johnmarktaylor91/torchlens/commit/dce809416e77b78402a2f5799c782573142e7275))
+- **packaging and pickle**: Package metadata declares Python 3.10 as the floor, `py.typed` ships, pickle preserves the module hierarchy, and connected traces support `deepcopy`. ([`11fac31`](https://github.com/johnmarktaylor91/torchlens/commit/11fac3195c545de069ce0190d3609313507511ed), [`28f904b`](https://github.com/johnmarktaylor91/torchlens/commit/28f904b6e0c0ac5e986efe2c559351717b1f42df))
+### Performance Improvements
+
+- **capture**: Removed two O(n^2) terms and repeated graph work on large captures. ([`be1dc41`](https://github.com/johnmarktaylor91/torchlens/commit/be1dc41ca944e2265ecd67afe3c7c067e5c6c90c), [`6c3f436`](https://github.com/johnmarktaylor91/torchlens/commit/6c3f436254991e7842038470c70857d85eea1295))
+- **postprocess**: The iso-group pair sweep, buffer dedup, recurrence grouping and conditional attribution no longer scale quadratically. ([`6126640`](https://github.com/johnmarktaylor91/torchlens/commit/6126640e2754750f660c85e0dcb05ba64b113ddb), [`42fdc7d`](https://github.com/johnmarktaylor91/torchlens/commit/42fdc7dd6c66f726fc3e5e53b7667cf4e0c0adc1))
+- **viz**: Collapse caches and work queues are linear, a backtracking regex was removed, and giant renders are disclosed. ([`e752695`](https://github.com/johnmarktaylor91/torchlens/commit/e75269513246c4fb1ee0788c9972679ccae0afeb), [`7665bc1`](https://github.com/johnmarktaylor91/torchlens/commit/7665bc1285140904f9b33a66e9b4d3c41617de68))
+- **io and hashing**: Tensor content streams into digests, metadata is dumped once per save, and merged rank-core hashes stream instead of loading each blob. ([`4bddfdb`](https://github.com/johnmarktaylor91/torchlens/commit/4bddfdb2bc90e7c8cf62d09ad452b61aa7ecc867), [`f56019f`](https://github.com/johnmarktaylor91/torchlens/commit/f56019f13594cc8927166605e8967696e65b8b70))
+- **memory**: Duplicate and empty container cells are pooled, singleton label lists are compacted, and copy-mode retention is built on the output device. ([`4217efc`](https://github.com/johnmarktaylor91/torchlens/commit/4217efc1b208cb588185339e8998ea029f20446f), [`ec0b2e5`](https://github.com/johnmarktaylor91/torchlens/commit/ec0b2e54f7870a00a967a1d008aa7c76ed1c592c))
+
 
 ## v2.34.1 (2026-08-10)
 
@@ -3365,7 +3853,7 @@ H9: intervention_sites_for_log deduped resolved sites by the aggregate layer_lab
   unrolled); a rolled aggregate Layer matches the aggregate set (colors the rolled node when any
   pass is a site), read crash-safe via the shared helper. The public
   intervention_site_and_cone_labels contract (aggregate layer_labels, used by _render_dot and the
-  dagua bridge) is unchanged.
+  experimental renderer bridge) is unchanged.
 
 - **viz**: Key rolled cluster-owned segment owners pass-free
   ([`097b0ef`](https://github.com/johnmarktaylor91/torchlens/commit/097b0efa98037d30313de11e01c6bb6d800caf55))
@@ -11413,7 +11901,7 @@ test_per_operation_oracle_deferred_per_ad_50 and test_not_mvp_audit shelled out 
   repo is a git checkout, i.e. CI and dev), searching tracked files -- correct for source-hygiene
   audits. Use -E for the regex-pattern audit; keeps the tripwire coverage on CI.
 
-- Version-gate functorch-level capability + guard dagua tests for lean CI
+- Version-gate functorch-level capability + guard experimental-renderer tests for lean CI
   ([`65fd4b8`](https://github.com/johnmarktaylor91/torchlens/commit/65fd4b812f07c2910914647367e7a2203ab9ff8d))
 
 Two more pre-existing cert10 torch-matrix / optional-dep test-hygiene gaps surfaced on CI:
@@ -11423,9 +11911,9 @@ Two more pre-existing cert10 torch-matrix / optional-dep test-hygiene gaps surfa
   required it everywhere. Probe torch directly and gate that one flag's expected value on actual
   availability (other flags unchanged).
 
-- dagua is an unused experimental integration whose renderer imports the external `dagua` package on
-  use; the 6 tests that build/render dagua graphs now pytest.importorskip("dagua") so they skip on
-  envs without it (CI, and everywhere until dagua is adopted) while the surrounding non-dagua tests
+- The experimental renderer is an unused integration whose renderer imports an external package on
+  use; the 6 tests that build/render its graphs now importorskip that package so they skip on
+  envs without it (CI, and everywhere until it is adopted) while the surrounding tests
   still run.
 
 
@@ -11606,9 +12094,9 @@ Added two regression tests to tests/test_backend_registry.py: one monkeypatching
   filterwarnings unconditionally downgrades any warning matching the alias message pattern back to
   non-fatal, so it can't distinguish deliberate user/test alias use from torchlens tripping over its
   own alias. Add tests/test_no_internal_self_deprecation.py, which runs a representative
-  trace/record/semantic-patch/dagua-audit/save-load slice under warnings.catch_warnings and flags
+  trace/record/semantic-patch/renderer-audit/save-load slice under warnings.catch_warnings and flags
   any DeprecationWarning/UserWarning matching warn_deprecated_alias's message shape or originating
-  from torchlens/. Confirmed live that a reintroduced regression in either the dagua
+  from torchlens/. Confirmed live that a reintroduced regression in either the experimental renderer
   deprecated-field skip-list or semantic/patching.py's Trace.run()-not-rerun() fix is caught by this
   test (and that a naive "except this test file" exemption would mask it, due to
   warn_deprecated_alias's fixed stacklevel misattributing the warning's origin at some call depths).
@@ -12100,7 +12588,7 @@ render_dot_to_file (and rank-layout neato) delete the DOT source only after a SU
   copy/deepcopy. - intervention/types: add _facets_cache -> FORK_RECONSTRUCT to the Op fork-policy
   table so Trace.fork()/Bundle.fork()/push(differentiable=True) no longer RecursionError when
   Op.facets was read pre-fork. - semantic/patching._run_patch: call Trace.run() instead of
-  deprecated Trace.rerun(). - experimental/dagua/_bridge._list_public_fields: skip deprecated
+  deprecated Trace.rerun(). - the experimental renderer bridge's _list_public_fields: skip deprecated
   conditional_{then,elif,else}_entry_edges during dir()/getattr() enumeration.
 
 - **classics**: Add functional weather generator
@@ -14340,7 +14828,7 @@ The five trace-mixin modules drop their blanket mypy ignore pragmas (debt from t
 - Document package layout policy
   ([`b5cdf65`](https://github.com/johnmarktaylor91/torchlens/commit/b5cdf65a165455da455738897d203874a4cc8fc5))
 
-- Spotless round 4 — docstring completion across utils/compat/semantic/dagua-bridge
+- Spotless round 4 — docstring completion across utils/compat/semantic/renderer-bridge
   ([`3b2b3f6`](https://github.com/johnmarktaylor91/torchlens/commit/3b2b3f62f8bc338c6328150ef90d655a9ba227dd))
 
 - **audit**: Add attribution + compat/bridges notebooks; rewrite README and recipe
@@ -19391,8 +19879,8 @@ Renders 'weight: (16, 3, 3, 3)' instead of 'weight (16, 3, 3, 3)' in graphviz pa
   ([`2dfe89d`](https://github.com/johnmarktaylor91/torchlens/commit/2dfe89ddde3aa5e609c4a36235ceb8b64596b50b))
 
 Module path rows rendered as "@ module1.module2"; tighten to "@module1.module2" so the dotted path
-  reads as a single token and matches the no-space form already used by bundle_diff and the dagua
-  bridge.
+  reads as a single token and matches the no-space form already used by bundle_diff and the experimental
+  renderer bridge.
 
 Generated with [Claude Code](https://claude.ai/code) via [Happy](https://happy.engineering)
 
@@ -20972,7 +21460,7 @@ Top-level surface (`torchlens.__all__`): - 84 names → 40 (exact). Slim per sub
   (Phase 2); `validate/tap/record_span/sites` (Phase 5a).
 
 New namespace submodules (each with explicit `__all__`): `torchlens.accessors`, `.bridge`,
-  `.callbacks`, `.compat`, `.errors`, `.examples`, `.experimental` (+ `.experimental.dagua`),
+  `.callbacks`, `.compat`, `.errors`, `.examples`, `.experimental` (+ an experimental renderer namespace),
   `.export`, `.grad`, `.intervene`, `.io`, `.partial`, `.report`, `.stats`, `.viz`. Existing
   namespaces extended: `.types`, `.options`, `.utils`, `.validation`, `.visualization`, `.fastlog`.
   `torchlens.visualization` exposes graph functions lazily (`__getattr__`) to avoid circular
@@ -21060,13 +21548,13 @@ Migration doc: docs/migration/v2.0_api_changes.md adds Phase 1c table.
 Quality gates: ruff PASS, mypy PASS (138 files clean), Tier-1 smoke 143/143, new tests 56/56,
   len(__all__)==40 PASS.
 
-* refactor(visualization): retire ELK from public API + dagua to experimental opt-in
+* refactor(visualization): retire ELK from public API + the alternate renderer to experimental opt-in
 
 Phase 1d: tightens the rendering surface per §13.6.
 
-Dagua → experimental: - `torchlens/visualization/dagua_bridge.py` →
-  `torchlens/experimental/dagua/_bridge.py`. - `vis_renderer="dagua"` raises RuntimeError unless
-  `from torchlens.experimental import dagua` was imported (sets opt-in marker).
+Alternate renderer → experimental: its bridge module moved from `torchlens/visualization/` to
+  `torchlens/experimental/`; selecting it raises RuntimeError unless the experimental module was
+  imported (sets opt-in marker).
 
 ELK → internal layout backend only: - `torchlens/visualization/elk_layout.py` →
   `_elk_internal/layout.py`. - Public docs say `layout="auto"`; `layout="elk"` accepted as internal
@@ -21082,7 +21570,7 @@ Total Audit growth: notebooks/total_audit/16_visualization_advanced.ipynb skelet
   .secrets.baseline regenerated.
 
 Quality gates: ruff PASS, mypy PASS (140 files clean), Tier-1 smoke 143/143, visualization-adjacent
-  tests 34 + 4 dagua all PASS, len(__all__)==40 PASS.
+  tests 34 + 4 experimental-renderer all PASS, len(__all__)==40 PASS.
 
 * feat(packaging): pandas + IPython move to opt-in extras
 
@@ -21878,7 +22366,7 @@ Add intervention visualization to graph rendering: - vis_intervention_mode="node
   vis_show_cone=True (default). - vis_intervention_mode="as_node": hook nodes inserted between
   producer and downstream consumers. - Cone extracted via Phase 6 cone_of_effect helper (no
   duplication). - Reuses existing node_spec_fn callback infrastructure. - ModelLog.show() and
-  Bundle.show() public methods. - Dagua bridge exposes is_intervention_site / is_in_cone /
+  Bundle.show() public methods. - The experimental renderer bridge exposes is_intervention_site / is_in_cone /
   intervention_log_summary fields. - Direct-write dirty flag surfaced in summary panel where
   available. - Re-enabled 21 previously-skipped multi_trace_visualization tests where intent maps to
   new Bundle API.
@@ -22277,7 +22765,7 @@ Expand visualization/_render_utils.py with the Graphviz primitives shared betwee
 
 Update rendering.py and elk_layout.py to call these helpers instead of inlining the formulae and
   constants. Output is byte-equivalent for ModelLog renderings -- the regression suite
-  (test_output_aesthetics, test_backward_visualization, test_dagua_theme) confirms.
+  (test_output_aesthetics, test_backward_visualization, the experimental theme test) confirms.
 
 The motivation is the upcoming bundle renderer refactor, where the multi-trace cluster builder will
   reuse the same primitives so single-and multi-trace cluster aesthetics stay in sync.
@@ -22699,7 +23187,7 @@ Per execution plan Step 6. Adds model_log.preview_fastlog() and tl.preview_fastl
   alias. Generates node_spec_fn at call time; does not touch MODE_REGISTRY. Uses
   _build_record_context to synthesize RecordContext from postprocessed LayerLog so a predicate that
   accesses a postprocess-only field fails the same way as in dry_run. preview_fastlog(...,
-  vis_renderer='dagua') raises NotImplementedError for v1.
+  the experimental renderer) raises NotImplementedError for v1.
 
 * feat(fastlog): dry_run live visualization
 
@@ -23298,7 +23786,7 @@ Tests (tests/test_conditional_rendering.py, 5 passing): -
   test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate -
   test_rolled_mixed_arm_graphviz_shows_composite_pass_label
 
-Dagua bridge and ELK remain deferred per user direction.
+The experimental renderer bridge and ELK remain deferred per user direction.
 
 Quality gates: rendering tests (5/5), mypy clean, ruff clean.
 
@@ -23540,7 +24028,7 @@ Break the symlink mirroring convention: CLAUDE.md now holds architect-level cont
 - **decoration**: Add global undecorate override
   ([`b0bafeb`](https://github.com/johnmarktaylor91/torchlens/commit/b0bafeb51fbf9b406bd34a84ed826cd4b9c607bb))
 
-- **viz**: Add dagua torchlens integration
+- **viz**: Add an experimental alternate-renderer integration
   ([`35d5bcd`](https://github.com/johnmarktaylor91/torchlens/commit/35d5bcdb976420b86be54048ab4503cbbc146763))
 
 ### Refactoring

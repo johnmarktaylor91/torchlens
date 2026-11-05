@@ -53,8 +53,8 @@ class _Routed(nn.Module):
 def _armed(model: nn.Module, inputs: torch.Tensor):
     """Capture with autograd retained so the gradient method can probe."""
 
-    capture = tl.options.CaptureOptions(backward_ready=True)
-    return tl.trace(model, inputs.requires_grad_(True), capture=capture, save_mode="reference")
+    capture = tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
+    return tl.trace(model, inputs.requires_grad_(True), capture=capture)
 
 
 @pytest.fixture(scope="module")

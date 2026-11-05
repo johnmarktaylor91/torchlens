@@ -121,7 +121,11 @@ def test_rank_layout_discloses_hook_nodes_it_does_not_draw(tmp_path: Path) -> No
     )
     try:
         with pytest.warns(tl.errors.TraceMutationWarning):
-            trace.set(tl.func("relu"), torch.zeros(2, 3))
+            trace.do(
+                tl.func("relu"),
+                torch.zeros(2, 3),
+                intervention=tl.options.InterventionOptions(engine="set_only"),
+            )
         dot_source, dot_messages = _draw(
             trace, tmp_path, "dot", intervention_mode="as_node", layout="dot"
         )

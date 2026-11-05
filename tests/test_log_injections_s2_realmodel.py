@@ -18,6 +18,13 @@ from torchlens.intervention.injection import attest_injected_ops
 transformers = pytest.importorskip("transformers")
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
+# The injected hooks are user callables, so the portable default refuses
+# intervention_spec_not_portable (saved_format_3.md section 5). Audit is
+# payload-free (no outs, no arg snapshots), which would void the payload and
+# replay-attestation guarantees under test; executable_with_callables is the
+# non-runnable level that keeps outs and arg snapshots, so the injected family
+# persists with its payloads exactly as the 2.x analysis save did.
+_SAVE_LEVEL = "executable_with_callables"
 
 
 def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
@@ -44,7 +51,7 @@ def test_gpt2_mlp_sae_injection_persists_and_attests(tmp_path) -> None:
     host_sites = {record.provenance.host_site_key for record in records}
     assert all(isinstance(key, str) and key.startswith("s1|") for key in host_sites)
     path = str(tmp_path / "gpt2_sae.tlspec")
-    logged.save(path)
+    logged.save(path, level=_SAVE_LEVEL)
     loaded = tl.load(path)
     restored = loaded.injected_ops
     assert len(restored) == len(records)
@@ -79,7 +86,7 @@ def test_torchvision_block_splice_injection_persists_and_attests(tmp_path) -> No
     func_names = {record.func_name for record in records}
     assert {"mean", "tanh", "add"} & func_names
     path = str(tmp_path / "resnet_splice.tlspec")
-    logged.save(path)
+    logged.save(path, level=_SAVE_LEVEL)
     loaded = tl.load(path)
     assert len(loaded.injected_ops) == len(records)
     report = attest_injected_ops(loaded)

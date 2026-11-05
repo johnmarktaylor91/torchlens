@@ -45,7 +45,7 @@ def _graph_entries(trace: Any, graph: Any, graph_value: str, reduce: str) -> dic
     known: set[str] = set()
     for label in trace.layer_labels:
         known.add(label)
-        known.update(trace[label].output_of_modules)
+        known.update(trace.layers[label].output_of_modules)
     by_site = _graph_site_values(graph, graph_value)
     unknown = sorted(site for site in by_site if site not in known)
     if unknown:
@@ -103,6 +103,16 @@ def attribution_color_by(trace: Any, source: Any) -> Callable[[Any], float | Non
         If a key matches neither a module output nor a layer label on
         ``trace``; ``attribution_overlay_graph_mismatch`` for a graph whose
         sites are not on ``trace``.
+
+    Examples
+    --------
+    >>> result = tl.attribution.layer_attribution(model, x, target=0, layer="0")
+    >>> trace = tl.trace(model, x)
+    >>> color_by = tl.attribution.overlay(trace, result)
+    >>> callable(color_by)
+    True
+    >>> color_by.__name__
+    'attribution_overlay'
     """
 
     reduce = "abs_sum"

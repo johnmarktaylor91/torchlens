@@ -31,7 +31,9 @@ from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
 from ..._record_type import record_type
+from ..._utils._display_bounded import short_dataclass_repr
 from ...errors._base import TorchLensWarning
+from .._encoding_request import EncodingChannelRequest
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
 from ._budget import BudgetResolution, resolve_budget
 from ._families import ResolvedSource, resolve_source_family, scalar_or_none, source_coverage
@@ -443,6 +445,8 @@ def _warn_secondary(lens_name: str, member: str, why: str) -> str:
 class _LensBuild:
     """Mutable build state one resolution's stage helpers share."""
 
+    __repr__ = short_dataclass_repr
+
     effective: dict[str, Any]
     user_kwargs: dict[str, Any]
     view: str
@@ -510,8 +514,6 @@ def _perf_stage(
         return None, None
     source, channel_values = _resolve_perf_source(trace, lens, build.view)
     if "color_by" not in build.user_kwargs:
-        from .._encoding import EncodingChannelRequest
-
         build.effective["color_by"] = EncodingChannelRequest(
             source=source.member,
             transform="rank",

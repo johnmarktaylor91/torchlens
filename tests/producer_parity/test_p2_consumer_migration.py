@@ -52,21 +52,6 @@ def test_hash_reads_through_the_reducer(monkeypatch: pytest.MonkeyPatch) -> None
     assert seen["hash_via_reducer"] == seen["hash_raw"], "passthrough must be byte-identical"
 
 
-def test_live_view_handle_reads_route_through_index() -> None:
-    """LiveOpView grad_fn reads come from the single-owner side index."""
-
-    trace = tl.trace(
-        SmallCNN(), _cnn_input(), capture=tl.options.CaptureOptions(save_mode="reference")
-    )
-    events = getattr(trace, "_capture_events", None)
-    assert events is not None
-    # after postprocess the index may be cleared by the working-projection
-    # release; the routing contract is asserted structurally instead:
-    from torchlens._capture import projections
-
-    assert hasattr(projections, "_grad_fn_handle_from_index")
-
-
 @pytest.mark.heavy
 def test_intervention_template_ref_is_dead() -> None:
     """No producer writes a non-None intervention_template_ref and no

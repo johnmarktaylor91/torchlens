@@ -12,7 +12,7 @@ them to the trainer you choose, such as SAELens or your own loop. The hand-off h
 3. A `DataLoader` over that dataset feeds the trainer: your own loop, dictionary_learning's
    `trainSAE`, sparsify's `SparseCoder`, or SAELens configured to train from pre-computed
    activations where your SAELens version supports that (check its documentation for the entry
-   point). The [trainer recipe](recipes/sae_trainers.md) runs dictionary_learning and sparsify on
+   point). The [trainer recipe](field-guide/sae_trainers.md) runs dictionary_learning and sparsify on
    extracted activations and splices each trained SAE back.
 
 The example runs all three steps on a small model, with a few optimizer steps of a minimal

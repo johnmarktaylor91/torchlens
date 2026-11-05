@@ -23,7 +23,7 @@ from torchlens.backends.paddle.validation_decisions import (  # noqa: E402
 from torchlens.backends.registry import get_backend_spec  # noqa: E402
 from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 _F = paddle.nn.functional
 

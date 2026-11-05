@@ -2,7 +2,7 @@
 
 r54 ``free_1`` (HIGH): a taken-path op whose output size is a literal integer
 (``torch.arange(n)``/``zeros(n)``/...) let an attacker edit one plaintext
-``manifest.json`` integer to drive an ~8 TB allocation on the default
+``runnable/descriptor.json`` integer to drive an ~8 TB allocation on the default
 ``tl.load(path).run(inputs)`` path -- the r53 state-slot / arity gates did not sit
 on the op-execution literal-argument path. W3's two lane-owned layers:
 
@@ -30,18 +30,14 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import mutate_runnable_descriptor
 
 import torchlens as tl
-from torchlens._io.runnable_load import _validate_literal_atom_value
 from torchlens._runnable import (
-    LiteralAtomKind,
     RunnableErrorCode,
-    StateSlotBinding,
-    StateSlotRole,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from torchlens._runnable.state import _preflight_run_allocation, _recorded_output_slots
 from torchlens.errors import RunCapabilityUnavailableError
 
 
@@ -65,10 +61,10 @@ def _build(tmp_path: Path, name: str) -> Path:
     return bundle
 
 
-def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
+def _recompute_runtime_fingerprints(descriptor: dict[str, Any]) -> None:
     """Rewrite each call's ``runtime_fingerprint`` per the loader recipe.
 
-    Naive manifest tampers are now caught at PARSE time by c9904d19's
+    Naive descriptor tampers are now caught at PARSE time by c9904d19's
     ``_verify_runtime_fingerprints`` check (sha256 over callable key, argument
     names, arity, output slot shapes/dtypes, and execution context), which
     would pre-empt the deeper gates this suite pins. Recomputing the
@@ -76,7 +72,7 @@ def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
     run-prep gates (``op_allocation_preflight`` etc.), which is their point.
     """
 
-    run = manifest["run"]
+    run = descriptor
     keys_by_registry_id = {entry["registry_id"]: entry["key"] for entry in run["callable_registry"]}
     slots_by_id = {slot["slot_id"]: slot for slot in run["tensor_slots"]}
     for call in run["calls"]:
@@ -118,11 +114,11 @@ def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
 
 
 def _tamper(bundle: Path, mutate: Any) -> None:
-    path = bundle / "manifest.json"
-    manifest = json.loads(path.read_text())
-    mutate(manifest)
-    _recompute_runtime_fingerprints(manifest)
-    path.write_text(json.dumps(manifest))
+    def edit(descriptor: dict[str, Any]) -> None:
+        mutate(descriptor)
+        _recompute_runtime_fingerprints(descriptor)
+
+    mutate_runnable_descriptor(bundle, edit)
 
 
 @contextmanager
@@ -165,31 +161,13 @@ def _output_slot(shape: tuple[int, ...], dtype: str = "torch.float32") -> Tensor
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
-def test_literal_int_over_int64_refused_at_parse() -> None:
-    """A literal int past the signed-64-bit ceiling is refused, typed."""
-
-    from torchlens._io.runnable_load import DescriptorStructuralBoundError
-
-    with pytest.raises(DescriptorStructuralBoundError):
-        _validate_literal_atom_value(LiteralAtomKind.INT, 10**20)
-
-
-def test_feasible_and_sub_int64_literals_accepted() -> None:
-    """Ordinary and even large-but-int64 literals still parse (gate is structural)."""
-
-    _validate_literal_atom_value(LiteralAtomKind.INT, 8)
-    _validate_literal_atom_value(LiteralAtomKind.INT, -1)
-    _validate_literal_atom_value(LiteralAtomKind.INT, 10**12)  # bounded later, not at parse
-
-
 def test_literal_magnitude_bomb_degrades_to_analysis_only(tmp_path: Path) -> None:
-    """An over-int64 literal in a real manifest degrades the load to analysis-only."""
+    """An over-int64 literal in a real descriptor degrades the load to analysis-only."""
 
     bundle = _build(tmp_path, "literal.tlspec")
 
-    def _bomb(manifest: dict[str, Any]) -> None:
-        for call in manifest["run"]["calls"]:
+    def _bomb(descriptor: dict[str, Any]) -> None:
+        for call in descriptor["calls"]:
             for literal in call.get("literal_arguments", []):
                 atom = literal.get("value", {})
                 if atom.get("kind") == "int":
@@ -210,73 +188,13 @@ def test_literal_magnitude_bomb_degrades_to_analysis_only(tmp_path: Path) -> Non
 # --------------------------------------------------------------------------- #
 
 
-def test_recorded_output_slots_selects_op_produced_roles() -> None:
-    """Only INTERMEDIATE/OUTPUT slots are treated as op-allocated outputs."""
-
-    class _Desc:
-        tensor_slots = (
-            _output_slot((2, 3)),
-            TensorSlotDescriptor(
-                slot_id="s_param",
-                role=TensorSlotRole.PARAMETER,
-                use_sites=(),
-                shape=(3, 4),
-                dtype="torch.float32",
-                rank=2,
-                device_type="cpu",
-                device_index=None,
-                mutable=False,
-                version_of=None,
-                producer_slot_id=None,
-                output_path=None,
-                input_binding=None,
-                state_binding=StateSlotBinding(
-                    module_path="fc",
-                    state_dict_name="fc.weight",
-                    semantic_role=StateSlotRole.WEIGHT,
-                    trainable=True,
-                    persistent=True,
-                    alias_group=None,
-                    captured_requires_grad=True,
-                    captured_grad_fn=False,
-                    host_escape_disposition=None,
-                ),
-                host_escape=False,
-                inert_sink=False,
-            ),
-        )
-
-    selected = _recorded_output_slots(_Desc())  # type: ignore[arg-type]
-    assert [slot.role for slot in selected] == [TensorSlotRole.OUTPUT]
-
-
-def test_output_slot_preflight_refuses_infeasible_slot() -> None:
-    """A single op-output slot larger than the whole budget is refused, per-slot."""
-
-    infeasible = _output_slot((10**9, 10**9))
-    with pytest.raises(RunCapabilityUnavailableError) as caught:
-        _preflight_run_allocation((), (infeasible,))
-    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
-    assert int(caught.value.fields["required_bytes"]) > int(caught.value.fields["available_bytes"])
-
-
-def test_output_slot_preflight_allows_feasible_and_many_small() -> None:
-    """A feasible slot and MANY small slots pass (per-slot, no whole-graph sum)."""
-
-    # A ~1.5 GiB single output slot is feasible on any normal host: must not refuse.
-    _preflight_run_allocation((), (_output_slot((200_000_000,)),))
-    # 5000 small slots -- their SUM is large but each is tiny: no over-trigger.
-    small = tuple(_output_slot((1024, 1024)) for _ in range(5000))
-    _preflight_run_allocation((), small)
-
-
 def test_output_slot_shape_bomb_refused_at_run(tmp_path: Path) -> None:
     """A tampered op-output slot shape is refused at run-prep, before any allocation."""
 
     bundle = _build(tmp_path, "outbomb.tlspec")
 
-    def _bomb(manifest: dict[str, Any]) -> None:
-        for slot in manifest["run"]["tensor_slots"]:
+    def _bomb(descriptor: dict[str, Any]) -> None:
+        for slot in descriptor["tensor_slots"]:
             if slot.get("role") in {"output", "intermediate"}:
                 slot["shape"] = [10**9, 10**9]
                 slot["rank"] = 2
@@ -286,19 +204,10 @@ def test_output_slot_shape_bomb_refused_at_run(tmp_path: Path) -> None:
     with _rlimit_cap():
         loaded = tl.load(str(bundle))
     with _rlimit_cap(), pytest.raises(RunCapabilityUnavailableError) as caught:
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
     assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
 
 
 # --------------------------------------------------------------------------- #
 # (c) over-trigger guard                                                      #
 # --------------------------------------------------------------------------- #
-
-
-def test_untampered_bundle_runs_verified(tmp_path: Path) -> None:
-    """The class is closed without over-triggering on a legitimate bundle."""
-
-    bundle = _build(tmp_path, "clean.tlspec")
-    loaded = tl.load(str(bundle))
-    result = loaded.run(inputs=torch.randn(2, 4))
-    assert result.report.path_faithfulness.value == "verified"

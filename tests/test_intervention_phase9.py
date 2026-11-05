@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 import torch
 from example_models import TinyReluAdd as _ReluModel
@@ -13,6 +15,10 @@ from torchlens.intervention.errors import (
     BundleComparisonError,
 )
 from torchlens.types import Relationship
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _TanhModel(nn.Module):
@@ -103,15 +109,31 @@ def test_bundle_getitem_returns_modellog_and_nodeview_accessor() -> None:
     assert bundle._supergraph is not None
 
 
-def test_map_is_per_member() -> None:
-    """map applies the function to each member, keyed by member name."""
+def test_map_passes_the_member_name_only_where_fn_takes_it() -> None:
+    """A defaulted second parameter keeps its default; ``name`` arrives by keyword or slot."""
 
     bundle = tl.Bundle({"a": _log(), "b": _log()})
+    sizes = {key: len(bundle[key]._layer_list) for key in ("a", "b")}
 
-    assert bundle.map(lambda member: len(member._layer_list)) == {
-        "a": len(bundle["a"]._layer_list),
-        "b": len(bundle["b"]._layer_list),
+    # The README's one-argument function with a keyword default after it.
+    assert bundle.map(lambda t, k=3: len(t._layer_list) * k) == {
+        key: size * 3 for key, size in sizes.items()
     }
+    # The documented two-argument form, any spelling of the second parameter.
+    assert bundle.map(lambda log, name: name) == {"a": "a", "b": "b"}
+    assert bundle.map(lambda log, member_name: member_name) == {"a": "a", "b": "b"}
+    # A parameter called ``name`` receives it by keyword, wherever it sits.
+    assert bundle.map(lambda log, name=None: name) == {"a": "a", "b": "b"}
+    assert bundle.map(lambda log, k=3, name=None: (k, name)) == {"a": (3, "a"), "b": (3, "b")}
+
+    def keyword_only(log: Any, *, name: str) -> str:
+        return name
+
+    assert bundle.map(keyword_only) == {"a": "a", "b": "b"}
+    # ``*args`` keeps the historical positional (member, name) call.
+    assert bundle.map(lambda *args: args[1]) == {"a": "a", "b": "b"}
+    # Builtins (no inspectable signature) get the member only.
+    assert bundle.map(type) == {"a": type(bundle["a"]), "b": type(bundle["b"])}
 
 
 def test_capacity_eviction_preserves_baseline() -> None:
@@ -174,7 +196,7 @@ def test_baseline_auto_detect_and_ambiguity() -> None:
 
     clean = _log()
     dirty = _log()
-    dirty.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    dirty._attach_hooks(tl.func("relu"), tl.zero_ablate())
 
     bundle = tl.Bundle({"clean": clean, "dirty": dirty})
     assert bundle.baseline_name == "clean"

@@ -508,6 +508,15 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     ValueError
         On an unknown analysis or method, invalid settings, a site whose
         stimulus count differs from the target's, or too few stimuli.
+
+    Examples
+    --------
+    >>> source = {"a": torch.randn(12, 5), "b": torch.randn(12, 6)}
+    >>> result = compare(source, torch.randn(12, 3), analyses=("rsa", "cka"))
+    >>> result.sites, result.analyses
+    (('a', 'b'), ('rsa', 'cka'))
+    >>> sorted(result.scores["cka"]) == ["a", "b"]
+    True
     """
 
     from ..repgeom._uncertainty import BootstrapSettings

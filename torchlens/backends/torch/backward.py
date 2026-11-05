@@ -1,5 +1,4 @@
 """Capture torch backward execution and autograd graph metadata.
-
 This module installs backward/grad wrappers, walks grad_fn graphs, records hook
 events, and exposes Trace/Recording backward helpers.
 """
@@ -31,15 +30,15 @@ from ..._capture.peak_memory import (
 from ..._data_classes._fork_lineage import _is_fork_relative
 from ..._data_classes._grad_fn_naming import (
     _grad_fn_label_parts,
-    _grad_fn_type_from_class_name,
     _normalize_grad_fn_type,
 )
 from ..._data_classes.backward_pass import BackwardPass
-from ..._data_classes.func_call_location import FuncCallLocation
+from ..._data_classes.func_call_location import FuncCallLocation, with_source_fingerprint
 from ..._data_classes.grad_fn import GradFn, _paired_pass_op
 from ..._data_classes.grad_fn_call import GradFnCall
 from ..._data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ..._deprecations import MISSING, MissingType
+from ..._errors import TorchLensWarning
 from ..._ir.events import (
     BackwardCoverageGap,
     BackwardPassEnd,
@@ -52,6 +51,7 @@ from ..._ir.events import (
 )
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
+from ..._utils._display_bounded import short_dataclass_repr
 from ..._utils._package_frames import is_torchlens_code
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
@@ -79,6 +79,20 @@ from ._fire_timing import (
     _pop_matching_fire_start,
     _register_fire_timing_prehook,
 )
+from ._grad_fn_graph import _sync_grad_fn_graph_relations
+from ._grad_fn_growth import (
+    _commit_grad_fn_growth,
+    _fold_created_records,
+    _grad_fn_record_from_discovery,
+    _GradFnGrowth,
+    _layer_grad_fn_ids,
+    _plan_backward_tail_fold,
+)
+from ._grad_fn_membership import (
+    MembershipSweeps,
+    _infer_grad_fn_module_membership,
+    _prefer_direct_pairing_source_for_paired_ops,
+)
 from ._grad_fn_orders import (
     _assign_grad_fn_orders,
     _max_call_order,
@@ -86,6 +100,7 @@ from ._grad_fn_orders import (
     _pass_order_from_roots,
     _resolved_order_for_creator,
 )
+from ._grad_fn_pairing import _layer_by_grad_fn_id, _pair_discovered_with_layers
 from ._grad_fn_source import _grad_fn_is_custom, _grad_fn_source_metadata
 from ._gradfn_markers import (
     _drain_gradfn_markers,
@@ -123,14 +138,14 @@ _INSTALLED_SAVED_TENSORS_HOOKS_INIT: Callable[..., Any] | None = None
 _INSTALLED_SAVED_TENSORS_HOOKS_ENTER: Callable[..., Any] | None = None
 _SAVED_TENSORS_HOOKS_INIT_PATCHED = False
 _INFERENCE_ONLY_BACKWARD_ERROR = (
-    "Cannot run log_backward on a trace captured with inference_only=True: the autograd "
+    "Cannot run backward on a trace captured with inference_only=True: the autograd "
     "graph was discarded during capture. inference_only is either passed explicitly or "
     "implied when the capture runs under torch.no_grad() or torch.inference_mode(). "
     "Re-capture with gradients enabled and without inference_only (optionally with "
     "backward_ready=True) to enable deferred backward."
 )
 _CHUNKED_FORWARD_BACKWARD_ERROR = (
-    "Cannot run log_backward on a trace captured with chunk_size: chunked forward capture "
+    "Cannot run backward on a trace captured with chunk_size: chunked forward capture "
     "concatenates forward payloads across independent sub-batches and does not retain a "
     "single full-batch autograd graph. Re-capture without chunk_size to enable deferred backward."
 )
@@ -142,14 +157,12 @@ def _run_with_detached_activation_guidance(
     engine_callable: Callable[[], Any],
 ) -> Any:
     """Run autograd and augment only a proven TorchLens-detached-root failure.
-
     Parameters
     ----------
     roots:
         Tensor roots passed to the PyTorch autograd engine.
     engine_callable:
         Zero-argument invocation of the original PyTorch entry point.
-
     Returns
     -------
     Any
@@ -240,15 +253,13 @@ def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
     ``tests/test_backward_call_context.py``.
     """
 
-    frame = inspect.currentframe()
-    if frame is None:
-        return None
-    frame = frame.f_back
+    current = inspect.currentframe()
+    frame = current.f_back if current is not None else None
     while frame is not None:
         if not is_torchlens_code(frame.f_code):
             source_loading_enabled = bool(trace._options_save_source_context)
             func_name = frame.f_code.co_name
-            return FuncCallLocation(
+            location = FuncCallLocation(
                 file=frame.f_code.co_filename,
                 line_number=frame.f_lineno,
                 func_name=func_name,
@@ -263,6 +274,7 @@ def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
                 col_offset=_get_col_offset(frame),
                 source_loading_enabled=source_loading_enabled,
             )
+            return with_source_fingerprint(location, trace)
         frame = frame.f_back
     return None
 
@@ -507,7 +519,7 @@ def _close_implicit_backward_pass_if_open(trace: Any, *, _close_path: str = "syn
     from .tensor_tracking import _IMPLICIT_BACKWARD_TASK_IDS
 
     if getattr(trace, "_implicit_backward_pass_open", False):
-        pass_index = getattr(trace, "_active_backward_pass_index", None)
+        pass_index = getattr(trace, "_active_backward_pass_number", None)
         if pass_index is not None:
             events = _ensure_backward_event_stream(trace)
             events.append_backward(
@@ -521,7 +533,7 @@ def _close_implicit_backward_pass_if_open(trace: Any, *, _close_path: str = "syn
                 )
             )
             trace._num_backward_passes = max(int(trace._num_backward_passes), int(pass_index))
-            trace.__dict__.pop("_active_backward_pass_index", None)
+            trace.__dict__.pop("_active_backward_pass_number", None)
             # Close the open-pass flag BEFORE the fallible record clear
             # (R14-1 sibling ordering): a clear failure propagates loudly
             # either way, but must not strand the implicit pass marked open
@@ -589,7 +601,7 @@ def _enqueue_implicit_pass_drain_callback(
             return
         if not getattr(live_trace, "_implicit_backward_pass_open", False):
             return
-        if getattr(live_trace, "_active_backward_pass_index", None) != pass_index:
+        if getattr(live_trace, "_active_backward_pass_number", None) != pass_index:
             return
         if _IMPLICIT_BACKWARD_TASK_IDS.get(live_trace) != graph_task_id:
             return
@@ -786,127 +798,6 @@ def _selected_for_grad_save(trace: Any, layer_label: str | None) -> bool:
     return layer_label is not None and _should_save_grad_payload(trace, layer_label)
 
 
-def _sync_grad_fn_graph_relations(trace: Any) -> None:
-    """Populate backward-oriented GradFn graph relation labels.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ``grad_fn_logs`` should be synchronized.
-    """
-
-    id_to_label = {
-        grad_fn_object_id: grad_fn.label
-        for grad_fn_object_id, grad_fn in trace._grad_fn_logs.items()
-    }
-    child_map: dict[str, list[str]] = {}
-    parent_map: dict[str, list[str]] = {
-        grad_fn.label: [] for grad_fn in trace._grad_fn_logs.values()
-    }
-    parent_membership: dict[str, set[str]] = {
-        grad_fn.label: set() for grad_fn in trace._grad_fn_logs.values()
-    }
-
-    for grad_fn in trace._grad_fn_logs.values():
-        children = [
-            id_to_label[next_grad_fn_id]
-            for next_grad_fn_id in grad_fn.next_grad_fn_ids
-            if next_grad_fn_id in id_to_label
-        ]
-        child_map[grad_fn.label] = children
-        for child_label in children:
-            if grad_fn.label not in parent_membership[child_label]:
-                parent_map[child_label].append(grad_fn.label)
-                parent_membership[child_label].add(grad_fn.label)
-
-    for grad_fn in trace._grad_fn_logs.values():
-        grad_fn.children = child_map[grad_fn.label]
-        grad_fn.parents = parent_map[grad_fn.label]
-        sibling_labels: list[str] = []
-        sibling_membership: set[str] = set()
-        for parent_label in grad_fn.parents:
-            for sibling_label in child_map.get(parent_label, []):
-                if sibling_label != grad_fn.label and sibling_label not in sibling_membership:
-                    sibling_labels.append(sibling_label)
-                    sibling_membership.add(sibling_label)
-        grad_fn.siblings = sibling_labels
-
-        co_parent_labels: list[str] = []
-        co_parent_membership: set[str] = set()
-        for child_label in grad_fn.children:
-            for co_parent_label in parent_map.get(child_label, []):
-                if co_parent_label != grad_fn.label and co_parent_label not in co_parent_membership:
-                    co_parent_labels.append(co_parent_label)
-                    co_parent_membership.add(co_parent_label)
-        grad_fn.co_parents = co_parent_labels
-
-
-def _param_module_address(trace: Any, param_ref: object | None) -> str | None:
-    """Return the owning module address for a parameter reference.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing parameter logs.
-    param_ref:
-        Parameter address recorded on an ``AccumulateGrad`` discovery event.
-
-    Returns
-    -------
-    str | None
-        Owning module address, or ``None`` when the parameter is unknown.
-    """
-
-    if not isinstance(param_ref, str):
-        return None
-    param_logs = trace._param_logs
-    if param_ref not in param_logs:
-        return None
-    param_log = param_logs[param_ref]
-    return None if param_log is None else getattr(param_log, "module_address", None)
-
-
-def _op_module_address(
-    trace: Any,
-    op_label: str | None,
-    grad_fn_object_id: int | None = None,
-) -> str | None:
-    """Return the containing module address for a paired forward op label.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing op logs.
-    op_label:
-        Forward layer label paired to a grad-fn record.
-    grad_fn_object_id:
-        Autograd identity of the grad-fn node, selecting its own pass on a
-        multi-pass layer.
-
-    Returns
-    -------
-    str | None
-        Module address for the paired op, if known.
-    """
-
-    op = _paired_pass_op(trace, op_label, grad_fn_object_id)
-    if op is None:
-        return None
-    module_address = getattr(op, "module_address", None)
-    if module_address is not None:
-        return cast(str, module_address)
-    atomic_module_address = getattr(op, "atomic_module_address", None)
-    if atomic_module_address is not None:
-        return cast(str, atomic_module_address)
-    output_module_calls = list(getattr(op, "output_of_module_calls", []) or [])
-    if output_module_calls:
-        return str(output_module_calls[-1]).rsplit(":", 1)[0]
-    module_calls = list(getattr(op, "modules", []) or [])
-    if not module_calls:
-        return None
-    return str(module_calls[-1]).rsplit(":", 1)[0]
-
-
 def _resolve_op_grad_event_label(trace: Any, op_label: str) -> str:
     """Return the final lookup label for an ``OpGradObserved`` event.
 
@@ -933,159 +824,6 @@ def _resolve_op_grad_event_label(trace: Any, op_label: str) -> str:
     return op_label
 
 
-def _op_raw_index(trace: Any, grad_fn_record: GradFn) -> int | None:
-    """Return the forward raw index backing a grad-fn's module attribution.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing op logs.
-    grad_fn_record:
-        GradFn whose attributed op position should be inspected.
-
-    Returns
-    -------
-    int | None
-        Forward raw index, or ``None`` for parameter-only and unresolved records.
-    """
-
-    op = _paired_pass_op(trace, grad_fn_record.op_label, grad_fn_record.grad_fn_object_id)
-    if op is None:
-        return None
-    return int(getattr(op, "raw_index"))
-
-
-def _post_forward_grad_fn_ids(grad_fn_logs: dict[int, GradFn]) -> set[int]:
-    """Return loss-construction grad-fn ids before the first op-anchored node.
-
-    Parameters
-    ----------
-    grad_fn_logs:
-        Projected GradFn records in backward discovery order.
-
-    Returns
-    -------
-    set[int]
-        Unpaired, non-creator-attributed ids that should not receive inferred
-        module containment.
-    """
-
-    op_steps = [
-        grad_fn_record.step_index
-        for grad_fn_record in grad_fn_logs.values()
-        if grad_fn_record.has_op
-    ]
-    if not op_steps:
-        return set()
-    first_op_step = min(op_steps)
-    return {
-        object_id
-        for object_id, grad_fn_record in grad_fn_logs.items()
-        if (
-            grad_fn_record.step_index < first_op_step
-            and not grad_fn_record.has_op
-            and grad_fn_record.creator_object_id is None
-        )
-    }
-
-
-def _candidate_module_sort_key(trace: Any, candidate: GradFn) -> tuple[int, int, str]:
-    """Return the deterministic P5 tie-break key for a containment candidate.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing forward op logs.
-    candidate:
-        Neighbor GradFn with resolved module containment.
-
-    Returns
-    -------
-    tuple[int, int, str]
-        Sort key where smaller values are preferred.
-    """
-
-    raw_index = _op_raw_index(trace, candidate)
-    consumer_rank = -(raw_index if raw_index is not None else -1)
-    return (consumer_rank, candidate.step_index, candidate.label)
-
-
-def _infer_grad_fn_module_membership(trace: Any) -> None:
-    """Populate inferred module containment for intervening backward nodes.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ``grad_fn_logs`` already have graph relations synchronized.
-
-    Returns
-    -------
-    None
-        GradFn ``modules``, ``module_address``, and ``module_membership_source``
-        fields are updated in place.
-    """
-
-    grad_fn_logs = trace._grad_fn_logs
-    label_to_id = {grad_fn.label: object_id for object_id, grad_fn in grad_fn_logs.items()}
-    carve_out_ids = _post_forward_grad_fn_ids(grad_fn_logs)
-    changed = True
-    while changed:
-        changed = False
-        for object_id, grad_fn_record in grad_fn_logs.items():
-            if (
-                object_id in carve_out_ids
-                or grad_fn_record.module_membership_source is not None
-                or grad_fn_record.creator_object_id is not None
-            ):
-                continue
-            neighbor_ids = [
-                label_to_id[label]
-                for label in [*grad_fn_record.parents, *grad_fn_record.children]
-                if label in label_to_id
-            ]
-            candidates = [
-                grad_fn_logs[neighbor_id]
-                for neighbor_id in neighbor_ids
-                if grad_fn_logs[neighbor_id].module_membership_source is not None
-            ]
-            if not candidates:
-                continue
-            winner = min(
-                candidates, key=lambda candidate: _candidate_module_sort_key(trace, candidate)
-            )
-            if winner.module_address is None:
-                continue
-            grad_fn_record.module_address = winner.module_address
-            grad_fn_record.modules = list(winner.modules) or [winner.module_address]
-            grad_fn_record.module_membership_source = "inferred"
-            changed = True
-
-
-def _prefer_direct_pairing_source_for_paired_ops(trace: Any) -> None:
-    """Mark direct op pairings as paired after containment inference.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ``grad_fn_logs`` should be normalized.
-
-    Returns
-    -------
-    None
-        Directly paired GradFn records keep any inferred module address but expose
-        ``module_membership_source="paired"``.
-    """
-
-    for grad_fn_record in trace._grad_fn_logs.values():
-        op = grad_fn_record.op
-        if (
-            op is not None
-            and (getattr(op, "is_compute_op", False) or getattr(op, "is_compute_layer", False))
-            and grad_fn_record.module_membership_source == "inferred"
-        ):
-            grad_fn_record.module_membership_source = "paired"
-
-
 @dataclass
 class _BackwardFoldState:
     """Cross-fold accumulators for incremental backward projection.
@@ -1094,6 +832,8 @@ class _BackwardFoldState:
     computes along the way so that a clean appended event tail can be folded
     in O(tail) instead of re-reading every backward event ever emitted.
     """
+
+    __repr__ = short_dataclass_repr
 
     discovered: OrderedDict[int, GradFnDiscovered] = field(default_factory=OrderedDict)
     latest_topology: dict[int, tuple[int, ...]] = field(default_factory=dict)
@@ -1108,50 +848,15 @@ class _BackwardFoldState:
     built_pass_indices: set[int] = field(default_factory=set)
     op_grad_passes: set[int] = field(default_factory=set)
     param_grad_passes: set[int] = field(default_factory=set)
-
-
-def _backward_tail_is_foldable(state: _BackwardFoldState, tail: list[Any]) -> bool:
-    """Return whether an appended event tail can fold without a full rebuild.
-
-    Foldable means the tail introduces no new grad-fn node, no merge that
-    would retroactively change an already-assigned label or field, no
-    topology change (which would require re-running the global order and
-    module-inference passes), and no event for an already-built pass. Any
-    other tail falls back to the byte-identical full rebuild.
-    """
-
-    max_built = max(state.built_pass_indices, default=0)
-    for event in tail:
-        if isinstance(event, BackwardPassStart):
-            if event.pass_index <= max_built or event.pass_index in state.starts:
-                return False
-        elif isinstance(event, BackwardPassEnd):
-            if event.pass_index <= max_built or event.pass_index in state.ends:
-                return False
-        elif isinstance(event, GradFnDiscovered):
-            existing = state.discovered.get(event.object_id)
-            if existing is None:
-                return False
-            if existing.op_label is None and event.op_label is not None:
-                return False
-            if existing.param_ref is None and event.param_ref is not None:
-                return False
-            if existing.created_in_pass is None and event.created_in_pass is not None:
-                return False
-            if existing.creator_object_id is None and event.creator_object_id is not None:
-                return False
-            if tuple(event.topology) != tuple(state.latest_topology.get(event.object_id, ())):
-                return False
-        elif isinstance(event, (GradFnFired, OpGradObserved, ParamGradObserved)):
-            if event.pass_index <= max_built:
-                return False
-        elif isinstance(event, CheckpointInvocationObserved):
-            # Projection-neutral: token evidence lives in runtime state and
-            # the witness field, never in the folded records.
-            continue
-        else:
-            return False
-    return True
+    # Growth fold inputs (``_grad_fn_growth``): set by the scratch rebuild,
+    # extended by each fold that appends records.
+    grows_in_place: bool = False
+    orders_converged: bool = False
+    type_counter: dict[str, int] = field(default_factory=dict)
+    membership_sweeps: MembershipSweeps = field(default_factory=dict)
+    referenced_ids: set[int] = field(default_factory=set)
+    label_to_id: dict[str, int] = field(default_factory=dict)
+    layer_grad_fn_ids: frozenset[int] = frozenset()
 
 
 def _materialize_backward_projections(trace: Any) -> None:
@@ -1174,8 +879,10 @@ def _materialize_backward_projections(trace: Any) -> None:
     if getattr(trace, "_tl_materializing_backward_projection", False):
         return
     stream = _ensure_backward_event_stream(trace)
-    events = list(getattr(stream, "backward_events", ()))
-    if not events:
+    # The live list, uncopied: a fold reads only its tail, so work stays per call.
+    stream_events = getattr(stream, "backward_events", ())
+    event_count = len(stream_events)
+    if not event_count:
         return
     # Checkpoint witness (memo 2.3): every backward-capturing trace gets the
     # projected summary, so the affirmative zero-token verdict is available
@@ -1185,7 +892,7 @@ def _materialize_backward_projections(trace: Any) -> None:
     if revision is None:
         # Legacy stream (e.g. unpickled from an older version) without a
         # revision counter: fall back to the event count as a change signal.
-        revision = len(events)
+        revision = event_count
     if getattr(trace, "_backward_projection_revision", None) == revision:
         from ..._postprocess._primitive_profile import _materialize_backward_primitive_profile
 
@@ -1195,28 +902,23 @@ def _materialize_backward_projections(trace: Any) -> None:
     try:
         state = getattr(trace, "_backward_projection_fold_state", None)
         watermark = getattr(trace, "_backward_projection_event_count", None)
-        if (
-            isinstance(state, _BackwardFoldState)
-            and isinstance(watermark, int)
-            and 0 < watermark < len(events)
-            and _backward_tail_is_foldable(state, events[watermark:])
-        ):
-            _fold_backward_projection_tail(trace, state, events[watermark:])
-            full_rebuild = False
-        else:
-            _materialize_backward_projections_impl(trace, events, stream=stream)
-            full_rebuild = True
-        _bind_backward_epoch(
-            trace,
-            full_rebuild=full_rebuild,
-            revision=revision,
-            watermark=len(events),
+        fold_state = state if isinstance(state, _BackwardFoldState) else None
+        plan = (
+            None
+            if fold_state is None
+            else _plan_backward_tail_fold(trace, fold_state, stream_events, watermark)
         )
+        fold_rows = None
+        if fold_state is not None and plan is not None:
+            fold_rows = _fold_backward_projection_tail(trace, fold_state, *plan)
+        else:
+            _materialize_backward_projections_impl(trace, list(stream_events), stream=stream)
+        _bind_backward_epoch(trace, fold_rows=fold_rows, revision=revision, watermark=event_count)
         # Publication is the LAST step: the lazy-invalidation stamps only
         # advance once the facade projection AND the core epoch both hold
         # the complete result, so a failure anywhere above cannot suppress
         # the retry (sol review finding 2).
-        trace._backward_projection_event_count = len(events)
+        trace._backward_projection_event_count = event_count
         trace._backward_projection_revision = revision
         from ..._postprocess._primitive_profile import _materialize_backward_primitive_profile
 
@@ -1237,7 +939,9 @@ def _materialize_backward_projections(trace: Any) -> None:
         trace.__dict__.pop("_tl_materializing_backward_projection", None)
 
 
-def _bind_backward_epoch(trace: Any, *, full_rebuild: bool, revision: Any, watermark: Any) -> None:
+def _bind_backward_epoch(
+    trace: Any, *, fold_rows: tuple[list[Any], ...] | None, revision: Any, watermark: Any
+) -> None:
     """Bind the projected backward records to the core's backward epoch (M9).
 
     Runs AFTER a successful projection and BEFORE the trace-side stamp
@@ -1245,9 +949,10 @@ def _bind_backward_epoch(trace: Any, *, full_rebuild: bool, revision: Any, water
     row into a STAGED fresh epoch and only then replaces the epoch list, so
     a failed adoption leaves ``core.backward_epochs`` untouched (the caller
     poisons the lazy-invalidation stamps and the next access rebuilds from
-    scratch). A clean tail fold extends the live epoch; ``adopt_rows``
-    skips already-adopted records, so folds only add the new tail rows and
-    a failed fold is healed by the caller-forced full rebuild. The epoch
+    scratch). A clean tail fold (``fold_rows``: the grad-fn, call and pass
+    records it created) extends the live epoch with exactly those rows, so
+    a fold's cost does not grow with the rows already adopted; a failed fold
+    is healed by the caller-forced full rebuild. The epoch
     stamps ``revision``/``watermark`` (its generation) last, after every
     adoption succeeded. Non-core-backed traces (loaded artifacts, previews)
     keep detached-backed records.
@@ -1259,15 +964,17 @@ def _bind_backward_epoch(trace: Any, *, full_rebuild: bool, revision: Any, water
     from torchlens._trace_core.record_rows import BackwardEpoch, adopt_rows
 
     epochs = core.backward_epochs
-    staged = full_rebuild or not epochs
+    staged = fold_rows is None or not epochs
     epoch = BackwardEpoch() if staged else epochs[-1]
-    grad_fn_logs = trace._grad_fn_logs or {}
-    grad_fns = list(grad_fn_logs.values())
-    calls: list[Any] = []
-    for grad_fn_record in grad_fns:
-        call_map = getattr(grad_fn_record.calls, "_dict", grad_fn_record.calls)
-        calls.extend(call_map.values())
-    passes = list((trace._backward_pass_logs or {}).values())
+    if fold_rows is not None and not staged:
+        grad_fns, calls, passes = fold_rows
+    else:
+        grad_fns = list((trace._grad_fn_logs or {}).values())
+        calls = []
+        for grad_fn_record in grad_fns:
+            call_map = getattr(grad_fn_record.calls, "_dict", grad_fn_record.calls)
+            calls.extend(call_map.values())
+        passes = list((trace._backward_pass_logs or {}).values())
     adopt_rows(epoch.stores, "grad_fn", grad_fns)
     adopt_rows(epoch.stores, "grad_fn_call", calls)
     adopt_rows(epoch.stores, "backward_pass", passes)
@@ -1362,13 +1069,14 @@ def _materialize_backward_projections_impl(
                 for call_ordinal, prior_call in prior_calls.items()
                 # A call with no recorded pass index counts as pre-base so its
                 # ordinal is reserved (never reused), the conservative reading.
-                if (prior_call.backward_pass_index or 0) <= pass_index_base
+                if (prior_call.backward_pass_number or 0) <= pass_index_base
             ]
             if base_ordinals:
                 state.per_object_ordinals[object_id] = max(
                     max(base_ordinals), state.per_object_ordinals.get(object_id, 0)
                 )
 
+    _pair_discovered_with_layers(trace, discovered)
     grad_fn_logs: OrderedDict[int, GradFn] = OrderedDict()
     type_counter: dict[str, int] = {}
     for preserved_record in preserved_grad_fn_logs.values():
@@ -1378,51 +1086,14 @@ def _materialize_backward_projections_impl(
     ordinal_offset = len(preserved_grad_fn_logs)
     object_to_label: dict[int, str] = {}
     for ordinal_index, (object_id, event) in enumerate(discovered.items(), start=ordinal_offset):
-        grad_fn_type = _grad_fn_type_from_class_name(event.class_name)
-        step_index = ordinal_index + 1
-        type_index, step_index, label = _grad_fn_label_parts(
+        grad_fn_record = _grad_fn_record_from_discovery(
             trace,
-            grad_fn_type,
-            event.op_label,
+            object_id,
+            event,
+            latest_topology.get(object_id, event.topology),
+            ordinal_index,
             type_counter,
-            step_index,
         )
-        source_fields = cast(dict[str, Any], dict(event.source))
-        modules: list[str] = []
-        module_address = None
-        module_membership_source = None
-        op_module_address = _op_module_address(trace, event.op_label, object_id)
-        param_module_address = _param_module_address(trace, event.param_ref)
-        if op_module_address is not None:
-            module_address = op_module_address
-            modules = [module_address]
-            module_membership_source = "paired"
-        elif param_module_address is not None:
-            module_address = param_module_address
-            modules = [module_address]
-            module_membership_source = "paired"
-        grad_fn_record = GradFn(
-            grad_fn_object_id=object_id,
-            class_name=event.class_name,
-            class_qualname=event.class_qualname,
-            label=label,
-            type=grad_fn_type,
-            type_index=type_index,
-            ordinal_index=ordinal_index,
-            step_index=step_index,
-            is_custom=event.is_custom,
-            has_op=event.op_label is not None,
-            op_label=event.op_label,
-            order=None,
-            origin_backward_pass=event.created_in_pass,
-            creator_object_id=event.creator_object_id,
-            modules=modules,
-            module_address=module_address,
-            module_membership_source=module_membership_source,
-            next_grad_fn_ids=list(latest_topology.get(object_id, event.topology)),
-            **source_fields,
-        )
-        grad_fn_record.trace = trace
         prior_record = prior_grad_fn_logs.get(object_id)
         if prior_record is not None:
             # A rediscovered node predating the detach keeps its at-or-below-
@@ -1432,14 +1103,17 @@ def _materialize_backward_projections_impl(
             # projection with calls its grad-fn record no longer knows.
             prior_calls = getattr(prior_record.calls, "_dict", prior_record.calls)
             for call_ordinal, prior_call in sorted(prior_calls.items()):
-                if prior_call.backward_pass_index <= pass_index_base:
+                if prior_call.backward_pass_number <= pass_index_base:
                     grad_fn_record.calls[call_ordinal] = prior_call
             if grad_fn_record.origin_backward_pass is None:
                 grad_fn_record.origin_backward_pass = prior_record.origin_backward_pass
         grad_fn_logs[object_id] = grad_fn_record
-        object_to_label[object_id] = label
+        object_to_label[object_id] = grad_fn_record.label
+        state.referenced_ids.update(grad_fn_record.next_grad_fn_ids)
+        if grad_fn_record.creator_object_id is not None:
+            state.referenced_ids.add(grad_fn_record.creator_object_id)
 
-    _assign_grad_fn_orders(grad_fn_logs)
+    state.orders_converged = _assign_grad_fn_orders(grad_fn_logs)
 
     for object_id, grad_fn_record in grad_fn_logs.items():
         if grad_fn_record.creator_object_id is not None:
@@ -1456,8 +1130,12 @@ def _materialize_backward_projections_impl(
     _fold_fired_events(trace, state, fired_events, pass_to_calls)
 
     _sync_grad_fn_graph_relations(trace)
-    _infer_grad_fn_module_membership(trace)
+    state.membership_sweeps = _infer_grad_fn_module_membership(trace)
     _prefer_direct_pairing_source_for_paired_ops(trace)
+    state.grows_in_place = not pass_index_base
+    state.type_counter = type_counter
+    state.label_to_id = {record.label: object_id for object_id, record in grad_fn_logs.items()}
+    state.layer_grad_fn_ids = _layer_grad_fn_ids(trace)
 
     # Gradient records at or below the pass-index base are preserved facts
     # from before the stream detach; only the stream's own window rebuilds.
@@ -1466,7 +1144,7 @@ def _materialize_backward_projections_impl(
             op_records = op._slot("_grad_records") or []
             op._internal_set(
                 "_grad_records",
-                [record for record in op_records if record.backward_pass_index <= pass_index_base],
+                [record for record in op_records if record.backward_pass_number <= pass_index_base],
             )
         else:
             op._clear_gradient_records()
@@ -1477,7 +1155,7 @@ def _materialize_backward_projections_impl(
             param_log._grad_records = [
                 record
                 for record in param_log._grad_records
-                if record.backward_pass_index <= pass_index_base
+                if record.backward_pass_number <= pass_index_base
             ]
         else:
             param_log._clear_gradient_records()
@@ -1501,11 +1179,7 @@ def _materialize_backward_projections_impl(
             parent_layer = trace._layer_logs.get(grad_fn_record.op.layer_label)
             if parent_layer is not None:
                 parent_layer.grad_fn = grad_fn_record
-    for layer in trace._layer_list:
-        grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
-        if grad_fn_object_id in trace._grad_fn_logs:
-            layer.grad_fn = trace._grad_fn_logs[grad_fn_object_id]
-    for layer in trace._layer_logs.values():
+    for layer in (*trace._layer_list, *trace._layer_logs.values()):
         grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
         if grad_fn_object_id in trace._grad_fn_logs:
             layer.grad_fn = trace._grad_fn_logs[grad_fn_object_id]
@@ -1513,14 +1187,20 @@ def _materialize_backward_projections_impl(
     trace._backward_projection_fold_state = state
 
 
-def _fold_backward_projection_tail(trace: Any, state: _BackwardFoldState, tail: list[Any]) -> None:
+def _fold_backward_projection_tail(
+    trace: Any, state: _BackwardFoldState, tail: list[Any], growth: _GradFnGrowth
+) -> tuple[list[Any], ...]:
     """Fold a clean appended event tail into the existing projections.
 
     Only called after ``_backward_tail_is_foldable`` proved the tail contains
-    no new grad-fn nodes, no retroactive merges, no topology changes, and no
-    events for already-built passes, so the global order / graph-relation /
-    module-inference passes provably do not need to re-run.
+    no retroactive merges, no topology changes, and no events for
+    already-built passes, and ``_plan_grad_fn_growth`` planned any new nodes
+    so that no existing record changes: the global order / graph-relation /
+    module-inference passes provably do not need to re-run. Returns the
+    grad-fn, call and pass records the fold created.
     """
+
+    _commit_grad_fn_growth(trace, state, growth)
 
     fired_events: list[GradFnFired] = []
     op_grad_events: list[OpGradObserved] = []
@@ -1556,6 +1236,7 @@ def _fold_backward_projection_tail(trace: Any, state: _BackwardFoldState, tail: 
         trace, state, new_pass_indices, pass_to_calls, trace._backward_pass_logs
     )
     _refresh_backward_pass_counters(trace, state)
+    return _fold_created_records(trace, growth, pass_to_calls, new_pass_indices)
 
 
 def _fold_fired_events(
@@ -1579,7 +1260,7 @@ def _fold_fired_events(
         call = GradFnCall(
             call_index=ordinal,
             ordinal=ordinal,
-            backward_pass_index=event.pass_index,
+            backward_pass_number=event.pass_index,
             grad_fn_label=grad_fn_record.label,
             grad_inputs=event.grad_input_refs,
             grad_outputs=event.grad_output_refs,
@@ -1610,7 +1291,7 @@ def _fold_op_grad_events(
         payload = event.payload_ref if isinstance(event.payload_ref, torch.Tensor) else None
         transformed_payload = event.transformed_payload_ref
         op._record_gradient(
-            backward_pass_index=event.pass_index,
+            backward_pass_number=event.pass_index,
             grad=payload,
             transformed_grad=transformed_payload,
             shape=event.shape,
@@ -1670,7 +1351,7 @@ def _fold_param_grad_events(
         if event.param_address not in param_logs:
             continue
         param_logs[event.param_address]._append_gradient_record(
-            backward_pass_index=event.pass_index,
+            backward_pass_number=event.pass_index,
             grad=event.payload_ref,
             shape=event.shape,
             dtype=event.dtype,
@@ -1909,8 +1590,8 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
         event_timestamp = time.time()
         cleaned_up = live_trace.__dict__.get("_tl_cleaned_up", False)
         default_pass = (0 if cleaned_up else live_trace._num_backward_passes) + 1
-        pass_index = int(getattr(live_trace, "_active_backward_pass_index", default_pass))
-        _set_live_grad_fn_call_backward_pass_index(grad_fn_handle, call_index, pass_index)
+        pass_index = int(getattr(live_trace, "_active_backward_pass_number", default_pass))
+        _set_live_grad_fn_call_backward_pass_number(grad_fn_handle, call_index, pass_index)
         if is_accumulate_grad:
             fire_records = _pop_pending_accumulate_grad_records(
                 live_trace, grad_fn_object_id, call_index
@@ -2047,7 +1728,7 @@ def _make_aten_grad_fn_prehook(
         ).get(grad_fn_object_id)
         if grad_fn_record is None:
             return None
-        pass_index = int(getattr(live_trace, "_active_backward_pass_index", 0) or 0)
+        pass_index = int(getattr(live_trace, "_active_backward_pass_number", 0) or 0)
         call_index = len(grad_fn_record.calls) + 1
         marker_tokens.append(
             begin_grad_fn_marker(grad_fn_object_id, call_index, pass_index, id(live_trace))
@@ -2154,7 +1835,7 @@ def _set_live_grad_fn_call_fire_ref(
         call.fire_record = fire_ref
 
 
-def _set_live_grad_fn_call_backward_pass_index(
+def _set_live_grad_fn_call_backward_pass_number(
     grad_fn_handle: Any,
     call_index: int,
     pass_index: int,
@@ -2179,7 +1860,7 @@ def _set_live_grad_fn_call_backward_pass_index(
     calls = getattr(grad_fn_handle, "calls", None)
     call = getattr(calls, "_dict", {}).get(call_index)
     if call is not None:
-        call.backward_pass_index = pass_index
+        call.backward_pass_number = pass_index
 
 
 def _pending_accumulate_grad_record_key(
@@ -2343,7 +2024,7 @@ def _peak_memory_baseline(device: torch.device, measure_host: bool) -> tuple[str
     """Return the pre-pass memory baseline WITHOUT resetting peak tracking.
 
     R36-2: this used to call ``torch.cuda.reset_peak_memory_stats`` on every
-    ``log_backward``, clobbering the caller's process-wide high-water counter.
+    ``backward``, clobbering the caller's process-wide high-water counter.
     The baseline is now the pre-existing ``max_memory_allocated`` snapshot:
     a backward that pushes a new device peak reports the exact excess over
     the prior high-water mark, and one that stays under it honestly reads
@@ -2368,59 +2049,6 @@ def _peak_memory_baseline(device: torch.device, measure_host: bool) -> tuple[str
     if measure_host and device.type not in {"cuda", "mps"}:
         reset_peak_rss()
     return _memory_snapshot(device)
-
-
-def _layer_grad_fn_pairing_rank(layer: Any) -> int:
-    """Return the preference rank for a forward op grad-fn pairing candidate.
-
-    Parameters
-    ----------
-    layer:
-        Forward Op/Layer candidate sharing a grad-fn object id.
-
-    Returns
-    -------
-    int
-        Lower rank is preferred; compute ops outrank boundary sentinels.
-    """
-
-    is_compute = getattr(layer, "is_compute_op", False) or getattr(
-        layer,
-        "is_compute_layer",
-        False,
-    )
-    return 0 if is_compute else 1
-
-
-def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
-    """Build a mapping from forward grad_fn_handle identity to final layer label.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose layers were captured during the forward pass.
-
-    Returns
-    -------
-    dict[int, str]
-        Mapping from ``id(grad_fn_handle)`` to final layer label. This is the
-        ``GradFn.op_label`` contract: always the layer label, never a
-        pass-qualified op label, also on multi-pass layers. Consumers that need
-        the exact pass resolve it with ``_paired_pass_op``.
-    """
-    mapping: dict[int, str] = {}
-    ranks: dict[int, int] = {}
-    for layer in trace._layer_list:
-        grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
-        if grad_fn_object_id is None:
-            continue
-        candidate_rank = _layer_grad_fn_pairing_rank(layer)
-        current_rank = ranks.get(grad_fn_object_id)
-        if current_rank is not None and current_rank <= candidate_rank:
-            continue
-        mapping[grad_fn_object_id] = layer.layer_label
-        ranks[grad_fn_object_id] = candidate_rank
-    return mapping
 
 
 def _walk_and_hook_backward_graph(
@@ -2450,7 +2078,7 @@ def _walk_and_hook_backward_graph(
         Hook handles to remove after backward finishes.
     """
     if loss.grad_fn is None:
-        raise ValueError("log_backward requires a loss tensor with a grad_fn_handle.")
+        raise ValueError("backward requires a loss tensor with a grad_fn_handle.")
 
     layer_lookup = _layer_by_grad_fn_id(trace)
     root_grad_fns = [loss.grad_fn, *(root.grad_fn for root in extra_roots)]
@@ -2467,7 +2095,7 @@ def _walk_and_hook_backward_graph(
     # grad_fns (e.g. the output clone wrapper), creating phantom cycles.
     strong_refs = trace.__dict__.setdefault("_backward_gradfn_refs", [])
     strong_refs.extend(root_grad_fns)
-    pass_index = int(getattr(trace, "_active_backward_pass_index", trace._num_backward_passes + 1))
+    pass_index = int(getattr(trace, "_active_backward_pass_number", trace._num_backward_passes + 1))
     roots_by_pass = trace.__dict__.setdefault("_backward_roots_by_pass", {})
     roots_by_pass.setdefault(pass_index, [])
     for root_grad_fn_id in map(id, root_grad_fns):
@@ -2614,7 +2242,7 @@ def _walk_and_hook_backward_graph(
             # every reason that is not a proven framework-contract exclusion.
             _ensure_backward_event_stream(trace).append_backward(
                 BackwardCoverageGap(
-                    pass_index=int(getattr(trace, "_active_backward_pass_index", 0) or 0),
+                    pass_index=int(getattr(trace, "_active_backward_pass_number", 0) or 0),
                     object_id=grad_fn_object_id,
                     class_qualname=grad_fn_record.class_qualname,
                     reason="registration_error",
@@ -3024,7 +2652,7 @@ def _run_backward_with_capture(
     )
     trace._active_save_grads_policy = active_save_grads_policy
     pass_index = int(trace._num_backward_passes) + 1
-    trace._active_backward_pass_index = pass_index
+    trace._active_backward_pass_number = pass_index
     trace._implicit_backward_pass_open = False
     start_event = BackwardPassStart(
         pass_index=pass_index,
@@ -3068,7 +2696,7 @@ def _run_backward_with_capture(
         # prefix of hooks, so unwind those handles and disarm fail-closed.
         publication.restore()
         trace.__dict__.pop("_tl_active_backward_bracket", None)
-        trace.__dict__.pop("_active_backward_pass_index", None)
+        trace.__dict__.pop("_active_backward_pass_number", None)
         if previous_had_save_grads_policy:
             trace.__dict__["_active_save_grads_policy"] = previous_save_grads_policy
         else:
@@ -3117,7 +2745,7 @@ def _run_backward_with_capture(
         # user/framework code or non-trivial bookkeeping and may raise.
         publication.restore()
         trace.__dict__.pop("_tl_active_backward_bracket", None)
-        trace.__dict__.pop("_active_backward_pass_index", None)
+        trace.__dict__.pop("_active_backward_pass_number", None)
         if previous_had_save_grads_policy:
             trace.__dict__["_active_save_grads_policy"] = previous_save_grads_policy
         else:
@@ -3199,7 +2827,7 @@ def _run_backward_with_capture(
         # justify discarding a failure here, so fold it into cleanup_error
         # like the sibling steps. suppress(BaseException) silently discarded
         # a KeyboardInterrupt delivered during handle removal after a
-        # successful backward and log_backward returned normally (grind-r6
+        # successful backward and backward returned normally (grind-r6
         # b8 R63, fable probe). Already-removed / framework-debris handles
         # still never mask a real first failure: the fold keeps the FIRST.
         for handle in handles:
@@ -3305,7 +2933,7 @@ def _capture_autograd_engine_call(
 
     # A backward the user directed at one trace (open managed bracket) must
     # not be re-captured by that trace's FORK RELATIVES just because they
-    # share the root tensors: a fork's ``log_backward`` would otherwise
+    # share the root tensors: a fork's ``backward`` would otherwise
     # silently append a pass to its parent's projection (and vice versa).
     # Unrelated root-owning traces keep the historical multi-trace capture.
     directing_trace, _ = _state.active_capture()
@@ -3348,17 +2976,17 @@ def _capture_autograd_engine_call(
     # P1 supports multi-trace bracket opening by nesting setup and running the
     # engine once through the innermost capture. Later projection phases will
     # refine per-trace outer_context metadata.
-    def nested_call(index: int) -> Any:
-        """Run nested capture setup for all matched traces."""
-
-        if index == len(matched_traces):
-            return engine_callable()
+    # Built innermost-first as a chain of partials (no self-recursive closure:
+    # that cycle would hold every matched trace until the cyclic collector ran).
+    run: Callable[[], Any] = engine_callable
+    for index in reversed(range(len(matched_traces))):
         matched_trace = matched_traces[index]
         root_forward_op_count = _root_forward_op_count(matched_trace, roots)
-        return _run_backward_with_capture(
+        run = functools.partial(
+            _run_backward_with_capture,
             matched_trace,
             roots_of[index][0],
-            lambda: nested_call(index + 1),
+            run,
             extra_roots=roots_of[index][1:],
             trigger=trigger,
             outer_context=None if index == 0 else f"{trigger}:multi_trace",
@@ -3369,8 +2997,7 @@ def _capture_autograd_engine_call(
                 else forward_op_count_at_trigger
             ),
         )
-
-    return nested_call(0)
+    return run()
 
 
 # ---------------------------------------------------------------------------
@@ -3574,7 +3201,7 @@ def _token_bearing_unpack_hook(
                 point = {
                     "graph_task_id": _current_backward_graph_task_id(),
                     "fire_bracket": bracket,
-                    "pass_index": getattr(live_trace, "_active_backward_pass_index", None),
+                    "pass_index": getattr(live_trace, "_active_backward_pass_number", None),
                 }
                 with state["lock"]:
                     record["unpack_evidence"].append(point)
@@ -3865,8 +3492,6 @@ def _warn_buried_autograd_sites(buried_sites: list[str]) -> None:
 
     if not buried_sites:
         return
-    from ..._errors import TorchLensWarning
-
     warnings.warn(
         "uninstall of TorchLens autograd wrappers left "
         f"{len(buried_sites)} slot(s) holding a third-party patch layered over "
@@ -4010,39 +3635,37 @@ def install_autograd_wrappers() -> None:
     _AUTOGRAD_WRAPPERS_INSTALLED = True
 
 
-def uninstall_autograd_wrappers() -> None:
+def uninstall_autograd_wrappers(buried_sites: list[str] | None = None) -> None:
     """Restore original global autograd entry points when installed.
 
-    Returns
-    -------
-    None
-        PyTorch autograd functions are restored in place.
+    ``buried_sites`` collects the slots left holding a foreign patch so the
+    caller reports them once its whole teardown is complete (a raised warning
+    must not abort it); without a collector this function warns itself.
     """
 
     global _AUTOGRAD_WRAPPERS_INSTALLED
     from ._function_boundary import uninstall_function_apply_wrapper
 
-    buried_sites: list[str] = []
-    _uninstall_saved_tensors_hooks_scope(buried_sites)
+    collected = buried_sites if buried_sites is not None else []
+    _uninstall_saved_tensors_hooks_scope(collected)
     uninstall_function_apply_wrapper()
-    if not _AUTOGRAD_WRAPPERS_INSTALLED:
-        _warn_buried_autograd_sites(buried_sites)
-        return
-    for attr_name, installed, original in (
-        ("backward", _INSTALLED_AUTOGRAD_BACKWARD, _ORIGINAL_AUTOGRAD_BACKWARD),
-        ("grad", _INSTALLED_AUTOGRAD_GRAD, _ORIGINAL_AUTOGRAD_GRAD),
-    ):
-        buried = _restore_slot_identity_checked(
-            torch.autograd,
-            attr_name,
-            installed,
-            original,
-            f"torch.autograd.{attr_name}",
-        )
-        if buried is not None:
-            buried_sites.append(buried)
-    _AUTOGRAD_WRAPPERS_INSTALLED = False
-    _warn_buried_autograd_sites(buried_sites)
+    if _AUTOGRAD_WRAPPERS_INSTALLED:
+        for attr_name, installed, original in (
+            ("backward", _INSTALLED_AUTOGRAD_BACKWARD, _ORIGINAL_AUTOGRAD_BACKWARD),
+            ("grad", _INSTALLED_AUTOGRAD_GRAD, _ORIGINAL_AUTOGRAD_GRAD),
+        ):
+            buried = _restore_slot_identity_checked(
+                torch.autograd,
+                attr_name,
+                installed,
+                original,
+                f"torch.autograd.{attr_name}",
+            )
+            if buried is not None:
+                collected.append(buried)
+        _AUTOGRAD_WRAPPERS_INSTALLED = False
+    if buried_sites is None:
+        _warn_buried_autograd_sites(collected)
 
 
 def _finalize_grad_streaming(trace: Any) -> None:
@@ -4073,7 +3696,7 @@ def _finalize_grad_streaming(trace: Any) -> None:
         trace.__dict__.pop(field_name, None)
 
 
-def log_backward(
+def trace_backward(
     self: Any,
     loss: torch.Tensor,
     *,

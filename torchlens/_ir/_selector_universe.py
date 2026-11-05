@@ -22,8 +22,27 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .._data_classes._trace_missing_attrs import is_live_trace
+from .._pass_tokens import pass_token_labels
 from ..backends._backend_names import TORCH_BACKEND_NAME
+
+#: Where ``Trace`` is defined; this module identifies it by class, not by import.
+#: Importing ``_data_classes._trace_missing_attrs.is_live_trace`` (the canonical
+#: reader) at module level runs that package's ``__init__``, whose ``op`` module
+#: imports the ``intervention`` package, whose ``spec`` imports back into
+#: ``selector_eval``; with this module on the ``selector_eval`` import path a cold
+#: ``import torchlens._ir.selector_eval`` (or ``_selection.resolver``) then hit a
+#: partially initialised ``selector_eval``. Same identity check as ``_trace_state``.
+_TRACE_MODULE = __name__.rsplit(".", 2)[0] + "._data_classes.trace"
+
+
+def _is_live_trace(candidate: Any) -> bool:
+    """Return whether ``candidate`` is a ``Trace`` that still holds its stores."""
+
+    for cls in type(candidate).__mro__:
+        if cls.__name__ == "Trace" and cls.__module__ == _TRACE_MODULE:
+            return not candidate.__dict__.get("_tl_cleaned_up", False)
+    return False
+
 
 #: String-label attribute universes per lifecycle, in match order.
 _STRING_LABEL_ATTRS: dict[str, tuple[str, ...]] = {
@@ -39,7 +58,7 @@ _SUBSTRING_LABEL_ATTRS: dict[str, tuple[str, ...]] = {
     "site": ("layer_label",),
 }
 
-_FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::\d+)?$|:\d+$)")
+_FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::(?:\d+|last|all))?$|:(?:\d+|last|all)$)")
 
 
 def sanitize_transform_kind(kind: object) -> str:
@@ -184,6 +203,11 @@ def _string_labels(
         if text not in seen:
             seen.add(text)
             labels.append(text)
+    if lifecycle == "site" and attrs is _STRING_LABEL_ATTRS:
+        # Pass tokens are post-hoc spellings: the pass count is known only
+        # once the trace has settled, so the live and capture lanes never
+        # answer to them.
+        labels.extend(token for token in pass_token_labels(subject) if token not in seen)
     return tuple(labels)
 
 
@@ -230,7 +254,7 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
         candidates.append(str(address))
     source_trace: Any = getattr(ctx, "source_trace", None)
     if (
-        source_trace._options_module_identity_mode if is_live_trace(source_trace) else None
+        source_trace._options_module_identity_mode if _is_live_trace(source_trace) else None
     ) == "function_root":
         candidates.append("self")
         candidates.append("self:1")
@@ -333,7 +357,7 @@ def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
         # owning session as ``source_trace`` (they have no ``trace`` member).
         source_trace: Any = getattr(subject, "source_trace", None)
         if (
-            source_trace._provenance_backend if is_live_trace(source_trace) else TORCH_BACKEND_NAME
+            source_trace._provenance_backend if _is_live_trace(source_trace) else TORCH_BACKEND_NAME
         ) != TORCH_BACKEND_NAME:
             module_candidate = getattr(subject, "module", None)
             if module_candidate is not None:

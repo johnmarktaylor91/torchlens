@@ -12,9 +12,14 @@ Python). The Brain-Score seam is a separate extra:
 Keep the two in separate environments: brainscore-vision 2.3 pins
 scikit-learn<1.6 while rsatoolbox 0.3 needs scikit-learn>=1.6, so
 `torchlens[neuro,brainscore]` resolves but `import rsatoolbox` fails
-(measured 2026-09-02; an upstream pin, not a torchlens choice).
-`__all__`/`dir()` advertise only the names whose dependency is present;
-accessing an unadvertised name teaches the exact install command.
+(measured 2026-09-02; an upstream pin, not a torchlens choice). In that
+environment `neuro.rdms` and `neuro.datasets` are not advertised, and touching
+them raises `MissingDependencyError` with code `neuro_dependency_conflict`,
+naming both installed versions, the pinning package and the fix (separate
+environments); the diagnosis reads installed metadata and never imports
+rsatoolbox. `__all__`/`dir()` advertise only the names whose dependency is
+present and importable; accessing an unadvertised name teaches the exact
+install command or the conflict.
 
 ## The map (mirrors `help(torchlens.neuro)`)
 

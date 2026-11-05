@@ -55,6 +55,17 @@ class RoleDeclaration:
     evidence:
         Member of :data:`ROLE_EVIDENCE`. ``"declared"`` records a caller
         assertion; ``"op_contract"`` is the v1.5 trace-derived producer.
+
+    Examples
+    --------
+    >>> roles = RoleDeclaration(axes=("batch", "token", "feature"))
+    >>> roles == tl.transforms.BTD, roles.evidence
+    (True, 'declared')
+    >>> try:
+    ...     RoleDeclaration(axes=("batch", "token"), evidence="inferred")
+    ... except tl.errors.TransformContractError as error:
+    ...     print(error.fields["code"])
+    transform_role_evidence_invalid
     """
 
     axes: tuple[str, ...]
@@ -114,6 +125,16 @@ def axis_for_role(roles: RoleDeclaration | None, rank: int, role: str) -> int:
     TransformContractError
         ``transform_axis_roles_unavailable`` when no declaration covers the
         role at this rank; the teaching message names both remedies.
+
+    Examples
+    --------
+    >>> axis_for_role(tl.transforms.NCHW, 4, "channel")
+    1
+    >>> try:
+    ...     axis_for_role(None, 3, "token")
+    ... except tl.errors.TransformContractError as error:
+    ...     print(error.fields["code"])
+    transform_axis_roles_unavailable
     """
 
     if roles is not None and len(roles.axes) == rank and role in roles.axes:
@@ -152,6 +173,14 @@ class SpecialTokenFacts:
     source:
         Free-text evidence disclosure recorded alongside the assertion
         (e.g. ``"declared"`` or ``"tokenizer:bert-base-uncased"``).
+
+    Examples
+    --------
+    >>> facts = SpecialTokenFacts(has_cls=True, source="tokenizer:demo")
+    >>> ctx = tl.transforms.TransformContext(roles=tl.transforms.BTD, special_tokens=facts)
+    >>> tokens = torch.randn(2, 5, 8)
+    >>> tl.transforms.cls_token(assume_no_padding=True).apply(tokens, ctx).shape
+    torch.Size([2, 8])
     """
 
     has_cls: bool
@@ -188,6 +217,14 @@ class TransformContext:
         preferred over ``site_label`` as the ``share="by_site"`` seed
         component when present (the output-key fallback is DISCLOSED as the
         weaker source).
+
+    Examples
+    --------
+    >>> ctx = TransformContext(roles=tl.transforms.NCHW, site_label="conv2d_1_1")
+    >>> ctx.site_label, ctx.mask is None
+    ('conv2d_1_1', True)
+    >>> tl.transforms.pool_spatial().apply(x, ctx).shape
+    torch.Size([1, 3])
     """
 
     roles: RoleDeclaration | None = None
@@ -205,6 +242,17 @@ class ContextTransform:
     :class:`TransformContext` alongside each tensor. Raw callables stay
     unary; capability dispatch is one isinstance check on this class, never
     ``inspect.signature`` (15 measured counterexamples, memo decision 15).
+
+    Examples
+    --------
+    >>> class ZeroWhenContext(ContextTransform):
+    ...     def __call__(self, tensor, ctx):
+    ...         return tensor if ctx is None else tensor * 0
+    >>> pipe = tl.transforms.chain(ZeroWhenContext())
+    >>> pipe.steps[0].context_capable
+    True
+    >>> pipe.apply(torch.ones(1, 2), tl.transforms.TransformContext()).tolist()
+    [[0.0, 0.0]]
     """
 
     #: Declaration consumed by :func:`wants_context`; never sniffed.
@@ -287,6 +335,15 @@ def with_context(
     ------
     TransformContractError
         ``transform_coercion_invalid`` when ``fn`` is not callable.
+
+    Examples
+    --------
+    >>> scaled = with_context(lambda tensor, ctx: tensor * (1 if ctx is None else 10))
+    >>> isinstance(scaled, tl.transforms.ContextTransform)
+    True
+    >>> pipe = tl.transforms.chain(scaled)
+    >>> pipe.apply(torch.ones(1, 2), tl.transforms.TransformContext()).tolist()
+    [[10.0, 10.0]]
     """
 
     if not callable(fn):

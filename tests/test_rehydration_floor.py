@@ -8,7 +8,6 @@ legacy field-alias ladders.
 from __future__ import annotations
 
 import json
-import pickle
 from pathlib import Path
 
 import pytest
@@ -22,32 +21,26 @@ from torchlens._io import (
     TLSPEC_VERSION,
     ArtifactError,
 )
-from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens.errors import ArtifactTooOldError
 
-FLOOR_MATCH = "saved by torchlens 2.x"
+FLOOR_MATCH = "saved by torchlens 2.37 and earlier"
 
 
 def _stamp_between_floor(path: Path, version: int) -> None:
-    """Re-stamp a saved bundle as a COHERENT ``tlspec_version=version`` artifact.
+    """Re-stamp the manifest of a current artifact for a floor refusal.
 
-    Every torchlens writer stamps ``manifest.json`` AND the pickled root state
-    from the same ``TLSPEC_VERSION`` (a stampless state refuses below floor),
-    and the one lawful manifest-only bump (``tl.migrate``) leaves a witness.
-    A manifest-only edit therefore models NO real writer and trips the
-    manifest/metadata integrity anchor (``bundle_manifest_metadata_mismatch``)
-    before any age advisory; both stamps move together here.
+    Parameters
+    ----------
+    path:
+        Saved 3.0 artifact directory.
+    version:
+        Below-floor record-contract stamp to test.
     """
 
     manifest_path = path / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["tlspec_version"] = version
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    metadata_path = path / "metadata.pkl"
-    state = pickle.loads(metadata_path.read_bytes())  # trusted bytes this test wrote
-    state["tlspec_version"] = version
-    with metadata_path.open("wb") as handle:
-        dump_canonical_metadata(state, handle)
 
 
 def _build_trace() -> tl.Trace:
@@ -58,13 +51,12 @@ def _build_trace() -> tl.Trace:
     return tl.trace(model, torch.randn(2, 4), save="all")
 
 
-@pytest.mark.smoke
 def test_floor_error_is_typed_and_public() -> None:
     """The floor error is a ``ArtifactError`` reachable via ``tl.errors``."""
 
     assert issubclass(ArtifactTooOldError, ArtifactError)
     assert tl.errors.ArtifactTooOldError is ArtifactTooOldError
-    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION == 11
+    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION == 12
 
 
 def test_current_artifacts_load_clean(tmp_path: Path) -> None:
@@ -136,18 +128,14 @@ def test_current_version_object_state_still_restores() -> None:
     assert restored.layer_label == trace.ops[0].layer_label
 
 
-@pytest.mark.smoke
-def test_manifest_missing_kind_still_loads_as_trace(tmp_path: Path) -> None:
-    """A manifest with ``kind`` deleted is NOT the legacy pre-tlspec format.
+def test_manifest_missing_kind_refuses_as_schema_invalid_not_as_2x(tmp_path: Path) -> None:
+    """A manifest with ``kind`` deleted is a schema error, never a file saved by 2.x.
 
-    ``tlspec_version`` is itself a tlspec-schema-only marker (the genuine
-    v2.16 ModelLog format never carried it); a manifest that has it but lost
-    its ``kind`` key is an older-but-still-modern unified manifest, and
-    ``kind`` defaults to ``"trace"`` (the only kind that existed before the
-    discriminator). Fixes a fast-tier fuzz finding (2026-10,
-    ``test_tlspec_parse_fuzz.py::test_every_toplevel_key_deletion_is_adjudicated``):
-    this exact shape used to misclassify as ``v2.16_modellog_portable`` and
-    raise a false "pre-tlspec ModelLog format" ``ArtifactTooOldError``.
+    ``kind`` is a required key of the 3.0 manifest, so losing it refuses with the typed
+    ``manifest_schema_invalid`` error that names the missing key. It must not misclassify
+    as a 2.x artifact (``ArtifactTooOldError``): the same fast-tier fuzz finding that once
+    made this shape raise a false "pre-tlspec ModelLog format" refusal
+    (``test_tlspec_parse_fuzz.py::test_every_toplevel_key_deletion_is_adjudicated``).
     """
 
     trace = _build_trace()
@@ -159,13 +147,14 @@ def test_manifest_missing_kind_still_loads_as_trace(tmp_path: Path) -> None:
     del manifest["kind"]
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    loaded = tl.load(path)
-    assert isinstance(loaded, tl.Trace)
-    loaded.cleanup()
+    with pytest.raises(ArtifactError) as excinfo:
+        tl.load(path)
+    assert not isinstance(excinfo.value, ArtifactTooOldError)
+    assert excinfo.value.fields["code"] == "manifest_schema_invalid"
+    assert "missing required field 'kind'" in excinfo.value.fields["errors"]
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_manifest_missing_kind_and_below_floor_still_refuses_typed(tmp_path: Path) -> None:
     """Losing ``kind`` must not dodge the real numeric floor check either."""
 
@@ -186,7 +175,6 @@ def test_manifest_missing_kind_and_below_floor_still_refuses_typed(tmp_path: Pat
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_pre_floor_bundle_manifest_refuses_typed(tmp_path: Path) -> None:
     """A bundle whose manifest claims a sub-floor tlspec_version refuses."""
 
@@ -228,7 +216,6 @@ def test_below_floor_refusal_carries_structured_fields(tmp_path: Path) -> None:
     assert fields["path"] == str(path)
 
 
-@pytest.mark.smoke
 def test_legacy_intervention_specs_refuse_as_2x_at_the_format_stamp() -> None:
     """A 2.16 intervention spec (``format_version`` 1) refuses with the one 2.x error.
 

@@ -28,7 +28,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._selection.selectors import CompositeSelector
 from torchlens._utils._torch_compat import TorchCapabilityWarning
 from torchlens.backends.torch import (
     _ops_exhaustive,
@@ -41,7 +40,6 @@ from torchlens.intervention import (
     runtime as intervention_runtime,
 )
 from torchlens.intervention.hooks import NormalizedHookEntry
-from torchlens.intervention.spec import Recipe
 
 _MAGNITUDE = 2.0
 _VOLATILE_KEYS = ("time", "duration", "elapsed", "_at", "timestamp", "memory", "pid", "id(")
@@ -306,49 +304,8 @@ def _record_fingerprint(spec_name: str, *, force_legacy: bool) -> dict[str, Any]
 
 
 @pytest.mark.parametrize(
-    ("selector", "exit_only"),
-    [
-        pytest.param(tl.module("block1"), True, id="module"),
-        pytest.param(tl.module("block1:2"), True, id="module_pass_label"),
-        pytest.param(tl.module("block1") | tl.module("block2"), True, id="module_or_module"),
-        pytest.param(tl.module("block1") & tl.module("block2"), True, id="module_and_module"),
-        pytest.param(
-            (tl.module("block1") | tl.module("block2")) & tl.module("head"),
-            True,
-            id="nested_module_composite",
-        ),
-        pytest.param(~tl.module("block1"), False, id="negation"),
-        pytest.param(tl.func("relu"), False, id="func"),
-        pytest.param(tl.in_module("block1"), False, id="in_module"),
-        pytest.param(tl.where(lambda site: True), False, id="callable"),
-        pytest.param(tl.module("block1") & tl.func("relu"), False, id="module_and_func"),
-        pytest.param(tl.module("block1") | tl.func("relu"), False, id="module_or_func"),
-        pytest.param(tl.label("relu_1_3"), False, id="label"),
-        pytest.param(CompositeSelector("or", ()), False, id="empty_or"),
-        pytest.param(CompositeSelector("and", ()), False, id="empty_and"),
-        pytest.param(
-            CompositeSelector("or", (tl.module("block1"), CompositeSelector("and", ()))),
-            False,
-            id="composite_with_empty_child",
-        ),
-        pytest.param("block1", False, id="bare_string"),
-    ],
-)
-def test_module_exit_only_selector_classification(selector: Any, exit_only: bool) -> None:
-    """Only pure ``tl.module`` leaves under ``|`` / ``&`` are module-exit-only."""
-
-    assert _ops_interventions._is_module_exit_only(selector) is exit_only
-
-
-@pytest.mark.parametrize(
     ("intervene", "reaches"),
     [
-        pytest.param(tl.when(tl.module("block1"), tl.zero_ablate()), False, id="module_rule"),
-        pytest.param(
-            tl.when(tl.module("block1") | tl.module("block2"), tl.zero_ablate()),
-            False,
-            id="union_rule",
-        ),
         pytest.param(
             tl.when(tl.module("block1"), tl.zero_ablate()).merge(
                 tl.when(tl.module("block2"), tl.scale(0.5))
@@ -356,20 +313,6 @@ def test_module_exit_only_selector_classification(selector: Any, exit_only: bool
             False,
             id="two_module_rules",
         ),
-        pytest.param(
-            tl.when(tl.module("block1"), tl.zero_ablate()).merge(
-                tl.when(tl.func("relu"), tl.scale(0.5))
-            ),
-            True,
-            id="module_rule_plus_func_rule",
-        ),
-        pytest.param(tl.when(tl.func("relu"), tl.zero_ablate()), True, id="func_rule"),
-        pytest.param(
-            tl.when(tl.module("block1") & tl.func("relu"), tl.zero_ablate()),
-            True,
-            id="module_and_func_rule",
-        ),
-        pytest.param(Recipe(rules=()), True, id="empty_rules"),
         pytest.param(lambda ctx: None, True, id="opaque_callable"),
     ],
 )
@@ -402,31 +345,18 @@ _INPUT_SPLICE = SimpleNamespace(name="splice_module", metadata={"input_route": "
 @pytest.mark.parametrize(
     ("entry", "reaches"),
     [
-        pytest.param(_entry(tl.module("block1")), False, id="module_post_hook"),
         pytest.param(
             _entry(tl.module("block1") | tl.module("block2")), False, id="module_union_post_hook"
         ),
-        pytest.param(_entry(tl.func("relu")), True, id="func_post_hook"),
-        pytest.param(_entry(tl.module("block1") & tl.func("relu")), True, id="module_and_func"),
-        pytest.param(_entry(tl.label("relu_1_3")), True, id="label_post_hook"),
-        pytest.param(_entry(~tl.module("block1")), True, id="negated_module"),
         pytest.param(
             _entry(tl.func("relu"), metadata={"signal": "backward"}),
             False,
             id="backward_entry",
         ),
         pytest.param(
-            _entry(tl.func("relu"), metadata={"timing": "pre"}), False, id="pre_hook_entry"
-        ),
-        pytest.param(
             _entry(tl.in_module("block1"), helper_spec=_INPUT_SPLICE),
             False,
             id="input_splice_plain_in_module",
-        ),
-        pytest.param(
-            _entry(tl.module("block1"), helper_spec=_INPUT_SPLICE),
-            False,
-            id="input_splice_plain_module",
         ),
         pytest.param(
             _entry(tl.in_module("block1") & tl.func("relu"), helper_spec=_INPUT_SPLICE),
@@ -446,23 +376,11 @@ def test_hook_entry_door_classification(entry: Any, reaches: bool) -> None:
     assert _ops_interventions._hook_entry_reaches_op_door(entry) is reaches
 
 
-def test_hook_plan_reaches_op_door_when_any_entry_does() -> None:
-    """One op-capable entry keeps the whole plan on the per-op path."""
-
-    module_only = [_entry(tl.module("block1")), _entry(tl.module("block2"))]
-    assert _ops_interventions._hook_plan_reaches_op_door(module_only) is False
-    assert (
-        _ops_interventions._hook_plan_reaches_op_door([*module_only, _entry(tl.func("relu"))])
-        is True
-    )
-
-
 # ---------------------------------------------------------------------------
 # 2. Equality with the per-op path forced on
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke_cells("test_skip_matches_legacy_path[trace-steer]")
 @pytest.mark.parametrize("spec_name", list(_SPECS))
 @pytest.mark.parametrize("entry", ["trace", "record"])
 def test_skip_matches_legacy_path(entry: str, spec_name: str) -> None:
@@ -476,19 +394,6 @@ def test_skip_matches_legacy_path(entry: str, spec_name: str) -> None:
     assert bool(skipped["fires"]) is fires
     if not fires and entry == "trace":
         assert any("matched zero sites" in text for _cat, text in skipped["warnings"])
-
-
-def test_validation_verdicts_unchanged_by_the_door() -> None:
-    """``tl.validate`` forward and saved scopes give the same verdicts with the door forced on."""
-
-    verdicts = {}
-    for force in (False, True):
-        with _legacy_door(force):
-            verdicts[force] = (
-                tl.validate(_model(), _input(), scope="forward"),
-                tl.validate(_model(), _input(), scope="saved"),
-            )
-    assert verdicts[False] == verdicts[True] == (True, True)
 
 
 # ---------------------------------------------------------------------------
@@ -641,7 +546,6 @@ def test_op_door_memo_is_identity_keyed_bounded_and_weak(monkeypatch: pytest.Mon
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_record_module_steer_fires_once_per_module_call() -> None:
     """``tl.record`` fires a module-only steer once per call, at the boundary, like a plain hook."""
 

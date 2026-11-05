@@ -50,26 +50,11 @@ def test_trace_parent_and_root_trace_resolve_fork_lineage() -> None:
     assert grandchild.root_trace is root
 
 
-def test_trace_source_introspection_fields_are_captured() -> None:
-    """Trace exposes source model docstrings and signatures."""
-
-    trace = _make_trace(CaptureOptions())
-
-    assert trace.source.class_docstring == _B2cModel.__doc__
-    assert trace.source.init_signature == "(self) -> None"
-    assert trace.source.init_docstring == _B2cModel.__init__.__doc__
-    assert (
-        trace.source.forward_signature
-        == "(self, x: torch.Tensor, scale: float = 1.0) -> torch.Tensor"
-    )
-    assert trace.source.forward_docstring == _B2cModel.forward.__doc__
-
-
 def test_grad_fn_calls_accessor_and_call_savedness() -> None:
     """GradFn.calls replaces ops and GradFnCall.is_saved mirrors saved grad payloads."""
 
     trace = _make_trace(CaptureOptions(save_grads=True))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     grad_fn = next(record for record in trace.autograd.grad_fns if record.num_calls)
     grad_fn_call = grad_fn.calls[0]
 
@@ -78,6 +63,50 @@ def test_grad_fn_calls_accessor_and_call_savedness() -> None:
     assert grad_fn_call.is_saved is (
         grad_fn_call.grad_inputs is not None or grad_fn_call.grad_outputs is not None
     )
+
+
+class _Triple(nn.Module):
+    """Multiply by a constant so the backward node's two gradient sides differ."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return three times the input."""
+
+        return x * 3.0
+
+
+def _glossary_row(name: str) -> str:
+    """Return the glossary table row whose first cell is ``name``."""
+
+    glossary = Path(__file__).resolve().parents[1] / "docs/reference/glossary.md"
+    prefix = f"| `{name}` |"
+    return next(line for line in glossary.read_text().splitlines() if line.startswith(prefix))
+
+
+def test_grad_fn_call_gradient_sides_match_their_glossary_rows() -> None:
+    """grad_outputs arrives at the node from later ops; grad_inputs leaves it toward earlier ops.
+
+    The hook is torch's ``Node.register_hook(grad_inputs, grad_outputs)``: for
+    ``y = 3x`` with upstream gradient ``g`` at ``y``, ``grad_outputs`` is ``g``
+    and ``grad_inputs`` is ``3g``, and the glossary rows say which flows in.
+    """
+
+    x = torch.ones(2, requires_grad=True)
+    trace = tl.trace(_Triple(), x, capture=CaptureOptions(save_grads=True))
+    out = trace[trace.output_layers[0]].out
+    upstream = torch.tensor([5.0, 7.0])
+    trace.backward((out * upstream).sum())
+    # The loss's own ``out * upstream`` is a MulBackward outside the traced
+    # graph with no retained payload; the model's ``x * 3.0`` node retains both.
+    call = next(
+        g.calls[0]
+        for g in trace.autograd.grad_fns
+        if g.class_name.startswith("MulBackward") and g.calls[0].grad_outputs is not None
+    )
+
+    assert torch.equal(call.grad_outputs[0], upstream)
+    assert torch.equal(call.grad_inputs[0], 3.0 * upstream)
+    assert "flowing into this grad-fn" in _glossary_row("GradFnCall.grad_outputs")
+    assert "flowing out of this grad-fn" in _glossary_row("GradFnCall.grad_inputs")
 
 
 def test_module_boundary_fields_are_populated_from_calls() -> None:

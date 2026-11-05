@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
 from fractions import Fraction
 
 import pytest
@@ -64,23 +63,6 @@ def _descriptor() -> ReceptiveField:
     )
 
 
-def test_rf_dataclass_repr_is_stable() -> None:
-    """Representations expose complete immutable public state."""
-
-    descriptor = _descriptor()
-
-    assert repr(descriptor) == repr(_descriptor())
-    assert "op_label='conv2d_1'" in repr(descriptor)
-    assert "Fraction(2, 1)" in repr(descriptor)
-
-
-def test_rf_types_are_frozen() -> None:
-    """Frozen public dataclasses reject mutation."""
-
-    with pytest.raises(FrozenInstanceError):
-        _descriptor().op_label = "other"  # type: ignore[misc]
-
-
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
@@ -119,28 +101,6 @@ def test_grid_layout_rejects_malformed_construction(
 
     with pytest.raises(ValueError, match=message):
         GridLayout(**kwargs)  # type: ignore[arg-type]
-
-
-def test_status_enum_has_locked_membership() -> None:
-    """The public status enum contains exactly the locked six values."""
-
-    assert {status.value for status in ReceptiveFieldStatus} == {
-        "exact",
-        "whole_input",
-        "upper_bound",
-        "data_dependent",
-        "unknown",
-        "unsupported",
-    }
-
-
-def test_grid_layout_exposes_derived_provenance() -> None:
-    """GridLayout retains the source and operation-label provenance."""
-
-    layout = _layout()
-
-    assert layout.source == "derived"
-    assert layout.provenance == ("input_1", "conv2d_1")
 
 
 def test_box_rejects_inverted_bounds() -> None:

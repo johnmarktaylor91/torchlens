@@ -16,7 +16,6 @@ These tests assert traced behavior matches untraced behavior exactly.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from _forward_stash import stashed
 from torch import nn
@@ -124,7 +123,6 @@ def test_meta_device_context_factory_under_active_logging() -> None:
     assert torch.allclose(mul_layer.out, x * 2)
 
 
-@pytest.mark.smoke
 def test_meta_device_context_with_save_arg_values() -> None:
     """The arg-snapshot/variation-tracking path also tolerates meta tensors."""
     from torchlens.options import CaptureOptions
@@ -184,7 +182,6 @@ def test_cpu_default_unaffected_under_active_logging() -> None:
     assert torch.equal(factory_layer.out, torch.zeros(3, 4))
 
 
-@pytest.mark.smoke
 def test_meta_tensor_has_no_retained_storage_identity() -> None:
     """A meta tensor is billed zero bytes, never a spurious "meta" ledger charge.
 

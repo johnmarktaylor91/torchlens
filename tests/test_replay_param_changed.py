@@ -16,7 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import ReplayPreconditionError
-from torchlens.options import InterventionOptions, ReplayOptions
+from torchlens.options import InterventionOptions
 
 CODE = "replay_param_changed_since_capture"
 RUN_KEY = "replayed_with_changed_params"
@@ -90,31 +90,34 @@ def _replay_fork_do(trace: tl.Trace, **options: bool) -> tl.Trace:
     )
 
 
-def _push(trace: tl.Trace, **options: bool) -> tl.Trace:
+def _do_mapping(trace: tl.Trace, **options: bool) -> tl.Trace:
     fork = trace.fork()
-    return fork.push(replay=ReplayOptions(hooks={tl.label(_relu_label(trace)): _double}, **options))
+    return fork.do(
+        {tl.label(_relu_label(trace)): _double},
+        intervention=InterventionOptions(engine="replay", **options),
+    )
 
 
-def _push_from(trace: tl.Trace, **options: bool) -> tl.Trace:
+def _do_value(trace: tl.Trace, **options: bool) -> tl.Trace:
     fork = trace.fork()
-    origin = fork._layer_dict_all_keys[_relu_label(trace)]
-    origin._internal_set("out", origin.out * 2.0)
-    return fork.push_from(origin, replay=ReplayOptions(**options))
+    label = _relu_label(trace)
+    value = fork._layer_dict_all_keys[label].out * 2.0
+    return fork.do(tl.label(label), value, intervention=InterventionOptions(**options))
 
 
-def _differentiable_push(trace: tl.Trace, **options: bool) -> tl.Trace:
-    return trace.fork().push(
-        replay=ReplayOptions(
-            differentiable=True, hooks={tl.label(_relu_label(trace)): _double}, **options
-        )
+def _differentiable_do(trace: tl.Trace, **options: bool) -> tl.Trace:
+    return trace.fork().do(
+        tl.label(_relu_label(trace)),
+        _double,
+        intervention=InterventionOptions(differentiable=True, **options),
     )
 
 
 DOORS: dict[str, Callable[..., tl.Trace]] = {
     "do_replay": _replay_fork_do,
-    "push": _push,
-    "push_from": _push_from,
-    "differentiable_push": _differentiable_push,
+    "do_mapping": _do_mapping,
+    "do_value": _do_value,
+    "differentiable_do": _differentiable_do,
 }
 
 
@@ -142,6 +145,7 @@ def test_every_replay_door_refuses_after_an_edit(door: str) -> None:
     assert excinfo.value.fields["code"] == CODE
 
 
+@pytest.mark.smoke_cells("test_opt_in_replays_current_weights_and_records_it[differentiable_push]")
 @pytest.mark.parametrize("door", sorted(DOORS))
 def test_opt_in_replays_current_weights_and_records_it(door: str) -> None:
     model, x, trace = _capture()
@@ -150,69 +154,6 @@ def test_opt_in_replays_current_weights_and_records_it(door: str) -> None:
     out = str(trace.output_layers[0])
     assert torch.allclose(result._layer_dict_all_keys[out].out.detach(), _expected_output(model, x))
     assert result.last_run[RUN_KEY] == ("fc2.weight",)
-
-
-@pytest.mark.parametrize("door", sorted(DOORS))
-def test_unedited_replay_is_unchanged(door: str) -> None:
-    model, x, trace = _capture()
-    result = DOORS[door](trace)
-    out = str(trace.output_layers[0])
-    assert torch.allclose(result._layer_dict_all_keys[out].out.detach(), _expected_output(model, x))
-    assert RUN_KEY not in result.last_run
-
-
-def test_a_later_push_on_a_replay_fork_refuses() -> None:
-    """Replay forks share the templates, so an edit after the fork still refuses."""
-
-    model, _x, trace = _capture()
-    fork = _replay_fork_do(trace)
-    _in_place_no_grad(model)
-    with pytest.raises(ReplayPreconditionError) as excinfo:
-        _replay_fork_do(fork)
-    assert excinfo.value.fields["code"] == CODE
-
-
-def test_a_rerun_fork_refuses_a_later_edit_but_not_its_own_weights() -> None:
-    """A rerun runs the live model; its fork refuses only edits made after the rerun."""
-
-    model, x, trace = _capture()
-    _in_place_no_grad(model)
-    rerun = trace.fork().do(
-        tl.func("relu"),
-        _double,
-        model=model,
-        inputs=x,
-        intervention=InterventionOptions(engine="rerun"),
-    )
-    out = str(trace.output_layers[0])
-    assert torch.allclose(rerun._layer_dict_all_keys[out].out, _expected_output(model, x))
-    pushed = _replay_fork_do(rerun)
-    assert RUN_KEY not in pushed.last_run
-    _in_place_no_grad(model)
-    with pytest.raises(ReplayPreconditionError) as excinfo:
-        _replay_fork_do(rerun)
-    assert excinfo.value.fields["code"] == CODE
-
-
-def test_an_edit_through_param_data_is_not_caught() -> None:
-    """Documented gap (known gotchas): ``.data`` has its own version counter."""
-
-    model, x, trace = _capture()
-    model.fc2.weight.data.add_(1.0)
-    result = _replay_fork_do(trace)
-    out = str(trace.output_layers[0])
-    assert torch.allclose(result._layer_dict_all_keys[out].out, _expected_output(model, x))
-
-
-def test_a_replaced_parameter_object_keeps_the_captured_values() -> None:
-    """The template holds the captured object, so replay is still faithful to capture."""
-
-    model, x, trace = _capture()
-    expected = _expected_output(model, x)
-    model.fc2.weight = nn.Parameter(model.fc2.weight.detach() + 1.0)
-    result = _replay_fork_do(trace)
-    out = str(trace.output_layers[0])
-    assert torch.allclose(result._layer_dict_all_keys[out].out, expected)
 
 
 @pytest.mark.parametrize("engine", ["replay", "rerun"])

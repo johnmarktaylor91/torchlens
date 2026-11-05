@@ -1350,14 +1350,14 @@ _FACTORY_FUNCS = [
     "eye",
     "full",
     "empty",
-    # Size/stride/layout-only allocators (no tensor operand): torch.empty_strided
-    # and torch.empty_permuted, seen in real captures on the nightly fast tier.
+    # Size/stride/layout-only allocators with no tensor operand (nightly fast-tier captures).
     "emptystrided",
     "emptypermuted",
-    # NOTE: "tensor" (torch.tensor) is NOT a pure factory -- ``torch.tensor(data)``
-    # accepts an existing tensor as ``data`` (torch warns but executes), a real
-    # data-lineage edge. It gets an explicit spec below (round-22 F6).
+    # NOTE: not "tensor": ``torch.tensor(data)`` accepts a tensor ``data`` (torch warns but
+    # executes), a real data-lineage edge, so it gets an explicit spec below (round-22 F6).
     "astensor",
+    "getrngstate",  # torch.get_rng_state: reads the CPU generator, no tensor operand
+    "makedeptoken",  # torch._make_dep_token: an export dependency token, no tensor operand
     "fromnumpy",
     "fromfile",
     "scalartensor",
@@ -1524,14 +1524,12 @@ FUNC_ARG_SPECS["layernorm"] = ArgSpec(
     positions=(0, 2, 3), tensor_kwargs=("input", "weight", "bias")
 )
 
-# group_norm: F.group_norm(input, num_groups, weight, bias, ...)
-# weight at pos 2, bias at pos 3
+# group_norm: F.group_norm(input, num_groups, weight, bias, ...); weight at pos 2, bias at pos 3
 FUNC_ARG_SPECS["groupnorm"] = ArgSpec(
     positions=(0, 2, 3), tensor_kwargs=("input", "weight", "bias")
 )
 
-# Loss functions: (input, target, weight=None, ...)
-# weight can be positional (pos 2) or kwarg
+# Loss functions: (input, target, weight=None, ...); weight can be positional (pos 2) or kwarg
 _LOSS_WITH_WEIGHT = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "target", "weight"))
 for _name in ["nllloss", "crossentropy", "nllloss2d"]:
     FUNC_ARG_SPECS[_name] = _LOSS_WITH_WEIGHT
@@ -1621,6 +1619,8 @@ FUNC_ARG_SPECS["autogradgrad"] = ArgSpec(
 FUNC_ARG_SPECS["autogradbackward"] = ArgSpec(
     positions=(0, 1, 2, 3), tensor_kwargs=("accumulate_into", "tensors", "grad_tensors", "inputs")
 )
+# Tensor.backward(self, gradient, retain_graph, create_graph, inputs); its grads are the ops above.
+FUNC_ARG_SPECS["backward"] = ArgSpec(positions=(0, 1, 4), tensor_kwargs=("gradient", "inputs"))
 FUNC_ARG_SPECS["where"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("condition", "input", "other")
 )

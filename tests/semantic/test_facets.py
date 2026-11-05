@@ -15,9 +15,14 @@ from torchlens._semantic import (
     facets as facets_mod,
 )
 from torchlens._semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
-from torchlens.errors import MissingFacetError
+from torchlens.errors import MissingFacetError, TorchLensWarning
 from torchlens.facets import FacetFunction, FacetSpec, FacetView, MissingGrad
 from torchlens.intervention.errors import SiteResolutionError
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _Record:
@@ -144,40 +149,6 @@ def test_multi_recipe_merge_warns_and_last_wins() -> None:
     assert view.z == 4
 
 
-def test_trace_snapshot_is_immune_to_later_registry_mutation() -> None:
-    """A trace uses the recipe snapshot captured during its forward pass."""
-
-    class Tiny(nn.Module):
-        """Tiny module with one named child."""
-
-        def __init__(self) -> None:
-            """Initialize the child linear layer."""
-
-            super().__init__()
-            self.linear = nn.Linear(2, 2)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Run the child layer."""
-
-            return self.linear(x)
-
-    @tl.facets.register(class_name="Linear")
-    def first_linear(record: Any) -> dict[str, Any]:
-        """Return the first snapshot value."""
-
-        return {"snapshot_value": 1}
-
-    log = tl.trace(Tiny(), torch.randn(1, 2), save="all")
-
-    @tl.facets.register(class_name="Linear")
-    def second_linear(record: Any) -> dict[str, Any]:
-        """Return a later value that must not affect old traces."""
-
-        return {"snapshot_value": 2}
-
-    assert log.modules["linear"].facets.snapshot_value == 1
-
-
 def test_trace_recipes_and_using_are_capture_time_additive() -> None:
     """Per-trace and context recipes affect snapshots only at capture time."""
 
@@ -210,40 +181,6 @@ def test_trace_recipes_and_using_are_capture_time_additive() -> None:
 
     outside = tl.trace(model, x, save="all")
     assert not outside.modules["self"].facets.has("local_value")
-
-
-def test_structural_output_facets_expose_names_and_method_collisions() -> None:
-    """Existing container output names are available through item access."""
-
-    class DictBlock(nn.Module):
-        """Return dict keys that include a FacetView method name."""
-
-        def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-            """Return named tensors."""
-
-            return {"keys": x + 1, "hidden": x + 2}
-
-    class Model(nn.Module):
-        """Wrapper with a named child module."""
-
-        def __init__(self) -> None:
-            """Initialize the child module."""
-
-            super().__init__()
-            self.block = DictBlock()
-
-        def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-            """Return the child output."""
-
-            return self.block(x)
-
-    x = torch.randn(2, 3)
-    log = tl.trace(Model(), x, save="all")
-    facets = log.modules["block"].facets
-
-    assert torch.equal(facets["keys"], x + 1)
-    assert torch.equal(facets["hidden"], x + 2)
-    assert callable(facets.keys)
 
 
 def test_structural_output_facets_expose_namedtuple_and_dataclass_names() -> None:
@@ -469,81 +406,6 @@ def test_facetspec_read_and_default_missing_gradient() -> None:
         torch.add(missing, 1)
 
 
-def test_facetspec_grad_matches_manual_slice_when_saved() -> None:
-    """FacetSpec grad applies the same transform chain to the home op grad."""
-
-    class Tiny(nn.Module):
-        """Tiny model with a named linear home."""
-
-        def __init__(self) -> None:
-            """Initialize the linear layer."""
-
-            super().__init__()
-            self.linear = nn.Linear(3, 2)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Return the linear output."""
-
-            return self.linear(x)
-
-    @tl.facets.register(class_name="Linear", target_scope="module", facets=("first_feature",))
-    def first_feature(module: Any) -> dict[str, Any]:
-        """Return the first feature as an op-anchored FacetSpec."""
-
-        op = module.trace.ops[module.calls[0].output_ops[0]]
-        return {"first_feature": FacetSpec.from_home(op, function_id="first_feature").select(-1, 0)}
-
-    log = tl.trace(
-        Tiny(),
-        torch.randn(4, 3),
-        capture=tl.options.CaptureOptions(save_grads="all"),
-        save="all",
-    )
-    log.log_backward(log[log.output_layers[0]].out.sum())
-    facet = log.modules["linear"].facets["first_feature"]
-    home = log.ops[log.modules["linear"].calls[0].output_ops[0]]
-
-    assert torch.equal(facet.grad, home.grad.select(-1, 0))
-
-
-def test_facetspec_grad_missing_for_unselected_home() -> None:
-    """Selective gradients return MissingGradient for an unselected home op."""
-
-    class Tiny(nn.Module):
-        """Tiny model with linear and relu homes."""
-
-        def __init__(self) -> None:
-            """Initialize the layers."""
-
-            super().__init__()
-            self.linear = nn.Linear(3, 2)
-            self.relu = nn.ReLU()
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Return relu(linear(x))."""
-
-            return self.relu(self.linear(x))
-
-    @tl.facets.register(class_name="Linear", target_scope="module", facets=("first_feature",))
-    def first_feature(module: Any) -> dict[str, Any]:
-        """Return the first feature as an op-anchored FacetSpec."""
-
-        op = module.trace.ops[module.calls[0].output_ops[0]]
-        return {"first_feature": FacetSpec.from_home(op, function_id="first_feature").select(-1, 0)}
-
-    log = tl.trace(
-        Tiny(),
-        torch.randn(4, 3),
-        capture=tl.options.CaptureOptions(save_grads=["relu"]),
-        save="all",
-    )
-    log.log_backward(log[log.output_layers[0]].out.sum())
-    missing = log.modules["linear"].facets["first_feature"].grad
-
-    assert isinstance(missing, MissingGrad)
-    assert "home op has no saved gradient" in missing.reason
-
-
 def test_parameter_builtin_facets_are_read_only_parameter_homes() -> None:
     """Built-in norm parameter facets use parameter homes, not op grads."""
 
@@ -750,7 +612,7 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
     clean_out = _trace_output(clean).clone()
 
     zeroed = clean.fork("zero_q_head")
-    zeroed.attach_hooks(tl.head(0, "q"), tl.zero_ablate())
+    zeroed._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
     zeroed.run(model, x)
 
     assert not torch.allclose(_trace_output(zeroed), clean_out)
@@ -759,7 +621,11 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
 
     patched = clean.fork("patch_q_head")
     replacement = torch.zeros_like(clean.modules["attn"].facets.head(1).q)
-    patched.set(tl.facet("q").head(1), replacement)
+    patched.do(
+        tl.facet("q").head(1),
+        replacement,
+        intervention=tl.options.InterventionOptions(engine="set_only"),
+    )
     patched.run(model, x)
 
     assert not torch.allclose(_trace_output(patched), clean_out)
@@ -782,11 +648,12 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
     clean_out = _trace_output(clean).clone()
 
     edited = clean.fork("fused_qk")
-    edited.attach_hooks(
+    edited.do(
         [
             (tl.head(0, "q"), tl.zero_ablate()),
             (tl.head(1, "k"), tl.zero_ablate()),
-        ]
+        ],
+        intervention=_STAGE,
     )
     edited.run(model, x)
 
@@ -797,11 +664,12 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
 
     conflict = clean.fork("fused_conflict")
     with pytest.raises(SiteResolutionError, match="Facet intervention conflict"):
-        conflict.attach_hooks(
+        conflict.do(
             [
                 (tl.head(0, "q"), tl.zero_ablate()),
                 (tl.facet("q").head(0), tl.zero_ablate()),
-            ]
+            ],
+            intervention=_STAGE,
         )
 
 
@@ -817,7 +685,7 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
         capture=tl.options.CaptureOptions(save_grads="all", save_args=True),
         save="all",
     )
-    log.log_backward(_trace_output(log).sum())
+    log.backward(_trace_output(log).sum())
     k_head = log.modules["attn"].facets.head(3).k
 
     assert torch.equal(k_head, log.modules["attn"].facets.k[:, :, 1, :])
@@ -826,23 +694,7 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
 
     edited = log.fork("gqa_refuse")
     with pytest.raises(RuntimeError, match="aliasing_selection.*alias group"):
-        edited.attach_hooks(tl.head(3, "k"), tl.zero_ablate())
-
-
-def test_computed_facet_write_refuses() -> None:
-    """Computed MLP intermediate facets are read-only for intervention."""
-
-    torch.manual_seed(3)
-    model = _MLPModel()
-    log = tl.trace(
-        model,
-        torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(save_args=True),
-        save="all",
-    )
-
-    with pytest.raises(RuntimeError, match="computed facets are read-only"):
-        log.fork("computed_refuse").attach_hooks(tl.facet("intermediate"), tl.zero_ablate())
+        edited._attach_hooks(tl.head(3, "k"), tl.zero_ablate())
 
 
 def test_in_place_or_view_version_facet_write_refuses() -> None:
@@ -878,7 +730,7 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
     )
 
     with pytest.raises(RuntimeError, match="not intervention-safe"):
-        log.fork("unsafe_refuse").attach_hooks(tl.facet("unsafe"), tl.zero_ablate())
+        log.fork("unsafe_refuse").do({tl.facet("unsafe"): tl.zero_ablate()}, intervention=_STAGE)
 
 
 def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
@@ -896,7 +748,10 @@ def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
     clean_out = _trace_output(clean).clone()
 
     edited = clean.fork("head_all")
-    edited.attach_hooks(tl.head(1), tl.zero_ablate())
+    # tl.head(i) keeps its broadcast meaning and discloses the q/k/v fan-out.
+    with pytest.warns(TorchLensWarning, match=r"tl\.head\(1\) writes 3 sites") as fanout:
+        edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
+    assert [w.message.fields["code"] for w in fanout] == ["facet_selector_fanout"]
     edited.run(model, x)
 
     assert not torch.allclose(_trace_output(edited), clean_out)

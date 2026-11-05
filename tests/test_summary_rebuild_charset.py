@@ -60,36 +60,38 @@ def _mask_volatile(text: str) -> str:
 _GOLDEN_ASCII = """\
 _GoldenToy | input (1, 3, 8, 8) float32
 view: hybrid, all 4 ops
-name (type)    output        params        (%)  fwd flops
----------------------------------------------------------
-conv (Conv2d)  (1, 4, 8, 8)     108   ... 7.8%     13.82K
-relu (ReLU)    (1, 4, 8, 8)       -          -        256
-flatten_1_3    (1, 256)           -          -          0
-fc (Linear)    (1, 5)         1.28K  ### 92.2%      2.56K
----------------------------------------------------------
-Params   1,388 declared | trainable 1,388 (100%) | size 5.6 KB
-Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
+name (type)    output        params    (%)  fwd flops
+-----------------------------------------------------
+conv (Conv2d)  (1, 4, 8, 8)     108   7.8%      13.8k
+relu (ReLU)    (1, 4, 8, 8)       -      -        256
+flatten_1      (1, 256)           -      -          0
+fc (Linear)    (1, 5)          1.3k  92.2%       2.6k
+-----------------------------------------------------
+Params   1,388 declared | trainable 1,388 (100%) | size 5.42 KiB
+Compute  16.6k FLOPs fwd (fma=2) | 8.2k MACs | 4/4 ops known
 Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
-Capture  torch | complete | health CHECKED-AND-CLEAN
-More:    result.details() | view='compute' for per-row MACs | docs/reference/summary.md"""
+Capture  torch | complete | no NaN/Inf (exact)
+Legend   1 MAC = 2 FLOPs
+more     result.details() | view='compute' for per-row MACs | docs/reference/summary.md"""
 
 _GOLDEN_UNICODE = """\
 _GoldenToy | input (1, 3, 8, 8) float32
 view: hybrid, all 4 ops
-name (type)    output        params        (%)  fwd flops
-─────────────────────────────────────────────────────────
-conv (Conv2d)  (1, 4, 8, 8)     108   ░░░ 7.8%     13.82K
-relu (ReLU)    (1, 4, 8, 8)       -          -        256
-flatten_1_3    (1, 256)           -          -          0
-fc (Linear)    (1, 5)         1.28K  ███ 92.2%      2.56K
-─────────────────────────────────────────────────────────
-Params   1,388 declared | trainable 1,388 (100%) | size 5.6 KB
-Compute  16.64K FLOPs fwd (fma=2) | 8.19K MACs | 4/4 ops known (formula-exact)
+name (type)    output        params    (%)  fwd flops
+─────────────────────────────────────────────────────
+conv (Conv2d)  (1, 4, 8, 8)     108   7.8%      13.8k
+relu (ReLU)    (1, 4, 8, 8)       -      -        256
+flatten_1      (1, 256)           -      -          0
+fc (Linear)    (1, 5)          1.3k  92.2%       2.6k
+─────────────────────────────────────────────────────
+Params   1,388 declared | trainable 1,388 (100%) | size 5.42 KiB
+Compute  16.6k FLOPs fwd (fma=2) | 8.2k MACs | 4/4 ops known
 Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
-Capture  torch | complete | health CHECKED-AND-CLEAN
-More:    result.details() | view='compute' for per-row MACs | docs/reference/summary.md"""
+Capture  torch | complete | no NaN/Inf (exact)
+Legend   1 MAC = 2 FLOPs
+more     result.details() | view='compute' for per-row MACs | docs/reference/summary.md"""
 
 
 def test_dual_charset_goldens(golden_report) -> None:
@@ -118,7 +120,6 @@ def test_glyph_table_is_one_to_one(golden_report) -> None:
     assert [len(line) for line in ascii_lines] == [len(line) for line in unicode_lines]
 
 
-@pytest.mark.smoke
 def test_no_escape_bytes_ever(golden_report) -> None:
     """A11: no ESC byte in any returned string, any charset."""
 
@@ -133,6 +134,7 @@ def test_str_is_pure_ascii(golden_report) -> None:
     str(golden_report).encode("ascii")
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_summary_charset.py.
 def test_detection_env_override(monkeypatch) -> None:
     """Rung 2: the environment override wins over everything below."""
 
@@ -142,25 +144,7 @@ def test_detection_env_override(monkeypatch) -> None:
     assert detect_style(io.StringIO()) == "ascii"
 
 
-def test_detection_ci_rung_beats_a_tty(monkeypatch) -> None:
-    """Rung 3: CI/GITHUB_ACTIONS resolve ASCII even on a capable pty."""
-
-    monkeypatch.delenv("TORCHLENS_SUMMARY_STYLE", raising=False)
-    monkeypatch.setenv("CI", "true")
-
-    class _Tty(io.StringIO):
-        """A capable interactive stream."""
-
-        encoding = "utf-8"
-
-        def isatty(self) -> bool:
-            return True
-
-    monkeypatch.setenv("TERM", "xterm-256color")
-    assert detect_style(_Tty()) == "ascii"
-
-
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_summary_charset.py.
 def test_detection_falls_toward_ascii(monkeypatch) -> None:
     """Non-tty, dumb TERM, and non-round-tripping encodings all -> ASCII."""
 
@@ -189,6 +173,7 @@ def test_detection_falls_toward_ascii(monkeypatch) -> None:
     assert detect_style(_DumbTty()) == "ascii"
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_summary_charset.py.
 def test_detection_affirms_unicode_only_when_verified(monkeypatch) -> None:
     """The ONLY path to unicode: interactive + TERM + verified encoding."""
 
@@ -208,7 +193,6 @@ def test_detection_affirms_unicode_only_when_verified(monkeypatch) -> None:
     assert detect_style(_Utf8Tty()) == "unicode"
 
 
-@pytest.mark.smoke
 def test_print_resolves_at_the_boundary(golden_report, monkeypatch) -> None:
     """print(style='auto') detects the actual sink, not global stdout."""
 

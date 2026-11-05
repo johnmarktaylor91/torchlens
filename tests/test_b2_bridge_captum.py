@@ -1,4 +1,4 @@
-"""Captum bridge: one test per method-class shape, against real Captum (walk U20.4).
+"""Captum bridge: one test per method-class shape, against real Captum.
 
 ``tl.bridge.captum.attribute`` passes ``target=`` only when the caller gives
 one (the activation and neuron classes reject it) and, when ``inputs`` is

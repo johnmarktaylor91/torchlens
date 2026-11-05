@@ -297,7 +297,8 @@ def _perturb_candidates(value: Any) -> tuple[Any, ...]:
         if np.issubdtype(array.dtype, np.bool_):
             candidates = (np.logical_not(array),)
         elif np.issubdtype(array.dtype, np.integer):
-            candidates = (array + 1, np.zeros_like(array))
+            # ~x flips the sign without overflow, so a threshold compare (ids < 0) sees it.
+            candidates = (array + 1, np.zeros_like(array), np.invert(array))
         else:
             magnitude = np.max(np.abs(array)).item() + 1.0 if array.size else 1.0
             candidates = (

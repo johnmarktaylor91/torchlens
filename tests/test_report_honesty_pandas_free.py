@@ -38,7 +38,7 @@ def grad_trace() -> Iterator[tl.Trace]:
         capture=tl.options.CaptureOptions(save_grads=True),
     )
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
     try:
         yield trace
     finally:

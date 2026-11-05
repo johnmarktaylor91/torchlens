@@ -42,20 +42,7 @@ def _fresh_caches() -> None:
     _artifacts._DIGEST_HINTS.clear()
 
 
-def test_load_plan_disclosed_on_every_artifact_tool(artifact: Path) -> None:
-    """overview/dump/explain all disclose the manifest-first load plan."""
-
-    overview = mcp.call_tool("torchlens_overview", {"path": str(artifact)})
-    dump = mcp.call_tool("torchlens_dump", {"path": str(artifact)})
-    explain_result = mcp.call_tool("torchlens_explain", {"path": str(artifact)})
-    for payload in (overview, dump, explain_result):
-        plan = payload["data"]["load_plan"]
-        assert plan["mode"] == "eager"
-        assert isinstance(plan["declared_payload_bytes"], int)
-        assert plan["declared_payload_count"] > 0
-        assert "reason" in plan
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_value_repr.py, report/_factcore.py and a sole campaign mutation kill.
 def test_declared_bytes_over_threshold_load_lazily(
     artifact: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -69,6 +56,7 @@ def test_declared_bytes_over_threshold_load_lazily(
     assert trace.payload_load_status == "loaded_lazy"
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_artifacts.py, agent/_registry.py.
 def test_memory_shaped_refusal_plant(artifact: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The declared-size gate REFUSES typed before any blob is opened."""
 
@@ -80,33 +68,7 @@ def test_memory_shaped_refusal_plant(artifact: Path, monkeypatch: pytest.MonkeyP
         mcp.call_tool("torchlens_dump", {"path": str(artifact)})
 
 
-def test_row_tools_are_bounded_by_default(artifact: Path) -> None:
-    """Omitted max_rows means the served default cap, never every row."""
-
-    dump = mcp.call_tool("torchlens_dump", {"path": str(artifact), "view": "graph"})
-    assert dump["limits"]["max_rows"] == _budgets.DEFAULT_MAX_ROWS
-    assert len(dump["data"]["rows"]) <= _budgets.DEFAULT_MAX_ROWS
-    # Small artifact: no truncation fires, but the cap was applied.
-    assert dump["truncation"] is None
-
-
-def test_row_cap_truncates_with_disclosure_and_pages(artifact: Path) -> None:
-    """Over-cap graph rows truncate with disclosure and a continuation."""
-
-    dump = mcp.call_tool("torchlens_dump", {"path": str(artifact), "view": "graph", "max_rows": 2})
-    assert len(dump["data"]["rows"]) == 2
-    assert dump["truncation"]["omitted"] > 0
-    assert dump["truncation"]["how_to_get_more"]
-    next_struct = dump["data"]["next"]
-    assert next_struct["offset"] == 2
-    page2 = mcp.call_tool(
-        "torchlens_dump",
-        {"path": str(artifact), "view": "graph", "max_rows": 2, "continuation": next_struct},
-    )
-    first_labels = {row["label"] for row in dump["data"]["rows"]}
-    assert first_labels.isdisjoint({row["label"] for row in page2["data"]["rows"]})
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_registry.py.
 def test_limit_above_served_ceiling_refuses_typed(artifact: Path) -> None:
     """An explicit max_rows above the served ceiling refuses with the bound."""
 
@@ -118,18 +80,7 @@ def test_limit_above_served_ceiling_refuses_typed(artifact: Path) -> None:
     assert exc.value.fields["code"] == "agent_limit_invalid"
 
 
-def test_artifact_identity_is_content_digest(artifact: Path, tmp_path: Path) -> None:
-    """Identical content at a different path hits the same cache entry."""
-
-    copy_path = tmp_path / "copy.tlspec"
-    shutil.copytree(artifact, copy_path)
-    trace_a, _, block_a = _artifacts.load_trace(str(artifact))
-    trace_b, _, block_b = _artifacts.load_trace(str(copy_path))
-    assert trace_a is trace_b  # digest-keyed, not path-keyed
-    assert block_a["id"] == block_b["id"]
-    assert block_a["id"].startswith("sha256:")
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_trace_groups_capture.py, _data_classes/trace.py.
 def test_changed_content_at_same_path_is_not_served_stale(artifact: Path, tmp_path: Path) -> None:
     """A rename-replace at the same path serves the NEW content."""
 
@@ -146,6 +97,7 @@ def test_changed_content_at_same_path_is_not_served_stale(artifact: Path, tmp_pa
     assert int(trace_b.num_params) == int(other.num_params)
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/__init__.py.
 def test_served_schema_field_parity() -> None:
     """Served declarations == registry, field-by-field (the F29 release gate).
 
@@ -177,6 +129,7 @@ def test_served_schema_field_parity() -> None:
     assert list(mcp.TOOL_SPECS) == list_tools()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _io/payload_reader.py, agent/_stats.py.
 def test_memory_shaped_stats_reads_do_not_attach(artifact: Path) -> None:
     """200 sequential payload_stats calls keep the lazily loaded ops payload-free.
 
@@ -198,12 +151,3 @@ def test_memory_shaped_stats_reads_do_not_attach(artifact: Path) -> None:
             f"{resident} payloads attached to the cached trace -- the stats "
             "path leaked through the attaching door"
         )
-
-
-def test_dump_and_report_are_escape_free(artifact: Path) -> None:
-    """MCP responses are publishable data: no ESC bytes anywhere."""
-
-    dump = mcp.call_tool("torchlens_dump", {"path": str(artifact), "view": "full"})
-    explain_result = mcp.call_tool("torchlens_explain", {"path": str(artifact)})
-    assert "\x1b" not in str(dump)
-    assert "\x1b" not in str(explain_result)

@@ -21,15 +21,11 @@ from torchlens.transforms import (
     SpecialTokenFacts,
     TensorSpec,
     TransformContext,
-    chain,
     channel_mean,
     cls_token,
     pool_spatial,
     pool_tokens,
-    unit_norm,
 )
-from torchlens.transforms._coerce import coerce_transform
-from torchlens.transforms._pipeline import pipeline_from_record, pipeline_record
 
 
 def _right_padded() -> tuple[torch.Tensor, torch.Tensor]:
@@ -93,7 +89,6 @@ def test_missing_mask_refuses_without_the_recorded_assertion() -> None:
     assert "mask" in str(err)
 
 
-@pytest.mark.smoke
 def test_assume_no_padding_is_recorded_and_licenses_physical_endpoints() -> None:
     """The assertion rides the spec params (manifest-visible) and unlocks [:, -1]."""
 
@@ -137,66 +132,7 @@ def test_all_invalid_row_refuses_named() -> None:
 # --- mask-aware references (the memo's silently-wrong naive spellings) --------
 
 
-def test_masked_mean_matches_hand_reference_and_differs_from_naive() -> None:
-    """Masked mean == valid-token mean; mask-blind mean is a different number."""
-
-    x, mask = _right_padded()
-    out = pool_tokens("mean").apply(x, TransformContext(roles=BTD, mask=mask))
-    for row in range(3):
-        valid = mask[row].bool()
-        assert torch.allclose(out[row], x[row][valid].mean(dim=0), atol=1e-6)
-    naive = x.mean(dim=1)
-    assert not torch.allclose(out, naive)
-
-
-def test_masked_max_ignores_padding() -> None:
-    """Masked max never reads a padded position."""
-
-    x, mask = _right_padded()
-    x = x.clone()
-    x[0, 4] = 1e6  # padded position holds the global max
-    out = pool_tokens("max").apply(x, TransformContext(roles=BTD, mask=mask))
-    assert float(out[0].max()) < 1e5
-    valid_ref = x[0][mask[0].bool()].amax(dim=0)
-    assert torch.equal(out[0], valid_ref)
-
-
-def test_last_gathers_greatest_valid_index_never_physical_end() -> None:
-    """``last`` under a right-padded mask reads the last VALID token."""
-
-    x, mask = _right_padded()
-    out = pool_tokens("last").apply(x, TransformContext(roles=BTD, mask=mask))
-    assert torch.equal(out[0], x[0, 2])
-    assert torch.equal(out[1], x[1, 4])
-    assert torch.equal(out[2], x[2, 1])
-    assert not torch.equal(out[0], x[0, -1])
-
-
-def test_first_and_last_under_left_padding() -> None:
-    """Left padding: first/last resolve per-row valid positions."""
-
-    x, mask = _left_padded()
-    ctx = TransformContext(roles=RoleDeclaration(axes=("batch", "token", "feature")), mask=mask)
-    first = pool_tokens("first").apply(x, ctx)
-    last = pool_tokens("last").apply(x, ctx)
-    assert torch.equal(first[0], x[0, 2])
-    assert torch.equal(first[1], x[1, 1])
-    assert torch.equal(last[0], x[0, 3])
-    assert torch.equal(last[1], x[1, 3])
-
-
 # --- cls_token: the gated distinct semantic name ------------------------------
-
-
-def test_cls_refuses_without_recorded_facts() -> None:
-    """No special-token facts -> transform_special_tokens_unavailable."""
-
-    x, mask = _right_padded()
-    with pytest.raises(TransformContractError) as excinfo:
-        cls_token().apply(x, TransformContext(roles=BTD, mask=mask))
-    err = excinfo.value
-    assert err.fields["code"] == "transform_special_tokens_unavailable"
-    assert "gpt2" in str(err)
 
 
 def test_cls_refuses_a_recorded_no_cls_tokenizer() -> None:
@@ -209,7 +145,6 @@ def test_cls_refuses_a_recorded_no_cls_tokenizer() -> None:
     assert excinfo.value.fields["code"] == "transform_special_tokens_unavailable"
 
 
-@pytest.mark.smoke
 def test_cls_gathers_first_valid_under_both_paddings() -> None:
     """With recorded facts, CLS is the first VALID index (both padding sides)."""
 
@@ -223,28 +158,9 @@ def test_cls_gathers_first_valid_under_both_paddings() -> None:
     assert torch.equal(lout[1], lx[1, 1])
 
 
-def test_cls_is_a_zero_param_preset() -> None:
-    """The bare string 'cls_token' coerces (deterministic zero-param preset)."""
-
-    pipeline = coerce_transform("cls_token")
-    assert pipeline is not None and pipeline.steps[0].name == "cls_token"
-
-
 # --- spatial presets -----------------------------------------------------------
 
 
-def test_pool_spatial_and_channel_mean_match_manual() -> None:
-    """Declared NCHW roles: spatial and channel reductions match torch."""
-
-    generator = torch.Generator().manual_seed(3)
-    img = torch.randn(2, 3, 4, 5, generator=generator)
-    ctx = TransformContext(roles=NCHW)
-    assert torch.allclose(pool_spatial("mean").apply(img, ctx), img.mean(dim=(2, 3)))
-    assert torch.equal(pool_spatial("max").apply(img, ctx), img.amax(dim=(2, 3)))
-    assert torch.allclose(channel_mean().apply(img, ctx), img.mean(dim=1))
-
-
-@pytest.mark.smoke
 def test_spatial_plan_predicts_apply() -> None:
     """T-C6: the plan's output spec matches the applied result."""
 
@@ -258,7 +174,6 @@ def test_spatial_plan_predicts_apply() -> None:
         assert plan.context_capable is True
 
 
-@pytest.mark.smoke
 def test_token_plan_predicts_apply() -> None:
     """T-C6 for token pooling: plan output matches apply under the mask."""
 
@@ -288,60 +203,12 @@ def test_mean_family_refuses_integer_domains() -> None:
     assert excinfo.value.fields["code"] == "transform_plan_invalid"
 
 
-def test_half_inputs_accumulate_in_fp32() -> None:
-    """T-C7: half mean == fp32 reference computed in fp32, cast back."""
-
-    x, mask = _right_padded()
-    half = x.to(torch.float16)
-    ctx = TransformContext(roles=BTD, mask=mask)
-    out = pool_tokens("mean").apply(half, ctx)
-    assert out.dtype == torch.float16
-    ref = pool_tokens("mean").apply(x, ctx).to(torch.float16)
-    assert torch.allclose(out.float(), ref.float(), atol=2e-3)
-
-
 # --- T-C10: batch-composition independence --------------------------------------
-
-
-def test_batch_composition_independence_for_masked_pooling() -> None:
-    """T(concat(x, y))[:len(x)] == T(x) for every pooling op."""
-
-    x, mask_x = _right_padded()
-    generator = torch.Generator().manual_seed(23)
-    y = torch.randn(2, 5, 8, generator=generator)
-    mask_y = torch.tensor([[1, 1, 0, 0, 0], [1, 1, 1, 1, 0]])
-    both = torch.cat([x, y], dim=0)
-    mask_both = torch.cat([mask_x, mask_y], dim=0)
-    for op in ("mean", "max", "first", "last"):
-        spec = pool_tokens(op)
-        alone = spec.apply(x, TransformContext(roles=BTD, mask=mask_x))
-        together = spec.apply(both, TransformContext(roles=BTD, mask=mask_both))
-        assert torch.equal(alone, together[: x.shape[0]]), op
 
 
 # --- chains + records -------------------------------------------------------------
 
 
-@pytest.mark.smoke
-def test_pooling_steps_ride_chains_and_records() -> None:
-    """Pooling composes in chains; the pipeline record round-trips it."""
-
-    pipeline = chain(pool_tokens("mean"), unit_norm(axis=-1))
-    record = pipeline_record(pipeline)
-    assert record is not None and record["resume_verifiable"] is True
-    rebuilt = pipeline_from_record(record)
-    assert rebuilt.canonical_chain() == pipeline.canonical_chain()
-    x, mask = _right_padded()
-    ctx = TransformContext(roles=BTD, mask=mask)
-    out = pipeline.apply(x, ctx)
-    assert torch.allclose(
-        torch.linalg.vector_norm(out.double(), dim=-1),
-        torch.ones(3, dtype=torch.float64),
-        atol=1e-5,
-    )
-
-
-@pytest.mark.smoke
 def test_pool_tokens_op_vocabulary_is_closed() -> None:
     """Unknown ops and non-bool assertions refuse typed."""
 

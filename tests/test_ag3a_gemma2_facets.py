@@ -15,23 +15,6 @@ import torch
 import torchlens as tl
 from tests.test_ag2_gemma2_sites import _frozen_ops, _model, _trace, _transcoders
 
-#: The tiny Gemma-2's attention patterns (one per layer) and norm scales (four
-#: per layer plus the final norm), as captured. Grouping rule rows 1 and 17: the
-#: mask builder's one call line (masking_utils.py:522) runs twice, so its mask ops
-#: are 2-pass layers; row 14: the rotary ``.float()`` pair on two source lines
-#: (modeling_gemma2.py:127 and :131) is two single layers. Both shift these labels.
-PATTERN_OPS = ("softmax_1_104:1", "softmax_2_198:1")
-INV_RMS_OPS = (
-    "rsqrt_1_54:1",
-    "rsqrt_2_117:1",
-    "rsqrt_3_127:1",
-    "rsqrt_4_141:1",
-    "rsqrt_5_151:1",
-    "rsqrt_6_211:1",
-    "rsqrt_7_221:1",
-    "rsqrt_8_235:1",
-    "rsqrt_9_245:1",
-)
 NORMS = (
     "input_layernorm",
     "post_attention_layernorm",
@@ -42,6 +25,24 @@ NORMS = (
 
 def _home(trace: tl.Trace, module: str, facet: str) -> str:
     return str(trace.modules[module].facets[facet].spec.home_label)
+
+
+def _held_by_hand(trace: tl.Trace, layers: int) -> list[str]:
+    """AG-2's hand-found frozen set, checked against the config's structure.
+
+    Found by op function and module, never by literal label: op labels count
+    the ops before them, and transformers 4.x and 5.x build Gemma-2's masks
+    with different op counts, so the same softmax is ``softmax_1_91`` on one
+    and ``softmax_1_104`` on the other.
+    """
+
+    held = _frozen_ops(trace)
+    funcs = {str(op.label): op.func_name for op in trace}
+    kinds = [funcs[label] for label in held]
+    assert held and len(set(held)) == len(held)
+    assert kinds.count("softmax") == layers  # one eager pattern per attention
+    assert kinds.count("rsqrt") == len(NORMS) * layers + 1  # four norms a layer, the final norm
+    return held
 
 
 def _graph(model, frozen):
@@ -65,26 +66,11 @@ def _equal(a: torch.Tensor, b: torch.Tensor) -> None:
 class TestGemma2Facets:
     """``pattern`` and ``inv_rms`` name the ops an attribution graph holds."""
 
-    def test_facets_resolve_to_the_frozen_op_labels(self) -> None:
-        model = _model()
-        assert list(model.config.layer_types) == ["sliding_attention", "full_attention"]
-        assert model.config.attn_logit_softcapping == 50.0
-        trace = _trace(model)
-        patterns = tuple(_home(trace, f"model.layers.{i}.self_attn", "pattern") for i in (0, 1))
-        norms = [f"model.layers.{i}.{norm}" for i in (0, 1) for norm in NORMS] + ["model.norm"]
-        scales = tuple(_home(trace, name, "inv_rms") for name in norms)
-        assert patterns == PATTERN_OPS
-        assert sorted(scales) == sorted(INV_RMS_OPS)
-        assert sorted(patterns + scales) == sorted(_frozen_ops(trace))
-        graph = _graph(model, [tl.facet("pattern"), tl.facet("inv_rms")])
-        held = set(graph.frozen_sites) - set(PATTERN_OPS) - set(INV_RMS_OPS)
-        assert len(held) == 2  # the two written MLP outputs
-        assert set(PATTERN_OPS + INV_RMS_OPS) <= set(graph.frozen_sites)
-
     def test_frozen_facets_build_the_same_graph(self) -> None:
         model = _model()
         by_facet = _graph(model, [tl.facet("pattern"), tl.facet("inv_rms")])
-        by_label = _graph(model, list(PATTERN_OPS + INV_RMS_OPS))
+        layers = model.config.num_hidden_layers
+        by_label = _graph(model, lambda trace: _held_by_hand(trace, layers))
         assert by_facet.nodes == by_label.nodes
         assert set(by_facet.frozen_sites) == set(by_label.frozen_sites)
         assert torch.equal(by_facet.active_feature_indices, by_label.active_feature_indices)

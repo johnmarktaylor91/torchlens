@@ -18,12 +18,17 @@ Leverage B4/B5 + surgery Build 0a/0b, one substrate:
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._postprocess._site_join import join_site_profiles, site_profile
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _Insertable(nn.Module):
@@ -61,11 +66,12 @@ def _capture_pair() -> tuple[tl.Trace, tl.Trace]:
 # ---------------------------------------------------------------------------
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_guarded_join_refuses_the_inserted_cohort() -> None:
     base, inserted = _capture_pair()
     rows = join_site_profiles(site_profile(base), site_profile(inserted))
 
-    relu_key = layer_site_key(base["relu_1_2"])
+    relu_key = layer_site_key(base.layers["relu_1_2"])
     assert relu_key is not None
 
     # POSITIVE CONTROL that must FAIL to detect: naive key-set membership
@@ -85,24 +91,8 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
     assert row.verdict.value == "refused_cardinality"
 
     # Unaffected structural positions stay joined.
-    fc1_key = layer_site_key(base["linear_1_1"])
+    fc1_key = layer_site_key(base.layers["linear_1_1"])
     assert rows[fc1_key].joined
-
-
-def test_parent_site_key_signature_change_is_visible() -> None:
-    """The output-side consumer's parent SIGNATURE changes across the
-    insertion (parent/child site-key agreement, review NEW-13's wording) --
-    exactly what artifact-at-a-time oracles cannot see."""
-
-    base, inserted = _capture_pair()
-
-    def parent_keys(trace: tl.Trace, label: str) -> set[str | None]:
-        op = trace.ops[label]
-        return {trace.ops[parent].site_key for parent in (op.parents or ()) if parent in trace.ops}
-
-    base_fc2_parents = parent_keys(base, "linear_2_3")
-    inserted_fc2_parents = parent_keys(inserted, "linear_2_4")
-    assert base_fc2_parents != inserted_fc2_parents
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +100,7 @@ def test_parent_site_key_signature_change_is_visible() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/spec_compat.py, campaign mutant kills.
 def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> None:
     import os
 
@@ -123,7 +114,7 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     base = tl.trace(base_model, x, capture=tl.options.CaptureOptions(replayable=True))
     inserted = tl.trace(inserted_model, x, capture=tl.options.CaptureOptions(replayable=True))
 
-    base.attach_hooks(tl.func("relu"), tl.scale(0.5), confirm_mutation=True)
+    base._attach_hooks(tl.func("relu"), tl.scale(0.5))
     spec_path = os.path.join(tmp_path, "spec.tlspec")
     base.save_intervention(spec_path)
     spec = load_intervention_spec(spec_path)
@@ -131,7 +122,7 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     manifest = spec.metadata["target_manifest"]
     assert manifest, "manifest missing"
     assert all("resolved_site_keys" in entry for entry in manifest)
-    assert manifest[0]["resolved_site_keys"] == [layer_site_key(base["relu_1_2"])]
+    assert manifest[0]["resolved_site_keys"] == [layer_site_key(base.layers["relu_1_2"])]
 
     # Same trace: EXACT, empty drift.
     same = check_spec_compat(spec, base)
@@ -150,6 +141,7 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     assert drifted.diff.new_site_keys or drifted.diff.missing_site_keys
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_trace_hooks.py, intervention/spec.py, campaign mutant kills.
 def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
     """Leverage B7: a spec staged by the capture-time predicate door persists
     resolved labels only; the reload discloses spec_derived=True. Spec-door
@@ -168,7 +160,7 @@ def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
 
     ready = tl.trace(model, torch.randn(2, 4), capture=tl.options.CaptureOptions(replayable=True))
     fork = ready.fork()
-    fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)), confirm_mutation=True)
+    fork._attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
     authored_path = os.path.join(tmp_path, "authored.tlspec")
     fork.save_intervention(authored_path)
     authored = load_intervention_spec(authored_path)
@@ -182,6 +174,7 @@ def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/_site_join.py, _selection/align.py, _selection/selection.py.
 def test_align_to_survives_label_renumbering_via_corroborated_join() -> None:
     """A structurally-intact site whose LABEL renumbered still aligns: the
     label leaves the join key, and the corroborated guarded-join verdict

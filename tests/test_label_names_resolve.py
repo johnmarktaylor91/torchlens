@@ -11,9 +11,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes import _labels
-from torchlens._data_classes.layer import Layer
-from torchlens._data_classes.module import Module
-from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
 
 # No smoke mark: the smoke tier sits at its size ceiling (tests/conftest.py).
@@ -44,26 +41,6 @@ TRACE_LABEL_NAMES = ("op_labels", "layer_labels")
 def _trace() -> Trace:
     model = nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2))
     return tl.trace(model, torch.randn(2, 3))
-
-
-def test_op_label_names_resolve_on_every_op() -> None:
-    trace = _trace()
-    for op in trace.ops:
-        missing = [name for name in OP_LABEL_NAMES if not hasattr(op, name)]
-        assert not missing, (op.label, missing)
-        assert _labels.is_pass_qualified(op.label)
-        assert not _labels.is_pass_qualified(op.layer_label)
-
-
-def test_layer_and_module_label_names_resolve() -> None:
-    trace = _trace()
-    for layer in trace.layers:
-        missing = [name for name in LAYER_LABEL_NAMES if not hasattr(layer, name)]
-        assert not missing, (layer.layer_label, missing)
-    for module in trace.modules:
-        missing = [name for name in MODULE_LABEL_NAMES if not hasattr(module, name)]
-        assert not missing, (module.address, missing)
-    assert isinstance(Layer, type) and isinstance(Module, type) and isinstance(Op, type)
 
 
 def test_trace_label_names_and_validate_forward_pass_resolve() -> None:

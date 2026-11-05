@@ -199,8 +199,9 @@ def test_multi_input_passthrough_names_roles_and_explicit_selection_works() -> N
 
     assert len(roles) == 2
     with pytest.raises(AmbiguousInputError) as caught:
-        _ = view.status
+        _ = view.size
     assert all(role in str(caught.value) for role in roles)
+    assert dict(view.status) == {role: view[role].status for role in roles}
     assert view[roles[0]].io_role == roles[0]
 
 
@@ -242,7 +243,9 @@ def test_multi_output_module_call_reuses_existing_error_and_lists_candidates() -
     assert len(call.output_ops) == 2
     with pytest.raises(MultiOutputModuleError) as caught:
         _ = call.receptive_field
-    assert all(label in str(caught.value) for label in call.output_ops)
+    assert all(trace.ops[label].short_layer_label in str(caught.value) for label in call.output_ops)
+    assert "\n  candidates " in str(caught.value)
+    assert "\n  remedy     " in str(caught.value)
 
 
 def test_tlspec_round_trip_drops_and_recomputes_view(tmp_path: Path) -> None:
@@ -261,6 +264,35 @@ def test_tlspec_round_trip_drops_and_recomputes_view(tmp_path: Path) -> None:
     assert recomputed is loaded_target.receptive_field
     assert recomputed is not original
     assert type(loaded_target)._PORTABLE_STATE_SPEC["_receptive_field_cache"] is FieldPolicy.DROP
+
+
+class _BatchedProductConcat(nn.Module):
+    """A same-rank batched product feeding a concatenation."""
+
+    def forward(self, left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+        """Multiply batched matrices, then join the product with a scaled copy."""
+
+        product = torch.matmul(left, right)
+        return torch.cat([product, product * 2], dim=-1)
+
+
+def test_loaded_trace_reads_operand_shapes_from_recorded_parent_shapes(tmp_path: Path) -> None:
+    """A reloaded trace solves operand-shape rules exactly as the live trace does."""
+
+    from torchlens.receptive_field._validation import check_geometric_metadata_invariants
+
+    _register_rules()
+    trace = tl.trace(_BatchedProductConcat(), (torch.randn(2, 3, 4), torch.randn(2, 4, 5)))
+    path = tmp_path / "rf-operands.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+
+    check_geometric_metadata_invariants(loaded)
+    for func_name in ("matmul", "cat"):
+        live_op = next(op for op in trace._layer_list if op.func_name == func_name)
+        loaded_op = loaded.ops[live_op.label]
+        assert _rules.operand_shapes(loaded_op) == _rules.operand_shapes(live_op)
+        assert repr(loaded_op.receptive_field.status) == repr(live_op.receptive_field.status)
 
 
 def test_registry_epoch_invalidation_refreshes_all_cached_views() -> None:

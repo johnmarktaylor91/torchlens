@@ -18,6 +18,13 @@ class UnsupportedRendererCapabilityError(_ActionableErrorMixin, ConfigurationErr
     Keeps its historical ``RuntimeError`` base while joining the taxonomy
     with a stable code and a default remedy, so single-message raise sites
     stay valid.
+
+    Examples
+    --------
+    >>> issubclass(UnsupportedRendererCapabilityError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(UnsupportedRendererCapabilityError, RuntimeError)
+    True
     """
 
     code: str = "renderer_capability_unsupported"

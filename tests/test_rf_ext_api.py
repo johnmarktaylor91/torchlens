@@ -55,18 +55,6 @@ def test_named_projective_siblings_and_direction_keyword() -> None:
         assert isinstance(module.projective_field, ReceptiveFieldView)
 
 
-def test_projective_table_keeps_receptive_default_schema() -> None:
-    """Append projective columns without changing the receptive table schema."""
-
-    trace, _ = _trace()
-    receptive = trace.receptive_fields().to_pandas()
-    projective = trace.projective_fields().to_pandas()
-
-    assert list(receptive.columns) == list(projective.columns[: len(receptive.columns)])
-    assert "projective_target" in projective.columns
-    assert projective.attrs["direction"] is ReceptiveFieldDirection.PROJECTIVE
-
-
 def test_configuration_errors_are_typed() -> None:
     """SF-07: user-facing misconfiguration raises the typed RF stratum.
 

@@ -52,3 +52,8 @@ def test_draft_excludes_package_source_and_contributor_notes() -> None:
     draft = _draft()
     assert "torchlens" in draft["excludeFolders"]
     assert {"AGENTS.md", "CLAUDE.md"} <= set(draft["excludeFiles"])
+
+
+def test_draft_excludes_internal_docs() -> None:
+    """Maintainer and agent pages under docs/internal never reach the indexed docs."""
+    assert "docs/internal" in _draft()["excludeFolders"]

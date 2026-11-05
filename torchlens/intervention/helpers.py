@@ -2,44 +2,44 @@
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._io.format3.contract import HELPER_REGISTRY_VERSION
 from ._helper_internals import (
     _align_direction,
+    _dim_outside_mean_vocabulary,
+    _donor_facet_slice,
     _enqueue_nondeterminism_note,
     _first_non_executable_arg,
     _helper_spec,
-    _live_capture_donor,
     _make_generator,
     _mean_ablate_axes,
+    _members_dim_without_population,
     _non_executable_builtin_placeholder,
     _patch_source_identity,
+    _population_mean_spec,
+    _resolve_patch_donor_site,
     _resolve_swap_value,
+    _source_mean_spec,
     _source_tensor_or_out,
     _splice_module_spec,
     _swap_with_spec,
 )
+from ._patch_mapping import apply_position_map, normalize_positions, resolve_source_site
 from .errors import (
     HookValueError,
     SpliceModuleDeviceError,
     SpliceModuleDtypeError,
 )
 from .hooks import HookContext
+from .masked_edit import checked_arguments, with_stored_mask
 from .population import Population
-from .stochastic import (
-    _prove_event_geometry,
-    _record_sampling,
-    _resolve_over_axes,
-)
 from .types import Edit
-
-HELPER_REGISTRY_VERSION = "1"
 
 
 def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
@@ -54,6 +54,12 @@ def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
     -------
     Edit
         Built-in forward helper spec.
+
+    Examples
+    --------
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+    >>> bool((edited["relu_1_2"].out == 0).all())
+    True
     """
 
     def factory() -> Callable[..., torch.Tensor]:
@@ -99,15 +105,18 @@ def mean_ablate(
         and never reads the traced batch (``is_batch_independent=True``). A
         :class:`~torchlens.intervention.Population` averages its members
         elementwise first (a reduction, never a draw: no seed, prepared at
-        construction), and ``dim`` then names the further site axes.
+        construction), and ``dim`` then says how far that mean reduces.
     dim:
-        REQUIRED. ``None`` averages every axis of a tensor or self source to
-        one scalar; an int or tuple of ints averages those axes with
-        ``keepdim`` broadcast. For a ``Population``, ``None`` is the
-        elementwise across-member mean and axes reduce that mean further. A
-        semantic axis name refuses ``axis_semantics_unknown`` until axis-role
-        evidence exists; any other spelling refuses ``intervention_over_invalid``
-        at construction (a typo can never flip ``is_batch_independent`` open).
+        REQUIRED. ``None`` averages every axis of the source to one scalar,
+        whatever the source (site, tensor, Op-like or ``Population``); an int
+        or tuple of ints averages those axes with ``keepdim`` broadcast (for a
+        ``Population``, the axes of its elementwise member mean).
+        ``"members"`` is the ``Population`` spelling for the elementwise
+        across-member mean itself, a fill with the members' shape; it refuses
+        ``intervention_over_invalid`` for any other source. A semantic axis
+        name refuses ``axis_semantics_unknown`` until axis-role evidence
+        exists; any other spelling refuses ``intervention_over_invalid`` at
+        construction (a typo can never flip ``is_batch_independent`` open).
     allow_shape_change:
         Stored escape-hatch metadata for execution.
 
@@ -118,161 +127,29 @@ def mean_ablate(
         population, whose members are not portable) with a DERIVED
         ``is_batch_independent`` flag: ``True`` iff the fill value provably never
         reads the traced batch.
+
+    Examples
+    --------
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.mean_ablate(dim=None)))
+    >>> edited["relu_1_2"].out.unique().numel() == 1
+    True
     """
 
+    if isinstance(dim, str) and dim == "members":
+        if not isinstance(source, Population):
+            raise _members_dim_without_population(source, dim)
+        return _population_mean_spec(source, axes="members", allow_shape_change=allow_shape_change)
     axes = _mean_ablate_axes(dim)
     if axes is None:
-        raise InvalidArgumentError(
-            f"mean_ablate(dim={dim!r}) is outside the mean vocabulary: dim=None "
-            "averages every axis, an int or tuple of ints names the axes to "
-            "average. Accepting another token would record a policy the hook "
-            "does not compute",
-            code="intervention_over_invalid",
-            remedy=(
-                "pass dim=None for the mean over all axes, or the explicit integer "
-                "axis (or tuple of axes) to average; pass source=<tensor> or "
-                "source=<Population> to average something other than the site"
-            ),
-            argument="dim",
-            received=repr(dim),
-        )
-    dim_kwarg: tuple[int, ...] | None = None if axes == "all" else axes
+        raise _dim_outside_mean_vocabulary(dim)
     if isinstance(source, Population):
-        return _population_mean_spec(source, axes=dim_kwarg, allow_shape_change=allow_shape_change)
+        return _population_mean_spec(source, axes=axes, allow_shape_change=allow_shape_change)
     return _source_mean_spec(source, axes=axes, allow_shape_change=allow_shape_change)
-
-
-def _source_mean_spec(
-    source: Any | None, *, axes: Literal["all"] | tuple[int, ...], allow_shape_change: bool
-) -> Edit:
-    """Build the ``mean_ablate`` spec for a self, tensor or Op-like source."""
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for mean ablation."""
-
-        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
-            """Return an out-shaped tensor filled with the source mean."""
-
-            values = _source_tensor_or_out(source, out).to(device=out.device, dtype=out.dtype)
-            if axes == "all":
-                return torch.zeros_like(out) + values.mean()
-            resolved = _resolve_over_axes(axes, values.ndim, verb="mean_ablate")
-            reduced = values.mean(dim=list(cast("tuple[int, ...]", resolved)), keepdim=True)
-            if source is None:
-                return torch.zeros_like(out) + reduced
-            return _broadcast_mean(reduced, out, argument="source").clone()
-
-        return _hook
-
-    # DERIVED, never tabled (edits memo D18): True only when the fill value
-    # provably never reads the traced batch. An external source qualifies;
-    # the self-mean reads every batch row and fails closed, and couples the
-    # rows (D34), so a chunked capture refuses it at attach.
-    batch_independent = source is not None
-    return _helper_spec(
-        "mean_ablate",
-        args=(source,),
-        kwargs={
-            "dim": None if axes == "all" else axes,
-            "allow_shape_change": allow_shape_change,
-        },
-        factory=factory,
-        signal="forward",
-        is_batch_independent=batch_independent,
-        is_compatible_with_append=not allow_shape_change,
-        metadata={"stochastic": False, **({} if batch_independent else {"batch_coherent": True})},
-    )
-
-
-def _population_mean_spec(
-    reference: Population, *, axes: tuple[int, ...] | None, allow_shape_change: bool
-) -> Edit:
-    """Build the ``mean_ablate`` spec whose source is a population.
-
-    The fill is computed eagerly at construction (populations are prepared
-    before hooks install, D10); the record says ``stochastic=False`` and no
-    seed is ever invented. ``axes=None`` is the elementwise across-member
-    mean, which must match the site's geometry exactly; explicit axes reduce
-    that mean further with ``keepdim`` and broadcast back to the site.
-    """
-
-    fill = reference.mean() if axes is None else reference.mean(axes)
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime population-mean fill hook."""
-
-        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
-            """Fill the site with the prepared population mean."""
-
-            prepared = fill.detach().to(device=out.device, dtype=out.dtype)
-            if axes is None:
-                _prove_event_geometry(prepared, out, verb="mean_ablate")
-                value = prepared
-            else:
-                value = _broadcast_mean(prepared, out, argument="source")
-            _record_sampling(
-                ctx,
-                "mean_ablate",
-                {
-                    "stochastic": False,
-                    "population_identity": reference.identity,
-                    "digest_kind": reference.digest_kind,
-                    "population_count": len(reference),
-                    "eligible_count": None,
-                    "base_seed": None,
-                    "derived_seed": None,
-                    "donor_group_id": None,
-                    "share_draw": None,
-                    "logical_firing_coordinate": (),
-                    "realized_draw_digest": None,
-                    "replacement_mode": "evidence_mean",
-                    "donor_grad": "detached",
-                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
-                },
-            )
-            return value.clone()
-
-        return _hook
-
-    return _helper_spec(
-        "mean_ablate",
-        kwargs={
-            "dim": axes,
-            "allow_shape_change": allow_shape_change,
-            "population_identity": reference.identity,
-            "population_count": len(reference),
-        },
-        factory=factory,
-        portability="opaque_audit",
-        is_batch_independent=True,
-        is_compatible_with_append=not allow_shape_change,
-        metadata={"stochastic": False},
-    )
-
-
-def _broadcast_mean(fill: torch.Tensor, out: torch.Tensor, *, argument: str) -> torch.Tensor:
-    """Expand a reduced mean to the site's shape, refusing typed when it cannot."""
-
-    if fill.shape == out.shape:
-        return fill
-    try:
-        return fill.expand(out.shape)
-    except RuntimeError:
-        raise InvalidArgumentError(
-            f"mean_ablate mean of shape {tuple(fill.shape)!r} does not broadcast to "
-            f"the site shape {tuple(out.shape)!r}",
-            code="sampling_geometry_mismatch",
-            remedy=(
-                "build the source at this site's geometry, or reduce over axes that broadcast back"
-            ),
-            argument=argument,
-        ) from None
 
 
 def scramble_elements(
     source: Any | None = None,
     *,
-    from_: Any | None = None,
     seed: int | None = None,
     allow_shape_change: bool = False,
 ) -> Edit:
@@ -302,10 +179,6 @@ def scramble_elements(
     ----------
     source:
         Source tensor or Op-like object.
-    from_:
-        Alias for ``source`` retained for the PLAN.md constructor spelling.
-        Passing BOTH ``source=`` and ``from_=`` refuses typed
-        (``intervention_source_conflict``); the two spellings name one slot.
     seed:
         Optional hook-local RNG seed.
     allow_shape_change:
@@ -315,18 +188,16 @@ def scramble_elements(
     -------
     Edit
         Built-in stochastic forward helper spec.
+
+    Examples
+    --------
+    >>> source = torch.tensor([1.0, 2.0, 3.0])
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), scramble_elements(source, seed=0)))
+    >>> set(edited["relu_1_2"].out.unique().tolist()) <= {1.0, 2.0, 3.0}
+    True
     """
 
-    if source is not None and from_ is not None:
-        raise InvalidArgumentError(
-            "scramble_elements received BOTH source= and from_=; the two "
-            "spellings name the same source slot and choosing one silently "
-            "would hide a caller mistake",
-            code="intervention_source_conflict",
-            remedy="pass exactly one of source= or from_=",
-            argument="source",
-        )
-    source_value = source if source is not None else from_
+    source_value = source
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for the elementwise scramble.
@@ -378,7 +249,6 @@ def steer(
     direction: torch.Tensor,
     strength: float = 1.0,
     *,
-    coef: float | None = None,
     dim: int | None = None,
     allow_shape_change: bool = False,
 ) -> Edit:
@@ -390,11 +260,9 @@ def steer(
         Direction tensor.
     strength:
         Scalar multiplier.
-    coef:
-        PLAN.md alias for ``strength``.
     dim:
-        Required when a vector direction must be aligned with an out
-        axis, avoiding silent batch/position assumptions.
+        Out axis a vector direction lies along. Omitted, it is inferred when exactly one
+        out axis has the direction's length; else ``AmbiguousAxisError`` (pass ``dim=``).
     allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
@@ -402,9 +270,16 @@ def steer(
     -------
     Edit
         Built-in forward helper spec.
+
+    Examples
+    --------
+    >>> clean = tl.trace(model, x)
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.steer(torch.ones(4), strength=2.0, dim=1)))
+    >>> torch.allclose(edited["relu_1_2"].out, clean["relu_1_2"].out + 2.0)
+    True
     """
 
-    scale_value = strength if coef is None else coef
+    scale_value = strength
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for steering.
@@ -418,7 +293,7 @@ def steer(
         def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Add the steering vector to the out."""
 
-            aligned = _align_direction(direction, out, dim=dim)
+            aligned = _align_direction(direction, out, dim=dim, infer=True)
             return out + aligned.to(device=out.device, dtype=out.dtype) * scale_value
 
         return _hook
@@ -451,6 +326,13 @@ def scale(factor: float, *, allow_shape_change: bool = False) -> Edit:
     -------
     Edit
         Built-in forward helper spec.
+
+    Examples
+    --------
+    >>> clean = tl.trace(model, x)
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.scale(0.5)))
+    >>> torch.allclose(edited["relu_1_2"].out, clean["relu_1_2"].out * 0.5)
+    True
     """
 
     def factory() -> Callable[..., torch.Tensor]:
@@ -500,6 +382,12 @@ def clamp(
     -------
     Edit
         Built-in forward helper spec.
+
+    Examples
+    --------
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.clamp(low=0.0, high=0.1)))
+    >>> bool(edited["relu_1_2"].out.max() <= 0.1)
+    True
     """
 
     if low is None and high is None:
@@ -552,6 +440,13 @@ def add_noise(
     -------
     Edit
         Built-in stochastic forward helper spec.
+
+    Examples
+    --------
+    >>> clean = tl.trace(model, x)
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.add_noise(0.1, seed=0)))
+    >>> tuple(edited["relu_1_2"].out.shape), bool((edited["relu_1_2"].out != clean["relu_1_2"].out).any())
+    ((1, 4, 8, 8), True)
     """
 
     def factory() -> Callable[..., torch.Tensor]:
@@ -615,6 +510,13 @@ def project_onto(
     -------
     Edit
         Built-in forward helper spec.
+
+    Examples
+    --------
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.project_onto(torch.ones(4), dim=1)))
+    >>> out = edited["relu_1_2"].out
+    >>> torch.allclose(out[:, 0], out[:, 1])
+    True
     """
 
     def factory() -> Callable[..., torch.Tensor]:
@@ -675,6 +577,12 @@ def project_out(
     -------
     Edit
         Built-in forward helper spec.
+
+    Examples
+    --------
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.project_out(torch.ones(4), dim=1)))
+    >>> torch.allclose(edited["relu_1_2"].out.sum(dim=1), torch.zeros(1, 8, 8), atol=1e-5)
+    True
     """
 
     onto_spec = project_onto(
@@ -816,6 +724,13 @@ def splice_module(
     -------
     Edit
         Built-in forward helper spec.
+
+    Examples
+    --------
+    >>> splice = nn.Conv2d(4, 4, 1)
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.splice_module(splice, input_route="out")))
+    >>> tuple(edited["relu_1_2"].out.shape)
+    (1, 4, 8, 8)
     """
 
     if input_route not in {"in", "out"} or output_route != "out":
@@ -885,6 +800,12 @@ def clip_norm(max_norm: float, norm_type: float = 2.0) -> Edit:
     -------
     Edit
         Built-in neutral helper spec.
+
+    Examples
+    --------
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.clip_norm(1.0)))
+    >>> bool(torch.linalg.vector_norm(edited["relu_1_2"].out) <= 1.0 + 1e-5)
+    True
     """
 
     if not max_norm > 0:
@@ -1074,11 +995,9 @@ def _builtin_constructor_lookup(name: str) -> tuple[dict[str, Callable[..., Edit
 def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Edit:
     """Rebuild one builtin helper spec through its public constructor.
 
-    The single builtin-name registry shared by ``.tlspec`` intervention-spec
-    loads and ``Edit`` pickle restore: a builtin helper's runtime hook
-    factory is a local closure (never serialized), so both restore paths
-    re-derive the whole spec from its stable ``(name, args, kwargs)``
-    identity by re-invoking the constructor.
+    Shared by ``.tlspec`` loads and ``Edit`` pickle restore: the hook factory is a
+    local closure (never serialized), so both re-invoke the constructor on the stable
+    ``(name, args, kwargs)``; a stored element mask is checked and re-applied.
 
     Parameters
     ----------
@@ -1097,9 +1016,8 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
     Raises
     ------
     InvalidArgumentError
-        ``intervention_helper_unknown`` if ``name`` is not a known builtin
-        helper; ``intervention_helper_renamed`` if it is the old name of a
-        renamed one (a clean break: a saved spec naming it no longer loads).
+        ``intervention_helper_unknown``, ``intervention_helper_renamed`` (a clean break) or
+        ``intervention_helper_arguments_invalid`` (foreign keywords, or a bad stored mask).
     """
 
     constructors, renamed_to = _builtin_constructor_lookup(name)
@@ -1124,21 +1042,15 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
             renamed_to=renamed_to,
         )
     constructor = constructors[name]
-    try:
-        inspect.signature(constructor).bind(*args, **kwargs)
-    except TypeError as exc:
+    kwargs, stored_mask, problem = checked_arguments(name, constructor, args, kwargs)
+    if problem is not None:
         raise InvalidArgumentError(
-            f"The saved intervention calls builtin helper {name!r} with arguments its "
-            f"constructor does not take ({exc}); the spec was saved by a torchlens whose "
-            "helper keywords differ",
+            problem.message,
             code="intervention_helper_arguments_invalid",
-            remedy=(
-                "load the spec with the torchlens version that saved it, or rebuild the "
-                "edit with the current constructor and save it again"
-            ),
-            argument="kwargs",
-        ) from exc
-    return constructor(*args, **kwargs)
+            remedy=problem.remedy,
+            argument=problem.argument,
+        ) from problem.cause
+    return with_stored_mask(constructor(*args, **kwargs), stored_mask)
 
 
 #: The one remedy text for the retired ``resample_ablate`` spelling, shared by
@@ -1280,61 +1192,23 @@ __all__ = [
 ]
 
 
-def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
-    """Resolve one PASS-QUALIFIED donor op on the patch source trace.
+def _patch_donor_value(source: Any, source_site: Any, fire_op: Any) -> tuple[Any, torch.Tensor]:
+    """Return ``(site_label, donor value)`` for one firing of a ``patch_from`` hook.
 
-    Prefers the fire context's pass-qualified ``label`` spelling, then
-    derives ``layer_label:pass_index``; a bare label reaching a multi-pass
-    donor site refuses typed (never guess a pass -- the historical bare
-    lookup silently returned the LAST pass). Returns ``(site_label, op)``.
+    The donor op is ``source_site`` on ``source`` when given, else the
+    pass-qualified op matching the firing site. A facet target (``tl.head`` /
+    ``tl.facet``) edits one slice of the home op, so the donor value is the SAME
+    facet view of the source value, never the whole home output.
     """
 
-    from .errors import HookValueError
-
-    context = layer_log if layer_log else {}
-    qualified = context.get("label")
-    bare = context.get("layer_label")
-    pass_index = context.get("pass_number")
-
-    site_label: Any = None
-    if isinstance(qualified, str) and ":" in qualified:
-        site_label = qualified
-    elif isinstance(bare, str) and isinstance(pass_index, int) and pass_index >= 1:
-        site_label = f"{bare}:{pass_index}"
-    elif bare is not None:
-        site_label = bare
-
-    source_site = None
-    if site_label is not None:
-        source_site = source._layer_dict_all_keys.get(site_label)
     if source_site is None:
-        live_label, source_site = _live_capture_donor(source, context)
-        if source_site is not None:
-            site_label = live_label
-    if source_site is None:
-        raise HookValueError(
-            f"patch_from source trace has no site {site_label!r}; patch "
-            "selections must resolve on sites the source captured "
-            "(multi-pass sites resolve pass-qualified, 'label:pass'; a live "
-            "rerun or bound firing resolves to the source op captured at the "
-            "same position, only when that op has the same type and shape)."
-        )
-    if isinstance(site_label, str) and ":" not in site_label:
-        num_passes = int(getattr(source_site, "num_passes", 1) or 1)
-        if num_passes > 1:
-            layer_label = getattr(source_site, "layer_label", site_label)
-            spellings = ", ".join(f"'{layer_label}:{index}'" for index in range(1, num_passes + 1))
-            raise HookValueError(
-                f"patch_from donor site {site_label!r} is multi-pass "
-                f"({num_passes} passes) and the fire context carries no pass: "
-                "a donor pass is never guessed (the bare lookup historically "
-                "returned the LAST pass silently). Remedy: address one donor "
-                f"pass explicitly: {spellings}.",
-                code="patch_donor_pass_ambiguous",
-                site=site_label,
-                num_passes=num_passes,
-            )
-    return site_label, source_site
+        site_label, donor_op = _resolve_patch_donor_site(source, fire_op)
+    else:
+        site_label, donor_op = resolve_source_site(source, source_site)
+    value = donor_op.out
+    if not isinstance(value, torch.Tensor):
+        raise HookValueError(f"patch_from source value at {site_label!r} is not a tensor.")
+    return site_label, _donor_facet_slice(source, donor_op, value)
 
 
 def patch_from(
@@ -1350,7 +1224,10 @@ def patch_from(
     recorded post-capture value at that same site (same-trace alignment is
     exact by construction: same index spaces). Combined with a Selection
     target, only the selected elements are patched (the engine's
-    edit-then-scatter contract).
+    edit-then-scatter contract). With a facet or head target
+    (``tl.head(h, "v")``, ``tl.facet(name)``) the donor is the same facet
+    view of the source's home-op value, so only that slice is copied;
+    ``positions=`` then indexes the facet slice's axes.
 
     PORTABILITY: ``opaque_audit`` (the shipped rule) — the spec's persisted
     args carry the source-trace IDENTITY (label + class + a stable id), never
@@ -1393,9 +1270,16 @@ def patch_from(
         The patch edit.
 
     DOCUMENTED-UNSTABLE spelling pending its naming-session ratification.
+
+    Examples
+    --------
+    >>> donor = tl.trace(model, torch.randn(1, 3, 8, 8))
+    >>> fork = tl.trace(model, x).fork()
+    >>> _ = fork.do("relu_1_2", tl.patch_from(donor))
+    >>> torch.equal(fork["relu_1_2"].out, donor["relu_1_2"].out)
+    True
     """
 
-    from ._patch_mapping import apply_position_map, normalize_positions, resolve_source_site
     from .stochastic import SamplingPlan, plan_patch_helper
 
     if isinstance(source, SamplingPlan):
@@ -1427,15 +1311,7 @@ def patch_from(
             recurrent/weight-reused models.
             """
 
-            from .errors import HookValueError
-
-            if source_site is None:
-                site_label, donor_op = _resolve_patch_donor_site(source, ctx.op)
-            else:
-                site_label, donor_op = resolve_source_site(source, source_site)
-            value = donor_op.out
-            if not isinstance(value, torch.Tensor):
-                raise HookValueError(f"patch_from source value at {site_label!r} is not a tensor.")
+            site_label, value = _patch_donor_value(source, source_site, ctx.op)
             # Never hand the source trace's stored tensor itself downstream —
             # the engine writes hook outputs into this trace's records.
             if pairs is None:

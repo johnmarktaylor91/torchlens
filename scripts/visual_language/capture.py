@@ -24,7 +24,6 @@ from scripts.visual_language.models import FIXTURES
 from scripts.visual_language.scale_models import SCALE_FIXTURES
 from scripts.visual_language.sentinel_models import SENTINEL_FIXTURES
 from scripts.visual_language.slides import CONVENTIONS, Panel, Slide
-from torchlens import _visualization
 from torchlens._record_type import record_type
 from torchlens._visualization import lenses
 from torchlens._visualization._encoding import EncodingChannelRequest
@@ -73,7 +72,7 @@ CALLABLES: Mapping[str, Callable[[], Any]] = {
     "@bytes_rank": lambda: EncodingChannelRequest(source="bytes", transform="rank"),
     "@bytes_log": lambda: EncodingChannelRequest(source="bytes", transform="log"),
     "@score_map": lambda: {"mul_1_1": 0.8},
-    "@unsaved_abs": lambda: lambda op: "abs" not in str(op.func_name),
+    "@unsaved_abs": lambda: ~tl.func("abs"),
     "@badge": lambda: _badge,
     "@boxbadge": lambda: _boxbadge,
     "@to_tensor": _ToTensor,
@@ -132,8 +131,8 @@ def _summary_dot(text: str) -> str:
     )
 
 
-def _log_backward(trace: Any) -> Any:
-    trace.log_backward(trace[trace.output_layers[0]].out)
+def _backward(trace: Any) -> Any:
+    trace.backward(trace[trace.output_layers[0]].out)
     return trace
 
 
@@ -152,12 +151,14 @@ def capture(panel: Panel) -> tuple[Any, Any]:
     kwargs: dict[str, Any] = {}
     if panel.capture:
         options = {k: _resolve(v) for k, v in panel.capture.items()}
+        if "save" in options:
+            kwargs["save"] = options.pop("save")
         kwargs["capture"] = tl.options.CaptureOptions(**options)
     if panel.intervene:
         kwargs["intervene"] = INTERVENTIONS[panel.intervene]()
     trace = tl.trace(model, inputs, **kwargs)
-    if panel.prep == "log_backward":
-        trace = _log_backward(trace)
+    if panel.prep == "backward":
+        trace = _backward(trace)
     elif panel.prep == "higher_order":
         trace = _higher_order(trace, inputs)
     return trace, inputs
@@ -194,10 +195,9 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         lens = kwargs.pop("lens")
         return str(lenses.draw_with_lens(trace, lens, **kwargs))
     if panel.call == "surgery":
-        from torchlens._visualization.surgery_visuals import render_surgery
-
+        # The panel's kwargs carry highlight="interventions"; the edit is made here.
         fork = _fork_edit(trace)
-        graph = render_surgery(fork, **kwargs)
+        graph = fork.draw(**kwargs)
         return str(getattr(graph, "source", graph))
     if panel.call == "surgery_diff":
         fork = _fork_edit(trace)
@@ -208,11 +208,11 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         diff.draw(str(outpath), vis_fileformat="svg", vis_save_only=True)
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
-    if panel.call in ("bundle_graph", "bundle_diff"):
-        # The bundle doors keep the engine spelling of the viewer switch.
-        kwargs["vis_save_only"] = not kwargs.pop("open_viewer", False)
-        if panel.call == "bundle_graph":
-            return str(_visualization.show_bundle_graph(_bundle(trace), **kwargs))
+    if panel.call == "bundle_graph":
+        # Bundle.draw takes the draw spellings (open_viewer, never vis_save_only).
+        return str(_bundle(trace).draw(**kwargs))
+    if panel.call == "bundle_diff":
+        # tl.viz.bundle_diff takes the draw spelling of the viewer switch (open_viewer).
         return str(tl.viz.bundle_diff(_bundle(trace), **kwargs))
     raise ValueError(f"unknown call {panel.call!r}")
 

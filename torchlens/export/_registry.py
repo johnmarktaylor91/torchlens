@@ -70,6 +70,15 @@ def register_target(
     -------
     RegistrationInfo
         The immutable registration metadata.
+
+    Examples
+    --------
+    >>> info = tl.export.register_target("demo_target", lambda trace, path: path, tier="present")
+    >>> info.capabilities["tier"]
+    'present'
+    >>> "demo_target" in tl.export.list_targets()
+    True
+    >>> tl.export.unregister_target("demo_target")
     """
 
     if not callable(fn):
@@ -102,24 +111,61 @@ def register_target(
 
 
 def unregister_target(name: str) -> None:
-    """Remove one export-target registration."""
+    """Remove one export-target registration.
+
+    Examples
+    --------
+    >>> info = tl.export.register_target("demo_target", lambda trace, path: path, tier="present")
+    >>> tl.export.unregister_target("demo_target")
+    >>> "demo_target" in tl.export.list_targets()
+    False
+    """
 
     _EXPORT_REGISTRY.unregister(name)
 
 
 def list_targets() -> tuple[str, ...]:
-    """Return the registered export-target names."""
+    """Return the registered export-target names.
+
+    Examples
+    --------
+    >>> targets = tl.export.list_targets()
+    >>> isinstance(targets, tuple)
+    True
+    >>> "csv" in targets
+    True
+    """
 
     return _EXPORT_REGISTRY.list_ids()
 
 
 def describe_target(name: str) -> RegistrationInfo:
-    """Return one export target's registration metadata (tier row included)."""
+    """Return one export target's registration metadata (tier row included).
+
+    Examples
+    --------
+    >>> tl.export.describe_target("csv").capabilities["tier"]
+    'present'
+    >>> tl.export.describe_target("netron").capabilities["tier"]
+    'bridge'
+    """
 
     return _EXPORT_REGISTRY.info(name)
 
 
 def resolve_target(name: str) -> Callable[..., Any]:
-    """Return one registered exporter callable; unknown names refuse teaching."""
+    """Return one registered exporter callable; unknown names refuse teaching.
+
+    Examples
+    --------
+    >>> tl.export.resolve_target("csv") is tl.export.csv
+    True
+    >>> try:
+    ...     tl.export.resolve_target("no_such_target")
+    ... except tl.errors.TorchLensError as err:
+    ...     refused = type(err).__name__
+    >>> refused
+    'RegistryError'
+    """
 
     return _EXPORT_REGISTRY.get(name)

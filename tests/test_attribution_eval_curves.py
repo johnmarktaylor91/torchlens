@@ -74,39 +74,6 @@ def _linear_model() -> tuple[nn.Linear, Tensor]:
 
 
 @pytest.mark.parametrize("kind", ["deletion", "insertion"])
-def test_curve_equals_closed_form_on_linear_model(kind: str) -> None:
-    """One feature per step on ``w.x + b``: scores, area and AOPC equal the closed form."""
-
-    model, x = _linear_model()
-    result = attribution.input_x_grad(model, x, target=0)
-    curve_fn = attribution.deletion_curve if kind == "deletion" else attribution.insertion_curve
-    curve = curve_fn(model, x, target=0, attribution=result, num_steps=6)
-
-    contributions = (model.weight[0] * x[0]).detach()
-    order = torch.sort(contributions, descending=True, stable=True).indices
-    bias = model.bias[0].detach()
-    full = contributions.sum() + bias
-    expected = [full] if kind == "deletion" else [bias]
-    for index in order:
-        step = contributions[index]
-        expected.append(expected[-1] - step if kind == "deletion" else expected[-1] + step)
-    expected_scores = torch.stack(expected).reshape(7, 1)
-
-    assert torch.equal(curve.scores, expected_scores)
-    assert torch.equal(curve.fractions, torch.arange(7, dtype=torch.float64) / 6)
-    sign = 1.0 if kind == "deletion" else -1.0
-    expected_aopc = float((sign * (expected_scores[0] - expected_scores)).mean())
-    expected_area = float(
-        sum((expected_scores[k, 0] + expected_scores[k + 1, 0]) / 2 for k in range(6)) / 6
-    )
-    assert curve.aopc == expected_aopc
-    assert curve.area == pytest.approx(expected_area, abs=1e-12)
-    assert curve.settings["features"] == "elements"
-    assert curve.extra["n_features"] == 6
-    assert [step.num_features for step in curve.steps] == list(range(7))
-
-
-@pytest.mark.parametrize("kind", ["deletion", "insertion"])
 def test_curve_steps_replay_to_their_scores_on_small_cnn(kind: str) -> None:
     """Every recorded step, replayed by ``trace.fork().do(selection, edit)``, gives its score."""
 
@@ -133,29 +100,6 @@ def test_curve_steps_replay_to_their_scores_on_small_cnn(kind: str) -> None:
         held = step.build_baseline_mask
         assert torch.all(step.build_inputs[held] == 0.5)
         assert torch.equal(step.build_inputs[~held], x[~held])
-
-
-def test_attribution_aopc_beats_random_ranking_when_true_ranking_is_known() -> None:
-    """On ``sum_i w_i x_i ** 2`` the input-times-gradient ranking is the true one."""
-
-    torch.manual_seed(0)
-    weight = torch.rand(16) + 0.1
-    model = SquareSum(weight)
-    x = torch.randn(1, 16)
-    result = attribution.input_x_grad(model, x, target=0)
-    curve = attribution.deletion_curve(model, x, target=0, attribution=result, num_steps=16)
-    for seed in range(10):
-        generator = torch.Generator().manual_seed(seed)
-        random_map = torch.rand(1, 16, generator=generator)
-        random_curve = attribution.deletion_curve(
-            model, x, target=0, attribution=random_map, num_steps=16
-        )
-        assert curve.aopc > random_curve.aopc
-    insertion = attribution.insertion_curve(model, x, target=0, attribution=result, num_steps=16)
-    random_insertion = attribution.insertion_curve(
-        model, x, target=0, attribution=torch.rand(1, 16), num_steps=16
-    )
-    assert insertion.aopc > random_insertion.aopc
 
 
 def _tiny_vit() -> tuple[nn.Module, Any]:

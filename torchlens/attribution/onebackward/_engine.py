@@ -6,7 +6,7 @@ per unique ``(node, slot)``, D11), ``allow_unused=True``,
 ``materialize_grads=False`` ALWAYS (torch itself REFUSES ``True`` on
 GradientEdge inputs -- the band probe pinned it -- and silent
 zero-materialization would fabricate rows), ``retain_graph=True`` always
-(repeated reads and a later ordinary ``log_backward`` must work).
+(repeated reads and a later ordinary ``backward`` must work).
 
 Target batching (D12) is chunked ``is_grads_batched=True`` VJPs with a
 plan-vs-refusal posture -- BUT chunks group by CONE: a batched call returns

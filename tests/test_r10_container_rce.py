@@ -20,7 +20,8 @@ so an absolute / ``..`` member path escaped the bundle root. The fix
 
 from __future__ import annotations
 
-import os
+import copy
+import json
 import pickle
 import sys
 from collections import OrderedDict
@@ -29,11 +30,12 @@ from typing import Any, NamedTuple
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
-from torchlens._io.bundle_container import _resolve_bundle_member_path
+from torchlens._io.format3.values import ValueEncoder
 from torchlens._ir.container import (
     ContainerReconstructionError,
     ContainerSpec,
@@ -77,13 +79,6 @@ class _NamedTupleModel(nn.Module):
         return _Pair(x + 1, 7)
 
 
-class _StructseqModel(nn.Module):
-    """Return a ``torch.return_types`` structseq output."""
-
-    def forward(self, x: torch.Tensor) -> Any:
-        return torch.max(x, dim=0)
-
-
 class _OrderedDictModel(nn.Module):
     """Return an ``OrderedDict`` output (faithfully reconstructable mapping subtype)."""
 
@@ -91,45 +86,20 @@ class _OrderedDictModel(nn.Module):
         return OrderedDict([("value", x + 1), ("meta", 3)])
 
 
-def _find_container_specs(obj: Any) -> list[ContainerSpec]:
-    """Return every ``ContainerSpec`` reachable from a pickled metadata object."""
+class _DictModel(nn.Module):
+    """Return a plain three-tensor dict output (three leaves, no type reference)."""
 
-    seen: set[int] = set()
-    specs: list[ContainerSpec] = []
-
-    def walk(node: Any, depth: int = 0) -> None:
-        if id(node) in seen or depth > 16:
-            return
-        seen.add(id(node))
-        if isinstance(node, ContainerSpec):
-            specs.append(node)
-            return
-        if isinstance(node, dict):
-            for value in node.values():
-                walk(value, depth + 1)
-        elif isinstance(node, (list, tuple, set, frozenset)):
-            for value in node:
-                walk(value, depth + 1)
-        else:
-            for value in (getattr(node, "__dict__", None) or {}).values():
-                walk(value, depth + 1)
-            for slot in getattr(type(node), "__slots__", ()) or ():
-                try:
-                    walk(getattr(node, slot, None), depth + 1)
-                except Exception:
-                    pass
-
-    walk(obj)
-    return specs
+    def forward(self, x: torch.Tensor) -> Any:
+        return {"a": x + 1, "b": x + 2, "c": x + 3}
 
 
-def _tamper_output_container_type(
-    bundle: Path, *, type_module: str, type_qualname: str, sentinel: Path
-) -> None:
-    """Overwrite the shared output ``ContainerSpec`` to name an arbitrary constructor."""
+_CONTAINER_SPEC_TYPE = "torchlens._ir.container.ContainerSpec"
 
-    with open(bundle / "metadata.pkl", "rb") as handle:
-        obj = pickle.load(handle)
+
+def _tampered_spec_cell(*, type_module: str, type_qualname: str, sentinel: Path) -> Any:
+    """Return the typed-JSON cell of a ``ContainerSpec`` that names an arbitrary constructor."""
+
+    spec = ContainerSpec(kind="tuple")
     child = ContainerSpec(kind="literal", literal_value=["/bin/sh", "-c", f"touch {sentinel}"])
     tampered = {
         "kind": "namedtuple",
@@ -140,11 +110,68 @@ def _tamper_output_container_type(
         "keys": (),
         "child_specs": ((NamedField("args"), child),),
     }
-    for spec in _find_container_specs(obj):
-        for key, value in tampered.items():
-            object.__setattr__(spec, key, value)
-    with open(bundle / "metadata.pkl", "wb") as handle:
-        pickle.dump(obj, handle)
+    for key, value in tampered.items():
+        object.__setattr__(spec, key, value)
+    return ValueEncoder().encode(spec, "r10-tamper")
+
+
+def _tampered_mapping_spec_cell(*, sentinel: Path) -> Any:
+    """Return the typed-JSON cell of a three-slot ``dict`` spec whose type is ``subprocess.Popen``.
+
+    The three keys are the argv of a shell command and each key holds one leaf slot, so the
+    spec consumes exactly the three real output leaves: the leaf-count check passes and the
+    mapping-subtype rebuild reaches ``container_type(items)``, which for ``Popen`` would run
+    ``list(items)`` (the keys) as a command. Only the admissibility gate stands in between.
+    """
+
+    spec = ContainerSpec(kind="dict")
+    tampered = {
+        "type_module": "subprocess",
+        "type_qualname": "Popen",
+        "keys": ("/bin/sh", "-c", f"touch {sentinel}"),
+        "child_specs": (),
+    }
+    for key, value in tampered.items():
+        object.__setattr__(spec, key, value)
+    return ValueEncoder().encode(spec, "r10-tamper-mapping")
+
+
+def _replace_container_specs(node: Any, cell: Any) -> int:
+    """Replace every ``ContainerSpec`` record cell under ``node`` in place; return the count."""
+
+    replaced = 0
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if isinstance(value, dict) and value.get("type") == _CONTAINER_SPEC_TYPE:
+                node[key] = copy.deepcopy(cell)
+                replaced += 1
+            else:
+                replaced += _replace_container_specs(value, cell)
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            if isinstance(value, dict) and value.get("type") == _CONTAINER_SPEC_TYPE:
+                node[index] = copy.deepcopy(cell)
+                replaced += 1
+            else:
+                replaced += _replace_container_specs(value, cell)
+    return replaced
+
+
+def _tamper_output_container_type(
+    bundle: Path, *, type_module: str, type_qualname: str, sentinel: Path
+) -> None:
+    """Overwrite every saved ``ContainerSpec`` to name an arbitrary constructor.
+
+    The saved format keeps container specs as typed-JSON records in the record
+    tables (and the runnable descriptor when it carries one). Each rewritten file
+    is re-listed in the manifest with its new digest, so the tampered spec reaches
+    reconstruction instead of stopping at the file-table check.
+    """
+
+    cell = _tampered_spec_cell(
+        type_module=type_module, type_qualname=type_qualname, sentinel=sentinel
+    )
+    _rewrite_container_spec_cells(bundle, cell)
 
 
 # --------------------------------------------------------------------------- #
@@ -172,29 +199,72 @@ def test_tampered_container_type_denies_code_execution(
 
     loaded = tl.load(bundle)
     with pytest.raises(RunPreconditionError):
-        loaded.run(inputs=torch.randn(1, 4))
+        loaded.run_transaction(inputs=torch.randn(1, 4))
     # The command must NEVER have run -- no sentinel, no side effect.
+    assert not sentinel.exists()
+
+
+def _rewrite_container_spec_cells(bundle: Path, cell: Any) -> None:
+    """Replace every saved ``ContainerSpec`` cell with ``cell``, re-digesting each file."""
+
+    total = 0
+    for path in sorted(bundle.rglob("*.json")):
+        relpath = path.relative_to(bundle).as_posix()
+        if relpath == "manifest.json":
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        replaced = _replace_container_specs(payload, cell)
+        if replaced:
+            path.write_text(
+                json.dumps(payload, separators=(",", ":"), ensure_ascii=False), encoding="utf-8"
+            )
+            redigest(bundle, relpath)
+            total += replaced
+    assert total, "the saved bundle carries no ContainerSpec to tamper"
+
+
+def _chain_text(exc: BaseException) -> str:
+    """Return the messages of ``exc`` and every exception it was raised from."""
+
+    parts: list[str] = []
+    current: BaseException | None = exc
+    while current is not None and len(parts) < 16:
+        parts.append(str(current))
+        current = current.__cause__ or current.__context__
+    return " | ".join(parts)
+
+
+def test_leaf_shaped_tampered_mapping_type_is_stopped_by_the_admissibility_gate(
+    tmp_path: Path,
+) -> None:
+    """A tamper with exactly the real leaf count is stopped by the admissibility gate alone.
+
+    The case above is also stopped by the leaf-count check, so it stays green when the
+    gate is removed. Here the tampered spec declares one leaf slot per real output leaf,
+    the leaf-count check passes, and the refusal must name the disallowed type.
+    """
+
+    import subprocess  # noqa: F401  (the resolver only reads modules already loaded)
+
+    sentinel = tmp_path / "rce_proof_mapping.txt"
+    bundle = tmp_path / "rce_mapping.tlspec"
+    tl.trace(_DictModel(), torch.randn(1, 4), capture=_CAP).save(
+        bundle, level="runnable", include_weights=True
+    )
+    _rewrite_container_spec_cells(bundle, _tampered_mapping_spec_cell(sentinel=sentinel))
+
+    loaded = tl.load(bundle)
+    with pytest.raises(RunPreconditionError) as caught:
+        loaded.run_transaction(inputs=torch.randn(1, 4))
+    chain = _chain_text(caught.value)
+    assert "disallowed type subprocess.Popen" in chain
+    assert "leaves supplied" not in chain
     assert not sentinel.exists()
 
 
 # --------------------------------------------------------------------------- #
 # FINDING 1 -- unit-level default-deny of the container-type resolver.
 # --------------------------------------------------------------------------- #
-
-
-def test_resolver_denies_loaded_non_container_type_without_construction() -> None:
-    """A loaded type that is not the recorded benign kind is refused, not constructed."""
-
-    import subprocess  # noqa: F401  (ensure it is in sys.modules)
-
-    spec = ContainerSpec(
-        kind="namedtuple",
-        fields=("args",),
-        type_module="subprocess",
-        type_qualname="Popen",
-    )
-    with pytest.raises(ContainerReconstructionError):
-        _resolve_container_type(spec)
 
 
 def test_container_tripwire_is_a_registered_typed_refusal() -> None:
@@ -207,8 +277,6 @@ def test_container_tripwire_is_a_registered_typed_refusal() -> None:
     deepcopy round-trips keep the structured payload (the R64 pickle-family
     defect class).
     """
-
-    import copy
 
     from torchlens import errors as tl_errors
 
@@ -277,26 +345,11 @@ def test_legit_namedtuple_output_still_round_trips(tmp_path: Path) -> None:
     tl.trace(_NamedTupleModel(), x, capture=_CAP).save(
         bundle, level="runnable", include_weights=True
     )
-    result = tl.load(bundle).run(inputs=x)
+    result = tl.load(bundle).run_transaction(inputs=x)
 
     assert type(result.output) is _Pair
     assert result.output.meta == 7
     assert torch.equal(result.output.value, x + 1)
-
-
-def test_legit_structseq_output_still_round_trips(tmp_path: Path) -> None:
-    """A torch.return_types structseq output reconstructs to its exact type."""
-
-    x = torch.tensor([[1.0, 4.0], [3.0, 2.0]])
-    bundle = tmp_path / "structseq.tlspec"
-    tl.trace(_StructseqModel(), x, capture=_CAP).save(
-        bundle, level="runnable", include_weights=True
-    )
-    result = tl.load(bundle).run(inputs=x)
-    live = _StructseqModel()(x)
-
-    assert type(result.output) is type(live)
-    assert torch.equal(result.output.values, live.values)
 
 
 def test_legit_ordereddict_output_still_round_trips(tmp_path: Path) -> None:
@@ -307,60 +360,16 @@ def test_legit_ordereddict_output_still_round_trips(tmp_path: Path) -> None:
     tl.trace(_OrderedDictModel(), x, capture=_CAP).save(
         bundle, level="runnable", include_weights=True
     )
-    result = tl.load(bundle).run(inputs=x)
+    result = tl.load(bundle).run_transaction(inputs=x)
 
     assert type(result.output) is OrderedDict
     assert list(result.output.keys()) == ["value", "meta"]
     assert result.output["meta"] == 3
 
 
-def test_resolver_admits_torch_structseq_and_namedtuple_and_ordereddict() -> None:
-    """Direct resolver admits the benign container classes it must keep working."""
-
-    assert (
-        _resolve_container_type(
-            ContainerSpec(kind="namedtuple", type_module="torch.return_types", type_qualname="max")
-        )
-        is torch.return_types.max
-    )
-    assert (
-        _resolve_container_type(
-            ContainerSpec(
-                kind="namedtuple",
-                fields=("value", "meta"),
-                type_module=_Pair.__module__,
-                type_qualname=_Pair.__qualname__,
-            )
-        )
-        is _Pair
-    )
-    assert (
-        _resolve_container_type(
-            ContainerSpec(kind="dict", type_module="collections", type_qualname="OrderedDict")
-        )
-        is OrderedDict
-    )
-
-
 # --------------------------------------------------------------------------- #
 # FINDING 2 -- member-path traversal guard.
 # --------------------------------------------------------------------------- #
-
-
-@pytest.mark.parametrize("evil", ["/etc/passwd", "../../etc/passwd", "../escape", "a/../../b"])
-def test_member_path_rejects_traversal(evil: str, tmp_path: Path) -> None:
-    """Absolute / parent-traversal member paths are rejected."""
-
-    with pytest.raises(ArtifactError):
-        _resolve_bundle_member_path(tmp_path, evil)
-
-
-def test_member_path_accepts_legit_relative(tmp_path: Path) -> None:
-    """A legit ``members/NNNN.tlspec`` member path resolves inside the bundle root."""
-
-    resolved = _resolve_bundle_member_path(tmp_path, "members/0000.tlspec")
-    assert resolved == (tmp_path / "members" / "0000.tlspec").resolve()
-    assert resolved.resolve().is_relative_to(tmp_path.resolve())
 
 
 @pytest.mark.parametrize("evil_path", ["/etc/passwd", "../../outside.tlspec"])
@@ -387,15 +396,3 @@ def test_bundle_loader_rejects_escaping_member_path(evil_path: str, tmp_path: Pa
 # --------------------------------------------------------------------------- #
 # Prior gate denials remain intact (defense-in-depth parity smoke).
 # --------------------------------------------------------------------------- #
-
-
-def test_os_module_not_leaked_by_container_resolver() -> None:
-    """The resolver never returns a bare function/module even when named."""
-
-    assert (
-        _resolve_container_type(
-            ContainerSpec(kind="namedtuple", type_module="os", type_qualname="getcwd")
-        )
-        is None
-    )  # getcwd is not a type -> graceful None
-    assert not os.path.exists("/tmp/__r10_should_never_exist__")

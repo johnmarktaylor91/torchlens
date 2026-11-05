@@ -1,7 +1,7 @@
 """Page-content checks for the crosscoder model-diff recipe (two traces, dictionary_learning).
 
 The page's fences run in ``tests/test_recipe_pages_executed.py``, whose ``PAGES``
-registry lists ``docs/recipes/sae_crosscoder_diff.md``; this module keeps the page-
+registry lists ``docs/field-guide/sae_crosscoder_diff.md``; this module keeps the page-
 content checks.
 """
 
@@ -19,7 +19,7 @@ assert _RUNNER_SPEC is not None and _RUNNER_SPEC.loader is not None
 recipes = importlib.util.module_from_spec(_RUNNER_SPEC)
 _RUNNER_SPEC.loader.exec_module(recipes)
 
-PAGE = "docs/recipes/sae_crosscoder_diff.md"
+PAGE = "docs/field-guide/sae_crosscoder_diff.md"
 
 
 def test_crosscoder_diff_recipe_pairs_two_traces_and_names_the_pin() -> None:

@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from benchmarks.artifact_size import artifact_size_bytes  # noqa: E402
 from benchmarks.host_label import benchmark_host_label  # noqa: E402
 from benchmarks.perf_models import (  # noqa: E402
     build_tiny_dummy,
@@ -482,7 +483,9 @@ def _operation(
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.record(model, x, default_op=False, default_module=True)
+        return lambda: tl.record(
+            model, x, recording=tl.options.RecordingOptions(default_op=False, default_module=True)
+        )
     if operation == "fastlog_zero":
         import torchlens as tl
 
@@ -494,8 +497,7 @@ def _operation(
             model,
             x,
             save=lambda _ctx: False,
-            default_op=False,
-            default_module=False,
+            recording=tl.options.RecordingOptions(default_op=False, default_module=False),
         )
     if operation.startswith("fastlog_halt_"):
         import torchlens as tl
@@ -523,8 +525,7 @@ def _operation(
             model,
             x,
             save=lambda ctx: getattr(ctx, "func_name", None) in names,
-            default_op=False,
-            default_module=False,
+            recording=tl.options.RecordingOptions(default_op=False, default_module=False),
         )
     if operation == "fastlog_op_50":
         import torchlens as tl
@@ -536,14 +537,15 @@ def _operation(
             model,
             x,
             save=lambda ctx: getattr(ctx, "func_name", None) in names,
-            default_op=False,
-            default_module=False,
+            recording=tl.options.RecordingOptions(default_op=False, default_module=False),
         )
     if operation == "fastlog_all":
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.record(model, x, default_op=True, default_module=True)
+        return lambda: tl.record(
+            model, x, recording=tl.options.RecordingOptions(default_op=True, default_module=True)
+        )
     if operation == "aux_validate":
         import torchlens as tl
 
@@ -564,8 +566,8 @@ def _operation(
         def save_once() -> None:
             path = Path(parent.name) / f"trace_{counter['i']}.tlspec"
             counter["i"] += 1
-            tl.save(trace, str(path))
-            state["serialized_file_size_bytes"] = path.stat().st_size
+            trace.save(str(path))
+            state["serialized_file_size_bytes"] = artifact_size_bytes(path)
 
         return save_once
     if operation == "aux_load":
@@ -575,8 +577,8 @@ def _operation(
         parent = tempfile.TemporaryDirectory()
         state["_tempdir"] = parent
         path = Path(parent.name) / "trace_fixture.tlspec"
-        tl.save(trace, str(path))
-        state["serialized_file_size_bytes"] = path.stat().st_size
+        trace.save(str(path))
+        state["serialized_file_size_bytes"] = artifact_size_bytes(path)
         return lambda: tl.load(str(path))
     if operation == "peer_manual_hooks":
         return lambda: run_vanilla_hooks_manual_dict(model, x)

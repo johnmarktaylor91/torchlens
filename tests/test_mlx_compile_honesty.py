@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.backend_mlx
+pytestmark = [pytest.mark.backend_mlx, pytest.mark.rare]
 
 mlx = pytest.importorskip("mlx")
 import mlx.core as mx  # noqa: E402

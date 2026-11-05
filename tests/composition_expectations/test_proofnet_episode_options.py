@@ -57,7 +57,7 @@ EPISODE_OPTION_TABLE: tuple[tuple[str, str, str], ...] = (
     ("structure_only", TYPED_REFUSED, "structure_only_episode_unsupported"),
     ("raise_on_nan", ORTHOGONAL, ""),
     ("log_injections", ORTHOGONAL, ""),
-    ("record_entry", UNTYPED_REFUSED, "TypeError"),
+    ("record_entry", TYPED_REFUSED, "record_episode_unsupported"),
     ("module_root_without_stepped_module", TYPED_REFUSED, "episode_declaration_invalid"),
     ("forced_tokens_on_float_root", TYPED_REFUSED, "episode_declaration_invalid"),
     ("bound_method_default_owner", COUPLED, ""),
@@ -189,7 +189,9 @@ def test_episode_coupled_replay_refuses_before_execution(episode_rig: dict[str, 
 
     products = build_episode_products()
     coupled = products["coupled"]
-    _assert_refuses("coupled_replay_run", lambda: coupled.run(inputs=products["example"]))
+    _assert_refuses(
+        "coupled_replay_run", lambda: coupled.run_transaction(inputs=products["example"])
+    )
 
 
 def test_episode_x_halt_is_coupled_via_step_status_rows(episode_rig: dict[str, Any]) -> None:
@@ -226,7 +228,7 @@ def test_episode_x_save_predicate_retaining_source_is_orthogonal(
     assert trace.annotations["episode"] is not None
     tanh_labels = [label for label in trace.layer_labels if "tanh" in label]
     assert tanh_labels, "no tanh layer captured"
-    first_pass = trace[tanh_labels[0]].ops[0]
+    first_pass = trace.layers[tanh_labels[0]].ops[0]
     assert first_pass.out is not None, "the save predicate retained nothing"
 
 
@@ -303,11 +305,9 @@ def test_episode_x_log_injections_is_orthogonal(episode_rig: dict[str, Any]) -> 
     assert trace.annotations["episode"] is not None
 
 
-def test_episode_kwarg_on_record_is_a_ledgered_untyped_refusal(
-    episode_rig: dict[str, Any],
-) -> None:
-    """tl.record has no episode arm; the bare TypeError is a ledgered gap
-    (DIGEST-AUDIT: record refuses trace-only kwargs untyped, B6 D20 class)."""
+def test_episode_kwarg_on_record_refuses_typed(episode_rig: dict[str, Any]) -> None:
+    """tl.record has no episode arm: it refuses typed (``record_episode_unsupported``)
+    and teaches ``tl.trace(model, x, episode=...)``."""
 
     import torchlens as tl
 

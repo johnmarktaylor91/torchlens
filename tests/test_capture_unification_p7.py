@@ -227,7 +227,7 @@ def test_recording_to_trace_inputs_come_from_materialization(
         for event in recording._capture_events.op_events
         if event.layer_type == "input"
     }
-    actual_raw_inputs = {cooked[label].ops[0]._label_raw for label in cooked.input_layers}
+    actual_raw_inputs = {cooked.layers[label].ops[0]._label_raw for label in cooked.input_layers}
     assert expected_raw_inputs
     assert actual_raw_inputs == expected_raw_inputs
     check_metadata_invariants(cooked)
@@ -303,7 +303,6 @@ def test_recording_to_trace_module_tree_matches_exhaustive(model_factory) -> Non
     assert _module_call_stacks(cooked) == _module_call_stacks(exhaustive)
 
 
-@pytest.mark.smoke
 def test_removed_keep_aliases_raise_type_error() -> None:
     """The removed keep_op=/keep_module= aliases fail loudly, never silently."""
 
@@ -470,6 +469,7 @@ def test_recording_to_trace_backfills_all_special_layer_lists() -> None:
     assert _buffer_read_addresses(cooked) == _buffer_read_addresses(exhaustive)
 
 
+@pytest.mark.smoke
 def test_recording_to_trace_halted_produces_valid_halted_trace() -> None:
     """A halted record().to_trace() yields a VALID halted Trace matching tl.trace().
 
@@ -593,11 +593,11 @@ def test_recording_to_trace_reuse_does_not_corrupt_frozen_recording() -> None:
     assert rec_records.n_records > 0
 
 
-def test_recording_to_trace_rejects_multi_pass_recordings() -> None:
-    """to_trace() refuses multi-pass Recorder outputs instead of cooking an invalid Trace."""
+def test_recording_to_trace_cooks_multi_pass_recordings() -> None:
+    """to_trace() folds a completed multi-pass Recorder output into a multi-pass Trace."""
 
     class RepeatRelu(nn.Module):
-        """Two-op model used to reproduce the multi-pass projector collision."""
+        """Two-op model once used to reproduce the multi-pass projector collision."""
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             """Apply one add and one relu."""
@@ -610,8 +610,10 @@ def test_recording_to_trace_rejects_multi_pass_recordings() -> None:
 
     recording = recorder.recording
     assert recording.num_passes == 2
-    with pytest.raises(RuntimeError, match="multi-pass Recordings"):
-        recording.to_trace()
+    trace = recording.to_trace()
+    relus = [op for op in trace.ops if op.type == "relu"]
+    assert [(op.pass_number, op.num_passes) for op in relus] == [(1, 2), (2, 2)]
+    assert torch.equal(relus[1].out, torch.full((1, 3), 3.0))
 
 
 def test_recording_to_trace_reuse_survives_output_tensor_label_undecoration() -> None:

@@ -10,7 +10,7 @@ sites; `tl.record(model, x, save=...)` is the lighter path for tight loops where
 selected records and can materialize a `Trace` later.
 
 Backend note: these timings and sparse-recording examples are torch-oriented. `tl.record()` /
-fastlog is torch-only in the backend-v1 registry. Non-torch preview backends may have different
+sparse recording (`tl.record()`) is torch-only in the backend-v1 registry. Non-torch preview backends may have different
 capture costs; JAX, tinygrad, Paddle, and TensorFlow `.tlspec` saves materialize array payloads but
 loaded traces cannot replay-validate stripped runtime captures. Paddle preview capture has its own
 dygraph/eager replay and static-inventory audit costs; TensorFlow preview capture runs live eager
@@ -21,7 +21,7 @@ dygraph/eager replay and static-inventory audit costs; TensorFlow preview captur
 | Need | Use | Notes |
 | --- | --- | --- |
 | Complete graph metadata and a few activations | `tl.trace(model, x, save=predicate)` | Best default for debugging and one-off analysis. |
-| Repeated activation pulls in a loop | `tl.record(model, x, save=predicate)` | Torch-only lower-overhead path; call `Recording.to_trace()` only when you need graph structure. |
+| Repeated activation pulls in a loop | `tl.record(model, x, save=predicate)` | Torch-only lower-overhead path; call `Recording.to_trace()` only when you need graph structure, `Trace.draw` options or facets (a `Recording` has neither). |
 | A local window around a later op | `tl.trace(..., save=tl.followed_by(...), lookback=K)` | Retains bounded recent metadata, and optionally bounded recent payloads. |
 | Disk-backed selected payloads | `tl.trace(..., storage=tl.to_disk(path))` | Keeps selected payloads portable without retaining them all in RAM. |
 | Intervention during the forward pass | `tl.trace(..., intervene=tl.when(...), save=...)` | Live edits cost more than passive capture; use only when the model must execute edited values. |
@@ -77,7 +77,7 @@ assert gelu_site.out.shape == (2, 4)
 `tl.record(save=...)` is the only torch sparse-capture spelling; the old
 `keep_op=`/`keep_module=` alias kwargs are removed.
 
-When a fastlog forward raises, the default remains `on_forward_error="raise"`. Opt into
+When a `tl.record()` forward raises, the default remains `on_forward_error="raise"`. Opt into
 `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
 `on_forward_error="return_partial"` to return a failed partial `Recording` (its `output` refuses
 with `output_forward_failed`). Failed partials set `status="partial_error"`, `failed=True`,
@@ -95,7 +95,7 @@ with the partial capture on `exc.partial_trace`.
 | Knob | Faster setting | Tradeoff |
 | --- | --- | --- |
 | Payload selection | `save=tl.func(...)` or `save=tl.in_module(...)` | Unsaved activations cannot be read later. |
-| Source text | `capture=CaptureOptions(save_source_context=False)` | File/line identity remains, but source text is not loaded. |
+| Source text | `capture=CaptureOptions(save_source_context=False)` (the default) | File/line identity is stored, but no source text: it is read from the file when you look at it, so it reflects the file on disk at read time, and a file changed or removed since capture shows that reason instead of text. `save_source_context=True` snapshots the text at capture. |
 | Window payloads | `lookback_payload_policy="metadata_only"` | `tl.followed_by(...)` can select metadata without retaining raw tensors. |
 | Retroactive payloads | `lookback_payload_policy="detached_raw"` | Enables payload recovery for recent matched ops at bounded memory cost. |
 | Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure. The model output the forward returns stays in memory (the output op may alias it), and a later `trace.run(...)` re-captures every payload into RAM while the bundle keeps the original capture. Blob writes overlap capture on a bounded async pipeline by default; `max_pending_bytes` (256 MiB default) caps the RAM pending writes may hold, and a disk slower than capture blocks the forward instead of accumulating memory. `async_writes=False` restores synchronous per-blob writes. |
@@ -126,6 +126,14 @@ trace = tl.trace(model, x)
 print(trace.health.num_escape_detector_events, trace.health.escape_detector_callback_ns)
 unwrap_torch()
 ```
+
+`CaptureOptions(aten_ops=True)` records the ATen rows behind each op and `aten_ops="values"` also
+keeps what each ATen call returned (`AtenOp.out`). Measured on one 4-thread CPU worker (torch 2.13,
+medians of 3): ResNet-18 at 224px, plain trace 0.53 s, rows 0.64 s, rows with values 0.61 s
+(107 rows, 44 MiB of ATen values against 31 MiB of `Op.out`); GPT-2 small at 1x32 tokens, plain
+trace 2.18 s, rows 2.9 s, rows with values 2.8 s (518 rows, 256 MiB against 96 MiB). The dispatch
+mode is the cost; the values add memory (roughly 1.4x to 2.7x the saved `Op.out` bytes, since every
+intermediate ATen result is kept), not time. With the switch off nothing is installed.
 
 The independent aten-level completeness witness is also opt-in and can run alone or alongside the
 callable detector. **This is the only route to `capture_verified=True`.** A plain `tl.trace()` never
@@ -207,10 +215,11 @@ full `tl.trace` calls per mode followed four two-capture warmup batches; the per
 
 ### Phase timing buckets
 
-`trace._phase_timings` groups wall-clock timings by stable bucket names. Capture buckets include
-`ctx_build:*`, `dispatch:*`, `clone_save:*`, and `object_construction:op`. Postprocess buckets use
-`postprocess:Step N: ...`, matching the numbered postprocess pipeline. Graphviz rendering records
-`render:graphviz:forward`, `render:graphviz:backward`, or `render:graphviz:combined` when those
+`trace._phase_timings` groups wall-clock timings by stable snake_case bucket names. Capture
+buckets include `ctx_build_*`, `dispatch_*`, `clone_save_*`, `backward_grad_event_*` and
+`object_construction_op`. Postprocess buckets use the postprocess pipeline's step names
+(`add_output_layers` through `release_param_refs`). Graphviz rendering records
+`render_graphviz_forward`, `render_graphviz_backward`, or `render_graphviz_combined` when those
 render entrypoints run.
 
 ## Chunked forward capture
@@ -236,7 +245,7 @@ dimension 0, executes one sub-batch at a time, and returns one accumulated in-me
 The v1 limits are intentionally narrow: torch backend only, positional inputs only, no
 `backward_ready`, no `save_grads`, no live `hooks=`, no public `intervene=`, and no
 `storage=tl.to_disk(...)`/`storage=`. Loaded or live chunked traces also reject
-`log_backward()` because they do not retain one full-batch autograd graph.
+`backward()` because they do not retain one full-batch autograd graph.
 
 Auto mode splits only when there is exactly one `ndim > 0` tensor leaf under standard Python
 containers (`list`, `tuple`, `dict`, or `namedtuple`). If there are several candidates, pass
@@ -334,8 +343,8 @@ assert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0
 ```
 
 Use `intervene=` when the edited value must affect downstream execution. For post-hoc experiments
-on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `push()`
-(which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
+on an existing trace, prefer `trace.fork()` and `do(site, edit)`, which stages the edit and pushes
+it downstream in one call (which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
 
 ## Long sequences and long contexts
 
@@ -379,7 +388,7 @@ model[0].requires_grad_(False)  # frozen first layer, and x needs no gradient
 x = torch.randn(2, 16)
 
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
-trace.log_backward(trace[trace.output_layers[0]].out.sum())
+trace.backward(trace[trace.output_layers[0]].out.sum())
 
 status = tl.report.backward_status(trace)
 # Only the last layer's weight gradient runs (2 * 2 * 32 * 4 FLOPs): nothing upstream of
@@ -403,7 +412,7 @@ class Attend(nn.Module):
 
 def executed(model, x):
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     return tl.report.backward_status(trace).executed_flops
 
 
@@ -463,10 +472,10 @@ activation and gradient substrate.
 Measured on the canonical bench host (Intel i9-9900X) at SHA `712a4e5` on
 `2026-06-16`, from a full non-smoke run (`baseline_status: "canonical"`). The complete 196-row
 table (CPU + CUDA, every model and row) lives in
-[`docs/_perf_numbers.md`](_perf_numbers.md) and the raw baseline in
+`docs/_perf_numbers.md` and the raw baseline in
 `benchmarks/perf_baselines/linux-cpu.json`.
 
-**Headline: with fastlog capture and an early halt at ~25% depth, capture runs _faster than the
+**Headline: with sparse recording and an early halt at ~25% depth, capture runs _faster than the
 raw forward pass itself_ — `fastlog_halt_25` is 0.84x raw forward on ResNet-18 (CPU) and 0.83x on
 GPT-2 (HookedTransformer, CPU).** You only pay for the layers you actually reach.
 

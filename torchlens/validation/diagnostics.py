@@ -23,6 +23,9 @@ from typing import Any
 
 import torch
 
+from .._utils._display_constructor import clipped
+from ._display import bind_failure_key, failure_card, failure_repr
+
 # Attribute name used to stash the structured failure on a live Trace. Private,
 # best-effort, and cleared at the start of each validation run so a stale
 # failure from a prior run can never be reported.
@@ -98,6 +101,14 @@ class ValidationFailure:
     always populated and names which validation phase fired. The tensor-shaped
     fields (``saved_shape`` etc.) are filled in only for the numeric replay /
     ground-truth paths where a saved-vs-expected tensor pair exists.
+
+    Examples
+    --------
+    >>> failure = ValidationFailure("forward_replay", op_label="relu_1_2", func_name="relu")
+    >>> failure.check_name, failure.op_label
+    ('forward_replay', 'relu_1_2')
+    >>> failure.saved_shape is None
+    True
     """
 
     check_name: str
@@ -118,8 +129,12 @@ class ValidationFailure:
     def __repr__(self) -> str:
         """Bounded identity card (D31): the summary line leads, ``extra`` is counted."""
 
-        extra = f", {len(self.extra)} extra key(s)" if self.extra else ""
-        return f"ValidationFailure({self.summary()!r}{extra})"
+        return failure_repr(self)
+
+    def __str__(self) -> str:
+        """Show recorded failure details as a card."""
+
+        return failure_card(self)
 
     def summary(self) -> str:
         """Return a compact single-line human-readable summary.
@@ -203,6 +218,14 @@ class ValidationDiagnostic:
         Human-readable explanation of the diagnostic.
     extra:
         Additional JSON-friendly context for downstream reporting.
+
+    Examples
+    --------
+    >>> note = ValidationDiagnostic("demo_check", "nothing to worry about")
+    >>> note.check_name
+    'demo_check'
+    >>> note.extra
+    {}
     """
 
     check_name: str
@@ -212,11 +235,7 @@ class ValidationDiagnostic:
     def __repr__(self) -> str:
         """Bounded identity card (D31): the check and a clipped message, ``extra`` counted."""
 
-        message = self.message if len(self.message) <= 160 else f"{self.message[:157]}..."
-        return (
-            f"ValidationDiagnostic({self.check_name!r}, message={message!r}, "
-            f"{len(self.extra)} extra key(s))"
-        )
+        return clipped(f"ValidationDiagnostic {self.check_name}: {self.message}")
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of this diagnostic.
@@ -260,6 +279,17 @@ def last_validation_peak_memory() -> dict[str, int] | None:
         ``cuda_peak_allocated_bytes`` (snapshot-based, R36-2: the exact device
         peak when the run pushed a new high-water mark, ``0`` when it stayed
         under the pre-existing peak). ``None`` before any instrumented run.
+
+    Examples
+    --------
+    >>> import os
+    >>> os.environ["TORCHLENS_VALIDATE_PEAK_MEMORY"] = "1"
+    >>> tl.validate(model, x, scope="forward")
+    True
+    >>> peaks = tl.validation.last_validation_peak_memory()
+    >>> del os.environ["TORCHLENS_VALIDATE_PEAK_MEMORY"]
+    >>> "host_rss_peak_delta_bytes" in peaks
+    True
     """
 
     return dict(_LAST_RUN_PEAKS) if _LAST_RUN_PEAKS else None
@@ -274,6 +304,13 @@ def last_validation_failure() -> ValidationFailure | None:
         The structured first mismatch of the last ``validate_saved_outs`` /
         ``tl.validate`` run (any scope; a False backward verdict records one
         under ``CHECK_BACKWARD``), or ``None`` when it passed (or never ran).
+
+    Examples
+    --------
+    >>> tl.validate(model, x, scope="forward")
+    True
+    >>> print(tl.validation.last_validation_failure())
+    None
     """
 
     return _LAST_RUN_FAILURE[0] if _LAST_RUN_FAILURE else None
@@ -305,6 +342,7 @@ def record_validation_failure(trace: Any, failure: ValidationFailure) -> None:
         Structured failure description to stash.
     """
 
+    bind_failure_key(failure, trace)
     if not _LAST_RUN_FAILURE:
         _LAST_RUN_FAILURE.append(failure)
     try:
@@ -323,6 +361,12 @@ def get_validation_failure(trace: Any) -> ValidationFailure | None:
     only that case falls back to the process-level ``last_validation_failure()``
     side channel, so a Trace that genuinely passed never has a failure invented
     for it.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> print(tl.validation.get_validation_failure(trace))
+    None
     """
 
     if trace is None:
@@ -395,6 +439,12 @@ def get_validation_diagnostics(trace: Any) -> tuple[ValidationDiagnostic, ...]:
     -------
     tuple[ValidationDiagnostic, ...]
         Diagnostics in emission order, or an empty tuple when unavailable.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> tl.validation.get_validation_diagnostics(trace)
+    ()
     """
 
     try:

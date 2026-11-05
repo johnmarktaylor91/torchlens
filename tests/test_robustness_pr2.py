@@ -394,7 +394,6 @@ class _SparseBuffer(nn.Module):
         return torch.sparse.mm(self.adjacency, self.linear(x))
 
 
-@pytest.mark.smoke
 def test_sparse_buffer_refuses_typed_at_entry_naming_the_slot() -> None:
     """A registered sparse buffer refuses with the variant code before session prep.
 

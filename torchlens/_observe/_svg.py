@@ -20,8 +20,8 @@ __all__ = ["render_timeline_svg", "write_timeline_svg"]
 
 #: Stacked band order (bottom-up) and placeholder fills.
 _BANDS: tuple[tuple[str, str], ...] = (
-    ("parameter", "#4878a8"),
-    ("buffer", "#76a5af"),
+    ("parameter", "#808080"),
+    ("buffer", "#e69f00"),
     ("input", "#b3b3b3"),
     ("activation", "#e8a33d"),
     ("newly_saved_activation", "#c25454"),
@@ -108,6 +108,18 @@ def render_timeline_svg(
     str
         Complete SVG document. Identical artifacts render byte-identically
         (fixed band order, fixed number formatting, no unordered iteration).
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> from torchlens._io._json import read_bounded
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = tl.export.memory_timeline_v2(trace, pathlib.Path(tmp) / "timeline.json")
+    ...     artifact = read_bounded(path)
+    >>> svg = tl.viz.timeline(artifact)
+    >>> svg.startswith("<svg"), svg.rstrip().endswith("</svg>")
+    (True, True)
     """
 
     columns, bin_size, n_ordinals = _cumulative_columns(artifact, column_budget)

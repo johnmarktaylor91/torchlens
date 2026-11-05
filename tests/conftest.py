@@ -42,6 +42,24 @@ pytest_plugins = [
 
 # Output directories are assigned under pytest's private basetemp in
 # ``pytest_configure`` before test modules import these constants.
+
+
+@pytest.fixture
+def root_edits_in_place():
+    """Opt one test into editing root traces in place.
+
+    ``InterventionOptions.confirm_mutation`` and the ``confirm_mutation=`` keyword
+    are gone (D.12): the root-mutation guard reads only the trace, so a test that
+    deliberately edits a root trace enters the session-level suppression context
+    for its own duration. Tests that assert the warning never request this fixture.
+    """
+
+    from torchlens.errors import quiet
+
+    with quiet():
+        yield
+
+
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_OUTPUTS_DIR = ""
 REPORTS_DIR = ""
@@ -50,7 +68,7 @@ VIS_OUTPUT_DIR = ""
 
 #: Size ceiling of the smoke tier in collected tests; ``tests/tiers/collection.json``
 #: records the measured count and ``tests/test_tiers_artifact.py`` compares the two.
-SMOKE_TIER_SIZE_CEILING = 1500
+SMOKE_TIER_SIZE_CEILING = 400
 
 
 @pytest.hookimpl(trylast=True)
@@ -103,6 +121,10 @@ def pytest_configure(config: pytest.Config) -> None:
     # Pay PyTorch's one-time RNG and deterministic-mode initialization during
     # session setup, not against whichever smoke test happens to run first.
     torch.random.get_rng_state()
+    # Every test runs under ``torch.use_deterministic_algorithms(True)``
+    # (tests/_state_isolation.py); on a CUDA host, torch releases before 2.13
+    # refuse cuBLAS matmuls in that mode unless the workspace is pinned.
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     deterministic = torch.are_deterministic_algorithms_enabled()
     deterministic_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
     torch.use_deterministic_algorithms(deterministic, warn_only=deterministic_warn_only)

@@ -73,13 +73,13 @@ def resolve_echo_capture_options(
             code="echo_chunked_unsupported",
             remedy="trace chunks individually, or use trace.narrate() post-hoc",
         )
-    if bool(getattr(capture_options, "structure_only", False)) and echo_options.stats != "off":
+    if echo_options.value_stats != "off" and getattr(capture_options, "structure_only", False):
         raise NarrationConfigError(
             "echo stats rungs read tensor values, and structure_only=True captures "
             "no values (every value-bearing claim is a hypothesis). Remedy: use "
-            "stats='off' metadata narration, or drop structure_only.",
+            "value_stats='off' metadata narration, or drop structure_only.",
             code="echo_stats_requires_values",
-            remedy="use stats='off', or drop structure_only",
+            remedy="use value_stats='off', or drop structure_only",
         )
     return echo_options
 

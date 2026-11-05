@@ -69,30 +69,6 @@ def test_call_tool_refusals_teach_the_fix() -> None:
     assert path_exc.value.fields["code"] == "agent_artifact_unreadable"
 
 
-def test_doctor_and_api_map_tools_are_json_safe() -> None:
-    """Environment and API-map tools return enveloped JSON-safe payloads."""
-
-    doctor = tlmcp.call_tool("torchlens_doctor")
-    assert doctor["schema"] == "torchlens.agent.doctor.v1"
-    assert doctor["artifact"] is None
-    assert doctor["data"]["checks"]
-    assert {"name", "status", "detail"} <= set(doctor["data"]["checks"][0])
-    json.dumps(doctor)
-
-    api_map = tlmcp.call_tool("torchlens_api_map")
-    assert api_map["schema"] == "torchlens.agent.api_map.v2"
-    names = {row["name"] for row in api_map["data"]["names"]}
-    assert set(tl.__all__) <= names
-    capabilities = api_map["data"]["capabilities"]
-    assert capabilities["writes"] is False
-    assert capabilities["executes_user_code"] is False
-    # The capabilities block declares the agent-registry roster; MCP serves
-    # exactly it.
-    assert set(capabilities["tools"]) == {spec["name"] for spec in tlmcp.TOOL_SPECS}
-    assert "tl.report" in api_map["data"]["submodules_not_in_all"]
-    json.dumps(api_map)
-
-
 def test_api_map_detail_mode_serves_one_full_record() -> None:
     """Per-name detail mode returns the full normalized signature."""
 

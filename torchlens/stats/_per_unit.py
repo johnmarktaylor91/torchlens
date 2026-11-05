@@ -72,6 +72,14 @@ class UnitTopK:
         ``position_axes`` is 0 when none remain; ``-1`` in empty slots.
     unit_axis:
         The unit axis the accumulator was built with.
+
+    Examples
+    --------
+    >>> top = tl.stats.TopK(k=1, unit_axis=1)
+    >>> top.update(torch.tensor([[1.0, 5.0], [3.0, 2.0]]))
+    >>> result = top.compute()
+    >>> isinstance(result, UnitTopK), result.values.shape, result.example_ids.tolist()
+    (True, torch.Size([2, 1]), [[1], [0]])
     """
 
     values: torch.Tensor
@@ -259,6 +267,13 @@ class Quantile:
     estimator, so a unit whose reservoir holds a NaN reports NaN. State is
     ``8 * reservoir_size`` bytes per unit (64 KiB at the default 8192), and
     a warning fires once per session when the total passes 256 MiB.
+
+    Examples
+    --------
+    >>> q = Quantile(quantiles=(0.5,))
+    >>> q.update(torch.arange(1.0, 102.0))
+    >>> q.compute()
+    {0.5: 51.0}
     """
 
     def __init__(  # noqa: PLR0913 -- the pooled knobs plus the keyword-only per-unit pair
@@ -511,6 +526,13 @@ class TopK:
     also allocates transient buffers in unit chunks of at most about four
     million elements. A warning fires once per session when the state total
     passes 256 MiB.
+
+    Examples
+    --------
+    >>> top = TopK(k=3)
+    >>> top.update(torch.tensor([5.0, 1.0, 9.0, 7.0]))
+    >>> top.compute()
+    [9.0, 7.0, 5.0]
     """
 
     def __init__(

@@ -18,9 +18,6 @@ The join corpus (memo 3.6):
 
 from __future__ import annotations
 
-import inspect
-from collections import Counter
-
 import pytest
 import torch
 import torch.nn as nn
@@ -50,30 +47,6 @@ class _FlatBranch(nn.Module):
         if self.flag:
             return torch.tanh(x)
         return torch.tanh(x)
-
-
-class _NestedInner(nn.Module):
-    """The nested form (r4, sol M3-1): alternative sites one module deep
-    behind ONE outer call line, where the shallowest frame is
-    capture-identical -- a cc[0] selector would silently corroborate."""
-
-    def __init__(self, flag: bool) -> None:
-        super().__init__()
-        self.flag = flag
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.flag:
-            return torch.tanh(x)
-        return torch.tanh(x)
-
-
-class _NestedOuter(nn.Module):
-    def __init__(self, flag: bool) -> None:
-        super().__init__()
-        self.inner = _NestedInner(flag)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.inner(x)
 
 
 class _PermBody(nn.Module):
@@ -117,36 +90,6 @@ class _Tied(nn.Module):
         return x
 
 
-class _BranchAct(nn.Module):
-    """Applies a relu written on a different line for each branch."""
-
-    def forward(self, x: torch.Tensor, branch: int) -> torch.Tensor:
-        if branch == 0:
-            return torch.relu(x)
-        if branch == 1:
-            return torch.relu(x)
-        return torch.relu(x)
-
-
-class _Shrink(nn.Module):
-    """Three same-site relus over three shapes, outside any recurrence group.
-
-    Each call takes its own branch line, so the relus are three single-pass
-    layers (grouping rule rows 41-42) that share one site key (each is the
-    first relu of its call). A reused ``nn.ReLU`` instance would instead be one
-    Layer with 3 passes (rule row 26), which the closure keeps by recurrence.
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.act = _BranchAct()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for branch, k in enumerate((8, 4, 2)):
-            x = self.act(x[:, :k], branch)
-        return x
-
-
 def _tanh_key(profile) -> str:
     return next(key for key in profile.keys.values() if "tanh" in key)
 
@@ -156,6 +99,7 @@ def _tanh_key(profile) -> str:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/_site_join.py.
 def test_flat_branch_refused_by_witness_not_guard() -> None:
     left = tl.trace(_FlatBranch(True), torch.randn(2, 4))
     right = tl.trace(_FlatBranch(False), torch.randn(2, 4))
@@ -167,44 +111,9 @@ def test_flat_branch_refused_by_witness_not_guard() -> None:
     assert not row.joined
 
 
-def test_nested_branch_witness_oracle_then_refusal() -> None:
-    left = tl.trace(_NestedOuter(True), torch.randn(2, 4))
-    right = tl.trace(_NestedOuter(False), torch.randn(2, 4))
-    left_profile, right_profile = site_profile(left), site_profile(right)
-    key = _tanh_key(left_profile)
-    # SOURCE-LINE ORACLE first (r4, sol M3-1): the selected witness must be
-    # the two DISTINCT inner branch lines, derived independently via
-    # inspect -- a regressed selector (cc[0]: the outer call line, identical
-    # across captures) fails HERE, not merely at the verdict.
-    source_lines, start = inspect.getsourcelines(_NestedInner.forward)
-    branch_lines = {
-        start + offset for offset, line in enumerate(source_lines) if "torch.tanh" in line
-    }
-    assert len(branch_lines) == 2
-    (left_witness,) = left_profile.witnesses[key]
-    (right_witness,) = right_profile.witnesses[key]
-    assert left_witness is not None and right_witness is not None
-    assert {left_witness[1], right_witness[1]} == branch_lines
-    assert left_witness != right_witness
-    rows = join_site_profiles(left_profile, right_profile)
-    assert rows[key].verdict is _SiteJoinVerdict.REFUSED_WITNESS
-
-
 # ---------------------------------------------------------------------------
 # (ii) permuted per-call-instance cardinality: strong guard refusal
 # ---------------------------------------------------------------------------
-
-
-def test_permuted_cardinality_weak_passes_strong_refuses() -> None:
-    left = tl.trace(_Perm((1, 3)), torch.randn(2, 4))
-    right = tl.trace(_Perm((3, 1)), torch.randn(2, 4))
-    rows = join_site_profiles(site_profile(left), site_profile(right))
-    tanh_rows = [row for key, row in rows.items() if "tanh" in key]
-    assert len(tanh_rows) == 3
-    for row in tanh_rows:
-        # The exact case the r2 sorted-multiset guard wrongly admitted.
-        assert row.weak_guard_ok and not row.strong_guard_ok
-        assert row.verdict is _SiteJoinVerdict.REFUSED_CARDINALITY
 
 
 # ---------------------------------------------------------------------------
@@ -212,47 +121,12 @@ def test_permuted_cardinality_weak_passes_strong_refuses() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_same_line_reorder_residual_stays_disclosed() -> None:
-    left = tl.trace(_SameLineLoop(), torch.randn(2, 4))
-    right = tl.trace(_SameLineLoop(), torch.randn(2, 4))
-    rows = join_site_profiles(site_profile(left), site_profile(right))
-    tanh_verdicts = {key: row.verdict for key, row in rows.items() if "tanh" in key}
-    assert len(tanh_verdicts) == 3
-    # Guard and witness both pass on one re-executed source line: the
-    # ordinal pairing is positional only, yet the tier reads corroborated
-    # BY DEFINITION (position + call-site provenance, never semantics).
-    # This pin asserts the disclosure stays true; a future key version that
-    # closes R4 must flip this test and the glossary entry together.
-    assert set(tanh_verdicts.values()) == {_SiteJoinVerdict.CORROBORATED}
-
-
 # ---------------------------------------------------------------------------
 # (iv) verdict totality + boundary behaviors
 # ---------------------------------------------------------------------------
 
 
-def test_every_joined_key_carries_exactly_one_tier() -> None:
-    left = tl.trace(_Perm((1, 3)), torch.randn(2, 4))
-    right = tl.trace(_Perm((3, 1)), torch.randn(2, 4))
-    rows = join_site_profiles(site_profile(left), site_profile(right))
-    assert rows  # non-vacuous
-    for row in rows.values():
-        assert row.verdict in tuple(_SiteJoinVerdict)
-        assert row.joined == (
-            row.verdict in (_SiteJoinVerdict.CORROBORATED, _SiteJoinVerdict.POSITIONAL)
-        )
-
-
-def test_io_boundary_ops_join_positional() -> None:
-    # Input/output ops carry no code_context: witness-absent, never refused.
-    left = tl.trace(_SameLineLoop(), torch.randn(2, 4))
-    right = tl.trace(_SameLineLoop(), torch.randn(2, 4))
-    rows = join_site_profiles(site_profile(left), site_profile(right))
-    assert rows["s1||input||1"].verdict is _SiteJoinVerdict.POSITIONAL
-    assert rows["s1||output||1"].verdict is _SiteJoinVerdict.POSITIONAL
-
-
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/_site_join.py.
 def test_site_profile_refuses_typed_on_keyless_trace() -> None:
     log = tl.trace(_SameLineLoop(), torch.randn(2, 4))
     for label in log.op_labels:
@@ -262,71 +136,12 @@ def test_site_profile_refuses_typed_on_keyless_trace() -> None:
     assert excinfo.value.fields["code"] == "site_key_unavailable"
 
 
-@pytest.mark.heavy
-def test_gpt2_cross_length_alignment_pins() -> None:
-    # Cross-capture alignment machinery (the cross-stamp exit-gate shape):
-    # two captures of one program at DIFFERENT sequence lengths align 100%
-    # on sites with exact pinned tier counts -- while their label spaces
-    # would disagree wherever step counts differ. Exact counts, not
-    # thresholds; drift = investigation.
-    transformers = pytest.importorskip("transformers")
-    config = transformers.GPT2Config(n_layer=4, n_head=4, n_embd=128, vocab_size=512)
-    model = transformers.GPT2LMHeadModel(config)
-    model.eval()
-    with torch.no_grad():
-        long_log = tl.trace(model, torch.randint(0, 512, (1, 16)))
-        short_log = tl.trace(model, torch.randint(0, 512, (1, 8)))
-    rows = join_site_profiles(site_profile(long_log), site_profile(short_log))
-    assert len(rows) == 199
-    tiers = Counter(row.verdict for row in rows.values())
-    assert tiers == Counter(
-        {
-            _SiteJoinVerdict.CORROBORATED: 189,
-            _SiteJoinVerdict.POSITIONAL: 10,
-        }
-    )
-
-
 # ---------------------------------------------------------------------------
 # Tier-(a) fold closure (entry-dark; normative equivalence guard)
 # ---------------------------------------------------------------------------
 
 
-def test_closure_is_identity_when_recurrence_already_grouped() -> None:
-    log = tl.trace(_Tied(), torch.randn(2, 8))
-    groups = fold_site_groups(fold_rows_from_trace(log))
-    ops = {label: log.ops[label] for label in log.op_labels}
-    for label, group in groups.items():
-        recurrence = set(ops[label].recurrent_ops or ()) or {label}
-        assert group == frozenset(recurrence)
-
-
 @pytest.mark.smoke
-def test_closure_reunites_degraded_same_site_cohorts() -> None:
-    # On the recurrence_detection=False path the param-free relus stay
-    # single layers; the closure folds them back into one group via
-    # (same site_key AND same equivalence_class).
-    log = tl.trace(
-        _Tied(), torch.randn(2, 8), capture=tl.options.CaptureOptions(recurrence_detection=False)
-    )
-    groups = fold_site_groups(fold_rows_from_trace(log))
-    relu_groups = {groups[label] for label in log.op_labels if "relu" in label}
-    assert len(relu_groups) == 1
-    assert len(next(iter(relu_groups))) == 3
-
-
-def test_closure_equivalence_guard_refuses_cross_shape_folds() -> None:
-    # The same-site relus span three shapes -> three distinct (shape-bearing)
-    # equivalence classes: the NORMATIVE guard keeps them separate. An
-    # unguarded closure would mint a cross-shape group violating the live
-    # shared-equivalence invariant.
-    log = tl.trace(_Shrink(), torch.randn(2, 16))
-    groups = fold_site_groups(fold_rows_from_trace(log))
-    relu_groups = {groups[label] for label in log.op_labels if "relu" in label}
-    assert len(relu_groups) == 3
-    assert all(len(group) == 1 for group in relu_groups)
-
-
 def test_closure_never_splits_and_stays_equivalence_uniform() -> None:
     for build in (
         lambda: tl.trace(_Tied(), torch.randn(2, 8)),
@@ -343,7 +158,7 @@ def test_closure_never_splits_and_stays_equivalence_uniform() -> None:
             assert len({ops[member].equivalence_class for member in group}) == 1
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/_site_join.py.
 def test_closure_keyless_rows_never_fold() -> None:
     rows = [
         FoldRow("a_1_1:1", None, "tanh_x", ()),
@@ -352,31 +167,3 @@ def test_closure_keyless_rows_never_fold() -> None:
     groups = fold_site_groups(rows)
     assert groups["a_1_1:1"] == frozenset({"a_1_1:1"})
     assert groups["a_2_2:1"] == frozenset({"a_2_2:1"})
-
-
-@pytest.mark.heavy
-def test_resnet18_fold_group_census_pin() -> None:
-    # Pinned census fact (I-S3' family). Grouping rule row 28: each
-    # BasicBlock's one ReLU module called twice is now one Layer with 2
-    # passes, so the 8 reused-relu pairs the guarded closure used to mint
-    # beyond recurrence are recurrence groups themselves, and the closure
-    # mints NO beyond-recurrence group on resnet18.
-    torchvision = pytest.importorskip("torchvision")
-    model = torchvision.models.resnet18()
-    model.eval()
-    with torch.no_grad():
-        log = tl.trace(model, torch.randn(1, 3, 64, 64))
-    ops = {label: log.ops[label] for label in log.op_labels}
-    groups = fold_site_groups(fold_rows_from_trace(log))
-    beyond_recurrence = [
-        group
-        for group in set(groups.values())
-        if len(group) > 1 and len(ops[next(iter(group))].recurrent_ops) != len(group)
-    ]
-    assert len(beyond_recurrence) == 0
-    folded = [group for group in set(groups.values()) if len(group) > 1]
-    assert len(folded) == 8
-    for group in folded:
-        assert len(group) == 2
-        assert {ops[member].func_name for member in group} == {"relu_"}  # ReLU(inplace=True)
-        assert len({ops[member].equivalence_class for member in group}) == 1

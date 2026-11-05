@@ -86,7 +86,7 @@ def _emit_exhaustive_operation_events(
         is_bottom_level_func: True if this function was not called by another
             decorated function (i.e., it's a leaf in the decoration nesting).
     """
-    with _timed_phase(self, "ctx_build:shared_fields"):
+    with _timed_phase(self, "ctx_build_shared_fields"):
         (
             fields_dict,
             parent_layer_entries,
@@ -341,7 +341,7 @@ def _emit_exhaustive_operation_events(
             # in-place path performs in _register_inplace_live_grad_hook.
             _add_tensor_backward_hook(self, live_member, new_tensor_label, take_ownership=True)
             _propagate_mutation_label_to_storage_aliases(self, live_member, new_tensor_label)
-        options = getattr(self, "_predicate_save_options", None)
+        options = self.__dict__.get("_predicate_save_options")
         if options is not None and options.halt is not None:
             halt_ctx = _build_trace_predicate_context(self, fields_dict_onetensor, out_tensor)
             evaluate_halt_stop(self, halt_ctx, options, frontier_output=out_tensor)

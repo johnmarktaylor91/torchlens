@@ -218,7 +218,7 @@ def hooked_run_diagnostic(trace: Any) -> RunnableDiagnostic | None:
             f"This run applied the trace's staged edits ({hooks} hook(s), {values} value "
             "replacement(s)), so its output is an edited forward, not the model's own. No "
             "hook-aware check exists yet, so the run is unverifiable, and the trace it "
-            "refreshed is not pristine. Detach the staged edits (trace.clear_hooks()) for "
+            "refreshed is not pristine. Detach the staged edits (trace.clear_edits(site) per staged site, or fork() afresh) for "
             "a verified run."
         ),
         registry_id=None,
@@ -409,7 +409,7 @@ class SteerPlan:
     def follows(self, trace: Any) -> bool:
         """Return whether ``trace`` still stages exactly the entries this plan lowered.
 
-        The staged spec is mutable (``attach_hooks``, ``clear_hooks``), so a
+        The staged spec is mutable (``do``, ``clear_edits``), so a
         cached session compares the entry objects themselves; the plan holds
         them, so an identity match cannot be a reused address.
         """

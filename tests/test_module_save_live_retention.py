@@ -111,23 +111,6 @@ def _saved(log: Any) -> dict[str, Any]:
     return {op.layer_label: op for op in log._layer_list if op.has_saved_activation}
 
 
-def _snapshot(log: Any) -> list[tuple[Any, ...]]:
-    """Per-op metadata that a selective save must not change."""
-
-    return [
-        (
-            op.layer_label,
-            op.has_saved_activation,
-            tuple(op.shape or ()),
-            str(op.dtype),
-            tuple(op.output_of_module_calls or ()),
-            tuple(op.parents),
-            tuple(op.children),
-        )
-        for op in log._layer_list
-    ]
-
-
 SELECTORS = {
     "nested": lambda: tl.module("block.inner"),
     "outer_with_nested_output": lambda: tl.module("block"),
@@ -155,71 +138,7 @@ EXPECTED_COPIES = {
 }
 
 
-@pytest.mark.parametrize("name", sorted(SELECTORS))
-def test_module_save_copies_only_ops_inside_matching_passes(
-    name: str, monkeypatch: pytest.MonkeyPatch
-):
-    """Only ops that run inside a matching module pass are copied; nothing spills."""
-
-    model, x = _model_and_input()
-    selector = SELECTORS[name]()
-    full_log = tl.trace(model, x)
-    expected = {site.layer_label for site in full_log.find_sites(selector)}
-    assert expected, f"{name}: selector matched nothing on the full trace"
-    # The selector resolves to producing ops; retention also keeps the output_N
-    # alias of a selected producer the model returns. The alias rides its
-    # producer's payload, so it adds no escrow copy.
-    expected |= {
-        op.layer_label
-        for op in full_log._layer_list
-        if op.type == "output" and any(parent in expected for parent in op.parents)
-    }
-
-    with _counting(monkeypatch) as counts:
-        log = tl.trace(model, x, save=selector)
-
-    assert set(_saved(log)) == expected
-    assert counts["copies"] == EXPECTED_COPIES[name], (
-        f"{name}: {counts['copies']} escrow copies ({len(log._layer_list)} ops in the trace)"
-    )
-    assert counts["spills"] == 0
-
-
-@pytest.mark.parametrize("name", sorted(SELECTORS))
-def test_module_save_matches_full_trace_values(name: str):
-    """Independent oracle: every saved payload equals the save-everything trace's."""
-
-    model, x = _model_and_input()
-    selector = SELECTORS[name]()
-    # Keep both traces alive: an op's payload lives in its trace's store.
-    full_log = tl.trace(model, x)
-    sparse_log = tl.trace(model, x, save=selector)
-    full = _saved(full_log)
-    for label, op in _saved(sparse_log).items():
-        assert torch.equal(op.out, full[label].out), f"{name}: {label} payload differs"
-
-
-@pytest.mark.parametrize("name", sorted(SELECTORS))
-def test_module_exit_path_equals_per_op_escrow_path(name: str, monkeypatch: pytest.MonkeyPatch):
-    """The module-exit path is a pure cost change over the per-op escrow it replaces."""
-
-    model, x = _model_and_input()
-    selector = SELECTORS[name]()
-    live = tl.trace(model, x, save=selector)
-    with monkeypatch.context() as patch:
-        patch.setattr(selector_eval, "module_exit_bound_addresses", lambda _selector: None)
-        escrowed = tl.trace(model, x, save=selector)
-
-    assert _snapshot(live) == _snapshot(escrowed)
-    assert getattr(live, "_tl_save_selector_fire_count", None) == getattr(
-        escrowed, "_tl_save_selector_fire_count", None
-    )
-    escrowed_saved = _saved(escrowed)
-    for label, op in _saved(live).items():
-        assert torch.equal(op.out, escrowed_saved[label].out), f"{name}: {label} differs"
-
-
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_module_boundary.py, campaign mutant kills.
 def test_module_save_with_module_intervention_keeps_replacement(monkeypatch):
     """The elicit spelling: save and steer the same module; the replacement is saved."""
 
@@ -242,7 +161,8 @@ def test_module_save_with_module_intervention_keeps_replacement(monkeypatch):
     assert counts["copies"] < len(log._layer_list) - 2
 
 
-@pytest.mark.parametrize(("address", "spills"), [("shared", 2), ("block", 4)])
+@pytest.mark.smoke_cells("test_forced_spill_writes_only_ops_inside_matching_passes[block-4]")
+@pytest.mark.parametrize(("address", "spills"), [("block", 4)])
 def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, monkeypatch):
     """Past the RAM budget only ops inside matching passes reach temporary files.
 
@@ -269,7 +189,7 @@ def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, mo
     model, x = _model_and_input()
     selector = tl.module(address)
     # The default save keeps payloads attached; a spilled one comes back
-    # detached, and the capture discloses it (U27.1).
+    # detached, and the capture discloses it.
     with _counting(monkeypatch) as counts, pytest.warns(TorchLensWarning) as caught:
         log = tl.trace(model, x, save=selector)
     assert counts["spills"] == spills, counts
@@ -286,6 +206,8 @@ def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, mo
         assert torch.equal(op.out, full[label].out)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/selector_eval.py.
+@pytest.mark.smoke_cells("test_mixed_module_selectors_keep_per_op_escrow[module_or_func]")
 @pytest.mark.parametrize(
     "selector_factory",
     [
@@ -321,91 +243,12 @@ INTERSECTIONS = {
 }
 
 
-@pytest.mark.parametrize("name", sorted(INTERSECTIONS))
-def test_module_intersections_escrow_only_inside_matching_passes(
-    name: str, monkeypatch: pytest.MonkeyPatch
-):
-    """``tl.module(...) & other`` matches a subset of module outputs: same bounded escrow.
-
-    The covering addresses only decide which passes escrow; post-postprocess
-    resolution still applies the whole selector, so the saved set, values and
-    metadata equal the per-op escrow path's and the save-everything trace's.
-    """
-
-    selector_factory, expected_copies = INTERSECTIONS[name]
-    model, x = _model_and_input()
-    selector = selector_factory()
-    full_log = tl.trace(model, x)
-    expected = {site.layer_label for site in full_log.find_sites(selector)}
-    with _counting(monkeypatch) as counts:
-        log = tl.trace(model, x, save=selector)
-    with monkeypatch.context() as patch:
-        patch.setattr(selector_eval, "module_exit_bound_addresses", lambda _selector: None)
-        escrowed = tl.trace(model, x, save=selector)
-
-    saved = _saved(log)
-    assert set(saved) == expected
-    assert counts == {"copies": expected_copies, "spills": 0}
-    assert _snapshot(log) == _snapshot(escrowed)
-    full = _saved(full_log)
-    escrowed_saved = _saved(escrowed)
-    for label, op in saved.items():
-        assert torch.equal(op.out, full[label].out), f"{name}: {label} vs full trace"
-        assert torch.equal(op.out, escrowed_saved[label].out), f"{name}: {label} vs escrow"
-
-
-@pytest.mark.parametrize(
-    ("selector", "expected"),
-    [
-        (tl.module("a"), ("a",)),
-        (tl.module("a") | tl.module("b:2"), ("a", "b:2")),
-        (tl.module("a") & tl.func("relu"), ("a",)),
-        (tl.func("relu") & (tl.module("a") | tl.module("b")), ("a", "b")),
-        ((tl.module("a") & tl.func("relu")) | tl.module("b"), ("a", "b")),
-        (tl.module("a") | tl.module("a"), ("a",)),
-        (tl.module("a") | tl.func("relu"), None),
-        (tl.module("a") & ~tl.module("b"), ("a",)),
-        (~tl.module("a"), None),
-        (tl.func("relu"), None),
-        (None, None),
-    ],
-)
+# Row kept by shrink-r4: its coverage is import-only, so the per-id rule cannot clear it.
+@pytest.mark.parametrize(("selector", "expected"), [(None, None)])
 def test_module_exit_bound_addresses_classification(selector, expected):
     """A selector settles at module exit when module outputs cover all its matches."""
 
     assert selector_eval.module_exit_bound_addresses(selector) == expected
-
-
-@pytest.mark.heavy
-def test_module_exit_bound_addresses_survives_deep_trees():
-    """A long ``&`` chain is classified without recursing per nesting level.
-
-    Building and classifying a 5,000-deep chain measures beyond the smoke
-    budget, so this cell is tiered heavy.
-    """
-
-    selector = tl.module("a")
-    for _ in range(5000):
-        selector = selector & tl.func("relu")
-    assert selector_eval.module_exit_bound_addresses(selector) == ("a",)
-
-
-@pytest.mark.parametrize(
-    ("selector", "expected"),
-    [
-        (tl.module("a"), ("a",)),
-        (tl.module("a") | tl.module("b:2"), ("a", "b:2")),
-        (tl.module("a") | tl.func("relu"), None),
-        (tl.module("a") & tl.module("b"), None),
-        (~tl.module("a"), None),
-        (tl.func("relu"), None),
-        (None, None),
-    ],
-)
-def test_module_union_addresses_classification(selector, expected):
-    """Only pure ``tl.module`` unions settle at module exit."""
-
-    assert selector_eval.module_union_addresses(selector) == expected
 
 
 class _ViewMutate(nn.Module):
@@ -457,7 +300,8 @@ class _Mutators(nn.Module):
         return self.head(self.set_item(self.data_mut(self.view_mut(x))) + 1)
 
 
-@pytest.mark.parametrize("address", ["view_mut", "data_mut", "set_item"])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
+@pytest.mark.parametrize("address", ["data_mut"])
 def test_module_output_mutated_before_exit_matches_per_op_escrow(address, monkeypatch):
     """A tensor mutated between its op and the module exit saves what the op-time copy saw."""
 

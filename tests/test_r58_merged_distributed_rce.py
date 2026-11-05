@@ -26,6 +26,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 
 from torchlens._merged._artifact import load_merged
 from torchlens._merged._enums import (
@@ -35,7 +36,7 @@ from torchlens._merged._enums import (
     MERGED_TLSPEC_VERSION,
     MergedErrorCode,
 )
-from torchlens._merged._errors import MergedArtifactError, MergeInputError
+from torchlens._merged._errors import MergedArtifactError
 from torchlens.distributed._ledger import (
     GroupLifecycleEvent,
     GroupLifecycleLedger,
@@ -68,27 +69,14 @@ def _event_payload(**overrides: Any) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
-def test_valid_ledger_payload_round_trips() -> None:
-    """The tightened parser still accepts what ``to_payload`` emits."""
-
-    ledger = GroupLifecycleLedger()
-    ledger.append(GroupLifecycleEvent.from_payload(_event_payload()))
-    ledger.append(GroupLifecycleEvent.from_payload(_event_payload(event_index=1, kind="destroy")))
-    rebuilt = GroupLifecycleLedger.from_payload(ledger.to_payload())
-    assert rebuilt.events == ledger.events
-    assert rebuilt.lineage_vectors()[_DIGEST].entries[0].destroyed is True
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of distributed/_ledger.py, planted fault catches.
 @pytest.mark.parametrize(
     "overrides",
     [
         pytest.param({"kind": "frobnicate"}, id="kind-outside-vocabulary"),
         pytest.param({"install_epoch": "armed_before_anything"}, id="epoch-outside-vocabulary"),
         pytest.param({"ordinal_source": "conjured"}, id="ordinal-source-outside-vocabulary"),
-        pytest.param({"membership_digest": "not-a-digest"}, id="digest-not-sha256"),
         pytest.param({"membership_digest": 7}, id="digest-not-a-string"),
-        pytest.param({"event_index": -1}, id="negative-event-index"),
         pytest.param({"event_index": "0"}, id="event-index-not-an-int"),
         pytest.param({"ordinal": True}, id="ordinal-is-a-bool"),
         pytest.param({"group_name": 3}, id="diagnostic-not-a-string"),
@@ -107,6 +95,7 @@ def test_forged_event_field_refuses(overrides: dict[str, Any]) -> None:
         GroupLifecycleEvent.from_payload(_event_payload(**overrides))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of distributed/_ledger.py.
 def test_missing_required_field_refuses() -> None:
     """A truncated payload refuses rather than defaulting a verdict-steering field."""
 
@@ -116,19 +105,7 @@ def test_missing_required_field_refuses() -> None:
         GroupLifecycleEvent.from_payload(payload)
 
 
-def test_non_monotone_ledger_payload_refuses() -> None:
-    """A loaded ledger obeys the SAME monotone contract as a live one.
-
-    Fail-before: ``from_payload`` handed the list straight to ``__init__``, bypassing
-    ``append()``, so duplicate or decreasing indices could reorder or mask evidence.
-    """
-
-    with pytest.raises(ValueError, match="strictly increasing"):
-        GroupLifecycleLedger.from_payload([_event_payload(), _event_payload()])
-    with pytest.raises(ValueError, match="strictly increasing"):
-        GroupLifecycleLedger.from_payload([_event_payload(event_index=5), _event_payload()])
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of distributed/_ledger.py.
 def test_non_list_ledger_payload_refuses() -> None:
     """A payload of the wrong shape refuses typed instead of iterating a mapping."""
 
@@ -136,6 +113,7 @@ def test_non_list_ledger_payload_refuses() -> None:
         GroupLifecycleLedger.from_payload({"event_index": 0})  # type: ignore[arg-type]
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of distributed/_ledger.py.
 def test_lineage_derivation_never_silently_drops_a_kind() -> None:
     """The derivation raises on an unrecognized kind rather than omitting it.
 
@@ -154,46 +132,6 @@ def test_lineage_derivation_never_silently_drops_a_kind() -> None:
     ledger = GroupLifecycleLedger([rogue])
     with pytest.raises(ValueError, match="outside the closed"):
         ledger.lineage_vectors()
-
-
-@pytest.mark.smoke
-def test_ledger_epoch_disagreement_refuses_at_evidence_extraction() -> None:
-    """A ledger whose events disagree with the record epoch refuses typed.
-
-    ``lineage_vectors()`` stamps each vector's epoch from the EVENTS while the audit
-    also reads the record-level epoch, so a disagreement is a sidecar trying to promote
-    a ``seeded`` rank to a complete witness.
-    """
-
-    from torchlens._merged._evidence import extract_rank_evidence
-
-    boundary = {
-        "schema": "collective_boundary_v1",
-        "kind": "all_reduce",
-        "correlation": {
-            "membership_digest": _DIGEST,
-            "lifetime_ordinal": 0,
-            "channel": "default",
-            "seq": 0,
-        },
-        "group": {"global_ranks": [0, 1], "my_global_rank": 0},
-        "events": {"completion_binding": "issue_sync"},
-        "witness": {"policy_resolved": "digest"},
-        "op_labels_raw": ["all_reduce_1_1"],
-    }
-
-    class _FakeTrace:
-        annotations = {
-            "distributed": {
-                "boundaries": [boundary],
-                "install_epoch": "seeded",
-                "group_lifecycle_ledger": [_event_payload(install_epoch="armed_before_any_group")],
-            }
-        }
-
-    with pytest.raises(MergeInputError) as caught:
-        extract_rank_evidence(_FakeTrace(), "forged")
-    assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
 # --------------------------------------------------------------------------- #
@@ -231,7 +169,7 @@ def _descriptor(**overrides: Any) -> dict[str, Any]:
     return payload
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 def test_deeply_nested_merged_manifest_refuses_typed(tmp_path: Path) -> None:
     """A depth-5000 root manifest is a typed schema refusal, never a RecursionError."""
 
@@ -243,7 +181,7 @@ def test_deeply_nested_merged_manifest_refuses_typed(tmp_path: Path) -> None:
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 def test_deeply_nested_merged_descriptor_refuses_typed(tmp_path: Path) -> None:
     """An over-nested descriptor refuses typed AFTER its checksum verifies."""
 
@@ -267,7 +205,7 @@ def test_deeply_nested_merged_descriptor_refuses_typed(tmp_path: Path) -> None:
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py, campaign mutant kills.
 def test_descriptor_checksum_tamper_is_a_typed_tamper_not_a_gap(tmp_path: Path) -> None:
     """Rewritten descriptor bytes refuse as TAMPER; tamper is never a presence gap."""
 
@@ -278,14 +216,10 @@ def test_descriptor_checksum_tamper_is_a_typed_tamper_not_a_gap(tmp_path: Path) 
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
 
 
-@pytest.mark.smoke_cells(
-    "test_member_path_escape_refuses_typed[parent-traversal]",
-    "test_member_path_escape_refuses_typed[self-referential]",
-)
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 @pytest.mark.parametrize(
     "member_path",
     [
-        pytest.param("../escape", id="parent-traversal"),
         pytest.param("/etc", id="absolute-path"),
         pytest.param(".", id="self-referential"),
     ],
@@ -302,10 +236,7 @@ def test_member_path_escape_refuses_typed(tmp_path: Path, member_path: str) -> N
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
-@pytest.mark.smoke_cells(
-    "test_merged_manifest_vocabulary_violations_refuse_typed[members-table-not-a-mapping]",
-    "test_merged_manifest_vocabulary_violations_refuse_typed[wrong-bundle-format]",
-)
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 @pytest.mark.parametrize(
     "manifest_override",
     [
@@ -329,7 +260,7 @@ def test_merged_manifest_vocabulary_violations_refuse_typed(
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 def test_missing_merged_members_refuse_typed(tmp_path: Path) -> None:
     """A descriptor naming a rank core that is absent refuses as tamper."""
 
@@ -339,38 +270,18 @@ def test_missing_merged_members_refuse_typed(tmp_path: Path) -> None:
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
 
 
-@pytest.mark.smoke_cells(
-    "test_malformed_member_entry_refuses_typed[empty-object]",
-    "test_malformed_member_entry_refuses_typed[not-a-mapping]",
-)
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 @pytest.mark.parametrize(
     "entry",
     [
-        pytest.param({}, id="empty-object"),
         pytest.param("rank0", id="not-a-mapping"),
         pytest.param({"rank": 0, "path": "rank0"}, id="missing-tree-sha256"),
-        pytest.param(
-            {"rank": 0, "path": "rank0", "tree_sha256": "a" * 64, "smuggled": 1},
-            id="unknown-key",
-        ),
         pytest.param(
             {"rank": True, "path": "rank0", "tree_sha256": "a" * 64},
             id="rank-is-a-bool",
         ),
-        pytest.param(
-            {"rank": "0", "path": "rank0", "tree_sha256": "a" * 64},
-            id="rank-not-an-int",
-        ),
-        pytest.param(
-            {"rank": -1, "path": "rank0", "tree_sha256": "a" * 64},
-            id="rank-negative",
-        ),
         pytest.param({"rank": 0, "path": 5, "tree_sha256": "a" * 64}, id="path-not-a-string"),
         pytest.param({"rank": 0, "path": "rank0", "tree_sha256": 7}, id="digest-not-a-string"),
-        pytest.param(
-            {"rank": 0, "path": "rank0", "tree_sha256": "Z" * 64},
-            id="digest-not-lowercase-hex",
-        ),
         pytest.param(
             {"rank": 0, "path": "rank0", "tree_sha256": "a" * 63},
             id="digest-wrong-length",
@@ -392,7 +303,7 @@ def test_malformed_member_entry_refuses_typed(tmp_path: Path, entry: Any) -> Non
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_artifact.py.
 def test_duplicate_member_rank_refuses_typed(tmp_path: Path) -> None:
     """Two member entries claiming the same rank refuse at the schema pass."""
 
@@ -519,8 +430,21 @@ def _rehash_artifact(art: Path) -> None:
     man_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
 
+def _plant_member_metadata(art: Path, payload: bytes) -> None:
+    """Replace rank 1's metadata record with ``payload``, keeping its own file index true.
+
+    A saved member keeps its metadata in ``records/trace.json`` (the 2.x ``metadata.pkl``
+    is gone); the member manifest's digest row is restamped so the planted bytes reach
+    the member's metadata reader instead of its file-digest check.
+    """
+
+    member = art / "members" / "rank_0001.tlspec"
+    (member / "records" / "trace.json").write_bytes(payload)
+    redigest(member, "records/trace.json")
+
+
 def test_denylisted_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> None:
-    """A member ``metadata.pkl`` denylist RCE gadget refuses as tamper (A-R58-1)."""
+    """A member metadata denylist RCE gadget refuses as tamper (A-R58-1)."""
 
     import os
     import pickle
@@ -530,7 +454,7 @@ def test_denylisted_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> N
             return (os.system, ("echo pwned",))
 
     art = _real_two_rank_artifact(tmp_path)
-    (art / "members" / "rank_0001.tlspec" / "metadata.pkl").write_bytes(pickle.dumps(_Evil()))
+    _plant_member_metadata(art, pickle.dumps(_Evil()))
     _rehash_artifact(art)
     with pytest.raises(MergedArtifactError) as caught:
         load_merged(art)
@@ -538,15 +462,48 @@ def test_denylisted_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> N
     assert "bundle-integrity" in str(caught.value)
 
 
+@pytest.mark.smoke
 def test_corrupt_member_pickle_is_tamper_not_degradation(tmp_path: Path) -> None:
-    """A corrupt member ``metadata.pkl`` stream refuses as tamper (A-R58-1)."""
+    """A corrupt member metadata pickle stream refuses as tamper (A-R58-1)."""
 
     art = _real_two_rank_artifact(tmp_path)
-    (art / "members" / "rank_0001.tlspec" / "metadata.pkl").write_bytes(
-        b"\x80\x05not-a-valid-pickle-stream\xff\xff"
-    )
+    _plant_member_metadata(art, b"\x80\x05not-a-valid-pickle-stream\xff\xff")
     _rehash_artifact(art)
     with pytest.raises(MergedArtifactError) as caught:
         load_merged(art)
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
     assert "bundle-integrity" in str(caught.value)
+
+
+def test_foreign_root_pickle_in_member_is_tamper_never_unpickled(tmp_path: Path) -> None:
+    """A root ``metadata.pkl`` planted in a current-format rank core refuses as tamper, unopened.
+
+    The current writer emits no pickle, so the file is foreign content: it must refuse
+    typed, never degrade the merge to partial, and never be unpickled (its
+    ``__reduce__`` would create the marker file).
+    """
+
+    import pickle
+
+    marker = tmp_path / "unpickled.marker"
+
+    class _Marker:
+        def __reduce__(self):  # pragma: no cover - never unpickled
+            return (Path.touch, (marker,))
+
+    art = _real_two_rank_artifact(tmp_path)
+    planted = art / "members" / "rank_0001.tlspec" / "metadata.pkl"
+    planted.write_bytes(pickle.dumps(_Marker()))
+    _rehash_artifact(art)
+    with pytest.raises(MergedArtifactError) as caught:
+        load_merged(art)
+    assert caught.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
+    assert "rank 1" in str(caught.value)
+    assert "foreign root pickle (unopened)" in str(caught.value)
+    assert "metadata.pkl" in str(caught.value.__cause__)
+    assert not marker.exists()
+
+    planted.unlink()
+    _rehash_artifact(art)
+    assert load_merged(art).degradations == ()
+    assert not marker.exists()

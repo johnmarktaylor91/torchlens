@@ -168,7 +168,7 @@ def _profile_model(name, model, input_tensor, description):
     # can fail even with identical inputs due to counter-alignment issues in
     # the fast path.  Gracefully degrade to N/A when that happens.
     try:
-        _, sna_time = _time_fn(log.save_new_outs, model, input_tensor.clone(), seed=42)
+        _, sna_time = _time_fn(log._save_new_outs, model, input_tensor.clone(), seed=42)
     except ValueError:
         sna_time = None
 

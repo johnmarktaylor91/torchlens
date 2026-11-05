@@ -228,7 +228,7 @@ def stamp_preview_graph_shape_hash(trace: Trace) -> None:
     """
 
     populate_normalized_layer_addresses(trace)
-    trace._provenance_fingerprint = compute_graph_shape_hash(trace)
+    trace._provenance_fingerprint = compute_graph_shape_hash(trace, include_module_address=False)
 
 
 def _set_per_op_tracing_finished(trace: Trace) -> None:
@@ -1218,7 +1218,6 @@ def new_preview_function_trace(
         recurrence_detection=recurrence_detection,
         verbose=verbose,
         backward_ready=False,
-        module_filter=None,
         emit_nvtx=False,
         input_transform=None,
         input=raw_input,

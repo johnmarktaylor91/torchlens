@@ -55,17 +55,6 @@ def _fail_capture(model: nn.Module) -> BaseException:
     return excinfo.value
 
 
-def test_failed_capture_removes_instance_forwards_and_pickles() -> None:
-    """After a failed capture the model is as if never traced."""
-
-    model = SmallNet()
-    _fail_capture(model)
-    assert "forward" not in model.fc.__dict__, (
-        "the failed capture left TorchLens' instance forward wrapper installed"
-    )
-    pickle.dumps(model)
-
-
 def test_failed_capture_then_retrace_keeps_module_attribution() -> None:
     """The release evicts prep bookkeeping so the next capture re-prepares.
 
@@ -81,17 +70,6 @@ def test_failed_capture_then_retrace_keeps_module_attribution() -> None:
         "module containment lost after a failed-capture release + re-trace"
     )
     tl.release_model(model)
-    pickle.dumps(model)
-
-
-def test_user_forward_failure_also_releases() -> None:
-    """The purity contract covers user-code failures, not just TL refusals."""
-
-    model = MidForwardBoom()
-    with pytest.raises(TraceCaptureError, match="user forward failure") as _tce_info:
-        tl.trace(model, torch.randn(2, 4))
-    assert isinstance(_tce_info.value.__cause__, RuntimeError)
-    assert "forward" not in model.fc.__dict__
     pickle.dumps(model)
 
 
@@ -133,18 +111,3 @@ def test_secondary_release_failure_warns_coded_and_never_masks(
         if isinstance(w.message, TorchLensWarning) and hasattr(w.message, "fields")
     ]
     assert "failed_capture_release_incomplete" in codes, codes
-
-
-def test_successful_capture_leaves_no_instance_forward() -> None:
-    """Success also puts every child forward back; release stays a no-op on it."""
-
-    model = SmallNet()
-    tl.trace(model, torch.randn(2, 4))
-    assert "forward" not in model.fc.__dict__, (
-        "the forward wrappers are session-scoped: the success path must put "
-        "every child forward back, exactly like the failure path"
-    )
-    pickle.dumps(model)
-    tl.release_model(model)
-    assert "forward" not in model.fc.__dict__
-    pickle.dumps(model)

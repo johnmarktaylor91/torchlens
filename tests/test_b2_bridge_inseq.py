@@ -1,4 +1,4 @@
-"""inseq bridge against the real inseq package (walk U22.1).
+"""inseq bridge against the real inseq package.
 
 Forced decoding must return the requested text: the bridge passes
 ``generated_texts=`` through inseq's own keyword and refuses a result that

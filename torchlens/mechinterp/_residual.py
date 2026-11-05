@@ -49,6 +49,8 @@ def _innermost_module(op: Any) -> str | None:
 def _writer_kind(trace: Any, op: Any) -> str:
     """Classify a writer for display from its module chain (metadata only)."""
 
+    if getattr(op, "expert", None) is not None:
+        return "expert"
     for address in reversed(_module_stack(op)):
         try:
             record = trace.modules[address]
@@ -140,7 +142,7 @@ def _require_payloads(trace: Any, labels: list[str], *, analysis: str) -> dict[s
             message=f"{analysis} needs {len(missing)} unsaved op payload(s): "
             f"{sorted(str(row['op_label']) for row in missing)}.",
             remedy="recapture with torchlens.mechinterp.retention_plan(trace, analyses=...).predicate "
-            "as save= (or layers_to_save='all'); never a partial table",
+            "as save= (or save='all'); never a partial table",
             missing_sites=missing,
             analysis=analysis,
         )
@@ -206,6 +208,17 @@ def residual_accumulation(
         Real merges only; nothing is fabricated for parallel blocks.
     positions:
         Optional position indices; rows are views sliced on axis 1.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> len(tl.mechinterp.residual_accumulation(trace))
+    5
     """
 
     target_op = _resolve_target_op(trace, target)
@@ -274,6 +287,7 @@ def _writer_row(
             site_key=getattr(writer_op, "site_key", None),
             pass_index=getattr(writer_op, "pass_number", None),
             kind=_writer_kind(trace, ancestor),
+            expert=getattr(ancestor, "expert", None),
             module_address=_innermost_module(ancestor),
             provenance=f"captured/{verification}",
         ),
@@ -362,6 +376,17 @@ def residual_decomposition(
     positions:
         Optional position indices; row VIEWS are sliced on axis 1 after the
         identity gate runs on the full tensors.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> tl.mechinterp.residual_decomposition(trace).grading
+    'complete'
     """
 
     target_op = _resolve_target_op(trace, target)

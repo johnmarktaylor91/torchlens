@@ -5,13 +5,11 @@ from __future__ import annotations
 import inspect
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
-from types import SimpleNamespace
 from typing import Any
 
 import torch
 
 from .. import _state
-from .._capture.arg_positions import _normalize_func_name
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
@@ -30,7 +28,7 @@ from ._module_boundary import (
     _replace_tensor_outputs as _replace_tensor_outputs,
 )
 from ._runtime_gradient import (
-    _active_backward_pass_index,
+    _active_backward_pass_number,
     _current_injection_rule,
     _first_replaced_tuple_index,
     _hook_display_name,
@@ -39,7 +37,7 @@ from ._runtime_gradient import (
     _live_run_ctx,
     _next_gradient_call_index,
     _record_backward_selector_fire,
-    _trace_backward_pass_index,
+    _trace_backward_pass_number,
 )
 from ._runtime_probes import (
     _apply_inplace_replacement_to_mutated_storage,
@@ -58,10 +56,12 @@ from ._runtime_sites import (
     _input_splice_module_scope,
     _is_plain_module_selector,
     _op_output_slot,
+    _provisional_inplace_site,
     _selector_uses_only_provisional_fields,
     _site_name,
     _whole_call_site_view,
 )
+from ._zero_fire import note_capture_fire
 from .audit import build_fire_record
 from .errors import HookSignatureError, HookValueError
 from .hooks import (
@@ -73,6 +73,7 @@ from .hooks import (
     make_hook_context,
     split_site_branches,
 )
+from .spec import Recipe
 from .types import FireRecord
 
 
@@ -570,11 +571,7 @@ def _apply_live_hooks(
             )
         )
         if normalized_entry.metadata.get("zero_match_ledger") == "intervene_selector":
-            trace = _state._active_trace
-            if trace is not None:
-                trace._tl_intervene_selector_fire_count = (
-                    int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) + 1
-                )
+            note_capture_fire(_state._active_trace, 1, entry_rule_id)
         current_out = result
     return current_out, tuple(fire_results)
 
@@ -658,7 +655,10 @@ def _has_matching_input_routed_intervention(
         current op's inputs through the post-hook execution path.
     """
 
-    site = _provisional_inplace_site(func_name, trace, func_call_id)
+    from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
+
+    modules = tuple(_snapshot_exhaustive_module_stack(trace))
+    site = _provisional_inplace_site(func_name, trace, func_call_id, modules)
     hook_plan = _state._active_hook_plan
     if hook_plan:
         for entry in hook_plan:
@@ -670,8 +670,28 @@ def _has_matching_input_routed_intervention(
     intervene = None if options is None else getattr(options, "intervene", None)
     if intervene is None:
         return False
-    selector = getattr(intervene, "selector", None)
-    decision = getattr(intervene, "decision", None)
+    return any(
+        _rule_may_route_inputs(selector, decision, site)
+        for selector, decision in _intervene_selector_decisions(intervene)
+    )
+
+
+def _intervene_selector_decisions(intervene: Any) -> list[tuple[Any, Any]]:
+    """Return ``(selector, decision)`` for every rule of a capture ``intervene=``.
+
+    A public spec contributes every rule; its single-rule ``.selector`` /
+    ``.decision`` view is ``None`` on a multi-clause spec, and reading only
+    that view skipped the in-place input snapshot for every rule.
+    """
+
+    if isinstance(intervene, Recipe):
+        return [(rule.target, rule.decision) for rule in intervene.rules]
+    return [(getattr(intervene, "selector", None), getattr(intervene, "decision", None))]
+
+
+def _rule_may_route_inputs(selector: Any, decision: Any, site: Any) -> bool:
+    """Return whether one ``intervene=`` rule may route the current op's inputs."""
+
     hook = None if decision is None else getattr(decision, "hook", None)
     if selector is None or hook is None:
         return False
@@ -738,56 +758,6 @@ def _selector_may_match_provisional_site(selector: Any, site: Any) -> bool:
     if matched:
         return True
     return not _selector_uses_only_provisional_fields(selector)
-
-
-def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> Any:
-    """Build a selector-matchable site for a not-yet-executed in-place op.
-
-    Parameters
-    ----------
-    func_name:
-        Decorated torch function name.
-    trace:
-        Active trace.
-    func_call_id:
-        Function-call id allocated by the torch wrapper.
-
-    Returns
-    -------
-    Any
-        Minimal live-site proxy for pre-execution selector matching.
-    """
-
-    from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
-
-    layer_type = _normalize_func_name(func_name)
-    modules = tuple(_snapshot_exhaustive_module_stack(trace))
-    raw_index = trace._raw_graph_ws.layer_counter + 1
-    type_index = trace._raw_graph_ws.raw_layer_type_counter.get(layer_type, 0) + 1
-    raw_label = f"{layer_type}_{type_index}_{raw_index}_raw"
-    return SimpleNamespace(
-        layer_label=raw_label,
-        _layer_label_raw=raw_label,
-        _label_raw=raw_label,
-        raw_index=raw_index,
-        layer_type=layer_type,
-        func_name=func_name,
-        func_call_id=func_call_id,
-        container_path=(),
-        module=modules[-1] if modules else None,
-        modules=modules,
-        output_of_module_calls=(),
-        output_of_modules=(),
-        _tl_module_boundary=False,
-        is_transform=False,
-        transform_kind=None,
-        transform_chain=(),
-        transform_config={},
-        is_inplace=True,
-        _tl_input_snapshot=False,
-        call_index=1,
-        lookup_keys=[],
-    )
 
 
 def _apply_live_backward_hooks(
@@ -976,7 +946,7 @@ def apply_live_gradient_hooks(
     hook_plan = _state._active_hook_plan
     if not hook_plan or _state.active_capture()[0] is not trace:
         return grad, ()
-    pass_index = _trace_backward_pass_index(trace)
+    pass_index = _trace_backward_pass_number(trace)
     current = grad
     fire_records: list[FireRecord] = []
     candidates = _gradient_site_ops(trace, op)
@@ -1046,7 +1016,7 @@ def _fire_gradient_entry(
         args=(grad,),
         kwargs={
             "grad_kind": "grad_output",
-            "backward_pass_index": pass_index,
+            "backward_pass_number": pass_index,
             "tuple_index": tuple_index,
             "call_index": call_index,
         },
@@ -1130,7 +1100,7 @@ def _gradient_fire_record(
         timing="post",
         signal="backward",
         edit_name=_hook_display_name(entry),
-        backward_pass_number=context.kwargs["backward_pass_index"],
+        backward_pass_number=context.kwargs["backward_pass_number"],
         call_index=context.kwargs["call_index"],
         grad_kind="grad_output",
         tuple_index=context.kwargs["tuple_index"],
@@ -1583,7 +1553,7 @@ def _build_live_backward_fire_record(
 
     tuple_index = _first_replaced_tuple_index(previous, current)
     label = str(getattr(grad_fn_handle, "label", ""))
-    pass_index = _active_backward_pass_index(grad_fn_handle)
+    pass_index = _active_backward_pass_number(grad_fn_handle)
     return build_fire_record(
         target_label=label,
         call_label=f"{label}:{call_index}" if label else str(call_index),

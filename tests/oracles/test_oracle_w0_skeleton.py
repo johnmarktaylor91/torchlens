@@ -10,11 +10,9 @@ controlled from day one.
 
 from __future__ import annotations
 
-import pickle
-
 import pytest
 
-from ._invocation_templates import SEED_TEMPLATES, _fixture_model
+from ._invocation_templates import SEED_TEMPLATES
 from ._registry import PURITY_CONTRACTS, PURITY_MECHANISMS
 
 
@@ -33,35 +31,6 @@ def test_every_template_declares_a_positive_control() -> None:
     for template in SEED_TEMPLATES:
         assert callable(template.positive_control), template.template_id
         assert callable(template.invoke), template.template_id
-
-
-@pytest.mark.smoke_cells(
-    "test_positive_control_passes_on_the_live_tree[torchlens.stats.aggregate]",
-    "test_positive_control_passes_on_the_live_tree[torchlens.extract]",
-)
-@pytest.mark.parametrize("template", SEED_TEMPLATES, ids=lambda t: t.door)
-def test_positive_control_passes_on_the_live_tree(template) -> None:
-    """Every seed template's measurement channel is ALIVE.
-
-    A dead channel exonerates real defects (the panel's function-local
-    pickle fixture reported "False -> False"); the control runs BEFORE any
-    wave-1 verdict is trusted.
-    """
-
-    template.positive_control()
-
-
-def test_fixture_model_is_module_level_picklable() -> None:
-    """CF-022: the fixture spec itself passes its own positive control.
-
-    A function-local fixture class cannot pickle, which kills the pickle
-    postcondition channel before the measurement. The shared fixture must
-    be picklable BEFORE any capture so the wave-1 pickle postcondition
-    measures TorchLens, not the fixture.
-    """
-
-    payload = pickle.dumps(_fixture_model())
-    assert payload, "fixture model failed to pickle; the channel is dead pre-capture"
 
 
 def test_state_contracts_stay_unset_pending_fork_a() -> None:

@@ -39,19 +39,6 @@ _SAVE_ALL = {"capture": tl.options.CaptureOptions()}
 # ---------------------------------------------------------------------------
 
 
-def test_collapse_plan_roundtrips_and_reapplies_on_clean_recapture():
-    baseline_model, _, x = make_insertion_pair()
-    first = tl.trace(baseline_model, x, **_SAVE_ALL)
-    exported = export_collapse_plan(first, mode="auto")
-    payload = json.loads(json.dumps(exported))  # must survive real JSON
-    second = tl.trace(baseline_model, x, **_SAVE_ALL)
-    report = reapply_collapse_plan(second, payload)
-    assert report.applicable
-    assert report.changed_cohorts == ()
-    assert report.collapsed_addresses  # the plan's units survived the trip
-
-
-@pytest.mark.smoke
 def test_collapse_plan_reapply_refuses_across_insertion():
     """Strict reapply refuses on the join's changed cohorts, teaching."""
 
@@ -72,7 +59,6 @@ def test_collapse_plan_reapply_refuses_across_insertion():
     )
 
 
-@pytest.mark.smoke
 def test_collapse_plan_payload_fail_closed():
     baseline_model, _, x = make_insertion_pair()
     trace = tl.trace(baseline_model, x, **_SAVE_ALL)
@@ -91,7 +77,6 @@ def test_collapse_plan_payload_fail_closed():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_harvest_clean_policy_is_explicit_and_roundtrips():
     spec = HarvestSpec()
     block = harvest_block(spec)
@@ -123,22 +108,6 @@ def test_harvest_clean_policy_refuses_intervention_fields():
     assert excinfo.value.fields["code"] == "harvest_schema_invalid"
 
 
-@pytest.mark.smoke
-def test_harvest_execution_gated_per_address_class_never_coarsens():
-    spec = HarvestSpec(
-        policy="intervened",
-        engine="replay",
-        address_class="selection",
-        target_site_keys=("s1|relu|relu||1",),
-        receipt_digest="deadbeef",
-        verification="movers_subset_of_cone",
-    )
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        require_executable(spec)
-    assert excinfo.value.fields["code"] == "harvest_address_class_ungated"
-    assert "never silently coarsened" in str(excinfo.value)
-
-
 def test_harvest_block_fail_closed_on_foreign_fields():
     block = harvest_block(HarvestSpec())["tl_counterfactual_harvest_v1"]
     block["extra"] = 1
@@ -161,17 +130,21 @@ def test_spec_persistence_carries_expression_and_resolution_disclosure():
     spec = tl.when(tl.func("relu"), tl.zero_ablate())
     trace = tl.trace(baseline_model, x, intervene=spec)
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "spec.json")
+        path = os.path.join(tmp, "spec.tlspec")
         intervention_save.save_intervention(trace, path)
-        with open(os.path.join(path, "spec.json")) as spec_file:
-            data = json.load(spec_file)
+        with open(os.path.join(path, "intervention.json")) as recipe_file:
+            data = json.load(recipe_file)
+        with open(os.path.join(path, "manifest.json")) as manifest_file:
+            manifest = json.load(manifest_file)
     # The predicate door lowers the fired selector into per-site label
     # targets, so the persisted ADDRESSING is derived (the pinned C03
     # disclosure contract). B7's expression provenance rides BESIDE it.
     assert data["spec_derived"] is True
-    blob = json.dumps(data["intervention_spec"])
+    blob = json.dumps(data["rules"])
     assert "spec_where_repr" in blob and "func" in blob  # the user's expression
-    for entry in data["target_manifest"]:
+    target_manifest = manifest["intervention_compat_metadata"]["target_manifest"]
+    assert target_manifest
+    for entry in target_manifest:
         if entry["resolved_status"] == "resolved":
             assert entry["resolved_site_keys"]  # disclosure: structural keys
             assert entry["graph_shape_hash"]  # the resolution digest

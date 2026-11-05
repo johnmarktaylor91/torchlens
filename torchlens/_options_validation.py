@@ -10,7 +10,7 @@ stays with the dataclasses in ``options.py``; this module never imports it.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ._errors import ArgumentTypeError, InvalidArgumentError
 from ._literals import (
@@ -188,6 +188,7 @@ def _validate_fold_repeats(value: FoldRepeatsLiteral) -> None:
 # ``'yes'`` or ``'no'`` used to be accepted silently, and ``'no'``/``'false'``
 # truthily meant ON (R64-F3).
 _VISUALIZATION_BOOL_FIELDS = (
+    "show_edge_shapes",
     "rolled",
     "open_viewer",
     "show_cone",
@@ -288,8 +289,7 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
     Raises
     ------
     ValueError
-        If ``jax_control_flow`` or ``jax_max_control_flow_unroll`` holds an
-        unsupported value.
+        If ``jax_control_flow`` or ``jax_max_control_flow_unroll`` holds an unsupported value.
     TypeError
         If ``jax_max_control_flow_unroll`` is not an integer.
     """
@@ -342,6 +342,36 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
             remedy="pass on_nonfinite='ignore', 'track', 'warn' or 'raise'",
             argument="on_nonfinite",
         )
+    _validate_capture_flag_values(values)
+
+
+def _validate_capture_flag_values(values: Mapping[str, Any]) -> None:
+    """Validate the ``aten_ops`` and ``structure_only`` capture flags.
+
+    The last checks of :func:`_validate_capture_values`, run in the same order.
+
+    Parameters
+    ----------
+    values:
+        Resolved capture field values keyed by canonical field name.
+
+    Raises
+    ------
+    InvalidArgumentError
+        If ``aten_ops`` is not ``True``, ``False`` or ``"values"``.
+    ArgumentTypeError
+        If ``structure_only`` is not a bool.
+    """
+
+    aten_ops = values["aten_ops"]  # identity checks: 1 == True would admit an int
+    if aten_ops is not True and aten_ops is not False and aten_ops != "values":
+        raise InvalidArgumentError(
+            f"Capture option aten_ops={aten_ops!r} is unsupported",
+            code="aten_ops_invalid",
+            remedy="pass aten_ops=False, aten_ops=True (value-free rows) or "
+            "aten_ops='values' (rows with their output tensors)",
+            argument="aten_ops",
+        )
     if not isinstance(values["structure_only"], bool):
         raise ArgumentTypeError(
             "Capture option structure_only is not a bool",
@@ -349,6 +379,25 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
             remedy="pass structure_only=True or structure_only=False",
             argument="structure_only",
             received_type=type(values["structure_only"]).__name__,
+        )
+    _validate_transformed_output_request(values)
+
+
+def _validate_transformed_output_request(values: Mapping[str, Any]) -> None:
+    """Refuse ``save_transformed_output=True`` with no ``output_transform``.
+
+    The flag asks to keep the transformed output, yet nothing transforms it:
+    refuse before the capture instead of silently saving nothing.
+    """
+
+    if values["save_transformed_output"] is True and values["output_transform"] is None:
+        raise InvalidArgumentError(
+            "Capture option save_transformed_output=True needs an output_transform; "
+            "without one there is no transformed output to save",
+            code="save_transformed_output_without_output_transform",
+            remedy="pass output_transform=<callable> alongside save_transformed_output=True, "
+            "or drop save_transformed_output",
+            argument="save_transformed_output",
         )
 
 
@@ -363,11 +412,10 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     Returns
     -------
     dict[str, Any]
-        Keyword arguments expected by ``Trace.draw``: the field names, with
-        ``container_path`` as ``path``; ``fold_repeats`` only when set or
-        explicit; the tri-state and optional channels only when set.
+        ``Trace.draw`` field names, renaming ``container_path`` to ``path``;
+        include ``file_format`` only when explicit and ``fold_repeats`` when set or explicit.
     """
-
+    explicit = visualization.is_field_explicit
     kwargs: dict[str, Any] = {
         "path": visualization.container_path,
         "graph": visualization.graph,
@@ -384,8 +432,9 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "grad_edge_overrides": visualization.grad_edge_overrides,
         "module_overrides": visualization.module_overrides,
         "open_viewer": visualization.open_viewer,
-        "file_format": visualization.file_format,
+        "file_format": visualization.file_format if explicit("file_format") else None,
         "show_buffers": visualization.show_buffers,
+        "show_edge_shapes": visualization.show_edge_shapes,
         "direction": visualization.direction,
         "layout": visualization.layout,
         "renderer": visualization.renderer,
@@ -393,7 +442,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "intervention_mode": visualization.intervention_mode,
         "show_cone": visualization.show_cone,
     }
-    if visualization.fold_repeats is not None or visualization.is_field_explicit("fold_repeats"):
+    if visualization.fold_repeats is not None or explicit("fold_repeats"):
         kwargs["fold_repeats"] = visualization.fold_repeats
     optional_kwargs = {
         "node_overlay": visualization.node_overlay,
@@ -409,6 +458,16 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "order_siblings": visualization.order_siblings,
     }
     for field_name, value in optional_kwargs.items():
-        if value is not None and value is not False or visualization.is_field_explicit(field_name):
+        if value is not None and value is not False or explicit(field_name):
             kwargs[field_name] = value
     return kwargs
+
+
+def _validate_visualization_values(values: Mapping[str, Any]) -> None:
+    """Validate resolved visualization values shared by both constructors."""
+    _validate_buffer_visibility(values["show_buffers"])
+    _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
+    _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
+    _validate_collapse(cast(CollapseLiteral, values["collapse"]))
+    _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
+    _validate_visualization_flag_fields(values)

@@ -105,7 +105,6 @@ def test_hot_path_device_time_refuses_without_join(mlp_log) -> None:
     assert excinfo.value.fields["remedy"]
 
 
-@pytest.mark.smoke
 def test_hot_path_device_time_ranks_joined_ops(mlp_log) -> None:
     """Joined device nanoseconds rank source lines."""
 
@@ -147,7 +146,6 @@ def test_draw_color_by_device_time_refuses_without_join(mlp_log, tmp_path: Path)
     assert excinfo.value.fields["code"] == "device_time_unavailable"
 
 
-@pytest.mark.smoke
 def test_draw_size_by_device_time(mlp_log, tmp_path: Path) -> None:
     """size_by='device_time' sizes joined nodes from the same table."""
 

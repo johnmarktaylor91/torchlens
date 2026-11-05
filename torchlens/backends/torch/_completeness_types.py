@@ -9,6 +9,7 @@ from typing import Any
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
+from ..._utils._display_bounded import short_dataclass_repr
 from .escape_detection import (
     ExpectedOriginalToken,
 )
@@ -80,6 +81,8 @@ class _DispatchEvent:
 class _WitnessState:
     """Per-forward dispatch census state."""
 
+    __repr__ = short_dataclass_repr
+
     trace: Any
     owner_thread_id: int
     guard_pass_index: int
@@ -89,6 +92,14 @@ class _WitnessState:
     record_escapes: bool = False
     ledger: bool = False
     record_aten: bool = False
+    record_aten_values: bool = False
+    """``CaptureOptions(aten_ops="values")``: keep each recorded ATen call's output
+    tensor(s) on its event, under the owner Op's save rules."""
+    aten_value_cells: dict[int, list[Any]] = field(default_factory=dict)
+    """Speculatively kept value cells by owner wrapper call id, awaiting that
+    owner's ``save=`` verdict (``_aten_capture._note_aten_owner_verdict``)."""
+    aten_owner_verdicts: dict[int, str] = field(default_factory=dict)
+    """Owner wrapper call id -> ``keep`` | ``deferred`` | ``drop`` (never downgraded)."""
     plane_p: bool = False
     """Merge-ranks C2 plane-P: record EVERY dispatched op (any namespace,
     paused windows included) for armed distributed captures. Feeds the
@@ -124,6 +135,29 @@ class _WitnessState:
     # r67 C3: lazy ptr -> full state-name-set index (params + buffers, alias groups merged)
     # backing the origin resolver's pointer fallback. Built once per forward on first use.
     storage_state_ptr_names: dict[int, frozenset[str]] | None = None
+
+    def release(self) -> None:
+        """Drop every per-forward reference once the capture that built this state ends.
+
+        torch's import-time registries (the sharded-op tables, dynamo's tensor attribute
+        map and its object rule cache) keep whichever callable was installed on
+        ``torch.Tensor`` or ``torch`` when they were first imported. A capture that
+        triggers such an import leaves one of this state's wrapper closures in those
+        tables for the life of the process, so the state they reach must hold nothing of
+        the finished capture: the trace dies by refcount with its last user reference,
+        and the wrapper's owner-thread and belt gates fail closed from then on.
+        """
+
+        self.trace = None
+        self.owner_thread_id = -1
+        self.belt_armed = False
+        self.events = []
+        self.plane_p_events = []
+        self.aten_events = None
+        self.aten_storage_alias_groups = {}
+        self.writeback_watch = []
+        self.storage_origins = None
+        self.storage_state_ptr_names = None
 
 
 class _StorageOriginRegistry:

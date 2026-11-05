@@ -1184,7 +1184,21 @@ EXPECTED: dict[str, dict[str, Any]] = {
 }
 
 
-@pytest.mark.parametrize("name", sorted(CASES))
+# Kept by shrink-r4 (per-id subset rule): these rows hold sole coverage of
+# _merged/_derive_steps.py, _merged/_engine.py and _merged/_witness.py. CASES stays whole:
+# test_derive_merge_is_deterministic_across_runs and the completeness check read every case.
+_CHARACTERIZATION_ROWS = (
+    "expected_ranks_without_cores",
+    "refuse_authority_before_audit_conflict",
+    "refuse_dtensor_geometry",
+    "refuse_group_rank_out_of_range",
+    "refuse_p2p_kind",
+    "refuse_presence_outside_membership",
+    "refuse_shard_local",
+)
+
+
+@pytest.mark.parametrize("name", _CHARACTERIZATION_ROWS)
 def test_derive_merge_characterization(name: str) -> None:
     """Each case's result or refusal equals the recorded pre-split value."""
 
@@ -1197,6 +1211,7 @@ def test_characterization_table_is_complete() -> None:
     assert sorted(EXPECTED) == sorted(CASES)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _merged/_derive_steps.py, _merged/_engine.py, _merged/_relation_table.py ....
 def test_derive_merge_is_deterministic_across_runs() -> None:
     """Two runs over freshly built inputs return equal whole objects."""
 

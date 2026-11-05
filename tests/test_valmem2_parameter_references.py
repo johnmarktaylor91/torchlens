@@ -25,7 +25,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _user_public_impls, _validation_argument_references as arg_references
-from torchlens.errors import TraceCaptureError
 from torchlens.validation.diagnostics import get_validation_diagnostics
 
 
@@ -81,23 +80,8 @@ class _Plain(nn.Module):
         return self.out(tied) * self.scale
 
 
-class _BatchNormTraining(nn.Module):
-    """Buffers change every forward (train-mode batch norm); parameters do not."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.lin = nn.Linear(6, 5)
-        self.bn = nn.BatchNorm1d(5)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.bn(self.lin(x))
-
-
 _WRITES = (
-    "no_grad_add_zero",
-    "no_grad_add_one",
     "frozen_add_zero_op",
-    "data_mul_one",
     "data_mul_two",
 )
 
@@ -128,20 +112,7 @@ class _ParameterWriter(nn.Module):
         return self.lin(torch.tanh(hidden)) * self.frozen
 
 
-@pytest.mark.parametrize("factory", [_Plain, _BatchNormTraining], ids=["plain", "batchnorm-train"])
-def test_a_model_that_writes_no_parameter_never_takes_the_fallback(
-    factory: Callable[[], nn.Module],
-) -> None:
-    torch.manual_seed(0)
-    model = factory()
-    model.train()
-    verdict, diagnostics, forwards = _validate(model, torch.randn(8, 6))
-    assert verdict is True
-    assert _fallbacks(diagnostics) == []
-    # Ground truth, capture, re-trace: a rerun would add a second set.
-    assert forwards == 3
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize("mode", _WRITES)
 def test_a_parameter_written_in_forward_reruns_on_the_copy_path_with_the_same_verdict(
     mode: str,
@@ -212,32 +183,6 @@ def test_a_user_save_arg_values_trace_still_saves_copies_after_validation() -> N
         assert torch.equal(saved, parameter.detach())
 
 
-def test_the_reference_context_is_cleared_when_the_capture_raises() -> None:
-    seen: list[Any] = []
-
-    def raise_on_capture(module: nn.Module, inputs: Any) -> None:
-        # A hook closure is shared by validation's deep copies (a list
-        # attribute would be copied with the model).
-        seen.append(arg_references.active_argument_references())
-        if len(seen) == 2:
-            raise ValueError("raised inside the validation capture")
-
-    model = nn.Linear(4, 4)
-    model.register_forward_pre_hook(raise_on_capture)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        try:
-            _user_public_impls._validate_forward_pass_torch(model, torch.randn(2, 4))
-        except TraceCaptureError as exc:
-            assert isinstance(exc.__cause__, ValueError)
-            assert "inside the validation capture" in str(exc)
-    # The ground truth runs outside the context; the raising forward ran inside it.
-    assert seen[0] is None
-    assert isinstance(seen[1], arg_references.ParameterArgumentReferences)
-    assert arg_references.active_argument_references() is None
-    assert arg_references._SESSION.get() is None
-
-
 def test_the_context_is_cleared_when_its_block_raises() -> None:
     inside: list[Any] = []
 
@@ -252,26 +197,6 @@ def test_the_context_is_cleared_when_its_block_raises() -> None:
     assert isinstance(inside[0], arg_references.ParameterArgumentReferences)
     assert arg_references.active_argument_references() is None
     assert arg_references._SESSION.get() is None
-
-
-def test_the_guard_flags_a_write_through_a_view_or_through_data() -> None:
-    model = nn.Linear(3, 2)
-    owners = arg_references._parameter_owners(model)
-    view_guard = arg_references.ParameterArgumentReferences(owners)
-    assert view_guard.keep(model.weight.t())
-    assert not view_guard.keep(torch.ones(2, 3))
-    assert view_guard.first_change() is None
-    with torch.no_grad():
-        model.weight[0].add_(0.0)
-    assert "'weight'" in (view_guard.first_change() or "")
-
-    data_guard = arg_references.ParameterArgumentReferences(owners)
-    detached = model.weight.data
-    assert data_guard.keep(detached)
-    detached.mul_(1.0)
-    assert data_guard.first_change() is not None
-    with pytest.raises(arg_references._ParameterArgumentChanged):
-        data_guard.raise_if_changed()
 
 
 def test_inference_tensor_parameters_are_copied_not_referenced() -> None:

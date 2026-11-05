@@ -16,8 +16,14 @@ from typing import TYPE_CHECKING, Any, Optional
 from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
+from .._pass_tokens import split_pass_token
+from .._utils._display_collections import collection_repr
+from .._utils._display_errors import lookup_message
+from .._utils._display_keys import display_key
+from .._utils.fail_open import fail_open
 from ._accessor_base import Accessor, attach_source_honesty
 from ._layer_views import _layer_log_to_row
+from ._lookup_kinds import converted, layer_for_key, scoped_op_by_lookup_key
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -79,6 +85,25 @@ class OpAccessor(Accessor["Op"]):
             return resolved
         raise KeyError(f"Op '{key}' not found in scoped Layer ops.")
 
+    def __repr__(self) -> str:
+        """Name the owning layer and the accessor's positional and pass bases."""
+
+        return fail_open(self._display_identity, lambda _error: "OpAccessor: metadata unavailable")
+
+    def _display_identity(self) -> str:
+        """Read only the first and last stored pass; never list members."""
+
+        count = len(self)
+        head = collection_repr("OpAccessor", count, "op" if count == 1 else "ops")
+        if not count:
+            return head + ", 0-based positions, pass-qualified labels"
+        first, last = self._list[0], self._list[-1]
+        passes = str(first.pass_number)
+        if count > 1:
+            passes += f"-{last.pass_number}"
+        noun = "pass" if count == 1 else "passes"
+        return f"{head} of {first.short_layer_label} ({noun} {passes}), 0-based positions"
+
     def set_pass(self, pass_index: int, value: "Op") -> None:
         """Store ``value`` as pass ``pass_index`` (1-based, the storage key).
 
@@ -135,16 +160,13 @@ class OpAccessor(Accessor["Op"]):
         except (KeyError, IndexError, ValueError):
             return default
 
-    def __repr__(self) -> str:
-        """Return a bounded summary teaching the REAL index basis."""
+    def _composition_note(self) -> str | None:
+        """Owning layer and the REAL read basis of ``ops[...]``, with no members listed."""
 
-        labels = [str(getattr(op, "label", getattr(op, "layer_label", "?"))) for op in self._list]
-        shown = ", ".join(repr(label) for label in labels[:5])
-        suffix = ", ..." if len(labels) > 5 else ""
-        return (
-            f"OpAccessor with {len(self._list)} ops "
-            f"(0-based positions or pass-qualified labels): [{shown}{suffix}]"
-        )
+        basis = "0-based positions or pass-qualified labels"
+        first = self._list[0] if self._list else None
+        layer = getattr(first, "short_layer_label", None) or getattr(first, "layer_label", None)
+        return f"layer {layer}; {basis}" if layer else basis
 
     def _resolve_substring(self, key: str) -> "Op | None":
         """Resolve Op by any scoped layer-label variant."""
@@ -163,13 +185,14 @@ class OpAccessor(Accessor["Op"]):
             if key in {op_log.layer_label, op_log.short_layer_label}
         ]
         if len(parent_matches) > 1:
-            parent_label = parent_matches[0].layer_label
-            qualified = ", ".join(op_log.label for op_log in parent_matches[:10])
-            suffix = "..." if len(parent_matches) > 10 else ""
+            parent_label = parent_matches[0].short_layer_label
             raise AmbiguousOpLookupError(
-                f"Layer '{parent_label}' has {len(parent_matches)} ops. Use a 0-based "
-                "integer position or a pass-qualified label like "
-                f"'{parent_label}:1'. Available Op labels: {qualified}{suffix}."
+                lookup_message(
+                    f"Layer {parent_label!r} has {len(parent_matches)} ops.",
+                    [display_key(op) for op in parent_matches],
+                    "Use a 0-based integer position or a pass-qualified label.",
+                    query=key,
+                )
             )
         for op_log in self._dict.values():
             if key in {
@@ -179,7 +202,7 @@ class OpAccessor(Accessor["Op"]):
                 op_log.raw_label,
             }:
                 return op_log
-        return None
+        return scoped_op_by_lookup_key(self._dict.values(), key)  # module-call or buffer key
 
 
 class LayerAccessor(Accessor["Layer"]):
@@ -188,8 +211,9 @@ class LayerAccessor(Accessor["Layer"]):
     Supports indexing by:
     * **layer label** (str) -- exact match against no-pass label.
     * **ordinal index** (int) -- position in execution order.
-    * **pass notation** (str ``"conv2d_1_1:2"``) -- strips the pass
-      suffix and returns the parent Layer.
+    * **pass notation** (str ``"conv2d_1_1:2"``, ``"conv2d_1_1:last"``,
+      ``"conv2d_1_1:all"``) -- strips the pass suffix and returns the parent
+      Layer.
 
     Available as ``trace.layers``.
     """
@@ -203,12 +227,24 @@ class LayerAccessor(Accessor["Layer"]):
     }
 
     def _composition_note(self) -> str | None:
-        """Composition breakdown for the one-line card: ops vs buffers."""
+        """Identity partition: compute layers, inputs, outputs and buffer rows."""
 
-        buffer_count = sum(1 for layer in self._list if getattr(layer, "is_buffer", False))
-        if not buffer_count:
-            return None
-        return f"{len(self._list) - buffer_count} ops, {buffer_count} buffers"
+        counts = {"op": 0, "input": 0, "output": 0, "buffer": 0}
+        for layer in self._list:
+            kind = "op"
+            for candidate in ("input", "output", "buffer"):
+                if getattr(layer, f"is_{candidate}", False):
+                    kind = candidate
+                    break
+            counts[kind] += 1
+        return (
+            ", ".join(
+                f"{count:,} {noun}{'s' if count != 1 else ''}"
+                for noun, count in counts.items()
+                if count
+            )
+            or None
+        )
 
     def __init__(
         self,
@@ -229,12 +265,22 @@ class LayerAccessor(Accessor["Layer"]):
         super().__init__(layer_logs, source_ref=source_ref)
 
     def _resolve_pass_qualified(self, key: str) -> "Layer | None":
-        """Resolve ``layer_label:pass`` notation to the parent Layer."""
+        """Resolve ``layer_label:pass``, ``:last`` or ``:all`` notation to the parent Layer.
+
+        Passes are 1-based: a zero or negative pass number names nothing.
+        """
+        record = converted(
+            self, key, layer_for_key
+        )  # a call label or buffer version names its Layer
+        if record is not None:
+            return record
         base, _, pass_str = key.rpartition(":")
-        try:
-            int(pass_str)
-        except ValueError:
-            return None
+        if split_pass_token(key) is None:
+            try:
+                if int(pass_str) < 1:
+                    return None
+            except ValueError:
+                return None
         return self._resolve_substring(base)
 
     def _resolve_substring(self, key: str) -> "Layer | None":
@@ -252,15 +298,15 @@ class LayerAccessor(Accessor["Layer"]):
                 f"Layer lookup '{key}' is ambiguous across {len(matches)} Layers: {listed}. "
                 f"Use the full Layer label, e.g. {matches[0].layer_label!r}."
             )
-        return None
+        return converted(self, key, layer_for_key)  # a module or buffer key names its Layer
 
     def _suggest(self, key: str) -> list[str]:
         """Return similar layer labels from the source Trace."""
         source_ref = getattr(self, "_source_ref", None)
         source = source_ref() if source_ref is not None else None
-        if source is not None and hasattr(source, "find_layers"):
-            return source.find_layers(str(key))
-        return []
+        if source is None:
+            return []
+        return list(source._suggest_layer_labels(str(key)))
 
     def _trace_filtered(self, impl: str) -> "LayerAccessor":
         """Return the Trace-level layer filter ``impl`` restricted to this collection."""

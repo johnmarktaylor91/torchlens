@@ -16,6 +16,7 @@ partial diagnostics, and fastlog's lightweight `RecordContext` construction.
 | `projections.py` | Conversion from backend events into `Trace`/`Recording` projections |
 | `predicates.py` | Capture predicate normalization, composition checks, and `followed_by` support |
 | `stop.py` | StopDirective policy objects and halt/nonfinite handling |
+| `_stop_after_policy.py` | The one never-fired `stop_after` policy (`settle_unfired_stop_after`): the torch epilogue and the Paddle/MLX previews call it; it imports only error types so it stays outside the import cycle |
 | `config.py` | Session configuration dataclasses used by backend capture |
 | `arg_positions.py` | 3-tier tensor/parameter extraction: static table, dynamic cache, BFS fallback |
 | `salient_args.py` | Human-readable function configuration metadata |
@@ -56,7 +57,7 @@ a full `Trace`.
 
 ### trace.py
 - `run_and_log_inputs_through_model()` - core runner used by `trace()`.
-- `save_new_outs()` - replay-like out refresh on an existing graph.
+- `_save_new_outs()` - replay-like out refresh on an existing graph (internal; `run()` is the public door).
 - `_run_model_and_save_specified_outs()` is called from `user_funcs.py` for two-pass
   selective save behavior.
 

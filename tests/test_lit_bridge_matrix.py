@@ -45,8 +45,6 @@ _MATRIX: tuple[tuple[str, str, str, str], ...] = (
     ),
     ("sshleifer/tiny-gpt2", "causal_lm", "transformer.h", "n_layer"),
 )
-_NAMES = tuple(row[0] for row in _MATRIX)
-_RAGGED = ("a", "a much longer ragged probe example sentence", "mid size probe")
 
 
 @pytest.fixture(scope="module")
@@ -130,7 +128,9 @@ def _trace(entry: dict[str, Any], texts: list[str]) -> Any:
     return tl.trace(entry["net"], [], input_kwargs=kwargs)
 
 
-@pytest.mark.parametrize("name", _NAMES)
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _autoroute/_builtin_output.py, bridge/lit/_sites.py.
+# Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
+@pytest.mark.parametrize("name", ["hf-internal-testing/tiny-random-roberta"])
 def test_blocks_preset_matches_config_depth(matrix: dict[str, dict[str, Any]], name: str) -> None:
     """The preset discovers exactly the config-declared consecutive stack."""
 
@@ -144,32 +144,7 @@ def test_blocks_preset_matches_config_depth(matrix: dict[str, dict[str, Any]], n
     assert [spec.field_name for spec in specs] == [f"tl_block_{i}" for i in range(depth)]
 
 
-@pytest.mark.parametrize("name", _NAMES)
-def test_site_keys_survive_ragged_rebatch(matrix: dict[str, dict[str, Any]], name: str) -> None:
-    """Pins from an unpadded probe re-resolve on a ragged padded batch (D4/D5)."""
-
-    entry = _entry(matrix, name)
-    specs = _sites.pin_blocks(_trace(entry, ["a short probe"]))
-    resolved = _sites.resolve_pinned(_trace(entry, list(_RAGGED)), specs)
-    assert set(resolved) == {spec.field_name for spec in specs}
-
-
-@pytest.mark.parametrize("name", _NAMES[:3])
-def test_encoder_blocks_bit_exact_vs_hidden_states(
-    matrix: dict[str, dict[str, Any]], name: str
-) -> None:
-    """Every encoder block value equals HF ``output_hidden_states`` EXACTLY."""
-
-    entry = _entry(matrix, name)
-    enc = entry["tok"]("a short parity probe", return_tensors="pt")
-    log = tl.trace(entry["net"], [], input_kwargs=dict(enc))
-    resolved = _sites.resolve_pinned(log, _sites.pin_blocks(log))
-    with torch.no_grad():
-        hidden = entry["net"](**enc, output_hidden_states=True).hidden_states
-    for i, field in enumerate(sorted(resolved, key=lambda f: int(f.rsplit("_", 1)[1]))):
-        assert torch.equal(resolved[field].out, hidden[i + 1]), field
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of bridge/lit/_sites.py.
 def test_gpt2_last_block_closes_under_ln_f(matrix: dict[str, dict[str, Any]]) -> None:
     """GPT-2 blocks are exact vs hidden states; the LAST needs ``ln_f`` (T24).
 

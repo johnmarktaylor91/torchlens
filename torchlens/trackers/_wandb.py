@@ -54,7 +54,18 @@ def _wandb_module() -> Any:
 
 
 class WandbSink:
-    """Native wandb receiver over an existing ``wandb.Run``."""
+    """Native wandb receiver over an existing ``wandb.Run``.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace
+    >>> from torchlens.trackers import ScalarPoint
+    >>> logged = []
+    >>> run = SimpleNamespace(log=lambda data, step=None: logged.append((data, step)))
+    >>> WandbSink(run).emit_scalar(ScalarPoint("gradients/norm/0.weight", 3, 0.5))
+    >>> logged
+    [({'gradients/norm/0.weight': 0.5}, 3)]
+    """
 
     def __init__(self, to: Any) -> None:
         """Wrap an existing run object (never calls ``wandb.init`` itself).

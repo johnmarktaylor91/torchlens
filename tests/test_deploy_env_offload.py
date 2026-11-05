@@ -141,7 +141,6 @@ class _StubHook:
         return output
 
 
-@pytest.mark.smoke
 def test_offload_backed_paths_require_weights_map_membership() -> None:
     """Key-inventory evidence is honored: absent keys stay unbacked (fail closed)."""
 

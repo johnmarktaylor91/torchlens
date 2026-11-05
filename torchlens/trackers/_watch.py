@@ -154,7 +154,17 @@ def _foreign_watch_prefixes(model: torch.nn.Module) -> tuple[str, ...]:
 @dataclass
 class CloseReport:
     """The close report: every scheduled observation ends as data, an
-    enumerated presence/skip outcome, or an exception (memo 3.13)."""
+    enumerated presence/skip outcome, or an exception (memo 3.13).
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink, watch
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> with watch(net, to=MemorySink(), optimizer=opt, every=1) as session, session.step(0):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> report = session.close()
+    >>> (report.first_step, report.last_step, report.is_disabled)
+    (0, 0, False)"""
 
     requested_signals: tuple[str, ...]
     matched_sites: int
@@ -217,6 +227,18 @@ class WatchSession:
 
     Construct through :func:`watch`. The session is a context manager;
     ``close()`` runs on every exit path and detaches every hook.
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink, watch
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> sink = MemorySink()
+    >>> with watch(net, to=sink, optimizer=opt, every=1) as session, session.step(5):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> isinstance(session, WatchSession)
+    True
+    >>> sorted({p.step for p in sink.scalars if p.tag.startswith("gradients/")})
+    [5]
     """
 
     def __init__(
@@ -1147,6 +1169,16 @@ def watch(
         forward. Attach then calibrates the wrap (plain vs wrapped forward on
         ``inputs``, RNG and buffers restored) and discloses the cost
         in ``plan_report()``, the tracker rows and one warning.
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> sink = MemorySink()
+    >>> with watch(net, to=sink, signals=("gradients",), optimizer=opt, every=1) as session, session.step(0):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> any(p.tag.startswith("gradients/") for p in sink.scalars)
+    True
     """
 
     sinks = tuple(to) if isinstance(to, (tuple, list)) else (to,)

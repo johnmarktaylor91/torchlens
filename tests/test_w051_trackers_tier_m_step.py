@@ -57,7 +57,6 @@ def test_activations_emit_under_step_callable_on_the_scheduled_steps() -> None:
     assert len(model._forward_pre_hooks) == 0
 
 
-@pytest.mark.smoke
 def test_step_callable_activations_match_the_explicit_scope_spelling() -> None:
     """Both step spellings observe the SAME activation statistics."""
 

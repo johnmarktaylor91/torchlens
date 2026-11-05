@@ -1,4 +1,4 @@
-"""The ACDC driver-loop recipe (``docs/recipes/acdc_ioi.md``) runs cold on CPU.
+"""The ACDC driver-loop recipe (``docs/field-guide/acdc_ioi.md``) runs cold on CPU.
 
 The page's fences run top to bottom in one namespace, each ``RESULT``
 compared with its ``# recipe-test`` header (the recipe-page convention of
@@ -22,7 +22,7 @@ import pytest
 pytest.importorskip("transformers")
 pytestmark = pytest.mark.heavy
 
-PAGE = Path(__file__).resolve().parents[1] / "docs" / "recipes" / "acdc_ioi.md"
+PAGE = Path(__file__).resolve().parents[1] / "docs" / "field-guide" / "acdc_ioi.md"
 HEADER_RE = re.compile(r"# recipe-test: tool=(?P<tool>[a-z0-9_]+) expected=(?P<expected>.+)")
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
 
@@ -44,7 +44,7 @@ def page(tmp_path_factory) -> dict[str, Any]:
             code = match.group("code")
             header = HEADER_RE.match(code.splitlines()[0])
             assert header is not None and header.group("tool") == "transformers", index
-            filename = f"docs/recipes/acdc_ioi.md:python-block-{index}"
+            filename = f"docs/field-guide/acdc_ioi.md:python-block-{index}"
             linecache.cache[filename] = (len(code), None, code.splitlines(True), filename)
             namespace["RESULT"] = None
             exec(compile(code, filename, "exec"), namespace)

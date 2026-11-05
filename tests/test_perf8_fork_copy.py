@@ -15,6 +15,7 @@ capture is pinned.
 from __future__ import annotations
 
 import functools
+import gc
 import math
 import sys
 from collections import OrderedDict, defaultdict
@@ -26,6 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._data_classes._fork_flat_copy as flat_copy
 import torchlens._data_classes._trace_fork as trace_fork
 from torchlens._data_classes._state_adapter import state_items, state_new
 from torchlens._data_classes.layer import OpAccessor
@@ -37,13 +39,14 @@ from torchlens._trace_core.op_store import (
     cow_copy_value,
 )
 from torchlens._trace_core.record_rows import CORE_KEY, ROW_KEY
+from torchlens._utils import tensor_utils
 from torchlens.options import CaptureOptions, InterventionOptions
 
-_NO_FLAT_COPY = trace_fork._NO_FLAT_COPY
-_FLAT_COPY_DEPTH = trace_fork._FLAT_COPY_DEPTH
-_ATOMIC_COPY_TYPES = trace_fork._ATOMIC_COPY_TYPES
-_FLAT_COPY_TYPES = trace_fork._FLAT_COPY_TYPES
-_ATOMIC_FACTORY_TYPES = trace_fork._ATOMIC_FACTORY_TYPES
+_NO_FLAT_COPY = flat_copy._NO_FLAT_COPY
+_FLAT_COPY_DEPTH = flat_copy._FLAT_COPY_DEPTH
+_ATOMIC_COPY_TYPES = flat_copy._ATOMIC_COPY_TYPES
+_FLAT_COPY_TYPES = flat_copy._FLAT_COPY_TYPES
+_ATOMIC_FACTORY_TYPES = flat_copy._ATOMIC_FACTORY_TYPES
 _RecordTranslator = trace_fork._RecordTranslator
 
 
@@ -371,9 +374,9 @@ def test_flat_copy_matches_the_former_copy(build: Callable[[Any], Any]) -> None:
 def test_flat_copy_sees_the_atomic_types_the_former_copy_saw() -> None:
     """The fast path's type test is the former per-member test, as a C-level lookup."""
 
-    assert trace_fork._is_atomic_copy_type.__self__ is _ATOMIC_COPY_TYPES
+    assert flat_copy._is_atomic_copy_type.__self__ is _ATOMIC_COPY_TYPES
     for item in (1, "a", b"b", 2.5, True, None, 1j, _Str("s"), _Record(), [], ()):
-        assert trace_fork._is_atomic_copy_type(type(item)) is (type(item) in _ATOMIC_COPY_TYPES)
+        assert flat_copy._is_atomic_copy_type(type(item)) is (type(item) in _ATOMIC_COPY_TYPES)
 
 
 class _FakeStore:
@@ -684,6 +687,15 @@ def test_a_fork_equals_one_built_by_the_former_copy_path(
 
 
 def _fork_events(trace: Any) -> int:
+    """Count the fork's own calls, never the finalizers of garbage it happens to collect.
+
+    Earlier tests in the same process leave dead captures in reference cycles. If an
+    automatic collection fires inside the profiled fork, their op-store finalizers run
+    there and are counted as the fork's calls (one such collection read about four
+    times the fork's own count). So collect first and keep automatic collection off
+    for the profiled call.
+    """
+
     trace.fork()  # warm-up, as the benchmark counter does
     calls = 0
 
@@ -692,11 +704,16 @@ def _fork_events(trace: Any) -> int:
         if event in ("call", "c_call"):
             calls += 1
 
+    gc.collect()
+    was_enabled = gc.isenabled()
+    gc.disable()
     sys.setprofile(count)
     try:
         member = trace.fork()
     finally:
         sys.setprofile(None)
+        if was_enabled:
+            gc.enable()
     del member
     return calls
 
@@ -710,4 +727,61 @@ def test_one_fork_stays_cheap() -> None:
     """Profiler events (calls and C calls) of one fork of a fixed capture."""
 
     events = _fork_events(_capture())
+    assert events <= _FORK_EVENT_BAR, events
+
+
+class _Paramless(nn.Module):
+    """No parameters and a plain capture: its payloads are deferred (clone-on-write)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(x + 1) * 2
+
+
+def _pending_keys(alive: bool) -> set[Any]:
+    return {
+        key
+        for key, entries in tensor_utils._DEFER_PENDING.items()
+        if any((entry.ref() is not None) is alive for entry in entries)
+    }
+
+
+def test_fork_stays_cheap_after_a_dropped_deferred_capture() -> None:
+    """A dropped capture with deferred payloads leaves no registry entry a later fork pays for.
+
+    While the deferred-payload registry holds anything, every mutating torch call
+    searches its arguments; a fork's tensor deep copies call ``set_``. Dead entries
+    of a dropped trace once stayed until a sweep, and a fork run after such a
+    capture went over the bar (the search reads properties of a storage object).
+    """
+
+    before = set(tensor_utils._DEFER_PENDING)
+    trace = tl.trace(_Paramless(), torch.ones(4, 4))
+    minted = _pending_keys(alive=True) - before
+    assert minted, "the capture must defer its payloads for this test to mean anything"
+    del trace
+    gc.collect()
+    events = _fork_events(_capture())
+    assert events <= _FORK_EVENT_BAR, events
+    assert not minted & set(tensor_utils._DEFER_PENDING), "dead keys stayed registered"
+
+
+def test_fork_stays_cheap_while_a_deferred_capture_is_alive() -> None:
+    """A live capture with deferred payloads adds nothing a later fork pays for.
+
+    The registry is armed for as long as any capture holding deferred payloads is
+    alive, as it is whenever an earlier test in the same process keeps one. A fork's
+    tensor deep copies once searched the armed registry on every ``set_``, which put
+    the fork over the bar only when it ran after such a test. Holding the capture
+    here makes that a plain red in any order.
+    """
+
+    before = set(tensor_utils._DEFER_PENDING)
+    held = tl.trace(_Paramless(), torch.ones(4, 4))
+    try:
+        minted = _pending_keys(alive=True) - before
+        assert minted, "the held capture must keep live deferred keys"
+        events = _fork_events(_capture())
+    finally:
+        del held
+        gc.collect()
     assert events <= _FORK_EVENT_BAR, events

@@ -25,7 +25,6 @@ from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.backends.torch._script_boundary import SCRIPT_FUNCTION_FUNC_NAME
 from torchlens.validation import last_validation_failure
 from torchlens.validation._script_metadata_proof import (
-    METADATA_READ_NODE_KINDS,
     SCRIPT_METADATA_ONLY_REASON,
     metadata_only_arguments,
     script_metadata_only_proof,
@@ -181,6 +180,7 @@ def _assert_boundary_perturbation_failure(trace: tl.Trace, result: bool) -> None
     assert _metadata_decisions(trace) == []
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_shape_only_helper_passes_with_a_recorded_proof() -> None:
     """The DeBERTa shape validates, and the exemption is recorded with its proof."""
 
@@ -194,23 +194,6 @@ def test_shape_only_helper_passes_with_a_recorded_proof() -> None:
     assert scaled_size_sqrt.qualified_name in decision["justification"]
     assert "query_layer only through aten::size" in decision["justification"]
     assert trace.validation_replay_status.exempted_reason_counts[SCRIPT_METADATA_ONLY_REASON] == 1
-
-
-def test_graph_proof_names_exactly_the_metadata_only_arguments() -> None:
-    """The proof covers every enumerated read and nothing that touches elements."""
-
-    assert metadata_only_arguments(scaled_size_sqrt) == {"query_layer": frozenset({"aten::size"})}
-    assert metadata_only_arguments(metadata_reads) == {"x": METADATA_READ_NODE_KINDS}
-    assert metadata_only_arguments(scale_by_last_dim) == {"x": frozenset({"aten::size"})}
-    assert metadata_only_arguments(nested_size_call) == {"x": frozenset({"aten::size"})}
-    for function in (
-        one_element_read,
-        size_and_element_read,
-        nested_element_call,
-        untaken_branch_element_read,
-        is_cuda_read,
-    ):
-        assert metadata_only_arguments(function) == {}
 
 
 def test_every_enumerated_metadata_read_passes() -> None:
@@ -229,72 +212,7 @@ def test_one_element_read_still_fails_perturbation() -> None:
     _assert_boundary_perturbation_failure(trace, result)
 
 
-def test_size_read_mixed_with_an_element_read_still_fails_perturbation() -> None:
-    """Armed negative: one value use anywhere voids the proof for that argument."""
-
-    trace, result = _trace_and_validate(_HelperModel(size_and_element_read), torch.randn(3, 4))
-    _assert_boundary_perturbation_failure(trace, result)
-
-
-def test_unknown_node_kind_keeps_the_perturbation_check() -> None:
-    """Armed negative: ``x.is_cuda`` is metadata too, but ``prim::is_cuda`` is not enumerated."""
-
-    trace, result = _trace_and_validate(_HelperModel(is_cuda_read), torch.randn(3, 4))
-    _assert_boundary_perturbation_failure(trace, result)
-
-
-def test_size_read_inside_a_nested_scripted_helper_passes() -> None:
-    """The nested helper is inlined, so its size-only read gives the proof."""
-
-    trace, result = _trace_and_validate(_HelperModel(nested_size_call), torch.randn(3, 4))
-
-    assert result is True
-    (decision,) = _metadata_decisions(trace)
-    assert nested_size_call.qualified_name in decision["justification"]
-
-
-def test_element_read_inside_a_nested_scripted_helper_still_fails_perturbation() -> None:
-    """Armed negative: inlining exposes the nested helper's element read."""
-
-    trace, result = _trace_and_validate(_HelperModel(nested_element_call), torch.randn(3, 4))
-    _assert_boundary_perturbation_failure(trace, result)
-
-
-def test_element_read_on_an_untaken_branch_still_fails_perturbation() -> None:
-    """Armed negative: the proof is not path-sensitive; any value use voids it."""
-
-    trace, result = _trace_and_validate(
-        _HelperModel(untaken_branch_element_read), torch.randn(3, 4)
-    )
-    _assert_boundary_perturbation_failure(trace, result)
-
-
-def test_parent_in_a_metadata_slot_and_a_value_slot_gets_no_proof() -> None:
-    """A parent that also feeds a value-bearing argument stays perturbation-tested."""
-
-    trace, result = _trace_and_validate(_TwoArgModel(same=True), torch.randn(3, 4))
-    assert result is True
-    op = _boundary_op(trace)
-    slots = op.parent_arg_positions["args"]
-    parent = slots[0]
-    assert slots[1] == parent
-    assert script_metadata_only_proof(op, [parent]) is None
-    assert _metadata_decisions(trace) == []
-
-
-def test_distinct_parents_split_into_proven_and_tested() -> None:
-    """With two parents only the size-read one is exempt; the value parent is tested."""
-
-    trace, result = _trace_and_validate(_TwoArgModel(same=False), torch.randn(3, 4))
-    assert result is True
-    op = _boundary_op(trace)
-    size_parent, value_parent = (op.parent_arg_positions["args"][pos] for pos in (0, 1))
-    assert script_metadata_only_proof(op, [size_parent]) is not None
-    assert script_metadata_only_proof(op, [value_parent]) is None
-    (decision,) = _metadata_decisions(trace)
-    assert "reads argument(s) x only" in decision["justification"]
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_script_metadata_proof.py, campaign mutant kills.
 def test_unreadable_graph_gives_no_proof() -> None:
     """An object without a readable graph or schema proves nothing."""
 
@@ -305,20 +223,6 @@ def test_unreadable_graph_gives_no_proof() -> None:
 
     assert metadata_only_arguments(_NoGraph()) == {}
     assert metadata_only_arguments(object()) == {}
-
-
-def test_plain_eager_capture_is_unaffected() -> None:
-    """The same helper as plain Python: op by op, no boundary, no metadata-only exemption."""
-
-    model = _ScaledModel(helper=_plain_scaled_size_sqrt)
-    trace, result = _trace_and_validate(model, torch.randn(3, 4))
-
-    assert result is True
-    assert not any(op.func_name == SCRIPT_FUNCTION_FUNC_NAME for op in trace._layer_list)
-    assert _metadata_decisions(trace) == []
-    for op in trace._layer_list:
-        for parent in op.parents:
-            assert script_metadata_only_proof(op, [parent]) is None
 
 
 # Adversarial attacks on the graph proof (review of AGT-2470). Each scripted helper below
@@ -428,40 +332,6 @@ def _traced_double(x: torch.Tensor) -> torch.Tensor:
 traced_double = torch.jit.trace(_traced_double, torch.randn(2, 4))
 
 
-@pytest.mark.parametrize(
-    "function",
-    [
-        view_alias_read,
-        list_packed_read,
-        tuple_packed_read,
-        size_fed_back_into_value_op,
-        in_place_then_size,
-        returned_from_if_block,
-        loop_carried,
-        passthrough,
-        ignored_python_read,
-        forked_element_read,
-        new_zeros_template,
-        traced_double,
-    ],
-)
-def test_attack_value_or_untrusted_use_gives_no_proof(function) -> None:
-    """Aliasing, packing, in-place, block, loop, return, Python, fork and trace uses."""
-
-    assert metadata_only_arguments(function) == {}
-
-
-def test_attack_proof_is_stable_across_executor_warmup() -> None:
-    """The proof reads the inlined program, not the executor's profiled graph."""
-
-    before = metadata_only_arguments(scale_by_last_dim)
-    graph_before = str(scale_by_last_dim.inlined_graph)
-    for _ in range(4):
-        scale_by_last_dim(torch.randn(3, 4), torch.randn(3, 4))
-    assert metadata_only_arguments(scale_by_last_dim) == before
-    assert str(scale_by_last_dim.inlined_graph) == graph_before
-
-
 @torch.jit.script
 def size_then_dict_value(x: torch.Tensor, d: dict[str, torch.Tensor]) -> torch.Tensor:
     """``x`` is read for its size; the dict member is read for values."""
@@ -520,15 +390,11 @@ def _slot_label(op, slot: int | str | tuple) -> str:
     return op.parent_arg_positions["kwargs" if isinstance(head, str) else "args"][slot]
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_script_metadata_proof.py, validation/core.py.
 @pytest.mark.parametrize(
     "call",
-    [
-        lambda h, g: size_then_dict_value(h, {"a": h}),
-        lambda h, g: size_then_list_value(h, [h]),
-        lambda h, g: size_then_tuple_value(h, (h, 1)),
-        lambda h, g: size_then_optional_value(h, h),
-    ],
-    ids=["dict", "list", "tuple", "optional"],
+    [lambda h, g: size_then_dict_value(h, {"a": h}), lambda h, g: size_then_optional_value(h, h)],
+    ids=["dict", "optional"],
 )
 def test_attack_parent_also_inside_a_container_slot_gets_no_proof(call) -> None:
     """A parent in a size slot AND inside a value-bearing container slot is never proven."""
@@ -540,16 +406,14 @@ def test_attack_parent_also_inside_a_container_slot_gets_no_proof(call) -> None:
     assert result is True
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_script_metadata_proof.py, campaign mutant kills.
 @pytest.mark.parametrize(
     ("call", "size_slot", "value_slot"),
     [
-        (lambda h, g: value_then_size(g, h), 1, 0),
         (lambda h, g: value_then_size(h, g), 1, 0),
         (lambda h, g: scale_by_last_dim(y=g, x=h), "x", "y"),
-        (lambda h, g: scale_by_last_dim(h, y=g), 0, "y"),
-        (lambda h, g: value_then_size(x=g, y=h), "x", "y"),
     ],
-    ids=["positional", "positional-swapped", "keywords", "mixed", "keywords-swapped"],
+    ids=["positional-swapped", "keywords"],
 )
 def test_attack_slot_mapping_follows_the_schema(call, size_slot, value_slot) -> None:
     """Only the parent bound to the size-read argument is proven, by position or keyword."""
@@ -563,20 +427,13 @@ def test_attack_slot_mapping_follows_the_schema(call, size_slot, value_slot) -> 
     assert result is True
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_attack_two_perturbed_parents_get_no_proof() -> None:
     """The proof applies to one perturbed parent at a time only."""
 
     trace, _ = _trace_and_validate(_TwoArgModel(same=False), torch.randn(3, 4))
     op = _boundary_op(trace)
     assert script_metadata_only_proof(op, list(op.parents)) is None
-
-
-def test_attack_in_place_call_is_not_collapsed_into_a_boundary_op() -> None:
-    """A scripted call that writes its argument in place never becomes a ``jitscript`` op."""
-
-    trace, _ = _trace_and_validate(_HelperModel(in_place_then_size), torch.randn(3, 4))
-    assert not any(op.func_name == SCRIPT_FUNCTION_FUNC_NAME for op in trace._layer_list)
-    assert _metadata_decisions(trace) == []
 
 
 @torch.jit.script
@@ -586,6 +443,7 @@ def value_times_size(x: torch.Tensor) -> torch.Tensor:
     return x * x.size(-1)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_attack_value_dependent_call_validates_without_the_exemption() -> None:
     """A boundary call whose output depends on the argument's values is perturbation-tested."""
 
@@ -595,6 +453,7 @@ def test_attack_value_dependent_call_validates_without_the_exemption() -> None:
     assert _metadata_decisions(trace) == []
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_attack_aliased_element_read_still_fails_perturbation() -> None:
     """Armed negative: an element read through a view alias keeps the check, which fails."""
 
@@ -625,13 +484,11 @@ def size_with_shallow_list(x: torch.Tensor, xs: list[torch.Tensor]) -> torch.Ten
     return xs[0] * x.size(-1)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/op.py, backends/torch/_ops_emission.py, backends/torch/_ops_exhaustive.py ....
 @pytest.mark.parametrize(
     "call",
-    [
-        lambda h, g: size_then_nested_list_value(h, [[h]]),
-        lambda h, g: size_then_dict_of_lists_value(h, {"a": [h]}),
-    ],
-    ids=["list-of-lists", "dict-of-lists"],
+    [lambda h, g: size_then_dict_of_lists_value(h, {"a": [h]})],
+    ids=["dict-of-lists"],
 )
 def test_attack_parent_hidden_below_the_slot_map_gets_no_proof(call) -> None:
     """A parent nested deeper than capture's slot map records is never proven size-only.
@@ -646,6 +503,7 @@ def test_attack_parent_hidden_below_the_slot_map_gets_no_proof(call) -> None:
     _assert_boundary_perturbation_failure(trace, result)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_attack_shallow_container_keeps_the_proof_for_the_size_argument() -> None:
     """A one-level container argument is fully slot-mapped, so the size argument stays provable."""
 

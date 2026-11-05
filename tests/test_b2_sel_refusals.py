@@ -2,7 +2,7 @@
 
 - Bug 6: the documented ``tl.trace(save=[...])`` list form runs, and every remedy the
   ``save=`` door emits is executed here.
-- U27.2: ``activations_by_address`` on an unmatched address refuses typed and lists the
+- ``activations_by_address`` on an unmatched address refuses typed and lists the
   addresses that exist.
 - forks.8: ``trace.using(name)`` returns a registered appliance; unknown names refuse typed
   with the registered names; outside packages register through the same function.
@@ -23,6 +23,11 @@ from torch import nn
 import torchlens as tl
 from torchlens import errors
 from torchlens.appliances import _appliances
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _Net(nn.Module):
@@ -72,8 +77,8 @@ def test_save_type_refusal_remedies_all_run(net) -> None:
 def test_save_selection_composes_with_other_capture_options(net) -> None:
     model, x = net
     trace = tl.trace(model, x, save=["fc"], capture=tl.options.CaptureOptions(save_args=True))
-    assert trace["fc"].has_saved_activation
-    relu_ops = [op for op in trace._layer_list if op.type == "relu"]
+    assert trace.ops["fc"].has_saved_activation
+    relu_ops = [op for op in trace.ops if op.type == "relu"]
     assert relu_ops
     assert all(op.has_saved_activation is False for op in relu_ops)
 
@@ -81,7 +86,7 @@ def test_save_selection_composes_with_other_capture_options(net) -> None:
 def test_activations_by_address_lists_existing_addresses(net) -> None:
     model, x = net
     trace = tl.trace(model, x)
-    assert [op.label for op in trace.activations_by_address("fc")] == [trace["fc"].label]
+    assert [op.label for op in trace.activations_by_address("fc")] == [trace.ops["fc"].label]
     with pytest.raises(errors.InvalidArgumentError) as exc_info:
         trace.activations_by_address("fc2")
     fields = exc_info.value.fields
@@ -133,12 +138,12 @@ def test_using_unknown_name_refuses_with_registered_names(net, empty_registry) -
     model, x = net
     trace = tl.trace(model, x)
     with pytest.raises(errors.InvalidArgumentError) as empty_info:
-        trace.using("mi")
+        trace.using("mechinterp")
     assert empty_info.value.fields["code"] == "appliance_unknown"
     assert "register(name, factory)" in empty_info.value.fields["remedy"]
     tl.appliances.register("outside", _OutsideAppliance)
     with pytest.raises(errors.InvalidArgumentError) as exc_info:
-        trace.using("mi")
+        trace.using("mechinterp")
     assert exc_info.value.fields["registered"] == ("outside",)
     remedy_call = re.search(r"trace\.using\('[^']*'\)", exc_info.value.fields["remedy"])
     assert remedy_call is not None
@@ -187,7 +192,7 @@ def test_unscoped_head_reports_the_sites_it_writes() -> None:
     edited = clean.fork("ablated")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        edited.attach_hooks(tl.head(5), tl.zero_ablate())
+        edited._attach_hooks(tl.head(5), tl.zero_ablate())
     reports = [
         w.message
         for w in caught
@@ -206,7 +211,7 @@ def test_unscoped_head_reports_the_sites_it_writes() -> None:
     scoped = clean.fork("scoped")
     with warnings.catch_warnings(record=True) as caught_scoped:
         warnings.simplefilter("always")
-        scoped.attach_hooks(tl.head(5, "q").in_module("transformer.h.0.attn"), tl.zero_ablate())
+        scoped._attach_hooks(tl.head(5, "q").in_module("transformer.h.0.attn"), tl.zero_ablate())
     assert not [
         w
         for w in caught_scoped
@@ -238,7 +243,7 @@ class _AttnHost(nn.Module):
 
 
 def test_facet_doors_refuse_typed_on_an_unregistered_attention_class() -> None:
-    """U36.1: both facet doors refuse with MissingFacetError, never a bare KeyError."""
+    """Both facet doors refuse with MissingFacetError, never a bare KeyError."""
 
     from torchlens.errors import MissingFacetError
 

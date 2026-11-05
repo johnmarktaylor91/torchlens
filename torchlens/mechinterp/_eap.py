@@ -186,7 +186,7 @@ def _norm_output_label(trace: Any, receiver: ComponentReceiver) -> str:
             code="mi_edge_selection_unresolvable",
             message=f"Norm {receiver.norm_address!r} of receiver {receiver.name!r} has "
             f"{len(outputs)} output ops; one is needed to read the receiver's gradient.",
-            remedy="capture with default options (layers_to_save='all')",
+            remedy="capture with default options (save='all')",
             receiver=receiver.name,
         )
     return str(trace.ops[str(outputs[0])].label)
@@ -228,7 +228,7 @@ def _output_cotangent(trace: Any, metric: Callable[..., Any]) -> Any:
         refuse(
             code="mi_payload_missing",
             message=f"The unembedding output {label!r} was not saved.",
-            remedy="capture with default options (layers_to_save='all')",
+            remedy="capture with default options (save='all')",
             analysis="edge_scores",
         )
     leaf = logits.detach().clone().requires_grad_(True)
@@ -435,6 +435,19 @@ def edge_scores(  # noqa: PLR0913 -- the public door: five keyword-only spec-pin
         ``sum over positions of (s_corrupt - s_clean) . dM/d(input of t)``,
         reduced over examples. Bias-sender edges score exactly zero (their
         corrupted and clean values are equal).
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> a, b = torch.randint(0, 32, (2, 1, 6))
+    >>> table = tl.mechinterp.edge_scores(lm, a, corrupted_input=b, method="eap",
+    ...                         metric=lambda logits: logits[:, -1, 3])
+    >>> len(table.rows()) > 0
+    True
     """
 
     started = time.perf_counter()

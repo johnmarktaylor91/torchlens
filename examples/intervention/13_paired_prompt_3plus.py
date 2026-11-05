@@ -43,9 +43,9 @@ def main() -> None:
     model = TinyMLP().eval()
     base = torch.randn(2, 8)
     logs = {
-        "clean": tl.trace(model, base, capture=tl.options.CaptureOptions(replayable=True)),
-        "plus": tl.trace(model, base + 0.2, capture=tl.options.CaptureOptions(replayable=True)),
-        "minus": tl.trace(model, base - 0.2, capture=tl.options.CaptureOptions(replayable=True)),
+        "clean": tl.trace(model, base),
+        "plus": tl.trace(model, base + 0.2),
+        "minus": tl.trace(model, base - 0.2),
     }
     bundle = tl.Bundle(logs, baseline="clean")
 

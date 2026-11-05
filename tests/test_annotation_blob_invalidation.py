@@ -11,7 +11,6 @@ the new stimuli.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -89,7 +88,6 @@ def test_rerun_same_shape_drops_annotation_blobs() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_replace_state_from_drops_annotation_blobs() -> None:
     """The atomic run-state swap takes the fresh log's (empty) blob state."""
 

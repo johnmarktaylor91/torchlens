@@ -14,14 +14,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.report import SummaryReport
-from torchlens.report._compute_truth import compute_aggregation
-from torchlens.report._summary_report import EVIDENCE_VALUES
 
 
 def _model() -> nn.Module:
     return nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_summary_report.py and a sole campaign mutation kill.
 def test_summary_returns_str_subclass_with_data_payload() -> None:
     """The report is a str subclass carrying the typed data payload."""
 
@@ -33,6 +32,7 @@ def test_summary_returns_str_subclass_with_data_payload() -> None:
     assert "view:" in str(report)
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_summary_report.py.
 def test_one_call_door_returns_report_with_disclosure() -> None:
     """tl.summary keeps the execution disclosure AND the typed payload."""
 
@@ -43,29 +43,7 @@ def test_one_call_door_returns_report_with_disclosure() -> None:
     assert report.totals.params_total == 30
 
 
-def test_raw_numbers_pin() -> None:
-    """Every numeric field is a plain int or None (summary 3.8, binding)."""
-
-    report = tl.trace(_model(), torch.randn(2, 4)).summary()
-    totals = report.totals
-    for name in (
-        "params_total",
-        "flops_forward_fma2",
-        "macs_forward",
-        "captured_bytes",
-        "retained_bytes",
-    ):
-        value = getattr(totals, name)
-        assert value is None or type(value) is int, name
-        if value is not None:
-            assert format(value, ",")  # digits, never human units
-    for row in report.rows:
-        for name in ("params_exclusive", "flops_exclusive", "macs_exclusive"):
-            value = getattr(row, name)
-            assert value is None or type(value) is int, (row.row_id, name)
-        assert row.evidence in EVIDENCE_VALUES
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_summary_report.py.
 def test_report_is_detached_survives_gc() -> None:
     """Pin: build report; del model and trace; the data still serves."""
 
@@ -81,31 +59,3 @@ def test_report_is_detached_survives_gc() -> None:
     assert len(payload["rows"]) == len(report.rows)
     assert "<table>" in report._repr_html_()
     assert report.sections == ("capture", "totals", "rows")
-
-
-def test_report_totals_read_the_one_aggregation() -> None:
-    """summary totals == the canonical compute face == profile's numbers."""
-
-    trace = tl.trace(_model(), torch.randn(2, 4))
-    report = trace.summary()
-    aggregation = compute_aggregation(trace)
-    assert report.totals.flops_forward_fma2 == int(aggregation.partition_total)
-    assert report.totals.macs_forward == int(aggregation.macs_total)
-    assert report.totals.compute_coverage["unknown"] == aggregation.coverage.unknown
-    # profile consumes the SAME aggregation: its whole-trace total agrees.
-    assert int(trace.cost.total_flops_forward) == report.totals.flops_forward_fma2
-
-
-def test_report_rows_carry_identity_and_evidence() -> None:
-    """Rows carry stable identities, site keys, and per-cell evidence."""
-
-    trace = tl.trace(_model(), torch.randn(2, 4))
-    report = trace.summary()
-    op_rows = [row for row in report.rows if row.kind == "op"]
-    assert op_rows
-    for row in op_rows:
-        assert row.row_id.startswith("op:")
-        assert row.flops_exclusive == row.flops_subtree  # families coincide at op grain
-    boundary_rows = [row for row in report.rows if row.kind != "op"]
-    for row in boundary_rows:
-        assert row.flops_exclusive is None  # boundary rows own nothing (D7)

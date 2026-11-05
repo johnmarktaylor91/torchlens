@@ -1,4 +1,4 @@
-"""The token SAE store (R2-08, lane EXTRACT).
+"""The token SAE store.
 
 A small token model's activations are extracted with ``ragged="trim"`` and
 ``store_input_ids=True``, then read back one row per TOKEN: every token row
@@ -161,7 +161,7 @@ def test_mixing_buffer_yields_the_token_multiset_across_shards(tmp_path: Path) -
 
 
 def _reference_shuffled(reader, batch_size: int, seed: int):
-    """The pre-R2-08 within-shard shuffle, verbatim, as the oracle."""
+    """The earlier within-shard shuffle, verbatim, as the oracle."""
 
     rng = random.Random(seed)
     order = list(range(int(reader.n_shards)))

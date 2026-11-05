@@ -1,4 +1,4 @@
-"""U53.2: ``Trace.profile(group_by="source_line")`` over existing activation bytes.
+"""``Trace.profile(group_by="source_line")`` over existing activation bytes.
 
 The grouped view folds op rows into one row per user source line. It adds no
 measurement, so every additive column sums to the ungrouped op view.
@@ -51,6 +51,7 @@ def two_line_trace() -> Iterator[Any]:
         captured.cleanup()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_profile_source_line.py.
 def test_grouped_activation_bytes_sum_to_the_ungrouped_view(two_line_trace) -> None:
     ungrouped = two_line_trace.profile().to_pandas()
     grouped = two_line_trace.profile(group_by="source_line").to_pandas()
@@ -61,6 +62,7 @@ def test_grouped_activation_bytes_sum_to_the_ungrouped_view(two_line_trace) -> N
     assert len(grouped) < len(ungrouped)
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_one_line_with_two_ops_is_one_row(two_line_trace) -> None:
     grouped = two_line_trace.profile(group_by="source_line").to_pandas()
     line = _line_of("two ops on one line")
@@ -75,6 +77,7 @@ def test_one_line_with_two_ops_is_one_row(two_line_trace) -> None:
     assert list(boundary["name"]) == ["<inputs and outputs>"]
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_profile.py.
 def test_grouped_profile_records_its_key_and_prints(two_line_trace) -> None:
     profile = two_line_trace.profile(group_by="source_line", sort_by="activation_memory")
 
@@ -89,6 +92,7 @@ def test_grouped_profile_records_its_key_and_prints(two_line_trace) -> None:
     )
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_profile.py.
 def test_group_by_refuses_other_levels_and_keys(two_line_trace) -> None:
     with pytest.raises(ValueError, match="use level='op'"):
         two_line_trace.profile("module", group_by="source_line")

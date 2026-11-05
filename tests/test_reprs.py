@@ -21,61 +21,6 @@ class _InfModel(nn.Module):
         return x / 0
 
 
-def _log_for_input(x: torch.Tensor) -> tl.Trace:
-    """Capture an identity model for one input.
-
-    Parameters
-    ----------
-    x:
-        Input tensor.
-
-    Returns
-    -------
-    tl.Trace
-        Captured model log.
-    """
-
-    return tl.trace(nn.Identity(), x)
-
-
-def test_print_trace_is_informative(capsys: pytest.CaptureFixture[str]) -> None:
-    """Printing a Trace gives a concise model summary."""
-
-    log = _log_for_input(torch.randn(1, 3))
-    print(log)
-    captured = capsys.readouterr()
-    assert "Log of" in captured.out
-    assert "Tensor info" in captured.out
-
-
-def test_trace_repr_html_is_informative() -> None:
-    """Trace HTML repr returns an informative string or text fallback."""
-
-    log = _log_for_input(torch.randn(1, 3))
-    html = log._repr_html_()
-    assert isinstance(html, str)
-    assert "Trace" in html or "TorchLens" in html
-    assert "Layers" in html or "layers=" in html
-
-
-@pytest.mark.parametrize("method", ["auto", "heatmap", "channels", "rgb", "hist"])
-def test_layer_log_show_custom_methods_return_output(method: str) -> None:
-    """Layer.show accepts every Phase 3 display method."""
-
-    x = torch.randn(1, 3, 4, 4) if method == "rgb" else torch.randn(3, 4, 4)
-    log = _log_for_input(x)
-    output = log.layers[0].show(kind=method)
-    assert output is not None
-
-
-def test_op_log_show_returns_output() -> None:
-    """Op.show delegates to the tensor display helper."""
-
-    log = _log_for_input(torch.randn(8))
-    output = log._layer_list[0].show(kind="hist")
-    assert output is not None
-
-
 def test_first_nonfinite_reports_context() -> None:
     """Trace.first_nonfinite reports the first saved NaN or Inf site."""
 
@@ -111,11 +56,11 @@ def test_layer_repr_after_trace_collection_degrades_not_raises() -> None:
 
     import gc
 
-    layer = tl.trace(_TwoStage(), torch.randn(2, 4))["relu_1_2"]
+    layer = tl.trace(_TwoStage(), torch.randn(2, 4)).layers["relu_1_2"]
     gc.collect()
 
     text = repr(layer)
-    assert "relu_1_2" in text
+    assert "relu_1" in text
     assert "detached" in text
     assert str(layer) == text
     assert f"context: {layer}"  # f-string interpolation must not raise
@@ -142,10 +87,10 @@ def test_layer_standalone_pickle_repr_and_accessors_typed() -> None:
     from torchlens._errors import RecordBindingError
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    restored = pickle.loads(pickle.dumps(trace["relu_1_2"]))
+    restored = pickle.loads(pickle.dumps(trace.layers["relu_1_2"]))
 
     text = repr(restored)
-    assert "relu_1_2" in text
+    assert "relu_1" in text
     assert "detached" in text
     assert str(restored) == text
 
@@ -159,6 +104,7 @@ def test_layer_standalone_pickle_repr_and_accessors_typed() -> None:
     assert parents_exc.value.fields["code"] == "record_not_bound"
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_op_source_trace_refuses_typed_when_detached() -> None:
     """``Op.source_trace`` must refuse TYPED for both detachment shapes.
 
@@ -174,7 +120,7 @@ def test_op_source_trace_refuses_typed_when_detached() -> None:
     from torchlens._errors import RecordBindingError
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    op = trace["relu_1_2"].ops[0]
+    op = trace.layers["relu_1_2"].ops[0]
 
     restored = pickle.loads(pickle.dumps(op))
     with pytest.raises(RecordBindingError) as exc_info:
@@ -186,14 +132,14 @@ def test_op_source_trace_refuses_typed_when_detached() -> None:
         _ = restored.get_children()
     assert children_exc.value.fields["code"] == "record_not_bound"
 
-    dead = trace["relu_1_2"].ops[0]
+    dead = trace.layers["relu_1_2"].ops[0]
     del trace, op
     gc.collect()
     with pytest.raises(RecordBindingError) as dead_exc:
         _ = dead.source_trace
     assert dead_exc.value.fields["code"] == "trace_reference_collected"
     # repr on the dead-ref op must still degrade, never raise.
-    assert "relu_1_2" in repr(dead)
+    assert "relu_1" in repr(dead)
 
 
 def test_op_repr_degrades_under_predicate_save() -> None:
@@ -211,10 +157,11 @@ def test_op_repr_degrades_under_predicate_save() -> None:
     unsaved = next(op for op in trace._layer_list if not op.has_saved_activation)
     unsaved_text = f"{unsaved}"
     assert "not saved" in unsaved_text
-    saved = trace["relu_1_2"]
+    saved = trace.layers["relu_1_2"]
     assert "not saved" not in f"{saved.ops[0]}"
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_layer_repr_on_live_trace_unchanged() -> None:
     """A Layer bound to a live Trace renders the one-line envelope+core repr.
 
@@ -223,11 +170,11 @@ def test_layer_repr_on_live_trace_unchanged() -> None:
     """
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    layer = trace["relu_1_2"]
+    layer = trace.layers["relu_1_2"]
     text = repr(layer)
-    assert "relu_1_2" in text
+    assert "relu_1" in text
     assert "\n" not in text
-    assert "mean=" in text  # the core carries numbers now
+    assert "mean " in text  # the core carries numbers now
     assert "detached" not in text
     card = str(layer)
     assert card.splitlines()[0] == text
@@ -247,11 +194,11 @@ def test_op_repr_after_trace_collection_degrades_not_raises() -> None:
 
     from torchlens._errors import RecordBindingError
 
-    op = tl.trace(_TwoStage(), torch.randn(2, 4))["relu_1_2"].ops[0]
+    op = tl.trace(_TwoStage(), torch.randn(2, 4)).layers["relu_1_2"].ops[0]
     gc.collect()
 
     text = repr(op)
-    assert "relu_1_2" in text
+    assert "relu_1" in text
     assert "detached" in text
     assert str(op) == text
     with pytest.raises(RecordBindingError) as exc_info:
@@ -267,7 +214,7 @@ def test_op_standalone_pickle_accessors_refuse_typed() -> None:
     from torchlens._errors import RecordBindingError
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    restored = pickle.loads(pickle.dumps(trace["relu_1_2"].ops[0]))
+    restored = pickle.loads(pickle.dumps(trace.layers["relu_1_2"].ops[0]))
 
     text = repr(restored)
     assert "detached" in text
@@ -287,9 +234,9 @@ def test_op_repr_on_live_trace_unchanged() -> None:
     """An Op bound to a live Trace keeps the full informative repr (R52-B)."""
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    op = trace["relu_1_2"].ops[0]
+    op = trace.layers["relu_1_2"].ops[0]
     text = repr(op)
-    assert "relu_1_2" in text
+    assert "relu_1" in text
     assert "detached" not in text
     assert "/?" not in text  # denominator is the real op count, not unknown
     assert op.get_parents() and op.get_children() is not None

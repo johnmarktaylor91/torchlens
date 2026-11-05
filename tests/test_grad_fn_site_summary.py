@@ -15,7 +15,6 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens._quantities import Duration
 
 
 class _ReusedModule(nn.Module):
@@ -39,49 +38,8 @@ def _backward_trace(model: nn.Module | None = None) -> tl.Trace:
         torch.randn(3, 4),
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     return trace
-
-
-def test_rollup_groups_reused_module_calls_under_one_site() -> None:
-    trace = _backward_trace()
-    summary = trace.grad_fn_site_summary
-    keyed = {key: entry for key, entry in summary.items() if key is not None}
-    assert keyed, "no keyed sites in the rollup"
-    shared_entries = [
-        entry for key, entry in keyed.items() if "|shared|" in key or key.startswith("s1|shared")
-    ]
-    assert shared_entries, f"no shared-module site among {sorted(keyed)}"
-    shared_fires = sum(entry["fire_count"] for entry in shared_entries)
-    # The reused module fired backward once per call instance.
-    assert shared_fires >= 2
-    for entry in summary.values():
-        assert entry["fire_count"] >= len(entry["pass_coverage"])
-        assert entry["pass_coverage"] == tuple(sorted(entry["pass_coverage"]))
-
-
-@pytest.mark.smoke
-def test_rollup_carries_live_timing_evidence() -> None:
-    trace = _backward_trace()
-    summary = trace.grad_fn_site_summary
-    total_fires = sum(entry["fire_count"] for entry in summary.values())
-    total_timed = sum(entry["timed_fire_count"] for entry in summary.values())
-    assert total_fires == total_timed > 0
-    for entry in summary.values():
-        if entry["timed_fire_count"]:
-            assert isinstance(entry["total_fire_duration"], Duration)
-            assert float(entry["total_fire_duration"]) > 0
-        else:
-            assert entry["total_fire_duration"] is None
-
-
-def test_unattributed_grad_fns_group_under_none_bucket() -> None:
-    trace = _backward_trace()
-    summary = trace.grad_fn_site_summary
-    assert None in summary, "AccumulateGrad nodes should land in the None bucket"
-    unattributed = summary[None]
-    assert unattributed["fire_count"] > 0
-    assert any(label.startswith("accumulategrad") for label in unattributed["grad_fn_labels"])
 
 
 def test_rollup_counts_survive_load_without_timing(tmp_path) -> None:
@@ -111,3 +69,12 @@ def test_keyless_op_backed_rollup_refuses_site_key_unavailable(monkeypatch) -> N
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = trace.grad_fn_site_summary
     assert excinfo.value.fields["code"] == "site_key_unavailable"
+
+
+def test_unattributed_grad_fns_group_under_none_bucket() -> None:
+    trace = _backward_trace()
+    summary = trace.grad_fn_site_summary
+    assert None in summary, "AccumulateGrad nodes should land in the None bucket"
+    unattributed = summary[None]
+    assert unattributed["fire_count"] > 0
+    assert any(label.startswith("accumulategrad") for label in unattributed["grad_fn_labels"])

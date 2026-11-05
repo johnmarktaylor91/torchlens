@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
@@ -11,12 +10,13 @@ import graphviz
 import torch
 
 from .._errors import InvalidArgumentError
-from ._render_utils import html_escape, render_dot_to_file, strip_known_extension
+from ._render_utils import _add_svg_accessibility, render_dot_to_file, strip_known_extension
 from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ..bundle import Bundle
+    from ..bundle._deltas import SiteDeltas
 
 
 DiffLayout = Literal["paired"]
@@ -33,7 +33,7 @@ def bundle_diff(
     baseline: str | Trace | None = None,
     on: DiffTensorField = "out",
     path: str = "bundle_diff",
-    vis_save_only: bool = False,
+    open_viewer: bool = False,
     file_format: str = "svg",
     theme: str = "paper",
     max_pairs: int | None = 16,
@@ -59,8 +59,8 @@ def bundle_diff(
         Tensor field compared at each site.
     path:
         Output path, with or without a recognised extension.
-    vis_save_only:
-        Whether to suppress opening the rendered artifact.
+    open_viewer:
+        ``True`` opens the written picture in a viewer; the default never does.
     file_format:
         Output format. Any Graphviz-supported format (e.g., ``"svg"``,
         ``"pdf"``, ``"png"``). Accessibility metadata is only embedded for
@@ -76,6 +76,16 @@ def bundle_diff(
     -------
     str
         Graphviz DOT source for the rendered bundle diff.
+
+    Examples
+    --------
+    >>> # requires: graphviz
+    >>> import os, tempfile
+    >>> bundle = tl.Bundle({"clean": tl.trace(model, x), "again": tl.trace(model, x)})
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     dot = bundle_diff(bundle, path=os.path.join(tmp, "diff"), open_viewer=False)
+    >>> "digraph" in dot
+    True
     """
 
     if layout != "paired":
@@ -88,20 +98,19 @@ def bundle_diff(
 
     left_name, right_name = _resolve_side_names(bundle, left=left, right=right)
     baseline_ref = baseline if baseline is not None else left_name
-    # Gate only the pairs this view renders (baseline against each side), so an
-    # unrelated third member does not refuse a two-member diff.
-    from ..bundle._deltas import _delta_map_values
+    from ..bundle._deltas import site_deltas
 
     baseline_name = bundle._baseline_or_raise(baseline_ref)
     sides = sorted({left_name, right_name} - {baseline_name})
+    # Gate only the pairs this view renders (baseline against each side), so an
+    # unrelated third member does not refuse a two-member diff. One node per op:
+    # each pass of a multi-pass layer is coloured by its own pass's distance.
     bundle._require_comparable("delta_map", pairs=[(baseline_name, side) for side in sides])
-    delta_map = _delta_map_values(bundle, metric, baseline_name, on, [baseline_name, *sides])
-    layer_to_node = _layer_to_supergraph_node(bundle)
+    deltas = site_deltas(bundle, metric, baseline_name, on, [baseline_name, *sides])
     pairs = _select_pairs(
         bundle._aligned_pairs(left_name, right_name),
         names=(left_name, right_name),
-        delta_map=delta_map,
-        layer_to_node=layer_to_node,
+        deltas=deltas,
         max_pairs=max_pairs,
     )
     dot = _build_dot(
@@ -111,13 +120,12 @@ def bundle_diff(
         right_name=right_name,
         metric_name=_metric_display_name(metric),
         tensor_field=on,
-        delta_map=delta_map,
-        layer_to_node=layer_to_node,
+        deltas=deltas,
         theme_name=theme,
         include_unmatched=include_unmatched,
     )
     outpath = strip_known_extension(path)
-    source = render_dot_to_file(dot, outpath, file_format, vis_save_only)
+    source = render_dot_to_file(dot, outpath, file_format, not open_viewer)
     if file_format == "svg":
         _add_svg_accessibility(
             f"{outpath}.{file_format}",
@@ -193,33 +201,6 @@ def _resolve_member_name(bundle: Bundle, member: str | Trace) -> str:
     raise KeyError("Trace is not a member of this Bundle.")
 
 
-def _layer_to_supergraph_node(bundle: Bundle) -> dict[str, str]:
-    """Map layer labels to their supergraph node names.
-
-    Parameters
-    ----------
-    bundle:
-        Bundle with a built supergraph.
-
-    Returns
-    -------
-    dict[str, str]
-        ``layer.layer_label`` to supergraph node name. Keyed by label rather
-        than ``id(layer)`` because the structural alignment and
-        ``bundle.supergraph.nodes`` materialize independent layer objects with
-        different ``id()`` values; an id-keyed lookup misses every entry, the
-        delta lookup falls back to ``0.0``, and the diff renders all-white.
-    """
-
-    lookup: dict[str, str] = {}
-    for graph_node_label, node in bundle.supergraph.nodes.items():
-        for layer in getattr(node, "layer_refs", {}).values():
-            label = str(getattr(layer, "layer_label", ""))
-            if label:
-                lookup[label] = str(graph_node_label)
-    return lookup
-
-
 def _build_dot(
     *,
     pairs: list[tuple[Any, Any]],
@@ -228,8 +209,7 @@ def _build_dot(
     right_name: str,
     metric_name: str,
     tensor_field: DiffTensorField,
-    delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[str, str],
+    deltas: SiteDeltas,
     theme_name: str,
     include_unmatched: bool,
 ) -> graphviz.Digraph:
@@ -249,10 +229,8 @@ def _build_dot(
         Human-readable metric name.
     tensor_field:
         Tensor field used for comparison.
-    delta_map:
-        Per-node metric values from the baseline comparison.
-    layer_to_node:
-        Mapping from concrete layers to supergraph node keys.
+    deltas:
+        Per-site metric values from the baseline comparison.
     theme_name:
         Visualization theme name.
     include_unmatched:
@@ -278,6 +256,14 @@ def _build_dot(
         {
             "rankdir": "TB",
             "compound": "true",
+            # One global ranking across clusters. Without it, dot pulls every
+            # node named in a ``rank=same`` pair subgraph (_add_pair_alignment)
+            # OUT of its side cluster ("already in a rankset, deleted from
+            # cluster"), drops both side clusters as empty, and lays the pairs
+            # out as loose node pairs: the column frames and member titles
+            # vanish and the white baseline column reads as an unlabeled
+            # duplicate of the marked one.
+            "newrank": "true",
             "splines": "ortho",
             "nodesep": "0.32",
             "ranksep": "0.34",
@@ -301,24 +287,12 @@ def _build_dot(
 
     paired_left_ids = {id(left_layer) for left_layer, _right_layer in pairs}
     paired_right_ids = {id(right_layer) for _left_layer, right_layer in pairs}
-    left_unmatched = (
-        [layer for layer in bundle[left_name]._layer_list if id(layer) not in paired_left_ids]
-        if include_unmatched
-        else []
-    )
-    right_unmatched = (
-        [layer for layer in bundle[right_name]._layer_list if id(layer) not in paired_right_ids]
-        if include_unmatched
-        else []
-    )
+    left_unmatched = _unmatched_layers(bundle[left_name], paired_left_ids, include_unmatched)
+    right_unmatched = _unmatched_layers(bundle[right_name], paired_right_ids, include_unmatched)
     left_layers = [left_layer for left_layer, _right_layer in pairs] + left_unmatched
     right_layers = [right_layer for _left_layer, right_layer in pairs] + right_unmatched
     values = _pair_delta_values(
-        pairs=pairs,
-        left_name=left_name,
-        right_name=right_name,
-        delta_map=delta_map,
-        layer_to_node=layer_to_node,
+        pairs=pairs, left_name=left_name, right_name=right_name, deltas=deltas
     )
     max_delta = max(values) if values else 0.0
     _add_side_cluster(
@@ -327,8 +301,7 @@ def _build_dot(
         side="clean",
         member_name=left_name,
         compared_member_name=left_name,
-        delta_map=delta_map,
-        layer_to_node=layer_to_node,
+        deltas=deltas,
         max_delta=max_delta,
         unmatched_layer_ids={id(layer) for layer in left_unmatched},
     )
@@ -338,8 +311,7 @@ def _build_dot(
         side="intervention",
         member_name=right_name,
         compared_member_name=right_name,
-        delta_map=delta_map,
-        layer_to_node=layer_to_node,
+        deltas=deltas,
         max_delta=max_delta,
         unmatched_layer_ids={id(layer) for layer in right_unmatched},
     )
@@ -348,6 +320,14 @@ def _build_dot(
     _add_pair_alignment(dot, pairs)
     _add_legend(dot)
     return dot
+
+
+def _unmatched_layers(member: Any, paired_ids: set[int], include_unmatched: bool) -> list[Any]:
+    """Return ``member``'s layers with no aligned counterpart, or ``[]`` when not drawn."""
+
+    if not include_unmatched:
+        return []
+    return [layer for layer in member._layer_list if id(layer) not in paired_ids]
 
 
 def _metric_display_name(metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> str:
@@ -438,51 +418,41 @@ def _pair_delta_values(
     pairs: list[tuple[Any, Any]],
     left_name: str,
     right_name: str,
-    delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[str, str],
+    deltas: SiteDeltas,
 ) -> list[float]:
     """Return member-specific delta values for color normalization.
 
     Parameters
     ----------
     pairs:
-        Aligned layer pairs.
+        Aligned op pairs.
     left_name:
         Left member name.
     right_name:
         Right member name.
-    delta_map:
-        Per-node metric values.
-    layer_to_node:
-        Mapping from layers to supergraph nodes.
+    deltas:
+        Per-site metric values.
 
     Returns
     -------
     list[float]
-        Non-negative finite delta values for both rendered members.
+        Non-negative delta values for both rendered members, each read at that
+        member's own op.
     """
 
-    values: list[float] = []
-    for left_layer, right_layer in pairs:
-        left_label = str(getattr(left_layer, "layer_label", ""))
-        right_label = str(getattr(right_layer, "layer_label", ""))
-        graph_node_label = layer_to_node.get(left_label) or layer_to_node.get(right_label)
-        if graph_node_label is None:
-            continue
-        node_values = delta_map.get(graph_node_label, {})
-        for member_name in (left_name, right_name):
-            value = float(node_values.get(member_name, 0.0))
-            if value >= 0.0:
-                values.append(value)
-    return values
+    values = [
+        deltas.value(op, member_name)
+        for left_layer, right_layer in pairs
+        for op, member_name in ((left_layer, left_name), (right_layer, right_name))
+    ]
+    return [value for value in values if value >= 0.0]
 
 
 def _select_pairs(
     pairs: list[tuple[Any, Any]],
     *,
     names: tuple[str, str],
-    delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[str, str],
+    deltas: SiteDeltas,
     max_pairs: int | None,
 ) -> list[tuple[Any, Any]]:
     """Select high-signal aligned pairs for a compact hero diff.
@@ -493,10 +463,8 @@ def _select_pairs(
         Candidate aligned pairs.
     names:
         The ``(left, right)`` member names.
-    delta_map:
-        Per-node metric values.
-    layer_to_node:
-        Mapping from layers to supergraph nodes.
+    deltas:
+        Per-site metric values.
     max_pairs:
         Maximum pair count, or ``None`` for all pairs.
 
@@ -518,14 +486,7 @@ def _select_pairs(
         )
     scored: list[tuple[float, int, tuple[Any, Any]]] = []
     for index, (left_layer, right_layer) in enumerate(pairs):
-        left_label = str(getattr(left_layer, "layer_label", ""))
-        right_label = str(getattr(right_layer, "layer_label", ""))
-        graph_node_label = layer_to_node.get(left_label) or layer_to_node.get(right_label)
-        node_values = delta_map.get(str(graph_node_label), {})
-        value = max(
-            float(node_values.get(left_name, 0.0)),
-            float(node_values.get(right_name, 0.0)),
-        )
+        value = max(deltas.value(left_layer, left_name), deltas.value(right_layer, right_name))
         scored.append((value, index, (left_layer, right_layer)))
     chosen_indexes = {
         index
@@ -541,8 +502,7 @@ def _add_side_cluster(
     side: str,
     member_name: str,
     compared_member_name: str,
-    delta_map: dict[str, dict[str, float]],
-    layer_to_node: dict[str, str],
+    deltas: SiteDeltas,
     max_delta: float,
     unmatched_layer_ids: set[int],
 ) -> None:
@@ -560,10 +520,8 @@ def _add_side_cluster(
         Bundle member represented by this side.
     compared_member_name:
         Member used for delta color values.
-    delta_map:
-        Per-node metric values.
-    layer_to_node:
-        Mapping from layers to supergraph nodes.
+    deltas:
+        Per-site metric values.
     max_delta:
         Maximum delta value used for normalization.
     unmatched_layer_ids:
@@ -584,9 +542,7 @@ def _add_side_cluster(
             style="rounded",
         )
         for layer in layers:
-            label = str(getattr(layer, "layer_label", "node"))
-            graph_node_label = layer_to_node.get(label, label)
-            value = float(delta_map.get(graph_node_label, {}).get(compared_member_name, 0.0))
+            value = deltas.value(layer, compared_member_name)
             subgraph.node(
                 _node_id(side, layer),
                 label=_node_label(layer, value),
@@ -618,7 +574,7 @@ def _add_side_edges(dot: graphviz.Digraph, *, layers: list[Any], side: str) -> N
         ``dot`` is mutated in place.
     """
 
-    visible = {str(getattr(layer, "layer_label", "")): layer for layer in layers}
+    visible = {_site_label(layer): layer for layer in layers}
     for layer in layers:
         target_id = _node_id(side, layer)
         for parent_label in getattr(layer, "parents", []) or []:
@@ -713,9 +669,22 @@ def _node_id(side: str, layer: Any) -> str:
         Graphviz-safe node ID.
     """
 
-    label = str(getattr(layer, "layer_label", "node"))
-    safe = re.sub(r"[^0-9A-Za-z_]", "_", label)
+    safe = re.sub(r"[^0-9A-Za-z_]", "_", _site_label(layer).replace(":", "_p"))
     return f"{side}_{safe}"
+
+
+def _site_label(layer: Any) -> str:
+    """Return a drawn op's label: ``"<layer>:<k>"`` for pass ``k`` of a multi-pass layer.
+
+    The row key of ``Bundle.compare`` (``bundle._aligned_sites.site_row_key``),
+    spelled here so the renderer adds no import of ``bundle``.
+    """
+
+    if not hasattr(layer, "layer_label"):
+        return "node"
+    if int(getattr(layer, "num_passes", 1) or 1) > 1:
+        return f"{layer.layer_label}:{layer.pass_number}"
+    return str(layer.layer_label)
 
 
 def _node_label(layer: Any, delta: float) -> str:
@@ -734,7 +703,7 @@ def _node_label(layer: Any, delta: float) -> str:
         Graphviz node label.
     """
 
-    label = str(getattr(layer, "layer_label", "node"))
+    label = _site_label(layer)
     func_name = str(getattr(layer, "func_name", "op"))
     module = getattr(layer, "module", None)
     module_line = f"@{module}" if module else ""
@@ -767,7 +736,7 @@ def _node_title(member_name: str, layer: Any, delta: float) -> str:
         Node title text.
     """
 
-    label = str(getattr(layer, "layer_label", "node"))
+    label = _site_label(layer)
     func_name = str(getattr(layer, "func_name", "op"))
     return f"{member_name} {label}; operation {func_name}; L2 delta {delta:.6g}"
 
@@ -841,38 +810,6 @@ def _interpolate(start: str, end: str, fraction: float) -> str:
     from ._encoding import interpolate_hex
 
     return interpolate_hex(start, end, fraction)
-
-
-def _add_svg_accessibility(path: str, aria_label: str) -> None:
-    """Add figure-level accessibility attributes to a rendered SVG.
-
-    Parameters
-    ----------
-    path:
-        Rendered SVG path.
-    aria_label:
-        Root SVG accessibility label.
-
-    Returns
-    -------
-    None
-        The SVG is updated in place when it exists.
-    """
-
-    if not os.path.exists(path):
-        return
-    with open(path, encoding="utf-8") as handle:
-        svg = handle.read()
-    if "aria-label=" not in svg:
-        escaped_label = html_escape(aria_label).replace('"', "&quot;")
-        svg = re.sub(
-            r"<svg\b",
-            f'<svg role="img" aria-label="{escaped_label}"',
-            svg,
-            count=1,
-        )
-    with open(path, "w", encoding="utf-8") as handle:
-        handle.write(svg)
 
 
 __all__ = ["bundle_diff"]

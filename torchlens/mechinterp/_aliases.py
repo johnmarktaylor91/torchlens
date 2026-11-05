@@ -10,7 +10,10 @@ first contact with fused reality is a teaching message, not a KeyError.
 Accepted forms: full 2.x names (``blocks.3.attn.hook_z``), 3.x bridge-cache
 names (the two generations have DIFFERENT vocabularies -- measured), the
 4.x ``TransformerBridge`` canonical names (``blocks.3.attn.o.hook_in``,
-``blocks.3.ln2.hook_in``), tuple forms (``("z", 3)``), and compact forms
+``blocks.3.ln2.hook_in``), nnterp's ``StandardizedTransformer`` accessor
+spellings (``layers_output[3]``, ``attentions_output[3]``, ``logits``),
+interp-engine point addresses (``resid_post.3``, ``mlp_act.3``,
+``embeddings``), tuple forms (``("z", 3)``), and compact forms
 (``"k6"``). Rows may carry a ``scope`` (attention / mlp modules only), an
 embedding ``role`` (token / position, decided by table size against the
 unembedding vocabulary), and an ``only_if_facet`` / ``unless_facet``
@@ -20,7 +23,10 @@ resolve through the EXECUTED attention/block order, so models with no
 
 The data lives in ``translation.json`` keyed by (TLens name, TLens
 generation); ``alias_report`` GENERATES the coverage matrix for the model in
-front of the user -- it is never hand-written.
+front of the user -- it is never hand-written. A generation whose engine
+publishes a closed point registry (interp-engine, pinned in
+``interp_engine_points.json``) also reports each registry point with no
+torchlens site, with the reason, so an absence is answered rather than dropped.
 
 Spellings DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -72,8 +78,16 @@ class AliasResolution:
     remedy:
         The action that unblocks the caller (always present off ``real``).
     generation:
-        Which TLens generation vocabulary matched (``2.x`` / ``3.x-bridge`` /
-        ``4.x``).
+        Which vocabulary matched (TLens ``2.x`` / ``3.x-bridge`` / ``4.x``,
+        ``nnterp``, or ``interp-engine``).
+
+    Examples
+    --------
+    >>> found = AliasResolution("blocks.0.attn.hook_q", "real", facet="q")
+    >>> found.status
+    'real'
+    >>> found.facet
+    'q'
     """
 
     query: str
@@ -87,15 +101,61 @@ class AliasResolution:
 
 
 def translation_table() -> list[dict[str, Any]]:
-    """Return the (TLens name, generation)-keyed translation rows."""
+    """Return the (TLens name, generation)-keyed translation rows.
+
+    Examples
+    --------
+    >>> rows = tl.mechinterp.translation_table()
+    >>> len(rows) > 0
+    True
+    >>> "2.x" in {row["generation"] for row in rows}
+    True
+    """
+
+    return list(_package_json("translation.json")["rows"])
+
+
+def _package_json(filename: str) -> dict[str, Any]:
+    """Load one of this package's shipped JSON data files."""
 
     with (
         resources.files("torchlens.mechinterp")
-        .joinpath("translation.json")
-        .open("r", encoding="utf-8")
-    ) as handle:
-        data = _json.load_bounded(handle)
-    return list(data["rows"])
+        .joinpath(filename)
+        .open("r", encoding="utf-8") as handle
+    ):
+        data: dict[str, Any] = _json.load_bounded(handle)
+    return data
+
+
+#: Generations whose engine publishes a closed point registry, by data file.
+_POINT_REGISTRIES = (("interp-engine", "interp_engine_points.json"),)
+
+
+def _point_registry(generation: str) -> dict[str, Any] | None:
+    """Return the pinned point registry for ``generation``, or None when it has none."""
+
+    for name, filename in _POINT_REGISTRIES:
+        if name == generation:
+            return _package_json(filename)
+    return None
+
+
+def _registry_absences(generation: str) -> list[AliasResolution]:
+    """Report each registry point with no torchlens site, once, with the reason."""
+
+    registry = _point_registry(generation)
+    if registry is None:
+        return []
+    return [
+        AliasResolution(
+            query=str(point["name"]),
+            status="structurally_absent",
+            remedy=str(point["no_torchlens_site"]),
+            generation=generation,
+        )
+        for point in registry["points"]
+        if point.get("no_torchlens_site")
+    ]
 
 
 #: Facets that identify a module's scope when a translation row names one.
@@ -345,13 +405,22 @@ def resolve_alias(trace: Any, name: Any) -> AliasResolution:
     trace:
         A finished torchlens trace.
     name:
-        Full TLens name (2.x, 3.x-bridge or 4.x canonical), tuple form
-        ``(facet, layer)``, or compact ``"k6"``.
+        Full TLens name (2.x, 3.x-bridge or 4.x canonical), nnterp accessor
+        spelling (``"mlps_output[2]"``), interp-engine point address
+        (``"mlp_act.2"``), tuple form ``(facet, layer)``, or
+        compact ``"k6"``.
 
     Returns
     -------
     AliasResolution
         Never raises for an unresolvable name -- the status IS the answer.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> found = tl.mechinterp.resolve_alias(trace, "blocks.0.attn.hook_q")
+    >>> found.status
+    'structurally_absent'
     """
 
     return _resolve(trace, _parse_query(name))
@@ -408,13 +477,48 @@ def _resolve(trace: Any, query: _Query) -> AliasResolution:
     return _resolve_on(homes[0], query, facet)
 
 
+def _report_layer_count(trace: Any, rows: list[dict[str, Any]]) -> int:
+    """Return the executed layer count ``alias_report`` instantiates ``{L}`` rows over.
+
+    The count is the most home modules any per-layer row has (never fewer than the
+    attention modules exposing the head vocabulary). Counting attention modules alone
+    dropped every per-layer row where no module declares the per-head ``result``
+    facet, as under fused SDPA attention; a row with fewer homes than the count now
+    answers ``structurally_absent`` for the missing layers instead of vanishing.
+    """
+
+    counts = [len(_attention_modules(trace))]
+    for row in rows:
+        if "{L}" not in str(row["tlens"]):
+            continue
+        facet = str(row["facet"])
+        query = _Query(str(row["tlens"]), facet, 0, str(row["generation"]), row)
+        counts.append(len(_layer_candidates(trace, query, _homes_for(trace, query, facet))))
+    return max(counts)
+
+
 def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution]:
     """GENERATE the per-trace TLens-name coverage matrix (never hand-written).
 
+    ``generation="nnterp"`` gives the same matrix in nnterp's accessor
+    spellings, i.e. this trace's sites under their nnterp names;
+    ``generation="interp-engine"`` gives it as interp-engine point addresses
+    and ends with one ``structurally_absent`` entry per interp-engine point
+    torchlens has no site for (query is the bare point name, remedy the
+    reason).
     Every translation row of the requested generation is instantiated for
     every executed layer and resolved against THIS trace; the result is the
     coverage matrix for the model in front of the user (published per R0
     family by CI).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> report = tl.mechinterp.alias_report(trace)
+    >>> len(report) > 0
+    True
+    >>> all(entry.status == "structurally_absent" for entry in report)
+    True
     """
 
     rows = [row for row in translation_table() if row["generation"] == generation]
@@ -422,10 +526,10 @@ def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution
         refuse(
             code="mi_translation_generation_unknown",
             message=f"No translation rows carry generation {generation!r}.",
-            remedy='pass generation="2.x", "3.x-bridge" or "4.x"',
+            remedy='pass generation="2.x", "3.x-bridge", "4.x", "nnterp" or "interp-engine"',
             generation=generation,
         )
-    n_layers = len(_attention_modules(trace))
+    n_layers = _report_layer_count(trace, rows)
     report = []
     for row in rows:
         pattern = str(row["tlens"])
@@ -435,4 +539,5 @@ def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution
                 report.append(_resolve(trace, _parse_query(name, prefer=generation)))
         else:
             report.append(_resolve(trace, _parse_query(pattern, prefer=generation)))
+    report.extend(_registry_absences(generation))
     return report

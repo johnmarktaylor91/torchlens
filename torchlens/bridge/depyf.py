@@ -45,6 +45,16 @@ def dump(model: Any, inputs: Any, path: str | Path, **kwargs: Any) -> list[Path]
     RuntimeError
         If the installed depyf has no ``prepare_debug``, or the compiled run
         dumped nothing (Dynamo reused an existing compile cache entry).
+
+    Examples
+    --------
+    >>> # requires: depyf
+    >>> import tempfile
+    >>> torch.compiler.reset()
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     files = tl.bridge.depyf.dump(model, (x,), tmp)
+    ...     print(len(files) > 0)
+    True
     """
 
     try:

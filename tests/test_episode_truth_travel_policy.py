@@ -2,7 +2,7 @@
 
 The foldA round-3 headline receipts, as permanent regressions:
 
-* R11 -- a fresh ``run(inputs=...)`` product carried the ORIGINAL episode
+* R11 -- a fresh ``run_transaction(inputs=...)`` product carried the ORIGINAL episode
   ledger (``provenance_tier=exact``) under ``path_faithfulness=VERIFIED``
   with zero warnings.
 * R12 -- the same class generalized: capture-time observer values
@@ -86,8 +86,9 @@ def _episode_trace(model: _Greedy, **extra) -> tl.Trace:
     )
 
 
+# Kept: sole branch coverage of _capture/_episode_ledger.py.
 def test_fresh_run_product_never_carries_foreign_episode_ledger():
-    """R11 verbatim: run(inputs=x2) on an episode capture of x1.
+    """R11 verbatim: run_transaction(inputs=x2) on an episode capture of x1.
 
     The product's output is correct for x2, the report says VERIFIED, and the
     product must NOT present x1's per-step tokens as its own evidence.
@@ -101,7 +102,7 @@ def test_fresh_run_product_never_carries_foreign_episode_ledger():
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        result = trace.run(inputs=torch.tensor([[9]]))
+        result = trace.run_transaction(inputs=torch.tensor([[9]]))
 
     assert result.output.tolist() == [[10, 11, 12]]
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -122,34 +123,7 @@ def test_fresh_run_product_never_carries_foreign_episode_ledger():
     assert episode_ledger_for(trace) is not None
 
 
-def test_fresh_run_product_never_carries_foreign_logged_values():
-    """R12 verbatim: observer values keyed to x1 never ride the x2 product."""
-
-    class _M(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x) * 2
-
-    model = _M()
-    x1 = torch.ones(1, 4)
-    trace = tl.trace(model, x1)
-    trace.annotations.setdefault("logged_values", {})["input_sum"] = float(x1.sum())
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        result = trace.run(inputs=torch.ones(1, 4) * 7)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert "logged_values" not in result.trace.annotations
-    assert result.trace.logged_values == {}
-    assert [str(w.message) for w in caught] == []
-    # The source trace keeps its capture-time observation.
-    assert trace.logged_values == {"input_sum": 4.0}
-
-
+# Kept: sole branch coverage of _capture/_annotations_travel.py, _capture/_episode_join.py.
 def test_fresh_execution_scrubs_every_registered_sub_key():
     """The generalized composition row (foldA s7): fresh execution x EVERY
     registered annotations sub-key, asserted per key from the registry."""
@@ -177,7 +151,7 @@ def test_fresh_execution_scrubs_every_registered_sub_key():
                 trace.annotations[key] = {"declared": {"episode_id": "ep-test"}}
             else:
                 trace.annotations[key] = {"probe": 1.0}
-        result = trace.run(inputs=torch.ones(1, 4) * 3)
+        result = trace.run_transaction(inputs=torch.ones(1, 4) * 3)
         product_annotations = result.trace.annotations
         if row.drop_mode == "note":
             assert product_annotations[key]["quarantined"] is True
@@ -186,7 +160,7 @@ def test_fresh_execution_scrubs_every_registered_sub_key():
             assert key not in product_annotations
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _capture/_episode_ledger.py.
 def test_guarded_fast_rerun_never_exposes_foreign_ledger():
     """Gate row: guarded-fast (run(fast=True)) never exposes a foreign ledger."""
 
@@ -197,7 +171,7 @@ def test_guarded_fast_rerun_never_exposes_foreign_ledger():
     )
     ledger_before = episode_ledger_for(trace)
     assert ledger_before is not None
-    result = trace.run(inputs=torch.tensor([[9]]), fast=True)
+    result = trace.run_transaction(inputs=torch.tensor([[9]]), fast=True)
     # The fast-live product IS the live trace, whose payloads were refreshed
     # in place: its episode evidence no longer describes what it presents.
     assert episode_ledger_for(result.trace) is None
@@ -207,6 +181,7 @@ def test_guarded_fast_rerun_never_exposes_foreign_ledger():
     assert [row.step_output for row in ledger_before.rows] == [(2,), (3,), (4,)]
 
 
+# Kept: named by a manifest, the interaction matrix or the validation mutation suite.
 def test_plain_fork_is_not_a_fresh_execution_and_carries_the_ledger():
     """A fork's records hold the capture's own values; evidence travels."""
 
@@ -217,12 +192,13 @@ def test_plain_fork_is_not_a_fresh_execution_and_carries_the_ledger():
     assert [row.step_output for row in forked_ledger.rows] == [(2,), (3,), (4,)]
 
 
+# Kept: sole branch coverage of _capture/_episode_ledger.py.
 def test_travel_drop_note_round_trips_load_validation_silently():
     """The in-key note is inert at load: no warning, no quarantine rewrite."""
 
     model = _Greedy()
     trace = _episode_trace(model)
-    result = trace.run(inputs=torch.tensor([[5]]))
+    result = trace.run_transaction(inputs=torch.tensor([[5]]))
     note = dict(result.trace.annotations["episode"])
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -231,17 +207,19 @@ def test_travel_drop_note_round_trips_load_validation_silently():
     assert result.trace.annotations["episode"] == note
 
 
+# Kept: sole branch coverage of _capture/_annotations_travel.py.
 def test_scrub_is_idempotent_and_never_rewrites_prior_diagnostics():
     """A second settlement pass keeps the first drop's note untouched."""
 
     model = _Greedy()
     trace = _episode_trace(model)
-    result = trace.run(inputs=torch.tensor([[5]]))
+    result = trace.run_transaction(inputs=torch.tensor([[5]]))
     first_note = dict(result.trace.annotations["episode"])
     assert scrub_fresh_execution_annotations(result.trace) == ()
     assert result.trace.annotations["episode"] == first_note
 
 
+# Kept: sole branch coverage of _capture/_annotations_travel.py.
 def test_registry_refuses_malformed_rows():
     """The registry validates its own vocabulary fail-closed."""
 

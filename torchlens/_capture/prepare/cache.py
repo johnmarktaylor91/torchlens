@@ -17,7 +17,7 @@ from typing import Any, cast
 
 from torchlens import _state
 
-from ..._autoroute._builtin_output import semantic_output_cache_key
+from ..._autoroute._builtin_output import output_decoders_cache_key, semantic_output_cache_key
 from ..._capture_state_helpers import (
     _capture_cache_dir,
     _capture_cache_key,
@@ -31,6 +31,7 @@ from ..._trace_selector_helpers import (
     _predicate_cache_key,
     _stable_cache_fragment,
 )
+from ...backends.torch.bound_root import TLBoundMethodRoot
 from .chunked import normalize_chunk_paths
 from .request import _DoorState
 
@@ -560,7 +561,6 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "hooks",
         "backward_ready",
         "inference_only",
-        "module_filter",
         "jax_control_flow",
         "jax_max_control_flow_unroll",
         "module_identity_mode",
@@ -630,7 +630,10 @@ def _resolve_cache_key(state: _DoorState) -> _DoorState:
     """Name the trace and, when caching, derive the cache key, path and secret."""
     capture_options = state.capture_options
     name = capture_options.name
-    log_name = name if name is not None else _state._auto_name(state.model)
+    naming_model = (
+        state.model.tl_owner if isinstance(state.model, TLBoundMethodRoot) else state.model
+    )
+    log_name = name if name is not None else _state._auto_name(naming_model)
     state = replace(state, log_name=log_name)
     if not capture_options.cache:
         return state
@@ -700,6 +703,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "capture_container_structure": opts.capture_container_structure,
         "output_transform": _stable_cache_fragment(opts.output_transform),
         "semantic_output_cache_key": semantic_output_cache_key(state.model),
+        "output_decoders": output_decoders_cache_key(),
         "facets": _facet_recipe_cache_key(state.facet_recipes),
         "save_predicate": _predicate_cache_key(state.save_predicate),
         "intervene": _predicate_cache_key(state.args.intervene),
@@ -717,13 +721,12 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "aten_ops": opts.aten_ops,
         "log_injections": opts.log_injections,
         "save_raw_input": repr(state.save_raw_input_policy),
-        "save_transformed_output": repr(state.save_raw_output_policy),
+        "save_transformed_output": repr(state.save_transformed_output_policy),
         "save_raw_activations": state.save_options.save_raw_activations,
         "save_raw_grads": state.save_options.save_raw_gradients,
         "activation_transform": _stable_cache_fragment(state.save_options.activation_transform),
         "grad_transform": _stable_cache_fragment(state.save_options.grad_transform),
         "seed": opts.seed,
-        "module_filter": _stable_cache_fragment(opts.module_filter),
         "layer_visualizers": _stable_cache_fragment(opts.layer_visualizers),
         "save_visualizations": _stable_cache_fragment(opts.save_visualizations),
         "optimizer": repr(opts.optimizer),

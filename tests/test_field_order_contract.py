@@ -23,6 +23,31 @@ from torchlens._io import FieldPolicy
 # 00bc67d3 KEEP->DROP flips were invisible to -m smoke for want of a marker).
 
 
+def _duplicates(values: Collection[str]) -> list[str]:
+    """Return duplicate strings in first-repeated order.
+
+    Parameters
+    ----------
+    values:
+        Strings to scan.
+
+    Returns
+    -------
+    list[str]
+        Duplicate values, each reported once.
+    """
+
+    seen: set[str] = set()
+    duplicated: list[str] = []
+    duplicated_set: set[str] = set()
+    for value in values:
+        if value in seen and value not in duplicated_set:
+            duplicated.append(value)
+            duplicated_set.add(value)
+        seen.add(value)
+    return duplicated
+
+
 @dataclass(frozen=True)
 class FieldOrderCase:
     """Static contract data for one public field-order surface."""
@@ -111,7 +136,6 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 # (FieldPolicy.KEEP) with load validation.
                 "last_run",
                 "layer_visualizers",
-                "_module_filter",
                 "_parent_run",
                 # R2-37: the live pinned-graph disclosure; a loaded trace pins
                 # nothing, so it never persists.
@@ -129,11 +153,11 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
             {
                 "_construction_done",
                 "activation_transform",
-                "arg_expressions",
                 "args_template",
                 # edge_substitutions / edge_replacement_stamps and site_key
                 # left this ledger at the tlspec v8 coordinated bump: all
-                # three now persist with load validation.
+                # three now persist with load validation. arg_expressions
+                # left it at the tlspec v12 bump.
                 "func",
                 "grad_fn",
                 "grad_fn_handle",
@@ -315,28 +339,3 @@ def test_known_glossary_aliases_have_backed_field_order_names() -> None:
     assert "has_op" in constants.GRAD_FN_LOG_FIELD_ORDER
     assert "is_intervening" not in constants.GRAD_FN_LOG_FIELD_ORDER
     assert "has_op" in GradFn._PORTABLE_STATE_SPEC
-
-
-def _duplicates(values: Collection[str]) -> list[str]:
-    """Return duplicate strings in first-repeated order.
-
-    Parameters
-    ----------
-    values:
-        Strings to scan.
-
-    Returns
-    -------
-    list[str]
-        Duplicate values, each reported once.
-    """
-
-    seen: set[str] = set()
-    duplicated: list[str] = []
-    duplicated_set: set[str] = set()
-    for value in values:
-        if value in seen and value not in duplicated_set:
-            duplicated.append(value)
-            duplicated_set.add(value)
-        seen.add(value)
-    return duplicated

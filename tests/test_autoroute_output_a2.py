@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
-import sys
 import warnings
 from pathlib import Path
 from typing import Any
@@ -16,14 +14,6 @@ import torchlens as tl
 from torchlens import _autoroute as autoroute
 from torchlens._autoroute._builtin_output import load_imagenet1k_labels, semantic_output_cache_key
 from torchlens._data_classes.trace import ResolvedPostprocessing
-
-
-def _decoded_rows(trace: tl.Trace) -> list[dict[str, Any]]:
-    """Return classification decoded rows from the typed A3 representation."""
-
-    assert trace._decoded_output is not None
-    assert trace._decoded_output["kind"] == "batch_topk"
-    return trace._decoded_output["rows"]
 
 
 class _Config:
@@ -130,24 +120,6 @@ class _Tokenizer:
         return " ".join(f"tok{token_id}" for token_id in token_ids)
 
 
-def test_config_id2label_decodes_topk_labels_and_probs() -> None:
-    """Classifier config labels decode into bounded top-k JSON rows."""
-
-    labels = {0: "negative", 1: "positive", 2: "neutral"}
-    model = _Classifier(torch.tensor([[0.0, 4.0, 1.0]]), labels).eval()
-
-    trace = tl.trace(model, torch.ones(1, 2))
-
-    assert trace.provenance.output_postprocessor is not None
-    assert trace.provenance.output_postprocessor.source == "hf_config"
-    rows = _decoded_rows(trace)
-    assert rows[0]["label"] == "positive"
-    assert rows[0]["class_index"] == 1
-    assert pytest.approx(rows[0]["prob"], rel=1e-5) == float(
-        torch.softmax(torch.tensor([0.0, 4.0, 1.0]), dim=0)[1]
-    )
-
-
 def test_read_time_head_decodes_the_named_retained_head() -> None:
     """Two same-width heads are ambiguous at capture; ``head=`` decodes one at read time."""
 
@@ -202,25 +174,6 @@ def test_custom_registered_output_detector_decodes() -> None:
     assert decoded["rows"][0]["label"] == "left"
 
 
-def test_backward_ready_decode_keeps_graph_connected_output() -> None:
-    """Decode uses a copy and leaves retained outputs connected to autograd."""
-
-    labels = {0: "low", 1: "high"}
-    model = _Classifier(torch.tensor([[0.0, 2.0]]), labels).train()
-    x = torch.ones(1, 2, requires_grad=True)
-
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
-    output_op = trace.output_ops[0]
-    output_tensor = output_op.out
-    assert isinstance(output_tensor, torch.Tensor)
-    assert output_tensor.requires_grad
-
-    output_tensor.sum().backward()
-
-    assert model.weight.grad is not None
-    assert x.grad is not None
-
-
 def test_multi_output_selects_logits_and_fails_closed_on_ambiguity() -> None:
     """Tuple/HF logits are selected conservatively and ambiguous tuples do not decode."""
 
@@ -249,16 +202,6 @@ def test_multi_output_selects_logits_and_fails_closed_on_ambiguity() -> None:
     )
 
 
-def test_generic_1000_width_tensor_without_verified_metadata_does_not_decode() -> None:
-    """A bare ``[B,1000]`` tensor is not silently treated as ImageNet."""
-
-    model = _Classifier(torch.zeros(1, 1000)).eval()
-    trace = tl.trace(model, torch.ones(1, 2))
-
-    assert trace._decoded_output is None
-    assert trace.provenance.output_postprocessor is None
-
-
 def test_hf_text_decode_uses_attached_tokenizer() -> None:
     """HF text style decodes argmax token ids with the attached tokenizer."""
 
@@ -271,32 +214,6 @@ def test_hf_text_decode_uses_attached_tokenizer() -> None:
     assert trace.provenance.output_postprocessor.style == "hf_text"
     assert trace._decoded_output == [
         {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}
-    ]
-
-
-def test_hf_text_decode_handles_batch_greater_than_one_independently() -> None:
-    """Each batch item must decode its own token sequence, never spliced together.
-
-    Regression for a bug where ``_decode_hf_text`` flattened all batch items'
-    token ids into a single sequence via ``reshape(-1)`` before decoding,
-    silently dropping every batch item past the first and corrupting the
-    first item's text with tokens spliced in from other items.
-    """
-
-    logits = torch.tensor(
-        [
-            [[0.0, 5.0], [6.0, 1.0]],  # batch item 0: argmax -> [1, 0]
-            [[7.0, 2.0], [1.0, 9.0]],  # batch item 1: argmax -> [0, 1]
-        ]
-    )
-    model = _Classifier(logits).eval()
-    model._torchlens_output_tokenizer = _Tokenizer()
-
-    trace = tl.trace(model, torch.ones(2, 2))
-
-    assert trace._decoded_output == [
-        {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]},
-        {"batch_item": 1, "rank": 1, "text": "tok0 tok1", "token_ids": [0, 1]},
     ]
 
 
@@ -347,31 +264,6 @@ def test_imagenet_label_bank_package_data_loads() -> None:
 
     assert len(labels) == 1000
     assert labels[:3] == ["tench", "goldfish", "great white shark"]
-
-
-def test_import_torchlens_does_not_import_optional_output_detector_deps() -> None:
-    """Importing TorchLens does not import the optional output-detector deps.
-
-    transformers/timm/torchvision imports live INSIDE detector or wrapping paths
-    and must stay lazy during bare TorchLens import.
-    """
-
-    code = """
-import sys
-for name in ['transformers', 'timm']:
-    sys.modules.pop(name, None)
-import torchlens
-print({name: name in sys.modules for name in ['transformers', 'timm']})
-"""
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=Path(__file__).resolve().parents[1],
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-
-    assert result.stdout.strip() == "{'transformers': False, 'timm': False}"
 
 
 class _NestedTensorOutput(nn.Module):

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import pickle
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
@@ -12,11 +11,8 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens._io.bundle import _build_manifest, _write_payload_blob
 from torchlens._io.payload_codec import get_payload_codec
-from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
-from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends.jax import capabilities
 from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
@@ -26,7 +22,7 @@ lax = pytest.importorskip("jax.lax")
 random = pytest.importorskip("jax.random")
 
 
-pytestmark = pytest.mark.backend_jax
+pytestmark = [pytest.mark.backend_jax, pytest.mark.rare]
 
 
 def _params() -> dict[str, Any]:
@@ -238,7 +234,7 @@ def _trace(**kwargs: Any) -> Any:
 
 
 def _write_jax_codec_fixture(path: Path) -> tuple[Any, np.ndarray]:
-    """Write a materialized JAX bundle through the private codec writer path.
+    """Save a JAX trace with its payloads as a format 3 artifact.
 
     Parameters
     ----------
@@ -252,54 +248,8 @@ def _write_jax_codec_fixture(path: Path) -> tuple[Any, np.ndarray]:
     """
 
     trace = _trace()
-    scrubbed_state, blob_specs, unsupported_tensors = scrub_for_save(
-        trace,
-        include_outs=True,
-        include_grads=False,
-        include_saved_args=False,
-        include_rng_states=False,
-        backend_name="jax",
-        payload_materialization=True,
-    )
-    if not blob_specs:
-        raise AssertionError("JAX codec fixture expected at least one saved payload.")
-
-    path.mkdir()
-    (path / "blobs").mkdir()
-    codec = get_payload_codec("jax")
-    tensor_entries = [
-        _write_payload_blob(tmp_path=path, blob_spec=blob_spec, codec=codec)
-        for blob_spec in blob_specs
-    ]
-    manifest = _build_manifest(
-        trace=trace,
-        tensor_entries=tensor_entries,
-        unsupported_tensors=unsupported_tensors,
-    )
-    _TlSpecWriter.write_trace_manifest(
-        path=path / "manifest.json",
-        trace=trace,
-        legacy_manifest=manifest,
-        save_level="portable",
-    )
-    with (path / "metadata.pkl").open("wb") as handle:
-        pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    _mark_fixture_manifest_materialized(path)
-    return trace, np.asarray(blob_specs[0].value)
-
-
-def _mark_fixture_manifest_materialized(path: Path) -> None:
-    """Patch a direct-writer fixture manifest to declare materialized payloads."""
-
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["body_format"] = "safetensors"
-    manifest["payload_policy"] = {
-        "policy": "array_payloads",
-        "materialization_supported": True,
-        "payload_kinds": sorted({entry["kind"] for entry in manifest["tensors"]}),
-    }
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    trace.save(path, level="portable")
+    return trace, np.asarray(_first_saved_op(trace).out)
 
 
 def _first_saved_op(trace: Any) -> Any:
@@ -360,7 +310,7 @@ def test_jax_payload_codec_encodes_numpy_manifest_fields() -> None:
 
 
 def test_jax_codec_fixture_loads_eager_payloads_as_jax_arrays(tmp_path: Path) -> None:
-    """Direct-writer JAX codec fixtures should load eager outs as JAX arrays."""
+    """Saved JAX payloads should load eagerly as JAX arrays."""
 
     path = tmp_path / "jax_codec_roundtrip.tlspec"
     _, expected = _write_jax_codec_fixture(path)
@@ -375,7 +325,7 @@ def test_jax_codec_fixture_loads_eager_payloads_as_jax_arrays(tmp_path: Path) ->
 
 
 def test_jax_codec_fixture_loads_lazy_refs_as_jax_arrays(tmp_path: Path) -> None:
-    """Lazy JAX codec fixtures should defer payload decode until materialization."""
+    """Lazily loaded JAX payloads should defer decode until materialization."""
 
     path = tmp_path / "jax_codec_lazy.tlspec"
     _, expected = _write_jax_codec_fixture(path)
@@ -533,18 +483,24 @@ def test_jax_old_style_prng_key_tlspec_round_trips_as_uint32_array(tmp_path: Pat
     manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
     loaded = tl.load(path)
     loaded_key = _first_saved_op(loaded).out
-    # The internal ``_raw`` capture sentinel is stripped from every preview
-    # layer label before it reaches a public surface like the portable
-    # manifest (see "strip the internal _raw sentinel from preview layer
-    # labels"); the real final label is bare of it.
-    input_entries = [entry for entry in manifest["tensors"] if entry.get("label") == "input_1_1:1"]
+    # Format 3 indexes payloads by file in ``body_index`` (no layer label), so
+    # the input's entries are found through its lazy ref's payload file. The
+    # internal ``_raw`` capture sentinel is stripped from every preview layer
+    # label before it reaches a public surface; the real final label is bare.
+    input_ref = tl.load(path, lazy=True).ops["input_1_1:1"].out_ref
+    input_entries = [
+        entry for entry in manifest["body_index"] if entry["filename"] == input_ref.relative_path
+    ]
 
     assert str(loaded_key.dtype) == "uint32"
     assert loaded_key.shape == (2,)
     np.testing.assert_array_equal(np.asarray(loaded_key), np.asarray(key))
+    assert input_ref.logical_dtype == "uint32"
+    assert "jax_prng_key_typed" not in (input_ref.codec_metadata or {})
     assert input_entries
-    assert input_entries[0]["logical_dtype"] == "uint32"
-    assert "jax_prng_key_typed" not in input_entries[0]["codec_metadata"]
+    for entry in input_entries:
+        assert entry["logical_dtype"] == "uint32"
+        assert "jax_prng_key_typed" not in entry["codec_metadata"]
 
 
 def test_jax_sharded_array_tlspec_round_trips_value_with_audit_metadata(
@@ -1104,7 +1060,7 @@ def test_jax_rejects_callback_effects() -> None:
             {"intervene": tl.when(tl.func("tanh"), tl.zero_ablate())},
             "can_intervene=False.*intervene",
         ),
-        ({"halt": tl.func("tanh")}, "can_intervene=False.*halt"),
+        ({"stop_after": tl.func("tanh")}, "can_intervene=False.*stop_after"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )
@@ -1220,7 +1176,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(TypeError, match="not a boolean"):
         bool(loaded_status)
     with pytest.raises(BackendUnsupportedError, match="backward capture.*derived_grads"):
-        trace.log_backward(cast(Any, trace[trace.output_layers[0]].out))
+        trace.backward(cast(Any, trace[trace.output_layers[0]].out))
     with pytest.raises(ValueError, match="derived_grads"):
         _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="derived_grads"):
@@ -1257,6 +1213,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
         "jax_control_flow",
         "jax_max_control_flow_unroll",
         "module_identity_mode",
+        "facets",
     )
 
 

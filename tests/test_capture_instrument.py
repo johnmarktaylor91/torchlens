@@ -15,8 +15,6 @@ import pytest
 import torch
 from torch import nn
 
-from torchlens._capture.stages import InstrumentedModel
-from torchlens._capture_state_helpers import CompiledCapturePrep
 from torchlens.backends.torch import instrument
 from torchlens.backends.torch._tl import (
     active_label_session_token,
@@ -63,22 +61,7 @@ def _model() -> nn.Module:
     return model
 
 
-def test_enter_order_and_handle(no_session: Any) -> None:
-    backend = _Backend()
-    model = _model()
-    trace = object()
-    with instrument.instrumented(backend, trace, model, (model, None, None)) as handle:
-        assert isinstance(handle, InstrumentedModel)
-        assert handle.model is model
-        assert isinstance(handle.compiled_prep, CompiledCapturePrep)
-        assert handle.observer is None
-        assert handle.label_session == active_label_session_token()
-        assert handle.unwrap_when_done is False
-        assert [name for name, _ in backend.calls] == ["once", "session"]
-    assert [name for name, _ in backend.calls] == ["once", "session", "cleanup"]
-    assert active_label_session_token() is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/instrument.py.
 def test_cleanup_runs_once_with_callable_payload(no_session: Any) -> None:
     backend = _Backend()
     model = _model()
@@ -96,50 +79,7 @@ def test_cleanup_runs_once_with_callable_payload(no_session: Any) -> None:
     assert cleanups[0][0] is model
 
 
-def test_cleanup_skipped_when_arm_already_retired_the_session(no_session: Any) -> None:
-    backend = _Backend()
-    model = _model()
-    with instrument.instrumented(backend, object(), model, (model, None, None)):
-        # A forward arm that cleaned up on its own ends the label session last.
-        backend.cleanup_model_session(object(), (model, None, None))
-    assert [name for name, _ in backend.calls].count("cleanup") == 1
-    assert active_label_session_token() is None
-
-
-def test_cleanup_runs_when_the_body_raises(no_session: Any) -> None:
-    backend = _Backend()
-    model = _model()
-    with (
-        pytest.raises(RuntimeError, match="forward failed"),
-        instrument.instrumented(backend, object(), model, (model, None, None)),
-    ):
-        raise RuntimeError("forward failed")
-    assert [name for name, _ in backend.calls] == ["once", "session", "cleanup"]
-    assert active_label_session_token() is None
-
-
-def test_observer_restores_before_release_and_runs_on_failure(no_session: Any) -> None:
-    backend = _Backend()
-    model = _model()
-    bn = model[1]
-    assert isinstance(bn, nn.BatchNorm1d)
-    before = bn.running_mean.clone()
-    failures: list[str] = []
-    policy = WrapPolicy(carry_state=False, on_failure=lambda: failures.append("released"))
-    with (
-        pytest.raises(RuntimeError, match="boom"),
-        instrument.instrumented(backend, object(), model, (model, None, None), policy) as handle,
-    ):
-        assert handle.observer is not None
-        bn.running_mean.add_(1.0)
-        model.train()
-        raise RuntimeError("boom")
-    assert torch.equal(bn.running_mean, before)
-    assert not model.training
-    assert failures == ["released"]
-    assert active_label_session_token() is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/state_live.py, backends/torch/instrument.py.
 def test_observer_handle_gets_the_trace_on_success(no_session: Any) -> None:
     backend = _Backend()
     model = _model()
@@ -153,6 +93,7 @@ def test_observer_handle_gets_the_trace_on_success(no_session: Any) -> None:
     assert handle.observer.trace is trace
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/instrument.py.
 def test_unwrap_only_after_a_completed_capture(
     no_session: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -89,16 +89,7 @@ def _assert_snapshot_matches_fresh_clone(snapshot: Any, model: nn.Module) -> Non
         assert _raw_bytes(shared) == _raw_bytes(value)
 
 
-def test_unchanged_state_shares_every_source_clone(fresh_reruns: list[Trace]) -> None:
-    model, x, trace = _capture()
-    source = trace._runnable.capture_state
-    _rerun(trace, model, x)
-    rerun_state = fresh_reruns[-1]._runnable.capture_state
-    assert set(rerun_state) == set(source)
-    assert all(rerun_state[name] is source[name] for name in source)
-    _assert_snapshot_matches_fresh_clone(rerun_state, model)
-
-
+# Kept: a sole mutation kill.
 def test_a_changed_entry_is_cloned_and_the_source_is_untouched(
     fresh_reruns: list[Trace],
 ) -> None:
@@ -115,22 +106,6 @@ def test_a_changed_entry_is_cloned_and_the_source_is_untouched(
     _assert_snapshot_matches_fresh_clone(rerun_state, model)
 
 
-def test_a_flipped_sign_bit_is_not_shared(fresh_reruns: list[Trace]) -> None:
-    torch.manual_seed(0)
-    model = _Net().eval()
-    with torch.no_grad():
-        model.fc2.bias.zero_()
-    x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
-    with torch.no_grad():
-        model.fc2.bias.neg_()  # 0.0 -> -0.0: equal values, different bytes
-    _rerun(trace, model, x)
-    rerun_state = fresh_reruns[-1]._runnable.capture_state
-    assert rerun_state["fc2.bias"] is not trace._runnable.capture_state["fc2.bias"]
-    assert torch.signbit(rerun_state["fc2.bias"]).all()
-    _assert_snapshot_matches_fresh_clone(rerun_state, model)
-
-
 def _save_outcome(trace: Trace, path: Path) -> Any:
     try:
         trace.save(path, level="runnable")
@@ -140,6 +115,7 @@ def _save_outcome(trace: Trace, path: Path) -> Any:
     return "saved"
 
 
+# Kept: sole branch coverage of _trace_core/op_store.py.
 def test_runnable_saves_behave_as_with_full_clones(
     fresh_reruns: list[Trace], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

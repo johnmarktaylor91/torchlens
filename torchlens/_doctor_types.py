@@ -64,6 +64,13 @@ class DoctorCheck:
         Explanation of the finding.
     suggestion:
         Suggested workaround or next action.
+
+    Examples
+    --------
+    >>> report = tl.report.doctor()
+    >>> row = report.checks[0]
+    >>> isinstance(row, DoctorCheck), row.status in ("pass", "known_broken", "scope", "not_tested")
+    (True, True)
     """
 
     key: str
@@ -94,6 +101,16 @@ class DoctorReport:
         Truth-table rows: environment checks, one ``backend_scorecard:<name>``
         row per registered backend (its shipped conformance record), then the
         model/input findings when a model was supplied.
+
+    Examples
+    --------
+    >>> report = tl.report.doctor(model, x)
+    >>> isinstance(report, DoctorReport)
+    True
+    >>> report.model_type
+    'torch.nn.modules.container.Sequential'
+    >>> len(report.checks) > 0
+    True
     """
 
     model_type: str | None
@@ -188,7 +205,7 @@ class DoctorReport:
             min(width, _SHOW_CELL_WIDTH_CAP) for width in _column_widths([headers, *body])
         )
         lines = [
-            f"TorchLens doctor report: {self.model_type or 'environment'}",
+            repr(self),
             f"PyTorch: {self.torch_version}",
             "",
             _format_table_line(headers, widths),
@@ -213,30 +230,9 @@ class DoctorReport:
     def __repr__(self) -> str:
         """Return a bounded findings-first summary."""
 
-        severity_rank = {"error": 0, "warning": 1, "info": 2, "ok": 3}
-        findings = sorted(
-            (row for row in self.checks if row.is_detected or row.severity != "ok"),
-            key=lambda row: severity_rank.get(row.severity, 3),
+        return _cap_line(
+            f"DoctorReport {self.model_type or 'environment'}: {len(self.checks)} rows"
         )
-        clean = [row for row in self.checks if not (row.is_detected or row.severity != "ok")]
-        lines = [
-            _cap_line(f"TorchLens doctor report: {self.model_type or 'environment'}"),
-            (
-                f"PyTorch {self.torch_version}; {len(self.checks)} rows: "
-                f"{len(findings)} finding(s), {len(clean)} clean"
-            ),
-        ]
-        for row in findings:
-            lines.append(_cap_line(f"- [{row.severity}] {row.label} ({row.status}): {row.details}"))
-            if row.suggestion:
-                lines.append(_cap_line(f"    fix: {row.suggestion}"))
-        if clean:
-            lines.append(_cap_line("Clean rows: " + ", ".join(row.label for row in clean)))
-        lines.append("Full table: report.show() / report.to_markdown()")
-        lines.append(
-            "Rows: report.checks / report.check(key); capability dump: report.capability_snapshot()"
-        )
-        return "\n".join(lines)
 
     def capability_snapshot(self) -> dict[str, bool]:
         """Return the full runtime capability snapshot (the detail accessor).
@@ -257,12 +253,13 @@ class DoctorReport:
 _SHOW_CELL_WIDTH_CAP = 60
 
 #: Width cap for one designed-summary line (bounded-reprs doctrine).
-_REPR_LINE_CAP = 160
+_REPR_LINE_CAP = 100
 
 
 def _cap_line(line: str) -> str:
     """Return ``line`` truncated to the repr cap with a disclosed ellipsis."""
 
+    line = line.replace("\n", " ")
     if len(line) <= _REPR_LINE_CAP:
         return line
     return line[: _REPR_LINE_CAP - 3] + "..."

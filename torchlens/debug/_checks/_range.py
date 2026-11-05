@@ -54,6 +54,16 @@ class RangeProbe:
         different, already-covered question.
     event_stream:
         Optional stream to publish per-fire verdict events into.
+
+    Examples
+    --------
+    >>> probe = tl.debug.RangeProbe({tl.func("relu"): (None, -1.0)})
+    >>> capture = tl.options.CaptureOptions(hooks=probe.hook_plan())
+    >>> trace = tl.trace(model, x, capture=capture)
+    >>> len(probe.observed_fires) > 0
+    True
+    >>> probe.findings[0].code
+    'activation_range_violated'
     """
 
     def __init__(
@@ -175,6 +185,15 @@ class LivenessProbe:
     never contain the word "dead": ``tl.dead(samples=...)`` keeps the only
     dead-unit verdict with its >=2-sample upper-bound epistemics; this probe
     is the cheap live measurement that tells you WHERE to point it.
+
+    Examples
+    --------
+    >>> probe = tl.debug.LivenessProbe([tl.func("relu")])
+    >>> capture = tl.options.CaptureOptions(hooks=probe.hook_plan())
+    >>> trace = tl.trace(model, x, capture=capture)
+    >>> stats = next(iter(probe.facts().values()))
+    >>> 0.0 <= stats["mean_zero_fraction"] <= 1.0
+    True
     """
 
     def __init__(self, sites: Any, *, event_stream: EventStream | None = None) -> None:

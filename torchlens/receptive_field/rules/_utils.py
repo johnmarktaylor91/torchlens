@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from numbers import Integral, Real
 from typing import Any, cast
@@ -141,3 +141,91 @@ def number_tuple(value: object, rank: int) -> tuple[int | float | Fraction, ...]
     if len(result) != rank:
         return None
     return result
+
+
+def parent_roles(context: ReceptiveFieldRuleContext, parent_label: str) -> frozenset[str]:
+    """Return every captured argument role one parent label fills.
+
+    Parameters
+    ----------
+    context:
+        Rule context for the captured operation.
+    parent_label:
+        Label of one entry in the operation's ``parents`` list.
+
+    Returns
+    -------
+    frozenset[str]
+        ``"args:<position>"`` and ``"kwargs:<name>"`` roles, the same spelling
+        :meth:`ReceptiveFieldRuleContext.parent_role` uses. Empty when the
+        parent's argument position was not captured.
+    """
+
+    positions = getattr(context.op, "parent_arg_positions", None) or {}
+    roles: set[str] = set()
+    for kind in ("args", "kwargs"):
+        table = positions.get(kind, {})
+        if not isinstance(table, Mapping):
+            continue
+        roles.update(f"{kind}:{key}" for key, label in table.items() if label == parent_label)
+    return frozenset(roles)
+
+
+def sole_data_parent(context: ReceptiveFieldRuleContext, data_roles: frozenset[str]) -> bool:
+    """Return whether the operation's only traced parent is its data operand.
+
+    Parameters
+    ----------
+    context:
+        Rule context for the captured operation.
+    data_roles:
+        Argument roles that name the data operand (for example
+        ``{"args:0", "kwargs:input"}``).
+
+    Returns
+    -------
+    bool
+        ``True`` only when there is exactly one parent, every role it fills is a
+        data role, and its captured rank equals the output rank. Parameters are
+        not traced parents, so a module's own weight and bias never count.
+    """
+
+    parents = tuple(context.op.parents or ())
+    if len(parents) != 1:
+        return False
+    roles = parent_roles(context, parents[0])
+    if not roles or not roles <= data_roles:
+        return False
+    shapes = context.in_shapes
+    return len(shapes) == 1 and len(shapes[0]) == len(context.out_shape)
+
+
+def whole_axes_by_parent(
+    context: ReceptiveFieldRuleContext,
+    data_roles: frozenset[str],
+    data_axes: tuple[int, ...],
+) -> dict[str, object]:
+    """Build a per-parent whole-extent axis selection for a ``full`` result.
+
+    Parameters
+    ----------
+    context:
+        Rule context for the captured operation.
+    data_roles:
+        Argument roles that name the data operand.
+    data_axes:
+        Whole-extent axes of the data operand.
+
+    Returns
+    -------
+    dict[str, object]
+        ``data_axes`` for a parent that fills only data roles, ``"all"`` for
+        every other parent (a traced weight or bias, or a parent whose role was
+        not captured) and as the default.
+    """
+
+    selection: dict[str, object] = {"default": "all"}
+    for label in tuple(context.op.parents or ()):
+        roles = parent_roles(context, label)
+        selection[label] = data_axes if roles and roles <= data_roles else "all"
+    return selection

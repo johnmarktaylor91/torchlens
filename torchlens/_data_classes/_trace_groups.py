@@ -8,8 +8,25 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._display_constructor import display_guard
+from .._utils._display_records import group_repr, group_str
+
 if TYPE_CHECKING:
     from .trace import Trace
+
+
+def _trace_texts(group: _TraceGroup) -> dict[str, str]:
+    """The Trace card wording a group shows: its graph row, or its honesty markers.
+
+    Read through the Trace's own report door, so the group adds no import edge.
+    """
+
+    name, trace = type(group).__name__, group._trace
+    if name == "TraceGraph":
+        return {"graph": dict(trace._repr_card_rows()).get("graph", "graph unavailable")}
+    if name == "TraceHealth":
+        return {"health": trace._repr_honesty_suffix()}
+    return {}
 
 
 class _TraceGroup:
@@ -22,11 +39,17 @@ class _TraceGroup:
 
         self._trace = trace
 
+    @display_guard
     def __repr__(self) -> str:
-        """Name the group and its Trace."""
+        """Use the Trace card's stored-fact wording, read through the Trace's own door."""
 
-        label = getattr(self._trace, "name", None)
-        return f"<{type(self).__name__} of Trace {label!r}>"
+        return group_repr(self, _trace_texts(self))
+
+    @display_guard
+    def __str__(self) -> str:
+        """Show a short concern card and its existing detail attributes."""
+
+        return group_str(self, _trace_texts(self))
 
     def __dir__(self) -> list[str]:
         """List the group's public members."""
@@ -35,7 +58,14 @@ class _TraceGroup:
 
 
 class TraceCost(_TraceGroup):
-    """Compute, memory and timing totals of a Trace."""
+    """Compute, memory and timing totals of a Trace.
+
+    Examples
+    --------
+    >>> cost = tl.trace(model, x).cost
+    >>> type(cost).__name__, isinstance(cost.forward_duration, tl.types.Duration)
+    ('TraceCost', True)
+    """
 
     __slots__ = ()
 
@@ -206,7 +236,14 @@ class TraceCost(_TraceGroup):
 
 
 class TraceGraph(_TraceGroup):
-    """Graph-shape facts of a Trace: edges, degrees, branching and conditionals."""
+    """Graph-shape facts of a Trace: edges, degrees, branching and conditionals.
+
+    Examples
+    --------
+    >>> graph = tl.trace(model, x).graph
+    >>> type(graph).__name__, graph.is_branching, graph.is_recurrent
+    ('TraceGraph', False, False)
+    """
 
     __slots__ = ()
 
@@ -365,9 +402,28 @@ class TraceGraph(_TraceGroup):
 
 
 class TraceAutograd(_TraceGroup):
-    """Backward-pass records and grad_fn facts of a Trace."""
+    """Backward-pass records and grad_fn facts of a Trace, and its autograd interception switch.
+
+    Examples
+    --------
+    >>> autograd = tl.trace(model, x).autograd
+    >>> type(autograd).__name__, autograd.has_backward_pass
+    ('TraceAutograd', False)
+    """
 
     __slots__ = ()
+
+    def disarm(self) -> None:
+        """Detach this Trace from global autograd backward interception.
+
+        Returns
+        -------
+        None
+            Future plain ``loss.backward()`` or ``torch.autograd.*`` calls will
+            not record into this Trace.
+        """
+
+        self._trace._disarm_autograd()
 
     @property
     def backward_passes(self) -> Any:
@@ -470,7 +526,14 @@ class TraceAutograd(_TraceGroup):
 
 
 class TraceProvenance(_TraceGroup):
-    """How, when and from what this Trace was captured."""
+    """How, when and from what this Trace was captured.
+
+    Examples
+    --------
+    >>> provenance = tl.trace(model, x).provenance
+    >>> type(provenance).__name__, provenance.backend
+    ('TraceProvenance', 'torch')
+    """
 
     __slots__ = ()
 
@@ -565,7 +628,11 @@ class TraceProvenance(_TraceGroup):
 
     @property
     def fingerprint(self) -> Any:
-        """hash of captured topology + shape-relevant structure."""
+        """Address-free hash of captured topology and shape-relevant structure.
+
+        Equal to ``tl.fingerprint.trace(trace)``: module addresses do not
+        contribute, so renaming a submodule leaves the fingerprint unchanged.
+        """
 
         return self._trace._provenance_fingerprint
 

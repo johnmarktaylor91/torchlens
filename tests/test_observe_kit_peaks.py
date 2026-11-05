@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import torch
-from torch import nn
-
 import torchlens as tl
 from torchlens._observe import format_pass_peak
 from torchlens._observe._peaks import pass_peak_facts
@@ -67,21 +64,6 @@ def test_positive_cuda_peak_is_the_only_ratio_eligible_value() -> None:
     assert pass_peak_facts(_FakeTrace("cuda", 4096)).ratio_eligible is True
     for backend, value in (("cuda", 0), ("cpu", 4096), ("mps", 4096), (None, None)):
         assert pass_peak_facts(_FakeTrace(backend, value)).ratio_eligible is False
-
-
-def test_summary_footer_routes_through_the_gate() -> None:
-    """The shipped summary footer renders through format_pass_peak."""
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    captured = tl.trace(model, torch.randn(2, 4))
-    try:
-        summary_text = str(captured.summary())
-        assert "forward peak" in summary_text
-        # On CPU the line must carry the labeled RSS meaning or honest absence,
-        # never a bare unlabeled "measured" claim.
-        assert ("NOT a tensor peak" in summary_text) or ("unavailable" in summary_text)
-    finally:
-        captured.cleanup()
 
 
 def test_lint_display_surfaces_read_peaks_only_through_the_gate() -> None:

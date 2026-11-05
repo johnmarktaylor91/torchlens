@@ -32,8 +32,8 @@ def _accumulate_grad_fn_site_record(
     entry["grad_fn_labels"].append(grad_fn_record.label)
     for call_index, call in grad_fn_record.calls.items():
         entry["fire_count"] += 1
-        if call.backward_pass_index is not None:
-            entry["pass_coverage"].add(int(call.backward_pass_index))
+        if call.backward_pass_number is not None:
+            entry["pass_coverage"].add(int(call.backward_pass_number))
         span = (
             fire_timings.get(f"{grad_fn_record.label}:{call_index}")
             if fire_timings is not None

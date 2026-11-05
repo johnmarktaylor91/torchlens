@@ -144,7 +144,14 @@ SENTINELS: tuple[Sentinel, ...] = (
                 intervene="zero_relu",
                 kwargs={"intervention_mode": "as_node"},
             ),
-            _panel("b", "ResidualNorm", "render_surgery", call="surgery", capture=_EDIT),
+            _panel(
+                "b",
+                "ResidualNorm",
+                'draw(highlight="interventions")',
+                call="surgery",
+                capture=_EDIT,
+                kwargs={"highlight": "interventions"},
+            ),
             _panel(
                 "c", "ResidualNorm", "surgery_diff(...).draw()", call="surgery_diff", capture=_EDIT
             ),
@@ -156,7 +163,7 @@ SENTINELS: tuple[Sentinel, ...] = (
         ("ResidualNorm",),
         "The bundle graph and the bundle diff of clean, intervened and successor traces.",
         (
-            _panel("a", "ResidualNorm", "show_bundle_graph", call="bundle_graph", capture=_EDIT),
+            _panel("a", "ResidualNorm", "bundle.draw", call="bundle_graph", capture=_EDIT),
             _panel("b", "ResidualNorm", "bundle_diff", call="bundle_diff", capture=_EDIT),
         ),
         pending_parts={"relation page": "the bundle relation page (11.30) is not built yet"},
@@ -172,7 +179,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "Grad",
                 'draw(graph="backward")',
                 capture=_GRAD,
-                prep="log_backward",
+                prep="backward",
                 kwargs={"graph": "backward"},
             ),
             _panel(
@@ -180,7 +187,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "Grad",
                 'draw(graph="combined")',
                 capture=_GRAD,
-                prep="log_backward",
+                prep="backward",
                 kwargs={"graph": "combined"},
             ),
             _panel(
@@ -212,7 +219,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "Nonfinite",
                 'lens "debug"',
                 call="lens",
-                capture={"module_filter": "@unsaved_abs"},
+                capture={"save": "@unsaved_abs"},
                 kwargs={"lens": "debug"},
             ),
         ),

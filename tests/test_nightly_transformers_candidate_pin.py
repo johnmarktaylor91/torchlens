@@ -73,10 +73,6 @@ def _job_block(workflow_text: str, job_id: str) -> str:
     return match.group(1)
 
 
-@pytest.mark.smoke_cells(
-    "test_broad_selection_nightly_jobs_pin_transformers_to_the_candidate_leg[tier]",
-    "test_broad_selection_nightly_jobs_pin_transformers_to_the_candidate_leg[coverage]",
-)
 @pytest.mark.parametrize("job_id", JOBS_RUNNING_R0_BROAD_SELECTION)
 def test_broad_selection_nightly_jobs_pin_transformers_to_the_candidate_leg(job_id: str) -> None:
     text = NIGHTLY.read_text()

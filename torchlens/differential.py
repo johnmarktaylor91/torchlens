@@ -62,6 +62,17 @@ class DiffRow:
     one-sided row carries only its own side's label). ``verdict`` is the
     guarded join's verdict where a join was attempted; ``max_abs_delta`` is
     populated only on value rows (``zero`` / ``changed``).
+
+    Examples
+    --------
+    >>> subject = tl.trace(model, x + 1.0)
+    >>> reference = tl.trace(model, x)
+    >>> report = tl.differential.diff(subject, reference)
+    >>> row = report.rows[0]
+    >>> type(row).__name__
+    'DiffRow'
+    >>> isinstance(row.site_key, str)
+    True
     """
 
     site_key: str
@@ -76,7 +87,20 @@ class DiffRow:
 
 @dataclass(frozen=True)
 class DiffReport:
-    """The settled two-capture differential: rows plus honest totals."""
+    """The settled two-capture differential: rows plus honest totals.
+
+    Examples
+    --------
+    >>> subject = tl.trace(model, x + 1.0)
+    >>> reference = tl.trace(model, x)
+    >>> report = tl.differential.diff(subject, reference)
+    >>> type(report).__name__
+    'DiffReport'
+    >>> len(report.rows) > 0
+    True
+    >>> report.rows_with_status("added")
+    ()
+    """
 
     rows: tuple[DiffRow, ...]
     counts: dict[str, int] = field(default_factory=dict)
@@ -247,6 +271,16 @@ def diff(subject: Any, reference: Any) -> DiffReport:
         either capture predates structural site keys — the projection's
         pairing authority is the guarded join, and a keyless capture has
         nothing sound to join on.
+
+    Examples
+    --------
+    >>> subject = tl.trace(model, x + 1.0)
+    >>> reference = tl.trace(model, x)
+    >>> report = tl.differential.diff(subject, reference)
+    >>> len(report.rows) > 0
+    True
+    >>> report.counts.get("added", 0)
+    0
     """
 
     if subject is reference:

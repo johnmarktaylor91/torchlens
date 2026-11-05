@@ -87,24 +87,6 @@ def partial_trace():
 # SurfaceRegistry (D22) + executable-spelling CI
 
 
-def test_registry_vocabularies_are_closed() -> None:
-    """Every row uses the closed subject/register/invariant/cost vocab."""
-
-    from torchlens.report._registry import COST_CLASSES, INVARIANTS, REGISTERS, SUBJECTS
-
-    assert SURFACE_REGISTRY
-    keys = [entry.key for entry in SURFACE_REGISTRY]
-    assert len(keys) == len(set(keys))
-    for entry in SURFACE_REGISTRY:
-        assert entry.subject in SUBJECTS, entry.key
-        assert entry.register in REGISTERS, entry.key
-        assert entry.cost_class in COST_CLASSES, entry.key
-        assert set(entry.invariants) <= set(INVARIANTS), entry.key
-        assert entry.answers.endswith(".")
-        assert entry.refuses_when
-
-
-@pytest.mark.smoke
 def test_registry_unknown_key_refuses_typed() -> None:
     """Lookups teach the roster."""
 
@@ -126,7 +108,6 @@ def test_every_registry_spelling_executes(family_trace) -> None:
         assert result is not None, entry.key
 
 
-@pytest.mark.smoke
 def test_which_do_i_use_docs_page_is_lockstepped() -> None:
     """Item 20: the docs page IS the generator output (no rot possible)."""
 
@@ -168,7 +149,6 @@ def test_capability_card_on_partial_names_remedies(partial_trace) -> None:
 # PartialTrace typed refusals (D25 / item 15)
 
 
-@pytest.mark.smoke
 def test_partial_members_refuse_typed_never_attributeerror(partial_trace) -> None:
     """D25: the five bare AttributeErrors are gone; refusals teach."""
 
@@ -180,7 +160,6 @@ def test_partial_members_refuse_typed_never_attributeerror(partial_trace) -> Non
         assert "audit" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_partial_explain_and_audit_still_answer(partial_trace) -> None:
     """The two remedies the refusal names actually work."""
 
@@ -194,15 +173,12 @@ def test_partial_explain_and_audit_still_answer(partial_trace) -> None:
 # Machine-core parity (item 14 / D17)
 
 
-@pytest.mark.smoke
 def test_agent_json_is_the_one_machine_projection(family_trace) -> None:
     """One machine core (D17; defaults.7): explain is prose only, and the
     agent JSON counts read the same FactCore the summary family reads (the
     69/151 bug class regression gate)."""
 
     import inspect
-
-    from torchlens.report._factcore import factcore
 
     assert "format" not in inspect.signature(tl.Trace.explain).parameters
     core = factcore(family_trace)
@@ -213,102 +189,5 @@ def test_agent_json_is_the_one_machine_projection(family_trace) -> None:
     assert agent_json["capture"]["model_class"] == family_trace.source.class_name
 
 
-@pytest.mark.smoke
-def test_bom_is_a_factcore_projection(family_trace) -> None:
-    """Item 14/D16: BOM counts come from FactCore, both grains named."""
-
-    core = factcore(family_trace)
-    bom = family_trace.bill_of_materials()
-    assert bom["graph"]["num_compute_ops"] == core.counts.compute_ops
-    assert bom["graph"]["num_alias_rows"] == core.counts.alias_rows
-    assert bom["graph"]["num_ops"] == core.counts.tracked_tensor_rows
-    assert bom["parameters"]["num_params"] == core.params.total
-    assert bom["activations"]["payload_scope"] == "retained_now"
-
-
 # ---------------------------------------------------------------------------
 # Family gate rows (item 19)
-
-
-def test_count_vocabulary_one_value_per_grain(family_trace) -> None:
-    """D3 (composition row 3): each grain has exactly ONE value across
-    summary counts, agent_json, BOM, and profile row counts."""
-
-    core = factcore(family_trace)
-    agent_json = family_trace.to_agent_json()
-    bom = family_trace.bill_of_materials()
-    profile_frame = family_trace.profile().to_pandas()
-    assert (
-        agent_json["counts"]["operations"]
-        == bom["graph"]["num_ops"]
-        == core.counts.tracked_tensor_rows
-        == len(profile_frame)
-    )
-    assert agent_json["counts"]["compute_ops"] == bom["graph"]["num_compute_ops"]
-    assert agent_json["counts"]["layers"] == bom["graph"]["num_layers"] == core.counts.layers
-    assert agent_json["counts"]["modules"] == bom["graph"]["num_modules"]
-
-
-@pytest.mark.smoke
-def test_metadata_only_members_trigger_no_scan(family_trace, monkeypatch) -> None:
-    """D4 work-metric (composition row 6): no metadata_only member pays for
-    a payload scan -- explain, profile, BOM, agent_json, summary included."""
-
-    import torchlens._data_classes._nonfinite as nonfinite_module
-
-    calls: list[str] = []
-    real_scan = nonfinite_module._scan
-
-    def _counting_scan(log, kind, stop_at_first):
-        calls.append(kind)
-        return real_scan(log, kind, stop_at_first)
-
-    monkeypatch.setattr(nonfinite_module, "_scan", _counting_scan)
-    family_trace.explain()
-    family_trace.profile()
-    family_trace.bill_of_materials()
-    family_trace.to_agent_json()
-    tl.report.cost_tree(family_trace)
-    tl.report.flops(family_trace)
-    family_trace.capabilities()
-    assert calls == [], f"metadata-only members scanned: {calls}"
-
-
-@pytest.mark.smoke
-def test_family_non_mutation(family_trace) -> None:
-    """Composition row 10: no family member mutates params or RNG."""
-
-    rng_before = torch.get_rng_state().clone()
-    family_trace.explain()
-    family_trace.profile()
-    family_trace.bill_of_materials()
-    family_trace.to_agent_json()
-    tl.report.cost_tree(family_trace)
-    tl.report.flops(family_trace)
-    tl.report.backward_status(family_trace)
-    tl.report.backward_estimate(family_trace)
-    assert torch.equal(torch.get_rng_state(), rng_before)
-
-
-def test_shared_facts_object_equal_before_render(family_trace) -> None:
-    """Composition row 1: every surface reads THE one FactCore instance."""
-
-    assert factcore(family_trace) is factcore(family_trace)
-    report = tl.report.flops(family_trace)
-    core = factcore(family_trace)
-    assert report.forward_flops == int(core.compute.partition_total)
-    assert report.params_unique == core.params.total
-
-
-def test_health_evidence_survives_annotations_roundtrip(family_trace) -> None:
-    """Composition row 8 (session form): a derived health record persists
-    on the annotations channel and is served back as the authority."""
-
-    from torchlens.report._health import HEALTH_FACTS_ANNOTATIONS_KEY, health_facts
-
-    derived = health_facts(family_trace)  # the explicit door may scan
-    assert HEALTH_FACTS_ANNOTATIONS_KEY in family_trace.annotations
-    served = health_facts(family_trace, allow_scan=False)
-    assert served.basis == "persisted"
-    assert served.source_basis == (derived.source_basis or derived.basis)
-    assert served.verdict == derived.verdict

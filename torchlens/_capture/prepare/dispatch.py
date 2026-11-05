@@ -13,6 +13,7 @@ from ..._data_classes.trace import (
     Trace,
 )
 from ..._deprecations import MISSING, MissingType
+from ..._input_coerce import _materialize_image_paths
 from ..._literals import (
     OutputDeviceLiteral,
 )
@@ -34,9 +35,11 @@ from ..._user_funcs_guards import (
     _reject_unrouted_jax_options,
     _trace_option_refusal_code,
 )
+from ...backends._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from ...backends._options import (
     MLX_EXTRA_KWARG_POLICY,
     TRACE_OPTION_CAPABILITY_GATES,
+    pop_stop_directive,
     reject_extra_trace_kwargs,
 )
 from ...backends._trace_options import _CONTROL_FLOW
@@ -96,7 +99,6 @@ def _trace_mlx_model(
     visualization: VisualizationOptions | None,
     backward_ready: bool | MissingType,
     name: str | None | MissingType,
-    module_filter: Callable[[Any], bool] | None | MissingType,
     module_identity_mode: str | None | MissingType,
     grad_options: Any | None | MissingType,
     verbose: bool | MissingType,
@@ -153,7 +155,6 @@ def _trace_mlx_model(
         name=name,
         cache=MISSING,
         cache_dir=MISSING,
-        module_filter=module_filter,
         module_identity_mode=module_identity_mode,
     )
     save_options = (
@@ -187,12 +188,12 @@ def _trace_mlx_model(
     if capture_options.input_transform is not None:
         raw_input = input_args
         transformed_input = capture_options.input_transform(input_args)
+        # As on the torch door: the caller's ``input_kwargs`` survive the transform.
         if isinstance(transformed_input, collections.abc.Mapping):
             model_input_args = []
-            model_input_kwargs = dict(transformed_input)
+            model_input_kwargs = {**dict(transformed_input), **(input_kwargs or {})}
         else:
             model_input_args = transformed_input
-            model_input_kwargs = None
     from ...backends.mlx import MLXBackend
 
     backend = MLXBackend()
@@ -200,7 +201,7 @@ def _trace_mlx_model(
         model,
         model_input_args,
         model_input_kwargs,
-        layers_to_save=capture_options._layers_to_save,
+        save=capture_options._layers_to_save,
         keep_orphans=capture_options.keep_orphans,
         output_device=capture_options.output_device,
         activation_transform=save_options.activation_transform,
@@ -217,7 +218,6 @@ def _trace_mlx_model(
         verbose=capture_options.verbose,
         backward_ready=capture_options.backward_ready,
         name=capture_options.name,
-        module_filter=capture_options.module_filter,
         transform=None,
         raw_input=raw_input,
         save_raw_input=capture_options.save_raw_input,
@@ -254,7 +254,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # Idempotent when the registry entry already resolved it; load-bearing for
     # direct/autoroute callers so the internal flat keys are honored, not dropped.
     # intervene=/halt= are DISPATCHED options on MLX (static-label live
-    # interventions); facets= is refused typed by the capture path below.
+    # interventions); facets= is snapshotted onto the finished trace below.
     # None of the three may flow through the capability-gated reject helper:
     # with interventions=True that would raise the never-dispatches
     # conformance error instead of running or refusing them properly.
@@ -273,7 +273,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
             "storage": kwargs["storage"],
             "inference_only": kwargs.get("inference_only", MISSING),
             "cache": kwargs.get("cache", MISSING),
-            "stop_after": kwargs.get("stop_after", MISSING),
             "on_nonfinite": (
                 kwargs["capture"].on_nonfinite if kwargs.get("capture") is not None else "ignore"
             ),
@@ -301,13 +300,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
             allowed=_MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS,
             backend_name="MLX",
         )
-    recipes_value = kwargs.get("facets", MISSING)
-    if recipes_value is not MISSING and recipes_value is not None:
-        raise BackendUnsupportedError(
-            "MLX backend supports interventions only through static-label "
-            "trace(intervene=tl.when(...)) predicates; recipe specs (facets=) "
-            "are not supported. Use the PyTorch backend for intervention recipes."
-        )
+    facet_recipes = pop_facet_recipes(dict(kwargs))
     # N5 fix: every name below except the genuine top-level ``trace()``
     # parameters (model, input_args, input_kwargs, capture, save,
     # grad_transform, grad_options, intervene, halt) moved into the grouped
@@ -320,7 +313,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # the grouped object's value, exactly like direct/internal callers who
     # still pass the flat spelling.
     activation_transform = kwargs.get("activation_transform", MISSING)
-    return _trace_mlx_model(
+    trace = _trace_mlx_model(
         kwargs["model"],
         kwargs["input_args"],
         kwargs["input_kwargs"],
@@ -329,7 +322,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         save_raw_input=kwargs.get("save_raw_input", MISSING),
         batch_render=kwargs.get("batch_render", MISSING),
         output_transform=kwargs.get("output_transform", MISSING),
-        save_transformed_output=kwargs.get("save_raw_output", MISSING),
+        save_transformed_output=kwargs.get("save_transformed_output", MISSING),
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
         keep_orphans=kwargs.get("keep_orphans", MISSING),
@@ -355,13 +348,14 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         visualization=None,
         backward_ready=kwargs.get("backward_ready", MISSING),
         name=kwargs.get("name", MISSING),
-        module_filter=kwargs.get("module_filter", MISSING),
         module_identity_mode=kwargs.get("module_identity_mode", MISSING),
         grad_options=kwargs["grad_options"],
         verbose=kwargs.get("verbose", MISSING),
         intervene=kwargs["intervene"],
-        halt=kwargs["halt"],
+        halt=pop_stop_directive(dict(kwargs)),
     )
+    attach_facet_recipes(trace, facet_recipes, backend_name="MLX")
+    return trace
 
 
 def _trace_option_explicit(option_name: str, public_trace_kwargs: dict[str, Any]) -> bool:
@@ -678,7 +672,10 @@ def _dispatch_trace(
     """
 
     model = public_trace_kwargs["model"]
-    input_args = public_trace_kwargs["input_args"]
+    # A path to an image file is opened here, before routing, so it reaches
+    # the image detectors as an image instead of the text path as a string.
+    input_args = _materialize_image_paths(model, public_trace_kwargs["input_args"])
+    public_trace_kwargs["input_args"] = input_args
     input_kwargs = public_trace_kwargs["input_kwargs"]
     chunk_size = public_trace_kwargs["chunk_size"]
     capture = public_trace_kwargs["capture"]

@@ -570,10 +570,13 @@ def _next_operation_hint(trace: Trace) -> str:
     if getattr(trace, "_has_direct_writes", False):
         return "direct writes present; replay() or rerun() will overlay recipe state"
     if getattr(trace, "_spec_revision", 0) != getattr(trace, "_out_recipe_revision", 0):
-        return "spec stale; call replay() or rerun() to propagate"
-    if not getattr(trace, "is_replayable", False):
-        return "not intervention-ready; recapture with replayable=True for replay templates"
-    return "ready for set(), attach_hooks(), do(), replay(), rerun(), or fork()"
+        return "spec stale; call push() or run(model, x) to propagate"
+    if not (
+        getattr(trace, "is_replayable", False)
+        or getattr(getattr(trace, "options", None), "save_arg_templates", False)
+    ):
+        return "not intervention-ready; no replay templates (pass model= and inputs= to do())"
+    return "ready for do(), run(), or fork()"
 
 
 def _rng_note_summary(trace: Trace) -> str:
@@ -644,7 +647,7 @@ def _combined_shape_str(trace: Trace, labels: Sequence[str]) -> str:
     shapes = []
     for label in labels:
         try:
-            shapes.append(_shape_str(getattr(trace[label], "shape", None)))
+            shapes.append(_shape_str(getattr(trace.layers[label], "shape", None)))
         except KeyError:
             continue
     if not shapes:

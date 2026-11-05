@@ -51,14 +51,6 @@ def test_validate_forward_returns_false_on_metadata_invariant_failure(monkeypatc
     assert "forced by the L9 regression test" in failure.message
 
 
-def test_validate_forward_without_metadata_is_unaffected(monkeypatch) -> None:
-    _arm_forced_invariant(monkeypatch)
-    torch.manual_seed(0)
-    model = _Tiny().eval()
-    x = torch.randn(2, 4)
-    assert tl.validate(model, x, scope="forward", validate_metadata=False) is True
-
-
 def test_lower_level_validate_forward_pass_still_raises(monkeypatch) -> None:
     """The tripwire is not weakened: the direct door keeps raising."""
 

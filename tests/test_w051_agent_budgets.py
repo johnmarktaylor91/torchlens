@@ -101,7 +101,6 @@ def test_dump_full_pages_and_accepts_max_tokens(realistic: Path) -> None:
     assert exc.value.fields["code"] == "agent_limit_invalid"
 
 
-@pytest.mark.smoke
 def test_budget_floor_keeps_the_capture_block(clean: Path) -> None:
     """The floor carries the honesty facts it claims to carry."""
 
@@ -114,7 +113,6 @@ def test_budget_floor_keeps_the_capture_block(clean: Path) -> None:
     assert rows_floor["data"] == {"budget_floor_exceeded": True}  # no capture block to carry
 
 
-@pytest.mark.smoke
 def test_explain_defaults_to_the_declared_budget(clean: Path) -> None:
     """explain's served default IS its declared default; honesty blocks ride the record."""
 
@@ -130,7 +128,6 @@ def test_explain_defaults_to_the_declared_budget(clean: Path) -> None:
     assert "Truncation" in tight["data"]["report"]
 
 
-@pytest.mark.smoke
 def test_backstop_disclosure_is_honest_on_non_paging_tools(clean: Path) -> None:
     """payload_stats does not page; its trimmed disclosure must not promise a continuation."""
 

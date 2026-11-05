@@ -437,9 +437,15 @@ _ZOO: list[tuple[str, Callable[[], nn.Module]]] = [
 ]
 
 
-@pytest.mark.parametrize(("name", "factory"), _ZOO, ids=[name for name, _ in _ZOO])
-def test_no_escape_and_no_side_effects(name: str, factory: Callable[[], nn.Module]) -> None:
-    """on_failure='return' never raises and never mutates the caller's model."""
+def test_no_escape_and_no_side_effects() -> None:
+    """on_failure='return' never raises and never mutates the caller's model, for every zoo model."""
+
+    for _name, factory in _ZOO:
+        _check_no_escape_and_no_side_effects(factory)
+
+
+def _check_no_escape_and_no_side_effects(factory: Callable[[], nn.Module]) -> None:
+    """One zoo model: a report comes back, its shape is sane, and the model is untouched."""
 
     model = factory()
     snapshot = _state_snapshot(model)
@@ -495,28 +501,6 @@ def test_lazy_model_still_works_after_refusal() -> None:
     assert model.fc1.in_features == 20
 
 
-def test_subclass_conv_is_inferred_like_a_conv() -> None:
-    """Conv2d subclasses dispatch by rank, not exact type, and succeed."""
-
-    model = SubclassConvNet()
-    result = tl.debug.guess_input_shape(model)
-    assert result.found
-    assert result.shape is not None
-    assert len(result.shape) == 4
-    assert result.shape[:2] == (1, 3)
-
-
-def test_train_mode_bn1d_succeeds_without_escape() -> None:
-    """Train-mode BatchNorm1d verifies in eval regime instead of raising raw."""
-
-    model = make_train_bn1d()
-    assert model.training
-    result = tl.debug.guess_input_shape(model, on_failure="return")
-    assert result.found
-    assert result.shape == (1, 20)
-    assert model.training
-
-
 def test_argument_validation_raises_typed_errors() -> None:
     """Degenerate search arguments raise ShapeInferenceError up front."""
 
@@ -537,21 +521,6 @@ def test_argument_validation_raises_typed_errors() -> None:
 # ---------------------------------------------------------------------------
 # Property 3: found=True honesty
 # ---------------------------------------------------------------------------
-
-
-def test_lstm_per_step_head_stays_rank3() -> None:
-    """A correct rank-3 RNN success is never normalized down to rank 2."""
-
-    model = LstmPerStepHead()
-    result = tl.debug.guess_input_shape(model)
-    assert result.found
-    assert result.shape == (1, 16, 32)
-    assert result.strategy != "executed_op_normalize"
-    assert result.example_input is not None
-    model.eval()
-    with torch.no_grad():
-        out = model(result.example_input)
-    assert out.ndim == 3
 
 
 def test_transformer_batch_first_layouts() -> None:

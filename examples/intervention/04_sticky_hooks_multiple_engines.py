@@ -2,8 +2,9 @@
 
 What this demonstrates
 ----------------------
-Attach a hook once, replay over the saved graph, then rerun the original model
-with the same active intervention spec.
+Stage the same sticky hook with ``do`` on two forks: without a model ``do``
+replays over the saved graph; with ``model=``/``inputs=`` it reruns the original
+model with the same active intervention spec.
 
 How to run
 ----------
@@ -42,15 +43,13 @@ def main() -> None:
     torch.manual_seed(4)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    clean = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    clean = tl.trace(model, x)
 
     replayed = clean.fork("replay")
-    replayed.attach_hooks(tl.func("relu"), tl.zero_ablate())
-    replayed.push()
+    replayed.do(tl.func("relu"), tl.zero_ablate())
 
     rerun = clean.fork("rerun")
-    rerun.attach_hooks(tl.func("relu"), tl.zero_ablate())
-    rerun.run(model, x)
+    rerun.do(tl.func("relu"), tl.zero_ablate(), model=model, inputs=x)
 
     assert torch.allclose(replayed.output_ops[-1].out, rerun.output_ops[-1].out)
     assert replayed.last_run_records()[-1].engine == "replay"

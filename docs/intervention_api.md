@@ -7,8 +7,11 @@ To apply one intervention to many forwards or a `generate()` loop, use `spec.bin
 (capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec)` (the
 model output is `recording.output`) when you need activations too, or rerun a steered trace with
 `trace.run(model, x)` (the guarded fast engine when the spec targets modules; see the glossary
-entry "Guarded fast rerun"). Recipe: "Steering many forwards / generation" in
-[agent-reference/common-patterns.md](agent-reference/common-patterns.md).
+entry "Guarded fast rerun"). `x`, like the `inputs` of `tl.record`, takes every input form
+`tl.trace` takes: a tensor, a positional list or tuple, and for a Hugging Face model a string,
+PIL image or modality dict (`{"text": ..., "image": ...}`), resolved with the model's own
+tokenizer or `AutoProcessor` exactly as the trace was. Which one to pick for a loop or for generation:
+[Performance: choosing a fast path](guides/fast_paths.md).
 
 ## Selectors
 
@@ -88,15 +91,15 @@ portable selector after discovery.
 
 ## Forward Helpers
 
-Forward helpers return `Edit` objects that can be passed to `set`,
-`attach_hooks`, `do`, live capture `hooks=...`, replay, or rerun.
+Forward helpers return `Edit` objects that can be passed to `do` (on the replay, rerun or
+set-only engine), or live capture `hooks=...`.
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
 | `tl.zero_ablate` | `zero_ablate(*, allow_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
-| `tl.mean_ablate` | `mean_ablate(source=None, *, dim, allow_shape_change=False)` | The one mean door; `dim` is required (`None` for every axis, else the axes). Portable for self and tensor sources; a population source is audit-only; the self mean couples the batch and blocks append. |
-| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
-| `tl.steer` | `steer(direction, strength=1.0, *, coef=None, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
+| `tl.mean_ablate` | `mean_ablate(source=None, *, dim, allow_shape_change=False)` | The one mean door; `dim` is required (`None` for every axis, the axes, or `"members"` for a population's elementwise member mean). Portable for self and tensor sources; a population source is audit-only; the self mean couples the batch and blocks append. |
+| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
+| `tl.steer` | `steer(direction, strength=1.0, *, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
 | `tl.scale` | `scale(factor, *, allow_shape_change=False)` | Portable built-in and append-compatible. |
 | `tl.clamp` | `clamp(*, low=None, high=None, allow_shape_change=False)` | Portable built-in and append-compatible. |
 | `tl.add_noise` | `add_noise(std, *, seed=None, allow_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
@@ -105,7 +108,7 @@ Forward helpers return `Edit` objects that can be passed to `set`,
 | `tl.splice_module` | `splice_module(module, *, input_route="in", output_route="out", allow_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
 
 The packaged SAE splice experiment, `torchlens.bridge.sae.splice(...)`
-(documented-unstable), composes `splice_module` with fork + push: it swaps a
+(documented-unstable), composes `splice_module` with fork + `do`: it swaps a
 duck-typed SAE's reconstruction (`encode`/`decode` pair; no SAE package
 required) back into the model at one site, replays downstream, and reports
 reconstruction fidelity plus output-level causal effect. The optional
@@ -129,11 +132,11 @@ There are no gradient-only helpers. The ordinary edits apply to whichever tensor
 | A callable `fn(grad, *, ctx)` | Receives the gradient; return a replacement or `None`. Audit-only when saved. |
 
 Edits that read recorded forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`,
-`tl.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
+`torchlens.intervention.helpers.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
 
 `trace.do(tl.grad(site), edit, model=model, inputs=x)` reruns the forward with the edit armed; the next
 `result.backward(loss)` applies it. `loss=lambda t: ...` (a callable of the returned trace) does both in
-one call. The audit row status is `"armed"` until a backward settles it. Without `model=` and `x=` (or
+one call. The audit row status is `"armed"` until a backward settles it. Without `model=` and `inputs=` (or
 `intervention=tl.options.InterventionOptions(engine="set_only")` to arm in place), `do` refuses
 `replay_gradient_edit_unsupported`.
 
@@ -222,19 +225,21 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 
 | Method | Use |
 | --- | --- |
-| `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
-| `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
-| `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
+| `log.do(site, value, intervention=tl.options.InterventionOptions(engine="set_only"))` | Record a one-shot tensor or callable replacement and mark the recipe stale, without propagating it. |
+| `log.do(site, edit)` | The one editing verb: stage the edit (a value sets, a hook or helper attaches as a sticky rule) and propagate it. Without `model=`/`inputs=` the replay engine propagates over the saved DAG without calling `model.forward`; with both, the rerun engine re-executes the model; `engine="set_only"` stages without propagating (a hook or helper stays a sticky hook under it). |
+| `log.do({site_a: edit_a, site_b: edit_b})` | Apply several edits in one propagation. |
+| `log.do(site, edit, intervention=InterventionOptions(differentiable=True))` | Replay onto a new fork whose outputs stay differentiable and return it (replay engine only). |
+| `log.clear_edits(site)` | Remove the sticky hooks staged at `site` (or by handle id with `log.clear_edits(handle=...)`); `do` returns the trace, not a handle. Removal takes effect at once, like a torch hook handle: a rerun or backward pass in progress skips the removed hooks from the next hook site it reaches, and the site firing at that moment finishes its queued hooks first. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
-| `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
 | `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
 | `log.save_intervention(path, level=...)` | Write a `.tlspec/` intervention recipe. |
+| `recipe.save(path, level=...)` | Write an authored `tl.Recipe` on its own (`kind: "recipe"`); `tl.load(path)` returns the Recipe. |
 
 There are two distinct intervention paths, and they do not mix implicitly:
 (1) edit a SAVED value and push the effect downstream on the captured DAG
-(`do()` on a resolved selection, `push_from`, direct writes), and (2)
+(`do()` on a site or a resolved selection, direct writes), and (2)
 intervene on a FRESH execution (`do(..., model=..., inputs=..., intervention=InterventionOptions(engine="rerun"))`
-or a new capture with `intervene=...`). A new-input `run(inputs=...)` on a
+or a new capture with `intervene=...`). A new-input `run_transaction(inputs=...)` on a
 trace carrying path-1 value-edits is a fresh execution — the edits do NOT
 apply to it, and TorchLens discloses that at the run door with
 `PendingValueEditsWarning` (documented-unstable spelling) rather than
@@ -259,15 +264,15 @@ pass `intervention=tl.options.InterventionOptions(engine="replay")`. Leaf sites
 The two engines differ sharply in cost when you sweep many edits over one
 captured input. On the 144-head ablation sweep of a 12-layer, 12-head GPT-2
 configuration (585 captured ops; `benchmarks/head_sweep_engine_cost.py`), the
-push engine (`engine="replay"`) took about 2.1 minutes for all 144 heads
+replay engine (`engine="replay"`) took about 2.1 minutes for all 144 heads
 (129 s and 125 s in two runs; median 0.60-0.62 s per head) and the rerun
 engine (`engine="rerun"`) about 34 minutes (2052 s and 2008 s; median
 13.5-13.7 s per head), on CPU with four torch threads (torch 2.13) on a shared
 32-core x86-64 Linux host. Both engines produce bitwise-identical ablated
 traces on all 144 heads, so the difference is cost only. A rerun re-executes
 every captured op, and from an intervention-ready source it also runs under
-the host RNG monitor, so its cost is the same for every site; push cost grows
-with the edited site's downstream cone. Prefer push for many edits on one
+the host RNG monitor, so its cost is the same for every site; replay cost grows
+with the edited site's downstream cone. Prefer replay for many edits on one
 captured input, and use rerun when the edit must see a fresh execution.
 A rerun from an intervention-ready source also snapshots the model state
 before its forward pass, as every intervention-ready capture does; each state
@@ -278,7 +283,7 @@ in-place weight edit, say) is cloned afresh. Every edit on either engine
 starts with `trace.fork()`, whose cost is fixed by the size of the trace, not
 by the edit: on this 585-op trace a fork takes about 0.08-0.09 s and makes
 about 419,000 Python calls (about 580,000 before its label tables were copied
-directly), which is the floor under the fastest push edits. A rerun that
+directly), which is the floor under the fastest replay edits. A rerun that
 refreshes its fork in place releases the capture it discarded before it
 returns, so a fork made right after a rerun costs the same as any other
 (about 420,000 calls; about 1.25 million before, when that capture's cleanup
@@ -286,7 +291,7 @@ ran inside whatever came next, typically the next fork).
 
 `Trace.draw(intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
-`log.set(...)` or `log.do(...)`. Each edited node gets a purple ring and a
+`log.do(...)`. Each edited node gets a purple ring and a
 last row naming the edit (`Δ zero_ablate`), and the header names the edits;
 `show_cone=True` (off by default) adds a translucent purple underlay
 under the arrows and node outlines the edit changed downstream. Capture-time `intervene=...` calls record
@@ -320,10 +325,19 @@ inserted edit op still meets its counterpart. A site that only some members have
 
 Relationship gates are intentional, and they check two predicates separately:
 a model-axis floor (`node` needs `same_param_shapes`; comparison reads need
-`shared_graph`) and, for comparison reads, VALUE-LEVEL input identity derived
-from retained input payloads. An identity relationship is never accepted as
-proof of input equality, unprovable input identity refuses fail-closed
-(`bundle_gate_input_identity_unproven`), and members joined by an ordering
+`shared_graph`) and, for comparison reads, SITE LINE-UP. Runs on different
+inputs or checkpoints compare (clean vs. patched, two prompts, two weight
+states) whenever their graphs line up: the pair either captured the same input
+VALUES (derived from retained input payloads) or has equal graph-shape hashes.
+A pair on different inputs whose graphs differ (data-dependent control flow
+took another branch) refuses `bundle_gate_input_values_differ`; with no input
+payloads to prove identity and graphs that differ it refuses
+`bundle_gate_input_identity_unproven`. An identity relationship is never
+accepted as proof of input equality or of line-up. Inputs of different shapes
+(prompts of different token counts) refuse one of two ways: when their graphs
+still line up, at the first site whose shapes differ (`metric_shape_mismatch`,
+naming the site); when the length changed the graph (GPT-2 does), with
+`bundle_gate_input_values_differ`, whose message names both input shapes. Members joined by an ordering
 relation (`successor_of`/`forked_from`/`escalates`) are not comparison
 operands regardless of rank (`bundle_gate_ordering_topology`). Pair-scoped
 reads (`compare(a, b)`, `most_changed` baseline pairs) gate only the

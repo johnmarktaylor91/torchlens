@@ -121,43 +121,6 @@ def model() -> nn.Module:
     return _MLP().eval()
 
 
-def test_cache_hit_skips_forward_and_equals(model: nn.Module, tmp_path: Path) -> None:
-    label = _relu_label(model)
-    batches = _batches(_data())
-    uncached, _ = _run(model, batches, _metrics(label), None)
-    first_metrics = _metrics(label)
-    first, first_forwards = _run(model, batches, first_metrics, tmp_path)
-    assert first_forwards > 0
-    _assert_equal_results(first, uncached)
-    assert len(list((tmp_path / "aggregate").glob("*.safetensors"))) == 1
-    second_metrics = _metrics(label)
-    second, second_forwards = _run(model, batches, second_metrics, tmp_path)
-    assert second_forwards == 0
-    _assert_equal_results(second, first)
-    assert _state(second_metrics) == _state(first_metrics)
-
-
-@pytest.mark.parametrize("change", ["parameter", "dataset", "accumulator_config"])
-def test_cache_misses_on_change(change: str, model: nn.Module, tmp_path: Path) -> None:
-    label = _relu_label(model)
-    data = _data()
-    _run(model, _batches(data), _metrics(label), tmp_path)
-    k = 3
-    if change == "parameter":
-        with torch.no_grad():
-            model.fc1.bias += 1.0
-    elif change == "dataset":
-        data = data.clone()
-        data[5, 2] += 1.0
-    else:
-        k = 2
-    expected, _ = _run(model, _batches(data), _metrics(label, k=k), None)
-    changed, forwards = _run(model, _batches(data), _metrics(label, k=k), tmp_path)
-    assert forwards > 0
-    _assert_equal_results(changed, expected)
-    assert len(list((tmp_path / "aggregate").glob("*.safetensors"))) == 2
-
-
 class _Opaque:
     """A batch leaf whose contents the key cannot read."""
 

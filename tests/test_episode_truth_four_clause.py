@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from collections import Counter
 
-import pytest
 import torch
 import torch.nn as nn
 from torch.utils._python_dispatch import TorchDispatchMode
@@ -148,7 +147,6 @@ def test_settlement_cost_is_exactly_the_priced_dispatcher_reads():
     assert counter.counts["aten.view.default"] == N_STEPS
 
 
-@pytest.mark.smoke
 def test_step_join_claim_is_per_artifact_never_the_build_switch():
     """F40c flipped the claim-off switch WITH the measurement behind it; the
     honesty invariant survives per-artifact: an artifact without a measured

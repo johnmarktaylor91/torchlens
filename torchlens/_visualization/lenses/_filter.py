@@ -159,6 +159,21 @@ def _token_predicate(token: str) -> Callable[[Any], bool]:
     )
 
 
+#: Where ``Selection`` and ``Selector`` are defined. The lens layer identifies
+#: them by class, not by import: the selection package reaches the records,
+#: and the records reach this layer through ``Trace.draw(highlight=...)``.
+_SELECTION_MODULE = __name__.partition("._visualization")[0] + "._selection.selection"
+
+
+def _is_selection_class(value: Any, class_name: str) -> bool:
+    """Return whether ``value`` is an instance of the named selection class."""
+
+    return any(
+        cls.__name__ == class_name and cls.__module__ == _SELECTION_MODULE
+        for cls in type(value).__mro__
+    )
+
+
 def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
     """Resolve a Selection operand to its Site rows on this trace.
 
@@ -166,11 +181,9 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
     (``align_to``) is the one explicit door for cross-trace reuse.
     """
 
-    from torchlens._selection.selection import Selection, Selector
-
-    if isinstance(selection, Selection):
+    if _is_selection_class(selection, "Selection"):
         resolved: Any = selection
-    elif isinstance(selection, Selector):
+    elif _is_selection_class(selection, "Selector"):
         resolved = selection._resolve(trace)
     elif hasattr(selection, "__selection__"):
         resolved = selection.__selection__()._resolve(trace)
@@ -185,7 +198,7 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
             remedy="pass the unresolved Selection, or align_to(this_trace) first",
             argument="display_filter",
         )
-    if isinstance(resolved, Selection):
+    if _is_selection_class(resolved, "Selection"):
         return tuple(resolved)
     return tuple(getattr(resolved, "entries", ()))
 

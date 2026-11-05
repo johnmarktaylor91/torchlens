@@ -167,6 +167,12 @@ def verify_membership_lineages(
     that the ranks PRESENT cannot be proven to describe the same communicator
     lineage. The remedy a conflict names is arming before any group creation
     (``torchlens.distributed.arm``).
+
+    Examples
+    --------
+    >>> verified = tl.distributed.verify_membership_lineages({})
+    >>> type(verified).__name__, len(verified)
+    ('dict', 0)
     """
 
     per_membership: dict[str, dict[int, LineageVector]] = {}

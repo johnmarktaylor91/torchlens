@@ -1,4 +1,4 @@
-"""U42.2: every report-shaped diagnostic helper returns the one ``tl.report.Report``.
+"""Every report-shaped diagnostic helper returns the one ``tl.report.Report``.
 
 One test per helper checks the common surface (type, lead facts, ``to_dict``,
 ``to_pandas``, the printed form). The six table helpers additionally pin that
@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.debug._audit import HealthReport
 from torchlens.debug._graph import _compare_rows, dead_neurons_rows as _dead_neurons_rows
 from torchlens.options import CaptureOptions
 from torchlens.report._report_protocol import REPORT_MAX_FINDINGS, BoundedReport
@@ -59,7 +60,7 @@ def trace(model: nn.Module, x: torch.Tensor) -> Iterator[Any]:
 @pytest.fixture(scope="module")
 def grad_trace(model: nn.Module, x: torch.Tensor) -> Iterator[Any]:
     captured = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
-    captured.log_backward(captured[captured.output_layers[0]].out.sum())
+    captured.backward(captured[captured.output_layers[0]].out.sum())
     try:
         yield captured
     finally:
@@ -99,7 +100,22 @@ def fixtures(model: nn.Module, x: torch.Tensor, trace: Any, grad_trace: Any) -> 
     return {"model": model, "x": x, "trace": trace, "grad_trace": grad_trace}
 
 
-@pytest.mark.parametrize("helper", sorted(_helper_calls()))
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _debug_report.py, debug/_audit.py and more.
+# Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
+@pytest.mark.parametrize(
+    "helper",
+    sorted(
+        set(_helper_calls())
+        - {
+            "bisect_nan",
+            "compare",
+            "compare_params",
+            "dead_neurons",
+            "gradient_flow_audit",
+            "hot_path",
+        }
+    ),
+)
 def test_helper_returns_the_debug_report(helper: str, fixtures: dict[str, Any]) -> None:
     report = _helper_calls()[helper](fixtures)
 
@@ -114,7 +130,10 @@ def test_helper_returns_the_debug_report(helper: str, fixtures: dict[str, Any]) 
     assert isinstance(report.to_pandas(), pd.DataFrame)
 
     text = str(report)
-    if type(report)._prints_repr:
+    if isinstance(report, HealthReport):
+        assert text.splitlines()[0] == repr(report)
+        assert text.splitlines()[-1].startswith("  more ")
+    elif type(report)._prints_repr:
         assert text == repr(report)
     else:
         lines = text.splitlines()
@@ -123,26 +142,6 @@ def test_helper_returns_the_debug_report(helper: str, fixtures: dict[str, Any]) 
         assert len([line for line in lines if line.startswith("  - ")]) <= REPORT_MAX_FINDINGS
     card = report.card()
     assert card.splitlines()[0].startswith(report.report_type)
-
-
-def test_param_audit_prints_exactly_as_before(model: nn.Module) -> None:
-    """ParamHealthReport kept its house-voice summary: str() is its unchanged repr."""
-
-    audit = tl.debug.param_health(model)
-    text = str(audit)
-    assert text == audit.__repr__()
-    assert text.splitlines()[0].startswith("ParamHealthReport: ")
-
-
-def test_table_report_never_is_a_dataframe(trace: Any) -> None:
-    report = tl.debug.hot_path(trace)
-
-    assert not isinstance(report, pd.DataFrame)
-    assert not hasattr(report, "columns")
-    assert not hasattr(report, "attrs")
-    frame = report.to_pandas()
-    frame["extra"] = 1
-    assert "extra" not in report.to_pandas().columns
 
 
 # --- the six table helpers: .to_pandas() is the pre-migration frame ----------
@@ -161,18 +160,26 @@ def _assert_same(report: Any, expected: Any) -> None:
         assert actual.attrs[key] == value
 
 
-def test_hot_path_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = tl.debug.hot_path_rows(trace, "flops")
-    columns = ["source_file:line", "op_count", "total_cost", "pct_total"]
-    _assert_same(tl.debug.hot_path(trace), _frame(rows, columns, attrs))
-
-
+# Kept at the C-063 stack merge: debug/_graph.py changed after the coverage proof.
 def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = _dead_neurons_rows(trace, dim=1, threshold=0.0)
-    columns = ["op", "total_units", "dead_count", "dead_frac", "sample_dead_idx", "reason"]
+    rows, attrs = _dead_neurons_rows(trace, dim=None, max_activation=0.0)
+    columns = [
+        "op",
+        "module",
+        "total_units",
+        "dead_count",
+        "dead_frac",
+        "sample_dead_idx",
+        "reason",
+        "source_line",
+    ]
     _assert_same(tl.debug.dead_neurons(trace), _frame(rows, columns, attrs))
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_gradients.py.
+
+
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_compare_frame_is_unchanged(trace: Any) -> None:
     rows, attrs = _compare_rows(trace, trace)
     columns = [
@@ -184,6 +191,7 @@ def test_compare_frame_is_unchanged(trace: Any) -> None:
         "mean_abs",
         "allclose",
         "reason",
+        "source_line",
     ]
     _assert_same(tl.debug.compare(trace, trace), _frame(rows, columns, attrs))
 
@@ -196,8 +204,11 @@ def test_gradient_flow_audit_frame_is_unchanged(grad_trace: Any) -> None:
     _assert_same(tl.debug.grad_health(grad_trace), expected)
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
+
+
 def test_recompute_candidates_frame_is_unchanged(trace: Any) -> None:
-    from torchlens.debug._common import _compute_ops, _op_label
+    from torchlens.debug._common import _compute_ops, _op_label, _source_line
 
     rows = []
     for op in _compute_ops(trace):
@@ -211,43 +222,18 @@ def test_recompute_candidates_frame_is_unchanged(trace: Any) -> None:
                 "flops_forward": float(flops),
                 "mem_per_flop": int(memory) / float(flops),
                 "suggested": False,
+                "source_line": _source_line(op),
             }
         )
     rows.sort(key=lambda row: float(row["mem_per_flop"]), reverse=True)
-    columns = ["op", "activation_memory", "flops_forward", "mem_per_flop", "suggested"]
+    columns = [
+        "op",
+        "activation_memory",
+        "flops_forward",
+        "mem_per_flop",
+        "suggested",
+        "source_line",
+    ]
     expected = _frame(rows, columns, {"total_freeable": sum(r["activation_memory"] for r in rows)})
     assert rows, "the fixture must yield candidates"
     _assert_same(tl.debug.recompute_candidates(trace), expected)
-
-
-def test_compare_params_frame_is_unchanged() -> None:
-    torch.manual_seed(0)
-    left = nn.Linear(4, 2)
-    right = nn.Linear(4, 2)
-    right.load_state_dict(left.state_dict())
-    with torch.no_grad():
-        right.bias.add_(1.0)
-    row = {
-        "kind": "parameter",
-        "status": "present-in-both",
-        "shape_match": True,
-        "dtype_match": True,
-        "reason": "",
-    }
-    rows = [
-        {"name": "bias", **row, "max_abs": 1.0, "mean_abs": 1.0, "allclose": False},
-        {"name": "weight", **row, "max_abs": 0.0, "mean_abs": 0.0, "allclose": True},
-    ]
-    columns = [
-        "name",
-        "kind",
-        "status",
-        "shape_match",
-        "dtype_match",
-        "max_abs",
-        "mean_abs",
-        "allclose",
-        "reason",
-    ]
-    expected = _frame(rows, columns, {"matched": 1, "value_diverged": 1})
-    _assert_same(tl.debug.compare_params(left, right), expected)

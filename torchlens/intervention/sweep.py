@@ -88,6 +88,12 @@ def sweep(
         is supplied.
     TypeError
         If ``site`` cannot be used as a capture-time intervention predicate.
+
+    Examples
+    --------
+    >>> bundle = tl.sweep(model, x, site="relu", values=[0.0, 1.0], include_baseline=True)
+    >>> bundle.names
+    ['baseline', 'sweep_0', 'sweep_1']
     """
 
     # Resolve positional `values` (may be MISSING if it was skipped when param was keyword-only)

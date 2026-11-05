@@ -15,7 +15,15 @@ __tl_layer__ = "L5"
 
 
 class NarrationConfigError(ConfigurationError):
-    """Raised for ``narrate=`` configuration refusals at capture entry."""
+    """Raised for ``narrate=`` configuration refusals at capture entry.
+
+    Examples
+    --------
+    >>> issubclass(NarrationConfigError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(NarrationConfigError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class NarrationStatsError(CaptureError):
@@ -25,6 +33,13 @@ class NarrationStatsError(CaptureError):
     asked for exact stats on a tensor the documented budget forbids), never
     an instrumentation failure: it propagates and fails the capture instead
     of stalling the forward for minutes or silently degrading to a sample.
+
+    Examples
+    --------
+    >>> issubclass(NarrationStatsError, tl.errors.CaptureError)
+    True
+    >>> issubclass(NarrationStatsError, tl.errors.TorchLensError)
+    True
     """
 
 

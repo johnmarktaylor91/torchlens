@@ -153,7 +153,7 @@ class EchoSession:
         self._followed_split = (
             split_followed_by_conjunction(self._selector) if self._selector_is_base else None
         )
-        self._stats_mode = options.stats
+        self._stats_mode = options.value_stats
         self._tail_maxlen = max(int(options.tail_on_error), 0)
         self._tail: deque[str] = deque(maxlen=self._tail_maxlen or 1)
         self._module_stack: list[_ModuleFrame] = []
@@ -335,7 +335,7 @@ class EchoSession:
             output_index=ctx.output_index,
             has_intervention=intervened,
             late=None,
-            stats=stats,
+            value_stats=stats,
             tier=self.tier,
         )
 
@@ -628,7 +628,7 @@ class EchoSession:
             suffix = " (capture halted, not failed)" if status == "halted" else ""
             footer = (
                 f"-- echo: {self.lines_emitted} lines narrated, {self.events_seen} events seen, "
-                f"stats={self._stats_mode}{suffix} --"
+                f"value_stats={self._stats_mode}{suffix} --"
             )
             if self.suppressed_count:
                 footer = footer[:-3] + f", {self.suppressed_count} lines suppressed --"

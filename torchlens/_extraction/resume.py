@@ -69,7 +69,14 @@ _CHECKSUM_LEVELS = ("fast", "crypto", "none")
 
 
 class DatasetExtractionResumeError(_ActionableErrorMixin, ConfigurationError, RuntimeError):
-    """Raised when a resumable extraction artifact cannot be safely continued."""
+    """Raised when a resumable extraction artifact cannot be safely continued.
+
+    Examples
+    --------
+    >>> issubclass(DatasetExtractionResumeError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(DatasetExtractionResumeError, tl.errors.TorchLensError)
+    True"""
 
     def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
         """Initialize an actionable extraction-resume refusal.
@@ -976,7 +983,7 @@ def _prepare_disk_run(
     torchlens._data_substrate.ExtractionArtifactError
         On a broken ledger prefix.
     torchlens.errors.ArtifactTooOldError
-        On a v1 artifact, which torchlens 2.x wrote.
+        On a v1 artifact, which torchlens 2.37 and earlier wrote.
     """
 
     container_path.mkdir(parents=True, exist_ok=True)

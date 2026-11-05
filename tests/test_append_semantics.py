@@ -138,7 +138,7 @@ def test_append_train_mode_no_helper_grad_message() -> None:
             backward_ready=True,
         ),
     )
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
 
     with pytest.raises(AppendBatchDependenceError, match="batch-independent helper"):
         trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))

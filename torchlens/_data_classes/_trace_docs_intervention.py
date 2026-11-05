@@ -55,99 +55,6 @@ DOCS: dict[str, str] = {
             Frozen public view of the current mutable intervention spec.
         """
     ),
-    "set": (
-        """Set a site out recipe without propagating it.
-        
-        Parameters
-        ----------
-        site:
-            Selector-like target for the out to replace.
-        value:
-            Static replacement tensor or one-shot callable accepting the
-            matched out and returning a replacement tensor.
-        direction:
-            Signal direction to replace: ``"forward"``, ``"backward"``, or
-            ``"both"``.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
-        
-        Returns
-        -------
-        Trace
-            This model log, with a stale intervention recipe.
-        """
-    ),
-    "attach_hooks": (
-        """Attach sticky hooks to the current intervention spec.
-        
-        The site decides which tensor a hook sees: a bare site mounts on the
-        activation, ``tl.grad(site)`` on the gradient of the site's output
-        (fired by ``trace.backward(loss)``), and ``tl.grad(site) | site`` on
-        both. Attaching is registration only: nothing runs until the next
-        forward (activation hooks) or backward (gradient hooks).
-        
-        Raw PyTorch ``register_forward_hook`` remains supported for users who
-        need module-local replacement logic outside this API; during active
-        TorchLens captures, returned replacement tensors are instrumented so the
-        graph can continue through downstream ops.
-        
-        Parameters
-        ----------
-        hooks_or_site:
-            Mapping/list batch input or selector-like site.
-        hook:
-            Optional hook for the ``(site, hook)`` input shape.
-        *extra_hooks:
-            Additional hooks to compose at ``hooks_or_site`` in left-to-right order.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        prepend:
-            Whether new sticky hooks should run before existing sticky hooks.
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
-        
-        Returns
-        -------
-        Any
-            Scoped removable hook handle.
-        """
-    ),
-    "remove": (
-        """Remove the most recent legacy-returned hook attachment.
-        
-        Returns
-        -------
-        None
-            Hook specs attached by the last single-hook ``attach_hooks`` call
-            are detached.
-        """
-    ),
-    "__enter__": (
-        """Enter a legacy scoped hook attachment.
-        
-        Returns
-        -------
-        Trace
-            This log, acting as the most recent hook handle.
-        """
-    ),
-    "__exit__": (
-        """Clean up a legacy scoped hook attachment.
-        
-        Parameters
-        ----------
-        exc_type:
-            Exception type, if the body raised.
-        exc:
-            Exception value, if the body raised.
-        traceback:
-            Exception traceback, if the body raised.
-        """
-    ),
     "clear_edits": (
         """Detach sticky hooks by site or handle.
         
@@ -157,60 +64,68 @@ DOCS: dict[str, str] = {
             Optional selector-like target. When provided, all sticky hooks for
             that target are removed.
         handle:
-            Optional hook handle returned by ``attach_hooks``.
+            Optional hook handle returned by a hook ``do``.
         strict:
             Whether no-op detach requests should raise.
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
         
         Returns
         -------
         Trace
             This model log, with a stale recipe if hooks were removed.
-        """
-    ),
-    "clear_hooks": (
-        """Clear all sticky hooks from the current intervention spec.
-        
-        Parameters
-        ----------
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
-        
-        Returns
-        -------
-        Trace
-            This model log with hook specs cleared and marked stale.
+
+        Notes
+        -----
+        Removal takes effect at once, like a torch hook handle: a rerun or
+        backward pass in progress skips the removed hooks from the next hook
+        site it reaches, and the site that is firing when this is called
+        finishes its queued hooks first.
         """
     ),
     "do": (
         """Apply an intervention and dispatch to replay, rerun, or set-only.
         
+        ``do`` is the one editing verb: ``(site, value)`` stages a value,
+        ``(site, hook)`` stages a sticky hook, and a ``Recipe`` (``tl.when``)
+        stages every rule it carries; the selected engine then propagates.
+        ``engine="set_only"`` stages without running (a ``Recipe`` keeps its
+        hooks sticky for the next ``run``). ``clear_edits`` removes staged
+        edits by site or handle.
+        
         The site decides which tensor the edit changes: a bare site edits the
         activation, ``tl.grad(site)`` the gradient of the site's output, and
         ``tl.grad(site) | site`` both. A gradient edit needs a backward pass:
-        with ``model=`` and ``x=`` the forward reruns on a new trace with the
+        with ``model=`` and ``inputs=`` the forward reruns on a new trace with the
         edit armed (the audit row says ``"armed"``) and the next
         ``result.backward(loss)`` applies it; ``engine="set_only"`` arms it on
         this trace instead. Replay re-executes forward ops only and refuses a
         gradient edit (``replay_gradient_edit_unsupported``).
         
+        ``do`` is the one editing verb on a trace. A non-callable value sets
+        the site and propagates it; a hook or helper is attached as a sticky
+        rule and propagated; a mapping of sites to edits applies several edits
+        in one propagation; an ``InterventionSpec`` applies its rules.
+        ``InterventionOptions(engine="set_only")`` stages without
+        propagating, and ``InterventionOptions(differentiable=True)`` replays
+        onto a new fork whose outputs stay differentiable.
+        
         Parameters
         ----------
-        hooks_or_site:
-            Mapping/list batch input or selector-like site.
-        value_or_hook:
-            Optional hook for the ``(site, hook)`` input shape.
+        site:
+            Mapping/list batch input or selector-like site (positional-only:
+            ``do(site, edit)``, never ``do(site=...)``).
+        edit:
+            Optional value, hook or helper for the ``(site, edit)`` input shape
+            (positional-only).
         model:
             Model required when ``engine="rerun"``.
         inputs:
             Input required when ``engine="rerun"``.
         intervention:
             Grouped intervention options (``InterventionOptions``: ``engine``
-            in ``"auto"``/``"replay"``/``"rerun"``/``"set_only"``,
-            ``confirm_mutation``, ``strict``).
+            in ``"auto"``/``"replay"``/``"rerun"``/``"set_only"``, ``strict``,
+            ``allow_changed_params``, ``differentiable``). Editing a root trace warns
+            once (``TraceMutationWarning``); edit a ``fork()`` for a quiet, isolated
+            copy.
         loss:
             Callable of the returned trace giving a scalar loss, for a plan
             with a gradient site: after arming, the door runs

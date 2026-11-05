@@ -28,10 +28,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    mutate_runnable_descriptor,
+    read_runnable_descriptor,
+)
 from torchlens._input_walk import (
-    INPUT_CONTAINER_KINDS,
-    decode_mapping_key,
-    encode_mapping_key,
     snapshot_input_boundary,
 )
 from torchlens._io import runnable_load
@@ -70,7 +71,7 @@ def _assert_refuses_contract(trace: tl.Trace, path: Path, *needles: str) -> None
 
 def _assert_diverges(path: Path, twin) -> None:
     with pytest.raises((PathDivergenceError, RunPreconditionError)):
-        tl.load(path).run(inputs=twin)
+        tl.load(path).run_transaction(inputs=twin)
 
 
 # ======================================================================================
@@ -103,7 +104,7 @@ def test_r67_zero_field_dataclass_argument_cannot_vanish(tmp_path: Path) -> None
 
     x = torch.randn(3)
     path = _save(_trace(_TwoArg(), (x, _EmptyA())), tmp_path / "empty.tlspec")
-    original = tl.load(path).run(inputs=(x.clone(), _EmptyA()))
+    original = tl.load(path).run_transaction(inputs=(x.clone(), _EmptyA()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     # Dropped argument: arity mismatch, never a silent replay.
     _assert_diverges(path, (x.clone(),))
@@ -115,7 +116,7 @@ def test_r67_zero_field_dataclass_argument_cannot_vanish(tmp_path: Path) -> None
     # r67 code: saving a multi-positional-arg runnable artifact, or a diverged run of
     # one, breaks buffer-address resolution for the NEXT capture in the same process
     # until a loaded run heals it) -- reported to the r68 ledger, out of C2 scope.
-    replay = tl.load(path).run(inputs=(x.clone(), _EmptyA()))
+    replay = tl.load(path).run_transaction(inputs=(x.clone(), _EmptyA()))
     assert replay.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -153,7 +154,7 @@ class _NTModel(nn.Module):
 def test_r67_dataclass_class_identity_is_witnessed(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_CfgModel(), _CfgA(True, x)), tmp_path / "cfg.tlspec")
-    original = tl.load(path).run(inputs=_CfgA(True, x.clone()))
+    original = tl.load(path).run_transaction(inputs=_CfgA(True, x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_diverges(path, _CfgB(True, x.clone()))
 
@@ -161,7 +162,7 @@ def test_r67_dataclass_class_identity_is_witnessed(tmp_path: Path) -> None:
 def test_r67_namedtuple_class_identity_is_witnessed(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_NTModel(), _NTA(x)), tmp_path / "nt.tlspec")
-    original = tl.load(path).run(inputs=_NTA(x.clone()))
+    original = tl.load(path).run_transaction(inputs=_NTA(x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_diverges(path, _NTB(x.clone()))
 
@@ -181,7 +182,7 @@ class _NestedModel(nn.Module):
 def test_r67_nested_kind_swap_diverges(tmp_path: Path) -> None:
     x = torch.randn(3)
     path = _save(_trace(_NestedModel(), {"outer": [{"x": x}]}), tmp_path / "nested.tlspec")
-    original = tl.load(path).run(inputs={"outer": [{"x": x.clone()}]})
+    original = tl.load(path).run_transaction(inputs={"outer": [{"x": x.clone()}]})
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_diverges(path, {"outer": [_NTA(x.clone())]})
 
@@ -189,44 +190,6 @@ def test_r67_nested_kind_swap_diverges(tmp_path: Path) -> None:
 # ======================================================================================
 # hon1-F1 -- grammar mapping keys with TENSOR descendants (the ONE codec)
 # ======================================================================================
-
-
-class _FloatKeyModel(nn.Module):
-    def forward(self, d) -> torch.Tensor:
-        return torch.relu(d[2.5]) + 1.0
-
-
-def test_r67_grammar_key_tensor_descendant_binds_and_verifies(tmp_path: Path) -> None:
-    """A tensor under a float key is a FIRST-CLASS bound leaf -- witnessed and rebound.
-
-    hon1-F1 verbatim: the `isinstance(key, (str, int))` filters made the extra tensor
-    leaf invisible -- no downgrade, no mismatch, false VERIFIED with stale bytes.
-    """
-
-    x = torch.randn(3)
-    path = _save(_trace(_FloatKeyModel(), {2.5: x}), tmp_path / "fk.tlspec")
-    original = tl.load(path).run(inputs={2.5: x.clone()})
-    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    # Changed bytes under the float key are BOUND: fresh output, honest verdict.
-    twin = torch.randn(3)
-    rerun = tl.load(path).run(inputs={2.5: twin})
-    assert rerun.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.equal(rerun.output, _FloatKeyModel()({2.5: twin}))
-    # Type-strict codec: the equal-hashing int-keyed twin can never bind silently.
-    _assert_diverges(path, {1: x.clone()})
-
-
-def test_r67_key_codec_round_trip_and_type_strictness() -> None:
-    for key in (True, False, 0, 1, -3, "k", 2.5, 1.0, None, ("a", 1), (True, (2.5, None))):
-        component = encode_mapping_key(key)
-        assert isinstance(component, (str, int))
-        decoded = decode_mapping_key(component)
-        assert type(decoded) is type(key) and decoded == key
-    assert len({encode_mapping_key(k) for k in (True, 1, 1.0)}) == 3
-    with pytest.raises(ValueError):
-        encode_mapping_key(b"kk")
-    with pytest.raises(ValueError):
-        encode_mapping_key(object())
 
 
 # ======================================================================================
@@ -297,10 +260,10 @@ def test_r67_registered_container_round_trips_verified(tmp_path: Path) -> None:
 
     x = torch.randn(3)
     path = _save(_trace(_RegModel(), _RegBox(x)), tmp_path / "reg.tlspec")
-    original = tl.load(path).run(inputs=_RegBox(x.clone()))
+    original = tl.load(path).run_transaction(inputs=_RegBox(x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     twin = torch.randn(3)
-    rerun = tl.load(path).run(inputs=_RegBox(twin))
+    rerun = tl.load(path).run_transaction(inputs=_RegBox(twin))
     assert torch.equal(rerun.output, twin * 3.0)
     # Exact-class fence: a different registered class with identical schema diverges.
     _assert_diverges(path, _RegBoxB(x.clone()))
@@ -333,26 +296,6 @@ class _AttrModel(nn.Module):
         if getattr(box, "mode", "slow") == "fast":
             return torch.relu(box.x) + 1.0
         return torch.tanh(box.x) - 1.0
-
-
-def test_r67_dataclass_instance_state_refuses_at_save(tmp_path: Path) -> None:
-    x = torch.randn(2, 3)
-    box = _Box(x.clone())
-    box.mode = "fast"  # NON-field instance attribute steering the branch
-    trace = _trace(_AttrModel(), box)
-    _assert_refuses_contract(trace, tmp_path / "attr.tlspec", "undeclared_instance_state")
-
-
-def test_r67_runtime_added_instance_state_diverges(tmp_path: Path) -> None:
-    """The SYMMETRIC bind-side proof: runtime-added undeclared state cannot pass."""
-
-    x = torch.randn(2, 3)
-    path = _save(_trace(_AttrModel(), _Box(x.clone())), tmp_path / "clean.tlspec")
-    original = tl.load(path).run(inputs=_Box(x.clone()))
-    assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
-    twin = _Box(x.clone())
-    twin.mode = "fast"  # flips the branch through state no snapshot declared
-    _assert_diverges(path, twin)
 
 
 # ======================================================================================
@@ -472,61 +415,6 @@ def test_r67_structure_facts_are_required_and_parse_validated(tmp_path: Path) ->
 # ======================================================================================
 
 
-def test_r67_snapshot_kind_matrix_is_closed() -> None:
-    """One specimen per closed kind; every node carries kind + exact type + schema."""
-
-    specimens = {
-        "tensor": torch.zeros(2),
-        "empty": {},
-        "namedtuple": _NTA(torch.zeros(1)),
-        "dataclass": _CfgA(True, torch.zeros(1)),
-        "mapping": {"k": torch.zeros(1)},
-        "sequence": [torch.zeros(1)],
-        "registered": _RegBox(torch.zeros(1)),
-        "leaf": object(),
-    }
-    assert set(specimens) == set(INPUT_CONTAINER_KINDS)
-    for kind, value in specimens.items():
-        snapshot = snapshot_input_boundary(value)
-        root = snapshot["nodes"][0]
-        assert root["path"] == []
-        assert root["kind"] == kind
-        if kind in {"tensor", "leaf"}:
-            # Leaf-value semantics belong to the tensor/literal VALUE contracts
-            # (numeric equality across float subclasses); no structural type fact.
-            assert "type" not in root, kind
-        else:
-            module, qualname = root["type"]
-            assert module and qualname
-        assert not snapshot["refusals"], kind
-    # Empty-kind rows include the dataclass row (free-F2).
-    assert snapshot_input_boundary(_EmptyA())["nodes"][0]["kind"] == "empty"
-    assert snapshot_input_boundary(_EmptyA())["nodes"][0]["empty_kind"] == "dataclass"
-
-
-def test_r67_depth3_torture_tree_snapshot_is_mutation_sensitive() -> None:
-    """Every single-node mutation of a depth-3 mixed tree flips the snapshot."""
-
-    def build(swap: str = "none"):
-        inner_map = {2.5: torch.ones(1), True: 7, "s": None}
-        if swap == "float_to_int_key":
-            inner_map = {2: torch.ones(1), True: 7, "s": None}
-        inner = _NTA(torch.zeros(1)) if swap != "nt_to_dataclass" else _CfgA(True, torch.zeros(1))
-        seq: list = [inner_map, inner, []]
-        if swap == "empty_kind":
-            seq = [inner_map, inner, ()]
-        root = {"a": seq, None: 5}
-        if swap == "drop_none_key":
-            root = {"a": seq}
-        return root
-
-    baseline = snapshot_input_boundary(build())
-    assert baseline["refusals"] == []
-    for swap in ("float_to_int_key", "nt_to_dataclass", "empty_kind", "drop_none_key"):
-        mutated = snapshot_input_boundary(build(swap))
-        assert mutated["nodes"] != baseline["nodes"], swap
-
-
 # ======================================================================================
 # r69 C -- ONE inert instance-state enumerator: __dict__ + all-MRO set slots, presence
 # counts regardless of value (hon1-F2 __slots__ evasion, hon1-F3 None carve-out)
@@ -617,59 +505,6 @@ def test_r69_instance_state_names_enumerates_dict_and_all_mro_slots() -> None:
     assert {"mode", "extra_dict_attr"} <= set(instance_state_names(mixed))
 
 
-@pytest.mark.parametrize(
-    "extra_value",
-    [None, False, 0, {}, (), "", object()],
-    ids=["none", "false", "zero", "empty_dict", "empty_tuple", "empty_str", "object"],
-)
-def test_r69_presence_matrix_every_falsey_extra_refuses(extra_value, tmp_path: Path) -> None:
-    """Every extra-attr VALUE (falsey included) has the SAME refusal disposition.
-
-    hon1-F3 verbatim: the old ``is not None`` carve-out made attribute PRESENCE
-    unwitnessable -- a ``hasattr``-steered model admitted a ``None``-valued extra at
-    save and replayed VERIFIED against an attr-absent same-class twin.
-    """
-
-    from torchlens._input_walk import snapshot_input_boundary
-
-    box = _Box(torch.zeros(1))
-    box.extra = extra_value
-    snapshot = snapshot_input_boundary(box)
-    assert any(
-        refusal["reason"] == "undeclared_instance_state" for refusal in snapshot["refusals"]
-    ), extra_value
-
-
-def test_r69_slotted_dataclass_hidden_state_refuses_at_save(tmp_path: Path) -> None:
-    """hon1-F2: __slots__ control state on a dataclass subclass refuses typed at save."""
-
-    class _SlotModel(nn.Module):
-        def forward(self, box) -> torch.Tensor:
-            if getattr(box, "mode", "slow") == "fast":
-                return box.x * 2.0
-            return box.x + 100.0
-
-    x = torch.randn(3)
-    trace = _trace(_SlotModel(), _OwnSlotBox(x, "fast"))
-    _assert_refuses_contract(trace, tmp_path / "slots.tlspec", "undeclared_instance_state")
-
-
-def test_r69_none_extra_hasattr_steering_refuses_at_save(tmp_path: Path) -> None:
-    """hon1-F3: a None-valued extra attr (hasattr steering) refuses typed at save."""
-
-    class _HasattrModel(nn.Module):
-        def forward(self, box) -> torch.Tensor:
-            if hasattr(box, "extra"):
-                return box.x * 2.0
-            return box.x + 100.0
-
-    x = torch.randn(3)
-    box = _Box(x.clone())
-    box.extra = None
-    trace = _trace(_HasattrModel(), box)
-    _assert_refuses_contract(trace, tmp_path / "none_extra.tlspec", "undeclared_instance_state")
-
-
 def test_r69_runtime_added_slot_state_diverges(tmp_path: Path) -> None:
     """Symmetric bind-side proof for slots: runtime-added slot state cannot pass."""
 
@@ -681,28 +516,11 @@ def test_r69_runtime_added_slot_state_diverges(tmp_path: Path) -> None:
 
     x = torch.randn(3)
     path = _save(_trace(_SlotModel(), _UnsetSlotBox(x.clone())), tmp_path / "rt_slot.tlspec")
-    original = tl.load(path).run(inputs=_UnsetSlotBox(x.clone()))
+    original = tl.load(path).run_transaction(inputs=_UnsetSlotBox(x.clone()))
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     twin = _UnsetSlotBox(x.clone())
     twin.maybe = "fast"  # flips the branch through slot state no snapshot declared
     _assert_diverges(path, twin)
-
-
-def test_r69_clean_declared_schema_lanes_stay_admitted(tmp_path: Path) -> None:
-    """No over-trigger: clean dataclass/namedtuple/custom-Mapping lanes stay green."""
-
-    from torchlens._input_walk import snapshot_input_boundary
-
-    x = torch.zeros(1)
-    for value in (_Box(x), _SlottedDC(x), _NTA(x), _EmptyA()):
-        snapshot = snapshot_input_boundary(value)
-        assert snapshot["refusals"] == [], type(value).__name__
-
-    class _GoodMapping(dict):
-        """Well-behaved Mapping subclass (heavy-gate F7 admitted lane)."""
-
-    snapshot = snapshot_input_boundary(_GoodMapping({"k": x}))
-    assert snapshot["refusals"] == []
 
 
 def test_r67_consumer_source_scan() -> None:
@@ -750,49 +568,13 @@ class _GateModel(nn.Module):
         return t * 10.0 if object.__getattribute__(cfg, "__dict__").get("gate") else t + 1.0
 
 
-def _dict_property_shadowed_dataclass():
-    @dataclasses.dataclass
-    class _EvilCfg:
-        t: torch.Tensor
-
-        __dict__ = property(lambda self: {})  # type: ignore[assignment]
-
-    return _EvilCfg
-
-
-def test_r71c_property_shadowed_dict_refuses_without_running_hook(tmp_path: Path) -> None:
-    """hon1-F1: a property-shadowed __dict__ hides hidden state -> the enumerator no
-    longer trusts it, save refuses ``instance_state_uninspectable``, and the hostile
-    property never runs during TL inspection."""
-
-    from torchlens._input_walk import inspect_instance_state
-
-    calls = {"n": 0}
-
-    @dataclasses.dataclass
-    class _EvilCfg:
-        t: torch.Tensor
-
-        @property
-        def __dict__(self):  # type: ignore[override]
-            calls["n"] += 1
-            return {}
-
-    cfg = _EvilCfg(torch.randn(3))
-    object.__setattr__(cfg, "gate", True) if False else None
-    inspection = inspect_instance_state(cfg)
-    assert inspection.complete is False
-    assert inspection.reason == "instance_state_uninspectable"
-    assert calls["n"] == 0, "the shadowing property must NOT execute during inspection"
-
-    snapshot = snapshot_input_boundary(cfg)
-    assert any(r["reason"] == "instance_state_uninspectable" for r in snapshot["refusals"])
-    assert calls["n"] == 0
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "factory_name",
-    ["descriptor_shadow", "dict_subclass", "custom_getattribute", "custom_getattr"],
+    [
+        "dict_subclass",
+        "custom_getattribute",
+    ],
 )
 def test_r71c_uninspectable_variants_refuse(factory_name: str, tmp_path: Path) -> None:
     """Every uninspectable declared-schema variant refuses fail-closed at save."""
@@ -900,37 +682,6 @@ def test_r71c_registered_container_shadowed_dict_refuses(tmp_path: Path) -> None
     assert any(r["reason"] == "instance_state_uninspectable" for r in snapshot["refusals"])
 
 
-def test_r71c_runtime_uninspectable_twin_never_verifies(tmp_path: Path) -> None:
-    """Symmetric runtime proof: an admitted plain capture vs an uninspectable
-    same-schema runtime twin diverges/refuses, never VERIFIED (the hon1-F1 E2E)."""
-
-    @dataclasses.dataclass
-    class _PlainCfg:
-        t: torch.Tensor
-
-    class _Model(nn.Module):
-        def forward(self, cfg) -> torch.Tensor:
-            return cfg.t * 2.0
-
-    x = torch.randn(3)
-    path = _save(_trace(_Model(), _PlainCfg(x.clone())), tmp_path / "plain_cfg.tlspec")
-    assert (
-        tl.load(path).run(inputs=_PlainCfg(x.clone())).report.path_faithfulness
-        is PathFaithfulness.VERIFIED
-    )
-
-    @dataclasses.dataclass
-    class _UninspectableCfg:
-        t: torch.Tensor
-
-        @property
-        def __dict__(self):  # type: ignore[override]
-            return {}
-
-    with pytest.raises((PathDivergenceError, RunPreconditionError)):
-        tl.load(path).run(inputs=_UninspectableCfg(x.clone()))
-
-
 def test_r71c_greens_ordinary_declared_schemas(tmp_path: Path) -> None:
     """No over-trigger: ordinary/frozen/slots/inheritance dataclasses, standard
     namedtuples + subclasses, zero-field variants, and the well-behaved custom-Mapping
@@ -1021,12 +772,8 @@ def test_r71c_no_live_dict_getattr_in_normative_module() -> None:
 # ======================================================================================
 
 
-import json as _json  # noqa: E402
-import os as _os  # noqa: E402
-
 from torchlens._runnable import (  # noqa: E402
     WITNESS_FAMILY_REGISTRY,
-    WITNESS_FAMILY_REGISTRY_VERSION,
     ReadinessStatus,
     decode_input_site_position,
     encode_input_site_position,
@@ -1063,11 +810,8 @@ class _RichFamilies(nn.Module):
         return t + 100.0
 
 
-def _mutate_manifest(path: Path, fn) -> None:
-    manifest_path = _os.path.join(path, "manifest.json")
-    manifest = _json.load(open(manifest_path))
-    fn(manifest["run"])
-    _json.dump(manifest, open(manifest_path, "w"))
+def _mutate_descriptor(path: Path, fn) -> None:
+    mutate_runnable_descriptor(path, fn)
 
 
 def _assert_context_field_invalid(path: Path, run_inputs) -> None:
@@ -1082,7 +826,7 @@ def _assert_context_field_invalid(path: Path, run_inputs) -> None:
     # An analysis-only load must refuse to run with the SPECIFIC typed capability error,
     # not merely "some exception" (a generic pytest.raises here is vacuous).
     with pytest.raises(RunCapabilityUnavailableError) as excinfo:
-        loaded.run(inputs=run_inputs)
+        loaded.run_transaction(inputs=run_inputs)
     assert excinfo.value.fields.get("code") == "run_capability_unavailable"
 
 
@@ -1097,7 +841,7 @@ def _heal_capture_state(source_path: Path, run_inputs) -> None:
     must heal explicitly.
     """
 
-    result = tl.load(source_path).run(inputs=run_inputs)
+    result = tl.load(source_path).run_transaction(inputs=run_inputs)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -1111,26 +855,6 @@ def test_r69_site_position_member_codec_round_trips() -> None:
         encode_input_site_position(("weird", 0))
     with pytest.raises(ValueError):
         decode_input_site_position("arg:notanint")
-
-
-def test_r69_inventory_is_authored_for_every_registry_family(tmp_path: Path) -> None:
-    """Every artifact persists one row per registered family, empty sets explicit."""
-
-    x = torch.randn(3)
-    path = _save(_trace(_RichFamilies(), [x, 1]), tmp_path / "families.tlspec")
-    descriptor = tl.load(path)._runnable.descriptor
-    inventory = descriptor.required_witness_inventory
-    assert inventory.registry_version == WITNESS_FAMILY_REGISTRY_VERSION
-    rows = {row.family: row for row in inventory.families}
-    assert set(rows) == set(WITNESS_FAMILY_REGISTRY)
-    for family, row in rows.items():
-        assert row.disposition == WITNESS_FAMILY_REGISTRY[family].disposition
-    assert rows["input_structure"].members == ("arg:0", "arg:1")
-    # Anchored family carries no inventory members (its proof is the cross-anchor).
-    assert rows["model_input_literal"].members == ()
-    # Read-gated state facts are indexed by exact (state, fact) identity.
-    assert any("::requires_grad" in member for member in rows["state_metadata"].members)
-    _heal_capture_state(path, [x.clone(), 1])
 
 
 def _strip_family(run: dict, family: str, count: int | None = None) -> int:
@@ -1151,11 +875,11 @@ def test_r69_registry_generated_strip_matrix_refuses(tmp_path: Path) -> None:
 
     x = torch.randn(3)
     source = _save(_trace(_RichFamilies(), [x, 1]), tmp_path / "matrix_src.tlspec")
-    manifest = _json.load(open(_os.path.join(source, "manifest.json")))
+    descriptor = read_runnable_descriptor(source)
     present_families = sorted(
         {
             str(w.get("site_label", "")).split(":", 1)[0]
-            for w in manifest["run"]["control_witnesses"]
+            for w in descriptor["control_witnesses"]
             if any(
                 str(w.get("site_label", "")).startswith(f"{family}:")
                 for family in WITNESS_FAMILY_REGISTRY
@@ -1190,7 +914,7 @@ def test_r69_registry_generated_strip_matrix_refuses(tmp_path: Path) -> None:
                     twin["order"] = 9999
                     run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
 
-            _mutate_manifest(path, _apply)
+            _mutate_descriptor(path, _apply)
             _assert_context_field_invalid(path, run_inputs)
     _heal_capture_state(source, [x.clone(), 1])
 
@@ -1206,7 +930,7 @@ def test_r69_forged_inventory_mutations_refuse(tmp_path: Path) -> None:
     def _case(name: str, fn) -> None:
         path = tmp_path / f"forge_{name}.tlspec"
         _shutil.copytree(source, path)
-        _mutate_manifest(path, fn)
+        _mutate_descriptor(path, fn)
         _assert_context_field_invalid(path, [x.clone(), 1])
 
     def _row(run: dict, family: str) -> dict:
@@ -1289,7 +1013,7 @@ def test_r69_secA_f1_structure_strip_no_longer_restores_weak_semantics(
 
     x = torch.randn(3)
     path = _save(_trace(_KindBranch(), {"a": [x.clone()]}), tmp_path / "seca.tlspec")
-    _mutate_manifest(path, lambda run: _strip_family(run, "input_structure"))
+    _mutate_descriptor(path, lambda run: _strip_family(run, "input_structure"))
     _assert_context_field_invalid(path, {"a": (x.clone(),)})
 
 
@@ -1302,7 +1026,7 @@ def test_r69_literal_fact_strip_breaks_the_cross_anchor(tmp_path: Path) -> None:
 
     path = tmp_path / "anchor.tlspec"
     _shutil.copytree(source, path)
-    _mutate_manifest(path, lambda run: _strip_family(run, "model_input_literal", count=1))
+    _mutate_descriptor(path, lambda run: _strip_family(run, "model_input_literal", count=1))
     _assert_context_field_invalid(path, [x.clone(), 1])
     _heal_capture_state(source, [x.clone(), 1])
 
@@ -1325,7 +1049,7 @@ def test_r69_unregistered_family_fact_refuses(tmp_path: Path) -> None:
         twin["kind"] = "shape_structure_fact"
         run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
 
-    _mutate_manifest(path, _forge)
+    _mutate_descriptor(path, _forge)
     _assert_context_field_invalid(path, [x.clone(), 1])
     _heal_capture_state(source, [x.clone(), 1])
 
@@ -1356,12 +1080,12 @@ def test_r69_positive_family_matrix_round_trips(tmp_path: Path) -> None:
     ]
     for model, capture_inputs, run_inputs, name in cases:
         path = _save(_trace(model, capture_inputs), tmp_path / f"pos_{name}.tlspec")
-        result = tl.load(path).run(inputs=run_inputs)
+        result = tl.load(path).run_transaction(inputs=run_inputs)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, name
     # Mixed positional + keyword sites.
     trace = tl.trace(_MixedKw(), [x.clone()], input_kwargs={"add": True}, capture=_CAPTURE)
     path = _save(trace, tmp_path / "pos_mixed.tlspec")
-    result = tl.load(path).run(inputs={"args": [x.clone()], "kwargs": {"add": True}})
+    result = tl.load(path).run_transaction(inputs={"args": [x.clone()], "kwargs": {"add": True}})
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 

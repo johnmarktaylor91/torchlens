@@ -5,7 +5,11 @@ counts only) holds torch FlopCounterMode's forward and backward totals for
 every corpus entry, built by ``build_entry`` in eval mode, at fma2 with only
 the matmul and convolution families counted. The seven entries that dispatch
 CPU fused attention were re-counted under the MATH attention backend, and
-that total is the bar for them; TorchLens counts the default backend.
+that total is the bar for them; TorchLens counts the default backend. The
+one entry whose eager forward dispatches the fused ``nn.MultiheadAttention``
+inference kernel (V-JEPA ViT-Large, its target encoder under ``no_grad``)
+was re-counted with ``torch.backends.mha`` fast path off: capture holds that
+fast path off, so TorchLens records and counts the unfused attention.
 
 Per entry, TorchLens's forward (2 x the true MACs of the matmul and
 convolution family ops) and its executed backward (``backward_status``)
@@ -194,7 +198,24 @@ def _entry_param(entry: CorpusEntry) -> Any:
     return pytest.param(entry, id=entry.id)
 
 
-@pytest.mark.parametrize("entry", [_entry_param(entry) for entry in corpus_entries()])
+# Kept by shrink-r4 (per-id subset rule): the rows below hold sole coverage of
+# _capture/flops.py and backends/torch/backward.py (SketchLattice) and _capture/compute_record.py
+# (GLA); V-JEPA is red at the shrink base and stays. Every other corpus row's coverage is
+# held by these rows, the behaviour net or tests/test_classics_corpus.py, which still
+# captures every corpus entry.
+_FLOPS_ORACLE_ROWS = frozenset(
+    {
+        "GLA (Gated Linear Attention, per-key-dim decay)",
+        "SketchLattice",
+        "V-JEPA ViT-Large (latent video joint-embedding predictor)",
+    }
+)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [_entry_param(entry) for entry in corpus_entries() if entry.id in _FLOPS_ORACLE_ROWS],
+)
 def test_corpus_forward_and_executed_backward_equal_the_oracle(entry: CorpusEntry) -> None:
     """Forward and executed backward FLOPs equal the oracle up to the two explained differences.
 
@@ -234,13 +255,13 @@ def _check_entry(entry: CorpusEntry) -> None:
         assert leaves
         if entry.id in BACKWARD_RAISES:
             with pytest.raises(RuntimeError, match="modified by an inplace operation"):
-                trace.log_backward(_loss(leaves))
+                trace.backward(_loss(leaves))
             # The pass raised part way: its backward did not run, and no number is printed.
             status = backward_status(trace)
             assert status.executed_flops is None, status.status_line
             assert "UNKNOWN" in status.status_line
             return
-        trace.log_backward(_loss(leaves))
+        trace.backward(_loss(leaves))
         status = backward_status(trace)
         assert status.state == "backward_observed"
         expected = row["fcm_bwd"] - GROUPED_DW_EXCESS.get(entry.id, 0) + beyond_bwd
@@ -265,6 +286,7 @@ def test_registered_corpus_accounts_for_every_entry() -> None:
         "paddledet_detr",
         "ProDESIGN-LE",
         "21cmBERT",
+        "V-JEPA ViT-Large (latent video joint-embedding predictor)",
     }
     assert len([row for row in ROWS.values() if "call_convention" in row]) == 8
     assert set(GROUPED_DW_EXCESS) <= set(ROWS) and set(BEYOND_FCM) <= set(ROWS)

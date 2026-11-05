@@ -46,7 +46,6 @@ def test_gqa_geometry_from_config(llama_capture):
     assert view["v"].value.shape[-2:] == (n_kv, d_head)
 
 
-@pytest.mark.smoke
 def test_gqa_head_view_maps_query_heads_to_kv_groups(llama_capture):
     """head(i).k reads KV group i // (n_q / n_kv), aliasing-flagged."""
 

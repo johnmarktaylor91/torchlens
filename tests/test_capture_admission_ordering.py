@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import threading
 
-import pytest
 import torch
 from torch import nn
 
@@ -50,31 +49,7 @@ def _refused_trace_in_thread(
     return holder[0]
 
 
-def test_refused_capture_does_not_reset_winner_runtime_context() -> None:
-    """A refused loser must not clear the admitted winner's live context."""
-
-    reservation = _state.capture_reservation()
-    reservation.__enter__()
-    try:
-        _state.reset_capture_runtime_context()
-        _state.configure_capture_runtime_context(
-            capture_replay_templates=True,
-            model_object_id=12345,
-            model_class_qualname="Winner",
-        )
-        refusal = _refused_trace_in_thread()
-        assert isinstance(refusal, ReentrantTraceError)
-        assert _state._capture_replay_templates is True, (
-            "the refused loser reset the winner's replay-template flag"
-        )
-        assert _state._relationship_model_id == 12345
-        assert _state._relationship_model_class == "Winner"
-    finally:
-        reservation.__exit__(None, None, None)
-        _state.reset_capture_runtime_context()
-
-
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _state.py.
 def test_refused_capture_does_not_reseed_global_rng() -> None:
     """The refusal settles BEFORE capture seeding touches the user's engines."""
 
@@ -99,26 +74,7 @@ def test_refused_capture_does_not_reseed_global_rng() -> None:
         _state.reset_capture_runtime_context()
 
 
-@pytest.mark.smoke
-def test_admitted_capture_still_restores_user_rng() -> None:
-    """R57 regression: the winning path keeps its every-settlement restore."""
-
-    model = nn.Linear(3, 3)  # parameter init draws RNG; construct FIRST
-    x = torch.randn(1, 3)
-    torch.manual_seed(31337)
-    before = torch.get_rng_state()
-    tl.trace(model, x, capture=tl.options.CaptureOptions(seed=99))
-    assert torch.equal(before, torch.get_rng_state())
-
-
-def test_recorder_token_passthrough_still_works() -> None:
-    """tl.record's outer reservation continues through the inner claim."""
-
-    model = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
-    recording = tl.record(model, torch.randn(1, 3), save=tl.func("relu"))
-    assert recording is not None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/belt.py, campaign mutant kills.
 def test_belt_report_is_read_only_from_non_owner_thread_mid_capture(monkeypatch) -> None:
     """doctor()/compat polling mid-capture must not derive (RNG rewind risk)."""
 

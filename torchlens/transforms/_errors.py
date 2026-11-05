@@ -19,7 +19,18 @@ __all__ = ["TransformContractError"]
 
 
 class TransformContractError(_ActionableErrorMixin, ConfigurationError, RuntimeError):
-    """Raised when a transform spec, chain, or plan violates its contract."""
+    """Raised when a transform spec, chain, or plan violates its contract.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.transforms.lookup_transform("no_such_transform")
+    ... except TransformContractError as error:
+    ...     print(error.fields["code"])
+    transform_name_unknown
+    >>> issubclass(TransformContractError, tl.errors.TorchLensError)
+    True
+    """
 
     def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
         """Initialize an actionable transform-contract refusal.

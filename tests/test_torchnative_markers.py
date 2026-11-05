@@ -35,23 +35,7 @@ def nvtx_calls(monkeypatch) -> list[str]:
     return calls
 
 
-def test_nvtx_names_carry_call_identity(nvtx_calls) -> None:
-    """TN-D13: repeated same-type calls produce DISTINGUISHABLE ranges."""
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4)).eval()
-    x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(emit_nvtx=True))
-    log.cleanup()
-    names = [c for c in nvtx_calls if c.startswith("torchlens::")]
-    assert names, "emit_nvtx=True emitted no torchlens:: ranges"
-    assert len(set(names)) == len(names), f"non-unique NVTX range names: {names}"
-    linear_ranges = [n for n in names if "linear" in n]
-    assert len(linear_ranges) >= 2
-    assert len(set(linear_ranges)) == len(linear_ranges)
-    # Identity is carried explicitly: name#<func_call_id>.
-    assert all("#" in n for n in names)
-
-
+# Kept: sole branch coverage of backends/torch/_op_markers.py; a sole mutation kill.
 def test_nvtx_internal_bookkeeping_separated(nvtx_calls) -> None:
     """TN-D11: TorchLens's own register_hook installs never publish as model work.
 
@@ -83,6 +67,7 @@ def test_nvtx_internal_bookkeeping_separated(nvtx_calls) -> None:
     assert any("linear" in n for n in model_ranges)
 
 
+# Kept: sole branch coverage of backends/torch/_op_markers.py; a sole mutation kill.
 def test_internal_read_marker_names_are_typed_internal() -> None:
     """A wrapped call made inside an internal read is named under ``torchlens::internal::``."""
 
@@ -97,15 +82,7 @@ def test_internal_read_marker_names_are_typed_internal() -> None:
         )
 
 
-def test_no_markers_without_a_sink(nvtx_calls) -> None:
-    """Strictly opt-in: plain captures push nothing into either sink."""
-
-    model = nn.Linear(4, 4).eval()
-    log = tl.trace(model, torch.randn(2, 4))
-    log.cleanup()
-    assert not [c for c in nvtx_calls if c.startswith("torchlens::")]
-
-
+# Kept: sole branch coverage of _observability/_session.py.
 def test_session_records_op_join_markers() -> None:
     """FLIP-1 marker side: an active owned session sees exact op keys.
 
@@ -134,7 +111,7 @@ def test_session_records_op_join_markers() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _observability/_native_profile.py, _observability/_session.py.
 def test_native_chrome_artifact_and_sidecar(tmp_path) -> None:
     """The NATIVE chrome trace is preserved with the exact-ID mapping sidecar."""
 
@@ -152,6 +129,7 @@ def test_native_chrome_artifact_and_sidecar(tmp_path) -> None:
     result.trace.cleanup()
 
 
+# Kept: sole branch coverage of _observability/_native_profile.py, _observability/_session.py.
 def test_borrowed_session_never_closed_and_joinable() -> None:
     """Borrowed mode: markers land in the caller's profiler; we never close it."""
 

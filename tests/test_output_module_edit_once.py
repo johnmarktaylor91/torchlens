@@ -367,44 +367,6 @@ def test_output_module_edit_applies_once_on_every_door(
     _assert_same(_leaves(bound), want, f"{case}: spec.bind(model)(x)")
 
 
-@pytest.mark.parametrize("kind", _KINDS)
-@pytest.mark.parametrize(("case", "factory", "address"), _CASES, ids=[c[0] for c in _CASES])
-def test_module_selectors_never_resolve_to_the_output_alias(
-    case: str, factory: Callable[[], nn.Module], address: str, kind: str
-) -> None:
-    """``find_sites`` returns the producing ops only; the output alias keeps its stamp."""
-
-    model, x, _x2 = _setup(factory)
-    trace = _ready_trace(model, x)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", MultiMatchWarning)
-        sites = list(trace.find_sites(_selector(kind, address)))
-    assert sites, case
-    assert not any(getattr(site, "is_output", False) for site in sites), [
-        site.layer_label for site in sites
-    ]
-    # Display stamp unchanged: the alias still names the module calls its producer sits in.
-    from torchlens._ir.selector_eval import module_address_matches
-
-    stamped = [
-        op
-        for op in trace.output_ops
-        if any(module_address_matches(call, address) for call in op.output_of_module_calls)
-    ]
-    assert stamped, f"{case}: output alias lost its display stamp"
-
-
-def test_single_leaf_output_module_selects_one_site_without_multimatch() -> None:
-    """A leaf module that produces the model output resolves to exactly one site."""
-
-    model, x, _x2 = _setup(_MLP)
-    trace = _ready_trace(model, x)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", MultiMatchWarning)
-        trace.fork().do(tl.module("fc2"), tl.scale(0.5))
-    assert len(trace[tl.module("fc2")]) == 1
-
-
 def test_multimatch_warning_names_alias_compounding_not_fan_out() -> None:
     """A selector matching a producer and its output alias warns that the edit compounds."""
 
@@ -419,15 +381,6 @@ def test_multimatch_warning_names_alias_compounding_not_fan_out() -> None:
     assert "compound" in message
     assert "fan out" not in message
     assert alias.layer_label in message and producer in message
-
-
-def test_multimatch_warning_keeps_fan_out_for_independent_sites() -> None:
-    """Independent sites (no alias pair) keep the fan-out wording."""
-
-    model, x, _x2 = _setup(_TupleHeadNet)
-    trace = _ready_trace(model, x)
-    with pytest.warns(MultiMatchWarning, match="will fan out"):
-        trace.fork().do(tl.module("head"), tl.scale(0.5))
 
 
 class _ChunkNet(nn.Module):

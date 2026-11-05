@@ -26,6 +26,14 @@ class CompileCountsUnavailableError(_ActionableErrorMixin, CompatibilityError, R
     Keeps its historical ``RuntimeError`` base while joining the taxonomy
     with a stable code and a default remedy, so single-message raise sites
     and existing ``except RuntimeError`` callers stay valid (R64).
+
+    Examples
+    --------
+    >>> err = CompileCountsUnavailableError("no counters")
+    >>> err.fields["code"]
+    'compile_counts_unavailable'
+    >>> isinstance(err, RuntimeError), isinstance(err, tl.errors.CompatibilityError)
+    (True, True)
     """
 
     code: str = "compile_counts_unavailable"
@@ -142,17 +150,10 @@ def count_compiles() -> Iterator[CompileCounts]:
 
     Examples
     --------
-    Verify the coexistence contract on a compiled model::
-
-        with tl.debug.count_compiles() as during:
-            trace = tl.trace(model, x)
-        assert during.frames_compiled == 0  # zero compiles during capture
-
-        with tl.debug.count_compiles() as burst:
-            model(x)  # the first call after capture may recompile a bounded burst
-        with tl.debug.count_compiles() as steady:
-            model(x)
-        assert steady.frames_compiled == 0  # then steady state
+    >>> with count_compiles() as during:
+    ...     _ = tl.trace(model, x)
+    >>> during.frames_compiled
+    0
     """
 
     counters = _torch_compat.get_dynamo_compile_counters(force_probe=True)

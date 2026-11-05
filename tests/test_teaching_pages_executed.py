@@ -70,6 +70,7 @@ def _examples() -> list[Any]:
     return params
 
 
+@pytest.mark.smoke_cells("test_teaching_page_example_runs[intervention_explainers.md:7]")
 @pytest.mark.parametrize(("page", "index", "expected", "code"), _examples())
 def test_teaching_page_example_runs(
     page: str, index: int, expected: Any, code: str, tmp_path: Path

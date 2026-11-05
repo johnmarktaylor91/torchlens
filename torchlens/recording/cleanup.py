@@ -32,6 +32,16 @@ def cleanup_partial(path: str | Path, *, force: bool = False) -> list[Path]:
     ------
     ArtifactError
         If any cleanup candidate is a symlink.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     (Path(folder) / "run.tlfast.tmp.1").mkdir()
+    ...     removed = cleanup_partial(Path(folder) / "run.tlfast", force=True)
+    >>> [path.name for path in removed]
+    ['run.tlfast.tmp.1']
     """
 
     bundle_path = Path(path)

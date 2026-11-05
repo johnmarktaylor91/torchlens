@@ -42,6 +42,8 @@ from .._semantic.patching import (
     _run_patch,
     _warn_if_campaign_all_identical,
 )
+from .._utils._display_errors import lookup_message
+from .._utils._display_keys import display_key
 from ._errors import refuse
 from ._grids import PatchGrid, _baseline_metrics, _disclose_cost_and_enforce_budget
 
@@ -136,6 +138,21 @@ def patch_query_heads_grid(  # noqa: PLR0913 -- mirrors the grid driver's signat
         call) matches, ``mi_grid_axes_invalid`` for a site other than k/v,
         ``mi_head_geometry_unavailable`` for an out-of-range head, and the
         grid driver's own codes (budget, length mismatch, missing payloads).
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import LlamaConfig, LlamaForCausalLM
+    >>> lm = LlamaForCausalLM(LlamaConfig(
+    ...     num_hidden_layers=1, hidden_size=8, intermediate_size=16, num_attention_heads=4,
+    ...     num_key_value_heads=2, vocab_size=32, max_position_embeddings=16, use_cache=False,
+    ...     attn_implementation="eager")).eval()
+    >>> a, b = torch.randint(0, 32, (2, 1, 6))
+    >>> grid = tl.mechinterp.patch_query_heads_grid(
+    ...     lm, a, b, lambda t: t.modules["lm_head"].out[0, -1, 3], heads=[0, 1])
+    patching grid: 2 cells x ~...s/rerun ~= ...s total
+    >>> grid.axes, tuple(grid.values.shape)
+    (('layer', 'head'), (1, 2))
     """
 
     _validate_site(site)
@@ -327,10 +344,13 @@ def _locate_expansion(  # noqa: PLR0913 -- the module's identity plus its head c
     if len(candidates) > 1:
         refuse(
             code="mi_kv_expansion_ambiguous",
-            message=f"Module {address!r} has {len(candidates)} ops that each expand its "
-            f"grouped {_SITE_WORDS[site]} tensor to the query heads "
-            f"({[str(op.label) for op in candidates]}); patching one would leave the "
-            "others unpatched.",
+            message=lookup_message(
+                f"Module {address!r} has {len(candidates)} ops that each expand its "
+                f"grouped {_SITE_WORDS[site]} tensor to the query heads; patching one "
+                "would leave the others unpatched.",
+                [display_key(op) for op in candidates],
+                "Patch the whole group or simplify the module so it expands once.",
+            ),
             remedy="patch the whole group with mechinterp.patch_grid(..., sites=site, "
             "axes=('layer', 'head')), or simplify the module so it expands once",
             module=address,

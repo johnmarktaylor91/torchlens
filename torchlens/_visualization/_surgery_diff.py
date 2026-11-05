@@ -300,6 +300,16 @@ def surgery_diff(subject: Trace, reference: Trace) -> SurgeryDiff:
     InvalidArgumentError
         ``surgery_diff_incomparable`` when the two operands are the same
         object (a self-diff is vacuous) or either side records no ops.
+
+    Examples
+    --------
+    >>> clean = tl.trace(model, x)
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+    >>> diff = tl.viz.intervention_diff(edited, clean)
+    >>> diff.lines()[0].startswith("surgery diff:")
+    True
+    >>> sorted(diff.counts())
+    ['fact', 'heuristic', 'only_in_reference', 'only_in_subject']
     """
 
     if subject is reference:

@@ -62,7 +62,7 @@ def test_grad_magnitude_flagged_provoked() -> None:
     assert all(f.stage is not None and f.scale_provenance is not None for f in flagged)
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: the only test that provokes error code param_bounds_violated.
 def test_param_bounds_violated_provoked() -> None:
     """Declared bounds catch an out-of-range parameter value."""
 
@@ -71,6 +71,7 @@ def test_param_bounds_violated_provoked() -> None:
     assert "param_bounds_violated" in codes
 
 
+# Kept by the shrink-r4 coverage proof: the only test that provokes error code param_dtype_headroom.
 def test_param_dtype_headroom_provoked() -> None:
     """Magnitudes within max_fraction of the fp16 finite max are flagged."""
 
@@ -80,6 +81,7 @@ def test_param_dtype_headroom_provoked() -> None:
     assert "param_dtype_headroom" in codes
 
 
+# Kept by the shrink-r4 coverage proof: the only test that provokes error code param_subnormal_heavy.
 def test_param_subnormal_heavy_provoked() -> None:
     """A subnormal-dominated tensor trips the underflow signature."""
 

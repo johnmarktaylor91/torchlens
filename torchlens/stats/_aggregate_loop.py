@@ -140,7 +140,7 @@ def _aggregate_backward_loop(
         )
         try:
             loss = loss_fn(_metric_value_from_log(log, "output"), *loss_args)
-            log.log_backward(loss)
+            log.backward(loss)
             for name, stat in metrics.items():
                 site = sites[name]
                 if isinstance(site, str) or not _is_gradient_key(site):

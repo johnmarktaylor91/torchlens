@@ -81,8 +81,8 @@ def _validate_leaves(leaves: list[Edit]) -> None:
                 "declared helper specs only (a bare callable's kind, flags, and "
                 "seed posture are undeclarable)",
                 code="compose_leaf_invalid",
-                remedy="wrap the transform as a helper (or attach the callable "
-                "separately through attach_hooks)",
+                remedy="wrap the transform as a helper (or stage the callable "
+                "separately, one do call per callable on the same site)",
                 argument="edits",
             )
         if leaf.factory is None:
@@ -150,6 +150,14 @@ def compose(*edits: Any) -> Edit:
         One composed helper: one fire, one scatter, one FireRecord, with the
         ordered leaf identities on the spec (``args``) and the AND-combined
         flags.
+
+    Examples
+    --------
+    >>> clean = tl.trace(model, x)
+    >>> chain = compose(tl.scale(2.0), tl.clamp(high=0.5))
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), chain))
+    >>> torch.allclose(edited["relu_1_2"].out, (clean["relu_1_2"].out * 2.0).clamp(max=0.5))
+    True
     """
 
     leaves = _flatten(tuple(edits))

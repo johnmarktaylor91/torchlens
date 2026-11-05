@@ -17,8 +17,8 @@ label flips to `stable`.
 ## Tutorial
 
 Trace a pure tinygrad callable, read the recorded ops, and validate the trace by replay.
-Every weight the callable closes over is a Python literal here, so the forward consumes no
-random state (see the random-init row in the table below).
+The capture evaluates the forward's lazy graph once, after the forward returns, and every
+payload comes from that one evaluation.
 
 ```python
 from tinygrad import Tensor
@@ -65,9 +65,13 @@ except BackendUnsupportedError as error:
     print(error.code)        # "module_identity_mode_unsupported"
 ```
 
-Closure weights built from a NumPy array (`Tensor(ndarray)`) stay host-side buffers until
-something realizes them; capturing a forward through one refuses `constant_unrealizable`
-naming the op. Realize the constant first (`weight.realize()`) or pass it as an input.
+Layers with random default init (`tinygrad.nn.Linear`, `Conv2d`) capture as they are: their
+weights are realized in the capture's single evaluation, so the trace and the random-number
+state afterwards match one eager forward. Random numbers drawn inside the traced callable
+(`Tensor.rand`, dropout) refuse `rng_state_in_graph`, since replay would draw them again;
+draw them before capture and pass them in. When comparing a capture with an eager forward,
+read the eager output before reading tinygrad's RNG counters: in tinygrad itself, realizing
+the counters first changes the values a still-lazy random weight takes.
 
 ## Can and cannot
 
@@ -77,7 +81,7 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | Capability | State | Notes |
 |---|---|---|
 | `has_validation_replay` | supported | UOp replay plus parent perturbation on `DEV=PYTHON` payloads |
-| `payload_materialization` | supported | `array_payloads` via `.tlspec`; realized copies per UOp today |
+| `payload_materialization` | supported | `array_payloads` via `.tlspec`; one realization per capture (realize-once) |
 | `intermediate_derived_grads` | supported | opt-in through `GradOptions(intermediate_grads=True)` |
 | `backward_capture` | unsupported | refusal `backward_capture_unsupported` |
 | `fastlog` | unsupported | refusal `fastlog_unsupported` |
@@ -87,8 +91,9 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | `structure_only_capture` | unsupported | refusal `structure_only_capture_unsupported` |
 | Closure constant with a readable buffer | supported | recorded as a parentless `buffer` op with payload (`tinygrad_constant_kind="closure"`) |
 | Literal producer (`Tensor.ones`, `Tensor.full`, scalar `const`) | supported | parentless op with payload (`tinygrad_constant_kind="literal"`) |
-| Closure constant with no readable buffer (`Tensor(ndarray)` not realized) | unsupported | refusal `constant_unrealizable` naming the op |
-| Random-init layers (`tinygrad.nn` default init) or in-forward `Tensor.rand` | unsupported | refusal `rng_state_in_graph`; random-init layers must be realized before capture until realize-once capture lands |
+| Closure constant built from a NumPy array (`Tensor(ndarray)`, not yet realized) | supported | realized in the capture's single evaluation; a value tinygrad cannot realize refuses `constant_unrealizable` naming the op |
+| Random-init layers (`tinygrad.nn` default init) | supported | weights realized in the capture's single evaluation; values and RNG state equal one eager forward |
+| In-forward random numbers (`Tensor.rand`, dropout inside the traced callable) | unsupported | refusal `rng_state_in_graph` |
 | `random_seed=` | unsupported | refusal `explicit_seed_unsupported` |
 | Trace options outside `module_identity_mode`, `grad_options` | unsupported | refusal `trace_option_unsupported` |
 | Mid-capture `Tensor.realize()` or TinyJit execution | unsupported | refusal `mid_capture_execution_unsupported` |
@@ -103,5 +108,5 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 (`python -m tests.conformance.scorecard --backend tinygrad --write`) and surfaces as the
 `backend_scorecard:tinygrad` row of `tl.report.doctor()`. The roster behind it is
 `tests/conformance/_rosters/tinygrad.py`: ten fixed-weight `config_built` rows, three
-`random_init` rows (refused until realize-once), and two `ecosystem` rows that run only
+`random_init` rows (default-init Linear, Conv2d and LayerNorm), and two `ecosystem` rows that run only
 under `TORCHLENS_CONFORMANCE_ECOSYSTEM=1`.

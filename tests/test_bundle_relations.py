@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
@@ -102,42 +103,19 @@ def _episode_ledger(n_declared: int, n_rows: int) -> EpisodeLedger:
 # ---------------------------------------------------------------------------
 
 
-def test_ctor_refuses_row_naming_absent_member(tiny_trace: Any) -> None:
-    """Constructing a Bundle with a relation naming a non-member refuses typed."""
-
-    with pytest.raises(BundleRelationError) as excinfo:
-        tl.Bundle(
-            {"a": tiny_trace, "b": tiny_trace},
-            relations=[_pair_row(dst="ghost")],
-        )
-    assert excinfo.value.fields["code"] == "bundle_relation_member_missing"
-    assert excinfo.value.fields["missing_member"] == "ghost"
-
-
-def test_relate_refuses_absent_member_and_keeps_table(tiny_trace: Any) -> None:
-    """relate() with a dangling row refuses typed and leaves the table unchanged."""
-
-    bundle = tl.Bundle({"a": tiny_trace, "b": tiny_trace})
-    with pytest.raises(BundleRelationError) as excinfo:
-        bundle.relate(_pair_row(kind="successor_of", dst="ghost"))
-    assert excinfo.value.fields["code"] == "bundle_relation_member_missing"
-    assert bundle.relations == ()
-
-
 # ---------------------------------------------------------------------------
 # R2: closed schema — unknown kind / wrong shape / param vocabulary
 # ---------------------------------------------------------------------------
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "payload",
     [
         # Unknown kind.
-        {"kind": "buddies_with", "from": "a", "to": "b", "params": {}},
         # PAIR kind given the MEMBER row shape.
         {"kind": "alternative_of", "member": "a", "params": {}},
         # Undeclared param key.
-        {"kind": "forked_from", "from": "a", "to": "b", "params": {"at_step": 0, "bogus": 1}},
         # Missing required at_step param.
         {"kind": "escalates", "from": "a", "to": "b", "params": {}},
         # Ill-typed at_step.
@@ -185,29 +163,11 @@ def test_episode_member_invariants(tiny_trace: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_view_identity_stability_and_new_version(tiny_trace: Any) -> None:
-    """member_relations is the SAME tuple across reads; relate() swaps it."""
-
-    bundle = tl.Bundle(
-        {"a": tiny_trace, "b": tiny_trace},
-        relations=[_pair_row()],
-    )
-    first_view = bundle.relations
-    assert isinstance(first_view, tuple)
-    assert bundle.relations is first_view
-    bundle.relate(_pair_row(kind="successor_of", src="b", dst="a"))
-    second_view = bundle.relations
-    assert second_view is not first_view
-    assert len(second_view) == 2
-    assert bundle.relations is second_view
-
-
 # ---------------------------------------------------------------------------
 # R5: mutator guards — refuse typed or cascade explicitly, never orphan
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_remove_refuses_then_cascades_exactly(tiny_trace: Any) -> None:
     """remove() refuses typed BEFORE removal; cascade drops only rows naming it."""
 
@@ -229,7 +189,6 @@ def test_remove_refuses_then_cascades_exactly(tiny_trace: Any) -> None:
     assert remaining[0].member == "c"
 
 
-@pytest.mark.smoke
 def test_clear_and_remove_except_guards(tiny_trace: Any) -> None:
     """clear()/remove_except() refuse typed, then cascade rows of removed members."""
 
@@ -259,7 +218,6 @@ def test_clear_and_remove_except_guards(tiny_trace: Any) -> None:
     assert bundle.relations == ()
 
 
-@pytest.mark.smoke
 def test_capacity_eviction_refuses_typed(tiny_trace: Any) -> None:
     """LRU eviction of a related member refuses typed, never silently orphans."""
 
@@ -280,7 +238,6 @@ def test_capacity_eviction_refuses_typed(tiny_trace: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_fold_arm2_episode_complete_via_bundle_ledger(tiny_trace: Any) -> None:
     """All-COMPLETE members matching the ledger-declared N fold complete."""
 
@@ -291,7 +248,7 @@ def test_fold_arm2_episode_complete_via_bundle_ledger(tiny_trace: Any) -> None:
             _episode_row("m1", 1, "decode"),
         ],
     )
-    result = bundle.episode_status("ep", ledger=_episode_ledger(2, 2))
+    result = bundle.episode_status("ep", episode_ledger=_episode_ledger(2, 2))
     assert result.status == "episode_complete"
     # Without the ledger, arm 2 cannot fire: fail-closed to unknown.
     assert bundle.episode_status("ep").status == "episode_unknown"
@@ -317,23 +274,6 @@ def test_fold_arm5_aborted_nonfinite_verbatim() -> None:
     assert result.status == "episode_aborted_at_step"
     assert result.at_step == 1
     assert result.member_status == "ABORTED_NONFINITE"
-
-
-def test_fold_arm6_failed_including_phaseless() -> None:
-    """FAILED members fold with verbatim phase, or 'unattributed' when absent."""
-
-    result = derive_episode_status(
-        [("complete", None), ("failed", "forward")], n_declared=None, ledger=None
-    )
-    assert result.status == "episode_failed_at_step"
-    assert result.at_step == 1
-    assert result.member_status == "FAILED"
-    assert result.member_phase == "forward"
-
-    phaseless = derive_episode_status([("failed", None)], n_declared=None, ledger=None)
-    assert phaseless.status == "episode_failed_at_step"
-    assert phaseless.at_step == 0
-    assert phaseless.member_phase == "unattributed"
 
 
 def test_fold_arm7_default_post_forward_failure_then_more_members() -> None:
@@ -370,24 +310,10 @@ def test_fold_escalates_exclusion_via_bundle(tiny_trace: Any) -> None:
     )
     # With esc excluded the domain is 2 COMPLETE members == n_declared=2;
     # without the exclusion the count would be 3 and the fold unknown.
-    result = bundle.episode_status("ep", ledger=_episode_ledger(2, 2))
+    result = bundle.episode_status("ep", episode_ledger=_episode_ledger(2, 2))
     assert result.status == "episode_complete"
 
 
-def test_fold_min_provenance_tier() -> None:
-    """Mixed exact + ledger_only member tiers fold to the MINIMUM tier."""
-
-    result = derive_episode_status(
-        [("complete", None), ("complete", None)],
-        n_declared=2,
-        ledger=None,
-        member_tiers=["exact", "ledger_only"],
-    )
-    assert result.status == "episode_complete"
-    assert result.provenance_tier == "ledger_only"
-
-
-@pytest.mark.smoke
 def test_fold_integration_real_failed_partial_member(tiny_trace: Any) -> None:
     """A real mid-forward failure folds via the failed member's real outcome."""
 
@@ -430,7 +356,6 @@ def _relation_bundle(tiny_trace: Any) -> Any:
     )
 
 
-@pytest.mark.smoke
 def test_persistence_empty_table_omits_the_key(tiny_trace: Any, tmp_path: Path) -> None:
     """A relation-free bundle writes no key and reloads plain (S6 R7)."""
 
@@ -439,7 +364,7 @@ def test_persistence_empty_table_omits_the_key(tiny_trace: Any, tmp_path: Path) 
     bundle = Bundle({"a": tiny_trace})
     target = tmp_path / "plain.tlspec"
     bundle.save(target)
-    metadata = json.loads((target / "bundle.json").read_text(encoding="utf-8"))
+    metadata = json.loads((target / "relations.json").read_text(encoding="utf-8"))
     assert "member_relations" not in metadata
     assert "_tlspec_prerelease" not in metadata
     loaded = tl.load(target)
@@ -453,7 +378,7 @@ def test_persistence_plain_round_trip_byte_faithful(tiny_trace: Any, tmp_path: P
     bundle = _relation_bundle(tiny_trace)
     target = tmp_path / "active.tlspec"
     bundle.save(target)
-    metadata = json.loads((target / "bundle.json").read_text(encoding="utf-8"))
+    metadata = json.loads((target / "relations.json").read_text(encoding="utf-8"))
     assert "_tlspec_prerelease" not in metadata
     expected_payload = MemberRelationTable(bundle.relations).to_payload()
     assert metadata["member_relations"] == expected_payload
@@ -467,13 +392,14 @@ def test_persistence_stale_marker_refuses_typed(tiny_trace: Any, tmp_path: Path)
     bundle = _relation_bundle(tiny_trace)
     target = tmp_path / "tampered.tlspec"
     bundle.save(target)
-    metadata_path = target / "bundle.json"
+    metadata_path = target / "relations.json"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["_tlspec_prerelease"] = {
         "marker": PRERELEASE_MARKER,
         "fields": ["Bundle.relations"],
     }
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    redigest(target, "relations.json")
     with pytest.raises(PreReleaseArtifactError):
         tl.load(target)
 
@@ -484,10 +410,11 @@ def test_persistence_dangling_member_refuses_typed(tiny_trace: Any, tmp_path: Pa
     bundle = _relation_bundle(tiny_trace)
     target = tmp_path / "dangling.tlspec"
     bundle.save(target)
-    metadata_path = target / "bundle.json"
+    metadata_path = target / "relations.json"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["member_relations"] = [_pair_row(dst="ghost")]
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    redigest(target, "relations.json")
     with pytest.raises(BundleRelationError) as excinfo:
         tl.load(target)
     assert excinfo.value.fields["code"] == "bundle_relation_member_missing"

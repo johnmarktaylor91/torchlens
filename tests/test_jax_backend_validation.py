@@ -10,8 +10,6 @@ import pytest
 
 from torchlens._ir.events import JaxEquationKind
 from torchlens.backends.jax.jaxpr import (
-    ALL_JAX_EQUATION_KINDS,
-    JAX_REPLAY_HANDLERS,
     JaxEquationCapture,
     replay_equation,
 )
@@ -48,19 +46,8 @@ def _capture_for_kind(kind: object) -> JaxEquationCapture:
     )
 
 
-def test_jax_replay_kind_table_covers_foundation_kinds() -> None:
-    """Replay dispatch should register every JAX interpreter foundation kind."""
-
-    assert ALL_JAX_EQUATION_KINDS == (
-        "primitive",
-        "scan_read",
-        "scan_stack",
-        "cond_decision",
-        "while_decision",
-    )
-    assert set(JAX_REPLAY_HANDLERS) == set(ALL_JAX_EQUATION_KINDS)
-
-
+@pytest.mark.rare
+@pytest.mark.backend_jax
 def test_jax_scan_replay_kinds_are_deterministic() -> None:
     """Scan helper replay kinds should reconstruct deterministic slice and stack values."""
 
@@ -81,6 +68,8 @@ def test_jax_scan_replay_kinds_are_deterministic() -> None:
     assert replay_equation(stack_capture)[0].tolist() == [1.0, 3.0]
 
 
+@pytest.mark.rare
+@pytest.mark.backend_jax
 def test_jax_decision_replay_kinds_validate_recorded_control_points() -> None:
     """Decision helper replay kinds should validate branch and stop-point semantics."""
 

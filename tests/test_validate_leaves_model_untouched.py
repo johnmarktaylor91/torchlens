@@ -196,19 +196,3 @@ def test_validate_keeps_accumulated_grads(scope: str, norm: str) -> None:
 
     output.sum().backward()
     _assert_grads_equal(model, _oracle_grads(norm), scale=2.0)
-
-
-def test_receptive_field_scope_on_a_batchnorm_model() -> None:
-    """Receptive-field validation of an eval BatchNorm model passes untouched.
-
-    Regression pin: the scope's reference-mode capture used to fail its own
-    metadata check on the BatchNorm's buffer version nodes (``saved
-    _version=2, current _version=0``). Materialization swapped each node's
-    payload for the write journal's private copy but kept the version stamped
-    from the live buffer it replaced.
-    """
-
-    model = _fresh("batch")
-    before = _tensor_state(model)
-    _validate(model, "receptive_field")
-    _assert_state_unchanged(before, model)

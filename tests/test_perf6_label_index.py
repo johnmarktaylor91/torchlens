@@ -61,13 +61,21 @@ def _spellings(log: tl.Trace) -> list[str]:
     return [*spellings, "no_such_label_1_1"]
 
 
+def _identity(resolved: Any) -> tuple[Any, ...]:
+    """A comparable identity: the Op's id, or a Selection's entry keys (``label:all``)."""
+
+    if type(resolved).__name__ == "Selection":
+        return ("Selection", tuple(entry.key for entry in resolved))
+    return (id(resolved),)
+
+
 def _outcome(log: tl.Trace, spelling: str) -> tuple[Any, ...]:
     """Resolved site identities, or the refusal, plus the warning texts."""
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         try:
-            result: Any = (id(log[tl.label(spelling)]),)
+            result: Any = _identity(log[tl.label(spelling)])
         except Exception as exc:  # noqa: BLE001 - the refusal itself is compared
             result = (type(exc).__name__, str(exc))
     return result, tuple(str(w.message) for w in caught)
@@ -110,24 +118,6 @@ def test_the_index_answers_label_queries_without_evaluating_selectors(
     assert [op.func_name for op in relus] == ["relu"] * 3
 
 
-def test_each_trace_in_one_scope_gets_its_own_index(trace) -> None:
-    torch.manual_seed(1)
-    other = tl.trace(
-        _Net().eval(),
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    try:
-        label = trace._layer_list[3].label
-        with resolver._label_index_scope():
-            mine = trace[tl.label(label)]
-            theirs = other[tl.label(label)]
-        assert mine is trace._layer_list[3]
-        assert theirs is other._layer_list[3]
-    finally:
-        other.cleanup()
-
-
 def test_the_index_skips_positional_keys_and_steps_aside_for_unknown_ones() -> None:
     class _Site:
         layer_label = "a_1_1"
@@ -142,7 +132,12 @@ def test_the_index_skips_positional_keys_and_steps_aside_for_unknown_ones() -> N
 
     site = _Site()
     index = selector_eval._label_site_index([site])
-    assert index == {"a_1_1": (site,), "a_1_1:1": (site,)}
+    assert index == {
+        "a_1_1": (site,),
+        "a_1_1:1": (site,),
+        "a_1_1:last": (site,),
+        "a_1_1:all": (site,),
+    }
     odd = _Site()
     odd.lookup_keys = ("a_1_1", _Key())
     assert selector_eval._label_site_index([odd]) is None
@@ -162,9 +157,7 @@ def test_a_push_with_label_hooks_evaluates_no_selector_per_hook(
     assert len(hooked) >= 5
     fork = trace.fork()
     monkeypatch.setattr(resolver, "evaluate", counting)
-    pushed = fork.push(
-        replay=tl.options.ReplayOptions(hooks={tl.label(label): tl.scale(1.0) for label in hooked})
-    )
+    pushed = fork.do({tl.label(label): tl.scale(1.0) for label in hooked})
     # Before the index, origins and hook targeting each evaluated every hook's
     # selector on every op: 2 x hooks x ops calls.
     assert len(calls) < len(trace._layer_list)

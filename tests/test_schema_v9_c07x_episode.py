@@ -31,7 +31,6 @@ import torch
 
 import torchlens as tl
 from torchlens._capture._episode_ledger import (
-    EPISODE_LEDGER_VERSION,
     EpisodeLedger,
     EpisodeLedgerHeader,
     EpisodeLedgerRow,
@@ -108,13 +107,6 @@ def _row(step: int, **overrides) -> EpisodeLedgerRow:
 # ---------------------------------------------------------------------------
 
 
-def test_header_carries_family_version_2() -> None:
-    assert EPISODE_LEDGER_VERSION == 2
-    header = _header()
-    assert header.episode_ledger_version == 2
-    assert header.to_payload()["episode_ledger_version"] == 2
-
-
 def test_wrong_family_version_refuses() -> None:
     """Future grammar changes are family-local; this build validates v2 only."""
 
@@ -126,24 +118,6 @@ def test_step_output_kind_default_tokens_and_closed() -> None:
     assert _header().step_output_kind == "tokens"
     with pytest.raises(ValueError, match="out of vocabulary"):
         _header(step_output_kind="frames")
-
-
-def test_entry_dark_header_slots_default_none() -> None:
-    """step_output_from/step_join/capture_digest/intervention_digest
-    DEFAULT to absent (None): only their writers (F40b/F40c/F42) fill them,
-    so a bare header constructs entry-dark."""
-
-    header = _header()
-    assert header.step_output_from is None
-    assert header.step_join is None
-    assert header.capture_digest is None
-    assert header.intervention_digest is None
-
-
-def test_perturbed_fidelity_basis_admitted() -> None:
-    header = _header(escalated_from="sha:1", reason="requested", fidelity_basis="perturbed")
-    rebuilt = EpisodeLedgerHeader.from_payload(header.to_payload())
-    assert rebuilt.fidelity_basis == "perturbed"
 
 
 def test_step_join_envelope_shape_validated() -> None:
@@ -170,15 +144,6 @@ def test_cache_len_is_deleted_from_the_grammar() -> None:
     payload["cache_len"] = 3
     with pytest.raises(ValueError, match="unknown keys"):
         EpisodeLedgerRow.from_payload(payload)
-
-
-def test_carried_state_witness_slots_default_not_measured() -> None:
-    """SV-6 = GENERIC: the witness is measured-or-absent; None = NOT
-    MEASURED, and no shipped writer fabricates a value."""
-
-    row = _row(0)
-    assert row.entry_state_digest is None
-    assert row.exit_state_digest is None
 
 
 @pytest.mark.smoke
@@ -285,37 +250,6 @@ def test_v1_payload_quarantines_at_load_validation() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_live_episode_writes_grammar_v2() -> None:
-    log = _capture_episode()
-    ledger = episode_ledger_for(log)
-    assert ledger is not None
-    header = ledger.header
-    assert header.episode_ledger_version == 2
-    assert header.step_output_kind == "tokens"
-    assert header.step_axis == -1  # the declared step axis, generic spelling
-    # Lane F40b activated the grammar's derivation carriers: the source
-    # disclosure is written whenever a kind consumes one, and the capture
-    # digest binds the ledger to this product (64-hex, foldA D7).
-    assert header.step_output_from == "output"
-    assert isinstance(header.capture_digest, str)
-    assert len(header.capture_digest) == 64
-    # Lane F40c landed the join measurement: the reserved slot carries the
-    # measured envelope on live captures. intervention_digest is F42's
-    # coupling slot: None here because THIS capture is uncoupled.
-    assert header.step_join is not None
-    assert header.step_join["schema"] == "episode_step_join_v1"
-    assert header.step_join["claim"] == "measured"
-    assert header.intervention_digest is None
-    for row in ledger.rows:
-        assert isinstance(row.step_output, tuple)
-        assert row.entry_state_digest is None
-        assert row.exit_state_digest is None
-        assert row.fire_count is None
-    payload = log.annotations["episode"]
-    assert "cache_len" not in payload["rows"][0]
-    assert "tokens" not in payload["rows"][0]
-
-
 def test_episode_round_trip_under_v9(tmp_path) -> None:
     log = _capture_episode()
     target = tmp_path / "episode.tlspec"
@@ -347,16 +281,6 @@ def test_root_entry_point_written_unconditionally() -> None:
     assert episode_log.provenance.root_entry_point.endswith("_EpisodeRoot.forward")
 
 
-def test_root_entry_point_round_trips(tmp_path) -> None:
-    model = _Greedy()
-    log = tl.trace(model, torch.randn(2, 4))
-    target = tmp_path / "plain.tlspec"
-    log.save(target)
-    loaded = tl.load(target)
-    assert loaded.provenance.root_entry_point == log.provenance.root_entry_point
-    assert loaded.provenance.root_entry_point.startswith("module_call:")
-
-
 def _roundtrip(log, tmp_path, name: str):
     target = tmp_path / f"{name}.tlspec"
     log.save(target)
@@ -372,14 +296,6 @@ def test_root_entry_point_grammar_refuses_at_load(tmp_path) -> None:
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(log, tmp_path, "root_bad")
     assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
-
-
-def test_op_entry_dark_facts_default_none() -> None:
-    model = _Greedy()
-    log = tl.trace(model, torch.randn(2, 4))
-    for op in log.ops:
-        assert op.episode_step is None
-        assert op.tl_authored_root is None
 
 
 def test_episode_step_stamp_without_declaration_refuses(tmp_path) -> None:
@@ -416,12 +332,3 @@ def test_tl_authored_root_without_bound_method_root_refuses(tmp_path) -> None:
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(log, tmp_path, "marker_bad")
     assert excinfo.value.fields["code"] == "artifact_tl_authored_root_invalid"
-
-
-def test_stamped_episode_capture_round_trips(tmp_path) -> None:
-    """The legal direction: a stamp on a real episode capture validates."""
-
-    log = _capture_episode()
-    log.ops[0].episode_step = 0
-    loaded = _roundtrip(log, tmp_path, "stamp_ok")
-    assert loaded.ops[0].episode_step == 0

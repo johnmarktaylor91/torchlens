@@ -199,14 +199,14 @@ def occlusion(
     data. To ask "what if this region held another input's value", patch from
     a donor trace instead: ``trace.fork().do(selection, tl.patch_from(donor))``
     with the donor captured on that other input, or the population-based
-    replacements (``tl.mean_ablate(population, dim=None)``,
+    replacements (``tl.mean_ablate(population, dim='members')``,
     ``torchlens.intervention.sample_from``, ``resample_rows_from``). The baseline used is always
     returned in ``extra["baseline"]``; report it with the score.
 
     Parameters
     ----------
     trace
-        Live captured Trace with replayable saved values.
+        Live captured Trace with saved values.
     selection
         Selection query, resolved selection, or region producer to occlude.
     score
@@ -222,6 +222,18 @@ def occlusion(
     AttributionResult
         Scalar scored delta in ``values`` plus both endpoint scores and baseline
         disclosure in ``extra``.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> result = tl.attribution.occlusion(
+    ...     trace, trace.input_ops[0], score=lambda t: t.output_ops[0].out.sum()
+    ... )
+    >>> result.method
+    'occlusion'
+    >>> result.extra["baseline"]
+    'zeros'
+    >>> trace.cleanup()
     """
 
     resolved = _resolve_selection(trace, selection)
@@ -235,7 +247,7 @@ def occlusion(
             f"({len(resolved)} touched site(s), none with a selected element), so the "
             "occluded score would equal the original and report a confident zero. "
             "Remedy: select at least one element: pass the op itself (e.g. "
-            "trace[label]) to occlude the whole site, or tl.units(label, [index, ...]) "
+            "trace.layers[label]) to occlude the whole site, or tl.units(label, [index, ...]) "
             "with at least one in-range index.",
             code="occlusion_selection_empty",
         )
@@ -555,6 +567,18 @@ def occlusion_map(
     ------
     AttributionError
         On geometry violations or a pass budget overrun.
+
+    Examples
+    --------
+    >>> clf = nn.Sequential(
+    ...     nn.Conv2d(3, 4, 3, padding=1), nn.ReLU(), nn.AdaptiveAvgPool2d(1), nn.Flatten(),
+    ...     nn.Linear(4, 3),
+    ... ).eval()
+    >>> result = tl.attribution.occlusion_map(clf, x, target=0, window=(4, 4))
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
+    >>> result.extra["perturbation_count"]
+    4
     """
 
     if overlap not in ("average", "sum"):

@@ -251,6 +251,22 @@ def noise_tunnel(
         On binding violations, composition refusals, invalid noise scales or
         aggregation tokens, cross-sample invariance violations, or a child
         failure (named by zero-based sample; no partial result).
+
+    Examples
+    --------
+    >>> result = tl.attribution.noise_tunnel(
+    ...     x,
+    ...     method=tl.attribution.saliency,
+    ...     model=model,
+    ...     target=0,
+    ...     num_samples=2,
+    ...     stdevs=0.1,
+    ...     seed=0,
+    ... )
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
+    >>> result.extra["child_method"]
+    'saliency'
     """
 
     _validate_positive_int("n_samples", num_samples)

@@ -83,6 +83,10 @@ from __future__ import annotations
 from importlib.util import find_spec as _find_spec
 
 from .._utils.facade import DependencyGate as _DependencyGate
+from ._conflicts import (
+    check_rsatoolbox_conflict as _check_rsatoolbox_conflict,
+    rsatoolbox_conflict as _rsatoolbox_conflict,
+)
 
 _INSTALL_NEURO = 'pip install "torchlens[neuro]"'
 _INSTALL_BRAINSCORE = 'pip install "torchlens[brainscore]" (Python >= 3.11)'
@@ -93,9 +97,16 @@ _INSTALL_BRAINSCORE = 'pip install "torchlens[brainscore]" (Python >= 3.11)'
 #: not a real public name of this environment, and ``hasattr`` already
 #: answers ``False`` for it. Access to an unadvertised gated name still
 #: teaches the exact install command (facade step 4 re-probes per access).
+#: An installed rsatoolbox that the metadata-only conflict check diagnoses
+#: as unimportable (the [neuro,brainscore] scikit-learn pin) is not
+#: advertised either; access raises ``neuro_dependency_conflict``.
 __all__ = (
     ["ExtractionPlan", "PlanSite", "compare", "export_npz", "plan_extraction"]
-    + (["datasets", "rdms"] if _find_spec("rsatoolbox") is not None else [])
+    + (
+        ["datasets", "rdms"]
+        if _find_spec("rsatoolbox") is not None and _rsatoolbox_conflict() is None
+        else []
+    )
     + (
         ["activations_extractor", "get_activations_fn"]
         if _find_spec("brainscore_vision") is not None
@@ -266,8 +277,8 @@ _REFUSALS: dict[str, str] = {
 #: Per-name dependency gates (facade step 4). Redirect/refusal rows need no
 #: gate -- teaching an absent name must never demand a foreign package.
 _DEPENDENCIES: dict[str, _DependencyGate] = {
-    "datasets": _DependencyGate("rsatoolbox", _INSTALL_NEURO),
-    "rdms": _DependencyGate("rsatoolbox", _INSTALL_NEURO),
+    "datasets": _DependencyGate("rsatoolbox", _INSTALL_NEURO, _check_rsatoolbox_conflict),
+    "rdms": _DependencyGate("rsatoolbox", _INSTALL_NEURO, _check_rsatoolbox_conflict),
     # Gated on brainscore_vision ALONE (memo D17/4.3): brainscore_core is
     # named nowhere -- pinning brainscore-vision gets core for free.
     "activations_extractor": _DependencyGate("brainscore_vision", _INSTALL_BRAINSCORE),

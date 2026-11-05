@@ -54,6 +54,7 @@ def _failed_validation_trace(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, nn.M
     return trace, model, passed
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _io/scrub.py, validation/_trace_checks.py.
 def test_failed_validation_leaves_no_scratch_and_saves(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -65,6 +66,12 @@ def test_failed_validation_leaves_no_scratch_and_saves(
 
 
 def test_validation_clears_scratch_when_it_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run that raises mid-way still leaves no scratch index on the trace.
+
+    The failed-verdict sibling covers the normal exit; this is the raise path,
+    which only the ``finally`` of ``validate_saved_outs`` clears.
+    """
+
     trace, _model, _passed = _failed_validation_trace(monkeypatch)
 
     def _boom(*_args: Any, **_kwargs: Any) -> Any:

@@ -230,7 +230,7 @@ def _has_op_in_pass(trace: Any, object_id: int, pass_index: int) -> bool:
         return False
     calls = getattr(grad_fn, "calls", None) or {}
     values = calls.values() if hasattr(calls, "values") else calls
-    return any(getattr(call, "backward_pass_index", None) == pass_index for call in values)
+    return any(getattr(call, "backward_pass_number", None) == pass_index for call in values)
 
 
 def _checkpoint_evidence(trace: Any) -> str:
@@ -263,7 +263,7 @@ def _resolve_call_index(grad_fn: Any, ref: tuple[int, int, int], pass_index: int
     in_pass = [
         int(call.call_index)
         for call in values
-        if getattr(call, "backward_pass_index", None) == pass_index
+        if getattr(call, "backward_pass_number", None) == pass_index
     ]
     if len(in_pass) == 1:
         return in_pass[0]

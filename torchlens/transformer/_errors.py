@@ -24,6 +24,14 @@ class RenderError(TorchLensError, RuntimeError):
     Contracted refusals carry a stable ``fields["code"]`` and a structured
     ``fields["remedy"]``; the ``RuntimeError`` lineage keeps tviz refusals
     catchable alongside the semantic and mechinterp packages' error classes.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.transformer.TokenAxis(role="bogus", tokens=("a",))
+    ... except tl.errors.RenderError as err:
+    ...     print(type(err).__name__, err.fields["code"])
+    RenderError tv_record_invalid
     """
 
 

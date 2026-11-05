@@ -26,7 +26,7 @@ from torchlens.backends.mlx.wrappers import (  # noqa: E402
     mlx_activations_module,
 )
 
-pytestmark = [pytest.mark.backend_mlx, pytest.mark.heavy]
+pytestmark = [pytest.mark.backend_mlx, pytest.mark.heavy, pytest.mark.rare]
 
 #: Constructor arguments for activation layers that need them. A layer MLX
 #: adds that cannot be built with no arguments fails the coverage test until

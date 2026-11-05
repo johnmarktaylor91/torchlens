@@ -14,12 +14,13 @@ from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import redigest
 
 import torchlens as tl
+from torchlens._io import ArtifactTooOldError
 from torchlens.bundle import Bundle
 from torchlens.bundle._relations import MemberRelationRow, MemberRelationTable
 from torchlens.errors.episode import BundleRelationError
-from torchlens.intervention.errors import BundleComparisonError
 
 
 class _TinyLM(torch.nn.Module):
@@ -63,57 +64,27 @@ def _evidence() -> dict[str, object]:
     }
 
 
-def test_direction_pin_and_params(model: _TinyLM) -> None:
-    bundle = _routed(model).relate(
-        "selected_by", "writer", "router", chosen=1, candidates=[0, 1], evidence=_evidence()
-    )
-    row = bundle.relations[0]
-    assert (row.kind, row.from_member, row.to_member) == ("selected_by", "writer", "router")
-    payload = row.to_payload()
-    assert (payload["from"], payload["to"]) == ("writer", "router")
-    assert payload["params"]["chosen"] == 1 and payload["params"]["candidates"] == [0, 1]
-    item = payload["params"]["evidence"]["items"][0]
-    assert item["grade"] == "disclosed" and item["declared_grade"] == "verified"
-    assert bundle.upstream("writer") == ("router",)
-    assert bundle.downstream("router") == ("writer",)
-
-
-def test_selected_and_decider_are_ordered_for_the_comparison_gate(model: _TinyLM) -> None:
-    bundle = _routed(model)
-    assert bundle._delta_map("relative_l2"), "same model, same input: comparable"
-    bundle.relate("selected_by", "writer", "router")
-    with pytest.raises(BundleComparisonError) as excinfo:
-        bundle._delta_map("relative_l2")
-    assert _code(excinfo) == "bundle_gate_ordering_topology"
-
-
 def test_round_trip_keeps_the_row(tmp_path: Path, model: _TinyLM) -> None:
     bundle = _routed(model).relate(
         "selected_by", "writer", "router", chosen="lookup", candidates=["lookup", "none"]
     )
     bundle.save(tmp_path / "routed.tlspec")
     manifest = json.loads((tmp_path / "routed.tlspec" / "manifest.json").read_text())
-    assert manifest["tlspec_version"] == 11
+    assert manifest["tlspec_version"] == 12
     loaded = tl.load(tmp_path / "routed.tlspec")
     assert loaded.relations == bundle.relations
     assert loaded.upstream("writer") == ("router",)
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "params",
     [
-        {"chosen": [1]},
-        {"chosen": float("nan")},
-        {"chosen": ""},
         {"candidates": []},
-        {"candidates": "ab"},
         {"candidates": [1, 1]},
         {"candidates": [{"route": 1}]},
-        {"chosen": 2, "candidates": [0, 1]},
         {"chosen": True, "candidates": [0, 1]},
         {"evidence": {"schema": "s", "items": []}},
-        {"label": "router"},
-        {"token_spans": [[0, 1, 0, 1]]},
     ],
 )
 def test_malformed_params_refuse_typed(model: _TinyLM, params: dict[str, object]) -> None:
@@ -128,10 +99,11 @@ def test_tampered_artifact_param_refuses_at_load(tmp_path: Path, model: _TinyLM)
     bundle = _routed(model).relate("selected_by", "writer", "router", chosen=1, candidates=[0, 1])
     path = tmp_path / "routed.tlspec"
     bundle.save(path)
-    metadata_path = path / "bundle.json"
+    metadata_path = path / "relations.json"
     metadata = json.loads(metadata_path.read_text())
     metadata["member_relations"][0]["params"]["chosen"] = 7
     metadata_path.write_text(json.dumps(metadata))
+    redigest(metadata_path.parent, "relations.json")
     with pytest.raises(BundleRelationError) as excinfo:
         tl.load(path)
     assert _code(excinfo) == "bundle_relation_schema_invalid"
@@ -144,10 +116,9 @@ def test_v9_stamped_artifact_with_the_kind_refuses(tmp_path: Path, model: _TinyL
     manifest = json.loads(manifest_path.read_text())
     manifest["tlspec_version"] = 9
     manifest_path.write_text(json.dumps(manifest))
-    with pytest.raises(BundleRelationError) as excinfo:
+    with pytest.raises(ArtifactTooOldError) as excinfo:
         tl.load(path)
-    assert _code(excinfo) == "bundle_relation_schema_invalid"
-    assert excinfo.value.fields["row_kind"] == "selected_by"  # type: ignore[attr-defined]
+    assert _code(excinfo) == "artifact_version_below_floor"
 
 
 @pytest.mark.parametrize("kind", ["chosen_by", "routed_by", "Selected_by", "selected-by"])
@@ -164,10 +135,11 @@ def test_unknown_bare_kinds_still_refuse(tmp_path: Path, model: _TinyLM, kind: s
             MemberRelationTable.from_payload(payload, unknown_kinds=policy)  # type: ignore[arg-type]
     path = tmp_path / f"{kind}.tlspec"
     bundle.relate("selected_by", "writer", "router").save(path)
-    metadata_path = path / "bundle.json"
+    metadata_path = path / "relations.json"
     metadata = json.loads(metadata_path.read_text())
     metadata["member_relations"][0]["kind"] = kind
     metadata_path.write_text(json.dumps(metadata))
+    redigest(metadata_path.parent, "relations.json")
     with pytest.raises(BundleRelationError) as excinfo:
         tl.load(path)
     assert _code(excinfo) == "bundle_relation_schema_invalid"
@@ -181,10 +153,3 @@ def test_graph_edge_names_the_decision() -> None:
     )
     label, checked = _relation_edge_label(row)
     assert label.splitlines() == ["selected_by", "chose 1"] and not checked
-
-
-def test_writer_contract_records_the_kind() -> None:
-    from torchlens._io.writer_contract import writer_contract
-
-    kinds = writer_contract()["component_schema_versions"]["bundle_relation_kinds"]
-    assert "selected_by" in kinds

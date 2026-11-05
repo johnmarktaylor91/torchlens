@@ -19,7 +19,7 @@ import pytest
 
 import torchlens as tl
 
-pytestmark = pytest.mark.heavy
+pytestmark = [pytest.mark.heavy, pytest.mark.rare]
 
 
 def _roundtrip(trace: Any, tmp_path: Path) -> Any:

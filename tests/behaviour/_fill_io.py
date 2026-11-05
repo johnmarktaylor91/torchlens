@@ -267,7 +267,9 @@ def _check_2x_refusal(cell: Cell, bundle: Path) -> None:
             exc.fields.get("code") == "artifact_version_below_floor",
             f"2.x refusal code {exc.fields.get('code')!r}",
         )
-        cell.expect("saved by torchlens 2.x" in str(exc), f"2.x refusal message: {exc}")
+        cell.expect(
+            "saved by torchlens 2.37 and earlier" in str(exc), f"pre-2.38 refusal message: {exc}"
+        )
         cell.expect(
             exc.fields.get("observed") == f"tlspec_version={STAMP_2X}",
             f"2.x refusal observed {exc.fields.get('observed')!r}",
@@ -353,7 +355,16 @@ PREDICATE_FEATURES = frozenset({"save", "halt", "intervene"})
 
 
 def _predicate_capture(cell: Cell) -> bool:
-    return any(feature.name in PREDICATE_FEATURES for feature in cell.features)
+    """Whether the capture passed a predicate keyword (``save=``, ``stop_after=``, ``intervene=``).
+
+    The predicate features always pass theirs. Any other feature counts only when
+    its capture really passed ``intervene=`` (the hooks feature does, through
+    ``_merge_intervene``): that is what makes ``op.out`` materialize the blob.
+    """
+
+    if any(feature.name in PREDICATE_FEATURES for feature in cell.features):
+        return True
+    return cell.trace_kwargs.get("intervene") is not None
 
 
 def _stream_path(cell: Cell) -> Path:

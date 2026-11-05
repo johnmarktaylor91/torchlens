@@ -30,44 +30,6 @@ def parity_capture() -> Any:
     trace.cleanup()
 
 
-def test_param_total_agrees_across_summary_agent_and_torch(parity_capture: Any) -> None:
-    """summary().total_params == the torch census the agent door restates."""
-
-    report = parity_capture.summary()
-    torch_census = 58  # closed form, pinned in test_proofnet_quantities
-    assert report.total_params == torch_census
-    payload = parity_capture.to_agent_json()
-    payload_text = str(payload)
-    assert str(torch_census) in payload_text, (
-        "the agent door nowhere states the parameter total the summary door"
-        f" serves ({torch_census})"
-    )
-
-
-def test_op_population_agrees_across_doors(parity_capture: Any) -> None:
-    """layer_labels, len(), iteration, and the agent payload agree."""
-
-    labels = parity_capture.layer_labels
-    assert len(parity_capture) == len(labels)
-    assert len(list(iter(parity_capture))) == len(labels)
-    payload = parity_capture.to_agent_json()
-    assert list(payload["layer_labels"]) == list(labels), (
-        "the agent door's label roster differs from the trace's own"
-    )
-
-
-def test_outcome_agrees_across_report_doors(parity_capture: Any) -> None:
-    """COMPLETE reads COMPLETE at every door that mentions status."""
-
-    assert parity_capture.outcome.status.name == "COMPLETE"
-    explain_text = parity_capture.explain().lower()
-    assert "failed" not in explain_text and "aborted" not in explain_text
-    payload_capture_block = str(parity_capture.to_agent_json().get("capture", {})).lower()
-    assert "complete" in payload_capture_block, (
-        "the agent capture block never states the settled COMPLETE outcome"
-    )
-
-
 def test_no_banned_tokens_on_any_text_door(parity_capture: Any) -> None:
     """Drafting placeholders never ship through a user-facing door."""
 

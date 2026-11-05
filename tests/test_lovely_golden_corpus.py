@@ -74,7 +74,6 @@ _CORE_SPECIMENS = [
 ]
 
 
-@pytest.mark.smoke_cells("test_core_line_golden[bool_all_true]", "test_core_line_golden[scalar]")
 @pytest.mark.parametrize(
     "name,factory,expected", _CORE_SPECIMENS, ids=[s[0] for s in _CORE_SPECIMENS]
 )
@@ -126,17 +125,14 @@ def test_op_envelope_golden() -> None:
     """
 
     trace = _elementwise_trace()
-    op = trace["relu_1_3"].ops[0]
-    assert repr(op) == (
-        "_Elementwise/relu_1_3 (pass 1/1) [op 3/4 relu] -> "
-        "f32[8]@cpu [0.000 .. 0.5000] mean=0.1429 sd=0.1821 zero=4/8"
-    )
+    op = trace.layers["relu_1_3"].ops[0]
+    assert repr(op) == ("Op relu_1: float32 [8] on cpu, min 0.000 max 0.5000 mean 0.1429 sd 0.1821")
     card = str(op)
     lines = card.splitlines()
     assert lines[0] == repr(op)
     assert any(line.strip().startswith("graph") for line in lines)
     assert any(line.strip().startswith("func") for line in lines)
-    assert lines[-1].strip().startswith("More:")
+    assert lines[-1].strip().startswith("more ")
     trace.cleanup()
 
 
@@ -153,7 +149,6 @@ def test_trace_and_records_ascii_sweep() -> None:
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_stats_record_repr_is_the_core_line() -> None:
     """TensorStats reprs as its own grammar (records show)."""
 

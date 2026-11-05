@@ -37,6 +37,17 @@ def from_direction(
     ------
     ImportError
         If steering-vectors is unavailable.
+
+    Examples
+    --------
+    >>> # requires: steering_vectors
+    >>> net = nn.Sequential(nn.Linear(4, 4)).eval()
+    >>> pos = tl.trace(net, torch.randn(3, 4))
+    >>> neg = tl.trace(net, torch.randn(3, 4))
+    >>> direction = tl.intervention.fit_direction(pos, neg, "linear", read_token_index=None)
+    >>> vector = tl.bridge.steering_vectors.from_direction(direction, layer=3)
+    >>> tuple(vector.layer_activations[3].shape)
+    (4,)
     """
 
     try:

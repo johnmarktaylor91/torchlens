@@ -148,7 +148,7 @@ def test_causal_scrub_row_agreement_seed_and_audit(scrub_world: dict[str, object
         tl.label(site),
         tl.patch_from(
             sample_from(
-                population,
+                donor_population,
                 agree_on=lambda datum: datum["template"],
                 matching=OneDatum({"template": "A"}),
                 seed=4321,

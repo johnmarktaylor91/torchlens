@@ -253,7 +253,7 @@ def _check_special_layer_lists(ml: Trace) -> None:
             lpl = (
                 retained_orphans_by_label[label]
                 if label in retained_orphans_by_label
-                else ml[label]
+                else (ml[label] if label_kind == "op" else ml.layers[label])
             )
             if not getattr(lpl, flag_attr):
                 raise MetadataInvariantError(
@@ -440,6 +440,19 @@ def _check_op_label_resolution(ml: Trace) -> None:
                 )
 
 
+def _edge_mismatch_message(label: str, other: str, relation: str, reverse: str, stored: Any) -> str:
+    """One bidirectionality finding, naming the counterpart's stored list verbatim.
+
+    The stored spellings stay visible so a corrupt-but-fuzzy-resolvable label
+    (``'input'`` for ``'input_1'``) is reported as stored, never as resolved.
+    """
+
+    return (
+        f"Layer {label} lists {other} as {relation}, but {other} does not list {label} as "
+        f"{reverse} (stored {reverse}s: {list(stored)!r})"
+    )
+
+
 def _check_graph_topology(ml: Trace) -> None:
     """Check C: parent-child edge bidirectionality and stored-flag consistency.
 
@@ -553,7 +566,7 @@ def _check_graph_topology(ml: Trace) -> None:
             if not lpl_aliases.intersection(parent.children):
                 raise MetadataInvariantError(
                     name,
-                    f"Layer {label} lists {p} as parent, but {p} does not list {label} as child",
+                    _edge_mismatch_message(label, p, "parent", "child", parent.children),
                 )
 
         for c in lpl.children:
@@ -568,7 +581,7 @@ def _check_graph_topology(ml: Trace) -> None:
             if not lpl_aliases.intersection(child.parents):
                 raise MetadataInvariantError(
                     name,
-                    f"Layer {label} lists {c} as child, but {c} does not list {label} as parent",
+                    _edge_mismatch_message(label, c, "child", "parent", child.parents),
                 )
 
         # Stored-flag consistency. has_children is set during capture and does

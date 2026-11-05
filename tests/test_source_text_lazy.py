@@ -1,0 +1,242 @@
+"""The line of code that ran an op: frame order, lazy source text, and the op card.
+
+Contract pinned here:
+
+- ``op.code_context`` is ordered outermost to innermost, like a traceback: the
+  call site first, the frame that ran the op LAST.
+- Without ``save_source_context`` a capture stores no source text; the text is
+  read from the file when asked for, and only while the file still has the
+  size and modification time it had at capture. A changed or missing file
+  shows a reason, never another line's text.
+- ``save_source_context=True`` snapshots the text at capture.
+- ``print(op)`` names the op's line (``file:line in function``) on its
+  ``source`` row; the text stays on ``op.code_context`` (house style B8). When
+  a lazily read file changed or vanished since capture, the row says so.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import linecache
+import os
+import sys
+import textwrap
+from pathlib import Path
+from types import ModuleType
+
+import pytest
+import torch
+from torch import nn
+
+import torchlens as tl
+from torchlens._data_classes._site_key import operation_witness
+from torchlens._data_classes.func_call_location import display_frame, short_source_path
+
+_TOY_SOURCE = textwrap.dedent(
+    """
+    import torch
+    from torch import nn
+
+
+    class Toy(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = nn.Linear(3, 3)
+
+        def forward(self, x):
+            y = self.linear(x)
+            z = torch.relu(y)  # the relu line
+            return z * 2
+    """
+)
+
+
+def _load_toy(tmp_path: Path, name: str) -> tuple[ModuleType, Path]:
+    """Write the toy model to ``tmp_path`` and import it as a fresh module."""
+
+    path = tmp_path / f"{name}.py"
+    path.write_text(_TOY_SOURCE)
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module, path
+
+
+def _source_row(card: str) -> str:
+    """The card's one ``source`` row."""
+
+    rows = [row for row in card.splitlines() if row.startswith("  source    ")]
+    assert len(rows) == 1, card
+    return rows[0]
+
+
+def _function_name() -> str:
+    """The qualified name where ``co_qualname`` exists, else the bare function name."""
+
+    return "Toy.forward" if sys.version_info >= (3, 11) else "forward"
+
+
+def _line_of(path: Path, needle: str) -> int:
+    """One-indexed line number of the first line containing ``needle``."""
+
+    for number, line in enumerate(path.read_text().splitlines(), start=1):
+        if needle in line:
+            return number
+    raise AssertionError(f"{needle!r} not in {path}")
+
+
+@pytest.fixture
+def toy(tmp_path: Path, request: pytest.FixtureRequest):
+    """A toy model module written to a temp file, plus its path."""
+
+    name = f"tl_lazy_source_{request.node.name.replace('[', '_').replace(']', '_')}"
+    module, path = _load_toy(tmp_path, name)
+    yield module, path
+    sys.modules.pop(name, None)
+    linecache.checkcache()
+
+
+def test_innermost_frame_is_last_and_call_site_first(toy) -> None:
+    module, path = toy
+    trace = tl.trace(module.Toy(), torch.randn(2, 3))
+    relu = trace["relu_1"]
+    frames = list(relu.code_context)
+    assert len(frames) >= 2
+    assert frames[0].file == __file__  # the call site: this test's trace line
+    assert frames[1].func_name == "forward"  # the outermost forward
+    assert frames[-1].file == str(path)
+    assert frames[-1].line_number == _line_of(path, "the relu line")
+    assert operation_witness(relu) == (str(path), _line_of(path, "the relu line"))
+
+
+def test_default_capture_reads_source_lazily(toy) -> None:
+    module, path = toy
+    trace = tl.trace(module.Toy(), torch.randn(2, 3))
+    frame = trace["relu_1"].code_context[-1]
+    assert frame.source_loading_enabled is False
+    assert frame._call_line == ""  # nothing stored at capture
+    assert frame.call_line == "z = torch.relu(y)  # the relu line"
+    assert "--->  " in frame.code_context_labeled
+    assert repr(frame).startswith("FuncCallLocation:")
+    assert "z = torch.relu(y)" not in repr(frame)
+
+
+def test_op_card_shows_location_and_text(toy) -> None:
+    module, path = toy
+    trace = tl.trace(module.Toy(), torch.randn(2, 3))
+    relu = trace.ops["relu_1"]  # a bare layer label at trace[...] names the Layer
+    card = str(relu)
+    line = _line_of(path, "the relu line")
+    frame = relu.code_context[-1]
+    function = _function_name()
+    assert (frame.func_qualname or frame.func_name) == function
+    assert _source_row(card).endswith(f"{path.name}:{line} in {function}")
+    # The text left the card (B8); the card points at .code_context, which holds it.
+    assert "z = torch.relu(y)" not in card
+    assert ".code_context" in card.splitlines()[-1]
+    assert frame.call_line == "z = torch.relu(y)  # the relu line"
+
+
+def test_op_card_skips_torch_frames_for_module_ops(toy) -> None:
+    module, path = toy
+    trace = tl.trace(module.Toy(), torch.randn(2, 3))
+    linear = trace["linear_1"]
+    torch_dir = os.path.dirname(os.path.abspath(torch.__file__))
+    assert os.path.abspath(linear.code_context[-1].file).startswith(torch_dir)
+    shown = display_frame(linear.code_context)
+    assert shown is not None
+    assert shown.file == str(path)
+    assert shown.line_number == _line_of(path, "y = self.linear(x)")
+    card = str(linear)
+    assert "\n  module    linear\n" in card
+    assert f"  source    {short_source_path(str(path))}:{shown.line_number} in " in card
+    line = _line_of(path, "y = self.linear(x)")
+    assert _source_row(card).endswith(f"{path.name}:{line} in {_function_name()}")
+    assert shown.call_line == "y = self.linear(x)"
+
+
+def test_edited_file_shows_reason_not_wrong_text(toy) -> None:
+    module, path = toy
+    trace = tl.trace(module.Toy(), torch.randn(2, 3))
+    relu = trace["relu_1"]
+    path.write_text("# a new first line shifts every line\n" + _TOY_SOURCE)
+    frame = relu.code_context[-1]
+    assert frame.call_line == ""
+    assert frame.code_context is None
+    assert frame._source_text_state()[1] == "source changed on disk since capture"
+    assert repr(frame).startswith("FuncCallLocation:")
+    card = str(relu)
+    line = _line_of(path, "the relu line") - 1  # the captured line, before the shift
+    assert _source_row(card).endswith(
+        f"{path.name}:{line} in {_function_name()} (source changed on disk since capture)"
+    )
+    assert "torch.relu(y)" not in card and "a new first line" not in card
+
+
+def test_missing_file_shows_reason(toy) -> None:
+    module, path = toy
+    trace = tl.trace(module.Toy(), torch.randn(2, 3))
+    relu = trace["relu_1"]
+    line = _line_of(path, "the relu line")
+    path.unlink()
+    frame = relu.code_context[-1]
+    assert frame.call_line == ""
+    assert frame._source_text_state()[1] == "source file not found"
+    assert repr(frame).startswith("FuncCallLocation:")
+    assert _source_row(str(relu)).endswith(
+        f"{path.name}:{line} in {_function_name()} (source file not found)"
+    )
+
+
+def test_save_source_context_snapshots_at_capture(toy) -> None:
+    module, path = toy
+    trace = tl.trace(
+        module.Toy(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(save_source_context=True),
+    )
+    relu = trace["relu_1"]
+    path.write_text("# edited after capture\n" + _TOY_SOURCE)
+    linecache.checkcache(str(path))
+    frame = relu.code_context[-1]
+    assert frame.source_loading_enabled is True
+    assert frame.call_line == "z = torch.relu(y)  # the relu line"
+    # The snapshot serves the text on .code_context; the card names the line, with no
+    # stale-file note, because the snapshot (not the edited file) is the authority.
+    line = _line_of(path, "the relu line") - 1
+    assert _source_row(str(relu)).endswith(f"{path.name}:{line} in {_function_name()}")
+
+
+def test_default_capture_stores_no_source_text(toy) -> None:
+    """The capture itself stays text-free: a fingerprint per frame, no stored text."""
+
+    module, _path = toy
+    trace = tl.trace(module.Toy(), torch.randn(2, 3))
+    frames = [frame for op in trace.ops for frame in (op.code_context or ())]
+    assert frames
+    assert all(frame._linecache_entry is not None for frame in frames)
+    assert all(frame._call_line == "" and frame._code_context is None for frame in frames)
+
+
+def test_nested_model_frames(tmp_path: Path) -> None:
+    """Nested modules: the last frame is the innermost forward's line."""
+
+    class Inner(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return torch.sigmoid(x)  # inner line
+
+    class Outer(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.inner = Inner()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.inner(x) + 1
+
+    trace = tl.trace(Outer(), torch.randn(2, 3))
+    frames = list(trace["sigmoid_1"].code_context)
+    assert [f.func_name for f in frames][-2:] == ["forward", "forward"]
+    assert frames[-1].call_line == "return torch.sigmoid(x)  # inner line"
+    assert frames[0].file == __file__

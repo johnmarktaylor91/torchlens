@@ -46,6 +46,13 @@ def show(obj: Any, *args: Any, **kwargs: Any) -> Any:
     -------
     Any
         Downstream torchshow result.
+
+    Examples
+    --------
+    >>> # requires: torchshow
+    >>> import matplotlib
+    >>> matplotlib.use("Agg")
+    >>> _ = show(torch.rand(3, 8, 8))
     """
 
     try:

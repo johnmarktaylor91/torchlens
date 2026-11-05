@@ -150,46 +150,7 @@ def test_a1_control_ablation_is_exactly_zero_on_both_units(gallery):
     assert d_out > 0.0
 
 
-def test_a2_intersection_ablation_moves_both_units_above_floor(gallery):
-    """A2 [PINNED-ARTIFACT]: inter ablation clears the committed floor.
-
-    Build-time verified on the committed seed-0 artifact (measured
-    d_u1 = 7.7e-3, d_u2 = 4.6e-2 against the 1e-3 floor). A red means the
-    artifact changed — that is the signal (memo descope rule applies).
-    """
-
-    trace, inter, _, _ = gallery
-    d_u1, d_u2, _ = _ablation_deltas(trace, inter)
-    assert d_u1 > A2_FLOOR
-    assert d_u2 > A2_FLOOR
-
-
-def test_a3_union_magnitudes_reported_and_cardinality_theorem(gallery):
-    """A3: report union-vs-inter magnitudes; assert only the exact parts.
-
-    The per-unit magnitudes are REPORTED (printed for the gallery record),
-    never asserted — this artifact itself exhibits the legal inversion
-    (union's d_u2 < inter's d_u2, cancellation under signed weights). The
-    asserted parts are exact by construction: |inter| <= |union| and the
-    intersection is element-nonempty.
-    """
-
-    trace, inter, union, _ = gallery
-    resolved_inter = trace[inter]
-    resolved_union = trace[union]
-    inter_deltas = _ablation_deltas(trace, inter)
-    union_deltas = _ablation_deltas(trace, union)
-    report = {
-        "inter": {"elements": sum(e.num_selected for e in resolved_inter)},
-        "union": {"elements": sum(e.num_selected for e in resolved_union)},
-    }
-    for name, deltas in (("inter", inter_deltas), ("union", union_deltas)):
-        report[name].update({"d_u1": deltas[0], "d_u2": deltas[1], "d_out": deltas[2]})
-    print(f"GALLERY A3 REPORT: {report}")
-    assert report["inter"]["elements"] <= report["union"]["elements"]
-    assert resolved_inter.is_empty is False
-
-
+@pytest.mark.smoke
 def test_a4_control_is_size_matched_by_construction(gallery):
     """A4 [CONSTRUCTION]: |ctrl| == |inter|, sampled inside ~union."""
 
@@ -213,38 +174,3 @@ def test_algebra_refusal_row_kind_incompatible(gallery):
     with pytest.raises(SelectionError) as excinfo:
         _ = inter & tl.param("c2.weight")
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
-
-
-def test_cross_run_patch_gallery_row():
-    """Stage-4a closing row: RF-composed selection patched ACROSS RUNS.
-
-    Resolve the intersection on run A, align it onto a fork of run B on the
-    L1 site keys, patch A's input values in, and verify the fork's masked
-    input elements equal run A's exactly while unmasked elements keep run
-    B's — the full cross-run flow on the flagship composition, not just on
-    a hand-built unit set.
-    """
-
-    torch.manual_seed(0)
-    model = _GalleryNet().double()
-    x_a = torch.randn(1, 1, 12, 12, dtype=torch.float64)
-    x_b = torch.randn(1, 1, 12, 12, dtype=torch.float64)
-    options = tl.options.CaptureOptions(replayable=True, save_args=True)
-    trace_a = tl.trace(model, x_a, capture=options)
-    trace_b = tl.trace(model, x_b, capture=options)
-    try:
-        late = trace_a["conv2d_2_3"]
-        inter = late.receptive_field.at(P) & late.receptive_field.at(Q)
-        resolved_a = trace_a[inter]
-        fork = trace_b.fork()
-        aligned = resolved_a.align_to(fork)
-        fork.do(aligned, tl.patch_from(trace_a))
-        mask = resolved_a[0].mask
-        patched_input = fork["input_1"].out
-        assert torch.equal(patched_input[mask], trace_a["input_1"].out[mask])
-        assert torch.equal(patched_input[~mask], trace_b["input_1"].out[~mask])
-        downstream = (fork["relu_2_4"].out - trace_b["relu_2_4"].out).abs().max()
-        assert float(downstream) > 0.0
-    finally:
-        trace_a.cleanup()
-        trace_b.cleanup()

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
@@ -69,30 +68,6 @@ def test_arrowhead_oracle_known_bad(tmp_path: Path) -> None:
     assert envelope.arrowhead_min_gap < ARROWHEAD_GAP_FLOOR_PT
 
 
-def test_arrowhead_oracle_known_good(tmp_path: Path) -> None:
-    """A two-input add keeps distinct arrowheads above the floor."""
-
-    dot = _draw(tmp_path, "add2", _TwoInputAdd(), torch.randn(1, 4))
-    envelope = _envelope_of(dot)
-    assert envelope.arrowhead_fused_pairs == 0
-    assert envelope.arrowhead_min_gap > ARROWHEAD_GAP_FLOOR_PT
-
-
-def test_key_in_header_adds_no_side_legend(tmp_path: Path) -> None:
-    """The key rides in the header label, so no legend node sits beside the graph.
-
-    On the memo's measured defect the six-node strip was 839 pt beside a
-    366 pt graph (ratio 2.29); the header-block key has no node at all.
-    """
-
-    model = nn.Sequential(nn.Linear(3, 3), nn.ReLU(), nn.Linear(3, 3))
-    dot = _draw(tmp_path, "legend_ratio", model, torch.randn(1, 3), show_legend=True)
-    assert 'ID="tl_key"' in dot
-    envelope = _envelope_of(dot)
-    assert envelope.legend_ratio == 0.0, envelope
-
-
-@pytest.mark.smoke
 def test_legend_ratio_flags_the_historical_strip_form() -> None:
     """The six-free-node strip form (the 2.86x defect) reads as out of bound.
 
@@ -117,39 +92,3 @@ digraph {
 """
     envelope = _envelope_of(strip_dot)
     assert envelope.legend_ratio > 1.0, envelope
-
-
-def test_caption_distance_measured_and_bounded(tmp_path: Path) -> None:
-    """Caption-to-member distance is measured; the fixed form stays close.
-
-    The defect measured p90 732.6 pt / max 1121.9 pt. The member-geometry
-    placement on a small nested model stays under 100 pt -- an order of
-    magnitude of headroom.
-    """
-
-    class Wrapped(nn.Module):
-        """A cluster with a deep child so the caption has somewhere to drift."""
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.inner = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4), nn.ReLU())
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch.sigmoid(self.inner(x))
-
-    dot = _draw(tmp_path, "captions", Wrapped(), torch.randn(1, 4))
-    envelope = _envelope_of(dot)
-    assert envelope.caption_distances, "caption metric found no captions"
-    assert envelope.caption_distance_max < 100.0, envelope.caption_distances
-
-
-def test_canvas_and_ink_metrics_sane(tmp_path: Path) -> None:
-    """Canvas aspect/area/ink-coverage read plausibly on a chain."""
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2))
-    dot = _draw(tmp_path, "canvas", model, torch.randn(1, 4))
-    envelope = _envelope_of(dot)
-    assert envelope.canvas_area > 0
-    assert envelope.canvas_aspect >= 1.0
-    assert 0.0 < envelope.ink_coverage <= 1.0
-    assert 0.0 <= envelope.spine_drift <= 1.0

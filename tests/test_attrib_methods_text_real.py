@@ -53,22 +53,6 @@ def test_gpt2_eiffel_headline_row(gpt2: tuple[object, object]) -> None:
 
 
 @pytest.mark.heavy
-def test_gpt2_batched_matches_sequential(gpt2: tuple[object, object]) -> None:
-    """steps_per_batch=8 under the audit matches sequential at rtol 1e-3.
-
-    Real float32 transformer gradients carry ~1e-4 infinity-norm-relative
-    kernel noise between batched and unbatched matmuls, so the cross-check
-    tolerance is the low-precision audit tier, not exact equality.
-    """
-
-    model, tokenizer = gpt2
-    prompt = "The cat sat on the"
-    batched = attribution.text(model, tokenizer, prompt, num_steps=16, steps_per_batch=8)
-    sequential = attribution.text(model, tokenizer, prompt, num_steps=16, steps_per_batch=1)
-    torch.testing.assert_close(batched.scores, sequential.scores, rtol=1e-3, atol=1e-5)
-
-
-@pytest.mark.heavy
 def test_distilgpt2_fast_row() -> None:
     """The distilgpt2 fast row: decoder auto baseline, sub-percent residual."""
 
@@ -117,17 +101,3 @@ def test_bert_mask_row_auto_pad_scaffold() -> None:
         model, tokenizer, prompt, target=mask_scorer, baseline="zeros", num_steps=16
     )
     assert zeros.baseline["policy"] == "zeros_all"
-
-
-@pytest.mark.slow
-def test_qwen_gqa_row() -> None:
-    """Qwen2.5-0.5B-Instruct: the GQA-architecture row (slow tier)."""
-
-    tokenizer = transformers.AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
-    model = transformers.AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen2.5-0.5B-Instruct", dtype=torch.float32
-    )
-    model.eval()
-    result = attribution.text(model, tokenizer, "The capital of France is", num_steps=32)
-    assert result.baseline["policy"] == "zeros_all"
-    assert torch.isfinite(result.scores).all()

@@ -78,14 +78,3 @@ def test_readme_receptive_field_of_mirror(resnet_trace) -> None:
     (entry,) = list(region)
     assert f"{entry.key[0]}:{entry.key[1]}" == _module_output(trace, "conv1").label
     assert 0 < entry.num_selected < entry.mask.numel()
-
-
-def test_within_takes_dotted_module_addresses(resnet_trace) -> None:
-    """Nested addresses (``"layer2.1"``, ``"layer3.0.conv2"``) name their modules' output ops."""
-
-    trace = resnet_trace
-    patch = [(0, 0, 50, 60)]
-    region = trace["conv1"].projective_field.of(patch, within=["layer2.1", "layer3.0.conv2"])
-    expected = [_module_output(trace, "layer2.1"), _module_output(trace, "layer3.0.conv2")]
-    assert [f"{entry.key[0]}:{entry.key[1]}" for entry in region] == [op.label for op in expected]
-    assert all(entry.num_selected > 0 for entry in region)

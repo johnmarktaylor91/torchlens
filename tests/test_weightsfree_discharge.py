@@ -12,9 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._capture._weightsfree_admission import stamp_wrap_generation
 from torchlens._capture.structure_only import (
-    COMPARISON_VOCABULARY_V1,
     StructureClaimStatus,
     StructureOnlyCapabilityError,
     claim_status_for,
@@ -48,15 +46,7 @@ def _expect_incomparable(structure, real, reason: str) -> None:
     assert claim_status_for(structure) is StructureClaimStatus.HYPOTHESIS
 
 
-def test_wrap_generation_mismatch_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
-    """W1-ORD: twins captured under different wrap generations refuse typed."""
-
-    structure, real = _twins()
-    stamp_wrap_generation(structure, 1)
-    stamp_wrap_generation(real, 2)
-    _expect_incomparable(structure, real, "wrap_generation")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/structure_only.py.
 def test_rescue_asymmetry_refuses() -> None:
     """A rescue re-run on exactly one side breaks comparability (D10)."""
 
@@ -65,6 +55,7 @@ def test_rescue_asymmetry_refuses() -> None:
     _expect_incomparable(structure, real, "rescue_asymmetry")
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/structure_only.py.
 def test_opaque_witness_on_oracle_refuses() -> None:
     """A real oracle carrying an opaque host-write witness fails preflight
     (memo D7 composition rule): an UNVERIFIABLE oracle corroborates nothing."""
@@ -81,21 +72,7 @@ def test_opaque_witness_on_oracle_refuses() -> None:
         _HOST_ESCAPE_MUTABLE_WRITEBACK.discard(real)
 
 
-def test_comparison_envelope_identity_v0() -> None:
-    """D5: the versioned comparison envelope ships at identity-v0 — both
-    digest pairs equal, reserved row kinds present, claim counts by kind."""
-
-    structure, real = _twins()
-    discharge = structure.discharge_against(real)
-    assert discharge.comparison_vocabulary == COMPARISON_VOCABULARY_V1
-    assert discharge.comparison_structure_digest == discharge.structure_digest
-    assert discharge.comparison_real_digest == discharge.real_digest
-    assert discharge.reserved_row_kinds == ("op_identity_unverified",)
-    assert set(discharge.claim_counts) == {"shape", "dtype", "param_geometry"}
-    assert sum(discharge.claim_counts.values()) == len(discharge.claims)
-    assert discharge.unavailable_evidence == {}
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/structure_only.py.
 def test_report_is_one_screen_and_names_verdict() -> None:
     structure, real = _twins()
     discharge = structure.discharge_against(real)

@@ -140,7 +140,7 @@ def _neuron_operands(trace: Any, module: Any) -> _NeuronOperands:
         refuse(
             code="mi_payload_missing",
             message=f"The MLP output at {address!r} is not readable.",
-            remedy="capture with the MLP output saved (layers_to_save='all' or a "
+            remedy="capture with the MLP output saved (save='all' or a "
             "retention_plan covering the MLP)",
             analysis="mlp_neuron_contributions",
             missing=[f"{address}.output"],
@@ -175,7 +175,7 @@ def _neuron_operands(trace: Any, module: Any) -> _NeuronOperands:
             code="mi_payload_missing",
             message=f"The input of the output projection {use_label!r} in {address!r} "
             "was not saved, and no intermediate facet of the right shape is readable.",
-            remedy="capture with the MLP interior saved (layers_to_save='all' or a "
+            remedy="capture with the MLP interior saved (save='all' or a "
             "retention_plan covering the MLP)",
             analysis="mlp_neuron_contributions",
             missing=[use_label],
@@ -353,6 +353,18 @@ def mlp_neuron_contributions(
         selected layers within the reconstruction tolerance. Grading is
         ``complete`` / ``closed_constant`` when every remainder is proven,
         else ``closed_unresolved`` and diagnostic-only.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> neurons = tl.mechinterp.mlp_neuron_contributions(trace)
+    >>> len(neurons) > 0
+    True
     """
 
     modules = _mlp_modules(trace)

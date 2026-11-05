@@ -76,7 +76,6 @@ def test_environment_sweep_is_byte_identical(tmp_path: Path) -> None:
     assert len(outputs) == 1, "agent-surface output varied with the environment"
 
 
-@pytest.mark.smoke
 def test_repeated_calls_are_byte_identical() -> None:
     """In-process repetition is byte-stable (no clocks, no id() leakage)."""
 
@@ -85,10 +84,6 @@ def test_repeated_calls_are_byte_identical() -> None:
             assert canonical_dumps(call_tool(name, args)) == canonical_dumps(call_tool(name, args))
 
 
-@pytest.mark.smoke_cells(
-    "test_golden_files_pin_the_wire_format[payload_stats-torchlens_payload_stats-args2]",
-    "test_golden_files_pin_the_wire_format[query_sites-torchlens_query_sites-args1]",
-)
 @pytest.mark.parametrize(
     ("golden_name", "tool", "args"),
     [

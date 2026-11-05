@@ -8,9 +8,12 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 from .._debug_report import Report, rows_of
-from ._common import _compute_ops
+from .._utils._display_card import LIST_LIMIT, render_card
+from .._utils._display_constructor import clipped, display_guard
+from .._utils._display_numbers import plural
+from ._common import _compute_ops, _nonfinite_kind
 from ._gradients import grad_health
-from ._nan import _nonfinite_kind, bisect_nan, find_nan_in_trace
+from ._nan import bisect_nan, find_nan_in_trace
 
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
@@ -39,6 +42,9 @@ class AuditFinding:
         Offending module addresses.
     follow_up:
         Call users can run to inspect the issue further.
+    source_line:
+        ``"file:line"`` of the user code that ran the offending op, when the
+        finding names one op and its location was recorded.
     """
 
     severity: AuditSeverity
@@ -47,6 +53,7 @@ class AuditFinding:
     ops: tuple[str, ...]
     modules: tuple[str, ...]
     follow_up: str
+    source_line: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +68,14 @@ class HealthReport(Report):
         Names of diagnostics that ran.
     skipped:
         ``(check, reason)`` entries for diagnostics not supported by the capture.
+
+    Examples
+    --------
+    >>> report = tl.trace(model, x).audit()
+    >>> isinstance(report, HealthReport), "find_nan" in report.checks_run
+    (True, True)
+    >>> ("compare", "requires a second trace") in report.skipped
+    True
     """
 
     findings: tuple[AuditFinding, ...]
@@ -92,6 +107,7 @@ class HealthReport(Report):
 
         return rows_of(self.findings)
 
+    @display_guard
     def __repr__(self) -> str:
         """Render a compact audit suitable for notebooks.
 
@@ -101,23 +117,27 @@ class HealthReport(Report):
             Health summary with findings and skipped-check reasons.
         """
 
-        heading = (
-            f"HealthReport: {len(self.findings)} issue(s); {len(self.checks_run)} checks run, "
-            f"{len(self.skipped)} skipped"
+        return clipped(
+            f"HealthReport: {plural(len(self.findings), 'finding')}, "
+            f"{len(self.checks_run)} checks run, {len(self.skipped)} skipped"
         )
-        if not self.findings:
-            heading = (
-                f"HealthReport: no issues found; {len(self.checks_run)} checks run, "
-                f"{len(self.skipped)} skipped"
-            )
-        lines = [heading]
-        lines.extend(
-            f"- [{finding.severity}] {finding.check}: {finding.message} "
-            f"Follow up: {finding.follow_up}"
-            for finding in self.findings
+
+    @display_guard
+    def __str__(self) -> str:
+        """Show a bounded set of findings and skipped checks."""
+
+        rows: list[tuple[str, str]] = [
+            (finding.severity, f"{finding.check}: {finding.message}; {finding.follow_up}")
+            for finding in self.findings[:LIST_LIMIT]
+        ]
+        if len(self.findings) > LIST_LIMIT:
+            rows.append(("findings", f"... and {len(self.findings) - LIST_LIMIT} more"))
+        rows.extend(("skipped", f"{check}: {reason}") for check, reason in self.skipped[:3])
+        if len(self.skipped) > 3:
+            rows.append(("skipped", f"... and {len(self.skipped) - 3} more"))
+        return render_card(
+            repr(self), rows, (".findings", ".skipped", ".to_pandas()", ".to_dict()")
         )
-        lines.extend(f"- skipped {check}: {reason}" for check, reason in self.skipped)
-        return "\n".join(lines)
 
 
 def _has_full_saved_activations(trace: Trace) -> bool:
@@ -155,7 +175,7 @@ def _has_saved_gradients(trace: Trace) -> tuple[bool, str | None]:
         if len(trace.autograd.backward_passes) == 0:
             return False, "forward-only trace; no backward pass was captured"
         if len(trace.saved_grad_ops) == 0:
-            return False, "no saved gradients; re-trace with save_grads=True and log_backward()"
+            return False, "no saved gradients; re-trace with save_grads=True and backward()"
     except ValueError as exc:
         return False, str(exc)
     return True, None

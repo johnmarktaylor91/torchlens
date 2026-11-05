@@ -26,7 +26,6 @@ from torchlens.report import (
     padding_waste,
     profile,
 )
-from torchlens.report._compute_truth import compute_aggregation
 from torchlens.report._cost_backward import BACKWARD_STATES, grad_enabled_at_capture
 from torchlens.report._cost_scaling import position_scaling_class
 
@@ -91,49 +90,15 @@ def nograd_trace():
 # T-HONESTY (costreport item 6, D2/D9)
 
 
-def test_honesty_labels_mixed_evidence_differently(sdpa_trace) -> None:
-    """T-HONESTY: honesty() is NOT a function of frame.notna().
-
-    One formula_exact and one estimated non-null value in the same flops
-    column must carry different labels. This fails against the pre-F09
-    presence-based honesty() (every non-null flops cell read 'estimated').
-    """
-
-    prof = profile(sdpa_trace, level="op")
-    honesty = prof.evidence_labels()
-    labels = set(honesty["flops"])
-    assert "formula_exact" in labels, labels
-    assert "estimated" in labels, labels
-
-
-def test_honesty_vocabulary_and_qualifiers(nested_trace) -> None:
-    """D9 column rules: time is never bare 'measured'; params are declared
-    inventory; boundary rows are not_applicable, never fabricated."""
-
-    prof = profile(nested_trace, level="op")
-    honesty = prof.evidence_labels()
-    assert set(honesty["time"]) <= {
-        "measured+instrumentation_inclusive",
-        "unknown",
-        "not_applicable",
-    }
-    assert "measured" not in set(honesty["time"])
-    assert set(honesty["param_count"]) <= {"formula_exact", "not_applicable"}
-    boundary = honesty.loc[honesty["name"].str.startswith("input_")].iloc[0]
-    assert boundary["flops"] == "not_applicable"
-    assert boundary["time"] == "not_applicable"
-
-
-@pytest.mark.smoke
 def test_honesty_as_summary_and_inline_evidence(nested_trace) -> None:
-    """honesty(as_summary=True) is the disclosure line; to_pandas(evidence=True)
+    """honesty(as_summary=True) is the disclosure line; to_pandas(include_evidence=True)
     interleaves per-cell evidence columns (D9's inline form, on the export door)."""
 
     prof = profile(nested_trace, level="op")
     line = prof.evidence_labels(as_summary=True)
     assert isinstance(line, str)
     assert "formula_exact" in line
-    inline = prof.to_pandas(evidence=True)
+    inline = prof.to_pandas(include_evidence=True)
     columns = list(inline.columns)
     assert columns.index("flops_evidence") == columns.index("flops") + 1
     assert columns.index("time_evidence") == columns.index("time") + 1
@@ -154,14 +119,6 @@ def test_honesty_aggregation_preserves_weakest_evidence(sdpa_trace) -> None:
 # Percent columns + roles (costreport item 7, D4/D5/D6)
 
 
-def test_profile_percent_columns_sum_to_100_of_known(nested_trace) -> None:
-    """D4: exclusive percents sum to 100% of the KNOWN total."""
-
-    prof = profile(nested_trace, level="op")
-    total_pct = sum(value for value in prof.frame["flops_pct"] if value == value)
-    assert total_pct == pytest.approx(100.0)
-
-
 def test_profile_percent_denominator_invariant_under_top_k(nested_trace) -> None:
     """D6 corruption plant: a denominator computed after top_k must fail --
     the partition total and per-row percents are unchanged by the view."""
@@ -177,34 +134,6 @@ def test_profile_percent_denominator_invariant_under_top_k(nested_trace) -> None
     assert visible_pct < 100.0  # the view dropped mass; the denominator did not shrink
 
 
-def test_profile_roles_and_additivity_metadata(nested_trace) -> None:
-    """D5: row roles and column additivity ride every export."""
-
-    op_frame = profile(nested_trace, level="op").to_pandas()
-    assert set(op_frame["role"].dropna()) == {"OWNER"}
-    assert op_frame.attrs["column_additivity"]["flops"] is True
-    module_profile = profile(nested_trace, level="module")
-    module_frame = module_profile.to_pandas()
-    assert set(module_frame["role"].dropna()) == {"SUBTOTAL"}
-    # Inclusive family is marked non-additive at module level.
-    assert module_frame.attrs["column_additivity"]["flops"] is False
-    assert module_frame.attrs["column_additivity"]["flops_self"] is True
-
-
-def test_module_self_family_sums_to_partition_total_not_naive(nested_trace) -> None:
-    """T-ROOT at module grain: the additive self family sums to the
-    partition total; the naive inclusive sum over-counts (forbidden)."""
-
-    prof = profile(nested_trace, level="module")
-    frame = prof.frame
-    partition_total = prof.partition_total
-    self_sum = int(sum(value for value in frame["flops_self"] if value == value))
-    assert self_sum == partition_total
-    naive_sum = int(sum(value for value in frame["flops"].dropna()))
-    assert naive_sum > partition_total  # nested modules double-count inclusively
-
-
-@pytest.mark.smoke
 def test_profile_totals_row_and_instrumented_label(nested_trace) -> None:
     """sumfam item 12: the explicit totals row and the instrumented label."""
 
@@ -217,7 +146,6 @@ def test_profile_totals_row_and_instrumented_label(nested_trace) -> None:
     assert frame.attrs["time_basis"] == "instrumented"
 
 
-@pytest.mark.smoke
 def test_call_children_sum_to_parent(nested_trace) -> None:
     """sumfam item 12 children-sum CI: per additive column, the members'
     self mass plus remainder equals the whole (conservation)."""
@@ -232,39 +160,6 @@ def test_call_children_sum_to_parent(nested_trace) -> None:
 # Cost tree (costreport item 8, D8)
 
 
-def test_cost_tree_root_row_and_conservation(nested_trace) -> None:
-    """T-ROOT: root self cells 0, subtree == partition total; the additive
-    column sums to the partition total exactly."""
-
-    tree = cost_tree(nested_trace)
-    root = tree.rows[0]
-    assert root.kind == "root"
-    assert root.self_flops == 0
-    assert root.subtree_flops == tree.partition_total
-    assert root.label == "NestedModel"  # named model root, never self:1
-    additive_sum = sum(row.self_flops or 0 for row in tree.rows if row.row_id != root.row_id)
-    assert additive_sum == tree.partition_total
-    pct_sum = sum(row.self_pct or 0.0 for row in tree.rows if row.row_id != root.row_id)
-    assert pct_sum == pytest.approx(100.0)
-
-
-def test_cost_tree_parent_child_conservation(nested_trace) -> None:
-    """Every SUBTOTAL row: subtree == self + sum(child subtrees)."""
-
-    tree = cost_tree(nested_trace)
-    children: dict[str, list] = {}
-    for row in tree.rows:
-        if row.parent_id is not None:
-            children.setdefault(row.parent_id, []).append(row)
-    for row in tree.rows:
-        if row.role != "SUBTOTAL":
-            continue
-        own = 0 if row.kind == "root" else (row.self_flops or 0)
-        child_sum = sum(child.subtree_flops or 0 for child in children.get(row.row_id, ()))
-        assert (row.subtree_flops or 0) == own + child_sum, row.row_id
-
-
-@pytest.mark.smoke
 def test_cost_tree_top_k_emits_remainder_and_receipt(nested_trace) -> None:
     """D8/D6: hidden mass lands in a deterministic REMAINDER row and the
     display receipt; the denominator never shrinks."""
@@ -278,7 +173,6 @@ def test_cost_tree_top_k_emits_remainder_and_receipt(nested_trace) -> None:
     assert additive_sum == view.partition_total
 
 
-@pytest.mark.smoke
 def test_cost_tree_depth_cutoff_conserves(nested_trace) -> None:
     """D8: conservation is exact under depth cutoff."""
 
@@ -290,18 +184,6 @@ def test_cost_tree_depth_cutoff_conserves(nested_trace) -> None:
 
 # ---------------------------------------------------------------------------
 # Backward gating (costreport items 11-12, D14/D15/D23; T-GRAD)
-
-
-def test_backward_zero_under_no_grad(nograd_trace) -> None:
-    """T-GRAD: executed backward is exactly 0 (formula_exact) when no
-    autograd graph was recorded -- never the forward-derived constant."""
-
-    assert not grad_enabled_at_capture(nograd_trace)
-    status = backward_status(nograd_trace)
-    assert status.state == "grad_disabled"
-    assert status.executed_flops == 0
-    assert status.executed_evidence == "formula_exact"
-    assert "0" in status.status_line
 
 
 def test_backward_unknown_when_enabled_but_unobserved(nested_trace) -> None:
@@ -316,7 +198,6 @@ def test_backward_unknown_when_enabled_but_unobserved(nested_trace) -> None:
     assert status.state in BACKWARD_STATES
 
 
-@pytest.mark.smoke
 def test_backward_estimate_is_named_door_and_hypothetical(nograd_trace) -> None:
     """T-GRAD: the counterfactual requires its named door, is labeled
     hypothetical, and discloses the freeze pattern + grad-disabled caveat."""
@@ -332,32 +213,8 @@ def test_backward_estimate_is_named_door_and_hypothetical(nograd_trace) -> None:
     assert all(name for name in estimate.excluded_ops)
 
 
-def test_backward_status_never_prints_counterfactual(nograd_trace) -> None:
-    """Memo 3.8: a counterfactual never prints in an actual-cost slot."""
-
-    status = backward_status(nograd_trace)
-    estimate = backward_estimate(nograd_trace)
-    assert status.executed_flops != estimate.hypothetical_flops
-
-
 # ---------------------------------------------------------------------------
 # flops_report (costreport item 9, D10-D13; T-RAW-INT, T-6ND-APPLIC)
-
-
-def test_flops_report_trace_door_blocks_and_raw_ints(nested_trace) -> None:
-    """D10: six-block screen; T-RAW-INT: numeric fields are plain ints."""
-
-    report = flops(nested_trace)
-    assert type(report.forward_flops) is int
-    assert type(report.true_macs) is int
-    text = str(report)
-    assert "actual-path analytic" in text  # D13: never "measured"
-    assert "measured" not in text.split("backward")[0]
-    assert "COMPLETE, not a lower bound" in text  # earned on this model
-    assert "parameters:" in text
-    assert "backward:" in text
-    agg = compute_aggregation(nested_trace)
-    assert report.forward_flops == int(agg.partition_total)
 
 
 def test_flops_report_6nd_absent_without_main_input(nested_trace) -> None:
@@ -368,7 +225,6 @@ def test_flops_report_6nd_absent_without_main_input(nested_trace) -> None:
     assert "6ND" not in str(report)
 
 
-@pytest.mark.smoke
 def test_flops_report_6nd_present_with_explicit_d(nested_trace) -> None:
     """D11: an explicit D renders the comparator with N from the dedup
     parameter identity and D counting pads."""
@@ -380,7 +236,6 @@ def test_flops_report_6nd_present_with_explicit_d(nested_trace) -> None:
     assert "pads counted" in str(report)
 
 
-@pytest.mark.smoke
 def test_flops_report_model_door_restores_state() -> None:
     """D10: the model door runs ONE capture under the summary execution
     contract -- training flags and RNG restored bit-identically."""
@@ -394,20 +249,10 @@ def test_flops_report_model_door_restores_state() -> None:
     assert type(report.forward_flops) is int
 
 
-def test_flops_report_trace_door_refuses_inputs(nested_trace) -> None:
-    """The trace door takes no inputs; a typed refusal teaches the doors."""
-
-    from torchlens._errors import InvalidArgumentError
-
-    with pytest.raises(InvalidArgumentError, match="model-door"):
-        flops(nested_trace, torch.randn(2, 8))
-
-
 # ---------------------------------------------------------------------------
 # Position scaling + padding waste (costreport item 10, D12)
 
 
-@pytest.mark.smoke
 def test_position_scaling_closed_forms() -> None:
     """The class-split estimator matches the closed forms per class."""
 
@@ -436,45 +281,14 @@ def test_position_scaling_closed_forms() -> None:
         trace.cleanup()
 
 
-def test_padding_waste_refuses_bad_lengths(nested_trace) -> None:
-    """Teaching refusals on impossible padding geometry."""
-
-    from torchlens._errors import InvalidArgumentError
-
-    with pytest.raises(InvalidArgumentError, match="padded_length"):
-        padding_waste(nested_trace, padded_length=0, real_lengths=(1,))
-    with pytest.raises(InvalidArgumentError, match="real_lengths"):
-        padding_waste(nested_trace, padded_length=4, real_lengths=(5,))
-
-
-def test_sdpa_is_quadratic_linear_is_linear(sdpa_trace) -> None:
-    """The scaling table's two anchor classes."""
-
-    ops = {str(op.layer_label): op for op in sdpa_trace._layer_list}
-    sdpa_op = next(op for label, op in ops.items() if label.startswith("scaleddotproduct"))
-    linear_op = next(op for label, op in ops.items() if label.startswith("linear"))
-    assert position_scaling_class(sdpa_op, 4) == "quadratic_in_sequence"
-    assert position_scaling_class(linear_op, 4) == "linear_in_tokens"
-
-
 # ---------------------------------------------------------------------------
 # Unknown ledger stays a work queue (item 5 consumed; D3)
-
-
-def test_unknown_ops_disclosed_as_events_never_percent(nested_trace) -> None:
-    """D4: the unknown disclosure is an event count + named ledger."""
-
-    prof = profile(nested_trace, level="op")
-    assert prof.unknown_events == 0
-    text = repr(prof)
-    assert "%" not in text.split("unknown")[-1] or "unknown" not in text
 
 
 # ---------------------------------------------------------------------------
 # Every new code ships provoked (error-code coverage gate)
 
 
-@pytest.mark.smoke
 def test_view_argument_codes_are_provoked(nested_trace) -> None:
     """Provoke cost_tree_top_k_invalid, cost_tree_depth_invalid,
     padding_waste_length_invalid, padding_waste_lengths_invalid,

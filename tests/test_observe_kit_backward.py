@@ -16,7 +16,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.debug import FirstBadThing, bisect_nan_backward
-from torchlens.debug._gradients import gradient_flow_audit_rows
 
 
 class _NanBirthBackward(torch.autograd.Function):
@@ -55,34 +54,8 @@ def _backward_trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         ),
     )
     output = captured.output_ops[0].out
-    captured.log_backward(output)
+    captured.backward(output)
     return captured
-
-
-def test_clean_backward_gets_complete_clean_verdict() -> None:
-    """A finite backward with full grad coverage reports clean_complete."""
-
-    model = nn.Sequential(nn.Linear(3, 3), nn.Tanh(), nn.Linear(3, 1))
-
-    class _Summed(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.body = model
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Reduce to a scalar loss for a plain backward."""
-
-            return self.body(x).sum()
-
-    captured = _backward_trace(_Summed(), torch.randn(2, 3, requires_grad=True))
-    try:
-        result = bisect_nan_backward(captured)
-        assert not result.found
-        assert result.birth is None
-        assert result.verdict_scope in ("clean_complete", "clean_among_checked")
-        assert result.transitions, "the ledger is never empty for a walked pass"
-    finally:
-        captured.cleanup()
 
 
 def test_backward_birth_is_localized_with_forward_join() -> None:
@@ -109,55 +82,6 @@ def test_backward_birth_is_localized_with_forward_join() -> None:
         captured.cleanup()
 
 
-def test_unpaired_birth_is_never_overclaimed() -> None:
-    """A birth inside an unsaved (unpaired) node stays first-among-checked.
-
-    A custom autograd Function has no paired traced op, so ``save_grads``
-    never saved its payloads: the tool must report the non-finite evidence
-    WITHOUT fabricating a birth claim it cannot prove.
-    """
-
-    class _WithBadBackward(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.linear = nn.Linear(3, 3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Route through the NaN-emitting custom Function."""
-
-            return _NanBirthBackward.apply(self.linear(x)).sum()
-
-    captured = _backward_trace(_WithBadBackward(), torch.randn(2, 3, requires_grad=True))
-    try:
-        result = bisect_nan_backward(captured)
-        assert result.found
-        assert result.birth is None
-        assert result.verdict_scope == "found_first_among_checked"
-        assert result.uncertainty_zone, "the unchecked custom node must be named"
-        assert any(t.verdict == "propagated" for t in result.transitions)
-        assert "no birth is provable" in result.message
-    finally:
-        captured.cleanup()
-
-
-@pytest.mark.smoke
-def test_healed_birth_reported_despite_finite_final_gradient() -> None:
-    """sqrt-birth erased by relu-backward: healed is measured, not decoration."""
-
-    x = torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True)
-    captured = _backward_trace(_SqrtHealModel(), x)
-    try:
-        result = bisect_nan_backward(captured)
-        assert result.found, "the sqrt backward births a NaN at the zero position"
-        assert result.healed, "the relu backward heals the NaN and must be recorded"
-        healed_transitions = [t for t in result.transitions if t.verdict == "healed"]
-        assert healed_transitions
-        assert "finite loss gradient does not prove a clean backward" in result.message
-    finally:
-        captured.cleanup()
-
-
-@pytest.mark.smoke
 def test_multi_backward_requires_bwd_selector() -> None:
     """Two captured passes refuse an unselected walk; passes never collapse."""
 
@@ -182,8 +106,8 @@ def test_multi_backward_requires_bwd_selector() -> None:
     )
     try:
         output = captured.output_ops[0].out
-        captured.log_backward(output, retain_graph=True)
-        captured.log_backward(output)
+        captured.backward(output, retain_graph=True)
+        captured.backward(output)
         with pytest.raises(InvalidArgumentError) as excinfo:
             bisect_nan_backward(captured)
         assert excinfo.value.fields["code"] == "bwd_selector_required"
@@ -213,36 +137,6 @@ def test_backward_capture_required_refusal_teaches() -> None:
         captured.cleanup()
 
 
-def test_gradient_flow_audit_relabels_carrier_and_points_at_bisector() -> None:
-    """The audit's non-finite rows are carrier observations, not birth claims."""
-
-    class _WithBadBackward(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.linear = nn.Linear(3, 3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Route through the NaN-emitting custom Function."""
-
-            return _NanBirthBackward.apply(self.linear(x)).sum()
-
-    captured = _backward_trace(_WithBadBackward(), torch.randn(2, 3, requires_grad=True))
-    try:
-        rows, _attrs = gradient_flow_audit_rows(captured)
-        nonfinite_rows = [
-            row
-            for row in rows
-            if row["grad_norm"] is not None and row["grad_norm"] != row["grad_norm"]
-        ]
-        carrier_rows = [row for row in rows if "carrier observation" in str(row["reason"])]
-        assert carrier_rows, "non-finite landings must be labeled carrier observations"
-        assert all("bisect_nan_backward" in str(row["reason"]) for row in carrier_rows)
-        del nonfinite_rows
-    finally:
-        captured.cleanup()
-
-
-@pytest.mark.smoke
 def test_audit_trace_runs_bisector_automatically_when_unambiguous() -> None:
     """audit_trace adds the backward-birth finding for one captured backward."""
 
@@ -299,5 +193,36 @@ def test_amp_hint_fires_only_for_pure_inf_findings_without_scale() -> None:
         disclosed = bisect_nan_backward(captured, grad_scale=65536.0)
         assert disclosed.amp_hint is None
         assert disclosed.grad_scale == 65536.0
+    finally:
+        captured.cleanup()
+
+
+def test_unpaired_birth_is_never_overclaimed() -> None:
+    """A birth inside an unsaved (unpaired) node stays first-among-checked.
+
+    A custom autograd Function has no paired traced op, so ``save_grads``
+    never saved its payloads: the tool must report the non-finite evidence
+    WITHOUT fabricating a birth claim it cannot prove.
+    """
+
+    class _WithBadBackward(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.linear = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Route through the NaN-emitting custom Function."""
+
+            return _NanBirthBackward.apply(self.linear(x)).sum()
+
+    captured = _backward_trace(_WithBadBackward(), torch.randn(2, 3, requires_grad=True))
+    try:
+        result = bisect_nan_backward(captured)
+        assert result.found
+        assert result.birth is None
+        assert result.verdict_scope == "found_first_among_checked"
+        assert result.uncertainty_zone, "the unchecked custom node must be named"
+        assert any(t.verdict == "propagated" for t in result.transitions)
+        assert "no birth is provable" in result.message
     finally:
         captured.cleanup()

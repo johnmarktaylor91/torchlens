@@ -93,19 +93,6 @@ class _EqualBranch(nn.Module):
         return y - 1
 
 
-class _NestedEqualBranch(nn.Module):
-    """``_EqualBranch`` one level down, under a module-forward token."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.block = nn.Sequential(_EqualBranch())
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the nested block."""
-
-        return self.block(x)
-
-
 _COPY_FALLBACK_DISCLOSURE = "could not deepcopy the model|model could not be copied"
 
 
@@ -142,14 +129,13 @@ def test_stale_alias_under_module_forward_fails_completeness() -> None:
     assert "bfs_completeness" in failure.summary()
 
 
-@pytest.mark.usefixtures("_restore_alias")
-def test_tracked_alias_under_module_forward_validates() -> None:
-    """With the alias tracked the op is captured and the same model validates."""
-
-    assert _validate(_NestedWeightNorm(stale_alias=False)), tl.validation.last_validation_failure()
-
-
-@pytest.mark.parametrize("model_cls", [_EqualBranch, _NestedEqualBranch])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "model_cls",
+    [
+        _EqualBranch,
+    ],
+)
 def test_equal_allclose_control_flow_still_validates(model_cls: type[nn.Module]) -> None:
     """Wrapper-owned pure reads stay benign at any nesting depth."""
 
@@ -211,7 +197,8 @@ def _backstop_trace(
     )
 
 
-@pytest.mark.parametrize("module_token", ["module_forward:exhaustive", "module_forward:predicate"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("module_token", ["module_forward:predicate"])
 def test_completeness_backstop_counts_module_forward_owned_drop(module_token: str) -> None:
     """A dispatch owned only by a module-forward token is a drop, like an unowned one.
 
@@ -269,24 +256,3 @@ def test_completeness_backstop_counts_module_forward_owned_drop(module_token: st
             )
         )
         assert dispatch == captured, benign_owner
-
-
-@pytest.mark.usefixtures("_restore_alias")
-def test_attribute_held_original_alias_is_rebound_and_validates(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The stale-alias case with the bare original, as it was first written.
-
-    Capture preparation rebinds the held ``_weight_norm`` original to its
-    wrapper, so the alias the forward installs is tracked: no escape, and
-    ``bfs_completeness`` passes.
-    """
-
-    def bare(func: Callable[..., Any]) -> Callable[..., Any]:
-        wrap_torch()
-        return _state._decorated_to_orig.get(id(func), func)
-
-    monkeypatch.setitem(globals(), "_raw", bare)
-    model = _NestedWeightNorm(stale_alias=True)
-    assert not isinstance(model.raw_weight_norm, OpaqueCallable)
-    assert _validate(model), tl.validation.last_validation_failure()

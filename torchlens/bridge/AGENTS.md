@@ -22,12 +22,27 @@ optional dependency.
   call.
 
 ## Adapter files and main entry points
-- `captum.py`: `attribute(log, method, target=None, *, inputs=None, **kwargs)`,
-  `layer()` (extra: `torchlens[captum]`; `layer()` is `_utils.module_for_site`).
+- `captum.py`: `attribute(trace, method, target=None, *, inputs=None, **kwargs)`,
+  `layer(trace, site, *, pass_index=None)` (extra: `torchlens[captum]`).
   `target=` is forwarded only when given (LayerActivation and most Neuron*
   classes reject it); without `inputs=` every logged input is forwarded (the
   tensor, or the positional tuple in `forward` order); a keyword-only, nested
-  or unsaved input refuses `bridge_captum_inputs_unresolved`.
+  or unsaved input refuses `bridge_captum_inputs_unresolved`. `layer()` tries
+  `_utils.module_for_site` first; on its three refusals it returns a
+  `_SiteProbe` (identity module remembering the op's `site_key`, label and
+  execution-order ordinal among ops sharing that key). `attribute()` with a
+  probe in `method.layer` swaps the method's `forward_func` (and nested
+  Captum objects sharing it) for a forward that runs `tl.trace(model, ...,
+  save=nothing, intervene=tl.when(site(key), splice))` with a root forward
+  hook keeping the model's own output; `splice` calls the probe on the
+  ordinal-th firing and hands a clone downstream (in-place consumers such as
+  the block's `ReLU(inplace=True)` would overwrite the tensor Captum's hook
+  saved), so a Captum hook on the probe sees exactly that tensor. The capture
+  lane is the only door that minted the key: `spec.bind` names a `+=` site
+  `add` where capture names it `iadd`, and `tl.record` tracks no module
+  stack. A forward that fires the site fewer times than the ordinal refuses
+  `bridge_captum_site_not_reached`; `pass_index` folds into `"address:N"`
+  for a module address and picks one op of a multi-pass label otherwise.
 - `shap.py`: `explain(log, *, background, inputs=None, ...)` (default
   `shap.DeepExplainer`; extra `torchlens[shap]`, `shap>=0.45.1,<1`).
   `background` is REQUIRED keyword-only: the old default made the explained
@@ -66,8 +81,8 @@ optional dependency.
   `tokens=` the first output shaped `tokens.shape + (vocab,)` is the logits:
   `ce_loss_clean`/`_spliced`/`_zero_ablated`, `ce_loss_recovered`,
   `kl_divergence`; without it they are `None` with a reason. Metric math lives
-  in `_sae_metrics.py`. Recipes: `docs/recipes/pretrained_saes.md`; an SAE latent
-  as a feature-visualisation objective, `docs/recipes/feature_visualisation.md`.
+  in `_sae_metrics.py`. Recipes: `docs/field-guide/pretrained_saes.md`; an SAE latent
+  as a feature-visualisation objective, `docs/field-guide/feature_visualisation.md`.
   `log_latents=True` (live-model door only) captures the model again with the SAE
   run inside it (`_sae_latents.logged_splice_trace`: a forward hook on the module
   `module_for_site` names, and the reconstruction module a temporary child of the
@@ -90,7 +105,7 @@ optional dependency.
   `UnitTopK`; neither package is imported (json and safetensors only). The layouts copy
   the consumers' own writers (cited in the docstrings); ranking is `tl.stats.TopK`'s.
   The real loaders run in `tests/test_bridge_real_sae_export.py` (peer-leg pins).
-  Recipe: `docs/recipes/sae_latent_export.md`.
+  Recipe: `docs/field-guide/sae_latent_export.md`.
 - `lit/`: `model(net, tokenizer, *, task=, sites=, ...)` wraps a LIVE model as
   a real `lit_nlp.api.model.Model` (classification + causal LM); `dataset()`,
   `layout()` (extra: `torchlens[lit]`; import-inert, call-time gate; site
@@ -103,6 +118,22 @@ optional dependency.
   `autoroute/_builtin_input.py` and imported eagerly by `user_funcs.py`, so it
   must import cleanly without `transformers` installed (gating stays inside
   the functions).
+- `_hf_processor.py` (used by `transformers.py`): `_resolve_hf_processor(model, name_or_path)`
+  loads the `AutoProcessor` for a modality dict (cache first, then the Hub unless offline)
+  and refuses typed `preprocessing_unresolved` when it cannot, through the one raise site
+  `_hf_refusals.refuse_preprocessing_unresolved` (shared with the image cascade);
+  `_load_hf_processor` is the one network seam tests patch; `_make_multimodal_transform(processor)`
+  builds the `input_transform`. The auto-route claims a `transformers` `PreTrainedModel`
+  with a `name_or_path` on shape alone (no cache or Hub I/O in detection); any other named
+  model is claimed only when its processor is in the local cache, else it keeps the plain
+  path. A dict on a model with an attached `model.processor` is coerced in
+  `torchlens/_input_coerce.py` instead. The same resolution reaches `Trace.run`, `tl.record`,
+  `tl.recording.dry_run`, `tl.validation.validate_backward_pass` and the `tl.debug` entries through that coercion
+  door: `autoroute/_builtin_input.py` installs `hf_input_claims` / `hf_input_transform` on
+  `torchlens/_input_route.py` at import (the door module itself imports no bridge code), and
+  `_apply_hf_processor` there spells a singular `image` key the way the processor's own call
+  signature names it (`images` for a CLIP-shaped processor; a `(*args, **kwargs)` processor
+  such as Whisper's gets the keys unchanged).
 - `hf_attention.py` (re-exported from `hf.py`): `register_attention(model=None)`
   registers the `"torchlens"` attention function AND its matching mask function
   (`torchlens_mask`, transformers' boolean `sdpa_mask` with the causal skip

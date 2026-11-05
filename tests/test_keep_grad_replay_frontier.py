@@ -1,6 +1,6 @@
 """``keep_grad`` under differentiable replay discloses that nothing upstream is reached.
 
-``push(replay=ReplayOptions(differentiable=True))`` re-enters each edited site value as
+``do(site, edit, intervention=InterventionOptions(differentiable=True))`` re-enters each edited site value as
 a fresh leaf, so a graph-keeping edit passes the keep_grad check there yet no parameter
 upstream of the site gets a gradient. keep_grad says so once per session with the code
 ``keep_grad_replay_frontier``; ``fork.do`` (which does reach upstream) stays silent, and
@@ -19,6 +19,8 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
 from torchlens.intervention import _gradient_contract, keep_grad
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 _CODE = "keep_grad_replay_frontier"
 _X = torch.randn(2, 4, generator=torch.Generator().manual_seed(5))
@@ -55,10 +57,8 @@ def _codes(caught: list[warnings.WarningMessage]) -> list[str]:
 
 
 def _push_differentiable(model: nn.Module) -> Any:
-    replay = tl.options.ReplayOptions(
-        hooks={tl.label("linear_1_1"): keep_grad(tl.scale(2.0))}, differentiable=True
-    )
-    return _ready(model).push(replay=replay)
+    options = tl.options.InterventionOptions(differentiable=True)
+    return _ready(model).do(tl.label("linear_1_1"), keep_grad(tl.scale(2.0)), intervention=options)
 
 
 def test_differentiable_replay_discloses_once_per_session() -> None:
@@ -83,21 +83,4 @@ def test_fork_do_stays_silent_and_reaches_upstream() -> None:
         fork.do("linear_1_1", keep_grad(tl.scale(2.0)))
     assert _CODE not in _codes(caught)
     fork[fork.output_layers[0]].out.sum().backward()
-    assert model.lin1.weight.grad is not None
-
-
-def test_the_named_live_doors_train_upstream_parameters() -> None:
-    model = _Net()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        _push_differentiable(model)
-    remedy = next(record.message.fields["remedy"] for record in caught if _CODE in _codes([record]))
-    assert ".bind(model)(x)" in remedy and "tl.trace(model, x, intervene=" in remedy
-    bound = tl.when(tl.module("lin1"), keep_grad(tl.scale(2.0))).bind(model)
-    bound(_X).sum().backward()
-    assert model.lin1.weight.grad is not None
-    assert torch.count_nonzero(model.lin1.weight.grad) > 0
-    model.zero_grad(set_to_none=True)
-    trace = tl.trace(model, _X, intervene=tl.when(tl.module("lin1"), tl.scale(2.0)))
-    trace[trace.output_layers[0]].out.sum().backward()
     assert model.lin1.weight.grad is not None

@@ -6,15 +6,17 @@ from typing import Any
 
 from torch import nn
 
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _coerce_inputs
+from ..options import CaptureOptions
+from ._dry_run import DryRun
 from ._recorder import Recorder
-from .options import PredicateFn
-from .types import DryRun
+from .exceptions import refuse_recorder_uninitialized
+from .options import PredicateFn, RecordingOptions
 
 
 def dry_run(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     save: PredicateFn | None = None,
@@ -28,8 +30,8 @@ def dry_run(
     ----------
     model:
         PyTorch module to execute.
-    input_args:
-        Tensor, list, or tuple of positional model inputs.
+    inputs:
+        Tensor, list, or tuple of positional model inputs; for a Hugging Face model also a string, PIL image or modality dict, resolved as ``tl.trace`` resolves it.
     input_kwargs:
         Optional keyword arguments for the model call.
     save, history_size, include_source_events, seed:
@@ -37,18 +39,28 @@ def dry_run(
 
     Returns
     -------
-    RecordingTrace
-        Chronological event contexts and any accumulated predicate failures.
+    DryRun
+        Chronological event contexts, one capture decision per op event and any
+        accumulated predicate failures.
+
+    Examples
+    --------
+    >>> plan = tl.recording.dry_run(model, x, save=tl.func("relu"))
+    >>> type(plan).__name__, len(plan.contexts) > 0, plan.predicate_failures
+    ('DryRun', True, ())
     """
 
-    input_args = _coerce_input_args(model, input_args)
+    inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
     recorder_kwargs: dict[str, Any] = {
         "save": save,
-        "history_size": history_size,
-        "include_source_events": include_source_events,
-        "on_predicate_error": "fail-fast",
-        "seed": seed,
+        "recording": RecordingOptions(
+            history_size=history_size,
+            include_source_events=include_source_events,
+            on_predicate_error="fail-fast",
+        ),
     }
+    if seed is not None:
+        recorder_kwargs["capture"] = CaptureOptions(seed=seed)
     recorder_cm = Recorder(
         model,
         **recorder_kwargs,
@@ -56,11 +68,12 @@ def dry_run(
 
     with recorder_cm as recorder:
         if recorder._state is None:  # noqa: SLF001
-            raise RuntimeError("Recorder state was not initialized")
+            refuse_recorder_uninitialized("Recorder state was not initialized")
         if recorder._capture_events is None:  # noqa: SLF001
-            raise RuntimeError("Recorder capture events were not initialized")
+            refuse_recorder_uninitialized("Recorder capture events were not initialized")
         recorder._state.no_tensor_capture = True  # noqa: SLF001
-        recorder(input_args, input_kwargs)
+        recorder._state.keep_all_contexts = True  # noqa: SLF001
+        recorder(inputs, input_kwargs)
         contexts = tuple(recorder._state.all_contexts)  # noqa: SLF001
         decisions = tuple(
             bool(getattr(event, "predicate_matched", False))

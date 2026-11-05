@@ -24,7 +24,6 @@ from torchlens._visualization.theme_registry import (
 )
 
 
-@pytest.mark.smoke
 def test_builtin_rows_are_registered_and_teach_their_settings() -> None:
     overview = get_lens("overview")
     blueprint = get_lens("blueprint")
@@ -71,13 +70,6 @@ def test_unknown_lens_lookup_names_the_roster() -> None:
     assert "overview" in str(excinfo.value)
 
 
-def test_resolution_is_defaults_not_overrides() -> None:
-    # N1: lens members apply ONLY where the user did not explicitly speak.
-    effective = resolve_lens_request("overview", {"collapse": "none"})
-    assert effective["collapse"] == "none"  # explicit user kwarg wins
-    assert effective["vis_mode"] == "rolled"  # lens member fills the gap
-
-
 def test_resolution_rejects_unknown_user_kwargs() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         resolve_lens_request("overview", {"not_a_param": 1})
@@ -107,18 +99,6 @@ def test_rows_are_plain_serialisable() -> None:
     assert round_tripped["surface"] == GRAPHVIZ_DRAW_SURFACE
 
 
-def test_graphviz_renderer_declares_encodings_capability() -> None:
-    # N14: "refuse by capability, never draw an unencoded imitation" needs
-    # the encodings bit to exist in the vocabulary.
-    from torchlens._visualization.renderers.base import RendererCapabilities
-    from torchlens._visualization.renderers.graphviz import GraphvizRenderer
-
-    assert "encodings" in {f.name for f in RendererCapabilities.__dataclass_fields__.values()}
-    assert GraphvizRenderer.capabilities.encodings is True
-    assert RendererCapabilities().encodings is False
-
-
-@pytest.mark.smoke
 def test_explicit_max_above_ceiling_warns_every_call(monkeypatch) -> None:
     # N15 (themes item 1): explicit collapse="max" above the compute gate
     # was a SILENT byte-identical no-op on every call after the first

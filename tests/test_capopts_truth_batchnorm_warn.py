@@ -4,7 +4,7 @@ WALKTHROUGH list-A row 30: train-mode tracing silently mutated BatchNorm
 running statistics -- the forward REALLY runs, so ``running_mean`` /
 ``running_var`` advance under momentum (even inside ``torch.no_grad`` or
 ``inference_only=True``) with no disclosure anywhere. A default capture is
-now a pure observer (U40.1) that restores the statistics afterwards, so the
+now a pure observer that restores the statistics afterwards, so the
 mutation happens only under the forward-equivalent opt-in
 ``CaptureOptions(carry_state=True)``; there the capture entry warns ONCE PER
 PROCESS with code ``batchnorm_train_stats_mutated`` when a train-mode norm

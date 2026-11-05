@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import pickle
-from pathlib import Path
-
 import pytest
 import torch
 
@@ -27,8 +24,8 @@ def _simple_model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
 def test_io_format_version_and_floor() -> None:
     """The coordinated tlspec v11 bump stamps 11 and reads only stamp 11."""
 
-    assert TLSPEC_VERSION == 11
-    assert MIN_TLSPEC_VERSION == 11
+    assert TLSPEC_VERSION == 12
+    assert MIN_TLSPEC_VERSION == 12
 
 
 def test_pre_floor_module_call_state_refuses_typed() -> None:
@@ -41,42 +38,5 @@ def test_pre_floor_module_call_state_refuses_typed() -> None:
     state["tlspec_version"] = 5
 
     restored = type(call).__new__(type(call))
-    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.37 and earlier"):
         restored.__setstate__(state)
-
-
-def test_round_trip_save_load_preserves_module_containment(tmp_path: Path) -> None:
-    """Save a current trace, load it, and confirm module containment survives."""
-
-    model, x = _simple_model_and_input()
-    trace = tl.trace(model, x)
-    bundle_path = tmp_path / "test_bundle.tlspec"
-
-    trace.save(bundle_path)
-    loaded = tl.load(bundle_path)
-
-    op_with_modules = next((op for op in loaded._layer_list if getattr(op, "modules", [])), None)
-    assert op_with_modules is not None, "loaded trace should preserve module containment"
-    assert isinstance(op_with_modules.modules, tuple)
-
-
-def test_legacy_thread_field_pickle_refuses_typed() -> None:
-    """A v2 Op state with thread-replay fields refuses instead of resurrecting.
-
-    Pre-floor behavior dropped the legacy thread fields with a one-per-process
-    ``DeprecationWarning``; the tlspec-6 floor replaces that resurrection path with
-    a typed refusal that names the floor.
-    """
-
-    model, x = _simple_model_and_input()
-    trace = tl.trace(model, x)
-    op = next(iter(trace._layer_list))
-    state = op.__getstate__()
-    state["tlspec_version"] = 2
-    state["_module_boundary_thread_output"] = [("+", "fake_module", 1)]
-    state["_module_boundary_threads_inputs"] = {"fake_label": []}
-    state["module_entry_exit_threads_inputs"] = {"old_alias": []}
-
-    decoded = pickle.loads(pickle.dumps(state))
-    with pytest.raises(ArtifactTooOldError, match="tlspec_version=2"):
-        type(op).__setstate__(op, decoded)

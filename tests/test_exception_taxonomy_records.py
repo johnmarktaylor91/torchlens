@@ -20,6 +20,10 @@ from torch import nn
 import torchlens as tl
 from torchlens import errors
 from torchlens._errors import PayloadUnavailableError, RecordBindingError
+from torchlens._visualization._trace_collapse import (
+    collapse_order as _collapse_order,
+    collapse_plan as _collapse_plan,
+)
 
 
 @pytest.fixture(scope="module")
@@ -43,8 +47,9 @@ def _assert_contract(exc: BaseException, expected_code: str, builtin: type[BaseE
     assert fields["code"] == expected_code
     remedy = fields.get("remedy")
     assert isinstance(remedy, str) and remedy
-    assert "Remedy:" in str(exc)
-    assert remedy in str(exc)
+    message = str(exc)
+    remedy_label = "\n  remedy     " if "\n  candidates " in message else "Remedy: "
+    assert f"{remedy_label}{remedy}" in message
 
 
 RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]], ...] = (
@@ -71,12 +76,12 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
     (
         "collapse_mode_invalid",
         ValueError,
-        lambda log: log.collapse_plan(mode="bogus"),  # type: ignore[arg-type]
+        lambda log: _collapse_plan(log, mode="bogus"),  # type: ignore[arg-type]
     ),
     (
         "collapse_level_invalid",
         ValueError,
-        lambda log: log.collapse_plan(mode=1.5),
+        lambda log: _collapse_plan(log, mode=1.5),
     ),
     (
         "stack_selector_no_match",
@@ -86,7 +91,7 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
     (
         "run_legacy_arguments_conflict",
         TypeError,
-        lambda log: log.run(object(), torch.randn(1, 4), inputs=torch.randn(1, 4)),
+        lambda log: log.run(object(), torch.randn(1, 4)),
     ),
     (
         "derived_field_assignment_invalid",
@@ -106,9 +111,6 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
 )
 
 
-@pytest.mark.smoke_cells(
-    "test_record_refusals_carry_codes_and_remedies[annotation_not_json_serializable]",
-)
 @pytest.mark.parametrize(
     ("expected_code", "builtin", "trigger"),
     RECORD_DOOR_CASES,
@@ -164,8 +166,8 @@ FASTLOG_DOOR_CASES: tuple[tuple[str, type[BaseException], dict[str, Any]], ...] 
     ("history_size_invalid", ValueError, {"history_size": -1}),
     ("lookback_invalid", ValueError, {"lookback": 4096}),
     ("lookback_payload_policy_invalid", ValueError, {"lookback_payload_policy": "bogus"}),
-    ("recording_intervention_predicate_type_invalid", ValueError, {"intervene": "not-callable"}),
-    ("recording_halt_predicate_type_invalid", ValueError, {"halt": "not-callable"}),
+    ("intervention_predicate_type_invalid", TypeError, {"intervene": "not-callable"}),
+    ("halt_predicate_type_invalid", TypeError, {"halt": "not-callable"}),
     ("max_predicate_failures_invalid", ValueError, {"max_predicate_failures": -3}),
     ("on_predicate_error_invalid", ValueError, {"on_predicate_error": "explode"}),
     ("on_forward_error_invalid", ValueError, {"on_forward_error": "shrug"}),
@@ -202,6 +204,7 @@ _RECORDING_FIELDS = {
     "default_grad",
     "include_source_events",
     "postprocess",
+    "lean",
 }
 _CAPTURE_FIELDS = {
     "lookback",
@@ -220,15 +223,16 @@ _CAPTURE_FIELDS = {
 def _door_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     """Spell former flat record keywords the way the door takes them now.
 
-    Recorder knobs stay flat door keywords, capture knobs ride
+    Recorder knobs ride ``recording=RecordingOptions(...)``, capture knobs ride
     ``capture=CaptureOptions(...)`` and ``halt`` is ``stop_after=``; the typed
-    refusal still fires where the Recorder resolves the merged values.
+    refusal still fires inside the door call (the option constructors validate).
     """
 
     out: dict[str, Any] = {}
     recording = {k: v for k, v in kwargs.items() if k in _RECORDING_FIELDS}
     capture = {k: v for k, v in kwargs.items() if k in _CAPTURE_FIELDS}
-    out.update(recording)
+    if recording:
+        out["recording"] = tl.options.RecordingOptions(**recording)
     if capture:
         out["capture"] = tl.options.CaptureOptions(**capture)
     for key, value in kwargs.items():
@@ -256,8 +260,9 @@ def test_trace_predicate_type_doors_carry_codes_and_remedies(
 ) -> None:
     """The tl.trace() non-callable intervene/halt doors expose codes and remedies.
 
-    Trace-side twins of the ``recording_*_predicate_type_invalid`` fastlog
-    doors above (new vocabulary must ship provoked).
+    The same codes and ``TypeError`` lineage as the ``tl.record`` doors above:
+    predicate misuse raises identically on both entry points, so one catch
+    handles the pair.
     """
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
@@ -266,7 +271,6 @@ def test_trace_predicate_type_doors_carry_codes_and_remedies(
     _assert_contract(exc_info.value, expected_code, builtin)
 
 
-@pytest.mark.smoke
 def test_intervention_doors_carry_codes_and_remedies() -> None:
     """Converted intervention-family doors expose codes and remedies."""
 
@@ -287,7 +291,6 @@ def test_intervention_doors_carry_codes_and_remedies() -> None:
     _assert_contract(exc_info.value, "spec_format_version_unsupported", ValueError)
 
 
-@pytest.mark.smoke
 def test_visualization_doors_carry_codes_and_remedies(small_trace: Any) -> None:
     """Converted visualization option doors expose codes and remedies."""
 
@@ -307,11 +310,10 @@ def test_visualization_doors_carry_codes_and_remedies(small_trace: Any) -> None:
     _assert_contract(exc_info.value, "summary_level_invalid", ValueError)
 
     with pytest.raises(errors.TorchLensError) as exc_info:
-        small_trace.collapse_order(mode="bogus")
+        _collapse_order(small_trace, mode="bogus")
     _assert_contract(exc_info.value, "collapse_mode_invalid", ValueError)
 
 
-@pytest.mark.smoke
 def test_trace_stack_shape_mismatch_is_typed(small_trace: Any) -> None:
     """Stacking differently-shaped saved outs refuses with the stack code."""
 

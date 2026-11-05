@@ -10,6 +10,7 @@ cache root twice now.
 """
 
 import gc
+import os
 import tracemalloc
 import weakref
 
@@ -35,6 +36,21 @@ from torchlens.errors import TraceCaptureError
 # ---------------------------------------------------------------------------
 # Test models
 # ---------------------------------------------------------------------------
+
+
+_TORCHLENS_DIR = os.path.dirname(os.path.abspath(tl.__file__)) + os.sep
+
+
+def _torchlens_growth(stats: list[tracemalloc.StatisticDiff]) -> int:
+    """Net bytes of blocks allocated in the torchlens package's own source files.
+
+    A frame belongs to torchlens when its file lies under the installed package
+    directory. A substring test on the path would also count every allocation of a
+    checkout whose path names torchlens (the virtualenv's torch, pytest), which is
+    other code's growth and depends on what ran earlier in the process.
+    """
+
+    return sum(s.size_diff for s in stats if s.traceback[0].filename.startswith(_TORCHLENS_DIR))
 
 
 class _SimpleLinear(nn.Module):
@@ -97,7 +113,7 @@ class TestTraceGC:
 
         model = _TwoLayerNet().eval()
         trace = tl.trace(model, torch.randn(1, 5), save=tl.module("fc1"))
-        trace.run(inputs=torch.randn(1, 5), fast=True)
+        trace.run_transaction(inputs=torch.randn(1, 5), fast=True)
         trace_ref = weakref.ref(trace)
         param_ref = weakref.ref(next(model.parameters()))
         assert model.fc1._forward_hooks
@@ -149,7 +165,7 @@ class TestTraceGC:
 
         # Compare: filter to torchlens allocations
         stats = after.compare_to(baseline, "lineno")
-        tl_growth = sum(s.size_diff for s in stats if "torchlens" in str(s.traceback))
+        tl_growth = _torchlens_growth(stats)
         # Allow up to 256KB of noise (caches, interned strings, etc.)
         assert tl_growth < 256 * 1024, f"Memory grew by {tl_growth} bytes across 5 sessions"
 
@@ -162,21 +178,21 @@ class TestTraceGC:
         trace = tl.trace(model, x, save=None)
 
         # Warm up
-        trace.save_new_outs(model, torch.randn(1, 5), layers_to_save="all")
+        trace._save_new_outs(model, torch.randn(1, 5), save="all")
         gc.collect()
 
         tracemalloc.start()
         baseline = tracemalloc.take_snapshot()
 
         for _ in range(5):
-            trace.save_new_outs(model, torch.randn(1, 5), layers_to_save="all")
+            trace._save_new_outs(model, torch.randn(1, 5), save="all")
             gc.collect()
 
         after = tracemalloc.take_snapshot()
         tracemalloc.stop()
 
         stats = after.compare_to(baseline, "lineno")
-        tl_growth = sum(s.size_diff for s in stats if "torchlens" in str(s.traceback))
+        tl_growth = _torchlens_growth(stats)
         assert tl_growth < 256 * 1024, f"Memory grew by {tl_growth} bytes across 5 save_new_outs"
         trace.cleanup()
 
@@ -243,8 +259,8 @@ class TestTraceGC:
         """The flattened ModuleCall accessor memo lives on the Trace, not a global.
 
         A module-global cache keyed by the Trace cannot hold this value: the
-        accessor holds ModuleCalls and ``ModuleCall._source_trace`` keeps a
-        strong reference back to the Trace, so even a ``WeakKeyDictionary``
+        accessor holds ModuleCalls and ``ModuleCall._source_trace`` used to keep
+        a strong reference back to the Trace, so even a ``WeakKeyDictionary``
         value would reach its own key and pin every Trace forever.
         """
 
@@ -275,40 +291,39 @@ class TestTraceGC:
             gc.collect()
         assert [ref() for ref in refs] == [None, None, None]
 
-    def test_held_module_call_still_keeps_its_trace_alive(self):
-        """The intentional ModuleCall -> Trace ownership edge survives the fix."""
+    def test_held_module_call_does_not_pin_its_trace(self):
+        """A ModuleCall holds its Trace weakly, as Module and Op already did.
+
+        The strong owner edge it used to carry closed Trace -> module_calls ->
+        ModuleCall -> Trace, so no Trace could die at zero refcount. A call held
+        past its Trace now answers ``trace`` with None.
+        """
 
         model = _TwoLayerNet()
         trace = tl.trace(model, torch.randn(1, 5))
         module_call = trace.module_calls[0]
         ref = weakref.ref(trace)
+        assert module_call.trace is trace
 
         del trace
         gc.collect()
-        assert ref() is not None, "holding a ModuleCall must keep its Trace alive"
-        assert module_call.trace is ref()
+        assert ref() is None, "holding a ModuleCall pinned its Trace"
+        assert module_call.trace is None
 
-        del module_call
-        gc.collect()
-        assert ref() is None
+    def test_trace_reclamation_is_prompt_refcount(self):
+        """A dropped Trace and its saved activations are freed at zero refcount.
 
-    def test_trace_reclamation_is_cyclic_gc_not_prompt_refcount(self):
-        """Traces are reclaimed by the CYCLIC collector, and that is the contract.
-
-        Deliberately pinned, because the docs claimed the opposite. Every capture
-        populates ``module_calls`` through the saved-summary refresh, and
-        ``ModuleCall._source_trace`` is a STRONG owner edge (kept on purpose --
-        see ``test_held_module_call_still_keeps_its_trace_alive``, and the module
-        accessor cache above reasons from it). That closes
-        Trace -> accessor -> ModuleCall -> Trace, so a dropped Trace and its saved
-        activations are freed at the next ``gc.collect()``, NOT at zero refcount.
-
-        Every other assertion in this file calls ``gc.collect()`` first, so
-        nothing here observed the difference; this arm runs with the collector
-        DISABLED so the real behavior is stated and cannot drift silently.
+        Every capture populates ``module_calls`` through the saved-summary
+        refresh; with the ModuleCall owner edge weak, nothing a Trace owns
+        points back at it, so the cyclic collector is not needed. This arm runs
+        with the collector DISABLED so the contract cannot drift silently. A
+        warm capture runs first: the first capture in a process triggers torch
+        imports whose registries copy the completeness wrappers, and that
+        process-lifetime pin is covered by ``tests/test_trace_lifetime.py``.
         """
 
         model = _TwoLayerNet()
+        tl.trace(model, torch.randn(1, 5))
         gc.collect()
         gc.disable()
         try:
@@ -318,18 +333,10 @@ class TestTraceGC:
             activation_ref = weakref.ref(activation)
 
             del trace, activation
-            assert trace_ref() is not None, (
-                "Trace became refcount-reclaimable: the ModuleCall owner edge or "
-                "the saved-summary refresh changed, so the documented lifetime "
-                "contract needs updating (and this test with it)"
-            )
-            assert activation_ref() is not None
+            assert trace_ref() is None, "Trace survived its last reference (held by a cycle)"
+            assert activation_ref() is None, "saved activation outlived its Trace"
         finally:
             gc.enable()
-
-        gc.collect()
-        assert trace_ref() is None, "Trace survived a cyclic collection"
-        assert activation_ref() is None, "saved activation survived a cyclic collection"
 
     def test_last_captures_model_class_is_not_pinned_after_the_epilogue(self):
         """A dynamically created module class dies with its last capture.
@@ -436,7 +443,6 @@ class TestTraceGC:
             "(eviction still waits for an unrelated later backward)"
         )
 
-    @pytest.mark.smoke
     def test_live_run_after_model_collection_refuses_typed_and_names_the_weak_ref(self):
         """A collected source model refuses run() typed AND discloses why (R37).
 
@@ -453,14 +459,14 @@ class TestTraceGC:
         gc.collect()
         assert trace._source_model_ref() is None, "inline model should be collected"
         with pytest.raises(RunCapabilityUnavailableError) as excinfo:
-            trace.run(inputs=torch.randn(1, 5))
+            trace.run_transaction(inputs=torch.randn(1, 5))
         message = str(excinfo.value)
         assert "weakly" in message and "strong reference" in message, (
             "the collected-model refusal must disclose the weak-reference "
             f"dependency and its remedy; got: {message}"
         )
         with pytest.raises(RunCapabilityUnavailableError) as fast_excinfo:
-            trace.run(inputs=torch.randn(1, 5), fast=True)
+            trace.run_transaction(inputs=torch.randn(1, 5), fast=True)
         assert "weakly" in str(fast_excinfo.value)
 
     def test_cleanup_drops_the_receptive_field_solution_cache(self):
@@ -554,7 +560,7 @@ class TestLifetimeCoverageGaps:
 
         model = _TwoLayerNet().eval()
         source = tl.trace(model, torch.randn(1, 5), save="all")
-        result = source.run(inputs=torch.randn(1, 5))
+        result = source.run_transaction(inputs=torch.randn(1, 5))
         fork_ref = weakref.ref(result.trace)
 
         del result
@@ -669,7 +675,6 @@ def test_delattr_capture_events_releases_the_working_projection():
     assert not stream.module_prep_events
 
 
-@pytest.mark.smoke
 def test_cleaned_trace_refuses_typed_and_settles_unknown():
     """A husked Trace refuses public reads TYPED and settles outcome UNKNOWN.
 

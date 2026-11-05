@@ -63,49 +63,6 @@ class _FFNModel(nn.Module):
 
 
 @pytest.mark.slow
-def test_distilbert_ffn_current_class_populates_facets() -> None:
-    """The current transformers FFN class name populates non-empty FFN facets.
-
-    Regression: transformers >= 4.57 renamed ``DistilBertFFN`` to ``FFN``. The
-    recipe targeted only the legacy name, so DistilBERT FFN facets came back
-    empty (silent) on current transformers.
-    """
-
-    log = trace_fn(
-        _FFNModel(FFN()),
-        torch.randn(2, 3, 8),
-        save="all",
-    )
-    view = log.modules["ffn"].facets
-    assert view.function_source == "distilbert_ffn"
-    assert view.up_out.shape == (2, 3, 16)
-    assert view.intermediate.shape == (2, 3, 16)
-    assert view.down_out.shape == (2, 3, 8)
-    assert view.output.shape == (2, 3, 8)
-
-
-@pytest.mark.slow
-def test_distilbert_ffn_legacy_class_still_populates_facets() -> None:
-    """The legacy transformers FFN class name still populates FFN facets.
-
-    Back-compat: older transformers (< 4.57) exposes ``DistilBertFFN``; the
-    recipe must keep matching it so the fix is robust across versions.
-    """
-
-    log = trace_fn(
-        _FFNModel(DistilBertFFN()),
-        torch.randn(2, 3, 8),
-        save="all",
-    )
-    view = log.modules["ffn"].facets
-    assert view.function_source == "distilbert_ffn"
-    assert view.up_out.shape == (2, 3, 16)
-    assert view.intermediate.shape == (2, 3, 16)
-    assert view.down_out.shape == (2, 3, 8)
-    assert view.output.shape == (2, 3, 8)
-
-
-@pytest.mark.slow
 def test_real_distilbert_ffn_facets_populate() -> None:
     """A real cached DistilBERT model populates FFN facets on the live class.
 

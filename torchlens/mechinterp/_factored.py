@@ -120,6 +120,16 @@ class FactoredMatrix:
     ``A`` is ``[..., ldim, mdim]`` and ``B`` is ``[..., mdim, rdim]``; leading
     dimensions broadcast. Products, SVD, norm and eigenvalues are computed
     without forming the full ``[..., ldim, rdim]`` product where possible.
+
+    Examples
+    --------
+    >>> fm = FactoredMatrix(torch.randn(4, 2), torch.randn(2, 5))
+    >>> tuple(fm.shape)
+    (4, 5)
+    >>> bool(torch.allclose(fm.AB, fm.A @ fm.B))
+    True
+    >>> tuple(fm.T.shape)
+    (5, 4)
     """
 
     def __init__(self, A: torch.Tensor, B: torch.Tensor) -> None:

@@ -84,7 +84,7 @@ def test_unretained_layer_source_names_both_real_label_selectors() -> None:
     trace = _trace_chain(save=tl.label("conv2d_2"))
     source, target = _conv_endpoints(trace)
     expected_recipe = (
-        "tl.trace(model, x.requires_grad_(True), "
+        "tl.trace(model, x, "
         'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"), '
         f"save=tl.label({source.short_layer_label!r}) | tl.label({target.short_layer_label!r}))"
     )

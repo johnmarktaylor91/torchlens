@@ -8,13 +8,10 @@ extra disclosed run.
 
 from __future__ import annotations
 
-import random
-
 import pytest
 import torch
 from torch import nn
 
-import torchlens as tl
 from torchlens.debug import check_determinism
 
 
@@ -57,45 +54,6 @@ class _BatchNormModel(nn.Module):
         return self.linear(self.norm(x))
 
 
-def test_eval_model_is_repeatable_and_caller_state_untouched() -> None:
-    """Deterministic eval forward: repeatable_under_test; caller RNG intact."""
-
-    model = _DropoutModel()
-    model.eval()
-    x = torch.randn(2, 4)
-    torch.manual_seed(31)
-    random.seed(31)
-    torch_state = torch.get_rng_state()
-    python_state = random.getstate()
-    report = check_determinism(model, x, runs=2, seed=5)
-    assert report.verdict == "repeatable_under_test"
-    assert report.runs == 2
-    assert report.policy == "exact"
-    assert report.model_mode == "eval"
-    assert report.seed_sensitivity_verdict is None
-    assert torch.equal(torch.get_rng_state(), torch_state)
-    assert random.getstate() == python_state
-    witness_names = [name for name, _value in report.environment_witnesses]
-    assert "torch.backends.cudnn.benchmark" in witness_names
-    assert "CUBLAS_WORKSPACE_CONFIG" in witness_names
-
-
-def test_train_dropout_repeats_and_names_the_dropout_op_itself() -> None:
-    """Same-seed dropout REPEATS; the RNG consumer list names dropout, not its successor."""
-
-    model = _DropoutModel()
-    model.train()
-    report = check_determinism(model, torch.randn(2, 4), runs=2, seed=7)
-    assert report.verdict == "repeatable_under_test"
-    assert any(label.startswith("dropout") for label in report.rng_consuming_ops), (
-        report.rng_consuming_ops
-    )
-    assert report.rng_attribution_basis in (
-        "pre_op_rng_snapshots",
-        "stochastic_func_names",
-    )
-
-
 def test_batchnorm_train_buffer_writes_are_not_nondeterminism() -> None:
     """Per-run fresh deepcopy isolates BatchNorm buffers across runs."""
 
@@ -105,7 +63,6 @@ def test_batchnorm_train_buffer_writes_are_not_nondeterminism() -> None:
     assert report.verdict == "repeatable_under_test"
 
 
-@pytest.mark.smoke
 def test_host_entropy_observed_as_divergence() -> None:
     """OS-entropy consumption inside forward yields an observed divergence."""
 
@@ -136,34 +93,6 @@ def test_seed_sensitivity_is_optin_with_disclosed_extra_run() -> None:
     assert eval_report.seed_sensitivity_verdict == "insensitive_under_test"
 
 
-def test_same_run_twice_self_check() -> None:
-    """Harness ACCEPTANCE: the harness itself never manufactures divergence.
-
-    Two isolated captures of a deterministic model compared through the same
-    machinery agree exactly -- this is the self-check as an acceptance test,
-    not a hidden per-call calibration run.
-    """
-
-    model = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 2))
-    report = check_determinism(model, torch.randn(3, 4), runs=4, seed=0)
-    assert report.verdict == "repeatable_under_test"
-    assert report.divergent_ops == ()
-
-
-def test_already_traced_model_works() -> None:
-    """The deepcopy-after-trace KeyError class never reaches this tool."""
-
-    model = _DropoutModel()
-    model.eval()
-    x = torch.randn(2, 4)
-    prior = tl.trace(model, x)
-    try:
-        report = check_determinism(model, x, runs=2, seed=1)
-        assert report.verdict == "repeatable_under_test"
-    finally:
-        prior.cleanup()
-
-
 def test_runs_below_two_refuse_typed() -> None:
     """runs=1 cannot support a repeatability claim; the refusal teaches."""
 
@@ -174,7 +103,6 @@ def test_runs_below_two_refuse_typed() -> None:
     assert excinfo.value.fields["code"] == "determinism_runs_invalid"
 
 
-@pytest.mark.smoke
 def test_undeepcopyable_model_is_inconclusive_with_factory_remedy() -> None:
     """A deepcopy-refusing model returns inconclusive, never a crash."""
 

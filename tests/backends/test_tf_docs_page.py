@@ -16,6 +16,7 @@ pytestmark = [
         _TF_BACKEND_SKIP_REASON is not None,
         reason=_TF_BACKEND_SKIP_REASON or "TensorFlow backend stack is supported",
     ),
+    pytest.mark.rare,
 ]
 
 _PAGE = Path(__file__).resolve().parents[2] / "docs" / "backends" / "tf.md"

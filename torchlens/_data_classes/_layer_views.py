@@ -282,7 +282,7 @@ def layer_parent_arg_positions(layer: Layer) -> dict[str, dict[Any, str]]:
     for pass_log in layer.ops.values():
         for arg_type in ["args", "kwargs"]:
             for arg_key, layer_label in pass_log.parent_arg_positions[arg_type].items():
-                no_pass = layer.source_trace[layer_label].layer_label
+                no_pass = layer.source_trace.layers[layer_label].layer_label
                 if arg_key not in result[arg_type]:
                     result[arg_type][arg_key] = no_pass
     return result
@@ -306,7 +306,7 @@ def resolve_relation_record(layer: Layer, label: str) -> Layer | None:
 
     trace = layer.source_trace
     try:
-        return cast("Layer", trace[label])
+        return cast("Layer", trace.layers[label])
     except (KeyError, ValueError):
         try:
             return cast("Layer", trace.graph.orphans[label])

@@ -40,6 +40,8 @@ from packaging.version import Version
 
 import torchlens as tl
 from torchlens.backends import FrameworkRequirement
+from torchlens.backends._protocols.mlx import MLX_ECOSYSTEM_TEST_REQUIREMENTS
+from torchlens.backends._protocols.tf import TF_ECOSYSTEM_TEST_REQUIREMENTS
 from torchlens.backends.registry import get_backend_spec, registered_backend_specs
 
 if sys.version_info >= (3, 11):
@@ -54,6 +56,12 @@ _CHANGES_SCRIPT = _REPO_ROOT / "scripts" / "backend_ci_changes.py"
 
 ALL_BACKENDS = ("torch", "tf", "jax", "mlx", "paddle", "tinygrad")
 PREVIEW_BACKENDS = ("tf", "jax", "mlx", "paddle", "tinygrad")
+
+#: Test-only ecosystem roster dependencies, nightly preview leg only.
+ECOSYSTEM_TEST_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    "mlx": MLX_ECOSYSTEM_TEST_REQUIREMENTS,
+    "tf": TF_ECOSYSTEM_TEST_REQUIREMENTS,
+}
 
 #: A specifier set compared by meaning: ``>=0.13`` equals ``>=0.13.0``.
 SpecKey = frozenset[tuple[str, Version]]
@@ -234,6 +242,38 @@ def test_nightly_leg_installs_the_declared_range_or_the_pin(backend: str) -> Non
     assert _spec_key(requirement) in allowed, f"{backend}: nightly installs {requirement}"
 
 
+@pytest.mark.parametrize("backend", sorted(ECOSYSTEM_TEST_REQUIREMENTS))
+def test_ecosystem_test_requirements_install_on_the_nightly_leg_only(backend: str) -> None:
+    """The nightly leg installs each ecosystem requirement as declared; nothing else does.
+
+    The per-change leg and every pyproject extra stay free of them, so a user
+    install and a pull-request leg never pull the roster-only libraries.
+    """
+
+    nightly = [
+        Requirement(text)
+        for text in _install_requirements(_legs(_NIGHTLY_WORKFLOW, "preview-backends")[backend])
+    ]
+    pr_names = {
+        canonicalize_name(Requirement(text).name)
+        for text in _install_requirements(_legs(_PR_WORKFLOW, "backend-protocol")[backend])
+    }
+    extra_names = {
+        canonicalize_name(Requirement(text).name)
+        for texts in _pyproject()["project"]["optional-dependencies"].values()
+        for text in texts
+    }
+    for text in ECOSYSTEM_TEST_REQUIREMENTS[backend]:
+        declared = Requirement(text)
+        name = canonicalize_name(declared.name)
+        installed = [req for req in nightly if canonicalize_name(req.name) == name]
+        assert [_spec_key(req) for req in installed] == [_spec_key(declared)], (
+            f"{backend}: nightly installs {installed}, the shell declares {declared}"
+        )
+        assert name not in pr_names, f"{backend}: the per-change leg installs {name}"
+        assert name not in extra_names, f"a pyproject extra declares {name}"
+
+
 @pytest.mark.parametrize("backend", PREVIEW_BACKENDS)
 def test_pr_and_nightly_legs_agree_on_suite_and_floor(backend: str) -> None:
     """Both legs run the same marker suite, import check and executed-test floor."""
@@ -272,7 +312,12 @@ def test_torch_scorecard_is_checked_in_its_pinned_smoke_row() -> None:
 
 
 def test_nightly_runs_the_ecosystem_rosters() -> None:
-    """The nightly preview matrix runs each backend's ecosystem roster with networked weights."""
+    """The nightly preview matrix runs each backend's ecosystem roster with networked weights.
+
+    Two steps switch the ecosystem rows on: the roster scorecard run, then the
+    leg's slow preview tests (the pretrained rows' pytest suites), in that order
+    so the tests reuse the weights the roster run fetched.
+    """
 
     job = _workflow(_NIGHTLY_WORKFLOW)["jobs"]["preview-backends"]
     ecosystem = [
@@ -280,8 +325,9 @@ def test_nightly_runs_the_ecosystem_rosters() -> None:
         for step in job["steps"]
         if step.get("env", {}).get("TORCHLENS_CONFORMANCE_ECOSYSTEM") == "1"
     ]
-    assert len(ecosystem) == 1
+    assert len(ecosystem) == 2
     assert "tests.conformance.scorecard --backend" in ecosystem[0]["run"]
+    assert '-m "${{ matrix.marker }} and slow"' in ecosystem[1]["run"]
     assert any(str(step.get("uses", "")).startswith("actions/cache@") for step in job["steps"])
 
 

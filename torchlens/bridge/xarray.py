@@ -9,8 +9,9 @@ when the artifact has them, and provenance (site, shaping op,
 input-preprocessing verdict) rides ``attrs``.
 
 ``data_array`` needs only ``xarray``; ``neuroid_assembly`` additionally
-needs Brain-Score's ``brainio`` assembly classes and degrades to a typed
-ImportError naming the extra when absent.
+needs Brain-Score's brainio assembly classes (bundled in ``brainscore_core``,
+which ``brainscore_vision`` installs, or the older standalone ``brainio``
+package) and degrades to a typed ImportError naming the extra when absent.
 
 Every spelling is DOCUMENTED-UNSTABLE pending the naming sprint.
 """
@@ -90,6 +91,16 @@ def data_array(source: Any, site: str) -> Any:
     ------
     ImportError
         If xarray is unavailable.
+
+    Examples
+    --------
+    >>> # requires: xarray
+    >>> trace = tl.trace(model, x)
+    >>> da = tl.bridge.xarray.data_array(trace, "2")
+    >>> da.dims
+    ('presentation', 'neuroid')
+    >>> da.shape
+    (1, 128)
     """
 
     try:
@@ -109,6 +120,40 @@ def data_array(source: Any, site: str) -> Any:
     )
 
 
+def _neuroid_assembly_class() -> Any:
+    """Return Brain-Score's ``NeuroidAssembly`` class from wherever it is installed.
+
+    Current ``brainscore_vision`` releases ship the brainio assembly classes inside
+    ``brainscore_core.supported_data_standards.brainio``; the standalone ``brainio``
+    package is their older home.
+
+    Returns
+    -------
+    Any
+        The ``NeuroidAssembly`` class.
+
+    Raises
+    ------
+    ImportError
+        If neither home is importable.
+    """
+
+    try:
+        from brainscore_core.supported_data_standards.brainio.assemblies import (
+            NeuroidAssembly,
+        )
+    except ImportError:
+        try:
+            from brainio.assemblies import NeuroidAssembly
+        except ImportError as exc:
+            raise ImportError(
+                "neuroid_assembly requires Brain-Score's brainio assembly classes "
+                "(installed with brainscore_vision); use data_array() for a "
+                "plain xarray.DataArray."
+            ) from exc
+    return NeuroidAssembly
+
+
 def neuroid_assembly(source: Any, site: str) -> Any:
     """Convert one TorchLens site into a Brain-Score ``NeuroidAssembly`` (B8).
 
@@ -123,26 +168,27 @@ def neuroid_assembly(source: Any, site: str) -> Any:
     Returns
     -------
     Any
-        ``brainio.assemblies.NeuroidAssembly`` over the same
-        "presentation x neuroid" array as :func:`data_array`.
+        Brain-Score's ``NeuroidAssembly`` over the same "presentation x
+        neuroid" array as :func:`data_array`.
 
     Raises
     ------
     ImportError
-        If ``brainio`` (Brain-Score's assembly package) is unavailable.
+        If neither ``brainscore_core`` nor the standalone ``brainio``
+        package provides Brain-Score's assembly classes.
+
+    Examples
+    --------
+    >>> # requires: brainscore_core
+    >>> trace = tl.trace(model, x)
+    >>> assembly = tl.bridge.xarray.neuroid_assembly(trace, "2")
+    >>> assembly.dims
+    ('presentation', 'neuroid')
     """
 
-    try:
-        from brainio.assemblies import NeuroidAssembly
-    except ImportError as exc:
-        raise ImportError(
-            "neuroid_assembly requires Brain-Score's brainio package "
-            "(installed with brainscore_vision); use data_array() for a "
-            "plain xarray.DataArray."
-        ) from exc
-
+    neuroid_assembly_class = _neuroid_assembly_class()
     array, coords, attrs = _assembly_pieces(source, site)
-    assembly = NeuroidAssembly(
+    assembly = neuroid_assembly_class(
         array,
         dims=("presentation", "neuroid"),
         coords=coords,

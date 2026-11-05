@@ -209,11 +209,10 @@ def test_plain_structure_only_truncation_cell_refuses_typed() -> None:
         capture=tl.options.CaptureOptions(structure_only=True),
     )
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
-        trace.run(inputs=torch.randn(2, 4), until="relu_1_2")
+        trace.run_transaction(inputs=torch.randn(2, 4), until="relu_1_2")
     assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
 
 
-@pytest.mark.smoke
 def test_mixed_tier_episode_folds_to_minimum() -> None:
     """The wildcard row's tier rule: episode tier = MINIMUM of member tiers."""
 

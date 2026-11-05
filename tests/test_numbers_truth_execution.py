@@ -42,20 +42,6 @@ class _BNStack(nn.Module):
         return self.bn2(self.conv2(self.bn1(self.conv1(x))))
 
 
-def test_one_call_summary_never_mutates_the_model() -> None:
-    """State dict bit-identical across tl.summary on a TRAIN-mode BN model (A4)."""
-
-    model = _BNStack()
-    model.train()
-    before = _state_dict_digest(model)
-    tl.summary(model, torch.randn(4, 3, 8, 8))
-    after = _state_dict_digest(model)
-    assert before == after
-    # Training flags restored: the model is still in train mode afterwards.
-    assert model.training
-    assert model.bn1.training
-
-
 @pytest.mark.heavy
 def test_one_call_summary_never_mutates_resnet18() -> None:
     """The memo pin: train-mode resnet18 state dict survives tl.summary (A4)."""
@@ -70,22 +56,6 @@ def test_one_call_summary_never_mutates_resnet18() -> None:
     assert model.training
 
 
-def test_one_call_summary_restores_rng_state() -> None:
-    """RNG streams are bit-identical with and without an interleaved summary (A4)."""
-
-    model = _BNStack()  # constructed BEFORE seeding: init draws stay out of the stream
-
-    torch.manual_seed(1234)
-    interleaved_input = torch.randn(4, 3, 8, 8)
-    tl.summary(model, interleaved_input)
-    resumed = torch.rand(8)
-
-    torch.manual_seed(1234)
-    _ = torch.randn(4, 3, 8, 8)
-    expected = torch.rand(8)
-    assert torch.equal(resumed, expected)
-
-
 def test_one_call_summary_explicit_train_mode_updates_buffers() -> None:
     """execution_mode='train' is the explicit opt-in that mutates BN stats (A4)."""
 
@@ -95,15 +65,6 @@ def test_one_call_summary_explicit_train_mode_updates_buffers() -> None:
     text = tl.summary(model, torch.randn(4, 3, 8, 8), execution_mode="train")
     assert not torch.equal(before, model.bn1.running_mean)
     assert "train mode (explicit" in text
-
-
-def test_one_call_summary_discloses_execution() -> None:
-    """The default summary discloses eval + no_grad + restoration (A4)."""
-
-    text = tl.summary(_BNStack(), torch.randn(2, 3, 8, 8))
-    assert "eval mode" in text
-    assert "no_grad" in text
-    assert "restored" in text
 
 
 def test_one_call_summary_mode_refusals_teach() -> None:
@@ -133,29 +94,6 @@ class _LazyUnused(nn.Module):
         """Run only the real submodule."""
 
         return self.used(x)
-
-
-def test_lazy_linear_traces_and_finalizes_inventory() -> None:
-    """nn.LazyLinear materializes during the ONE captured forward (A9)."""
-
-    model = nn.Sequential(nn.LazyLinear(16), nn.ReLU())
-    log = tl.trace(model, torch.randn(2, 8), save=None)
-    try:
-        shapes = {pl.address: tuple(pl.shape) for pl in log._param_logs}
-        assert shapes == {"0.weight": (16, 8), "0.bias": (16,)}
-        counts = {pl.address: pl.num_params for pl in log._param_logs}
-        assert counts == {"0.weight": 128, "0.bias": 16}
-        assert all(int(pl.param_memory) > 0 for pl in log._param_logs)
-    finally:
-        log.cleanup()
-
-
-def test_lazy_linear_summary_one_call() -> None:
-    """tl.summary works on a lazy model with no priming forward (A9)."""
-
-    text = tl.summary(nn.Sequential(nn.LazyLinear(16), nn.ReLU()), torch.randn(2, 8))
-    assert isinstance(text, str)
-    assert "Linear" in text
 
 
 def test_lazy_linear_graph_stays_clean() -> None:

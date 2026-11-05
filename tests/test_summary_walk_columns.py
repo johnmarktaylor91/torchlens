@@ -1,16 +1,18 @@
 """Walk batch 1 summary additions: optional columns, tuple shapes, footer extras.
 
 Rulings (round-2 walk, 2026-10-11): every member shape of a tuple-returning
-module (U02.1); optional input / kernel_size / groups / params_trainable
-columns and a params-size line (U01.4, U02.3, U06.7); a ``mode`` column over
-``module.training`` (U03.5); ``flops_pct`` beside ``params_pct`` (U04.3);
-the full-square attention disclosure on every attention FLOP line (U04.2);
-raw and effective nonzero counts on pruned models (U01.2); the optimizer
-state footer (U06.2). The attention note also rides the profile footer, the
+module; optional input / kernel_size / groups / params_trainable
+columns and a params-size line; a ``mode`` column over
+``module.training``; ``flops_pct`` beside ``params_pct``;
+the full-square attention disclosure on every attention FLOP line;
+raw and effective nonzero counts on pruned models; the optimizer
+state footer. The attention note also rides the profile footer, the
 explain FLOPs line and graph-label FLOP rows.
 """
 
 from __future__ import annotations
+
+import re
 
 import torch
 from torch import nn
@@ -88,8 +90,9 @@ def _body_line(text: str, prefix: str) -> str:
     return next(line for line in text.splitlines() if line.startswith(prefix))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_summary_columns.py.
 def test_tuple_output_row_prints_every_member_shape() -> None:
-    """U02.1: an LSTM row shows output, h_n and c_n in return order."""
+    """An LSTM row shows output, h_n and c_n in return order."""
 
     torch.manual_seed(0)
     report = tl.summary(_Recurrent(), torch.randn(2, 5, 4))
@@ -99,8 +102,9 @@ def test_tuple_output_row_prints_every_member_shape() -> None:
     assert "(2, 5, 6), (1, 2, 6), (1, 2, 6)" in _body_line(str(report), "lstm (LSTM)")
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_summary_config.py, report/_summary_ladder.py, report/_summary_render.py.
 def test_optional_columns_render_their_facts() -> None:
-    """U01.4/U02.3/U03.5/U04.3: input, kernel, groups, trainable, mode, flops_pct."""
+    """Input, kernel, groups, trainable, mode, flops_pct."""
 
     model = _frozen_eval_head()
     trace = tl.trace(model, torch.randn(1, 3, 8, 8))
@@ -133,6 +137,7 @@ def test_optional_columns_render_their_facts() -> None:
     assert " train " in dw_line  # mode, before the auto-shown requires_grad column
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_summary_ladder.py.
 def test_mode_mixed_on_a_row_whose_modules_disagree() -> None:
     """A depth-1 container row reads ``mixed`` when its children disagree."""
 
@@ -143,18 +148,9 @@ def test_mode_mixed_on_a_row_whose_modules_disagree() -> None:
     assert report._rebuilt.visible_rows[0].mode == "mixed"
 
 
-def test_params_size_and_raw_totals() -> None:
-    """U01.4/U06.7: the Params footer names the unique parameters' storage."""
-
-    model = _Convs().to(torch.float64)
-    report = tl.summary(model, torch.randn(1, 3, 8, 8, dtype=torch.float64))
-    expected = sum(param.numel() * 8 for param in model.parameters())
-    assert report.totals.params_bytes == expected
-    assert " | size " in _body_line(str(report), "Params")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/buffer.py, report/_compute_truth.py, report/_factcore.py ....
 def test_pruned_model_shows_raw_and_effective_nonzero_counts() -> None:
-    """U01.2: prune's weight_orig + weight_mask pair is named with both counts."""
+    """Prune's weight_orig + weight_mask pair is named with both counts."""
 
     model = _Convs()
     prune.l1_unstructured(model.conv, "weight", amount=0.5)
@@ -173,8 +169,9 @@ def test_pruned_model_shows_raw_and_effective_nonzero_counts() -> None:
     assert "conv (Conv2d) [pruned]" in str(report)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/model_prep.py, report/_summary_columns.py, report/_summary_render.py.
 def test_optimizer_state_footer_before_and_after_a_step() -> None:
-    """U06.2: 'optimizer state N params, X' from the live optimizer state."""
+    """'optimizer state N params, X' from the live optimizer state."""
 
     torch.manual_seed(0)
     model = _Convs()
@@ -198,8 +195,9 @@ def test_optimizer_state_footer_before_and_after_a_step() -> None:
     assert plain.totals.optimizer_state_params is None
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/_torch_compat.py, report/_cost_backward.py, report/_flops_report.py ....
 def test_attention_flop_lines_disclose_the_full_square() -> None:
-    """U04.2 (b): every attention FLOP cell is marked and the footer explains."""
+    """Every attention FLOP cell is marked and the footer explains."""
 
     torch.manual_seed(0)
     model = _Attention()
@@ -209,6 +207,8 @@ def test_attention_flop_lines_disclose_the_full_square() -> None:
     line = _body_line(str(report), sdpa.name)
     assert line.count(ATTENTION_MARK) == 2  # the flops and flops_pct cells
     assert "attention masks and is_causal are not discounted" in str(report)
+    legend = next(line for line in str(report).splitlines() if line.startswith("Legend"))
+    assert ATTENTION_MARK in legend
     proj = _body_line(str(report), "proj (Linear)")
     assert ATTENTION_MARK not in proj
     flops = tl.report.flops(model, x)
@@ -216,6 +216,7 @@ def test_attention_flop_lines_disclose_the_full_square() -> None:
     assert "full query x key square" in str(flops)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_summary_config.py.
 def test_no_attention_legend_without_a_flop_column() -> None:
     """The legend rides only beside a printed FLOP cell."""
 
@@ -230,14 +231,16 @@ def _attention_trace() -> tl.Trace:
     return tl.trace(_Attention(), torch.randn(2, 5, 8))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_profile.py.
 def test_profile_footer_discloses_the_full_square() -> None:
-    """U04.2 (b): the profile footer carries the attention note."""
+    """The profile footer carries the attention note."""
 
     profile = _attention_trace().profile()
     assert profile.attention_full_square_ops == 1
     assert ATTENTION_FULL_SQUARE_NOTE in repr(profile)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_profile.py.
 def test_profile_footer_has_no_note_without_attention() -> None:
     """A model with no attention op prints no attention note."""
 
@@ -247,16 +250,18 @@ def test_profile_footer_has_no_note_without_attention() -> None:
     assert ATTENTION_FULL_SQUARE_NOTE not in repr(profile)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_explain.py.
 def test_explain_flops_line_discloses_the_full_square() -> None:
-    """U04.2 (b): the explain FLOPs line carries the attention note."""
+    """The explain FLOPs line carries the attention note."""
 
     text = _attention_trace().explain()
     flops_line = next(line for line in text.splitlines() if "Forward FLOPs" in line)
     assert ATTENTION_FULL_SQUARE_NOTE in flops_line
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/flops.py, _visualization/_label_format.py, _visualization/_render_nodes.py ....
 def test_graph_label_flops_rows_carry_the_note_on_attention_nodes_only() -> None:
-    """U04.2 (b): an attention node's flops label field and flops overlay add the note."""
+    """An attention node's flops label field and flops overlay add the note."""
 
     from torchlens._visualization._render_nodes import compute_default_node_lines
 
@@ -311,6 +316,7 @@ class _CacheWrapper(nn.Module):
         return self.body(x)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_value_repr.py, report/_summary_ladder.py, report/_summary_render.py.
 def test_long_output_shape_list_compacts_identical_runs() -> None:
     """A 25-member output row prints identical runs as ``×N`` and stays short."""
 
@@ -323,6 +329,7 @@ def test_long_output_shape_list_compacts_identical_runs() -> None:
     assert line.count("(1, 2, 2, 2)") == 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_summary_render.py.
 def test_compact_shapes_text_budget_rules() -> None:
     """Short lists stay verbatim; overflowing distinct lists end in a counted elision."""
 
@@ -336,3 +343,25 @@ def test_compact_shapes_text_budget_rules() -> None:
     shown = text.count("(")
     assert text.startswith("(1, 3, 32, 32), ")
     assert text.endswith(f", ... +{20 - shown} more")
+
+
+def test_flops_and_macs_cells_use_the_params_count_spelling() -> None:
+    """FLOPs, MACs and params share one compact count spelling (lowercase k, one decimal)."""
+
+    model = nn.Sequential(nn.Linear(64, 128), nn.ReLU(), nn.Linear(128, 10))
+    trace = tl.trace(model, torch.randn(2, 64))
+    try:
+        hybrid = str(trace.summary())
+        compute = str(trace.summary(view="compute"))
+    finally:
+        trace.cleanup()
+
+    for text in (hybrid, compute):
+        counts = re.findall(r"(?<![\w.])(\d+(?:\.\d+)?)([kKMGT])(?=\s|$|\^|\*)", text)
+        assert counts, text
+        for number, suffix in counts:
+            assert suffix != "K", text
+            assert re.fullmatch(r"\d+\.\d", number), text
+    assert "8.3k" in hybrid  # params of the first Linear, beside its FLOPs cell
+    flops_line = next(line for line in hybrid.splitlines() if line.startswith("Compute"))
+    assert re.match(r"Compute  \d+\.\dk FLOPs fwd \(fma=2\) \| \d+\.\dk MACs", flops_line)

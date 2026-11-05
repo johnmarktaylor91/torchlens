@@ -167,6 +167,15 @@ class PlanSite:
         Whether the site is in the run's save set.
     exclusion_reason:
         Actionable reason when excluded; never silently dropped.
+
+    Examples
+    --------
+    >>> plan = tl.neuro.plan_extraction(model, torch.randn(4, 3, 8, 8), num_stimuli=8, batch_size=4)
+    >>> site = plan.included_sites[0]
+    >>> isinstance(site, PlanSite), site.is_included
+    (True, True)
+    >>> site.bytes_at_batch(4) > 0
+    True
     """
 
     label: str
@@ -206,6 +215,15 @@ class ExtractionPlan:
     size, transform identity, and model class all key the plan, and
     :meth:`run` refuses a drifted request typed instead of silently
     over-running.
+
+    Examples
+    --------
+    >>> plan = tl.neuro.plan_extraction(model, torch.randn(4, 3, 8, 8), num_stimuli=8, batch_size=4)
+    >>> isinstance(plan, ExtractionPlan), plan.planned_passes
+    (True, 5)
+    >>> out = plan.run(torch.randn(8, 3, 8, 8), progress=False)
+    >>> set(out) == {site.label for site in plan.included_sites}
+    True
     """
 
     sites: tuple[PlanSite, ...]
@@ -637,6 +655,18 @@ def plan_extraction(  # noqa: PLR0913 -- the memo-specified public planner surfa
         On a non-trace engine (code ``extraction_engine_unsupported``), an
         over-budget plan (code ``extraction_plan_over_budget``), or invalid
         probe inputs (code ``extraction_probe_invalid``).
+
+    Examples
+    --------
+    >>> probe = torch.randn(4, 3, 8, 8)
+    >>> plan = plan_extraction(model, probe, num_stimuli=8, batch_size=4)
+    >>> len(plan.included_sites) > 0, plan.table().startswith("site")
+    (True, True)
+    >>> try:
+    ...     plan_extraction(model, probe, num_stimuli=8, batch_size=4, engine="fastlog")
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(err.fields["code"])
+    extraction_engine_unsupported
     """
 
     import weakref
@@ -804,6 +834,16 @@ def export_npz(
         On an unknown layout/compatibility combination or non-numeric
         payloads (code ``npz_export_invalid``). Object arrays never write:
         every save uses ``allow_pickle=False`` semantics.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> features = {"site": torch.arange(6.0).reshape(3, 2)}
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     paths = export_npz(features, Path(tmp) / "feat.npz", stimulus_ids=["a", "b", "c"])
+    ...     [p.name for p in paths]
+    ['feat.npz']
     """
 
     if layout not in {"consolidated", "per_stimulus"}:

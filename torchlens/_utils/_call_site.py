@@ -18,7 +18,7 @@ import dis
 import sys
 import weakref
 from collections.abc import Callable
-from types import CodeType
+from types import CodeType, FrameType
 from typing import Any
 
 #: The one place the module-call choice lives (decided True, 2026-10-29: calling
@@ -32,6 +32,30 @@ MODULE_CALL_IS_PASS = True
 
 #: Marks a call-site equivalence class (``<type>@cs<N>``).
 CALL_SITE_CLASS_MARKER = "@cs"
+
+
+def call_site_class(
+    index: dict[Any, int], key: tuple[Any, ...], layer_type: str, slot: int | None
+) -> str:
+    """Return the call-site class ``<type>@cs<N>`` of one op output.
+
+    ``key`` is ``(innermost module address, call-site chain, func_name, output
+    slot)``; ``N`` is its first-appearance number in ``index``, the per-capture
+    table the caller owns, so equal keys get equal classes and the string is
+    deterministic for the same model code. Exhaustive capture and predicate
+    recording mint through this one function, so a cooked recording groups by
+    the same classes as ``tl.trace``.
+    """
+
+    number = index.get(key)
+    if number is None:
+        number = len(index) + 1
+        index[key] = number
+    site_class = f"{layer_type}{CALL_SITE_CLASS_MARKER}{number}"
+    if slot is not None:
+        site_class += f"_outindex{slot}"
+    return site_class
+
 
 _HAS_CO_POSITIONS = sys.version_info >= (3, 11)
 
@@ -205,3 +229,30 @@ def canonical_chain(raw: tuple[tuple[Any, int], ...]) -> tuple[tuple[Any, Any], 
         for code, lasti in reversed(raw)
     ]
     return collapse_recursion(tokens)
+
+
+_Survivor = tuple[FrameType, CodeType, int, int]
+
+
+def select_context_frames(
+    survivors: list[_Survivor], last_forward_pos: int, anchor_frame: FrameType | None
+) -> tuple[list[_Survivor], _Survivor | None]:
+    """Select an op's context frames from the capture walk's survivors, plus its call site.
+
+    ``survivors`` are the user frames ``introspection._get_code_context``
+    kept, innermost first. The context is outermost first, like a traceback:
+    the call site (the first survivor above the outermost ``forward`` frame,
+    or the verified anchor frame), then the outermost ``forward`` frame down
+    to the innermost frame, which ran the op and is always LAST. With no
+    ``forward`` frame the context is empty and there is no call site.
+    """
+
+    if last_forward_pos < 0:
+        return [], None
+    call_site: _Survivor | None = None
+    if last_forward_pos + 1 < len(survivors):
+        call_site = survivors[last_forward_pos + 1]
+    elif anchor_frame is not None:
+        call_site = (anchor_frame, anchor_frame.f_code, anchor_frame.f_lineno, anchor_frame.f_lasti)
+    inner = survivors[last_forward_pos::-1]
+    return ([call_site, *inner] if call_site is not None else inner), call_site

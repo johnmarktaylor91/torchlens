@@ -15,11 +15,12 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 from .._errors import InvalidArgumentError
+from .._io.payload_codec import get_payload_codec
 from .._selection.resolver import _resolve_sites
 from .._selection.selectors import label as _exact_label
 from ..intervention.types import Relationship
 from ._aligned_sites import aligned_site_labels, resolve_aligned_site, site_row_key
-from ._deltas import _distance_value
+from ._deltas import _distance_value, _tensor_field as _read_tensor_field
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -151,9 +152,11 @@ def rank_changes(
     *,
     k: int = 10,
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
+    by: Literal["site", "module"] = "site",
 ) -> list[tuple[str, float]]:
     """Rank sites by out distance from a baseline (the SITE axis)."""
 
+    _check_rank_by(by)
     baseline_name = self._baseline_or_raise(baseline)
     # SITE AXIS (ledger memo D3f): most_changed answers "WHERE did the
     # bundle diverge" — per site it AVERAGES the metric from the baseline
@@ -183,7 +186,7 @@ def rank_changes(
         if members is None:
             continue
         outs = {
-            name: getattr(member, "out", None)
+            name: _tensor_field(member, "out")
             for name, member in members.items()
             if getattr(member, "has_saved_activation", False)
         }
@@ -196,9 +199,40 @@ def rank_changes(
                 continue
             distances.append(_distance_value(base, out, metric, site=key))
         if distances:
-            scored.append((key, sum(distances) / len(distances)))
+            row_key = key if by == "site" else _module_row_key(site, key)
+            scored.append((row_key, sum(distances) / len(distances)))
+    if by == "module":
+        scored = _fold_module_rows(scored)
     scored.sort(key=lambda row: row[1], reverse=True)
     return scored[:k]
+
+
+def _check_rank_by(by: str) -> None:
+    """Refuse a ``rank_changes(by=)`` value outside the two row kinds."""
+
+    if by not in ("site", "module"):
+        raise InvalidArgumentError(
+            f"rank_changes(by=) must be 'site' or 'module', got {by!r}",
+            code="rank_changes_by_invalid",
+            remedy="pass by='site' for one row per op or by='module' for one row per module",
+            argument="by",
+        )
+
+
+def _module_row_key(site: Any, site_key: str) -> str:
+    """Return the module address a site belongs to, or its own key when it has none."""
+
+    address = getattr(site, "atomic_module_address", None)
+    return address if address else site_key
+
+
+def _fold_module_rows(scored: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    """Fold per-site scores into one row per module: the module's most changed site."""
+
+    folded: dict[str, float] = {}
+    for key, score in scored:
+        folded[key] = max(score, folded.get(key, score))
+    return list(folded.items())
 
 
 def compare_members(
@@ -242,8 +276,8 @@ def diff_members(
         except Exception:  # noqa: BLE001 - missing sites are not common sites
             continue
         right_site = right_sites.first()
-        left_out = getattr(left_site, on, None)
-        right_out = getattr(right_site, on, None)
+        left_out = _tensor_field(left_site, on)
+        right_out = _tensor_field(right_site, on)
         if not isinstance(left_out, torch.Tensor) or not isinstance(
             right_out,
             torch.Tensor,
@@ -320,3 +354,15 @@ def weak_model(log: Trace) -> Any | None:
         return ref()
     except TypeError:
         return None
+
+
+def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | None:
+    """Read a saved field using the codec of the layer's owning trace."""
+
+    native = _read_tensor_field(layer, field)
+    if native is not None:
+        return native
+    trace = getattr(layer, "source_trace", None)
+    backend = "torch" if trace is None else trace.provenance.backend
+    codec = get_payload_codec(str(backend))
+    return _read_tensor_field(layer, field, codec)

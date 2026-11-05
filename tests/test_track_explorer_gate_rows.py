@@ -2,8 +2,8 @@
 
 The memo splits the overhead gates into two rows, module tier and op tier;
 ``tests/test_explorer_watch_gates.py`` carries the module-tier CUDA rows. This
-module adds the op-tier row through the SHIPPED door (``watch(grain="op")``,
-U32.1), measured by the same noise-disciplined A/B harness:
+module adds the op-tier row through the SHIPPED door (``watch(grain="op")``),
+measured by the same noise-disciplined A/B harness:
 
 - a CPU structural row (unmarked): the row runs end to end on a small model and
   produces a complete A/B record; no number is claimed from a shared CPU box;

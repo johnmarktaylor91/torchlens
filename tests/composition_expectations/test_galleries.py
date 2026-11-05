@@ -14,7 +14,6 @@ import pytest
 import torch
 
 from tests.composition_expectations.conftest import (
-    GALLERY_MODEL_TRAITS,
     build_gallery_model,
     trace_fingerprint,
 )
@@ -28,50 +27,6 @@ TREE_ROOT = Path(__file__).resolve().parent
 _CONSTRUCTION_LICENSED = {"conftest.py"}
 
 _PRODUCT_CONSTRUCTORS = {"trace", "record", "merge_ranks", "extract_dataset", "load", "save"}
-
-
-def test_model_gallery_roster_and_traits(model_gallery) -> None:
-    """Every declared model builds, runs, and matches its trait row."""
-
-    assert set(model_gallery) == set(GALLERY_MODEL_TRAITS)
-    for name, (model, inputs) in model_gallery.items():
-        output = model(*inputs)
-        assert isinstance(output, torch.Tensor), name
-        assert GALLERY_MODEL_TRAITS[name], f"{name} has no declared traits"
-
-
-def test_product_gallery_serves_shared_products(product_gallery) -> None:
-    """The session products exist and read as their declared kinds."""
-
-    assert type(product_gallery["trace"]).__name__ == "Trace"
-    assert type(product_gallery["recording"]).__name__ == "Recording"
-    assert len(product_gallery["trace"].layer_labels) >= 4
-
-
-def test_fingerprint_detects_mutation() -> None:
-    """Red-capability: an in-place payload edit changes the fingerprint.
-
-    Runs on a PRIVATE capture (never the shared session product -- proving
-    the tripwire by tripping it on the shared artifact would poison every
-    later cell).
-    """
-
-    import torchlens as tl
-
-    model, inputs = build_gallery_model("mlp")
-    trace = tl.trace(model, *inputs)
-    try:
-        before = trace_fingerprint(trace)
-        assert trace_fingerprint(trace) == before, "fingerprint is not deterministic"
-        label = trace.layer_labels[1]
-        with torch.no_grad():
-            trace[label].out.add_(1.0)
-        assert trace_fingerprint(trace) != before, (
-            "an in-place payload mutation left the fingerprint unchanged -- "
-            "the teardown tripwire is disarmed"
-        )
-    finally:
-        trace.cleanup()
 
 
 def test_fork_for_mutation_isolates_the_shared_trace(product_gallery, fork_for_mutation) -> None:

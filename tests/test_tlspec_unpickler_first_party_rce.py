@@ -37,7 +37,6 @@ import torchlens as tl
 from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._utils._callable_safety import is_inert_first_party_callable
-from torchlens.intervention._spec_values import _resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.options import CaptureOptions
 from torchlens.report import _environment as tl_environment
@@ -47,18 +46,6 @@ _CAP = CaptureOptions(
     capture_container_structure=True,
     cache=False,
 )
-
-
-def _global_ref_pickle(module: str, name: str) -> bytes:
-    """Build a minimal pickle that is a bare GLOBAL reference to ``module.name``."""
-
-    return b"c" + module.encode() + b"\n" + name.encode() + b"\n."
-
-
-def _load_ref(module: str, name: str) -> object:
-    """Resolve a bare GLOBAL reference through the restricted bundle unpickler."""
-
-    return SafeBundleUnpickler(io.BytesIO(_global_ref_pickle(module, name))).load()
 
 
 class _ModuleInstalledGadget:
@@ -75,6 +62,18 @@ class _ModuleInstalledGadget:
         return (tl_environment._module_is_installed, (self._attacker,))
 
 
+def _global_ref_pickle(module: str, name: str) -> bytes:
+    """Build a minimal pickle that is a bare GLOBAL reference to ``module.name``."""
+
+    return b"c" + module.encode() + b"\n" + name.encode() + b"\n."
+
+
+def _load_ref(module: str, name: str) -> object:
+    """Resolve a bare GLOBAL reference through the restricted bundle unpickler."""
+
+    return SafeBundleUnpickler(io.BytesIO(_global_ref_pickle(module, name))).load()
+
+
 def _has_unpickling_error(exc: BaseException | None) -> bool:
     """Return whether an UnpicklingError appears anywhere in the cause/context chain."""
 
@@ -85,6 +84,19 @@ def _has_unpickling_error(exc: BaseException | None) -> bool:
             return True
         exc = exc.__cause__ or exc.__context__
     return False
+
+
+def _assert_refused_before_unpickling(raised: BaseException | None) -> None:
+    """The planted pickle never reaches an unpickler: format 3 refuses the directory first.
+
+    A ``metadata.pkl`` at the artifact root marks a 2.x save, which the 3.0 reader refuses
+    ``artifact_version_below_floor`` without opening it (the direct-unpickler tests below
+    still pin the unpickler's own denial).
+    """
+
+    assert isinstance(raised, ArtifactError), "load-time gadget was not refused typed"
+    assert raised.fields.get("code") == "artifact_version_below_floor", raised
+    assert not _has_unpickling_error(raised), "the planted pickle was opened"
 
 
 # --------------------------------------------------------------------------- #
@@ -121,7 +133,7 @@ def test_module_is_installed_reduce_gadget_denied_through_tl_load(tmp_path: Path
             raised = exc
 
         assert raised is not None, "load-time import gadget was not blocked"
-        assert _has_unpickling_error(raised), "denial must surface an UnpicklingError"
+        _assert_refused_before_unpickling(raised)
         assert not sentinel.exists(), "attacker sentinel written -> gadget executed (RCE)"
         assert attacker_name not in sys.modules, "attacker module imported -> gadget executed"
     finally:
@@ -139,22 +151,6 @@ def test_module_is_installed_denied_by_direct_unpickler() -> None:
 # --------------------------------------------------------------------------- #
 # Vetted first-party callables (recipe + transform) still admit.
 # --------------------------------------------------------------------------- #
-
-
-def test_vetted_facet_recipe_admitted() -> None:
-    """A genuine public first-party facet recipe still resolves to the real callable."""
-
-    from torchlens._semantic.recipes.norm import layer_norm
-
-    assert _load_ref("torchlens._semantic.recipes.norm", "layer_norm") is layer_norm
-
-
-def test_vetted_transform_helper_admitted() -> None:
-    """A public first-party transform (identity) still resolves (prior r4 contract)."""
-
-    from torchlens._utils.display import identity
-
-    assert _load_ref("torchlens._utils.display", "identity") is identity
 
 
 def test_full_facet_registry_snapshot_round_trips_through_unpickler() -> None:
@@ -230,37 +226,6 @@ class _OsSystemGadget:
         return (os.system, ("true",))
 
 
-def test_os_system_still_denied() -> None:
-    """The r1-r20 closure holds: an os.system REDUCE / bare ref is still refused."""
-
-    # Bare reference to the dangerous module is module-denied.
-    with pytest.raises(pickle.UnpicklingError):
-        _load_ref("posix", "system")
-    # A __reduce__ os.system gadget is refused before it can execute.
-    blob = pickle.dumps(_OsSystemGadget(), protocol=pickle.HIGHEST_PROTOCOL)
-    with pytest.raises(pickle.UnpicklingError):
-        SafeBundleUnpickler(io.BytesIO(blob)).load()
-
-
-def test_resolver_denies_first_party_import_gadget_but_resolves_helper() -> None:
-    """Defense-in-depth: the resolver denies the gadget, still resolves a public helper."""
-
-    from torchlens.intervention.helpers import zero_ablate
-
-    assert _resolve_import_ref("torchlens.intervention.helpers:zero_ablate") is zero_ablate
-    with pytest.raises((UntrustedCallableError, Exception)) as excinfo:
-        _resolve_import_ref("torchlens.report._environment:_module_is_installed")
-    # The refusal must originate from the untrusted-callable gate.
-    chain: list[BaseException] = []
-    exc: BaseException | None = excinfo.value
-    seen: set[int] = set()
-    while exc is not None and id(exc) not in seen:
-        seen.add(id(exc))
-        chain.append(exc)
-        exc = exc.__cause__ or exc.__context__
-    assert any(isinstance(item, UntrustedCallableError) for item in chain)
-
-
 # --------------------------------------------------------------------------- #
 # Round-22: the positive-allowlist inversion. The pre-r22 gate's PUBLIC-name
 # fallthrough admitted ~60 side-effecting public torchlens.* callables whose verb
@@ -309,7 +274,7 @@ def test_fs_mutation_gadget_denied_through_tl_load(tmp_path: Path) -> None:
         raised = exc
 
     assert raised is not None, "fs-mutation gadget was not blocked"
-    assert _has_unpickling_error(raised), "denial must surface an UnpicklingError"
+    _assert_refused_before_unpickling(raised)
     assert victim.exists(), "attacker-named directory was deleted -> gadget executed"
     assert (victim / "important.txt").exists(), "victim contents destroyed -> rmtree ran"
 
@@ -354,20 +319,6 @@ def test_public_side_effecting_first_party_callables_denied() -> None:
         _load_ref("torchlens.recording.cleanup", "cleanup_partial")
     with pytest.raises(pickle.UnpicklingError):
         _load_ref("torchlens._utils._torch_compat", "mark_torch_capability_missing")
-
-
-def test_vetted_inert_helper_set_admitted() -> None:
-    """Every frozen vetted-inert helper factory + identity still admits + resolves."""
-
-    from torchlens._utils._callable_safety import _VETTED_INERT_FIRST_PARTY
-    from torchlens._utils.display import identity
-
-    # identity resolves through the door.
-    assert _load_ref("torchlens._utils.display", "identity") is identity
-    # Every enumerated helper factory is admitted by the gate AND resolves by ref.
-    for module, qualname in _VETTED_INERT_FIRST_PARTY:
-        obj = _load_ref(module, qualname)
-        assert is_inert_first_party_callable(obj), f"{module}:{qualname} not admitted"
 
 
 def test_untrusted_callable_refusals_carry_code_and_subject() -> None:

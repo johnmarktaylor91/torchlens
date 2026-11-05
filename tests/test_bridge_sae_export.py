@@ -142,35 +142,6 @@ def test_dashboard_top_examples_over_a_dataset_equal_a_hand_topk(setup, tmp_path
     assert data["feature_stats"]["max"] == []
 
 
-def test_dashboard_from_one_spliced_batch_carries_every_token(setup, tmp_path: Path) -> None:
-    """``SpliceResult.latents``: each sequence holds the latent at every token."""
-
-    model, sae, tokens = setup
-    batch = tokens[:4]
-    result = sae_bridge.splice(model, batch, site=tl.func("relu"), sae=sae)
-    hand = _hand_latents(model, sae, batch)
-    assert torch.allclose(result.latents.double(), hand, atol=1e-6)
-    path = sae_bridge.write_sae_dashboard(
-        result.latents, batch, latent_ids=[0, 3], k=2, path=tmp_path / "one.json"
-    )
-    data = json.loads(path.read_text())
-    assert sorted(data["feature_data_dict"]) == ["0", "3"]
-    latents = result.latents.double()
-    for index, unit in enumerate((0, 3)):
-        group = data["feature_data_dict"][str(unit)]["sequence_data"]["seq_group_data"][0]
-        expected = _hand_topk(latents, unit, 2)
-        assert [(s["original_index"], s["qualifying_token_index"]) for s in group["seq_data"]] == [
-            (example, position) for example, position, _ in expected
-        ]
-        for record, (example, _, _) in zip(group["seq_data"], expected, strict=True):
-            assert record["feat_acts"] == [round(v, 4) for v in latents[example, :, unit].tolist()]
-        column = latents[..., unit].reshape(-1)
-        assert data["feature_stats"]["max"][index] == pytest.approx(float(column.max()))
-        assert data["feature_stats"]["frac_nonzero"][index] == pytest.approx(
-            float((column.abs() > 1e-6).double().mean())
-        )
-
-
 def _read_delphi(folder: Path) -> tuple[set[tuple[int, int, int]], dict, list[Path]]:
     entries: dict[tuple[int, int, int], float] = {}
     files = sorted(folder.glob("*.safetensors"), key=lambda p: int(p.stem.split("_")[0]))

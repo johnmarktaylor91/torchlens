@@ -8,28 +8,24 @@ if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
 from .._debug_report import Report, table_report, trace_subject
-from ._common import _compute_ops, _op_label, _require_pandas
+from ._common import _compute_ops, _op_label, _require_pandas, _source_line
 
 
-def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Report:
-    """Rank ops by activation memory per forward FLOP.
+def _candidate_rows(trace: Trace) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Build one unranked candidate row per compute op with both cost facts.
 
     Parameters
     ----------
     trace:
         Completed TorchLens trace.
-    budget_gb:
-        Optional greedy freed-memory target in GiB.
 
     Returns
     -------
-    Report
-        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
-        DataFrame described here.
-        Candidate rows with exclusion counts in ``df.attrs``.
+    tuple[list[dict[str, Any]], dict[str, int]]
+        Candidate rows (``suggested`` still False) and the per-reason counts of ops
+        excluded for missing or nonpositive activation memory or forward FLOPs.
     """
 
-    pd = _require_pandas()
     rows: list[dict[str, Any]] = []
     excluded = {
         "missing_activation_memory": 0,
@@ -57,9 +53,40 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
                 "flops_forward": flops_value,
                 "mem_per_flop": memory_value / flops_value,
                 "suggested": False,
+                "source_line": _source_line(op),
             }
         )
+    return rows, excluded
 
+
+def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Report:
+    """Rank ops by activation memory per forward FLOP.
+
+    Parameters
+    ----------
+    trace:
+        Completed TorchLens trace.
+    budget_gb:
+        Optional greedy freed-memory target in GiB.
+
+    Returns
+    -------
+    Report
+        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
+        DataFrame described here.
+        Candidate rows with exclusion counts in ``df.attrs``; ``source_line``
+        is the ``"file:line"`` of the user code that ran the op.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> frame = recompute_candidates(tl.trace(model, x), budget_gb=1e-9).to_pandas()
+    >>> len(frame) > 0, bool(frame["suggested"].any())
+    (True, True)
+    """
+
+    pd = _require_pandas()
+    rows, excluded = _candidate_rows(trace)
     rows.sort(key=lambda row: float(row["mem_per_flop"]), reverse=True)
     total_freeable = sum(int(row["activation_memory"]) for row in rows)
     if budget_gb is not None:
@@ -73,7 +100,14 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
 
     frame = pd.DataFrame(
         rows,
-        columns=["op", "activation_memory", "flops_forward", "mem_per_flop", "suggested"],
+        columns=[
+            "op",
+            "activation_memory",
+            "flops_forward",
+            "mem_per_flop",
+            "suggested",
+            "source_line",
+        ],
     )
     frame.attrs["total_freeable"] = total_freeable
     frame.attrs["budget_gb"] = budget_gb
@@ -85,5 +119,5 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
         "recompute_candidates",
         attach_dataframe_honesty(frame, trace),
         subject=trace_subject(trace),
-        finding_columns=("op", "activation_memory", "mem_per_flop", "suggested"),
+        finding_columns=("op", "activation_memory", "mem_per_flop", "suggested", "source_line"),
     )

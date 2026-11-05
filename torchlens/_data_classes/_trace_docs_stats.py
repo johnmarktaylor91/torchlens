@@ -301,73 +301,13 @@ DOCS: dict[str, str] = {
             ``(module_address, priority)`` sorted by ``(-priority, address)``.
         """
     ),
-    "collapse_order": (
-        """Return smart-collapse ranking for a policy.
-        
-        The documented-inert ``weights=`` parameter is REMOVED (collapse
-        memo D9; clean-v2 hard-rename posture, no warn shim; MIGRATIONS.md).
-        
-        Parameters
-        ----------
-        mode:
-            ``"auto"`` or ``"max"`` landmark policy.
-        
-        Returns
-        -------
-        list[tuple[str, float]]
-            ``(module_address, rounded_score)`` sorted by ``(-score, address)``.
-        """
-    ),
-    "collapse_plan": (
-        """Return the v2 diagnostic collapse plan for this trace.
-        
-        Parameters
-        ----------
-        mode:
-            Collapse policy to plan, either ``"auto"`` for a readable overview
-            or ``"max"`` for aggressive condensation. A float in ``[0.0, 1.0]``
-            selects the public monotone collapse schedule, where ``0.0`` is
-            the full graph and ``1.0`` is byte-identical to ``"max"``.
-        context:
-            Optional :class:`torchlens._visualization.collapse_plan.RenderContext`.
-            When omitted, the default unrolled Graphviz context is used.
-        
-        Returns
-        -------
-        CollapsePlan
-            Renderer-faithful diagnostic plan. Node kinds are ``ModuleBox`` for
-            collapsed module calls, ``RawOp`` for exposed operations,
-            ``RepeatFold`` for representative-plus-ellipsis repeated runs,
-            ``OpSegment`` and ``ChildSegment`` for condensed segment boxes, and
-            ``Boundary`` for input/output or renderer boundary nodes.
-        
-        Raises
-        ------
-        ValueError
-            If ``mode`` is not ``"auto"``, ``"max"``, or a float in
-            ``[0.0, 1.0]``, or the v2 optimizer declines to produce a plan for
-            the provided context.
-        """
-    ),
-    "collapse_schedule": (
-        """Return the public monotone float collapse schedule.
-        
-        Parameters
-        ----------
-        context:
-            Optional :class:`torchlens._visualization.collapse_plan.RenderContext`.
-            When omitted, the default unrolled Graphviz context is used.
-        
-        Returns
-        -------
-        CollapseSchedule
-            Ordered schedule from ``t=0.0`` full graph to ``t=1.0`` max
-            collapse. Each step includes the selected plan, visible count, and
-            collapsed module-address set.
-        """
-    ),
     "modules_with_facet": (
-        """Yield Modules whose semantic facet view has a facet available now.
+        """Yield single-call Modules whose semantic facet view has a facet available now.
+        
+        A module called more than once has no module-level facet view: it is
+        skipped when no facet recipe for its class declares ``name``, and refused
+        (``InvalidArgumentError``, code ``module_call_ambiguous``) when one does;
+        the refusal's remedy names the per-call views, ``module.calls[N].facets``.
         
         Parameters
         ----------

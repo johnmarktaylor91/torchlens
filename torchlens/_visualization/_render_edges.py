@@ -8,6 +8,12 @@ from ._buffer_visibility import (
     _is_buffer_visible,
     _is_noise_buffer,
 )
+from ._container_edges import (
+    _occurrence_matches_op,
+    _op_is_model_input_container_leaf,
+    _op_is_model_output_container_leaf,
+    container_edge_text,
+)
 from ._edge_multiplicity import (
     _ARG_LABEL_MIDPOINT_FANIN,
     _bump_deduped_edge_multiplicity,
@@ -17,6 +23,7 @@ from ._edge_multiplicity import (
     _register_deduped_edge,
     _set_argument_edge_label,
 )
+from ._loop_edges import loop_edge_attrs, pass_label_spacing
 from ._render_common import *
 from ._render_leaf import *
 from ._render_module_scope import (
@@ -24,7 +31,7 @@ from ._render_module_scope import (
     _place_rolled_endpoints_in_pass_scope,
 )
 from ._render_utils import html_escape
-from ._typography import DEFAULT_TYPOGRAPHY
+from ._rolled_edges import _html_combined_recurrence_label
 from .collapse_plan import OpSegment
 
 if TYPE_CHECKING:
@@ -104,10 +111,10 @@ def _segment_for_node(
     if segment_lookup is None or isinstance(node, BoundaryNode):
         return None
     label = str(getattr(node, "layer_label", ""))
-    if isinstance(node, Op):
+    if isinstance(_unwrap_focus_node(node), Op):
         # Unrolled nodes carry pass-qualified labels; match those against
         # concrete descriptor ops first so per-pass segments of a reused
-        # module absorb exactly their own pass.
+        # module absorb exactly their own pass (the proxy forwards ``label``).
         qualified = str(node.label)
         segment = segment_lookup.qualified_labels.get(qualified)
         if segment is not None:
@@ -1085,14 +1092,13 @@ def _add_edges_for_node(
                     "fontcolor": label_color or node_color,
                     "style": edge_style,
                     "arrowsize": ".7",
-                    "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
+                    "labelfontsize": edge_annotation_pt(),
                 }
             tail_name = hook_name
 
         edge_has_boundary = isinstance(parent_node, BoundaryNode) or isinstance(
             child_node, BoundaryNode
         )
-
         # Add it to the appropriate module cluster (most nested one containing both nodes)
         if edge_has_boundary:
             module = _get_lowest_module_for_two_render_nodes(
@@ -1110,11 +1116,9 @@ def _add_edges_for_node(
             )
         if tail_name == head_name and _self_loop_is_single_op_module(self, parent_node):
             module = -1
-        # Preserve the edge's LCA cluster key BEFORE the has_input_ancestor loops
-        # below clobber the ``module`` loop variable (they reassign it to each
-        # node's own module path). Without this, the captured forward edge would
-        # record the wrong cluster key and sibling rank-groups would never resolve
-        # to a common cluster (always falling back to top-level emission).
+        # Keep the edge's LCA cluster key before the has_input_ancestor loops
+        # below reassign ``module``; the captured forward edge needs it so that
+        # sibling rank-groups resolve to a common cluster.
         edge_module_key: str | int = module
         if hook_edge is not None:
             # The site-to-hook edge goes in the cluster the site-to-child edge
@@ -1180,6 +1184,9 @@ def _add_edges_for_node(
             edge_module_key = module
 
         edge_is_self_loop = tail_name == head_name
+        edge_is_back_edge = not (edge_is_self_loop or edge_has_boundary) and _is_rolled_back_edge(
+            parent_node, child_node, vis_mode, rolled_maps, parent_segment, child_segment
+        )
         if edge_is_self_loop and (parent_segment is not None or child_segment is not None):
             continue
         edge_touches_run_fold = _edge_touches_run_fold(tail_name, head_name, repeat_folds, vis_mode)
@@ -1216,8 +1223,11 @@ def _add_edges_for_node(
             "fontcolor": label_color or node_color,
             "style": edge_style,
             "arrowsize": ".7",
-            "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
+            "labelfontsize": edge_annotation_pt(),
         }
+        if edge_has_boundary:  # a stub's edge crosses the frame: keep it clear of the border
+            edge_dict["minlen"] = "2"
+        edge_dict.update(loop_edge_attrs(edge_is_self_loop, edge_is_back_edge, rankdir))
         if occurrence_key and occurrence_key[0] == "skipped":
             # Bridged-edge disclosure (N9): dashed, with the midpoint
             # ``label=`` spelling -- measured zero node penetrations at 100%
@@ -1248,17 +1258,9 @@ def _add_edges_for_node(
             )
         if edge_label is not None:
             edge_dict["label"] = edge_label
-        if show_containers:
-            container_label = _container_edge_label(metadata_base)
-            if (
-                container_label is None
-                and show_containers == "nodes"
-                and not _op_is_model_input_container_leaf(parent_node)
-                and not _op_is_model_output_container_leaf(parent_node)
-            ):
-                container_label = _container_edge_label(_base_node_for_metadata(parent_node))
-            if container_label is not None and "label" not in edge_dict:
-                edge_dict["label"] = _html_container_edge_label(container_label)
+        container_label = container_edge_text(parent_node, metadata_base, show_containers)
+        if container_label is not None and "label" not in edge_dict:
+            edge_dict["label"] = _html_container_edge_label(container_label)
 
         # Annotate ops for rolled node edge if it varies across ops
         if vis_mode == "rolled" and metadata_child is not None and not edge_has_boundary:
@@ -1267,22 +1269,13 @@ def _add_edges_for_node(
             if isinstance(metadata_base_for_pass, Layer) and isinstance(
                 parent_base_for_pass, Layer
             ):
-                # A recurrence back-edge may only merge its In/Out annotations
-                # into a midpoint ``label`` if no conditional label was set above
-                # and the argument labeler below (which adds headlabel/xlabel)
-                # cannot fire for this edge; otherwise it keeps head/tail labels.
-                arg_labeler_may_fire = not child_is_collapsed_module and bool(
-                    _should_mark_arguments_on_edge(
-                        self, metadata_base_for_pass, show_buffer_layers, rolled_maps
-                    )
-                )
                 _label_rolled_call_indexs(
                     metadata_base_for_pass,
                     parent_base_for_pass,
                     edge_dict,
                     is_self_loop=edge_is_self_loop,
+                    is_back_edge=edge_is_back_edge,
                     rankdir=rankdir,
-                    allow_midpoint_merge="label" not in edge_dict and not arg_labeler_may_fire,
                     rolled_maps=rolled_maps,
                 )
 
@@ -1470,8 +1463,8 @@ def _projected_antiparallel_edge_attrs() -> dict[str, str]:
 class _RolledEdgeMaps:
     """Per-draw memo of the ``Layer`` rolled-edge map properties.
 
-    ``child_ops_per_layer``, ``parent_ops_per_layer``, ``edges_vary_across_ops``,
-    and ``parents_per_pass`` are computed properties that rebuild their dicts
+    ``child_ops_per_layer``, ``parent_ops_per_layer`` and ``parents_per_pass``
+    are computed properties that rebuild their dicts
     from every pass's op record on each access, and one rolled draw reads them
     O(edges) times.  Layer graph fields do not change during a draw, so a draw
     shares one computation per layer.  Every cached value comes from the
@@ -1480,12 +1473,11 @@ class _RolledEdgeMaps:
     op children/parents between draws.
     """
 
-    __slots__ = ("_child_ops", "_parent_ops", "_edges_vary", "_parents_per_pass")
+    __slots__ = ("_child_ops", "_parent_ops", "_parents_per_pass")
 
     def __init__(self) -> None:
         self._child_ops: dict[str, dict[str, list[int]]] = {}
         self._parent_ops: dict[str, dict[str, list[int]]] = {}
-        self._edges_vary: dict[str, bool] = {}
         self._parents_per_pass: dict[str, dict[int, list[str]]] = {}
 
     def child_ops_per_layer(self, layer: "Layer") -> dict[str, list[int]]:
@@ -1502,14 +1494,6 @@ class _RolledEdgeMaps:
         found = self._parent_ops.get(layer.layer_label)
         if found is None:
             found = self._parent_ops[layer.layer_label] = layer.parent_ops_per_layer
-        return found
-
-    def edges_vary_across_ops(self, layer: "Layer") -> bool:
-        """Per-draw memo of ``Layer.edges_vary_across_ops``."""
-
-        found = self._edges_vary.get(layer.layer_label)
-        if found is None:
-            found = self._edges_vary[layer.layer_label] = layer.edges_vary_across_ops
         return found
 
     def parents_per_pass(self, layer: "Layer") -> dict[int, list[str]]:
@@ -1557,6 +1541,26 @@ def _is_rolled_loop_carried_self_edge(
         child_pass > parent_pass
         for parent_pass, child_pass in zip(parent_passes, child_passes, strict=False)
     )
+
+
+def _is_rolled_back_edge(
+    parent_node: GraphNode,
+    child_node: GraphNode,
+    vis_mode: str,
+    rolled_maps: "_RolledEdgeMaps | None",
+    parent_segment: SegmentDescriptor | None,
+    child_segment: SegmentDescriptor | None,
+) -> bool:
+    """Return whether a rolled edge between two different nodes closes a loop body.
+
+    The last op of a multi-op loop body feeds its first op from pass ``k``
+    into pass ``k + 1``: the self-loop test on two endpoints.  Segment-projected
+    endpoints never count.
+    """
+
+    if parent_segment is not None or child_segment is not None:
+        return False
+    return _is_rolled_loop_carried_self_edge(parent_node, child_node, vis_mode, rolled_maps)
 
 
 def _self_loop_is_single_op_module(trace: "Trace", node: GraphNode) -> bool:
@@ -1635,11 +1639,10 @@ def _label_node_arguments_if_needed(
     # ``label`` (reserved layout space) instead of a ``headlabel`` (painted
     # post-layout at one shared radius, where they smear into one band --
     # D03-R4; sweep provenance on ``_ARG_LABEL_MIDPOINT_FANIN``).
-    prefer_midpoint = (
-        _visible_parent_count(self, child_node, show_buffer_layers, rolled_maps)
-        >= _ARG_LABEL_MIDPOINT_FANIN
-    )
-    return _set_argument_edge_label(edge_dict, arg_label, prefer_midpoint=prefer_midpoint)
+    fan_in = _visible_parent_count(self, child_node, show_buffer_layers, rolled_maps)
+    midpoint = fan_in >= _ARG_LABEL_MIDPOINT_FANIN
+    rolled = isinstance(child_node, Layer)  # rolled draws hand Layers here, unrolled ones Ops
+    return _set_argument_edge_label(edge_dict, arg_label, prefer_midpoint=midpoint, rolled=rolled)
 
 
 def _should_mark_arguments_on_edge(
@@ -1704,8 +1707,8 @@ def _visible_parent_count_unrolled(
         num_parents_shown -= sum(
             [
                 int(
-                    self[parent].is_buffer
-                    and not _is_buffer_visible(self[parent], show_buffer_layers)
+                    self.layers[parent].is_buffer
+                    and not _is_buffer_visible(self.layers[parent], show_buffer_layers)
                 )
                 for parent in child_node.parents
             ]
@@ -1746,88 +1749,6 @@ def _visible_parent_count_rolled(
     return max_parents_shown
 
 
-def _op_is_model_input_container_leaf(node: GraphNode) -> bool:
-    """Return whether ``node`` is a model-input container leaf.
-
-    Parameters
-    ----------
-    node:
-        Candidate render node.
-
-    Returns
-    -------
-    bool
-        ``True`` when the node is an input leaf that already receives a
-        container-node source edge in ``show_containers="nodes"`` mode.
-    """
-
-    if not isinstance(node, Op):
-        return False
-    trace = getattr(node, "source_trace", None)
-    if trace is None:
-        return False
-    for record in getattr(trace, "_containers", {}).values():
-        if not isinstance(record, ContainerRecord):
-            continue
-        for snapshot in record.snapshots:
-            if snapshot.role != Role.MODEL_INPUT:
-                continue
-            for occurrence in snapshot.leaf_occurrences:
-                if _occurrence_matches_op(trace, occurrence.producer_op_label, node):
-                    return True
-    return False
-
-
-def _op_is_model_output_container_leaf(node: GraphNode) -> bool:
-    """Return whether ``node`` is a final model-output container leaf.
-
-    Parameters
-    ----------
-    node:
-        Candidate render node.
-
-    Returns
-    -------
-    bool
-        ``True`` when a sink container-node edge should carry its key label.
-    """
-
-    if not isinstance(node, Op):
-        return False
-    trace = getattr(node, "source_trace", None)
-    if trace is None:
-        return False
-    return getattr(node, "layer_label", None) in set(getattr(trace, "output_layers", ()) or ())
-
-
-def _occurrence_matches_op(trace: "Trace", label: str | None, op: Op) -> bool:
-    """Return whether a container occurrence producer label resolves to ``op``.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing ``op``.
-    label:
-        Final or raw producer label from a container occurrence.
-    op:
-        Candidate operation.
-
-    Returns
-    -------
-    bool
-        ``True`` if the label identifies ``op``.
-    """
-
-    if label is None:
-        return False
-    if label in trace.ops and trace.ops[label] is op:
-        return True
-    return (
-        getattr(op, "layer_label_raw", None) == label
-        or getattr(op, "_layer_label_raw", None) == label
-    )
-
-
 def _html_container_edge_label(text: str) -> str:
     """Return the HTML midpoint label for a container leaf edge.
 
@@ -1864,31 +1785,19 @@ def _html_edge_label(text: str) -> str:
     text = html_escape(text)
     return (
         f'<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="{_EDGE_LABEL_PAD}">'
-        f'<TR><TD><FONT POINT-SIZE="{_EDGE_LABEL_FONT_SIZE}">{text}</FONT></TD></TR></TABLE>>'
+        f'<TR><TD><FONT POINT-SIZE="{edge_annotation_pt()}">{text}</FONT></TD></TR></TABLE>>'
     )
 
 
-def _html_combined_recurrence_label(top: str, bottom: Optional[str] = None) -> str:
-    """Return an HTML combined recurrence label with left/right spacers.
+def _space_from_reverse_edge(
+    child_node: "Layer", parent_node: "Layer", edge_dict: Dict[str, Any], maps: "_RolledEdgeMaps"
+) -> None:
+    """Blank-label an every-pass edge whose reverse edge is also drawn.
 
-    Used for a node's self-loop arc, a merged recurrence back-edge, and merged
-    buffer-edge annotations; the combined ``In``/``Out`` label sits beside the
-    edge, and wide side spacer cells keep it clear of the node border and the
-    edge line.  When ``bottom`` is ``None`` the label is a single line (a
-    buffer edge may carry only one of ``In``/``Out``).
-
-    ``top``/``bottom`` are escaped individually (not after joining) so the
-    literal ``<BR/>`` line-break tag inserted between them is preserved.
-    """
-
-    top = html_escape(top)
-    text = top if bottom is None else f"{top}<BR/>{html_escape(bottom)}"
-    return (
-        '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
-        f'<TR><TD WIDTH="{_SELF_LOOP_LABEL_HGAP}"></TD>'
-        f'<TD><FONT POINT-SIZE="{_EDGE_LABEL_FONT_SIZE}">{text}</FONT></TD>'
-        f'<TD WIDTH="{_SELF_LOOP_LABEL_HGAP}"></TD></TR></TABLE>>'
-    )
+    Both then reserve a label slot, so Graphviz keeps the loop's splines apart. The slot
+    holds a no-break space: Graphviz before 14 rejects an empty FONT element."""
+    if parent_node.layer_label in maps.child_ops_per_layer(child_node) and "label" not in edge_dict:
+        edge_dict["label"] = _html_combined_recurrence_label("\u00a0")
 
 
 def _label_rolled_call_indexs(
@@ -1897,38 +1806,27 @@ def _label_rolled_call_indexs(
     edge_dict: Dict[str, Any],
     *,
     is_self_loop: bool = False,
+    is_back_edge: bool = False,
     rankdir: str = "BT",
-    allow_midpoint_merge: bool = False,
     rolled_maps: "_RolledEdgeMaps | None" = None,
 ) -> None:
     """Add pass-number annotations to edges in rolled mode.
 
-    In rolled mode, a single edge may represent connections from different
-    ops.  When edges vary across ops (``edges_vary_across_ops``), the edge
-    says which ops it applies to, e.g. ``"Out 1,3"`` / ``"In 2,4"``, using
-    ``int_list_to_compact_str`` for concise ranges (``"1-3"``).
-
-    The annotations compose into ONE midpoint ``label``
-    whenever the caller vouches the slot is free (``allow_midpoint_merge``: no
-    conditional label set, no argument label coming). Graphviz reserves layout
-    space for a midpoint label (a dummy node), so it never collides with a
-    node, spline or arrowhead, on any engine or font stack -- the endpoint
-    head/tail labels it replaces get no reserved space, which is why the
-    measured stock GPT-2 rolled page carried 38 more hard label violations
-    with them. The ``In`` line sits above ``Out`` for bottom-up graphs (flow
-    points up) and below it for top-down ones. Recurrence self-loops always
-    merge a full pair. An unvouched edge keeps head/tail labels, emitted as
-    HTML tables with small spacer cells so the text keeps an even gap from
-    the node and the arrowhead.
+    An end used by a strict subset of its node's passes names them, e.g.
+    ``"Out 1,3"`` / ``"In 2,4"``; an end every pass uses carries no label.
+    ``Out`` is the tail label and ``In`` the head label, so each sits at the node
+    it describes (restored head/tail placement, JMT, 3 Nov 2026); where is chosen
+    after layout (``_pass_label_placement``), and a labelled straight edge keeps two
+    ranks of length (``pass_label_spacing``).  A self-loop's pair merges into one
+    label beside the loop, ``In`` above ``Out`` unless flow runs down.
 
     Args:
         child_node: The child Layer node.
         parent_node: The parent Layer node.
         edge_dict: Mutable dict of edge attributes; taillabel/headlabel/label may be added.
         is_self_loop: Whether this edge is a node's recurrence self-loop.
-        rankdir: Graphviz rank direction, used to order a combined label's lines.
-        allow_midpoint_merge: Whether the edge may take a midpoint ``label`` (no
-            conditional label present, no argument label coming).
+        is_back_edge: Whether this edge is a rolled loop's return arc.
+        rankdir: Graphviz rank direction, used to order a self-loop's lines.
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
@@ -1936,38 +1834,28 @@ def _label_rolled_call_indexs(
     child_call_indexs = maps.parent_ops_per_layer(child_node)[parent_node.layer_label]
     out_label = (
         f"Out {int_list_to_compact_str(parent_call_indexs)}"
-        if maps.edges_vary_across_ops(parent_node)
+        if len(set(parent_call_indexs)) < parent_node.num_passes
         else None
     )
     in_label = (
         f"In {int_list_to_compact_str(child_call_indexs)}"
-        if maps.edges_vary_across_ops(child_node)
+        if len(set(child_call_indexs)) < child_node.num_passes
         else None
     )
 
-    # Decided on the post-sink-fix numbers (stock GPT-2 rolled, 97 -> 59
-    # hard label violations at 1.008x page area): every
-    # rolled In/Out annotation the caller vouches for -- no conditional label
-    # set, no argument label coming -- composes into ONE midpoint ``label``,
-    # which Graphviz reserves layout space for (a dummy node), so it clears
-    # nodes, splines and arrowheads on every engine and font stack. Self-loops
-    # always merge a full pair. Unvouched edges keep head/tail labels.
-    if (is_self_loop or allow_midpoint_merge) and out_label is not None and in_label is not None:
-        top, bottom = (out_label, in_label) if rankdir == "TB" else (in_label, out_label)
-        edge_dict["label"] = _html_combined_recurrence_label(top, bottom)
+    if out_label is None and in_label is None:
+        _space_from_reverse_edge(child_node, parent_node, edge_dict, maps)
         return
-    single_label = out_label if out_label is not None else in_label
-    if (
-        allow_midpoint_merge
-        and single_label is not None
-        and (out_label is None or in_label is None)
-    ):
-        edge_dict["label"] = _html_combined_recurrence_label(single_label)
+    if is_self_loop and out_label is not None and in_label is not None:
+        top, bottom = (out_label, in_label) if rankdir == "TB" else (in_label, out_label)
+        edge_dict["taillabel"] = _html_combined_recurrence_label(top, bottom)
         return
     if out_label is not None:
         edge_dict["taillabel"] = _html_edge_label(out_label)
     if in_label is not None:
         edge_dict["headlabel"] = _html_edge_label(in_label)
+    if "minlen" not in edge_dict:
+        edge_dict.update(pass_label_spacing(is_back_edge))
 
 
 def _get_lowest_module_for_two_render_nodes(

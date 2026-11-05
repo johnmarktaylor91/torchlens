@@ -56,6 +56,14 @@ def cosine_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     the two flattened tensors are bitwise-equal -- in which case we treat them
     as identical (distance 0). This guards self-comparisons of dead/zero
     outs from showing up as maximally-different.
+
+    Examples
+    --------
+    >>> a, b = torch.tensor([1.0, 0.0]), torch.tensor([0.0, 1.0])
+    >>> round(tl.stats.cosine_distance(a, b).item(), 3)
+    1.0
+    >>> bool(tl.stats.cosine_distance(a, a) < 1e-6)
+    True
     """
 
     fa = _as_flat_float(a)
@@ -83,6 +91,12 @@ def relative_l2(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     This is asymmetric on purpose -- the denominator is anchored on ``a`` so
     that a "row" comparison `node.compare(other='trace_x')` reads as relative to
     that trace.
+
+    Examples
+    --------
+    >>> a, b = torch.tensor([3.0, 4.0]), torch.zeros(2)
+    >>> round(tl.stats.relative_l2(a, b).item(), 3)
+    1.0
     """
 
     fa = _as_flat_float(a)
@@ -142,6 +156,12 @@ def relative_l1(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     Used as the implicit fallback for scalar (0-d or 1-element) outputs because
     cosine, relative-L2, and Pearson are all meaningless or near-degenerate on a
     single value.
+
+    Examples
+    --------
+    >>> a, b = torch.tensor([2.0]), torch.tensor([1.0])
+    >>> round(tl.stats.relative_l1(a, b).item(), 3)
+    0.5
     """
 
     fa = _as_flat_float(a)

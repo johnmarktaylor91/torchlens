@@ -38,7 +38,19 @@ _REQUIRED_METHODS = ("log_metric", "log_text")
 
 
 class CometSink:
-    """Native Comet receiver over an existing experiment (it never starts or ends one)."""
+    """Native Comet receiver over an existing experiment (it never starts or ends one).
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace
+    >>> from torchlens.trackers import ScalarPoint
+    >>> experiment = SimpleNamespace(log_metric=lambda tag, value, step: print(tag, value, step), log_text=print)
+    >>> sink = CometSink(experiment)
+    >>> sink.emit_scalar(ScalarPoint("gradients/norm/0.weight", 3, 0.5))
+    gradients/norm/0.weight 0.5 3
+    >>> "raw_histogram" in sink.capabilities()
+    False
+    """
 
     def __init__(self, comet_experiment: Any) -> None:
         """Wrap an existing ``Experiment`` or ``OfflineExperiment`` object.

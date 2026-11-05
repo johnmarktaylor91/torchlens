@@ -41,7 +41,18 @@ _WARNED_TRACE_IDS: set[int] = set()
 
 
 class SynthesizedValueReadWarning(TorchLensWarning):
-    """First raw value read on a trace whose input values were synthesized."""
+    """First raw value read on a trace whose input values were synthesized.
+
+    Examples
+    --------
+    >>> import warnings
+    >>> synthesized = tl.trace(model, input_shape=(1, 3, 8, 8))
+    >>> with warnings.catch_warnings(record=True) as caught:
+    ...     warnings.simplefilter("always")
+    ...     _ = synthesized["relu_1_2"].out
+    >>> [type(w.message).__name__ for w in caught if w.category is SynthesizedValueReadWarning]
+    ['SynthesizedValueReadWarning']
+    """
 
 
 def is_gold(trace: Any) -> bool:

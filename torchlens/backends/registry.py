@@ -8,6 +8,7 @@ from typing import Any, Final, Literal, TypeAlias
 
 from ._backend_names import TORCH_BACKEND_NAME as TORCH_BACKEND_NAME
 from ._backend_protocol import MATURITIES, _install_spec_lookup, protocol_problems
+from ._entry_refusals import refuse_backend_registered
 from ._errors import (
     AmbiguousBackendError as AmbiguousBackendError,
     BackendCapabilityConformanceError as BackendCapabilityConformanceError,
@@ -100,6 +101,14 @@ class BackendCapabilities:
     trace_options:
         Backend-specific public ``trace`` keyword options accepted by this
         backend in addition to the backend-neutral options.
+
+    Examples
+    --------
+    >>> caps = BackendCapabilities(False, False, False, False, False, False, False)
+    >>> (caps.fastlog, caps.save_levels[0])
+    (False, 'audit')
+    >>> tl.backends.spec("torch").capabilities.backward_capture
+    True
     """
 
     backward_capture: bool
@@ -182,6 +191,17 @@ class BackendSpec:
     maturity:
         Launch label, ``"preview"`` or ``"stable"``; only a recorded
         maintainer decision changes it.
+
+    Examples
+    --------
+    >>> demo = BackendSpec(name="demo", can_handle=lambda m, a, k: False,
+    ...     capture_trace=lambda *a, **k: None, validate_entry=lambda *a, **k: None,
+    ...     validate_trace=lambda *a, **k: None,
+    ...     capabilities=tl.backends.BackendCapabilities(*[False] * 7))
+    >>> (demo.name, demo.priority, demo.maturity)
+    ('demo', 0, 'preview')
+    >>> tl.backends.spec("torch").maturity
+    'stable'
     """
 
     name: BackendName
@@ -214,11 +234,10 @@ _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES: tuple[str, ...] = (
     "cleanup_forward_memory",
     "cleanup_stopped_forward_session",
     "cleanup_model_session",
-    "copy_replacement_metadata",
     "detect_backend_semantics",
     "emit_function_outputs",
     "extract_and_mark_outputs",
-    "fetch_label_move_input_tensors",
+    "_fetch_label_move_input_tensors",
     "finalize_forward_session",
     "inference_context",
     "is_parameter",
@@ -389,6 +408,19 @@ def require_capability_implementation(spec: BackendSpec, flag: str) -> object:
         If the flag has no bound factory, the factory raises, or it resolves
         to ``None`` — i.e. the flag promises support the backend does not
         actually register.
+
+    Examples
+    --------
+    >>> torch_spec = tl.backends.spec("torch")
+    >>> require_capability_implementation(torch_spec, "fastlog") is not None
+    True
+    >>> import dataclasses
+    >>> bare = dataclasses.replace(torch_spec, capability_implementations={})
+    >>> try:
+    ...     require_capability_implementation(bare, "fastlog")
+    ... except tl.errors.BackendCapabilityConformanceError as err:
+    ...     print(err.code)
+    backend_capability_conformance
     """
 
     implementations = spec.capability_implementations or {}
@@ -428,12 +460,23 @@ def register_backend_spec(spec: BackendSpec, *, replace: bool = False) -> None:
     -------
     None
         The process-local backend registry is updated.
+
+    Examples
+    --------
+    >>> demo = tl.backends.BackendSpec(name="demo", can_handle=lambda m, a, k: False,
+    ...     capture_trace=lambda *a, **k: None, validate_entry=lambda *a, **k: None,
+    ...     validate_trace=lambda *a, **k: None,
+    ...     capabilities=tl.backends.BackendCapabilities(*[False] * 7))
+    >>> register(demo)
+    >>> "demo" in [s.name for s in tl.backends.specs()]
+    True
+    >>> tl.backends.unregister("demo")
     """
 
     names = (str(spec.name), *spec.aliases)
     for name in names:
         if not replace and name in _REGISTRY:
-            raise ValueError(f"Backend {name!r} is already registered.")
+            refuse_backend_registered(name)
     _validate_capture_backend_factory(spec)
     _validate_protocol_factory(spec)
     _validate_capability_implementations(spec)
@@ -461,6 +504,17 @@ def unregister_backend_spec(name: str) -> None:
     -------
     None
         The matching spec entries are removed.
+
+    Examples
+    --------
+    >>> demo = tl.backends.BackendSpec(name="demo", can_handle=lambda m, a, k: False,
+    ...     capture_trace=lambda *a, **k: None, validate_entry=lambda *a, **k: None,
+    ...     validate_trace=lambda *a, **k: None,
+    ...     capabilities=tl.backends.BackendCapabilities(*[False] * 7))
+    >>> tl.backends.register(demo)
+    >>> unregister("demo")
+    >>> "demo" in [s.name for s in tl.backends.specs()]
+    False
     """
 
     spec = _REGISTRY.pop(name, None)
@@ -483,6 +537,16 @@ def get_backend_spec(name: str) -> BackendSpec:
     -------
     BackendSpec
         Matching backend spec.
+
+    Examples
+    --------
+    >>> spec("torch").name
+    'torch'
+    >>> try:
+    ...     spec("no_such_backend")
+    ... except tl.errors.UnknownBackendError as err:
+    ...     print(err.code)
+    unknown_backend
     """
 
     try:
@@ -501,6 +565,12 @@ def registered_backend_specs() -> tuple[BackendSpec, ...]:
     -------
     tuple[BackendSpec, ...]
         Registered specs in first-registration order.
+
+    Examples
+    --------
+    >>> names = [s.name for s in specs()]
+    >>> "torch" in names
+    True
     """
 
     seen: set[int] = set()
@@ -516,7 +586,7 @@ def registered_backend_specs() -> tuple[BackendSpec, ...]:
 def resolve_backend_spec(
     backend: BackendName | None,
     model: object,
-    input_args: object,
+    inputs: object,
     input_kwargs: dict[Any, Any] | None = None,
 ) -> BackendSpec:
     """Resolve the backend spec for a public call.
@@ -527,7 +597,7 @@ def resolve_backend_spec(
         Explicit backend name, or ``None`` for detector-based resolution.
     model:
         Candidate model or callable.
-    input_args:
+    inputs:
         Positional input object supplied by the user.
     input_kwargs:
         Keyword input mapping supplied by the user.
@@ -536,20 +606,25 @@ def resolve_backend_spec(
     -------
     BackendSpec
         Resolved backend spec.
+
+    Examples
+    --------
+    >>> resolve(None, model, (x,)).name
+    'torch'
+    >>> resolve("torch", model, (x,)).name
+    'torch'
     """
 
     if backend is not None:
         spec = get_backend_spec(str(backend))
-        if not spec.coercible and not spec.can_handle(model, input_args, input_kwargs):
+        if not spec.coercible and not spec.can_handle(model, inputs, input_kwargs):
             raise BackendMismatchError(
                 f"backend={backend!r} cannot handle model type {type(model).__qualname__}."
             )
         return spec
 
     matches = [
-        spec
-        for spec in registered_backend_specs()
-        if spec.can_handle(model, input_args, input_kwargs)
+        spec for spec in registered_backend_specs() if spec.can_handle(model, inputs, input_kwargs)
     ]
     if not matches:
         return get_backend_spec("torch")

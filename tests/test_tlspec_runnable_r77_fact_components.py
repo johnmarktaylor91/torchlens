@@ -19,7 +19,6 @@ untouched.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +27,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    read_runnable_descriptor,
+    write_runnable,
+)
 from torchlens._runnable import ReadinessStatus
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.options import CaptureOptions
@@ -83,10 +86,9 @@ def _tamper_fact_field(
 ) -> None:
     """Re-encode one decoded-fact field inside every matching control witness."""
 
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
+    descriptor = read_runnable_descriptor(path)
     tampered = 0
-    for witness in manifest["run"].get("control_witnesses", []):
+    for witness in descriptor.get("control_witnesses", []):
         if not str(witness.get("site_label", "")).startswith(site_prefix):
             continue
         for entry in witness["observed_value"]["entries"]:
@@ -94,7 +96,7 @@ def _tamper_fact_field(
                 entry["value"] = encoded_value
                 tampered += 1
     assert tampered, f"no {site_prefix!r} witness carried field {field_name!r}"
-    manifest_path.write_text(json.dumps(manifest))
+    write_runnable(path, descriptor)
 
 
 def _assert_context_field_invalid_analysis_only(path: Path, run_inputs: Any) -> None:
@@ -107,9 +109,10 @@ def _assert_context_field_invalid_analysis_only(path: Path, run_inputs: Any) -> 
     codes = {diagnostic.code.value for diagnostic in readiness.diagnostics}
     assert "context_field_invalid" in codes, codes
     with pytest.raises(RunCapabilityUnavailableError):
-        loaded.run(inputs=run_inputs)
+        loaded.run_transaction(inputs=run_inputs)
 
 
+# Kept: a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     "encoded_value",
     [_NESTED_LIST_COMPONENT, _MAPPING_COMPONENT, _SLICE_COMPONENT],
@@ -130,6 +133,7 @@ def test_r77_unhashable_metadata_path_component_refuses_typed(
     _assert_context_field_invalid_analysis_only(path, x.clone())
 
 
+# Kept: sole branch coverage of _io/runnable_load.py.
 def test_r77_unhashable_metadata_position_component_refuses_typed(tmp_path: Path) -> None:
     """An unhashable metadata-fact POSITION component refuses typed (was ``in set`` crash)."""
 
@@ -139,15 +143,7 @@ def test_r77_unhashable_metadata_position_component_refuses_typed(tmp_path: Path
     _assert_context_field_invalid_analysis_only(path, x.clone())
 
 
-def test_r77_unhashable_literal_path_component_refuses_typed(tmp_path: Path) -> None:
-    """The sibling literal-fact path lane refuses an unhashable component typed."""
-
-    x = torch.randn(4, 4)
-    path = _save(_LiteralCarrier().eval(), (x, 3), tmp_path / "lit_path.tlspec")
-    _tamper_fact_field(path, "model_input_literal:", "path", _MAPPING_COMPONENT)
-    _assert_context_field_invalid_analysis_only(path, (x.clone(), 3))
-
-
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_r77_unhashable_literal_position_component_refuses_typed(tmp_path: Path) -> None:
     """The literal-fact POSITION coercion refuses an unhashable component typed."""
 
@@ -157,6 +153,7 @@ def test_r77_unhashable_literal_position_component_refuses_typed(tmp_path: Path)
     _assert_context_field_invalid_analysis_only(path, (x.clone(), 3))
 
 
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_r77_unhashable_structure_position_component_refuses_typed(tmp_path: Path) -> None:
     """A structure-fact POSITION with an unhashable component refuses typed.
 

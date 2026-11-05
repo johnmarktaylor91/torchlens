@@ -99,24 +99,27 @@ def _safe_int(value: Any) -> int | None:
 
 
 def _decode_hf_text(logits: torch.Tensor, meta: dict[str, Any]) -> list[dict[str, Any]] | None:
-    """Decode Hugging Face text logits with an attached tokenizer when present.
+    """Decode Hugging Face text logits: argmax token ids, plus text when a tokenizer is present.
 
     Parameters
     ----------
     logits:
         Live logits tensor.
     meta:
-        Detector metadata.
+        Detector metadata. Without a usable ``tokenizer`` (one with a
+        ``decode`` method) the rows carry the token ids and ``text`` is
+        ``None``: the trace was captured without a tokenizer and none was
+        passed at read time.
 
     Returns
     -------
     list[dict[str, Any]] | None
-        JSON-primitive rows.
+        JSON-primitive rows; ``None`` when the logits are not rank-2 or rank-3.
     """
 
     tokenizer = meta.get("tokenizer")
-    if tokenizer is None or not hasattr(tokenizer, "decode"):
-        return None
+    if tokenizer is not None and not hasattr(tokenizer, "decode"):
+        tokenizer = None
     logits_copy = logits.detach().clone()
     if logits_copy.ndim == 2:
         # Unbatched `[seq_len, vocab]`: treat as a single batch item.
@@ -128,12 +131,12 @@ def _decode_hf_text(logits: torch.Tensor, meta: dict[str, Any]) -> list[dict[str
     token_ids_per_item = torch.argmax(logits_copy, dim=-1).tolist()
     rows: list[dict[str, Any]] = []
     for batch_index, token_ids in enumerate(token_ids_per_item):
-        text = tokenizer.decode(token_ids)
+        text = None if tokenizer is None else str(tokenizer.decode(token_ids))
         rows.append(
             {
                 "batch_item": int(batch_index),
                 "rank": 1,
-                "text": str(text),
+                "text": text,
                 "token_ids": [int(i) for i in token_ids],
             }
         )

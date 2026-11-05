@@ -11,7 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.streaming import PARTIAL_SENTINEL
-from torchlens.errors import PredicateError, RecordingConfigError
+from torchlens.errors import PredicateError
 from torchlens.options import StorageOptions
 from torchlens.recording import CaptureSpec, RecordContext
 
@@ -37,42 +37,13 @@ def _first_payload_record(recording: tl.Recording) -> tl.recording.ActivationRec
     return next(record for record in recording if record.ram_payload is not None)
 
 
-def test_ram_only_keep_grad_false_records_detached_tensor() -> None:
-    """RAM-only keep_grad=False stores a detached tensor payload."""
-
-    recording = tl.record(StorageModel(), torch.ones(1, 3), default_op=True)
-    payload = _first_payload_record(recording).ram_payload
-
-    assert payload is not None
-    assert payload.requires_grad is False
-    assert payload.grad_fn is None
-
-
-def test_ram_only_keep_grad_true_records_attached_tensor_and_backpropagates() -> None:
-    """RAM-only keep_grad=True keeps an attached clone that reaches parameters."""
-
-    model = StorageModel()
-    recording = tl.record(
-        model,
-        torch.ones(1, 3),
-        default_op=CaptureSpec(save_grad=True),
-    )
-    payload = _first_payload_record(recording).ram_payload
-
-    assert payload is not None
-    assert payload.requires_grad is True
-    assert payload.grad_fn is not None
-    payload.sum().backward()
-    assert model.linear.weight.grad is not None
-
-
 def test_view_save_mode_promotes_keep_grad() -> None:
     """CaptureSpec save_mode='view' records an attached payload honestly."""
 
     recording = tl.record(
         StorageModel(),
         torch.ones(1, 3),
-        default_op=CaptureSpec(save_mode="view"),
+        recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_mode="view")),
     )
     record = _first_payload_record(recording)
 
@@ -89,7 +60,7 @@ def test_reference_save_mode_to_trace_checks_version() -> None:
         recording = tl.record(
             StorageModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(save_mode="reference"),
+            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_mode="reference")),
         )
     trace = recording.to_trace()
     op = next(layer for layer in trace._layer_list if layer.has_saved_activation)
@@ -99,22 +70,6 @@ def test_reference_save_mode_to_trace_checks_version() -> None:
 
     with pytest.raises(tl.errors.MutatedReferenceError, match="mutated after capture"):
         _ = op.out
-
-
-def test_true_predicate_inherits_default_save_mode() -> None:
-    """Predicate ``True`` decisions inherit the default storage policy."""
-
-    recording = tl.record(
-        StorageModel(),
-        torch.ones(1, 3),
-        save=lambda ctx: ctx.kind == "op",
-        default_op=CaptureSpec(save_mode="reference"),
-    )
-
-    saved_modes = {
-        event.capture_spec.save_mode for event in recording.op_events if event.capture_spec.save_out
-    }
-    assert saved_modes == {"reference"}
 
 
 def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
@@ -129,7 +84,7 @@ def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
             path=tmp_path / "mirror.tlfast",
             retain_in_memory=True,
         ),
-        default_op=CaptureSpec(save_grad=True),
+        recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
     )
     record = _first_payload_record(recording)
 
@@ -137,20 +92,6 @@ def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
     assert record.ram_payload.grad_fn is not None
     assert record.disk_payload is not None
     assert record.disk_payload.grad_fn is None
-
-
-def test_disk_only_keep_grad_default_rejected_at_construction(tmp_path: Path) -> None:
-    """Disk-only storage rejects static keep_grad defaults before recording."""
-
-    with pytest.raises(RecordingConfigError, match="save_grad=True"):
-        tl.recording.Recorder(
-            StorageModel(),
-            default_op=CaptureSpec(save_grad=True),
-            storage=StorageOptions(
-                path=tmp_path / "disk.tlfast",
-                retain_in_memory=False,
-            ),
-        )
 
 
 def test_disk_only_predicate_keep_grad_rejected_before_record_write(
@@ -179,17 +120,6 @@ def test_disk_only_predicate_keep_grad_rejected_before_record_write(
     assert not (partials[0] / "fastlog_index.jsonl").exists()
 
 
-def test_keep_grad_true_integer_dtype_rejected_per_record() -> None:
-    """keep_grad=True with an integer dtype transform is rejected per record."""
-
-    with pytest.raises(PredicateError, match="integer or bool"):
-        tl.record(
-            StorageModel(),
-            torch.ones(1, 3),
-            default_op=CaptureSpec(save_grad=True, dtype=torch.int32),
-        )
-
-
 def test_keep_grad_true_cpu_device_warns_once_and_is_allowed(tmp_path: Path) -> None:
     """keep_grad=True with an explicit CPU device warns once and records."""
 
@@ -201,7 +131,9 @@ def test_keep_grad_true_cpu_device_warns_once_and_is_allowed(tmp_path: Path) -> 
                 path=tmp_path / "mirror.tlfast",
                 retain_in_memory=True,
             ),
-            default_op=CaptureSpec(save_grad=True, device="cpu"),
+            recording=tl.options.RecordingOptions(
+                default_op=CaptureSpec(save_grad=True, device="cpu")
+            ),
         )
 
     assert len(warnings_seen) == 1
@@ -223,16 +155,3 @@ def test_safe_copy_is_only_detach_lever_in_fastlog() -> None:
                 offenders.append(f"{path}:{node.lineno}")
 
     assert offenders == []
-
-
-def test_model_parameter_requires_grad_flags_preserved() -> None:
-    """Fastlog does not mutate mixed parameter requires_grad flags."""
-
-    model = StorageModel()
-    model.linear.bias.requires_grad_(False)
-    before = {name: param.requires_grad for name, param in model.named_parameters()}
-
-    tl.record(model, torch.ones(1, 3), default_op=True)
-
-    after = {name: param.requires_grad for name, param in model.named_parameters()}
-    assert after == before

@@ -6,7 +6,7 @@ import builtins
 import re as _re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, ClassVar, Literal, TypeAlias, cast
 
 from .._errors import ArgumentTypeError
 from .errors import SelectorCompositionError
@@ -16,7 +16,6 @@ from .selector_base import (
     BaseSelector,
     CompositeSelector as CompositeSelector,
     NotSelector,
-    SelectorUniverse,
     classify_selector_universe as classify_selector_universe,
 )
 from .target import FrozenTargetSpec, TargetSpec
@@ -527,6 +526,12 @@ def site(
     -------
     SiteSelector
         Structural selector valid in every lane (address law).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace[tl.site(func="relu")].labels
+    ('relu_1_2:1',)
     """
 
     return SiteSelector(
@@ -990,6 +995,8 @@ class GradSelector(BaseSelector):
         activation-universe selector.
     """
 
+    _wrapped_operand_attr: ClassVar[str | None] = "inner"
+
     def __init__(self, inner: str | BaseSelector) -> None:
         """Create a gradient address over one forward site."""
 
@@ -1070,6 +1077,14 @@ def label(name: str) -> LabelSelector:
     -------
     LabelSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace[tl.label("relu_1_2")].label
+    'relu_1_2:1'
+    >>> len(trace.find_sites(tl.label("relu_1_2")))
+    1
     """
 
     return LabelSelector(name)
@@ -1089,6 +1104,12 @@ def func(name: str, *, output: int | str | None = None) -> FuncSelector:
     -------
     FuncSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace[tl.func("conv2d")].labels
+    ('conv2d_1_1:1', 'conv2d_2_3:1')
     """
 
     if not isinstance(name, str):
@@ -1115,6 +1136,15 @@ def func_transform(kind: str | None = None) -> FuncTransformSelector:
     -------
     FuncTransformSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> class Mapped(nn.Module):
+    ...     def forward(self, v):
+    ...         return torch.func.vmap(torch.sin)(v)
+    >>> trace = tl.trace(Mapped(), torch.randn(3, 4))
+    >>> trace[tl.func_transform("vmap")].labels
+    ('vmap_1_1:1',)
     """
 
     return FuncTransformSelector(kind)
@@ -1132,6 +1162,14 @@ def followed_by(selector: SelectorLike, /) -> FollowedBySelector:
     -------
     FollowedBySelector
         Selector interpreted by capture-time save predicates.
+
+    Examples
+    --------
+    >>> keep = tl.func("conv2d") & tl.followed_by(tl.func("relu"))
+    >>> trace = tl.trace(model, x, save=keep,
+    ...                  capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"))
+    >>> [op.label for op in trace.saved_ops]
+    ['conv2d_1_1:1']
     """
 
     return FollowedBySelector(selector)
@@ -1149,6 +1187,14 @@ def preceded_by(selector: SelectorLike, /) -> PrecededBySelector:
     -------
     PrecededBySelector
         Selector matching current ops with a retained predecessor.
+
+    Examples
+    --------
+    >>> keep = tl.func("conv2d") & tl.preceded_by(tl.func("relu"))
+    >>> trace = tl.trace(model, x, save=keep, capture=tl.options.CaptureOptions(lookback=4))
+    >>> labels = [op.label for op in trace.saved_ops]
+    >>> "conv2d_2_3:1" in labels, "conv2d_1_1:1" in labels
+    (True, False)
     """
 
     return PrecededBySelector(selector)
@@ -1166,6 +1212,16 @@ def model_output(target: int | str) -> OutputSelector:
     -------
     OutputSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> class Split(nn.Module):
+    ...     def forward(self, v):
+    ...         first, second = torch.chunk(v, 2, dim=1)
+    ...         return first * 2 + second
+    >>> trace = tl.trace(Split(), torch.randn(1, 4))
+    >>> trace[tl.model_output(1)].labels
+    ('chunk_2_2:1',)
     """
 
     return OutputSelector(target)
@@ -1201,6 +1257,17 @@ def model_input(*path: Any) -> InputPathSelector:
     -------
     InputPathSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> class DictIn(nn.Module):
+    ...     def forward(self, d):
+    ...         return d["a"] + d["b"]
+    >>> inputs = [{"a": torch.zeros(1, 2), "b": torch.ones(1, 2)}]
+    >>> capture = tl.options.CaptureOptions(capture_container_structure=True)
+    >>> trace = tl.trace(DictIn(), inputs, capture=capture)
+    >>> trace[tl.model_input("b")].labels
+    ('input_2:1',)
     """
 
     return InputPathSelector(*path)
@@ -1218,6 +1285,12 @@ def module(address: str) -> ModuleSelector:
     -------
     ModuleSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace[tl.module("1")].labels
+    ('relu_1_2:1',)
     """
 
     return ModuleSelector(address)
@@ -1235,6 +1308,12 @@ def label_contains(substring: str) -> ContainsSelector:
     -------
     ContainsSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace[tl.label_contains("conv")].labels
+    ('conv2d_1_1:1', 'conv2d_2_3:1')
     """
 
     return ContainsSelector(substring)
@@ -1258,6 +1337,12 @@ def label_matches(pattern: str) -> RegexSelector:
     ------
     re.error
         If ``pattern`` is not a valid regular expression.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace[tl.label_matches("^relu_[0-9]+_2$")].labels
+    ('relu_1_2:1',)
     """
 
     return RegexSelector(pattern)
@@ -1277,6 +1362,12 @@ def where(predicate: Callable[[Any], bool], *, name_hint: str | None = None) -> 
     -------
     WhereSelector
         Immutable non-portable selector.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace[tl.where(lambda op: op.func_name == "relu", name_hint="relus")].labels
+    ('relu_1_2:1',)
     """
 
     return WhereSelector(predicate, name_hint=name_hint)
@@ -1303,6 +1394,12 @@ def grad_fn(
     -------
     GradFnSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> selector = tl.grad_fn("ReluBackward0")
+    >>> selector.selector_kind
+    'grad_fn'
     """
 
     return GradFnSelector(name, label=label, is_custom=is_custom)
@@ -1315,6 +1412,12 @@ def without_op() -> InterveningSelector:
     -------
     InterveningSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> selector = tl.without_op()
+    >>> selector.selector_kind
+    'intervening'
     """
 
     return InterveningSelector()
@@ -1332,6 +1435,12 @@ def facet(name: str) -> FacetSelector:
     -------
     FacetSelector
         Selector resolved to facet home-op hooks by intervention mutators.
+
+    Examples
+    --------
+    >>> selector = tl.facet("pattern")
+    >>> selector.selector_kind, selector.name
+    ('facet', 'pattern')
     """
 
     return FacetSelector(name)
@@ -1351,6 +1460,14 @@ def head(index: int, name: str | None = None) -> FacetSelector:
     -------
     FacetSelector
         Selector resolved to facet home-op hooks by intervention mutators.
+
+    Examples
+    --------
+    >>> selector = tl.head(2, "q")
+    >>> selector.head_index, selector.name
+    (2, 'q')
+    >>> tl.head(0).head(3).head_index
+    3
     """
 
     return FacetSelector(name, head_index=index)
@@ -1380,6 +1497,12 @@ def grad_input() -> GradKindSelector:
     -------
     GradKindSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> selector = tl.grad_input()
+    >>> selector.selector_value
+    'grad_input'
     """
 
     return GradKindSelector("grad_input")
@@ -1392,6 +1515,12 @@ def grad_output() -> GradKindSelector:
     -------
     GradKindSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> selector = tl.grad_output()
+    >>> selector.selector_value
+    'grad_output'
     """
 
     return GradKindSelector("grad_output")
@@ -1409,6 +1538,12 @@ def in_backward_pass(pass_index: int) -> BackwardPassSelector:
     -------
     BackwardPassSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> selector = tl.in_backward_pass(1)
+    >>> selector.pass_index
+    1
     """
 
     return BackwardPassSelector(pass_index)
@@ -1553,6 +1688,17 @@ def grad(site: Any, /) -> GradSelector:
         ``grad_selector_nested``, ``grad_selector_inner_not_forward``,
         ``grad_facet_unsupported``, ``grad_selection_unsupported`` or
         ``grad_selector_inner_invalid``, each with a ``remedy``.
+
+    Examples
+    --------
+    >>> repr(tl.grad("relu_1_2"))
+    "tl.grad('relu_1_2')"
+    >>> both = tl.grad("relu_1_2") | "relu_1_2"
+    >>> try:
+    ...     tl.grad(tl.grad("relu_1_2"))
+    ... except tl.errors.SelectorCompositionError as e:
+    ...     print(e.fields["code"])
+    grad_selector_nested
     """
 
     if isinstance(site, GradSelector):
@@ -1587,6 +1733,15 @@ def at_step(*steps: int) -> EpisodeStepSelector:
     -------
     EpisodeStepSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     trace[tl.at_step(0)]
+    ... except tl.errors.SiteResolutionError as e:
+    ...     print(e.fields["code"])
+    episode_step_selector_without_episode
     """
 
     return EpisodeStepSelector(*steps)
@@ -1606,57 +1761,15 @@ def in_module(address: str) -> InModuleSelector:
         Selector matching sites contained in the module. Whether one record
         belongs to a module is read on the record (``layer.module == address``
         or ``address in layer.modules``).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace[tl.in_module("0")].labels
+    ('conv2d_1_1:1',)
     """
 
     return InModuleSelector(str(address))
-
-
-def _and_universe(
-    left: SelectorUniverse | None,
-    right: SelectorUniverse | None,
-    left_sel: Any,
-    right_sel: Any,
-) -> SelectorUniverse | None:
-    """Combine two ``&`` operands' universes, refusing pairs that share no site."""
-
-    if left is None or right is None:
-        other = right if left is None else left
-        if other in (None, "activation"):
-            return other
-        left = left or "activation"
-        right = right or "activation"
-    if left == right and left != "mixed":
-        return left
-    pair = {left, right}
-    if "mixed" not in pair and "qualifier" in pair and pair & {"gradient", "node"}:
-        return "gradient" if "gradient" in pair else "node"
-    if pair == {"activation", "qualifier"}:
-        site, qualifier = (left_sel, right_sel) if left == "activation" else (right_sel, left_sel)
-        raise SelectorCompositionError(
-            f"{left_sel!r} & {right_sel!r} joins a backward pass qualifier to an "
-            "activation address; activations have no backward pass.",
-            code="selector_signal_mismatch",
-            remedy=f"a pass qualifier needs a gradient address: tl.grad({site!r}) & {qualifier!r}",
-        )
-    if "mixed" in pair:
-        remedy = "write & inside each branch of the |, e.g. (tl.grad(a) & q) | (a & b)"
-    elif pair == {"activation", "gradient"}:
-        remedy = "a gradient and an activation address never share a site; use | for both"
-    elif "activation" in pair:
-        remedy = (
-            "spell the node address alone: tl.grad_fn(label=...), or the tensor address tl.grad(s)"
-        )
-    else:
-        remedy = (
-            "the tensor address tl.grad(s) and the node address tl.grad_fn(...) differ in "
-            "payload; use one of them"
-        )
-    raise SelectorCompositionError(
-        f"Cross-universe composition not supported: {left_sel!r} & {right_sel!r} joins a "
-        f"{left} address and a {right} address, which never share a site.",
-        code="selector_cross_universe_and",
-        remedy=remedy,
-    )
 
 
 __all__ = [

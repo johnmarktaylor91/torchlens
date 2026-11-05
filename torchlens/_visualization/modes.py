@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import torch
 
+from .._data_classes.func_call_location import display_frame
 from .._literals import VisNodeModeLiteral
 from .._quantities import Duration
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
-from .._utils.display import human_readable_size
-from ._label_format import format_shape
+from ._label_format import binary_size, format_shape
 from .node_spec import NodeSpec
 
 if TYPE_CHECKING:
@@ -209,12 +209,12 @@ def _multipass_profiling_lines(layer_log: Layer, lines: list[str]) -> list[str]:
     return lines
 
 
-def vision_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
+def vision_node_mode(op: Op | Layer, spec: NodeSpec) -> NodeSpec:
     """Append input/output spatial shapes for vision-like layers.
 
     Parameters
     ----------
-    layer_log:
+    op:
         Per-pass Op or aggregate Layer being rendered.
     spec:
         Current node spec.
@@ -223,13 +223,20 @@ def vision_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
     -------
     NodeSpec
         Node spec with an IO-shape row for spatial layers.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> spec = vision_node_mode(trace.ops["0"], tl.viz.NodeSpec(lines=["conv"]))
+    >>> spec.lines[0], spec.lines[-1].startswith("in=")
+    ('conv', True)
     """
 
-    if _normalized_layer_type(layer_log) not in VISION_LAYER_TYPES:
+    if _normalized_layer_type(op) not in VISION_LAYER_TYPES:
         return spec
 
-    input_shape = _first_input_shape(layer_log)
-    output_shape = _get_optional_attr(layer_log, "shape")
+    input_shape = _first_input_shape(op)
+    output_shape = _get_optional_attr(op, "shape")
     if not isinstance(input_shape, tuple) or not isinstance(output_shape, tuple):
         return spec
 
@@ -238,12 +245,12 @@ def vision_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
     return spec.replace(lines=lines)
 
 
-def attention_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
+def attention_node_mode(op: Op | Layer, spec: NodeSpec) -> NodeSpec:
     """Append compact annotations for attention-related layers.
 
     Parameters
     ----------
-    layer_log:
+    op:
         Per-pass Op or aggregate Layer being rendered.
     spec:
         Current node spec.
@@ -252,26 +259,33 @@ def attention_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
     -------
     NodeSpec
         Node spec with attention details when heuristics match.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> spec = attention_node_mode(trace.ops["0"], tl.viz.NodeSpec(lines=["conv"]))
+    >>> spec.lines
+    ['conv']
     """
 
     lines = list(spec.lines)
-    layer_type = _normalized_layer_type(layer_log)
-    containing_mha = _is_inside_multihead_attention(layer_log)
+    layer_type = _normalized_layer_type(op)
+    containing_mha = _is_inside_multihead_attention(op)
 
     if "multiheadattention" in layer_type or layer_type == "scaleddotproductattention":
-        attention_line = _format_attention_head_line(layer_log)
+        attention_line = _format_attention_head_line(op)
         if attention_line:
             lines.append(attention_line)
-        dropout = _attention_dropout(layer_log)
+        dropout = _attention_dropout(op)
         if dropout is not None and dropout != 0:
             lines.append(f"dropout={dropout:g}")
 
-    role = _attention_projection_role(layer_log, containing_mha)
+    role = _attention_projection_role(op, containing_mha)
     if role is not None:
         lines.append(f"(role={role})")
 
     if "softmax" in layer_type and containing_mha:
-        dim = _get_optional_attr(layer_log, "func_config")
+        dim = _get_optional_attr(op, "func_config")
         if isinstance(dim, dict) and dim.get("dim") == -1:
             lines.append("(attn-softmax)")
     return spec.replace(lines=lines) if lines != spec.lines else spec
@@ -380,17 +394,22 @@ def _get_optional_attr(obj: object, attr_name: str) -> Any:
 
 
 def _compact_size(size: float) -> str:
-    """Format bytes without the space used by the generic display helper."""
+    """Format bytes for a drawing without the space (``"60.0KB"``)."""
 
-    return human_readable_size(size).replace(" ", "")
+    return binary_size(size).replace(" ", "")
 
 
 def _first_call_location(layer_log: Op | Layer) -> Any | None:
-    """Return the first captured call-stack location for a layer."""
+    """Return the call-stack frame that ran a layer's op, or ``None``.
+
+    ``code_context`` is ordered outermost to innermost, so ``[0]`` is the
+    caller's entry point, not the op's line; ``display_frame`` names the
+    innermost frame outside torch, as every other source-line display does.
+    """
 
     call_stack = _get_optional_attr(layer_log, "code_context")
     if isinstance(call_stack, list) and call_stack:
-        return call_stack[0]
+        return display_frame(call_stack)
     return None
 
 

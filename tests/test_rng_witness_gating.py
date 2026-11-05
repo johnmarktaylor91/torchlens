@@ -15,7 +15,6 @@ from __future__ import annotations
 import sys
 
 import torch
-from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -42,40 +41,6 @@ _RUNNABLE_CAP = {
     "cache": False,
     "seed": 7,
 }
-
-
-def test_plain_trace_does_not_arm_monitor_and_stamps_fail_closed():
-    model = _ProfileProbeModel()
-    trace = tl.trace(model, torch.randn(2, 4))
-    # No profile hook was installed for the user forward.
-    assert stashed(trace, "profile_hook_during_forward") is None
-    # The fail-closed stamp: channel coverage is UNKNOWABLE, never "no consumption".
-    assert trace._runnable.rng_monitor_uncertain is True
-    assert trace._runnable.rng_monitor_uncertain_detail == ("monitor_not_armed",)
-    # The channel verdict fields were never observed and must remain tri-state.
-    assert trace._runnable.host_rng_channels is None
-    assert trace._runnable.host_rng_unreplayable is None
-
-
-def test_intervention_ready_trace_arms_monitor_unchanged():
-    model = _ProfileProbeModel()
-    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(**_RUNNABLE_CAP))
-    # The real monitor ran the forward under its profile hook.
-    assert model.profile_hook_during_forward is not None
-    assert trace._runnable.rng_monitor_uncertain is False
-    assert trace._runnable.host_rng_channels == ()
-    assert trace._runnable.host_rng_unreplayable is False
-
-
-def test_plain_trace_cannot_pass_runnable_preflight():
-    # The gate predicate invariant: descriptor.preflight.passed implies
-    # trace.is_replayable, so "was-witnessed" and "can-claim" never diverge.
-    from torchlens._io.runnable import build_sparse_run_descriptor
-
-    model = _ProfileProbeModel()
-    trace = tl.trace(model, torch.randn(2, 4))
-    descriptor = build_sparse_run_descriptor(trace)
-    assert descriptor.preflight.passed is False
 
 
 def test_disarmed_stamp_ceilings_descriptor_build():

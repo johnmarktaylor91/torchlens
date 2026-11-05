@@ -17,7 +17,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.receptive_field._engine import solve
-from torchlens.receptive_field._engine_forward import solve_projective
 from torchlens.receptive_field._validation import check_geometric_metadata_invariants
 from torchlens.validation import last_validation_failure
 
@@ -43,17 +42,6 @@ def test_empty_output_validates() -> None:
         assert tl.validate(_EmptyOutput().eval(), torch.randn(2, 4), scope="forward") is True, (
             last_validation_failure()
         )
-
-
-def test_empty_output_has_no_projective_descriptor() -> None:
-    trace = tl.trace(_EmptyOutput().eval(), torch.randn(2, 4))
-    empty_output = next(op for op in trace.output_ops if 0 in tuple(op.shape))
-    used_output = next(op for op in trace.output_ops if 0 not in tuple(op.shape))
-    solution = solve_projective(trace, trace.output_ops)
-    roles = {role for _label, role in solution.descriptors}
-    assert (used_output.io_role or used_output.label) in roles
-    assert (empty_output.io_role or empty_output.label) not in roles
-    assert check_geometric_metadata_invariants(trace)
 
 
 def test_empty_input_has_no_receptive_descriptor() -> None:

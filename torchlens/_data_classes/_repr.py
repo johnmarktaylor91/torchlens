@@ -57,3 +57,8 @@ def format_shape_list(shapes: Iterable[Any]) -> str:
     """
 
     return ", ".join(str(shape) for shape in shapes)
+
+
+def trace_honesty_suffix(trace: Any) -> str:
+    """Return the outcome and health suffix tokens for a trace's identity repr (F10)."""
+    return trace._repr_honesty_suffix()

@@ -1,0 +1,21 @@
+name: Question or docs gap
+description: Ask in GitHub Discussions first. Use this form only when the docs are missing something or are wrong.
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions about how to do something are answered in [GitHub Discussions](https://github.com/johnmarktaylor91/torchlens/discussions/categories/q-a), where other users can find the answer later.
+        Open an issue here only to report a docs page that is missing, unclear, or out of date.
+  - type: input
+    id: page
+    attributes:
+      label: Docs page
+      description: The page or section you were reading, as a link or a file path.
+  - type: textarea
+    id: task
+    attributes:
+      label: What you were trying to do
+      description: The task, the call you tried first, and what the docs said or did not say.
+    validations:
+      required: true

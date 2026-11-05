@@ -33,7 +33,7 @@ Cases
     As ``synthetic-1000``, but every tenth re-fed event draws new parents.
 ``failed-partial``
     A ``Recorder`` over a 60-op chain whose third pass raises halfway, with
-    ``on_forward_error="return_partial"``.
+    ``recording=RecordingOptions(on_forward_error="return_partial")``.
 
 Run ``python benchmarks/live_index_append_counters.py --out OUT.json``; one
 JSON document is printed and written to ``--out``.
@@ -68,6 +68,7 @@ import torchlens as tl  # noqa: E402
 from torchlens._ir.live_index import LiveIndex  # noqa: E402
 from torchlens.recording import Recorder  # noqa: E402
 from torchlens.recording._recorder import Recorder as _RecorderImpl  # noqa: E402
+from torchlens.recording.options import RecordingOptions  # noqa: E402
 
 PROMPT = torch.tensor([[454, 137, 139, 386]])
 SITE_OPS = ("transformer.h.0.mlp.dropout", "transformer.h.1.mlp.dropout", "transformer.ln_f")
@@ -378,7 +379,9 @@ def _run_recorder(model: nn.Module, n: int) -> Any:
 
 
 def _run_failed_partial() -> Any:
-    with Recorder(_Chain(), save=_save_ops, on_forward_error="return_partial") as recorder:
+    with Recorder(
+        _Chain(), save=_save_ops, recording=RecordingOptions(on_forward_error="return_partial")
+    ) as recorder:
         for _ in range(3):
             recorder(torch.ones(4))
         return recorder.recording

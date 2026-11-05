@@ -28,6 +28,13 @@ Supporting files:
   `TORCHLENS_BENCH_HOST_LABEL` (default `benchmark-host`), never the real hostname, and
   captured output spells the checkout as `<repo>`.
 
+## Capture benchmarks
+
+`capture/` holds the matched-contract suites (A: every arm produces the same output;
+B: what each TorchLens operation keeps), the operation fixtures, the real-model panel,
+the mech-interp workloads and the "what hooks miss" census, all writing one JSON result
+format. See `capture/README.md`.
+
 ## Intervention overhead
 
 `intervention_overhead.py` is the earlier focused benchmark for TorchLens
@@ -54,4 +61,21 @@ index state after every pass. Counters gate; wall time is context only:
 
 ```bash
 python benchmarks/live_index_append_counters.py --out live_index_counters.json
+```
+
+## Save-path counters
+
+`save_path_counters.py` counts the work one `trace.save` of the `tinynet` capture
+does on the default portable path (saved format 3): record-table write passes and
+encoder calls, verifying re-reads of the record tables, `fsync` calls, Python-level
+opens, and the files and bytes written (split into manifest, metadata and blobs).
+Byte counts hold each wall-clock timing float (`TIMING_FLOAT_PATHS`) at a fixed
+width, since format 3 writes floats by exact repr; every other byte counts as
+written, and the raw size is information only. The pinned values
+sit beside the `aux_save` row of `perf_baselines/linux-cpu-provisional.json`
+(`metadata.save_path_counters`) and `tests/test_save_path_counters.py` holds them.
+Counters gate; wall time and the profiled call count are context only:
+
+```bash
+python benchmarks/save_path_counters.py --out save_counters.json
 ```

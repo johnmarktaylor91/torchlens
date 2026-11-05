@@ -12,6 +12,7 @@ have all landed.
 
 from __future__ import annotations
 
+import pytest
 import torch
 from test_weightsfree_fixtures import (
     ConvBnPool,
@@ -55,6 +56,7 @@ def test_linear_relu_linear_parity_and_geometry() -> None:
     assert total_param_bytes == 84  # 21 fp32 params
 
 
+@pytest.mark.smoke
 def test_conv_bn_pool_parity_buffers() -> None:
     """Buffer-holding CNN: no fabricated writes, declared writes at parity."""
 

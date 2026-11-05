@@ -60,7 +60,6 @@ def test_act_selection_scalar_refuses_typed(capture, bad_value) -> None:
     assert torch.equal(fork["relu_1_2"].out, capture["relu_1_2"].out)
 
 
-@pytest.mark.smoke
 def test_edge_selection_scalar_refuses_typed(capture) -> None:
     """EDGE lane: same refusal, same teaching."""
 
@@ -103,7 +102,7 @@ def test_wrong_shape_tensor_value_refuses_typed_not_bare(capture) -> None:
     """Shape mismatches stay typed refusals on the Selection lane."""
 
     fork = capture.fork()
-    sel = capture["relu_1_2"].__selection__()
+    sel = capture.layers["relu_1_2"].__selection__()
     with pytest.raises(Exception) as excinfo:
         fork.do(sel, torch.ones(2, 2))
     assert not isinstance(excinfo.value, AttributeError)

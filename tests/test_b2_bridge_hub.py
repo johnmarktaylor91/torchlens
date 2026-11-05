@@ -1,4 +1,4 @@
-"""Hub push and pull through the safe ``.tlspec`` path (walk U14.2).
+"""Hub push and pull through the safe ``.tlspec`` path.
 
 ``push_to_hub`` uploads a gzipped tar of the portable bundle and never a raw
 pickle; ``from_hub`` downloads it, checks every tar member, and loads it
@@ -144,19 +144,19 @@ def _symlink(tar: tarfile.TarFile) -> None:
     tar.addfile(info)
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("payload", "problem"),
     [
         (b"not a tar at all", "not a readable gzipped tar"),
         (_tar_bytes(lambda tar: _file(tar, "bundle/../../escape.json")), "escapes the bundle"),
-        (_tar_bytes(lambda tar: _file(tar, "/abs/manifest.json")), "escapes the bundle"),
         (_tar_bytes(_symlink), "link or special file"),
         (
             _tar_bytes(lambda tar: (_file(tar, "a/manifest.json"), _file(tar, "b/x.json"))),
             "expected one top-level bundle",
         ),
     ],
-    ids=["not-gzip", "parent-escape", "absolute", "symlink", "two-roots"],
+    ids=["not-gzip", "parent-escape", "symlink", "two-roots"],
 )
 def test_from_hub_refuses_an_unsafe_download(payload: bytes, problem: str, tmp_path: Path) -> None:
     hub = _LocalHub(tmp_path / "cache")

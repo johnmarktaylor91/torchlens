@@ -145,6 +145,14 @@ def positions(
     ------
     InvalidArgumentError
         ``position_edit_invalid`` for unsupported positions or axis.
+
+    Examples
+    --------
+    >>> edit = tl.positions(tl.zero_ablate(), [0, 1], axis=1)
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), edit))
+    >>> out = edited["relu_1_2"].out
+    >>> bool((out[:, :2] == 0).all()), bool((out[:, 2:] != 0).any())
+    (True, True)
     """
 
     canonical = _validate_positions(positions)

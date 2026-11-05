@@ -75,6 +75,12 @@ class BudgetResolution:
     disclosure: tuple[str, ...]
 
 
+def _collapse_schedule(trace: Trace, context: Any) -> Any:
+    """Return the trace's collapse schedule through the private ``Trace._collapse_schedule`` door."""
+
+    return trace._collapse_schedule(context)
+
+
 def _coverage_for_step(
     values: dict[str, float],
     op_modules: dict[str, tuple[str, ...]],
@@ -153,7 +159,7 @@ def resolve_budget(
         Active colour-channel values keyed by pass-qualified op label; when
         supplied the coverage floor is enforced alongside the band.
     context:
-        Optional render context forwarded to ``Trace.collapse_schedule``.
+        Optional render context forwarded to ``Drawing.collapse_schedule``.
 
     Returns
     -------
@@ -164,7 +170,7 @@ def resolve_budget(
         (``lens_budget_band_missed``) -- disclosed, never silent.
     """
 
-    from ..collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
+    from .._render_names import COLLAPSE_OPTIMIZER_MAX_OPS
 
     channel_values, op_modules = _op_value_maps(trace, values)
     channel_active = bool(channel_values)
@@ -173,7 +179,7 @@ def resolve_budget(
     if op_count > COLLAPSE_OPTIMIZER_MAX_OPS:
         return _resolve_above_ceiling(trace, op_count, channel_active)
 
-    schedule = trace.collapse_schedule(context)
+    schedule = _collapse_schedule(trace, context)
     full_visible = schedule.steps[0].visible_count
     if full_visible <= BAND_CEILING:
         coverage = (
@@ -288,7 +294,7 @@ def _resolve_above_ceiling(trace: Trace, op_count: int, channel_active: bool) ->
     is the shipped dial that still works. Counts are disclosed ESTIMATES.
     """
 
-    from ..collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
+    from .._render_names import COLLAPSE_OPTIMIZER_MAX_OPS
 
     best_depth = 1
     best_estimate = _call_depth_estimate(trace, 1)

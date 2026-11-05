@@ -103,7 +103,7 @@ EXCLUDES = (
     "MIGRATIONS.md",
     "docs/migration",
     "docs/reference/deprecations.md",
-    "torchlens/_io/_pre3_module_paths.py",
+    "torchlens/_io/format_contract.py",
 )
 SUFFIXES = {
     ".py",
@@ -257,13 +257,13 @@ PIN_EDITS: dict[str, tuple[tuple[str, str], ...]] = {
             "# After\nfrom torchlens.visualization import show_model_graph\n\n"
             "show_model_graph(\n    model,\n    x,\n"
             '    visualization=tl.options.VisualizationOptions(container_path="graph", save_only=True),\n)\n',
-            '# After\ntrace = tl.trace(model, x)\ntrace.draw(path="graph", vis_save_only=True)\n',
+            '# After\ntrace = tl.trace(model, x)\ntrace.draw("graph")\n',
         ),
         (
             "# After\nfrom torchlens.visualization import draw_backward\n\n"
-            "loss = trace[trace.output_layers[0]].out.sum()\ntrace.log_backward(loss)\n"
+            "loss = trace[trace.output_layers[0]].out.sum()\ntrace.backward(loss)\n"
             'dot = draw_backward(\n    trace, visualization=tl.options.VisualizationOptions(container_path="backward")\n)\n',
-            "# After\nloss = trace[trace.output_layers[0]].out.sum()\ntrace.log_backward(loss)\n"
+            "# After\nloss = trace[trace.output_layers[0]].out.sum()\ntrace.backward(loss)\n"
             'dot = trace.draw_backward(path="backward")\n',
         ),
     ),
@@ -274,23 +274,23 @@ PIN_EDITS: dict[str, tuple[tuple[str, str], ...]] = {
             "`with tl.recording.Recorder(model, narrate=",
         ),
     ),
-    "docs/agent-reference/package/newer-2-x-subsystems.md": (
+    "docs/internal/agent-reference/package/newer-2-x-subsystems.md": (
         ("- `fastlog/`: sparse", "- `recording/`: sparse"),
     ),
-    "docs/agent-reference/package/subpackages.md": (
+    "docs/internal/agent-reference/package/subpackages.md": (
         ("- `capture/` - real-time", "- `_capture/` - real-time"),
         ("- `fastlog/` - sparse", "- `recording/` - sparse"),
         ("- `visualization/` - Graphviz", "- `_visualization/` - Graphviz"),
         ("- `accessors/`, `semantic/`, `observers`", "- `accessors/`, `_semantic/`, `observers`"),
     ),
-    "docs/agent-reference/package/key-concepts.md": (
+    "docs/internal/agent-reference/package/key-concepts.md": (
         ("3. `capture/` builds raw", "3. `_capture/` builds raw"),
     ),
-    "docs/agent-reference/package/files-in-this-directory.md": (
+    "docs/internal/agent-reference/package/files-in-this-directory.md": (
         ("below — `captured_run.py`,", "below — `_captured_run.py`,"),
         ("| `user_funcs.py` |", "| `_user_funcs.py` |"),
     ),
-    "docs/agent-reference/package/architecture-overview.md": (
+    "docs/internal/agent-reference/package/architecture-overview.md": (
         ("  |  captured_run, observers,", "  |  _captured_run, observers,"),
         ("and visualization (hard-pinned", "and _visualization (hard-pinned"),
         (
@@ -348,7 +348,6 @@ PIN_EDITS: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
 }
-PRE_3_NAMES = ("capture", "captured_run", "fastlog", "semantic", "user_funcs", "visualization")
 
 
 def _package_of(path: Path, repo: Path) -> list[str]:
@@ -443,16 +442,6 @@ def edit_root(text: str) -> str:
     for name in PRIVATE_ROOT_ROWS:
         text = re.sub(rf'^    "{name}": \("torchlens\._\w+", None\),\n', "", text, flags=re.M)
     return text
-
-
-def edit_pre3(text: str) -> str:
-    """Add the old package names to the 2.x module-path refusal set (sorted, idempotent)."""
-    match = re.search(r"_PRE_3_PACKAGES = frozenset\(\n    \{\n(.*?)    \}\n\)", text, re.S)
-    if match is None:
-        return text
-    names = set(re.findall(r'"(\w+)"', match.group(1))) | set(PRE_3_NAMES)
-    body = "".join(f'        "{name}",\n' for name in sorted(names))
-    return text[: match.start(1)] + body + text[match.end(1) :]
 
 
 def iter_files(repo: Path):
@@ -570,15 +559,6 @@ def main(argv: list[str]) -> int:
     for path in apply_pins(repo, dry):
         changed += 1
         touched.append(path)
-    pre3 = repo / "torchlens/_io/_pre3_module_paths.py"
-    if pre3.is_file():
-        text = pre3.read_text(encoding="utf-8")
-        new = edit_pre3(text)
-        if new != text:
-            changed += 1
-            touched.append(pre3)
-            if not dry:
-                pre3.write_text(new, encoding="utf-8")
     if not dry:
         tidy(repo, touched)
     print(f"moved {len(moves)} packages, rewrote {changed} files")

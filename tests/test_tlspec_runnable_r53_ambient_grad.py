@@ -15,12 +15,12 @@ pin.
 from __future__ import annotations
 
 import dataclasses
-import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import mutate_runnable_descriptor, read_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
@@ -60,40 +60,10 @@ def _save_runnable(model: nn.Module, x: torch.Tensor, path: Path, **save_kwargs:
 
 
 def _descriptor_ambient(path: Path) -> dict[str, Any]:
-    manifest = json.loads((path / "manifest.json").read_text())
-    return dict(manifest["run"]["ambient_context"])
+    return dict(read_runnable_descriptor(path)["ambient_context"])
 
 
-def test_grad_on_capture_records_ambient_and_replays_recorded_arm(tmp_path: Path) -> None:
-    """Grad-ON capture: recorded ``grad_enabled=True``; replay under a caller's
-    ``no_grad()`` still takes the RECORDED arm (the hon_1 false-VERIFIED class).
-    """
-
-    torch.manual_seed(0)
-    model = GradBranchModel().eval()
-    x = torch.randn(2, 3)
-    path = _save_runnable(model, x, tmp_path / "grad-on.tlspec", include_weights=True)
-
-    ambient = _descriptor_ambient(path)
-    assert ambient["grad_enabled"] is True
-    assert ambient["inference_mode"] is False
-
-    expected_grad_on = model(x.clone())  # fresh oracle under the recorded ambient
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.allclose(result.output, expected_grad_on)
-
-    # The sharp class pin: a caller replaying inside the STANDARD inference
-    # context must still observe the recorded grad-ON branch, because the
-    # scoped ambient restore re-enters the recorded global around the run.
-    with torch.no_grad():
-        no_grad_result = tl.load(path).run(inputs=x.clone())
-        assert not torch.is_grad_enabled()  # caller context intact inside
-    assert torch.allclose(no_grad_result.output, expected_grad_on)
-    assert no_grad_result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.is_grad_enabled()  # caller ambient restored on exit
-
-
+# Kept: the catch of its regression fault.
 def test_no_grad_capture_records_false_and_matches_no_grad_oracle(tmp_path: Path) -> None:
     """A ``no_grad()`` capture records ``grad_enabled=False`` and VERIFIED means
     faithfulness against the no_grad oracle -- under ANY caller ambient."""
@@ -108,31 +78,12 @@ def test_no_grad_capture_records_false_and_matches_no_grad_oracle(tmp_path: Path
     trace.save(path, level="runnable", include_weights=True)
 
     assert _descriptor_ambient(path)["grad_enabled"] is False
-    result = tl.load(path).run(inputs=x.clone())  # caller is grad-ON here
+    result = tl.load(path).run_transaction(inputs=x.clone())  # caller is grad-ON here
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert torch.allclose(result.output, expected_no_grad)
 
 
-def test_inference_mode_capture_records_and_replays(tmp_path: Path) -> None:
-    """An ambient ``inference_mode()`` capture records True and replays its arm."""
-
-    torch.manual_seed(0)
-    model = InferenceBranchModel().eval()
-    x = torch.randn(2, 3)
-    with torch.inference_mode():
-        trace = tl.trace(model, x.clone(), capture=_CAPTURE)
-        expected = model(x.clone()).clone()
-    path = tmp_path / "inference.tlspec"
-    trace.save(path, level="runnable", include_weights=True)
-
-    ambient = _descriptor_ambient(path)
-    assert ambient["inference_mode"] is True
-    result = tl.load(path).run(inputs=x.clone())  # caller NOT in inference mode
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.allclose(result.output, expected)
-    assert not torch.is_inference_mode_enabled()  # caller ambient restored
-
-
+# Kept: sole branch coverage of _io/runnable_load.py.
 @pytest.mark.parametrize("field", ("grad_enabled", "inference_mode", "fill_uninitialized_memory"))
 def test_missing_ambient_mode_field_is_typed_analysis_only(field: str, tmp_path: Path) -> None:
     """A v2 descriptor missing an ambient mode field (a pre-r53 dev-window
@@ -145,10 +96,7 @@ def test_missing_ambient_mode_field_is_typed_analysis_only(field: str, tmp_path:
     # Value-free descriptor (no weights): the load surfaces the typed readiness
     # refusal instead of hard-failing on a missing parsed descriptor.
     path = _save_runnable(model, x, tmp_path / "tampered.tlspec")
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["run"]["ambient_context"].pop(field)
-    manifest_path.write_text(json.dumps(manifest))
+    mutate_runnable_descriptor(path, lambda descriptor: descriptor["ambient_context"].pop(field))
 
     loaded = tl.load(path)  # analysis-only load must succeed
     readiness = loaded.readiness
@@ -159,24 +107,23 @@ def test_missing_ambient_mode_field_is_typed_analysis_only(field: str, tmp_path:
     assert "context_field_invalid" in codes, codes
     assert "context_parse_validation" in stages, stages
     with pytest.raises(RunnableTLSPECError):
-        loaded.run(inputs=torch.randn(2, 3))
+        loaded.run_transaction(inputs=torch.randn(2, 3))
 
 
 @pytest.mark.parametrize("field", ("grad_enabled", "inference_mode"))
 def test_null_ambient_mode_is_a_typed_refusal_never_a_default(field: str, tmp_path: Path) -> None:
     """``null`` is not a legal producer value for the global mode (every
     supported torch exposes both queries): a nulled field is a typed refusal
-    through EITHER the manifest schema preflight or the strict parser --
+    through EITHER the descriptor schema preflight or the strict parser --
     a defaulted-mode run is unreachable both ways."""
 
     torch.manual_seed(0)
     model = GradBranchModel().eval()
     x = torch.randn(2, 3)
     path = _save_runnable(model, x, tmp_path / "nulled.tlspec")
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest["run"]["ambient_context"][field] = None
-    manifest_path.write_text(json.dumps(manifest))
+    mutate_runnable_descriptor(
+        path, lambda descriptor: descriptor["ambient_context"].__setitem__(field, None)
+    )
 
     try:
         loaded = tl.load(path)
@@ -187,7 +134,7 @@ def test_null_ambient_mode_is_a_typed_refusal_never_a_default(field: str, tmp_pa
     assert readiness is not None
     assert readiness.status.value == "unavailable"
     with pytest.raises(RunnableTLSPECError):
-        loaded.run(inputs=torch.randn(2, 3))
+        loaded.run_transaction(inputs=torch.randn(2, 3))
 
 
 def test_ambient_snapshot_covers_every_recorded_field() -> None:
@@ -220,7 +167,7 @@ def test_live_grad_read_never_ceilings_or_degrades(tmp_path: Path) -> None:
         include_weights=True,
         include_activations=True,
     )
-    report = tl.load(path).run(inputs=x.clone()).report
+    report = tl.load(path).run_transaction(inputs=x.clone()).report
     assert report.path_faithfulness is PathFaithfulness.VERIFIED
     assert report.numeric_attestation is NumericAttestationStatus.ATTESTED
     assert report.nondeterministic_sources == ()

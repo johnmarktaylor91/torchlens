@@ -111,6 +111,10 @@ _CONSTANT_SPELLED_CODES: dict[str, tuple[str, str]] = {
         "torchlens/backends/_protocols/paddle.py",
         "PADDLE_REFUSAL_INPLACE",
     ),
+    "neuro_dependency_conflict": (
+        "torchlens/neuro/_conflicts.py",
+        "CONFLICT_CODE",
+    ),
 }
 
 

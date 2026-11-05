@@ -13,6 +13,7 @@ thing they add.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import shutil
 import site
@@ -97,6 +98,13 @@ def _fresh_venv(root: Path) -> Path:
     parent_sites = [*site.getsitepackages(), site.getusersitepackages()]
     lines = [f"import site; site.addsitedir({path!r})" for path in parent_sites]
     (Path(own_site) / "zz_torchlens_parent_env.pth").write_text("\n".join(lines) + "\n")
+    # Before Python 3.12 ensurepip also seeds its bundled setuptools (65.x), which
+    # sits ahead of the running environment's on sys.path and cannot build a wheel
+    # without the separate ``wheel`` package. When the running environment has its
+    # own setuptools, remove the bundled copy so the build uses that one.
+    bundled = [p for p in Path(own_site).glob("setuptools-*.dist-info") if p.is_dir()]
+    if bundled and importlib.util.find_spec("setuptools") is not None:
+        _run([str(python), "-m", "pip", "uninstall", "--yes", "setuptools"], cwd=root.parent)
     # The build runs offline, so the setuptools backend must already be
     # importable (ensurepip bundles it only before Python 3.12, and it is not
     # a declared TorchLens dependency).

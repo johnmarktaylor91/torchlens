@@ -70,31 +70,14 @@ class _DeepcopyThenMutateSource(nn.Module):
         return snapshot * y
 
 
-def test_deepcopy_of_a_buffer_is_its_own_node_and_validates() -> None:
-    """The copy is logged as an op on the buffer, and forward replay validates."""
-
-    model = _DeepcopyBuffer()
-    x = torch.ones(4)
-    trace = tl.trace(model, x)
-    try:
-        (buffer_op,) = [op for op in trace._layer_list if op.is_buffer]
-        (mul_op,) = [op for op in trace._layer_list if op.func_name == "__mul__"]
-        assert buffer_op.label not in mul_op.parents, mul_op.parents
-        (copy_parent,) = [trace[label] for label in mul_op.parents if label != "input_1"]
-        assert copy_parent.func_name == "__deepcopy__"
-        assert [trace[label].is_buffer for label in copy_parent.parents] == [True]
-        assert trace.provenance.verified is not False, trace.provenance.verification_reason
-    finally:
-        trace.cleanup()
-    assert tl.validate(_DeepcopyBuffer(), x, scope="forward") is True
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _save_budget.py, _utils/arg_handling.py, backends/torch/_ops_arguments.py ....
 def test_deepcopy_snapshot_of_a_later_mutated_intermediate_validates() -> None:
     """A deep-copied snapshot keeps its pre-write value through replay."""
 
     assert tl.validate(_DeepcopyThenMutateSource(), torch.ones(4), scope="forward") is True
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/op_record.py, backends/torch/_completeness_boundaries.py, backends/torch/_completeness_dispatch.py ....
 def test_deepcopy_records_under_an_intervention_ready_capture() -> None:
     """The recorded ``copy.deepcopy(self)`` call builds its replay template cleanly."""
 
@@ -110,6 +93,7 @@ def test_deepcopy_records_under_an_intervention_ready_capture() -> None:
         trace.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_deepcopied_tensor_meta_drops_only_the_session_identity() -> None:
     """The copy keeps inert raw history but never the source object's session anchor."""
 

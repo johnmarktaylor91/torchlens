@@ -3,7 +3,7 @@
 TorchLens defaults favor complete metadata and debuggability. For high-throughput capture, use the
 smallest capture surface that answers your question.
 
-Backend note: these defaults describe torch capture. `tl.record()`/fastlog is torch-only in
+Backend note: these defaults describe torch capture. `tl.record()` (sparse recording) is torch-only in
 backend v1. JAX, tinygrad, Paddle, and TensorFlow preview `.tlspec` payloads materialize
 arrays, but loaded traces report replay validation as unavailable because runtime replay captures
 are stripped.
@@ -29,7 +29,7 @@ Use these defaults when speed matters:
 | Saved layers | `save=tl.func(...)` / `save=tl.in_module(...)` | Saves activation payloads only where needed in the primary single-pass path. |
 | Windowed selection | `lookback=K` with `tl.followed_by(...)` / `tl.preceded_by(...)` | Enables local graph-context predicates without post-hoc filtering. |
 | Lookback payloads | Default `lookback_payload_policy="metadata_only"` | Avoids pinning recent tensors unless retroactive payload saving is required. |
-| Source context | `CaptureOptions(save_source_context=False)` | Keeps file/line identity but avoids source-text loading. |
+| Source context | `CaptureOptions(save_source_context=False)` (the default) | Keeps file/line identity and defers source text to read time (from the file on disk, only while it is unchanged since capture). |
 | Validation | Run separately | Validation replays the model and should be a gate, not the hot path. |
 | Streaming | `storage=tl.to_disk(path)` | Moves predicate-selected payload storage to disk while preserving the manifest. |
 
@@ -78,7 +78,7 @@ exception) with a separate honest partial on `exc.partial_trace`.
 
 `save=[...]` is still supported when selection depends on final labels that are only known
 after postprocessing. That path runs the legacy two-pass strategy. For recurrent layers,
-`layers_to_save=["attn"]` saves all passes, while `layers_to_save=["attn:2"]` saves only pass 2
+`save=["attn"]` saves all passes, while `save=["attn:2"]` saves only pass 2
 using TorchLens's 1-based pass-label syntax.
 
 ## What Not To Optimize Away

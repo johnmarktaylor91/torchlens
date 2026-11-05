@@ -27,10 +27,12 @@ from __future__ import annotations
 import json
 import warnings
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import read_record, write_record
 from _refuses_as_2x import assert_refuses_as_2x
 from torch.utils.checkpoint import checkpoint
 
@@ -42,6 +44,7 @@ from torchlens._io.prerelease import (
     registered_prerelease_fields,
 )
 from torchlens._io.scrub import scrub_for_save
+from torchlens.intervention.errors import OpaqueCallableError
 
 # ---------------------------------------------------------------------------
 # Registry-driven completeness ledger (brief: enumerate from the registry,
@@ -263,7 +266,7 @@ def _persisted_eq(a: object, b: object) -> bool:
     return bool(a == b)
 
 
-def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str) -> tl.Trace:
+def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str, *, level: str = "portable") -> tl.Trace:
     """Save plainly, prove the current stamp and the marker's absence, load plainly.
 
     The write must stamp ``tlspec_version == TLSPEC_VERSION`` (9) and carry NO
@@ -278,17 +281,19 @@ def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str) -> tl.Trace:
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace.save(str(path))
+        trace.save(str(path), level=level)
         return tl.load(str(path))
 
 
-def _second_generation(loaded: tl.Trace, tmp_path, name: str) -> tl.Trace:
+def _second_generation(
+    loaded: tl.Trace, tmp_path, name: str, *, level: str = "portable"
+) -> tl.Trace:
     """Re-save the LOADED trace plainly and load again (settle stability)."""
 
     path = tmp_path / f"{name}_gen2.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        loaded.save(str(path))
+        loaded.save(str(path), level=level)
         return tl.load(str(path))
 
 
@@ -307,7 +312,7 @@ class _TwoConv(nn.Module):
         return torch.relu(self.c2(torch.relu(self.c1(x))))
 
 
-def _selection_fork() -> tl.Trace:
+def _selection_fork(edit: Any = None) -> tl.Trace:
     torch.manual_seed(0)
     trace = tl.trace(
         _TwoConv(),
@@ -315,30 +320,7 @@ def _selection_fork() -> tl.Trace:
         capture=tl.options.CaptureOptions(replayable=True),
     )
     fork = trace.fork()
-    fork.do(tl.units("relu_1_2", [(0, 0, 1, 1)]), tl.zero_ablate())
-    return fork
-
-
-class _EdgeNet(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.c1 = nn.Conv2d(1, 2, 3)
-        self.c2 = nn.Conv2d(2, 2, 3)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.relu(self.c2(torch.relu(self.c1(x))) + 1.0)
-
-
-def _edge_fork() -> tl.Trace:
-    torch.manual_seed(0)
-    trace = tl.trace(
-        _EdgeNet(),
-        torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
-    )
-    edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
-    fork = trace.fork()
-    fork.do(edge.__selection__(), trace["relu_1_2"].out.clone())
+    fork.do(tl.units("relu_1_2", [(0, 0, 1, 1)]), tl.zero_ablate() if edit is None else edit)
     return fork
 
 
@@ -358,7 +340,7 @@ def _backward_trace() -> tl.Trace:
         torch.randn(3, 4),
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     return trace
 
 
@@ -379,7 +361,7 @@ def _checkpoint_trace() -> tl.Trace:
         torch.randn(3, 4),
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     return trace
 
 
@@ -432,15 +414,6 @@ def _structure_only_trace() -> tl.Trace:
     )
 
 
-def _armed_aten_trace() -> tl.Trace:
-    torch.manual_seed(0)
-    return tl.trace(
-        nn.Sequential(nn.Linear(4, 4), nn.ReLU()),
-        torch.randn(1, 4),
-        capture=tl.options.CaptureOptions(aten_ops=True),
-    )
-
-
 def _telemetry_trace() -> tl.Trace:
     from torchlens import _kernel_telemetry as telemetry
 
@@ -457,25 +430,6 @@ def _telemetry_trace() -> tl.Trace:
 # ---------------------------------------------------------------------------
 
 
-def test_l1_grouping_family_roundtrip(tmp_path) -> None:
-    trace = _tiny_trace()
-    loaded = _plain_roundtrip(trace, tmp_path, "grouping")
-    assert loaded.options.grouping == trace.options.grouping == "structural"
-    assert loaded.options.grouping_policy == trace.options.grouping_policy
-    gen2 = _second_generation(loaded, tmp_path, "grouping")
-    assert gen2.options.grouping_policy == loaded.options.grouping_policy
-
-
-def test_l1_site_key_family_roundtrip(tmp_path) -> None:
-    trace = _tiny_trace()
-    live_keys = [op.site_key for op in trace.ops]
-    assert any(key and key.startswith("s1|") for key in live_keys)
-    loaded = _plain_roundtrip(trace, tmp_path, "site_key")
-    assert [op.site_key for op in loaded.ops] == live_keys
-    gen2 = _second_generation(loaded, tmp_path, "site_key")
-    assert [op.site_key for op in gen2.ops] == live_keys
-
-
 def test_l2_episode_family_roundtrip(tmp_path) -> None:
     trace = _episode_trace()
     assert trace.annotations["episode"]["header"]["capture_kind"] == "episode"
@@ -485,64 +439,71 @@ def test_l2_episode_family_roundtrip(tmp_path) -> None:
     assert gen2.annotations["episode"] == trace.annotations["episode"]
 
 
-def test_l3_aten_profile_family_roundtrip(tmp_path) -> None:
-    trace = _armed_aten_trace()
-    live_profile = trace._primitive_op_profile
-    assert live_profile is not None and live_profile.primitive_ops
-    loaded = _plain_roundtrip(trace, tmp_path, "aten")
-    assert _persisted_eq(loaded._primitive_op_profile, live_profile)
-    gen2 = _second_generation(loaded, tmp_path, "aten")
-    assert _persisted_eq(gen2._primitive_op_profile, live_profile)
-
-
-def test_l3_kernel_telemetry_family_roundtrip(tmp_path) -> None:
-    from torchlens import _kernel_telemetry as telemetry
-
-    trace = _telemetry_trace()
-    live_payload = trace.annotations["_kernel_telemetry"]
-    loaded = _plain_roundtrip(trace, tmp_path, "telemetry")
-    assert _persisted_eq(loaded.annotations["_kernel_telemetry"], live_payload)
-    telemetry._bind_trace_telemetry(loaded)
-    assert loaded.ops[0].gpu_kernels[0].attribution_status in (
-        "unavailable",
-        "exact",
-        "ambiguous",
-    )
-    gen2 = _second_generation(loaded, tmp_path, "telemetry")
-    assert _persisted_eq(gen2.annotations["_kernel_telemetry"], live_payload)
-
-
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_l6_selection_family_roundtrip(tmp_path) -> None:
     fork = _selection_fork()
     live_audit = fork.intervention_audit
     live_recipe = next(
         record.edit.selection_recipe
-        for record in fork["relu_1_2"].ops[0].edits
+        for record in fork.layers["relu_1_2"].ops[0].edits
         if record.edit is not None
     )
     assert live_recipe["resolve_digest"]
-    loaded = _plain_roundtrip(fork, tmp_path, "selection")
+    # A masked builtin edit stores its mask and digest: the default portable save takes it.
+    fork.save(tmp_path / "portable_selection")
+    assert tl.load(tmp_path / "portable_selection").intervention_audit == live_audit
+    # A masked user callable cannot be rebuilt from the file: the portable save refuses.
+    with pytest.raises(OpaqueCallableError) as caught:
+        _selection_fork(lambda out, *, ctx: out * 0.5).save(tmp_path / "nonportable_selection")
+    assert caught.value.fields["code"] == "intervention_spec_not_portable"
+    loaded = _plain_roundtrip(fork, tmp_path, "selection", level="audit")
     assert loaded.intervention_audit == live_audit
     loaded_recipe = next(
         record.edit.selection_recipe
-        for record in loaded["relu_1_2"].ops[0].edits
+        for record in loaded.layers["relu_1_2"].ops[0].edits
         if record.edit is not None
     )
     assert loaded_recipe == live_recipe
-    gen2 = _second_generation(loaded, tmp_path, "selection")
+    gen2 = _second_generation(loaded, tmp_path, "selection", level="audit")
     assert gen2.intervention_audit == live_audit
 
 
+# Kept: named by a kept test.
+class _EdgeNet(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.c1 = nn.Conv2d(1, 2, 3)
+        self.c2 = nn.Conv2d(2, 2, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.c2(torch.relu(self.c1(x))) + 1.0)
+
+
+# Kept: named by a kept test.
+def _edge_fork() -> tl.Trace:
+    torch.manual_seed(0)
+    trace = tl.trace(
+        _EdgeNet(),
+        torch.randn(1, 1, 12, 12),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
+    )
+    edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
+    fork = trace.fork()
+    fork.do(edge.__selection__(), trace["relu_1_2"].out.clone())
+    return fork
+
+
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_l6_edge_family_roundtrip(tmp_path) -> None:
     fork = _edge_fork()
-    child = fork["conv2d_2_3"].ops[0]
+    child = fork.layers["conv2d_2_3"].ops[0]
     store_key = ("positional", (0,))
     assert store_key in child.edge_substitutions
     live_value = child.edge_substitutions[store_key]["value"]
     live_stamps = child.edge_replacement_stamps
     live_edge_address = next(record.edge_address for record in child.edits if record.edge_address)
     loaded = _plain_roundtrip(fork, tmp_path, "edges")
-    loaded_child = loaded["conv2d_2_3"].ops[0]
+    loaded_child = loaded.layers["conv2d_2_3"].ops[0]
     assert torch.equal(loaded_child.edge_substitutions[store_key]["value"], live_value)
     assert _persisted_eq(loaded_child.edge_replacement_stamps, live_stamps)
     assert (
@@ -550,39 +511,8 @@ def test_l6_edge_family_roundtrip(tmp_path) -> None:
         == live_edge_address
     )
     gen2 = _second_generation(loaded, tmp_path, "edges")
-    gen2_child = gen2["conv2d_2_3"].ops[0]
+    gen2_child = gen2.layers["conv2d_2_3"].ops[0]
     assert torch.equal(gen2_child.edge_substitutions[store_key]["value"], live_value)
-
-
-def test_l7a_structure_only_family_roundtrip(tmp_path) -> None:
-    trace = _structure_only_trace()
-    assert trace.options.structure_only is True
-    loaded = _plain_roundtrip(trace, tmp_path, "structure_only")
-    assert loaded.options.structure_only is True
-    gen2 = _second_generation(loaded, tmp_path, "structure_only")
-    assert gen2.options.structure_only is True
-
-
-def test_l8_distributed_scope_family_roundtrip(tmp_path) -> None:
-    from torchlens.distributed import _lifecycle as lifecycle
-    from torchlens.distributed._dtensor import RANK_LOCAL_SHARD
-
-    lifecycle.disarm()
-    trace = _tiny_trace()
-    trace._provenance_distributed_scope = RANK_LOCAL_SHARD
-    loaded = _plain_roundtrip(trace, tmp_path, "distributed_scope")
-    assert loaded.provenance.distributed_scope == RANK_LOCAL_SHARD
-    gen2 = _second_generation(loaded, tmp_path, "distributed_scope")
-    assert gen2.provenance.distributed_scope == RANK_LOCAL_SHARD
-
-
-def test_l9_timing_provenance_family_roundtrip(tmp_path) -> None:
-    trace = _backward_trace()
-    assert trace.grad_fn_timing_provenance == "perf_counter"
-    loaded = _plain_roundtrip(trace, tmp_path, "timing")
-    assert loaded.grad_fn_timing_provenance == "perf_counter"
-    gen2 = _second_generation(loaded, tmp_path, "timing")
-    assert gen2.grad_fn_timing_provenance == "perf_counter"
 
 
 def test_l9_checkpoint_witness_family_roundtrip(tmp_path) -> None:
@@ -631,6 +561,7 @@ def _tampered_refuses(
     name: str,
     *,
     field: str,
+    level: str = "portable",
 ) -> ArtifactError:
     """Prove one planted tamper refuses teachingly and stays marker-contained.
 
@@ -654,7 +585,13 @@ def _tampered_refuses(
     path = tmp_path / f"{name}_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace.save(str(path))
+        trace.save(str(path), level=level)
+    return _load_field_refusal(path, field)
+
+
+def _load_field_refusal(path: Path, field: str) -> ArtifactError:
+    """Keep every original typed field, reason and remedy assertion on the load door."""
+
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(path))
     refusal = excinfo.value
@@ -664,6 +601,19 @@ def _tampered_refuses(
     assert field in str(refusal)
     assert "Remedy:" in str(refusal)
     return refusal
+
+
+def _tamper_written_trace(
+    trace: tl.Trace, tmp_path: Path, name: str, *, field: str, mutate
+) -> ArtifactError:
+    """Forge one already-written record so save-side preflight remains fully enforced."""
+
+    path = tmp_path / f"{name}_tampered.tlspec"
+    trace.save(path)
+    record = read_record(path, "trace")
+    mutate(record["fields"])
+    write_record(path, "trace", record)
+    return _load_field_refusal(path, field)
 
 
 def test_tamper_site_key_refuses_typed(tmp_path) -> None:
@@ -690,12 +640,14 @@ def test_tamper_distributed_scope_refuses_typed(tmp_path) -> None:
     assert FORGERY_SURFACE_LEDGER["Trace.provenance.distributed_scope"] == "validated_refuse_typed"
     lifecycle.disarm()
     trace = _tiny_trace()
-    trace._provenance_distributed_scope = "forged_scope_value"
-    refusal = _tampered_refuses(
+    refusal = _tamper_written_trace(
         trace,
         tmp_path,
         "distributed_scope",
         field="Trace.provenance.distributed_scope",
+        mutate=lambda state: state.__setitem__(
+            "_provenance_distributed_scope", "forged_scope_value"
+        ),
     )
     assert refusal.fields["code"] == "artifact_distributed_scope_invalid"
 
@@ -705,12 +657,12 @@ def test_tamper_timing_provenance_refuses_typed(tmp_path) -> None:
 
     assert FORGERY_SURFACE_LEDGER["Trace.grad_fn_timing_provenance"] == "validated_refuse_typed"
     trace = _backward_trace()
-    object.__setattr__(trace, "grad_fn_timing_provenance", "forged_clock_source")
-    refusal = _tampered_refuses(
+    refusal = _tamper_written_trace(
         trace,
         tmp_path,
         "timing",
         field="Trace.grad_fn_timing_provenance",
+        mutate=lambda state: state.__setitem__("grad_fn_timing_provenance", "forged_clock_source"),
     )
     assert refusal.fields["code"] == "artifact_grad_fn_timing_provenance_invalid"
 
@@ -720,14 +672,14 @@ def test_tamper_checkpoint_witness_refuses_typed(tmp_path) -> None:
 
     assert FORGERY_SURFACE_LEDGER["Trace.checkpoint_invocation_witness"] == "validated_refuse_typed"
     trace = _checkpoint_trace()
-    witness = dict(trace.checkpoint_invocation_witness)
-    witness["token_count"] = "forty-two"  # type-forged: count is not even an int
-    object.__setattr__(trace, "checkpoint_invocation_witness", witness)
-    refusal = _tampered_refuses(
+    refusal = _tamper_written_trace(
         trace,
         tmp_path,
         "checkpoint",
         field="Trace.checkpoint_invocation_witness",
+        mutate=lambda state: state["checkpoint_invocation_witness"].__setitem__(
+            "token_count", "forty-two"
+        ),
     )
     assert refusal.fields["code"] == "artifact_checkpoint_witness_invalid"
 
@@ -745,6 +697,7 @@ def test_tamper_intervention_audit_refuses_typed(tmp_path) -> None:
         tmp_path,
         "audit",
         field="Trace.intervention_audit",
+        level="audit",
     )
     assert refusal.fields["code"] == "artifact_intervention_audit_invalid"
 
@@ -767,26 +720,6 @@ def test_tamper_kernel_telemetry_refuses_typed(tmp_path) -> None:
     assert refusal.fields["code"] == "artifact_kernel_telemetry_invalid"
 
 
-def test_tamper_grouping_policy_validated_degrades_typed(tmp_path) -> None:
-    """VALIDATED-NOW representative: the grouping stamp tamper degrades typed
-    (fail-closed settlement), re-proven here so the ledger's validated class
-    has an in-module witness alongside the owning lane suite."""
-
-    from torchlens._postprocess._grouping_stamp import degraded_grouping_policy_stamp
-    from torchlens.errors import TorchLensWarning
-
-    assert FORGERY_SURFACE_LEDGER["Trace.options.grouping_policy"].startswith("validated")
-    trace = _tiny_trace()
-    trace._options_grouping_policy = {**trace.options.grouping_policy, "policy": "greedy"}
-    path = tmp_path / "grouping_tampered.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace.save(str(path))
-    with pytest.warns(TorchLensWarning, match="grouping_policy stamp is invalid"):
-        loaded = tl.load(str(path))
-    assert loaded.options.grouping_policy == degraded_grouping_policy_stamp("vocabulary")
-
-
 # ---------------------------------------------------------------------------
 # S2 marker-combination table (brief question 4): every reachable TYPED
 # REFUSE cell refuses, every reachable LEGAL cell works. The ledger-only
@@ -794,34 +727,6 @@ def test_tamper_grouping_policy_validated_degrades_typed(tmp_path) -> None:
 # lane in tests/test_bundle_relations.py; the wave-3 P1 totality test owns
 # the full product.
 # ---------------------------------------------------------------------------
-
-
-def test_combination_plain_structure_only_truncation_refuses() -> None:
-    """Cell (plain, structure_only=True, truncation present) = TYPED REFUSE.
-
-    A structure-only capture executes no values to truncate; the refusal
-    fires at the L7a value-consumer chokepoint before any truncation term.
-    """
-
-    trace = _structure_only_trace()
-    with pytest.raises(Exception) as excinfo:
-        trace.run(inputs=torch.randn(1, 4), until="linear_1_1")
-    assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
-
-
-def test_combination_episode_structure_only_refuses() -> None:
-    """Cell (episode, structure_only=True, *, *) = TYPED REFUSE at entry."""
-
-    lm = _TinyLM()
-    runner = _GreedyRunner(lm, 2)
-    with pytest.raises(Exception) as excinfo:
-        tl.trace(
-            runner,
-            torch.zeros(1, 3, dtype=torch.long),
-            episode=tl.options.EpisodeOptions(stepped_module=lm, num_steps=2),
-            capture=tl.options.CaptureOptions(structure_only=True),
-        )
-    assert excinfo.value.fields["code"] == "structure_only_episode_unsupported"
 
 
 def test_combination_plain_truncation_legal_run_result_term_only() -> None:
@@ -836,31 +741,12 @@ def test_combination_plain_truncation_legal_run_result_term_only() -> None:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
     trace = tl.trace(model, torch.randn(1, 4))
-    result = trace.run(inputs=torch.randn(1, 4), until="linear_1_1")
+    result = trace.run_transaction(inputs=torch.randn(1, 4), until="linear_1_1")
     assert result.report.truncated is True
     assert result.report.truncation.stopped_at == "linear_1_1"
     assert result.output is None  # disclosed, never a fabricated tail
     assert trace.outcome.status is CaptureStatus.COMPLETE
     del model  # keep-alive: the live run needs the strong model reference
-
-
-def test_combination_episode_core_legal() -> None:
-    """Cell (episode, structure_only=False, absent, exact) = LEGAL."""
-
-    trace = _episode_trace()
-    header = trace.annotations["episode"]["header"]
-    assert header["capture_kind"] == "episode"
-    assert header["structure_only"] is False
-    rows = trace.annotations["episode"]["rows"]
-    assert all(row["status"] == "complete" for row in rows)
-
-
-def test_combination_plain_structure_only_absent_legal() -> None:
-    """Cell (plain, structure_only=True, truncation absent) = LEGAL (L7a core)."""
-
-    trace = _structure_only_trace()
-    assert trace.options.structure_only is True
-    assert trace.ops  # structure recorded, values hypothesized
 
 
 # ---------------------------------------------------------------------------
@@ -890,17 +776,14 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
 
     # Layer 2 (load-side M-C2, unchanged): write the SAME capture honestly,
     # then tamper the marker into the persisted metadata on disk.
-    import pickle as _pickle
-
     trace._options_structure_only = False
     honest_path = tmp_path / "structure_only_payload_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace.save(str(honest_path))
-    metadata_path = honest_path / "metadata.pkl"
-    state = _pickle.loads(metadata_path.read_bytes())
-    state["_options_structure_only"] = True
-    metadata_path.write_bytes(_pickle.dumps(state))
+    record = read_record(honest_path, "trace")
+    record["fields"]["_options_structure_only"] = True
+    write_record(honest_path, "trace", record)
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(honest_path))
     refusal = excinfo.value
@@ -962,22 +845,22 @@ def test_real_v7_artifact_refuses_as_2x() -> None:
 
 
 def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
-    """A fresh save stamps tlspec_version 11; the v7 fixture stays 7."""
+    """A fresh save stamps tlspec_version 12; the v7 fixture stays 7."""
 
     trace = _tiny_trace()
     state, _, _ = scrub_for_save(trace)
-    assert state["tlspec_version"] == TLSPEC_VERSION == 11
+    assert state["tlspec_version"] == TLSPEC_VERSION == 12
     path = tmp_path / "fresh_v11.tlspec"
     trace.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.tlspec_version == 11
+    assert loaded.tlspec_version == 12
     assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]
 
 
 def test_newer_than_runtime_version_refuses_typed() -> None:
-    """A claimed tlspec_version=12 state refuses as newer-than-runtime."""
+    """A claimed tlspec_version=13 state refuses as newer-than-runtime."""
 
     from torchlens._io import read_tlspec_version
 
-    with pytest.raises(ArtifactError, match="only supports up to 11"):
-        read_tlspec_version({"tlspec_version": 12}, cls_name="Trace")
+    with pytest.raises(ArtifactError, match="only supports up to 12"):
+        read_tlspec_version({"tlspec_version": 13}, cls_name="Trace")

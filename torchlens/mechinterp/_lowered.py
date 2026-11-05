@@ -58,6 +58,18 @@ class PatchedRun:
     ``read_facet`` is the guarded read surface: invalidated virtual facets
     at the lowered layer refuse typed (the trace never lies); everything
     else reads from the patched rerun.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=1, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> a, b = torch.randint(0, 32, (2, 1, 6))
+    >>> run = tl.mechinterp.patch_head(lm, a, b, layer=0, head=1)
+    >>> isinstance(run, PatchedRun), run.receipt["formula_version"]
+    (True, 'mikit_d11_v1')
     """
 
     metric_value: torch.Tensor | None
@@ -129,8 +141,8 @@ def _delta_for(  # noqa: PLR0913 -- one cell's full evidence set (kind/head/two 
             remedy="use equal-length prompts",
         )
     v = _head_facet(corrupted_log, address, "v").to(torch.float32)  # [b, src, H_kv? , d]
-    group = max(1, views.num_q_heads // max(1, views.n_kv_heads))
-    v_head = v[:, :, head // group if v.shape[2] == views.n_kv_heads else head, :]
+    group = max(1, views.num_q_heads // max(1, views.num_kv_heads))
+    v_head = v[:, :, head // group if v.shape[2] == views.num_kv_heads else head, :]
     return ((pattern_clean - pattern_corrupt) @ v_head) @ w_o_h
 
 
@@ -167,6 +179,18 @@ def patch_head(  # noqa: PLR0913 -- the memo-normative D11 signature
         Optional ``Trace -> scalar``; evaluated on the patched rerun.
     trace_kwargs:
         Extra kwargs for the baseline traces.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=1, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> a, b = torch.randint(0, 32, (2, 1, 6))
+    >>> run = tl.mechinterp.patch_head(lm, a, b, layer=0, head=1)
+    >>> tuple(run.logits().shape)
+    (1, 6, 32)
     """
 
     if kind in ("q", "k"):

@@ -24,9 +24,13 @@ from torchlens.backends import (  # noqa: E402
     require_capability_implementation,
 )
 from torchlens.backends.paddle import PaddleBackend  # noqa: E402
-from torchlens.errors import BackendUnsupportedError  # noqa: E402
+from torchlens.errors import (  # noqa: E402
+    BackendUnsupportedError,
+    InvalidArgumentError,
+    TorchLensWarning,
+)
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 
 def _inputs() -> tuple[Any, Any, Any, Any, Any]:
@@ -96,6 +100,112 @@ def test_paddle_capability_lift_is_real() -> None:
     assert spec.capabilities.can_intervene is True
     implementation = require_capability_implementation(spec, "can_intervene")
     assert implementation is not None
+
+
+def test_paddle_module_exit_changes_output_and_validates() -> None:
+    """The Sequential child output is replaced before the next child consumes it."""
+
+    model = paddle.nn.Sequential(paddle.nn.ReLU(), paddle.nn.Sigmoid())
+    trace = tl.trace(
+        model,
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.module("0"), tl.zero_ablate()),
+    )
+    producer = _relu_op(trace)
+    assert producer.is_edited
+    assert list(producer.edits)
+    assert producer.edits[0].target_label == producer._label_raw
+    assert np.allclose(_output_op(trace).out.numpy(), 0.5)
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+def test_paddle_in_module_intervention_keeps_op_dispatch() -> None:
+    """Containment selectors still edit the existing op door once."""
+
+    trace = tl.trace(
+        paddle.nn.Sequential(paddle.nn.ReLU(), paddle.nn.Sigmoid()),
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.in_module("0"), tl.scale(0.5)),
+    )
+    assert np.allclose(_relu_op(trace).out.numpy(), 0.5)
+    assert np.allclose(_output_op(trace).out.numpy(), 1 / (1 + np.exp(-0.5)))
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+@pytest.mark.parametrize("second, expected", [("0", 0.5), ("1", 0.25)])
+def test_paddle_module_union_fires_once_per_call(second: str, expected: float) -> None:
+    """Overlapping module addresses apply scale once rather than twice."""
+
+    model = paddle.nn.Sequential(paddle.nn.ReLU(), paddle.nn.ReLU())
+    trace = tl.trace(
+        model,
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.module("0") | tl.module(second), tl.scale(0.5)),
+    )
+    assert np.allclose(_output_op(trace).out.numpy(), expected)
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+@pytest.mark.parametrize("address, expected", [("block", 9.0), ("block:2", 13.5)])
+def test_paddle_module_exit_nested_leaves_aliases_and_repeated_calls(
+    address: str, expected: float
+) -> None:
+    """Edit boundary leaves while keeping aliases and earlier consumers replayable."""
+
+    class Leaves(paddle.nn.Layer):
+        def forward(self, x: Any) -> Any:
+            first = x + 1
+            return {"main": first, "alias": first, "other": [first * 2, x], "tag": "kept"}
+
+    class Model(paddle.nn.Layer):
+        def __init__(self) -> None:
+            super().__init__()
+            self.block = Leaves()
+
+        def forward(self, x: Any) -> Any:
+            a, b = self.block(x), self.block(x)
+            assert a["tag"] == b["tag"] == "kept"
+            return (
+                a["main"] + a["alias"] + sum(a["other"]) + b["main"] + b["alias"] + sum(b["other"])
+            )
+
+    trace = tl.trace(
+        Model(),
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.module(address), tl.scale(0.5)),
+    )
+    assert np.allclose(_output_op(trace).out.numpy(), expected)
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+@pytest.mark.parametrize("kind", ["and", "or", "not"])
+def test_paddle_mixed_module_selector_refuses_before_forward(kind: str) -> None:
+    """Unsupported module trees must refuse before invoking user code."""
+
+    calls = []
+    module = tl.module("0")
+    selector = {
+        "and": module & tl.func("functional.relu"),
+        "or": module | tl.func("functional.relu"),
+        "not": ~module,
+    }[kind]
+
+    def forward(x: Any) -> Any:
+        calls.append(True)
+        return paddle.nn.functional.relu(x)
+
+    with pytest.raises(BackendUnsupportedError, match="(?i)paddle"):
+        tl.trace(
+            forward,
+            paddle.ones([2, 4]),
+            backend="paddle",
+            intervene=tl.when(selector, tl.zero_ablate()),
+        )
+    assert calls == []
 
 
 def test_paddle_zero_ablate_e2e_changes_downstream_and_validates() -> None:
@@ -210,6 +320,29 @@ def test_paddle_halt_stops_execution_at_frontier() -> None:
     assert not any("linear_2" in label for label in trace.layer_labels)
     assert any("relu" in label for label in trace.layer_labels)
     assert PaddleBackend().validate_trace(trace) is True
+
+
+def test_paddle_unfired_stop_after_selector_refuses_like_torch() -> None:
+    """A stop_after selector that never fires refuses typed, with torch's code."""
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.trace(_mlp, _inputs(), backend="paddle", stop_after=tl.func("does_not_exist"))
+    assert excinfo.value.fields["code"] == "stop_after_never_fired"
+
+
+def test_paddle_unfired_stop_after_callable_warns_like_torch() -> None:
+    """An exploratory stop_after callable that never fires warns coded, torch-style."""
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(_mlp, _inputs(), backend="paddle", stop_after=lambda ctx: False)
+    assert trace.is_stopped is False
+    codes = [
+        getattr(entry.message, "fields", {}).get("code")
+        for entry in caught
+        if isinstance(entry.message, TorchLensWarning)
+    ]
+    assert "stop_after_never_fired_callable" in codes
 
 
 def test_paddle_halt_value_dependent_predicate() -> None:

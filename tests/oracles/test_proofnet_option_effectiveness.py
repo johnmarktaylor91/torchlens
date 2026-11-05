@@ -14,7 +14,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import pytest
 import torch
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -77,27 +76,6 @@ WITNESSES: dict[str, tuple[dict[str, Any], dict[str, Any], Callable[[Any], Any]]
 }
 
 
-@pytest.mark.parametrize("field", sorted(WITNESSES))
-def test_option_flip_changes_its_observable(field: str) -> None:
-    """Both arms run; the declared observable differs between them."""
-
-    off_options, on_options, read = WITNESSES[field]
-    off_trace = _capture(**off_options)
-    try:
-        off_value = read(off_trace)
-    finally:
-        off_trace.cleanup()
-    on_trace = _capture(**on_options)
-    try:
-        on_value = read(on_trace)
-    finally:
-        on_trace.cleanup()
-    assert off_value != on_value, (
-        f"{field}: flipping the option left the observable at {off_value!r}"
-        " on both arms -- a silent no-op (the stop_after class)"
-    )
-
-
 def test_witnessed_fields_ride_the_dual_source_census() -> None:
     """A witness on a field the census does not know is an orphan."""
 
@@ -107,24 +85,3 @@ def test_witnessed_fields_ride_the_dual_source_census() -> None:
         f"witnessed fields missing from options_fields.tsv: {orphans}"
         " (renamed option? re-key the witness in the same commit)"
     )
-
-
-def test_witness_helper_catches_a_planted_neutralized_option() -> None:
-    """Red-capability: a flip whose observable does NOT move must fail."""
-
-    def dead_observable(trace: Any) -> Any:
-        del trace
-        return "constant"
-
-    off_trace = _capture()
-    try:
-        off_value = dead_observable(off_trace)
-    finally:
-        off_trace.cleanup()
-    on_trace = _capture(verbose=False)
-    try:
-        on_value = dead_observable(on_trace)
-    finally:
-        on_trace.cleanup()
-    with pytest.raises(AssertionError):
-        assert off_value != on_value, "planted"

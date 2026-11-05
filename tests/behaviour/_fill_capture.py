@@ -305,7 +305,9 @@ def _after_record(cell: Cell) -> None:
     _no_stochastic(cell)
     model, _ = cell.case.build()
     torch.manual_seed(SEED)
-    cooked = tl.record(model, cell.fresh_inputs(), default_op=True).to_trace()
+    cooked = tl.record(
+        model, cell.fresh_inputs(), recording=tl.options.RecordingOptions(default_op=True)
+    ).to_trace()
     cell.expect(
         cooked.outcome.status is CaptureStatus.COMPLETE, f"record outcome {cooked.outcome.status!r}"
     )
@@ -341,7 +343,7 @@ def _after_fast_run(cell: Cell) -> None:
     runs = []
     for _ in range(2):
         torch.manual_seed(SEED)
-        result = trace.run(inputs=cell.fresh_inputs(), fast=True)
+        result = trace.run_transaction(inputs=cell.fresh_inputs(), fast=True)
         cell.expect(not result.report.is_poisoned, f"fast run poisoned: {result.report!r}")
         runs.append(
             [

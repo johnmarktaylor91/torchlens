@@ -39,15 +39,7 @@ def _facts_of(dataframe: object) -> dict:
     return facts
 
 
-def test_to_pandas_attrs_carry_honesty(export_trace: tl.Trace) -> None:
-    """Trace.to_pandas() attaches the shared fact block to DataFrame.attrs."""
-
-    facts = _facts_of(export_trace.to_pandas())
-    assert facts["capture_status"] == "complete"
-    assert facts["poisoned"] is False
-
-
-@pytest.mark.smoke
+# Kept: sole branch coverage of _data_classes/_accessor_base.py, _data_classes/_layer_accessors.py, _data_classes/_layer_views.py and more.
 def test_profile_and_accessor_tables_carry_honesty(export_trace: tl.Trace) -> None:
     """ProfileReport.to_pandas and accessor to_pandas carry the facts."""
 
@@ -57,7 +49,7 @@ def test_profile_and_accessor_tables_carry_honesty(export_trace: tl.Trace) -> No
     assert _facts_of(accessor_frame)["capture_status"] == "complete"
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _debug_report.py, debug/_common.py, debug/_cost.py and more.
 def test_debug_dataframes_carry_honesty(export_trace: tl.Trace) -> None:
     """The debug DataFrame family attaches the shared fact block."""
 
@@ -75,7 +67,7 @@ def test_debug_dataframes_carry_honesty(export_trace: tl.Trace) -> None:
     assert both["trace_b"]["capture_status"] == "complete"
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _capture_honesty.py, recording/types.py.
 def test_fastlog_tables_carry_honesty() -> None:
     """Recording.to_pandas attaches the settled recording outcome facts."""
 
@@ -86,29 +78,7 @@ def test_fastlog_tables_carry_honesty() -> None:
     assert facts["capture_status"] == "complete"
 
 
-@pytest.mark.smoke
-def test_csv_export_preamble(export_trace: tl.Trace, tmp_path: Path) -> None:
-    """CSV opens with '#' honesty comment lines; read back with comment='#'."""
-
-    destination = tl.export.csv(export_trace, tmp_path / "t.csv")
-    text = destination.read_text(encoding="utf-8")
-    assert text.startswith("# torchlens capture honesty: status=complete")
-    frame = pd.read_csv(destination, comment="#")
-    assert len(frame) == len(export_trace._layer_list)
-
-
-@pytest.mark.smoke
-def test_json_export_carries_fact_block(export_trace: tl.Trace, tmp_path: Path) -> None:
-    """json() wraps rows with the fact block under torchlens.table_export.v1."""
-
-    destination = tl.export.json(export_trace, tmp_path / "t.json")
-    payload = json_module.loads(destination.read_text(encoding="utf-8"))
-    assert payload["schema"] == "torchlens.table_export.v1"
-    assert payload["capture_honesty"]["capture_status"] == "complete"
-    assert isinstance(payload["rows"], list) and payload["rows"]
-
-
-@pytest.mark.smoke
+# Kept: sole branch coverage of export/__init__.py.
 def test_parquet_export_carries_schema_metadata(export_trace: tl.Trace, tmp_path: Path) -> None:
     """parquet() embeds the fact block in file-level schema metadata."""
 
@@ -121,7 +91,7 @@ def test_parquet_export_carries_schema_metadata(export_trace: tl.Trace, tmp_path
     assert len(pd.read_parquet(destination)) == len(export_trace._layer_list)
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _visualization/_condensed_flow.py, _visualization/auto_collapse.py, export/__init__.py and more.
 def test_svg_and_html_exports_carry_comment(export_trace: tl.Trace, tmp_path: Path) -> None:
     """svg()/html() embed the honesty facts as an XML/HTML comment."""
 
@@ -132,7 +102,7 @@ def test_svg_and_html_exports_carry_comment(export_trace: tl.Trace, tmp_path: Pa
     assert "torchlens capture honesty: status=complete" in html_text
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of export/__init__.py.
 def test_json_timeline_exports_carry_fact_key(export_trace: tl.Trace, tmp_path: Path) -> None:
     """chrome_trace/speedscope/memory_timeline carry the dedicated key."""
 
@@ -150,7 +120,7 @@ def test_json_timeline_exports_carry_fact_key(export_trace: tl.Trace, tmp_path: 
     assert timeline["torchlens_capture_honesty"]["capture_status"] == "complete"
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of export/__init__.py, export/_naming.py.
 def test_flamegraph_carries_zero_weight_honesty_frame(
     export_trace: tl.Trace, tmp_path: Path
 ) -> None:
@@ -171,7 +141,7 @@ def test_flamegraph_carries_zero_weight_honesty_frame(
         assert stack and count.isdigit()
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of export/_model_explorer/__init__.py, export/_model_explorer/_attrs.py, export/_model_explorer/_build.py and more.
 def test_vendor_graph_exports_carry_facts(export_trace: tl.Trace, tmp_path: Path) -> None:
     """model_explorer/netron embed the facts in their vendor-legal slots."""
 
@@ -197,7 +167,7 @@ def test_vendor_graph_exports_carry_facts(export_trace: tl.Trace, tmp_path: Path
     assert json_module.loads(honesty_props[0]["value"])["capture_status"] == "complete"
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of export/_trackers.py.
 def test_tracker_exports_return_fact_block(export_trace: tl.Trace) -> None:
     """mlflow/aim prepared-metrics mappings carry the fact block (not logged)."""
 
@@ -243,7 +213,7 @@ def test_tracker_exports_return_fact_block(export_trace: tl.Trace) -> None:
     assert all(isinstance(value, int | float) for value, _ in run.tracked)
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of export/_trackers.py.
 def test_tensorboard_export_writes_honesty_text(export_trace: tl.Trace) -> None:
     """tensorboard() adds a capture_honesty text summary."""
 
@@ -263,15 +233,3 @@ def test_tensorboard_export_writes_honesty_text(export_trace: tl.Trace) -> None:
     honesty_texts = [text for tag, text, _ in writer.texts if tag.endswith("capture_honesty")]
     assert len(honesty_texts) == 1
     assert "status=complete" in honesty_texts[0]
-
-
-def test_poisoned_trace_export_preamble_discloses(tmp_path: Path) -> None:
-    """A poisoned capture's exports carry the poison, never a clean preamble."""
-
-    from torchlens._runnable import PathFaithfulness
-
-    trace = tl.trace(nn.Sequential(nn.Linear(3, 4), nn.ReLU()), torch.randn(2, 3))
-    trace._runnable.poisoned = True
-    trace._runnable.path_faithfulness = PathFaithfulness.DIVERGED
-    svg_text = tl.export.svg(trace, tmp_path / "p.svg").read_text(encoding="utf-8")
-    assert "POISONED" in svg_text

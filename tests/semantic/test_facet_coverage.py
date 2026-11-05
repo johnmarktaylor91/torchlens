@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -126,7 +125,6 @@ def test_facet_coverage_reports_typed_absences() -> None:
     assert ("resid_pre", "structurally_absent") in report.missing_counts()
 
 
-@pytest.mark.smoke
 def test_facet_coverage_discloses_multi_call_modules() -> None:
     """A reused module's typed facets refusal becomes a disclosed row, not a crash."""
 

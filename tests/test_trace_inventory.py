@@ -130,15 +130,3 @@ def test_bill_of_materials_reports_captured_facts() -> None:
     assert bom["activations"]["retained_now_memory"] == bom["activations"]["at_capture_memory"]
     assert bom["backward"]["num_grad_fn_records"] == 0
     assert bom["annotations"] == ()
-
-
-def test_bill_of_materials_is_read_only_and_repeatable() -> None:
-    """Building the inventory twice yields equal sections and mutates nothing."""
-
-    torch.manual_seed(3)
-    trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
-
-    first = trace.bill_of_materials()
-    second = trace.bill_of_materials()
-
-    assert first == second

@@ -39,6 +39,15 @@ class DisagreeingPair:
         and a side has no such metric; ``None`` when some side-taking
         metric has no interval. Marginal intervals share one seed, so this
         is a conservative reading, not a paired test.
+
+    Examples
+    --------
+    >>> scores = {"cka": {"a": 0.9, "b": 0.5}, "rsa": {"a": 0.2, "b": 0.6}}
+    >>> pair = tl.repgeom.metric_disagreement(scores).pairs[0]
+    >>> (pair.site_a, pair.site_b)
+    ('a', 'b')
+    >>> pair.higher
+    {'cka': 'a', 'rsa': 'b'}
     """
 
     site_a: str
@@ -77,6 +86,15 @@ class MetricDisagreement:
     intervals:
         ``intervals[metric][site]`` for the scores that carried a
         :class:`ScoreInterval` (metrics without any are absent).
+
+    Examples
+    --------
+    >>> scores = {"cka": {"a": 0.9, "b": 0.5}, "rsa": {"a": 0.2, "b": 0.6}}
+    >>> report = tl.repgeom.metric_disagreement(scores)
+    >>> report.sites
+    ('a', 'b')
+    >>> len(report.pairs)
+    1
     """
 
     metrics: tuple[str, ...]
@@ -94,6 +112,13 @@ class MetricDisagreement:
         str
             A fixed-width table with one row per site and a score and rank
             column per metric, followed by one line per disagreeing pair.
+
+        Examples
+        --------
+        >>> scores = {"cka": {"a": 0.9, "b": 0.5}, "rsa": {"a": 0.2, "b": 0.6}}
+        >>> text = tl.repgeom.metric_disagreement(scores).table()
+        >>> "pairs ordered differently by the metrics: 1 of 1" in text
+        True
         """
 
         width = max([len("site"), *(len(site) for site in self.sites)])
@@ -269,6 +294,15 @@ def metric_disagreement(scores: Mapping[str, Mapping[str, Any]]) -> MetricDisagr
     ------
     ValueError
         If fewer than two metrics or fewer than two sites are given.
+
+    Examples
+    --------
+    >>> scores = {"cka": {"a": 0.9, "b": 0.5}, "rsa": {"a": 0.2, "b": 0.6}}
+    >>> report = tl.repgeom.metric_disagreement(scores)
+    >>> report.ranks["cka"]
+    {'a': 1.0, 'b': 2.0}
+    >>> report.pairs[0].firm is None
+    True
     """
 
     metrics = tuple(str(metric) for metric in scores)

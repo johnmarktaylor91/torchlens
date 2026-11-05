@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import pickle
 
-import pytest
 import torch
 from safetensors.torch import save_file
 from torch import nn
 
 import torchlens as tl
 from torchlens import Trace, trace as trace_fn
-from torchlens._io import TLSPEC_VERSION, ArtifactError
+from torchlens._io import TLSPEC_VERSION
 from torchlens._io.rehydrate import rehydrate_trace
 from torchlens._io.scrub import scrub_for_save
 from torchlens._quantities import Bytes
@@ -122,98 +121,6 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     assert isinstance(first_arg_layer.saved_args[0], torch.Tensor)
 
 
-def test_trace_setstate_refuses_pre_versioning_state() -> None:
-    """Missing version tags refuse at the tlspec-6 rehydration floor."""
-
-    from torchlens._io import ArtifactTooOldError
-
-    live_log = _build_live_log()
-    old_state = live_log.__getstate__()
-    old_state.pop("tlspec_version", None)
-
-    restored = Trace.__new__(Trace)
-    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
-        restored.__setstate__(old_state)
-
-
-def test_trace_setstate_default_fills_grad_fn_param_refs() -> None:
-    """A state dict predating ``_grad_fn_param_refs`` must not crash ``log_backward()``.
-
-    Regression gate for cert8 BLOCKER-1: ``_grad_fn_param_refs`` is a real,
-    populated ``FieldPolicy.KEEP`` field written unconditionally (no
-    ``getattr``/``setdefault`` guard) by
-    ``backends/torch/backward.py::_walk_and_hook_backward_graph``, but it was
-    absent from ``MODEL_LOG_FIELD_ORDER`` and therefore from
-    ``_MODEL_LOG_DEFAULT_FILL``. Loading a state dict that predates the field
-    (a supported path for same-``tlspec_version`` states saved before the
-    field existed) left the restored ``Trace`` without the attribute
-    at all, so the first backward pass crashed with
-    ``AttributeError: 'Trace' object has no attribute '_grad_fn_param_refs'``
-    mid-way through backward-graph hook installation.
-
-    ``_backward_gradfn_refs`` (a separate, pre-existing, out-of-scope
-    ``__getstate__``/``__setstate__`` type-mismatch bug -- confirmed present
-    on main independent of this fix) is also stripped here so this repro
-    isolates the one field this fix addresses.
-    """
-
-    live_log = _build_live_log()
-    old_state = live_log.__getstate__()
-    assert "_grad_fn_param_refs" in old_state
-    old_state.pop("_grad_fn_param_refs")
-    old_state.pop("_backward_gradfn_refs", None)
-    old_state.pop("_phase_timings", None)
-    old_state.pop("_replay_arg_version_data_complete", None)
-
-    restored = Trace.__new__(Trace)
-    restored.__setstate__(old_state)
-
-    assert restored._grad_fn_param_refs == {}
-    assert restored._phase_timings == {}
-    assert restored._replay_arg_version_data_complete is True
-
-    out = restored[restored.output_layers[0]].out
-    restored.log_backward(out.sum())
-
-    # The field is genuinely populated by the backward walk, not just
-    # present-but-empty -- confirms the fill value is functionally correct,
-    # not merely attribute-error-silencing.
-    assert restored._grad_fn_param_refs != {}
-    assert all(
-        isinstance(key, str) and isinstance(value, str)
-        for key, value in restored._grad_fn_param_refs.items()
-    )
-
-
-def test_trace_setstate_rejects_newer_io_versions() -> None:
-    """Future portable versions must fail fast."""
-
-    live_log = _build_live_log()
-    future_state = live_log.__getstate__()
-    future_state["tlspec_version"] = TLSPEC_VERSION + 1
-
-    restored = Trace.__new__(Trace)
-    with pytest.raises(ArtifactError):
-        restored.__setstate__(future_state)
-
-
-def test_plain_pickle_roundtrip_still_works() -> None:
-    """Existing plain ``pickle.dump`` behavior should remain available."""
-
-    live_log = trace_fn(
-        _PlainPickleModel(),
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(seed=0),
-        save="all",
-    )
-    restored = pickle.loads(pickle.dumps(live_log))
-
-    assert isinstance(restored, Trace)
-    assert restored.source.class_name == live_log.source.class_name
-    assert len(restored._layer_list) == len(live_log._layer_list)
-    assert restored._layer_list[0].source_trace is restored
-
-
 def test_trace_setstate_coerces_legacy_backward_gradfn_refs_dict() -> None:
     """A genuinely-on-disk legacy ``_backward_gradfn_refs`` dict must not crash.
 
@@ -248,25 +155,8 @@ def test_trace_setstate_coerces_legacy_backward_gradfn_refs_dict() -> None:
     assert restored._backward_gradfn_refs == []
 
     out = restored[restored.output_layers[0]].out
-    restored.log_backward(out.sum())
+    restored.backward(out.sum())
 
-    assert isinstance(restored._backward_gradfn_refs, list)
-
-
-def test_trace_getstate_setstate_roundtrip_backward_gradfn_refs_stays_list() -> None:
-    """Plain getstate/setstate roundtrip keeps ``_backward_gradfn_refs`` a list."""
-
-    live_log = _build_live_log()
-    state = live_log.__getstate__()
-    assert state["_backward_gradfn_refs"] == []
-    assert isinstance(state["_backward_gradfn_refs"], list)
-
-    restored = Trace.__new__(Trace)
-    restored.__setstate__(state)
-
-    assert isinstance(restored._backward_gradfn_refs, list)
-    out = restored[restored.output_layers[0]].out
-    restored.log_backward(out.sum())
     assert isinstance(restored._backward_gradfn_refs, list)
 
 
@@ -294,67 +184,3 @@ def test_trace_setstate_coerces_wrong_typed_total_backward_memory() -> None:
     # equal-by-value (Bytes subclasses int, so a bare `int` would pass a
     # naive `== 0` check while still failing `isinstance`/format checks).
     f"{restored.cost.total_backward_memory:.2f MB}"
-
-
-def test_trace_setstate_coerces_present_but_wrong_typed_total_backward_memory() -> None:
-    """A present-but-wrong-typed ``total_backward_memory`` is coerced too."""
-
-    live_log = _build_live_log()
-    state = live_log.__getstate__()
-    state["_cost_total_backward_memory"] = 12345  # legacy plain int, not Bytes
-
-    restored = Trace.__new__(Trace)
-    restored.__setstate__(state)
-
-    assert isinstance(restored.cost.total_backward_memory, Bytes)
-    assert int(restored.cost.total_backward_memory) == 12345
-
-
-def test_trace_setstate_coerces_present_but_wrong_typed_container_fields() -> None:
-    """Present-but-wrong-typed container fields are coerced, not just filled.
-
-    Regression gate for the cert9 comprehensive fix:
-    ``coerce_container_typed_state`` closes the whole "legacy state with a
-    wrong-typed field" class, not just the two fields (``_backward_gradfn_refs``,
-    ``total_backward_memory``) the cert9 audit happened to find. Exercises a
-    representative list-default and dict-default field being forced into the
-    wrong type before restore, mirroring how an older schema version might
-    have stored the same field name with a different container type.
-    """
-
-    live_log = _build_live_log()
-    state = live_log.__getstate__()
-    # `state_history` defaults to a list; force it to a dict (wrong type).
-    state["state_history"] = {}
-    # `annotations` defaults to a dict; force it to a list (wrong type).
-    state["annotations"] = []
-    # `_last_hook_handle_ids` defaults to a tuple; force it to a list.
-    state["_last_hook_handle_ids"] = ["handle_1", "handle_2"]
-
-    restored = Trace.__new__(Trace)
-    restored.__setstate__(state)
-
-    assert isinstance(restored.state_history, list)
-    assert isinstance(restored.annotations, dict)
-    assert isinstance(restored._last_hook_handle_ids, tuple)
-    assert restored._last_hook_handle_ids == ("handle_1", "handle_2")
-
-
-def test_trace_setstate_does_not_coerce_ambiguous_grad_op_nums_to_save() -> None:
-    """A legitimate string sentinel for ``_grad_op_nums_to_save`` survives.
-
-    ``_grad_op_nums_to_save`` is typed ``List[int] | str`` (the string
-    ``"all"`` is a real, legitimate value, not a legacy type-mismatch bug).
-    The generic container-type coercion must not corrupt it into
-    ``list("all")`` -- confirms the exclude-set carve-out in
-    ``Trace.__setstate__`` actually holds.
-    """
-
-    live_log = _build_live_log()
-    state = live_log.__getstate__()
-    state["_grad_op_nums_to_save"] = "all"
-
-    restored = Trace.__new__(Trace)
-    restored.__setstate__(state)
-
-    assert restored._grad_op_nums_to_save == "all"

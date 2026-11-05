@@ -21,6 +21,20 @@ _RNG = np.random.default_rng(0)
 _X24 = _RNG.standard_normal((2, 4)).astype(np.float32)
 _W44 = (_RNG.standard_normal((4, 4)) * 0.5).astype(np.float32)
 _B4 = _RNG.standard_normal((4,)).astype(np.float32)
+# loop3's input, weight and bias are multiples of 1/8 or coarser: every product and partial
+# sum of its matmul and bias add is exact in float32, so any summation order (the framework's
+# kernel or NumPy's BLAS, which differ by CPU) gives the oracle's bits.
+_LOOP_X = np.array([[0.5, -1.0, 0.25, 0.75], [-0.5, 0.25, 1.0, -0.25]], dtype=np.float32)
+_LOOP_W = np.array(
+    [
+        [0.5, -0.25, 0.25, 0.0],
+        [0.25, 0.5, -0.5, 0.25],
+        [-0.25, 0.25, 0.5, 0.5],
+        [0.5, 0.0, -0.25, 0.25],
+    ],
+    dtype=np.float32,
+)
+_LOOP_B = np.array([0.25, -0.25, 0.125, 0.5], dtype=np.float32)
 _IMG = _RNG.standard_normal((1, 6, 6, 1)).astype(np.float32)
 
 
@@ -83,8 +97,8 @@ def _build_loop() -> tuple[Any, Any]:
     """Build three repeated affine/ReLU steps with closure constants."""
     import tensorflow as tf
 
-    weights = tf.constant(_W44)
-    bias = tf.constant(_B4)
+    weights = tf.constant(_LOOP_W)
+    bias = tf.constant(_LOOP_B)
 
     def loop(v: Any) -> Any:
         """Apply the same fixed affine transform three times."""
@@ -92,7 +106,7 @@ def _build_loop() -> tuple[Any, Any]:
             v = tf.nn.relu(tf.matmul(v, weights) + bias)
         return v
 
-    return loop, tf.constant(_X24)
+    return loop, tf.constant(_LOOP_X)
 
 
 def _build_norm() -> tuple[Any, Any]:
@@ -223,16 +237,46 @@ def _build_efficientnet() -> tuple[Any, Any]:
     return model, tf.constant(image)
 
 
+#: The keras-hub BERT-Tiny preset (2 layers, hidden size 128) the text row loads,
+#: pinned to version 3 of its Kaggle handle so a re-upload cannot move the weights.
+_BERT_TINY_PRESET = "kaggle://keras/bert/keras/bert_tiny_en_uncased/3"
+#: Eight WordPiece ids framed by ``[CLS]`` (101) and ``[SEP]`` (102).
+_BERT_TOKEN_IDS = np.array([[101, 1996, 4248, 2829, 4419, 14523, 1012, 102]], dtype=np.int32)
+
+
+def _build_bert_tiny() -> tuple[Any, Any]:
+    """Load the keras-hub BERT-Tiny backbone only when called.
+
+    The backbone returns a dict; the row wraps it so the model returns its two
+    outputs as a list (sequence output, then pooled output), which the
+    harness compares output by output.
+    """
+    import keras
+    import keras_hub
+    import tensorflow as tf
+
+    keras.utils.set_random_seed(0)
+    backbone = keras_hub.models.BertBackbone.from_preset(_BERT_TINY_PRESET)
+    outputs = backbone.output
+    model = keras.Model(backbone.input, [outputs["sequence_output"], outputs["pooled_output"]])
+    example = {
+        "token_ids": tf.constant(_BERT_TOKEN_IDS),
+        "segment_ids": tf.zeros_like(_BERT_TOKEN_IDS),
+        "padding_mask": tf.ones_like(_BERT_TOKEN_IDS),
+    }
+    return model, example
+
+
 def _loop_intermediates() -> dict[str, np.ndarray | list[np.ndarray]]:
     """Compute every repeated affine/ReLU value with NumPy."""
-    h = _X24
+    h = _LOOP_X
     matmuls, additions, relus = [], [], []
     for _ in range(3):
-        matmuls.append(h @ _W44)
-        additions.append(matmuls[-1] + _B4)
+        matmuls.append(h @ _LOOP_W)
+        additions.append(matmuls[-1] + _LOOP_B)
         h = np.maximum(additions[-1], 0)
         relus.append(h)
-    return {"input": _X24, "MatMul": matmuls, "AddV2": additions, "Relu": relus}
+    return {"input": _LOOP_X, "MatMul": matmuls, "AddV2": additions, "Relu": relus}
 
 
 def _norm_intermediates() -> dict[str, np.ndarray | list[np.ndarray]]:
@@ -444,6 +488,22 @@ ROW_SPECS: tuple[dict[str, Any], ...] = (
         "expected_intermediates": {},
         "has_constants": True,
         "random_init": True,
+        "group": "ecosystem",
+    },
+    {
+        "family": "bert_tiny_en_uncased_keras_hub",
+        "realism": "pretrained",
+        "builder": _build_bert_tiny,
+        "checkpoint_evidence": (
+            "kaggle:keras/bert/keras/bert_tiny_en_uncased/3 model.weights.h5; "
+            "sha256:6c45fb588a10511922476751b2f01581a168631784d090858a1ad42ce8e87eaa"
+        ),
+        "expected_op_kinds": None,
+        "expected_intermediates": {},
+        # The attention softmax adds the padding mask scaled by a Python
+        # large-negative scalar, a constant no recorded op produces.
+        "has_constants": True,
+        "random_init": False,
         "group": "ecosystem",
     },
 )

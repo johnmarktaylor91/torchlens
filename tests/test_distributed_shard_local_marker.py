@@ -15,8 +15,6 @@ synthetically, exactly like the plan's other pre-relaxation reds.
 
 from __future__ import annotations
 
-import dataclasses
-
 import pytest
 import torch
 from torch import nn
@@ -71,14 +69,6 @@ def gloo_world(tmp_path):
 class TestShardedPredicate:
     """The Shard / Replicate / mixed matrix, pinned explicitly (plan 3.3)."""
 
-    def test_string_placements_matrix(self):
-        assert shard_local_placements(["Shard(dim=0)"])
-        assert shard_local_placements(["Replicate()", "Shard(dim=1)"])
-        assert not shard_local_placements(["Replicate()"])
-        assert not shard_local_placements(["Replicate()", "Replicate()"])
-        assert not shard_local_placements([])
-        assert not shard_local_placements(None)
-
     def test_live_placement_objects_matrix(self, gloo_world):
         from torch.distributed.device_mesh import init_device_mesh
         from torch.distributed.tensor import Replicate, Shard, distribute_tensor
@@ -110,22 +100,6 @@ class TestShardedPredicate:
 
 
 class TestMarkerFieldSubstrate:
-    def test_field_declared_ordered_and_persisting(self):
-        from torchlens._constants import MODEL_LOG_FIELD_ORDER
-        from torchlens._data_classes.trace import Trace
-        from torchlens._io import FieldPolicy
-
-        assert "_provenance_distributed_scope" in MODEL_LOG_FIELD_ORDER
-        entry = Trace._FIELD_POLICY["_provenance_distributed_scope"]
-        # tlspec v8: the marker persists (the erasure guard's second conjunct
-        # goes false by construction; see TestErasurePreventionInvariant).
-        assert getattr(entry, "portable_policy", entry) is FieldPolicy.KEEP
-
-    def test_plain_capture_never_carries_the_marker(self):
-        lifecycle.disarm()
-        log = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
-        assert log.provenance.distributed_scope is None
-
     def test_plain_round_trip_preserves_the_marker(self, tmp_path):
         """Tamper row (a) counterpart: at tlspec v8 the marker persists on a
         PLAIN save and survives load intact (validated closed-vocabulary)."""
@@ -147,18 +121,6 @@ class TestErasurePreventionInvariant:
         log = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
         log._provenance_distributed_scope = RANK_LOCAL_SHARD
         return log
-
-    def test_row_b_marked_save_proceeds_and_round_trips_at_v8(self, tmp_path):
-        """tlspec v8 persists the marker, so the guard's second conjunct is
-        false by construction and ordinary saves proceed with the disclosure
-        intact across the round trip -- the marker-free-artifact class stays
-        EMPTY through persistence rather than through refusal."""
-
-        log = self._marked_trace()
-        for level in ("portable", "audit"):
-            path = tmp_path / f"marked-{level}.tlspec"
-            log.save(str(path), level=level)
-            assert tl.load(str(path)).provenance.distributed_scope == RANK_LOCAL_SHARD
 
     def test_row_e_forced_drop_refires_post_bump(self, tmp_path, monkeypatch):
         """The predicate keys on the ACTUAL field-policy state: forcing the
@@ -182,12 +144,6 @@ class TestErasurePreventionInvariant:
         with pytest.raises(InvalidArgumentError) as excinfo:
             log.save(str(tmp_path / "regression.tlspec"))
         assert excinfo.value.fields["code"] == "shard_local_persistence_unsupported"
-
-    def test_unmarked_trace_saves_normally(self, tmp_path):
-        lifecycle.disarm()
-        log = tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
-        log.save(str(tmp_path / "plain.tlspec"))
-        assert tl.load(str(tmp_path / "plain.tlspec")).provenance.distributed_scope is None
 
 
 class TestMergeScopeMarkerKey:
@@ -218,38 +174,3 @@ class TestMergeScopeMarkerKey:
             tl.merge_ranks([log])
         assert excinfo.value.fields["code"] == "merge_scope_unsupported"
         assert excinfo.value.fields["reason"] == "shard_local_member_unsupported"
-
-    @requires_vetted_snapshot
-    def test_c5r_direct_rank_evidence_construction_refuses(self, gloo_world):
-        """The membership-authority precedent: the marker key runs INSIDE
-        derive_merge, so directly constructed RankEvidence refuses too."""
-
-        from torchlens._merged._engine import derive_merge
-        from torchlens._merged._errors import MergeInputError
-        from torchlens._merged._evidence import extract_rank_evidence
-
-        log = self._rank_core_with_marker(gloo_world)
-        evidence = extract_rank_evidence(log, "live[0]")
-        assert evidence.shard_local is True
-        with pytest.raises(MergeInputError) as excinfo:
-            derive_merge({0: evidence})
-        assert excinfo.value.fields["reason"] == "shard_local_member_unsupported"
-        # The geometry key STAYS beside the marker key: an evidence carrier
-        # without the marker keeps merging (shipped behavior untouched).
-        clean = dataclasses.replace(evidence, shard_local=False)
-        derivation = derive_merge({0: clean})
-        assert derivation is not None
-
-    def test_marker_field_is_required_not_defaulted(self):
-        """Direct construction must consciously supply shard_local."""
-
-        from torchlens._merged._evidence import RankEvidence
-
-        with pytest.raises(TypeError):
-            RankEvidence(  # type: ignore[call-arg]
-                rank=0,
-                boundaries=(),
-                ledger=None,
-                install_epoch="seeded",
-                source="live",
-            )

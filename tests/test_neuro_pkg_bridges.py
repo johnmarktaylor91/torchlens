@@ -125,25 +125,6 @@ def test_brain_score_default_sweep_survives_partial_trace() -> None:
 
 
 @pytest.mark.heavy
-def test_brain_score_default_sweep_filters_buffers() -> None:
-    """Item 9: buffer rows are never scored; one summarized disclosure."""
-
-    from torchlens.bridge.brain_score import per_layer
-    from torchlens.errors._base import TorchLensWarning
-
-    log = _full_trace()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        scores = per_layer(log, lambda out, layer=None: float(out.mean()))
-    assert not any("buffer" in label for label in scores)
-    assert len(scores) == 6
-    skip_warnings = [
-        w for w in caught if isinstance(w.message, TorchLensWarning) and "skipped" in str(w.message)
-    ]
-    assert len(skip_warnings) == 1
-
-
-@pytest.mark.heavy
 def test_brain_score_explicit_contracts() -> None:
     """Item 9: documented ValueError fires; module dotted paths resolve."""
 

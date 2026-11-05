@@ -12,12 +12,15 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from name_lockstep import check, codemod, gate_input
+from name_lockstep import baseguard, check, codemod, gate_input
+from name_lockstep.baseguard import BaseError
 from name_lockstep.diff import diff_inventories, proposals_to_map
 from name_lockstep.inventory import build_inventory, load_inventory
 
 REPO = Path(__file__).resolve().parents[2]
 TOOLS = Path(__file__).resolve().parents[1]
+#: Exit status for a base or ref the diff must not run against (never 0 or 1).
+BAD_BASE = 2
 
 
 def _inventory_at_ref(ref: str, repo: Path) -> dict[str, Any]:
@@ -36,9 +39,15 @@ def _inventory_at_ref(ref: str, repo: Path) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        The inventory.
+        The inventory, with ``ref`` and the resolved ``commit``.
+
+    Raises
+    ------
+    BaseError
+        When the repository does not have the ref.
     """
 
+    commit = baseguard.resolve(repo, ref, "ref")
     with tempfile.TemporaryDirectory(prefix="name-lockstep-") as tmp:
         archive = Path(tmp) / "tree.tar"
         subprocess.run(
@@ -74,10 +83,19 @@ def _inventory_at_ref(ref: str, repo: Path) -> dict[str, Any]:
         )
     inventory = json.loads(done.stdout)
     inventory["ref"] = ref
+    inventory["commit"] = commit
     return inventory
 
 
-def _rows(source: str, repo: Path) -> dict[str, dict[str, Any]]:
+def _working_inventory(repo: Path) -> dict[str, Any]:
+    """Build the working tree's inventory, recording the checked-out commit."""
+
+    inventory = build_inventory()
+    inventory["commit"] = baseguard.rev(repo, "HEAD")
+    return inventory
+
+
+def _rows(source: str, repo: Path) -> tuple[dict[str, dict[str, Any]], str | None]:
     """Load rows from an inventory file, or build them at a git ref.
 
     Parameters
@@ -89,17 +107,55 @@ def _rows(source: str, repo: Path) -> dict[str, dict[str, Any]]:
 
     Returns
     -------
-    dict[str, dict[str, Any]]
-        Rows keyed on id.
+    tuple[dict[str, dict[str, Any]], str | None]
+        Rows keyed on id, and the commit they describe (None when a JSON inventory
+        records none).
     """
 
     if source == ".":
-        inventory = build_inventory()
+        inventory = _working_inventory(repo)
     elif source.startswith("ref:"):
         inventory = _inventory_at_ref(source[4:], repo)
     else:
-        return load_inventory(Path(source))
-    return {row["id"]: row for row in inventory["rows"]}
+        path = Path(source)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        commit = data.get("commit") if isinstance(data, dict) else None
+        return load_inventory(path), commit
+    return {row["id"]: row for row in inventory["rows"]}, inventory.get("commit")
+
+
+def _guard_base(args: argparse.Namespace, base_commit: str | None, head_commit: str | None) -> None:
+    """Refuse a base the diff cannot be trusted against; log the base summary otherwise.
+
+    The summary goes to stderr: ``check`` output is parsed line by line as findings.
+
+    Parameters
+    ----------
+    args
+        Parsed arguments (``base``, ``head``, ``target``, ``repo``).
+    base_commit, head_commit
+        Commits the two inventories describe, when known.
+
+    Raises
+    ------
+    BaseError
+        A missing commit (unless ``--target none``), a base outside the head's history, or
+        a base no merge target reaches.
+    """
+
+    for label, source, commit in (
+        ("base", args.base, base_commit),
+        ("head", args.head, head_commit),
+    ):
+        if commit is None and args.target != baseguard.NONE:
+            raise BaseError(
+                f"{label} inventory {source} records no commit, so the base cannot be"
+                " verified: rebuild it with this tool, or pass --target none"
+            )
+    if base_commit is None or head_commit is None:
+        print("base: unverified (an inventory records no commit; --target none)", file=sys.stderr)
+        return
+    print(baseguard.verify(args.repo, base_commit, head_commit, args.target), file=sys.stderr)
 
 
 def _diff(args: argparse.Namespace):
@@ -116,7 +172,11 @@ def _diff(args: argparse.Namespace):
         Base rows, head rows and the diff.
     """
 
-    base, head = _rows(args.base, args.repo), _rows(args.head, args.repo)
+    (base, base_commit), (head, head_commit) = (
+        _rows(args.base, args.repo),
+        _rows(args.head, args.repo),
+    )
+    _guard_base(args, base_commit, head_commit)
     declared = proposals_to_map(load_inventory(Path(args.renames))) if args.renames else {}
     return base, head, diff_inventories(base, head, declared)
 
@@ -124,7 +184,9 @@ def _diff(args: argparse.Namespace):
 def cmd_inventory(args: argparse.Namespace) -> int:
     """Write an inventory of the package (working tree, or ``--ref``)."""
 
-    inventory = _inventory_at_ref(args.ref, args.repo) if args.ref else build_inventory()
+    inventory = (
+        _inventory_at_ref(args.ref, args.repo) if args.ref else _working_inventory(args.repo)
+    )
     Path(args.out).write_text(json.dumps(inventory, indent=1) + "\n", encoding="utf-8")
     print(f"wrote {args.out} ({len(inventory['rows'])} rows)")
     return 0
@@ -214,6 +276,11 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--head", default=".", help="inventory JSON, ref:<rev> or .")
         command.add_argument("--renames", help="rows with id and proposed (declared renames)")
         command.add_argument("--glossary", action="append", default=list(check.DEFAULT_GLOSSARY))
+        command.add_argument(
+            "--target",
+            help="ref the base must be reachable from (default: main or a *-train branch);"
+            " 'none' skips that check",
+        )
         if name == "gate-input":
             command.add_argument("--out", required=True)
         command.set_defaults(func=func)
@@ -240,4 +307,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
 
     args = _parser().parse_args(argv)
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except BaseError as error:
+        print(f"name_lockstep: {error}", file=sys.stderr)
+        return BAD_BASE

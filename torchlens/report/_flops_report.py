@@ -53,6 +53,15 @@ class SixNDFacts:
     (heuristic-vs-exact); ``six_nd`` (= 6*N*D) is the full training
     heuristic, printed as a fact, never compared against an executed
     quantity unless the hypothetical backward door was invoked.
+
+    Examples
+    --------
+    >>> report = tl.report.flops(tl.trace(model, x), main_input_numel=x.numel())
+    >>> facts = report.six_nd
+    >>> facts.d_numel
+    192
+    >>> facts.six_nd == 3 * facts.two_nd
+    True
     """
 
     num_params: int
@@ -80,7 +89,16 @@ class SixNDFacts:
 
 @dataclass(frozen=True)
 class FlopsReport:
-    """The detached one-call cost report (D10). Raw ints or None only."""
+    """The detached one-call cost report (D10). Raw ints or None only.
+
+    Examples
+    --------
+    >>> report = tl.report.flops(model, x)
+    >>> report.forward_flops > 0
+    True
+    >>> "forward compute" in str(report)
+    True
+    """
 
     convention: str
     forward_flops: int | None
@@ -313,7 +331,7 @@ def _build_report(
 
 def flops(
     subject: Any,
-    input_args: Any = None,
+    inputs: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     main_input_numel: int | None = None,
@@ -329,7 +347,7 @@ def flops(
         ONE capture under the summary execution contract: eval mode,
         ``torch.no_grad()``, module training flags and RNG state restored
         bit-identically afterwards).
-    input_args / input_kwargs:
+    inputs / input_kwargs:
         Model-door inputs; refused on the trace door.
     main_input_numel:
         Explicit 6ND ``D`` for the trace door (the comparator's HF
@@ -337,18 +355,29 @@ def flops(
         is OMITTED without it, never guessed).
     breakdown_k:
         Depth-1 module rows in the optional breakdown block (0 disables).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> tl.report.flops(trace).forward_flops == tl.report.flops(model, x).forward_flops
+    True
+    >>> try:
+    ...     tl.report.flops(model)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     import torch.nn as nn
 
     if isinstance(subject, nn.Module):
-        if input_args is None:
+        if inputs is None:
             raise InvalidArgumentError(
                 "the model door needs example inputs to run its one capture.",
                 code="flops_report_inputs_required",
                 remedy="Call tl.report.flops(model, example_inputs).",
             )
-        trace = _capture_for_report(subject, input_args, input_kwargs)
+        trace = _capture_for_report(subject, inputs, input_kwargs)
         try:
             return _build_report(
                 trace,
@@ -358,9 +387,9 @@ def flops(
             )
         finally:
             trace.cleanup()
-    if input_args is not None or input_kwargs:
+    if inputs is not None or input_kwargs:
         raise InvalidArgumentError(
-            "input_args/input_kwargs are model-door arguments; the trace door takes none.",
+            "inputs/input_kwargs are model-door arguments; the trace door takes none.",
             code="flops_report_trace_door_inputs",
             remedy=(
                 "Call tl.report.flops(trace) on a finished trace, or pass the model "

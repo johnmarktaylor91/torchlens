@@ -1,12 +1,17 @@
-"""One parametrized test per oracle over the stress matrix cells.
+"""One test per stress matrix cell, judging the cell with all six oracles.
 
-Every cell runs once, through the module-scoped ``cell_result`` fixture, and
-each oracle test reads that result. Cells carry an ``xdist_group`` mark so
-``-n N --dist loadgroup`` keeps a cell's six oracle tests on one worker.
+Every cell runs once, through the ``cell_result`` fixture, and its one test,
+``test_cell[<cell id>]``, asks every oracle in ``ORACLES`` for a verdict and
+never stops at the first failing one. Cells carry an ``xdist_group`` mark so
+``-n N --dist loadgroup`` schedules them as whole units.
 
-The pre-merge run takes the cells in ``subset.json``; ``TORCHLENS_STRESS_FULL=1``
-takes every generated cell. A ``fail`` is a finding against the cell id; a
-``not_applicable`` verdict is reported as a skip with its reason.
+The scheduled run takes the cells in ``subset.json``; ``TORCHLENS_STRESS_FULL=1``
+takes every generated cell. A ``fail`` from any oracle is a finding against the
+cell id: the test fails with one message naming each failing oracle and its
+reason. An oracle that raises counts as failing, with the exception named. A
+cell whose every oracle is ``not_applicable`` is a skip with the reasons; a
+``not_applicable`` beside other passing verdicts is recorded as a junit
+property (``not_applicable:<oracle>``) and the cell passes.
 """
 
 from __future__ import annotations
@@ -26,17 +31,7 @@ from .generator import (
     select_subset,
     selected_cells,
 )
-from .oracles import (
-    CellResult,
-    Verdict,
-    invariants_pass,
-    peak_memory_within_budget,
-    replay_equals_eager,
-    run_cell,
-    save_load_equals_live,
-    torch_clean_after_cell,
-    typed_refusal_names_condition,
-)
+from .oracles import ORACLES, CellResult, Verdict, run_cell
 
 AXES = default_axes()
 CELLS = selected_cells(AXES)
@@ -50,7 +45,7 @@ def _cell_param(cell: Cell) -> object:
 def cell_result(
     request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
 ) -> Iterator[CellResult]:
-    """Run one cell once; the six oracle tests for that cell share the result."""
+    """Run one cell once; its test judges the result with every oracle."""
 
     cell: Cell = request.param
     if not cell.device.available():
@@ -63,56 +58,45 @@ def cell_result(
         gc.collect()
 
 
-def _judge(oracle: Callable[[CellResult], Verdict], result: CellResult) -> None:
-    """Turn an oracle verdict into a pass, a failure naming the cell, or a skip."""
+def _verdicts(result: CellResult) -> list[tuple[str, Verdict]]:
+    """Ask every oracle for its verdict; an oracle that raises is a failing verdict."""
 
-    verdict = oracle(result)
-    if verdict.status == "fail":
-        pytest.fail(f"{result.cell_id}: {verdict.detail}", pytrace=False)
-    if verdict.status == "not_applicable":
-        pytest.skip(f"{result.cell_id}: {verdict.detail}")
-
-
-@pytest.mark.slow
-def test_replay_equals_eager(cell_result: CellResult) -> None:
-    """Forward replay of every captured op reproduces eager."""
-
-    _judge(replay_equals_eager, cell_result)
+    verdicts = []
+    for name, oracle in ORACLES:
+        try:
+            verdict = oracle(result)
+        except Exception as exc:  # judged as a failure below, never swallowed
+            verdict = Verdict.failed(f"the oracle raised {type(exc).__name__}: {exc}")
+        verdicts.append((name, verdict))
+    return verdicts
 
 
 @pytest.mark.slow
-def test_invariants_pass(cell_result: CellResult) -> None:
-    """Default validation's metadata invariants hold."""
+def test_cell(cell_result: CellResult, record_property: Callable[[str, object], None]) -> None:
+    """Every oracle holds on the cell; a failure names each failing oracle.
 
-    _judge(invariants_pass, cell_result)
+    The six oracles: forward replay of every captured op reproduces eager
+    (``replay_equals_eager``); default validation's metadata invariants hold
+    (``invariants_pass``); a portable save and load returns the live ops and
+    outputs (``save_load_equals_live``); anything TorchLens refused is a typed
+    error with a stable code (``typed_refusal_names_condition``); torch and
+    TorchLens process state are clean after the cell
+    (``torch_clean_after_cell``); the cell's peak memory stays under its row's
+    budget (``peak_memory_within_budget``).
+    """
 
-
-@pytest.mark.slow
-def test_save_load_equals_live(cell_result: CellResult) -> None:
-    """A portable save and load returns the live ops and outputs."""
-
-    _judge(save_load_equals_live, cell_result)
-
-
-@pytest.mark.slow
-def test_typed_refusal_names_condition(cell_result: CellResult) -> None:
-    """Anything TorchLens refused is a typed error with a stable code."""
-
-    _judge(typed_refusal_names_condition, cell_result)
-
-
-@pytest.mark.slow
-def test_torch_clean_after_cell(cell_result: CellResult) -> None:
-    """Torch and TorchLens process state are clean after the cell."""
-
-    _judge(torch_clean_after_cell, cell_result)
-
-
-@pytest.mark.slow
-def test_peak_memory_within_budget(cell_result: CellResult) -> None:
-    """The cell's peak memory stays under its row's budget."""
-
-    _judge(peak_memory_within_budget, cell_result)
+    verdicts = _verdicts(cell_result)
+    failures = [f"{name}: {v.detail}" for name, v in verdicts if v.status == "fail"]
+    if failures:
+        pytest.fail(
+            f"{cell_result.cell_id}: {len(failures)} oracle(s) failed\n" + "\n".join(failures),
+            pytrace=False,
+        )
+    skipped = [(name, v.detail) for name, v in verdicts if v.status == "not_applicable"]
+    if len(skipped) == len(verdicts):
+        pytest.skip(f"{cell_result.cell_id}: " + "; ".join(f"{n}: {d}" for n, d in skipped))
+    for name, detail in skipped:
+        record_property(f"not_applicable:{name}", detail)
 
 
 def test_matrix_rows_are_well_formed() -> None:

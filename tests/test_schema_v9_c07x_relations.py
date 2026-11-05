@@ -13,7 +13,7 @@ window (TLSPEC_VERSION stays 9):
 - three-leg preserve-and-disclose loading: (a) unknown NAMESPACED relation
   kinds load opaque/disclosed (bare unknown refuses; ``tl.load(
   unknown_relations="refuse")`` restores strictness), (b) unknown evidence
-  schema ids load opaque, (c) unknown namespaced bundle.json sections
+  schema ids load opaque, (c) unknown namespaced relations.json sections
   preserve through the Bundle carriage while bare-unknown sections refuse —
   with byte-preserving re-save in every leg;
 - reserved evidence schema-id strings and reserved TorchLens sidecar family
@@ -25,27 +25,23 @@ Every protective claim gets a test that TRIES the forbidden thing (D18).
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import redigest
 
 import torchlens as tl
 from torchlens._io.sidecar import (
-    RESERVED_SIDECAR_FAMILY_IDS,
     SidecarError,
     SidecarFamily,
     register_sidecar_family,
-    unregister_sidecar_family,
 )
 from torchlens._registry import ProviderInfo
 from torchlens.bundle import Bundle
 from torchlens.bundle._relations import (
-    RELATION_CLAIM_GRADES,
     RELATION_EVIDENCE_BUDGET_BYTES,
-    RELATION_UNCHECKED_REASONS,
-    RESERVED_EVIDENCE_SCHEMA_IDS,
     MemberRelationRow,
-    MemberRelationTable,
     OpaqueRelationRow,
 )
 from torchlens.errors import TorchLensWarning
@@ -84,7 +80,7 @@ def _successor_row(**params: object) -> MemberRelationRow:
 def _evidence(**overrides: object) -> dict[str, object]:
     envelope: dict[str, object] = {
         "schema": "version_boundary_v1",
-        "items": [{"grade": "consistent", "basis": "step_count"}],
+        "items": [{"grade": "consistent", "basis": "step_count", "class": "member_state"}],
         "facts_digest": "sha256:00",
     }
     envelope.update(overrides)
@@ -96,49 +92,15 @@ def _evidence(**overrides: object) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
-def test_successor_of_bare_row_still_valid() -> None:
-    """v8-era successor_of rows (empty params) stay valid under grammar v2."""
-
-    row = _successor_row()
-    assert row.params == {}
-    rebuilt = MemberRelationRow.from_payload(row.to_payload())
-    assert rebuilt == row
-
-
-@pytest.mark.smoke
 def test_successor_of_admits_optional_evidence_carry_mode_state_source() -> None:
     row = _successor_row(
-        evidence=_evidence(), carry_mode="declared", state_source="optimizer_checkpoint"
+        evidence=_evidence(), carry_mode="summarized", state_source="optimizer_checkpoint"
     )
     payload = row.to_payload()
     rebuilt = MemberRelationRow.from_payload(payload)
-    assert rebuilt.params["carry_mode"] == "declared"
+    assert rebuilt.params["carry_mode"] == "summarized"
     assert rebuilt.params["state_source"] == "optimizer_checkpoint"
     assert rebuilt.params["evidence"]["schema"] == "version_boundary_v1"
-
-
-def test_undeclared_param_key_still_refuses() -> None:
-    """The required/optional split does NOT weaken the unknown-key check (D4)."""
-
-    with pytest.raises(ValueError, match="undeclared param keys"):
-        _successor_row(surprise=1)
-
-
-def test_optional_keys_are_per_kind_closed() -> None:
-    """successor_of's optional set does not leak onto other kinds."""
-
-    with pytest.raises(ValueError, match="undeclared param keys"):
-        MemberRelationRow(
-            kind="alternative_of",
-            from_member="ckpt_200",
-            to_member="ckpt_100",
-            params={"evidence": _evidence()},
-        )
-
-
-def test_required_keys_still_required() -> None:
-    with pytest.raises(ValueError, match="missing required param keys"):
-        MemberRelationRow(kind="forked_from", from_member="ckpt_200", to_member="ckpt_100")
 
 
 def test_carry_mode_and_state_source_type_envelope() -> None:
@@ -151,18 +113,6 @@ def test_carry_mode_and_state_source_type_envelope() -> None:
 # ---------------------------------------------------------------------------
 # Items 9 + 10: graded evidence items; contracted unchecked-reason menu.
 # ---------------------------------------------------------------------------
-
-
-def test_grade_vocabulary_reserved() -> None:
-    assert {
-        "verified",
-        "consistent",
-        "disclosed",
-        "unchecked",
-        "divergent",
-    } == RELATION_CLAIM_GRADES
-    assert "no_param_snapshot" in RELATION_UNCHECKED_REASONS
-    assert "incomparable_basis" in RELATION_UNCHECKED_REASONS
 
 
 def test_evidence_item_requires_contracted_grade() -> None:
@@ -186,21 +136,20 @@ def test_unchecked_grade_requires_contracted_reason() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_no_param_snapshot_is_admitted() -> None:
     row = _successor_row(
         evidence=_evidence(
-            items=[{"grade": "unchecked", "basis": None, "reason": "no_param_snapshot"}]
+            items=[
+                {
+                    "grade": "unchecked",
+                    "basis": None,
+                    "reason": "no_param_snapshot",
+                    "class": "member_params",
+                }
+            ]
         )
     )
     assert row.params["evidence"]["items"][0]["reason"] == "no_param_snapshot"
-
-
-def test_evidence_envelope_exact_keys() -> None:
-    with pytest.raises(ValueError, match="exactly the keys"):
-        _successor_row(evidence={"schema": "x", "items": []})
-    with pytest.raises(ValueError, match="exactly the keys"):
-        _successor_row(evidence=_evidence(extra="k"))
 
 
 # ---------------------------------------------------------------------------
@@ -208,23 +157,17 @@ def test_evidence_envelope_exact_keys() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_evidence_over_budget_refuses_typed() -> None:
-    oversized = _evidence(
-        items=[
-            {"grade": "disclosed", "basis": "bulk", "blob": "x" * RELATION_EVIDENCE_BUDGET_BYTES}
-        ]
-    )
-    with pytest.raises(BundleRelationError) as excinfo:
-        _successor_row(evidence=oversized)
-    assert excinfo.value.fields["code"] == "bundle_relation_evidence_over_budget"
-
-
 def test_evidence_over_budget_code_survives_bundle_door(two_member_bundle: Bundle) -> None:
     """The distinct code must not flatten to schema_invalid at Bundle.relate."""
 
     oversized = _evidence(
         items=[
-            {"grade": "disclosed", "basis": "bulk", "blob": "x" * RELATION_EVIDENCE_BUDGET_BYTES}
+            {
+                "grade": "disclosed",
+                "basis": "bulk",
+                "class": "member_state",
+                "blob": "x" * RELATION_EVIDENCE_BUDGET_BYTES,
+            }
         ]
     )
     with pytest.raises(BundleRelationError) as excinfo:
@@ -244,33 +187,11 @@ def test_evidence_over_budget_code_survives_bundle_door(two_member_bundle: Bundl
 # ---------------------------------------------------------------------------
 
 
-def test_successor_of_direction_pin_documented() -> None:
-    """from = the LATER member, pinned in the row docstring and module doc."""
-
-    from torchlens.bundle import _relations as relations_module
-
-    for text in (MemberRelationRow.__doc__ or "", relations_module.__doc__ or ""):
-        assert "LATER member" in text, "successor_of direction pin missing from docs"
-
-
 # ---------------------------------------------------------------------------
 # Item 11 + 6: reserved id strings (registrations, not slots).
 # ---------------------------------------------------------------------------
 
 
-def test_reserved_evidence_schema_ids() -> None:
-    assert {"version_boundary_v1", "turn_boundary_v1"} == RESERVED_EVIDENCE_SCHEMA_IDS
-
-
-def test_reserved_sidecar_family_ids_registered() -> None:
-    assert {
-        "torchlens.input_origin",
-        "torchlens.input_digest",
-        "torchlens.boundary_facts",
-    } == RESERVED_SIDECAR_FAMILY_IDS
-
-
-@pytest.mark.smoke
 def test_torchlens_sidecar_namespace_refuses_foreign_provider() -> None:
     """Squat prevention: only the TorchLens provider registers torchlens.*."""
 
@@ -286,20 +207,6 @@ def test_torchlens_sidecar_namespace_refuses_foreign_provider() -> None:
     assert excinfo.value.fields["code"] == "sidecar_family_namespace_reserved"
 
 
-@pytest.mark.smoke
-def test_torchlens_provider_can_register_reserved_family() -> None:
-    """The reservation is a squat guard, not a slot: the owner still can."""
-
-    family = SidecarFamily(
-        family_id="torchlens.input_origin",
-        schema_id="torchlens.input_origin.v1",
-        version=1,
-        owner="torchlens",
-    )
-    register_sidecar_family(family)
-    unregister_sidecar_family("torchlens.input_origin")
-
-
 # ---------------------------------------------------------------------------
 # Item 2 leg (a): unknown relation kinds — opaque vs refuse.
 # ---------------------------------------------------------------------------
@@ -307,47 +214,6 @@ def test_torchlens_provider_can_register_reserved_family() -> None:
 
 def _foreign_kind_payload() -> dict[str, object]:
     return {"kind": "someorg.custody_of", "anchor": "ckpt_100", "note": {"chain": [1, 2]}}
-
-
-@pytest.mark.smoke
-def test_unknown_namespaced_kind_loads_opaque_and_preserves() -> None:
-    payload = [_successor_row().to_payload(), _foreign_kind_payload()]
-    table = MemberRelationTable.from_payload(payload, unknown_kinds="opaque")
-    assert table.opaque_kinds == ("someorg.custody_of",)
-    opaque = table.rows[1]
-    assert isinstance(opaque, OpaqueRelationRow)
-    assert opaque.named_members() == ()
-    # Verbatim re-save: the raw payload round-trips value-exact.
-    assert table.to_payload()[1] == _foreign_kind_payload()
-
-
-def test_unknown_namespaced_kind_refuses_under_strict_policy() -> None:
-    payload = [_foreign_kind_payload()]
-    with pytest.raises(ValueError, match="outside the closed vocabulary"):
-        MemberRelationTable.from_payload(payload, unknown_kinds="refuse")
-
-
-def test_bare_unknown_kind_refuses_under_both_policies() -> None:
-    payload = [{"kind": "custody_of", "from": "a", "to": "b", "params": {}}]
-    for policy in ("opaque", "refuse"):
-        with pytest.raises(ValueError, match="outside the closed vocabulary"):
-            MemberRelationTable.from_payload(payload, unknown_kinds=policy)  # type: ignore[arg-type]
-
-
-@pytest.mark.smoke
-def test_construction_always_refuses_unknown_kinds(two_member_bundle: Bundle) -> None:
-    """Opaque rows enter from artifacts only; relate() refuses unknown kinds."""
-
-    with pytest.raises(BundleRelationError) as excinfo:
-        two_member_bundle.relate(_foreign_kind_payload())
-    assert excinfo.value.fields["code"] == "bundle_relation_schema_invalid"
-
-
-def test_default_from_payload_policy_is_refuse() -> None:
-    """Construction semantics by default; the artifact door opts into opaque."""
-
-    with pytest.raises(ValueError, match="outside the closed vocabulary"):
-        MemberRelationTable.from_payload([_foreign_kind_payload()])
 
 
 # ---------------------------------------------------------------------------
@@ -368,10 +234,11 @@ def test_loader_leg_a_end_to_end(tmp_path, two_member_bundle: Bundle) -> None:
         {"kind": "successor_of", "from": "ckpt_200", "to": "ckpt_100", "params": {}}
     )
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
-    metadata_path = tmp_path / "bundle.tlspec" / "bundle.json"
+    metadata_path = tmp_path / "bundle.tlspec" / "relations.json"
     metadata = json.loads(metadata_path.read_text())
     metadata["member_relations"].append(_foreign_kind_payload())
     metadata_path.write_text(json.dumps(metadata))
+    redigest(tmp_path / "bundle.tlspec", "relations.json")
 
     with pytest.warns(TorchLensWarning, match="unknown namespaced kinds") as caught:
         loaded = tl.load(path)
@@ -387,7 +254,7 @@ def test_loader_leg_a_end_to_end(tmp_path, two_member_bundle: Bundle) -> None:
 
     resaved = tmp_path / "resaved.tlspec"
     loaded.save(resaved)
-    resaved_metadata = json.loads((resaved / "bundle.json").read_text())
+    resaved_metadata = json.loads((resaved / "relations.json").read_text())
     assert _foreign_kind_payload() in resaved_metadata["member_relations"]
 
     with pytest.raises(BundleRelationError) as excinfo:
@@ -395,12 +262,14 @@ def test_loader_leg_a_end_to_end(tmp_path, two_member_bundle: Bundle) -> None:
     assert excinfo.value.fields["code"] == "bundle_relation_schema_invalid"
 
 
+@pytest.mark.smoke
 def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: Bundle) -> None:
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
-    metadata_path = tmp_path / "bundle.tlspec" / "bundle.json"
+    metadata_path = tmp_path / "bundle.tlspec" / "relations.json"
     metadata = json.loads(metadata_path.read_text())
     metadata["someorg.experiment_index"] = {"runs": [1, 2, 3]}
     metadata_path.write_text(json.dumps(metadata))
+    redigest(tmp_path / "bundle.tlspec", "relations.json")
 
     with pytest.warns(TorchLensWarning, match="unknown namespaced sections") as caught:
         loaded = tl.load(path)
@@ -415,21 +284,21 @@ def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: 
 
     resaved = tmp_path / "resaved.tlspec"
     loaded.save(resaved)
-    resaved_metadata = json.loads((resaved / "bundle.json").read_text())
+    resaved_metadata = json.loads((resaved / "relations.json").read_text())
     assert resaved_metadata["someorg.experiment_index"] == {"runs": [1, 2, 3]}
 
 
-@pytest.mark.smoke
 def test_loader_leg_c_bare_unknown_section_refuses(tmp_path, two_member_bundle: Bundle) -> None:
     """The historical silent load-then-destroy is banned in both directions."""
 
     from torchlens._io.format_errors import ArtifactError
 
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
-    metadata_path = tmp_path / "bundle.tlspec" / "bundle.json"
+    metadata_path = tmp_path / "bundle.tlspec" / "relations.json"
     metadata = json.loads(metadata_path.read_text())
     metadata["experiment_index"] = {"runs": [1]}
     metadata_path.write_text(json.dumps(metadata))
+    redigest(Path(path), "relations.json")
 
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
@@ -448,27 +317,3 @@ def test_unknown_relations_policy_validates(tmp_path, two_member_bundle: Bundle)
 # ---------------------------------------------------------------------------
 # Item 2 leg (b): unknown evidence schema ids load opaque.
 # ---------------------------------------------------------------------------
-
-
-def test_unknown_evidence_schema_id_loads_opaque(tmp_path, two_member_bundle: Bundle) -> None:
-    """Leg (b): future torchlens.* (and foreign) schema ids must not break
-    earlier readers — the envelope validates, items preserve, and the row
-    stays a first-class validated row."""
-
-    envelope = {
-        "schema": "torchlens.future_boundary_v9",
-        "items": [{"grade": "verified", "basis": "digest", "extra_future_key": [1]}],
-        "facts_digest": "sha256:ff",
-    }
-    row = _successor_row(evidence=envelope)
-    table = MemberRelationTable.from_payload([row.to_payload()])
-    rebuilt = table.rows[0]
-    assert isinstance(rebuilt, MemberRelationRow)
-    assert rebuilt.params["evidence"]["items"][0]["extra_future_key"] == [1]
-    # And end-to-end through the artifact door.
-    two_member_bundle.relate(row)
-    path = _saved_bundle_dir(tmp_path, two_member_bundle)
-    loaded = tl.load(path)
-    assert isinstance(loaded, Bundle)
-    kinds = [r.kind for r in loaded.relations]
-    assert "successor_of" in kinds

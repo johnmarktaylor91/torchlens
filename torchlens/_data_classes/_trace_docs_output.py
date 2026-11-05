@@ -110,9 +110,8 @@ DOCS: dict[str, str] = {
         
         With no keywords this returns the rows the automatic capture-time
         decode produced. Naming a ``style``, a ``head`` or a ``tokenizer``
-        decodes again from the retained output tensors (the output ops'
-        values), the persisted ``output_id2label`` and the shipped ImageNet
-        bank, without touching ``decoded_output``.
+        decodes again from the retained output tensors, the persisted
+        ``output_id2label`` and the ImageNet bank, never ``decoded_output``.
         
         Parameters
         ----------
@@ -126,7 +125,8 @@ DOCS: dict[str, str] = {
             Output head to decode, as an output container path such as
             ``"logits"``, ``"0"`` or ``"0.logits"``.
         tokenizer:
-            Tokenizer with a ``decode`` method, required by ``"hf_text"``.
+            Tokenizer with a ``decode`` method, used by ``"hf_text"``; without
+            one the rows carry the argmax ``token_ids`` and ``text`` is ``None``.
         
         Returns
         -------
@@ -198,12 +198,13 @@ DOCS: dict[str, str] = {
         Parameters
         ----------
         path:
-            Output path stem. ``None`` (the default) writes a collision-safe
-            file in the current directory (``modelgraph.<format>``, then
-            ``modelgraph-2.<format>``, ...) and prints its path, so a bare
-            ``draw()`` never overwrites an earlier picture. An explicit path is
-            written exactly (overwriting) and printed only when the trace is
-            verbose. Backward and combined graphs default to
+            Output path; its extension picks the format (``"g.png"`` writes PNG).
+            An explicit path is always written (overwriting), printed only when
+            the trace is verbose. ``None`` (the default): inside a Jupyter kernel
+            the picture displays inline and no file is written; elsewhere a
+            collision-safe file is written in the current directory
+            (``modelgraph.<format>``, then ``modelgraph-2.<format>``, ...) and
+            its path printed. Backward and combined graphs write
             ``backward_modelgraph`` and ``combined_modelgraph``.
         graph:
             Which graph: ``"forward"`` (the ops), ``"backward"`` (the captured
@@ -239,7 +240,7 @@ DOCS: dict[str, str] = {
         layout:
             Node placement: ``"auto"``, ``"dot"`` or ``"rank"``.
         renderer:
-            ``"graphviz"`` (default) or the experimental ``"dagua"`` after opt-in.
+            ``"graphviz"`` (default) or a renderer registered out of tree.
         direction:
             Edge flow: ``"bottomup"``, ``"topdown"``, ``"leftright"`` or
             ``"rightleft"``. ``None`` takes the graph's default (forward
@@ -248,10 +249,15 @@ DOCS: dict[str, str] = {
             Node label style: ``"default"`` or ``"profiling"``.
         show_buffers:
             Buffer visibility: ``"never"``, ``"meaningful"`` or ``"always"``.
+        show_edge_shapes:
+            Label forward dataflow edges with producer output shapes (default False);
+            multi-output calls label each tensor slot separately.
         show_legend:
             Tri-state legend visibility. ``None`` (default) draws a legend only
-            when an encoding channel is active, ``True`` draws the full theme
-            legend, ``False`` disables the legend even with channels active.
+            when an encoding channel is active, and the key on a ``module=``
+            focused draw; ``True`` draws the full theme legend (on a focused
+            draw, with a reading key explaining the picture's notation),
+            ``False`` disables the legend even with channels active.
         color_by:
             Fill encoding channel (keyword-only; unstable). A Layer/Op field
             name (``"flops_forward"``), a scalar builtin (``"time"``,
@@ -286,10 +292,13 @@ DOCS: dict[str, str] = {
             ``"intervention"``, ``"bundle_delta"``), a mapping of layer label
             to value, or a callable ``node -> value``.
         node_label_fields:
-            Explicit list of label rows to show on every node.
+            Explicit list of label rows to show on every node. ``"label"`` keeps
+            the default title's pass marks (``:2``, ``(x3)``); ``"pass"`` adds
+            no row on a single-pass node.
         graph_overrides, edge_overrides, grad_edge_overrides, module_overrides:
             Graphviz attribute overrides for the graph, forward edges, gradient
-            edges and module boxes.
+            edges and module boxes. A static forward-edge ``fontsize`` also sizes
+            the edge annotations (pass ranges, IF/THEN, argument labels).
         node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn:
             Per-node styling and selection callbacks (see ``tl.viz.nodes``).
         intervention_mode:
@@ -299,7 +308,8 @@ DOCS: dict[str, str] = {
         code_panel:
             Source-location panel option (``False``, ``True`` or a panel spec).
         font_size, dpi:
-            Typography and raster resolution overrides.
+            Typography and raster resolution overrides; ``font_size`` sizes the
+            edge annotations when ``edge_overrides`` sets no ``fontsize``.
         order_siblings:
             Keep sibling ops in execution order (a post-pass; off while
             ``stack_by`` is active).
@@ -339,10 +349,23 @@ DOCS: dict[str, str] = {
             Combined graph: placement of backward-only nodes (``"upstream"``,
             ``"outside"``, ``"downstream"`` or ``"own"``).
         file_format:
-            Output file format (``"pdf"`` default, ``"svg"``, ``"png"``, ...).
+            Format for a path with no extension, or a bare call (``"pdf"``, or
+            ``"svg"`` inline); a different format than the path's extension refuses.
         open_viewer:
             ``True`` opens the written picture in the system viewer; the
             default never opens anything.
+        highlight:
+            Keyword-only. Named highlight drawn over the graph. ``None`` (the
+            default) draws the plain graph. ``"interventions"`` draws the
+            surgery lens: every recorded intervention is marked on its node
+            (solid border = recorded fact, dashed = heuristic attribution),
+            the caption carries the per-lane census, and when a figure is
+            written the full census text lands beside it as
+            ``<path>.census.txt`` (beside the collision-safe file a bare draw
+            chose). A trace with no recorded intervention refuses
+            ``surgery_evidence_missing``; any other value refuses
+            ``draw_highlight_invalid`` naming the allowed values. The other
+            keywords you pass win over the lens's own settings.
         
         Returns
         -------
@@ -548,21 +571,6 @@ DOCS: dict[str, str] = {
             A ``SummaryReport`` (``str`` subclass) carrying typed rows,
             totals, capture facts, and the
             render/print/to_pandas/to_markdown/to_html result API.
-        """
-    ),
-    "to_dagua_graph": (
-        """Translate this model log into an experimental Dagua graph.
-        
-        Parameters
-        ----------
-        rolled, depth, show_buffers, direction, include_grad_edges:
-            Forwarded unchanged to
-            :func:`torchlens.experimental.dagua.trace_to_dagua_graph`.
-        
-        Returns
-        -------
-        Any
-            Dagua graph object.
         """
     ),
     "narrate": (

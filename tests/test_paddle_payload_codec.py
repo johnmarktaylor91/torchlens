@@ -10,13 +10,17 @@ import pytest
 
 paddle = pytest.importorskip("paddle")
 
+import torch  # noqa: E402
+
 import torchlens as tl  # noqa: E402
+from torchlens._io.format3.codec_policy import backend_materializes  # noqa: E402
 from torchlens._io.payload_codec import get_payload_codec  # noqa: E402
 from torchlens._io.tensor_policy import Ok  # noqa: E402
+from torchlens.backends.registry import get_backend_spec  # noqa: E402
 from torchlens.validation import validate_tlspec  # noqa: E402
 from torchlens.validation.invariants import check_metadata_invariants  # noqa: E402
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 paddle.seed(0)
 
@@ -143,12 +147,15 @@ def test_paddle_tlspec_manifest_runtime_fingerprint(tmp_path: Path) -> None:
 
     assert manifest["schema_version"] == 2
     assert manifest["backend"] == "paddle"
-    assert manifest["torch_version"] is None
+    # Saved format 3 stamps the writer's torch (a writer identity field) on every artifact,
+    # keeps only the include flags in payload_policy, and reads the payload policy and its
+    # materialization from the backend spec.
+    assert manifest["torch_version"] == torch.__version__
     assert manifest["backend_runtime"]["name"] == "paddle"
     assert manifest["backend_runtime"]["version"] == paddle.__version__
     assert manifest["backend_runtime"]["version"] != "0.0.metadata"
-    assert manifest["payload_policy"]["policy"] == "array_payloads"
-    assert manifest["payload_policy"]["materialization_supported"] is True
+    assert get_backend_spec("paddle").serialization_policy.payload_policy == "array_payloads"
+    assert backend_materializes(manifest["backend"]) is True
     assert manifest["body_format"] == "safetensors"
 
 

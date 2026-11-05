@@ -28,6 +28,16 @@ class ContainerReconstructionError(_ActionableErrorMixin, TorchLensError, ValueE
     not only an internal codec error: it resolves from ``torchlens.errors``,
     carries ``fields["code"] == "container_spec_inadmissible"`` plus a remedy,
     and rows in ``docs/reference/error_refusal_contract.md``.
+
+    Examples
+    --------
+    >>> try:
+    ...     raise tl.errors.ContainerReconstructionError("type 'os.system' is not a container")
+    ... except ValueError as e:
+    ...     print(type(e).__name__, e.fields["code"])
+    ContainerReconstructionError container_spec_inadmissible
+    >>> issubclass(tl.errors.ContainerReconstructionError, tl.errors.TorchLensError)
+    True
     """
 
     def __init__(

@@ -11,16 +11,27 @@ re-exported there; new consumers import this module directly.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 from torch import nn
 
 from .._data_classes._trace_missing_attrs import is_live_trace
-from .errors import AmbiguousAxisError, HookValueError, NonExecutableSpecError
-from .hooks import HookContext
-from .stochastic import _NAMED_AXIS_TOKENS, _resolve_over_axes
+from .._errors import InvalidArgumentError
+from .._utils._display_errors import lookup_message
+from ._facet_writes import _active_facet_fire, _facet_home_label
+from .errors import AmbiguousAxisError, HookValueError, _refuse_non_executable
+from .hooks import HookContext, _resolve_facet_specs
+from .stochastic import (
+    _NAMED_AXIS_TOKENS,
+    _prove_event_geometry,
+    _record_sampling,
+    _resolve_over_axes,
+)
 from .types import Edit, HelperPortability, Signal
+
+if TYPE_CHECKING:
+    from .population import Population
 
 
 def _mean_ablate_axes(dim: Any) -> Literal["all"] | tuple[int, ...] | None:
@@ -198,7 +209,7 @@ def _non_executable_builtin_placeholder(
             Always -- the helper carries an audit-only opaque argument.
         """
 
-        raise NonExecutableSpecError(
+        _refuse_non_executable(
             f"Builtin helper {name!r} was loaded with a non-executable "
             f"(audit-only) argument {opaque_arg!r} and cannot be run. Re-save the "
             "intervention at level='executable_with_callables' (or 'portable') "
@@ -292,11 +303,51 @@ def _source_tensor_or_out(source: Any, out: torch.Tensor) -> torch.Tensor:
     raise HookValueError(f"unsupported tensor source for helper: {type(source).__name__}")
 
 
+def _resolve_vector_axis(
+    direction: torch.Tensor,
+    out: torch.Tensor,
+    *,
+    infer: bool,
+) -> tuple[int | None, str]:
+    """Infer the out axis of a 1-D direction, or explain why it cannot be.
+
+    Parameters
+    ----------
+    direction:
+        1-D direction tensor.
+    out:
+        Activation tensor with two or more axes.
+    infer:
+        Whether the caller infers an omitted ``dim`` (``tl.steer``).
+
+    Returns
+    -------
+    tuple[int | None, str]
+        The only axis of ``out`` whose size equals the direction's length and an
+        empty message; or ``None`` and the ``AmbiguousAxisError`` message, which
+        names the matching dims (two or more, or none) when ``infer`` is set.
+    """
+
+    if not infer:
+        return None, "vector directions require explicit dim to avoid axis ambiguity"
+    length = int(direction.shape[0])
+    shape = tuple(out.shape)
+    matches = [axis for axis, size in enumerate(shape) if size == length]
+    if len(matches) == 1:
+        return matches[0], ""
+    found = f"matches dims {matches} of" if matches else "matches no dim of"
+    return None, (
+        f"cannot infer the axis for a direction of length {length}: it {found} "
+        f"out shape {shape}; pass dim= to name the axis the direction lies along"
+    )
+
+
 def _align_direction(
     direction: torch.Tensor,
     out: torch.Tensor,
     *,
     dim: int | None,
+    infer: bool = False,
 ) -> torch.Tensor:
     """Align a direction tensor with an out tensor.
 
@@ -308,6 +359,10 @@ def _align_direction(
         Activation tensor.
     dim:
         Axis receiving a vector direction.
+    infer:
+        Infer an omitted ``dim`` for a vector direction when exactly one out
+        axis has its length (``tl.steer``); otherwise an omitted ``dim``
+        refuses.
 
     Returns
     -------
@@ -319,9 +374,9 @@ def _align_direction(
         return direction
     if direction.ndim == 1 and out.ndim > 1:
         if dim is None:
-            raise AmbiguousAxisError(
-                "vector directions require explicit dim to avoid axis ambiguity"
-            )
+            dim, refusal = _resolve_vector_axis(direction, out, infer=infer)
+            if dim is None:
+                raise AmbiguousAxisError(refusal)
         normalized_axis = dim % out.ndim
         if direction.shape[0] != out.shape[normalized_axis]:
             raise HookValueError(
@@ -471,3 +526,265 @@ def _patch_source_identity(
         identity["positions"] = repr(pairs)
         identity["position_axis"] = str(int(position_axis))
     return identity
+
+
+def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
+    """Resolve one PASS-QUALIFIED donor op on the patch source trace.
+
+    Prefers the fire context's pass-qualified ``label`` spelling, then
+    derives ``layer_label:pass_index``; a bare label reaching a multi-pass
+    donor site refuses typed (never guess a pass -- the historical bare
+    lookup silently returned the LAST pass). Returns ``(site_label, op)``.
+    """
+
+    context = layer_log if layer_log else {}
+    qualified = context.get("label")
+    bare = context.get("layer_label")
+    pass_index = context.get("pass_number")
+
+    site_label: Any = None
+    if isinstance(qualified, str) and ":" in qualified:
+        site_label = qualified
+    elif isinstance(bare, str) and isinstance(pass_index, int) and pass_index >= 1:
+        site_label = f"{bare}:{pass_index}"
+    elif bare is not None:
+        site_label = bare
+
+    source_site = None
+    if site_label is not None:
+        source_site = source._layer_dict_all_keys.get(site_label)
+    if source_site is None:
+        live_label, source_site = _live_capture_donor(source, context)
+        if source_site is not None:
+            site_label = live_label
+    if source_site is None:
+        raise HookValueError(
+            f"patch_from source trace has no site {site_label!r}; patch "
+            "selections must resolve on sites the source captured "
+            "(multi-pass sites resolve pass-qualified, 'label:pass'; a live "
+            "rerun or bound firing resolves to the source op captured at the "
+            "same position, only when that op has the same type and shape)."
+        )
+    if isinstance(site_label, str) and ":" not in site_label:
+        num_passes = int(getattr(source_site, "num_passes", 1) or 1)
+        if num_passes > 1:
+            layer_label = getattr(source_site, "short_layer_label", site_label)
+            raise HookValueError(
+                lookup_message(
+                    f"patch_from donor site {site_label!r} is multi-pass "
+                    f"({num_passes} passes) and the fire context carries no pass.",
+                    [f"{layer_label}:{index}" for index in range(1, num_passes + 1)],
+                    "Address one donor pass explicitly; a donor pass is never guessed.",
+                ),
+                code="patch_donor_pass_ambiguous",
+                site=site_label,
+                num_passes=num_passes,
+            )
+    return site_label, source_site
+
+
+def _donor_facet_slice(source: Any, donor_op: Any, value: torch.Tensor) -> torch.Tensor:
+    """Return the facet slice of a donor value when a facet write is firing.
+
+    Outside a facet scatter wrapper the donor value is returned unchanged. Inside
+    one, the wrapper's facet selector is resolved on the SOURCE trace and the
+    view whose home is the donor op is applied to the donor value; when the
+    source trace serves no such facet view (its module facets were not kept),
+    the target's own facet transform chain (the portable view definition) is
+    applied to the donor value instead.
+    """
+
+    fire = _active_facet_fire()
+    if fire is None:
+        return value
+    donor_labels = {
+        str(label)
+        for label in (
+            getattr(donor_op, "_layer_label_raw", None),
+            getattr(donor_op, "layer_label", None),
+            getattr(donor_op, "label", None),
+        )
+        if label is not None
+    }
+    view_spec = fire.spec
+    for _facet_name, source_spec in _resolve_facet_specs(source, fire.selector):
+        if source_spec.home is donor_op or _facet_home_label(source_spec) in donor_labels:
+            view_spec = source_spec
+            break
+    return cast(torch.Tensor, view_spec.apply_transforms(value))
+
+
+def _members_dim_without_population(source: Any | None, dim: Any) -> InvalidArgumentError:
+    """``dim='members'`` names a Population axis; any other source has none."""
+
+    return InvalidArgumentError(
+        "mean_ablate(dim='members') averages over a Population's members, "
+        f"and the source is {type(source).__name__ if source is not None else 'the site'}: "
+        "a site, tensor or Op-like source has no member axis",
+        code="intervention_over_invalid",
+        remedy=(
+            "pass source=<Population> with dim='members' for the elementwise "
+            "across-member mean, or dim=None / integer axes for this source"
+        ),
+        argument="dim",
+        received=repr(dim),
+    )
+
+
+def _dim_outside_mean_vocabulary(dim: Any) -> InvalidArgumentError:
+    """A ``dim`` spelling the hook does not compute refuses at construction."""
+
+    return InvalidArgumentError(
+        f"mean_ablate(dim={dim!r}) is outside the mean vocabulary: dim=None "
+        "averages every axis, an int or tuple of ints names the axes to "
+        "average, and dim='members' averages over a Population's members. "
+        "Accepting another token would record a policy the hook does not compute",
+        code="intervention_over_invalid",
+        remedy=(
+            "pass dim=None for the mean over all axes, or the explicit integer "
+            "axis (or tuple of axes) to average; pass source=<tensor> or "
+            "source=<Population> to average something other than the site "
+            "(dim='members' for the elementwise member mean)"
+        ),
+        argument="dim",
+        received=repr(dim),
+    )
+
+
+def _source_mean_spec(
+    source: Any | None, *, axes: Literal["all"] | tuple[int, ...], allow_shape_change: bool
+) -> Edit:
+    """Build the ``mean_ablate`` spec for a self, tensor or Op-like source."""
+
+    def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for mean ablation."""
+
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
+            """Return an out-shaped tensor filled with the source mean."""
+
+            values = _source_tensor_or_out(source, out).to(device=out.device, dtype=out.dtype)
+            if axes == "all":
+                return torch.zeros_like(out) + values.mean()
+            resolved = _resolve_over_axes(axes, values.ndim, verb="mean_ablate")
+            reduced = values.mean(dim=list(cast("tuple[int, ...]", resolved)), keepdim=True)
+            if source is None:
+                return torch.zeros_like(out) + reduced
+            return _broadcast_mean(reduced, out, argument="source").clone()
+
+        return _hook
+
+    # DERIVED, never tabled (edits memo D18): True only when the fill value
+    # provably never reads the traced batch. An external source qualifies;
+    # the self-mean reads every batch row and fails closed, and couples the
+    # rows (D34), so a chunked capture refuses it at attach.
+    batch_independent = source is not None
+    return _helper_spec(
+        "mean_ablate",
+        args=(source,),
+        kwargs={
+            "dim": None if axes == "all" else axes,
+            "allow_shape_change": allow_shape_change,
+        },
+        factory=factory,
+        signal="forward",
+        is_batch_independent=batch_independent,
+        is_compatible_with_append=not allow_shape_change,
+        metadata={"stochastic": False, **({} if batch_independent else {"batch_coherent": True})},
+    )
+
+
+def _population_mean_spec(
+    reference: Population,
+    *,
+    axes: Literal["members", "all"] | tuple[int, ...],
+    allow_shape_change: bool,
+) -> Edit:
+    """Build the ``mean_ablate`` spec whose source is a population.
+
+    The fill is computed eagerly at construction (populations are prepared
+    before hooks install, D10); the record says ``stochastic=False`` and no
+    seed is ever invented. ``axes="members"`` is the elementwise
+    across-member mean, which must match the site's geometry exactly;
+    ``"all"`` reduces that mean to one scalar and explicit axes reduce it
+    with ``keepdim``, both broadcast back to the site.
+    """
+
+    member_mean = reference.mean()
+    if axes == "members":
+        fill = member_mean
+    elif axes == "all":
+        fill = member_mean.mean()
+    else:
+        fill = reference.mean(axes)
+
+    def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime population-mean fill hook."""
+
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
+            """Fill the site with the prepared population mean."""
+
+            prepared = fill.detach().to(device=out.device, dtype=out.dtype)
+            if axes == "members":
+                _prove_event_geometry(prepared, out, verb="mean_ablate")
+                value = prepared
+            else:
+                value = _broadcast_mean(prepared, out, argument="source")
+            _record_sampling(ctx, "mean_ablate", _population_mean_record(reference, ctx))
+            return value.clone()
+
+        return _hook
+
+    return _helper_spec(
+        "mean_ablate",
+        kwargs={
+            "dim": None if axes == "all" else axes,
+            "allow_shape_change": allow_shape_change,
+            "population_identity": reference.identity,
+            "population_count": len(reference),
+        },
+        factory=factory,
+        portability="opaque_audit",
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
+        metadata={"stochastic": False},
+    )
+
+
+def _population_mean_record(reference: Population, ctx: HookContext) -> dict[str, Any]:
+    """The sampling record of a population-mean fill: a reduction, never a draw."""
+
+    return {
+        "stochastic": False,
+        "population_identity": reference.identity,
+        "digest_kind": reference.digest_kind,
+        "population_count": len(reference),
+        "eligible_count": None,
+        "base_seed": None,
+        "derived_seed": None,
+        "donor_group_id": None,
+        "share_draw": None,
+        "logical_firing_coordinate": (),
+        "realized_draw_digest": None,
+        "replacement_mode": "evidence_mean",
+        "donor_grad": "detached",
+        "recomputation": bool(ctx.run_state.get("recomputation", False)),
+    }
+
+
+def _broadcast_mean(fill: torch.Tensor, out: torch.Tensor, *, argument: str) -> torch.Tensor:
+    """Expand a reduced mean to the site's shape, refusing typed when it cannot."""
+
+    if fill.shape == out.shape:
+        return fill
+    try:
+        return fill.expand(out.shape)
+    except RuntimeError:
+        raise InvalidArgumentError(
+            f"mean_ablate mean of shape {tuple(fill.shape)!r} does not broadcast to "
+            f"the site shape {tuple(out.shape)!r}",
+            code="sampling_geometry_mismatch",
+            remedy=(
+                "build the source at this site's geometry, or reduce over axes that broadcast back"
+            ),
+            argument=argument,
+        ) from None

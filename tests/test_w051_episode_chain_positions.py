@@ -122,7 +122,6 @@ def test_declared_crossing_derives_at_measured_chain_positions() -> None:
     assert envelope["break_step"] == 1
 
 
-@pytest.mark.smoke
 def test_undeclared_injection_refuses_and_teaches_crossings() -> None:
     """Measured alone, the surplus is ambiguous with multi-token decoding."""
 
@@ -135,6 +134,7 @@ def test_undeclared_injection_refuses_and_teaches_crossings() -> None:
     assert "crossings=(k, ...)" in message
 
 
+@pytest.mark.smoke
 def test_declared_crossing_requires_the_root_to_reproduce_the_entry_chain() -> None:
     """A root that does not return the fed ids cannot be chain-aligned."""
 
@@ -192,7 +192,6 @@ def test_tail_rederivation_without_disclosure_reads_the_tail() -> None:
     assert rederived_evidence_matches(log, {"header": legacy, "rows": rows}) is True
 
 
-@pytest.mark.smoke
 def test_forged_positions_do_not_rederive() -> None:
     """Rewritten positions read a different column: the anchor reports a mismatch."""
 
@@ -234,6 +233,7 @@ def test_positions_validator_geometry_against_rows() -> None:
         )
 
 
+@pytest.mark.smoke
 def test_ledger_assembly_refuses_positions_geometry_mismatch() -> None:
     log = _trace(_ToolInject(), crossings=(1,))
     ledger = episode_ledger_for(log)

@@ -259,7 +259,7 @@ def _first_replaced_tuple_index(
     return None
 
 
-def _active_backward_pass_index(grad_fn_handle: Any) -> int | None:
+def _active_backward_pass_number(grad_fn_handle: Any) -> int | None:
     """Return the active trace backward pass index for a grad_fn handle.
 
     Parameters
@@ -276,10 +276,10 @@ def _active_backward_pass_index(grad_fn_handle: Any) -> int | None:
     trace = getattr(grad_fn_handle, "trace", None)
     if trace is None:
         return None
-    return _trace_backward_pass_index(trace)
+    return _trace_backward_pass_number(trace)
 
 
-def _trace_backward_pass_index(trace: Any) -> int | None:
+def _trace_backward_pass_number(trace: Any) -> int | None:
     """Return a trace's active one-based backward pass index (``None`` outside a pass).
 
     The backward door sets the index for the length of one pass and drops it
@@ -296,5 +296,5 @@ def _trace_backward_pass_index(trace: Any) -> int | None:
         Active one-based backward pass index, when a pass is open.
     """
 
-    value = getattr(trace, "_active_backward_pass_index", None)
+    value = getattr(trace, "_active_backward_pass_number", None)
     return int(value) if isinstance(value, int) else None

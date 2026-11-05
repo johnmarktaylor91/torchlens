@@ -42,6 +42,17 @@ from ._utils import int_tuple
     "floor",
     "ceil",
     "round",
+    "type",
+    "float",
+    "double",
+    "half",
+    "bfloat16",
+    "square",
+    "reciprocal",
+    "erf",
+    "sign",
+    "tril",
+    "triu",
 )
 def pointwise(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Shape-preserving pointwise ops leave the receptive field unchanged (exact).
@@ -53,6 +64,25 @@ def pointwise(context: ReceptiveFieldRuleContext) -> _RuleResult:
     return context.passthrough(
         note="pointwise: each output element depends only on the same input element"
     )
+
+
+@register_rf_rule("identity")
+def identity(context: ReceptiveFieldRuleContext) -> _RuleResult:
+    """A module-boundary identity returns its one input tensor unchanged.
+
+    TorchLens records ``nn.Identity`` modules, and modules that return an input
+    tensor as is, through an ``identity`` op so the module boundary has its own
+    node. Its output is its input, so the field passes through exactly. Any
+    other shape (no parent, several parents, a changed shape) is refused as
+    unknown rather than guessed: backends that use the name for a creation op
+    (an identity matrix) have no traced parent.
+    """
+
+    parents = tuple(context.op.parents or ())
+    shapes = context.in_shapes
+    if len(parents) != 1 or len(shapes) != 1 or shapes[0] != context.out_shape:
+        return context.unknown("identity op is not a one-input, shape-preserving pass-through")
+    return context.passthrough(note="identity: the output is the input tensor itself")
 
 
 @register_rf_rule(
@@ -70,6 +100,22 @@ def pointwise(context: ReceptiveFieldRuleContext) -> _RuleResult:
     "minimum",
     "pow",
     "where",
+    "rsub",
+    "floordiv",
+    "remainder",
+    "lt",
+    "le",
+    "gt",
+    "ge",
+    "eq",
+    "ne",
+    "logical_and",
+    "logical_or",
+    "bitwise_and",
+    "bitwise_or",
+    "masked_fill",
+    "expand",
+    "broadcast_to",
 )
 def elementwise_binary(context: ReceptiveFieldRuleContext) -> _RuleResult:
     """Binary/n-ary elementwise: parents merge at the engine level.
@@ -84,6 +130,17 @@ def elementwise_binary(context: ReceptiveFieldRuleContext) -> _RuleResult:
         {"axis_alignment": "trailing"},
         "elementwise parents contribute same-position or broadcast coordinates",
     )
+
+
+@register_rf_rule("tensor", "arange", "zeros", "ones", "full", "empty", "eye", "linspace")
+def creation(context: ReceptiveFieldRuleContext) -> _RuleResult:
+    """Tensor creation has no tensor parents; the relation is never applied.
+
+    Registering it keeps the rule census clean: a mask constant or an index
+    range built inside a forward pass is a graph source, not a gap.
+    """
+
+    return context.passthrough(note="tensor creation carries no input geometry")
 
 
 @register_rf_rule("mean", "sum", "amax", "amin", "var", "std")

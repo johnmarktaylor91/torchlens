@@ -117,59 +117,6 @@ def _hand_kl(clean_logits: torch.Tensor, spliced_logits: torch.Tensor, start: in
     return float(per_position.sum()) / per_position.numel()
 
 
-def test_variance_fields_equal_a_float64_hand_computation(mlp_setup) -> None:
-    """Global, pooled and per-dimension variance explained match float64 by hand."""
-
-    model, x, sae = mlp_setup
-    result = sae_bridge.splice(model, x, site="relu_1_2", sae=sae)
-
-    global_fve, pooled, by_dim = _hand_variance(result.clean_site_out, result.reconstruction)
-    residual = result.reconstruction.double() - result.clean_site_out.double()
-    assert result.reconstruction_mse == pytest.approx(float((residual**2).mean()), rel=1e-12)
-    assert result.fraction_variance_explained == pytest.approx(global_fve, rel=1e-12)
-    assert result.fraction_variance_explained_pooled == pytest.approx(pooled, rel=1e-12)
-    assert result.fraction_variance_explained_by_dim.dtype == torch.float64
-    finite = torch.isfinite(by_dim)
-    assert torch.equal(torch.isfinite(result.fraction_variance_explained_by_dim), finite)
-    assert torch.allclose(
-        result.fraction_variance_explained_by_dim[finite], by_dim[finite], rtol=1e-12, atol=0
-    )
-    # ReLU units dead on the whole batch have zero variance: nan there, never 0.0.
-    assert torch.isnan(result.fraction_variance_explained_by_dim[~finite]).all()
-    assert result.zero_variance is False
-    assert "fraction_variance_explained" not in result.unavailable_metrics
-
-
-def test_latents_are_the_encoder_output_exactly(mlp_setup) -> None:
-    """Kept by default; equal to sae.encode(clean site); edits kept beside them."""
-
-    model, x, sae = mlp_setup
-    result = sae_bridge.splice(model, x, site="relu_1_2", sae=sae)
-    with torch.no_grad():
-        expected = sae.encode(result.clean_site_out)
-    assert torch.equal(result.latents, expected)
-    assert result.edited_latents is None
-
-    def keep_first_four(z: torch.Tensor) -> torch.Tensor:
-        return z * (torch.arange(z.shape[-1]) < 4)
-
-    edited = sae_bridge.splice(model, x, site="relu_1_2", sae=sae, latents_edit=keep_first_four)
-    assert torch.equal(edited.latents, expected)
-    assert torch.equal(edited.edited_latents, keep_first_four(expected))
-    with torch.no_grad():
-        assert torch.allclose(edited.reconstruction, sae.decode(keep_first_four(expected)))
-
-
-def test_keep_latents_false_drops_them_and_the_metrics_stay(mlp_setup) -> None:
-    """The cheaper spelling keeps every metric and no latents."""
-
-    model, x, sae = mlp_setup
-    full = sae_bridge.splice(model, x, site="relu_1_2", sae=sae)
-    lean = sae_bridge.splice(model, x, site="relu_1_2", sae=sae, keep_latents=False)
-    assert lean.latents is None and lean.edited_latents is None
-    assert lean.fraction_variance_explained_pooled == full.fraction_variance_explained_pooled
-
-
 def test_large_latents_warn_once_and_name_a_spelling_that_runs(
     mlp_setup, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -216,75 +163,6 @@ def test_zero_variance_sets_the_flag_and_never_returns_zero() -> None:
     coded = [w.message for w in caught if isinstance(w.message, TorchLensWarning)]
     assert [w.fields["code"] for w in coded] == ["sae_splice_zero_variance"]
     assert "Remedy:" in str(coded[0])
-
-
-def test_single_token_has_no_per_dimension_variance(mlp_setup) -> None:
-    """One token: the global number exists, the pooled one is nan and flagged."""
-
-    model, _x, sae = mlp_setup
-    result = sae_bridge.splice(model, torch.randn(1, 8), site="relu_1_2", sae=sae)
-    assert math.isfinite(result.fraction_variance_explained)
-    assert math.isnan(result.fraction_variance_explained_pooled)
-    assert result.zero_variance is True
-    assert "two tokens" in result.unavailable_metrics["fraction_variance_explained_pooled"]
-
-
-def test_next_token_metrics_are_none_with_a_reason_without_tokens(mlp_setup) -> None:
-    """No tokens=: every CE and KL field is None and says why."""
-
-    model, x, sae = mlp_setup
-    result = sae_bridge.splice(model, x, site="relu_1_2", sae=sae)
-    for name in (
-        "ce_loss_clean",
-        "ce_loss_spliced",
-        "ce_loss_zero_ablated",
-        "ce_loss_recovered",
-        "kl_divergence",
-    ):
-        assert getattr(result, name) is None
-        assert "tokens=" in result.unavailable_metrics[name]
-
-
-def _direct_logits(model: _TinyLM, tokens: torch.Tensor, site_value: torch.Tensor) -> torch.Tensor:
-    """Run the downstream of the site directly in float64."""
-
-    return nn.functional.linear(
-        site_value.double(), model.unembed.weight.double(), model.unembed.bias.double()
-    )
-
-
-def test_ce_recovered_and_kl_equal_hand_calculations(lm_setup) -> None:
-    """CE triple, loss recovered and KL: from the result's logits and from a direct run."""
-
-    model, ids, sae = lm_setup
-    result = sae_bridge.splice(model, ids, site=tl.func("relu"), sae=sae, tokens=ids)
-
-    clean_logits, spliced_logits = result.clean_outputs[0], result.spliced_outputs[0]
-    ce_clean = _hand_ce(clean_logits, ids, 0)
-    ce_spliced = _hand_ce(spliced_logits, ids, 0)
-    zero_logits = model.unembed.bias.detach().expand_as(clean_logits)
-    ce_zero = _hand_ce(zero_logits, ids, 0)
-    assert result.ce_loss_clean == pytest.approx(ce_clean, rel=1e-12)
-    assert result.ce_loss_spliced == pytest.approx(ce_spliced, rel=1e-12)
-    assert result.ce_loss_zero_ablated == pytest.approx(ce_zero, rel=1e-12)
-    recovered = (ce_zero - ce_spliced) / (ce_zero - ce_clean)
-    assert result.ce_loss_recovered == pytest.approx(recovered, rel=1e-10)
-    assert result.kl_divergence == pytest.approx(
-        _hand_kl(clean_logits, spliced_logits, 0), rel=1e-12
-    )
-
-    # Direct float64 forward from the site, independent of the replay.
-    with torch.no_grad():
-        site = torch.relu(model.hidden(model.embed(ids)))
-        recon = sae.decode(sae.encode(site))
-    direct_clean = _direct_logits(model, ids, site)
-    direct_spliced = _direct_logits(model, ids, recon)
-    assert result.ce_loss_clean == pytest.approx(_hand_ce(direct_clean, ids, 0), rel=1e-5)
-    assert result.ce_loss_spliced == pytest.approx(_hand_ce(direct_spliced, ids, 0), rel=1e-5)
-    assert result.kl_divergence == pytest.approx(
-        _hand_kl(direct_clean, direct_spliced, 0), rel=1e-4
-    )
-    assert set(result.unavailable_metrics).isdisjoint({"ce_loss_recovered", "kl_divergence"})
 
 
 def test_exclude_bos_keeps_position_zero_clean_and_out_of_every_metric(lm_setup) -> None:

@@ -56,6 +56,15 @@ class InputSpec:
     low / high:
         Optional value-range override. For integer dtypes the recipe is
         ``randint(low, high)``; for float dtypes ``uniform [low, high)``.
+
+    Examples
+    --------
+    >>> spec = InputSpec((1, 3, 8, 8), dtype=torch.float32, low=0.0, high=1.0)
+    >>> spec.shape
+    (1, 3, 8, 8)
+    >>> trace = tl.trace(model, input_shape=spec)
+    >>> trace.provenance.input_preprocessor is not None
+    True
     """
 
     shape: tuple[int, ...]

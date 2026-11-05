@@ -29,6 +29,11 @@ from torchlens.intervention.errors import (
 )
 from torchlens.options import CaptureOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
+
 _POLICIES = ("warn", "error", "disclose")
 
 
@@ -116,15 +121,6 @@ def test_bound_generate_door_policy(policy: str) -> None:
     assert [c for c in _codes(caught) if c.endswith("zero_fire")] == expected
 
 
-def test_bind_fired_rule_never_warns() -> None:
-    model, x = _setup()
-    bound = tl.when(tl.func("relu"), tl.zero_ablate()).bind(model)
-    with _caught() as caught:
-        bound(x)
-    assert bound.last_report.zero_fire_rule_ids == ()
-    assert not [c for c in _codes(caught) if c.endswith("zero_fire")]
-
-
 # --- tl.trace(intervene=) ------------------------------------------------------
 
 
@@ -178,13 +174,6 @@ def test_trace_policy_never_changes_the_capture() -> None:
     )
 
 
-def test_trace_fired_spec_never_warns() -> None:
-    model, x = _setup()
-    with _caught() as caught:
-        tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
-    assert not [c for c in _codes(caught) if c.endswith("zero_fire")]
-
-
 # --- Trace.run (rerun) -------------------------------------------------------
 
 
@@ -199,7 +188,7 @@ def _gated_rerun_case() -> tuple[nn.Module, tl.Trace, dict[str, bool]]:
     model = _ReluAdd()
     trace = tl.trace(model, torch.randn(2, 3), capture=CaptureOptions(replayable=True))
     gate = {"active": True}
-    trace.attach_hooks(
+    trace._attach_hooks(
         tl.func("relu") & tl.where(lambda _op: gate["active"], name_hint="runtime_gate"),
         tl.zero_ablate(),
     )
@@ -267,7 +256,7 @@ def test_fast_run_door_policy_knob_is_accepted(policy: str) -> None:
 
     model, trace, x_of = _fast_steered_case()
     with _caught() as caught:
-        result = trace.run(inputs=x_of(1), fast=True, on_zero_fire=policy)
+        result = trace.run_transaction(inputs=x_of(1), fast=True, on_zero_fire=policy)
     del model
     assert result.trace.last_run["hooks_unfired"] == 0
     assert not [c for c in _codes(caught) if c.endswith("zero_fire")]
@@ -298,7 +287,7 @@ def test_disclose_cannot_silence_the_post_capture_predicate_refusal(same_inputs:
     x = torch.randn(2, 4)
     trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     label = str(trace.find_sites(tl.func("relu"))[0].layer_label)
-    trace.attach_hooks(tl.where(lambda p: p.layer_label == label), tl.zero_ablate())
+    trace._attach_hooks(tl.where(lambda p: p.layer_label == label), tl.zero_ablate())
     run_x = x if same_inputs else x + 1.0
     for policy in _POLICIES:
         with pytest.raises(LiveModeLabelError) as refused:

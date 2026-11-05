@@ -42,7 +42,7 @@ cost is SUPERLINEAR in step count — measured on gpt2-124M (CPU, 8-token
 prompt): N=20 costs 79 s (103x native) with a 146 MB artifact and 1.9 GB peak
 RSS; N=100 costs 657 s (323x native), 947 MB, 5.4 GB peak RSS. Do not plan
 wrapped episode captures for hundreds of steps; the guarded-fast tier
-(`trace.run(inputs=..., fast=True)`) is the engine for episode-scale
+(`trace.run_transaction(inputs=..., fast=True)`) is the engine for episode-scale
 re-runs, and it must reproduce the wrapped tier's tokens bit-exactly (a
 pinned cross-tier identity test guards this). The guarded-fast tier is NOT
 reachable from the default capture above: `fast=True` collects functional
@@ -51,7 +51,7 @@ capture meant for fast re-runs must pass a functional save predicate --
 `tl.trace(runner, ids, episode=..., save=tl.func("cat"))` (any `tl.func(...)`
 selection covering the loop's functional ops) -- or the run refuses typed
 (`run_capability_unavailable`, teaching the `save=` remedy). The default
-capture re-runs through `trace.run(inputs=...)` (the full transactional
+capture re-runs through `trace.run_transaction(inputs=...)` (the full transactional
 tier) instead. Either re-run is a FRESH execution: the product drops the
 episode ledger to a travel note and clears the per-op `episode_step` stamps
 (the travel policy below), and the product saves and loads as a plain
@@ -84,8 +84,8 @@ episode-declared and undeclared runs of the same seeded fixture.
 be a PROPER submodule of the traced episode root. On a BOUND-METHOD root
 (F41, the ruled root contract: `tl.trace(model.generate, ids,
 episode=EpisodeOptions(n_steps=N))` — the owner resolves via
-`method.__self__` and registers as a submodule of the TL-authored wrapper
-root) `stepped_module` DEFAULTS to the owner; on a module root it is
+`method.__self__` and is the root `self` of the TL-authored wrapper root's
+tree; the stepped address recorded is `self`) `stepped_module` DEFAULTS to the owner; on a module root it is
 required, and `None` refuses typed (`episode_declaration_invalid`) — wrap
 the loop in a module or trace the bound generation method directly. Step
 tallying is FLAT: each
@@ -273,7 +273,7 @@ forward again.
 ## Evidence never rides a fresh execution (the travel policy)
 
 The per-step ledger is evidence about ONE executed forward. A fresh
-re-execution product — `trace.run(inputs=...)` on any provider, including
+re-execution product — `trace.run_transaction(inputs=...)` on any provider, including
 guarded-fast — never carries the original capture's episode ledger: the
 annotations travel policy (`torchlens/_capture/_annotations_travel.py`)
 replaces it with an inert in-key note
@@ -512,7 +512,7 @@ size evidence only) is N per-step captures composed in a `Bundle` with S6
 `episode_member` relation rows, under OBSERVER DISCIPLINE: the driver's
 native forward owns the live carried state; each capture observes an isolated
 copy; a capture product is never the source of carried episode state.
-`Bundle.episode_status(episode_id, ledger=...)` folds member outcomes
+`Bundle.episode_status(episode_id, episode_ledger=...)` folds member outcomes
 into a DERIVED episode status (`episode_complete` /
 `episode_halted_at_step` / `episode_aborted_at_step` /
 `episode_failed_at_step` / `episode_unknown`) — a total, fail-closed

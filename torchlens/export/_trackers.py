@@ -47,6 +47,17 @@ def tensorboard(trace: Any, writer: Any, *, step: int, prefix: str = "torchlens"
     -------
     Any
         The writer object passed in.
+
+    Examples
+    --------
+    >>> import types
+    >>> trace = tl.trace(model, x)
+    >>> seen = []
+    >>> writer = types.SimpleNamespace(add_scalar=lambda tag, value, step: seen.append(tag), add_text=lambda *a: None, flush=lambda: None)
+    >>> tl.export.tensorboard(trace, writer, step=0) is writer
+    True
+    >>> "torchlens/num_layers" in seen
+    True
     """
 
     # a non-Trace input used to write plausible zeros (getattr defaults).
@@ -92,6 +103,17 @@ def wandb(trace: Any, to: Any | None = None, name: str = "torchlens_trace") -> d
     ------
     ImportError
         If W&B is unavailable.
+
+    Examples
+    --------
+    >>> # requires: wandb
+    >>> import types
+    >>> logged = []
+    >>> out = tl.export.wandb(tl.trace(model, x), types.SimpleNamespace(log=logged.append), name="layers")
+    >>> "layers" in logged[0]
+    True
+    >>> out["num_layers"] > 0
+    True
     """
 
     try:
@@ -180,6 +202,17 @@ def mlflow(
         If ``client`` lacks a required method, an ``MlflowClient`` comes
         without ``run_id``, or ``run_id`` is given to a client that cannot
         take it.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> import types; metrics, tags = {}, {}
+    >>> client = types.SimpleNamespace(log_metric=lambda key, value: metrics.update({key: value}), log_table=lambda data, artifact_file: None, log_text=lambda text, artifact_file: None, set_tag=lambda key, value: tags.update({key: value}))
+    >>> out = tl.export.mlflow(tl.trace(model, x), client)
+    >>> "torchlens.num_layers" in metrics
+    True
+    >>> out["artifacts"]
+    ['torchlens/layers.json', 'torchlens/report.txt']
     """
 
     metrics = _summary_metrics(trace)
@@ -337,6 +370,16 @@ def aim(trace: Any, to: Any | None = None, prefix: str = "torchlens") -> dict[st
     ------
     TypeError
         If ``to`` lacks ``track``, ``add_tag`` or item assignment.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> trace = tl.trace(model, x)
+    >>> Run = type("Run", (dict,), {"track": lambda self, value, name, **kw: None, "add_tag": lambda self, tag: None})
+    >>> run = Run()
+    >>> out = tl.export.aim(trace, run)
+    >>> "torchlens.report" in run
+    True
     """
 
     metrics = _summary_metrics(trace)
@@ -431,9 +474,25 @@ def _tracker_dataframe(log: Any) -> Any:
         Pandas dataframe suitable for strict tracker table types.
     """
 
+    import pandas as pd
+
     dataframe = log.to_pandas()
-    # ``apply`` builds a new frame, which does not reliably propagate attrs.
-    return attach_dataframe_honesty(dataframe.apply(lambda column: column.map(_tracker_cell)), log)
+    # Build every column as an ``object`` series from the scalarized cells.
+    # ``Series.map`` keeps a nullable extension dtype (pandas 3), which turns the
+    # ``None`` a missing cell maps to back into ``pd.NA``: not a primitive, and
+    # strict tracker tables reject it. A new frame also drops attrs, so the
+    # honesty facts are attached afterwards.
+    columns = [
+        pd.Series(
+            [_tracker_cell(cell) for cell in dataframe.iloc[:, position].tolist()],
+            index=dataframe.index,
+            dtype=object,
+        )
+        for position in range(dataframe.shape[1])
+    ]
+    tracker = pd.concat(columns, axis=1, ignore_index=True) if columns else dataframe.astype(object)
+    tracker.columns = dataframe.columns
+    return attach_dataframe_honesty(tracker, log)
 
 
 def _tracker_cell(value: Any) -> Any:

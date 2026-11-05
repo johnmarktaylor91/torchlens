@@ -65,7 +65,7 @@ def test_rg10_shape_resnet18_memory_disk_reload_export_agree(tmp_path: Path) -> 
     assert torch.equal(row3[0], in_memory["pool"][3])
 
     dest = tmp_path / "export"
-    export_extraction(out, dest, format="npy", keys=["pool"])
+    export_extraction(out, dest, file_format="npy", keys=["pool"])
     import numpy as np
 
     contract = json.loads((dest / "export_contract.json").read_text())

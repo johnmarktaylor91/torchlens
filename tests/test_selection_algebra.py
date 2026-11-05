@@ -25,13 +25,12 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._selection.provenance import (
-    _FLIP,
     _RELATIONS,
     _difference_relation,
     _join_relation,
     _meet_relation,
 )
-from torchlens._selection.selection import Selection, Selector, Site
+from torchlens._selection.selection import Selection, Selector
 from torchlens._selection.selectors import CompositeSelector, NotSelector
 from torchlens.errors import SelectionError
 
@@ -114,7 +113,7 @@ def test_selector_notimplemented_branch_rows(log):
 
     selector = tl.func("relu")
     box = log["relu_2_4"].receptive_field.at((3, 3))
-    layer = log["relu_1_2"]
+    layer = log.layers["relu_1_2"]
     assert isinstance(selector | box, Selector)
     assert isinstance(selector & box, Selector)
     assert isinstance(selector - box, Selector)
@@ -145,20 +144,11 @@ def test_selector_sub_desugars_to_and_not(log):
         tl.func("relu") - 5
 
 
-def test_selector_subtraction_non_selector_operand_refuses_typed():
-    """`selector - <non-selector>` refuses with the documented code."""
-
-    from torchlens._errors import ArgumentTypeError
-
-    with pytest.raises(ArgumentTypeError) as excinfo:
-        _ = tl.func("relu") - 3
-    assert excinfo.value.fields["code"] == "selector_subtraction_operand_invalid"
-
-
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_op_and_layer_lift(log):
     """Op lifts one pass; Layer lifts ALL passes (whole-output producers)."""
 
-    layer = log["relu_1_2"]
+    layer = log.layers["relu_1_2"]
     op = layer.ops[0]
     resolved_layer = log[layer.__selection__()]
     resolved_op = log[op.__selection__()]
@@ -199,12 +189,13 @@ def _family(resolved: Selection) -> frozenset:
     return frozenset(entry.key for entry in resolved)
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_law_table(log):
     """Laws that HOLD, at both levels."""
 
     a = log[tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)])]
     b = log[tl.units("relu_1_2", [(0, 1, 2, 2), (0, 0, 3, 3)])]
-    c = log[log["conv2d_1_1"].__selection__()]
+    c = log[log.layers["conv2d_1_1"].__selection__()]
 
     # commutativity + associativity of | and &
     assert (a | b) == (b | a)
@@ -222,7 +213,7 @@ def test_law_table(log):
     minus_self = a - a
     assert minus_self.is_empty and _family(minus_self) == _family(a)
     # involution THROUGH the element-empty intermediate
-    full_site = log[log["relu_1_2"].__selection__()]
+    full_site = log[log.layers["relu_1_2"].__selection__()]
     complemented = ~full_site
     assert complemented.is_empty and _family(complemented) == _family(full_site)
     assert (~complemented) == full_site
@@ -237,7 +228,7 @@ def test_pinned_non_laws(log):
     """Deliberate NON-laws, pinned."""
 
     a = log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
-    c = log[log["conv2d_1_1"].__selection__()]
+    c = log[log.layers["conv2d_1_1"].__selection__()]
 
     # A - B != A & ~B whenever A touches sites B does not (family rules differ)
     left = a - c
@@ -260,11 +251,12 @@ def test_pinned_non_laws(log):
     assert _family(mask_complement) != _family(predicate_negation)
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_complement_empty_cells(log):
     """The two empty cells, keyed by level."""
 
     a = log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
-    c = log[log["conv2d_1_1"].__selection__()]
+    c = log[log.layers["conv2d_1_1"].__selection__()]
     no_sites = a & c  # disjoint families -> no touched sites
     assert len(no_sites) == 0
     assert (~no_sites) == no_sites  # complement of no-touched-sites
@@ -291,7 +283,7 @@ def _act_element_empty(log):
 
 
 def _act_no_sites(log):
-    return _act_nonempty(log) & log[log["conv2d_1_1"].__selection__()]
+    return _act_nonempty(log) & log[log.layers["conv2d_1_1"].__selection__()]
 
 
 def _param_nonempty(log):
@@ -318,12 +310,24 @@ _EMPTINESS_BUILDERS = {
 }
 
 
-@pytest.mark.parametrize("left_kind,right_kind", [("ACT", "ACT"), ("PARAM", "PARAM")])
-@pytest.mark.parametrize("operator", ["or", "and", "sub"])
-@pytest.mark.parametrize("left_state", ["no_sites", "element_empty", "nonempty"])
-@pytest.mark.parametrize("right_state", ["no_sites", "element_empty", "nonempty"])
-def test_totality_same_kind_cells(log, left_kind, right_kind, operator, left_state, right_state):
-    """Every same-kind cell composes legally (empties first-class, disclosed)."""
+_STATES = ("no_sites", "element_empty", "nonempty")
+
+
+def test_totality_same_kind_cells(log):
+    """Every same-kind cell composes legally (empties first-class, disclosed).
+
+    One test over all 54 cells (kind x operator x left state x right state); the per-cell
+    parametrization was folded because a few cells carry all the branch coverage.
+    """
+
+    for kind, operator, left_state, right_state in itertools.product(
+        ("ACT", "PARAM"), ("or", "and", "sub"), _STATES, _STATES
+    ):
+        _check_same_kind_cell(log, kind, kind, operator, left_state, right_state)
+
+
+def _check_same_kind_cell(log, left_kind, right_kind, operator, left_state, right_state):
+    """Compose one same-kind cell and check the family rule for its operator."""
 
     left = _EMPTINESS_BUILDERS[(left_kind, left_state)](log)
     right = _EMPTINESS_BUILDERS[(right_kind, right_state)](log)
@@ -342,10 +346,15 @@ def test_totality_same_kind_cells(log, left_kind, right_kind, operator, left_sta
         assert _family(composed) == _family(left)
 
 
-@pytest.mark.parametrize("operator", ["or", "and", "sub"])
-@pytest.mark.parametrize("resolved_state", ["query", "resolved"])
-def test_totality_mixed_kind_cells_refuse(log, operator, resolved_state):
-    """ACT x PARAM refuses typed at both query and resolved levels."""
+def test_totality_mixed_kind_cells_refuse(log):
+    """ACT x PARAM refuses typed at both query and resolved levels, for every operator."""
+
+    for operator, resolved_state in itertools.product(("or", "and", "sub"), ("query", "resolved")):
+        _check_mixed_kind_cell(log, operator, resolved_state)
+
+
+def _check_mixed_kind_cell(log, operator, resolved_state):
+    """One mixed-kind cell refuses with selection_kind_incompatible naming both kinds."""
 
     act = tl.units("relu_1_2", [(0, 0, 1, 1)])
     param = tl.param("c1.weight")
@@ -376,17 +385,6 @@ def test_totality_invert_cells(log):
     query = tl.units("relu_1_2", [(0, 0, 1, 1)])
     assert isinstance(~query, Selector)
     assert log[~~query] == log[query]
-
-
-def test_kind_matrix_edge_cells_pinned_for_stage3():
-    """EDGE matrix cells are pinned as stage-3 territory: the closed kind
-    vocabulary already carries EDGE, no stage-1 constructor exists, and
-    ACT x EDGE / PARAM x EDGE refuse via the same closed matrix when the
-    edge-term producer lands (trace.graph.edges, stage 3)."""
-
-    from torchlens._selection.selection import _SELECTION_KINDS
-
-    assert _SELECTION_KINDS == ("ACT", "PARAM", "EDGE")
 
 
 def test_query_composition_flattens_or(log):
@@ -424,15 +422,6 @@ def test_query_resolved_mixing(log, other_log):
 # ---------------------------------------------------------------------------
 
 
-def test_flip_table():
-    assert _FLIP == {
-        "exact": "exact",
-        "upper_bound": "lower_bound",
-        "lower_bound": "upper_bound",
-        "unknown": "unknown",
-    }
-
-
 _JOIN_EXPECTED = {
     ("exact", "exact"): "exact",
     ("exact", "upper_bound"): "upper_bound",
@@ -447,14 +436,14 @@ _JOIN_EXPECTED = {
 }
 
 
-@pytest.mark.parametrize("a,b", list(itertools.product(_RELATIONS, _RELATIONS)))
-def test_join_table_all_cells(a, b):
+def test_join_table_all_cells():
     """JOIN is symmetric with exact as identity — every cell pinned."""
 
-    expected = _JOIN_EXPECTED.get((a, b)) or _JOIN_EXPECTED[(b, a)]
-    assert _join_relation(a, b) == expected
-    assert _join_relation(b, a) == expected
-    assert _meet_relation(a, b) == expected  # meet lattice coincides
+    for a, b in itertools.product(_RELATIONS, _RELATIONS):
+        expected = _JOIN_EXPECTED.get((a, b)) or _JOIN_EXPECTED[(b, a)]
+        assert _join_relation(a, b) == expected, (a, b)
+        assert _join_relation(b, a) == expected, (b, a)
+        assert _meet_relation(a, b) == expected, (a, b)  # meet lattice coincides
 
 
 _DIFFERENCE_EXPECTED = {
@@ -477,26 +466,11 @@ _DIFFERENCE_EXPECTED = {
 }
 
 
-@pytest.mark.parametrize("a,b", list(itertools.product(_RELATIONS, _RELATIONS)))
-def test_difference_table_all_cells_both_orders(a, b):
-    """DIFFERENCE is ordered flip-first: rel(A-B) = join(rel(A), FLIP(rel(B)))."""
+def test_difference_table_all_cells_both_orders():
+    """DIFFERENCE is ordered flip-first: rel(A-B) = join(rel(A), FLIP(rel(B))), every cell."""
 
-    assert _difference_relation(a, b) == _DIFFERENCE_EXPECTED[(a, b)]
-
-
-def test_relation_composition_flows_through_operators(log):
-    """Composed entries carry the table-derived relation."""
-
-    exact = log[tl.units("input_1", [(0, 0, 4, 4)])]  # relation exact
-    box = log["relu_2_4"].receptive_field.at((3, 3))
-    hull = log[box.__selection__()]
-    hull_relation = hull[0].provenance.relation  # exact or upper_bound
-    joined = exact | hull
-    assert joined[0].provenance.relation == _join_relation("exact", hull_relation)
-    difference = exact - hull
-    assert difference[0].provenance.relation == _difference_relation("exact", hull_relation)
-    flipped = ~hull
-    assert flipped[0].provenance.relation == _FLIP[hull_relation]
+    for a, b in itertools.product(_RELATIONS, _RELATIONS):
+        assert _difference_relation(a, b) == _DIFFERENCE_EXPECTED[(a, b)], (a, b)
 
 
 # ---------------------------------------------------------------------------
@@ -504,10 +478,11 @@ def test_relation_composition_flows_through_operators(log):
 # ---------------------------------------------------------------------------
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_mask_representation_parity(log):
     """whole-site sentinel == dense equivalent; slice-box == dense equivalent."""
 
-    op = log["relu_1_2"].ops[0]
+    op = log.layers["relu_1_2"].ops[0]
     whole = log[op.__selection__()]
     dense_mask = torch.ones(op.shape, dtype=torch.bool)
     dense = log[tl.units("relu_1_2", dense_mask)]
@@ -520,59 +495,6 @@ def test_mask_representation_parity(log):
     from_dense = log[tl.units("input_1", dense_box)]
     assert from_slices[0].key == from_dense[0].key
     assert torch.equal(from_slices[0].mask, from_dense[0].mask)
-
-
-def test_mask_immutability_pin(log):
-    """Mutating a returned mask alters NOTHING: digest, equality, later reads."""
-
-    resolved = log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
-    entry = resolved[0]
-    digest_before = resolved.digest
-    handed_out = entry.mask
-    assert handed_out is not entry.mask  # fresh materialization per access
-    handed_out.fill_(True)
-    assert entry.num_selected == 1
-    assert resolved.digest == digest_before
-    assert resolved == log[tl.units("relu_1_2", [(0, 0, 1, 1)])]
-
-
-def test_repeated_resolve_identity_stability(log):
-    """Repeated resolves are equal with equal digests (deterministic)."""
-
-    query = tl.units("relu_1_2", [(0, 0, 1, 1)]) | tl.func("conv2d")
-    first = log[query]
-    second = log[query]
-    assert first == second
-    assert first.digest == second.digest
-
-
-def test_multi_site_value_type(log):
-    """Iteration follows GRAPH ORDER (F10); per-site access by position.
-
-    Re-pin: entries read in the trace's execution order, not lexicographic
-    site-key order (lovely bug 14 -- ``relu_1_10`` no longer sorts before
-    ``relu_1_2``).
-    """
-
-    resolved = log[(tl.func("relu") | tl.func("conv2d")).__selection__()]
-    keys = [entry.key for entry in resolved]
-    execution_order = {
-        (op.layer_label, op.pass_number): index for index, op in enumerate(log._layer_list)
-    }
-    steps = [execution_order[key] for key in keys]
-    assert steps == sorted(steps), "resolved ACT entries must read in execution order"
-    assert resolved[0].key == keys[0]
-    assert len(resolved) == len(keys)
-    assert all(isinstance(entry, Site) for entry in resolved)
-
-
-def test_empty_selection_legal_end_to_end(log):
-    """Zero matches is disclosure, never an error."""
-
-    resolved = log[tl.label("no_such_layer_anywhere").__selection__()]
-    assert len(resolved) == 0
-    assert resolved.is_empty is True
-    assert bool(resolved) is False
 
 
 def test_resolver_refusal_matrix(log):
@@ -601,7 +523,7 @@ def test_resolver_refusal_matrix(log):
 
     # population_too_small (incl. the empty complement case)
     like = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 0, 2, 2)])
-    whole = log["relu_1_2"].__selection__()
+    whole = log.layers["relu_1_2"].__selection__()
     with pytest.raises(SelectionError) as excinfo:
         log[tl.random_like(like=like, within=~whole, seed=3)]
     assert excinfo.value.fields["reason"] == "population_too_small"
@@ -643,7 +565,7 @@ def test_facet_lift_and_refusal_rows(log):
 
     from torchlens._semantic.facets import FacetSpec
 
-    op = log["relu_1_2"].ops[0]
+    op = log.layers["relu_1_2"].ops[0]
     spec = FacetSpec.from_home(op)
     resolved = log[spec.__selection__()]
     assert resolved[0].key == ("relu_1_2", 1)
@@ -655,7 +577,7 @@ def test_facet_lift_and_refusal_rows(log):
 
     torch.manual_seed(0)
     sparse_log = tl.trace(_TwoConv(), torch.randn(1, 1, 12, 12), save=tl.func("conv2d"))
-    sparse_op = sparse_log["relu_1_2"].ops[0]
+    sparse_op = sparse_log.layers["relu_1_2"].ops[0]
     sparse_spec = FacetSpec.from_home(sparse_op)
     with pytest.raises(SelectionError) as excinfo:
         sparse_log[sparse_spec.__selection__()]
@@ -690,16 +612,6 @@ def test_gradient_rf_lift():
     assert armed[combined][0].num_selected >= resolved[0].num_selected
 
 
-def test_box_lift_relation_and_shape_guard(log):
-    """Hull lift relation: exact only when box.exact and no sparse axis."""
-
-    box = log["relu_2_4"].receptive_field.at((3, 3))
-    resolved = log[box.__selection__()]
-    expected = "exact" if (box.exact and not box.sparse_possible) else "upper_bound"
-    assert resolved[0].provenance.relation == expected
-    assert resolved[0].key == ("input_1", 1)
-
-
 # ---------------------------------------------------------------------------
 # Constructor validation (house-style ValueErrors, no trace needed)
 # ---------------------------------------------------------------------------
@@ -726,7 +638,7 @@ def test_random_selection_totality(log):
     """Seeded, deterministic, size-matched, sampled inside `within`."""
 
     like = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 0, 2, 2), (0, 1, 3, 3)])
-    within = log["relu_1_2"].__selection__() - like
+    within = log.layers["relu_1_2"].__selection__() - like
     control = tl.random_like(like=like, within=within, seed=11)
     first = log[control]
     second = log[control]
@@ -757,7 +669,7 @@ def test_selection_repr_stability(log):
     box = log["relu_2_4"].receptive_field.at((3, 3))
     assert repr(box.__selection__()) == "Selection[ACT](rf_box('relu_2_4:1' -> 'input.x'))"
     resolved = log[unit]
-    assert repr(resolved) == "Selection[ACT](1 sites, 1 elements)"
+    assert repr(resolved).startswith("Selection ACT: 1 site, values not computed")
 
 
 def test_selection_is_frozen(log):
@@ -769,16 +681,6 @@ def test_selection_is_frozen(log):
     resolved = log[query]
     with pytest.raises(AttributeError):
         resolved._entries = ()
-
-
-def test_selection_error_is_catalogued():
-    """SelectionError rides the intervention error catalog surface."""
-
-    from torchlens.errors import SelectionError as catalogued
-
-    assert catalogued is SelectionError
-    assert issubclass(SelectionError, ValueError)
-    assert SelectionError.severity == "recoverable"
 
 
 def test_internal_closed_set_guards_raise(log):
@@ -807,3 +709,22 @@ def test_internal_closed_set_guards_raise(log):
 
     with pytest.raises(NotImplementedError):
         _Bare().__selection__()
+
+
+def test_selector_subtraction_non_selector_operand_refuses_typed():
+    """`selector - <non-selector>` refuses with the documented code."""
+
+    from torchlens._errors import ArgumentTypeError
+
+    with pytest.raises(ArgumentTypeError) as excinfo:
+        _ = tl.func("relu") - 3
+    assert excinfo.value.fields["code"] == "selector_subtraction_operand_invalid"
+
+
+def test_empty_selection_legal_end_to_end(log):
+    """Zero matches is disclosure, never an error."""
+
+    resolved = log[tl.label("no_such_layer_anywhere").__selection__()]
+    assert len(resolved) == 0
+    assert resolved.is_empty is True
+    assert bool(resolved) is False

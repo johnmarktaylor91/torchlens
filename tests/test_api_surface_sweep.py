@@ -45,16 +45,6 @@ def _relu_op(trace: tl.Trace) -> tl.Op:
     return next(op for op in trace._layer_list if op.type == "relu")
 
 
-def test_sweep_returns_bundle_with_one_trace_per_value() -> None:
-    """``tl.sweep`` should return one Bundle member per swept value."""
-
-    bundle = tl.sweep(_ReluModel(), torch.tensor([-1.0, 2.0]), site="relu", values=[0.0, 3.0])
-
-    assert isinstance(bundle, tl.Bundle)
-    assert len(bundle) == 2
-    assert bundle.names == ["sweep_0", "sweep_1"]
-
-
 def test_sweep_applies_each_replacement_value() -> None:
     """Each swept trace should include the replacement applied at the target site."""
 

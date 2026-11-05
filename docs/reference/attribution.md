@@ -110,11 +110,7 @@ import torch
 from torch import nn
 import torchlens as tl
 
-trace = tl.trace(
-    nn.ReLU(),
-    torch.tensor([[-1.0, 2.0]]),
-    capture=tl.options.CaptureOptions(replayable=True),
-)
+trace = tl.trace(nn.ReLU(), torch.tensor([[-1.0, 2.0]]))
 region = tl.units(trace.input_ops[0].label, [(0, 1)])
 result = tl.attribution.occlusion(
     trace,
@@ -271,7 +267,7 @@ Output:
 with a wider set of class activation maps (Grad-CAM++, Smooth Grad-CAM++, Score-CAM, Layer-CAM
 and others) and its own automatic target-layer choice. TorchLens ships native Grad-CAM only and
 no torch-cam extra; use torch-cam directly when you need another CAM variant. The
-[torch-cam recipe](../recipes/torchcam.md) runs both on one model and checks that their Grad-CAM
+[torch-cam recipe](../field-guide/torchcam.md) runs both on one model and checks that their Grad-CAM
 maps agree.
 
 ## `layer_integrated_gradients`
@@ -537,7 +533,7 @@ result = tl.attribution.input_x_grad(model, x, target=0)
 curve = tl.attribution.deletion_curve(model, x, target=0, attribution=result, num_steps=4)
 print(curve.scores[:, 0].tolist(), curve.aopc)
 
-trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+trace = tl.trace(model, x)
 fork = trace.fork()
 for selection, edit in curve.steps[1].build_interventions:
     fork.do(selection, edit)
@@ -707,7 +703,7 @@ audit = tl.attribution.causal_audit(model, x, claim=claim, target=0, k=2, num_ra
 print([(row.index, row.claimed_effect, row.measured_effect) for row in audit.units])
 print(audit.rank_agreement, [(item.kind, item.indices, item.measured_effect) for item in audit.sets[:2]])
 
-trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+trace = tl.trace(model, x)
 fork = trace.fork()
 for selection, edit in audit.set_of("top")[0].build_interventions:
     fork.do(selection, edit)
@@ -1078,7 +1074,9 @@ attention patterns and normalisation scales held at their captured values. Docum
   reach `logit_probability_coverage`, at most `max_num_logits`; a list of token ids names them. With
   `demeaned_logits=True` a logit node is its logit minus the mean logit. `logits_at` takes a
   `SiteTarget` naming the module whose output holds the logits (for example the logits before a
-  final softcap).
+  final softcap). The logits site is `(1, positions, vocab)`, read at the last position, or a
+  pooled `(1, classes)` head (a vision transformer's class-token head), whose logit nodes carry
+  the last position by convention and say so in `disclosures`.
 
 The result, `tl.attribution.AttributionGraph`, has one `GraphNode` (`kind`, `site`, `position`,
 `feature_index`, `token`) per row and column of `adjacency_matrix`, in the order features, errors,
@@ -1089,7 +1087,7 @@ row of `adjacency_matrix` plus `constants["encoder_bias"]`, `constants["decoder_
 position embeddings); a large `other` on a node means a path to it bypasses the graph, for
 example an attention pattern left unfrozen. `error_vectors` holds each MLP output minus its
 reconstruction, `active_feature_indices` and `feature_activations` the feature nodes, and
-`capture_outcome` and `disclosures` what the capture's completeness verdict says.
+`capture_status` and `disclosures` what the capture's completeness verdict says.
 
 ```python
 import json
@@ -1328,7 +1326,7 @@ result.show()
 
 To save the rendering to a file, write the payload's HTML:
 `open("tokens.html", "w").write(result.payload().to_html())`. Per-step attribution over
-generated text is a recipe: [per-step attribution for generated text](../recipes/generation_step_attribution.md).
+generated text is a recipe: [per-step attribution for generated text](../field-guide/generation_step_attribution.md).
 
 Input Integrated Gradients through HF `inputs_embeds` with every integer input held fixed;
 signed per-token scores sum-reduce the embedding width so completeness accounting survives.
@@ -1355,7 +1353,7 @@ TorchLens has no public LRP surface. The recipe uses `SiteStash`, an internal fo
 pairing store in `torchlens.attribution._stash` (`stash`/`fetch`, LIFO pairing proven on reused
 modules, leftovers disclosed); it is not exported from `tl.attribution`. There is no rule registry, no composites, no canonizers -- the cleanroom epsilon-LRP recipe
 with its per-site conservation ledger lives in
-[`docs/recipes/lrp_epsilon_litmus.md`](../recipes/lrp_epsilon_litmus.md).
+[`docs/field-guide/lrp_epsilon_litmus.md`](../field-guide/lrp_epsilon_litmus.md).
 
 ### IG step batching (`step_batch_size`, `step_audit`)
 

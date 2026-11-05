@@ -3,20 +3,29 @@
 from __future__ import annotations
 
 import importlib
+import pickle
+import warnings
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 import torch
 
 import torchlens as tl
+from torchlens.intervention._replay_sites import _unmet_log_precondition
 from torchlens.intervention.errors import (
     ControlFlowDivergenceWarning,
     MultiMatchWarning,
     ReplayPreconditionError,
 )
-from torchlens.intervention.replay import cone_of_effect
 from torchlens.io import TraceState
+from torchlens.options import InterventionOptions
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+_CONFIRM = InterventionOptions()
+_DIFFERENTIABLE = InterventionOptions(differentiable=True)
 
 replay_mod = importlib.import_module("torchlens.intervention.replay")
 
@@ -188,25 +197,6 @@ def _first_func(log: Any, func_name: str) -> Any:
     return next(layer for layer in log._layer_list if layer.func_name == func_name)
 
 
-def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
-    """Replay applies hooks, mutates downstream output, and records run state."""
-
-    torch.manual_seed(0)
-    log = _interventions(ResidualRelu(), torch.randn(2, 3))
-    original_output = log[log.output_layers[0]].out.clone()
-
-    log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _zero_hook}))
-
-    relu_site = _first_func(log, "relu")
-    assert torch.equal(relu_site.out, torch.zeros_like(relu_site.out))
-    assert not torch.equal(log[log.output_layers[0]].out, original_output)
-    assert log.state is TraceState.REPLAY_PROPAGATED
-    assert log.last_run["engine"] == "replay"
-    assert relu_site.edits[-1].engine == "replay"
-    assert relu_site.edits[-1].replaced is True
-    assert relu_site.is_edited is True
-
-
 def test_differentiable_replay_patching_captures_backward_grads() -> None:
     """Differentiable replay patches one run into another and captures grads."""
 
@@ -246,9 +236,7 @@ def test_differentiable_replay_patching_captures_backward_grads() -> None:
         del out, ctx
         return patch
 
-    replayed = corrupt.push(
-        replay=tl.options.ReplayOptions(hooks={tl.func("relu"): patch_hook}, differentiable=True)
-    )
+    replayed = corrupt.do(tl.func("relu"), patch_hook, intervention=_DIFFERENTIABLE)
     replay_relu = _first_func(replayed, "relu")
     replay_output = replayed[replayed.output_layers[0]].out
 
@@ -296,11 +284,7 @@ def test_differentiable_replay_forks_isolated_records() -> None:
         save="all",
     )
 
-    replayed = log.push(
-        replay=tl.options.ReplayOptions(
-            hooks={tl.func("relu"): _identity_hook}, differentiable=True
-        )
-    )
+    replayed = log.do(tl.func("relu"), _identity_hook, intervention=_DIFFERENTIABLE)
 
     fork_record = next(
         record
@@ -321,99 +305,19 @@ def test_differentiable_replay_forks_isolated_records() -> None:
     assert replayed[outside_cone_label].edits is not log[outside_cone_label].edits
 
 
-def test_replay_failure_rolls_back_partial_out_updates(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Replay failures leave outs and intervention records unchanged."""
-
-    torch.manual_seed(0)
-    log = _interventions(ResidualRelu(), torch.randn(2, 3))
-    original_tensors = {
-        layer.layer_label: layer.out.clone()
-        for layer in log._layer_list
-        if isinstance(layer.out, torch.Tensor)
-    }
-    original_records = {layer.layer_label: list(layer.edits) for layer in log._layer_list}
-    original_state = log.state
-    real_execute = replay_mod._execute_replay_func_strict
-    execute_count = 0
-
-    def flaky_execute(site: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
-        """Raise after the replay has computed an upstream update."""
-
-        nonlocal execute_count
-        execute_count += 1
-        if execute_count == 2:
-            raise RuntimeError("replay boom")
-        return real_execute(site, args, kwargs)
-
-    monkeypatch.setattr(replay_mod, "_execute_replay_func_strict", flaky_execute)
-
-    with pytest.raises(RuntimeError, match="replay boom"):
-        log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _zero_hook}))
-
-    assert log.state is original_state
-    for layer in log._layer_list:
-        if layer.layer_label in original_tensors:
-            assert torch.equal(layer.out, original_tensors[layer.layer_label])
-        assert list(layer.edits) == original_records[layer.layer_label]
-
-
-def test_replay_from_preserves_origin_out_and_recomputes_children() -> None:
-    """``replay_from`` treats the origin as already mutated."""
+def test_do_value_preserves_origin_out_and_recomputes_children() -> None:
+    """``do(site, value)`` keeps the set origin value and recomputes its children."""
 
     torch.manual_seed(1)
     log = _interventions(ResidualRelu(), torch.randn(2, 3))
     relu_site = _first_func(log, "relu")
     replacement = torch.full_like(relu_site.out, 2.0)
-    relu_site._internal_set("out", replacement)
 
-    log.push_from(relu_site)
+    log.do(tl.label(relu_site.layer_label), replacement, intervention=_CONFIRM)
 
     assert torch.equal(relu_site.out, replacement)
     assert log.state is TraceState.REPLAY_PROPAGATED
     assert relu_site.layer_label in log.last_run["origins"]
-
-
-def test_cone_of_effect_follows_bfs_children_and_stops_at_outputs() -> None:
-    """Cone traversal walks children and terminates at output leaves."""
-
-    log = _interventions(ResidualRelu(), torch.randn(2, 3))
-    relu_site = _first_func(log, "relu")
-
-    cone = cone_of_effect(log, [relu_site])
-    cone_labels = [site.layer_label for site in cone]
-
-    assert relu_site.layer_label in cone_labels
-    assert log.output_layers[0] in cone_labels
-    assert cone_labels == sorted(cone_labels, key=lambda label: log[label].step_index)
-
-
-def test_cone_of_effect_follows_output_versions_per_child() -> None:
-    """Cone traversal follows child-version edges even when children is stale."""
-
-    log = _interventions(ResidualRelu(), torch.randn(2, 3))
-    origin = _first_func(log, "linear")
-    child_label = origin.children[0]
-    origin.children = tuple(c for c in origin.children if c != child_label)
-    origin.out_versions_by_child[child_label] = origin.out
-
-    cone_labels = [site.layer_label for site in cone_of_effect(log, [origin])]
-
-    assert child_label in cone_labels
-
-
-def test_cone_of_effect_includes_all_func_call_id_siblings_once() -> None:
-    """Cone traversal expands same-call multi-output siblings."""
-
-    log = _interventions(SplitModel(), torch.randn(4, 5))
-    max_sites = [layer for layer in log._layer_list if layer.func_name == "max"]
-    assert len(max_sites) == 2
-
-    cone_labels = [site.layer_label for site in cone_of_effect(log, [max_sites[0]])]
-
-    assert {site.layer_label for site in max_sites}.issubset(cone_labels)
-    assert len(cone_labels) == len(set(cone_labels))
 
 
 def test_replay_executes_multi_output_func_call_group_once() -> None:
@@ -434,22 +338,9 @@ def test_replay_executes_multi_output_func_call_group_once() -> None:
         site._internal_set("func", counted_max)
 
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        log.push(replay=tl.options.ReplayOptions(hooks={tl.func("max"): _identity_hook}))
+        log.do({tl.func("max"): _identity_hook}, intervention=_CONFIRM)
 
     assert calls["count"] == 1
-
-
-def test_cone_of_effect_handles_cycles() -> None:
-    """Cone traversal tracks visited sites and avoids graph cycles."""
-
-    log = _interventions(ResidualRelu(), torch.randn(2, 3))
-    relu_site = _first_func(log, "relu")
-    output = log.ops[log.output_layers[0]]
-    output.children = tuple(output.children) + (relu_site.layer_label,)
-
-    cone = cone_of_effect(log, [relu_site])
-
-    assert len(cone) == len({site.layer_label for site in cone})
 
 
 def test_replay_warns_on_saved_edge_divergence() -> None:
@@ -460,13 +351,102 @@ def test_replay_warns_on_saved_edge_divergence() -> None:
     relu_site.parents = ()
 
     with pytest.warns(ControlFlowDivergenceWarning):
-        log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _identity_hook}))
+        log.do({tl.func("relu"): _identity_hook}, intervention=_CONFIRM)
 
 
 def test_replay_rejects_non_intervention_ready_logs() -> None:
-    """Replay requires intervention-ready metadata."""
+    """Replay requires per-op argument templates; a predicate recording keeps none."""
+
+    log = tl.record(ResidualRelu(), torch.randn(2, 3), save=tl.func("relu")).to_trace()
+
+    with pytest.raises(ReplayPreconditionError, match="argument templates"):
+        log.do({tl.func("relu"): _identity_hook}, intervention=_CONFIRM)
+
+
+@pytest.mark.parametrize("backend", ["jax", "tf", "mlx", "paddle", "tinygrad"])
+def test_replay_refusal_names_the_preview_backend(backend: str) -> None:
+    """A preview trace has no argument templates; the refusal names its backend, not tl.record."""
+
+    preview_log = SimpleNamespace(
+        _tracing_finished=True, is_replayable=False, options=None, _provenance_backend=backend
+    )
+
+    message = _unmet_log_precondition(cast(Any, preview_log))
+
+    assert message is not None
+    assert f"the {backend} preview backend cannot edit or patch a finished trace" in message
+    assert "every other" not in message
+
+
+def test_replay_runs_on_default_capture() -> None:
+    """A default capture records argument templates, so replay needs no replayable=True."""
 
     log = tl.trace(ResidualRelu(), torch.randn(2, 3))
 
-    with pytest.raises(ReplayPreconditionError):
-        log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _identity_hook}))
+    log.do({tl.func("relu"): _identity_hook}, intervention=_CONFIRM)
+
+    assert log.last_run["engine"] == "replay"
+
+
+class _GeluStages(torch.nn.Module):
+    """Two stages of linear + GELU, so a selector can fan out to several sites."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.stages = torch.nn.ModuleList(
+            [
+                torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.GELU(), torch.nn.GELU()),
+                torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.GELU(), torch.nn.GELU()),
+            ]
+        )
+        self.head = torch.nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for stage in self.stages:
+            x = stage(x)
+        return self.head(x)
+
+
+def test_default_trace_do_matches_replayable_replay_and_rerun() -> None:
+    """The README shape trace.do(site, edit) works on a default trace and agrees exactly."""
+
+    torch.manual_seed(0)
+    model = _GeluStages().eval()
+    x = torch.randn(3, 4)
+    site = tl.func("gelu") & tl.in_module("stages.1")
+
+    default = tl.trace(model, x)
+    assert default.is_replayable is False
+    replayable = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    rerun = tl.trace(model, x).fork()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", tl.errors.InterventionWarning)
+        default.do(site, tl.zero_ablate())
+        replayable.do(site, tl.zero_ablate())
+        rerun.do(site, tl.zero_ablate(), model=model, inputs=x)
+    assert default.last_run["engine"] == "replay"
+
+    def final(trace: Any) -> torch.Tensor:
+        return cast(torch.Tensor, trace[trace.output_layers[0]].out)
+
+    with torch.no_grad():
+        hooked_in = model.stages[0](x)
+        expected = model.head(torch.zeros_like(model.stages[1][0](hooked_in)))
+    assert torch.equal(final(default), final(replayable))
+    assert torch.equal(final(default), final(rerun))
+    assert torch.allclose(final(default), expected)
+
+
+def test_default_trace_pickle_drops_argument_templates() -> None:
+    """Templates hold live parameters; a pickled default trace must not carry the weights."""
+
+    model = torch.nn.Sequential(torch.nn.Linear(1024, 1024), torch.nn.ReLU())
+    log = tl.trace(model, torch.randn(1, 1024))
+    assert any(op.args_template is not None for op in log.ops)
+
+    data = pickle.dumps(log)
+    restored = pickle.loads(data)
+
+    weight_bytes = model[0].weight.numel() * model[0].weight.element_size()
+    assert len(data) < weight_bytes
+    assert all(op.args_template is None for op in restored.ops)

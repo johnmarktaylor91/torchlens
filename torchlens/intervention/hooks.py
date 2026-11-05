@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal, TypeAlias, cast
 
 import torch
 
-from .._errors import InvalidArgumentError, PayloadUnavailableError
+from .._errors import InvalidArgumentError
 from .._selection.selectors import (
     BackwardPassSelector,
     BaseSelector,
@@ -19,14 +19,22 @@ from .._selection.selectors import (
     NotSelector,
     label,
 )
+from .._utils._package_frames import external_warning_stacklevel
 from ..errors import TorchLensWarning
+from ._facet_writes import (
+    _check_facet_write_conflicts,
+    _facet_fire_scope,
+    _facet_home_label,
+    _iter_facet_records,
+    _scoped_facet_view,
+)
 from ._hooks_support import (
     _display_label,
     _existing_facet_write_claims,
-    _multi_call_addresses,
     _needs_tensor_backward_adapter,
     _selector_call_index,
     _snapshot_layer_log,
+    _stored_facet_scatter_hook,
     _targets_accumulate_grad,
     _validate_hook_signature,
     gradient_inner,
@@ -37,7 +45,6 @@ from .errors import (
     HookSignatureError,
     HookSiteCoverageError,
     LiveModeLabelError,
-    ReplayPreconditionError,
     SiteResolutionError,
 )
 from .types import (
@@ -98,6 +105,16 @@ class HookContext:
         Frozen positional tensor arguments at the hook site.
     kwargs:
         Mapping proxy of tensor keyword arguments at the hook site.
+
+    Examples
+    --------
+    >>> seen = []
+    >>> def hook(out, *, ctx):
+    ...     seen.append((isinstance(ctx, HookContext), ctx.signal))
+    ...     return out
+    >>> _ = tl.trace(model, x, intervene=tl.when(tl.func("relu"), hook))
+    >>> seen
+    [(True, 'forward')]
     """
 
     name: str
@@ -114,12 +131,17 @@ class HookContext:
 
 @dataclass(frozen=True, slots=True)
 class NormalizedHookEntry:
-    """Uniform representation of one requested hook attachment."""
+    """Uniform representation of one requested hook attachment.
+
+    ``handle`` is the sticky spec's handle id; removal through it retires the
+    entry from a live plan mid-run (``_live_hook_plan``).
+    """
 
     site_target: Any
     normalized_callable: HookCallable
     helper_spec: Edit | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    handle: str | None = None
 
     @property
     def signal(self) -> HookDirection:
@@ -301,10 +323,8 @@ def normalize_hook_plan(
     for order, (raw_site_target, hook_like) in enumerate(pairs):
         site_target = lower_record_site_target(raw_site_target)
         helper_spec = hook_like if isinstance(hook_like, Edit) else None
-        # The escape hatch is requested by the helper's own allow_shape_change
-        # kwarg (e.g. tl.replace_with(t, allow_shape_change=True)); it rides
-        # entry metadata so a helper-requested shape change reaches
-        # validate_hook_output, mirroring the append-safety check in rerun.py.
+        # A helper's own allow_shape_change kwarg rides entry metadata so the shape
+        # change reaches validate_hook_output (mirrors the append-safety check in rerun.py).
         entry_force_shape_change = helper_spec is not None and bool(
             dict(helper_spec.kwargs).get("allow_shape_change", False)
         )
@@ -769,10 +789,8 @@ def normalize_hooks_from_spec(
                     normalize_hook_plan(target, hook_like, allow_replay_only_site_targets=replay_ok)
                 )
     if live_forward:
-        # RERUN/backward preflight: sticky entries staged through the attach
-        # door's replay-only carve-out (site selectors) must refuse HERE,
-        # before any forward runs -- a mid-forward capability error is a
-        # late, ugly refusal.
+        # RERUN/backward preflight: entries staged through the replay-only carve-out
+        # (site selectors) refuse HERE, before any forward runs.
         for entry in entries:
             live_targets = (
                 gradient_inners(entry.site_target)
@@ -799,6 +817,67 @@ def is_facet_target(site_target: Any) -> bool:
     """
 
     return _facet_selector_from_target(site_target) is not None
+
+
+def _fused_attention_write_remedy(facet_name: str, *, reconstructed: bool = True) -> str:
+    """Explain why an attention-interior facet cannot be written, and what can.
+
+    Parameters
+    ----------
+    facet_name:
+        The requested facet (``pattern``, ``scores``, ``z`` or ``result``).
+    reconstructed:
+        Whether the facet is rebuilt from a fused kernel's saved arguments
+        (fused attention). ``False`` means a facet computed from captured
+        values (``result``, ``z_h @ W_O_h``), read-only on eager attention too.
+
+    Returns
+    -------
+    str
+        The cause and the remedies, for the refusal message.
+    """
+
+    if not reconstructed:
+        return (
+            f"The {facet_name!r} facet is computed from other captured values (for "
+            "'result', each head's 'z' times its slice of the output projection), so no "
+            "captured op holds it and it is read-only under every attention "
+            "implementation. Write the facet it is computed from instead: replacing a "
+            "head's 'z' replaces exactly its 'result'."
+        )
+    return (
+        f"Under fused attention (torch scaled_dot_product_attention, the transformers "
+        f"default attn_implementation='sdpa') the {facet_name!r} facet is reconstructed "
+        "read-only from the kernel's saved arguments: the kernel computes it internally, "
+        "so there is no captured tensor op to write. To write it, load the model with "
+        "attn_implementation='eager' (on a transformers model, "
+        "model.set_attn_implementation('eager')) and capture again. On the fused model "
+        "the 'q'/'k'/'v' facets (the projection outputs feeding the kernel) stay "
+        "writable, and tl.mechinterp.patch_head lowers a single head or pattern patch "
+        "exactly to the real output projection."
+    )
+
+
+def _facet_write_mask(selector: FacetSelector, spec: Any) -> torch.Tensor:
+    """Return a detached copy of ``spec``'s write mask.
+
+    A read-only attention facet (fused attention, or a reconstructed facet)
+    raises ``RuntimeError`` from ``write_mask``; that becomes a
+    ``SiteResolutionError`` naming the eager-attention remedy.
+    """
+
+    try:
+        return spec.write_mask().detach().clone()
+    except RuntimeError as exc:
+        if selector.name in {"pattern", "scores", "z", "result"}:
+            raise SiteResolutionError(
+                f"facet selector {selector!r} resolved only read-only "
+                "attention facets. "
+                + _fused_attention_write_remedy(
+                    selector.name, reconstructed=spec.capability_flags.reconstructed
+                )
+            ) from exc
+        raise
 
 
 def expand_facet_hook_entries(
@@ -833,25 +912,14 @@ def expand_facet_hook_entries(
             if selector.name in {"pattern", "scores", "z", "result"}:
                 raise SiteResolutionError(
                     f"facet selector {selector!r} matched no write-capable real tensor facets. "
-                    "Fused attention reconstruction facets are read-only; re-run with a scoped "
-                    "eager attention implementation so the requested internal facet is captured "
-                    "as an op before attaching this intervention."
+                    + _fused_attention_write_remedy(selector.name)
                 )
             raise SiteResolutionError(
                 f"facet selector {selector!r} matched 0 write-capable facets."
             )
         written: list[tuple[str, str]] = []
         for facet_name, spec in specs:
-            try:
-                mask = spec.write_mask().detach().clone()
-            except RuntimeError as exc:
-                if selector.name in {"pattern", "scores", "z", "result"}:
-                    raise SiteResolutionError(
-                        f"facet selector {selector!r} resolved only read-only reconstructed "
-                        "attention facets. Re-run with a scoped eager attention implementation "
-                        "so the requested internal facet is captured as a real tensor op."
-                    ) from exc
-                raise
+            mask = _facet_write_mask(selector, spec)
             home_label = _facet_home_label(spec)
             _check_facet_write_conflicts(claimed, home_label=home_label, mask=mask)
             claimed.append((home_label, mask, facet_name))
@@ -870,6 +938,11 @@ def expand_facet_hook_entries(
                         entry.normalized_callable,
                         spec,
                         facet_name=facet_name,
+                        selector=FacetSelector(
+                            facet_name,
+                            head_index=selector.head_index,
+                            module_address=selector.module_address,
+                        ),
                     ),
                     helper_spec=entry.helper_spec,
                     metadata=MappingProxyType(metadata),
@@ -920,7 +993,7 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
             code="facet_selector_fanout",
             site_count=len(written),
         ),
-        stacklevel=5,
+        stacklevel=external_warning_stacklevel(),
     )
 
 
@@ -928,7 +1001,7 @@ def _facet_owner_address(log: Any, selector: FacetSelector, home_label: str, fac
     """Return the innermost module address owning ``facet`` at ``home_label``, if any."""
 
     try:
-        home = log[home_label]
+        home = log._layer_logs[home_label] if home_label in log._layer_logs else log[home_label]
         modules = getattr(log, "modules", None)
         for call_label in reversed(list(getattr(home, "modules", ()) or ())):
             address = str(call_label).rsplit(":", 1)[0]
@@ -1029,29 +1102,14 @@ def _normalize_sticky_hook_specs(
     entries: list[NormalizedHookEntry] = []
     for hook_spec in hook_specs:
         if hook_spec.metadata.get("facet_write"):
-            # Facet-slice hooks fire through the scatter wrapper built at attach time
-            # (_facet_scatter_hook), which closes over the resolved FacetSpec and CANNOT be
-            # rebuilt from the raw helper: the generic path below would silently apply the
-            # helper to the WHOLE home tensor (tl.head(0, "q") + tl.zero_ablate() zeroing
-            # every head). Fail closed when the wrapper is absent (e.g. a spec loaded from disk).
-            stored_hook = hook_spec.hook
-            if not getattr(stored_hook, "_tl_facet_scatter", False):
-                facet_name = hook_spec.metadata.get("facet_name", "<unknown>")
-                home_label = hook_spec.metadata.get("facet_home_label", "<unknown>")
-                raise ReplayPreconditionError(
-                    "Sticky facet-slice hook lost its scatter wrapper: the stored hook "
-                    f"for facet {facet_name!r} on home {home_label!r} is not the live "
-                    "facet scatter wrapper, so firing it would write the whole home "
-                    "tensor instead of the selected facet slice. Facet hooks cannot be "
-                    "rebuilt from a serialized helper; re-attach the facet intervention "
-                    "on a live trace (e.g. trace.attach_hooks(tl.head(...), helper))."
-                )
+            stored_hook = _stored_facet_scatter_hook(hook_spec)
             entries.append(
                 NormalizedHookEntry(
                     site_target=hook_spec.site_target,
                     normalized_callable=cast(HookCallable, stored_hook),
                     helper_spec=hook_spec.helper,
                     metadata=MappingProxyType(dict(hook_spec.metadata)),
+                    handle=hook_spec.handle,
                 )
             )
             continue
@@ -1077,6 +1135,7 @@ def _normalize_sticky_hook_specs(
                     normalized_callable=entry.normalized_callable,
                     helper_spec=entry.helper_spec,
                     metadata=MappingProxyType(metadata),
+                    handle=hook_spec.handle,
                 )
             )
     return entries
@@ -1111,8 +1170,8 @@ def _refuse_legacy_backward_hook_spec(hook_spec: HookSpec) -> None:
         f"{hook_spec.metadata.get('direction')!r} keyword; the site now decides the pass, "
         "and this site is an activation. Nothing was attached.",
         code="edit_signal_mismatch",
-        remedy="re-attach the edit on the gradient address: trace.attach_hooks(tl.grad(site), edit)",
-        argument="hooks_or_site",
+        remedy="re-attach the edit on the gradient address: trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn)",
+        argument="site",
         site=repr(site),
     )
 
@@ -1298,7 +1357,7 @@ def _live_backward_context_matches(
         return any(isinstance(value, torch.Tensor) for value in values or ())
     if isinstance(selector, BackwardPassSelector):
         trace = getattr(grad_fn_handle, "trace", None)
-        return getattr(trace, "_active_backward_pass_index", None) == selector.pass_index
+        return getattr(trace, "_active_backward_pass_number", None) == selector.pass_index
     return True
 
 
@@ -1466,142 +1525,12 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
     return resolved
 
 
-def _scoped_facet_view(record: Any, selector: FacetSelector) -> Any:
-    """Return ``record``'s facet view when ``selector`` may use it, else ``None``.
-
-    A module record that ran more than once is skipped (its view raises
-    ``module_call_ambiguous``; the ops of its calls still serve), and refused
-    with ``facet_selector_module_multi_call`` when the selector is scoped to it.
-    """
-
-    record_address = getattr(record, "address", None)
-    if selector.module_address is not None and record_address != selector.module_address:
-        return None
-    call_addresses = _multi_call_addresses(record)
-    if call_addresses is not None:
-        if selector.module_address is not None:
-            _refuse_multi_call_module(selector, str(record_address), call_addresses)
-        return None
-    try:
-        return getattr(record, "facets", None)
-    except PayloadUnavailableError:
-        # An op whose payload was not saved serves no facet value; skipping it
-        # lets a selectively saved trace resolve the facets it did keep.
-        return None
-
-
-def _refuse_multi_call_module(
-    selector: FacetSelector, address: str, call_addresses: tuple[str, ...]
-) -> None:
-    """Refuse a facet selector scoped to a module that ran more than once.
-
-    A facet write installs its hook on the home op's layer, which fires on
-    every call of the module, so no call-qualified selector can edit one call;
-    each call's facets are read at its call-qualified address.
-    """
-
-    raise InvalidArgumentError(
-        f"{selector!r} is scoped to module {address!r}, which ran {len(call_addresses)} "
-        "times; a facet write there would fire on every call",
-        code="facet_selector_module_multi_call",
-        remedy=f"read one call's facets at trace[{call_addresses[0]!r}].facets (calls: "
-        f"{', '.join(call_addresses)}); write through a selector scoped to a module that "
-        "runs once",
-        address=address,
-        call_addresses=call_addresses,
-    )
-
-
-def _iter_facet_records(log: Any) -> Iterator[Any]:
-    """Yield records that can own semantic facet views.
-
-    Parameters
-    ----------
-    log:
-        Trace to inspect.
-
-    Yields
-    ------
-    Any
-        Module records followed by op records.
-    """
-
-    modules = getattr(log, "modules", ())
-    try:
-        yield from modules
-    except TypeError:
-        pass
-    yield from log._layer_list
-
-
-def _facet_home_label(spec: Any) -> str:
-    """Return the live hook label for a facet home op.
-
-    Parameters
-    ----------
-    spec:
-        FacetSpec-like object.
-
-    Returns
-    -------
-    str
-        Home op layer label.
-    """
-
-    home = getattr(spec, "home", None)
-    label_value = (
-        getattr(home, "_layer_label_raw", None)
-        or getattr(home, "_label_raw", None)
-        or getattr(home, "layer_label", None)
-        or getattr(home, "label", None)
-    )
-    if label_value is None:
-        label_value = getattr(spec, "home_label", None)
-    if label_value is None:
-        raise SiteResolutionError("Facet selector resolved to a home without a layer label.")
-    return str(label_value)
-
-
-def _check_facet_write_conflicts(
-    claims: Sequence[tuple[str, torch.Tensor, str]],
-    *,
-    home_label: str,
-    mask: torch.Tensor,
-) -> None:
-    """Raise when a facet write overlaps an existing same-home claim.
-
-    Parameters
-    ----------
-    claims:
-        Existing write claims.
-    home_label:
-        Home label for the candidate write.
-    mask:
-        Candidate boolean write mask.
-
-    Returns
-    -------
-    None
-        Raises on overlapping writes.
-    """
-
-    for claimed_home, claimed_mask, claimed_name in claims:
-        if claimed_home != home_label:
-            continue
-        if tuple(claimed_mask.shape) != tuple(mask.shape):
-            continue
-        if bool(torch.logical_and(claimed_mask.to(mask.device), mask).any()):
-            raise SiteResolutionError(
-                f"Facet intervention conflict on home {home_label!r}: write overlaps "
-                f"existing facet {claimed_name!r}."
-            )
-
-
 def _facet_scatter_hook(
     user_hook: HookCallable,
     spec: Any,
     *,
     facet_name: str,
+    selector: FacetSelector | None = None,
 ) -> HookCallable:
     """Return a home-op hook that edits one facet slice.
 
@@ -1613,12 +1542,18 @@ def _facet_scatter_hook(
         FacetSpec used to read and scatter the slice.
     facet_name:
         Public facet name for diagnostics.
+    selector:
+        The facet selector narrowed to ``facet_name``; a donor-reading edit
+        resolves it on its source trace (defaults to ``tl.facet(facet_name)``).
 
     Returns
     -------
     HookCallable
         Hook with the standard whole-output TorchLens contract.
     """
+
+    if selector is None:
+        selector = FacetSelector(facet_name)
 
     def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Apply a user hook to a facet slice and scatter it into ``out``.
@@ -1639,7 +1574,8 @@ def _facet_scatter_hook(
         from .runtime import validate_hook_output
 
         facet_slice = spec.apply_transforms(out)
-        edited_slice = user_hook(facet_slice, ctx=ctx)
+        with _facet_fire_scope(spec, selector):
+            edited_slice = user_hook(facet_slice, ctx=ctx)
         checked_slice = validate_hook_output(edited_slice, facet_slice, hook_context=ctx)
         return spec.scatter_update(out, checked_slice, mode="replace")
 
@@ -1651,28 +1587,25 @@ def _facet_scatter_hook(
     return _hook
 
 
+def _hook_pairs_from_spec(spec: InterventionSpec) -> list[tuple[Any, HookInput]]:
+    """Expand a loaded spec into ``(site, hook)`` pairs: each rule's portable helper, else its hook."""
+
+    return [
+        (
+            hook_spec.site_target,
+            hook_spec.helper if hook_spec.helper is not None else hook_spec.hook,
+        )
+        for hook_spec in spec.hook_specs
+    ]
+
+
 def _dispatch_hook_pairs(
     hooks_or_site: Any,
     hook: HookInput | None,
     *,
     default_site_target: Any | None,
 ) -> list[tuple[Any, HookInput]]:
-    """Parse supported hook input shapes into ``(site, hook)`` pairs.
-
-    Parameters
-    ----------
-    hooks_or_site:
-        Attach-hooks input object.
-    hook:
-        Optional hook paired with a site.
-    default_site_target:
-        Site target used for bare callable/helper input.
-
-    Returns
-    -------
-    list[tuple[Any, HookInput]]
-        Parsed site/hook pairs.
-    """
+    """Parse the hook input shapes (site, hook-like, mapping, pairs, loaded spec) into pairs."""
 
     if hook is not None:
         if hasattr(hooks_or_site, "to_hook_pairs"):
@@ -1692,6 +1625,9 @@ def _dispatch_hook_pairs(
 
     if isinstance(hooks_or_site, Mapping):
         return [(site, hook_like) for site, hook_like in hooks_or_site.items()]
+
+    if isinstance(hooks_or_site, InterventionSpec):
+        return _hook_pairs_from_spec(hooks_or_site)
 
     if _is_single_pair(hooks_or_site):
         site_target, hook_like = hooks_or_site

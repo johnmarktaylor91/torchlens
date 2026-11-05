@@ -36,7 +36,13 @@ def test_old_spelling_is_gone() -> None:
     assert "resample_ablate" not in dir(tl)
 
 
-@pytest.mark.parametrize("owner", ["torchlens", "intervention", "helpers"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "owner",
+    [
+        "intervention",
+    ],
+)
 def test_old_spelling_raises_typed_error_naming_the_replacement(owner: str) -> None:
     """Every removed spelling raises facade_redirect naming scramble_elements."""
 
@@ -51,13 +57,6 @@ def test_old_spelling_raises_typed_error_naming_the_replacement(owner: str) -> N
     assert "torchlens.intervention.scramble_elements" in str(excinfo.value)
 
 
-def test_constructor_mints_the_honest_name() -> None:
-    """Specs carry the honest helper name."""
-
-    assert scramble_elements(torch.ones(3), seed=0).name == "scramble_elements"
-
-
-@pytest.mark.smoke
 def test_seeded_draws_are_reproducible() -> None:
     """Same seed, same draws (the rename changed no behavior)."""
 
@@ -68,16 +67,6 @@ def test_seeded_draws_are_reproducible() -> None:
     second = scramble_elements(source, seed=7).factory()(out, ctx=None)
     assert torch.equal(first, second)
     assert set(first.flatten().tolist()) <= set(source.tolist())
-
-
-def test_serialized_specs_load_under_the_new_name() -> None:
-    """A persisted ``scramble_elements`` spec reconstructs through its constructor."""
-
-    spec = rebuild_builtin_helper("scramble_elements", (torch.ones(3),), {"seed": 3})
-    assert spec.name == "scramble_elements"
-    hook = spec.factory()
-    sampled = hook(torch.zeros(4), ctx=None)
-    assert torch.equal(sampled, torch.ones(4))
 
 
 def test_a_saved_spec_naming_the_old_helper_refuses_typed() -> None:

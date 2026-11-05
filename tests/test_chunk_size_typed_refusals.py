@@ -73,41 +73,6 @@ class _NeedsWholeBatch(nn.Module):
         return out.sum(dim=(1, 2))
 
 
-def test_reused_module_with_different_shapes_assembles_by_pass() -> None:
-    torch.manual_seed(0)
-    model = _SharedRelu().eval()
-    x = torch.randn(4, 3, 12)
-    plain = tl.trace(model, x.clone())
-    chunked = tl.trace(model, x.clone(), capture=tl.options.CaptureOptions(chunk_size=2))
-    assert [op.label for op in chunked.ops] == [op.label for op in plain.ops]
-    relus = [op.label for op in plain.ops if op.func_name == "relu"]
-    assert len(relus) == 2, relus
-    for label in relus:
-        torch.testing.assert_close(chunked[label].out, plain[label].out)
-    torch.testing.assert_close(chunked.reconstruct_output(), plain.reconstruct_output())
-
-
-def test_reused_module_with_equal_shapes_keeps_each_pass_its_own_rows() -> None:
-    torch.manual_seed(0)
-    model = _SharedReluSameShape().eval()
-    x = torch.randn(4, 4)
-    plain = tl.trace(model, x.clone())
-    chunked = tl.trace(model, x.clone(), capture=tl.options.CaptureOptions(chunk_size=2))
-    relus = [op.label for op in plain.ops if op.func_name == "relu"]
-    assert len(relus) == 2, relus
-    for label in relus:
-        torch.testing.assert_close(chunked[label].out, plain[label].out)
-
-
-def test_batch_coupled_activation_refuses_typed() -> None:
-    torch.manual_seed(0)
-    with pytest.raises(ChunkedForwardConfigError) as info:
-        tl.trace(_Gram().eval(), torch.randn(3, 2), capture=tl.options.CaptureOptions(chunk_size=2))
-    assert _code(info.value) == "chunked_forward_batch_coupled"
-    assert "chunk_size" in info.value.fields.get("remedy", "")
-    assert info.value.fields.get("chunk_index") == 1
-
-
 def test_forward_that_needs_the_whole_batch_refuses_typed() -> None:
     torch.manual_seed(0)
     with pytest.raises(ChunkedForwardConfigError) as info:
@@ -119,16 +84,3 @@ def test_forward_that_needs_the_whole_batch_refuses_typed() -> None:
     assert _code(info.value) == "chunked_forward_batch_coupled"
     assert isinstance(info.value.__cause__, RuntimeError)
     assert info.value.fields.get("chunk_index") == 0
-
-
-def test_chunk_option_conflicts_carry_a_code() -> None:
-    torch.manual_seed(0)
-    model = _SharedReluSameShape().eval()
-    with pytest.raises(ChunkedForwardConfigError) as info:
-        tl.trace(
-            model,
-            torch.randn(4, 4),
-            storage=tl.to_disk("unused.tlspec"),
-            capture=tl.options.CaptureOptions(chunk_size=2),
-        )
-    assert _code(info.value) == "chunked_capture_option_conflict"

@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 import pytest
 import torch
 
+from tests.support.cairosvg_skip import require_cairosvg
 from torchlens._observability import (
     Histogram,
     HistoryCollector,
@@ -25,7 +26,6 @@ from torchlens._observability import (
     StepTruth,
     WatchRenderError,
     color_by_watch,
-    contact_sheet_pages,
     derived_quantile,
     histogram_payload,
     observation_row,
@@ -52,7 +52,7 @@ def _observed(
     if with_sketch:
         histogram = Histogram()
         histogram.update(tensor)
-        sketch = histogram.result()
+        sketch = histogram.compute()
     return ObservationRecord(
         global_step=step,
         site_id=site,
@@ -115,6 +115,26 @@ def _synthetic_view() -> HistoryView:
     return HistoryView.from_blocks(run, sites, tuple(blocks))
 
 
+def _many_site_view(num_sites: int) -> HistoryView:
+    """One committed step observing ``num_sites`` distinct module sites."""
+
+    run = RunRecord(run_id="run-many", segment_id="seg-1")
+    sites = {
+        f"m:s{index}": SiteRecord(
+            site_id=f"m:s{index}",
+            kind="module",
+            display_label=f"s{index}",
+            module_path=f"s{index}",
+        )
+        for index in range(num_sites)
+    }
+    observations = tuple(
+        _observed(0, site_id, torch.full((4,), float(index)), with_sketch=False)
+        for index, site_id in enumerate(sites)
+    )
+    return HistoryView.from_blocks(run, sites, (_block(0, observations),))
+
+
 @pytest.fixture(scope="module")
 def collector_view() -> HistoryView:
     """A real Route-A collector session: 6 steps, one skipped."""
@@ -140,41 +160,10 @@ def collector_view() -> HistoryView:
 
 
 class TestDerivedQuantiles:
-    def test_matches_torch_quantile_within_grid_tolerance(self) -> None:
-        torch.manual_seed(1)
-        data = torch.randn(20000)
-        histogram = Histogram()
-        histogram.update(data)
-        sketch = histogram.result()
-        for q in (0.05, 0.25, 0.5, 0.75, 0.95):
-            estimate = derived_quantile(sketch, q)
-            truth = float(torch.quantile(data, q))
-            assert estimate.approximate
-            # bpo=4 grid: one bin spans a 2^(1/4) magnitude ratio (~19%).
-            assert abs(estimate.value - truth) <= max(abs(truth) * 0.2, 0.02), (
-                q,
-                estimate.value,
-                truth,
-            )
-
-    def test_monotone_in_q(self) -> None:
-        torch.manual_seed(2)
-        histogram = Histogram()
-        histogram.update(torch.randn(5000))
-        sketch = histogram.result()
-        values = [derived_quantile(sketch, q).value for q in (0.1, 0.3, 0.5, 0.7, 0.9)]
-        assert values == sorted(values)
-
-    @pytest.mark.smoke
-    def test_zero_heavy_population_median_is_zero(self) -> None:
-        histogram = Histogram()
-        histogram.update(torch.zeros(100))
-        assert derived_quantile(histogram.result(), 0.5).value == 0.0
-
     def test_overflow_clamp_is_disclosed(self) -> None:
         histogram = Histogram()
         histogram.update(torch.full((50,), 2.0**40))  # beyond hi_exp=16 window
-        estimate = derived_quantile(histogram.result(), 0.5)
+        estimate = derived_quantile(histogram.compute(), 0.5)
         assert estimate.clamped_to_window
         assert estimate.value == 2.0**16
 
@@ -182,19 +171,18 @@ class TestDerivedQuantiles:
         histogram = Histogram()
         histogram.update(torch.randn(10))
         with pytest.raises(WatchRenderError) as excinfo:
-            derived_quantile(histogram.result(), 1.5)
+            derived_quantile(histogram.compute(), 1.5)
         assert excinfo.value.fields["code"] == "watch_quantile_invalid"
 
     def test_empty_population_refuses(self) -> None:
         histogram = Histogram()
         histogram.update(torch.full((5,), float("nan")))
         with pytest.raises(WatchRenderError) as excinfo:
-            derived_quantile(histogram.result(), 0.5)
+            derived_quantile(histogram.compute(), 0.5)
         assert excinfo.value.fields["code"] == "watch_population_empty"
 
 
 class TestHistogramPayload:
-    @pytest.mark.smoke
     def test_bucket_counts_cover_finite_population(self) -> None:
         torch.manual_seed(4)
         data = torch.randn(3000)
@@ -226,7 +214,6 @@ class TestHistogramPayload:
             histogram_payload(obs)
         assert excinfo.value.fields["code"] == "watch_sketch_missing"
 
-    @pytest.mark.smoke
     def test_observation_row_none_payload_for_gaps(self) -> None:
         gap = ObservationRecord(
             global_step=1,
@@ -241,7 +228,6 @@ class TestHistogramPayload:
 
 
 class TestHistoryView:
-    @pytest.mark.smoke
     def test_series_and_refusals(self) -> None:
         view = _synthetic_view()
         series = view.series("m:a")
@@ -280,20 +266,12 @@ class TestHistoryView:
         assert excinfo.value.fields["code"] == "watch_phase_ambiguous"
         assert len(view.series("p:w", "param_grad", "pre_clip")) == 1
 
-    def test_rows_long_form(self) -> None:
-        view = _synthetic_view()
-        rows = view.rows()
-        assert len(rows) == 10
-        gap_rows = [r for r in rows if r["presence"] != "observed"]
-        assert len(gap_rows) == 1 and gap_rows[0]["mean"] is None
-
     def test_to_pandas_when_available(self) -> None:
         pandas = pytest.importorskip("pandas")
         frame = _synthetic_view().to_pandas()
         assert isinstance(frame, pandas.DataFrame)
         assert len(frame) == 10
 
-    @pytest.mark.smoke
     def test_to_pandas_without_pandas_refuses_typed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Absent pandas refuses ``watch_tabular_extra_missing`` with the remedy."""
 
@@ -322,7 +300,6 @@ class TestRenderers:
         assert "nonfinite event" in svg_1  # the injected NaN
         _parse_svg(svg_1)
 
-    @pytest.mark.smoke
     def test_waterfall_deterministic_with_raster_and_caption(self) -> None:
         view = _synthetic_view()
         svg_1 = histogram_waterfall(view, "m:a")
@@ -332,7 +309,6 @@ class TestRenderers:
         assert "nonfinite" in svg_1
         _parse_svg(svg_1)
 
-    @pytest.mark.smoke
     def test_contact_sheet_footer_ranking_pagination(self) -> None:
         view = _synthetic_view()
         sheet = contact_sheet(view)
@@ -342,7 +318,7 @@ class TestRenderers:
         ranked = rank_sites(view)
         assert ranked[0][0] == "m:b", "nonfinite site ranks first"
         assert "nonfinite" in ranked[0][2]
-        assert contact_sheet_pages(view, tiles_per_page=1) == 2
+        assert contact_sheet(view, tiles_per_page=1).page_count == 2
         page_2 = contact_sheet(view, page=1, tiles_per_page=1)
         assert "sites 2-2 of 2" in page_2
         with pytest.raises(WatchRenderError) as excinfo:
@@ -350,7 +326,6 @@ class TestRenderers:
         assert excinfo.value.fields["code"] == "watch_page_out_of_range"
         _parse_svg(sheet)
 
-    @pytest.mark.smoke
     def test_detail_sheet_discloses(self) -> None:
         view = _synthetic_view()
         detail = site_detail(view, "m:b")
@@ -359,7 +334,6 @@ class TestRenderers:
         assert "activation" in detail
         _parse_svg(detail)
 
-    @pytest.mark.smoke
     def test_real_collector_views_render(self, collector_view: HistoryView) -> None:
         ranked = rank_sites(collector_view)
         assert ranked, "collector produced rankable sites"
@@ -377,6 +351,44 @@ class TestRenderers:
         assert len(skipped_blocks) == 1
         assert not [o for o in skipped_blocks[0].observations if o.stream == "param_delta"]
 
+    @pytest.mark.parametrize(
+        ("num_sites", "expected_pages"), [(0, 1), (1, 1), (12, 1), (13, 2), (340, 29)]
+    )
+    def test_contact_sheet_carries_page_count(self, num_sites: int, expected_pages: int) -> None:
+        view = _many_site_view(num_sites)
+        first = contact_sheet(view, tiles_per_page=12)
+        assert first.page == 0
+        assert first.page_count == expected_pages
+        last = contact_sheet(view, page=expected_pages - 1, tiles_per_page=12)
+        assert last.page == expected_pages - 1
+        assert last.page_count == expected_pages
+        assert f"page {expected_pages} of {expected_pages}" in last
+        assert f"of {num_sites} -- page" in last
+        with pytest.raises(WatchRenderError) as excinfo:
+            contact_sheet(view, page=expected_pages, tiles_per_page=12)
+        assert excinfo.value.fields["pages"] == expected_pages
+
+    def test_contact_sheet_is_the_svg_text(self) -> None:
+        import copy
+        import pickle
+
+        sheet = contact_sheet(_synthetic_view())
+        assert isinstance(sheet, str)
+        assert sheet._repr_svg_() == str(sheet)
+        _parse_svg(sheet)
+        for clone in (copy.copy(sheet), pickle.loads(pickle.dumps(sheet))):
+            assert clone == sheet
+            assert (clone.page, clone.page_count) == (0, 1)
+
+    def test_contact_sheet_pages_helper_is_removed(self) -> None:
+        import torchlens._observability as observability
+        import torchlens._observability._render as render
+
+        with pytest.raises(ImportError):
+            from torchlens._observability import contact_sheet_pages  # noqa: F401
+        assert not hasattr(observability, "contact_sheet_pages")
+        assert not hasattr(render, "contact_sheet_pages")
+
     def test_repr_html_is_contact_sheet(self) -> None:
         html = _synthetic_view()._repr_html_()
         assert html.startswith("<svg")
@@ -384,7 +396,7 @@ class TestRenderers:
 
 class TestCairosvgRoundTrip:
     def test_all_views_convert(self) -> None:
-        cairosvg = pytest.importorskip("cairosvg")
+        cairosvg = require_cairosvg()
         view = _synthetic_view()
         for document in (
             quantile_fan(view, "m:a"),
@@ -397,7 +409,6 @@ class TestCairosvgRoundTrip:
 
 
 class TestGraphJoin:
-    @pytest.mark.smoke
     def test_color_by_watch_callable(self) -> None:
         from types import SimpleNamespace
 

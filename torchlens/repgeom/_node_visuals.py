@@ -68,6 +68,17 @@ def mds_scatter_node_spec(
     ------
     ValueError
         If sizing or cap parameters are invalid.
+
+    Examples
+    --------
+    >>> node_fn = tl.viz.nodes.mds_scatter(max_thumbnails=4)
+    >>> callable(node_fn)
+    True
+    >>> try:
+    ...     tl.viz.nodes.mds_scatter(max_thumbnails=0)
+    ... except ValueError as err:
+    ...     print(type(err).__name__)
+    ValueError
     """
 
     if max_thumbnails < 1:
@@ -183,6 +194,17 @@ def rdm_node_spec(  # noqa: PLR0913 -- draw-time producer: six all-defaulted pre
     ValueError
         If sizing or cap parameters are invalid, or ``display`` is not one
         of ``"raw"``, ``"rank"``, ``"percentile"``.
+
+    Examples
+    --------
+    >>> node_fn = tl.viz.nodes.rdm(display="percentile", max_stimuli=4)
+    >>> callable(node_fn)
+    True
+    >>> try:
+    ...     tl.viz.nodes.rdm(display="bogus")
+    ... except ValueError as err:
+    ...     print(type(err).__name__)
+    ValueError
     """
 
     if max_stimuli < 1:
@@ -292,6 +314,17 @@ def scree_node_spec(
     ------
     ValueError
         If sizing, cap, or threshold parameters are invalid.
+
+    Examples
+    --------
+    >>> node_fn = tl.viz.nodes.scree(max_components=5)
+    >>> callable(node_fn)
+    True
+    >>> try:
+    ...     tl.viz.nodes.scree(width=10)
+    ... except ValueError as err:
+    ...     print(type(err).__name__)
+    ValueError
     """
 
     if max_components < 1:
@@ -450,7 +483,7 @@ def _render_scree_image(
         height=height,
         y_min=0.0,
         y_max=1.0,
-        colors=((48, 93, 170), (32, 128, 90), (160, 72, 72)),
+        colors=((80, 80, 80), (32, 128, 90), (160, 72, 72)),
         show_legend=True,
         x_label="component",
         y_label="fraction",
@@ -466,7 +499,7 @@ def _render_scree_image(
         f"rank {info['effective_rank']}"
     )
     draw.rectangle([(0, height), (width - 1, height + callout_height - 1)], fill=(255, 255, 255))
-    draw.line([(0, height), (width - 1, height)], fill=(215, 219, 226))
+    draw.line([(0, height), (width - 1, height)], fill=(218, 218, 218))
     draw.text((8, height + 10), callout, fill=(35, 39, 47))
     return canvas
 

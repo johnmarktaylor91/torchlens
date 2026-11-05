@@ -1,4 +1,4 @@
-"""Decode-step selector on the capture-free bound generation path (R2-25, N-IV-12).
+"""Decode-step selector on the capture-free bound generation path.
 
 ``torchlens.at_step(k)`` on a bound ``generate`` fires only during
 the k-th forward of the generation (step 0 is the prefill), capture-free. Each

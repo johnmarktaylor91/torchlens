@@ -690,13 +690,14 @@ input-conditional at run time, not a static descriptor flag.
 
 ## 5. Producer preflight and no-payload invariant
 
-The producer can emit a runnable descriptor only when the source capture recorded replay-template
-metadata. Users must capture with
-`capture=tl.options.CaptureOptions(replayable=True)` (or flat
-`replayable=True`) before `trace.save(..., level="runnable")`. This capture flag is required
-even when the user intends replay without an intervention. Omitting it produces a typed
-`RunnablePreflightError` with the `MISSING_CALLABLE_REF` finding; analysis saves remain available,
-but save-time code never guesses or reconstructs missing call templates.
+The producer can emit a runnable descriptor only when the source capture recorded the runnable
+apparatus (callable registry keys, state snapshots, alias topology, escape records). Users must
+capture with `capture=tl.options.CaptureOptions(replayable=True)` (or flat
+`replayable=True`) before `trace.save(..., level="runnable")`. The flag is required even when
+no intervention is planned; saved-graph replay in the capturing process (`trace.do(site, edit)`)
+does not need it, since every capture records the per-op argument templates. Omitting it produces
+a typed `RunnablePreflightError` with the `MISSING_CALLABLE_REF` finding; analysis saves remain
+available, but save-time code never guesses or reconstructs missing callable keys.
 
 ### Load-side structural integer anchoring (r53 free_1)
 
@@ -1178,16 +1179,16 @@ forward. Analysis-level saves of halted captures remain allowed; the refusal sur
 `RunnablePreflightError` at `trace.save(path, level="runnable")` entry.
 
 `user_intervention_unsupported` is also the RUN-time ceiling diagnostic (stage
-`hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run(inputs=...,
-fast=True)` on a live trace that applies its staged hooks or value replacements returns an
+`hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run_transaction(inputs=...)`,
+fast or not, on a live trace that applies its staged hooks or value replacements returns an
 edited forward, not the model's own, and no hook-aware check exists yet, so the report settles
 `unverifiable` (poisoned, never `verified`) and the trace is no longer pristine. A run with
-nothing staged keeps its verdict; the ordinary `run(inputs=)` keeps refusing staged edits it
-would not apply (`run_staged_spec_unapplied`).
+nothing staged keeps its verdict; only `run_transaction(inputs=)` on a loaded artifact (sparse or analysis
+provider) refuses staged edits it cannot apply (`run_staged_spec_unapplied`).
 
 `user_intervention_unsupported` is the SAVE-time producer refusal (stage
 `producer_user_intervention`) for a capture whose taken path carries at least one
-user-intervention-replaced op (`trace(intervene=...)`, `set`, or a raw forward hook that
+user-intervention-replaced op (`trace(intervene=...)`, a `set_only` `do`, or a raw forward hook that
 substituted a value). The replacement value has no traceable function, so a sparse runnable
 replay could only recompute the UN-intervened computation -- a different function than the
 provenance the artifact archives -- and would permanently ceiling `unverifiable`. The
@@ -2418,7 +2419,7 @@ remains owner-thread-scoped (a `TorchDispatchMode` is thread-local).
 
 ### Input site-set exactness (r42 corr1)
 
-Loaded sparse `.run(inputs=...)` must match the captured top-level model input site set exactly.
+Loaded sparse `.run_transaction(inputs=...)` must match the captured top-level model input site set exactly.
 Extra positional arguments or keyword arguments not present in the captured site set are observed
 input-tree contradictions and cannot be ignored or reported `verified`, including for captures of
 Python variadic signatures whose recorded taken path contains only a finite concrete site set

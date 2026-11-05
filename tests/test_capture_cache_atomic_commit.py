@@ -90,6 +90,7 @@ def test_crash_at_the_legacy_tag_seam_never_leaves_a_torn_entry(tmp_path, monkey
     assert after.provenance.cache_hit is True
 
 
+@pytest.mark.smoke
 def test_crash_at_the_single_commit_preserves_the_old_generation(tmp_path, monkeypatch) -> None:
     """A crash at the atomic commit itself leaves the prior entry fully intact."""
 
@@ -126,7 +127,6 @@ def test_crash_at_the_single_commit_preserves_the_old_generation(tmp_path, monke
     assert after.provenance.cache_hit is True
 
 
-@pytest.mark.smoke
 def test_committed_entry_is_self_authenticating(tmp_path) -> None:
     """The committed record needs no sidecar: no ``.hmac`` file exists at all."""
 

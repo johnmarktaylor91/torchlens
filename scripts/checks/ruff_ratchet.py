@@ -220,7 +220,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # pattern) -- tl.report.mfu's three D16/D17 disclosure knobs bundle into
     # the frozen MfuProvenance dataclass (validation unchanged at the mfu()
     # door, so the typed refusals still fire), and the D9 evidence= knob
-    # moved from build_profile to ProfileReport.to_pandas(evidence=) -- the
+    # moved from build_profile to ProfileReport.to_pandas(include_evidence=) -- the
     # export door -- so build_profile keeps its historical five-argument
     # view surface. The lane's PRIVATE offenders (_remainder,
     # _assemble_level_rows, _rollup_row) were refactored in-lane. F09 adds
@@ -295,7 +295,50 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # upstream libraries' call shapes carried per-line noqa with that reason, so
     # the count no longer rides on other merges (all three were later replaced
     # by converters without the noqa). Measured 440 (same pinned mode).
-    "PLR0913": 440,
+    # 440 -> 445 (2026-11-03 C-143, JMT decision d-90086c50, 12:17 PM PT: "yes u
+    # can raise the cap for lint, just make sure it sto0ps beng a blocker"; set to
+    # the unit's own measured count). New long signatures, all field-transformers
+    # df3f9bd469: receptive_field/_engine_causal.py apply_causal and
+    # transpose_causal, _query_causal.py map_extended_to_child,
+    # _reshape_blocks.py apply_blocks, rules/transforms.py _axis_map_result.
+    # Three more sites only moved (_query.py to _query_maps.py:
+    # _interpolation_source, map_interpolation_index_set,
+    # map_transposed_convolution_index_set). Measured 445 (same pinned mode).
+    # 445 -> 446 (2026-11-03 merges of trains 14510badb (C-139, ceiling 443) and
+    # 801bd8dbd (C-132) into C-143, same JMT decision d-90086c50): the value is the
+    # count measured at the merged tree 0ec91978d (fellows q5c143-plr-2, pinned ruff,
+    # isolated mode, torchlens/ scope): the train's sites plus C-143's five above.
+    # Train side, 446 (2026-11-03, JMT d-90086c50 "yes u can raise the cap for lint"): the
+    # measured count of the merged tree, base 438 + the lean/lazy record's 3 +
+    # the recording-parity work's 5 (PredicateOpIdentity.for_call,
+    # _predicate_output_context, _predicate_equivalence_class, Recording.do,
+    # Recording.save). Same pinned mode.
+    # 446 -> 451 (2026-11-03 merge of train 88b207bc9 (C-134, ceiling 446) into C-143, same
+    # JMT decision d-90086c50): measured at b2e1a3cc2 (fellows q5c143-plr-3, pinned ruff,
+    # isolated mode, torchlens/ scope) = the train's 446 sites (q5c143-plr-train-3) plus
+    # C-143's five field-transformers signatures named above; site lists diffed.
+    # 452 (2026-11-03, same JMT d-90086c50): the measured count of the C-146
+    # merged tree = the train's 451 sites plus memory-lifetime's one new long
+    # signature, _retired_hook_event (torchlens/_utils/rng/monitor_state.py, the
+    # retired host-RNG hook's six profile-callback inputs); site lists diffed.
+    # Same pinned mode.
+    # 454 (2026-11-04, same JMT d-90086c50): the C-149 viz merge's measured count
+    # on that train, + 1 for _focus_stubs._boundary_lines (trace, external_node,
+    # vis_mode, boundary_kind, tensor_row, prefix; _get_or_create_boundary_node
+    # moved from _render_flow into _focus_stubs and stays one count) and + 1 for
+    # loop-if's _render_edges._is_rolled_back_edge (parent_node, child_node,
+    # vis_mode, rolled_maps, parent_segment, child_segment). Same pinned mode.
+    # 458 (2026-11-04 C-156 combined tip, same JMT d-90086c50): measured 458 at the
+    # merged tree (pinned ruff, isolated mode, torchlens/ scope) = the C-149 454 plus
+    # C-154 walk rulings' four new signatures, site lists diffed per file:
+    # Trace.run_transaction (names.11, _data_classes/trace.py) and the names.5
+    # feature door mechinterp/_feature.py visualize_feature, _optimize and
+    # _validate_settings. C-138 and C-133 add none.
+    # 459 (2026-11-04 grad-live remerge onto train 4b12c574df, same JMT
+    # d-90086c50): measured 459 at the merged tree = the train's 458 plus one
+    # new signature, site lists diffed per file: the growth fold's
+    # _grad_fn_record_from_discovery (backends/torch/_grad_fn_growth.py).
+    "PLR0913": 459,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f

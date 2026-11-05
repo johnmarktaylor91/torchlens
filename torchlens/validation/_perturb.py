@@ -3,7 +3,7 @@
 The forward validation replays each op from a perturbed parent and requires the
 output to move; these helpers produce that perturbation (integer, bool, float
 and complex strategies, and sparse parents through their values component).
-Leaf module: it imports torch and the sparse component helpers only.
+Leaf module: it imports torch, the sparse component helpers and torch_attr only.
 """
 
 from __future__ import annotations
@@ -11,11 +11,25 @@ from __future__ import annotations
 import torch
 
 from .._utils._sparse_parts import sparse_component_tensors, sparse_with_values
+from .._utils._torch_symbols import torch_attr
 
 # Maximum number of random perturbation attempts before giving up on finding
 # a value different from the original.  Relevant for integer/bool tensors
 # where the value space may be small (e.g., a single-element int tensor).
 MAX_PERTURB_ATTEMPTS = 100
+
+# The wide unsigned dtypes (torch 2.3+) have few kernels (no ``unique`` or ``randint`` on most
+# devices), so they are perturbed through a same-width signed view: a philox key (uint64) is a
+# value parent that is perturbed like any integer, never routed to the float branch.
+_UNSIGNED_AS_SIGNED: dict[torch.dtype, torch.dtype] = {
+    unsigned_dtype: signed
+    for unsigned, signed in (
+        ("uint16", torch.int16),
+        ("uint32", torch.int32),
+        ("uint64", torch.int64),
+    )
+    if (unsigned_dtype := torch_attr(unsigned)) is not None
+}
 
 
 def _perturb_sparse_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) -> torch.Tensor:
@@ -76,6 +90,9 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
         torch.int64,
     ]:
         perturbed_outs = _perturb_integer_outs(parent_outs)
+    elif parent_outs.dtype in _UNSIGNED_AS_SIGNED:
+        signed = parent_outs.view(_UNSIGNED_AS_SIGNED[parent_outs.dtype])
+        perturbed_outs = _perturb_integer_outs(signed).view(parent_outs.dtype)
     elif parent_outs.dtype == torch.bool:
         perturbed_outs = _perturb_bool_outs(parent_outs)
     elif parent_outs.is_complex():

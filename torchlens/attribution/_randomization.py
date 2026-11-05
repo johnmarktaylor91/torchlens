@@ -58,6 +58,19 @@ class RandomizationStep:
     values
         The attribution computed on the randomized copy, or ``None`` with
         ``keep_maps=False``.
+
+    Examples
+    --------
+    >>> result = tl.attribution.randomization_test(
+    ...     model, x, target=0, method=tl.attribution.saliency
+    ... )
+    >>> step = result.steps[0]
+    >>> type(step).__name__
+    'RandomizationStep'
+    >>> step.module_address
+    '2'
+    >>> sorted(step.similarities)
+    ['spearman', 'spearman_abs', 'ssim']
     """
 
     module_address: str
@@ -85,6 +98,20 @@ class RandomizationTest:
     extra
         Method-specific extras: the similarity measure names (``measures``) and
         the per-step initialization notes (``initialization_per_layer``).
+
+    Examples
+    --------
+    >>> result = tl.attribution.randomization_test(
+    ...     model, x, target=0, method=tl.attribution.saliency
+    ... )
+    >>> type(result).__name__
+    'RandomizationTest'
+    >>> result.randomization
+    'cascading'
+    >>> len(result.module_addresses)
+    2
+    >>> len(result.similarity("spearman"))
+    2
     """
 
     randomization: str
@@ -354,6 +381,16 @@ def randomization_test(  # noqa: PLR0913 - public door: keyword-only test settin
         On an unknown order, a non-callable method, layers that are not
         parameterized modules, or (with ``layers=None``) no parameterized module
         running while the method computes its map.
+
+    Examples
+    --------
+    >>> result = tl.attribution.randomization_test(
+    ...     model, x, target=0, method=tl.attribution.saliency
+    ... )
+    >>> len(result.steps)
+    2
+    >>> result.settings["randomization"]
+    'cascading'
     """
 
     if randomization not in ("cascading", "independent"):

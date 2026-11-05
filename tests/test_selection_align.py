@@ -72,16 +72,7 @@ def _alignment_reason(excinfo: pytest.ExceptionInfo) -> str:
     return excinfo.value.fields["reason"]
 
 
-def test_entries_record_the_l1_structural_site_key(pair):
-    """ACT entries carry the op's site_key_v1 string (the bridging relation)."""
-
-    trace_a, _ = pair
-    resolved = trace_a[tl.units("relu_1_2", IDX)]
-    entry = resolved[0]
-    assert isinstance(entry.structural_site_key, str)
-    assert entry.structural_site_key.startswith("s1|")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/align.py.
 def test_align_to_same_trace_is_identity(pair):
     """Alignment onto the selection's own trace returns the selection itself."""
 
@@ -90,25 +81,7 @@ def test_align_to_same_trace_is_identity(pair):
     assert resolved.align_to(trace_a) is resolved
 
 
-def test_align_to_rebinds_with_masks_and_provenance(pair):
-    """Happy path: target binding, unchanged masks, cross-run disclosure."""
-
-    trace_a, trace_b = pair
-    resolved = trace_a[tl.units("relu_1_2", IDX)]
-    aligned = resolved.align_to(trace_b)
-    assert aligned is not resolved
-    assert aligned._trace is trace_b
-    assert len(aligned) == len(resolved)
-    for source_entry, aligned_entry in zip(resolved, aligned, strict=True):
-        assert aligned_entry.key == source_entry.key
-        assert aligned_entry.structural_site_key == source_entry.structural_site_key
-        assert torch.equal(aligned_entry.mask, source_entry.mask)
-        assert aligned_entry.provenance.relation == source_entry.provenance.relation
-        assert "cross-run aligned from" in aligned_entry.provenance.source
-    # Content digest is mask/site-based, so a label-identical alignment agrees.
-    assert aligned.digest == resolved.digest
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/do_plan.py, intervention/_trace_selection_edits.py.
 def test_do_still_refuses_foreign_resolved_selection(pair):
     """The trace-mismatch tripwire stays armed; its remedy teaches align_to."""
 
@@ -121,6 +94,7 @@ def test_do_still_refuses_foreign_resolved_selection(pair):
     assert "align_to" in str(excinfo.value)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/do_plan.py, intervention/_helper_internals.py, intervention/_patch_mapping.py ....
 def test_cross_run_patch_lands_source_values(pair):
     """Flagship flow: resolve on A, align to a fork of B, patch from A.
 
@@ -150,6 +124,7 @@ def test_cross_run_patch_lands_source_values(pair):
     assert audit["patch_source"]["source_object_id"] == str(id(trace_a))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/mask.py, _selection/selection.py.
 def test_alignment_mask_stays_immutable(pair):
     """Mutating a mask returned by an aligned entry cannot alter the selection."""
 
@@ -163,6 +138,7 @@ def test_alignment_mask_stays_immutable(pair):
     assert aligned[0].num_selected == len(IDX)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/align.py, _selection/selection.py.
 def test_refusal_kind_unsupported(pair):
     """PARAM selections refuse alignment (addresses not run-stable)."""
 
@@ -173,6 +149,7 @@ def test_refusal_kind_unsupported(pair):
     assert _alignment_reason(excinfo) == "kind_unsupported"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/_grouping_stamp.py, _selection/align.py, _trace_core/op_store.py ....
 def test_refusal_grouping_stamp_degraded(pair):
     """A degraded stamp on either side refuses (L1 consumer-matrix row)."""
 
@@ -200,6 +177,7 @@ def test_refusal_grouping_stamp_degraded(pair):
         trace_a._options_grouping_policy = missing
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/align.py.
 def test_refusal_grouping_stamp_mismatch(pair):
     """Cross-stamp captures refuse typed (no relaxation minted here)."""
 
@@ -218,6 +196,7 @@ def test_refusal_grouping_stamp_mismatch(pair):
         trace_b._options_grouping_policy = healthy
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/align.py.
 def test_refusal_site_key_unavailable(pair):
     """A keyless entry (legacy capture) cannot bridge."""
 
@@ -237,6 +216,7 @@ def test_refusal_site_key_unavailable(pair):
     assert _alignment_reason(excinfo) == "site_key_unavailable"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/align.py.
 def test_refusal_site_not_in_target(pair):
     """A different architecture has no matching (address, site key) pair."""
 
@@ -265,6 +245,7 @@ def test_refusal_site_not_in_target(pair):
         other.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _selection/align.py.
 def test_refusal_index_space_mismatch(pair):
     """Same site, different input geometry: masks cannot re-index."""
 

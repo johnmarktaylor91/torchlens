@@ -266,7 +266,7 @@ def _compile_backward_pass_capture(selector: BaseSelector, lane: str) -> _Matche
 def _match_backward_pass_capture(subject: Any, *, value: Any) -> bool:
     """Return whether the context's backward (or plain) pass index equals ``value``."""
 
-    ctx_pass = getattr(subject, "backward_pass_index", None)
+    ctx_pass = getattr(subject, "backward_pass_number", None)
     if ctx_pass is None:
         ctx_pass = getattr(subject, "pass_number", None)
     return ctx_pass == value
@@ -455,6 +455,6 @@ def _match_grad_fn_backward_pass(site: Any, *, pass_index: int) -> bool:
     """Return whether any backward call of the GradFn ran at ``pass_index``."""
 
     return any(
-        getattr(call, "backward_pass_index", None) == pass_index
+        getattr(call, "backward_pass_number", None) == pass_index
         for call in _grad_fn_call_values(site)
     )

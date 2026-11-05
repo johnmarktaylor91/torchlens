@@ -10,6 +10,7 @@ counters to unmemoized reference computations.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -201,7 +202,9 @@ def _reference_module_call_match(accessor: TraceModuleCallAccessor, key: str) ->
             f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
             f"position or a call-qualified label like '{key}:1'."
         )
-    return None
+    # The typed door converts a key that names exactly one call (here, a call label
+    # handed straight to the resolver) to that call; the scan mirrors it.
+    return accessor._dict.get(key)
 
 
 def _reference_grad_fn_call_match(accessor: TraceGradFnCallAccessor, key: str) -> Any:
@@ -270,8 +273,8 @@ def test_module_call_and_grad_fn_call_indexes_match_scan() -> None:
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"), save="all")
     try:
         loss = trace[trace.output_layers[0]].out.sum()
-        trace.log_backward(loss, retain_graph=True)
-        trace.log_backward(loss, retain_graph=True)
+        trace.backward(loss, retain_graph=True)
+        trace.backward(loss, retain_graph=True)
 
         module_calls = trace.module_calls
         module_keys = [getattr(call, "address", None) for call in module_calls]
@@ -388,6 +391,80 @@ def test_alias_index_build_failure_falls_back_to_scan(monkeypatch: pytest.Monkey
             accessor._resolve_substring("definitely-not-a-label")
         with pytest.raises(RuntimeError, match="unreadable raw_label"):
             accessor._resolve_substring_by_scan("definitely-not-a-label")
+    finally:
+        tl.release_model(model)
+        trace.cleanup()
+
+
+def _scanned_layer_matches(accessor: TraceOpAccessor, key: str) -> list[Op]:
+    """Reference bare-layer-label matches by scanning every row, as before the index."""
+
+    return [op for op in accessor._list if key in {op.layer_label, op.short_layer_label}]
+
+
+def test_resolve_all_index_matches_scan_for_every_key() -> None:
+    """``resolve_all`` and ``trace[...]`` answer identically through the layer-label index.
+
+    The index serves only settled rows; the scan stays the reference, so every
+    probe key (aliases, stored edge labels, pass tokens, misses) must resolve to
+    the same Ops in the same order, or raise the same error.
+    """
+
+    probed = 0
+    for name, model, trace in _traces():
+        try:
+            accessor = trace.ops
+            assert getattr(accessor._list[-1], "_tracing_finished", False), name
+            scan_only = TraceOpAccessor(accessor._list, trace._layer_num_calls)
+            scan_only._layer_label_matches = (  # type: ignore[method-assign]
+                lambda key, a=scan_only: _scanned_layer_matches(a, key)
+            )
+            keys = _op_probe_keys(accessor)
+            keys += [f"{op.layer_label}:{token}" for op in accessor for token in ("last", "all")]
+            for key in dict.fromkeys(keys):
+                indexed = _outcome(lambda k=key, a=accessor: a.resolve_all(k))
+                scanned = _outcome(lambda k=key, a=scan_only: a.resolve_all(k))
+                if isinstance(scanned, str):
+                    assert indexed == scanned, (name, key)
+                else:
+                    assert [id(op) for op in indexed] == [id(op) for op in scanned], (name, key)
+                via_trace = _outcome(lambda k=key, t=trace: t[k])
+                assert not isinstance(via_trace, list), (name, key)
+                probed += 1
+            assert accessor._layer_label_index is not None, name
+        finally:
+            tl.release_model(model)
+            trace.cleanup()
+    assert probed > 30
+
+
+def test_resolve_all_scans_until_rows_settle() -> None:
+    """Before the last row is finished no index is built and the live scan answers."""
+
+    torch.manual_seed(0)
+    model = Recurrent()
+    model.eval()
+    trace = tl.trace(model, torch.randn(3, 6))
+    try:
+        # A trailing stand-in row whose finished flag the test controls.
+        last = SimpleNamespace(
+            label="stand_in_1_1",
+            raw_index=-1,
+            layer_label="stand_in_1_1",
+            short_layer_label="stand_in_1",
+            _tracing_finished=False,
+        )
+        ops = [*trace._layer_list, last]
+        accessor = TraceOpAccessor(ops, trace._layer_num_calls)  # type: ignore[arg-type]
+        key = next(op.layer_label for op in ops if trace._layer_num_calls[op.layer_label] > 1)
+        assert accessor.resolve_all(key) == _scanned_layer_matches(accessor, key)
+        assert accessor._layer_label_index is None
+        last._tracing_finished = True
+        assert accessor.resolve_all(key) == _scanned_layer_matches(accessor, key)
+        assert accessor._layer_label_index is not None
+        # Callers get a fresh list; mutating it leaves the index intact.
+        accessor.resolve_all(key).clear()
+        assert accessor.resolve_all(key) == _scanned_layer_matches(accessor, key)
     finally:
         tl.release_model(model)
         trace.cleanup()

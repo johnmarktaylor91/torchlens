@@ -159,7 +159,6 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_options_backward_ready": FieldPolicy.DROP,
     "_options_inference_only": FieldPolicy.KEEP,
     "_options_chunk_size": FieldPolicy.KEEP,
-    "_module_filter": FieldPolicy.DROP,
     "_options_emit_nvtx": FieldPolicy.KEEP,
     # Session-time measurement knob (like ``backward_ready``): it selects how
     # ``forward_peak_memory`` was measured during this capture and has no
@@ -410,7 +409,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # BEFORE any receptive-field probe has the same class spec as one
     # serialized after (the probe used to setdefault this at call time).
     "_tl_rf_probe_active": FieldPolicy.DROP,
-    "_active_backward_pass_index": FieldPolicy.DROP,
+    "_active_backward_pass_number": FieldPolicy.DROP,
     "_backward_roots_by_pass": FieldPolicy.DROP,
     "_backward_projection_event_count": FieldPolicy.DROP,
     "_backward_projection_revision": FieldPolicy.DROP,

@@ -228,7 +228,7 @@ def _layer_passes(trace: Any, label: str) -> list[Any]:
     """Return every pass-qualified op of a multi-pass layer, or ``[]``."""
 
     try:
-        num_passes = int(getattr(trace[label], "num_passes", 0) or 0)
+        num_passes = int(getattr(trace.layers[label], "num_passes", 0) or 0)
     except (KeyError, TypeError, ValueError):
         return []
     passes = []

@@ -22,6 +22,7 @@ from .._input_walk import INPUT_TREE_MAX_DEPTH
 from . import _call_site, _torch_compat
 from ._call_site import _BOUNDARY_CODES
 from ._package_frames import _VERDICTS as _PACKAGE_VERDICTS, is_torchlens_code
+from ._quiet_property import _QuietPropertyLogs, read_attr_quietly
 
 # Attributes to skip when crawling an object's namespace looking for tensors.
 # Two groups, matched by EXACT name:
@@ -288,7 +289,7 @@ def get_vars_of_type_from_obj(
     )
     # BFS: each iteration processes one depth level.
     # Hoist warnings context manager to avoid ~77K per-attribute entries.
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(), _QuietPropertyLogs():
         warnings.simplefilter("ignore")
         for _ in range(search_depth):
             this_stack = _search_stack_for_vars_of_type(
@@ -420,7 +421,7 @@ def _get_tensors_and_params_from_obj(
     params: list[torch.nn.Parameter] = []
     found_ids: set[int] = set()
     expanded_ids: set[int] | None = None if allow_repeats else set()
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(), _QuietPropertyLogs():
         warnings.simplefilter("ignore")
         for _ in range(search_depth):
             this_stack = _search_stack_for_tensors_and_params(
@@ -691,17 +692,16 @@ def _extend_search_stack_from_item(
         # Opaque object that refuses introspection -> treat as a leaf.
         return
 
-    # warnings.catch_warnings() is hoisted to get_vars_of_type_from_obj
+    # warnings.catch_warnings() and the log mute scope are hoisted to the walkers' entry points
     for attr_name in filtered_attrs:
         try:
-            attr = getattr(item, attr_name)
+            attr = read_attr_quietly(item, attr_name)
         except Exception:
             # getattr can fail for many reasons (missing C-level attr,
             # property that raises, etc.) — skip gracefully.
             continue
         attr_cls = type(attr)
-        # Leaf types — can't contain tensors.
-        if attr_cls in _NON_CONTAINER_LEAF_TYPES:
+        if attr_cls in _NON_CONTAINER_LEAF_TYPES:  # leaf types cannot contain tensors
             continue
         # Skip callables (custom_methods, functions) UNLESS they're nn.Modules,
         # which are callable but may hold tensor attributes.
@@ -931,11 +931,13 @@ def _get_code_context(
     by ``FuncCallLocation`` on first access via ``linecache``.
 
     The walk is a single innermost-to-outermost pass that keeps only
-    surviving (non-internal, non-``_call_impl``) frames. The historical
-    outermost-first scan is recovered from the survivor list: the outermost
-    ``forward``-named survivor starts the context, every deeper survivor
-    follows, and the first survivor above that ``forward`` (the user's
-    ``trace`` call site) is appended last.
+    surviving (non-internal, non-``_call_impl``) frames. The context is then
+    read from the survivor list outermost first, like a traceback: the first
+    survivor above the outermost ``forward``-named survivor (the call site:
+    the user's ``trace`` line, or the nearest wrapper above the root
+    ``forward``, such as a decorator) comes first, then the outermost
+    ``forward`` and every deeper survivor, so the innermost frame -- the line
+    that ran the op -- is always the LAST entry.
 
     When a ``context_cache`` is supplied, the walk also maintains a
     per-capture *anchor* -- the identity of the call-site frame -- under
@@ -967,7 +969,8 @@ def _get_code_context(
             Python frame lies inside it. Grouping (step 7) keys layers on it.
 
     Returns:
-        List[FuncCallLocation] ordered shallow-to-deep.
+        List[FuncCallLocation] ordered outermost to innermost; the last entry
+        is the frame that ran the op.
     """
     global _FUNC_CALL_LOCATION
 
@@ -1033,36 +1036,20 @@ def _get_code_context(
             )
         )
 
-    # Reconstruct the historical selection from the survivor list. With no
-    # ``forward`` frame, tracking never starts and the context is empty; the
-    # call site is only ever appended when a ``forward`` frame exists.
-    selected: list[tuple[FrameType, CodeType, int, int]] = []
-    if last_forward_pos >= 0:
-        selected = survivors[last_forward_pos::-1]
-        if last_forward_pos + 1 < len(survivors):
-            call_site = survivors[last_forward_pos + 1]
-            selected.append(call_site)
-        elif anchor_frame is not None:
-            call_site = (
-                anchor_frame,
-                anchor_frame.f_code,
-                anchor_frame.f_lineno,
-                anchor_frame.f_lasti,
-            )
-            selected.append(call_site)
-        else:
-            call_site = None
-        if context_cache is not None and anchor is None and call_site is not None:
-            # Establish the anchor: ``call_site`` is the first survivor above
-            # the OUTERMOST ``forward`` frame, so no ``forward``-named survivor
-            # exists anywhere above it -- the invariant the early-stop relies on.
-            cs_frame = call_site[0]
-            context_cache[_CODE_CONTEXT_ANCHOR_KEY] = (
-                id(cs_frame),
-                cs_frame.f_code,
-                cs_frame.f_lasti,
-                cs_frame.f_lineno,
-            )
+    selected, call_site = _call_site.select_context_frames(
+        survivors, last_forward_pos, anchor_frame
+    )
+    if call_site is not None and context_cache is not None and anchor is None:
+        # Establish the anchor: ``call_site`` is the first survivor above the
+        # OUTERMOST ``forward`` frame, so no ``forward``-named survivor exists
+        # anywhere above it -- the invariant the early-stop relies on.
+        cs_frame = call_site[0]
+        context_cache[_CODE_CONTEXT_ANCHOR_KEY] = (
+            id(cs_frame),
+            cs_frame.f_code,
+            cs_frame.f_lasti,
+            cs_frame.f_lineno,
+        )
 
     cache_key: _CodeContextCacheKey | None = None
     if context_cache is not None:
@@ -1097,6 +1084,12 @@ def _get_code_context(
             col_offset=None if disable_col_offset else _get_col_offset(frame_ref),
             source_loading_enabled=source_loading_enabled,
         )
+        if source_loading_enabled:  # save_source_context: snapshot the text at capture
+            loc._ensure_source_loaded()
+        else:
+            loc._linecache_entry = FuncCallLocation._cached_source_fingerprint(
+                code.co_filename, num_context_lines, context_cache
+            )
         result.append(loc)
 
     if context_cache is not None and cache_key is not None:

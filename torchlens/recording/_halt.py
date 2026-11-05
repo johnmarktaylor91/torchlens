@@ -1,8 +1,11 @@
-"""Fastlog early-abort control signal."""
+"""Fastlog early-abort control signal and the halted-state writer for a frozen Recording."""
 
 from __future__ import annotations
 
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
+
+if TYPE_CHECKING:
+    from .types import Recording
 
 
 class StopSignal(BaseException):
@@ -12,6 +15,13 @@ class StopSignal(BaseException):
     ----------
     reason:
         Optional user-facing reason stored on the resulting recording.
+
+    Examples
+    --------
+    >>> issubclass(StopSignal, BaseException), issubclass(StopSignal, Exception)
+    (True, False)
+    >>> StopSignal("enough").reason
+    'enough'
     """
 
     def __init__(
@@ -29,7 +39,7 @@ class StopSignal(BaseException):
         reason:
             User-facing halt reason.
         frontier_output:
-            Optional live output object used by ``trace(halt=...)`` to finalize
+            Optional live output object used by ``trace(stop_after=...)`` to finalize
             a partial graph at the halt boundary.
         boundary_kind:
             Event kind at the halt boundary (settlement metadata); ``None``
@@ -58,6 +68,16 @@ def stop(reason: str = "") -> NoReturn:
     ------
     HaltSignal
         Always raised to unwind to the recorder boundary.
+
+    Examples
+    --------
+    >>> def keep(ctx):
+    ...     if ctx.kind == "op":
+    ...         tl.recording.stop("enough")
+    ...     return True
+    >>> recording = tl.record(model, x, save=keep)
+    >>> recording.is_stopped, recording.stop_reason
+    (True, 'enough')
     """
 
     # F6 stop-request latch: the direct-raise public spelling must be as
@@ -71,3 +91,16 @@ def stop(reason: str = "") -> NoReturn:
 
         active_trace.__dict__["_stop_requested"] = StopRequest(kind="stop", reason=reason)
     raise StopSignal(reason)
+
+
+def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:
+    """Set halt state on a frozen ``Recording`` (mutated via ``object.__setattr__``); an empty
+    ``reason`` means none was given.
+    """
+
+    recording.stops_by_pass.setdefault(pass_index, reason)
+    if recording.is_stopped:
+        return
+    object.__setattr__(recording, "is_stopped", True)
+    object.__setattr__(recording, "status", "halted")
+    object.__setattr__(recording, "stop_reason", reason)

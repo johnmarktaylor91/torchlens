@@ -188,28 +188,6 @@ def test_grad_cam_derives_token_grid_and_matches_independent_cam(family: str) ->
     torch.testing.assert_close(result.values, expected, atol=1e-6, rtol=0)
 
 
-def test_grad_cam_reshape_callable_reproduces_derived_vit_result() -> None:
-    """The escape hatch gives the derived result when it states the same layout."""
-
-    torch.manual_seed(0)
-    model, layer, target, side, prefix = _vit()
-    image = torch.randn(1, 3, IMAGE, IMAGE)
-
-    derived = attribution.grad_cam(model, image, target=target, layer=layer, overlay=False)
-    by_hand = attribution.grad_cam(
-        model,
-        image,
-        target=target,
-        layer=layer,
-        reshape=lambda a: a[:, prefix:].transpose(1, 2).reshape(a.shape[0], a.shape[2], side, side),
-        overlay=False,
-    )
-
-    assert by_hand.extra["grid_route"] == "reshape"
-    assert by_hand.extra["prefix_tokens"] == prefix
-    assert torch.equal(by_hand.values, derived.values)
-
-
 class UnfoldTokens(nn.Module):
     """Tokens cut by ``F.unfold``: no rank-4 grid is ever flattened, so no grid is provable."""
 

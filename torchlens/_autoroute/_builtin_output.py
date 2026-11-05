@@ -21,15 +21,16 @@ from torchlens._autoroute._decode_heads import (
 from torchlens._autoroute._decode_spellings import (
     HEAD_KW,
     STYLE_KW,
-    TOKENIZER_KW,
     UNDETECTED_REMEDY,
 )
-from torchlens._autoroute.output import register
+from torchlens._autoroute.output import list as _registered_output_detectors, register
 from torchlens._capture._episode_derivation import _render_container_path
 from torchlens._capture_fingerprint import _never_matching_fragment
 from torchlens._data_classes.trace import ResolvedPostprocessing, Trace
 from torchlens._errors import InvalidArgumentError, PayloadUnavailableError
 from torchlens._ir.container_registry import _is_hf_model_output
+from torchlens._utils._display_errors import lookup_message
+from torchlens._utils.torchvision_weights import match_torchvision_weights
 
 DETECTOR_VERSION = "torchlens-output-a2-v1"
 #: Styles ``Trace.decode_output(style=...)`` resolves itself; a registered
@@ -207,11 +208,10 @@ def decode_trace_output(
     decoded = _decode_selected(logits_info[0], resolved, meta, top_n=top_n)
     if decoded is None and resolved.style == "hf_text":
         raise DecodeStyleUnknownError(
-            f"{STYLE_KW}='hf_text' needs a tokenizer with a decode method and rank-2 or "
-            "rank-3 logits",
+            f"{STYLE_KW}='hf_text' needs rank-2 [seq, vocab] or rank-3 [batch, seq, vocab] logits",
             code="decode_style_unknown",
-            remedy=f"pass {TOKENIZER_KW}= the model's tokenizer",
-            argument=TOKENIZER_KW,
+            remedy=f"pass {HEAD_KW}= the logits head of this trace",
+            argument=HEAD_KW,
         )
     if decoded is None:
         raise PayloadUnavailableError(
@@ -314,6 +314,25 @@ def _resolve_requested_style(meta: dict[str, Any]) -> ResolvedPostprocessing | N
     return None
 
 
+def output_decoders_cache_key() -> tuple[tuple[str, int, int], ...]:
+    """Return the registered output detectors as a capture-cache fragment.
+
+    Registered detectors label the capture-time decode, so a cached trace made
+    before a register or unregister must not serve the next capture.
+
+    Returns
+    -------
+    tuple[tuple[str, int, int], ...]
+        ``(name, priority, registration_order)`` per registered detector, in
+        dispatch order; re-registering a name changes its order and the key.
+    """
+
+    return tuple(
+        (detector.name, detector.priority, detector.registration_order)
+        for detector in _registered_output_detectors()
+    )
+
+
 def semantic_output_cache_key(model: Any) -> dict[str, Any]:
     """Return a serializable semantic-output cache fingerprint.
 
@@ -348,6 +367,10 @@ def semantic_output_cache_key(model: Any) -> dict[str, Any]:
         default_cfg = None
         config_unreadable = _never_matching_fragment("model-default-cfg-getter-raised")
     weights = getattr(model, "_torchlens_weights", None)
+    if weights is None:
+        # No handle planted: a torchvision model still names its preset when
+        # its loaded state equals exactly one cached preset checkpoint.
+        weights = match_torchvision_weights(model)
     return {
         "version": DETECTOR_VERSION,
         "config_unreadable": config_unreadable,
@@ -406,11 +429,20 @@ def _build_output_meta(
         if tokenizer is not None
         else getattr(trace, "_output_tokenizer", None),
         "model_metadata": getattr(trace, "_semantic_output_metadata", None),
+        "model_class_name": trace._source_class_name,
     }
 
 
 class DecodeStyleUnknownError(InvalidArgumentError):
-    """``decode_output(style=...)`` names a style no built-in or registered detector resolves."""
+    """``decode_output(style=...)`` names a style no built-in or registered detector resolves.
+
+    Examples
+    --------
+    >>> issubclass(DecodeStyleUnknownError, tl.errors.InvalidArgumentError)
+    True
+    >>> issubclass(DecodeStyleUnknownError, tl.errors.TorchLensError)
+    True
+    """
 
 
 def refuse_unknown_decode_style(style: Any) -> NoReturn:
@@ -428,8 +460,6 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
         Always, with code ``decode_style_unknown``.
     """
 
-    import difflib
-
     if style is None:
         raise DecodeStyleUnknownError(
             "no output detector resolved a decode style from the retained outputs. "
@@ -438,15 +468,17 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
             remedy=f"pass {STYLE_KW}= a built-in style or a registered custom style",
             argument=STYLE_KW,
         )
-    close = difflib.get_close_matches(str(style), BUILTIN_OUTPUT_STYLES, n=1)
-    hint = f" (did you mean {close[0]!r}?)" if close else ""
     raise DecodeStyleUnknownError(
-        f"unknown {STYLE_KW}={style!r}{hint}; no built-in or registered custom output "
-        f"detector resolved it. Built-in styles: {', '.join(BUILTIN_OUTPUT_STYLES)}.",
+        lookup_message(
+            f"unknown {STYLE_KW}={style!r}; no built-in or registered custom output detector resolved it.",
+            list(BUILTIN_OUTPUT_STYLES),
+            "pass a built-in style, or register a custom output detector.",
+            query=str(style),
+        ),
         code="decode_style_unknown",
         remedy=(
             "pass a built-in style, or register a custom detector that resolves it "
-            "with tl._autoroute.output.register(...)"
+            "with tl.postprocessing.register(...)"
         ),
         argument=STYLE_KW,
     )
@@ -475,7 +507,7 @@ def hf_config_classifier(outputs: Any, meta: dict[str, Any]) -> ResolvedPostproc
     id2label = meta.get("id2label")
     if not isinstance(id2label, dict) or not id2label:
         return None
-    return ResolvedPostprocessing(
+    resolved = ResolvedPostprocessing(
         source="hf_config",
         identifier="config.id2label",
         verified=True,
@@ -487,6 +519,38 @@ def hf_config_classifier(outputs: Any, meta: dict[str, Any]) -> ResolvedPostproc
         label_source_version=DETECTOR_VERSION,
         confidence=0.99,
     )
+    if not _labels_cover_selected_logits(outputs, resolved, meta, id2label):
+        return None
+    return resolved
+
+
+def _labels_cover_selected_logits(
+    outputs: Any, resolved: ResolvedPostprocessing, meta: dict[str, Any], id2label: dict[Any, Any]
+) -> bool:
+    """Return whether ``id2label`` can label the logits this record would select.
+
+    Every Hugging Face config carries a placeholder ``id2label`` (two
+    ``LABEL_n`` entries) even on language models, whose ``logits`` are a
+    rank-3 vocabulary-width tensor no label table covers. Claiming those
+    outputs would block the tokenizer-backed text decode behind them, so the
+    classifier detector declines when the selected logits are not a rank-1 or
+    rank-2 tensor at most ``len(id2label)`` wide. An ambiguous head choice
+    (no single logits tensor) keeps the claim: the ambiguity is disclosed on
+    the record instead.
+    """
+
+    logits_info = _select_logits(outputs, resolved, meta)
+    if logits_info is None:
+        return True
+    logits = logits_info[0]
+    width = _safe_last_dim(logits)
+    if width is None:
+        return True
+    try:
+        rank = int(logits.ndim)
+    except Exception:
+        return True
+    return rank in (1, 2) and width <= len(id2label)
 
 
 @register(name="imagenet_verified", priority=20)

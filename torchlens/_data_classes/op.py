@@ -48,7 +48,6 @@ from .._constants import ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER
 from .._errors import (
     ArgumentTypeError,
     InvalidArgumentError,
-    MutatedReferenceError,
     PayloadUnavailableError,
     RecordBindingError,
 )
@@ -61,15 +60,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._ir.refs import DeviceRef, DtypeRef
-from .._quantities import (
-    Bytes,
-    Duration,
-    Flops,
-    Macs,
-    as_bytes,
-    as_duration,
-    as_flops,
-)
+from .._quantities import Bytes, Duration, Flops, Macs, as_bytes, as_duration, as_flops
 from .._selection.selection import _SelectionOperand
 from .._trace_core.fact_blocks import OP_FACT_FIELDS
 from .._trace_core.groups import GroupRef
@@ -90,8 +81,8 @@ from .._trace_core.relation_views import (
     materialize_dataflow_view,
 )
 from .._trace_state import TraceState
-from .._utils._torch_compat import tensor_version_or_none
 from .._utils.arg_handling import copy_arg_tree
+from .._utils.facade import refuse_removed_member, removed_set_remedy
 from .._utils.tensor_utils import (
     concatenate_batch_tensors,
     get_memory_amount_from_metadata,
@@ -108,9 +99,25 @@ from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._layer_accessors import OpAccessor
 from ._op_aten import OpAtenMixin
+from ._op_container_census import (  # noqa: F401  (re-exported for the pooling tests)
+    _census_container_cells,
+    _count_container_ids,
+)
 from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importers)
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
+)
+from ._op_out_read import (
+    _out_read_state,
+    _refuse_read_without_trace,
+    _synthesized_out_read_due,
+    _validate_reference_out_not_mutated,
+)
+from ._op_row_release import (  # noqa: F401  (re-exported for cleanup and backend importers)
+    _ROW_RELEASE_PROPERTIES,
+    bind_op_facade,
+    register_row_release_property,
+    release_op_row,
 )
 from ._op_save import (  # noqa: F401  (re-exported for backends and postprocess importers)
     _dtype_or_none,
@@ -154,16 +161,15 @@ _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
 # -> builtins hit -> type attribute resolution) was itself measurable. Bind the
 # unbound slot accessors once at import.
 _object_getattribute = object.__getattribute__
+
+
 _object_setattr = object.__setattr__
 # Fields whose reads go through the lazy-materialization path in
 # ``Op.__getattribute__``; every other name short-circuits straight to the slot.
 _LAZY_READ_FIELDS = frozenset({"grad", "out"})
-# ``equivalent_ops``/``recurrent_ops`` historically lived here too as
-# copy-on-read fields (a fresh mutable copy per read, protecting the ONE
-# canonical container shared by every group member from alias corruption).
-# The M7 live group views replace that barrier natively: cells hold a shared
-# ``GroupRef`` and reads resolve to the group's cached IMMUTABLE view
-# (``_GroupViewField``), so sharing is alias-safe without per-read copies.
+# ``equivalent_ops``/``recurrent_ops`` were copy-on-read fields here; the M7
+# live group views (shared ``GroupRef`` cells, cached immutable ``_GroupViewField``
+# reads) make sharing alias-safe without per-read copies.
 _INTERCEPTED_READ_FIELDS = _LAZY_READ_FIELDS
 _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_source_trace_ref": None,
@@ -174,6 +180,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_pending_grad_blob_id": None,
     "_pending_transformed_grad_blob_id": None,
     "annotations": {},
+    "is_constant": False,
     "autograd_memory": None,
     "num_autograd_tensors": None,
     "bytes_delta_at_call": None,
@@ -210,15 +217,10 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_construction_done": True,
 }
 # Typed container defaults for every non-Optional container field in
-# `LAYER_PASS_LOG_FIELD_ORDER`. Same defect and fix as
-# `trace._MODEL_LOG_CONTAINER_DEFAULTS`: the blanket ``{field: None}`` base
-# below makes an absent (legacy/partial-state) container field restore as
-# ``None`` instead of its declared list/dict/set/tuple, which then crashes real
-# consumer code (membership/iteration in ``finalization.py``,
-# ``loop_detection.py``, ``invariants.py``). Plain builtin types are used so
-# ``coerce_container_typed_state`` (called from ``Op.__setstate__``) also
-# repairs a present-but-wrong-typed legacy value (e.g. a ``set`` where a
-# ``list`` is now declared).
+# `LAYER_PASS_LOG_FIELD_ORDER` (same fix as `trace._MODEL_LOG_CONTAINER_DEFAULTS`):
+# an absent legacy field restores as its declared container, not ``None``, and
+# plain builtin types let ``coerce_container_typed_state`` (``Op.__setstate__``)
+# repair a present-but-wrong-typed legacy value.
 _LAYER_PASS_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "lookup_keys": [],
     "annotations": {},
@@ -380,11 +382,11 @@ _FIDS_INIT_NONE = tuple(
 #     untouched and never enters the pool.
 # ---------------------------------------------------------------------------
 
-# Exact classes that are safe to share.  Exact-class (not isinstance) matching
-# keeps subclasses out, so a pooled value always has the original's type.
-# ``torch.dtype``/``torch.device`` are immutable value objects (process
-# singletons for dtypes), so sharing references is safe; they appear inside
-# per-op config dicts such as ``func_autocast_state``.
+# Exact immutable classes safe to share (exact class keeps a pooled value's type;
+# dtype/device are process value objects, e.g. in ``func_autocast_state``). Only a
+# ZERO ``Duration`` pools (the fixed placeholder of rows that ran nothing): measured
+# timings match only by chance, and sharing them made the saved graph's identity
+# (pickle memo back-references, ``metadata.pkl`` bytes) depend on the clock.
 _POOLED_CLASSES = frozenset(
     {str, bytes, DtypeRef, DeviceRef, Bytes, Flops, Macs, Duration, torch.dtype, torch.device}
 )
@@ -593,50 +595,6 @@ def _container_member_key(
     return None
 
 
-def _count_container_ids(
-    value: Any,
-    id_counts: dict[int, int],
-    expanded_ids: set[int],
-    depth: int,
-) -> None:
-    """Count every exact builtin MUTABLE container id reachable from one cell.
-
-    The alias census behind the pooling guard: a container whose id is seen
-    more than once across ALL swept cells is aliased in-store, and replacing
-    any of its cell appearances would break the alias for later in-place
-    mutation, so such cells never pool.
-
-    Only ``dict``/``defaultdict``/``list``/``set`` ids matter (the pool key
-    visits exactly those). Hashability bounds the walk: dict KEYS and
-    ``set``/``frozenset`` members must be hashable, so no exact builtin
-    mutable container can hide below them — dict values, list members, and
-    tuple members are the only recursion edges.
-    """
-
-    cls = value.__class__
-    if cls is dict or cls is defaultdict:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-        if depth < 6 and oid not in expanded_ids:
-            expanded_ids.add(oid)
-            for member in value.values():
-                _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-    elif cls is list:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-        if depth < 6 and oid not in expanded_ids:
-            expanded_ids.add(oid)
-            for member in value:
-                _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-    elif cls is set:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-    elif cls is tuple and depth < 6 and id(value) not in expanded_ids:
-        expanded_ids.add(id(value))
-        for member in value:
-            _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-
-
 def _pool_container_cells(
     stores: list[tuple[Any, Any]], container_pool: dict[Any, PooledCell]
 ) -> None:
@@ -654,47 +612,25 @@ def _pool_container_cells(
         so equal content pools trace-wide.
     """
 
-    # ONE scan over every cell: the alias census recurses only into cells
-    # whose class can hold a container (everything else is skipped by an
-    # inline class test — the vast majority of cells are scalars/None), and
-    # the same scan collects the pool candidates (container-classed cells at
-    # sanctioned fids) and the singleton-compaction sites (kind-table list
-    # cells), so neither later pass re-walks rows x fields.
-    id_counts: dict[int, int] = {}
-    expanded_ids: set[int] = set()
-    cell_sites: list[tuple[Any, int, Any]] = []
-    singleton_sites: list[tuple[Any, int, int, Any, Any]] = []
-    any_swept = False
-    for store, fids in stores:
-        rows = store.rows_building()
-        if rows is None:
-            continue
-        any_swept = True
-        fid_set = None if fids is None else frozenset(fids)
-        for row_idx, row_cells in enumerate(rows):
-            for fid, value in enumerate(row_cells):
-                cls = value.__class__
-                if cls is tuple:
-                    _count_container_ids(value, id_counts, expanded_ids, 0)
-                    continue
-                if not (cls is dict or cls is list or cls is set or cls is defaultdict):
-                    continue
-                _count_container_ids(value, id_counts, expanded_ids, 0)
-                if fid_set is None or fid in fid_set:
-                    cell_sites.append((row_cells, fid, value))
-                if fid_set is None and cls is list:
-                    singleton_sites.append((store, row_idx, fid, row_cells, value))
-    if not any_swept:
+    census = _census_container_cells(stores)
+    if census is None:
         return
+    id_counts, cell_sites, singleton_sites = census
+    # A cell whose own id is aliased is skipped before its key is built: that
+    # id is the first one the key walk visits, so the alias guard would refuse
+    # it anyway. Empty exact dict/list/set cells arrive with their key.
     candidates: list[tuple[Any, int, Any, Any]] = []
     key_counts: dict[Any, int] = {}
-    for row_cells, fid, value in cell_sites:
-        visited_ids: list[int] = []
-        key = _container_pool_key(value, 0, visited_ids)
+    for row_cells, fid, value, key in cell_sites:
+        if id_counts[id(value)] > 1:
+            continue
         if key is None:
-            continue
-        if any(id_counts[oid] > 1 for oid in visited_ids):
-            continue
+            visited_ids: list[int] = []
+            key = _container_pool_key(value, 0, visited_ids)
+            if key is None:
+                continue
+            if any(id_counts[oid] > 1 for oid in visited_ids):
+                continue
         candidates.append((row_cells, fid, value, key))
         key_counts[key] = key_counts.get(key, 0) + 1
     for row_cells, fid, value, key in candidates:
@@ -752,7 +688,7 @@ def _pool_key(value: Any) -> Any:
         return (cls, value)
     if cls is float:
         return (cls, value.hex())
-    if cls in _POOLED_CLASSES:
+    if cls in _POOLED_CLASSES and (cls is not Duration or not value):
         return (cls, value.hex()) if cls is Duration else (cls, value)
     if value is None:
         return _NONE_POOL_KEY
@@ -785,7 +721,7 @@ def _pool_value(value: Any, pool: dict[Any, Any]) -> Any:
     """
 
     cls = value.__class__
-    if cls in _POOLED_CLASSES:
+    if cls in _POOLED_CLASSES and (cls is not Duration or not value):
         key = (cls, value.hex()) if cls is Duration else (cls, value)
     elif (cls is tuple or cls is frozenset) and value:
         key = _pool_key(value)
@@ -930,7 +866,7 @@ class GradientRecord:
         Op that received the gradient.
     ordinal:
         One-based local ordinal for this owner.
-    backward_pass_index:
+    backward_pass_number:
         One-based global backward pass number.
     grad:
         Saved raw gradient tensor, if retained.
@@ -949,7 +885,7 @@ class GradientRecord:
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "owner": FieldPolicy.WEAKREF_STRIP,
         "ordinal": FieldPolicy.KEEP,
-        "backward_pass_index": FieldPolicy.KEEP,
+        "backward_pass_number": FieldPolicy.KEEP,
         "grad": FieldPolicy.BLOB,
         "transformed_grad": FieldPolicy.BLOB,
         "shape": FieldPolicy.KEEP,
@@ -963,7 +899,7 @@ class GradientRecord:
         *,
         owner: Any,
         ordinal: int,
-        backward_pass_index: int,
+        backward_pass_number: int,
         grad: torch.Tensor | None,
         transformed_grad: Any | None,
         shape: tuple[int, ...] | None,
@@ -979,7 +915,7 @@ class GradientRecord:
             Object that owns the gradient record.
         ordinal:
             Position of this record within the owner.
-        backward_pass_index:
+        backward_pass_number:
             Backward pass index that produced the gradient.
         grad:
             Raw gradient tensor, if retained.
@@ -997,7 +933,7 @@ class GradientRecord:
 
         self.owner = owner
         self.ordinal = ordinal
-        self.backward_pass_index = backward_pass_index
+        self.backward_pass_number = backward_pass_number
         self.grad = grad
         self.transformed_grad = transformed_grad
         self.shape = shape
@@ -1041,7 +977,7 @@ class GradientRecordAccessor(Accessor[GradientRecord]):
     def for_pass(self, pass_index: int) -> GradientRecord:
         """Return the gradient record for a one-based backward pass number."""
 
-        matches = [record for record in self._list if record.backward_pass_index == pass_index]
+        matches = [record for record in self._list if record.backward_pass_number == pass_index]
         if len(matches) == 1:
             return matches[0]
         if matches:
@@ -1052,7 +988,7 @@ class GradientRecordAccessor(Accessor[GradientRecord]):
                 remedy="use positional indexing on .grads to pick one record",
                 pass_index=pass_index,
             )
-        available = [record.backward_pass_index for record in self._list]
+        available = [record.backward_pass_number for record in self._list]
         raise KeyError(
             f"Gradient record for backward pass {pass_index} not found; participated in "
             f"passes {available}."
@@ -1142,26 +1078,6 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
     entry._internal_set("transformed_activation_memory", _memory_or_none(entry.transformed_out))
 
 
-def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
-    """Raise if a reference-mode saved output has changed since capture."""
-
-    annotations = state.get("annotations") or {}
-    if annotations.get("save_mode") != "reference":
-        return
-    out = state.get("out")
-    if not isinstance(out, torch.Tensor):
-        return
-    saved_version = annotations.get("saved_out_version")
-    current_version = tensor_version_or_none(out)
-    if saved_version is not None and current_version != saved_version:
-        label = state.get("label") or state.get("layer_label") or state.get("_label_raw")
-        raise MutatedReferenceError(
-            f"saved reference out for op {label!r} was mutated after capture "
-            f"(saved _version={saved_version}, current _version={current_version}). "
-            "Use save_mode='copy' for isolated saved tensors."
-        )
-
-
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -1172,6 +1088,22 @@ if TYPE_CHECKING:
     from .module import Module
     from .param import Param
     from .trace import Trace
+
+
+#: Public Op members removed by the do fold (remove-and-rename, no alias).
+_REMOVED_OP_MEMBERS: dict[str, str] = {
+    "attach_hooks": "use op.do(hook, ...) -- do stages the hook",
+    "set": removed_set_remedy("Op", "op", "value"),
+}
+
+
+def _warn_synthesized_out_read(source_trace: Any) -> None:
+    """Fire the once-per-trace synthesized-value warning for an ``Op.out`` read when due."""
+
+    if _synthesized_out_read_due(source_trace):
+        from .._quickstart._gate import warn_on_raw_read
+
+        warn_on_raw_read(source_trace, site="Op.out")
 
 
 class Op(OpAtenMixin, _SelectionOperand):
@@ -1195,6 +1127,15 @@ class Op(OpAtenMixin, _SelectionOperand):
       ``trace[label]`` does not accept it.  Combine
       ``fx_qualpath.replace(".", "_")`` with ``fx_call_index`` when an
       FX-style name form is needed.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> op = trace.ops[1]
+    >>> type(op).__name__, op.func_name
+    ('Op', 'relu')
+    >>> tuple(op.out.shape)
+    (1, 4, 8, 8)
     """
 
     __slots__ = ("_core", "_row")
@@ -1351,6 +1292,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         min_distance_to_output: Any
         max_distance_to_output: Any
         is_buffer: Any
+        is_constant: bool
         address: Any
         buffer_pass: Any
         buffer_source: Any
@@ -1473,7 +1415,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         "func_qualname": FieldPolicy.KEEP,
         "code_context": FieldPolicy.KEEP,
         "var_names": FieldPolicy.KEEP,
-        ARG_EXPRESSIONS_FIELD: FieldPolicy.DROP,
+        ARG_EXPRESSIONS_FIELD: FieldPolicy.KEEP,
         "func_duration": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
         "flops_backward": FieldPolicy.KEEP,
@@ -1558,6 +1500,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         "max_distance_to_output": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
         "is_buffer": FieldPolicy.KEEP,
+        "is_constant": FieldPolicy.KEEP,
         "address": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
         "buffer_source": FieldPolicy.KEEP,
@@ -1661,7 +1604,7 @@ class Op(OpAtenMixin, _SelectionOperand):
                     return grad
                 if len(saved) > 1:
                     label = slot("label") or slot("layer_label") or slot("_label_raw")
-                    passes = [record.backward_pass_index for record in saved]
+                    passes = [record.backward_pass_number for record in saved]
                     raise InvalidArgumentError(
                         f"op {label} has gradients saved from multiple backward passes {passes}; "
                         "use op.grads[...] / op.grad_for(bwd=k)",
@@ -1678,16 +1621,10 @@ class Op(OpAtenMixin, _SelectionOperand):
             out = slot("out")
             source_ref = slot("_source_trace_ref")
             source_trace = None if source_ref is None else source_ref()
-            # Lazy-payload honesty gate (agent memo P0 part 1): a saved
-            # payload behind a lazy blob ref MATERIALIZES (sha-verified,
-            # attaching -- interactive semantics preserved) instead of
-            # silently reading ``None``. The historical capture-only
-            # ``_predicate_save_options`` gate limited this to predicate
-            # captures, so every ``tl.load(..., lazy=True)`` artifact
-            # served silent Nones for rows whose manifest says saved=true.
-            # Live streamed captures (``retain_in_memory=False``) keep
-            # their pinned None: the user chose that memory posture and an
-            # attribute read must not re-inflate it by attaching.
+            if out is None and source_trace is None and source_ref is not None:
+                _getattribute(self, "source_trace")  # collected Trace: refuse typed, never None
+            # Lazy-payload honesty gate (P0 part 1): a lazy blob ref materializes (sha-verified)
+            # instead of reading None; live streamed captures (retain_in_memory=False) keep None.
             if (
                 out is None
                 and slot("out_ref") is not None
@@ -1702,10 +1639,7 @@ class Op(OpAtenMixin, _SelectionOperand):
                 and not slot("has_saved_activation", False)
                 and (
                     getattr(source_trace, "_predicate_save_options", None) is not None
-                    # P0 part 4: on a LAZILY loaded artifact ``.out`` is never
-                    # a silent None -- unsaved rows refuse typed. Eager and
-                    # preview-backend loads keep their historical None-for-
-                    # unsaved contract.
+                    # P0 part 4: a lazy load refuses unsaved rows; eager loads keep None-for-unsaved.
                     or getattr(source_trace, "payload_load_status", None) == "loaded_lazy"
                 )
             ):
@@ -1716,22 +1650,22 @@ class Op(OpAtenMixin, _SelectionOperand):
                     remedy="re-run with save=... to retain this activation",
                     label=str(label),
                 )
-            if out is None and slot("_tracing_finished") and source_trace is not None:
-                from ..stats._capture_stats import refuse_reduced_payload_read
-
-                refuse_reduced_payload_read(slot, source_trace)
+            if out is None:
+                _refuse_read_without_trace(self, out_trace=source_trace)
+            _warn_synthesized_out_read(source_trace)
             if not getattr(source_trace, "_postprocessing_active", False):
-                state = {
-                    "out": out,
-                    "annotations": slot("annotations"),
-                    "has_saved_activation": slot("has_saved_activation", False),
-                    "detach_saved_activations": slot("detach_saved_activations"),
-                    "label": slot("label"),
-                    "layer_label": slot("layer_label"),
-                    "_label_raw": slot("_label_raw"),
-                }
-                _validate_reference_out_not_mutated(state)
+                _validate_reference_out_not_mutated(_out_read_state(slot, out))
         return _getattribute(self, name)
+
+    if not TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any:
+            """Miss hook: a removed public member redirects typed (``facade_redirect``)."""
+
+            if not name.startswith("_"):
+                refuse_removed_member("Op", name, _REMOVED_OP_MEMBERS)
+                _refuse_read_without_trace(self, member=name)
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(
         self,
@@ -1813,7 +1747,7 @@ class Op(OpAtenMixin, _SelectionOperand):
             if value is None:
                 continue
             cls = value.__class__
-            if cls in pooled_classes:
+            if cls in pooled_classes and (cls is not Duration or not value):
                 key = (cls, value.hex()) if cls is Duration else (cls, value)
                 pooled = pool_get(key)
                 if pooled is None:
@@ -1976,13 +1910,13 @@ class Op(OpAtenMixin, _SelectionOperand):
     def bytes_read(self) -> Bytes | None:
         """Theoretical ideal read-once traffic for this operation."""
 
-        return _doors.debug()._cost.theoretical_op_bytes(self)[0]
+        return _op_cost.checked_bytes(self, _doors.debug()._cost.theoretical_op_bytes(self)[0])
 
     @property
     def bytes_written(self) -> Bytes | None:
         """Theoretical ideal write-once traffic for this operation."""
 
-        return _doors.debug()._cost.theoretical_op_bytes(self)[1]
+        return _op_cost.checked_bytes(self, _doors.debug()._cost.theoretical_op_bytes(self)[1])
 
     @property
     def arithmetic_intensity(self) -> float | None:
@@ -2086,7 +2020,7 @@ class Op(OpAtenMixin, _SelectionOperand):
     def _record_gradient(
         self,
         *,
-        backward_pass_index: int,
+        backward_pass_number: int,
         grad: torch.Tensor | None,
         transformed_grad: Any | None,
         shape: tuple[int, ...] | None,
@@ -2098,7 +2032,7 @@ class Op(OpAtenMixin, _SelectionOperand):
 
         Parameters
         ----------
-        backward_pass_index:
+        backward_pass_number:
             One-based global backward pass number.
         grad:
             Saved raw gradient tensor, if retained.
@@ -2124,12 +2058,12 @@ class Op(OpAtenMixin, _SelectionOperand):
             records = []
             self._internal_set("_grad_records", records)
         records[:] = [
-            record for record in records if record.backward_pass_index != backward_pass_index
+            record for record in records if record.backward_pass_number != backward_pass_number
         ]
         record = GradientRecord(
             owner=self,
             ordinal=len(records) + 1,
-            backward_pass_index=backward_pass_index,
+            backward_pass_number=backward_pass_number,
             grad=grad,
             transformed_grad=transformed_grad,
             shape=shape,
@@ -2324,11 +2258,9 @@ class Op(OpAtenMixin, _SelectionOperand):
 
     @property
     def is_in_conditional_body(self) -> bool:
-        """Whether this op is in a conditional arm body."""
+        """Whether this op ran inside a conditional arm (the Layer rule; test ops are outside)."""
 
-        if self.has_output_descendant and not self.conditional_entry_children:
-            return False
-        return bool(self._slot("_is_in_conditional_body", False)) or any(
+        return bool(self.conditional_branch_stack) or any(
             role.role == "body" for role in self.in_conditionals or []
         )
 
@@ -2531,9 +2463,9 @@ class Op(OpAtenMixin, _SelectionOperand):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected",
+                "Trace has been garbage-collected; an Op does not keep its Trace alive",
                 code="trace_reference_collected",
-                remedy="keep the owning Trace alive while reading its records",
+                remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
             )
         return cast("Trace", obj)
 
@@ -2590,7 +2522,8 @@ class Op(OpAtenMixin, _SelectionOperand):
 
     def do(
         self,
-        input_transform: Any,
+        edit: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -2599,39 +2532,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         """Apply an intervention to this op through the owning Trace."""
 
         return _doors.intervention()._op_edits.do(
-            self, input_transform, model=model, inputs=inputs, intervention=intervention
-        )
-
-    def set(
-        self,
-        value: Any,
-        *,
-        strict: bool = False,
-        confirm_mutation: bool = False,
-    ) -> "Trace":
-        """Set this op's out recipe through the owning Trace."""
-
-        return _doors.intervention()._op_edits.set(
-            self, value, strict=strict, confirm_mutation=confirm_mutation
-        )
-
-    def attach_hooks(
-        self,
-        hook: Any = None,
-        *extra_hooks: Any,
-        strict: bool = False,
-        prepend: bool = False,
-        confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to this op through the owning Trace."""
-
-        return _doors.intervention()._op_edits.attach_hooks(
-            self,
-            hook,
-            *extra_hooks,
-            strict=strict,
-            prepend=prepend,
-            confirm_mutation=confirm_mutation,
+            self, edit, model=model, inputs=inputs, intervention=intervention
         )
 
     def materialize_out(
@@ -2644,10 +2545,8 @@ class Op(OpAtenMixin, _SelectionOperand):
 
         Parameters
         ----------
-        map_location:
-            Target device for the materialized tensor.
-        payload_hints:
-            Optional backend payload hints used during materialization.
+        map_location, payload_hints:
+            Target device for the materialized tensor; optional backend payload hints.
 
         Returns
         -------
@@ -2761,6 +2660,12 @@ class Op(OpAtenMixin, _SelectionOperand):
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
         state = dict(state_items(self))
+        # Argument templates hold the model's live parameters. A pickled op has no
+        # func, so its templates cannot drive replay; only a replayable capture keeps
+        # them (its pickle form is unchanged), so a default trace pickles at its old size.
+        if not getattr(self._source_trace_or_none(), "is_replayable", False):
+            state["args_template"] = None
+            state["kwargs_template"] = None
         state["_source_trace_ref"] = None
         state.pop("_facets_cache", None)
         state.pop("_receptive_field_cache", None)
@@ -2782,10 +2687,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         _ensure_detached_store(self)
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         resolver_status_was_present = "resolver_status" in state
-        default_fill_state(
-            state,
-            defaults=self._DEFAULT_FILL_STATE,
-        )
+        default_fill_state(state, defaults=self._DEFAULT_FILL_STATE)
         # Repair present-but-wrong-typed container fields from legacy states
         # (e.g. `_param_barcodes` serialized as a `set` where a `list` is now
         # declared). `default_fill_state` only fills absent keys; this closes
@@ -2986,7 +2888,7 @@ class Op(OpAtenMixin, _SelectionOperand):
 
         return _op_save._copy_with_shallow_fields(self, extra_shallow_fields, _store=_store)
 
-    def save_activation(
+    def _save_activation(
         self,
         t: torch.Tensor,
         t_args: list[Any] | tuple[Any, ...],
@@ -3009,10 +2911,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         if save_args:
             self.has_saved_args = True
             self._internal_set("saved_args", [copy_arg_tree(arg) for arg in t_args])
-            self._internal_set(
-                "saved_kwargs",
-                {k: copy_arg_tree(v) for k, v in t_kwargs.items()},
-            )
+            self._internal_set("saved_kwargs", {k: copy_arg_tree(v) for k, v in t_kwargs.items()})
         else:
             self._internal_set("saved_args", None)
             self._internal_set("saved_kwargs", None)
@@ -3205,32 +3104,11 @@ class Op(OpAtenMixin, _SelectionOperand):
     # ********************************************
 
     def __str__(self) -> str:
-        """Return the bounded Op card (F10; lovely D15: line 1 IS the repr).
+        """Render a bounded Op display from captured metadata and cached values."""
 
-        Data-model contract: never raises. An Op detached from its Trace
-        (collected, standalone-pickled, or husked by cleanup) degrades to a
-        one-line placeholder instead of silently printing an unknown
-        denominator (``operation 1/?``) or propagating the typed relation
-        refusal out of ``repr()``/``print()`` (r5 b7-opus R52-B, matching
-        the Layer degradation). The historical 21-line dump is gone: the
-        preview, relation lists, and lookup keys live behind the card's
-        ``More:`` exits.
-        """
+        from ._value_repr import op_card
 
-        trace = self._source_trace_or_none()
-        trace_finished = trace is not None and trace._tracing_finished
-        if self._tracing_finished or trace_finished:
-            if trace is None:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-            from ._value_repr import op_card
-
-            try:
-                return op_card(self)
-            except RecordBindingError:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-        return self._str_during_pass()
+        return op_card(self)
 
     def _str_during_pass(self) -> str:
         """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""
@@ -3264,26 +3142,11 @@ class Op(OpAtenMixin, _SelectionOperand):
         return s
 
     def __repr__(self) -> str:
-        """Return ONE nestable envelope+core line (F10; lovely D15).
+        """Render a bounded Op display from captured metadata and cached values."""
 
-        Never raises: a detached Op degrades to the same placeholder as
-        ``__str__``, and a mid-capture Op keeps the during-pass form.
-        """
+        from ._value_repr import op_repr_line
 
-        trace = self._source_trace_or_none()
-        trace_finished = trace is not None and trace._tracing_finished
-        if self._tracing_finished or trace_finished:
-            if trace is None:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-            from ._value_repr import op_repr_line
-
-            try:
-                return op_repr_line(self)
-            except RecordBindingError:
-                label = self.layer_label or self._label_raw or "<unbound>"
-                return f"<Op {label}: detached from its Trace>"
-        return self._str_during_pass()
+        return op_repr_line(self)
 
 
 # ---------------------------------------------------------------------------
@@ -3586,53 +3449,12 @@ def _install_op_field_descriptors() -> None:
 
 _install_op_field_descriptors()
 
-
-def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
-    """Pool repeated immutable metadata across a whole building-phase store.
-
-    Column-major equivalent of ``Op._compact_metadata`` (same class ladder,
-    same ``_UNPOOLED_SLOTS`` skips, same container-member handling) operating
-    directly on the row cells, so a core-backed trace pools without paying
-    the per-attribute descriptor protocol.
-
-    Parameters
-    ----------
-    store:
-        Building-phase ``OpRowStore`` (frozen stores are left untouched --
-        pooling always precedes the physical freeze).
-    pool:
-        Pass-local ``pool key -> canonical instance`` table shared with any
-        remaining per-op walks of the same trace.
-    """
-
-    rows = store.rows_building()
-    if rows is None:
-        return
-    pooled_classes = _POOLED_CLASSES
-    pool_get = pool.get
-    for fid, name in enumerate(store.layout.names):
-        if name in _UNPOOLED_SLOTS:
-            continue
-        for row_cells in rows:
-            value = row_cells[fid]
-            if value is None or value is _MISSING:
-                continue
-            cls = value.__class__
-            if cls in pooled_classes:
-                key = (cls, value.hex()) if cls is Duration else (cls, value)
-                pooled = pool_get(key)
-                if pooled is None:
-                    pool[key] = value
-                elif pooled is not value:
-                    row_cells[fid] = pooled
-            elif cls is list or cls is set or cls is dict:
-                _pool_container_members(value, pool, 0)
-            elif cls is tuple or cls is frozenset:
-                pooled = _pool_value(value, pool)
-                if pooled is not value:
-                    row_cells[fid] = pooled
-            elif isinstance(value, dict):
-                _pool_container_members(value, pool, 0)
+#: The generated field descriptor classes, for :func:`release_op_row`'s facade
+#: check. No descriptor class overrides ``_OpField.__delete__``.
+_ROW_RELEASE_FIELD_CLASSES = frozenset(
+    {_OpField, _RelationViewField, _GroupViewField, _DataflowField, _FactField}
+)
+bind_op_facade(Op, _OP_SLOT_NAMES, _ROW_RELEASE_FIELD_CLASSES)
 
 
 # The tlspec v8 coordinated bump retired this class's S3 pre-release

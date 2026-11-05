@@ -1,4 +1,4 @@
-"""Intervened dataset extraction (R2-08, lane EXTRACT).
+"""Intervened dataset extraction.
 
 ``extract_dataset(..., intervene=spec)`` stores the INTERVENED activations:
 on a small chain model a zero-ablation of one site leaves every upstream key

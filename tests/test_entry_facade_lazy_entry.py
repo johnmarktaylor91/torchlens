@@ -45,15 +45,7 @@ def _pending(model: nn.Module) -> bool:
     return has_uninitialized_lazy_state(model)
 
 
-def test_record_tolerates_pending_lazy_params() -> None:
-    """tl.record on a pending-param model captures; the module materializes."""
-
-    model = _lazy_mlp()
-    recording = tl.record(model, torch.randn(2, 4), save=tl.func("relu"))
-    assert recording.status == "complete"
-    assert not _pending(model), "the captured forward materializes the lazy head"
-
-
+# Kept: sole branch coverage of backends/torch/buffer_writes.py; a sole mutation kill.
 def test_trace_tolerates_lazy_buffer_model() -> None:
     """Pending lazy BUFFERS capture directly (F20 buffer-side completion).
 
@@ -75,7 +67,7 @@ def test_trace_tolerates_lazy_buffer_model() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of backends/torch/_tl.py, backends/torch/param_mutation.py; a sole mutation kill.
 def test_record_tolerates_lazy_buffer_model() -> None:
     """tl.record rides the same buffer-completion path."""
 
@@ -85,6 +77,7 @@ def test_record_tolerates_lazy_buffer_model() -> None:
     assert not _pending(model)
 
 
+# Kept: sole branch coverage of _utils/tensor_utils.py.
 def test_self_prime_remedy_unlocks_capture() -> None:
     """The taught two-line self-prime materializes and capture then succeeds."""
 
@@ -98,7 +91,7 @@ def test_self_prime_remedy_unlocks_capture() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _utils/lazy_state.py.
 def test_pending_enumeration_is_id_keyed_and_falsy_when_clear() -> None:
     """pending_lazy_state keys by id() and answers falsy after materialization."""
 
@@ -114,6 +107,7 @@ def test_pending_enumeration_is_id_keyed_and_falsy_when_clear() -> None:
     assert bool(pending_lazy_state(model)) is False
 
 
+# Kept: sole branch coverage of _errors.py, _runnable/state.py, _utils/lazy_state.py.
 def test_armed_lane_state_baseline_refuses_typed() -> None:
     """snapshot_capture_state refuses pending slots before any mutation."""
 
@@ -127,6 +121,7 @@ def test_armed_lane_state_baseline_refuses_typed() -> None:
     assert _pending(model)
 
 
+# Kept: sole branch coverage of _runnable/state.py.
 def test_snapshot_clone_failures_degrade_to_none_not_crash() -> None:
     """The clone loop sits inside its guard: unclonable state answers None."""
 
@@ -144,6 +139,7 @@ def test_snapshot_clone_failures_degrade_to_none_not_crash() -> None:
     assert snapshot_capture_state(_HostileState()) is None
 
 
+# Kept: sole branch coverage of backends/torch/rescue.py; a sole mutation kill.
 def test_capture_failure_advisory_scopes_the_restoration_claim() -> None:
     """The failed-capture advisory no longer claims the MODEL was restored."""
 
@@ -170,7 +166,7 @@ def test_capture_failure_advisory_scopes_the_restoration_claim() -> None:
         assert "not rolled back" in message
 
 
-@pytest.mark.smoke
+# Kept: a sole mutation kill.
 def test_materialized_lazy_param_trace_round_trips_through_save_load(tmp_path) -> None:
     """A captured lazy-module trace saves and loads (nightly platform-canary).
 

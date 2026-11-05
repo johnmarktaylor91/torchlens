@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._entry_refusals import refuse_sae_encoder, refuse_sae_reconstructor
 from ._utils import out_at
 
 
@@ -30,6 +31,15 @@ def encode(trace: Any, site: Any, sae: Any) -> Any:
         If SAE Lens is unavailable.
     TypeError
         If ``sae`` cannot encode an out.
+
+    Examples
+    --------
+    >>> # requires: sae_lens
+    >>> clf = nn.Sequential(nn.Flatten(), nn.Linear(12, 3)).eval()
+    >>> trace = tl.trace(clf, torch.randn(1, 12))
+    >>> latents = tl.bridge.sae_lens.encode(trace, "linear", nn.Linear(3, 5))
+    >>> tuple(latents.shape)
+    (1, 5)
     """
 
     try:
@@ -44,7 +54,7 @@ def encode(trace: Any, site: Any, sae: Any) -> Any:
         return sae.encode(out)
     if callable(sae):
         return sae(out)
-    raise TypeError("SAE Lens bridge expected an SAE with encode(...) or a callable SAE.")
+    refuse_sae_encoder(sae)
 
 
 def reconstruct(trace: Any, site: Any, sae: Any) -> Any:
@@ -77,6 +87,15 @@ def reconstruct(trace: Any, site: Any, sae: Any) -> Any:
         If SAE Lens is unavailable.
     TypeError
         If ``sae`` cannot reconstruct an out.
+
+    Examples
+    --------
+    >>> # requires: sae_lens
+    >>> clf = nn.Sequential(nn.Flatten(), nn.Linear(12, 3)).eval()
+    >>> trace = tl.trace(clf, torch.randn(1, 12))
+    >>> recon = tl.bridge.sae_lens.reconstruct(trace, "linear", nn.Linear(3, 3))
+    >>> tuple(recon.shape)
+    (1, 3)
     """
 
     try:
@@ -91,9 +110,7 @@ def reconstruct(trace: Any, site: Any, sae: Any) -> Any:
         return sae.decode(sae.encode(out))
     if callable(sae):
         return sae(out)
-    raise TypeError(
-        "SAE Lens bridge expected an SAE with encode(...) and decode(...) or a callable SAE."
-    )
+    refuse_sae_reconstructor(sae)
 
 
 __all__ = ["encode", "reconstruct"]

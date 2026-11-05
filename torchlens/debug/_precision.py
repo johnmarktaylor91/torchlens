@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from .._debug_report import FoundReport, rows_of
+from .._debug_report import FoundReport, at_source, rows_of
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
 from ._common import _compute_ops, _op_label, _safe_out, _source_line, _tensor_unavailable_reason
 
@@ -93,6 +93,14 @@ class BisectPrecisionReport(FoundReport):
         region cannot be excluded.
     message:
         Human-readable summary.
+
+    Examples
+    --------
+    >>> report = tl.debug.bisect_precision(model, x)
+    >>> isinstance(report, BisectPrecisionReport), report.found
+    (True, False)
+    >>> len(report.rows) > 0
+    True
     """
 
     found: bool
@@ -110,7 +118,9 @@ class BisectPrecisionReport(FoundReport):
 
         findings = [self.message] if self.message else []
         findings.extend(
-            f"{row.label}: max_abs_err={row.max_abs_err:.4g}" for row in self.rows if row.diverged
+            f"{row.label}: max_abs_err={row.max_abs_err:.4g}{at_source(row.source_line)}"
+            for row in self.rows
+            if row.diverged
         )
         return findings
 
@@ -122,7 +132,7 @@ class BisectPrecisionReport(FoundReport):
 
 def bisect_precision(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[Any, Any] | None = None,
     *,
     reference_dtype: torch.dtype = torch.float64,
@@ -148,7 +158,7 @@ def bisect_precision(
     ----------
     model:
         Source model. It is deep-copied twice and never mutated.
-    input_args:
+    inputs:
         Forward input value or positional-argument list/tuple, exactly as
         accepted by ``tl.trace``.
     input_kwargs:
@@ -166,6 +176,14 @@ def bisect_precision(
     -------
     BisectPrecisionReport
         First divergence plus the full per-op comparison table.
+
+    Examples
+    --------
+    >>> report = bisect_precision(model, x)
+    >>> report.found, len(report.rows) > 0
+    (False, True)
+    >>> report.max_abs_err is None
+    True
     """
 
     from ..options import CaptureOptions
@@ -177,14 +195,14 @@ def bisect_precision(
     try:
         native_trace = isolated_capture(
             model,
-            input_args,
+            inputs,
             input_kwargs,
             seed=seed,
             capture=capture,
         )
         reference_trace = isolated_capture(
             model,
-            _cast_tree(input_args, reference_dtype),
+            _cast_tree(inputs, reference_dtype),
             _cast_tree(input_kwargs, reference_dtype),
             seed=seed,
             prepare=lambda run_model: run_model.to(reference_dtype),

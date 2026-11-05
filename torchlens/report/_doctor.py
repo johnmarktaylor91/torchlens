@@ -40,6 +40,16 @@ def doctor(model: nn.Module | None = None, inputs: Any = None) -> DoctorReport:
     DoctorReport
         Environment checks, the ``backend_scorecard:<name>`` rows, then model
         compatibility findings, if a model was supplied.
+
+    Examples
+    --------
+    >>> report = tl.report.doctor(model, x)
+    >>> type(report).__name__
+    'DoctorReport'
+    >>> report.torch_version == torch.__version__
+    True
+    >>> len(report.checks) > 0
+    True
     """
 
     from ..backends._scorecard_rows import backend_scorecard_rows
@@ -66,6 +76,7 @@ _ENVIRONMENT_REMEDIES = {
     "mechanical belt": "Run a capture first; avoid pre-wrap references to failed belt probes.",
     "cuda": "Use CPU capture or install a CUDA-enabled PyTorch build on a compatible device.",
     "graphviz": "Install torchlens[viz] and the Graphviz system executable.",
+    "cairosvg": "Install cairosvg and the cairo system library (libcairo2 / brew install cairo) for PDF/PNG highlighters.",
     "safetensors": "Install safetensors to enable portable tensor artifacts.",
     "extras": "Reinstall TorchLens with the optional extras needed for your workflow.",
     "model fingerprint": "Check the fingerprint diagnostic and report the failing environment.",

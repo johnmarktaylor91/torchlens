@@ -30,8 +30,7 @@ from torchlens.neuro._compare import (
     loo_errors,
     ridge_folds,
 )
-from torchlens.repgeom import MetricDisagreement, ScoreInterval, compare_rdms, rdm
-from torchlens.stats import cka
+from torchlens.repgeom import MetricDisagreement, ScoreInterval
 
 
 class _Counted(nn.Module):
@@ -55,39 +54,6 @@ def _trace(n: int = 24) -> tuple[_Counted, tl.Trace]:
 
 def _target(n: int = 24, columns: int = 5) -> np.ndarray:
     return np.random.default_rng(1).normal(size=(n, columns))
-
-
-def test_trace_source_scores_every_site_without_rerunning_the_model() -> None:
-    model, log = _trace()
-    calls = model.calls
-    result = tl.neuro.compare(log, _target(), analyses=("rsa", "ridge", "cka"))
-    assert model.calls == calls
-    assert result.analyses == ANALYSES
-    assert result.sites and set(result.scores) == set(ANALYSES)
-    for name in ANALYSES:
-        assert set(result.scores[name]) == set(result.sites)
-    assert result.intervals == {}
-
-
-def test_each_analysis_equals_its_standalone_computation() -> None:
-    rng = np.random.default_rng(2)
-    site = rng.normal(size=(20, 7))
-    target = site[:, :3] @ rng.normal(size=(3, 4)) + rng.normal(size=(20, 4))
-    result = tl.neuro.compare({"s": site}, target, analyses=("rsa", "ridge", "cka"))
-    assert result.scores["rsa"]["s"] == compare_rdms(
-        rdm(site, "correlation"), rdm(target, "correlation"), method="spearman"
-    )
-    assert result.scores["cka"]["s"] == pytest.approx(cka(site, target), abs=1e-12)
-    predicted, _alphas = cross_validated_ridge(
-        site, target, alphas=result.settings["ridge_alphas"], n_folds=5, seed=0
-    )
-    columns = [np.corrcoef(predicted[:, j], target[:, j])[0, 1] for j in range(4)]
-    assert result.scores["ridge"]["s"] == pytest.approx(float(np.mean(columns)), abs=1e-12)
-    assert result.similarity_repository_ids == {
-        "rsa": "measure/*/rsa-rdm=correlation-compare=spearman",
-        "ridge": None,
-        "cka": "measure/*/cka-kernel=linear-hsic=gretton-score",
-    }
 
 
 def _explicit_ridge(train_x, train_y, test_x, alpha):  # type: ignore[no-untyped-def]

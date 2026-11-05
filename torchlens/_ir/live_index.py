@@ -7,11 +7,21 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from .events import ModuleFrame
+from .events import ModuleFrame, _bounded_record_repr
 
 
 class LiveIndexWindowError(KeyError):
-    """Raised when a live-index query targets an unavailable raw label."""
+    """Raised when a live-index query targets an unavailable raw label.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.LiveIndexWindowError, KeyError)
+    True
+    >>> try:
+    ...     raise tl.errors.LiveIndexWindowError("relu_9_9_raw")
+    ... except KeyError as e:
+    ...     print(type(e).__name__)
+    LiveIndexWindowError"""
 
 
 @dataclass(slots=True)
@@ -23,6 +33,8 @@ class LiveIndex:
     and small sibling-event counters. It intentionally does not expose
     mutable ``Op`` field dictionaries.
     """
+
+    __repr__ = _bounded_record_repr
 
     by_raw_label: dict[str, Any] = field(default_factory=dict)
     labels: list[str] = field(default_factory=list)

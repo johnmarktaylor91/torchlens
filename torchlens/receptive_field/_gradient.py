@@ -23,6 +23,7 @@ from ._errors import (
     ReceptiveFieldError,
     ReceptiveFieldUnavailableError,
 )
+from ._gradient_live import _RECAPTURE_RECIPE, _saved_tensor
 from ._path import require_path, resolve_graph_point
 from ._types import GradReceptiveField, GridLayout, ReceptiveFieldDirection
 
@@ -31,12 +32,6 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ._engine_geometry import _InputState
     from ._types import ReceptiveField
-
-
-_RECAPTURE_RECIPE = (
-    "tl.trace(model, x.requires_grad_(True), "
-    'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))'
-)
 
 
 @contextmanager
@@ -200,8 +195,8 @@ def _snapshot_probe_state(trace: Trace) -> _ProbeSnapshot:
         num_backward_passes=int(trace._num_backward_passes),
         has_gradients=bool(trace._autograd_has_grads),
         backward_event_count=_backward_event_count(trace),
-        active_index_present="_active_backward_pass_index" in trace_dict,
-        active_index=trace_dict.get("_active_backward_pass_index"),
+        active_index_present="_active_backward_pass_number" in trace_dict,
+        active_index=trace_dict.get("_active_backward_pass_number"),
     )
 
 
@@ -427,42 +422,6 @@ def _select_inputs(
     return ((role, op, descriptors.get(role)),)
 
 
-def _saved_tensor(op: Op, purpose: str) -> torch.Tensor:
-    """Return one live saved tensor or raise the typed recapture diagnostic.
-
-    Parameters
-    ----------
-    op:
-        Operation whose payload is required.
-    purpose:
-        Human-readable purpose used in the error.
-
-    Returns
-    -------
-    torch.Tensor
-        Live saved tensor payload.
-
-    Raises
-    ------
-    ReceptiveFieldUnavailableError
-        If no graph-connected tensor payload is available.
-    """
-
-    try:
-        value = op.out
-    except (AttributeError, RuntimeError, ValueError) as exc:
-        raise ReceptiveFieldUnavailableError(
-            f"The {purpose} op {op.label!r} has no saved payload. Recapture with "
-            f"{_RECAPTURE_RECIPE}."
-        ) from exc
-    if not isinstance(value, torch.Tensor):
-        raise ReceptiveFieldUnavailableError(
-            f"The {purpose} op {op.label!r} does not expose a tensor payload. Recapture with "
-            f"{_RECAPTURE_RECIPE}."
-        )
-    return value
-
-
 def _source_recapture_recipe(source: Op, target: Op) -> str:
     """Build the escrowed capture recipe for a layer-to-layer probe.
 
@@ -480,7 +439,7 @@ def _source_recapture_recipe(source: Op, target: Op) -> str:
     """
 
     return (
-        "tl.trace(model, x.requires_grad_(True), "
+        "tl.trace(model, x, "
         'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"), '
         f"save=tl.label({source.short_layer_label!r}) | tl.label({target.short_layer_label!r}))"
     )
@@ -692,14 +651,14 @@ def _build_result(
 
     magnitude = grad.detach().abs()
     finite = torch.isfinite(magnitude)
-    nonfinite_count = int((~finite).sum().item())
+    num_nonfinite = int((~finite).sum().item())
     finite_values = magnitude[finite]
     maximum = finite_values.max() if finite_values.numel() else magnitude.new_tensor(0.0)
     support = finite & (magnitude > atol + rtol * maximum)
     result_warnings: tuple[str, ...] = ()
-    if nonfinite_count:
+    if num_nonfinite:
         message = (
-            f"Gradient receptive field for {target.label!r} contains {nonfinite_count} "
+            f"Gradient receptive field for {target.label!r} contains {num_nonfinite} "
             "NaN or Inf entries; validation is indeterminate."
         )
         warnings.warn(message, RuntimeWarning, stacklevel=3)
@@ -720,7 +679,7 @@ def _build_result(
         cross_batch_influence=cross_batch,
         atol=atol,
         rtol=rtol,
-        nonfinite_count=nonfinite_count,
+        num_nonfinite=num_nonfinite,
         warnings=result_warnings,
         direction=ReceptiveFieldDirection.RECEPTIVE,
         unit_shape=unit_shape,

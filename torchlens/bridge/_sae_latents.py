@@ -27,7 +27,7 @@ from torch import nn
 from .._errors import InvalidArgumentError
 from ._utils import module_for_site, resolve_one_site
 
-_DOCS = "docs/recipes/pretrained_saes.md"
+_DOCS = "docs/field-guide/pretrained_saes.md"
 _INVALID_NAME_CHARS = frozenset("[],")
 
 
@@ -204,6 +204,7 @@ class _SAEFamily:
             latents.
         """
 
+        record = _op_record(record)
         homes = self._home_labels(record)
         if isinstance(homes, InvalidArgumentError):
             raise homes
@@ -216,6 +217,7 @@ class _SAEFamily:
     def listed_spec(self, record: Any) -> Any:
         """Return the all-latents facet on ``record`` for listings; never raises."""
 
+        record = _op_record(record)
         homes = self._home_labels(record)
         if not isinstance(homes, frozenset) or _record_label(record) not in homes:
             return None
@@ -363,6 +365,29 @@ def _first_op_label(record: Any, site: str) -> str:
     return f"{site}:1"
 
 
+def _op_record(record: Any) -> Any:
+    """Return the Op a record reads latents from: itself, or a module record's one output op.
+
+    ``trace[address]`` is the Module (RC-260); its facets read the latents of
+    its single call's single output op. A module called or outputting several
+    times keeps ``record`` as is, so the family stays off its home.
+    """
+
+    if hasattr(record, "layer_label") or record is None:
+        return record
+    trace = getattr(record, "trace", None)
+    call_labels = getattr(record, "call_labels", None)  # a Module lists its calls
+    call = record
+    if call_labels is not None:
+        if trace is None or len(call_labels) != 1:
+            return record
+        call = trace.module_calls[call_labels[0]]
+    labels = list(getattr(call, "output_ops", None) or [])
+    if trace is None or len(labels) != 1:
+        return record
+    return trace.ops[labels[0]]
+
+
 def _record_label(record: Any) -> Any:
     """Return the pass-qualified label of an op record (``None`` for a module record)."""
 
@@ -398,7 +423,7 @@ def register(name: str, sae: Any, *, site: Any) -> None:
 
     After ``tl.bridge.sae.register("res", sae, site="blocks.4")``,
     ``tl.facet("res").latent(3442)`` addresses latent 3442 wherever a
-    ``tl.head`` selector works (``Trace.set``, ``attach_hooks``, ``do``,
+    ``tl.head`` selector works (``do`` on any engine,
     ``fork().do``), and ``trace["blocks.4"].facets["res[3442]"]`` reads it.
     Registration is process-wide and seen by traces captured before it.
 
@@ -419,6 +444,21 @@ def register(name: str, sae: Any, *, site: Any) -> None:
     InvalidArgumentError
         ``sae_family_name_invalid`` for a malformed name,
         ``sae_family_name_taken`` when the name is registered already.
+
+    Examples
+    --------
+    >>> class TinySae:
+    ...     def encode(self, h):
+    ...         return torch.relu(h)
+    ...     def decode(self, z):
+    ...         return z
+    >>> tl.bridge.sae.register("demo_register", TinySae(), site="2")
+    >>> try:
+    ...     tl.bridge.sae.register("demo_register", TinySae(), site="2")
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
+    >>> tl.bridge.sae.unregister("demo_register")
     """
 
     from .._semantic import _families
@@ -453,6 +493,21 @@ def unregister(name: str) -> None:
     ------
     InvalidArgumentError
         ``sae_family_unknown`` when nothing is registered under ``name``.
+
+    Examples
+    --------
+    >>> class TinySae:
+    ...     def encode(self, h):
+    ...         return torch.relu(h)
+    ...     def decode(self, z):
+    ...         return z
+    >>> tl.bridge.sae.register("demo_unregister", TinySae(), site="2")
+    >>> tl.bridge.sae.unregister("demo_unregister")
+    >>> try:
+    ...     tl.bridge.sae.unregister("demo_unregister")
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     from .._semantic import _families
@@ -547,7 +602,7 @@ def logged_splice_trace(
     model.add_module(child, reconstruction)
     handle = module.register_forward_hook(_hook)
     try:
-        logged = tl.trace(model, inputs, capture=tl.options.CaptureOptions(replayable=True))
+        logged = tl.trace(model, inputs)
     finally:
         handle.remove()
         del model._modules[child]

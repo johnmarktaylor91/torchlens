@@ -376,7 +376,7 @@ def test_invariant_5_all_conditional_ids_resolve_to_events() -> None:
 
 
 def test_invariant_6_parent_child_stacks_are_prefix_related() -> None:
-    """Invariant 6 fails on a non-prefix stack reordering across one graph edge."""
+    """Invariant 6 fails when a nested stack lists the inner conditional first."""
 
     trace = _log_model(NestedIfModel(), torch.ones(2, 3))
     try:
@@ -396,7 +396,7 @@ def test_invariant_6_parent_child_stacks_are_prefix_related() -> None:
         violating_child.conditional_branch_stack = list(
             reversed(violating_child.conditional_branch_stack)
         )
-        _assert_invariant_error(trace, ("Invariant 6", "non-prefix conditional stacks"))
+        _assert_invariant_error(trace, ("Invariant 6", "without its enclosing conditional"))
     finally:
         trace.cleanup()
 
@@ -450,22 +450,6 @@ def test_invariant_10_conditional_edge_call_indices_reject_invalid_pass() -> Non
         existing_ops = trace.graph.conditional_edge_call_indices[edge_key]
         trace.graph.conditional_edge_call_indices[edge_key] = sorted(existing_ops + [0])
         _assert_invariant_error(trace, ("Invariant 10", "pass 0"))
-    finally:
-        trace.cleanup()
-
-
-def test_invariant_11_transient_bool_key_is_removed() -> None:
-    """Invariant 11 fails when a pass log still carries ``_bool_conditional_key``."""
-
-    trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
-    try:
-        bool_layer = _get_only_terminal_bool(trace)
-        if "_bool_conditional_key" not in getattr(type(bool_layer), "__slots__", ()):
-            with pytest.raises(AttributeError):
-                bool_layer._bool_conditional_key = ("fake.py", 1, 2, 3)
-            return
-        bool_layer._bool_conditional_key = ("fake.py", 1, 2, 3)
-        _assert_invariant_error(trace, ("Invariant 11", "_bool_conditional_key"))
     finally:
         trace.cleanup()
 

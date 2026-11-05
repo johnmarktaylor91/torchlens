@@ -10,7 +10,7 @@ values. The eager forward runs under ``no_grad``; the rows re-enable grad
 locally where they need it.
 
 Backward after the capture (``loss.backward()`` on a captured output,
-``Trace.log_backward``, a second backward with ``retain_graph``) needs a
+``Trace.backward``, a second backward with ``retain_graph``) needs a
 post-capture step the runner does not have; it is listed as remaining work.
 """
 

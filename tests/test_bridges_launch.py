@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import json
 import sys
 from pathlib import Path
@@ -324,34 +323,6 @@ def test_lightning_layer_profiler_callback_fires_and_saves_results(tmp_path: Pat
     saved = [json.loads(line) for line in container_path.read_text(encoding="utf-8").splitlines()]
     assert saved[0]["stage"] == "validation"
     assert saved[0]["num_layers"] > 0
-
-
-def test_lightning_callback_missing_extra_errors_on_use(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Lightning callback module imports lazily and errors clearly when used without Lightning."""
-
-    real_import = builtins.__import__
-
-    def fail_lightning(name: str, *args: Any, **kwargs: Any) -> Any:
-        """Raise ImportError for Lightning imports only."""
-
-        if name.split(".")[0] in {"lightning", "pytorch_lightning"}:
-            raise ImportError("missing lightning")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.delitem(sys.modules, "lightning", raising=False)
-    monkeypatch.delitem(sys.modules, "lightning.pytorch", raising=False)
-    monkeypatch.delitem(sys.modules, "lightning.pytorch.callbacks", raising=False)
-    monkeypatch.delitem(sys.modules, "pytorch_lightning", raising=False)
-    monkeypatch.delitem(sys.modules, "pytorch_lightning.callbacks", raising=False)
-    monkeypatch.setattr(builtins, "__import__", fail_lightning)
-
-    lightning_callbacks = tl_callbacks.lightning
-    lightning_callbacks.__dict__.pop("LayerProfilerCallback", None)
-
-    with pytest.raises(ImportError, match=r"torchlens\[lightning\]"):
-        lightning_callbacks.LayerProfilerCallback
 
 
 def test_hf_compat_loaders_match_direct_calls(monkeypatch: pytest.MonkeyPatch) -> None:

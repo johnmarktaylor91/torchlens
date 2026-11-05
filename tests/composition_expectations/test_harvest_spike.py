@@ -30,7 +30,7 @@ _CLAIM_PATTERN = re.compile(
 def _doc_files() -> tuple[Path, ...]:
     """The taught-surface corpus: docs/** markdown plus the README.
 
-    ``docs/agent-reference/`` is excluded on purpose: the 2026-10-01 docs move
+    ``docs/internal/agent-reference/`` is excluded on purpose: the 2026-10-01 docs move
     ("docs: move agent reference material out of startup instructions" / "docs:
     reserve nested instruction budget for module rules") relocated AGENTS.md's
     own working-notes content under ``docs/``, but that material is AGENT

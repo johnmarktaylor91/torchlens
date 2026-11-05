@@ -42,6 +42,13 @@ class TensorSubclassUnsupportedError(CompatibilityError, RuntimeError):
     non-``torch.Tensor`` cls) inside a model forward, an intervention hook,
     or a ``validate_forward_pass`` replay while capturing on this torch
     build.
+
+    Examples
+    --------
+    >>> issubclass(TensorSubclassUnsupportedError, tl.errors.CompatibilityError)
+    True
+    >>> issubclass(TensorSubclassUnsupportedError, RuntimeError)
+    True
     """
 
 

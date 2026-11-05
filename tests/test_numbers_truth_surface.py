@@ -75,7 +75,6 @@ def test_readme_idiom_subprocess_zero_warnings() -> None:
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.smoke
 def test_summary_has_no_escape_bytes_any_level(small_log: tl.Trace) -> None:
     """No returned summary string carries ESC bytes, at any level (A11)."""
 
@@ -84,7 +83,6 @@ def test_summary_has_no_escape_bytes_any_level(small_log: tl.Trace) -> None:
         assert "\x1b" not in text, f"escape byte in summary({kwargs})"
 
 
-@pytest.mark.smoke
 def test_control_flow_summary_has_no_escape_bytes() -> None:
     """A conditional model's summary and provenance emit plain text (A11)."""
 

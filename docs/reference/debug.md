@@ -3,7 +3,11 @@
 `tl.debug` inspects a completed trace when the graph itself is the diagnostic: it can
 locate non-finite saved tensors, walk dependencies, compare runs, rank cost and
 recomputation candidates, audit saved gradients, and infer a runnable input shape. Capture
-with the normal `tl.trace(...)` API, then pass the resulting trace to a helper.
+with the normal `tl.trace(...)` API, then pass the resulting trace to a helper. A helper that
+takes `inputs` itself (`bisect_precision`, `check_determinism`, `find_nan`, `graph_breaks`,
+`isolated_capture`, `nonfinite_origin`, `tl.report.flops_vs_dispatch`) takes every input form
+`tl.trace` takes: a tensor, a positional list or tuple, and for a Hugging Face model a string, PIL
+image or modality dict, resolved as the trace resolves it.
 
 ## The report object (`Report`)
 
@@ -158,7 +162,7 @@ True nan
 
 ## `bisect_precision`
 
-`tl.debug.bisect_precision(model, input_args)` (DOCUMENTED-UNSTABLE spelling) runs the
+`tl.debug.bisect_precision(model, inputs)` (DOCUMENTED-UNSTABLE spelling) runs the
 same seeded forward twice -- once at native precision, once with floating state and
 inputs cast to `reference_dtype` (fp64 by default) -- and returns a
 `BisectPrecisionReport` naming the first op whose native output separates from the
@@ -201,9 +205,12 @@ True __sub__
 
 ## `compare`
 
-`tl.debug.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares saved dense
-floating activations with matching operation labels and returns a tabular `Report`
-whose `.to_pandas()` DataFrame carries aggregate counts in `attrs`.
+`tl.debug.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares saved
+activations with matching operation labels and returns a tabular `Report` whose
+`.to_pandas()` DataFrame carries aggregate counts in `attrs`. Runs on different devices
+are compared on the CPU and different dtypes in the wider dtype; each row's `reason`
+and the card's coverage line name the alignment. Integer and boolean activations
+(indices, masks) must match exactly.
 
 ```python
 import torch
@@ -220,7 +227,7 @@ print(comparison.shape, comparison.attrs["value_diverged"])
 Output:
 
 ```text
-(2, 8) 2
+(2, 9) 2
 ```
 
 ## `compare_params`
@@ -305,10 +312,19 @@ Output:
 
 ## `dead_neurons`
 
-`tl.debug.dead_neurons(trace, *, dim=1, threshold=0.0)` reports units whose maximum
-activation is at most `threshold` or whose value has zero variance in this trace. One
-trace is only one sample; aggregate runs before making a dataset-level claim. Related:
-[`grad_health`](#grad_health).
+`tl.debug.dead_neurons(trace, *, dim=None, max_activation=0.0)` reports, for every layer, the
+units whose output is identically zero at every position in the batch: every element of
+the unit's slice has a magnitude at or below `max_activation` (absolute, on the layer's output;
+`0.0` means exactly zero). The units are a layer's output units, so there is one row per
+op a module call returned or the model's `forward` returned; the ops inside a composite
+activation (the `tanh` of a tanh-approximated GELU, the `sigmoid` of SiLU) get no row,
+because a saturated intermediate is not a dead output unit. One trace is only one sample;
+aggregate runs before making a dataset-level claim. With `dim=None` the unit axis is
+picked per op: the last axis of a 2-D or 3-D activation (a linear layer's
+`(batch, features)`, a transformer block's `(batch, tokens, features)`), the channel axis
+of a convolution, pooling or per-channel norm and of the same-shaped ops it feeds, and
+axis 1 for 4-D and wider. An int `dim` forces one axis on every op.
+Related: [`grad_health`](#grad_health).
 
 ```python
 import torch
@@ -323,7 +339,7 @@ print(report.columns.tolist())
 Output:
 
 ```text
-['op', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason']
+['op', 'module', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason', 'source_line']
 ```
 
 ## `dtype_range`
@@ -357,7 +373,7 @@ Output:
 `tl.debug.grad_health(trace, *, bwd=None, vanishing_threshold=1e-7,
 exploding_threshold=1e4, grad_scale=None, grad_scales=None, basis="total_norm")`
 ranks saved gradients and flags zero, vanishing, and exploding norms. Capture
-with `save_grads=True`, then call `trace.log_backward(...)` first.
+with `save_grads=True`, then call `trace.backward(...)` first.
 
 The F23 fix pack added (all additive): `module` + `is_frontier` columns (a
 dead layer zeroes the gradient of everything upstream, so the frontier — a
@@ -369,9 +385,8 @@ sync per device (replacing the historical per-op `.item()`), `stage` +
 stamps. Under AMP the saved gradients are SCALED: pass `grad_scale=` (one
 factor) or `grad_scales=` (per-backward mapping); unknown provenance yields
 `unknown` magnitude verdicts in the `verdict` column, never a silent
-pass-as-1.0. `basis="total_norm"` keeps the legacy classification for one
-deprecation cycle; the `basis="rms"` flip is announced in `report.attrs` and
-gated on the multi-model calibration runs.
+pass-as-1.0. `basis="total_norm"` (the default) classifies on each gradient's
+total norm; `basis="rms"` classifies on `norm/sqrt(numel)`.
 
 ```python
 import torch
@@ -380,7 +395,7 @@ import torchlens as tl
 from torchlens.options import CaptureOptions
 
 trace = tl.trace(nn.Linear(2, 1), torch.ones(1, 2), capture=CaptureOptions(save_grads=True))
-trace.log_backward(trace[trace.output_layers[0]].out.sum())
+trace.backward(trace[trace.output_layers[0]].out.sum())
 report = tl.debug.grad_health(trace).to_pandas()
 print(report.shape, report.attrs["bwd"])
 ```
@@ -399,7 +414,7 @@ Output:
 results to CHECKED values, discloses AMP limits, and prints the
 `torch.autograd.set_detect_anomaly` recipe verbatim for the cases it does
 not cover (backward-born NaNs, custom-autograd exceptions). The live form
-`tl.debug.nonfinite_origin(model, x)` runs one memory-light tripwire forward. It
+`tl.debug.nonfinite_origin(model, inputs)` runs one memory-light tripwire forward. It
 NEVER auto-runs anomaly mode — a second execution can mutate state and
 follow another stochastic path.
 
@@ -421,7 +436,7 @@ TorchLens unknown cells, and a native ZERO can be a registry-coverage fact
 `tl.debug.hot_path(trace, by="flops")` aggregates forward FLOPs, activation memory, or
 duration by source line. `by` is one of `"flops"`, `"memory"`, `"duration"`, or
 `"device_time"` (joined Kineto device nanoseconds; refuses typed
-`device_time_unavailable` without a joined `torchlens._observability`
+`device_time_unavailable` without a joined observability
 session); use
 [`recompute_candidates`](#recompute_candidates) when the question is activation-memory
 tradeoffs instead.
@@ -472,7 +487,7 @@ Output:
 `tl.debug.guess_input_shape(model, *, batch_size=1, input_dtype=None, channels=None,
 spatial_rank="auto", seq_len=None, square=True, min_size=1, max_size=512,
 preferred_sizes=(224, 256, 384, 299, 128, 96, 64, 32, 28), max_probes=64, device=None,
-seed=0, return_trace=False, on_failure="return", input_specs=None)` probes a module and
+seed=0, on_failure="return", input_specs=None)` probes a module and
 returns an `GuessInputShapeReport` with a verified synthetic shape or a diagnostic failure.
 
 ```python
@@ -537,7 +552,7 @@ Output:
 
 ## `find_nan`
 
-`tl.debug.find_nan(model, x, **trace_kwargs)` runs a memory-light live capture and stops at
+`tl.debug.find_nan(model, inputs, **trace_kwargs)` runs a memory-light live capture and stops at
 the first non-finite operation output. `trace.find_nan()` instead scans the payloads saved in an
 existing trace; on a selective-save trace, its result explicitly identifies the uncertainty zone
 created by unsaved operations.
@@ -585,7 +600,7 @@ no rerun. `result.first_bad_thing` projects into the shared `FirstBadThing` voca
 
 ## `check_determinism`
 
-`tl.debug.check_determinism(model, input_args, *, runs=2, seed=0, rtol=None, atol=None,
+`tl.debug.check_determinism(model, inputs, *, runs=2, seed=0, rtol=None, atol=None,
 seed_sensitivity=False)` (DOCUMENTED-UNSTABLE spelling) answers ONE controlled question:
 do N isolated same-seed runs agree? Every run executes on a fresh released deep copy
 with cloned inputs under preserved, identically-seeded RNG. The verdict is three-state
@@ -607,7 +622,7 @@ whose rows follow execution order -- never alphabetical.
 ## `isolated_capture` / `preserved_rng_state` / `clone_input_tree`
 
 The shared isolated-rerun harness (DOCUMENTED-UNSTABLE spellings) behind
-`bisect_precision` and `check_determinism`: `isolated_capture(model, input_args, *,
+`bisect_precision` and `check_determinism`: `isolated_capture(model, inputs, *,
 seed, prepare=None, **trace_kwargs)` runs one seeded capture of a fresh deep copy
 that is RELEASED from inherited TorchLens preparation first (the deepcopy-after-trace
 `KeyError` repair), with cloned inputs, under `preserved_rng_state()` (Python, NumPy,

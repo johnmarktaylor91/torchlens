@@ -103,6 +103,14 @@ def circuit_performance_ratio(
     -------
     float
         The area under ``f`` (MIB ``area_under``); higher is better.
+
+    Examples
+    --------
+    >>> tl.mechinterp.circuit_performance_ratio([1.0, 1.0], fractions=[0.5, 1.0])
+    0.5
+    >>> abs(tl.mechinterp.circuit_performance_ratio([0.2, 0.5, 1.0],
+    ...                                             fractions=[0.1, 0.5, 1.0]) - 0.515) < 1e-9
+    True
     """
 
     xs, fs = _curve(faithfulness, fractions, log_scale, "circuit_performance_ratio")
@@ -133,6 +141,13 @@ def circuit_model_difference(
     -------
     float
         The area under ``|1 - f|`` (MIB ``area_from_1``); lower is better.
+
+    Examples
+    --------
+    >>> tl.mechinterp.circuit_model_difference([1.0, 1.0], fractions=[0.5, 1.0])
+    0.0
+    >>> tl.mechinterp.circuit_model_difference([0.0, 0.0], fractions=[0.5, 1.0])
+    0.5
     """
 
     xs, fs = _curve(faithfulness, fractions, log_scale, "circuit_model_difference")

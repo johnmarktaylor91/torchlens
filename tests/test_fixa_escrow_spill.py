@@ -191,7 +191,7 @@ def test_config_built_clip_visual_projection_bit_equal_through_forced_spill(forc
 
 
 def _detached(**fields: Any) -> Any:
-    """Return capture options for a detached deferred save (the pre-U27.1 escrow path).
+    """Return capture options for a detached deferred save (the earlier escrow path).
 
     Parameters
     ----------
@@ -271,13 +271,13 @@ def test_resnet50_batch1_op_label_selective_save_completes():
     # The label is resolved from the graph (the tenth conv2d op), never
     # hard-coded: label numbering shifts whenever the op count before it does.
     structure = tl.trace(model, x, save="none")
-    convs = [op for op in structure._layer_list if op.layer_type == "conv2d"]
+    convs = [op for op in structure.ops if op.type == "conv2d"]
     assert len(convs) > 9, "expected more than nine conv2d ops on resnet50"
     label = convs[9].layer_label
     capture = _detached()
     log = tl.trace(model, x, capture=capture, save=[label])
     op = log[label]
-    assert op.layer_type == "conv2d"
+    assert op.type == "conv2d"
     assert op.output_of_modules, "the tenth conv2d op must be a module output"
     assert torch.equal(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
 

@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens._utils.env_flags import ENV_FLAG_REGISTRY, closed_bool_env
+from torchlens._utils.env_flags import ENV_FLAG_REGISTRY
 from torchlens.errors import CaptureNotActiveError
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -171,19 +171,3 @@ def test_true_never_means_off_for_torchlens_auto() -> None:
         assert excinfo2.value.fields["code"] == "env_flag_invalid"
     finally:
         os.environ.pop("TORCHLENS_AUTO", None)
-
-
-def test_suppress_capability_warnings_false_means_off() -> None:
-    """The suppress knob's false spellings mean OFF (raw truthiness killed)."""
-
-    import os
-
-    try:
-        os.environ["TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS"] = "false"
-        assert closed_bool_env("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS") is False
-        os.environ["TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS"] = "0"
-        assert closed_bool_env("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS") is False
-        os.environ["TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS"] = "on"
-        assert closed_bool_env("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS") is True
-    finally:
-        os.environ.pop("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS", None)

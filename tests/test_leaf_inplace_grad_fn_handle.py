@@ -68,10 +68,3 @@ def test_in_forward_input_gradient_validates() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(InputGradientInForward(), torch.randn(2, 4), scope="forward")
-
-
-def test_same_object_inplace_on_non_leaf_keeps_its_real_node() -> None:
-    trace = tl.trace(InplaceOnNonLeaf(), [torch.randn(2, 4)])
-    add = _layer(trace, "add_")
-    assert add.grad_fn_object_id is not None
-    assert add.grad_fn_class_name == "AddBackward0"

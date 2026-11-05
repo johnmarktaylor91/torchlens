@@ -22,7 +22,6 @@ metadata + safetensors blobs, directory bundles); log administration delegates t
 - `save_intervention(...)` — write an intervention recipe (`Trace.save_intervention`
   routes here).
 - `TraceState` — the runtime state enum (`torchlens._trace_state`).
-- `suppress_mutate_warnings()` — context manager silencing mutation warnings.
 - `PayloadLoadHints` / `JaxPayloadLoadHint`, `ArtifactError`, `materialize_nested`,
   `cleanup_tmp` — re-exports from `_io`.
 

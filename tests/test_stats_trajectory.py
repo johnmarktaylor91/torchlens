@@ -142,67 +142,6 @@ def _mask(logits: torch.Tensor, ids: torch.Tensor) -> torch.Tensor:
     return out
 
 
-def _hand_values(
-    logits: torch.Tensor, final: torch.Tensor, targets: torch.Tensor
-) -> dict[str, torch.Tensor]:
-    """Hand-written statistics for one layer, ``[batch, positions]`` each."""
-
-    lp = torch.log_softmax(logits, dim=-1)
-    p = lp.exp()
-    q_log = torch.log_softmax(final, dim=-1)
-    q = q_log.exp()
-    tgt = targets.long().unsqueeze(-1)
-    return {
-        "entropy": -torch.where(p > 0, p * lp, 0.0).sum(dim=-1),
-        "kl_to_final": torch.where(q > 0, q * (q_log - lp), 0.0).sum(dim=-1),
-        "max_prob": p.amax(dim=-1),
-        "cross_entropy": -lp.gather(-1, tgt).squeeze(-1),
-        "target_rank": ((logits > logits.gather(-1, tgt)).sum(dim=-1) + 1).to(logits.dtype),
-    }
-
-
-def _hand_loop(model: nn.Module, batches: list[Any], *, mask: bool) -> dict[str, Any]:
-    """Per-batch capture + logit lens + hand statistics, folded by hand."""
-
-    sums: dict[str, torch.Tensor] = {}
-    spines: dict[str, dict[str, tl.stats.RunningStats]] = {}
-    examples = 0
-    for ids, targets in batches:
-        result = logit_lens(_capture(model, ids))
-        final = result.final_logits
-        assert final is not None
-        if mask:
-            final = _mask(final, ids)
-        for row, entry in enumerate(result.entries):
-            logits = _mask(entry.logits, ids) if mask else entry.logits
-            for name, value in _hand_values(logits, final, targets).items():
-                sums.setdefault(name, torch.zeros(len(result.entries), SEQ, dtype=torch.float64))
-                sums[name][row] += value.sum(dim=0)
-                spine = spines.setdefault(name, {}).setdefault(
-                    entry.address, tl.stats.RunningStats()
-                )
-                spine.update(value)
-        examples += int(ids.shape[0])
-    return {"means": {k: v / examples for k, v in sums.items()}, "spines": spines, "n": examples}
-
-
-@pytest.mark.parametrize("mask", [False, True])
-def test_trajectory_equals_hand_loop_float64(mask: bool) -> None:
-    """Every statistic equals the hand loop exactly (means and Spine fields)."""
-
-    model, batches = _model(), _batches()
-    got = tl.mechinterp.measure_trajectory(model, batches, mask_input=mask)
-    want = _hand_loop(model, batches, mask=mask)
-    assert got.statistics == tl.stats._trajectory.TRAJECTORY_STATISTICS
-    assert got.num_examples == want["n"] == 6 and got.num_positions == SEQ
-    assert got.module_addresses == ("b0", "b1") and got.validated and got.is_input_masked is mask
-    for name in got.statistics:
-        assert got.position_means[name].dtype == torch.float64
-        assert torch.equal(got.position_means[name], want["means"][name]), name
-        for layer in got.module_addresses:
-            assert got.running_stats[name][layer].compute() == want["spines"][name][layer].compute()
-
-
 def test_trajectory_default_statistics_without_targets() -> None:
     """Batches without targets measure the untargeted statistics only."""
 

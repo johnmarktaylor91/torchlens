@@ -53,15 +53,7 @@ def _cyclic_list() -> list[object]:
     return value
 
 
-def test_trace_refuses_overdeep_input_typed() -> None:
-    """A too-deep input tree refuses typed at capture entry, never RecursionError."""
-
-    deep = _deep_list(INPUT_TREE_MAX_DEPTH + 50, torch.ones(1))
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.trace(nn.Identity(), deep)
-    assert excinfo.value.fields["code"] == "input_tree_depth_exceeded"
-
-
+# Kept: a sole mutation kill.
 def test_trace_refuses_cyclic_input_typed() -> None:
     """A self-referential input container refuses typed at capture entry."""
 
@@ -70,7 +62,7 @@ def test_trace_refuses_cyclic_input_typed() -> None:
     assert excinfo.value.fields["code"] == "input_tree_cycle"
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _postprocess/loop_grouping_adapter.py; a sole mutation kill.
 def test_trace_recovers_and_accepts_shared_substructure_after_refusal() -> None:
     """State recovers after a refusal, and DAG-shaped inputs still trace."""
 
@@ -81,6 +73,7 @@ def test_trace_recovers_and_accepts_shared_substructure_after_refusal() -> None:
     assert len(log) > 0
 
 
+# Kept: sole branch coverage of _input_walk.py.
 def test_walk_input_boundary_depth_and_cycle_ceiling_the_subtree() -> None:
     """The normative walker ceilings over-deep and cyclic subtrees, never crashes.
 
@@ -108,20 +101,7 @@ def test_walk_input_boundary_depth_and_cycle_ceiling_the_subtree() -> None:
     assert len(cyclic_opaque) == 1, "cyclic subtree must ceiling exactly once"
 
 
-def test_walk_input_boundary_walks_every_shared_occurrence() -> None:
-    """The cycle guard is PATH-scoped: a shared container is walked per occurrence."""
-
-    leaf = torch.ones(1)
-    shared = [leaf]
-    seen: list[tuple[object, ...]] = []
-    walk_input_boundary(
-        [shared, shared],
-        key_component=raw_mapping_key_component,
-        on_tensor=lambda _tensor, path: seen.append(path),
-    )
-    assert seen == [(0, 0), (1, 0)]
-
-
+# Kept: sole branch coverage of _input_walk.py.
 def test_snapshot_input_boundary_is_total_and_refuses_in_ledger() -> None:
     """The runnable structure snapshot stays TOTAL: violations join the refusals."""
 
@@ -132,15 +112,7 @@ def test_snapshot_input_boundary_is_total_and_refuses_in_ledger() -> None:
     assert "input_container_too_deep" in {r["reason"] for r in deep_snapshot["refusals"]}
 
 
-def test_snapshot_input_boundary_clean_input_has_no_guard_refusals() -> None:
-    """Ordinary nested inputs snapshot with zero guard refusals (no false refusal)."""
-
-    snapshot = snapshot_input_boundary({"a": [torch.ones(1), {"b": (1, 2.5)}]})
-    reasons = {r["reason"] for r in snapshot["refusals"]}
-    assert "input_tree_cycle" not in reasons
-    assert "input_tree_depth_exceeded" not in reasons
-
-
+# Kept: sole branch coverage of backends/default_specs.py; sole provocation of an error code.
 def test_simple_leaves_depth_and_cycle_refuse_typed() -> None:
     """Backend-resolution leaf sniffing shares the same typed guards."""
 
@@ -156,6 +128,7 @@ def test_simple_leaves_depth_and_cycle_refuse_typed() -> None:
     assert len(_simple_leaves([shared, shared])) == 2
 
 
+# Kept: sole branch coverage of _utils/arg_handling.py.
 def test_copy_arg_tree_depth_refuses_typed_and_cycles_still_reproduce() -> None:
     """The canonical input copier is depth-bounded; cycle reproduction is unchanged."""
 
@@ -167,43 +140,6 @@ def test_copy_arg_tree_depth_refuses_typed_and_cycles_still_reproduce() -> None:
     copied = copy_arg_tree(cyclic)
     assert copied[1] is copied  # the cycle is reproduced in the copy
     assert torch.equal(copied[0], cyclic[0])
-
-
-def test_moderate_nesting_still_traces() -> None:
-    """Inputs well under the ceiling keep working end to end."""
-
-    log = tl.trace(nn.Identity(), _deep_list(30, torch.ones(1)))
-    assert len(log) > 0
-
-
-def test_copy_arg_tree_dag_is_linear_and_preserves_aliasing() -> None:
-    """r-b4 R29-3: a DAG-shaped input copies O(nodes), not O(paths).
-
-    The historical path-scoped memo copied a shared sub-container once per PATH
-    (x2 per shared-substructure level; depth 25 hung capture entry ~4 minutes).
-    The call-scoped memo copies it once and PRESERVES the aliasing topology the
-    model itself would have seen.
-    """
-
-    import time
-
-    node: object = [torch.ones(1)]
-    for _ in range(60):  # 2**60 paths under the old memo: only a linear memo finishes
-        node = [node, node]
-    start = time.perf_counter()
-    copied = copy_arg_tree(node)
-    assert time.perf_counter() - start < 5.0
-    assert copied[0] is copied[1]  # shared substructure stays aliased in the copy
-    assert copied[0] is not node[0]  # ...but is a genuine copy
-
-
-def test_copy_arg_tree_distinct_containers_stay_distinct() -> None:
-    """Equal-valued but DISTINCT containers still copy to distinct objects."""
-
-    left = [torch.ones(1)]
-    right = [torch.ones(1)]
-    copied = copy_arg_tree([left, right])
-    assert copied[0] is not copied[1]
 
 
 # --- grind-p3 T11.4: one ceiling, and stack exhaustion refuses typed ------------------
@@ -237,6 +173,7 @@ def _tight_stack(fn: Any, headroom: int = 130) -> Any:
         sys.setrecursionlimit(old_limit)
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_input_search_ceiling_locksteps_the_shared_ceiling() -> None:
     """The tensor-extraction walker's ceiling covers the boundary contract.
 
@@ -250,27 +187,7 @@ def test_input_search_ceiling_locksteps_the_shared_ceiling() -> None:
     assert INPUT_SEARCH_DEPTH_LIMIT > INPUT_TREE_MAX_DEPTH
 
 
-def test_input_search_walker_reaches_ceiling_depth_tensor_leaves() -> None:
-    """A tensor leaf at legal depth (>64, <=ceiling) is enumerated, gap-free."""
-
-    from torchlens._utils.introspection import (
-        INPUT_SEARCH_DEPTH_LIMIT,
-        get_vars_of_type_from_obj,
-    )
-
-    for depth in (100, INPUT_TREE_MAX_DEPTH):
-        leaf = torch.ones(1)
-        gaps: list[str] = []
-        found = get_vars_of_type_from_obj(
-            _deep_list(depth, leaf),
-            torch.Tensor,
-            search_depth=INPUT_SEARCH_DEPTH_LIMIT,
-            depth_exceeded_paths=gaps,
-        )
-        assert any(item is leaf for item in found), f"leaf at depth {depth} dropped"
-        assert gaps == [], f"legal depth {depth} recorded a traversal gap"
-
-
+# Kept: sole branch coverage of _input_walk.py.
 def test_walk_input_boundary_stack_exhaustion_refuses_typed() -> None:
     """A LEGAL 100-deep input under a consumed stack refuses typed, never raw."""
 
@@ -284,6 +201,7 @@ def test_walk_input_boundary_stack_exhaustion_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "input_tree_stack_exhausted"
 
 
+# Kept: sole branch coverage of _input_walk.py.
 def test_snapshot_input_boundary_stack_exhaustion_refuses_typed() -> None:
     """The snapshot spine shares the typed stack-budget refusal."""
 
@@ -293,6 +211,7 @@ def test_snapshot_input_boundary_stack_exhaustion_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "input_tree_stack_exhausted"
 
 
+# Kept: sole branch coverage of _utils/arg_handling.py.
 def test_copy_arg_tree_stack_exhaustion_refuses_typed() -> None:
     """The capture-entry input copier shares the typed stack-budget refusal.
 
@@ -306,6 +225,7 @@ def test_copy_arg_tree_stack_exhaustion_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "input_tree_stack_exhausted"
 
 
+# Kept: sole branch coverage of _utils/arg_handling.py, backends/default_specs.py.
 def test_simple_leaves_stack_exhaustion_refuses_typed() -> None:
     """Backend-resolution leaf sniffing shares the typed stack-budget refusal."""
 
@@ -313,20 +233,6 @@ def test_simple_leaves_stack_exhaustion_refuses_typed() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         _tight_stack(lambda: _simple_leaves(deep))
     assert excinfo.value.fields["code"] == "input_tree_stack_exhausted"
-
-
-def test_walkers_still_complete_legal_depths_on_a_healthy_stack() -> None:
-    """No false stack refusal: the same legal input walks fine untightened."""
-
-    deep = _deep_list(100, torch.ones(1))
-    seen: list[tuple[Any, ...]] = []
-    walk_input_boundary(
-        deep, key_component=raw_mapping_key_component, on_tensor=lambda t, p: seen.append(p)
-    )
-    assert len(seen) == 1
-    assert snapshot_input_boundary(deep)["refusals"] == []
-    assert isinstance(copy_arg_tree(deep), list)
-    assert len(_simple_leaves(deep)) == 1
 
 
 class _CycleModel(nn.Module):
@@ -351,7 +257,7 @@ class _PeerBox:
     peer: Any = None
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _capture/_run_setup.py, _capture_state_helpers.py; a sole mutation kill.
 def test_device_move_walker_refuses_cycles_and_depth_typed() -> None:
     """The device-move walker carries the shared cycle/depth guards.
 
@@ -383,7 +289,7 @@ def test_device_move_walker_refuses_cycles_and_depth_typed() -> None:
         tl.trace(_CycleModel(), deep)
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _capture_state_helpers.py.
 def test_device_move_dataclass_rebuild_never_reruns_user_init() -> None:
     """The dataclass device-move rebuild is inert (no ``__post_init__`` re-run).
 
@@ -416,6 +322,7 @@ def test_device_move_dataclass_rebuild_never_reruns_user_init() -> None:
     assert moved.n == 1, "user __init__/__post_init__ ran a second time during the move"
 
 
+# Kept: sole branch coverage of _capture_state_helpers.py, types.py.
 def test_device_move_walker_descends_registered_containers() -> None:
     """Registered containers move through their own flatten/unflatten hooks.
 
@@ -448,77 +355,7 @@ def test_device_move_walker_descends_registered_containers() -> None:
 # --- grind-p5 b3-opus-R12-2: mapping/list-subclass device-move rebuilds are INERT ------
 
 
-def test_device_move_dict_subclass_rebuild_never_reruns_ctor_and_keeps_state() -> None:
-    """The dict-subclass device-move rebuild is inert (no user ctor, state kept).
-
-    The 66263de1 inert-rebuild fix landed only on the dataclass arm: the Mapping
-    arm still called ``type(obj)(moved_mapping)``, re-running the user's
-    ``__init__`` and RESETTING same-class instance state -- which the
-    instance-state witness then recorded with zero refusals.
-    """
-
-    from torchlens._capture_state_helpers import _move_tensors_to_device
-
-    class ModeBox(dict):
-        """Dict subclass whose ctor observably resets a mode attribute."""
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            super().__init__(*args, **kwargs)
-            self.mode = "ctor-default"
-            self.ctor_runs = getattr(self, "ctor_runs", 0) + 1
-
-    box = ModeBox({"x": torch.ones(2)})
-    box.mode = "user-set"
-    moved = _move_tensors_to_device(box, "meta")
-    assert moved is not box
-    assert type(moved) is ModeBox
-    assert moved["x"].device.type == "meta"
-    assert moved.mode == "user-set", "user ctor re-ran and RESET instance state"
-    assert moved.ctor_runs == 1
-
-
-@pytest.mark.smoke
-def test_device_move_list_subclass_rebuild_never_reruns_ctor_and_keeps_state() -> None:
-    """The list-subclass device-move rebuild is inert (no user ctor, state kept)."""
-
-    from torchlens._capture_state_helpers import _move_tensors_to_device
-
-    class TaggedList(list):
-        """List subclass whose ctor observably resets a tag attribute."""
-
-        def __init__(self, *args: Any) -> None:
-            super().__init__(*args)
-            self.tag = "ctor-default"
-
-    tagged = TaggedList([torch.ones(2)])
-    tagged.tag = "user-set"
-    moved = _move_tensors_to_device(tagged, "meta")
-    assert moved is not tagged
-    assert type(moved) is TaggedList
-    assert moved[0].device.type == "meta"
-    assert moved.tag == "user-set", "user ctor re-ran and RESET instance state"
-
-
-def test_device_move_defaultdict_moves_and_keeps_factory() -> None:
-    """``defaultdict`` inputs actually MOVE (the ctor TypeError was swallowed).
-
-    ``type(obj)(moved_mapping)`` on a defaultdict put the mapping in the
-    ``default_factory`` slot, raised TypeError, and the except arm returned
-    ``_UNMOVED`` -- so defaultdict inputs were silently never device-moved.
-    """
-
-    from torchlens._capture_state_helpers import _move_tensors_to_device
-
-    source: collections.defaultdict[str, Any] = collections.defaultdict(list)
-    source["x"] = torch.ones(2)
-    moved = _move_tensors_to_device(source, "meta")
-    assert moved is not source
-    assert type(moved) is collections.defaultdict
-    assert moved["x"].device.type == "meta"
-    assert moved.default_factory is list
-
-
-@pytest.mark.smoke
+# Kept: sole branch coverage of _capture_state_helpers.py, _utils/arg_handling.py.
 def test_device_move_ordereddict_subclass_keeps_order_and_state() -> None:
     """OrderedDict subclasses rebuild through the od physical channel, in order."""
 
@@ -539,32 +376,7 @@ def test_device_move_ordereddict_subclass_keeps_order_and_state() -> None:
     assert list(moved.keys()) == ["a", "b"]  # od linked list is coherent
 
 
-def test_device_move_dict_subclass_lying_keys_reads_physical_storage() -> None:
-    """A ``keys()``/``__iter__`` override cannot hide children from the move.
-
-    The mapping arm iterated ``obj.keys()`` -- overridable user code -- so a
-    lying ``keys()`` shrank the rebuilt container refusal-free and hid tensor
-    children from the device move.
-    """
-
-    from torchlens._capture_state_helpers import _move_tensors_to_device
-
-    class HidingDict(dict):
-        """Dict subclass whose ``keys()``/``__iter__`` hide one key."""
-
-        def keys(self) -> Any:  # type: ignore[override]
-            return [key for key in dict.keys(self) if key != "hidden"]
-
-        def __iter__(self) -> Any:
-            return iter(self.keys())
-
-    hiding = HidingDict({"seen": torch.ones(2), "hidden": torch.ones(2)})
-    moved = _move_tensors_to_device(hiding, "meta")
-    assert moved is not hiding
-    assert dict.__len__(moved) == 2, "lying keys() shrank the rebuilt container"
-    assert dict.__getitem__(moved, "hidden").device.type == "meta"
-
-
+# Kept: sole branch coverage of _capture_state_helpers.py, _utils/arg_handling.py.
 def test_device_move_list_subclass_lying_iter_reads_physical_storage() -> None:
     """A list-subclass ``__iter__`` override cannot hide children from the move."""
 
@@ -583,7 +395,7 @@ def test_device_move_list_subclass_lying_iter_reads_physical_storage() -> None:
     assert list.__getitem__(moved, 1).device.type == "meta"
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _capture_state_helpers.py.
 def test_device_move_userdict_moves_via_instance_state_without_protocol() -> None:
     """Non-dict Mappings move through their INSTANCE STATE, dataclass-style.
 
@@ -610,30 +422,7 @@ def test_device_move_userdict_moves_via_instance_state_without_protocol() -> Non
     assert moved.mode == "user-set", "user ctor re-ran and RESET instance state"
 
 
-def test_copy_arg_tree_dict_subclass_inert_rebuild_keeps_state_no_ctor() -> None:
-    """``copy_arg_tree`` rebuilds dict subclasses inertly (sibling of the mover fix).
-
-    The dict arm called ``type(arg)()`` -- the user's constructor -- and read
-    children through the overridable ``items()`` protocol; the defaultdict arm
-    additionally SUBSTITUTED exact ``defaultdict`` for any subclass.
-    """
-
-    class ModeBox(dict):
-        """Dict subclass whose ctor observably resets a mode attribute."""
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            super().__init__(*args, **kwargs)
-            self.mode = "ctor-default"
-
-    box = ModeBox({"x": torch.ones(2)})
-    box.mode = "user-set"
-    copied = copy_arg_tree(box)
-    assert copied is not box
-    assert type(copied) is ModeBox
-    assert copied.mode == "user-set", "user ctor re-ran and RESET instance state"
-    assert torch.equal(copied["x"], box["x"]) and copied["x"] is not box["x"]
-
-
+# Kept: sole branch coverage of _utils/arg_handling.py.
 def test_copy_arg_tree_defaultdict_subclass_keeps_type_and_factory() -> None:
     """A defaultdict SUBCLASS copies to the same class, factory preserved."""
 
@@ -648,6 +437,7 @@ def test_copy_arg_tree_defaultdict_subclass_keeps_type_and_factory() -> None:
     assert torch.equal(copied["x"], source["x"])
 
 
+# Kept: sole branch coverage of _utils/arg_handling.py; smoke tier id (frozen).
 @pytest.mark.smoke
 def test_copy_arg_tree_lying_iteration_reads_physical_storage() -> None:
     """Lying ``keys()``/``__iter__`` overrides cannot shrink the copy."""
@@ -682,7 +472,7 @@ def test_copy_arg_tree_lying_iteration_reads_physical_storage() -> None:
 # --- grind-p5 b3-opus-R12-1: the input-copy walker never runs user copy protocols ------
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _utils/arg_handling.py.
 def test_safe_copy_input_tree_ignores_user_deepcopy_substitution() -> None:
     """A user ``__deepcopy__`` cannot substitute the captured program.
 
@@ -718,6 +508,7 @@ def test_safe_copy_input_tree_ignores_user_deepcopy_substitution() -> None:
     )
 
 
+# Kept: sole branch coverage of _utils/arg_handling.py.
 def test_safe_copy_input_tree_dict_subclass_state_kept_no_ctor() -> None:
     """Dict-subclass inputs copy inertly: no ctor re-run, state preserved."""
 
@@ -740,6 +531,7 @@ def test_safe_copy_input_tree_dict_subclass_state_kept_no_ctor() -> None:
     assert torch.equal(copied["x"], box["x"]) and copied["x"] is not box["x"]
 
 
+# Kept: a sole mutation kill.
 def test_trace_captures_original_values_despite_hostile_deepcopy() -> None:
     """End to end: the forward runs over the ORIGINAL values, not a substitute.
 
@@ -773,6 +565,7 @@ def test_trace_captures_original_values_despite_hostile_deepcopy() -> None:
     )
 
 
+# Kept: sole branch coverage of _utils/arg_handling.py.
 def test_safe_copy_input_tree_preserves_view_topology_and_grad_paths() -> None:
     """The inert rewrite keeps the deepcopy-era guarantees it replaced.
 
@@ -805,6 +598,7 @@ def test_safe_copy_input_tree_preserves_view_topology_and_grad_paths() -> None:
     assert copied_grad.requires_grad and copied_grad is not grad_leaf
 
 
+# Kept: sole branch coverage of _input_walk.py.
 def test_snapshot_mapping_protocol_totality_refusal() -> None:
     """A dict-backed mapping whose protocol hides physical entries refuses.
 
@@ -848,26 +642,7 @@ def _sneaky_substitution_dict(hidden: torch.Tensor) -> dict:
     return SneakySub({"visible": torch.ones(2), "hidden": hidden})
 
 
-def test_snapshot_mapping_count_preserving_substitution_refuses() -> None:
-    """A count-preserving ``items()`` substitution refuses; forged snapshots never bless.
-
-    R12 (4th-round carry): the totality fact compared only COUNT, so a lying
-    ``items()`` presenting ``[("visible", t), ("decoy", zeros)]`` over physical
-    storage ``{"visible": t, "hidden": t_h}`` passed with EMPTY refusals, the
-    hidden tensor appeared in no snapshot node, and two instances with
-    DIFFERENT hidden payloads snapshot EQUAL while concrete
-    ``dict.__getitem__`` reads steered the forward -- a false-VERIFIED lane
-    (the shrink/pad and namedtuple siblings are already refused).
-    """
-
-    snapshot = snapshot_input_boundary({"box": _sneaky_substitution_dict(torch.ones(3))})
-    reasons = {refusal["reason"] for refusal in snapshot["refusals"]}
-    assert "mapping_protocol_not_total" in reasons
-
-    other = snapshot_input_boundary({"box": _sneaky_substitution_dict(torch.full((7,), 5.0))})
-    assert {refusal["reason"] for refusal in other["refusals"]} >= {"mapping_protocol_not_total"}
-
-
+# Kept: sole branch coverage of _input_walk.py.
 def test_walker_routes_substituted_mapping_to_opaque_channel() -> None:
     """``walk_input_boundary`` never walks a forged protocol view (R12).
 

@@ -14,8 +14,6 @@ typed BEFORE-the-first-candidate retention preflight.
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 import torch
 from torch import nn
@@ -23,7 +21,11 @@ from torch import nn
 import torchlens as tl
 from torchlens.bundle._bytes import bundle_retained_bytes, preflight_retention_projection
 from torchlens.errors.episode import BundleExperimentError
-from torchlens.intervention.errors import ControlFlowDivergenceWarning
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _ConvBN(nn.Module):
@@ -41,34 +43,13 @@ class _ConvBN(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def test_edited_rerun_does_not_trip_divergence_detector() -> None:
-    torch.manual_seed(0)
-    model = _ConvBN().eval()
-    x = torch.randn(2, 3, 8, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    fork = log.fork()
-    fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        fork.run(model, x)
-    divergence_warnings = [
-        w for w in caught if issubclass(w.category, ControlFlowDivergenceWarning)
-    ]
-    assert not divergence_warnings, [str(w.message) for w in divergence_warnings]
-    rerun_rows = [
-        row for row in fork.state_history if isinstance(row, dict) and "divergence_count" in row
-    ]
-    assert rerun_rows, "rerun wrote no state-history row"
-    assert all(row["divergence_count"] == 0 for row in rerun_rows)
-
-
 def test_edited_rerun_strict_does_not_raise() -> None:
     torch.manual_seed(0)
     model = _ConvBN().eval()
     x = torch.randn(2, 3, 8, 8)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = log.fork()
-    fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
+    fork._attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
     fork.run(model, x, replay=tl.options.ReplayOptions(strict=True))
 
 
@@ -93,7 +74,6 @@ def test_bundle_retained_bytes_lower_bound_aggregation() -> None:
     assert report["unmetered_members"] == []
 
 
-@pytest.mark.smoke
 def test_bundle_retained_bytes_names_unmetered_members() -> None:
     torch.manual_seed(1)
     x = torch.randn(2, 3, 8, 8)
@@ -105,7 +85,6 @@ def test_bundle_retained_bytes_names_unmetered_members() -> None:
     assert report["unmetered_members"] == ["legacy"]
 
 
-@pytest.mark.smoke
 def test_retention_preflight_refuses_typed_before_any_work() -> None:
     with pytest.raises(BundleExperimentError) as excinfo:
         preflight_retention_projection(

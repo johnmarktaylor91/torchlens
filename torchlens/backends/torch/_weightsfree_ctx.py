@@ -39,7 +39,7 @@ class _FactoryDeviceSlot(threading.local):
 
 
 # Module-level mutable state: thread-local, mutated only by the context
-# manager below; inventoried by tests/test_global_state_inventory.py.
+# manager below; inventoried by scripts/checks/global_state_inventory.py.
 _SLOT = _FactoryDeviceSlot()
 
 

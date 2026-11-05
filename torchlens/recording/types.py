@@ -14,7 +14,11 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, cast
 import torch
 
 from .._captured_run import TraceLike
-from .._errors import CaptureNotActiveError
+from .._errors import (
+    CaptureNotActiveError,
+    refuse_if_no_replay_events,
+    require_recording_projection,
+)
 from .._ir import predicate as _predicate
 from .._utils.tensor_utils import SaveMode as SaveMode
 
@@ -50,7 +54,7 @@ if TYPE_CHECKING:
     from ..intervention.predicates import InterventionPredicate
     from ..options import StorageOptions
     from ..types import _ActivationPostfunc, _GradientPostfunc
-    from ..viz._drawing import Drawing
+    from ._dry_run import DryRun
     from .options import (
         ForwardErrorMode,
         GradPredicateFn,
@@ -60,97 +64,6 @@ if TYPE_CHECKING:
         PredicateFn,
         _RecordingConfig,
     )
-
-
-@dataclass(frozen=True, slots=True)
-class DryRun:
-    """Predicate dry-run trace without retained tensor payloads."""
-
-    contexts: tuple[RecordContext, ...]
-    decisions: tuple[bool, ...] = ()
-    predicate_failures: tuple[PredicateFailure, ...] = ()
-
-    @property
-    def events(self) -> tuple[RecordContext, ...]:
-        """Return chronological dry-run events."""
-
-        return self.contexts
-
-    def print_tree(self) -> str:
-        """Return a unicode-indented event tree for this trace."""
-
-        from .._visualization.fastlog_live import print_tree
-
-        return print_tree(self)
-
-    def to_pandas(self) -> Any:
-        """Return a pandas DataFrame representation of trace events."""
-
-        from .._visualization.fastlog_live import to_pandas
-
-        return to_pandas(self)
-
-    def draw(self, **kwargs: Any) -> Drawing:
-        """Render a flat Graphviz graph of trace operation events.
-
-        Returns
-        -------
-        Drawing
-            The picture; ``str()`` of it is the DOT source.
-        """
-
-        from .._visualization.fastlog_live import draw
-
-        return draw(self, **kwargs)
-
-    def summary(self) -> str:
-        """Return a concise human-readable dry-run summary."""
-
-        from .._visualization.fastlog_live import summary
-
-        return summary(self)
-
-    def timeline_html(self) -> Any:
-        """Return an IPython HTML timeline for this trace."""
-
-        from .._visualization.fastlog_live import timeline_html
-
-        return timeline_html(self)
-
-    def filter(
-        self,
-        other_keep_op: Callable[[RecordContext], PredicateDecision] | None = None,
-    ) -> DryRun:
-        """Return a new trace with decisions from a new op predicate.
-
-        Parameters
-        ----------
-        other_keep_op:
-            Predicate for op, input, and buffer events. Module boundary
-            events have no predicate slot and are never re-selected.
-
-        Returns
-        -------
-        RecordingTrace
-            New trace sharing the same event tuple and predicate failures.
-        """
-
-        from .._capture.predicates import _normalize_capture_decision
-
-        decisions: list[bool] = []
-        for ctx in self.contexts:
-            predicate = None if ctx.kind in {"module_enter", "module_exit"} else other_keep_op
-            result = predicate(ctx) if predicate is not None else False
-            spec = _normalize_capture_decision(result, ctx, False)
-            if not isinstance(spec, CaptureSpec):
-                decisions.append(True)
-                continue
-            decisions.append(spec.save_out or spec.save_metadata)
-        return DryRun(
-            contexts=self.contexts,
-            decisions=tuple(decisions),
-            predicate_failures=self.predicate_failures,
-        )
 
 
 #: Closed RecordContext field set exported by :meth:`Recording.raw_metadata`.
@@ -189,8 +102,8 @@ _RAW_METADATA_FIELDS = (
 
 #: ``RecordingSettings`` field -> the ``_RecordingConfig`` slot it reads. The
 #: record speaks the public spellings: the capture knobs keep their
-#: ``CaptureOptions`` names, the recorder knobs their flat ``tl.record``
-#: keyword names, and the three door-carried slots their door keywords.
+#: ``CaptureOptions`` names, the recorder knobs their ``RecordingOptions``
+#: field names, and the three door-carried slots their door keywords.
 _SETTINGS_SLOTS: Final[tuple[tuple[str, str], ...]] = (
     ("keep_op", "keep_op"),
     ("default_op", "default_op"),
@@ -215,6 +128,7 @@ _SETTINGS_SLOTS: Final[tuple[tuple[str, str], ...]] = (
     ("stop_after", "halt"),
     ("storage", "streaming"),
     ("narrate", "echo"),
+    ("lean", "lean"),
 )
 
 #: Value types a saved recording stores verbatim (bundle ``metadata.json``).
@@ -229,9 +143,8 @@ class RecordingSettings:
     recording made?" across every door that configured it: the capture knobs
     (``capture=CaptureOptions(...)``: ``save_grads``, ``activation_transform``,
     ``grad_transform``, ``lookback``, ...), the recorder knobs
-    (the flat ``tl.record`` keywords: ``keep_op``, ``default_op``,
-    ``history_size``, ...) and the door keywords ``stop_after=``, ``storage=``
-    and ``narrate=``. Values are the live objects the recorder used (the
+    (``recording=RecordingOptions(...)``: ``default_op``, ``history_size``, ...) and
+    the door keywords ``save=``, ``intervene=``, ``stop_after=``, ``storage=``, ``narrate=``. Values are the live objects the recorder used (the
     predicate or transform callable itself, the ``CaptureSpec``), never repr
     strings. Built by the recorder; there is no public constructor.
 
@@ -287,9 +200,18 @@ class RecordingSettings:
         The stop predicate from ``stop_after=``, if any.
     storage:
         The disk sink from ``storage=``, if any.
+    lean:
+        PROVISIONAL SPELLING. Whether only the kept events were journaled (``lean_omissions``).
     narrate:
         The live narration settings (a ``NarrationOptions``) that printed each captured
         event as the forward ran, from the door's ``narrate=``; ``None`` when off.
+
+    Examples
+    --------
+    >>> recording = tl.record(model, x, save=tl.func("relu"))
+    >>> settings = recording.options
+    >>> type(settings).__name__, settings.history_size
+    ('RecordingSettings', 8)
     """
 
     keep_op: PredicateFn | None
@@ -315,6 +237,7 @@ class RecordingSettings:
     stop_after: HaltPredicateFn | None
     storage: StorageOptions | None
     narrate: Any | None
+    lean: bool | None
 
     @classmethod
     def _from_values(cls: type[RecordingSettings], values: Mapping[str, Any]) -> RecordingSettings:
@@ -345,6 +268,16 @@ class RecordingSettings:
 class Recording(TraceLike):
     """Result of a fastlog recording session.
 
+    A Recording is the event stream, not the graph. It has ``to_pandas()``,
+    ``summary()`` and ``narrate()``; it has no ``draw()`` and no facets. Call
+    ``to_trace()`` to cook it into a ``Trace`` with every ``Trace.draw``
+    option (``vis_mode``, nesting depth, rolled recurrent views) and the
+    ``modules[...].facets`` views. Recorded ops carry the same parameter and
+    argument equivalence classes exhaustive capture gives them, so the cooked
+    Trace groups a reused layer into passes the way ``tl.trace`` does.
+    ``tl.recording.dry_run(...).draw()`` renders only a flat event graph and
+    takes ``vis_outpath``, ``vis_save_only`` and ``vis_fileformat`` alone.
+
     Built by ``tl.record`` and ``Recorder``; there is no public constructor
     (the recorder and the bundle recovery build it through the private
     ``_build``). ``options`` returns the settings the recording was made with.
@@ -356,9 +289,16 @@ class Recording(TraceLike):
     failures may include a skipped/partial current-call event. ``last_event_*``
     fields are best-effort details about the last captured event, not an
     authoritative description of the failing op. For reused multi-pass
-    recorders, ``n_ops_completed`` is the total count of op-kind events captured
+    recorders, ``n_ops_committed`` is the total count of op-kind events captured
     across all completed passes in the recorder before the failure, not just
     the count from the failing pass.
+
+    Examples
+    --------
+    >>> recording = tl.record(model, x, save=tl.func("relu"))
+    >>> type(recording).__name__, recording.status, len(recording.records)
+    ('Recording', 'complete', 1)
+
     """
 
     # Sanctioned outcome-gate marker (torchlens/_capture/outcome.py): this slots-backed product's
@@ -561,11 +501,7 @@ class Recording(TraceLike):
                 is_derived=True,
             )
         if status == "recovered":
-            return CaptureOutcome(
-                status=CaptureStatus.UNKNOWN,
-                is_recovered=True,
-                is_derived=True,
-            )
+            return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_recovered=True, is_derived=True)
         if status == "complete":
             return CaptureOutcome(status=CaptureStatus.UNATTESTED, is_derived=True)
         return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_derived=True)
@@ -655,21 +591,13 @@ class Recording(TraceLike):
 
         base = session._fastlog_recording
         object.__setattr__(base, "_capture_events", session.capture_events)
+        object.__setattr__(base, "_output_tensors", list(getattr(session, "output_tensors", [])))
         object.__setattr__(
-            base,
-            "_output_tensors",
-            list(getattr(session, "output_tensors", [])),
-        )
-        object.__setattr__(
-            base,
-            "_output_tensor_addresses",
-            list(getattr(session, "output_tensor_addresses", [])),
+            base, "_output_tensor_addresses", list(getattr(session, "output_tensor_addresses", []))
         )
         object.__setattr__(base, "_recording_state", getattr(session, "recording_state", None))
         object.__setattr__(
-            base,
-            "_captured_run_cores",
-            tuple(getattr(session, "captured_run_cores", ())),
+            base, "_captured_run_cores", tuple(getattr(session, "captured_run_cores", ()))
         )
         has_core_projection = bool(getattr(session, "captured_run_cores", ()))
         object.__setattr__(
@@ -699,7 +627,8 @@ class Recording(TraceLike):
         if self._captured_run_cores:
             from .._capture.projectors import RecordingProjector
 
-            projection = RecordingProjector().project(self._captured_run_cores)
+            cores = self._captured_run_cores
+            projection = RecordingProjector().project(cores, fold=not self._lean_omissions())
             records.extend(projection.records)
             self.by_pass.update(projection.by_pass)
             self.by_label.update(projection.by_label)
@@ -721,11 +650,19 @@ class Recording(TraceLike):
         object.__setattr__(self, "_records_built", True)
 
     @property
-    def lazy_trace(self) -> DryRun:
-        """Return a lazy trace projection over all capture events."""
+    def lean_omissions(self) -> tuple[str, ...]:
+        """PROVISIONAL SPELLING. What a lean recording left out; ``()`` for a default one."""
 
+        return self._lean_omissions()
+
+    @property
+    def lazy_trace(self) -> DryRun:
+        """Return a lazy trace projection over all capture events (refused when lean)."""
+
+        self._check_journal_read("lazy_trace")
         if self._recording_trace is None:
             from .._capture.projections import recording_trace_from_events
+            from ._dry_run import DryRun
 
             contexts = (
                 ()
@@ -748,10 +685,7 @@ class Recording(TraceLike):
                     predicate_failures=tuple(self.predicate_failures),
                 ),
             )
-        trace = self._recording_trace
-        if trace is None:
-            raise RuntimeError("recording_trace projection was not initialized")
-        return trace
+        return require_recording_projection(self._recording_trace)
 
     def raw_metadata(self) -> tuple[dict[str, Any], ...]:
         """Return payload-free raw metadata for every captured event.
@@ -779,6 +713,7 @@ class Recording(TraceLike):
 
         from .exceptions import RecorderStateError
 
+        self._check_journal_read("raw_metadata")
         if self.event_stream is None:
             raise RecorderStateError(
                 "this Recording no longer holds its raw capture event stream "
@@ -976,8 +911,8 @@ class Recording(TraceLike):
         if self.is_failed:
             return (
                 f"Recording(status={self.status!r}, n_passes={self.num_passes}, "
-                f"n_records={len(self)}, n_ops_completed={self.num_committed_ops}, "
-                "caveat='n_ops_completed counts op-kind events across completed "
+                f"n_records={len(self)}, n_ops_committed={self.num_committed_ops}, "
+                "caveat='n_ops_committed counts op-kind events across completed "
                 "passes in this recorder; user-op failures exclude the failing "
                 "call; TL-side capture failures may include a skipped/partial "
                 "current-call event.')"
@@ -1073,11 +1008,16 @@ class Recording(TraceLike):
         ------
         RuntimeError
             If the recording is a failed partial capture, if it does not retain
-            the topology-complete event stream (e.g. disk-recovered), if it
-            spans multiple recorded passes, or if it is halted but retained no
+            the topology-complete event stream (e.g. disk-recovered), if it is
+            a halted multi-pass recording, or if it is halted but retained no
             raw activation payload to bind as the output frontier.
+
+        A multi-pass recording (several ``Recorder(...)`` passes) cooks into one
+        multi-pass Trace numbered the way ``tl.trace`` numbers repeated calls of a
+        module: ``trace["linear_1_1:2"]`` is the second pass's op.
         """
 
+        self._check_journal_read("to_trace")
         if self.is_failed:
             raise CaptureNotActiveError(
                 "Recording.to_trace() cannot materialize a failed partial Recording because "
@@ -1093,11 +1033,10 @@ class Recording(TraceLike):
                 code="recording_events_not_retained",
                 remedy="convert the in-session Recording rather than a disk-recovered one",
             )
-        if self.num_passes > 1:
+        if self.num_passes > 1 and self.is_stopped:
             raise CaptureNotActiveError(
-                "Recording.to_trace() does not support multi-pass Recordings because "
-                "replaying multiple Recorder(...) passes into one Trace is not yet "
-                "structurally defined",
+                "Recording.to_trace() cannot convert this multi-pass Recording: it was "
+                "halted, and a halt frontier is defined for one forward pass",
                 code="recording_multipass_not_convertible",
                 remedy="record one pass per Recording before converting",
             )
@@ -1107,8 +1046,7 @@ class Recording(TraceLike):
         from .options import _RecordingConfig
 
         projection = RecordingProjector().project(self._captured_run_cores)
-        if projection.capture_events is None:
-            raise RuntimeError("Recording.to_trace() core has no replay event facts.")
+        refuse_if_no_replay_events(projection.capture_events)
 
         trace = Trace(model_class_name="RecordedModel")
         # capture_mode drives exhaustive-style postprocess behavior for the
@@ -1160,49 +1098,80 @@ class Recording(TraceLike):
             trace.output_layers = [frontier_label]
             halt_output_tensors = [frontier_tensor]
             halt_output_addresses = [""]
-        trace._postprocess(
-            halt_output_tensors,
-            halt_output_addresses,
-        )
+        trace._postprocess(halt_output_tensors, halt_output_addresses)
 
-        # Settle at the cook seam (settlement authority path 9): the cooked
-        # Trace is a real product and must carry an attested outcome; a halted
-        # cooked trace is HALTED (so the runnable/live-replay gates see it),
-        # never a silently-blessed complete. The frontier label is read back
-        # post-postprocess so it is the FINAL remapped label.
-        from .._capture.outcome import stamp_cooked
+        from ._cook_settle import _settle_cooked_trace
 
-        cooked_frontier = None
-        cooked_reason = None
-        cooked_boundary = None
-        cooked_boundary_kind = None
-        if self.is_stopped:
-            output_labels = list(getattr(trace, "output_layers", ()))
-            cooked_frontier = str(output_labels[0]) if output_labels else None
-            # R06: the halted postprocess remapped the persisted halt fields to
-            # FINAL labels; the settled record mirrors them (settle_halted
-            # parity) instead of stamping the Recording-space raw label into an
-            # outcome whose frontier is final. boundary_kind rides the
-            # Recording's own settled outcome; the raw stop_reason stays the
-            # fallback when the remap did not run.
-            remapped_reason = getattr(trace, "stop_reason", None)
-            cooked_reason = (
-                remapped_reason if isinstance(remapped_reason, str) else self.stop_reason
-            )
-            remapped_frontier = trace._graph_stop_frontier
-            cooked_boundary = (
-                remapped_frontier if isinstance(remapped_frontier, str) else cooked_reason
-            )
-            cooked_boundary_kind = getattr(self.outcome, "boundary_kind", None)
-        stamp_cooked(
-            trace,
-            halted=self.is_stopped,
-            reason=cooked_reason,
-            boundary_kind=cooked_boundary_kind,
-            boundary_label=cooked_boundary,
-            frontier_label=cooked_frontier,
-        )
+        _settle_cooked_trace(self, trace)
         return trace
+
+    def to_agent_json(self, *, max_ops: int | None = None) -> dict[str, Any]:
+        """Return the ``torchlens.agent_trace.v1`` dump of ``self.to_trace()``.
+
+        ``max_ops`` caps the emitted op rows, as for ``Trace.to_agent_json``.
+        """
+
+        return self.to_trace().to_agent_json(max_ops=max_ops)
+
+    def save(
+        self,
+        path: str | Path,
+        *,
+        level: str = "portable",
+        overwrite: bool = False,
+        include_outs: bool | None = None,
+        include_weights: bool = False,
+        include_grads: bool | None = None,
+        include_saved_args: bool | None = None,
+        include_rng_states: bool | None = None,
+        include_activations: bool = False,
+        include_source: bool = True,
+        include_custom_attributes: bool = True,
+        include_buffer_values: bool | None = None,
+        strict: bool = True,
+    ) -> None:
+        """Cook this recording into a Trace and save it as a ``.tlspec`` directory.
+
+        The parameters are ``Trace.save``'s; ``tl.load(path)`` reads the artifact
+        back as a Trace.
+        """
+
+        self.to_trace().save(
+            path,
+            level=level,
+            overwrite=overwrite,
+            include_outs=include_outs,
+            include_weights=include_weights,
+            include_grads=include_grads,
+            include_saved_args=include_saved_args,
+            include_rng_states=include_rng_states,
+            include_activations=include_activations,
+            include_source=include_source,
+            include_custom_attributes=include_custom_attributes,
+            include_buffer_values=include_buffer_values,
+            strict=strict,
+        )
+
+    def fork(self, name: str | None = None) -> Trace:
+        """Cook this recording and return a copy-on-write intervention fork of it."""
+
+        return self.to_trace().fork(name)
+
+    def do(
+        self,
+        site: Any,
+        edit: Any = None,
+        /,
+        *,
+        model: torch.nn.Module | None = None,
+        inputs: Any = None,
+        intervention: Any = None,
+        loss: Callable[[Trace], torch.Tensor] | None = None,
+    ) -> Trace:
+        """Cook this recording and run ``Trace.do`` on a fork of it (no shared root to warn about)."""
+
+        fork = self.to_trace().fork()
+        return fork.do(site, edit, model=model, inputs=inputs, intervention=intervention, loss=loss)
 
     def _recover_halt_frontier(self) -> tuple[str, torch.Tensor]:
         """Recover the frontier (output-parent label, tensor) for a halted recording.
@@ -1255,7 +1224,7 @@ class Recording(TraceLike):
             code="recording_halt_frontier_missing",
             remedy=(
                 "re-run record(...) with a save= predicate that captures at least the halt "
-                "frontier layer, or use tl.trace(model, x, halt=...) for the exhaustive "
+                "frontier layer, or use tl.trace(model, x, stop_after=...) for the exhaustive "
                 "halted-capture path"
             ),
         )
@@ -1282,16 +1251,3 @@ def _recording_setstate(self: Recording, state: list[Any]) -> None:
 # pair would pickle the live model output.
 Recording.__getstate__ = _recording_getstate  # type: ignore[method-assign,assignment]
 Recording.__setstate__ = _recording_setstate  # type: ignore[attr-defined]
-
-
-def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:
-    """Set halt state on a frozen ``Recording`` (mutated via ``object.__setattr__``); an empty
-    ``reason`` means none was given.
-    """
-
-    recording.stops_by_pass.setdefault(pass_index, reason)
-    if recording.is_stopped:
-        return
-    object.__setattr__(recording, "is_stopped", True)
-    object.__setattr__(recording, "status", "halted")
-    object.__setattr__(recording, "stop_reason", reason)

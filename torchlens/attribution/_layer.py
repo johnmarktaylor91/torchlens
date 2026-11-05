@@ -11,6 +11,7 @@ from torch import Tensor
 from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 
+from torchlens._utils._display_errors import lookup_message
 from torchlens.attribution._core import (
     _DOCS_POINTER as _INTEGER_DOCS_POINTER,
     Attribution,
@@ -306,7 +307,7 @@ def _feeding_original_leaves(
     return tuple(feeding)
 
 
-def _format_layer_options(model: Module) -> str:
+def _format_layer_options(model: Module) -> list[str]:
     """Return a compact list of useful layer-name suggestions.
 
     Parameters
@@ -316,8 +317,8 @@ def _format_layer_options(model: Module) -> str:
 
     Returns
     -------
-    str
-        Comma-separated module names suitable for an error message.
+    list[str]
+        Module names suitable for a bounded candidate row.
     """
 
     named_modules = dict(model.named_modules())
@@ -326,12 +327,7 @@ def _format_layer_options(model: Module) -> str:
         for name, module in named_modules.items()
         if name and ("conv" in name.lower() or "conv" in type(module).__name__.lower())
     ]
-    options = conv_like[:5]
-    if not options:
-        options = [name for name in named_modules if name][:5]
-    if not options:
-        return "<no named child modules>"
-    return ", ".join(options)
+    return conv_like or [name for name in named_modules if name]
 
 
 def _resolve_named_layer(model: Module, layer: str) -> Module:
@@ -362,7 +358,11 @@ def _resolve_named_layer(model: Module, layer: str) -> Module:
     if layer not in named_modules:
         options = _format_layer_options(model)
         raise AttributionError(
-            f"layer {layer!r} was not found; available conv-like layers include: {options}"
+            lookup_message(
+                f"layer {layer!r} was not found.",
+                options,
+                "Pass a layer name from dict(model.named_modules()).",
+            )
         )
     return named_modules[layer]
 
@@ -973,6 +973,16 @@ def layer_integrated_gradients(
         Layer attribution values with the same shape as the captured activation.
         ``extra`` carries the layer-space completeness fields with the
         bottleneck caveat, plus cost and audit disclosure.
+
+    Examples
+    --------
+    >>> result = tl.attribution.layer_integrated_gradients(
+    ...     model, x, target=0, layer="0", num_steps=4
+    ... )
+    >>> tuple(result.values.shape)
+    (1, 4, 8, 8)
+    >>> result.extra["layer"]
+    '0'
     """
 
     _validate_positive_int("n_steps", num_steps)
@@ -1090,6 +1100,16 @@ def layer_conductance(
         Layer conductance values with the same shape as the captured activation.
         ``extra`` carries the layer-space completeness fields with the
         bottleneck caveat, plus cost and audit disclosure.
+
+    Examples
+    --------
+    >>> result = tl.attribution.layer_conductance(
+    ...     model, x, target=0, layer="0", num_steps=4
+    ... )
+    >>> tuple(result.values.shape)
+    (1, 4, 8, 8)
+    >>> result.method
+    'layer_conductance'
     """
 
     _validate_positive_int("n_steps", num_steps)
@@ -1199,6 +1219,14 @@ def layer_attribution(
     AttributionError
         If ``method`` is unsupported, or a reused layer produced mismatched
         activation shapes across firings.
+
+    Examples
+    --------
+    >>> result = tl.attribution.layer_attribution(model, x, target=0, layer="0")
+    >>> tuple(result.values.shape)
+    (1, 4, 8, 8)
+    >>> result.method
+    'layer_activation_x_grad'
     """
 
     if method not in ("activation_x_grad", "grad"):

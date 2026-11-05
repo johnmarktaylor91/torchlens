@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar, Literal, TypeAlias
 
+from .._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
+from .._entry_refusals import require_hook_factory
 from .._io._field_policy import FieldPolicy
 from .._ir.container import (
     ContainerSpec,
@@ -25,7 +27,10 @@ from .._selection.target import (
     TensorSliceSpec as TensorSliceSpec,
 )
 from .._utils._tensor_layout import CaptureLayout
+from . import _display
+from ._edit_copy import deepcopy_edit
 from ._hook_spec_match import _hook_spec_matches
+from .errors import _refuse_placeholder_edit
 
 GraphShapeHash: TypeAlias = str
 InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transform"]
@@ -38,7 +43,15 @@ HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
 
 @dataclass(frozen=True)
 class Edit:
-    """Portable identity and hook factory for helper-built interventions."""
+    """Portable identity and hook factory for helper-built interventions.
+
+    Examples
+    --------
+    >>> edit = tl.scale(2.0)
+    >>> isinstance(edit, tl.Edit), edit.name
+    (True, 'scale')
+    >>> len(tl.when(tl.func("relu"), edit).rules)
+    1"""
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "name": FieldPolicy.KEEP,
@@ -101,13 +114,15 @@ class Edit:
 
         Raises
         ------
+        NonExecutableSpecError
+            If the spec is an audit-only placeholder with no runtime factory.
         TypeError
-            If the spec does not carry a runtime factory.
+            If any other spec does not carry a runtime factory.
         """
 
         if self.factory is None:
-            raise TypeError(f"Edit {self.name!r} has no hook factory")
-        return self.factory()
+            _refuse_placeholder_edit(self.name, self.portability)
+        return require_hook_factory(self.name, self.factory)()
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state, dropping factories pickle cannot carry.
@@ -156,14 +171,7 @@ class Edit:
         factory-dropping pickle path.
         """
 
-        import copy as _copy
-
-        cls = type(self)
-        clone = cls.__new__(cls)
-        memo[id(self)] = clone
-        for key, value in self.__dict__.items():
-            object.__setattr__(clone, key, _copy.deepcopy(value, memo))
-        return clone
+        return deepcopy_edit(self, memo)
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +294,9 @@ class CapturedArgTemplate:
     func_id: FunctionRegistryKey | None = None
     notes: tuple[str, ...] = ()
 
+    __repr__ = _display.template_repr
+    __str__ = _display.template_card
+
 
 #: The frozen replay-template records; a rerun refresh rebuilds these field by field.
 REPLAY_TEMPLATE_TYPES: frozenset[type] = frozenset(
@@ -301,6 +312,15 @@ class SamplingRecord:
     sampled or resampled draw, the row permutation for ``permute_batch``, empty for
     an averaging verb that draws nothing and records only its population facts.
     ``FireRecord.determinism_note`` keeps the readable one-line rendering.
+
+    Examples
+    --------
+    >>> donors = tl.intervention.population(torch.randn(5, 1, 4, 8, 8), origin="doc")
+    >>> plan = tl.intervention.sample_from(donors, seed=3)
+    >>> patched = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.patch_from(plan)))
+    >>> record = patched["relu_1_2"].edits[-1].sampling[0]
+    >>> isinstance(record, tl.intervention.SamplingRecord), record.population_count
+    (True, 5)
     """
 
     verb: str
@@ -322,6 +342,13 @@ class FireRecord:
 
     ``sampling`` holds the realized draws of the stochastic verbs that fired here, one
     :class:`SamplingRecord` per draw, saved with the record as of tlspec 11.
+
+    Examples
+    --------
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+    >>> record = edited["relu_1_2"].edits[-1]
+    >>> isinstance(record, tl.intervention.FireRecord), record.replaced
+    (True, True)
     """
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -400,19 +427,8 @@ class EdgeUseRecord(_SelectionOperand):
 
         return _selection_from_edge(self)
 
-    def __repr__(self) -> str:
-        """Designed per-edge line (F10): source -> target (arg k) + relations.
-
-        The storage relation prints only when POPULATED (``view``/``copy``);
-        the honest sentinel ``unknown`` stays silent rather than reading as
-        a fact (lovely bug 24's sentinel discipline).
-        """
-
-        path = ".".join(str(component) for component in self.arg_path) or "?"
-        line = f"edge {self.parent_label} -> {self.child_label} ({self.arg_kind} {path})"
-        if self.view_or_copy in ("view", "copy"):
-            line += f" [{self.view_or_copy}]"
-        return line
+    __repr__ = _display.edge_repr
+    __str__ = _display.edge_card
 
 
 @dataclass
@@ -653,9 +669,19 @@ class FrozenInterventionSpec:
     records: tuple[FireRecord, ...] = ()
     metadata: tuple[tuple[str, Any], ...] = ()
 
+    __repr__ = _display.frozen_spec_repr
+    __str__ = _display.frozen_spec_card
+
 
 class Relationship(str, Enum):
-    """Evidence level for relationships between bundle members."""
+    """Evidence level for relationships between bundle members.
+
+    Examples
+    --------
+    >>> tl.types.Relationship.SAME_OBJECT.value
+    'same_object'
+    >>> tl.types.Relationship("unknown") is tl.types.Relationship.UNKNOWN
+    True"""
 
     SAME_OBJECT = "same_object"
     SAME_MODEL_OBJECT_AT_CAPTURE = "same_model_at_capture"
@@ -730,8 +756,6 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
         Fork policies for Trace fields.
     """
 
-    from .._constants import MODEL_LOG_FIELD_ORDER
-
     table = _fork_policy_table(
         MODEL_LOG_FIELD_ORDER,
         share={
@@ -764,8 +788,6 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
     dict[str, ForkFieldPolicy]
         Fork policies for Op fields.
     """
-
-    from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
     table = _fork_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,

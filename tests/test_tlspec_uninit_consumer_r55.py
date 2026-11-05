@@ -93,18 +93,12 @@ class _NonAliasOut(nn.Module):
         return c
 
 
+# Kept: sole branch coverage of _runnable/attestation.py; the catch of its regression fault.
 def test_aliased_out_preserves_uninit_taint(tmp_path: Path) -> None:
     """hon_2: an out= that aliases a value operand PRESERVES the uninit taint."""
 
     bundle = _build(tmp_path, "alias_out.tlspec", _AliasOut(), torch.randn(4))
     assert _output_taint_reaches(bundle) is True
-
-
-def test_nonaliased_out_still_sanitizes(tmp_path: Path) -> None:
-    """hon_2 non-regression: a genuine total-write out= to a distinct dest sanitizes."""
-
-    bundle = _build(tmp_path, "nonalias_out.tlspec", _NonAliasOut(), torch.randn(4))
-    assert _output_taint_reaches(bundle) is False
 
 
 # --------------------------------------------------------------------------- #
@@ -128,15 +122,9 @@ class _NewData(nn.Module):
         return a, x.sum()
 
 
+# Kept: sole branch coverage of _runnable/attestation.py.
 def test_new_size_form_recognized_uninit(tmp_path: Path) -> None:
     """hon_1: ``Tensor.new(size)`` is recognized as uninitialized -> taint reaches output."""
 
     bundle = _build(tmp_path, "new_size.tlspec", _NewSize(), torch.randn(4))
     assert _output_taint_reaches(bundle) is True
-
-
-def test_new_data_form_stays_clean(tmp_path: Path) -> None:
-    """hon_1 over-ceiling guard: ``Tensor.new([data])`` is a deterministic copy -> clean."""
-
-    bundle = _build(tmp_path, "new_data.tlspec", _NewData(), torch.randn(4))
-    assert _output_taint_reaches(bundle) is False

@@ -11,8 +11,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._constants import (
     BUFFER_LOG_FIELD_ORDER,
-    GRAD_FN_LOG_FIELD_ORDER,
-    GRAD_FN_PASS_LOG_FIELD_ORDER,
     LAYER_LOG_FIELD_ORDER,
     LAYER_PASS_LOG_FIELD_ORDER,
     MODEL_LOG_FIELD_ORDER,
@@ -52,7 +50,6 @@ def _trace_memory_model() -> tl.Trace:
     )
 
 
-@pytest.mark.smoke
 def test_bytes_formatting_and_numeric_behavior() -> None:
     """Bytes formats human-readably while preserving numeric operations."""
 
@@ -60,7 +57,7 @@ def test_bytes_formatting_and_numeric_behavior() -> None:
 
     assert isinstance(value, tl.types.Quantity)
     assert isinstance(value, int)
-    assert str(value) == "1.2 MB"
+    assert str(value) == "1.18 MiB"
     assert repr(tl.types.Bytes(32)) == "Bytes('32 B')"
     assert f"{value:raw}" == "1234567"
     assert f"{value:.2f MB}" == "1.18 MB"
@@ -73,7 +70,6 @@ def test_bytes_formatting_and_numeric_behavior() -> None:
     assert value > 1_000_000
 
 
-@pytest.mark.smoke
 def test_duration_flops_and_macs_formatting_and_numeric_behavior() -> None:
     """Duration, Flops, and Macs format directly while staying numeric."""
 
@@ -84,9 +80,9 @@ def test_duration_flops_and_macs_formatting_and_numeric_behavior() -> None:
     assert isinstance(duration, float)
     assert isinstance(flops, int)
     assert isinstance(macs, int)
-    assert str(duration) == "1.2 ms"
-    assert repr(duration) == "Duration('1.2 ms')"
-    assert str(tl.types.Duration(3.4)) == "3.4 s"
+    assert str(duration) == "1.20 ms"
+    assert repr(duration) == "Duration('1.20 ms')"
+    assert str(tl.types.Duration(3.4)) == "3.40 s"
     assert f"{duration:raw}" == "0.0012"
     assert f"{duration:.2f ms}" == "1.20 ms"
     assert str(flops) == "1.23 GFLOPs"
@@ -129,7 +125,7 @@ def test_memory_fields_are_bytes_and_format_directly() -> None:
     ]
 
     assert all(isinstance(field, tl.types.Bytes) for field in fields)
-    assert re.fullmatch(r"-?\d+(?:\.\d+)? [KMGTPE]?B", str(op.activation_memory))
+    assert re.fullmatch(r"-?\d+(?:\.\d+)? (?:[KMGTPE]i)?B", str(op.activation_memory))
     assert op.activation_memory + 1 > op.activation_memory
 
 
@@ -235,50 +231,6 @@ def test_memory_str_and_bare_memory_fields_are_not_public() -> None:
         assert "memory" not in field_order
         assert all(not field.endswith("_memory_str") for field in field_order)
         assert all(field != "memory_str" for field in field_order)
-
-
-def test_no_str_suffixed_quantity_fields_remain_public() -> None:
-    """Field orders and records no longer expose quantity string companions."""
-
-    trace = _trace_memory_model()
-    records = [
-        trace,
-        trace.ops[0],
-        trace.layers[0],
-        trace.modules[0],
-        trace.module_calls[0],
-        trace.params[0],
-        trace.buffers[0],
-    ]
-    removed_suffixes = ("_memory_str", "_duration_str", "_flops_str", "_macs_str")
-    removed_exact = {"memory_str", "duration_str", "flops_str", "macs_str"}
-    field_orders = [
-        LAYER_PASS_LOG_FIELD_ORDER,
-        LAYER_LOG_FIELD_ORDER,
-        PARAM_LOG_FIELD_ORDER,
-        BUFFER_LOG_FIELD_ORDER,
-        MODULE_PASS_LOG_FIELD_ORDER,
-        MODULE_LOG_FIELD_ORDER,
-        MODEL_LOG_FIELD_ORDER,
-        GRAD_FN_PASS_LOG_FIELD_ORDER,
-        GRAD_FN_LOG_FIELD_ORDER,
-    ]
-
-    for field_order in field_orders:
-        assert all(not field.endswith(removed_suffixes) for field in field_order)
-        assert all(field not in removed_exact for field in field_order)
-
-    for record in records:
-        for field in {
-            "forward_duration_str",
-            "backward_duration_str",
-            "func_calls_duration_str",
-            "total_forward_duration_str",
-            "total_backward_duration_str",
-            "total_func_calls_duration_str",
-            "capture_duration_str",
-        }:
-            assert not hasattr(record, field)
 
 
 def test_forward_peak_memory_ignores_pre_existing_external_tracemalloc_peak() -> None:

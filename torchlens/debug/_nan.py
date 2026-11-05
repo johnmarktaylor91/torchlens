@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
-from .._debug_report import FoundReport, Report
+from .._debug_report import FoundReport, Report, at_source
+from .._io.payload_codec import get_payload_codec
 from ..errors import CaptureError
 
 if TYPE_CHECKING:
@@ -16,7 +17,14 @@ if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
 from ._capture_override import _with_capture_fields
-from ._common import _ordered_ops, _source_line
+from ._common import (
+    _module_address,
+    _nonfinite_kind,
+    _nonfinite_kind_of,
+    _ordered_ops,
+    _runs_on_torch,
+    _source_line,
+)
 
 
 @dataclass(frozen=True)
@@ -37,6 +45,14 @@ class BisectNanReport(FoundReport):
         ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"``.
     message:
         Actionable human-readable result summary.
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = tl.debug.bisect_nan(tl.trace(bad, torch.ones(1, 3)))
+    >>> isinstance(report, BisectNanReport), report.found, report.kind
+    (True, True, 'nan')
     """
 
     found: bool
@@ -63,6 +79,14 @@ class BisectNanReport(FoundReport):
             detection_basis="saved_activations",
             message=self.message,
         )
+
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card: the summary, then the op and its line."""
+
+        findings = [self.message] if self.message else []
+        if self.found and self.label is not None:
+            findings.append(f"first {self.kind}: {self.label}{at_source(self.source_line)}")
+        return findings
 
 
 @dataclass(frozen=True)
@@ -99,6 +123,16 @@ class FindNanReport(FoundReport):
         actual birth operation and therefore prevent a stronger claim.
     message:
         Human-readable diagnostic summary.
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = tl.debug.find_nan(bad, torch.ones(1, 3))
+    >>> isinstance(report, FindNanReport), report.found, report.kind
+    (True, True, 'nan')
+    >>> report.bad_tensors
+    ('output',)
     """
 
     found: bool
@@ -116,12 +150,28 @@ class FindNanReport(FoundReport):
     message: str
     label_status: str = "final"
 
-    _prints_repr = True
-
     def _report_subject(self) -> str:
         """What this report examined (the card's subject)."""
 
         return str(self.scope)
+
+    def _report_findings(self) -> list[str]:
+        """One-line findings for the card: the op, its line, its module."""
+
+        if not self.found:
+            return [self.message] if self.message else []
+        func = f" ({self.func_name})" if self.func_name else ""
+        findings = [f"first {self.kind}: {self.label}{func}{at_source(self.source_line)}"]
+        if self.module_address:
+            findings.append(f"module: {self.module_address}")
+        if self.shape is not None or self.dtype is not None:
+            shape = "x".join(str(size) for size in self.shape) if self.shape else "scalar"
+            findings.append(f"output: {shape} {self.dtype or ''}".rstrip())
+        if self.uncertainty_zone:
+            findings.append(
+                f"uncertainty zone (unsaved ancestors): {', '.join(self.uncertainty_zone)}"
+            )
+        return findings
 
     @property
     def first_bad_thing(self) -> Any:
@@ -150,6 +200,8 @@ class FindNanReport(FoundReport):
     def __repr__(self) -> str:
         """Return a compact notebook-oriented diagnostic representation.
 
+        ``print(report)`` shows the multi-line card instead (:meth:`card`).
+
         Returns
         -------
         str
@@ -163,33 +215,6 @@ class FindNanReport(FoundReport):
             f"found=True, kind={self.kind!r}, label={self.label!r}, "
             f"source_line={self.source_line!r}, scope={self.scope!r})"
         )
-
-
-def _nonfinite_kind(tensor: torch.Tensor) -> str:
-    """Classify non-finite values in a tensor.
-
-    Parameters
-    ----------
-    tensor:
-        Tensor to inspect.
-
-    Returns
-    -------
-    str
-        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"``.
-    """
-
-    if not torch.is_floating_point(tensor) and not torch.is_complex(tensor):
-        return "none"
-    has_nan = bool(torch.isnan(tensor).any().item())
-    has_inf = bool(torch.isinf(tensor).any().item())
-    if has_nan and has_inf:
-        return "nan+inf"
-    if has_nan:
-        return "nan"
-    if has_inf:
-        return "inf"
-    return "none"
 
 
 def _op_by_any_label(trace: Trace) -> dict[str, Op]:
@@ -245,34 +270,6 @@ def _op_label(op: Op) -> str:
 
     label = canonical_public_label(op)
     return label if label else "unknown"
-
-
-def _module_address(op: Op) -> str | None:
-    """Return the containing module address recorded for an op.
-
-    Parameters
-    ----------
-    op:
-        Operation whose module metadata should be read.
-
-    Returns
-    -------
-    str | None
-        Atomic module address or the innermost containing module address.
-    """
-
-    atomic_address = getattr(op, "atomic_module_address", None)
-    if isinstance(atomic_address, str):
-        return atomic_address
-    # Live (mid-capture) ops have no atomic_module_address yet; the fallback
-    # reads the innermost module CALL label ("0:1"), which carries the pass
-    # qualifier -- strip it so the field keeps its ADDRESS contract.
-    module = getattr(op, "module", None)
-    if isinstance(module, tuple) and module and isinstance(module[0], str):
-        return module[0].rsplit(":", 1)[0]
-    if isinstance(module, str):
-        return module.rsplit(":", 1)[0]
-    return None
 
 
 def _unsaved_ancestors(trace: Trace, op: Op) -> tuple[str, ...]:
@@ -401,7 +398,7 @@ def _no_finding_result(*, scope: str, uncertainty_zone: tuple[str, ...] = ()) ->
     )
 
 
-def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
+def find_nan(model: Any, inputs: Any, **trace_kwargs: Any) -> FindNanReport:
     """Run a memory-light live capture and return its first NaN or Inf finding.
 
     The capture stops at the first non-finite op output, rather than retaining
@@ -410,29 +407,41 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
     Parameters
     ----------
     model:
-        PyTorch model to execute.
-    x:
+        Model to execute, on any capture backend.
+    inputs:
         Positional model input accepted by :func:`torchlens.trace`.
     **trace_kwargs:
-        Additional :func:`torchlens.trace` keyword arguments. The capture runs
-        with ``on_nonfinite="raise"`` whatever the caller's ``capture=`` says.
+        Additional :func:`torchlens.trace` keyword arguments. Torch runs with
+        ``on_nonfinite="raise"``; other backends scan a full capture's outputs.
 
     Returns
     -------
     FindNanReport
         First live non-finite output, or a clean result.
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = find_nan(bad, torch.ones(1, 3))
+    >>> report.found, report.kind
+    (True, 'nan')
+    >>> find_nan(model, x).found
+    False
     """
 
     from .._user_funcs import trace
     from ..options import CaptureOptions
 
+    if not _runs_on_torch(model, inputs, trace_kwargs):  # no live stop: scan a full capture
+        return find_nan_in_trace(trace(model, inputs, **trace_kwargs))
     capture = trace_kwargs.pop("capture", None)
     if capture is not None:
         trace_kwargs["capture"] = _with_capture_fields(capture, on_nonfinite="raise")
     else:
         trace_kwargs["capture"] = CaptureOptions(on_nonfinite="raise")
     try:
-        trace(model, x, **trace_kwargs)
+        trace(model, inputs, **trace_kwargs)
     except CaptureError as exc:
         fields = exc.fields
         if "op" not in fields or "layer" not in fields:
@@ -443,9 +452,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
             partial_trace is not None
             and partial_trace.__dict__.get("_nonfinite_prefix_finalized", False)
         )
-        # The resolver contract (observe item 1): fields carry the FINAL
-        # public label (or None + status), plus the raw identity under the
-        # explicitly raw-named key. No spelling is ever derived by stripping.
+        # Fields carry the FINAL label (or None + status) and the raw-named identity.
         raw_layer_field = fields.get("layer")
         label: str | None = raw_layer_field if isinstance(raw_layer_field, str) else None
         label_status = str(
@@ -532,6 +539,7 @@ def find_nan_in_trace(trace: Trace) -> FindNanReport:
     """
 
     any_unsaved = False
+    codec = get_payload_codec(str(trace._provenance_backend))
     for op in _ordered_ops(trace):
         if bool(getattr(op, "is_input", False)):
             continue
@@ -543,14 +551,11 @@ def find_nan_in_trace(trace: Trace) -> FindNanReport:
         except ValueError:
             any_unsaved = True
             continue
-        if isinstance(out, torch.Tensor):
-            kind = _nonfinite_kind(out)
-            if kind != "none":
-                uncertainty_zone = _unsaved_ancestors(trace, op)
-                scope = "first among saved tensors" if any_unsaved else "first non-finite tensor"
-                return _result_from_op(
-                    op, kind=kind, scope=scope, uncertainty_zone=uncertainty_zone
-                )
+        kind = _nonfinite_kind_of(out, codec)
+        if kind != "none":
+            uncertainty_zone = _unsaved_ancestors(trace, op)
+            scope = "first among saved tensors" if any_unsaved else "first non-finite tensor"
+            return _result_from_op(op, kind=kind, scope=scope, uncertainty_zone=uncertainty_zone)
     return _no_finding_result(
         scope="saved tensors",
         uncertainty_zone=tuple(
@@ -577,6 +582,16 @@ def bisect_nan(trace: Trace) -> BisectNanReport:
     BisectNanReport
         Clear result object instead of raising when no non-finite saved
         activation is found.
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = bisect_nan(tl.trace(bad, torch.ones(1, 3)))
+    >>> report.found, report.kind
+    (True, 'nan')
+    >>> bisect_nan(tl.trace(model, x)).found
+    False
     """
 
     unsaved_compute_ops = 0
@@ -592,9 +607,7 @@ def bisect_nan(trace: Trace) -> BisectNanReport:
         except ValueError:
             unsaved_compute_ops += 1
             continue
-        if not isinstance(out, torch.Tensor):
-            continue
-        kind = _nonfinite_kind(out)
+        kind = _nonfinite_kind_of(out, get_payload_codec(str(trace._provenance_backend)))
         if kind != "none":
             label = _op_label(op)
             source_line = _source_line(op)
@@ -655,6 +668,16 @@ class NonfiniteReport(Report):
     INSIDE its own output -- the ``detect_anomaly`` recipe is printed
     verbatim for the cases this report does not cover (backward-born NaNs,
     custom-autograd exceptions).
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = tl.debug.nonfinite_origin(bad, torch.ones(1, 3))
+    >>> isinstance(report, NonfiniteReport), report.has_nonfinite
+    (True, True)
+    >>> report.phase
+    'forward'
     """
 
     has_nonfinite: bool
@@ -699,7 +722,9 @@ class NonfiniteReport(Report):
 
         findings = []
         if self.origin_label is not None:
-            findings.append(f"origin: {self.origin_label} ({self.kind})")
+            findings.append(
+                f"origin: {self.origin_label} ({self.kind}){at_source(self.source_line)}"
+            )
         findings.extend(f"non-finite: {label}" for label in self.nonfinite_labels)
         if self.scope_note:
             findings.append(self.scope_note)
@@ -733,7 +758,7 @@ class NonfiniteReport(Report):
         return "\n".join(lines)
 
 
-def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> NonfiniteReport:
+def nonfinite_origin(subject: Any, inputs: Any = None, **trace_kwargs: Any) -> NonfiniteReport:
     """One-call NaN forensics (torchnative 6.5; placeholder spelling).
 
     Consumes an EXISTING trace's queryable nonfinite record first (free);
@@ -747,7 +772,7 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
     ----------
     subject:
         A completed ``Trace`` (post-hoc, free) or a model (live tripwire).
-    x:
+    inputs:
         Model input, required for the live form.
     **trace_kwargs:
         Extra ``tl.trace`` options for the live form.
@@ -757,6 +782,16 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
     NonfiniteReport
         Structured findings, coverage disclosure, capture outcome, cost
         tier, AMP disclosure, and the deferred-authority recipe.
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = nonfinite_origin(bad, torch.ones(1, 3))
+    >>> report.has_nonfinite, report.kind
+    (True, 'nan')
+    >>> nonfinite_origin(tl.trace(model, x)).has_nonfinite
+    False
     """
 
     from .._data_classes._nonfinite import nonfinite_coverage
@@ -766,7 +801,7 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
         finding = find_nan_in_trace(trace)
         cost_tier = "free (post-hoc on the capture you already ran)"
     else:
-        finding = find_nan(subject, x, **trace_kwargs)
+        finding = find_nan(subject, inputs, **trace_kwargs)
         # The tripwire's evidence lives on the finding itself; there is no
         # completed trace to read a memoized nonfinite record from.
         trace = None

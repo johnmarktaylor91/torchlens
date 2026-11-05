@@ -1,4 +1,4 @@
-"""U36.2 deployment legs for the TorchLens HF attention backend, on CPU.
+"""Deployment legs for the TorchLens HF attention backend, on CPU.
 
 device_map dispatch, disk offload and bitsandbytes quantization: each loads
 the same saved grouped-query checkpoint twice (sdpa and torchlens), checks

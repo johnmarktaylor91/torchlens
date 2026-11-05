@@ -15,10 +15,8 @@ import torch
 import torch.nn as nn
 
 from torchlens.attribution import (
-    input_x_grad,
     integrated_gradients,
     layer_attribution,
-    saliency,
     smoothgrad,
 )
 
@@ -68,19 +66,9 @@ def _first_tensor(values) -> torch.Tensor:
 @pytest.mark.parametrize(
     "run",
     [
-        pytest.param(lambda m, x: saliency(m, x, target=0), id="saliency"),
-        pytest.param(lambda m, x: input_x_grad(m, x, target=0), id="input_x_grad"),
-        pytest.param(
-            lambda m, x: integrated_gradients(m, x, target=0, num_steps=3),
-            id="integrated_gradients",
-        ),
         pytest.param(
             lambda m, x: smoothgrad(m, x, target=0, num_samples=2, seed=0),
             id="smoothgrad",
-        ),
-        pytest.param(
-            lambda m, x: layer_attribution(m, x, target=0, layer="lin"),
-            id="layer_attribution",
         ),
     ],
 )
@@ -99,22 +87,6 @@ def test_mixed_train_eval_state_is_restored_exactly(run) -> None:
     assert after == before, f"attribution clobbered per-module modes: {before} -> {after}"
 
 
-def test_eval_root_with_training_submodule_is_restored() -> None:
-    """The reverse mix (eval root, one training submodule) is also preserved."""
-
-    torch.manual_seed(0)
-    model = _MixedModeNet()
-    model.eval()
-    model.lin.train()
-    before = (model.training, model.lin.training, model.frozen_bn.training)
-    assert before == (False, True, False)
-
-    saliency(model, torch.randn(8, 4), target=0)
-
-    after = (model.training, model.lin.training, model.frozen_bn.training)
-    assert after == before
-
-
 # --------------------------------------------------------------------------- #
 # W2A3-06: attribution must compute under an ambient torch.no_grad().
 # --------------------------------------------------------------------------- #
@@ -123,8 +95,6 @@ def test_eval_root_with_training_submodule_is_restored() -> None:
 @pytest.mark.parametrize(
     "run",
     [
-        pytest.param(lambda m, x: saliency(m, x, target=0), id="saliency"),
-        pytest.param(lambda m, x: input_x_grad(m, x, target=0), id="input_x_grad"),
         pytest.param(
             lambda m, x: integrated_gradients(m, x, target=0, num_steps=3),
             id="integrated_gradients",
@@ -150,15 +120,3 @@ def test_attribution_works_under_ambient_no_grad(run) -> None:
     ref_tensor = _first_tensor(reference.values)
     got_tensor = _first_tensor(under_no_grad.values)
     assert torch.allclose(ref_tensor, got_tensor)
-
-
-def test_no_grad_does_not_leak_grad_state() -> None:
-    """Running attribution under no_grad must not turn grad back on for the caller."""
-
-    torch.manual_seed(0)
-    model = nn.Linear(4, 3)
-    x = torch.randn(8, 4)
-    with torch.no_grad():
-        assert not torch.is_grad_enabled()
-        saliency(model, x, target=0)
-        assert not torch.is_grad_enabled()

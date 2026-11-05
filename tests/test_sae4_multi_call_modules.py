@@ -16,8 +16,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from tests.test_sae4_latent_facets import TOL, W_DEC, X, _HandSAE, _latents, _trace
 from torchlens._errors import InvalidArgumentError
+from torchlens.errors import TorchLensWarning
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class MultiHeadSelfAttention(nn.Module):
@@ -48,23 +53,6 @@ class _AttnReluTwice(nn.Module):
         return self.act(self.attn(self.act(x)))
 
 
-class _SaeReluTwice(nn.Module):
-    """``fc1`` (identity, the SAE site) then one ``nn.ReLU`` called twice."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(4, 4)
-        self.mid = nn.Linear(4, 4)
-        self.act = nn.ReLU()
-        self.fc2 = nn.Linear(4, 2)
-        with torch.no_grad():
-            self.fc1.weight.copy_(torch.eye(4))
-            self.fc1.bias.zero_()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.fc2(self.act(self.mid(self.act(self.fc1(x)))))
-
-
 def _head_trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(
         model,
@@ -84,24 +72,12 @@ def test_head_selector_writes_on_a_model_that_calls_a_relu_twice() -> None:
     clean = _head_trace(model, x)
     clean_out = _output(clean).clone()
     edited = clean.fork("head")
-    edited.attach_hooks(tl.head(1), tl.zero_ablate())
+    with pytest.warns(TorchLensWarning, match=r"tl\.head\(1\) writes 3 sites") as fanout:
+        edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
+    assert [w.message.fields["code"] for w in fanout] == ["facet_selector_fanout"]
     edited.run(model, x)
     assert not torch.allclose(_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0
-
-
-def test_latent_write_on_a_model_that_calls_a_relu_twice() -> None:
-    torch.manual_seed(0)
-    model, x = _SaeReluTwice().eval(), torch.tensor(X)
-    tl.bridge.sae.register("twice", _HandSAE(), site="fc1")
-    try:
-        clean = _trace(model, x)
-        edited = clean.fork("edit").do(tl.facet("twice").latent(1), tl.zero_ablate())
-    finally:
-        tl.bridge.sae.unregister("twice")
-    expected = [[h[j] - _latents(h)[1] * W_DEC[1][j] for j in range(4)] for h in X]
-    torch.testing.assert_close(edited["fc1"].out, torch.tensor(expected), **TOL)
-    assert not torch.equal(_output(edited), _output(clean))
 
 
 def test_a_selector_scoped_to_a_module_that_ran_twice_refuses_naming_its_calls() -> None:
@@ -109,7 +85,11 @@ def test_a_selector_scoped_to_a_module_that_ran_twice_refuses_naming_its_calls()
     model, x = _AttnReluTwice().eval(), torch.randn(2, 3, 8)
     clean = _head_trace(model, x)
     with pytest.raises(InvalidArgumentError) as caught:
-        clean.fork("scoped").attach_hooks(tl.head(1).in_module("act"), tl.zero_ablate())
+        clean.fork("scoped").do(
+            tl.head(1).in_module("act"),
+            tl.zero_ablate(),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
     assert caught.value.fields["code"] == "facet_selector_module_multi_call"
     calls = caught.value.fields["call_addresses"]
     assert tuple(calls) == ("act:1", "act:2")

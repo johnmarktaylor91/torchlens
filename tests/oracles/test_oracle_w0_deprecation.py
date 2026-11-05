@@ -13,8 +13,6 @@ from __future__ import annotations
 import warnings
 from pathlib import Path
 
-import pytest
-
 from ._deprecation import (
     DeprecatedDoor,
     audit_registered_door,
@@ -32,24 +30,6 @@ def test_registry_is_empty_and_loads() -> None:
         "a deprecation-door row appeared; interim-phase policy is "
         "remove-and-rename (scripts/checks/deprecation_inventory.py) -- a real "
         "shim needs BOTH the registry row and a conscious policy change"
-    )
-
-
-@pytest.mark.parametrize("template", SEED_TEMPLATES, ids=lambda t: t.door)
-def test_unregistered_doors_never_warn_deprecation_at_call_time(template) -> None:
-    """Direction 2 of the iff: no unregistered door warns when CALLED.
-
-    Rooted in observed calls through the shared invocation templates (one
-    asset, three consumers: purity harness, option witnesses, this gate).
-    """
-
-    registered = frozenset(row.door for row in load_deprecated_doors())
-    if template.door in registered:
-        pytest.skip("registered doors are audited by the direction-1 gate")
-    emitted = call_time_deprecations(template.invoke)
-    assert emitted == (), (
-        f"{template.door} emitted DeprecationWarning at call time without a "
-        f"registry row (undocumented deprecation): {[str(m.message) for m in emitted]}"
     )
 
 

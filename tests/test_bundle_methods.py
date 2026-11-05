@@ -10,7 +10,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import FacadeTeachingError
 
 
 class _TinyRelu(nn.Module):
@@ -79,7 +78,7 @@ def test_bundle_call_accessors_resolve_listed_labels() -> None:
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
     bundle = tl.Bundle({"first": trace, "second": trace}, baseline="first")
 
     module_label = next(iter(bundle.module_calls))
@@ -140,7 +139,7 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
     # upstream/downstream, token_pairs, token_divergence, add_alternative)
     # and draw are real methods now (max-push walk surface.7, late.26) and
     # count here; measure_members is removed into Bundle.map (walk names.11).
-    assert len(members) <= 44
+    assert len(members) <= 45
     assert "relate" in members
     for removed in (
         "joint_metric",
@@ -186,23 +185,6 @@ def test_bundle_add_remove_accept_single_and_list_forms() -> None:
     assert bundle.names == ["a", "c"]
 
 
-def test_store_comparison_stamps_named_field_and_matches_delta_map() -> None:
-    """store_comparison persists delta_map's values on the supergraph nodes."""
-
-    bundle = _capture_pair(seed=4, offset=0.25)
-
-    name = bundle.store_comparison("relative_l2")
-
-    assert name == "relative_l2:out@baseline"
-    stored = bundle.stored_comparison(name)
-    assert stored == bundle._delta_map("relative_l2")
-    assert bundle.stored_comparison_names() == (name,)
-    # Queryable per node, without recomputation.
-    node_label = next(iter(stored))
-    node = bundle.supergraph.nodes[node_label]
-    assert node.comparisons[name] == stored[node_label]
-
-
 def test_store_comparison_overwrites_same_name_and_keeps_others() -> None:
     """Restoring under one name replaces it; other names are untouched."""
 
@@ -220,8 +202,6 @@ def test_store_comparison_overwrites_same_name_and_keeps_others() -> None:
 
 def test_store_comparison_callable_metric_requires_explicit_name() -> None:
     """A callable metric has no derivable stable name and refuses typed."""
-
-    import pytest
 
     from torchlens._errors import InvalidArgumentError
 
@@ -257,8 +237,6 @@ def test_store_comparison_callable_metric_requires_explicit_name() -> None:
 def test_stored_comparison_unknown_name_refuses_typed() -> None:
     """Reading a never-stored name refuses typed, never an empty dict."""
 
-    import pytest
-
     from torchlens._errors import InvalidArgumentError
 
     bundle = _capture_pair(seed=7, offset=0.25)
@@ -268,31 +246,46 @@ def test_stored_comparison_unknown_name_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "comparison_unknown"
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "traces",
-        "member_construction",
-        "cluster",
-        "help",
-        "joint_metric",
-        "set_capacity",
-        "push",
-        "attach_hooks",
-        "node",
-        "compare_at",
-        "show_diff",
-        "delta_map",
-        "norm_delta",
-        "output_delta",
-        "aligned_pairs",
-    ],
-)
-def test_removed_bundle_member_redirects_typed(name: str) -> None:
-    """Each removed Bundle member refuses with the typed redirect naming its replacement."""
+def test_bundle_summary_is_a_text_card() -> None:
+    """Bundle.summary returns the card: members, outcomes, baseline, relations (RC-278)."""
 
-    bundle = tl.Bundle()
-    with pytest.raises(FacadeTeachingError) as excinfo:
-        getattr(bundle, name)
-    assert excinfo.value.fields["code"] == "facade_redirect"
-    assert excinfo.value.fields["attribute"] == name
+    bundle = _capture_pair(seed=0, offset=0.5)
+    card = bundle.summary()
+    assert isinstance(card, str)
+    assert "members (2): baseline (baseline), changed" in card
+    assert "baseline: 'baseline'" in card
+    assert "outcomes:" in card and "relations:" in card
+    assert "structurally consistent:" in card
+
+
+def test_bundle_to_pandas_stacks_members() -> None:
+    """Bundle.to_pandas stacks each member's table under a leading member column (RC-278)."""
+
+    pd = pytest.importorskip("pandas")
+    bundle = _capture_pair(seed=0, offset=0.5)
+    frame = bundle.to_pandas()
+    assert list(frame.columns)[0] == "member"
+    assert list(frame.index) == list(range(len(frame)))
+    per_member = {name: len(bundle[name].to_pandas()) for name in bundle.names}
+    assert frame["member"].value_counts().to_dict() == per_member
+    assert list(dict.fromkeys(frame["member"])) == bundle.names
+    empty = tl.Bundle().to_pandas()
+    assert isinstance(empty, pd.DataFrame)
+    assert list(empty.columns) == ["member"] and len(empty) == 0
+
+
+def test_bundle_to_agent_json_dumps_every_member() -> None:
+    """Bundle.to_agent_json is the agent_bundle.v1 dump with per-member dumps (RC-278)."""
+
+    import json
+
+    bundle = _capture_pair(seed=0, offset=0.5)
+    dump = bundle.to_agent_json(max_ops=3)
+    assert dump["schema"] == "torchlens.agent_bundle.v1"
+    assert dump["member_count"] == 2
+    assert dump["names"] == ["baseline", "changed"]
+    assert dump["baseline_name"] == "baseline"
+    assert sum(dump["outcome"].values()) == 2
+    assert set(dump["members"]) == {"baseline", "changed"}
+    assert dump["members"]["changed"] == bundle["changed"].to_agent_json(max_ops=3)
+    json.dumps(dump)

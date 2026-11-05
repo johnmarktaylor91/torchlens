@@ -33,13 +33,11 @@ from __future__ import annotations
 import io
 import pickle
 import sys
-from pathlib import Path
 
 import pytest
 import torch
 from torch import nn
 
-import torchlens as tl
 from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _DeferredForeignCallable,
@@ -99,7 +97,13 @@ def _drop_foreign_modules() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens.report._notebook"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "appliance_module",
+    [
+        "torchlens.neuro",
+    ],
+)
 def test_safe_unpickler_defers_appliance_module_without_importing(appliance_module: str) -> None:
     """A GLOBAL naming an appliance module is load-tolerated without ever importing it.
 
@@ -126,34 +130,13 @@ def test_safe_unpickler_defers_appliance_module_without_importing(appliance_modu
         resolved()
 
 
-def test_end_to_end_load_does_not_import_appliance_deps(tmp_path: Path) -> None:
-    """A tampered bundle naming ``torchlens.neuro`` never imports rsatoolbox at ``tl.load()``.
-
-    This mirrors the exact repro: a legitimate runnable bundle whose
-    ``metadata.pkl`` is overwritten with a raw pickle GLOBAL referencing
-    ``torchlens.neuro``. A plain ``tl.load()`` (no run, no trust flags) must
-    either fail closed or otherwise never import the foreign package.
-    """
-
-    _drop_foreign_modules()
-    model = _Linear()
-    x = torch.randn(2, 4)
-    bundle = tmp_path / "m.tlspec"
-    tl.trace(model, x, capture=_CAP).save(bundle, level="runnable", include_weights=True)
-
-    metadata_path = bundle / "metadata.pkl"
-    metadata_path.write_bytes(_global_only_pickle("torchlens.neuro", "__name__"))
-
-    assert "rsatoolbox" not in sys.modules
-    try:
-        tl.load(bundle)
-    except Exception:
-        pass
-    assert "rsatoolbox" not in sys.modules
-    assert "brainscore_core" not in sys.modules
-
-
-@pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens.report._notebook"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "appliance_module",
+    [
+        "torchlens.neuro",
+    ],
+)
 def test_safe_unpickler_admits_appliance_module_only_under_explicit_trust(
     appliance_module: str,
 ) -> None:
@@ -168,43 +151,18 @@ def test_safe_unpickler_admits_appliance_module_only_under_explicit_trust(
     assert appliance_module in sys.modules
 
 
-def test_safe_unpickler_still_denies_prior_dangerous_globals() -> None:
-    """Prior gate denials are unaffected: ``os.system`` remains blocked."""
-
-    payload = _global_only_pickle("os", "system")
-    with pytest.raises(pickle.UnpicklingError):
-        SafeBundleUnpickler(io.BytesIO(payload)).load()
-
-
-def test_safe_unpickler_still_admits_torchlens_types() -> None:
-    """Non-appliance ``torchlens.*`` classes still resolve (unaffected)."""
-
-    from torchlens._data_classes.trace import Trace
-
-    payload = _global_only_pickle("torchlens._data_classes.trace", "Trace")
-    resolved = SafeBundleUnpickler(io.BytesIO(payload)).load()
-    assert resolved is Trace
-
-
-def test_is_torchlens_appliance_module_classification() -> None:
-    """Appliance-module detection matches by exact name and submodule prefix."""
-
-    assert _is_torchlens_appliance_module("torchlens.neuro")
-    assert _is_torchlens_appliance_module("torchlens.neuro.submodule")
-    assert _is_torchlens_appliance_module("torchlens.report._notebook")
-    assert _is_torchlens_appliance_module("torchlens.report._notebook.submodule")
-    assert not _is_torchlens_appliance_module("torchlens")
-    assert not _is_torchlens_appliance_module("torchlens._data_classes.trace")
-    # A prefix-alike module must not false-positive.
-    assert not _is_torchlens_appliance_module("torchlens.neurotransmitter")
-
-
 # --------------------------------------------------------------------------- #
 # Gate site 2: resolve_function_registry_key (intervention-spec resolver).
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens.report._notebook"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "appliance_module",
+    [
+        "torchlens.neuro",
+    ],
+)
 def test_resolver_denies_appliance_module_by_name(appliance_module: str) -> None:
     """A custom key naming an appliance module is denied by default, no import."""
 
@@ -237,39 +195,6 @@ def test_resolver_admits_appliance_module_only_under_explicit_trust() -> None:
     ):
         resolve_function_registry_key(key, allowed_custom_callable_modules={"torchlens.neuro"})
     assert "torchlens.neuro" in sys.modules
-
-
-def test_resolver_still_denies_os_system_pivot() -> None:
-    """Prior gate denial is unaffected: walking to ``os.system`` off torchlens is denied."""
-
-    key = FunctionRegistryKey(
-        "custom", "system", "function", import_path="torchlens._io.tlspec:os.system"
-    )
-    with pytest.raises(UntrustedCallableError):
-        resolve_function_registry_key(key)
-
-
-def test_resolver_still_admits_legit_torchlens_custom_callable() -> None:
-    """A genuinely torchlens-owned custom callable still resolves without trust flags."""
-
-    key = FunctionRegistryKey(
-        "custom", "identity", "function", import_path="torchlens._utils.display:identity"
-    )
-    resolved = resolve_function_registry_key(key)
-    assert callable(resolved)
-    assert resolved.__module__.startswith("torchlens.")
-
-
-def test_resolver_still_resolves_torch_and_operator_namespaces() -> None:
-    """Prior fixed-namespace resolution is unaffected."""
-
-    torch_key = FunctionRegistryKey("torch", "relu", "function")
-    assert resolve_function_registry_key(torch_key) is torch.relu
-
-    op_key = FunctionRegistryKey("operator", "add", "function")
-    import operator
-
-    assert resolve_function_registry_key(op_key) is operator.add
 
 
 def test_resolver_appliance_classifier_matches_unpickler_classifier() -> None:

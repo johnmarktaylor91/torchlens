@@ -1,4 +1,4 @@
-"""The counterfactual-harvest execution gate (R2-08, lane EXTRACT).
+"""The counterfactual-harvest execution gate.
 
 ``harvest_schema.EXECUTABLE_ADDRESS_CLASSES`` admits a class only beside its
 measured gate evidence: the receipt lane, the save path, and the real

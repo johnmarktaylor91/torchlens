@@ -245,7 +245,7 @@ def backward_pass_origins(trace: Any) -> dict[int, PassOriginStamp]:
     """Return origin stamps for every recorded backward pass of a trace.
 
     Unstamped recorded passes default to ``origin='user'`` (an ordinary
-    ``log_backward``); the default is applied at read time, never stored.
+    ``backward``); the default is applied at read time, never stored.
     """
 
     stamps = dict(_PASS_STAMPS.get(trace, {}))

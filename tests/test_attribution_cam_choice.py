@@ -62,13 +62,6 @@ def _assert_auto_matches_explicit(model: nn.Module, inputs: Tensor, target: Any,
     assert torch.equal(auto.values, explicit.values)
 
 
-def test_grad_cam_chooses_last_feature_stage_of_small_cnn() -> None:
-    """The outermost module returning the last spatial map is chosen."""
-
-    torch.manual_seed(0)
-    _assert_auto_matches_explicit(SmallCnn(), torch.randn(1, 3, 8, 8), 1, "features")
-
-
 def test_grad_cam_chooses_layer4_of_resnet18() -> None:
     """torchvision resnet18 (random init): ``layer4``, the last map before pooling."""
 

@@ -1,4 +1,4 @@
-"""Token-position editing, phase 2 (U42.1): edit chosen positions, padding-aware.
+"""Token-position editing, phase 2: edit chosen positions, padding-aware.
 
 Each row edits the middle layer's ``(batch, tokens, hidden)`` output through
 ``torchlens.positions`` and compares the model output with the

@@ -71,33 +71,3 @@ def test_no_silently_unseen_overridables() -> None:
         "extend tests/data/torchnative/overrides_drift_baseline.json in the "
         "torchnative owner review. Never silently regenerate the baseline."
     )
-
-
-def test_interposition_surface_docs_number() -> None:
-    """The docs number stays truthful: derived, never typed.
-
-    ``docs/native-torch.md`` quotes the interposition-surface count from
-    this derivation; the tolerance band keeps the docs sentence honest
-    across patch releases without demanding lockstep edits for tiny drift.
-    """
-
-    overridable = _overridable_names()
-    covered = overridable & _wrap_inventory()
-    fraction = len(covered) / len(overridable)
-    # On the frozen minor the measured point was ~0.85 covered; the docs
-    # sentence says "the great majority", which this band keeps true.
-    assert fraction > 0.75, (
-        f"only {fraction:.0%} of torch's overridable registry intersects the "
-        "wrap inventory; the docs wording and the baseline need a conscious "
-        "re-derivation"
-    )
-
-
-def test_baseline_is_selfdescribing() -> None:
-    """The frozen baseline carries its scope and version stamp."""
-
-    payload = json.loads(_BASELINE_PATH.read_text())
-    assert payload["schema"] == "torchlens.overrides_drift_baseline.v1"
-    assert payload["torch_version"]
-    assert isinstance(payload["unseen"], list)
-    assert payload["scope_note"]

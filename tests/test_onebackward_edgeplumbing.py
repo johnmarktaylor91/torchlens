@@ -51,7 +51,6 @@ class TestGradInputUseMap:
             elif use.status == "unsupported":
                 assert use.addresses == ()
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_no_positional_zipping_census(self) -> None:
         """Multi-input nodes stay unmated -- the census that kills zipping.
@@ -86,7 +85,6 @@ class TestPassOriginStamps:
         origins = ob.backward_pass_origins(trace)
         assert origins[1].target_ids == ("t0",)
 
-    @pytest.mark.smoke
     def test_unstamped_recorded_passes_default_to_user(self) -> None:
         torch.manual_seed(0)
         model = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 3))
@@ -95,7 +93,7 @@ class TestPassOriginStamps:
             torch.randn(2, 4, requires_grad=True),
             capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
-        trace.log_backward(trace["output_1"].out.sum(), retain_graph=True)
+        trace.backward(trace["output_1"].out.sum(), retain_graph=True)
         origins = ob.backward_pass_origins(trace)
         assert origins[1].origin == "user"
 

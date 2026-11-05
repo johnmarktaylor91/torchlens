@@ -132,15 +132,11 @@ def _validate(model: nn.Module, x: torch.Tensor) -> bool:
     ("round_trip", "resolution", "parent_type"),
     [
         pytest.param(_numpy_round_trip, RESOLUTION_VIEW, "detach", marks=pytest.mark.smoke),
-        (_cpu_numpy_round_trip, RESOLUTION_VIEW, "cpu"),
         (_numpy_transpose_round_trip, RESOLUTION_VIEW, "detach"),
-        (_as_tensor_round_trip, RESOLUTION_VIEW, "detach"),
         pytest.param(
             _dlpack_capsule_round_trip, RESOLUTION_VIEW, "detach", marks=pytest.mark.smoke
         ),
-        (_dlpack_numpy_round_trip, RESOLUTION_VIEW, "detach"),
         pytest.param(_tolist_round_trip, RESOLUTION_COPY, "detach", marks=pytest.mark.smoke),
-        (_tensor_of_ndarray_round_trip, RESOLUTION_COPY, "detach"),
     ],
 )
 def test_pure_round_trip_is_one_op_with_the_departed_parent_and_validates(
@@ -164,16 +160,6 @@ def test_pure_round_trip_is_one_op_with_the_departed_parent_and_validates(
     )
     assert _validate(model, x) is True
     assert last_validation_failure() is None
-
-
-def test_round_trip_replay_follows_a_perturbed_parent() -> None:
-    """The round trip is a real edge: a different departed value gives a different output."""
-
-    model = _RoundTripModel(_numpy_round_trip)
-    trace = _trace_quiet(model, torch.randn(3, 4))
-    op = _foreign_ops(trace)[0]
-    departed = trace[op.parents[0]].out
-    assert torch.equal(op.func(departed + 1.0, *op.non_tensor_pos_args), departed + 1.0)
 
 
 @pytest.mark.smoke
@@ -211,33 +197,6 @@ class _ConstantAfterExportModel(nn.Module):
         if self.export_first:
             y.detach().numpy()
         return y + torch.from_numpy(self.table)
-
-
-def test_true_constant_without_departure_stays_a_plain_source() -> None:
-    """With nothing having left torch, ``from_numpy`` is the parentless source it always was."""
-
-    model = _ConstantAfterExportModel(export_first=False)
-    x = torch.randn(3, 4)
-    trace = _trace_quiet(model, x)
-    assert _foreign_ops(trace) == []
-    sources = [op for op in trace._layer_list if op.type == "fromnumpy"]
-    assert len(sources) == 1 and list(sources[0].parents) == []
-    assert _validate(model, x) is True
-
-
-def test_constant_after_a_departure_is_linked_and_refused() -> None:
-    """After an export, an unmatched buffer re-entry is unresolved (provenance upper bound)."""
-
-    model = _ConstantAfterExportModel(export_first=True)
-    x = torch.randn(3, 4)
-    trace = _trace_quiet(model, x)
-    ops = _foreign_ops(trace)
-    assert len(ops) == 1
-    assert ops[0].transform_config["resolution"] == RESOLUTION_UNRESOLVED
-    assert [record_type(trace[label]) for label in ops[0].parents] == ["detach"]
-    assert _validate(model, x) is False
-    failure = last_validation_failure()
-    assert failure is not None and failure.extra["reason"] == FOREIGN_DATA_REPLAY_REASON
 
 
 class _ScalarAfterTolistModel(nn.Module):

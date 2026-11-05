@@ -103,7 +103,7 @@ def _bench_model(name: str, model: torch.nn.Module, x: torch.Tensor, repeats: in
     scenarios: dict[str, NarrationOptions] = {
         "record_echo_devnull_s": NarrationOptions(sites=True, sink=devnull),
         "record_echo_callable_s": NarrationOptions(sites=True, sink=count_sink),
-        "record_echo_sampled_s": NarrationOptions(sites=True, sink=devnull, stats="sampled"),
+        "record_echo_sampled_s": NarrationOptions(sites=True, sink=devnull, value_stats="sampled"),
     }
     for key, options in scenarios.items():
         rows[key] = _time_best(lambda opt=options: tl.record(model, x, narrate=opt), repeats)
@@ -181,7 +181,7 @@ def _bench_crash_flush(name: str, model: torch.nn.Module, x: torch.Tensor) -> di
                 crasher,
                 x,
                 narrate=NarrationOptions(sites=True, sink=flush_path, tail_on_error=20),
-                on_forward_error="return_partial",
+                recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
             )
     except Exception:  # noqa: BLE001, S110 - the crash row MEASURES a failing forward
         pass

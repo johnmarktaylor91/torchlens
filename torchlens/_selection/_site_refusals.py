@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
+from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
+from .._utils._display_errors import lookup_message
 from .errors import AmbiguousSiteError, SiteResolutionError
 
 if TYPE_CHECKING:
@@ -83,18 +85,16 @@ def multipass_bare_label_message(layer_label: str, pass_indices: Sequence[int]) 
     Returns
     -------
     str
-        Message naming the layer, its pass count, and every pass-qualified
-        spelling the caller can address instead.
+        Message naming the layer, its pass count, and at most five
+        pass-qualified display keys the caller can address instead.
     """
 
-    spellings = ", ".join(f"'{layer_label}:{index}'" for index in pass_indices)
-    return (
-        f"bare label {layer_label!r} is ambiguous on this trace: layer "
-        f"{layer_label!r} ran {len(pass_indices)} passes, and each pass is a "
-        "distinct op with its own activation. Bare layer labels address only "
-        "single-pass layers. Remedy: address one pass with a pass-qualified "
-        f"label ({spellings}), or select every pass explicitly with the Layer "
-        f"selection (log[{layer_label!r}].__selection__())."
+    return lookup_message(
+        f"bare label {layer_label!r} is ambiguous: the layer ran {len(pass_indices)} passes; "
+        "each pass is a distinct op with its own activation.",
+        [f"{layer_label}:{index}" for index in pass_indices],
+        f"Address one pass explicitly, '{layer_label}:last', or '{layer_label}:all'; "
+        f"read the aggregate with trace.layers[{layer_label!r}].",
     )
 
 
@@ -116,6 +116,10 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
     selector_kind = getattr(selector, "selector_kind", None)
     if len(matched) <= 1 or selector_kind not in ("label", "contains"):
         return
+    token = split_pass_token(str(getattr(selector, "selector_value", "")))
+    if selector_kind == "label" and token is not None and token[1] == PASS_TOKEN_ALL:
+        # ``label:all`` is the set spelling: naming every pass is its meaning.
+        return
     layer_labels = {getattr(site, "layer_label", None) for site in matched}
     if len(layer_labels) != 1:
         return
@@ -128,7 +132,9 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
         return
     pass_indices = sorted(int(getattr(site, "pass_number", 1) or 1) for site in matched)
     raise AmbiguousSiteError(
-        multipass_bare_label_message(layer_label, pass_indices),
+        multipass_bare_label_message(
+            getattr(matched[0], "short_layer_label", layer_label), pass_indices
+        ),
         code="multipass_bare_label_ambiguous",
         layer_label=layer_label,
         pass_indices=tuple(pass_indices),

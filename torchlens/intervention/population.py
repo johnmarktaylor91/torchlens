@@ -234,6 +234,14 @@ class Population:
         for trace members (see ``digest_kind``).
     digest_kind:
         ``"content"`` (value hash) or ``"address"`` (identity facts only).
+
+    Examples
+    --------
+    >>> donors = tl.intervention.population(torch.randn(5, 4), origin="doc stack")
+    >>> isinstance(donors, Population), len(donors), donors.kind
+    (True, 5, 'tensor')
+    >>> tuple(donors.mean().shape)
+    (4,)
     """
 
     members: tuple[Any, ...]
@@ -561,6 +569,12 @@ def population(
         dtype; ``population_empty`` / ``population_datum_count_mismatch`` per
         the dataclass invariants; ``population_digest_unavailable`` when
         ``digest_population=True`` finds no retained payload to hash.
+
+    Examples
+    --------
+    >>> donors = population(torch.randn(5, 4), origin="doc stack")
+    >>> len(donors.members), donors.digest_kind, donors.origin
+    (5, 'content', 'doc stack')
     """
 
     if not isinstance(origin, str) or not origin.strip():

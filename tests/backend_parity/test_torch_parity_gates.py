@@ -210,7 +210,7 @@ def _backward_ready_trace() -> Trace:
         ),
         save="all",
     )
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
 

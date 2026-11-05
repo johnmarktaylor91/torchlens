@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import pickle
 from pathlib import Path
 from typing import Any
 
@@ -11,11 +10,8 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens._io.bundle import _build_manifest, _write_payload_blob
 from torchlens._io.payload_codec import get_payload_codec
-from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
-from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends.tinygrad import GradOptions, TinygradBackend, capabilities
 from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
@@ -23,7 +19,7 @@ tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor
 
 
-pytestmark = pytest.mark.backend_tinygrad
+pytestmark = [pytest.mark.backend_tinygrad, pytest.mark.rare]
 
 
 def _tiny_block(x: Any) -> Any:
@@ -141,7 +137,7 @@ def test_tinygrad_payload_codec_encodes_numpy_manifest_fields() -> None:
 
 
 def test_tinygrad_codec_fixture_loads_eager_payloads_as_tensors(tmp_path: Path) -> None:
-    """Direct-writer tinygrad codec fixtures should load eager outs as tinygrad tensors."""
+    """Saved tinygrad payloads should load eagerly as tinygrad tensors."""
 
     path = tmp_path / "tinygrad_codec_roundtrip.tlspec"
     _, expected, expected_dtype, expected_device = _write_tinygrad_codec_fixture(path)
@@ -158,7 +154,7 @@ def test_tinygrad_codec_fixture_loads_eager_payloads_as_tensors(tmp_path: Path) 
 
 
 def test_tinygrad_codec_fixture_loads_lazy_refs_as_tensors(tmp_path: Path) -> None:
-    """Lazy tinygrad codec fixtures should defer payload decode until materialization."""
+    """Lazily loaded tinygrad payloads should defer decode until materialization."""
 
     path = tmp_path / "tinygrad_codec_lazy.tlspec"
     _, expected, expected_dtype, expected_device = _write_tinygrad_codec_fixture(path)
@@ -356,7 +352,7 @@ def _trace(**kwargs: Any) -> Any:
 
 
 def _write_tinygrad_codec_fixture(path: Path) -> tuple[Any, np.ndarray, str, str]:
-    """Write a materialized tinygrad bundle through the private codec writer path.
+    """Save a tinygrad trace with its payloads as a format 3 artifact.
 
     Parameters
     ----------
@@ -370,60 +366,14 @@ def _write_tinygrad_codec_fixture(path: Path) -> tuple[Any, np.ndarray, str, str
     """
 
     trace = _trace()
-    scrubbed_state, blob_specs, unsupported_tensors = scrub_for_save(
-        trace,
-        include_outs=True,
-        include_grads=False,
-        include_saved_args=False,
-        include_rng_states=False,
-        backend_name="tinygrad",
-        payload_materialization=True,
-    )
-    if not blob_specs:
-        raise AssertionError("tinygrad codec fixture expected at least one saved payload.")
-
-    path.mkdir()
-    (path / "blobs").mkdir()
-    codec = get_payload_codec("tinygrad")
-    tensor_entries = [
-        _write_payload_blob(tmp_path=path, blob_spec=blob_spec, codec=codec)
-        for blob_spec in blob_specs
-    ]
-    manifest = _build_manifest(
-        trace=trace,
-        tensor_entries=tensor_entries,
-        unsupported_tensors=unsupported_tensors,
-    )
-    _TlSpecWriter.write_trace_manifest(
-        path=path / "manifest.json",
-        trace=trace,
-        legacy_manifest=manifest,
-        save_level="portable",
-    )
-    with (path / "metadata.pkl").open("wb") as handle:
-        pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    _mark_fixture_manifest_materialized(path)
-    first_payload = blob_specs[0].value
+    trace.save(path, level="portable")
+    first_payload = _first_saved_op(trace).out
     return (
         trace,
         np.asarray(first_payload.numpy()),
         str(first_payload.dtype),
         str(first_payload.device),
     )
-
-
-def _mark_fixture_manifest_materialized(path: Path) -> None:
-    """Patch a direct-writer fixture manifest to declare materialized payloads."""
-
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["body_format"] = "safetensors"
-    manifest["payload_policy"] = {
-        "policy": "array_payloads",
-        "materialization_supported": True,
-        "payload_kinds": sorted({entry["kind"] for entry in manifest["tensors"]}),
-    }
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
 def _first_saved_op(trace: Any) -> Any:
@@ -454,50 +404,7 @@ def test_tinygrad_spec_registered() -> None:
     assert capabilities.supports_payload_materialization is True
     assert capabilities.module_identity_modes == ("function_root", "object_module")
     assert capabilities.payload_policy == "array_payloads"
-    assert capabilities.trace_options == ("module_identity_mode", "grad_options")
-
-
-def test_unrealized_closure_constant_refuses_typed() -> None:
-    """A closure constant the forward never realized refuses ``constant_unrealizable``.
-
-    ``Tensor(ndarray)`` stays a host-side source buffer until something
-    realizes it; the per-uop payload copy of that buffer cannot be written
-    back to its device (tinygrad ``need copyin``). Until realize-once capture
-    lands the backend refuses typed, naming the op, instead of crashing.
-    """
-
-    weight = Tensor(np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32))
-    bias = Tensor(np.asarray([0.5, -0.5], dtype=np.float32))
-    x = Tensor(np.asarray([[1.0, -1.0]], dtype=np.float32))
-
-    def forward(value: Any) -> Any:
-        return (value.matmul(weight) + bias).relu()
-
-    with pytest.raises(BackendUnsupportedError) as info:
-        tl.trace(forward, x, backend="tinygrad")
-
-    assert info.value.code == "constant_unrealizable"
-    assert "BUFFER" in str(info.value)
-
-
-def test_rng_bearing_graph_refuses_typed() -> None:
-    """A forward through a random-init ``tinygrad.nn`` layer refuses ``rng_state_in_graph``.
-
-    The lazy weight graph carries the Threefry generator; a per-op realization
-    would re-evaluate it and capture values that differ from eager (F11), so
-    the backend refuses before any payload is realized.
-    """
-
-    from tinygrad import nn
-
-    Tensor.manual_seed(0)
-    layer = nn.Linear(4, 3)
-    x = Tensor(np.ones((2, 4), dtype=np.float32))
-
-    with pytest.raises(BackendUnsupportedError) as info:
-        tl.trace(lambda value: layer(value).relu(), x, backend="tinygrad")
-
-    assert info.value.code == "rng_state_in_graph"
+    assert capabilities.trace_options == ("module_identity_mode", "grad_options", "facets")
 
 
 def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
@@ -516,7 +423,7 @@ def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
     assert "mul" in layer_types
     assert {"add", "where", "mul"} <= layer_types
     assert trace.validate_forward_pass([_tiny_block(x)]) is True
-    assert getattr(trace, "tinygrad_payload_policy") == "dev_python_realized_copy"
+    assert getattr(trace, "tinygrad_payload_policy") == "realize_once"
     assert trace.output_layers
 
 
@@ -546,6 +453,54 @@ def test_tinygrad_multi_output_marks_outputs() -> None:
     # layer_dict_main_keys directly.
     assert all(trace[label].is_output_parent for label in trace.output_layers)
     assert trace.validate_forward_pass(list(_multi_output(x))) is True
+
+
+def _broadcast_relu(value: Any) -> Any:
+    """Add a broadcast scalar, multiply by the input and rectify."""
+
+    return ((value + 1.0) * value).relu()
+
+
+def test_tinygrad_records_only_values_that_reach_an_output() -> None:
+    """Every recorded non-output op has a consumer; nothing dangles.
+
+    A broadcast builds its target shape from scalar ``CONST`` UOps and an
+    ``ndarray`` input sits on a storage ``BUFFER`` UOp. Both are UOp-graph
+    ancestors of the output but carry no tensor value into it, so recording
+    them left parentless ops with no consumer (constants nothing reads).
+    """
+
+    x = Tensor(np.asarray([[-1.0, -0.5, 0.25, 1.0], [0.5, 1.5, -2.0, 0.75]], dtype=np.float32))
+    trace = tl.trace(_broadcast_relu, x, backend="tinygrad")
+
+    dangling = [
+        f"{op.label} ({op.func_name})"
+        for op in trace._layer_list
+        if not op.is_output_parent and not tuple(op.children or ())
+    ]
+    assert dangling == []
+    assert [op.func_name for op in trace._layer_list if op.func_name == "buffer"] == []
+    assert trace.validate_forward_pass(_broadcast_relu(x)) is True
+
+
+def test_tinygrad_func_names_do_not_depend_on_earlier_captures() -> None:
+    """The recorded op kinds of one forward are the same in a fresh and a used process.
+
+    Op kinds are looked up by UOp ``id()``; a UOp tinygrad dropped mid-forward
+    freed its id for a later UOp, which then took the dropped one's name, so
+    the kinds varied with whatever ran before. The capture now holds every
+    observed UOp until it has read the names.
+    """
+
+    def kinds() -> list[str]:
+        x = Tensor(np.asarray([[-1.0, -0.5, 0.25, 1.0], [0.5, 1.5, -2.0, 0.75]], dtype=np.float32))
+        trace = tl.trace(_broadcast_relu, x, backend="tinygrad")
+        return [str(op.func_name) for op in trace._layer_list]
+
+    first = kinds()
+    for _ in range(3):
+        tl.trace(_tiny_block, Tensor([1.0, -2.0, 3.0]), backend="tinygrad")
+        assert kinds() == first
 
 
 def test_tinygrad_wide_corpus_capture_and_validation() -> None:
@@ -664,7 +619,7 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
             {"intervene": tl.when(tl.func("relu"), tl.zero_ablate())},
             "can_intervene=False.*intervene",
         ),
-        ({"halt": tl.func("relu")}, "can_intervene=False.*halt"),
+        ({"stop_after": tl.func("relu")}, "can_intervene=False.*stop_after"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )
@@ -898,7 +853,7 @@ def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
     )
 
     with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
-        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
@@ -995,7 +950,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(TypeError, match="not a boolean"):
         bool(loaded_status)
     with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
-        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):

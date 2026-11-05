@@ -18,6 +18,7 @@ from . import _state
 from ._call_fingerprint import fingerprinting
 from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from ._data_classes._trace_accessors import boundary_label_rows
+from ._fast_live_events import _NestedEventTracker
 from ._fast_live_plans import (
     _admitted_collection_labels,
     _drop_uncollected_payloads,
@@ -178,7 +179,7 @@ class _FastSparseSession:
         # Key the refresh gate by EVERY lookup spelling of a saved entry:
         # descriptor calls carry pass-qualified labels ('linear_1_1:1') while
         # ``layer_label`` is the bare final label, so a bare-label-only set
-        # made the in-loop ``save_activation`` refresh dead code -- every fast
+        # made the in-loop ``_save_activation`` refresh dead code -- every fast
         # iteration returned iteration-1 payloads on a verified trace.
         self.saved_labels = frozenset(
             key
@@ -435,7 +436,7 @@ class _FastSparseSession:
             if op_label in self.saved_labels:
                 op = self.target._layer_dict_all_keys.get(op_label)
                 if op is not None:
-                    op.save_activation(
+                    op._save_activation(
                         value,
                         (),
                         {},
@@ -671,7 +672,7 @@ class _FastSparseSession:
         )
 
 
-class _FastLiveSession:
+class _FastLiveSession(_NestedEventTracker):
     """Native-forward collector guarded by selected-site and boundary call plans."""
 
     def __init__(self, trace: Any, model: nn.Module, *, target: Any | None = None) -> None:
@@ -690,10 +691,6 @@ class _FastLiveSession:
         self.active = False
         self.module_index = 0
         self.function_index = 0
-        # The last collected functional event: its name, output object and
-        # tensor leaves, held strongly so a later same-name event is compared by
-        # object identity, never by a reusable ``id()``.
-        self.last_function_output: tuple[str, Any, tuple[Any, ...]] | None = None
         # True while the session saves a payload: its own ``safe_copy`` clone
         # and transform calls run through the wrapped torch functions and must
         # not count as the model's events.
@@ -969,7 +966,7 @@ class _FastLiveSession:
         self.module_index = 0
         self.module_call_counts = {}
         self.function_index = 0
-        self.last_function_output = None
+        self.reset_event_nesting()
         self.failure = None
         self.shape_varied = False
         self.steer_plan.reset()
@@ -981,7 +978,7 @@ class _FastLiveSession:
             _state._active_fast_run_collector = prior
             self.active = False
             self.owner_thread_id = None
-            self.last_function_output = None
+            self.reset_event_nesting()
 
     def _admit_inputs(self, inputs: Any) -> tuple[Any, Mapping[str, Any], bool]:
         """Split the runtime inputs and admit them against the captured input boundary.
@@ -1088,9 +1085,8 @@ class _FastLiveSession:
         routes = direct_forward_routes_installed(self.direct_routes, weakref.ref(self))
         with self._forward_scope(model, routes) as fingerprint:
             try:
-                # Bind positional inputs exactly as capture and the ordinary live
-                # run do (a tuple or list spreads; a one-parameter forward takes a
-                # multi-element sequence whole), so one input tree means one call.
+                # Bind positional inputs as capture and the live run do (a tuple or list
+                # spreads; a one-parameter forward takes a sequence whole): one tree, one call.
                 output = model(*normalize_input_args(input_args, model), **dict(input_kwargs))
             except FastUntilReached:
                 output = None
@@ -1106,11 +1102,12 @@ class _FastLiveSession:
         else:
             self._check_full_path()
             self._refresh_boundary_payloads(input_args, input_kwargs, output)
+        from ._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
+
+        refresh_decoded_output(self.target)  # decode this run's outputs, not the capture's
         if self.shape_varied and not self.shape_metadata_cleared:
-            # Honesty rule: a native forward refreshes only the saved sites and
-            # the boundary ops. Every other op's shape and size metadata would
-            # otherwise read capture-time numbers as if they were this run's,
-            # so they take the not-available spelling (None) once and for all.
+            # Honesty rule: a native forward refreshes only saved sites and boundary ops; other
+            # ops' shape/size metadata takes None rather than read capture-time numbers as ours.
             clear_unrefreshed_shape_metadata(self.target, self.refreshed_labels)
             self.shape_metadata_cleared = True
         # A cut forward leaves downstream staged hooks unfired by design.
@@ -1355,10 +1352,10 @@ class _FastLiveSession:
             # A folded input Layer is listed once per pass under one bare
             # label, which ``layer_dict_all_keys`` maps to the LAST pass; the
             # per-listing rule refreshes each pass with its own input.
-            input_ops = boundary_label_rows(input_labels, self.target.__getitem__)
+            input_ops = boundary_label_rows(input_labels, self.target.layers.__getitem__)
             for op, value in zip(input_ops, input_leaves, strict=True):
                 if op is not None and bool(getattr(op, "has_saved_activation", False)):
-                    op.save_activation(value, (), {}, False)
+                    op._save_activation(value, (), {}, False)
 
     def _refresh_boundary_payloads(
         self,
@@ -1411,7 +1408,7 @@ class _FastLiveSession:
                 )
                 self._poison_and_raise(failed)
             if isinstance(value, torch.Tensor) and bool(getattr(op, "has_saved_activation", False)):
-                op.save_activation(value, (), {}, False)
+                op._save_activation(value, (), {}, False)
         # Same rule as capture (_capture/trace.py): the transformed raw output
         # is stored when an output transform exists; the save scope is
         # otherwise untouched, so a sparse save stays sparse on a rerun.

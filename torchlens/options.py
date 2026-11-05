@@ -32,26 +32,24 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from ._mutate_warnings import _MutateWarningSuppression
 from ._option_receipt import (
     NarrationOptions,
+    _build_option,
     _explicit_fields,
     _field_is_explicit,
     _resolve_option_value,
     _set_frozen_fields,
 )
+from ._options_removed import REMOVED_CAPTURE_MEMBERS, REMOVED_VISUALIZATION_MEMBERS
 from ._options_validation import (
     _normalize_layout,
-    _validate_buffer_visibility,
     _validate_capture_values,
-    _validate_collapse,
-    _validate_fold_repeats,
-    _validate_intervention_mode,
-    _validate_node_style,
-    _validate_visualization_flag_fields,
+    _validate_visualization_values,
     visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
+from ._utils._display_options import _OptionsDisplay
+from ._utils.facade import refuse_removed_keywords, refuse_removed_member
 from ._utils.tensor_utils import SaveMode
 from ._vocab.node_spec import NodeSpec
 
@@ -97,7 +95,6 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "name",
     "cache",
     "cache_dir",
-    "module_filter",
     "jax_control_flow",
     "jax_max_control_flow_unroll",
     "module_identity_mode",
@@ -139,6 +136,7 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "open_viewer",
     "file_format",
     "show_buffers",
+    "show_edge_shapes",
     "direction",
     "graph_overrides",
     "node_style",
@@ -170,17 +168,15 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
 )
 _REPLAY_FIELDS: Final[tuple[str, ...]] = (
     "strict",
-    "hooks",
-    "differentiable",
     "append",
     "chunk_size",
     "allow_changed_params",
 )
 _INTERVENTION_FIELDS: Final[tuple[str, ...]] = (
     "engine",
-    "confirm_mutation",
     "strict",
     "allow_changed_params",
+    "differentiable",
 )
 _STREAMING_FIELDS: Final[tuple[str, ...]] = (
     "path",
@@ -223,7 +219,6 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "name": "name",
     "cache": "cache",
     "cache_dir": "cache_dir",
-    "module_filter": "module_filter",
     "jax_control_flow": "jax_control_flow",
     "jax_max_control_flow_unroll": "jax_max_control_flow_unroll",
     "module_identity_mode": "module_identity_mode",
@@ -261,26 +256,21 @@ _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
 }
 _REPLAY_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "strict": "strict",
-    "hooks": "hooks",
-    "differentiable": "differentiable",
     "append": "append",
     "chunk_size": "chunk_size",
     "allow_changed_params": "allow_changed_params",
 }
 _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "engine": "engine",
-    "confirm_mutation": "confirm_mutation",
     "strict": "strict",
     "allow_changed_params": "allow_changed_params",
+    "differentiable": "differentiable",
 }
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "path": "path",
     "retain_in_memory": "retain_in_memory",
     "on_save": "on_save",
 }
-
-
-suppress_mutate_warnings = _MutateWarningSuppression()
 
 
 def _merge_grouped_options(
@@ -359,21 +349,9 @@ def _merge_grouped_options(
     return _build_option(option_factory, values, specified_fields)
 
 
-def _build_option(
-    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
-) -> Any:
-    """Build an option object from resolved values through its (possibly private) builder."""
-
-    builder = getattr(option_factory, "_from_values", None)
-    if builder is None:
-        builder = option_factory.from_values
-    return builder(values, specified_fields)
-
-
-@dataclass(frozen=True, init=False)
-class CaptureOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class CaptureOptions(_OptionsDisplay):
     """Grouped capture options for ``trace``.
-
         Parameters
         ----------
         input_transform:
@@ -388,14 +366,14 @@ class CaptureOptions:
             ``"shape_only"``.
         output_transform:
             Optional callable applied once to the model output after ``model.forward``.
-        save_raw_output:
+        save_transformed_output:
             Raw model-output save policy for portable bundles. ``"small"`` stores a
             bounded representation, ``True`` stores the full object, and ``False``
             drops it when saving.
         layer_visualizers:
             Optional mapping from site selectors to per-layer thumbnail callables.
         save_visualizations:
-            Whether rendered visualizer image files should be copied into portable bundles.
+            Copy rendered visualizer images into portable bundles.
         keep_orphans:
             Whether island ops (computations unreachable from both the model inputs and
             outputs) are retained in raw metadata and exposed via ``trace.graph.orphans``. Defaults
@@ -445,7 +423,11 @@ class CaptureOptions:
         recurrence_detection:
             Whether repeated graph patterns are detected during postprocess.
         replayable:
-            Whether replay-template metadata is captured for intervention APIs.
+            Whether the runnable apparatus is captured: the state, RNG and escape
+            records a ``level="runnable"`` save and a sparse run need, plus edge
+            provenance. Saved-graph replay (``do()`` without ``model=``) does not need
+            it: every capture records the per-op argument templates replay uses.
+            Measured capture premium on CPU: 5-8x wall time.
         capture_container_structure:
             Whether to persist input and output container structure without
             enabling intervention replay metadata.
@@ -469,7 +451,7 @@ class CaptureOptions:
             Whether the capture keeps the model state its forward changed
             (forward-equivalent: norm running statistics, buffer writes, training
             modes and plain attributes advance exactly as one direct ``model(x)``
-            would, the spelling ``trace.run(carry_state=True)`` uses; no capture
+            would, the spelling ``trace.run_transaction(inputs=..., carry_state=True)`` uses; no capture
             advances the caller's random streams under either setting). The default
             ``False`` makes the capture a pure observer: buffers, random state,
             training modes and plain instance attributes are restored afterwards,
@@ -481,7 +463,7 @@ class CaptureOptions:
             the capture-state contract). A cache hit runs no forward, so nothing
             advances (DOCUMENTED-UNSTABLE).
         name:
-            Optional user-facing name for the returned log.
+            User-facing log name.
         cache:
             Whether to use the content-hash capture cache. The key covers model
             tensor content (including per-tensor device and ``requires_grad``),
@@ -493,18 +475,6 @@ class CaptureOptions:
             ``torchlens.clear_cache()`` empties the cache.
         cache_dir:
             Optional directory for content-hash cache entries.
-        module_filter:
-            Optional THIRD save gate composed (AND) with ``save=``: an op's
-            payload is retained only when the save selection picks it AND this
-            predicate returns truthy. The
-            predicate receives an op-record namespace (the legacy-shaped
-            ``SimpleNamespace`` of captured op fields such as ``func_name``,
-            ``layer_label``, and ``modules``), NEVER an
-            ``nn.Module`` instance — a filter written against modules (e.g.
-            ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
-            ZERO payloads. Returning ``False`` keeps metadata but skips payload
-            saving; a capture whose every selected payload was suppressed by
-            this gate emits a ``module_filter_zero_saved`` warning.
         jax_control_flow:
             Declared JAX control-flow policy. Backends other than torch reject
             explicit use until their implementation phase supports it.
@@ -642,10 +612,15 @@ class CaptureOptions:
             Whether the capture records the public ATen operations that each logged
             torch call dispatched to, served by ``Op.aten_ops`` and ``Trace.aten_ops``
             (a session-time knob; ``Trace.has_aten_ops`` reports it after capture or
-            load). Recording installs a dispatch mode for the forward pass and for
-            ``Trace.backward()`` with ``backward_ready=True``, so it is opt-in. The
-            default ``False`` installs no dispatch mode and the accessors raise
-            ``AtenOpsUnavailableError``. GPU kernel recording is out of scope.
+            load). ``True`` records value-free rows; ``"values"`` also keeps each
+            call's returned tensor(s) as ``AtenOp.out`` under the same rules as
+            ``Op.out`` (the ``save=`` selection of the owning torch call,
+            ``detach_saved_activations``, ``output_device``, ``save_mode`` and the
+            save budget). Recording installs a dispatch mode for the forward pass
+            and for ``Trace.backward()`` with ``backward_ready=True``, so it is
+            opt-in. The default ``False`` installs no dispatch mode and the
+            accessors raise ``AtenOpsUnavailableError``. GPU kernel recording is
+            out of scope.
 
         Examples
         --------
@@ -687,7 +662,6 @@ class CaptureOptions:
     name: str | None = None
     cache: bool = False
     cache_dir: str | Path | None = None
-    module_filter: Callable[[Any], bool] | None = None
     jax_control_flow: Literal["reject", "unroll", "region"] = "unroll"
     jax_max_control_flow_unroll: int = 64
     module_identity_mode: str | None = None
@@ -713,9 +687,10 @@ class CaptureOptions:
     jax_static_argnums: int | Sequence[int] | None = None
     grad_options: Any | None = None
     chunk_size: int | None = None
-    aten_ops: bool = False
+    aten_ops: bool | Literal["values"] = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
+    @refuse_removed_keywords("CaptureOptions", REMOVED_CAPTURE_MEMBERS)
     def __init__(
         self,
         input_transform: Callable[[Any], Any] | None | MissingType = MISSING,
@@ -749,7 +724,6 @@ class CaptureOptions:
         name: str | None | MissingType = MISSING,
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
-        module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
         jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
         jax_max_control_flow_unroll: int | MissingType = MISSING,
         module_identity_mode: str | None | MissingType = MISSING,
@@ -776,7 +750,7 @@ class CaptureOptions:
         jax_static_argnums: int | Sequence[int] | None | MissingType = MISSING,
         grad_options: Any | None | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
-        aten_ops: bool | MissingType = MISSING,
+        aten_ops: bool | Literal["values"] | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
@@ -791,6 +765,16 @@ class CaptureOptions:
         _validate_capture_values(values)
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified))
+
+    # Runtime only: under TYPE_CHECKING the hook would make every attribute
+    # type-check as Any, hiding typos and the removed spellings from mypy.
+    if not TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any:
+            """Name the replacement for a removed public member, else fail as usual."""
+
+            refuse_removed_member("CaptureOptions", name, REMOVED_CAPTURE_MEMBERS)
+            return object.__getattribute__(self, name)
 
     def as_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""
@@ -836,8 +820,8 @@ _CAPTURE_DEFAULTS: Final[Mapping[str, Any]] = {
 }
 
 
-@dataclass(frozen=True, init=False)
-class _SaveTransforms:
+@dataclass(frozen=True, init=False, repr=False)
+class _SaveTransforms(_OptionsDisplay):
     """Internal carrier of the save-transform fields of :class:`CaptureOptions`.
 
     Built by :func:`_save_transforms_from_capture`; not a public option
@@ -916,22 +900,8 @@ class _SaveTransforms:
         return instance
 
 
-#: Alias properties removed by the 2026-10-01 shim removal (no alias kept).
-_REMOVED_VISUALIZATION_OPTION_MEMBERS: dict[str, str] = {
-    "mode": "use VisualizationOptions.rolled (a bool) -- the mode alias was removed",
-    "view": "use VisualizationOptions.rolled (True for the rolled graph); a picture is drawn whenever visualization options are passed",
-    "save_only": "use VisualizationOptions.open_viewer (True opens the viewer; the default never does)",
-    "for_paper": 'use VisualizationOptions.theme="paper"',
-    "return_graph": "read Drawing.dot on the returned Drawing",
-    "max_module_depth": "use VisualizationOptions.depth -- the max_module_depth alias was removed",
-    "layout_engine": "use VisualizationOptions.layout -- the layout_engine alias was removed",
-    "node_mode": "use VisualizationOptions.node_style -- the node_mode alias was removed",
-    "animate": "use trace.animate(site) -- the animation is its own door, not a draw keyword",
-}
-
-
-@dataclass(frozen=True, init=False)
-class VisualizationOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class VisualizationOptions(_OptionsDisplay):
     """Grouped visualization options for capture and graph-rendering APIs.
 
     Parameters
@@ -952,6 +922,8 @@ class VisualizationOptions:
         Graph output file format.
     show_buffers:
         Buffer visibility policy.
+    show_edge_shapes:
+        Label forward dataflow edges with their producer output shapes (default False).
     direction:
         Graph layout direction.
     graph_overrides:
@@ -996,8 +968,8 @@ class VisualizationOptions:
     node_label_fields:
         Optional explicit label row fields.
     show_legend:
-        Tri-state legend visibility (``None`` = auto: legend only when an
-        encoding channel is active); see ``Trace.draw``.
+        Tri-state legend (``None`` = auto: an active encoding channel's
+        legend, and the key on a ``module=`` focus); see ``Trace.draw``.
     color_by:
         UNSTABLE encoding-channel value source; see ``Trace.draw``.
     size_by:
@@ -1034,6 +1006,7 @@ class VisualizationOptions:
     open_viewer: bool = False
     file_format: str = "pdf"
     show_buffers: BufferVisibilityLiteral = "meaningful"
+    show_edge_shapes: bool = False
     direction: VisDirectionLiteral = "bottomup"
     graph_overrides: dict[str, Any] | None = None
     node_style: VisNodeModeLiteral = "default"
@@ -1073,6 +1046,7 @@ class VisualizationOptions:
         open_viewer: bool | MissingType = MISSING,
         file_format: str | MissingType = MISSING,
         show_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
+        show_edge_shapes: bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
         graph_overrides: dict[str, Any] | None | MissingType = MISSING,
         node_style: VisNodeModeLiteral | MissingType = MISSING,
@@ -1119,6 +1093,9 @@ class VisualizationOptions:
             ),
             "file_format": _resolve_option_value(
                 "file_format", file_format, "pdf", specified_fields
+            ),
+            "show_edge_shapes": _resolve_option_value(
+                "show_edge_shapes", show_edge_shapes, False, specified_fields
             ),
             "show_buffers": _resolve_option_value(
                 "show_buffers", show_buffers, "meaningful", specified_fields
@@ -1186,12 +1163,7 @@ class VisualizationOptions:
                 "order_siblings", order_siblings, True, specified_fields
             ),
         }
-        _validate_buffer_visibility(values["show_buffers"])
-        _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
-        _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
-        _validate_collapse(cast(CollapseLiteral, values["collapse"]))
-        _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
-        _validate_visualization_flag_fields(values)
+        _validate_visualization_values(values)
         _set_frozen_fields(self, _VISUALIZATION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
 
@@ -1202,11 +1174,7 @@ class VisualizationOptions:
         def __getattr__(self, name: str) -> Any:
             """Name the replacement for a removed public member, else fail as usual."""
 
-            from ._utils.facade import refuse_removed_member
-
-            refuse_removed_member(
-                "VisualizationOptions", name, _REMOVED_VISUALIZATION_OPTION_MEMBERS
-            )
+            refuse_removed_member("VisualizationOptions", name, REMOVED_VISUALIZATION_MEMBERS)
             return object.__getattribute__(self, name)
 
     def to_dict(self) -> dict[str, Any]:
@@ -1228,32 +1196,22 @@ class VisualizationOptions:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
-        values = dict(values)
+        values = {"show_edge_shapes": False, **values}
         values["layout"] = _normalize_layout(values["layout"])
-        _validate_node_style(cast(VisNodeModeLiteral, values["node_style"]))
-        _validate_intervention_mode(cast(VisInterventionModeLiteral, values["intervention_mode"]))
-        _validate_buffer_visibility(values["show_buffers"])
-        _validate_collapse(cast(CollapseLiteral, values["collapse"]))
-        _validate_fold_repeats(cast(FoldRepeatsLiteral, values["fold_repeats"]))
-        _validate_visualization_flag_fields(values)
+        _validate_visualization_values(values)
         _set_frozen_fields(instance, _VISUALIZATION_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class ReplayOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class ReplayOptions(_OptionsDisplay):
     """Grouped replay/rerun options for ``Trace`` propagation APIs.
 
     Parameters
     ----------
     strict:
         Whether divergence warnings should raise.
-    hooks:
-        Optional replay hook mapping.
-    differentiable:
-        Whether replay returns a new differentiable Trace over fresh frontier
-        leaves instead of mutating the existing Trace in place.
     append:
         Whether rerun appends a compatible batch chunk.
     chunk_size:
@@ -1273,8 +1231,6 @@ class ReplayOptions:
     """
 
     strict: bool = False
-    hooks: dict[Any, Any] | None = None
-    differentiable: bool = False
     append: bool = False
     chunk_size: int | None = None
     allow_changed_params: bool = False
@@ -1283,8 +1239,6 @@ class ReplayOptions:
     def __init__(  # noqa: PLR0913 -- an options group's constructor takes one keyword per field
         self,
         strict: bool | MissingType = MISSING,
-        hooks: dict[Any, Any] | None | MissingType = MISSING,
-        differentiable: bool | MissingType = MISSING,
         append: bool | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
         allow_changed_params: bool | MissingType = MISSING,
@@ -1294,10 +1248,6 @@ class ReplayOptions:
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
-            "hooks": _resolve_option_value("hooks", hooks, None, specified_fields),
-            "differentiable": _resolve_option_value(
-                "differentiable", differentiable, False, specified_fields
-            ),
             "append": _resolve_option_value("append", append, False, specified_fields),
             "chunk_size": _resolve_option_value("chunk_size", chunk_size, None, specified_fields),
             "allow_changed_params": _resolve_option_value(
@@ -1329,16 +1279,14 @@ class ReplayOptions:
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class InterventionOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class InterventionOptions(_OptionsDisplay):
     """Grouped intervention options for ``Trace.do``.
 
     Parameters
     ----------
     engine:
         Propagation engine: ``"auto"``, ``"replay"``, ``"rerun"``, or ``"set_only"``.
-    confirm_mutation:
-        Whether root-mutation warnings are suppressed for intentional mutation.
     strict:
         Whether selector and propagation checks raise instead of warning.
     allow_changed_params:
@@ -1347,6 +1295,10 @@ class InterventionOptions:
         ``replay_param_changed_since_capture``; ``True`` names the parameters used
         in ``trace.last_run["replayed_with_changed_params"]``. The rerun engine
         always runs the live model and ignores it.
+    differentiable:
+        Replay onto a new fork whose outputs stay differentiable (fresh frontier
+        leaves) and return it, instead of mutating this trace in place. Only the
+        replay engine reads it; rerun and set-only ignore it.
 
     Examples
     --------
@@ -1356,29 +1308,29 @@ class InterventionOptions:
     """
 
     engine: str = "auto"
-    confirm_mutation: bool = False
     strict: bool = False
     allow_changed_params: bool = False
+    differentiable: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
         engine: str | MissingType = MISSING,
-        confirm_mutation: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
         allow_changed_params: bool | MissingType = MISSING,
+        differentiable: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen intervention option bundle."""
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "engine": _resolve_option_value("engine", engine, "auto", specified_fields),
-            "confirm_mutation": _resolve_option_value(
-                "confirm_mutation", confirm_mutation, False, specified_fields
-            ),
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
             "allow_changed_params": _resolve_option_value(
                 "allow_changed_params", allow_changed_params, False, specified_fields
+            ),
+            "differentiable": _resolve_option_value(
+                "differentiable", differentiable, False, specified_fields
             ),
         }
         _set_frozen_fields(self, _INTERVENTION_FIELDS, values)
@@ -1389,18 +1341,18 @@ class InterventionOptions:
 
         return {field_name: getattr(self, field_name) for field_name in _INTERVENTION_FIELDS}
 
-    def is_field_explicit(self, field_name: str) -> bool:
-        """Return whether a field was explicitly supplied by the caller."""
+    def _is_field_explicit(self, field_name: str) -> bool:
+        """Return whether a field was explicitly supplied by the caller (private)."""
 
         return _field_is_explicit(self, field_name)
 
     @classmethod
-    def from_values(
+    def _from_values(
         cls,
         values: Mapping[str, Any],
         specified_fields: frozenset[str],
     ) -> InterventionOptions:
-        """Build an instance from already-resolved field values."""
+        """Build an instance from already-resolved field values (private; the flat-kwarg merge path)."""
 
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _INTERVENTION_FIELDS, values)
@@ -1408,8 +1360,8 @@ class InterventionOptions:
         return instance
 
 
-@dataclass(frozen=True, init=False)
-class StorageOptions:
+@dataclass(frozen=True, init=False, repr=False)
+class StorageOptions(_OptionsDisplay):
     """Grouped streaming-save options for ``trace``.
 
     Parameters
@@ -1568,7 +1520,17 @@ def to_disk(
     Returns
     -------
     StorageOptions
-        Storage options for ``trace(..., storage=...)`` and ``record(..., streaming=...)``.
+        Storage options for ``trace(..., storage=...)`` and ``record(..., storage=...)``.
+
+    Examples
+    --------
+    >>> to_disk("run.tlspec").retain_in_memory
+    False
+    >>> import os, tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     trace = tl.trace(model, x, storage=to_disk(os.path.join(tmp, "run.tlspec")))
+    ...     print(os.path.exists(os.path.join(tmp, "run.tlspec")))
+    True
     """
 
     return StorageOptions(
@@ -1740,7 +1702,6 @@ __all__ = [
     "ReplayOptions",
     "StorageOptions",
     "VisualizationOptions",
-    "suppress_mutate_warnings",
 ]
 
 

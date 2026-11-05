@@ -56,7 +56,7 @@ def effective_inference_only(capture_options: CaptureOptions, *, backward_reques
     ``torch.no_grad()`` or ``torch.inference_mode()`` builds no autograd graph,
     so it implies ``inference_only=True`` unless a backward-related option asks
     for one. The Trace then reports ``inference_only=True`` and a later
-    ``log_backward`` refusal names the cause. An implied value is provisional:
+    ``backward`` refusal names the cause. An implied value is provisional:
     the capture clears it after the forward if an output still carries
     autograd history (``torch.enable_grad()`` inside the forward), see
     :func:`torchlens._capture.stop.cleared_inference_only_directive`.
@@ -86,6 +86,15 @@ class TrainingModeConfigError(ConfigurationError, ValueError):
     This is the slow/replay sibling of ``tl.errors.RecordingConfigError``:
     both are ``ValueError`` subclasses for user configuration mistakes, but
     this class specifically covers autograd-retaining training captures.
+
+    Examples
+    --------
+    >>> opts = tl.options.CaptureOptions(inference_only=True, backward_ready=True)
+    >>> try:
+    ...     tl.trace(model, torch.randn(1, 3, 8, 8, requires_grad=True), capture=opts)
+    ... except TrainingModeConfigError as err:
+    ...     print(type(err).__name__, err.fields["code"])
+    TrainingModeConfigError inference_only_conflict
     """
 
 

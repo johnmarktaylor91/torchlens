@@ -23,6 +23,7 @@ pytestmark = [
         _TF_BACKEND_SKIP_REASON is not None,
         reason=_TF_BACKEND_SKIP_REASON or "TensorFlow backend stack is supported",
     ),
+    pytest.mark.rare,
 ]
 
 
@@ -223,9 +224,9 @@ def test_tf_validation_reports_unverified_for_pure_allowlist_gap() -> None:
     """A classified pure op outside the replay allowlist is not a green pass."""
 
     def mostly_unverified(x: Any) -> Any:
-        """Use a classified but non-allowlisted pure op (``Slice``)."""
+        """Use a classified but non-allowlisted pure op (``Pack``)."""
 
-        return tf.slice(x, [0], [1])
+        return tf.stack([x, x])
 
     trace = tl.trace(mostly_unverified, tf.constant([1.0, 2.0]), backend="tf")
     result = _validate(trace)

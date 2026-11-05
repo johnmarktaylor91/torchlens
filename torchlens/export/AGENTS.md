@@ -40,10 +40,10 @@ default per DISSENT D1; ruling N2 makes module the FILE default);
 `_netron_fields.py` curated attrs/wording contract (module-path attr is
 never named `module`; missing-is-absent-never-zero);
 `_netron_emit.py` deterministic serialization; `_netron_attachment.py` the
-`netron:attachment` companion (written by default beside every file export,
-ruling U09.3) with four fail-closed vendor guards; `_netron_diff.py` the
+`netron:attachment` companion (written by default beside every file export
+unless `attachment=False`) with four fail-closed vendor guards; `_netron_diff.py` the
 `baseline=` per-node diff facts read from `torchlens.report.diff`
-(ruling U09.5). Every
+(the diff summary lands in the `torchlens.baseline` slot). Every
 artifact must stay green under strict `onnx.ModelProto` parse +
 `check_model(full_check=True)` — the checker catches what netron's
 permissive reader swallows, including the function-cycle class that KILLS

@@ -12,7 +12,7 @@ while the site value had one (or when the site value has no graph to keep).
 The matrix of which verb keeps the graph under which door is
 ``docs/gradient_contract.md``.
 
-Differentiable replay (``push(replay=ReplayOptions(differentiable=True))``)
+Differentiable replay (``do(..., intervention=InterventionOptions(differentiable=True))``)
 re-leafs each edited site value as a fresh frontier leaf, so a graph-keeping
 edit passes the check there yet no parameter upstream of the site gets a
 gradient; ``keep_grad`` discloses that once per session with the warning code
@@ -187,6 +187,19 @@ def keep_grad(edit: Any) -> Any:
     InvalidArgumentError
         ``keep_grad_edit_invalid`` for an edit with no runtime hook or an
         object that is not an edit.
+
+    Examples
+    --------
+    >>> kept = keep_grad(tl.scale(0.0))
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), kept))
+    >>> edited[edited.output_layers[0]].out.requires_grad
+    True
+    >>> detached = keep_grad(tl.zero_ablate())
+    >>> try:
+    ...     tl.trace(model, x, intervene=tl.when(tl.func("relu"), detached))
+    ... except Exception as error:
+    ...     print(error.fields["code"])
+    edit_detached_from_graph
     """
 
     if isinstance(edit, Edit) and dict(edit.metadata).get("keep_grad"):

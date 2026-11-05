@@ -1,8 +1,8 @@
-"""Field-admission gate for the v11 writer contract.
+"""Field-admission gate for the frozen v11 writer contract.
 
-Every field the v11 contract of record carries over v10 (persisted or DROP)
-must be registered here under its policy. An unregistered new persisted field
-fails this test, so a field never reaches the stored shape by accident.
+The v11 contract stays byte-frozen beside the current one. Every field it
+carries over v10 (persisted or DROP) is registered here under its policy, so a
+field never reached the stored shape by accident.
 """
 
 from __future__ import annotations
@@ -19,9 +19,14 @@ V11_CONTRACT = SCHEMAS / "writer_contract_v11.json"
 #: for every field added over v10. The v11 renames enter under their new
 #: spellings (the old spellings leave with no alias).
 V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
+    "aten_op": {"out": "blob_recursive"},
     "backward_pass": {"_executed_flops_record": "keep", "pass_number": "keep"},
     "buffer": {"grad_memory": "keep", "overwrite_index": "keep", "writer_label": "keep"},
-    "grad_fn_call": {"fire_record": "keep", "grad_fn_label": "keep"},
+    "grad_fn_call": {
+        "backward_pass_number": "keep",
+        "fire_record": "keep",
+        "grad_fn_label": "keep",
+    },
     "layer": {"is_edited": "keep", "short_layer_label": "keep"},
     "module_call": {"has_pre_hook_input_change": "keep", "label": "keep"},
     "op": {
@@ -35,6 +40,7 @@ V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
     "trace": {
         # Private storage behind the removed public Trace names: the capture
         # pipeline, the accessors and save/load still read these stores.
+        "_active_backward_pass_number": "drop",
         "_append_history": "keep",
         "_autograd_backward_root_grad_fn_object_ids": "keep",
         "_autograd_derived_grads": "keep",
@@ -89,7 +95,6 @@ V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
         "_layer_list": "keep",
         "_layer_logs": "keep",
         "_layer_num_calls": "keep",
-        "_module_filter": "drop",
         "_num_backward_passes": "keep",
         "_num_layers_with_params": "keep",
         "_num_ops": "keep",
@@ -247,12 +252,14 @@ def test_v11_admissions_name_only_real_additions() -> None:
 
 
 def test_v11_reader_floor_is_the_v11_stamp() -> None:
-    """The v11 contract reads only stamp 11: the floor moved with the contract."""
+    """The frozen v11 contract read only stamp 11: the floor moved with the contract.
 
-    from torchlens._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION
+    The live floor is pinned by the current contract's own gate
+    (``tests/test_schema_v12_contract.py``) and ``tests/test_rehydration_floor.py``.
+    """
 
-    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION == 11
     v11 = json.loads(V11_CONTRACT.read_text(encoding="utf-8"))
     v10 = json.loads(V10_CONTRACT.read_text(encoding="utf-8"))
-    assert v11["contract"]["min_tlspec_version"] == 11
+    assert v11["contract"]["tlspec_version"] == 11, "v11 stays frozen"
+    assert v11["contract"]["min_tlspec_version"] == 11, "v11 stays frozen"
     assert v10["contract"]["min_tlspec_version"] == 6, "v10 stays frozen"

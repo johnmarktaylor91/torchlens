@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import torch
 
+from .._entry_refusals import require_member_name
 from .._utils.facade import refuse_removed_member
 from ..intervention._super.super_logs import (
     SuperBufferAccessor,
@@ -18,12 +19,7 @@ from ..intervention._super.super_logs import (
     SuperModuleCallAccessor,
     SuperParamAccessor,
 )
-from ..intervention._super.super_op import (
-    SuperAtenOp,
-    SuperLayerAccessor,
-    SuperOp,
-    SuperOpAccessor,
-)
+from ..intervention._super.super_op import SuperAtenOp, SuperLayerAccessor, SuperOp, SuperOpAccessor
 from ..intervention._topology.topology import Supergraph
 from ..intervention.types import Relationship
 from . import (
@@ -61,7 +57,7 @@ from ._deltas import (
     _resolve_member_name as _resolve_member_name,
     _tensor_field as _tensor_field,
 )
-from ._draw import bundle_draw as _bundle_draw
+from ._draw import bundle_show as _bundle_show, forward_bundle_draw as _forward_bundle_draw
 from ._labels import AmbiguousLabelError, label_view
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
 from ._lookup import _BundleAccessorProperty, _BundleStructuralProperty
@@ -78,7 +74,12 @@ from ._relation_carriage import (
     _bundle_relate,
     _bundle_upstream,
 )
+from ._relation_grades import (
+    RelationGrade as RelationGrade,  # re-export: torchlens.bundle.RelationGrade
+    _bundle_relation_grades,
+)
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
+from ._removed import _REMOVED_BUNDLE_MEMBERS
 from ._token_divergence import (
     TokenDivergence as TokenDivergence,  # re-export: torchlens.bundle.TokenDivergence
     _bundle_token_divergence,
@@ -95,30 +96,6 @@ if TYPE_CHECKING:
     from ..viz._drawing import Drawing
     from ._draw import BundleGraphLiteral
     from ._token_spans import TokenPairs
-
-
-#: Public Bundle methods removed by the 2026-10-01 shim removal (no alias kept).
-
-
-_REMOVED_BUNDLE_MEMBERS: dict[str, str] = {
-    "replay": "use bundle.do(site, edit) -- do replays every member",
-    "rerun": "use bundle.run(model, x) -- Bundle.rerun was renamed",
-    "push": "use bundle.do(site, edit) -- do applies and replays the edit on every member",
-    "attach_hooks": "use bundle.do(site, hook) -- do is the one editing verb on a bundle",
-    "node": "use bundle.at(site)",
-    "compare_at": "use bundle.at(site).compare()",
-    "joint_metric": "call fn(bundle) directly",
-    "set_capacity": "assign bundle.capacity = n",
-    "traces": "use bundle.members or bundle[name]",
-    "help": "print(bundle) shows the bundle card",
-    "cluster": "there is no bundle clustering; compute it over bundle.map(fn)",
-    "member_construction": "read bundle.history for how members entered the bundle",
-    "show_diff": "use bundle.draw(graph='diff', members=(a, b), metric=...)",
-    "delta_map": "use bundle.compare(a, b, metric=..., on=...) per pair, bundle.rank_changes() across members",
-    "norm_delta": "use bundle.compare(baseline, member, metric='relative_l2')",
-    "output_delta": "use bundle.compare(member, target, metric=...) and read the output sites",
-    "aligned_pairs": "use bundle.supergraph, the structural alignment across members",
-}
 
 
 class Bundle:
@@ -163,10 +140,17 @@ class Bundle:
         Load-side carriage for the persisted container identity (F03
         lineage). ``None`` (the user door) mints a fresh random id; the
         artifact loader passes the saved id verbatim.
+
+    Examples
+    --------
+    >>> bundle = Bundle({"clean": tl.trace(model, x), "shifted": tl.trace(model, x + 1)},
+    ...                 baseline="clean")
+    >>> len(bundle), bundle.names, bundle.baseline_name
+    (2, ['clean', 'shifted'], 'clean')
     """
 
-    # Bundle outcome authority (foldB D9, instance three of the two-answers
-    # disease): the container speaks for itself through the DERIVED
+    _comparison_field = staticmethod(_comparisons._tensor_field)
+    # Bundle outcome authority: the container speaks through the DERIVED
     # worst-of-members fold below, so ``outcome_for(bundle)`` never falls back
     # to a false UNKNOWN with the hand-built-object warning.
     _OUTCOME_SELF_AUTHORITY: ClassVar[bool] = True
@@ -249,6 +233,21 @@ class Bundle:
 
         return _card.outcome_distribution(self)
 
+    def summary(self) -> str:
+        """Return the bundle card as text: members, outcomes, baseline, relations."""
+
+        return _card.bundle_summary(self)
+
+    def to_pandas(self) -> Any:
+        """Return one member-keyed table: a ``member`` column, then each member's rows."""
+
+        return _card.bundle_table(self)
+
+    def to_agent_json(self, *, max_ops: int | None = None) -> dict[str, Any]:
+        """Return the ``torchlens.agent_bundle.v1`` dump: card facts plus each member's dump."""
+
+        return _card.bundle_agent_json(self, max_ops=max_ops)
+
     def __repr__(self) -> str:
         """One-line bundle card: members, baseline, outcome distribution.
 
@@ -280,9 +279,7 @@ class Bundle:
             Matching member log.
         """
 
-        if not isinstance(name, str):
-            raise TypeError(f"Bundle indices must be member names, got {type(name).__name__}.")
-        return self._members[name]
+        return self._members[require_member_name(name)]
 
     @property
     def outcome(self) -> CaptureOutcome:
@@ -502,6 +499,7 @@ class Bundle:
     # completion, no longer __getattr__-only dynamic lookups).
     relate = _bundle_relate
     episode_status = _bundle_derive_episode_status
+    relation_grades = _bundle_relation_grades  # derived row grades, never stored
     # The provenance join (F03 item 4): pure derived views, never stored.
     why = _bundle_why
     provenance = _bundle_provenance
@@ -695,8 +693,8 @@ class Bundle:
         floor of the comparison gate passes for every member pair (a view
         read, so different input values are allowed). ``compare()`` on the
         returned view is the member-by-member matrix at this site and first
-        runs the comparison gate (shared graph, same input values) over the
-        members it reads. To read a subset of members, build a bundle of
+        runs the comparison gate (shared graph; same input values or, for runs
+        on different inputs, graphs that line up) over the members it reads. To read a subset of members, build a bundle of
         them: ``tl.Bundle({name: bundle[name] for name in names}).at(site)``.
 
         Parameters
@@ -900,14 +898,14 @@ class Bundle:
 
         return _operations.bundle_fork(self, name)
 
-    def run(self, model: nn.Module, x: Any = None, **kwargs: Any) -> Bundle:
+    def run(self, model: nn.Module, inputs: Any = None, **kwargs: Any) -> Bundle:
         """Run all member logs with a supplied model and input.
 
         Parameters
         ----------
         model:
             Model forwarded to each member.
-        x:
+        inputs:
             Forward input.
 
         Returns
@@ -916,7 +914,7 @@ class Bundle:
             This bundle.
         """
 
-        return _operations.bundle_run(self, model, x, **kwargs)
+        return _operations.bundle_run(self, model, inputs, **kwargs)
 
     def map(self, fn: Callable[..., Any]) -> dict[str, Any]:
         """Apply a function independently to each member; released members read ``"unmeasured"``.
@@ -924,10 +922,15 @@ class Bundle:
         Parameters
         ----------
         fn:
-            Callable receiving one member log. A callable that accepts a
-            second positional parameter additionally receives the member's
-            NAME (``bundle.map(lambda log, name: ...)``); single-parameter
-            callables keep the historical contract unchanged.
+            Callable receiving one member log. A callable whose second
+            positional parameter is required (or that takes ``*args``)
+            additionally receives the member's NAME there
+            (``bundle.map(lambda log, name: ...)``); a callable declaring a
+            parameter called ``name`` receives it by keyword
+            (``lambda log, k=3, name=None: ...``). A defaulted second
+            parameter with another name keeps its default
+            (``lambda log, k=3: ...`` is called as ``fn(log)``), and
+            single-parameter callables keep the historical contract.
 
         Returns
         -------
@@ -940,37 +943,29 @@ class Bundle:
 
         return _operations.bundle_map(self, fn)
 
-    @staticmethod
-    def _accepts_member_name(fn: Callable[..., Any]) -> bool:
-        """Whether ``fn`` can take (member, name) rather than (member,) only.
-
-        Signature inspection failures (builtins, C callables) fall back to
-        the historical single-argument call, never a guessed two-argument
-        call that would raise mid-iteration.
-        """
-
-        return _operations.accepts_member_name(fn)
-
-    def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, Drawing | str]:
-        """Render each bundle member graph as a member-keyed strip.
+    def show(self, kind: str | None = None, **kwargs: Any) -> Drawing | dict[str, Drawing | str]:
+        """Show the bundle: by default the merged graph of where its members differ.
 
         Parameters
         ----------
         kind:
-            Picture kind forwarded to each member's :meth:`Trace.show`.
+            ``None`` (default) or ``"graph"``: the merged graph, :meth:`draw`
+            with ``**kwargs``. ``"strip"``: each member's own ``Trace.draw``
+            side by side (a given ``path`` gets ``_<member>`` appended).
+            ``"repr"`` / ``"html"``: each member's ``repr`` / HTML text. Any
+            other kind refuses (``bundle_show_kind_invalid``).
         **kwargs:
-            ``Trace.draw`` keywords, forwarded to each member. When a ``path``
-            is supplied, member names are appended to produce one artifact
-            per member.
+            Forwarded to :meth:`draw`, or under ``kind="strip"`` to each
+            member's ``Trace.draw``.
 
         Returns
         -------
-        dict[str, Drawing | str]
-            Member-keyed results: each member's :class:`Drawing`, or the
-            ``repr`` / HTML text for those kinds.
+        Drawing | dict[str, Drawing | str]
+            The merged graph's :class:`Drawing`; for the other kinds,
+            member-keyed results.
         """
 
-        return _operations.bundle_show(self, kind, **kwargs)
+        return _bundle_show(self, kind, kwargs)
 
     def draw(
         self,
@@ -990,45 +985,30 @@ class Bundle:
         members: tuple[str | Trace, str | Trace] | None = None,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
         on: Literal["out", "grad"] = "out",
-    ) -> str:
-        """Draw the bundle as one picture and return its DOT source.
+        **unsupported: Any,
+    ) -> Drawing:
+        """Draw the bundle as one picture and return it as a :class:`Drawing`.
 
         ``graph`` picks the picture: ``"forward"`` (default), ``"backward"`` or
         ``"combined"`` draw the bundle's union op graph for that pass, and ``"diff"``
         draws the ``members`` pair (default: the baseline and the next member) side by
-        side with their aligned sites coloured by ``metric`` distance over the ``on``
-        tensor field (``"out"`` or ``"grad"``). ``nodes="members"`` draws one node per
-        member and one edge per relation row (``graph`` must stay ``"forward"``);
-        ``rolled`` draws the rolled (per-layer) graph instead of every op.
+        side, one node per op (each pass of a repeated layer apart), coloured by
+        ``metric`` distance over ``on`` (``"out"`` or ``"grad"``). ``nodes="members"``
+        draws one node per member and one edge per relation row (``graph`` must stay
+        ``"forward"``); ``rolled`` draws the rolled (per-layer) graph instead of every op.
 
-        ``path`` is the output file (a recognised extension picks the format); a bare
-        call writes a collision-safe ``bundle_modelgraph`` file (``bundle_diff`` for
-        ``graph="diff"``) in the working directory. ``file_format`` defaults to
-        ``"pdf"`` (``"svg"`` for diff), ``theme`` to ``"torchlens"`` (``"paper"`` for
-        diff; the names ``Trace.draw`` takes) and ``direction`` to ``"bottomup"``.
-        ``show_legend=True`` draws the key under the header; ``open_viewer`` opens the
-        rendered file. ``graph_overrides``, ``node_overrides`` (keyed by op label, or
-        member name under ``nodes="members"``) and ``edge_overrides`` (keyed by
-        ``(source, target)`` labels) pass Graphviz attributes through.
+        ``path`` is the output file, as on ``Trace.draw``: its extension picks the format
+        and ``file_format`` (default ``"pdf"``, ``"svg"`` for diff) applies only to a path
+        without one; a different format than the extension refuses. A bare call
+        displays inline inside a Jupyter kernel and writes nothing; elsewhere it writes
+        a collision-safe ``bundle_modelgraph`` file (``bundle_diff`` for diff) and
+        prints its path. ``theme`` defaults to ``"torchlens"`` (``"paper"`` for diff),
+        ``direction`` to ``"bottomup"``; ``open_viewer=True`` opens the file. The
+        ``*_overrides`` pass Graphviz attributes (nodes keyed by op label, or member
+        name under ``nodes="members"``; edges by ``(source, target)``). Any other
+        keyword refuses (``bundle_draw_keyword_unsupported``, naming the supported list).
         """
-        return _bundle_draw(
-            self,
-            path,
-            graph=graph,
-            nodes=nodes,
-            rolled=rolled,
-            direction=direction,
-            theme=theme,
-            show_legend=show_legend,
-            file_format=file_format,
-            open_viewer=open_viewer,
-            graph_overrides=graph_overrides,
-            node_overrides=node_overrides,
-            edge_overrides=edge_overrides,
-            members=members,
-            metric=metric,
-            on=on,
-        )
+        return _forward_bundle_draw(locals())
 
     def rank_changes(
         self,
@@ -1036,36 +1016,36 @@ class Bundle:
         *,
         k: int = 10,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
+        by: Literal["site", "module"] = "site",
     ) -> list[tuple[str, float]]:
         """Rank sites by out distance from a baseline (the SITE axis).
 
-        Each site's score is the ``metric`` distance from the baseline's
-        activation to every other member's, AVERAGED across those members —
-        the answer to "where did the bundle diverge", never "which member
-        mattered" (the member axis lives on the effect table).
-
-        Sites pair through the structural alignment (:attr:`supergraph`), not
-        by literal label; a site some member lacks is not scored.
+        Each site's score is the ``metric`` distance from the baseline's activation to every
+        other member's, AVERAGED across them ("where did the bundle diverge", never "which
+        member mattered"). Sites pair through the structural alignment (:attr:`supergraph`),
+        not by literal label; a site some member lacks is not scored.
 
         Parameters
         ----------
         baseline:
             Optional baseline override.
         k:
-            Maximum rows to RETURN. Every site is scored first; this is a
-            display cap on the sorted result, not a compute bound.
+            Maximum rows to RETURN after every site is scored (a display cap).
         metric:
             Pairwise tensor metric.
+        by:
+            ``"site"`` (default): one row per op. ``"module"``: one row per module address
+            (``transformer.h.9``) scored by its most changed site (ops outside every module
+            keep their site rows); ``k`` caps after the fold.
 
         Returns
         -------
         list[tuple[str, float]]
-            ``(site_label, score)`` rows sorted descending. A multi-pass op
-            scores one row per pass, keyed by its pass-qualified label
-            (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
+            ``(site_label, score)`` rows sorted descending. A multi-pass op scores one row per
+            pass, keyed ``tanh_1_1:2``; a single-pass op keeps its bare layer label.
         """
 
-        return _comparisons.rank_changes(self, baseline, k=k, metric=metric)
+        return _comparisons.rank_changes(self, baseline, k=k, metric=metric, by=by)
 
     def compare(
         self,
@@ -1218,7 +1198,7 @@ class Bundle:
         baseline: str | Trace | None = None,
         on: Literal["out", "grad"] = "out",
     ) -> str:
-        """Compute one per-node comparison once and store it on the supergraph.
+        """Store one per-node comparison on the supergraph (a layer's passes joined in order).
 
         Returns the stored name (the metric's name unless ``name`` is given);
         :meth:`stored_comparison` reads it back without recomputing.
@@ -1355,8 +1335,8 @@ class Bundle:
         """Run the two-predicate comparison gate over the operand pairs.
 
         Thin delegation to :func:`torchlens.bundle._compare_gate.require_comparable`
-        (topology -> model-axis floor -> value-level input identity, per
-        operand pair; A-GATE, foldB D6/D18).
+        (topology -> model-axis floor -> site line-up: proven-equal input values
+        or equal graph-shape hashes, per operand pair; A-GATE, foldB D6/D18).
 
         Parameters
         ----------

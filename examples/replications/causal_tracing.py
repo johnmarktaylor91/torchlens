@@ -301,11 +301,13 @@ def _restore_layers(
 
     rows = corrupted.shape[0] // len(positions)
     restored = corrupt.fork("restore_" + "_".join(addresses))
+    hooks = []
     for address in addresses:
         clean_out = clean.modules[address].facets["down_out"].value.detach()
-        hook = _restore_hook(clean_out, positions, rows)
-        restored.attach_hooks(tl.facet("down_out").in_module(address), hook)
-    restored.run(wrapped, corrupted)
+        hooks.append(
+            (tl.facet("down_out").in_module(address), _restore_hook(clean_out, positions, rows))
+        )
+    restored.do(hooks, model=wrapped, inputs=corrupted)
     return restored
 
 
@@ -381,7 +383,7 @@ def run(
     passed = (
         modules_ok and peak_category == "last subject token" and peak_layer <= EARLY_LAYER_LIMIT
     )
-    _save_clean_trace(wrapped, tokenizer, facts[0], out_dir)
+    replay = _save_clean_trace(wrapped, tokenizer, facts[0], out_dir)
     summary = {
         "replication": "causal_tracing",
         "claim": CLAIM,
@@ -411,6 +413,7 @@ def run(
             "paper_peak_mlp_aie_gpt2_xl": PAPER_PEAK_MLP_AIE,
             "patched_modules_are_the_12_mlps": modules_ok,
         },
+        "replay": replay,
         "verdict": common.REPLICATED if passed else common.NOT_REPLICATED,
     }
     if n_facts > VERDICT_FACTS or window > 1:
@@ -473,17 +476,17 @@ def _reported(per_fact: list[dict[str, Any]], widths: tuple[int, ...]) -> dict[s
 
 def _save_clean_trace(
     wrapped: EmbedsGPT2, tokenizer: Any, fact: dict[str, Any], out_dir: Path | None
-) -> None:
-    """Write a portable ``.tlspec`` of the first fact's clean run."""
+) -> dict[str, Any] | None:
+    """Write a portable ``.tlspec`` of the first fact's clean run and verify its replay."""
 
     if out_dir is None:
-        return
+        return None
     ids = tokenizer(fact["prompt"], return_tensors="pt").input_ids
     with torch.no_grad():
         embeds = wrapped.lm.transformer.wte(ids)
     trace = tl.trace(wrapped, embeds, save="all")
     try:
-        common.save_trace(trace, out_dir, "causal_tracing")
+        return common.save_trace(trace, out_dir, "causal_tracing", model=wrapped, inputs=embeds)
     finally:
         trace.cleanup()
 

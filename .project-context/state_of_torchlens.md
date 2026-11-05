@@ -101,7 +101,7 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/stats/` | Streaming stats and `aggregate()` | Dataset-scale activation summaries |
 | `torchlens/callbacks/` | Lightning callback integration | Training-loop adapters |
 | `torchlens/_partial/` | Partial capture wrapper for failed forwards | Debugging failed captures |
-| `torchlens/experimental/` | Unstable helpers, Dagua opt-in, node styles | Experimental APIs |
+| `torchlens/experimental/` | Unstable helpers, node styles | Experimental APIs |
 | `torchlens/viz/` | Convenience visual namespace | Bundle diff and heatmap helpers |
 | `torchlens/appliances/` | Moved accessor aliases | Non-top-level public accessor imports |
 | `torchlens/types.py` | Moved type aliases | Public types not in top-level `__all__` |
@@ -174,7 +174,7 @@ version again.
 
 JAX M1 exposes leaf-level derived gradients through `trace.derived_grads` when capture receives
 `tl.backends.jax.GradOptions`. These records come from a second pure `jax.value_and_grad` run and
-are not backward capture; JAX traces keep `backward_capture=False`, and `trace.log_backward(...)`,
+are not backward capture; JAX traces keep `backward_capture=False`, and `trace.backward(...)`,
 `trace.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise with guidance to
 `trace.derived_grads`.
 
@@ -276,20 +276,21 @@ Extras in `pyproject.toml` also cover `viz`, `tabular`, `captum`, `sae`, `profil
 
 | Location | Contents |
 |----------|----------|
-| `examples/5min/` | Seven quickstart notebooks plus README |
-| `examples/50min/` | Nine longer workflow notebooks plus README |
-| `examples/recipes/` | Five recipe notebooks plus README |
+| `examples/quick/` | One-screen recipe notebooks plus README |
+| `examples/workflows/` | Longer workflow notebooks plus README |
+| `examples/methods/` | Recent-method notebooks plus README |
+| `examples/replications/` | Paper-replication scripts on GPT-2 small plus README |
 | `examples/intervention/` | Sixteen numbered Python intervention examples plus README |
 | `examples/demos/` | Bundle-diff hero demo notebook and SVG artifact |
 | `notebooks/audit/` | User-facing 2.x audit notebooks |
 | `notebooks/` | Backward, fastlog, and training tutorials |
 
 ## Release Pipeline
-The release path uses semantic-release v9 configured in `pyproject.toml`. Version variables are
-`pyproject.toml:project.version` and `torchlens/__init__.py:__version__`. A custom parser at
-`scripts/no_major_parser.py` plus commit-msg and pre-push hooks prevent accidental major
-releases; keep the 2.x family locked unless release work explicitly says otherwise. See
-`feedback_version_bumps.md` in the maintainer memory path for the incident history if needed.
+A release is a maintainer-pushed `vX.Y.Z` tag on main whose `pyproject.toml:project.version` and
+`torchlens/__init__.py:__version__` already carry that version (`.github/workflows/release.yml`).
+`scripts/check_release_major.py` refuses an unapproved major version before every build, and the
+commit-msg and pre-push hooks (`scripts/check_no_breaking_markers.py`) reject major-bump markers. A
+major version ships only on the maintainer's explicit command, through `.github/MAJOR_RELEASE_APPROVED`.
 
 ## Where To Look For X
 
@@ -317,7 +318,7 @@ releases; keep the 2.x family locked unless release work explicitly says otherwi
 | Where are bridge integrations? | `torchlens/bridge/` |
 | Where is the environment and model report (`tl.report.doctor`)? | `torchlens/report/_doctor.py` (entry point), `torchlens/report/_environment.py` (environment checks), `torchlens/compat/_report.py` (model checks) |
 | Where are observer taps/spans? | `torchlens/observers.py` |
-| Where are release guards? | `scripts/no_major_parser.py`, `scripts/check_no_breaking_markers.py`, `pyproject.toml` |
+| Where are release guards? | `scripts/check_release_major.py`, `scripts/check_no_breaking_markers.py`, `.github/workflows/release.yml` |
 
 ## Pointers To Deeper Docs
 - Root `AGENTS.md` for agent behavior and common workflows (`CLAUDE.md` beside each

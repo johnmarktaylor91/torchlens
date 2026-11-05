@@ -28,6 +28,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._io import ArtifactError
 from torchlens._io.forgery_validation import _validate_audit_row
+from torchlens.errors import OpaqueCallableError
 
 _DIGEST = hashlib.sha256(b"schema-v9-audit").hexdigest()
 _CHAIN_DIGEST = hashlib.sha256(b"schema-v9-chain").hexdigest()
@@ -72,10 +73,26 @@ def test_selection_intervened_artifact_loads_its_own_save(log, tmp_path):
         "fixture must exercise the shipped per-site source disclosure"
     )
     path = tmp_path / "selection_intervened.tlspec"
+    # A masked builtin edit stores its mask and digest, so the default portable save takes it.
     fork.save(path)
     loaded = tl.load(path)
     loaded_rows = [row for row in loaded.intervention_audit if row.get("kind") == "ACT"]
     assert any("source" in site for row in loaded_rows for site in row.get("sites", ()))
+
+
+def test_masked_user_callable_refuses_a_default_portable_save(log, tmp_path):
+    """A masked edit that needs user code needs the audit level: the default save names the code
+    and remedy."""
+
+    def _halve(out, *, ctx):
+        return out * 0.5
+
+    fork = log.fork()
+    fork.do(fork[tl.units("relu_1_2", [(0, 0, 1, 1)])], _halve)
+    with pytest.raises(OpaqueCallableError) as caught:
+        fork.save(tmp_path / "masked_default.tlspec")
+    assert caught.value.fields["code"] == "intervention_spec_not_portable"
+    assert "level='audit'" in caught.value.fields["remedy"]
 
 
 @pytest.mark.smoke
@@ -160,7 +177,6 @@ def _event_row(**overrides):
     return row
 
 
-@pytest.mark.smoke
 def test_act_site_source_is_optional_and_string_typed():
     assert _validate_audit_row(0, _act_row()) is not None
     assert _validate_audit_row(0, _act_row(source="subspace basis sha256:ab")) is not None
@@ -170,7 +186,6 @@ def test_act_site_source_is_optional_and_string_typed():
         _validate_audit_row(0, _act_row(unexpected="x"))
 
 
-@pytest.mark.smoke
 def test_param_row_grammar_is_closed():
     digest, edit, targets = _validate_audit_row(0, _param_row())
     assert digest == _DIGEST and edit == "scale"
@@ -191,7 +206,6 @@ def test_param_row_grammar_is_closed():
         _validate_audit_row(0, bad)
 
 
-@pytest.mark.smoke
 def test_event_row_grammar_and_chain_extension():
     assert _validate_audit_row(0, _event_row()) is None, (
         "EVENT rows are transaction envelopes: they stay outside the "
@@ -217,7 +231,6 @@ def test_event_row_grammar_and_chain_extension():
             _validate_audit_row(0, _event_row(**mutation))
 
 
-@pytest.mark.smoke
 def test_param_selection_recipe_form_is_admitted_and_closed():
     """The shipped param-substitution FireRecord recipe loads; malformed refuses.
 

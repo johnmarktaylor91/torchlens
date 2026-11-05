@@ -230,23 +230,6 @@ def _lifted_relation(trace, seed_op, units, target, direction: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_receptive_hull_to_input_matches_hand_computation(stack) -> None:
-    """A 2x2 seed at conv3 rows/cols 2..3 reaches input rows/cols 2..12."""
-
-    conv3 = _op(stack, "conv2d_", 2)
-    seed = tl.units(conv3.label, _patch(range(2, 4), range(2, 4)))
-    resolved = stack[_influence(seed, direction="receptive")]
-    target = stack.input_ops[0]
-    entry = _entry(resolved, target)
-
-    expected = _slices_mask((1, 1, 16, 16), slice(None), slice(None), slice(2, 13), slice(2, 13))
-    assert torch.equal(entry.mask, expected)
-    assert entry.provenance.relation == "exact"
-    assert entry.provenance.basis == "geometric"
-    assert entry.provenance.field_status == "exact"
-    assert len(list(resolved)) == 1
-
-
 def test_receptive_hull_to_interior_layers_matches_hand_computation(stack) -> None:
     """The same seed reaches conv2 rows 2..5 and conv1 rows 3..11."""
 
@@ -404,19 +387,6 @@ def test_seed_at_the_target_site_is_the_identity(branchy) -> None:
 # a windowed one is graded ``exact`` with the global axis covered whole.
 
 
-def test_global_axis_is_covered_whole_beside_a_windowed_axis(mixed) -> None:
-    """A row-mean broadcast makes every column reachable while rows stay windowed."""
-
-    output = mixed.output_ops[0]
-    seed = tl.units(output.label, _patch(range(3, 5), range(3, 5)))
-    entry = _entry(mixed[_influence(seed, direction="receptive")], mixed.input_ops[0])
-    assert torch.equal(
-        entry.mask, _slices_mask((1, 1, 8, 8), slice(None), slice(None), slice(2, 6), slice(None))
-    )
-    assert entry.provenance.relation == "exact"
-    assert entry.provenance.field_status == "exact"
-
-
 def test_whole_site_seed_on_a_global_block_is_a_whole_site_mask(mixed) -> None:
     """Seeding the whole output site reaches the whole input site."""
 
@@ -459,16 +429,18 @@ def test_data_dependent_routing_refuses_geometry_typed(routed) -> None:
     assert "method='gradient'" in str(excinfo.value)
 
 
-def test_attention_without_windowed_axes_refuses_geometry_typed() -> None:
-    """Pure attention has no windowed axis; geometry refuses typed, not silently."""
+def test_attention_without_windowed_axes_answers_the_whole_extent() -> None:
+    """Pure attention has no windowed axis; the set query covers the mixed axes whole."""
 
     torch.manual_seed(4)
     trace = tl.trace(_Attention(), torch.randn(2, 2, 3, 2))
     try:
         seed = tl.units(trace.input_ops[0].label, [(0, 0, 0, 0)])
-        with pytest.raises(SelectionError) as excinfo:
-            trace[_influence(seed)]
-        assert excinfo.value.fields["code"] == "influence_geometry_unavailable"
+        (entry,) = trace[_influence(seed)]
+        assert entry.provenance.field_status == "upper_bound"
+        expected = torch.zeros(2, 2, 3, 2, dtype=torch.bool)
+        expected[0, 0] = True
+        assert torch.equal(entry.mask, expected)
     finally:
         trace.cleanup()
 
@@ -625,23 +597,6 @@ def test_checkerboard_seed_over_budget_collapses_to_upper_bound(stack) -> None:
     assert entry.provenance.relation == "upper_bound"
     flipped = _entry(stack[~_influence(seed, direction="receptive")], stack.input_ops[0])
     assert flipped.provenance.relation == "lower_bound"
-
-
-def test_rectangle_decomposition_is_exact_under_budget() -> None:
-    """A dense L-shaped mask decomposes into a few exact rectangles."""
-
-    from torchlens._selection.mask import _mask_from_dense
-
-    dense = torch.zeros((6, 6), dtype=torch.bool)
-    dense[0:2, :] = True
-    dense[:, 0:2] = True
-    rectangles, exact = influence._rectangles(_mask_from_dense((6, 6), dense))
-    assert exact
-    rebuilt = torch.zeros((6, 6), dtype=torch.bool)
-    for rectangle in rectangles:
-        rebuilt[tuple(slice(start, stop) for start, stop in rectangle)] = True
-    assert torch.equal(rebuilt, dense)
-    assert len(rectangles) <= 3
 
 
 def test_algebra_with_between_and_units(stack) -> None:

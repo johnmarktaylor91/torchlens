@@ -20,6 +20,7 @@ from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING
 from ..._errors import TraceCaptureError, original_exception
 from ..._trace_state import TraceState
+from ..._utils._display_errors import lookup_message
 from ...errors._base import TorchLensError
 from ...intervention.errors import (
     AmbiguousBatchInputError,
@@ -431,6 +432,17 @@ def normalize_chunk_paths(chunk_paths: Iterable[Any] | None) -> tuple[str, ...] 
     return tuple(str(path) for path in chunk_paths)
 
 
+def _ambiguous_chunk_message(leaves: list[tuple[tuple[Any, ...], torch.Tensor]]) -> str:
+    """Describe candidate paths from tensor metadata, without printing values."""
+
+    details = [f"{format_chunk_path(path)} shape={tuple(tensor.shape)}" for path, tensor in leaves]
+    return lookup_message(
+        "chunk_size found multiple ndim>0 tensor leaves.",
+        details,
+        "Pass chunk_paths=[...] to select batched inputs explicitly.",
+    )
+
+
 def plan_chunks(
     input_args: Any,
     *,
@@ -474,14 +486,7 @@ def plan_chunks(
             path, tensor = tensor_leaves[0]
             return ChunkPlan(normalized_size, int(tensor.shape[0]), (path,))
         if len(tensor_leaves) > 1:
-            details = ", ".join(
-                f"{format_chunk_path(path)} shape={tuple(tensor.shape)}"
-                for path, tensor in tensor_leaves
-            )
-            raise AmbiguousBatchInputError(
-                "chunk_size found multiple ndim>0 tensor leaves; pass chunk_paths=[...] "
-                f"to select batched inputs explicitly. Candidates: {details}."
-            )
+            raise AmbiguousBatchInputError(_ambiguous_chunk_message(tensor_leaves))
         raise ChunkedForwardConfigError(
             "chunk_size requires at least one ndim>0 tensor input leaf."
         )

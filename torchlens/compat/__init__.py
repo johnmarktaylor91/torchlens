@@ -1,4 +1,4 @@
-"""Compatibility adapters for TorchLens 2.x."""
+"""Compatibility adapters for TorchLens 2.37 and earlier."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import importlib
 from types import ModuleType
 from typing import Any
 
+from .._entry_refusals import refuse_ilg_return_layers, refuse_torchextractor_layers
 from .torchextractor import Extractor
 
 _COMPAT_MODULES = {"lovely", "torchshow"}
@@ -92,6 +93,15 @@ def from_huggingface(
     ------
     ImportError
         If Transformers is unavailable.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> try:
+    ...     from_huggingface("torchlens-example/not-in-the-local-cache")
+    ... except OSError:
+    ...     print("not cached locally")
+    not cached locally
     """
 
     try:
@@ -125,6 +135,13 @@ def from_timm(model_class_name: str, *, pretrained: bool = False, **kwargs: Any)
     ------
     ImportError
         If timm is unavailable.
+
+    Examples
+    --------
+    >>> # requires: timm
+    >>> net = from_timm("resnet18", num_classes=3).eval()
+    >>> tuple(net(torch.randn(1, 3, 32, 32)).shape)
+    (1, 3)
     """
 
     try:
@@ -157,6 +174,13 @@ def from_torchextractor(model: Any, layers: Any | None = None) -> Extractor:
         If torchextractor is unavailable.
     ValueError
         If no layer list can be resolved.
+
+    Examples
+    --------
+    >>> # requires: torchextractor
+    >>> extractor = from_torchextractor(model, {"stem": "0", "head": "2"})
+    >>> sorted(extractor(x))
+    ['head', 'stem']
     """
 
     try:
@@ -174,9 +198,7 @@ def from_torchextractor(model: Any, layers: Any | None = None) -> Extractor:
     if resolved_layers is None:
         resolved_layers = getattr(model, "layer_names", None)
     if resolved_layers is None:
-        raise ValueError(
-            "from_torchextractor requires explicit layers or an extractor-like object."
-        )
+        refuse_torchextractor_layers()
     return Extractor(source_model, resolved_layers)
 
 
@@ -194,6 +216,13 @@ def from_fx(graph_module: Any, layers: Any | None = None) -> dict[str, Any]:
     -------
     dict[str, Any]
         Contract payload with the graph module and suggested TorchLens layers.
+
+    Examples
+    --------
+    >>> graph_module = torch.fx.symbolic_trace(model)
+    >>> contract = from_fx(graph_module)
+    >>> contract["schema"], len(contract["layers"])
+    ('torchlens.fx_migration.v1', 5)
     """
 
     graph = getattr(graph_module, "graph", None)
@@ -226,6 +255,13 @@ def from_ilg(model: Any, return_layers: dict[str, str] | None = None) -> Extract
         If torchvision is unavailable.
     ValueError
         If no return-layer mapping can be resolved.
+
+    Examples
+    --------
+    >>> # requires: torchvision
+    >>> extractor = from_ilg(model, return_layers={"0": "stem", "2": "head"})
+    >>> sorted(extractor(x))
+    ['head', 'stem']
     """
 
     try:
@@ -240,7 +276,7 @@ def from_ilg(model: Any, return_layers: dict[str, str] | None = None) -> Extract
     if resolved_layers is None:
         resolved_layers = getattr(model, "return_layers", None)
     if resolved_layers is None:
-        raise ValueError("from_ilg requires a return_layers mapping.")
+        refuse_ilg_return_layers()
     torchlens_layers = {
         output_name: module_name for module_name, output_name in resolved_layers.items()
     }
@@ -266,6 +302,13 @@ def from_sentence_transformers(model: Any, *, prompt: str | None = None) -> dict
     ------
     ImportError
         If sentence-transformers is unavailable.
+
+    Examples
+    --------
+    >>> # requires: sentence_transformers
+    >>> contract = from_sentence_transformers(model)
+    >>> contract["schema"], contract["layers"]
+    ('torchlens.sentence_transformers_migration.v1', ['', '0', '1', '2'])
     """
 
     try:

@@ -78,6 +78,8 @@ from ...validation.status import (
     ValidationStatus,
     count_importer_region_annotations,
 )
+from .._entry_refusals import refuse_if_bad_jax_control_flow, refuse_if_bad_max_intermediate_grads
+from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
     JAX_PREVIEW_TRACE_OPTION_POLICY,
@@ -198,8 +200,7 @@ class GradOptions:
             Hard cap on saved op boundaries for the zero-tap producer and oracle.
         """
 
-        if not isinstance(max_intermediate_grads, int) or max_intermediate_grads < 1:
-            raise ValueError("max_intermediate_grads must be an integer >= 1")
+        refuse_if_bad_max_intermediate_grads(max_intermediate_grads)
         object.__setattr__(self, "params", params)
         object.__setattr__(self, "loss_fn", loss_fn)
         object.__setattr__(self, "input_grad_argnums", tuple(input_grad_argnums))
@@ -429,7 +430,7 @@ class JAXBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        save: Any = None,
         keep_orphans: bool | MissingType = MISSING,
         output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
@@ -446,13 +447,12 @@ class JAXBackend:
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
         name: str | None | MissingType = MISSING,
-        module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: object | None = None,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool | MissingType = MISSING,
         lookback: int = 0,
@@ -475,8 +475,8 @@ class JAXBackend:
             Positional arguments for the callable.
         input_kwargs
             Keyword arguments. Unsupported in this preview.
-        layers_to_save
-            Must be ``"all"``; JAX preview is full-save only.
+        save
+            ``"all"``, omitted, or a static ``tl.trace(save=)`` selector of ops to keep.
         keep_orphans
             Whether orphan ops are retained.
         output_device
@@ -508,8 +508,6 @@ class JAXBackend:
             Unsupported for JAX in this preview.
         name
             Trace label.
-        module_filter
-            Unsupported for JAX in this preview.
         transform
             Unsupported for JAX in this preview.
         raw_input
@@ -520,8 +518,8 @@ class JAXBackend:
             Raw-input render policy.
         output_transform
             Optional metadata transform for final output.
-        save_raw_output
-            Raw-output save policy.
+        save_transformed_output
+            Transformed-output save policy.
         layer_visualizers
             Unsupported for JAX in this preview.
         save_visualizations
@@ -542,19 +540,16 @@ class JAXBackend:
             regions; ``"reject"`` preserves the earlier nested-primitive
             rejection behavior.
         jax_max_control_flow_unroll
-            Maximum allowed static unroll length for one JAX control-flow
-            primitive.
+            Maximum static unroll length for one JAX control-flow primitive.
         module_identity_mode
             Optional JAX module mode. Raw callables use ``"function_root"``;
             Equinox module roots default to ``"pytree_module"``.
         grad_options
-            Optional JAX derived-gradient configuration. This runs a second
-            pure functional ``jax.value_and_grad`` pass and populates
-            ``trace.autograd.derived_grads``.
+            Optional JAX derived-gradient configuration: a second pure functional
+            ``jax.value_and_grad`` pass populates ``trace.autograd.derived_grads``.
         capture
-            Grouped ``CaptureOptions``. The sole post-sprint spelling for the
-            flat capture kwargs above; an explicit field here is merged in
-            (``merge_capture_options``) ahead of this backend's own defaults.
+            Grouped ``CaptureOptions``, the sole spelling for the flat capture kwargs
+            above; an explicit field is merged in (``merge_capture_options``) first.
         **kwargs
             Extra public trace kwargs rejected by this backend.
 
@@ -564,7 +559,8 @@ class JAXBackend:
             Captured JAX trace.
         """
 
-        save_predicate = pop_static_label_save_predicate(kwargs, backend_name="JAX")
+        save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="JAX")
+        facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
         # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
@@ -579,7 +575,6 @@ class JAXBackend:
         # distinguishable from ``MISSING`` for them.
         capture_options = merge_capture_options(
             capture=capture,
-            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -593,7 +588,7 @@ class JAXBackend:
             name=name,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             save_visualizations=save_visualizations,
             jax_control_flow=jax_control_flow,
             jax_max_control_flow_unroll=jax_max_control_flow_unroll,
@@ -613,13 +608,12 @@ class JAXBackend:
         name = capture_options.name
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_transformed_output
+        save_transformed_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         jax_control_flow = capture_options.jax_control_flow
         jax_max_control_flow_unroll = capture_options.jax_max_control_flow_unroll
         module_identity_mode = capture_options.module_identity_mode
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
-        module_filter = _resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = _resolve_optional_capture_field(capture, "transform", transform)
         output_transform = _resolve_optional_capture_field(
             capture, "output_transform", output_transform
@@ -645,11 +639,10 @@ class JAXBackend:
         name = _default_if_missing(name, None)
         save_raw_input = _default_if_missing(save_raw_input, "small")
         batch_render = _default_if_missing(batch_render, "auto")
-        save_raw_output = _default_if_missing(save_raw_output, "small")
+        save_transformed_output = _default_if_missing(save_transformed_output, "small")
         save_visualizations = _default_if_missing(save_visualizations, False)
         activation_transform = None if _is_missing(activation_transform) else activation_transform
         save_grads = None if _is_missing(save_grads) else save_grads
-        module_filter = None if _is_missing(module_filter) else module_filter
         transform = None if _is_missing(transform) else transform
         output_transform = None if _is_missing(output_transform) else output_transform
         layer_visualizers = None if _is_missing(layer_visualizers) else layer_visualizers
@@ -659,10 +652,7 @@ class JAXBackend:
         grad_options = None if _is_missing(grad_options) else grad_options
         args = self._normalize_input_args(input_args)
         _reject_tracer_inputs(args)
-        if jax_control_flow not in {"reject", "unroll", "region"}:
-            raise ValueError("jax_control_flow must be 'reject', 'unroll', or 'region'")
-        if not isinstance(jax_max_control_flow_unroll, int) or jax_max_control_flow_unroll < 1:
-            raise ValueError("jax_max_control_flow_unroll must be an integer >= 1")
+        refuse_if_bad_jax_control_flow(jax_control_flow, jax_max_control_flow_unroll)
         eqx_tree = discover_equinox_module_tree(model)
         nnx_tree = discover_nnx_module_tree(model) if eqx_tree is None else None
         module_tree = eqx_tree or nnx_tree
@@ -682,7 +672,7 @@ class JAXBackend:
             )
         static_argnums = _normalize_static_argnums(jax_static_argnums, len(args))
         self._reject_unsupported_options(
-            layers_to_save=layers_to_save,
+            save=layers_to_save,
             input_kwargs=input_kwargs,
             output_device=output_device,
             activation_transform=activation_transform,
@@ -693,7 +683,6 @@ class JAXBackend:
             save_source_context=save_code_context,
             save_rng=save_rng_states,
             backward_ready=backward_ready,
-            module_filter=module_filter,
             transform=transform,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
@@ -712,7 +701,7 @@ class JAXBackend:
             save_raw_input=cast(str | bool, save_raw_input),
             batch_render=cast(str, batch_render),
             output_transform=output_transform,
-            save_transformed_output=cast(str | bool, save_raw_output),
+            save_transformed_output=cast(str | bool, save_transformed_output),
         )
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
@@ -766,6 +755,7 @@ class JAXBackend:
                 jax_control_flow=cast(str, jax_control_flow),
                 jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
             )
+        attach_facet_recipes(trace, facet_recipes, backend_name="JAX")
         freeze_trace_relation_views(trace)
         stamp_backend_finalized(trace)
         return trace
@@ -2576,7 +2566,7 @@ class JAXBackend:
             op_log.module_call_stack = [
                 f"{address}:{call_index}" for address, call_index in module_call_stack_calls
             ]
-            parent_call_label: str | None = None
+            parent_call_label = "self:1" if "self" in seen_addresses else None
             for module_index, (address, call_index) in enumerate(normalized_calls):
                 call_label = f"{address}:{call_index}"
                 # Torch parity (same population as
@@ -2614,7 +2604,7 @@ class JAXBackend:
                         mbd["top_level_module_ops"].append(call_label)
                     if address != "self" and address not in mbd["top_level_modules"]:
                         mbd["top_level_modules"].append(address)
-                elif parent_call_label is not None:
+                if parent_call_label is not None and parent_call_label != call_label:
                     if call_label not in seen_pass_children[parent_call_label]:
                         seen_pass_children[parent_call_label].add(call_label)
                         mbd["module_pass_children"][parent_call_label].append(call_label)
@@ -3650,7 +3640,7 @@ def _jax_intermediate_tap_specs(trace: Trace) -> tuple[_JaxIntermediateTapSpec, 
         label = capture_to_label.get(capture.index)
         if not isinstance(label, str) or label not in trace.op_labels:
             continue
-        op = trace[label]
+        op = trace.ops[label]
         if not getattr(op, "has_saved_activation", False):
             continue
         if getattr(op, "is_input", False) or getattr(op, "is_output", False):

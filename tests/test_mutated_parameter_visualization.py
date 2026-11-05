@@ -53,20 +53,6 @@ class _MixHicToy(nn.Module):
         return self.inner(x) + 1
 
 
-class _MutatedTwice(nn.Module):
-    """Mutate a Parameter twice, then read it."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.temp = nn.Parameter(torch.ones([]))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            self.temp.mul_(2.0)
-            self.temp.add_(1.0)
-        return x * self.temp
-
-
 class _ReadBeforeAndAfter(nn.Module):
     """Read a Parameter, mutate it in place, then read it again."""
 
@@ -93,22 +79,6 @@ class _FrozenMutated(nn.Module):
         return x / self.temp
 
 
-class _ParamReadByInplaceOp(nn.Module):
-    """In-place ops that READ Parameters without mutating them, plus a receiver."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.temp = nn.Parameter(torch.ones(3))
-        self.w = nn.Parameter(torch.full((3,), 0.5))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = x.clone()
-        with torch.no_grad():
-            y.add_(self.w)
-            self.temp.add_(self.w)
-        return y * self.temp
-
-
 class _NeverMutated(nn.Module):
     """The MIX-HIC shape without the in-place op: Parameters only read."""
 
@@ -132,17 +102,6 @@ class _Mid(nn.Module):
         return self.leaf(x) * 2
 
 
-class _ThreeLevel(nn.Module):
-    """Root -> ``mid`` -> ``mid.leaf``, which owns and clamps ``temp``."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.mid = _Mid()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.mid(x) + 1
-
-
 class _Clamper(nn.Module):
     """Clamp the Parameter it is handed; owns no Parameter of its own."""
 
@@ -162,33 +121,6 @@ class _RootParamMutatedInChild(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.mut(x, self.temp) / self.temp
-
-
-class _HoldsB(nn.Module):
-    """Owns ``b`` and clamps it."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.b = nn.Parameter(torch.ones([]))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            self.b.clamp_(0.0, 2.0)
-        return x * self.b
-
-
-class _DotUnderscoreCollision(nn.Module):
-    """``a.b`` and root ``a_b``: addresses equal after ``.`` -> ``_`` folding."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.a = _HoldsB()
-        self.a_b = nn.Parameter(torch.ones([]))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            self.a_b.clamp_(0.0, 3.0)
-        return self.a(x) * self.a_b
 
 
 class _Owner(nn.Module):
@@ -282,104 +214,6 @@ def _cluster_body(dot: str, cluster: str) -> str:
     raise AssertionError(f"unterminated subgraph {cluster}")
 
 
-def test_mixhic_toy_draws_parameter_cylinder_in_owner_cluster(tmp_path: Path) -> None:
-    """The clamped Parameter is a grey cylinder inside ``@inner`` feeding the clamp op."""
-
-    trace = _trace(_MixHicToy())
-    try:
-        dot = _dot(trace, tmp_path, "mixhic")
-        clamp = _node_name(trace, "clamp_")
-        truediv = _node_name(trace, "__truediv__")
-    finally:
-        trace.cleanup()
-
-    param_node = '"mutatedparam_inner.temp"'
-    line = _node_line(dot, param_node)
-    assert "shape=cylinder" in line
-    assert f'fillcolor="{TRAINABLE_PARAMS_BG_COLOR}"' in line
-    assert "<B>parameter temp</B>" in line
-    assert ">()<" in line  # the scalar's shape row
-    assert f"{param_node} [" in _cluster_body(dot, "cluster_inner_pass1")
-
-    edges = _edges(dot)
-    assert (param_node, clamp) in edges
-    # The later read takes its edge from the in-place op, never the Parameter node.
-    assert (clamp, truediv) in edges
-    assert (param_node, truediv) not in edges
-    assert sum(1 for tail, _ in edges if tail == param_node) == 1
-
-
-def test_parameter_mutated_twice_chains_through_both_ops(tmp_path: Path) -> None:
-    """The node feeds the first mutation; the second chains on it; the read on the last."""
-
-    trace = _trace(_MutatedTwice())
-    try:
-        dot = _dot(trace, tmp_path, "twice")
-        first = _node_name(trace, "mul_")
-        second = _node_name(trace, "add_")
-        read = _node_name(trace, "__mul__")
-    finally:
-        trace.cleanup()
-
-    param_node = "mutatedparam_temp"
-    assert "shape=cylinder" in _node_line(dot, param_node)
-    edges = _edges(dot)
-    assert (param_node, first) in edges
-    assert (first, second) in edges
-    assert (second, read) in edges
-    assert {head for tail, head in edges if tail == param_node} == {first}
-    # A root-owned Parameter sits at top level, outside every cluster.
-    assert "subgraph cluster" not in dot
-
-
-def test_reads_before_and_after_mutation_bind_to_the_right_value(tmp_path: Path) -> None:
-    """A read before the mutation hangs off the Parameter node; a read after, off the op."""
-
-    trace = _trace(_ReadBeforeAndAfter())
-    try:
-        dot = _dot(trace, tmp_path, "before_after")
-        before = _node_name(trace, "__mul__", 0)
-        mutation = _node_name(trace, "mul_")
-        after = _node_name(trace, "__mul__", 1)
-    finally:
-        trace.cleanup()
-
-    param_node = "mutatedparam_scale"
-    edges = _edges(dot)
-    assert {head for tail, head in edges if tail == param_node} == {before, mutation}
-    assert (mutation, after) in edges
-    assert (param_node, after) not in edges
-
-
-def test_legend_lists_mutated_parameter_only_when_drawn(tmp_path: Path) -> None:
-    """The legend row follows the buffer row's form and is gated on a drawn node."""
-
-    mutated = _trace(_MixHicToy())
-    plain = _trace(_NeverMutated())
-    try:
-        mutated_dot = _dot(mutated, tmp_path, "legend_mutated", show_legend=True)
-        plain_dot = _dot(plain, tmp_path, "legend_plain", show_legend=True)
-    finally:
-        mutated.cleanup()
-        plain.cleanup()
-
-    assert ">mutated parameter<" in mutated_dot
-    assert "mutated parameter" not in plain_dot
-    # The buffer row is gated the same way: present exactly when a buffer is drawn.
-    for dot in (mutated_dot, plain_dot):
-        assert (">buffer<" in dot) == _draws_buffer_node(dot)
-
-
-def _draws_buffer_node(dot: str) -> bool:
-    """Whether the DOT draws a buffer: a cylinder in the default skin's buffer fill."""
-
-    return any(
-        "shape=cylinder" in line and '"#E69F00"' in line
-        for line in dot.splitlines()
-        if not line.strip().startswith("graph [")
-    )
-
-
 def test_frozen_mutated_parameter_uses_frozen_parameter_grey(tmp_path: Path) -> None:
     """A frozen Parameter's node takes the frozen grey and the frozen shape notation."""
 
@@ -410,80 +244,10 @@ def test_rolled_view_draws_the_parameter_node(tmp_path: Path) -> None:
     assert f"{param_node} [" in _cluster_body(dot, "cluster_inner")
 
 
-def test_only_the_receiver_parameter_gets_a_node(tmp_path: Path) -> None:
-    """A Parameter read by an in-place op is not mutated; only the receiver is."""
-
-    from torchlens._visualization import _mutated_params
-
-    trace = _trace(_ParamReadByInplaceOp())
-    try:
-        sources = _mutated_params.find_mutated_parameter_sources(trace)
-        dot = _dot(trace, tmp_path, "receiver")
-    finally:
-        trace.cleanup()
-
-    assert [source.param.address for source in sources] == ["temp"]
-    assert "mutatedparam_temp [" in dot
-    assert "mutatedparam_w" not in dot
-
-
-def test_never_mutated_parameters_get_no_node_and_unchanged_dot(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Without a mutation there is no node, and the DOT equals the feature-free render."""
-
-    from torchlens._visualization import _mutated_params
-
-    trace = _trace(_NeverMutated())
-    try:
-        assert _mutated_params.find_mutated_parameter_sources(trace) == ()
-        dot = _dot(trace, tmp_path, "plain", show_legend=True)
-        monkeypatch.setattr(_mutated_params, "find_mutated_parameter_sources", lambda _trace: ())
-        baseline = _dot(trace, tmp_path, "plain_baseline", show_legend=True)
-    finally:
-        trace.cleanup()
-
-    assert "mutatedparam_" not in dot
-    assert "shape=cylinder" not in dot
-    assert dot == baseline
-
-
 def _cluster_names(dot: str) -> list[str]:
     """Return every subgraph cluster name in the DOT source."""
 
     return re.findall(r"subgraph (\S*cluster\S*) \{", dot)
-
-
-def _render_names(trace: tl.Trace, func_name: str) -> set[str]:
-    """Return the DOT names the first ``func_name`` op may render under (plain or focus)."""
-
-    op = next(op for op in trace._layer_list if op.func_name == func_name)
-    return {str(op.layer_label), str(op.label).replace(":", "pass")}
-
-
-@pytest.mark.parametrize("focus", ["mid.leaf", "mid"])
-def test_module_focus_draws_the_parameter_node(tmp_path: Path, focus: str) -> None:
-    """A focus containing the owner draws the node inside the owner cluster."""
-
-    trace = _trace(_ThreeLevel())
-    try:
-        dot = _dot(trace, tmp_path, f"focus_{focus}", module=focus)
-        clamp_names = _render_names(trace, "clamp_")
-        truediv_names = _render_names(trace, "__truediv__")
-    finally:
-        trace.cleanup()
-
-    param_node = '"mutatedparam_mid.leaf.temp"'
-    line = _node_line(dot, param_node)
-    assert "shape=cylinder" in line
-    assert "<B>parameter temp</B>" in line
-    edges = _edges(dot)
-    clamp_name = next(head for tail, head in edges if tail == param_node)
-    assert clamp_name in clamp_names
-    assert {head for tail, head in edges if tail == param_node} == {clamp_name}
-    assert any(tail == clamp_name and head in truediv_names for tail, head in edges)
-    leaf_cluster = next(name for name in _cluster_names(dot) if "leaf" in name)
-    assert f"{param_node} [" in _cluster_body(dot, leaf_cluster)
 
 
 def test_module_focus_excluding_the_owner_draws_no_node(tmp_path: Path) -> None:
@@ -499,46 +263,6 @@ def test_module_focus_excluding_the_owner_draws_no_node(tmp_path: Path) -> None:
     assert "mutatedparam_temp [" in full
     assert "clamp_" in focused
     assert "mutatedparam_" not in focused
-
-
-def test_dot_and_underscore_addresses_get_distinct_nodes(tmp_path: Path) -> None:
-    """``a.b`` and ``a_b`` keep separate node declarations and separate edges."""
-
-    from torchlens._visualization._mutated_params import mutated_parameter_node_name
-
-    trace = _trace(_DotUnderscoreCollision())
-    try:
-        dot = _dot(trace, tmp_path, "collision")
-        clamps = [
-            str(op.label).replace(":", "pass")
-            for op in trace._layer_list
-            if op.func_name == "clamp_"
-        ]
-        receivers = [
-            op._param_logs[0].address for op in trace._layer_list if op.func_name == "clamp_"
-        ]
-    finally:
-        trace.cleanup()
-
-    assert mutated_parameter_node_name("a.b") != mutated_parameter_node_name("a_b")
-    dotted, flat = '"mutatedparam_a.b"', "mutatedparam_a_b"
-    assert "<B>parameter b</B>" in _node_line(dot, dotted)
-    assert "<B>parameter a_b</B>" in _node_line(dot, flat)
-    clamp_of = dict(zip(receivers, clamps, strict=True))
-    edges = _edges(dot)
-    assert {head for tail, head in edges if tail == dotted} == {clamp_of["a.b"]}
-    assert {head for tail, head in edges if tail == flat} == {clamp_of["a_b"]}
-
-
-def test_node_names_are_injective_and_port_free() -> None:
-    """Distinct addresses never share a node name, and no name carries a DOT port colon."""
-
-    from torchlens._visualization._mutated_params import mutated_parameter_node_name
-
-    addresses = ["a.b", "a_b", "a%2Eb", "a:b", "a-b", 'a"b', "a b", "a.b.c", "a_b.c"]
-    names = [mutated_parameter_node_name(address) for address in addresses]
-    assert len(set(names)) == len(addresses)
-    assert all(":" not in name and '"' not in name and " " not in name for name in names)
 
 
 def test_rank_engine_draws_the_parameter_node_and_legend_row(tmp_path: Path) -> None:

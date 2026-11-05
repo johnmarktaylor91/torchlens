@@ -1,26 +1,40 @@
 """Log torch capture source tensors.
 
 This module creates input and buffer Op entries, updates fast-capture source
-payloads, and preserves source equivalence metadata for postprocessing.
+payloads, and preserves source equivalence metadata for postprocessing. It also
+holds the first two of the three input-leaf phases the backend's
+``_fetch_label_move_input_tensors`` runs on the copied forward inputs: collect
+every tensor leaf with its nested address, and move each distinct leaf to the
+model device (writing it back into its container). The third phase flattens the
+leaves into one de-duplicated list of tensors and
+``input.<argname>[.<nested_path>]`` labels
+(``_utils.input_leaves.flatten_input_tensor_addresses``).
 """
 
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._capture._lazy_contexts import lazy_history_of
 from ..._capture.predicates import _evaluate_halt, _evaluate_keep_op, _is_halt_only_capture
 from ..._capture.projections import (
     _build_record_context,
     append_projected_event,
     get_active_recording_state,
 )
+from ..._entry_refusals import refuse_source_kind
 from ..._errors import UserTransformError
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._training_validation import TrainingModeConfigError
 from ..._utils.input_leaves import INPUT_WAS_PARAMETER_ATTR
-from ..._utils.introspection import _get_code_context
+from ..._utils.introspection import (
+    INPUT_SEARCH_DEPTH_LIMIT,
+    _get_code_context,
+    get_vars_of_type_from_obj,
+)
 from ..._utils.rng import log_current_rng_states
 from ..._utils.tensor_utils import get_memory_amount_from_metadata
 from ...recording._halt import StopSignal
@@ -28,6 +42,7 @@ from ...recording.exceptions import PredicateError
 from ...recording.types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
 from ._completeness_origins import internal_scalar_read
+from ._sources_lazy import log_source_tensor_lazy
 from ._tl import get_tensor_meta, set_tensor_label
 from .buffer_writes import buffer_version_key
 from .tensor_tracking import _add_tensor_backward_hook, _append_module_suffix_to_equivalence_class
@@ -104,7 +119,13 @@ def log_source_tensor(
     if self._options_mode == "exhaustive":
         log_source_tensor_exhaustive(self, t, source, extra_address)
     elif self._options_mode == "predicate":
-        log_source_tensor_predicate(self, t, source, extra_address)
+        history = lazy_history_of(get_active_recording_state())
+        if history is None:
+            log_source_tensor_predicate(self, t, source, extra_address)
+        else:
+            label = log_source_tensor_lazy(self, history, t, source, extra_address)
+            if source == "buffer":
+                self._raw_graph_ws.buffer_version_keys[label] = buffer_version_key(t)
 
 
 def log_closure_constant_if_known(self: "Trace", t: torch.Tensor) -> bool:
@@ -161,12 +182,11 @@ def log_source_tensor_predicate(
     """Predicate-mode source tensor logging for inputs and buffers."""
 
     if source not in {"input", "buffer"}:
-        raise ValueError("source must be either 'input' or 'buffer'")
+        refuse_source_kind(source, "input", "buffer")
     state = get_active_recording_state()
     self._raw_graph_ws.layer_counter += 1
     self._raw_graph_ws.raw_layer_type_counter[source] += 1
     state.event_index += 1
-    raw_index = self._raw_graph_ws.layer_counter
     type_index = self._raw_graph_ws.raw_layer_type_counter[source]
     tensor_label = f"{source}_{type_index}_raw"
     set_tensor_label(t, tensor_label)
@@ -180,10 +200,10 @@ def log_source_tensor_predicate(
             "label": tensor_label,
             "raw_label": tensor_label,
             "_label_raw": tensor_label,
-            "raw_index": raw_index,
+            "raw_index": self._raw_graph_ws.layer_counter,
             "type": source,
             "type_index": type_index,
-            "func_name": None,
+            "func_name": "none",  # the exhaustive source spelling (``log_source_tensor_exhaustive``)
             "input_output_address": extra_addr,
             "tensor": t,
             "address": module_frame.address if module_frame else None,
@@ -218,8 +238,7 @@ def log_source_tensor_predicate(
                 )
             spec = decision
             if spec.save_out or spec.save_metadata:
-                disk_payload = None
-                transformed_disk_payload = None
+                disk_payload = transformed_disk_payload = None
                 if spec.save_out:
                     (
                         ram_payload,
@@ -238,17 +257,18 @@ def log_source_tensor_predicate(
                             transformed_disk_payload=transformed_disk_payload,
                         )
                     )
-        append_projected_event(
-            self,
-            ctx,
-            spec,
-            tensor=t,
-            ram_payload=ram_payload,
-            transformed_ram_payload=transformed_ram_payload,
-            predicate_matched=spec.save_out or spec.save_metadata,
-        )
-        # Echo narrator slot (snoop D1, source seam): once per committed
-        # input/buffer event, after the append.
+        source_kept = spec.save_out or spec.save_metadata
+        if source_kept or not state.options.lean:  # lean: no shell event for an unkept source
+            append_projected_event(
+                self,
+                ctx,
+                spec,
+                tensor=t,
+                ram_payload=ram_payload,
+                transformed_ram_payload=transformed_ram_payload,
+                predicate_matched=source_kept,
+            )
+        # Echo narrator slot (snoop D1, source seam): once per committed event, after the append.
         _emit_source_echo(self, ctx)
         _evaluate_halt(ctx, state.options, frontier_output=t)
     except StopSignal:
@@ -263,7 +283,8 @@ def log_source_tensor_predicate(
     except Exception as exc:
         state.handle_predicate_exception(ctx, exc)
     finally:
-        if not halt_only and not _predicate_event_was_appended(self, ctx.raw_label or ctx.label):
+        fallback = not halt_only and not state.options.lean
+        if fallback and not _predicate_event_was_appended(self, ctx.raw_label or ctx.label):
             append_projected_event(
                 self,
                 ctx,
@@ -314,7 +335,7 @@ def _echo_and_halt_on_source(
                 "raw_index": raw_index,
                 "type": source,
                 "type_index": type_index,
-                "func_name": None,
+                "func_name": "none",
                 "input_output_address": extra_addr,
                 "tensor": t,
             },
@@ -455,7 +476,7 @@ def log_source_tensor_exhaustive(
         input_ancestors = set()
         equivalence_class = f"{CONSTANT_SOURCE}_{type_index}"
     else:
-        raise ValueError("source must be 'input', 'buffer' or 'constant'")
+        refuse_source_kind(source, "input", "buffer", "constant")
 
     modules = _snapshot_exhaustive_module_stack(self)
     base_equivalence_class = equivalence_class
@@ -639,3 +660,123 @@ def log_source_tensor_exhaustive(
     _add_tensor_backward_hook(self, t, tensor_label)
 
     _echo_and_halt_on_source(self, t, source, extra_addr, tensor_label, raw_index, type_index)
+
+
+def _collect_input_tensor_leaves(
+    input_args: list[Any],
+    input_arg_names: list[str],
+    input_kwargs: dict[Any, Any],
+) -> tuple[list[list[Any]], list[list[Any]], list[str]]:
+    """Find the tensor leaves of every positional and keyword input.
+
+    Returns the per-argument leaf lists (``(tensor, addr, addr_full)`` triples),
+    the per-keyword leaf lists, and the input paths whose traversal reached
+    ``INPUT_SEARCH_DEPTH_LIMIT`` unresolved.
+    """
+    input_arg_tensors = []
+    input_kwarg_tensors = []
+    traversal_gaps: list[str] = []
+    for arg_index, arg in enumerate(input_args):
+        unresolved: list[str] = []
+        input_arg_tensors.append(
+            get_vars_of_type_from_obj(
+                arg,
+                torch.Tensor,
+                search_depth=INPUT_SEARCH_DEPTH_LIMIT,
+                return_addresses=True,
+                depth_exceeded_paths=unresolved,
+            )
+        )
+        arg_name = input_arg_names[arg_index]
+        traversal_gaps.extend(
+            f"input.{arg_name}{f'.{path}' if path else ''}" for path in unresolved
+        )
+    for key, kwarg in input_kwargs.items():
+        unresolved = []
+        input_kwarg_tensors.append(
+            get_vars_of_type_from_obj(
+                kwarg,
+                torch.Tensor,
+                search_depth=INPUT_SEARCH_DEPTH_LIMIT,
+                return_addresses=True,
+                depth_exceeded_paths=unresolved,
+            )
+        )
+        traversal_gaps.extend(f"input.{key}{f'.{path}' if path else ''}" for path in unresolved)
+    return input_arg_tensors, input_kwarg_tensors, traversal_gaps
+
+
+def _move_input_tensors_to_device(
+    input_args: list[Any],
+    input_kwargs: dict[Any, Any],
+    input_arg_tensors: list[list[Any]],
+    input_kwarg_tensors: list[list[Any]],
+    model_device: object,
+    assign_nested: Callable[[Any, Any, torch.Tensor], Any],
+) -> None:
+    """Move each distinct input tensor leaf to ``model_device``, in place.
+
+    Rewrites the leaf lists and the input containers with the moved tensors; a
+    tensor reached twice is moved once, and positional inputs go before keywords.
+    ``assign_nested`` is the backend's ``_outputs._assign_nested_input_value``,
+    passed in so this module does not import ``_outputs``.
+    """
+    moved_tensors_by_id: dict[int, torch.Tensor] = {}
+    _move_positional_input_tensors(
+        input_args, input_arg_tensors, model_device, moved_tensors_by_id, assign_nested
+    )
+    for kwarg_idx, (key, _val) in enumerate(input_kwargs.items()):
+        for tensor_idx, (tensor, addr, addr_full) in enumerate(input_kwarg_tensors[kwarg_idx]):
+            moved_tensor = moved_tensors_by_id.get(id(tensor))
+            if moved_tensor is None:
+                moved_tensor = tensor if model_device is None else tensor.to(model_device)
+                moved_tensors_by_id[id(tensor)] = moved_tensor
+            if bool(getattr(tensor, INPUT_WAS_PARAMETER_ATTR, False)):
+                setattr(moved_tensor, INPUT_WAS_PARAMETER_ATTR, True)
+            input_kwarg_tensors[kwarg_idx][tensor_idx] = (moved_tensor, addr, addr_full)
+            if not addr_full:
+                input_kwargs[key] = moved_tensor
+            else:
+                input_kwargs[key] = assign_nested(input_kwargs[key], addr_full, moved_tensor)
+
+
+def _move_positional_input_tensors(
+    input_args: list[Any],
+    input_arg_tensors: list[list[Any]],
+    model_device: object,
+    moved_tensors_by_id: dict[int, torch.Tensor],
+    assign_nested: Callable[[Any, Any, torch.Tensor], Any],
+) -> None:
+    """Move the positional inputs' tensor leaves, recording each move by tensor id."""
+    # Move each tensor to model device.  Plain tuples must be temporarily
+    # converted to lists for item assignment, then converted back to
+    # preserve type.  This roundtrip only applies to *exact* ``tuple``
+    # instances: they are the only ones addressed positionally
+    # (``("ind", i)``) by ``get_vars_of_type_from_obj``, which treats
+    # tuple *subclasses* (e.g. a NamedTuple-based GNN batch container) as
+    # plain attribute-bearing objects instead, addressed via
+    # ``("attr", name)``.  Applying the list roundtrip to a subclass would
+    # silently discard its identity and break downstream named-field
+    # access (``batch.edge_features``); ``_assign_nested_input_value``
+    # already knows how to mutate those in place via ``attr`` addressing.
+    for arg_idx, arg in enumerate(input_args):
+        was_tuple = type(arg) is tuple
+        if was_tuple:
+            input_args[arg_idx] = list(arg)
+        for tensor_idx, (tensor, addr, addr_full) in enumerate(input_arg_tensors[arg_idx]):
+            moved_tensor = moved_tensors_by_id.get(id(tensor))
+            if moved_tensor is None:
+                # ``model_device is None`` = the model pins no device
+                # (no parameters or buffers); inputs stay on their own
+                # devices, matching eager semantics.
+                moved_tensor = tensor if model_device is None else tensor.to(model_device)
+                moved_tensors_by_id[id(tensor)] = moved_tensor
+            if bool(getattr(tensor, INPUT_WAS_PARAMETER_ATTR, False)):
+                setattr(moved_tensor, INPUT_WAS_PARAMETER_ATTR, True)
+            input_arg_tensors[arg_idx][tensor_idx] = (moved_tensor, addr, addr_full)
+            if not addr_full:
+                input_args[arg_idx] = moved_tensor
+            else:
+                input_args[arg_idx] = assign_nested(input_args[arg_idx], addr_full, moved_tensor)
+        if was_tuple and isinstance(input_args[arg_idx], list):
+            input_args[arg_idx] = tuple(input_args[arg_idx])

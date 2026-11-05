@@ -1,4 +1,4 @@
-"""U31.2: the checks session beside an LR scheduler, in both registration orders.
+"""The checks session beside an LR scheduler, in both registration orders.
 
 The incumbent's mount replaced ``optimizer.step``, which on current torch
 crashes or makes the scheduler warn that ``optimizer.step()`` "has been

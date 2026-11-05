@@ -33,6 +33,13 @@ class RankRenderEndpointError(GraphvizRenderError):
     DOT is a guaranteed ``neato -n`` hard error after the layout work is
     already spent, and fabricating positions for dropped nodes would draw a
     graph that lies about the capture. Assert-and-fail, never fall back.
+
+    Examples
+    --------
+    >>> issubclass(RankRenderEndpointError, tl.errors.GraphvizRenderError)
+    True
+    >>> issubclass(RankRenderEndpointError, RuntimeError)
+    True
     """
 
     code: str = "rank_render_endpoint_undeclared"

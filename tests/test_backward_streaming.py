@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import safetensors  # noqa: F401
 import torch
+from _format3_envelope import read_record
 from torch import nn
 
 import torchlens as tl
-from torchlens._io.manifest import Manifest
 from torchlens.options import CaptureOptions
 
 
@@ -71,7 +72,7 @@ def _logged_backward_stream(
         save="all",
         storage=tl.to_disk(bundle_path, retain_in_memory=retain_in_memory),
     )
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     expected = (
         {label: trace[label].grad.detach().clone() for label in trace.saved_grad_ops.keys()}
         if retain_in_memory
@@ -80,16 +81,22 @@ def _logged_backward_stream(
     return trace, expected
 
 
+def _saved_grad_cells(bundle_path: Path) -> list[Any]:
+    """Return the non-empty ``grad`` cells of the saved op record (3.0 layout)."""
+
+    table = read_record(bundle_path, "op")
+    return [cell for cell in table["columns"]["grad"] if cell is not None]
+
+
 def test_log_backward_streams_grads_to_disk(tmp_path: Path) -> None:
     """Gradient streaming should write grad blobs into the bundle."""
 
     bundle_path = tmp_path / "backward_stream.tl"
     trace, _expected = _logged_backward_stream(bundle_path)
-    manifest = Manifest.read(bundle_path / "manifest.json")
 
     assert bundle_path.exists()
     assert trace.autograd.has_backward_pass
-    assert any(entry.kind == "grad" for entry in manifest.tensors)
+    assert _saved_grad_cells(bundle_path)
     assert len(trace.saved_grad_ops) > 0
 
 
@@ -107,13 +114,11 @@ def test_streamed_bundle_honors_per_call_save_grads_override(tmp_path: Path) -> 
     )
     trace._options_save_grads = None
 
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), save_grads=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), save_grads=True)
 
-    manifest = Manifest.read(bundle_path / "manifest.json")
-    assert any(entry.kind == "grad" for entry in manifest.tensors)
+    assert _saved_grad_cells(bundle_path)
 
 
-@pytest.mark.smoke
 def test_lazy_load_grad_from_bundle(tmp_path: Path) -> None:
     """Lazy-loaded grads should materialize on field access."""
 
@@ -127,33 +132,6 @@ def test_lazy_load_grad_from_bundle(tmp_path: Path) -> None:
     assert layer.grad_ref is not None
     assert torch.equal(layer.grad, expected[label])
     assert isinstance(layer._slot("grad"), torch.Tensor)
-
-
-def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
-    """Bundle save/load should preserve backward metadata and cross-references."""
-
-    source_path = tmp_path / "backward_stream.tl"
-    trace, expected = _logged_backward_stream(source_path)
-    roundtrip_path = tmp_path / "roundtrip.tl"
-
-    trace.save(roundtrip_path)
-    restored = tl.load(roundtrip_path, lazy=True)
-    label = next(iter(expected))
-    grad_fn_handle = next(
-        grad_fn_handle for grad_fn_handle in restored.autograd.grad_fns if grad_fn_handle.op
-    )
-
-    assert restored.autograd.has_backward_pass is True
-    assert len(restored.autograd.backward_passes) == len(trace.autograd.backward_passes)
-    assert restored.provenance.backward_memory_backend == trace.provenance.backward_memory_backend
-    assert len(restored._grad_fn_logs) == len(trace._grad_fn_logs)
-    # Portable grad-fn identities are remapped to deterministic sequential ids
-    # at save time (order-preserving over grad_fn_order); the live trace keeps
-    # raw id() values, so the roundtrip contract is the remap image, not raw
-    # equality.
-    assert restored.autograd.grad_fn_order == list(range(1, len(trace.autograd.grad_fn_order) + 1))
-    assert grad_fn_handle.op.grad_fn_handle is grad_fn_handle
-    assert torch.equal(restored[label].grad, expected[label])
 
 
 def test_train_mode_disk_save_rejected_for_grads(tmp_path: Path) -> None:

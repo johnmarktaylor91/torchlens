@@ -116,14 +116,14 @@ def _refuse_structure_only_conflicts(facts: _StructureOnlyEntryFacts) -> None:
             halt_value_suspect = first_selector_kind_outside(halt, allowed=_STATIC_SELECTOR_KINDS)
         if halt_value_suspect is not None:
             raise StructureOnlyOptionConflictError(
-                "structure_only=True requires a provably value-free halt= "
+                "structure_only=True requires a provably value-free stop_after= "
                 f"predicate; received {halt_value_suspect!r}. A value-touching "
                 "halt predicate would select the recorded graph by values the "
                 "capture does not record",
                 code="structure_only_option_conflict",
                 remedy=(
                     "use structured value-free selectors (tl.func, tl.in_module, "
-                    "label selectors, and their & | ~ compositions) as halt=, or "
+                    "label selectors, and their & | ~ compositions) as stop_after=, or "
                     "run a real capture"
                 ),
                 arguments=("structure_only", "halt"),

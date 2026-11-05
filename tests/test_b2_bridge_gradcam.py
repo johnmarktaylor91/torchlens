@@ -1,4 +1,4 @@
-"""Grad-CAM bridge ``call_kwargs=`` against real pytorch-grad-cam (walk U45.3).
+"""Grad-CAM bridge ``call_kwargs=`` against real pytorch-grad-cam.
 
 Smoothing options given in ``call_kwargs=`` reach the CAM call and match the
 package called directly; an option given twice refuses typed.

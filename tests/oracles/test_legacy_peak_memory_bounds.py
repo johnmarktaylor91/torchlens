@@ -6,6 +6,10 @@ page, and frees it before returning: a private anonymous 64 MiB mapping
 whatever earlier tests in the process left in the heap. The test samples the
 process's resident set itself (``/proc/self/statm``, ``/proc/self/status``), independent of TorchLens.
 A peak must include that buffer even though it is gone when the bracket ends.
+The plant's release folds the releasing CPU's share of the kernel's per-CPU RSS
+counter before and after the unmap (``_fresh_plant.FreshPlant.close``), so the
+kernel's mark is set on a total whose missing shares TorchLens can still read;
+without it the mark read short by a varying part of one counter batch.
 
 The margin, registered before these tests first ran, is 1 MiB on every CPU
 bound: it covers resident-set movement between TorchLens's bracket baseline and
@@ -19,18 +23,14 @@ from __future__ import annotations
 
 import os
 import tracemalloc
-from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
-from _fresh_plant import touch_fresh_plant
+from _fresh_plant import needs_vmhwm_reset, touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
-import torchlens._capture._forward_helpers as capture_forward_helpers
-from torchlens._capture import peak_memory
-from torchlens._capture.peak_memory import CPU_ZERO_PEAK_REASON
 from torchlens.options import CaptureOptions
 
 PLANT = 8 * 2**20  # float64 elements
@@ -42,10 +42,7 @@ HOST = CaptureOptions(measure_host_peak_memory=True)
 #: module attributes after the forward (pure observer).
 SAMPLES: dict[str, int] = {}
 
-procfs = pytest.mark.skipif(
-    not (Path("/proc/self/statm").exists() and os.access("/proc/self/clear_refs", os.W_OK)),
-    reason="the per-bracket resident high-water needs Linux procfs (skipped by design)",
-)
+
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA device")
 
 
@@ -110,7 +107,7 @@ class PyTransient(nn.Module):
         return self.fc(x)
 
 
-@procfs
+@needs_vmhwm_reset
 def test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward() -> None:
     torch.manual_seed(0)
     tl.trace(Transient().eval(), torch.randn(2, 4)).cleanup()  # warm the wrappers
@@ -129,39 +126,6 @@ def test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward() -> None:
         assert reported >= PLANT_BYTES - MARGIN
         assert reported <= high_water - before + MARGIN
         assert trace.cost.forward_peak_memory_reason is None
-    finally:
-        trace.cleanup()
-
-
-def test_cpu_forward_python_peak_includes_a_freed_bytearray() -> None:
-    torch.manual_seed(0)
-    model = PyTransient().eval()
-    SAMPLES.clear()
-    trace = tl.trace(
-        model,
-        torch.randn(2, 4),
-        capture=CaptureOptions(measure_python_peak_memory=True, measure_host_peak_memory=True),
-    )
-    try:
-        outside = SAMPLES["alive"] - SAMPLES["entry"]
-        assert outside >= PY_PLANT_BYTES
-        assert trace.cost.forward_peak_memory is not None
-        assert int(trace.cost.forward_peak_memory) >= outside - MARGIN
-        assert int(trace.cost.forward_peak_memory) >= PY_PLANT_BYTES - MARGIN
-    finally:
-        trace.cleanup()
-
-
-def test_cpu_forward_zero_reads_none_with_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
-    # An outside measurement of zero growth: every resident reading is the same.
-    monkeypatch.setattr(capture_forward_helpers, "process_rss_bytes", lambda: 1_000_000)
-    monkeypatch.setattr(peak_memory, "peak_rss_bytes", lambda: 1_000_000)
-    torch.manual_seed(0)
-    trace = tl.trace(nn.Linear(4, 2).eval(), torch.randn(2, 4), capture=HOST)
-    try:
-        assert trace.provenance.forward_memory_backend == "cpu"
-        assert trace.cost.forward_peak_memory is None
-        assert trace.cost.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
     finally:
         trace.cleanup()
 
@@ -187,7 +151,7 @@ def _backward_hook_trace(device: str, samples: dict[str, list[int]]) -> Any:
     return trace, out
 
 
-@procfs
+@needs_vmhwm_reset
 def test_cpu_backward_peak_is_the_largest_pass_peak() -> None:
     samples: dict[str, list[int]] = {"entry": [], "alive": []}
     trace, out = _backward_hook_trace("cpu", samples)

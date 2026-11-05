@@ -9,12 +9,14 @@ summaries and overlays the forward pass prepares before emission live here too.
 
 from __future__ import annotations
 
+import functools
 from collections import defaultdict, deque
 from typing import TYPE_CHECKING, cast
 
 import graphviz
 
 from ._boundary_bundle import bundle_member_nodes
+from ._focus_scope import flatten_ancestor_frames
 from ._render_common import (
     GRADIENT_ARROW_COLOR,
     ContainerClusterSpec,
@@ -84,6 +86,9 @@ def _setup_combined_special_clusters(
             subgraph.edge(**edge_dict)
 
 
+_ROOT = frozenset({"self", "self:1"})
+
+
 def _setup_subgraphs(
     self: Trace,
     graphviz_graph: graphviz.Digraph,
@@ -93,20 +98,17 @@ def _setup_subgraphs(
     top_level_rank_groups: Sequence[SiblingOrderChain | RenderIROrderingConstraint] = (),
     regions: Sequence[Any] = (),
     container_ink: Mapping[str, str] | None = None,
+    flatten: frozenset[str] = frozenset(),
 ) -> None:
     """Build nested Graphviz subgraphs for module clusters.
 
     Creates the module hierarchy as nested Graphviz subgraphs (clusters),
-    placing edges into the appropriate depth level.  Uses a BFS-like
-    approach: starts from top-level modules, builds each subgraph via
-    ``_setup_subgraphs_recurse``, and pushes child modules onto a stack.
-
-    In **unrolled** mode, each module pass is a separate subgraph (keyed by
-    ``"module_addr:call_index"``).  In **rolled** mode, all ops share one
-    subgraph (keyed by ``"module_addr"``).
-
-    Subgraph names are prefixed with ``"cluster_"`` (Graphviz convention to
-    draw a border box around them).
+    placing edges into the appropriate depth level. Walks breadth first from
+    the top-level modules via ``_setup_subgraphs_recurse``. Unrolled clusters
+    are keyed ``"module_addr:call_index"``, rolled ones ``"module_addr"``;
+    names take the ``"cluster_"`` prefix (Graphviz draws a border for it).
+    Frames in ``flatten`` (a ``module=`` focus's ancestors) are not drawn:
+    their contents go to the top level and the walk starts below them.
 
     Args:
         graphviz_graph: The top-level Graphviz Digraph.
@@ -118,6 +120,7 @@ def _setup_subgraphs(
     """
     if "self" not in self.modules:
         return
+    emit = functools.partial(_emit_cluster_payload, container_ink=container_ink)
     region_styles = {
         region.key: dict(region.style) for region in regions if region.kind == "module"
     }
@@ -125,23 +128,22 @@ def _setup_subgraphs(
         module_submodule_dict = defaultdict(list)
         for call_label, mpl in self.modules._pass_dict.items():
             module_submodule_dict[call_label] = list(mpl.call_children)
-        subgraphs = list(self.modules["self"].ops[0].call_children)
+        subgraphs = ["self:1"]
+        module_submodule_dict["self:1"] = list(self.modules["self"].ops[0].call_children)
     else:
         module_submodule_dict = defaultdict(list)
         for ml in self.modules:
-            if ml.address != "self":
-                module_submodule_dict[ml.address] = list(ml.call_children)
-        subgraphs = list(self.modules["self"].call_children)
-
-    # Get the max module nesting depth:
-
+            module_submodule_dict[ml.address] = list(ml.call_children)
+        subgraphs = ["self"]
+    # The root frame is never a cluster: content scoped to it is drawn at the top level.
+    subgraphs, emitted_rank_groups = flatten_ancestor_frames(
+        graphviz_graph, subgraphs, module_edge_dict, module_submodule_dict, flatten | _ROOT, emit
+    )
     max_call_depth = _get_max_call_depth(subgraphs, module_edge_dict, module_submodule_dict)
-
     # deque: list.pop(0) shifted the whole queue per module, Theta(M^2) on
     # flat module-heavy graphs before Graphviz even ran (R29, b4 sol MED).
     subgraph_stack: deque[list[str]] = deque([subgraph] for subgraph in subgraphs)
     call_depth = 0
-    emitted_rank_groups = 0
     while len(subgraph_stack) > 0:
         parent_graph_list = subgraph_stack.popleft()
         emitted_rank_groups += _setup_subgraphs_recurse(
@@ -350,23 +352,38 @@ def _setup_subgraphs_recurse(
                     else:
                         module_args[arg_name] = str(arg_val)
             s.attr(**module_args)
-            for chain in cluster_payload.get("rank_groups", []):
-                _emit_sibling_rank_group(s, chain)
-                emitted_rank_groups += 1
-            subgraph_nodes = cluster_payload.get("nodes", [])
-            for node_args in subgraph_nodes:
-                s.node(**node_args)
-            for container_cluster in cluster_payload.get("container_clusters", []):
-                _emit_container_cluster(
-                    s, cast(ContainerClusterSpec, container_cluster), ink=container_ink
-                )
-            subgraph_edges = cluster_payload["edges"]
-            for edge_dict in subgraph_edges:
-                s.edge(**edge_dict)
+            emitted_rank_groups += _emit_cluster_payload(s, cluster_payload, container_ink)
             subgraph_children = module_submodule_dict[subgraph_name_w_pass]
             for subgraph_child in subgraph_children:  # it's weird but have to go in reverse order.
                 subgraph_stack.append(parent_graph_list[:] + [subgraph_child])
         return emitted_rank_groups
+
+
+def _emit_cluster_payload(
+    graph: graphviz.Digraph,
+    payload: Mapping[str, Any],
+    container_ink: Mapping[str, str] | None = None,
+) -> int:
+    """Emit one module cluster's contents into ``graph``; return its rank-group count.
+
+    The contents are the cluster's sibling rank groups, nodes, container
+    frames and edges, in that order. ``graph`` is the cluster's own subgraph,
+    or the top level for a flattened frame (a ``module=`` focus's ancestor).
+    """
+
+    rank_groups = 0
+    for chain in payload.get("rank_groups", []):
+        _emit_sibling_rank_group(graph, chain)
+        rank_groups += 1
+    for node_args in payload.get("nodes", []):
+        graph.node(**node_args)
+    for container_cluster in payload.get("container_clusters", []):
+        _emit_container_cluster(
+            graph, cast(ContainerClusterSpec, container_cluster), ink=container_ink
+        )
+    for edge_dict in payload.get("edges", []):
+        graph.edge(**edge_dict)
+    return rank_groups
 
 
 def _collapsed_container_nodes_for_draw(

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .._debug_report import FoundReport
+from .._debug_report import FoundReport, at_source
 
 __all__ = ["FirstBadThing", "amp_scaled_grads_hint"]
 
@@ -69,6 +69,14 @@ class FirstBadThing(FoundReport):
         Reserved so the future live/anomaly tier joins the same shape.
     message:
         Human-readable summary.
+
+    Examples
+    --------
+    >>> finding = tl.debug.find_nan(model, x).first_bad_thing
+    >>> isinstance(finding, FirstBadThing), finding.found
+    (True, False)
+    >>> finding.tool, finding.kind
+    ('find_nan', 'none')
     """
 
     found: bool
@@ -99,7 +107,7 @@ class FirstBadThing(FoundReport):
 
         findings = [self.message] if self.message else []
         if self.label is not None:
-            findings.append(f"first bad: {self.label} ({self.kind}) at {self.source_line}")
+            findings.append(f"first bad: {self.label} ({self.kind}){at_source(self.source_line)}")
         return findings
 
 
@@ -117,6 +125,13 @@ def amp_scaled_grads_hint(*, all_nonfinite: bool = False) -> str:
     str
         Disclosure naming the GradScaler possibility and the remedy; it never
         edits the caller's rows or verdicts.
+
+    Examples
+    --------
+    >>> "GradScaler" in amp_scaled_grads_hint()
+    True
+    >>> "overflow" in amp_scaled_grads_hint(all_nonfinite=True)
+    True
     """
 
     if all_nonfinite:

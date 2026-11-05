@@ -26,7 +26,15 @@ from ._streaming import (
 
 
 class Aggregator:
-    """Combine multiple streaming accumulators in one update pass."""
+    """Combine multiple streaming accumulators in one update pass.
+
+    Examples
+    --------
+    >>> both = Aggregator(tl.stats.Mean(name="mean"), tl.stats.Norm(name="norm"))
+    >>> both.update(torch.tensor([3.0, 4.0]))
+    >>> both.compute()
+    {'mean': 3.5, 'norm': 5.0}
+    """
 
     def __init__(self, *stats: StreamingStat, name: str | None = None) -> None:
         """Initialize the combined aggregator.
@@ -90,7 +98,7 @@ def _resolve_metric_out(log: Any, metric_name: str) -> tuple[Any, Any]:
     """
 
     if metric_name == "output" and log.output_layers:
-        site = log[log.output_layers[-1]]
+        site = log.ops[log.output_layers[-1]]
         return site.out, site
     try:
         site = log[metric_name]
@@ -460,7 +468,7 @@ def _rng_snapshot() -> tuple[Any, Any, Any, Any] | None:
             numpy_state = None
         return (
             random.getstate(),
-            torch.random.get_rng_state().clone(),
+            torch.default_generator.get_state().clone(),
             cuda_states,
             numpy_state,
         )
@@ -544,6 +552,13 @@ def aggregate(  # noqa: PLR0913 -- the ruled cache pair joins loss_fn= (base sup
         spelling: a string key as given, a selector key by its ``repr``
         (``"tl.grad('relu_3')"``), so an activation and a gradient metric of
         one site never collide.
+
+    Examples
+    --------
+    >>> batches = [torch.randn(1, 3, 8, 8) for _ in range(3)]
+    >>> results = tl.stats.aggregate(model, batches, {"relu_1_2": tl.stats.Covariance()})
+    >>> results["relu_1_2"].shape
+    torch.Size([256, 256])
     """
 
     keyed, sites = _canonical_metric_keys(metrics)

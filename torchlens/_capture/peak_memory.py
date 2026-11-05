@@ -56,7 +56,7 @@ def reset_peak_rss() -> bool:
     first -- the brainpipe memo's sweep-scale instrument defect). Only the
     peak-RSS counter is touched; no page state relevant to correctness
     changes. The reset is process-wide and cannot be undone: after a capture
-    (forward bracket) or a CPU ``log_backward`` (each pass), a caller's own
+    (forward bracket) or a CPU ``backward`` (each pass), a caller's own
     ``VmHWM`` and ``ru_maxrss`` reads report the high-water since that bracket
     began, not since process start. Nothing in TorchLens reads it across
     brackets. Called only under ``CaptureOptions(measure_host_peak_memory=True)``.
@@ -133,8 +133,11 @@ def _kernel_mark_lag_bytes(exact_rss: int, approximate_rss: int | None) -> int:
     per CPU, 8 MiB measured on a 32-CPU host. A mark set when a freed buffer
     was unmapped therefore reads below the RSS ``/proc`` showed while the
     buffer was resident. The lag read now stands in for the lag at that
-    unmap. On kernels whose ``/proc`` RSS is the approximate total the two
-    readings agree and the lag is 0.
+    unmap, except the share of the CPU that ran the unmap: the unmap itself
+    folds that share into the total, so the mark can still read short by up
+    to one counter batch (twice the CPU count in pages, at least 32), a share
+    nothing in ``/proc`` reports afterwards. On kernels whose ``/proc`` RSS is the
+    approximate total the two readings agree and the lag is 0.
 
     Parameters
     ----------

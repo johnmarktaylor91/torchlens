@@ -100,6 +100,12 @@ class DeclaredPreprocessing:
     extras:
         Adapter-specific disclosures that are NOT compared (kept for the
         provenance record, e.g. ``crop_pct``, processor class names).
+
+    Examples
+    --------
+    >>> declared = DeclaredPreprocessing(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
+    >>> declared.mean, declared.crop_size
+    ((0.5, 0.5, 0.5), None)
     """
 
     modality: str = "image"
@@ -158,6 +164,14 @@ ResolvedPreprocessing` provenance record (source, identifier, verified,
         The authority's own transform callable when it ships one (torchvision
         preset, timm transform, HF processor); ``None`` for declaration-only
         authorities (explicit dicts) and unknown resolutions.
+
+    Examples
+    --------
+    >>> resolution = tl.preprocessing.resolve(model=nn.Linear(4, 4))
+    >>> isinstance(resolution, Resolution), resolution.status
+    (True, 'unknown')
+    >>> resolution.declared is None and resolution.input_transform is None
+    True
     """
 
     preprocessing: ResolvedPreprocessing
@@ -196,6 +210,12 @@ def unknown_resolution(reason: str, *, fetch: dict[str, Any] | None = None) -> R
     Resolution
         ``source="unknown"``, ``verified=False``, no declared fields, no
         transform.
+
+    Examples
+    --------
+    >>> resolution = tl.preprocessing.unknown_resolution("no card for this model")
+    >>> resolution.status, resolution.preprocessing.source, resolution.declared
+    ('unknown', 'unknown', None)
     """
 
     from torchlens._data_classes.trace import ResolvedPreprocessing
@@ -213,4 +233,30 @@ def unknown_resolution(reason: str, *, fetch: dict[str, Any] | None = None) -> R
         ),
         declared=None,
         input_transform=None,
+    )
+
+
+def as_model_metadata(resolution: Resolution, method: str = "model_metadata") -> Resolution:
+    """Re-stamp an explicit-adapter resolution as model-attached metadata.
+
+    ``method`` names how the authority was found: ``"model_metadata"`` for a
+    handle the model object carries, ``"state_match"`` for a torchvision
+    preset recovered from the loaded weights.
+    """
+
+    from torchlens._data_classes.trace import ResolvedPreprocessing
+
+    record = resolution.preprocessing
+    config = dict(record.config)
+    config["resolution_method"] = method
+    return Resolution(
+        preprocessing=ResolvedPreprocessing(
+            source=record.source,
+            identifier=record.identifier,
+            verified=True,
+            config=config,
+            description=record.description,
+        ),
+        declared=resolution.declared,
+        input_transform=resolution.input_transform,
     )

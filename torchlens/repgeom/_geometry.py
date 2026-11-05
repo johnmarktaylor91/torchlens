@@ -353,6 +353,15 @@ def activation_distance_matrix(
     ------
     ValueError
         If activations are non-finite, empty, or the metric is unsupported.
+
+    Examples
+    --------
+    >>> acts = torch.randn(6, 4)
+    >>> d = tl.repgeom.activation_distance_matrix(acts, metric="cosine")
+    >>> d.shape
+    (6, 6)
+    >>> bool(abs(d - d.T).max() < 1e-9)
+    True
     """
 
     array = _as_numpy_array(activations)
@@ -553,6 +562,15 @@ def rdm(  # noqa: PLR0913 -- the D-5-widened public signature (brainpipe memo): 
     ValueError
         If activations are non-finite, empty, zero-norm for angular metrics,
         or an option value is unsupported.
+
+    Examples
+    --------
+    >>> acts = torch.randn(6, 4)
+    >>> d = tl.repgeom.rdm(acts)
+    >>> d.shape
+    (6, 6)
+    >>> tl.repgeom.rdm(acts, output="condensed").shape
+    (15,)
     """
 
     modern = (
@@ -664,6 +682,15 @@ def compare_rdms(rdm_a: Any, rdm_b: Any, method: str = "spearman") -> float:
     ValueError
         On shape mismatch, a non-square non-condensed input, or an unknown
         method.
+
+    Examples
+    --------
+    >>> acts = torch.randn(6, 4)
+    >>> d = tl.repgeom.rdm(acts)
+    >>> tl.repgeom.compare_rdms(d, d) > 0.999
+    True
+    >>> tl.repgeom.compare_rdms(d, d, method="pearson") > 0.999
+    True
     """
 
     def triangle(value: Any, name: str) -> np.ndarray:
@@ -823,6 +850,15 @@ def rank_transform_rdm(
     ValueError
         If the matrix is not a valid finite symmetric distance matrix, is
         smaller than 2 x 2, or ``output`` is not a supported token.
+
+    Examples
+    --------
+    >>> d = tl.repgeom.rdm(torch.randn(6, 4))
+    >>> ranks = tl.repgeom.rank_transform_rdm(d, output="rank")
+    >>> ranks.shape
+    (6, 6)
+    >>> int(ranks.max())
+    15
     """
 
     if output not in ("rank", "percentile"):
@@ -913,6 +949,15 @@ def classical_mds(
     ------
     ValueError
         If inputs are non-finite, too small, duplicate, or rank-deficient.
+
+    Examples
+    --------
+    >>> feats = torch.randn(8, 5)
+    >>> coords, info = tl.repgeom.classical_mds(feats, input_kind="features")
+    >>> coords.shape
+    (8, 2)
+    >>> info["n_stimuli"]
+    8
     """
 
     if num_components < 1:
@@ -1017,6 +1062,14 @@ def scree(
     ------
     ValueError
         If inputs are malformed, non-finite, or have too few stimuli.
+
+    Examples
+    --------
+    >>> eig = tl.repgeom.scree(torch.randn(8, 5))
+    >>> eig.shape
+    (8,)
+    >>> bool(eig[0] >= eig[1])
+    True
     """
 
     if min_stimuli < 3:
@@ -1058,6 +1111,14 @@ def effective_dimensionality(
     ------
     ValueError
         If inputs are malformed or ``variance_threshold`` is outside ``[0, 1]``.
+
+    Examples
+    --------
+    >>> info = tl.repgeom.effective_dimensionality(torch.randn(8, 5))
+    >>> 1 <= info["n_components_for_threshold"] <= 5
+    True
+    >>> info["effective_rank"] <= 5
+    True
     """
 
     _validate_variance_threshold(variance_threshold)
@@ -1091,6 +1152,15 @@ def procrustes_align(source_2d: Any, target_2d: Any) -> np.ndarray:
     ------
     ValueError
         If inputs are non-finite, malformed, or rank-deficient.
+
+    Examples
+    --------
+    >>> target = torch.randn(8, 2)
+    >>> aligned = tl.repgeom.procrustes_align(target, target)
+    >>> aligned.shape
+    (8, 2)
+    >>> bool(abs(aligned - target.numpy()).max() < 1e-6)
+    True
     """
 
     source = _as_numpy_array(source_2d)

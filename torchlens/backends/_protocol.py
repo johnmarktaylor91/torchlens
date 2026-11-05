@@ -14,7 +14,16 @@ from .._ir.workspaces import RawGraphWorkspace
 
 
 class CaptureBackend(Protocol):
-    """Protocol implemented by backend-specific capture adapters."""
+    """Protocol implemented by backend-specific capture adapters.
+
+    Examples
+    --------
+    >>> adapter = tl.backends.spec("torch").capture_backend()
+    >>> (adapter.name, adapter.supports_backward_capture)
+    ('torch', True)
+    >>> all(hasattr(adapter, member) for member in ("wrap", "unwrap", "start_session"))
+    True
+    """
 
     name: str
     supports_backward_capture: bool
@@ -63,16 +72,16 @@ class CaptureBackend(Protocol):
         self,
         session: object,
         model: object,
-        input_args: object,
+        inputs: object,
         input_kwargs: dict[Any, Any] | None,
     ) -> tuple[list[Any], dict[Any, Any], list[str], object]:
         """Normalize inputs, copy caller-owned values, and detect the model device."""
         ...
 
-    def fetch_label_move_input_tensors(
+    def _fetch_label_move_input_tensors(
         self,
         session: object,
-        input_args: list[Any],
+        inputs: list[Any],
         input_arg_names: list[str],
         input_kwargs: dict[Any, Any],
         model_device: object,
@@ -251,10 +260,6 @@ class CaptureBackend(Protocol):
 
     def safe_copy(self, session: object, value: object, policy: CapturePolicy) -> object:
         """Materialize a backend-safe payload copy under the given policy."""
-        ...
-
-    def copy_replacement_metadata(self, session: object, src: object, dst: object) -> None:
-        """Copy backend metadata from an intervention source to replacement."""
         ...
 
     def emit_function_outputs(

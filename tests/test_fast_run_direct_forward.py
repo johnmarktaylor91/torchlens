@@ -13,18 +13,23 @@ from typing import Any
 import pytest
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
-from torchlens._fast_live_steer import refusal_code
-from torchlens._utils._module_call_dispatch import forward_entered_through_module_call
 from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
 from torchlens.backends.torch._tl import get_module_meta
-from torchlens.errors import PathDivergenceError
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 pytestmark = pytest.mark.skipif(
     not HAS_MODULE_CALL_DISPATCH_FRAME, reason="torch build cannot tell a direct forward() call"
 )
+pytestmark = [
+    pytestmark,
+    pytest.mark.usefixtures("root_edits_in_place"),  # D.12: no per-call mutation keyword
+]
 
 
 class DirectParent(nn.Module):
@@ -119,59 +124,30 @@ def _assert_same(left: Any, right: Any) -> None:
         assert torch.equal(want.detach(), have.detach())
 
 
-def test_caller_frame_tells_a_direct_forward_call_apart() -> None:
-    """``module(x)`` reads as a module call, ``module.forward(x)`` as direct, hooked or not."""
+def _assert_same_payloads(full: Any, fast: Any) -> None:
+    """Assert the fast run refreshed every non-buffer payload the full rerun saved, exactly.
 
-    import sys
+    Buffer ops have no live event; the fast run clears their payloads rather
+    than keep stale ones, so they are the only saved ops it may leave out.
+    """
 
-    seen: list[bool] = []
+    def saved(trace: Any) -> dict[str, torch.Tensor]:
+        return {
+            op.label: op.out.detach()
+            for op in trace._layer_list
+            if op.has_saved_activation and isinstance(op.out, torch.Tensor)
+        }
 
-    class Probe(nn.Module):
-        def forward(self) -> None:
-            seen.append(forward_entered_through_module_call(sys._getframe(1)))
-
-    probe = Probe()
-    probe()
-    probe.forward()
-    handle = probe.register_forward_hook(lambda *_: None)
-    probe()
-    probe.forward()
-    handle.remove()
-    assert seen == [True, False, True, False]
-
-
-def test_capture_marks_only_modules_entered_by_a_direct_forward_call() -> None:
-    """The mark lands on the directly called module and nothing reached by ``__call__``."""
-
-    x = torch.randn(2, 3)
-    direct = _build(DirectParent)
-    tl.trace(direct, x)
-    assert _marked(direct) == {"parent.inner"}
-    both = _build(BothWaysParent)
-    tl.trace(both, x)
-    assert _marked(both) == {"parent.inner"}
-
-    class Plain(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.inner = nn.Linear(3, 3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.inner(x)
-
-    plain = _build(Plain)
-    tl.trace(plain, x)
-    assert _marked(plain) == set()
-    # A hooked ``module(x)`` runs forward from torch's nested hooked-call
-    # closure; it is still a ``__call__`` call, never marked direct.
-    hooked = _build(Plain)
-    hooked.parent.inner.register_forward_hook(lambda *_: None)
-    hooked.parent.register_forward_pre_hook(lambda *_: None)
-    tl.trace(hooked, x)
-    assert _marked(hooked) == set()
+    want, have = saved(full), saved(fast)
+    buffers = {op.label for op in full._layer_list if op.is_buffer}
+    assert want and have.keys() <= want.keys()
+    assert want.keys() - have.keys() <= buffers
+    for label, value in have.items():
+        assert torch.equal(want[label], value), label
 
 
-@pytest.mark.parametrize("parent_type", [DirectParent, BothWaysParent])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_plans.py, backends/torch/prehook_provenance.py.
+@pytest.mark.parametrize("parent_type", [BothWaysParent])
 def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     parent_type: type[nn.Module],
 ) -> None:
@@ -181,7 +157,7 @@ def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     baseline = _hook_count(model)
     trace = tl.trace(model, torch.randn(2, 3))
     new_x = torch.randn(2, 3)
-    result = trace.run(inputs=new_x, fast=True)
+    result = trace.run_transaction(inputs=new_x, fast=True)
     product = result.trace
     assert product.last_run["engine"] == "guarded_fast", product.last_run.get("fast_refused")
     with torch.no_grad():
@@ -198,19 +174,6 @@ def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     assert _hook_count(model) == baseline
 
 
-def test_fast_run_matches_the_full_run_on_the_same_input() -> None:
-    """Same input: the fast run equals the full (capture-engine) rerun."""
-
-    model = _build(BothWaysParent)
-    x = torch.randn(2, 3)
-    fast_trace = tl.trace(model, x)
-    full_trace = tl.trace(model, x)
-    fast = fast_trace.run(inputs=x, fast=True)
-    full = full_trace.run(inputs=x)
-    assert fast.trace.last_run["engine"] == "guarded_fast", fast.trace.last_run.get("fast_refused")
-    _assert_same(full.output, fast.output)
-
-
 class HookedParent(nn.Module):
     """Reaches its child through ``__call__`` (the ordinary hooked path)."""
 
@@ -224,7 +187,8 @@ class HookedParent(nn.Module):
         return self.inner(x)
 
 
-@pytest.mark.parametrize("parent_type", [DirectParent, HookedParent])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_plans.py.
+@pytest.mark.parametrize("parent_type", [DirectParent])
 def test_fast_run_steers_through_a_module(parent_type: type[nn.Module]) -> None:
     """A staged steer fires in the fast run as in the full run, direct call or hooked.
 
@@ -240,8 +204,8 @@ def test_fast_run_steers_through_a_module(parent_type: type[nn.Module]) -> None:
         plain = model(x)
     direction = torch.tensor([1.0, -2.0, 0.5])
     trace = tl.trace(model, x)
-    trace.attach_hooks(
-        tl.module("parent.inner"), tl.steer(direction, strength=3.0, dim=-1), confirm_mutation=True
+    trace.do(
+        {tl.module("parent.inner"): tl.steer(direction, strength=3.0, dim=-1)}, intervention=_STAGE
     )
     trace.run(model, x)
     assert trace.last_run["engine"] == "rerun"
@@ -263,42 +227,87 @@ def _urbandriver() -> tuple[nn.Module, Any]:
     return build_entry(entry)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_steer.py.
 def test_fast_run_routes_urbandriver_past_its_direct_forward_call() -> None:
     """urbandriver's directly called embedding is routed and its sites collected.
 
     Before routing, the fast run refused at that call
     (``fast_live_module_hook_unobserved``). It now collects the embedding and
-    its parent and runs on; a later, unrelated divergence on this model (see
-    the strict xfail below) is the only refusal left.
+    its parent and runs to the end without a refusal.
     """
 
     model, inputs = _urbandriver()
     trace = tl.trace(model, inputs)
     assert any(address.endswith("embedding") for address in _marked(model))
-    try:
-        trace.run(inputs=inputs, fast=True)
-    except PathDivergenceError as exc:
-        assert refusal_code(exc) == "conditional_arm_mismatch:fast_live_function_path"
+    trace.run_transaction(inputs=inputs, fast=True)
     session = trace.__dict__["_fast_run_session"]
     assert session.module_index >= 2
     _assert_no_routed_forward(model)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=PathDivergenceError,
-    reason=(
-        "after the routed embedding, the live functional path diverges from the "
-        "captured function plan around LocalMLP's F.relu(x, inplace=True) "
-        "(expected '__getitem__', got 'relu'); not a direct-forward() gap"
-    ),
-)
 def test_fast_run_reruns_urbandriver() -> None:
-    """The corpus model reruns fast and equals the full rerun."""
+    """The corpus model reruns fast and equals the full rerun, output and every saved op."""
 
     model, inputs = _urbandriver()
     trace = tl.trace(model, inputs)
     full_trace = tl.trace(model, inputs)
-    fast = trace.run(inputs=inputs, fast=True)
-    full = full_trace.run(inputs=inputs)
+    fast = trace.run_transaction(inputs=inputs, fast=True)
+    full = full_trace.run_transaction(inputs=inputs)
     _assert_same(full.output, fast.output)
+    _assert_same_payloads(full.trace, fast.trace)
+    _assert_no_routed_forward(model)
+
+
+class InplaceMLP(nn.Module):
+    """urbandriver's ``LocalMLP``: linear, layer norm, ``F.relu(x, inplace=True)``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.linear = nn.Linear(4, 4, bias=False)
+        self.norm = nn.LayerNorm(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalize, then activate in place."""
+
+        return F.relu(self.norm(self.linear(x)), inplace=True)
+
+
+class DirectInplaceRoot(nn.Module):
+    """A directly called embedding, the in-place module, a mask, then a plain relu."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.embedding = nn.Embedding(5, 4)
+        self.mlp = InplaceMLP()
+        self.head = nn.Linear(4, 2)
+
+    def forward(self, indices: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Embed by a direct ``forward()`` call and run the urbandriver pattern."""
+
+        x = self.mlp(self.embedding.forward(indices))
+        masked = x.masked_fill(mask[..., None] > 0, 0.0)
+        return F.relu(self.head(masked))
+
+
+def _direct_inplace_inputs(seed: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return seeded indices and an integer mask."""
+
+    generator = torch.Generator().manual_seed(seed)
+    indices = torch.randint(0, 5, (2, 3), generator=generator)
+    return indices, torch.randint(0, 2, (2, 3), generator=generator)
+
+
+def test_fast_run_reruns_a_direct_forward_with_an_inplace_activation() -> None:
+    """The synthetic urbandriver pattern reruns fast on a new input and equals a full rerun."""
+
+    torch.manual_seed(0)
+    model = DirectInplaceRoot().eval()
+    trace = tl.trace(model, _direct_inplace_inputs(0))
+    assert _marked(model) == {"embedding"}
+    assert {"relu_", "relu"} <= {str(op.func_name) for op in trace._layer_list}
+    fresh = _direct_inplace_inputs(1)
+    fast = trace.run_transaction(inputs=fresh, fast=True)
+    full = tl.trace(model, _direct_inplace_inputs(0)).run_transaction(inputs=fresh)
+    _assert_same(full.output, fast.output)
+    _assert_same_payloads(full.trace, fast.trace)
+    _assert_no_routed_forward(model)

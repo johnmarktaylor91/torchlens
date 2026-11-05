@@ -96,6 +96,20 @@ class CausalAuditUnit:
         The claim's name for the unit's component: the layer of a layer
         claim, the row label of a direct-logit table (``"blocks.0.mlp"``),
         the site of a read row, the edge of an EDGE row (``"a0.h1->m2"``).
+
+    Examples
+    --------
+    >>> clf = nn.Sequential(nn.Flatten(), nn.Linear(12, 3)).eval()
+    >>> inp = torch.randn(1, 12)
+    >>> claim = tl.attribution.layer_attribution(clf, inp, target=0, layer="1")
+    >>> audit = tl.attribution.causal_audit(
+    ...     clf, inp, claim=claim, target=0, k=1, num_random_draws=1
+    ... )
+    >>> row = audit.units[0]
+    >>> type(row).__name__
+    'CausalAuditUnit'
+    >>> row.component
+    '1'
     """
 
     index: tuple[int, ...]
@@ -109,8 +123,8 @@ class CausalAuditUnit:
     def build_interventions(self) -> tuple[tuple[Any, Any], ...]:
         """The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect``.
 
-        Replay it with ``fork = trace.fork(); fork.do(*pair)`` on a trace
-        captured with ``capture=tl.options.CaptureOptions(replayable=True)``.
+        Replay it with ``fork = trace.fork(); fork.do(*pair)`` on a trace of
+        the same inputs (``tl.trace(model, x)``).
         """
 
         assert self._plan is not None  # noqa: S101 - every audit row carries its plan
@@ -145,6 +159,20 @@ class CausalAuditSet:
         edge patched together).
     draw
         Index of the random draw (``0`` for ``"top"`` and ``"bottom"``).
+
+    Examples
+    --------
+    >>> clf = nn.Sequential(nn.Flatten(), nn.Linear(12, 3)).eval()
+    >>> inp = torch.randn(1, 12)
+    >>> claim = tl.attribution.layer_attribution(clf, inp, target=0, layer="1")
+    >>> audit = tl.attribution.causal_audit(
+    ...     clf, inp, claim=claim, target=0, k=1, num_random_draws=1
+    ... )
+    >>> top = audit.set_of("top")[0]
+    >>> type(top).__name__
+    'CausalAuditSet'
+    >>> top.kind
+    'top'
     """
 
     kind: str
@@ -213,6 +241,21 @@ class CausalAudit:
         ``kind``, ``draw``, ``units``, ``edges``, ``claimed_effect`` and the
         ``reason``; empty, since every set is patched in one call) and ``trace`` (the clean intervention-ready trace the edges
         were patched on; the recorded patches replay on its forks).
+
+    Examples
+    --------
+    >>> clf = nn.Sequential(nn.Flatten(), nn.Linear(12, 3)).eval()
+    >>> inp = torch.randn(1, 12)
+    >>> claim = tl.attribution.layer_attribution(clf, inp, target=0, layer="1")
+    >>> audit = tl.attribution.causal_audit(
+    ...     clf, inp, claim=claim, target=0, k=1, num_random_draws=1
+    ... )
+    >>> type(audit).__name__
+    'CausalAudit'
+    >>> len(audit.units)
+    3
+    >>> len(audit.set_of("random"))
+    1
     """
 
     module_address: str | None
@@ -340,6 +383,21 @@ def causal_audit(  # noqa: PLR0913 - public door: keyword-only audit settings
     AttributionError
         On a claim the audit cannot ground at its sites, a claim that does
         not fit its sites, target or logits, or invalid settings.
+
+    Examples
+    --------
+    >>> clf = nn.Sequential(nn.Flatten(), nn.Linear(12, 3)).eval()
+    >>> inp = torch.randn(1, 12)
+    >>> claim = tl.attribution.layer_attribution(clf, inp, target=0, layer="1")
+    >>> audit = tl.attribution.causal_audit(
+    ...     clf, inp, claim=claim, target=0, k=1, num_random_draws=1
+    ... )
+    >>> type(audit).__name__
+    'CausalAudit'
+    >>> audit.extra["claim_kind"]
+    'layer'
+    >>> audit.set_of("top")[0].kind
+    'top'
     """
 
     request = _AuditRequest(

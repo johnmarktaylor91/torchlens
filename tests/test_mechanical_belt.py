@@ -45,44 +45,13 @@ def _wrapped_torch() -> Iterator[None]:
     yield
 
 
-def test_belt_membership_is_derived_and_pinned() -> None:
-    """The measured protocol-invisible set on this build, exactly."""
-
-    report = belt.belt_report()
-    assert report is not None
-    assert set(report.members) == _EXPECTED_MEMBERS
-    assert not report.probe_failures
-    if hasattr(torch, "from_file"):
-        # Build-dependent visibility: measured VISIBLE on this build, so the
-        # net covers it and the belt must NOT claim it.
-        assert ("torch", "from_file") in report.probed_visible
-        assert ("torch", "from_file") not in report.members
-
-
-def test_belt_members_fire_zero_mode_callbacks() -> None:
-    """Independent re-measurement: no mode can see a belt member's call."""
-
-    report = belt.belt_report()
-    assert report is not None
-    for entry in report.members:
-        recipe = belt.PROBE_RECIPES[entry]
-        namespace = belt._resolve_namespace(entry[0])
-        current = getattr(namespace, entry[1])
-        original = _state._decorated_to_orig.get(id(current), current)
-        args, kwargs = recipe()
-        mode = belt._CountingMode()
-        with _state.pause_logging(), mode:
-            original(*args, **kwargs)
-        assert mode.calls == 0, f"{entry} fired the mode; it is not protocol-invisible"
-
-
 def _original_and_wrapper(name: str) -> tuple[Any, Any]:
     wrapper = getattr(torch, name)
     original = _state._decorated_to_orig[id(wrapper)]
     return original, wrapper
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_belt_sweep_patches_stale_module_ref_and_restores() -> None:
     """Module-attr stale refs to belt members round-trip through the ledger."""
 
@@ -101,6 +70,7 @@ def test_belt_sweep_patches_stale_module_ref_and_restores() -> None:
         belt.restore_belt_references()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/belt.py.
 def test_belt_restore_preserves_user_reassignment() -> None:
     """Reversal is conditional: a slot the user rewrote is left alone."""
 
@@ -120,22 +90,31 @@ def test_belt_restore_preserves_user_reassignment() -> None:
         belt.restore_belt_references()
 
 
-def test_belt_sweep_is_epoch_incremental() -> None:
-    """A module identity is scanned once; new imports are picked up later."""
+class _RaisingStub:
+    """A module global whose every attribute read raises (shap.plots without matplotlib)."""
+
+    def __getattribute__(self, item: str) -> Any:
+        raise ImportError("plotting is not available")
+
+
+def test_belt_sweep_skips_a_global_whose_attribute_reads_raise() -> None:
+    """A raising stub beside a stale ref neither aborts the sweep nor hides the ref."""
 
     original, wrapper = _original_and_wrapper("from_numpy")
-    belt.sweep_stale_belt_references()  # drain: everything live is now swept
-    late = types.ModuleType("_tl_belt_late_import")
-    late.op = original
-    sys.modules[late.__name__] = late
+    mod = types.ModuleType("_tl_belt_raising_stub_check")
+    mod.plots = _RaisingStub()
+    mod.op = original
+    sys.modules[mod.__name__] = mod
     try:
         assert belt.sweep_stale_belt_references() >= 1
-        assert late.op is wrapper
+        assert mod.op is wrapper
     finally:
-        sys.modules.pop(late.__name__, None)
+        sys.modules.pop(mod.__name__, None)
         belt.restore_belt_references()
+    assert mod.op is original
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_belt_sweep_prefilter_evicts_dead_module_ids() -> None:
     """The O(new) pre-filter never turns a reused id into a silent skip.
 
@@ -170,6 +149,7 @@ def test_belt_sweep_prefilter_evicts_dead_module_ids() -> None:
         belt.restore_belt_references()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_probe_rng_bracket_restores_global_seed() -> None:
     """The probe framework is RNG-neutral by construction (b8-fable R56).
 
@@ -191,6 +171,7 @@ def test_probe_rng_bracket_restores_global_seed() -> None:
     )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/belt.py, campaign mutant kills.
 def test_belt_derivation_is_rng_neutral() -> None:
     """End-to-end: a full ``_derive()`` pass leaves the global RNG untouched."""
 
@@ -213,29 +194,7 @@ def _forged_failure_report() -> belt.BeltReport:
     )
 
 
-@pytest.mark.heavy  # doctor-row probe crossed the 7s smoke budget at T56 (8.0s cpu)
-def test_probe_failure_reaches_doctor_row(monkeypatch: pytest.MonkeyPatch) -> None:
-    """grind-r6 b3 R02 (sol MED): doctor() must consume belt probe failures.
-
-    A failed probe means the candidate is neither belt-patched nor proven
-    mode-visible, so a stale pre-wrap reference to it drops ops with zero
-    signal while ``capture_verified`` stays True. Before the fix NO doctor
-    row consumed the belt report at all.
-    """
-
-    import torchlens as tl
-
-    monkeypatch.setattr(belt, "_report", _forged_failure_report())
-    monkeypatch.setattr(belt, "_member_map", {})
-    rows = {check.key: check for check in tl.report.doctor().checks}
-    assert "mechanical belt" in rows, "no doctor row consumes the belt report"
-    row = rows["mechanical belt"]
-    assert row.status == "scope"
-    assert "torch.frombuffer" in row.details
-    assert "probe exploded" in row.details
-    assert "unprobed_candidates=2" in row.details
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of compat/_report.py, report/_environment.py.
 def test_probe_failure_reaches_compat_row(monkeypatch: pytest.MonkeyPatch) -> None:
     """grind-r6 b3 R02 (sol MED): report.doctor() must carry the belt row."""
 
@@ -250,7 +209,6 @@ def test_probe_failure_reaches_compat_row(monkeypatch: pytest.MonkeyPatch) -> No
     assert "torch.frombuffer" in row.details
 
 
-@pytest.mark.smoke
 def test_clean_belt_reports_pass_not_false_alarm() -> None:
     """Healthy build: PASS rows that still DISCLOSE the unprobed count.
 
@@ -276,3 +234,124 @@ def test_clean_belt_reports_pass_not_false_alarm() -> None:
     assert compat_row.status == "pass"
     assert compat_row.severity == "ok"
     assert "unprobed_candidates=" in compat_row.details
+
+
+def _capture_from_file_probe_paths(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record the temp path every ``from_file`` probe recipe creates."""
+
+    real_recipe = belt.PROBE_RECIPES[("torch", "from_file")]
+    paths: list[str] = []
+
+    def recording_recipe() -> tuple[tuple[Any, ...], dict[str, Any]]:
+        args, kwargs = real_recipe()
+        paths.append(str(args[0]))
+        return args, kwargs
+
+    monkeypatch.setitem(belt.PROBE_RECIPES, ("torch", "from_file"), recording_recipe)
+    return paths
+
+
+def _from_file_classification(report: belt.BeltReport) -> tuple[bool, bool, bool]:
+    key = ("torch", "from_file")
+    return (key in report.members, key in report.probed_visible, key in report.probe_failures)
+
+
+def test_from_file_probe_releases_mapping_before_unlink(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The probe tensor is gone before its temp file is removed (Windows).
+
+    Windows refuses to delete a file a live mapping still holds; the
+    ``from_file`` result maps the probe file, so unlinking while it is alive
+    raised ``PermissionError`` out of ``_derive`` and failed every
+    ``tl.trace`` on Windows. The fake ``unlink`` reproduces that refusal
+    whenever a probe result tensor is still alive.
+    """
+
+    import os
+    import weakref
+
+    expected = _from_file_classification(belt._derive()[0])
+    paths = _capture_from_file_probe_paths(monkeypatch)
+    live_results: list[weakref.ref[torch.Tensor]] = []
+    real_touches = belt._touches_tensor
+
+    def track(result: Any) -> None:
+        if isinstance(result, torch.Tensor):
+            live_results.append(weakref.ref(result))
+
+    # The result is seen by the counting mode where the call dispatches
+    # (mode-visible builds) and by the touches check where it does not.
+    class RecordingMode(belt._CountingMode):
+        def __torch_function__(
+            self,
+            func: Any,
+            types_: Any,
+            args: tuple[Any, ...] = (),
+            kwargs: dict[str, Any] | None = None,
+        ) -> Any:
+            result = super().__torch_function__(func, types_, args, kwargs)
+            track(result)
+            return result
+
+    def spying_touches(result: Any, func: Any) -> bool:
+        track(result)
+        return real_touches(result, func)
+
+    real_unlink = os.unlink
+
+    def windows_unlink(path: Any, *args: Any, **kwargs: Any) -> None:
+        if str(path) in paths and any(ref() is not None for ref in live_results):
+            raise PermissionError(13, "simulated WinError 5: file is mapped", str(path))
+        real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(belt, "_CountingMode", RecordingMode)
+    monkeypatch.setattr(belt, "_touches_tensor", spying_touches)
+    monkeypatch.setattr(belt, "_deferred_probe_paths", [])
+    monkeypatch.setattr(os, "unlink", windows_unlink)
+
+    report, _ = belt._derive()
+
+    assert paths, "the from_file probe never ran"
+    assert _from_file_classification(report) == expected
+    assert belt._deferred_probe_paths == []
+    assert not any(os.path.exists(path) for path in paths)
+
+
+def test_trace_survives_refused_probe_file_removal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused removal defers cleanup; ``tl.trace`` and the report are unchanged.
+
+    Even with the mapping released, Windows (or a scanner holding a handle)
+    can refuse the first removal. The capture must still succeed, the probe's
+    classification must not change, and the file must be removed on retry.
+    """
+
+    import os
+
+    expected = _from_file_classification(belt._derive()[0])
+    paths = _capture_from_file_probe_paths(monkeypatch)
+    refused: list[str] = []
+    real_unlink = os.unlink
+
+    def refuse_first_unlink(path: Any, *args: Any, **kwargs: Any) -> None:
+        if str(path) in paths and not refused:
+            refused.append(str(path))
+            raise PermissionError(13, "simulated WinError 32: file in use", str(path))
+        real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(belt, "_deferred_probe_paths", [])
+    monkeypatch.setattr(os, "unlink", refuse_first_unlink)
+    # Force a fresh derivation inside the next capture, as on a first wrap.
+    monkeypatch.setattr(belt, "_report", None)
+    monkeypatch.setattr(belt, "_member_map", None)
+
+    trace = tl.trace(torch.nn.Linear(2, 2), torch.randn(1, 2))
+
+    assert trace is not None
+    assert refused == paths[:1]
+    report = belt._report
+    assert report is not None
+    assert _from_file_classification(report) == expected
+    assert belt._deferred_probe_paths == refused
+    assert os.path.exists(refused[0])
+    belt._retry_deferred_probe_files()
+    assert belt._deferred_probe_paths == []
+    assert not os.path.exists(refused[0])

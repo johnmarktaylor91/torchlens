@@ -100,6 +100,36 @@ def test_gpt2_parity_vs_output_attentions(gpt2_logs) -> None:
 
 
 @pytest.mark.heavy
+def test_gpt2_generation_step_attention(gpt2_pair, tmp_path) -> None:
+    """views.3: each generation step's picture equals the full no-cache forward's pattern."""
+
+    from torchlens.transformer._generation_attention import generation_attention_views
+
+    tokenizer, eager, _ = gpt2_pair
+    input_ids = tokenizer(PROMPT, return_tensors="pt").input_ids
+    greedy = {"max_new_tokens": 3, "min_new_tokens": 3, "do_sample": False, "use_cache": True}
+    generation = tl.record(eager, input_ids, save=tl.func("softmax"), generate_kwargs=greedy)
+    tokens = _tokens(tokenizer, generation.sequences[0])
+    for entry in generation.steps:
+        n_keys = entry.positions.stop
+        views = generation_attention_views(generation, entry.step, tokens=tokens)
+        assert len(views) == 12
+        with torch.no_grad():
+            reference = eager(
+                generation.sequences[:, :n_keys], use_cache=False, output_attentions=True
+            ).attentions
+        for layer_index, view in enumerate(views):
+            assert view.pattern.shape == (12, n_keys, n_keys)
+            assert view.query_tokens.tokens == tuple(tokens[:n_keys])
+            torch.testing.assert_close(
+                view.pattern, reference[layer_index][0], rtol=1e-4, atol=1e-5
+            )
+    saved = tl.viz.attention(views[5], tmp_path / "step.png", heads=(0, 1, 2, 3))
+    assert saved.paths[0].stat().st_size > 0
+    assert any("outlined row" in line for line in saved.disclosure_lines)
+
+
+@pytest.mark.heavy
 def test_sdpa_reconstruction_agrees_with_eager(gpt2_logs) -> None:
     """R1-vs-R2 (the headline): observed == reconstructed within dtype tol."""
 

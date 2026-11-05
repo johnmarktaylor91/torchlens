@@ -109,7 +109,7 @@ def _backward_pass_row(
             {
                 int(pass_index)
                 for pass_index in (
-                    getattr(grad_fn_call, "backward_pass_index", None)
+                    getattr(grad_fn_call, "backward_pass_number", None)
                     for grad_fn_call in grad_fn_handle.calls.values()
                 )
                 if pass_index is not None
@@ -120,7 +120,7 @@ def _backward_pass_row(
         if pass_indices:
             return [f"bwd {int_list_to_compact_str(pass_indices)}"]
         return []
-    pass_index = getattr(call, "backward_pass_index", None)
+    pass_index = getattr(call, "backward_pass_number", None)
     if pass_index is not None:
         return [f"bwd {pass_index}"]
     return []
@@ -161,5 +161,5 @@ def _backward_dot_call_node_name(grad_fn_handle: GradFn, call: Any) -> str:
 
     return (
         f"grad_fn_{grad_fn_handle.grad_fn_object_id}_"
-        f"bwd{getattr(call, 'backward_pass_index', 0)}_call{getattr(call, 'call_index', 0)}"
+        f"bwd{getattr(call, 'backward_pass_number', 0)}_call{getattr(call, 'call_index', 0)}"
     )

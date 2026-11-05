@@ -34,7 +34,16 @@ _CLIP_CONSTANCY_WINDOW = 6
 
 @dataclass(frozen=True)
 class ScaleLedgerSnapshot:
-    """Frozen skip/scale ledger facts for reports and events."""
+    """Frozen skip/scale ledger facts for reports and events.
+
+    Examples
+    --------
+    >>> snap = tl.debug.ScaleLedger(None).snapshot()
+    >>> (snap.has_scaler, snap.attempts)
+    (False, 0)
+    >>> snap.to_dict()["scaler_present"]
+    False
+    """
 
     has_scaler: bool
     is_enabled: bool
@@ -73,6 +82,16 @@ class ScaleLedger:
     supplies the cadence); ``accepted()`` once per optimizer post-step. The
     ledger performs no device work: ``GradScaler.get_scale()`` reads host
     state.
+
+    Examples
+    --------
+    >>> ledger = tl.debug.ScaleLedger(None)
+    >>> ledger.is_enabled
+    False
+    >>> ledger.observe_accepted_step()
+    >>> snap = ledger.snapshot()
+    >>> (snap.accepted_steps, snap.skipped_attempts)
+    (1, 0)
     """
 
     def __init__(self, scaler: Any | None) -> None:
@@ -177,7 +196,16 @@ def _exact_event_count(scale: float, last: float, factor: float) -> int:
 
 @dataclass(frozen=True)
 class WatchdogSnapshot:
-    """Frozen death-spiral watchdog state (memo D11)."""
+    """Frozen death-spiral watchdog state (memo D11).
+
+    Examples
+    --------
+    >>> snap = tl.debug.Watchdog(2, 4).snapshot()
+    >>> (snap.threshold, snap.is_tripped)
+    (8, False)
+    >>> snap.to_dict()["backwards_since_accepted"]
+    0
+    """
 
     backwards_since_accepted: int
     threshold: int
@@ -199,6 +227,17 @@ class Watchdog:
     S-A fires on skipped attempts and S-B does not, so "N backwards since
     the last accepted step exceeding K x factor" detects scale collapse even
     when every retrospective method stays silent forever.
+
+    Examples
+    --------
+    >>> dog = tl.debug.Watchdog(1, 3)
+    >>> [dog.on_backward() for _ in range(4)]
+    [False, False, False, True]
+    >>> dog.snapshot().is_tripped
+    True
+    >>> dog.on_accepted()
+    >>> dog.snapshot().backwards_since_accepted
+    0
     """
 
     def __init__(self, accumulation_steps: int | None, factor: int) -> None:
@@ -240,7 +279,18 @@ class Watchdog:
 
 @dataclass(frozen=True)
 class ClipLedgerSnapshot:
-    """Frozen clip-saturation facts (memo D12), tiered and honest."""
+    """Frozen clip-saturation facts (memo D12), tiered and honest.
+
+    Examples
+    --------
+    >>> ledger = tl.debug.ClipLedger(1.0)
+    >>> ledger.observe_step(1.0, 2.0)
+    >>> snap = ledger.snapshot()
+    >>> (snap.tier, snap.saturated_steps)
+    ('a', 1)
+    >>> snap.to_dict()["accepted_steps_observed"]
+    1
+    """
 
     tier: str
     declared_clip_norm: float | None
@@ -278,6 +328,15 @@ class ClipLedger:
     window) fires an INFO-level hint naming ``clip_norm=`` -- a hint, never
     a pass or a warning. A nonfinite total records the collateral-damage
     signal, not a meaningless clip ratio.
+
+    Examples
+    --------
+    >>> ledger = tl.debug.ClipLedger(1.0)
+    >>> ledger.observe_step(0.5, None)
+    >>> ledger.observe_step(1.0, None)
+    >>> snap = ledger.snapshot()
+    >>> (snap.tier, snap.accepted_steps_observed, snap.saturated_steps)
+    ('b', 2, 1)
     """
 
     def __init__(self, clip_norm: float | None) -> None:

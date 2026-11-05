@@ -1,4 +1,4 @@
-"""Forward-graph keyword translation for the Trace drawing door."""
+"""Forward- and backward-graph keyword translation for the Trace drawing door."""
 
 from collections.abc import Callable
 from typing import Any
@@ -17,7 +17,7 @@ def _forward_render_arguments(
         Color-source resolver from the drawing implementation.
     """
     return {
-        "vis_mode": options["vis_mode"],
+        "vis_mode": "rolled" if options["rolled"] else "unrolled",
         "vis_call_depth": options["depth"],
         "vis_outpath": options["outpath"],
         "announce_path": options["path"] is None,
@@ -46,6 +46,7 @@ def _forward_render_arguments(
         "code_panel": options["code_panel"],
         "node_overlay": options["node_overlay"],
         "node_label_fields": options["node_label_fields"],
+        "show_edge_shapes": options["show_edge_shapes"],
         "show_legend": options["show_legend"],
         "font_size": options["font_size"],
         "dpi": options["dpi"],
@@ -60,4 +61,32 @@ def _forward_render_arguments(
         "stack_by": options["stack_by"],
         "show_redundant_args": options["show_redundant_args"],
         "show_saved_for_backward": options["show_saved_for_backward"],
+    }
+
+
+def _backward_render_arguments(options: dict[str, Any]) -> dict[str, Any]:
+    """Select the backward-graph renderer keywords from the drawing options.
+
+    Parameters
+    ----------
+    options : dict
+        Drawing arguments and resolved graph-local values.
+    """
+    return {
+        "outpath": options["outpath"],
+        "vis_mode": "rolled" if options["rolled"] else "unrolled",
+        "direction": options["direction"],
+        "graph_overrides": options["graph_overrides"],
+        "node_spec_fn": options["node_spec_fn"],
+        "collapsed_node_spec_fn": options["collapsed_node_spec_fn"],
+        "node_style": options["node_style"],
+        "edge_overrides": options["edge_overrides"],
+        "open_viewer": options["open_viewer"],
+        "file_format": options["file_format"],
+        "code_panel": options["code_panel"],
+        "bwd": options["bwd"],
+        "show_legend": options["show_legend"],
+        "theme": options["theme"],
+        "show_module_paths": options["show_module_paths"],
+        "show_grad_values": options["show_grad_values"],
     }

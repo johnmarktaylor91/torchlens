@@ -59,7 +59,7 @@ pytest tests/ -m "not rare and not slow" -x --tb=short        # before merging a
 
 Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0), so the
 parity script is the commit gate, not a plain smoke run in your own environment. Smoke is
-about 1,400 coverage-chosen tests under a fixed size ceiling; a new smoke test needs a
+a few hundred coverage-chosen tests under a fixed size ceiling; a new smoke test needs a
 matching demotion. Run `-n N` with `N` equal to the cores you have, never `-n auto`.
 
 ## The lockstep rule
@@ -67,7 +67,7 @@ matching demotion. Run `-n N` with `N` equal to the cores you have, never `-n au
 The glossary (`docs/reference/glossary.md`) is the canonical API specification and code
 conforms to it. Renaming, adding or removing any public name (a dataclass field, a property,
 a method, a top-level `tl.*` name, a keyword argument) updates, in the same change, the
-glossary entry, the examples under `docs/agent-reference/`, and the audit notebooks under
+glossary entry, the examples under `docs/internal/agent-reference/`, and the audit notebooks under
 `notebooks/audit/` and `examples/` that use it. A change that leaves them stale is
 incomplete. `python tools/name_lockstep check --base ref:<base-branch>` lists every new,
 renamed and removed public name against a base and exits 1 for each missing glossary entry,
@@ -81,6 +81,12 @@ tolerance or skip a validation check to make a test pass: a validation failure i
 working, so find and fix the capture bug. The only legitimate exemption is behaviour that is
 correct by design and provably outside the check's contract, and even then the carve-out is
 narrow and still fails on the unintended case.
+
+## Public claims
+
+A sentence in the README or docs that states a number, a comparison or an "every" or "any"
+claim needs a row in `docs/migration/_claims_ledger.json` pointing at the test or artifact
+behind it.
 
 ## Public repository
 

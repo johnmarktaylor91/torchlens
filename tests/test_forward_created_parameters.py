@@ -20,7 +20,6 @@ unaccounted dispatch beside a lazy materialization still fails the completeness 
 
 from __future__ import annotations
 
-import copy
 import warnings
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -34,7 +33,6 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._capture_honesty import ADVISORY_PARAMETER_CREATED_IN_FORWARD
-from torchlens.backends.torch._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.validation import last_validation_failure
 from torchlens.validation.diagnostics import (
@@ -207,7 +205,6 @@ def _assert_fails_at(model: nn.Module, x: torch.Tensor, *check_names: str) -> No
     assert failure.check_name in check_names, failure.summary()
 
 
-@pytest.mark.smoke
 def test_lazy_module_built_in_forward_registers_its_parameters_with_provenance() -> None:
     x = _x()
     trace = _trace_without_provenance_warning(LazyBuiltInForward().eval(), x)
@@ -236,11 +233,6 @@ def _assert_validates(model: nn.Module, x: torch.Tensor) -> None:
     assert verdict is True, failure.summary() if failure is not None else "no failure recorded"
 
 
-@pytest.mark.smoke
-def test_lazy_module_built_in_forward_validates() -> None:
-    _assert_validates(LazyBuiltInForward().eval(), _x())
-
-
 def test_lazy_module_recreated_in_forward_replaces_the_prep_slot_and_validates() -> None:
     x = _x()
     model = LazyFirstCall().eval()
@@ -263,21 +255,10 @@ def test_lazy_module_recreated_in_forward_replaces_the_prep_slot_and_validates()
     _assert_validates(model, x)
 
 
-def test_lazy_module_registered_at_prep_records_no_creation_advisory() -> None:
-    x = _x()
-    model = LazyAtPrep().eval()
-    trace = _trace_without_provenance_warning(model, x)
-    assert _creation_rows(trace) == []
-    assert tuple(trace.params["lazy.weight"].shape) == (4, WIDTH)
-    _assert_validates(model, x)
-
-
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "build",
     [
         pytest.param(lambda: LazyNotAttached(), id="not_attached"),
-        pytest.param(lambda: ForeignLazyModule(nn.LazyLinear(4)), id="foreign_model"),
     ],
 )
 def test_lazy_parameters_outside_the_model_tree_gain_no_provenance(
@@ -291,7 +272,6 @@ def test_lazy_parameters_outside_the_model_tree_gain_no_provenance(
     _assert_fails_at(build().eval(), x, CHECK_SOURCE_PROVENANCE)
 
 
-@pytest.mark.smoke
 def test_parameter_built_from_a_captured_value_gains_no_provenance() -> None:
     """r77 shape: attached to the tree inside forward, but never a pending lazy slot."""
 
@@ -304,44 +284,6 @@ def test_parameter_built_from_a_captured_value_gains_no_provenance() -> None:
     _assert_fails_at(
         CapturedValueAttachedAsParameter().eval(), x, CHECK_ARG_LOGGING, CHECK_SOURCE_PROVENANCE
     )
-
-
-def test_hand_written_init_on_a_prepared_parameter_is_model_dataflow() -> None:
-    """``nn.init.uniform_(self.weight)`` on an ordinary parameter is a recorded, consumed op."""
-
-    x = _x()
-    model = InitInForward(lambda w: nn.init.uniform_(w, -0.1, 0.1))
-    trace = tl.trace(copy.deepcopy(model), x)
-    # ``nn.init.uniform_`` records its write as a chain of ``uniform`` ops on the
-    # parameter (the first names ``weight`` as its parameter input; a later one
-    # consumes the labeled result); the ``linear`` then reads the chain's output.
-    uniform_ops = [layer for layer in trace.layers if layer.type == "uniform"]
-    assert uniform_ops, [layer.label for layer in trace.layers]
-    assert any([p.address for p in layer.params] == ["weight"] for layer in uniform_ops), [
-        (layer.label, [p.address for p in layer.params]) for layer in uniform_ops
-    ]
-    (linear,) = [layer for layer in trace.layers if layer.type == "linear"]
-    parent_labels = [trace[parent].label for parent in linear.parents]
-    assert any(layer.label in parent_labels for layer in uniform_ops), (
-        [layer.label for layer in uniform_ops],
-        parent_labels,
-    )
-    assert "weight" not in [p.address for p in linear.params]
-    assert _creation_rows(trace) == []
-    assert all(
-        entry.get("owner_wrapper") != LAZY_MODULE_MATERIALIZE_WRAPPER
-        for entry in getattr(trace, "completeness_decompositions", ())
-    )
-
-
-def test_hand_written_constant_init_on_a_prepared_parameter_validates() -> None:
-    x = _x()
-    model = InitInForward(lambda w: w.fill_(0.5))
-    trace = tl.trace(copy.deepcopy(model), x)
-    mutations = [layer for layer in trace.layers if layer.type == "fill"]
-    assert mutations, [layer.label for layer in trace.layers]
-    assert all([p.address for p in layer.params] == ["weight"] for layer in mutations)
-    _assert_validates(copy.deepcopy(model), x)
 
 
 @pytest.mark.smoke

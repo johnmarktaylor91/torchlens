@@ -212,7 +212,6 @@ def test_wrong_reconstruction_on_sliced_capture_still_refuses(
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_predictions_stream_math_and_provenance(_models: dict[str, nn.Module]) -> None:
     """Top-k, full-vocab denominator, one-based ranks, native-row honesty."""
 
@@ -283,7 +282,7 @@ def test_predictions_tie_ranks_share_smallest_rank(_models: dict[str, nn.Module]
         tied = torch.zeros(1, 1, VOCAB)
         tied[0, 0, 0] = 1.0  # unique top; all other tokens tied at 0
         preds = logit_lens_predictions(
-            log, k=1, tokens=[1, 2], layers=["b0"], lens=lambda hidden: tied
+            log, k=1, tokens=[1, 2], modules=["b0"], lens=lambda hidden: tied
         )
         row = preds.rows[0]
         # Both tied tokens rank 2 (one strictly-greater logit each).
@@ -294,7 +293,6 @@ def test_predictions_tie_ranks_share_smallest_rank(_models: dict[str, nn.Module]
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_predictions_positions_normalize_and_refuse(_models: dict[str, nn.Module]) -> None:
     log = _capture(_models["sliced"])
     try:

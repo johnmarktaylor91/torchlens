@@ -30,10 +30,6 @@ import pytest
 from torchlens._io import TLSPEC_VERSION
 from torchlens._io.field_registry import (
     RECORD_CONTRACT_CLASSES,
-    FieldTier,
-    field_tiers,
-    persisted_field_names,
-    record_field_policies,
 )
 from torchlens._io.writer_contract import writer_contract, writer_contract_digest
 
@@ -52,6 +48,7 @@ def _write_golden(payload: dict) -> None:
         fh.write("\n")
 
 
+@pytest.mark.smoke
 def test_contract_of_record_matches_live_tree() -> None:
     from _oracle_env import (
         flag_armed,
@@ -86,84 +83,6 @@ def test_contract_of_record_matches_live_tree() -> None:
         "add an alias rule (_PORTABLE_STATE_ALIASES on the owning class) so "
         "governed artifacts keep loading."
     )
-
-
-def test_removed_persisted_fields_require_aliases() -> None:
-    """Alias-or-fail: a dropped persisted name must be covered by an alias."""
-
-    committed = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
-    live = json.loads(json.dumps(writer_contract(), sort_keys=True))
-    failures: list[str] = []
-    for record_key, committed_record in committed["contract"]["record_contracts"].items():
-        live_record = live["record_contracts"].get(record_key)
-        if live_record is None:
-            failures.append(f"record contract {record_key!r} disappeared entirely")
-            continue
-        removed = set(committed_record["persisted_field_names"]) - set(
-            live_record["persisted_field_names"]
-        )
-        uncovered = removed - set(live_record["aliases"])
-        if uncovered:
-            failures.append(
-                f"{record_key}: persisted field(s) {sorted(uncovered)} were removed "
-                "without an alias rule"
-            )
-    assert not failures, (
-        "Reader regression (MEMO 3.3 alias-or-fail): a field a governed writer "
-        "persisted no longer loads and carries no alias. Add "
-        "_PORTABLE_STATE_ALIASES coverage on the owning class or restore the "
-        f"field. Details: {failures}"
-    )
-
-
-@pytest.mark.smoke
-def test_digest_tracks_persisted_field_name_sets() -> None:
-    """The same-stamp drift catcher: field-name sets are digest inputs."""
-
-    contract = writer_contract()
-    baseline = writer_contract_digest(contract)
-    mutated = json.loads(json.dumps(contract, sort_keys=True))
-    mutated["record_contracts"]["op"]["persisted_field_names"].append(
-        "a_field_a_future_release_added"
-    )
-    assert writer_contract_digest(mutated) != baseline
-
-
-def test_tier_partition_is_closed_and_total() -> None:
-    """Every persisted field of every record contract has exactly one tier."""
-
-    for record_key in RECORD_CONTRACT_CLASSES:
-        tiers = field_tiers(record_key)
-        assert set(tiers) == set(persisted_field_names(record_key))
-        assert all(isinstance(tier, FieldTier) for tier in tiers.values())
-
-
-def test_tier_partition_moves_no_fields() -> None:
-    """P05 is the envelope only: tiers annotate, policies are untouched.
-
-    Every field the tier table classifies must still be persisted under its
-    declared FieldPolicy -- the partition can never itself change what a
-    writer emits (field moves land at C07 via the 8->9 bump).
-    """
-
-    for record_key in RECORD_CONTRACT_CLASSES:
-        policies = record_field_policies(record_key)
-        for name in field_tiers(record_key):
-            assert name in policies
-            assert policies[name].value != "drop"
-
-
-def test_registry_mirrors_the_lockstep_catalogs() -> None:
-    """RECORD_CONTRACT_CLASSES covers exactly the FIELD_ORDER catalog owners."""
-
-    import sys
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "checks"))
-    from schema_lockstep import CATALOGS  # noqa: E402
-
-    lockstep_owners = {catalog.owner.__name__ for catalog in CATALOGS if catalog.owner is not None}
-    registry_owners = {class_name for _, class_name in RECORD_CONTRACT_CLASSES.values()}
-    assert registry_owners == lockstep_owners
 
 
 def test_component_spec_module_list_is_complete() -> None:

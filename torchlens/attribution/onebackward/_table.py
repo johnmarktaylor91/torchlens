@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from ..._io import _json as _bounded_json
+from ..._utils._display_errors import lookup_message
 from ._errors import ReadError
 
 __all__ = ["ReadRow", "ReadTable", "TableProvenance", "load_read_table"]
@@ -120,6 +121,24 @@ class ReadRow:
         Nullable sample identity (dataset-mean seam; always ``None`` in v1).
     rescorable:
         ``False`` on loaded tables (the runtime registry is not serialized).
+
+    Examples
+    --------
+    >>> mlp = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 3)).eval()
+    >>> trace = tl.trace(mlp, torch.randn(2, 4))
+    >>> table = tl.attribution.read(
+    ...     trace,
+    ...     target=tl.attribution.seed("output_1", index=(0, 0)),
+    ...     method="grad",
+    ...     reduce="sum",
+    ... )
+    >>> row = table.rows()[0]
+    >>> type(row).__name__
+    'ReadRow'
+    >>> row.kind
+    'ACT'
+    >>> row.grain
+    'site'
     """
 
     target_id: str | None
@@ -274,6 +293,23 @@ class ReadTable(Mapping):
     Keys are ``(target_id, kind, address)``; values are :class:`ReadRow`.
     The table never mutates; every derivation (``target``,
     ``aggregate_targets``, alias collapse) returns a new table.
+
+    Examples
+    --------
+    >>> mlp = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 3)).eval()
+    >>> trace = tl.trace(mlp, torch.randn(2, 4))
+    >>> table = tl.attribution.read(
+    ...     trace,
+    ...     target=tl.attribution.seed("output_1", index=(0, 0)),
+    ...     method="grad",
+    ...     reduce="sum",
+    ... )
+    >>> type(table).__name__
+    'ReadTable'
+    >>> len(table) == len(table.rows())
+    True
+    >>> table.target_ids() == (table.rows()[0].target_id,)
+    True
     """
 
     __slots__ = ("_rows", "_provenance", "_trace_ref", "_trace_token")
@@ -422,10 +458,9 @@ class ReadTable(Mapping):
 
         rows = {key: row for key, row in self._rows.items() if row.target_id == target_id}
         if not rows:
+            problem = f"No rows for target_id {target_id!r}."
             raise ReadError(
-                f"No rows for target_id {target_id!r}; known targets: "
-                f"{list(self.target_ids())!r}. Remedy: pick a target_id from "
-                "target_ids()",
+                lookup_message(problem, self.target_ids(), "Pick from target_ids()."),
                 code="read_table_target_unknown",
                 target_id=target_id,
                 known=list(self.target_ids()),
@@ -767,6 +802,25 @@ def load_read_table(path: str | Path) -> ReadTable:
     ------
     ReadError
         Code ``read_table_artifact_invalid`` on any structural violation.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> mlp = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 3)).eval()
+    >>> trace = tl.trace(mlp, torch.randn(2, 4))
+    >>> table = tl.attribution.read(
+    ...     trace,
+    ...     target=tl.attribution.seed("output_1", index=(0, 0)),
+    ...     method="grad",
+    ...     reduce="sum",
+    ... )
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = table.save(pathlib.Path(tmp) / "table.json")
+    ...     loaded = tl.attribution.load_read_table(path)
+    >>> len(loaded) == len(table)
+    True
+    >>> loaded.is_rescorable
+    False
     """
 
     source = Path(path)

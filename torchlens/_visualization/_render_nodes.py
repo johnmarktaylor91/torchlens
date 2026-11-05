@@ -6,7 +6,15 @@ import re as _re
 
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
-from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
+from ._bool_outcomes import bool_node_fill, bool_value_line
+from ._encoding_aggregate import (
+    BoxScopeHelpers,
+    box_channel_spec,
+    collapsed_box_scope,
+    segment_encoding_attrs,
+)
+from ._label_format import compute_selected_node_lines as _compute_selected_node_lines, shape_rows
+from ._pass_marks import pass_mark_suffix
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
@@ -17,8 +25,16 @@ from .modes import CollapsedModeScope
 # The spec-slot context lives there too, so the intervention callback reads it
 # without importing this module.
 from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
+from .themes import _edge_and_label_inks
 
 _TOOLTIP_ADDRESS_PATTERN = _re.compile(r"0x[0-9a-fA-F]+")
+#: Renderer helpers the leaf box-scope rule needs (injected: no import cycle).
+BOX_SCOPE_HELPERS = BoxScopeHelpers(
+    _run_fold_for_address,
+    _collapsed_module_should_show_remainder,
+    _surfaced_own_output_ops,
+    _segment_for_node,
+)
 
 
 def _tooltip_repr(value: Any) -> str:
@@ -110,7 +126,7 @@ def _get_hidden_parent_buffer_addresses(
             continue
         parent_node: BaseGraphNode
         if isinstance(source_node, Op):
-            parent_node = trace[parent_label]
+            parent_node = trace.ops[parent_label]
         else:
             parent_node = trace._layer_logs[parent_label]
         if not parent_node.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
@@ -199,7 +215,7 @@ def _visible_backward_calls_by_pass(
         for call in grad_fn_handle.calls.values():
             if not _grad_fn_call_matches_backward_filter(call, pass_filter):
                 continue
-            pass_index = getattr(call, "backward_pass_index", None)
+            pass_index = getattr(call, "backward_pass_number", None)
             if pass_index is None:
                 continue
             calls_by_pass[int(pass_index)].append((grad_fn_handle, call))
@@ -414,7 +430,7 @@ def _add_node_to_graphviz(
             module_edge_dict,
             emitted_segment_nodes,
             segment,
-            (vis_mode, theme),
+            (vis_mode, theme, encoding),
         )
     is_collapsed_module = collapse_address is not None
     is_hidden_run_member = (
@@ -448,6 +464,7 @@ def _add_node_to_graphviz(
             theme,
             repeat_folds,
             collapse_fn,
+            encoding=encoding,
         )
         node_color = "black"
     elif is_hidden_run_member:
@@ -473,12 +490,7 @@ def _add_node_to_graphviz(
             show_saved_for_backward=show_saved_for_backward,
         )
 
-    # Edges and their labels keep the renderer's black only on skins that
-    # leave edge ink unset; the dark skin's edge colours apply here.
-    edge_ink = node_color if theme is None else _theme_line_ink(theme, node_color) or node_color
-    label_ink = (
-        node_color if theme is None else _theme_annotation_ink(theme, node_color) or node_color
-    )
+    edge_ink, label_ink = _edge_and_label_inks(theme, node_color)
     _add_edges_for_node(
         self,
         node,
@@ -546,7 +558,7 @@ def _build_layer_node(
     if isinstance(node, BoundaryNode):
         fillcolor = INPUT_COLOR if node.boundary_kind == "input" else OUTPUT_COLOR
         spec = NodeSpec(
-            lines=[node.display_label],
+            lines=list(node.lines) or [node.display_label],
             shape="oval",
             fillcolor=fillcolor,
             fontcolor="black",
@@ -646,7 +658,7 @@ def _build_layer_node(
     elif node.is_output:
         raw_output_attrs = _render_raw_output(self._decoded_output)
         if raw_output_attrs is None:
-            raw_output_attrs = _render_raw_output(getattr(self, "transformed_output", None))
+            raw_output_attrs = _render_raw_output(self.__dict__.get("transformed_output"))
         if raw_output_attrs is not None:
             node_args.update(raw_output_attrs)
     node_args["name"] = _render_node_name(node, vis_mode)
@@ -685,7 +697,7 @@ def _queue_segment_node(
     module_edge_dict: Dict[str, Any],
     emitted_segment_nodes: set[str] | None,
     segment: SegmentDescriptor,
-    presentation: "tuple[str, VisualizationTheme | None] | str" = "unrolled",
+    presentation: "tuple[str, VisualizationTheme | None] | tuple[str, Any, Any] | str" = "unrolled",
 ) -> None:
     """Queue one dashed segment node if it has not already been emitted.
 
@@ -706,9 +718,9 @@ def _queue_segment_node(
     segment:
         Segment descriptor to render.
     presentation:
-        The ``(vis_mode, theme)`` pair, or a bare ``vis_mode`` string
-        (``"unrolled"`` / ``"rolled"``) keeping the historical theme-less
-        spelling; a ``None`` theme resolves to the torchlens preset.
+        ``(vis_mode, theme)`` or ``(vis_mode, theme, encoding)`` (the draw's
+        encoding state fills/sizes an encoded segment), or a bare ``vis_mode``
+        string; a ``None`` theme resolves to the torchlens preset.
     """
 
     if emitted_segment_nodes is None:
@@ -716,9 +728,9 @@ def _queue_segment_node(
     if segment.name in emitted_segment_nodes:
         return
     emitted_segment_nodes.add(segment.name)
-    # ``presentation`` is the (vis_mode, theme) pair (one arg: PLR0913);
-    # a bare string keeps the historical vis_mode-only spelling for tests.
-    vis_mode, theme = presentation if isinstance(presentation, tuple) else (presentation, None)
+    # One ``presentation`` arg (PLR0913); a bare string is vis_mode only.
+    pres = presentation if isinstance(presentation, tuple) else (presentation,)
+    vis_mode, theme, encoding = (*pres, None, None)[:3]
     # K4 capsule colors derive from the active theme (F11 memo item 10:
     # the hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
     from .themes import THEME_PRESETS, collapse_tokens
@@ -734,6 +746,7 @@ def _queue_segment_node(
         "fontcolor": tokens.segment_font,
         "ordering": "out",
     }
+    node_args.update(segment_encoding_attrs(encoding, segment.name))
     owner = _segment_owner_for_mode(segment.owner, vis_mode)
     if owner is None:
         graphviz_graph.node(**node_args)
@@ -1334,6 +1347,7 @@ def _build_collapsed_module_node(
     repeat_folds: Mapping[str, "ModuleRepeatFold"] | None = None,
     collapse_fn: CollapseFn | None = None,
     resolved_specs: list[NodeSpec] | None = None,
+    encoding: Any | None = None,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
 
@@ -1345,7 +1359,16 @@ def _build_collapsed_module_node(
         vis_mode: 'unrolled' or 'rolled'.
         vis_call_depth: Maximum nesting depth; nodes at this depth are collapsed.
         overrides: Graphviz attribute overrides.
+        encoding: Per-draw encoding state; the box takes its exact member-op
+            aggregate fill/size before the user callback.
     """
+    scope = collapsed_box_scope(
+        self,
+        node,
+        (vis_mode, vis_call_depth),
+        (collapse_address, repeat_folds, collapse_fn),
+        BOX_SCOPE_HELPERS,
+    )
     # Access the module at the collapse threshold depth.  This index is safe
     # because _is_collapsed_module already verified the node is deep enough.
     address_w_pass = (
@@ -1384,12 +1407,9 @@ def _build_collapsed_module_node(
     if vis_mode == "unrolled":
         graph_node_label = "pass".join(module_tuple)
         module_call = ml.ops[int(call_index) - 1]
-        # Mode presets aggregate over exactly the calls this box represents:
-        # this ONE call for an unrolled per-call box.
-        scope_op_labels = tuple(module_call.ops)
         module_num_tensors = module_call.num_layers
-        module_num_buffers = sum(self[layer].is_buffer for layer in module_call.ops)
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in module_call.ops)
+        module_num_buffers = sum(self.layers[o].is_buffer for o in module_call.ops)
+        module_has_input_ancestor = any(self.layers[o].has_input_ancestor for o in module_call.ops)
         if (
             _collapsed_module_should_show_remainder(
                 self,
@@ -1412,21 +1432,11 @@ def _build_collapsed_module_node(
             module_nparams = remainder_stats["num_params"]
             module_nparams_trainable = remainder_stats["num_params_trainable"]
             module_nparams_frozen = remainder_stats["num_params_frozen"]
-            # Surfaced ops render as their own nodes with their own rows;
-            # keeping them in the box scope would double-count them and
-            # contradict the box's remainder tensor-count line.
-            surfaced_labels = {str(op.layer_label) for op in surfaced_call_ops}
-            scope_op_labels = tuple(
-                label for label in scope_op_labels if label not in surfaced_labels
-            )
     else:
         graph_node_label = module_tuple[0]
-        # A rolled box stands for every call of the module, so the mode
-        # presets aggregate per-pass op records across all calls.
-        scope_op_labels = tuple(op_label for call in ml.ops.values() for op_label in call.ops)
         module_num_tensors = len(ml.layer_labels)
-        module_num_buffers = sum(self[layer].is_buffer for layer in ml.layer_labels)
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layer_labels)
+        module_num_buffers = sum(layer.is_buffer for layer in ml)
+        module_has_input_ancestor = any(layer.has_input_ancestor for layer in ml)
         # Rolled boxes need the same surfaced-exit remainder belt as the
         # unrolled branch (round-25): the atomic-exit drop in
         # ``_collapse_address_for_node`` is vis_mode-independent, so the exit
@@ -1449,19 +1459,6 @@ def _build_collapsed_module_node(
             module_nparams = remainder_stats["num_params"]
             module_nparams_trainable = remainder_stats["num_params_trainable"]
             module_nparams_frozen = remainder_stats["num_params_frozen"]
-            # The surfaced-exit predicate is a per-layer invariant, so every
-            # pass of a surfaced layer renders outside the rolled box; drop
-            # the whole layer base from the mode-preset scope to match the
-            # remainder tensor count.
-            surfaced_bases = {
-                str(op.layer_label).rsplit(":", 1)[0]
-                for op in _surfaced_own_output_ops(self, address, ml.layer_labels)
-            }
-            scope_op_labels = tuple(
-                op_label
-                for op_label in scope_op_labels
-                if op_label.rsplit(":", 1)[0] not in surfaced_bases
-            )
 
     # Deduplicate: multiple layers in the same collapsed module will each
     # trigger this function, but the node should only be added once.
@@ -1545,10 +1542,12 @@ def _build_collapsed_module_node(
         scope_note = (
             f"@{address}:{call_index} only" if vis_mode == "unrolled" else f"@{address} only"
         )
-    mode_scope = CollapsedModeScope(op_labels=scope_op_labels, note=scope_note)
+    mode_scope = CollapsedModeScope(op_labels=scope.op_labels, note=scope_note)
     mode_fn = COLLAPSED_MODE_REGISTRY[node_mode]
     mode_result = mode_fn(ml, default_spec, mode_scope)
     mode_spec = default_spec if mode_result is None else mode_result
+    # Encoding channels: exact member-op aggregate, user may override.
+    mode_spec = box_channel_spec(encoding, scope.name, mode_spec)
     if collapsed_node_spec_fn is not None:
         result = collapsed_node_spec_fn(ml, mode_spec)
         spec = mode_spec if result is None else result
@@ -1691,6 +1690,12 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
     return RollingAnnotation(call_groups=call_groups, buffer_versions=buffer_versions)
 
 
+def _rolled_mark(layer_log: GraphNode, vis_mode: str) -> str:
+    """Return a rolled multi-pass title mark: the ``:1-2,4`` call range or `` (x3)``."""
+    suffix = _format_rolling_suffix(_rolling_annotation(layer_log, vis_mode))
+    return suffix or f" (x{_rolled_visual_num_passes(layer_log)})"
+
+
 def _format_rolling_suffix(annotation: RollingAnnotation | None) -> str:
     """Return the face suffix for a rolled annotation.
 
@@ -1826,9 +1831,8 @@ def _is_only_non_buffer_in_module(
 def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     """Returns the background color hex string for a graph node based on its type.
 
-    Maps node types to colors: input=green, output=red, boolean=yellow,
-    buffer=orange, parameterized layers=light gray (trainable), dark gray
-    (frozen) or a two-tone split (both), default=white.
+    Maps node types to role fills: input, output, boolean (pale when False, split
+    when passes disagree), buffer, weights (trainable, frozen, or split), plain.
 
     Args:
         node: node to add
@@ -1841,7 +1845,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     elif node.is_output:
         bg_color = OUTPUT_COLOR
     elif node.is_terminal_bool:
-        bg_color = BOOL_NODE_COLOR
+        bg_color = bool_node_fill(node, BOOL_NODE_COLOR)
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR
     elif node.has_params:
@@ -1983,58 +1987,39 @@ def compute_default_node_lines(
 
     layer_log = _unwrap_focus_node(layer_log)
     if isinstance(layer_log, BoundaryNode):
-        return [layer_log.display_label]
+        return list(layer_log.lines) or [layer_log.display_label]
 
-    if node_label_fields is not None:
-        selected_lines = _compute_selected_node_lines(
-            layer_log, node_address, vis_mode, node_label_fields
-        )
-        append_overlay_lines(selected_lines, layer_log, node_overlay)
-        return selected_lines
-
-    annotation = _rolling_annotation(layer_log, vis_mode)
-    # An atomic module rectangle carries its split call range on the ``@module``
-    # marking (e.g. ``@shared:1-2,3-5``); keep the title's count clean and
-    # non-redundant in that case, and fall back to a plain ``(xN)`` count.
-    atomic_marking_has_range = getattr(layer_log, "is_atomic_module", False) and (
-        ":" in node_address
+    # A test's outcome row (with its IF/ELIF kind) leads every label, picker or not.
+    lines = [bool_value_line(layer_log)] if layer_log.is_terminal_bool else []
+    # ``:2`` unrolled, ``:1-2,4`` or `` (x3)`` rolled; the "label" token keeps it too.
+    module_row = node_label_fields is None or "module" in node_label_fields
+    call_label = pass_mark_suffix(
+        layer_log, node_address, vis_mode, _rolled_mark, module_row=module_row
     )
-    if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
-        call_label = f":{layer_log.pass_number}"
-    elif (layer_log.num_passes > 1) and (vis_mode == "rolled"):
-        if atomic_marking_has_range:
-            call_label = ""
-        else:
-            rolling_suffix = _format_rolling_suffix(annotation)
-            if rolling_suffix:
-                call_label = rolling_suffix
-            else:
-                call_label = f" (x{_rolled_visual_num_passes(layer_log)})"
-    else:
-        call_label = ""
+    if node_label_fields is not None:
+        lines += _compute_selected_node_lines(
+            layer_log, node_address, vis_mode, node_label_fields, call_label
+        )
+        append_overlay_lines(lines, layer_log, node_overlay)
+        return lines
 
+    # Titles are trace keys: ``layer_label`` (plus ``:pass`` when unrolled), never a
+    # ``{type}_{type_index}_{step_index}`` rebuild. ``step_index`` is renumbered per op
+    # after labeling, so in a recurrent graph it names no layer (sum_1_14 for sum_1_5).
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
-        # F2: show the RESOLVABLE trace identity ``layer_label:pass`` (== op.label,
-        # e.g. linear_1_1:2) instead of ``{type}_{type_index}_{step_index}:{pass}``.
-        # The latter renumbers the ordinal from this pass's step_index and yields an
-        # un-lookup-able label (linear_1_3:2 for what is really linear_1_1:2), so
-        # users copying the displayed name got a "not found" ValueError.
         title = f"{layer_log.layer_label}:{layer_log.pass_number}"
     elif (layer_type := record_type(layer_log)) in ["input", "output", "buffer"]:
         title = f"{layer_type}_{layer_log.type_index}{call_label}"
     else:
-        title = f"{layer_type}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
+        title = f"{layer_log.layer_label}{call_label}"
 
-    lines: list[str] = []
-    if layer_log.is_terminal_bool:
-        lines.append(str(layer_log.bool_value).upper())
     lines.append(title)
     # L1's across-pass shape summary (rolled multi-pass Layers only; plain
     # data, escaped like every row by the S5 choke point).
     shape_summary = getattr(layer_log, "shape_summary", None)
     if isinstance(shape_summary, str) and shape_summary:
         lines.append(shape_summary)
-    lines.append(f"{format_shape(layer_log.shape)}, {format_memory(layer_log.activation_memory)}")
+    lines.extend(shape_rows(layer_log, with_memory=True))
 
     if show_saved_for_backward and (saved := saved_for_backward_line(layer_log, vis_mode)):
         lines.append(saved)

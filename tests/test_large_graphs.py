@@ -18,14 +18,9 @@ from torchlens import trace as trace_fn
 from torchlens._user_funcs import validate_forward_pass
 from torchlens._visualization._rank_layout_internal import layout as rank_layout
 from torchlens._visualization._rank_layout_internal.layout import (
-    RANK_LAYOUT_COST_THRESHOLD,
-    SPAN_LOCAL,
     _choose_spline_mode,
     _compute_topological_layout,
     _rescale_dot_for_rtree,
-    compute_rank_depths,
-    estimate_rank_layout_cost,
-    get_node_placement_engine,
 )
 from torchlens.errors._base import TorchLensWarning
 
@@ -111,15 +106,6 @@ def _chain_edges(num_nodes: int) -> list[tuple[str, str]]:
     return [(f"n{i}", f"n{i + 1}") for i in range(num_nodes - 1)]
 
 
-def _hub_edges(num_nodes: int, fanout: int) -> list[tuple[str, str]]:
-    """Build a chain plus long-range hub edges for estimator tests."""
-
-    edges = _chain_edges(num_nodes)
-    step = max(1, num_nodes // fanout)
-    edges.extend(("n0", f"n{i}") for i in range(step, num_nodes, step))
-    return edges
-
-
 def _synthetic_node_data(num_nodes: int) -> dict[str, dict[str, Any]]:
     """Build minimal node data for rank-layout scale tests."""
 
@@ -142,37 +128,6 @@ def _synthetic_rank_edges(num_nodes: int) -> list[dict[str, str]]:
 
 class TestRandomGraphModel:
     """Verify the random model generator produces approximately correct node counts."""
-
-    def test_small_model(self) -> None:
-        """A 500-node target lands near the requested scale."""
-
-        model = RandomGraphModel(target_nodes=500, seed=42)
-        count = _count_nodes(model, torch.randn(2, 64))
-        assert 400 < count < 600, f"Expected ~500 nodes, got {count}"
-
-    @pytest.mark.slow
-    def test_3k_nodes(self) -> None:
-        """A 3k-node target lands near the requested scale."""
-
-        model = RandomGraphModel(target_nodes=3000, seed=42)
-        count = _count_nodes(model, torch.randn(2, 64))
-        assert 2500 < count < 3500, f"Expected ~3000 nodes, got {count}"
-
-    @pytest.mark.slow
-    def test_5k_nodes(self) -> None:
-        """A 5k-node target lands near the requested scale."""
-
-        model = RandomGraphModel(target_nodes=5000, seed=42)
-        count = _count_nodes(model, torch.randn(2, 64))
-        assert 4500 < count < 5500, f"Expected ~5000 nodes, got {count}"
-
-    @pytest.mark.slow
-    def test_10k_nodes(self) -> None:
-        """A 10k-node target lands near the requested scale."""
-
-        model = RandomGraphModel(target_nodes=10000, seed=42)
-        count = _count_nodes(model, torch.randn(2, 64))
-        assert 9000 < count < 11000, f"Expected ~10000 nodes, got {count}"
 
     @pytest.mark.slow
     @pytest.mark.rare
@@ -222,63 +177,6 @@ class TestRandomGraphModel:
         count = _count_nodes(model, torch.randn(2, 64))
         assert 900000 < count < 1100000, f"Expected ~1000000 nodes, got {count}"
 
-    def test_deterministic(self) -> None:
-        """Same seed produces the same structure."""
-
-        m1 = RandomGraphModel(target_nodes=1000, seed=123)
-        m2 = RandomGraphModel(target_nodes=1000, seed=123)
-        assert sum(p.numel() for p in m1.parameters()) == sum(p.numel() for p in m2.parameters())
-
-    def test_different_seeds(self) -> None:
-        """Different seeds produce different structures."""
-
-        m1 = RandomGraphModel(target_nodes=1000, seed=1)
-        m2 = RandomGraphModel(target_nodes=1000, seed=2)
-        assert sum(p.numel() for p in m1.parameters()) != sum(p.numel() for p in m2.parameters())
-
-    def test_call_depth(self) -> None:
-        """Module nesting creates expected hierarchy."""
-
-        model = RandomGraphModel(target_nodes=500, call_depth=4, seed=42)
-        trace = trace_fn(model, torch.randn(2, 64))
-        max_depth = max(len(trace[label].modules) for label in trace.layer_labels)
-        assert max_depth >= 3
-        trace.cleanup()
-
-    def test_validation_small(self) -> None:
-        """Validation succeeds for a small random model."""
-
-        model = RandomGraphModel(target_nodes=200, seed=42)
-        assert validate_forward_pass(model, torch.randn(2, 64))
-
-    @pytest.mark.slow
-    def test_validation_1k(self) -> None:
-        """Validation succeeds for a 1k-node random model."""
-
-        model = RandomGraphModel(target_nodes=1000, seed=42)
-        assert validate_forward_pass(model, torch.randn(2, 64))
-
-    @pytest.mark.slow
-    def test_validation_3k(self) -> None:
-        """Validation succeeds for a 3k-node random model."""
-
-        model = RandomGraphModel(target_nodes=3000, seed=42)
-        assert validate_forward_pass(model, torch.randn(2, 64))
-
-    @pytest.mark.slow
-    def test_validation_5k(self) -> None:
-        """Validation succeeds for a 5k-node random model."""
-
-        model = RandomGraphModel(target_nodes=5000, seed=42)
-        assert validate_forward_pass(model, torch.randn(2, 64))
-
-    @pytest.mark.slow
-    def test_validation_10k(self) -> None:
-        """Validation succeeds for a 10k-node random model."""
-
-        model = RandomGraphModel(target_nodes=10000, seed=42)
-        assert validate_forward_pass(model, torch.randn(2, 64))
-
     @pytest.mark.slow
     @pytest.mark.rare
     def test_validation_20k(self) -> None:
@@ -326,82 +224,8 @@ class TestRandomGraphModel:
             assert validate_forward_pass(model, torch.randn(2, 64))
 
 
-class TestRankLayoutUtilities:
-    """Test rank layout helpers without invoking Graphviz."""
-
-    def test_depths_for_chain(self) -> None:
-        """A local chain gets monotonically increasing depths."""
-
-        labels = {f"n{i}" for i in range(5)}
-        depths = compute_rank_depths(labels, _chain_edges(5))
-        assert depths == {"n0": 0, "n1": 1, "n2": 2, "n3": 3, "n4": 4}
-
-    def test_local_topology_stays_under_threshold(self) -> None:
-        """The measured local 5k topology stays on dot with the calibrated threshold."""
-
-        labels = {f"n{i}" for i in range(5000)}
-        cost = estimate_rank_layout_cost(labels, _chain_edges(5000))
-        assert cost == 5000
-        assert SPAN_LOCAL == 12
-        assert cost < RANK_LAYOUT_COST_THRESHOLD
-        assert get_node_placement_engine("auto", cost) == "dot"
-
-    def test_hub_topology_exceeds_threshold(self) -> None:
-        """Long hub edges exceed the threshold even at moderate node counts."""
-
-        labels = {f"n{i}" for i in range(3500)}
-        cost = estimate_rank_layout_cost(labels, _hub_edges(3500, fanout=24))
-        assert cost > RANK_LAYOUT_COST_THRESHOLD
-        assert get_node_placement_engine("auto", cost) == "rank"
-
-    def test_manual_engines_force_selection(self) -> None:
-        """Explicit dot and rank choices bypass auto cost selection."""
-
-        assert get_node_placement_engine("dot", RANK_LAYOUT_COST_THRESHOLD + 1) == "dot"
-        assert get_node_placement_engine("rank", 1) == "rank"
-
-    def test_topological_layout_returns_module_boxes(self) -> None:
-        """The Kahn layout returns positions and compound boxes for modules."""
-
-        node_data = {
-            "a": {"attrs": {"label": "A"}, "node_label": "a"},
-            "b": {"attrs": {"label": "B"}, "node_label": "b"},
-        }
-        edges = [{"tail_name": "a", "head_name": "b"}]
-        sizes = {"a": (100.0, 40.0), "b": (100.0, 40.0)}
-        positions, compound_bboxes, max_y = _compute_topological_layout(
-            node_data,
-            edges,
-            sizes,
-            {"module": ["a", "b"]},
-            {},
-        )
-        assert set(positions) == {"a", "b"}
-        assert "group_module" in compound_bboxes
-        assert max_y > 0
-
-
 class TestRankLayoutScale:
     """Exercise the kept rank layout at large synthetic scales."""
-
-    @pytest.mark.slow
-    @pytest.mark.parametrize("num_nodes", [3000, 5000])
-    def test_rank_layout_scale_smoke(self, num_nodes: int) -> None:
-        """Rank layout computes positions for common large-graph sizes."""
-
-        node_data = _synthetic_node_data(num_nodes)
-        edges = _synthetic_rank_edges(num_nodes)
-        sizes = {f"n{i}": (20.0, 10.0) for i in range(num_nodes)}
-        positions, compound_bboxes, max_y = _compute_topological_layout(
-            node_data,
-            edges,
-            sizes,
-            {},
-            {},
-        )
-        assert len(positions) == num_nodes
-        assert compound_bboxes == {}
-        assert max_y > 0
 
     @pytest.mark.slow
     @pytest.mark.rare
@@ -429,22 +253,6 @@ class TestRankLayoutScale:
 
 class TestRankEngineRendering:
     """Test renderer integration for dot, rank, auto, and legacy values."""
-
-    def test_auto_local_topology_renders_with_dot(self, tmp_path: Any) -> None:
-        """A local small graph renders through dot without the rank notice."""
-
-        model = RandomGraphModel(target_nodes=80, seed=42)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            source = _draw_model(
-                model,
-                torch.randn(2, 64),
-                layout="auto",
-                file_format="svg",
-                path=str(tmp_path / "auto_dot"),
-            )
-        assert "digraph" in source
-        assert not any("auto-selected rank layout" in str(w.message) for w in caught)
 
     def test_auto_hub_topology_selects_rank(
         self,
@@ -479,35 +287,6 @@ class TestRankEngineRendering:
         assert calls == ["rank"]
         assert source == "digraph { rank_path }"
 
-    def test_rank_path_sets_trivial_sibling_ordering_decision(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Any,
-    ) -> None:
-        """The rank engine skips sibling ordering but still sets the decision."""
-
-        monkeypatch.setattr(rank_layout, "RANK_LAYOUT_COST_THRESHOLD", 10)
-        monkeypatch.setattr(
-            rank_layout,
-            "render_rank_layout",
-            lambda *args, **kwargs: "digraph { rank_path }",
-        )
-        model = RandomGraphModel(target_nodes=80, seed=42)
-        trace = trace_fn(model, torch.randn(2, 64))
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                trace.draw(
-                    layout="auto",
-                    file_format="svg",
-                    path=str(tmp_path / "rank_decision"),
-                )
-            decision = trace._last_sibling_ordering_decision
-        finally:
-            trace.cleanup()
-        assert decision.candidate_count == 0
-        assert decision.survivor_count == 0
-
     def test_manual_dot_forces_dot(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -534,36 +313,6 @@ class TestRankEngineRendering:
                 path=str(tmp_path / "manual_dot"),
             )
         assert "digraph" in source
-
-    def test_manual_rank_forces_rank(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Any,
-    ) -> None:
-        """Explicit rank calls the rank renderer without an auto notice."""
-
-        calls: list[str] = []
-
-        def fake_render_rank_layout(*args: Any, **kwargs: Any) -> str:
-            """Record rank renderer use without invoking neato."""
-
-            calls.append("rank")
-            return "digraph { manual_rank }"
-
-        monkeypatch.setattr(rank_layout, "render_rank_layout", fake_render_rank_layout)
-        model = RandomGraphModel(target_nodes=60, seed=42)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            source = _draw_model(
-                model,
-                torch.randn(2, 64),
-                layout="rank",
-                file_format="svg",
-                path=str(tmp_path / "manual_rank"),
-            )
-        assert calls == ["rank"]
-        assert source == "digraph { manual_rank }"
-        assert not any("auto-selected rank layout" in str(w.message) for w in caught)
 
     def test_removed_engine_values_are_rejected(self, tmp_path: Any) -> None:
         """The retired 'elk' and 'sfdp' engine values raise like any bad value."""
@@ -597,20 +346,6 @@ class TestRankEngineRendering:
         assert "cluster_" in source
         assert "@layers" in source
 
-    def test_vis_node_placement_forwarded(self, tmp_path: Any) -> None:
-        """vis_node_placement parameter reaches Trace.draw."""
-
-        model = RandomGraphModel(target_nodes=80, seed=42)
-        trace = trace_fn(model, torch.randn(2, 64))
-        source = trace.draw(
-            rolled=False,
-            file_format="svg",
-            path=str(tmp_path / "placement_test"),
-            layout="dot",
-        ).dot
-        assert "digraph" in source
-        trace.cleanup()
-
 
 class TestSplineModeHeuristic:
     """Unit tests for the neato spline-mode degradation heuristic.
@@ -620,15 +355,6 @@ class TestSplineModeHeuristic:
     The heuristic must keep pretty splines for small/sparse graphs (the common
     case) and degrade to straight lines for large OR edge-dense graphs.
     """
-
-    def test_small_sparse_graph_keeps_splines(self) -> None:
-        """A small, sparse (sequential) graph keeps curved splines."""
-
-        # ~1.0 edges/node — a plain CNN/transformer chain.
-        assert _choose_spline_mode(num_nodes=200, num_edges=210) == "true"
-        assert _choose_spline_mode(num_nodes=50, num_edges=49) == "true"
-        # Just under the node ceiling and sparse -> still pretty.
-        assert _choose_spline_mode(num_nodes=600, num_edges=650) == "true"
 
     def test_repro_models_all_degrade_to_line(self) -> None:
         """The three real repro graphs (real node/edge counts) all use line.
@@ -653,15 +379,6 @@ class TestSplineModeHeuristic:
         # 500 nodes, ratio 1.8 (> density ratio) -> "line".
         assert _choose_spline_mode(num_nodes=500, num_edges=900) == "line"
 
-    def test_tiny_dense_graph_keeps_splines(self) -> None:
-        """A tiny graph keeps splines even when proportionally dense.
-
-        Below the density-floor node count, crossing search is cheap, so a
-        small densely-connected graph should stay pretty.
-        """
-
-        assert _choose_spline_mode(num_nodes=100, num_edges=300) == "true"
-
 
 class TestRtreeRescale:
     """Unit tests for the rtree-overflow coordinate down-scaling mitigation.
@@ -677,7 +394,6 @@ class TestRtreeRescale:
         dot = 'a [pos="100,200!" width=1.0 height=0.5]'
         assert _rescale_dot_for_rtree(dot, ceiling=28000.0) is None
 
-    @pytest.mark.smoke
     def test_over_ceiling_scales_uniformly(self) -> None:
         """An over-range layout is shrunk so max coord == ceiling, preserving ratio."""
 

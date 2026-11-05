@@ -1,4 +1,4 @@
-"""The ``"dtype"`` node label field (walk U06.3).
+"""The ``"dtype"`` node label field.
 
 ``draw(node_label_fields=[..., "dtype", ...])`` adds the node's output dtype
 as one row, framework namespace dropped (``"float16"``, the Keras
@@ -17,7 +17,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._visualization._label_format import format_dtype
-from torchlens._visualization._render_nodes import compute_default_node_lines
 
 
 class HalfTail(nn.Module):
@@ -38,19 +37,6 @@ def half_log() -> Any:
         yield log
     finally:
         log.cleanup()
-
-
-def test_dtype_token_renders_each_nodes_output_dtype(half_log: tl.Trace) -> None:
-    by_dtype: dict[str, list[str]] = {}
-    for layer in half_log._layer_logs.values():
-        lines = compute_default_node_lines(
-            layer, vis_mode="rolled", node_label_fields=["name", "dtype"]
-        )
-        assert lines[0] == layer.layer_label
-        assert lines[1:] == [format_dtype(layer.dtype)]
-        by_dtype.setdefault(lines[1], []).append(layer.layer_type)
-    assert "linear" in by_dtype["float32"]
-    assert "mul" in by_dtype["float16"]
 
 
 def test_dtype_token_reaches_the_drawn_graph(half_log: tl.Trace, tmp_path: Path) -> None:

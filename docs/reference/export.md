@@ -133,9 +133,12 @@ trace.json True
 
 `tl.export.chrome_trace_diff(bundle, path)` writes one Chrome timeline comparing the members of a
 TorchLens `Bundle`. Its per-node deltas are the relative L2 distances from the baseline (what `bundle.compare(baseline, member, metric="relative_l2")` reads per pair), so they need members that pass the
-Bundle comparison gate (one shared graph, equal input values). Members that do not still export
-their timelines; only the deltas are refused: every event's `delta` is `None` and
-`metadata["deltas"]` records the gate's code (for example `bundle_gate_input_values_differ`).
+Bundle comparison gate (one shared graph, and sites that line up: equal input values, or for
+members on different inputs equal graph-shape hashes) and equal shapes at every compared site.
+Members that do not still export their timelines; only the deltas are refused: every event's
+`delta` is `None` and `metadata["deltas"]` records the refusal code (for example
+`bundle_gate_input_values_differ` for graphs that do not line up, or `metric_shape_mismatch` for
+inputs of different shapes).
 
 ```python
 from pathlib import Path

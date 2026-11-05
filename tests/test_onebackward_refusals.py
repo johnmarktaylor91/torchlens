@@ -100,7 +100,6 @@ class TestLivenessGate:
             reason="not_live",
         )
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_graph_freed_refuses_typed(self) -> None:
         trace = _trace(
@@ -382,7 +381,6 @@ class TestTableRefusals:
             "read_table_not_portable",
         )
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_scalar_roundtrip_is_not_rescorable(self, tmp_path) -> None:
         trace = _trace()
@@ -544,7 +542,6 @@ class TestTypedDoorProvocations:
             table.to_pandas(values="all")
         assert excinfo.value.fields["code"] == "read_table_values_mode_invalid"
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_read_table_grain_unaggregatable(self) -> None:
         trace = _trace()
@@ -576,7 +573,6 @@ class TestTypedDoorProvocations:
             ob.load_read_table(path)
         assert excinfo.value.fields["code"] == "read_table_artifact_invalid"
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_read_alias_conflict(self) -> None:
         from dataclasses import replace

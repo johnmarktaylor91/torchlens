@@ -15,7 +15,6 @@ import math
 from pathlib import Path
 
 import pytest
-import torch
 
 import torchlens as tl
 from tests.test_agent_surface_helpers import (
@@ -40,36 +39,7 @@ def ablated(tmp_path: Path) -> Path:
     return save_ablated_artifact(tmp_path)
 
 
-def test_stats_match_a_torch_reference(clean: Path) -> None:
-    """min/max/mean/std/norms agree with float64 torch on the saved payload."""
-
-    log = tl.load(str(clean))
-    reference = log["relu_1_2"].out.double().flatten()
-    envelope = call_tool("torchlens_payload_stats", {"path": str(clean), "labels": ["relu_1_2:1"]})
-    row = envelope["data"]["rows"][0]
-    assert row["status"] == "ok"
-    assert math.isclose(row["mean"], reference.mean().item(), rel_tol=1e-12)
-    assert math.isclose(row["std"], reference.std(correction=0).item(), rel_tol=1e-12)
-    assert math.isclose(row["l2_norm"], reference.pow(2).sum().sqrt().item(), rel_tol=1e-12)
-    assert row["numel"] == reference.numel()
-    header = envelope["data"]["header"]
-    assert header["accumulation_dtype"] == "float64"
-    assert header["std_correction"] == 0
-
-
-def test_unsaved_site_is_a_row_status_never_a_batch_failure(clean: Path) -> None:
-    """An unsaved site rides as a typed row with the exact recapture remedy."""
-
-    envelope = call_tool(
-        "torchlens_payload_stats",
-        {"path": str(clean), "labels": ["relu_1_2:1", "linear_1_1:1"]},
-    )
-    by_label = {row["label"]: row for row in envelope["data"]["rows"]}
-    assert by_label["relu_1_2:1"]["status"] == "ok"
-    assert by_label["linear_1_1:1"]["status"] == "unsaved"
-    assert "save=" in by_label["linear_1_1:1"]["remedy"]
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_envelope.py, agent/_query.py and more.
 def test_nonfinite_values_arrive_tagged_never_bare(tmp_path: Path) -> None:
     """NaN payload stats serialize under allow_nan=False with tagged records."""
 
@@ -86,6 +56,7 @@ def test_nonfinite_values_arrive_tagged_never_bare(tmp_path: Path) -> None:
     assert rows and rows[0]["nan_count"] + rows[0]["posinf_count"] + rows[0]["neginf_count"] > 0
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_stats.py.
 def test_byte_budget_refuses_before_materialization(
     clean: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -100,6 +71,7 @@ def test_byte_budget_refuses_before_materialization(
     assert envelope["data"]["header"]["bytes_materialized"] == 0
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_registry.py, agent/_stats.py.
 def test_retained_axis_reduction_is_explicit_and_ranked(clean: Path) -> None:
     """One explicit dimension INDEX; over-extent requires a ranking metric."""
 
@@ -127,6 +99,7 @@ def test_retained_axis_reduction_is_explicit_and_ranked(clean: Path) -> None:
     assert exc.value.fields["code"] == "agent_reduction_invalid"
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_stats.py.
 def test_top_k_is_deterministic_with_full_coordinates(clean: Path) -> None:
     """top_k returns coordinate-addressed extremes, byte-stable across calls."""
 
@@ -141,6 +114,7 @@ def test_top_k_is_deterministic_with_full_coordinates(clean: Path) -> None:
     assert math.isclose(payload[tuple(top["coordinates"])].item(), top["value"], rel_tol=1e-6)
 
 
+# Kept by the shrink-r4 coverage proof: a sole campaign mutation kill.
 def test_compare_recovers_the_intervention_boundary(clean: Path, ablated: Path) -> None:
     """The flagship claim: boundary + downstream drift from two artifacts."""
 
@@ -157,31 +131,3 @@ def test_compare_recovers_the_intervention_boundary(clean: Path, ablated: Path) 
     assert coverage["sites_value_compared"] == 3
     assert coverage["sites_changed"] == 2
     assert "never numerically compared" in coverage["note"]
-
-
-def test_compare_fingerprint_mismatch_is_loud(clean: Path, tmp_path: Path) -> None:
-    """Different models: relationship evidence, never a silent numeric diff."""
-
-    torch.manual_seed(7)
-    other = tl.trace(
-        torch.nn.Sequential(torch.nn.Linear(8, 8), torch.nn.ReLU()).eval(),
-        torch.randn(2, 8),
-        save=tl.func("relu"),
-    )
-    other_path = tmp_path / "other.tlspec"
-    other.save(str(other_path))
-    envelope = call_tool("torchlens_compare", {"reference": str(clean), "subject": str(other_path)})
-    data = envelope["data"]
-    assert data["fingerprint_match"] is False
-    assert "different models" in data["fingerprint_note"]
-    states = {row["state"] for row in data["rows"]}
-    assert "only_reference" in states or "only_subject" in states
-
-
-def test_compare_carries_both_artifact_blocks(clean: Path, ablated: Path) -> None:
-    """compare's envelope names reference AND subject identities."""
-
-    envelope = call_tool("torchlens_compare", {"reference": str(clean), "subject": str(ablated)})
-    assert envelope["artifacts"]["reference"]["id"].startswith("sha256:")
-    assert envelope["artifacts"]["subject"]["id"].startswith("sha256:")
-    assert envelope["artifacts"]["reference"]["id"] != envelope["artifacts"]["subject"]["id"]

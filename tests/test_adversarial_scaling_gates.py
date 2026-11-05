@@ -226,7 +226,7 @@ def test_deep_recurrence_rolls_to_one_layer_per_site(deep_capture) -> None:
     log = deep_capture
     assert len(log._layer_list) == 2 * N_PASSES + 2  # linear+tanh per step, input, output
     for label in ("linear_1_1", "tanh_1_2"):
-        layer = log[label]
+        layer = log.layers[label]
         assert layer.num_passes == N_PASSES, label
 
 
@@ -257,7 +257,7 @@ def test_deep_recurrence_site_key_stable_across_passes(deep_capture) -> None:
     log = deep_capture
     keys = {log[f"linear_1_1:{p}"].site_key for p in range(1, N_PASSES + 1)}
     assert len(keys) == 1
-    assert layer_site_key(log["linear_1_1"]) == keys.pop()
+    assert layer_site_key(log.layers["linear_1_1"]) == keys.pop()
 
 
 @pytest.mark.heavy
@@ -431,7 +431,7 @@ def test_wide_fanout_and_fanin_relations_exact() -> None:
     assert len(mults) == N_FANOUT
     # grouping rule row 32: the comprehension is one ``mul`` layer with a pass
     # per child, so relations name the pass-qualified labels.
-    assert log[mults[0]].num_passes == N_FANOUT
+    assert log.layers[mults[0]].num_passes == N_FANOUT
     input_children = log["input_1:1"].children
     assert len(input_children) == N_FANOUT
     assert set(input_children) == set(mults)

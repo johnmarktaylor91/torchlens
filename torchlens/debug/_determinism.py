@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import Report
+from .._debug_report import Report, at_source
 from .._utils._torch_compat import read_legacy_fp32_controls, snapshot_fp32_precision_controls
 from ._common import _compute_ops, _op_label, _safe_out, _source_line
 from ._first_bad import FirstBadThing
@@ -94,6 +94,14 @@ class DeterminismReport(Report):
         Actionable next steps.
     message:
         Human-readable summary; discloses total capture count up front.
+
+    Examples
+    --------
+    >>> report = tl.debug.check_determinism(model, x)
+    >>> isinstance(report, DeterminismReport), report.verdict
+    (True, 'repeatable_under_test')
+    >>> report.runs, report.policy
+    (2, 'exact')
     """
 
     verdict: str
@@ -131,7 +139,13 @@ class DeterminismReport(Report):
         """One-line findings for the card, most severe first."""
 
         findings = [self.message] if self.message else []
-        findings.extend(f"divergent op: {label}" for label in self.divergent_ops)
+        first = self.first_divergence or {}
+        first_label = first.get("op")
+        first_line = first.get("source_line")
+        findings.extend(
+            f"divergent op: {label}{at_source(first_line) if label == first_label else ''}"
+            for label in self.divergent_ops
+        )
         findings.extend(f"non-finite op: {label}" for label in self.nonfinite_ops)
         findings.extend(f"remedy: {remedy}" for remedy in self.remedies)
         return findings
@@ -267,7 +281,7 @@ def _compare_runs(
 ) -> tuple[list[dict[str, Any]], int, list[str]]:
     """Walk two runs in execution order; return (divergences, unchecked, nonfinite)."""
 
-    from ._nan import _nonfinite_kind
+    from ._common import _nonfinite_kind
 
     reference_ops = {_op_label(op): op for op in _compute_ops(reference)}
     candidate_ops = {_op_label(op): op for op in _compute_ops(candidate)}
@@ -444,7 +458,7 @@ def _report_message(report: DeterminismReport, total_captures: int) -> str:
 
 def check_determinism(
     model: Any,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[Any, Any] | None = None,
     *,
     runs: int = 2,
@@ -468,7 +482,7 @@ def check_determinism(
     model:
         Source model; never mutated (deepcopy-impossible models return an
         ``inconclusive`` verdict with a ``model_factory`` remedy).
-    input_args:
+    inputs:
         Forward input value or positional-argument list/tuple.
     input_kwargs:
         Optional forward keyword arguments.
@@ -497,6 +511,17 @@ def check_determinism(
     ------
     InvalidArgumentError
         If ``runs < 2`` (code ``determinism_runs_invalid``).
+
+    Examples
+    --------
+    >>> report = check_determinism(model, x, runs=2, seed=0)
+    >>> report.verdict, report.divergent_ops
+    ('repeatable_under_test', ())
+    >>> try:
+    ...     check_determinism(model, x, runs=1)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(err.fields["code"])
+    determinism_runs_invalid
     """
 
     from .._errors import InvalidArgumentError
@@ -533,7 +558,7 @@ def check_determinism(
     try:
         for _ in range(runs):
             traces.append(
-                isolated_capture(model, input_args, input_kwargs, seed=seed, **(trace_kwargs or {}))
+                isolated_capture(model, inputs, input_kwargs, seed=seed, **(trace_kwargs or {}))
             )
         reference = traces[0]
         divergences, unchecked, nonfinite = _compare_all_runs(traces, rtol=rtol, atol=atol)
@@ -543,7 +568,7 @@ def check_determinism(
         seed_sensitivity_verdict: str | None = None
         if seed_sensitivity:
             probe = isolated_capture(
-                model, input_args, input_kwargs, seed=seed + 1, **(trace_kwargs or {})
+                model, inputs, input_kwargs, seed=seed + 1, **(trace_kwargs or {})
             )
             traces.append(probe)
             seed_sensitivity_verdict = _seed_probe_verdict(reference, probe, rtol=rtol, atol=atol)

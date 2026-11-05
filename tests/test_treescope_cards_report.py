@@ -84,7 +84,6 @@ def test_report_anatomy(dirty_log, tmp_path: Path) -> None:
     assert 'id="op-relu-1-2-1"' in text
 
 
-@pytest.mark.smoke
 def test_no_network_regression(dirty_log, tmp_path: Path) -> None:
     """The one-file contract: zero external references of any kind."""
 
@@ -169,7 +168,6 @@ def test_arrays_selection_form(dirty_log, tmp_path: Path) -> None:
     assert "selected," in text
 
 
-@pytest.mark.smoke
 def test_invalid_arrays_refuses_typed(dirty_log, tmp_path: Path) -> None:
     """Unknown arrays= values refuse with report_arrays_invalid."""
 

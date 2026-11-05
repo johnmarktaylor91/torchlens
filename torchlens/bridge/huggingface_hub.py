@@ -82,6 +82,15 @@ def push_to_hub(
     ArtifactError
         If the ``.tlspec`` bundle save fails. ``push_to_hub`` never silently
         substitutes a metadata-only stub for genuine artifact content.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> info = tl.bridge.huggingface_hub.push_to_hub(trace, "user/repo", dry_run=True)
+    >>> info["dry_run"], info["format"]
+    (True, 'tar.gz')
+    >>> info["size_bytes"] > 0
+    True
     """
 
     payload = _artifact_bytes(log_or_bundle_or_spec, save_level=save_level)
@@ -165,6 +174,27 @@ def from_hub(
         ``hub_artifact_unsafe`` when the download is not a readable gzipped
         tar or a member fails the extraction checks; any ``.tlspec`` load
         refusal propagates unchanged.
+
+    Examples
+    --------
+    >>> import shutil, tempfile
+    >>> from pathlib import Path
+    >>> class FakeApi:
+    ...     def __init__(self, store):
+    ...         self.store = store
+    ...     def create_repo(self, **kwargs):
+    ...         return None
+    ...     def upload_file(self, path_or_fileobj, path_in_repo, **kwargs):
+    ...         shutil.copy(path_or_fileobj, self.store / path_in_repo)
+    ...     def hf_hub_download(self, repo_id, filename, revision=None):
+    ...         return str(self.store / filename)
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     api = FakeApi(Path(tmp))
+    ...     _ = tl.bridge.huggingface_hub.push_to_hub(trace, "user/repo", api=api)
+    ...     loaded = tl.bridge.huggingface_hub.from_hub("user/repo", api=api)
+    >>> len(loaded.layers) == len(trace.layers)
+    True
     """
 
     from .._io.bundle import load as _load

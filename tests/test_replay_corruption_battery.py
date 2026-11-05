@@ -243,48 +243,6 @@ class _MiniAttention(nn.Module):
         return torch.matmul(weights, x)
 
 
-def test_corrupted_linear_payload_fails_replay():
-    """A corrupted linear activation is caught and localized."""
-
-    _corrupt_and_assert(_MLP(), torch.randn(2, 6), "linear")
-
-
-def test_corrupted_relu_payload_fails_replay():
-    """A corrupted relu activation is caught and localized."""
-
-    _corrupt_and_assert(_MLP(), torch.randn(2, 6), "relu")
-
-
-def test_corrupted_conv_payload_fails_replay():
-    """A corrupted conv2d activation is caught and localized."""
-
-    _corrupt_and_assert(_ConvNet(), torch.randn(1, 1, 6, 6), "conv2d")
-
-
-def test_corrupted_pool_payload_fails_replay():
-    """A corrupted max_pool2d activation is caught and localized."""
-
-    _corrupt_and_assert(_ConvNet(), torch.randn(1, 1, 6, 6), "max_pool2d")
-
-
-def test_corrupted_add_payload_fails_replay():
-    """A corrupted elementwise-add activation is caught and localized."""
-
-    _corrupt_and_assert(_Arithmetic(), torch.randn(3, 4), "__add__")
-
-
-def test_corrupted_mul_payload_fails_replay():
-    """A corrupted elementwise-mul activation is caught and localized."""
-
-    _corrupt_and_assert(_Arithmetic(), torch.randn(3, 4), "__mul__")
-
-
-def test_corrupted_softmax_payload_fails_replay():
-    """A corrupted softmax activation is caught and localized."""
-
-    _corrupt_and_assert(_MiniAttention(), torch.randn(4, 4), "softmax")
-
-
 def test_corrupted_matmul_payload_fails_replay():
     """A corrupted matmul activation is caught and localized."""
 

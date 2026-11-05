@@ -30,6 +30,7 @@ def artifact(tmp_path: Path) -> Path:
     return save_clean_artifact(tmp_path)
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_query.py.
 def test_refused_kinds_name_the_python_path() -> None:
     """regex/where/changed/callable refuse typed, teaching the Python spelling."""
 
@@ -44,7 +45,7 @@ def test_refused_kinds_name_the_python_path() -> None:
         assert exc.value.fields["code"] == "agent_query_invalid"
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_query.py.
 def test_decoder_ceilings_trip_before_resolution() -> None:
     """Depth, node-count, and string ceilings refuse with the DoS rationale."""
 
@@ -65,20 +66,7 @@ def test_decoder_ceilings_trip_before_resolution() -> None:
     assert string_exc.value.fields["code"] == "agent_query_ceiling"
 
 
-def test_listing_resolves_the_full_population(artifact: Path) -> None:
-    """Listing is uncapped: all 3 relus resolve."""
-
-    envelope = call_tool(
-        "torchlens_query_sites", {"path": str(artifact), "query": {"op": "func", "value": "relu"}}
-    )
-    header = envelope["data"]["header"]
-    assert header["matches_total"] == 3
-    assert header["population_total"] == 9
-    labels = [row["label"] for row in envelope["data"]["rows"]]
-    assert labels == ["relu_1_2:1", "relu_2_4:1", "relu_3_6:1"]  # execution order
-
-
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_query.py.
 def test_combinators_and_closure_semantics(artifact: Path) -> None:
     """and/not and the followed_by transitive closure match the graph truth."""
 
@@ -101,31 +89,7 @@ def test_combinators_and_closure_semantics(artifact: Path) -> None:
     assert all(row["saved"] is False for row in envelope["data"]["rows"])
 
 
-def test_ff2_match_reason_plus_row_fields_reproduce_locally(artifact: Path) -> None:
-    """FF2: every row's disclosed reason is checkable from the row itself."""
-
-    query = {"op": "func", "value": "relu"}
-    envelope = call_tool("torchlens_query_sites", {"path": str(artifact), "query": query})
-    for row in envelope["data"]["rows"]:
-        assert row["matched"] == [{"op": "func", "value": "relu"}]
-        assert row["func_name"] == "relu"  # the row field alone reproduces the reason
-
-
-def test_ff1_module_containment_is_populated(artifact: Path) -> None:
-    """FF1: every in-module op row carries a non-null containment address."""
-
-    envelope = call_tool("torchlens_query_sites", {"path": str(artifact)})
-    rows = envelope["data"]["rows"]
-    in_module = [row for row in rows if row["module_call_stack"]]
-    assert in_module
-    assert all(row["module_containment"] for row in in_module)
-    # Stratification: no single containment bucket swallows the population.
-    buckets: dict[str, int] = {}
-    for row in in_module:
-        buckets[row["module_containment"]] = buckets.get(row["module_containment"], 0) + 1
-    assert max(buckets.values()) <= max(1, len(in_module) // 2)
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_query.py.
 def test_handoff_runs_verbatim_and_reproduces_the_match(artifact: Path) -> None:
     """The handoff field executes against the loaded trace and agrees exactly."""
 

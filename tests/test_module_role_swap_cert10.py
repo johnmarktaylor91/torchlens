@@ -51,7 +51,7 @@ def _assert_root_call_mirrors_layers(log: "tl.Trace") -> None:
     pass-qualified Op labels like every other call, and its distinct Layers in
     order are exactly the trace's layer labels.
     """
-    root_call = log["self"]
+    root_call = log["self:1"]
     assert list(root_call.ops) == list(log.op_labels), (list(root_call.ops), list(log.op_labels))
     projection = list(dict.fromkeys(log.ops[label].layer_label for label in root_call.ops))
     assert projection == list(log.layer_labels), (projection, list(log.layer_labels))

@@ -388,7 +388,7 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     appended event and a retaining journal's seq domain is provably DENSE:
     ``{1 .. event_seq}`` with no holes. Measured dense on plain, selective,
     intervened, lookback, buffer, recurrent, CNN, halted, cooked-recording,
-    fast-run and post-``log_backward`` captures. A journal that retains NOTHING
+    fast-run and post-``backward`` captures. A journal that retains NOTHING
     is excluded: releasing a working projection legitimately empties every lane
     while the counter stands (a graph-vs-events reconciliation is a different
     obligation, not this one).

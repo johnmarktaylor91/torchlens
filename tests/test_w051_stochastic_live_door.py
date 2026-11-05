@@ -9,7 +9,6 @@ proxy. The donor-group id also hashes datum CONTENT, never ``repr``.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from support.sampling import sampling_draws
 from torch import nn
@@ -64,8 +63,8 @@ def test_live_door_matches_replay_door() -> None:
     # without the multi-match disclosure warning the suite escalates.
     fork.do(
         [
-            (log["relu_1_2"].__selection__(), tl.patch_from(plan)),
-            (log["relu_2_4"].__selection__(), tl.patch_from(plan)),
+            (log.layers["relu_1_2"].__selection__(), tl.patch_from(plan)),
+            (log.layers["relu_2_4"].__selection__(), tl.patch_from(plan)),
         ]
     )
     replay = _coordinates(fork)
@@ -79,7 +78,7 @@ def test_live_door_matches_replay_door() -> None:
         site_key, pass_index, _step = coordinate
         assert isinstance(site_key, str) and site_key.startswith("s1|")
         assert pass_index == 1
-    assert {layer_site_key(live["relu_1_2"]), layer_site_key(live["relu_2_4"])} == {
+    assert {layer_site_key(live.layers["relu_1_2"]), layer_site_key(live.layers["relu_2_4"])} == {
         coordinate[0] for coordinate, _d in replay
     }, "the stamped live key IS the key postprocess mints"
 
@@ -111,7 +110,6 @@ def test_live_coordinate_is_stable_under_unrelated_upstream_op() -> None:
     assert labels_plain != labels_prologue, "the ordinal labels DID shift; the coordinate did not"
 
 
-@pytest.mark.smoke
 def test_donor_group_id_hashes_datum_content_not_repr() -> None:
     """Two tensors with one repr mint two group ids; equal content mints one."""
 

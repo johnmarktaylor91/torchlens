@@ -1,0 +1,726 @@
+{
+  "schema": "torchlens.claims_ledger.v1",
+  "about": "One row per public claim: wording, locations, evidence, exclusions and status. Wording rules per topic live in _claims.json; registry_ids point at them. Evidence pointers are repo-relative.",
+  "statuses": [
+    "release-supported",
+    "train-only",
+    "historical",
+    "preview-or-partial",
+    "unmeasured"
+  ],
+  "rows": [
+    {
+      "id": "readme-any-pytorch-model",
+      "category": "any-model",
+      "wording": "Inspect, visualize and intervene on any operation in any neural network.",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "tests/classics_corpus sample; Menagerie campaign outside this repo",
+      "evidence": [
+        "tests/classics_corpus/README.md",
+        "docs/backends.md"
+      ],
+      "evidence_note": "The tagline's scope is the backends TorchLens ships: PyTorch eager is the stable capture path and JAX, TensorFlow, MLX, PaddlePaddle and tinygrad are previews; replay validation over the Model Menagerie is the breadth evidence.",
+      "exclusions": "TorchScript, torch.export, CUDA graph replay, GPTQ/AWQ packed weights, sharded FSDP/DTensor topologies (see the limitations catalog).",
+      "date": "2026-11-04",
+      "status": "preview-or-partial",
+      "registry_ids": [
+        "menagerie-phrasing"
+      ]
+    },
+    {
+      "id": "readme-every-activation-and-gradient",
+      "category": "every-operation",
+      "wording": "logs the result of every operation it executes, not just module outputs",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "every captured model",
+      "evidence": [
+        "docs/reference/limitations.md",
+        "tests/test_validation.py"
+      ],
+      "evidence_note": "Operation-level capture within supported execution boundaries; fused kernels and opaque extensions are one op each, and backward capture is torch-only.",
+      "exclusions": "Fused kernels' internal tensors; opaque C++ extensions; non-torch backends record derived leaf-level gradients, not backward graphs.",
+      "date": "2026-11-04",
+      "status": "preview-or-partial",
+      "registry_ids": [
+        "verified-capture-scope"
+      ]
+    },
+    {
+      "id": "readme-any-architecture-dynamic-recurrent",
+      "category": "any-model",
+      "wording": "Every tool above is designed to work on [any PyTorch model](#model-menagerie), including ones with loops, conditional branches, and other dynamic behavior",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "classics corpus recurrent and dynamic entries",
+      "evidence": [
+        "tests/classics_corpus/README.md",
+        "docs/reference/limitations.md"
+      ],
+      "evidence_note": "Dynamic control flow and recurrence are captured as executed (multi-pass ops); the classics corpus includes recurrent models.",
+      "exclusions": "Same as readme-any-pytorch-model.",
+      "date": "2026-11-04",
+      "status": "preview-or-partial",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-menagerie-catalog-count",
+      "category": "any-model",
+      "wording": "of over 6,400 networks, spanning over eight decades of neural network history",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "Model Menagerie (modelmenagerie.ai)",
+      "evidence": [],
+      "evidence_note": "JMT's current Model Menagerie count, recorded 2026-11-04 (the Menagerie is its own project; the count is not reproducible from this repo).",
+      "exclusions": "Menagerie entries are not all executed checks; the verified subset is readme-menagerie-replay-carriers.",
+      "date": "2026-11-04",
+      "status": "unmeasured",
+      "registry_ids": [
+        "menagerie-phrasing",
+        "menagerie-figure-collision"
+      ]
+    },
+    {
+      "id": "readme-metadata-field-counts-total",
+      "category": "capability",
+      "wording": "with [800+ metadata attributes](docs/reference/glossary.md) in all",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "n/a",
+      "evidence": [
+        "docs/reference/glossary.md"
+      ],
+      "evidence_note": "The linked glossary lists the public attributes of every record type; no committed count of them is on file.",
+      "exclusions": "The figure counts attributes across all record types (operation, module, parameter, buffer, grad_fn node, trace), not per operation.",
+      "date": "2026-11-04",
+      "status": "unmeasured",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-torch-floor",
+      "category": "support",
+      "wording": "TorchLens runs on Python 3.10 to 3.13 with PyTorch 2.1 or later",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": "v2.36.1@550b96a6",
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "CI floor legs",
+      "evidence": [
+        ".github/workflows/nightly.yml",
+        "pyproject.toml"
+      ],
+      "evidence_note": "Floor legs in the nightly workflow pin the exact floor pair per interpreter.",
+      "exclusions": "Per-interpreter floors are higher: PyTorch 2.2+ on Python 3.12 and 2.6+ on 3.13 (no older torch wheels exist there).",
+      "date": "2026-11-04",
+      "status": "release-supported",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-index-any-operation",
+      "category": "capability",
+      "wording": "A trace can also be indexed by a module's address",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "test models in the indexing suites",
+      "evidence": [
+        "tests/test_indexing_coherence.py",
+        "tests/test_op_label_resolution.py"
+      ],
+      "evidence_note": "Lookup by operation name, name plus call number, module address and selector resolves to the same records.",
+      "exclusions": "Ambiguous keys refuse with AmbiguousOpLookupError (for example a module with two output ops).",
+      "date": "2026-11-04",
+      "status": "train-only",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-every-op-records-metadata",
+      "category": "capability",
+      "wording": "Every operation, module, parameter, buffer, and grad_fn node gets its own data structure, as does the trace itself",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "toy and example models",
+      "evidence": [
+        "tests/test_metadata.py"
+      ],
+      "evidence_note": "Per-op metadata fields are covered by the metadata tests.",
+      "exclusions": "FLOPs are formula-exact only for ops with a known rule; unknown ops are disclosed.",
+      "date": "2026-11-04",
+      "status": "train-only",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-every-op-call-stack",
+      "category": "capability",
+      "wording": "covering everything from each operation's output shape and FLOPs to the line of code that ran it",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "toy and example models",
+      "evidence": [
+        "tests/test_metadata.py"
+      ],
+      "evidence_note": "",
+      "exclusions": "",
+      "date": "2026-11-04",
+      "status": "train-only",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-visualizes-any-architecture",
+      "category": "any-model",
+      "wording": "it shows every operation the network performs, in the same notation for every architecture",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "Model Menagerie gallery pages",
+      "evidence": [
+        "tests/test_large_graphs.py"
+      ],
+      "evidence_note": "Rendering covers captured graphs; very large graphs fall back to layout limits.",
+      "exclusions": "Models that cannot be captured cannot be drawn.",
+      "date": "2026-11-04",
+      "status": "preview-or-partial",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-menagerie-replay-carriers",
+      "category": "validated",
+      "wording": "Each model is checked with tl.validate, which re-executes every saved operation and confirms that the results match the model's own output. More than 6,300 models have been verified in this way so far",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "Model Menagerie (modelmenagerie.ai)",
+      "evidence": [
+        "tests/test_validation.py"
+      ],
+      "evidence_note": "JMT's current count of Menagerie models passing tl.validate, recorded 2026-11-04; the Menagerie verification ledger is not in this repo, so the number is not reproducible from the tree. tests/test_validation.py covers the replay check itself.",
+      "exclusions": "Replay success is not by itself proof that every operation was seen; fused and opaque boundaries stay outside the check.",
+      "date": "2026-11-04",
+      "status": "unmeasured",
+      "registry_ids": [
+        "menagerie-phrasing",
+        "menagerie-figure-collision",
+        "verified-capture-scope"
+      ]
+    },
+    {
+      "id": "readme-backends-preview-table",
+      "category": "backends",
+      "wording": "it also has backends for JAX, TensorFlow, MLX, PaddlePaddle and tinygrad",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "backend conformance packs",
+      "evidence": [
+        "docs/backends.md"
+      ],
+      "evidence_note": "docs/backends.md#capability-matrix is the linked feature comparison; every non-PyTorch backend is a preview.",
+      "exclusions": "Preview backends do not cover the full PyTorch feature set; see the capability matrix.",
+      "date": "2026-11-04",
+      "status": "preview-or-partial",
+      "registry_ids": [],
+      "say_today": "Stable PyTorch and five named previews",
+      "before_strengthening": "Per-backend, per-feature evidence"
+    },
+    {
+      "id": "docs-perf-halt-faster-than-raw",
+      "category": "speed",
+      "wording": "fastlog_halt_25 is 0.84x raw forward on ResNet-18 (CPU) and 0.83x on",
+      "locations": [
+        {
+          "file": "docs/performance.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "resnet18 cpu; GPT-2 HookedTransformer",
+      "evidence": [
+        "benchmarks/perf_results_2026-05-14.md",
+        "docs/_perf_numbers.md"
+      ],
+      "evidence_note": "Same measurement as readme-halt-faster-than-raw.",
+      "exclusions": "Only the early-halt case.",
+      "date": "2026-10-29",
+      "status": "historical",
+      "registry_ids": [
+        "perf-no-single-multiplier",
+        "perf-fastlog-attribution"
+      ]
+    },
+    {
+      "id": "pyproject-description",
+      "category": "capability",
+      "wording": "A package for extracting activations from PyTorch models and saving portable bundles",
+      "locations": [
+        {
+          "file": "pyproject.toml"
+        }
+      ],
+      "release": "v2.36.1@550b96a6",
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "n/a",
+      "evidence": [
+        "tests/test_quickstart_readme_gate.py"
+      ],
+      "evidence_note": "Plain description; to be replaced by the author's pitch.",
+      "exclusions": "",
+      "date": "2026-10-29",
+      "status": "release-supported",
+      "registry_ids": []
+    },
+    {
+      "id": "github-repo-description",
+      "category": "every-operation",
+      "wording": "Capture every activation and gradient of any PyTorch model",
+      "locations": [
+        {
+          "external": "GitHub repository description"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "every captured model",
+      "evidence": [
+        "docs/reference/limitations.md"
+      ],
+      "evidence_note": "Same claim as readme-every-activation-and-gradient; set in repository settings, not in a file.",
+      "exclusions": "As readme-every-activation-and-gradient.",
+      "date": "2026-10-29",
+      "status": "preview-or-partial",
+      "registry_ids": []
+    },
+    {
+      "id": "docs-bind-about-1x-hook",
+      "category": "speed",
+      "wording": "about 1x a plain forward hook",
+      "locations": [
+        {
+          "file": "docs/for-ai-agents.md"
+        },
+        {
+          "file": "docs/performance.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "fast-path benchmarks",
+      "evidence": [
+        "docs/guides/fast_paths.md"
+      ],
+      "evidence_note": "Bound live edits measured at 1.0 to 1.2x a plain hook; refresh on the release before quoting.",
+      "exclusions": "Capture-free: no activations recorded.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [],
+      "say_today": "Bound live edits at hook speed",
+      "before_strengthening": "Refreshed matched measurements before quoting older ratios"
+    },
+    {
+      "id": "planned-any-model",
+      "category": "any-model",
+      "wording": "Architecture-general design, diverse real examples, Menagerie with hedged count",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "classics corpus; Model Menagerie",
+      "evidence": [
+        "tests/classics_corpus/README.md"
+      ],
+      "evidence_note": "The classics corpus runs capture, replay and invariants on a coverage-chosen sample; the Menagerie count is hedged.",
+      "exclusions": "Structure-only entries are not executed checks.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [
+        "menagerie-phrasing"
+      ],
+      "say_today": "Architecture-general design, diverse real examples, Menagerie with hedged count",
+      "before_strengthening": "Audited, deduplicated counts by family, backend and check"
+    },
+    {
+      "id": "planned-every-operation",
+      "category": "every-operation",
+      "wording": "Operation-level capture within supported execution boundaries",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "every captured model",
+      "evidence": [
+        "tests/test_validation.py",
+        "docs/reference/limitations.md"
+      ],
+      "evidence_note": "Capture is per torch operation; the limitations catalog names the boundaries.",
+      "exclusions": "Fused and opaque ops are one op each.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [
+        "verified-capture-scope"
+      ],
+      "say_today": "Operation-level capture within supported execution boundaries",
+      "before_strengthening": "Coverage tests plus fused and opaque op disclosures"
+    },
+    {
+      "id": "planned-validated",
+      "category": "validated",
+      "wording": "Replay checks with explicit pass, unavailable and refused cases",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "test models",
+      "evidence": [
+        "tests/test_validation.py"
+      ],
+      "evidence_note": "Forward replay validation and metadata invariants; unavailable and refused outcomes are typed.",
+      "exclusions": "Release-matched tamper controls are not on file.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [
+        "verified-capture-scope"
+      ],
+      "say_today": "Replay checks with explicit pass, unavailable and refused cases",
+      "before_strengthening": "Release-matched tamper controls"
+    },
+    {
+      "id": "planned-multiple-backends",
+      "category": "backends",
+      "wording": "Stable PyTorch and five named previews",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "backend conformance packs",
+      "evidence": [
+        "docs/backends.md",
+        "tests/test_conformance_preview_packs.py"
+      ],
+      "evidence_note": "JAX, MLX, tinygrad, Paddle and TensorFlow are previews with a capability table.",
+      "exclusions": "Per-backend, per-feature evidence is not complete.",
+      "date": "2026-10-29",
+      "status": "preview-or-partial",
+      "registry_ids": [],
+      "say_today": "Stable PyTorch and five named previews",
+      "before_strengthening": "Per-backend, per-feature evidence"
+    },
+    {
+      "id": "planned-fast",
+      "category": "speed",
+      "wording": "Bound live edits at hook speed",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "fast-path benchmarks",
+      "evidence": [
+        "docs/guides/fast_paths.md"
+      ],
+      "evidence_note": "Bound live edits measured at 1.0 to 1.2x a plain hook.",
+      "exclusions": "Full trace is far slower than a hook; older ratios are configuration-specific.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [
+        "perf-no-single-multiplier"
+      ],
+      "say_today": "Bound live edits at hook speed",
+      "before_strengthening": "Refreshed matched measurements before quoting older ratios"
+    },
+    {
+      "id": "planned-helps-agents",
+      "category": "agents",
+      "wording": "TorchLens helps coding agents implement interpretability methods",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "agent benchmark tasks",
+      "evidence": [],
+      "evidence_note": "A small docs-use study exists; the agent benchmark (pilot and confirmation) has not run.",
+      "exclusions": "No agent productivity claim anywhere until the benchmark numbers exist.",
+      "date": "2026-10-29",
+      "status": "unmeasured",
+      "registry_ids": [],
+      "say_today": "A small docs-use study exists",
+      "before_strengthening": "The agent benchmark"
+    },
+    {
+      "id": "planned-reproduces-ioi-eap-ig",
+      "category": "science",
+      "wording": "IOI circuit by EAP-IG at head ROC AUC 0.926 on GPT-2 small",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "GPT-2 small",
+      "evidence": [
+        "torchlens/mechinterp/_eap.py",
+        "tests/test_circ2_edge_scores.py"
+      ],
+      "evidence_note": "Measured on the development branch: head ROC AUC 0.9263 against the 26 Wang circuit heads, 1000 MIB IOI train rows, EAP-IG m=5. Not yet rerun on a release.",
+      "exclusions": "Edge recall at k=182 was 0.3956.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [],
+      "say_today": "Specific agreements on file",
+      "before_strengthening": "Rerun on the release"
+    },
+    {
+      "id": "planned-attribution-graph-agreement",
+      "category": "science",
+      "wording": "Attribution graph matches circuit-tracer on Gemma-2 2B within 8.6e-7 of the largest adjacency entry",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "Gemma-2 2B with Gemma Scope transcoders",
+      "evidence": [
+        "docs/reference/attribution.md"
+      ],
+      "evidence_note": "Measured on the development branch: largest adjacency difference 8.64e-7 of the largest oracle entry, relative Frobenius 1.10e-6, CPU float32, Dallas prompt, 9,170 features. A 1.05e-6 figure quoted elsewhere is the spread between two circuit-tracer environments, not the TorchLens agreement.",
+      "exclusions": "One prompt; CPU float32.",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [],
+      "say_today": "Specific agreements on file",
+      "before_strengthening": "Rerun on the release"
+    },
+    {
+      "id": "planned-brain-score-end-to-end",
+      "category": "science",
+      "wording": "TorchLens activations scored on Brain-Score benchmarks end to end",
+      "locations": [],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "ResNet-18 (seam run)",
+      "evidence": [
+        "docs/reference/brain_benchmarking_seam.md",
+        ".github/workflows/nightly.yml"
+      ],
+      "evidence_note": "Measured 2026-10-14: MajajHong2015public.IT-pls 0.4408, Geirhos2021colour-top1 0.9547; seam parity max abs diff 0.0 against Brain-Score's PytorchWrapper on 24 stimuli.",
+      "exclusions": "Brain-Score is a destination: never 'runs Brain-Score' or RSA parity wording (U28.4).",
+      "date": "2026-10-29",
+      "status": "train-only",
+      "registry_ids": [
+        "rsa-brainscore-destinations"
+      ],
+      "say_today": "Specific agreements on file",
+      "before_strengthening": "Rerun on the release"
+    },
+    {
+      "id": "readme-intro-frontier-pace",
+      "category": "science",
+      "wording": "new frontier models arriving faster than we can study the current ones",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "none",
+      "models": "none (the research field)",
+      "evidence": [],
+      "evidence_note": "Framing about the pace of the field, not a claim about TorchLens; the 'faster' coverage pattern matches it.",
+      "exclusions": "Not a TorchLens speed claim.",
+      "date": "2026-11-04",
+      "status": "unmeasured",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-pytorch-lacks-extraction",
+      "category": "comparison",
+      "wording": "PyTorch has long lacked a built-in way to extract every intermediate activation from arbitrary networks",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "arbitrary PyTorch models",
+      "evidence": [],
+      "evidence_note": "Sourced to the torchvision feature_extraction docstring linked in the README (lines 391-405 at e334535a), which says extraction can take some massaging.",
+      "exclusions": "torchvision's FX-based create_feature_extractor exists; the claim is that it is not general across arbitrary networks.",
+      "date": "2026-11-04",
+      "status": "unmeasured",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-trace-any-model-as-is",
+      "category": "any-model",
+      "wording": "Pass it any PyTorch model and its input exactly as they are, with no hooks, wrappers or changes to your code",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "eager PyTorch modules and callables",
+      "evidence": [
+        "tests/classics_corpus/README.md"
+      ],
+      "evidence_note": "tl.trace takes the unmodified model and input; the classics corpus exercises that across architecture families.",
+      "exclusions": "torch.compile, TorchScript and torch.export artifacts are refused (log the eager module); concurrent captures across threads or processes are unsupported.",
+      "date": "2026-11-04",
+      "status": "preview-or-partial",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-gradient-at-any-operation",
+      "category": "every-operation",
+      "wording": "read the gradient at any operation, or at the grad_fn nodes PyTorch runs between operations",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "eager PyTorch models with save_grads=True",
+      "evidence": [
+        "tests/test_capopts_truth_save_grads.py",
+        "tests/test_grad_fn_call_identity.py"
+      ],
+      "evidence_note": "Gradients are recorded per operation output and per grad_fn call when a backward pass runs.",
+      "exclusions": "Fused kernels expose no hidden internal gradients; torch.func transforms are boundary nodes.",
+      "date": "2026-11-04",
+      "status": "train-only",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-builtin-edits-count",
+      "category": "capability",
+      "wording": "patch in activations from another run (20+ built-in edits)",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "all intervention sites",
+      "evidence": [],
+      "evidence_note": "Count of built-in edit helpers in the tl namespace; no committed census of them is on file.",
+      "exclusions": "Counts helpers, not combinations.",
+      "date": "2026-11-04",
+      "status": "unmeasured",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-bundle-compare-any-operation",
+      "category": "capability",
+      "wording": "compute metrics across them at any operation, find where they diverge most",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "any set of traces of one model",
+      "evidence": [
+        "tests/test_bundle_compare_fork.py"
+      ],
+      "evidence_note": "Bundle metrics and divergence ranking over aligned operations.",
+      "exclusions": "Traces must align operation by operation; unaligned operations are reported, not compared.",
+      "date": "2026-11-04",
+      "status": "train-only",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-agents-validate-replay",
+      "category": "validated",
+      "wording": "a built-in validation function (tl.validate) can replay the forward pass to confirm that everything it saved matches the real model",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "verified captures only",
+      "evidence": [
+        "tests/test_validation.py",
+        "tests/classics_corpus/README.md"
+      ],
+      "evidence_note": "Replay plus metadata invariants per verified capture; replay success is not by itself proof that every operation was seen.",
+      "exclusions": "Fused and opaque boundaries; captures where validation is unavailable or refused.",
+      "date": "2026-11-04",
+      "status": "train-only",
+      "registry_ids": [
+        "verified-capture-scope"
+      ]
+    },
+    {
+      "id": "readme-captum-at-any-operation",
+      "category": "capability",
+      "wording": "at any operation you select",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "eager PyTorch models with the captum extra",
+      "evidence": [
+        "tests/test_bridge_real_captum.py",
+        "tests/test_bridge_real_sae_export.py"
+      ],
+      "evidence_note": "Covers both README places (the Related tools paragraph and the Captum bullet): Captum attribution and SAELens export run at a selected operation, not only at module boundaries.",
+      "exclusions": "Needs the optional captum or saelens extra.",
+      "date": "2026-11-04",
+      "status": "train-only",
+      "registry_ids": [
+        "attribution-destinations"
+      ]
+    }
+  ]
+}

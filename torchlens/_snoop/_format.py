@@ -216,8 +216,8 @@ def render_line(event: NarrationEvent) -> str:
     if structural is not None:
         return structural
     line = f"{indent}{'  '.join(_op_columns(event))}".rstrip()
-    if event.stats is not None:
-        segment = render_stats_segment(event.stats)
+    if event.value_stats is not None:
+        segment = render_stats_segment(event.value_stats)
         if segment:
             line = f"{line} | {segment}"
     return line

@@ -66,6 +66,16 @@ class RaggedBatch:
         ``values[offsets[i]:offsets[i+1]]``. The STORED authority.
     row_shapes:
         Per-row logical shapes (each row's true ``[extent, *feature]``).
+
+    Examples
+    --------
+    >>> batch = RaggedBatch(
+    ...     values=torch.zeros(5, 4), offsets=torch.tensor([0, 2, 5]), row_shapes=((2, 4), (3, 4))
+    ... )
+    >>> batch.num_rows
+    2
+    >>> tuple(batch.row(1).shape)
+    (3, 4)
     """
 
     values: torch.Tensor

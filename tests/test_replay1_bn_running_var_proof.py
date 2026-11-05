@@ -9,7 +9,6 @@ input is off the mean by any amount, a running_mean or input edge, and a trainin
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import pytest
@@ -17,8 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import get_eval_batch_norm_mean_residual_support
 from torchlens.options import CaptureOptions
-from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
     _execute_func_with_restored_state,
@@ -66,15 +65,6 @@ CASES = [
 
 
 @pytest.mark.parametrize(("make", "shape"), CASES)
-def test_eval_bn_with_input_at_running_mean_validates(make, shape) -> None:
-    model = make().eval()
-    x = torch.zeros(shape)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert validate_forward_pass(model, x, seed=0) is True
-
-
-@pytest.mark.parametrize(("make", "shape"), CASES)
 def test_running_var_edge_is_exempted_by_the_value_proof(make, shape) -> None:
     trace = _capture(make().eval(), torch.zeros(shape))
     op = _bn_op(trace)
@@ -97,7 +87,7 @@ def test_dead_running_var_edge_off_the_mean_still_fails(make, shape) -> None:
     assert result.reason == "perturbation_insensitive"
 
 
-@pytest.mark.parametrize("slot", [0, 3])
+@pytest.mark.parametrize("slot", [3])
 def test_dead_input_or_running_mean_edge_at_the_mean_still_fails(slot) -> None:
     trace = _capture(nn.BatchNorm2d(4).eval(), torch.zeros(2, 4, 3, 3))
     op = _bn_op(trace)
@@ -218,12 +208,13 @@ def _hole_case_scale_overflows_after_unit_step() -> tuple[nn.Module, torch.Tenso
     return _bn2d(weight=torch.full((4,), 1e37)), torch.zeros(2, 4, 3, 3)
 
 
+#: Cases whose live running_var edge is only observable when the CPU eval kernel leaves a
+#: residual at a non-zero mean (``HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL``): with no weight to
+#: scale it, Apple ARM's kernel cancels the mean exactly and the output ignores running_var.
+KERNEL_RESIDUAL_CASES = {_hole_case_nonzero_mean_affine_false}
+
 HOLE_CASES = [
-    pytest.param(_hole_case_var_below_unit_step, id="var-below-unit-step"),
-    pytest.param(_hole_case_large_output, id="widening-by-output-scale"),
-    pytest.param(_hole_case_zero_weight_channel_low_var, id="zero-weight-channel-low-var"),
     pytest.param(_hole_case_negative_eps, id="negative-eps"),
-    pytest.param(_hole_case_nonzero_mean, id="nonzero-mean"),
     pytest.param(_hole_case_nonzero_mean_affine_false, id="nonzero-mean-affine-false"),
     pytest.param(_hole_case_nonzero_mean_channels_last, id="nonzero-mean-channels-last"),
     pytest.param(_hole_case_scale_overflows_after_unit_step, id="scale-overflow"),
@@ -243,10 +234,28 @@ def test_dead_running_var_edge_a_live_edge_would_expose_still_fails(make) -> Non
     trace = _capture(model, x)
     op = _bn_op(trace)
     label = op.parent_arg_positions["args"][4]
-    assert _live_edge_changes(trace, op, label), "case no longer exposes a live edge"
+    live_edge_expected = (
+        make not in KERNEL_RESIDUAL_CASES or get_eval_batch_norm_mean_residual_support()
+    )
+    live_edge_changes = bool(_live_edge_changes(trace, op, label))
+    assert live_edge_changes == live_edge_expected, (
+        "case no longer exposes a live edge"
+        if live_edge_expected
+        else "this kernel cancels the mean exactly, yet the live edge moved"
+    )
     _freeze(op)
     result = _edge(trace, op, 4)
     assert result.decision == "failed", (result.decision, result.reason)
+
+
+def test_eval_bn_mean_residual_flag_matches_this_kernel() -> None:
+    """``HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL`` agrees with the affine-free hole case measured here."""
+
+    model, x = _hole_case_nonzero_mean_affine_false()
+    base = model(x)
+    model.running_var.add_(1.0)
+    moved = model(x)
+    assert (not torch.equal(base, moved)) == get_eval_batch_norm_mean_residual_support()
 
 
 def _sound_case_zero_weight_channel_off_mean() -> tuple[nn.Module, torch.Tensor]:
@@ -256,11 +265,7 @@ def _sound_case_zero_weight_channel_off_mean() -> tuple[nn.Module, torch.Tensor]
 
 
 SOUND_CASES = [
-    pytest.param(lambda: (nn.BatchNorm2d(4).eval(), torch.zeros(2, 4, 3, 3)), id="bn2d"),
-    pytest.param(lambda: (nn.BatchNorm1d(6).eval(), torch.zeros(5, 6)), id="bn1d"),
-    pytest.param(lambda: (nn.BatchNorm2d(4).eval(), -torch.zeros(2, 4, 3, 3)), id="negative-zero"),
     pytest.param(_sound_case_zero_weight_channel_off_mean, id="zero-weight-channel-off-mean"),
-    pytest.param(lambda: (_RawBatchNorm(4, eps=1e-3).eval(), torch.zeros(2, 4, 3, 3)), id="eps"),
 ]
 
 

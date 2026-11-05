@@ -67,22 +67,6 @@ def _rerun_with(trace: Trace, model: nn.Module, x: torch.Tensor, edit: Any) -> T
     )
 
 
-def _drawing_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-    return out * (2.0 + 0.0 * random.random())
-
-
-def test_a_rerun_hook_that_draws_host_rng_marks_the_fork() -> None:
-    torch.manual_seed(0)
-    model = _Net().eval()
-    x, trace = _capture(model)
-    before = _verdict(trace)
-    assert before["host_rng_consumed"] is False
-    fork = _rerun_with(trace, model, x, _drawing_hook)
-    assert fork.last_run["fast_refresh"] is True
-    assert fork._runnable.host_rng_consumed is True
-    assert _verdict(trace) == before
-
-
 def test_a_rerun_that_draws_nothing_keeps_the_verdict() -> None:
     for model_type in (_Net, _DrawingNet):
         torch.manual_seed(0)

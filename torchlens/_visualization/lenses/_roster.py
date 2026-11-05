@@ -65,13 +65,7 @@ COMPOSITIONS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
     {
         "runtime_storage": MappingProxyType({"lens": "speed", "size_by": "bytes", "scale": "sqrt"}),
         "vision": MappingProxyType({"lens": "dims", "direction": "leftright", "color_by": "flops"}),
-        "debug_edge_shapes": MappingProxyType(
-            # The edge-shape channel spelling belongs to TRI-VIZMECH; the
-            # recipe records the intent and the gallery spec pins the
-            # stratum. Until that channel lands the recipe is dims-adjacent
-            # label redundancy only.
-            {"lens": "debug", "show_redundant_args": True}
-        ),
+        "debug_edge_shapes": MappingProxyType({"lens": "debug", "show_edge_shapes": True}),
     }
 )
 
@@ -183,7 +177,7 @@ SEQUENCE_LENS = register_lens(
         secondary_members=("stack_by",),
         disclosure=(
             "same rank = the licensed same execution window, not parallelism",
-            "pass_index encodes linearly (the one field uniform by construction)",
+            "pass_number encodes linearly (the one field uniform by construction)",
         ),
     )
 )

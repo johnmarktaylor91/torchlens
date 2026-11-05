@@ -21,16 +21,17 @@ from ..._ir.events import (
 )
 from ..._ir.refs import ParamRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._utils._mutation_names import _is_inplace_augmented_assignment_dunder
 from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
 from . import module_stack as _mstack
 from ._completeness_origins import internal_scalar_read
+from ._same_object_handoff import set_same_object_live_value, set_same_object_mutation
 from ._tl import (
     active_label_session_token,
     get_param_meta,
     get_tensor_label,
-    set_same_object_mutation,
     set_tensor_label,
 )
 
@@ -51,7 +52,7 @@ __all__ = (
     "_record_label_version_snapshot",
     "_bind_writeback_receiver_label",
     "_label_version_baseline",
-    "_stamp_same_object_mutation",
+    "_stamp_same_object",
     "get_capture_producer_policy",
     "set_capture_producer_policy",
     "_should_keep_alias_mutation_contract",
@@ -212,23 +213,6 @@ def _compact_ancestor_sets(trace: Trace) -> None:
         _ANCESTOR_SLOT_DESCRIPTORS[field_name].__set__(op, bitset)
 
 
-def _is_inplace_augmented_assignment_dunder(name: str) -> bool:
-    """Return whether ``name`` denotes an in-place augmented-assignment dunder.
-
-    Parameters
-    ----------
-    name:
-        Function name recorded by the torch eager wrapper.
-
-    Returns
-    -------
-    bool
-        True for ``__i*`` mutation dunders except known non-mutating dunders.
-    """
-
-    return name.startswith("__i") and name not in _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS
-
-
 def _record_label_version_snapshot(t: Any, *, mutated_via: tuple[Any, Any] | None = None) -> None:
     """Record ``t``'s current version, keyed to the active label session.
 
@@ -341,7 +325,9 @@ def _label_version_baseline(t: Any) -> int | None:
     return version
 
 
-def _stamp_same_object_mutation(logged: Any, receiver: Any, mutation_signature: bool) -> None:
+def _stamp_same_object(
+    logged: Any, receiver: Any, mutation_signature: bool, distinct_return: bool = False
+) -> None:
     """Stamp a same-object call's mutation verdict on the copy it is logged against.
 
     The op-output classifier only sees the fresh logging copy, never the live
@@ -359,6 +345,14 @@ def _stamp_same_object_mutation(logged: Any, receiver: Any, mutation_signature: 
         The live first argument the call returned.
     mutation_signature
         Whether the call's signature requests mutation.
+    distinct_return
+        Whether the caller receives the copy itself (the module-boundary
+        ``identity`` mint), so the copy is the live object.
+
+    A non-mutating return also stamps the live receiver: the caller and every
+    downstream op consume it, not the copy, so a by-reference payload must be
+    it. A Parameter receiver is logged through its own mutation path and keeps
+    the copy.
     """
 
     if not isinstance(logged, torch.Tensor):
@@ -372,6 +366,8 @@ def _stamp_same_object_mutation(logged: Any, receiver: Any, mutation_signature: 
         verdict = current is None or current != baseline
     with contextlib.suppress(AttributeError):
         set_same_object_mutation(logged, verdict)
+        if not (verdict or distinct_return or isinstance(receiver, torch.nn.Parameter)):
+            set_same_object_live_value(logged, receiver)
 
 
 def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPolicy:
@@ -416,6 +412,8 @@ def set_capture_producer_policy(trace: Trace, mode: CaptureProducerMode) -> None
     """
 
     trace._capture_producer_policy = get_capture_producer_policy(mode)
+    if mode == "predicate":
+        install_lazy_record_contexts(trace)
 
 
 def _should_keep_alias_mutation_contract(trace: Trace) -> bool:
@@ -439,7 +437,7 @@ def _should_keep_alias_mutation_contract(trace: Trace) -> bool:
         or getattr(trace, "is_replayable", False)
         or trace._options_backward_ready
         or save_grads not in (None, False)
-        or getattr(trace, "_validation_active", False)
+        or trace.__dict__.get("_validation_active", False)
     )
 
 
@@ -753,13 +751,15 @@ def _exhaustive_capture_policy(trace: Trace, fields_dict: dict[str, Any]) -> Cap
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from ._ops_exhaustive import _emit_exhaustive_operation_events  # noqa: E402
-from ._ops_predicate_events import _emit_predicate_operation_events  # noqa: E402
+from ._ops_predicate_events import (  # noqa: E402
+    _emit_predicate_operation_events,
+    install_lazy_record_contexts,
+)
 from .ops import (  # noqa: E402
     _ANCESTOR_FIELD_NAMES,
     _ANCESTOR_SLOT_DESCRIPTORS,
     _CAPTURE_PRODUCER_POLICIES,
     _FUNCTION_REF_PER_OUTPUT_FIELDS,
-    _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
     _LABEL_VERSION_SNAPSHOT,
     _VIEW_MUTATION_RELABELS,
     CaptureProducerPolicy,

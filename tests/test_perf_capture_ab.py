@@ -55,7 +55,7 @@ Two workloads:
    more-samples-on-demand, never a wider gate. Medians and the native
    floor ride alongside for provenance.
 2. **Fast-tier decode pair** — native vs wrapped-episode (``tl.trace`` per
-   decode step) vs guarded-fast (``trace.run(inputs=..., fast=True)`` per
+   decode step) vs guarded-fast (``trace.run_transaction(inputs=..., fast=True)`` per
    step) on a fixed-window greedy decode loop over a HuggingFace causal LM.
    The METAPLAN P2 floor (r3 decision rule) is absolute: guarded-fast must
    beat wrapped-episode by >= 2x wall clock on the primary CPU row. Both
@@ -332,7 +332,7 @@ def decode_pair_rows(
 
         # Warm both tiers once: wrapper install, module prep, fast binders.
         warm = tl.trace(model, ids, save=predicate)
-        warm.run(inputs=ids, fast=True)
+        warm.run_transaction(inputs=ids, fast=True)
 
         def native_step(current: torch.Tensor) -> Any:
             with torch.no_grad():
@@ -342,7 +342,7 @@ def decode_pair_rows(
             return tl.trace(model, current, save=predicate)
 
         def fast_step(current: torch.Tensor) -> Any:
-            return warm.run(inputs=current, fast=True)
+            return warm.run_transaction(inputs=current, fast=True)
 
         native_ms = run_tier(native_step, windows)
         wrapped_ms = run_tier(wrapped_step, windows)

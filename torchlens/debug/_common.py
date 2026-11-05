@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import torch
+
+from .._comparison_tensor import _comparison_tensor
+from .._data_classes._lookup_kinds import op_at
+from .._data_classes.func_call_location import display_frame
+from .._utils._multipass_access import is_multipass_layer
+from ..backends.registry import TORCH_BACKEND_NAME, resolve_backend_spec
 
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
@@ -38,7 +45,11 @@ def _ordered_ops(trace: Trace) -> list[Op]:
 
 
 def _source_line(op: Op) -> str | None:
-    """Return the first source location for an op.
+    """Return the source location of the line that ran an op.
+
+    The location is the innermost recorded frame outside torch's own code
+    (:func:`torchlens._data_classes.func_call_location.display_frame`), the
+    same line an op's card shows.
 
     Parameters
     ----------
@@ -51,10 +62,9 @@ def _source_line(op: Op) -> str | None:
         ``"file:line"`` or ``None`` when no source context is present.
     """
 
-    context = getattr(op, "code_context", None) or ()
-    if not context:
+    location = display_frame(getattr(op, "code_context", None))
+    if location is None:
         return None
-    location = context[0]
     file_name = getattr(location, "file", None)
     line_number = getattr(location, "line_number", None)
     if file_name is None or line_number is None:
@@ -126,6 +136,23 @@ def _compute_ops(trace: Trace) -> list[Op]:
     return [op for op in _ordered_ops(trace) if int(getattr(op, "step_index", 0) or 0) > 0]
 
 
+def _multipass_layer_or_none(trace: Trace, label: Any) -> Any | None:
+    """Return the aggregate Layer a bare multi-pass label names, else ``None``.
+
+    A bare multi-pass label names a Layer, not one op (every pass is a distinct
+    op); the lineage contract still owes the honest "select a pass" message,
+    which needs the aggregate record's pass count.
+    """
+
+    if not isinstance(label, str):
+        return None
+    try:
+        layer = trace.layers[label]
+    except Exception:  # noqa: BLE001 - an unresolvable label keeps the door's own message.
+        return None
+    return layer if is_multipass_layer(layer) else None
+
+
 def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
     """Resolve an op-like object or lookup key without raising.
 
@@ -142,14 +169,14 @@ def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
         Resolved op and error message.
     """
 
-    from .._utils._multipass_access import is_multipass_layer
-
     candidate = op_or_label
     if not (hasattr(candidate, "parents") and hasattr(candidate, "children")):
         try:
-            candidate = trace[op_or_label]
+            candidate = op_at(trace, op_or_label)  # a module name names its output op
         except Exception as exc:  # noqa: BLE001 - debug helpers report odd inputs instead of raising.
-            return None, f"unavailable: {exc}"
+            candidate = _multipass_layer_or_none(trace, op_or_label)
+            if candidate is None:
+                return None, f"unavailable: {exc}"
     # An aggregate recurrent Layer is per-pass ambiguous: its graph edges are
     # bare labels that re-resolve to aggregates and its per-pass fields trip the
     # multi-pass ValueError tripwire. Refuse it honestly (non-raising, per the
@@ -178,13 +205,15 @@ def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
     return None, f"unavailable: {op_or_label!r} did not resolve to an op"
 
 
-def _safe_out(op: Op) -> tuple[Any | None, str | None]:
+def _safe_out(op: Op, codec: Any = None) -> tuple[Any | None, str | None]:
     """Read ``op.out`` and convert known unavailable cases into a reason.
 
     Parameters
     ----------
     op:
         TorchLens op.
+    codec:
+        Optional producing backend codec for comparison on host tensors.
 
     Returns
     -------
@@ -195,7 +224,8 @@ def _safe_out(op: Op) -> tuple[Any | None, str | None]:
     if not bool(getattr(op, "has_saved_activation", False)):
         return None, "unsaved"
     try:
-        return op.out, None
+        value = op.out
+        return (value if codec is None else _comparison_tensor(value, codec)), None
     except ValueError as exc:
         return None, str(exc)
 
@@ -266,3 +296,135 @@ def _op_from_label(trace: Trace, label: str) -> Op | None:
 
     op, _ = _resolve_op(trace, label)
     return op
+
+
+def _nonfinite_kind(tensor: torch.Tensor) -> str:
+    """Classify non-finite values in a tensor.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor to inspect.
+
+    Returns
+    -------
+    str
+        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"``.
+    """
+
+    if not torch.is_floating_point(tensor) and not torch.is_complex(tensor):
+        return "none"
+    has_nan = bool(torch.isnan(tensor).any().item())
+    has_inf = bool(torch.isinf(tensor).any().item())
+    return _kind_from_flags(has_nan, has_inf)
+
+
+def _nonfinite_kind_of(value: Any, codec: Any) -> str:
+    """Classify non-finite values in a saved output from any capture backend.
+
+    Torch tensors use :func:`_nonfinite_kind`; arrays from the other backends are
+    copied to host NumPy through the trace backend's payload codec.
+
+    Parameters
+    ----------
+    value:
+        Saved op output.
+    codec:
+        ``get_payload_codec(trace._provenance_backend)`` for the producing backend.
+
+    Returns
+    -------
+    str
+        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"`` (also for values the
+        backend codec cannot convert, such as non-array outputs).
+    """
+
+    if isinstance(value, torch.Tensor):
+        return _nonfinite_kind(value)
+    try:
+        array = codec.to_numpy(value).array
+    except (TypeError, ValueError):
+        return "none"
+    if array.dtype.kind not in "fc":
+        return "none"
+    return _kind_from_flags(bool(np.isnan(array).any()), bool(np.isinf(array).any()))
+
+
+def _runs_on_torch(model: Any, inputs: Any, trace_kwargs: dict[str, Any]) -> bool:
+    """Report whether a :func:`torchlens.trace` call would capture on the torch backend.
+
+    Only PyTorch eager capture honours ``on_nonfinite="raise"``; the other backends
+    ignore it, so NaN finders scan a full capture's saved outputs there instead.
+
+    Parameters
+    ----------
+    model:
+        Model to execute.
+    inputs:
+        Positional model input.
+    trace_kwargs:
+        Caller's :func:`torchlens.trace` keyword arguments.
+
+    Returns
+    -------
+    bool
+        ``True`` when the call resolves to the torch backend.
+    """
+
+    spec = resolve_backend_spec(
+        trace_kwargs.get("backend"), model, inputs, trace_kwargs.get("input_kwargs")
+    )
+    return spec.name == TORCH_BACKEND_NAME
+
+
+def _kind_from_flags(has_nan: bool, has_inf: bool) -> str:
+    """Name the non-finite kind from NaN and Inf presence flags.
+
+    Parameters
+    ----------
+    has_nan:
+        Whether any NaN is present.
+    has_inf:
+        Whether any Inf is present.
+
+    Returns
+    -------
+    str
+        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"``.
+    """
+
+    if has_nan and has_inf:
+        return "nan+inf"
+    if has_nan:
+        return "nan"
+    if has_inf:
+        return "inf"
+    return "none"
+
+
+def _module_address(op: Op) -> str | None:
+    """Return the containing module address recorded for an op.
+
+    Parameters
+    ----------
+    op:
+        Operation whose module metadata should be read.
+
+    Returns
+    -------
+    str | None
+        Atomic module address or the innermost containing module address.
+    """
+
+    atomic_address = getattr(op, "atomic_module_address", None)
+    if isinstance(atomic_address, str):
+        return atomic_address
+    # Live (mid-capture) ops have no atomic_module_address yet; the fallback
+    # reads the innermost module CALL label ("0:1"), which carries the pass
+    # qualifier -- strip it so the field keeps its ADDRESS contract.
+    module = getattr(op, "module", None)
+    if isinstance(module, tuple) and module and isinstance(module[0], str):
+        return module[0].rsplit(":", 1)[0]
+    if isinstance(module, str):
+        return module.rsplit(":", 1)[0]
+    return None

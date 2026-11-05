@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._utils._display_bounded import short_dataclass_repr
+from ._encoding_size_layout import layout_encoded_sizes
 from .request import RenderContext
 
 if TYPE_CHECKING:
@@ -26,7 +28,6 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class RenderIRNode:
     """Resolved render node independent of Graphviz mutation.
-
     Parameters
     ----------
     name:
@@ -67,6 +68,8 @@ class RenderIRNode:
 class _NodeDecisionInputs:
     """Per-draw inputs shared by every render-node presentation decision."""
 
+    __repr__ = short_dataclass_repr
+
     universe: Any
     repeat_folds: Mapping[str, ModuleRepeatFold] | None
     segment_lookup: _SegmentLookup
@@ -77,7 +80,6 @@ class _NodeDecisionInputs:
 @dataclass(frozen=True)
 class RenderIREdge:
     """Resolved forward edge independent of DOT emission.
-
     Parameters
     ----------
     source_unit:
@@ -117,7 +119,6 @@ class RenderIREdge:
 @dataclass(frozen=True)
 class RenderIRRegion:
     """One nested, renderer-neutral region selected for DOT emission.
-
     Parameters
     ----------
     key:
@@ -175,23 +176,19 @@ class RenderIROrderingConstraint:
 
 @dataclass(frozen=True)
 class RenderIRRankGroup:
-    """One stacking (rank) channel group: nodes pinned to one Graphviz rank.
+    """One rank group: nodes pinned to one Graphviz rank.
 
-    Parameters
-    ----------
-    kind:
-        Constraint kind; v1 emits ``"stack"`` only (the ``stack_by``
-        encoding channel; the license/cohort semantics live in
-        ``visualization._stacking``).
-    key:
-        Repr of the shared annotation value (rank key).
-    members:
-        Rendered node names pinned to the shared rank.
+    ``kind`` is the constraint kind: ``"stack"`` (the ``stack_by`` encoding
+    channel; semantics in ``visualization._stacking``) or ``"focus_stubs"``.
+    ``key`` is the repr of the shared rank key, ``members`` the rendered node
+    names, and ``rank`` the Graphviz rank the subgraph is given: ``"same"``,
+    or ``"source"`` / ``"sink"`` for a focused draw's input and output stubs.
     """
 
     kind: str
     key: str
     members: tuple[str, ...]
+    rank: str = "same"
 
 
 @dataclass(frozen=True)
@@ -336,14 +333,12 @@ def build_render_ir(
         universe = build_node_universe(
             build_source_graph(trace, resolved_context), collapse_fn, repeat_folds
         )
-    encoding = getattr(resolved_context, "encoding", None)
-    if encoding is not None:
-        # PHASE A of the encoding channel (L5): a data prepass over the
-        # already-chosen visible-node universe, before any per-node spec
-        # resolution -- collect values once, validate, compute the domain.
-        from ._encoding import populate_encoding_state
+    from ._encoding import populate_encoding_state
+    from ._render_nodes import BOX_SCOPE_HELPERS, _atomic_module_sibling_counts
 
-        populate_encoding_state(encoding, trace, universe)
+    encoding = getattr(resolved_context, "encoding", None)
+    scope = (resolved_context, repeat_folds, segment_lookup, BOX_SCOPE_HELPERS)
+    populate_encoding_state(encoding, trace, universe, scope)
     if suppressed_args is None and not getattr(resolved_context, "show_redundant_args", False):
         # Checked suppression (L5 M4, DEFAULT-ON): the trace-bearing prepass
         # proves which constructor-arg rows duplicate captured shapes on
@@ -352,8 +347,6 @@ def build_render_ir(
 
         suppressed_args = compute_suppressed_arg_keys(trace, universe)
     suppressed_args = suppressed_args or {}
-    from ._render_nodes import _atomic_module_sibling_counts
-
     sibling_counts = _atomic_module_sibling_counts(trace)
     decision_inputs = _NodeDecisionInputs(
         universe=universe,
@@ -376,6 +369,7 @@ def build_render_ir(
     entries = universe.source_graph.entries_to_plot
     labels = bundle_labels(trace, entries, resolved_context, collapse_fn)
     nodes = relabel_bundle_nodes(nodes, labels)
+    nodes = layout_encoded_sizes(nodes, encoding, resolved_context)
     edges = _build_forward_edges_from_universe(universe)
     regions = _build_regions(trace, nodes, edges)
     _warn_if_render_exceeds_disclosure_ceiling(len(nodes), len(edges))
@@ -556,7 +550,7 @@ def _normalize_backward_nodes(
         for call in grad_fn.calls.values():
             if not _grad_fn_call_matches_backward_filter(call, pass_filter):
                 continue
-            pass_index = getattr(call, "backward_pass_index", None)
+            pass_index = getattr(call, "backward_pass_number", None)
             if pass_index is None:
                 continue
             visible_by_pass[int(pass_index)].append((grad_fn, call))
@@ -846,8 +840,6 @@ def _resolve_node_decision(
     tuple
         Recorded top-level calls, owned node arguments, edge color, and structured label spans.
     """
-    from collections import defaultdict
-
     from ._render_common import _RenderIRDecisionBuilder
     from ._render_edges import _segment_for_node
     from ._render_flow import _collapsed_container_leaf_nodes
@@ -893,6 +885,7 @@ def _resolve_node_decision(
             inputs.repeat_folds,
             context.collapse_fn,
             resolved_specs,
+            encoding=getattr(context, "encoding", None),
         )
         color = "black"
     else:

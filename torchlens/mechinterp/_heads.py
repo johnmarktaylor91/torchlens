@@ -24,6 +24,7 @@ from typing import Any
 
 import torch
 
+from .._semantic.recipes._helpers import relays_wrapped_core
 from .._semantic.tolerances import within_reconstruction_tolerance
 from ._errors import refuse
 from ._records import ComponentRow, ComponentStack, Coordinate, StackGrading
@@ -49,29 +50,30 @@ def _facet_keys_or_none(module: Any) -> set[str] | None:
 
 
 def _attention_modules(trace: Any) -> list[Any]:
-    """Return attention module records (those exposing the head vocabulary)."""
+    """Return attention module records exposing the head vocabulary, one per layer."""
 
     modules = []
     for module in trace.modules:
         keys = _facet_keys_or_none(module)
-        if keys is not None and {"result", "attn_out", "n_q_heads", "d_head"} <= keys:
+        head_keys = keys is not None and {"result", "attn_out", "n_q_heads", "d_head"} <= keys
+        if head_keys and not relays_wrapped_core(module, "result"):
             modules.append(module)
     return modules
 
 
-def _select_layers(modules: list[Any], layers: Any) -> list[Any]:
+def _select_layers(modules: list[Any], selector: Any) -> list[Any]:
     """Filter attention modules by index or address."""
 
-    if layers is None:
+    if selector is None:
         return modules
     selected = []
-    wanted = [layers] if isinstance(layers, (int, str)) else list(layers)
+    wanted = [selector] if isinstance(selector, (int, str)) else list(selector)
     for entry in wanted:
         if isinstance(entry, int):
             if not -len(modules) <= entry < len(modules):
                 refuse(
                     code="mi_head_geometry_unavailable",
-                    message=f"layers= index {entry} outside the {len(modules)} attention "
+                    message=f"modules= index {entry} outside the {len(modules)} attention "
                     "modules found.",
                     remedy=f"pass indices inside [-{len(modules)}, {len(modules)})",
                     n_layers=len(modules),
@@ -82,7 +84,7 @@ def _select_layers(modules: list[Any], layers: Any) -> list[Any]:
             if not match:
                 refuse(
                     code="mi_head_geometry_unavailable",
-                    message=f"layers= address {entry!r} is not an attention module with "
+                    message=f"modules= address {entry!r} is not an attention module with "
                     "head facets.",
                     remedy="pass an attention module address exposing result/attn_out",
                     address=str(entry),
@@ -103,7 +105,7 @@ def _result_tensor(module: Any) -> torch.Tensor:
             f"{getattr(module, 'address', '?')} is not readable "
             f"({type(value).__name__}).",
             remedy="capture with the attention interior saved (retention_plan or "
-            "layers_to_save='all'); fused SDPA needs "
+            "save='all'); fused SDPA needs "
             "capture=CaptureOptions(save_args=True)",
             analysis="attention_head_contributions",
         )
@@ -243,7 +245,7 @@ def _layer_rows(
 
 def attention_head_contributions(
     trace: Any,
-    layers: Any = None,
+    modules: Any = None,
     *,
     onto: torch.Tensor | None = None,
     positions: Any = None,
@@ -254,7 +256,7 @@ def attention_head_contributions(
     ----------
     trace:
         A finished torchlens trace.
-    layers:
+    modules:
         Attention-module selector: ``None`` (all), index/address, or a list.
     onto:
         Optional direction vector(s) ``[d_model]`` or ``[d_model, n]``: rows
@@ -271,10 +273,22 @@ def attention_head_contributions(
         Head rows (+ per-layer verified bias constants) in execution order.
         GQA metadata rides each coordinate's ``expert``-adjacent fields:
         the kv group index is ``head // (n_q_heads // n_kv_heads)``.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> heads = tl.mechinterp.attention_head_contributions(trace)
+    >>> tuple(heads[0].value.shape)
+    (1, 6, 8)
     """
 
-    modules = _attention_modules(trace)
-    if not modules:
+    candidates = _attention_modules(trace)
+    if not candidates:
         refuse(
             code="mi_head_geometry_unavailable",
             message="No module in the trace exposes the attention head vocabulary "
@@ -282,7 +296,7 @@ def attention_head_contributions(
             remedy="capture with the builtin attention recipes (import torchlens._semantic); "
             "attention-free architectures have no head rows",
         )
-    selected = _select_layers(modules, layers)
+    selected = _select_layers(candidates, modules)
 
     direction = None
     if onto is not None:
@@ -306,7 +320,7 @@ def attention_head_contributions(
         refuse(
             code="mi_head_geometry_unavailable",
             message="No attention layer was selected.",
-            remedy="pass layers=None (all) or a non-empty selector",
+            remedy="pass modules=None (all) or a non-empty selector",
         )
     if direction is not None:
         target_total = target_total.to(torch.float32) @ direction.to(torch.float32)

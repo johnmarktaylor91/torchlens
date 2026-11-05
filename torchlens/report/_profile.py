@@ -15,7 +15,6 @@ from collections.abc import Hashable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from .._utils._multipass_access import is_multipass_layer
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
@@ -93,6 +92,15 @@ class ProfileReport:
     -----
     Operation wall-times are collected while TorchLens instrumentation is
     active. Use them to identify relative hotspots, not as clean benchmarks.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> report = tl.report.profile(tl.trace(model, x), level="module")
+    >>> report.level
+    'module'
+    >>> "flops" in report.to_pandas().columns
+    True
     """
 
     frame: pd.DataFrame
@@ -119,7 +127,9 @@ class ProfileReport:
     # one row per op. DOCUMENTED-UNSTABLE spelling.
     group_by: str | None = None
 
-    def to_pandas(self, *, include_totals: bool = False, evidence: bool = False) -> pd.DataFrame:
+    def to_pandas(
+        self, *, include_totals: bool = False, include_evidence: bool = False
+    ) -> pd.DataFrame:
         """Return a copy of the underlying profile dataframe.
 
         The stamped capture-honesty facts and the column-additivity map
@@ -133,7 +143,7 @@ class ProfileReport:
             additive families carry the whole-capture partition totals --
             the sort/top_k view above it never changes these denominators
             (D6).
-        evidence:
+        include_evidence:
             Interleave per-cell evidence columns (``<column>_evidence``)
             into the frame (costreport D9's inline form). The labels are
             the same :meth:`honesty` projection; the ``TOTAL`` row carries
@@ -144,9 +154,8 @@ class ProfileReport:
         pandas.DataFrame
             Resource profile rows.
         """
-
         frame = self.frame.copy()
-        if evidence:
+        if include_evidence:
             honesty_frame = self._honesty_table()
             for column in ("time", "flops", "activation_memory", "param_count"):
                 frame.insert(
@@ -174,7 +183,6 @@ class ProfileReport:
 
     def _totals_row(self) -> dict[str, Any]:
         """The explicit totals row (sumfam item 12): partition denominators."""
-
         row: dict[str, Any] = dict.fromkeys(self.frame.columns)
         row["name"] = "TOTAL"
         row["kind"] = "total"
@@ -359,29 +367,16 @@ def _ops_for_labels(trace: Trace, labels: list[str]) -> list[Any]:
 
     Notes
     -----
-    A bare (non-pass-qualified) layer label resolves to an aggregate ``Layer``,
-    not a single ``Op``. The root ``ModuleCall`` stores such bare labels while
-    submodule calls store pass-qualified op labels. For a multi-pass (recurrent)
-    layer that aggregate cannot answer per-pass reads (``has_saved_activation``,
-    ``func_duration``, ...): ``Layer._single_pass_or_error`` raises the deliberate
-    multi-pass ``ValueError`` tripwire, which every downstream ``getattr(op, ...,
-    default)`` in :func:`_row`/:func:`_sum_optional`/:func:`_values` would leak
-    (``getattr`` shields only ``AttributeError``), crashing ``profile("call")``
-    and ``profile("module")`` on ANY recurrent model. Expanding the aggregate to
-    its concrete per-pass Ops surfaces the true per-pass values and also repairs
-    the silent undercount (N passes would otherwise collapse into one row).
+    The root ``ModuleCall`` stores bare layer labels while submodule calls store
+    pass-qualified op labels. ``trace.ops.resolve_all`` expands a bare multi-pass
+    (recurrent) label to its concrete per-pass Ops, so per-pass reads
+    (``has_saved_activation``, ``func_duration``, ...) see true per-pass values
+    and N passes never collapse into one row.
     """
 
     ops: list[Any] = []
     for label in labels:
-        try:
-            resolved = trace[label]
-        except (KeyError, ValueError):
-            continue
-        if is_multipass_layer(resolved):
-            ops.extend(resolved.ops.values())
-        else:
-            ops.append(resolved)
+        ops.extend(trace.ops.resolve_all(label))
     return ops
 
 
@@ -919,6 +914,15 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     ``flops`` (inclusive subtree, NON-additive there) and ``flops_self``
     (exclusive, additive, sums to the partition total) -- with roles and
     column additivity stamped on every export (D5).
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> report = tl.report.profile(tl.trace(model, x), sort_by="flops", k=2)
+    >>> report.level
+    'op'
+    >>> "name" in report.to_pandas().columns
+    True
     """
 
     _validate_profile_args(level, sort_by, k, group_by)

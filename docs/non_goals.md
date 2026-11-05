@@ -22,7 +22,7 @@ scope (what can go wrong and what you see) are in the
 | Boundary | What it means | What to do |
 | --- | --- | --- |
 | Remote or hosted execution | TorchLens runs in your Python process, where your model runs. It has no remote-execution service, so it cannot capture a model that runs on another machine. | Run TorchLens on the machine that holds the model. To move an experiment, save its recipe with `trace.save_intervention(...)`; the `.tlspec/` directory is the portable unit. |
-| Serving engines (vLLM, SGLang) | Serving engines run fused kernels, paged KV caches and CUDA graphs outside eager PyTorch, so there is nothing for TorchLens to record. `tl.report.doctor` flags them with the `serving_engine` row. | Load the same checkpoint as an eager Hugging Face model and trace that twin ([deployment envelope](reference/deployment_envelope.md#serving-engines-capture-the-hugging-face-twin)). |
+| Serving engines (vLLM, SGLang) | Serving engines run fused kernels, paged KV caches and CUDA graphs outside eager PyTorch, so there is nothing for TorchLens to record. `tl.report.doctor` flags them with the `serving_engine` row. | Load the same checkpoint as an eager Hugging Face model and trace that twin ([deployment envelope](reference/deployment_envelope.md#serving-engines-capture-the-hugging-face-twin)); for capture or steering inside the serving engine itself, use nnsight's vLLM back end, Neuronpedia's interp-engine, vllm-lens or EasySteer ([comparable tools](migration/landscape.md)). |
 | Compiled and exported graphs (`torch.compile`, TorchScript, `torch.export`, ONNX) | TorchLens records eager execution; a compiled artifact no longer runs the Python it came from. | Trace the eager source module. |
 | Several captures at once | Capture uses process-global state, so it is single-threaded by design. | Capture from the main process, one capture at a time. |
 
@@ -41,7 +41,9 @@ short summaries; check each tool's own documentation before relying on them.
   graph is the record of one run, not a pruning plan.
 - EasyEdit and other knowledge-editing toolkits (ROME, MEMIT): TorchLens implements no
   model-editing method. It can apply a weight change "as if" on a fork
-  (`fork.do(tl.param(name), edit)`) and show what the change moved.
+  (`fork.do(tl.param(name), edit)`) and show what the change moved. EasyEdit2, the project's
+  steering framework, is a row in the [landscape](migration/landscape.md): a steering vector
+  built and checked in TorchLens can be applied there.
 - DAAM and diffusers hooks: TorchLens ships no diffusion-specific views, such as per-token
   cross-attention maps, and does not drive a denoising loop.
 - `torch_geometric.explain`: graph-neural-network explainers belong to PyTorch Geometric.

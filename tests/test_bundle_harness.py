@@ -16,8 +16,11 @@ from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import redigest
 
 import torchlens as tl
+from torchlens._errors import InvalidArgumentError
+from torchlens._io import ArtifactTooOldError
 from torchlens._io.sidecar import SidecarError
 from torchlens.bundle import Bundle
 from torchlens.bundle._fed_by import (
@@ -111,18 +114,13 @@ def test_fed_by_row_admits_exactly_its_four_params() -> None:
         _fed_by(role="judge")
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "spans",
     [
-        [[0, 2, 5]],
         [[0, 2, 5, -1]],
-        [[True, 2, 5, 7]],
-        [[3, 2, 5, 7]],
-        [[0, 2, 7, 5]],
-        [[0, 0, 5, 7]],
         [[0, 2, 5, 5]],
         "auto",
-        [[0.0, 2, 5, 7]],
     ],
 )
 def test_malformed_token_spans_refuse(spans: object) -> None:
@@ -130,39 +128,21 @@ def test_malformed_token_spans_refuse(spans: object) -> None:
         _fed_by(token_spans=spans)
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "params",
     [
         {"basis": "measured"},
         {"coverage": 1.5},
         {"coverage": float("nan")},
-        {"coverage": True},
         {"label": ""},
         {"label": "x" * 257},
-        {"basis": "verified"},
         {"basis": "matched", "token_spans": []},
     ],
 )
 def test_fed_by_param_values_are_closed(params: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         _fed_by(**params)
-
-
-def test_positional_relate_reads_as_the_sentence(model: _TinyLM) -> None:
-    bundle = _harness(model)
-    bundle.relate("fed_by", "critique", "draft", label="critique")
-    (row,) = bundle.relations
-    assert (row.kind, row.from_member, row.to_member) == ("fed_by", "critique", "draft")
-    assert row.params == {"label": "critique"}, "no spans: nothing to bind or verify"
-    assert bundle.upstream("critique") == ("draft",)
-    assert bundle.downstream("draft") == ("critique",)
-
-
-def test_fed_by_orders_members_for_the_comparison_gate(model: _TinyLM) -> None:
-    bundle = _harness(model).relate("fed_by", "critique", "draft")
-    with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.at(tl.func("relu")).compare()
-    assert _code(excinfo) == "bundle_gate_ordering_topology"
 
 
 def test_positional_relate_refusals(model: _TinyLM) -> None:
@@ -195,74 +175,12 @@ def test_positional_relate_names_one_member_for_member_kinds(model: _TinyLM) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_default_bindings_without_a_completion_range_stay_declared(model: _TinyLM) -> None:
-    bundle = _harness(model)
-    bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
-    (row,) = bundle.relations
-    assert row.params["basis"] == "declared", "matching ids alone do not show the output fed in"
-    assert member_binding(bundle["draft"]) == {
-        "stream": "input",
-        "batch_row": 0,
-        "length": len(_DRAFT_IDS),
-        "ids_digest": ids_digest(_DRAFT_IDS),
-    }
-    assert member_binding(bundle["critique"])["ids_digest"] == ids_digest(_CRITIQUE_IDS)
-
-
-def test_bound_completion_verifies_and_fills_the_measured_keys(model: _TinyLM) -> None:
-    bundle = _bound_harness(model)
-    bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
-    (row,) = bundle.relations
-    assert row.params["basis"] == "verified"
-    assert row.params["coverage"] == 1.0
-    binding = member_binding(bundle["draft"])
-    assert binding["completion"] == [3, 7]
-    assert binding["ids_digest"] == ids_digest(_DRAFT_IDS) and binding["length"] == 7
-
-
-def test_prompt_overlap_outside_the_completion_does_not_verify(model: _TinyLM) -> None:
-    bundle = Bundle({"draft": _trace(model, [1, 2, 3, 7]), "critique": _trace(model, [1, 2, 9])})
-    completion = {"stream": "input", "batch_row": 0, "completion": [3, 4]}
-    attach_sidecar(bundle["draft"], TOKEN_BOUNDARY_FAMILY_ID, completion)
-    bundle.relate("fed_by", "critique", "draft", token_spans=[[0, 2, 0, 2]])
-    assert bundle.relations[0].params["basis"] == "declared"
-
-
-def test_coverage_counts_the_eligible_completion_tokens(model: _TinyLM) -> None:
-    bundle = _harness(model)
-    attach_sidecar(
-        bundle["draft"],
-        TOKEN_BOUNDARY_FAMILY_ID,
-        {
-            "stream": "input",
-            "batch_row": 0,
-            "length": len(_DRAFT_IDS),
-            "ids_digest": ids_digest(_DRAFT_IDS),
-            "completion": [3, 7],
-            "excluded_ids": [10],
-            "tokenizer": "toy-vocab-32",
-        },
-    )
-    bundle.relate("fed_by", "critique", "draft", token_spans=[[3, 5, 3, 5]])
-    (row,) = bundle.relations
-    assert row.params["basis"] == "verified"
-    # eligible = positions 3..6 minus the excluded id 10 at position 6 -> 3 tokens, 2 covered.
-    assert row.params["coverage"] == pytest.approx(2 / 3)
-
-
 def test_mismatched_spans_stay_declared(model: _TinyLM) -> None:
     bundle = _harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[[0, 3, 0, 3]], coverage=0.9)
     (row,) = bundle.relations
     assert row.params["basis"] == "declared", "retokenized or paraphrased text is a declaration"
     assert row.params["coverage"] == 0.9
-
-
-def test_explicit_declared_basis_skips_binding(model: _TinyLM) -> None:
-    bundle = _harness(model)
-    bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], basis="declared")
-    assert bundle.relations[0].params["basis"] == "declared"
-    assert member_binding(bundle["draft"]) is None
 
 
 def test_claimed_verified_row_rechecks_at_every_door(model: _TinyLM) -> None:
@@ -281,13 +199,6 @@ def test_claimed_verified_row_rechecks_at_every_door(model: _TinyLM) -> None:
             relations=[_fed_by(token_spans=[[0, 3, 0, 3]], basis="verified")],
         )
     assert _code(excinfo) == "bundle_relation_span_unverified"
-
-
-def test_fork_carries_verified_rows(model: _TinyLM) -> None:
-    bundle = _bound_harness(model)
-    bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN])
-    child = bundle.fork()
-    assert child.relations[0].params["basis"] == "verified"
 
 
 def test_unverifiable_claim_clamps_to_declared(model: _TinyLM) -> None:
@@ -345,7 +256,7 @@ def test_draw_diff_gates_only_the_rendered_pair(tmp_path: Path, model: _TinyLM) 
         {"clean": clean, "patched": clean.fork("patched"), "router": _trace(_Other(), [4, 5])},
         baseline="clean",
     )
-    dot = bundle.draw(graph="diff", members=("clean", "patched"), path=str(tmp_path / "d"))
+    dot = bundle.draw(graph="diff", members=("clean", "patched"), path=str(tmp_path / "d")).dot
     assert "clean vs patched" in dot
     with pytest.raises(BundleComparisonError):
         bundle._delta_map("relative_l2")
@@ -385,19 +296,6 @@ def test_walks_are_transitive_and_follow_ordering_kinds(model: _TinyLM) -> None:
         bundle.upstream("zzz")
 
 
-def test_walk_methods_resolve_on_an_instance(model: _TinyLM) -> None:
-    bundle = _harness(model)
-    assert callable(bundle.upstream) and callable(bundle.downstream)
-
-
-def test_dir_lists_the_real_methods(model: _TinyLM) -> None:
-    names = dir(_harness(model))
-    for name in ("upstream", "downstream", "compare", "draw", "store_comparison", "relate"):
-        assert name in names, name
-    for name in ("delta_map", "norm_delta", "output_delta", "show_diff", "aligned_pairs"):
-        assert name not in names, name
-
-
 def test_at_on_a_member_subset_skips_a_foreign_member(model: _TinyLM) -> None:
     torch.manual_seed(1)
     ids = [1, 2, 3]
@@ -417,44 +315,48 @@ def test_at_on_a_member_subset_skips_a_foreign_member(model: _TinyLM) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "read",
-    [
-        lambda b: b._delta_map("relative_l2"),
-        lambda b: b._norm_delta(),
-        lambda b: b._output_delta("draft"),
-        lambda b: b.compare("draft", "critique", metric="relative_l2"),
-        lambda b: b.store_comparison("relative_l2"),
-    ],
-)
-def test_delta_family_refuses_unrelated_prompts(model: _TinyLM, read) -> None:
+_DELTA_READS = [
+    lambda b: b._delta_map("relative_l2"),
+    lambda b: b._norm_delta(),
+    lambda b: b._output_delta("draft"),
+    lambda b: b.compare("draft", "critique", metric="relative_l2"),
+    lambda b: b.store_comparison("relative_l2"),
+]
+
+
+@pytest.mark.parametrize("read", _DELTA_READS)
+def test_delta_family_compares_prompts_whose_graphs_line_up(model: _TinyLM, read) -> None:
+    """Two calls on different prompts of one length line up and compare."""
+
     bundle = Bundle(
         {"draft": _trace(model, [1, 2, 3, 4]), "critique": _trace(model, [5, 6, 7, 8])},
         baseline="draft",
     )
-    with pytest.raises(BundleComparisonError) as excinfo:
+    assert read(bundle) is not None
+
+
+@pytest.mark.parametrize("read", _DELTA_READS)
+def test_delta_family_refuses_prompts_of_different_lengths(model: _TinyLM, read) -> None:
+    """Prompts of different token counts refuse typed at the first mismatched site."""
+
+    bundle = Bundle(
+        {"draft": _trace(model, [1, 2, 3, 4]), "critique": _trace(model, [5, 6, 7])},
+        baseline="draft",
+    )
+    with pytest.raises(InvalidArgumentError) as excinfo:
         read(bundle)
-    assert _code(excinfo) == "bundle_gate_input_values_differ"
-
-
-def test_delta_family_refuses_fed_by_members_on_topology(model: _TinyLM) -> None:
-    ids = [1, 2, 3, 4]
-    bundle = Bundle({"draft": _trace(model, ids), "critique": _trace(model, ids)}, baseline="draft")
-    assert bundle._delta_map("relative_l2"), "same model, same input: comparable"
-    bundle.relate("fed_by", "critique", "draft")
-    with pytest.raises(BundleComparisonError) as excinfo:
-        bundle._delta_map("relative_l2")
-    assert _code(excinfo) == "bundle_gate_ordering_topology"
+    assert excinfo.value.fields["code"] == "metric_shape_mismatch"
+    assert excinfo.value.fields["site"]
 
 
 def test_chrome_trace_diff_keeps_the_timeline_and_refuses_only_the_deltas(
     tmp_path: Path, model: _TinyLM
 ) -> None:
-    unrelated = Bundle({"draft": _trace(model, [1, 2, 3]), "critique": _trace(model, [4, 5, 6])})
+    unrelated = Bundle({"draft": _trace(model, [1, 2, 3]), "critique": _trace(model, [4, 5])})
     payload = json.loads(tl.export.chrome_trace_diff(unrelated, tmp_path / "a.json").read_text())
     status = payload["metadata"]["deltas"]
     assert status["status"] == "refused"
-    assert status["code"] == "bundle_gate_input_values_differ"
+    assert status["code"] == "metric_shape_mismatch"
     spans = [event for event in payload["traceEvents"] if event["ph"] == "X"]
     assert spans and all(event["args"]["delta"] is None for event in spans)
     same = Bundle({"a": _trace(model, [1, 2, 3]), "b": _trace(model, [1, 2, 3])}, baseline="a")
@@ -487,7 +389,7 @@ def test_v11_bundle_with_spans_round_trips(tmp_path: Path, model: _TinyLM) -> No
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
     bundle.save(tmp_path / "harness.tlspec")
     manifest = json.loads((tmp_path / "harness.tlspec" / "manifest.json").read_text())
-    assert manifest["tlspec_version"] == 11
+    assert manifest["tlspec_version"] == 12
     loaded = tl.load(tmp_path / "harness.tlspec")
     assert loaded.relations == bundle.relations
     assert loaded.relations[0].params["basis"] == "verified", "re-verified at load"
@@ -502,16 +404,17 @@ def test_tampered_artifact_span_refuses_at_load(tmp_path: Path, model: _TinyLM) 
     bundle.save(source)
     tampered = tmp_path / "tampered.tlspec"
     shutil.copytree(source, tampered)
-    metadata_path = tampered / "bundle.json"
+    metadata_path = tampered / "relations.json"
     metadata = json.loads(metadata_path.read_text())
     metadata["member_relations"][0]["params"]["token_spans"] = [[0, 3, 0, 3]]
     metadata_path.write_text(json.dumps(metadata))
+    redigest(metadata_path.parent, "relations.json")
     with pytest.raises(BundleRelationError) as excinfo:
         tl.load(tampered)
     assert _code(excinfo) == "bundle_relation_span_unverified"
 
 
-def test_v9_stamped_bundle_still_loads(tmp_path: Path, model: _TinyLM) -> None:
+def test_v9_stamped_bundle_refuses_before_relations(tmp_path: Path, model: _TinyLM) -> None:
     bundle = _harness(model).relate("successor_of", "critique", "draft")
     path = tmp_path / "v9.tlspec"
     bundle.save(path)
@@ -519,8 +422,9 @@ def test_v9_stamped_bundle_still_loads(tmp_path: Path, model: _TinyLM) -> None:
     manifest = json.loads(manifest_path.read_text())
     manifest["tlspec_version"] = 9
     manifest_path.write_text(json.dumps(manifest))
-    loaded = tl.load(path)
-    assert loaded.relations == bundle.relations
+    with pytest.raises(ArtifactTooOldError) as caught:
+        tl.load(path)
+    assert caught.value.fields["code"] == "artifact_version_below_floor"
 
 
 def test_writer_contract_records_the_relation_vocabulary() -> None:

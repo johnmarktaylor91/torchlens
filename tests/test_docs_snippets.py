@@ -8,8 +8,8 @@ Two gates live here:
   (``CLAUDE.md`` only imports AGENTS.md) top to bottom, statement by statement, in one
   shared namespace per page. The 2026-10-01 docs move ("docs: move agent reference
   material out of startup instructions") relocated those two fences out of AGENTS.md
-  into ``docs/agent-reference/common-patterns.md`` and
-  ``docs/agent-reference/architecture.md``, which this gate now reads directly;
+  into ``docs/internal/agent-reference/common-patterns.md`` and
+  ``docs/internal/agent-reference/architecture.md``, which this gate now reads directly;
   AGENTS.md itself carries no fences any more (just "Required reading" pointers).
 
 The canonical-page ambient contract is deliberately tiny: the harness injects
@@ -50,13 +50,18 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         # FW2 closure sweep: the 2026-08-28 pages whose fences are
         # self-contained programs (spelling-only sketches on them are tagged
         # ```text).
-        "migration/coming_from_torchsnooper.md",
-        "migration/from_hooks.md",
         "native-torch.md",
-        "recipes/lrp_epsilon_litmus.md",
+        "field-guide/lrp_epsilon_litmus.md",
         "guides/grouping.md",
+        # tl.preprocessing / tl.postprocessing / tl.facets registration walkthrough.
+        "guides/model_conveniences.md",
+        # The internals guide: one self-contained fence (loop grouping, a replayed edit).
+        "how-it-works.md",
         # Backend protocol: the reference backend's tutorial (graduation G5).
         "backends/torch.md",
+        # Agent-reference pages whose fences are self-contained programs.
+        "internal/agent-reference/current-2-x-surface.md",
+        "internal/agent-reference/feature-inspection.md",
     ),
     "reference_tooling": (
         "reference/debug.md",
@@ -245,10 +250,27 @@ def test_doc_python_blocks_run_reference_views(
 #: docstring); these two pages carry the content "AGENTS.md" used to name here.
 CANONICAL_PAGES = (
     "README.md",
-    "docs/agent-reference/common-patterns.md",
-    "docs/agent-reference/architecture.md",
+    "docs/internal/agent-reference/common-patterns.md",
+    "docs/internal/agent-reference/architecture.md",
 )
 _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
+
+#: README fences are advertisements: one fence may mix setups or lean on names it
+#: never defines. The README's setup lives here, in the test, never in README
+#: markers. ``README_PRELUDE`` supplies the imports the loop fence elides; the
+#: ViT fence reads ``cat.jpg``, which the test writes as a plain synthetic image.
+README_PRELUDE = "import torch\nfrom torch import nn\n"
+#: README statements that need a model the page's shared namespace does not hold
+#: (the ResNet-18 line in the GPT-2 selection fence). Each is compiled, not run,
+#: and names the test that executes the same API spelling for real:
+#: (statement as written, covering test file, spelling the covering test must use).
+README_ILLUSTRATIVE_STATEMENTS: tuple[tuple[str, str, str], ...] = (
+    (
+        'trace["conv1"].projective_field.of(units, within=["layer1", "layer2"])',
+        "tests/test_field_view_of_resnet.py",
+        'trace["conv1"].projective_field.of(',
+    ),
+)
 _OPTIONAL_AMBIENT_NAMES = frozenset({"tf_model", "tf_x"})
 
 
@@ -353,8 +375,33 @@ def _canonical_ambient() -> dict[str, Any]:
     return namespace
 
 
+def _readme_setup(namespace: dict[str, Any], workdir: Path) -> None:
+    """Prepare the README's shared namespace and working directory (see README_PRELUDE)."""
+
+    # The ViT fence's image input needs Pillow, the same condition its preprocessing has.
+    if importlib.util.find_spec("PIL") is None:
+        pytest.skip("README.md imports uninstalled optional dependencies: ['PIL']")
+    from PIL import Image
+
+    Image.new("RGB", (256, 256), (140, 110, 80)).save(workdir / "cat.jpg")
+    exec(compile(README_PRELUDE, "README.md:prelude", "exec"), namespace)
+
+
+def _is_readme_illustrative(page_name: str, node: ast.stmt) -> bool:
+    """Return whether one README statement is in README_ILLUSTRATIVE_STATEMENTS."""
+
+    return page_name == "README.md" and any(
+        ast.unparse(node) == ast.unparse(ast.parse(statement).body[0])
+        for statement, _, _ in README_ILLUSTRATIVE_STATEMENTS
+    )
+
+
 @pytest.mark.heavy
-@pytest.mark.parametrize("page_name", CANONICAL_PAGES)
+@pytest.mark.parametrize(
+    "page_name",
+    # The README runs real pretrained GPT-2 and ViT fences (a 144-run patching sweep included).
+    [pytest.param(p, marks=pytest.mark.slow) if p == "README.md" else p for p in CANONICAL_PAGES],
+)
 def test_canonical_page_python_blocks_execute(
     page_name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -362,10 +409,12 @@ def test_canonical_page_python_blocks_execute(
 
     Fences run cumulatively in one shared namespace, statement by statement.
     The only tolerated non-executions are (a) fences whose first line carries an
-    explicit ``API sketch`` comment marker (compile-gated) and (b) statements
+    explicit ``API sketch`` comment marker (compile-gated), (b) statements
     that read a declared OPTIONAL ambient name (``tf_model``/``tf_x``) on a box
-    without the TensorFlow preview dependency. Any other failure is a
-    documentation bug or a harness gap and fails the gate.
+    without the TensorFlow preview dependency and (c) the README statements in
+    ``README_ILLUSTRATIVE_STATEMENTS`` (compiled; each names the test that runs
+    its spelling). Any other failure is a documentation bug or a harness gap
+    and fails the gate.
 
     Parameters
     ----------
@@ -382,6 +431,8 @@ def test_canonical_page_python_blocks_execute(
     blocks = BLOCK_RE.findall(page.read_text(encoding="utf-8"))
     assert blocks, f"{page_name} has no python fences"
     namespace = _canonical_ambient()
+    if page_name == "README.md":
+        _readme_setup(namespace, tmp_path)
     executed_statements = 0
     for block_index, code in enumerate(blocks, start=1):
         source_name = f"{page_name}:python-block-{block_index}"
@@ -389,6 +440,8 @@ def test_canonical_page_python_blocks_execute(
             compile(code, source_name, "exec")
             continue
         for node in ast.parse(code, filename=source_name).body:
+            if _is_readme_illustrative(page_name, node):
+                continue
             loads = {
                 name.id
                 for name in ast.walk(node)
@@ -410,6 +463,122 @@ def test_canonical_page_python_blocks_execute(
     assert executed_statements > 0, f"{page_name}: nothing executed"
 
 
+def test_readme_illustrative_statements_are_live_and_covered() -> None:
+    """Every README statement the page test skips is still in the README and covered.
+
+    A row whose statement left the README is stale; a row whose covering test
+    no longer exercises the same API spelling would leave that spelling unrun.
+    """
+
+    root = _docs_dir().parent
+    readme_statements = {
+        ast.unparse(node)
+        for code in BLOCK_RE.findall((root / "README.md").read_text(encoding="utf-8"))
+        for node in ast.parse(code).body
+    }
+    for statement, covering_test, spelling in README_ILLUSTRATIVE_STATEMENTS:
+        assert ast.unparse(ast.parse(statement).body[0]) in readme_statements, (
+            f"stale README_ILLUSTRATIVE_STATEMENTS row: {statement!r} is no longer in README.md"
+        )
+        assert spelling in statement, f"{statement!r} does not use its spelling {spelling!r}"
+        covering = root / covering_test
+        assert covering.is_file(), f"{covering_test} no longer exists"
+        assert spelling in covering.read_text(encoding="utf-8"), (
+            f"{covering_test} no longer runs {spelling!r}"
+        )
+
+
+#: Peer libraries the nightly peer leg installs beside TorchLens (the recipe
+#: pages' tools plus the optional-extra fences). A peer that patches torch at
+#: import time AFTER the first capture (nnsight re-wraps ``torch.Tensor.backward``
+#: with ``functools.wraps`` around whatever is installed) once made
+#: ``unwrap_torch`` raise its burial warning under the suite's
+#: warnings-as-errors filter before the decorated flag flipped, so every later
+#: snippet logged only module boundaries: 27 reds that appeared only with the
+#: peers present. ``test_docs_snippets_pass_set_matches_with_peer_imported`` is
+#: the bare-vs-peers parity guard: each installed peer runs the failing shape in
+#: a subprocess under the same filters this suite runs with.
+PEER_MODULES: tuple[str, ...] = (
+    "cornet",
+    "dictionary_learning",
+    "himalaya",
+    "lxt",
+    "matplotlib",
+    "netrep",
+    "nnsight",
+    "open_clip",
+    "quantus",
+    "sae_lens",
+    "sparsify",
+    "timm",
+    "torchcam",
+    "torchvision",
+    "transformers",
+    "tuned_lens",
+    "vit_prisma",
+    "wandb",
+    "weightwatcher",
+    "xarray",
+)
+
+_PEER_PARITY_PROBE = r"""
+import importlib
+import sys
+import warnings
+
+warnings.filterwarnings("error", category=UserWarning, module=r"torchlens(\.|$)")
+warnings.filterwarnings("error", category=DeprecationWarning, module=r"torchlens(\.|$)")
+
+import torch
+from torch import nn
+
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2))
+x = torch.ones(2, 4)
+bare = [op.func_name for op in tl.trace(model, x)]
+assert bare[1:-1] == ["linear", "relu", "linear"], bare
+
+importlib.import_module(sys.argv[1])
+
+# backends/torch.md fence 1: validate unwraps to pristine torch and re-wraps.
+assert tl.validate(model, x, scope="forward", validate_metadata=False) is True
+after = [op.func_name for op in tl.trace(model, x)]
+assert after == bare, (bare, after)
+assert tl.validate(model, x, scope="forward", validate_metadata=False) is True
+# The peer's own patch (if any) still runs outside a capture.
+model(x).sum().backward()
+print("PARITY_OK")
+"""
+
+
+@pytest.mark.heavy
+@pytest.mark.parametrize("peer", PEER_MODULES)
+def test_docs_snippets_pass_set_matches_with_peer_imported(peer: str) -> None:
+    """The snippet suite's pass set is the same with ``peer`` imported mid-process.
+
+    Runs in a subprocess so the peer's import-time torch patches land on a
+    process that has already captured once, the order the combined nightly
+    session produces, under this suite's warnings-as-errors filters.
+    """
+
+    import subprocess
+    import sys
+
+    if importlib.util.find_spec(peer) is None:
+        pytest.skip(f"peer library {peer} is not installed")
+    completed = subprocess.run(
+        [sys.executable, "-c", _PEER_PARITY_PROBE, peer],
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    assert completed.returncode == 0 and "PARITY_OK" in completed.stdout, (
+        f"{peer}: rc={completed.returncode}\n{completed.stdout[-2000:]}\n{completed.stderr[-4000:]}"
+    )
+
+
 def test_collapse_reference_gallery_exists_and_is_regenerable() -> None:
     """Keep visual-reference links and the render-script manifest aligned."""
 
@@ -427,6 +596,11 @@ _MIGRATION_PAGES_EXECUTED = (
     "executed fence by fence by tests/test_migration_pages_executed.py (the TorchLens "
     "fences always; a third-party fence where that package is installed)"
 )
+#: Reason shared by the coming-from pages run by tests/test_migrations.py.
+_MIGRATIONS_TEST_EXECUTED = (
+    "executed fence by fence by tests/test_migrations.py (the TorchLens fences always; a "
+    "third-party fence where that package is installed)"
+)
 #: Reason shared by the teaching pages whose every fence is headed and run.
 _TEACHING_PAGES_EXECUTED = (
     "executed fence by fence by tests/test_teaching_pages_executed.py, each against its "
@@ -438,6 +612,12 @@ _RECIPE_PAGES_EXECUTED = (
     "executed fence by fence by tests/test_recipe_pages_executed.py (a TorchLens-only "
     "page always; a third-party page where that package is installed, and always in "
     "the peer-recipe leg)"
+)
+
+#: Reason shared by the launch docs pages (Field guide, strip, comparison).
+_LAUNCH_PAGES_EXECUTED = (
+    "executed by tests/test_launch_docs_pages.py (a Field guide page as one session in "
+    "order; each strip fence alone, skipped where its declared package is absent)"
 )
 
 #: r7 R81 (opus b2 MED): pages with python fences OUTSIDE the executed set,
@@ -452,11 +632,11 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     # instructions"): these two pages carry the fences the canonical AGENTS.md gate
     # used to execute directly; CANONICAL_PAGES now reads them by this path, so they
     # are covered there, not by the per-block DOC_FILES mechanism.
-    "agent-reference/common-patterns.md": (
+    "internal/agent-reference/common-patterns.md": (
         "executed end-to-end by test_canonical_page_python_blocks_execute "
         "(moved from AGENTS.md's Common Patterns section)"
     ),
-    "agent-reference/architecture.md": (
+    "internal/agent-reference/architecture.md": (
         "executed end-to-end by test_canonical_page_python_blocks_execute "
         "(moved from AGENTS.md's Architecture section's "
         "'Common unified capture patterns' fence)"
@@ -466,11 +646,11 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     # docs/, where this lint sees it for the first time. The fences are illustrative
     # sketches over backends/inputs the canonical ambient does not provide
     # (paddle_model/paddle_x, raw_text/text_to_tensor, block1/block2 submodules).
-    "agent-reference/package/public-surface.md": (
+    "internal/agent-reference/package/public-surface.md": (
         "illustrative surface-listing fragments (paddle/raw_text/block1-block2 "
         "ambient names undefined), not runnable programs"
     ),
-    "agent-reference/package/architecture-overview.md": (
+    "internal/agent-reference/package/architecture-overview.md": (
         "illustrative surface-listing fragments (paddle/raw_text/block1-block2 "
         "ambient names undefined), not runnable programs"
     ),
@@ -484,6 +664,12 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "order; each later fence reads the first fence's trace and helpers)"
     ),
     "backends.md": "preview-backend snippets need tf/jax/mlx/tinygrad/paddle runtimes",
+    "bridges.md": (
+        "bridge fences share the first fence's resnet18 trace and need optional "
+        "third-party runtimes (captum, grad-cam, rsatoolbox, brain-score) plus a "
+        "network call (from_hub); claims covered by tests/test_bridge_real_captum.py, "
+        "tests/test_b2_bridge_captum.py and tests/test_b2_bridge_hub.py"
+    ),
     "backends/tf.md": (
         "tutorial fence executed by tests/backends/test_tf_docs_page.py under the "
         "tf_backend marker (needs the tensorflow runtime)"
@@ -512,19 +698,20 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "facets.md": "pending execution coverage (semantic recipes; heavier model deps)",
     "intervention_api.md": "pending execution coverage",
     "method_x_model_compatibility.md": "compatibility matrix stubs, not runnable programs",
-    "migration/from_captum.md": "needs captum installed (weekly bridge leg env only)",
-    "migration/from_fx.md": "pending execution coverage",
-    "migration/from_nnsight.md": (
-        "executed by tests/test_migrations.py (the TorchLens side always; the nnsight "
-        "side where nnsight is installed)"
-    ),
-    "migration/from_thingsvision.md": "needs thingsvision (not a declared extra)",
+    "migration/from_captum.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_fx.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_hooks.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_torchinfo.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/coming_from_torchsnooper.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/cross_engine.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_nnsight.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_thingsvision.md": _MIGRATIONS_TEST_EXECUTED,
     "reference/neuro.md": (
         "needs rsatoolbox (the neuro extra); every snippet's behavior is "
         "executed by tests/test_neuro_pkg_* at BOTH rsatoolbox versions"
     ),
-    "migration/from_torchextractor.md": "needs torchextractor (bridge shim demo)",
-    "migration/from_transformerlens.md": "needs transformer_lens (heavyweight)",
+    "migration/from_torchextractor.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/from_transformerlens.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/v2.0_api_changes.md": "contains deliberate 'Before:' v1 blocks that must NOT run",
     "migration/from_bertviz_ecco.md": _MIGRATION_PAGES_EXECUTED,
     "migration/from_hf_kwargs.md": _MIGRATION_PAGES_EXECUTED,
@@ -538,27 +725,47 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/from_transformers_interpret.md": _MIGRATION_PAGES_EXECUTED,
     "migration/multi_gpu_extraction.md": _MIGRATION_PAGES_EXECUTED,
     "migration/penzai.md": _MIGRATION_PAGES_EXECUTED,
-    "recipes/acdc_ioi.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/tcav.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/conditional_steering.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/torchcam.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/quantus.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/sae_trainers.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/prisma_clip_sae.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/sae_crosscoder_diff.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/sae_latent_export.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/pretrained_saes.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/feature_visualisation.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/dissection.md": _RECIPE_PAGES_EXECUTED,
+    "migration/saelens.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/lovely_stats_line.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/inseq.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/repe.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/autocircuit.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/baukit.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_flax_tabulate.md": _MIGRATION_PAGES_EXECUTED,
+    "field-guide/acdc_ioi.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/tcav.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/linear_probes.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/craft_concepts.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/das_gpt2.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/entropy_steering.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/generation_attention.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/tensor_images.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/jacobian_lens.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/conditional_steering.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/torchcam.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/quantus.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/sae_trainers.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/prisma_clip_sae.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/sae_crosscoder_diff.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/sae_latent_export.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/pretrained_saes.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/feature_visualisation.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/dissection.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
+    "neuroai/task_rnn_circuits.md": _RECIPE_PAGES_EXECUTED,
+    "neuroai/protein_language_model.md": _RECIPE_PAGES_EXECUTED,
+    "gallery/causal_tracing.md": _RECIPE_PAGES_EXECUTED,
+    "gallery/cnn_fields.md": _RECIPE_PAGES_EXECUTED,
+    "gallery/neuro_rdms.md": _RECIPE_PAGES_EXECUTED,
+    "gallery/ioi_circuit.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (
         "the file-round-trip blocks assume a completed real-checkpoint extraction and a "
         "user-owned learned transform; the offline mechanics (extract -> manifest -> "
@@ -676,11 +883,20 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "guides/kv_cache.md": _TEACHING_PAGES_EXECUTED,
     "sae_training_handoff.md": _TEACHING_PAGES_EXECUTED,
     "gradient_contract.md": _TEACHING_PAGES_EXECUTED,
-    "migration/from_pyvene.md": (
-        "executed by tests/test_migrations.py (the TorchLens side always; the pyvene "
-        "comparison fence is collected and skipped)"
+    "migration/from_pyvene.md": _MIGRATIONS_TEST_EXECUTED,
+    "field-guide/running_examples.md": _LAUNCH_PAGES_EXECUTED,
+    "field-guide/see_and_inspect.md": _LAUNCH_PAGES_EXECUTED,
+    "field-guide/extract_features.md": _LAUNCH_PAGES_EXECUTED,
+    "field-guide/intervene.md": _LAUNCH_PAGES_EXECUTED,
+    "gallery/any_architecture.md": _LAUNCH_PAGES_EXECUTED,
+    "migration/comparison.md": _LAUNCH_PAGES_EXECUTED,
+    # Conditional attribution reads the model's source file (tokenize.open), and
+    # this suite execs fences from memory, so an executed copy records no conditional.
+    "conditional_attribution.md": (
+        "the conditional indexer needs the model's source on disk; the same "
+        "early-return shape and its fired_arm_kind and outcome asserts are "
+        "pinned in tests/test_conditional_fallthrough_outcome.py"
     ),
-    "migration/pyvene.md": _MIGRATION_PAGES_EXECUTED,
 }
 
 

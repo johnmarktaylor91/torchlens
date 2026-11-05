@@ -43,6 +43,8 @@
   `_CounterfactualStateGuard` (in `_state_guard.py`, with `_teardown`)
   snapshots/restores RNG and stateful tensors so clean/corrupted runs stay
   comparable.
+- Model-input facet patching (input-homed facets, which live hooks never
+  reach) lives in `_input_patching.py`.
 
 ## reconstruction.py
 - Fused-SDPA facet reconstruction: `SDPAReconstruction`,

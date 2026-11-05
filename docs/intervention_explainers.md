@@ -39,7 +39,7 @@ live = tl.trace(model, x, save=head, intervene=spec)
 live_out = live.find_sites(head).first().out
 
 # do() with no model: edit a saved value and push it down the recorded graph.
-saved = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+saved = tl.trace(model, x)
 pushed = saved.fork("pushed")
 pushed.do(site, tl.zero_ablate())
 pushed_out = pushed.find_sites(head).first().out
@@ -62,27 +62,32 @@ RESULT = [
 ]
 ```
 
-They stop agreeing when the edit changes what the forward does. A push recomputes the downstream
+They stop agreeing when the edit changes what the forward does. A replay recomputes the downstream
 ops exactly as they were recorded, so a branch the edit would have flipped, a dropout mask, or a
 module that reads its own state takes the recorded path, not the new one. Use the re-executing
 form whenever that can happen.
 
-## Push vs run
+## Replay vs run
 
-`trace.push()` walks the saved TorchLens graph and recomputes the affected downstream cone without
-calling `model.forward` again. It is fast and right for graph-stable interventions, where the saved
-op metadata is enough to recompute the children.
+`trace.do(site, edit)` stages the edit and, on the replay engine (no `model=`/`inputs=`), walks the
+saved TorchLens graph and recomputes the affected downstream cone without calling `model.forward`
+again. It is fast and right for graph-stable interventions, where the saved op metadata is enough to
+recompute the children. A mapping, `trace.do({site_a: edit_a, site_b: edit_b})`, applies several
+edits in one propagation; `intervention=tl.options.InterventionOptions(engine="set_only")` stages
+an edit without propagating it, and `trace.clear_edits(site)` detaches a sticky edit.
 
 `trace.run(model, x)` re-executes the model under the trace's active intervention spec. Use it when
 the intervention may affect Python control flow, module behavior, randomness, or anything else the
 saved graph cannot reconstruct. A module-targeted spec reruns through a guarded fast engine and
 falls back to the capture engine when a guard refuses; `trace.last_run` says which engine ran.
 
-The older `replay()` and `rerun()` spellings are removed; `push()` and `run()` replace them.
+The older `replay()` and `rerun()` spellings are removed; `do()` and `run()` replace them, and `do`
+is also the one verb that stages and propagates an edit (docs/reference/deprecations.md maps the
+removed spellings).
 
 ## Mutate In Place and Fork First
 
-`set`, `attach_hooks`, and `do` mutate the `Trace` they are called on. A root trace warns once
+`do` (including `do` with the `set_only` engine) mutates the `Trace` it is called on. A root trace warns once
 before this kind of mutation. For branched experiments, fork first:
 
 ```python
@@ -94,12 +99,11 @@ import torchlens as tl
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 x = torch.randn(2, 4)
-clean = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+clean = tl.trace(model, x)
 before = clean.find_sites(tl.module("2")).first().out.clone()
 
 candidate = clean.fork("candidate")
-candidate.attach_hooks(tl.func("relu"), tl.zero_ablate())
-candidate.push()
+candidate.do(tl.func("relu"), tl.zero_ablate())
 
 # The fork changed; the trace it came from did not.
 RESULT = torch.equal(clean.find_sites(tl.module("2")).first().out, before)
@@ -112,8 +116,8 @@ captured evidence where safe.
 
 Writing directly to a saved value, for example `trace[label].out = value`, bypasses the
 intervention recipe. TorchLens marks the owning trace `DIRECT_WRITE_DIRTY` and warns once. A later
-push overlays recipe state; it does not treat the direct write as a portable, auditable
-intervention. Use `set`, `attach_hooks` or `do` when the edit should be part of the recipe.
+replay overlays recipe state; it does not treat the direct write as a portable, auditable
+intervention. Use `do` when the edit should be part of the recipe.
 
 ## Subspace edits: the component along a basis
 
@@ -162,9 +166,8 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
-options = tl.options.CaptureOptions(replayable=True)
-base = tl.trace(model, torch.randn(3, 4), capture=options)
-source = tl.trace(model, torch.randn(3, 4), capture=options)
+base = tl.trace(model, torch.randn(3, 4))
+source = tl.trace(model, torch.randn(3, 4))
 site = "linear_1_1"
 basis = torch.tensor([[1.0, 1.0, 0.0, 0.0]]) / 2**0.5  # one unit direction
 
@@ -198,10 +201,12 @@ direction = torch.tensor([1.0, 1.0, 0.0, 0.0])
 unit = direction / direction.norm()
 site = tl.module("0")
 
-clean = tl.trace(model, x, save=site).find_sites(site).first().out
-off = tl.trace(
+clean_trace = tl.trace(model, x, save=site)
+clean = clean_trace.find_sites(site).first().out
+off_trace = tl.trace(
     model, x, save=site, intervene=tl.when(site, tl.project_out(direction, dim=-1))
-).find_sites(site).first().out
+)
+off = off_trace.find_sites(site).first().out
 
 # project_out leaves no component along the direction and keeps the rest.
 RESULT = [
@@ -213,7 +218,8 @@ RESULT = [
 ### A rotation learned elsewhere
 
 TorchLens applies a rotation you trained elsewhere (distributed alignment search, ReFT); it does
-not fit one. The first `k` rows of the learned rotation `R` are the basis, so
+not fit one. [Fit a causal basis on GPT-2 small](field-guide/das_gpt2.md) fits one with a plain
+PyTorch loop over captured activations and applies it with the builtin edit. The first `k` rows of the learned rotation `R` are the basis, so
 `do(tl.subspace(site, R[:k], origin=...), edit)` edits the learned subspace. With a builtin verb
 the staged edit is the builtin `subspace_edit`, which stores the verb, the float64 orthonormal rows
 it applies, the bound axis, the rows' sha256 and the basis provenance (`origin`, `method`, the
@@ -236,13 +242,13 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
-options = tl.options.CaptureOptions(replayable=True)
 x, x_source = torch.randn(3, 4), torch.randn(3, 4)
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 4))[0].T  # stands in for a learned rotation
-source_value = tl.trace(model, x_source, capture=options)[site].out
+source_trace = tl.trace(model, x_source)
+source_value = source_trace[site].out
 
-fork = tl.trace(model, x, capture=options).fork()
+fork = tl.trace(model, x).fork()
 fork.do(
     tl.subspace(site, rotation[:2], origin="DAS rotation trained elsewhere", method="das"),
     tl.replace_with(source_value),
@@ -251,10 +257,8 @@ path = Path(tempfile.mkdtemp()) / "rotation.tlspec"
 tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
-fresh = tl.trace(model, x, capture=options).fork()
-for hook_spec in spec.hook_specs:
-    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-reloaded = fresh.push()
+fresh = tl.trace(model, x).fork()
+reloaded = fresh.do(spec, intervention=tl.options.InterventionOptions())
 helper = spec.hook_specs[0].helper
 
 RESULT = [
@@ -283,13 +287,12 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
-options = tl.options.CaptureOptions(replayable=True)
 x = torch.randn(3, 4, dtype=torch.float64)
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 2, dtype=torch.float64))[0]  # R, [d, k]
 weight, bias = torch.randn(2, 4, dtype=torch.float64), torch.randn(2, dtype=torch.float64)
 
-base = tl.trace(model, x, capture=options)
+base = tl.trace(model, x)
 fork = base.fork()
 fork.do(
     tl.subspace(site, rotation.T, origin="LoReFT trained elsewhere", method="loreft"),
@@ -299,7 +302,7 @@ h = base[site].out
 loreft = h + (h @ weight.T + bias - h @ rotation) @ rotation.T
 
 RESULT = [
-    torch.allclose(fork.push()[site].out, loreft, rtol=0.0, atol=1e-12),  # LoReFT, by hand
+    torch.allclose(fork[site].out, loreft, rtol=0.0, atol=1e-12),  # LoReFT, by hand
     fork.intervention_audit[-1]["edit"] == "set_affine_coordinates",
 ]
 ```
@@ -309,7 +312,10 @@ subspace with `within=tl.units(site, mask)`, `mask` True on every feature of tha
 subspace edit with a builtin verb stores its mask and the mask's sha256, so a one-position edit
 still saves at `level="portable"` and reloads as the same edit; a stored mask that is malformed
 refuses `subspace_spec_invalid` at load and one changed after saving refuses
-`subspace_spec_mask_tampered`. Other masked edits keep their own portability.
+`subspace_spec_mask_tampered`. A plain builtin verb under an element mask (`fork.do(tl.units(site,
+mask), tl.zero_ablate())`, the heads `head_ablation_candidates` returns) stores its mask and the
+mask's sha256 the same way and saves at `level="portable"`; an edit that needs user code still
+refuses `intervention_spec_not_portable`.
 `tl.bridge.pyreft.read(directory)` reads a saved pyreft artifact into these two pieces
 (`artifact.subspace(site, positions=...)` and `artifact.edit`); see
 [from pyvene](migration/from_pyvene.md#reading-a-pyreft-loreft-artifact).
@@ -325,7 +331,6 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
-options = tl.options.CaptureOptions(replayable=True)
 tokens = torch.randn(1, 5, 4, dtype=torch.float64)  # [batch, positions, features]
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 2, dtype=torch.float64))[0]
@@ -333,23 +338,22 @@ weight, bias = torch.randn(2, 4, dtype=torch.float64), torch.randn(2, dtype=torc
 last = torch.zeros(1, 5, 4, dtype=torch.bool)
 last[:, -1, :] = True  # every feature of the last position
 
-base = tl.trace(model, tokens, capture=options)
+base = tl.trace(model, tokens)
 fork = base.fork()
 fork.do(
     tl.subspace(tl.units(site, last), rotation.T, origin="LoReFT trained elsewhere"),
     tl.intervention.set_affine_coordinates(weight, bias=bias),
 )
-edited = fork.push()
+edited = fork  # do() already replayed the edit downstream
 path = Path(tempfile.mkdtemp()) / "loreft.tlspec"
 tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
-fresh = tl.trace(model, tokens, capture=options).fork()
-for hook_spec in spec.hook_specs:
-    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
+fresh = tl.trace(model, tokens).fork()
+fresh.do(spec, intervention=tl.options.InterventionOptions())
 
 RESULT = [
-    torch.equal(fresh.push()[site].out, edited[site].out),  # the same edit, bit for bit
+    torch.equal(fresh[site].out, edited[site].out),  # the same edit, bit for bit
     torch.equal(edited[site].out[:, :-1], base[site].out[:, :-1]),  # other positions untouched
     spec.hook_specs[0].helper.portability == "builtin",
 ]
@@ -378,11 +382,11 @@ Portable saves reject opaque local callables. Use built-in helpers such as `zero
 
 A `.tlspec/` directory contains:
 
-- `spec.json`: serialized selector, hook, helper, function-registry, append, and target-manifest
-  metadata.
-- `manifest.json`: tensor sidecar manifest with hashes and storage metadata.
-- `tensors/`: tensor payloads stored separately from JSON.
-- `README.md`: a generated human-readable summary.
+- `manifest.json`: the artifact manifest, `kind: "intervention"`.
+- `intervention.json`: the recipe: each rule's selector and built-in `Edit` identity as typed
+  JSON; a user callable is a placeholder, never pickled.
+- `blobs/recipe-<nnnn>.safetensors`: the recipe's tensors, one entry per tensor object however
+  many places the recipe references it (a sticky hook's edit and its fire records share one).
 
 Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture with
 `torchlens.intervention.check_spec_compat(spec, new_trace)`.

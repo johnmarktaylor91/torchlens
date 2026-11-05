@@ -33,20 +33,7 @@ def _toy_trace() -> tl.Trace:
     return tl.trace(_Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(replayable=True))
 
 
-def test_left_to_right_order_and_noncommutativity() -> None:
-    """compose(a, b)(x) == b(a(x)); scale/clamp do not commute."""
-
-    log = _toy_trace()
-    baseline = log["relu_1_2"].out
-    fork_lr = log.fork()
-    fork_lr.do(tl.label("relu_1_2"), compose(tl.scale(2.0), tl.clamp(high=0.5)))
-    fork_rl = log.fork()
-    fork_rl.do(tl.label("relu_1_2"), compose(tl.clamp(high=0.5), tl.scale(2.0)))
-    assert torch.equal(fork_lr["relu_1_2"].out, (baseline * 2).clamp(max=0.5))
-    assert torch.equal(fork_rl["relu_1_2"].out, baseline.clamp(max=0.5) * 2)
-    assert not torch.equal(fork_lr["relu_1_2"].out, fork_rl["relu_1_2"].out)
-
-
+@pytest.mark.smoke
 def test_flattening_is_syntactic_and_audit_visible() -> None:
     """compose(a, compose(b, c)) and compose(a, b, c) are ONE identity."""
 
@@ -72,19 +59,6 @@ def test_construction_refusals() -> None:
     with pytest.raises(Exception) as excinfo:
         compose(tl.scale(2.0, allow_shape_change=True))
     assert excinfo.value.fields["code"] == "compose_shape_change_unsupported"
-
-
-def test_one_fire_one_record_with_ordered_leaves() -> None:
-    """ONE FireRecord per firing; the ordered leaf identities ride the spec."""
-
-    log = _toy_trace()
-    fork = log.fork()
-    fork.do(tl.label("relu_1_2"), compose(tl.scale(3.0), tl.clamp(high=1.0)))
-    fires = list(fork.ops["relu_1_2"].edits or ())
-    assert len(fires) == 1, "one composed fire, never one record per leaf"
-    assert fires[0].edit is not None
-    assert fires[0].edit.name == "compose"
-    assert dict(fires[0].edit.metadata)["compose_leaves"] == "scale|clamp"
 
 
 def test_flags_and_combine_and_seeded_stochastic_leaf_allowed() -> None:

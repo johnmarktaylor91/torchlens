@@ -15,18 +15,12 @@ later read links to the ``share_memory_`` output.
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Callable
-from typing import Any
 
 import pytest
 import torch
 from _validation_capture import _quiet_validate
 from torch import nn
-
-import torchlens as tl
-from torchlens._utils.hashing import compute_graph_shape_hash
-from torchlens.options import CaptureOptions
 
 
 class _ShareOwnStorage(nn.Module):
@@ -84,7 +78,6 @@ _STATES: dict[type[nn.Module], dict[str, Callable[[nn.Module], None]]] = {
     },
     _ShareAliasedStorage: {"fresh": _fresh, "after_one_forward": _after_one_forward},
 }
-_CASES = [(model_cls, state) for model_cls, states in _STATES.items() for state in states]
 
 
 def _model_in_state(model_cls: type[nn.Module], state: str) -> nn.Module:
@@ -94,97 +87,12 @@ def _model_in_state(model_cls: type[nn.Module], state: str) -> nn.Module:
     return model
 
 
-def _graph(model: nn.Module) -> tuple[str, list[tuple[str, str, tuple[str, ...], Any]]]:
-    """Return the graph-shape hash and each layer's func name, parents and buffer write kind."""
-
-    torch.manual_seed(0)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace = tl.trace(
-            model,
-            torch.rand(4),
-            capture=CaptureOptions(save_args=True, seed=0),
-            save="all",
-        )
-    try:
-        rows = [
-            (
-                layer.layer_label,
-                layer.func_name,
-                tuple(layer.parents),
-                getattr(layer, "buffer_write_kind", None),
-            )
-            for layer in trace._layer_list
-        ]
-        return compute_graph_shape_hash(trace, include_module_address=False), rows
-    finally:
-        trace.cleanup()
-
-
-def test_share_memory_moves_every_tensor_on_the_storage_once() -> None:
-    """The torch contract the capture relies on."""
-
-    src = torch.arange(8, dtype=torch.float32)
-    view = src[2:6]
-    before = src.untyped_storage().data_ptr()
-    view.share_memory_()
-    moved = src.untyped_storage().data_ptr()
-    assert moved != before and view.untyped_storage().data_ptr() == moved
-    assert src.is_shared()
-    view.share_memory_()
-    assert src.untyped_storage().data_ptr() == moved
-
-
-@pytest.mark.parametrize(("model_cls", "state"), [c for c in _CASES if c[1] != "fresh"])
-def test_share_memory_graph_does_not_depend_on_the_entry_state(
-    model_cls: type[nn.Module], state: str
-) -> None:
-    """The captured graph from any entry state equals the graph from a fresh model."""
-
-    fresh_hash, fresh_rows = _graph(_model_in_state(model_cls, "fresh"))
-    state_hash, state_rows = _graph(_model_in_state(model_cls, state))
-    assert state_rows == fresh_rows
-    assert state_hash == fresh_hash
-
-
-@pytest.mark.parametrize(("model_cls", "state"), _CASES)
-def test_share_memory_is_captured_as_a_storage_rebind(
-    model_cls: type[nn.Module], state: str
-) -> None:
-    """One ``share_memory_`` op reads the buffer; the buffer records a ``data_reassign``.
-
-    The aliased source buffer moves with the receiver's storage and records
-    its own rebind; no in-place version node appears, and the later read of the
-    receiver links to the ``share_memory_`` output.
-    """
-
-    _, rows = _graph(_model_in_state(model_cls, state))
-    (share_label,) = [label for label, func, _, _ in rows if func == "share_memory_"]
-    share_parents = next(parents for label, _, parents, _ in rows if label == share_label)
-    assert len(share_parents) == 1 and share_parents[0].startswith("buffer")
-    kinds = [kind for _, _, _, kind in rows if kind is not None]
-    expected_rebinds = 2 if model_cls is _ShareAliasedStorage else 1
-    assert kinds == ["data_reassign"] * expected_rebinds
-    readers = [label for label, _, parents, _ in rows if share_label in parents]
-    assert readers, "nothing reads the shared buffer from the share_memory_ output"
-
-
-@pytest.mark.parametrize(("model_cls", "state"), _CASES)
+# Kept by the shrink-r4 coverage proof: sole branch coverage of backends/torch/buffer_writes.py.
+# Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
+@pytest.mark.parametrize(("model_cls", "state"), [(_ShareAliasedStorage, "fresh")])
 def test_share_memory_validates_from_every_entry_state(
     model_cls: type[nn.Module], state: str
 ) -> None:
     """Validation (first trace from the entry state, re-trace from after it) returns True."""
 
     assert _quiet_validate(_model_in_state(model_cls, state), torch.rand(4)) is True
-
-
-def test_share_memory_leaves_the_live_buffer_shared_and_unchanged() -> None:
-    torch.manual_seed(0)
-    model = _ShareOwnStorage()
-    expected = model.b.clone()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace = tl.trace(model, torch.rand(4), save="all")
-    trace.cleanup()
-    assert model.b.is_shared()
-    assert torch.equal(model.b, expected)

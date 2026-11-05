@@ -44,7 +44,8 @@ from .._selection.module_alias_guard import (
     refuse_module_alias_spellings,
 )
 from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
-from ._binding_calls import _alias_disclosure, _has_tensor, _is_in_place_call
+from ._binding_calls import _alias_disclosure, _bound_leaves, _has_tensor, _is_in_place_call
+from ._display import bound_model_card, bound_model_repr
 from ._helper_fingerprint import helper_versions
 from ._zero_fire import (
     DEFAULT_ZERO_FIRE_POLICY,
@@ -102,6 +103,14 @@ class BindReport:
     ``trace=None`` -- spec and model stamps, resolved static targets, per-rule
     fire counts, zero-fire rules, errors, and the cleanup verdict. No per-op
     claims are made: nothing was captured.
+
+    Examples
+    --------
+    >>> bound = tl.when(tl.func("relu"), tl.zero_ablate()).bind(model)
+    >>> _ = bound(x)
+    >>> report = bound.last_report
+    >>> isinstance(report, BindReport), report.status, report.num_fires
+    (True, 'fired', 1)
     """
 
     schema: str = "bind_report_v1"
@@ -246,7 +255,7 @@ _GRAPH_TERM_KINDS: tuple[tuple[str, str], ...] = (
 
 _LABEL_OP_TYPE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*?)(?:_\d+){1,2}(?:_raw)?(?::\d+)?$")
 
-_POINTER = "see 'Labels inside a binding' in docs/agent-reference/known-gotchas.md"
+_POINTER = "see 'Labels inside a binding' in docs/internal/agent-reference/known-gotchas.md"
 
 
 def _label_term_unmatchable(kind: str, value: str) -> bool:
@@ -899,7 +908,7 @@ def _make_boundary_hook(
         if not _decode_step_admits(plan) or _output_has_no_tensor(session, address, output):
             return None
         replacements: dict[tuple[Any, ...], Any] = {}
-        for out, container_path, _spec in _iter_loggable_live_outputs(output, True):
+        for out, container_path in _bound_leaves(output, _iter_loggable_live_outputs(output, True)):
             hook_ctx = make_hook_context(
                 name=plan.display_name,
                 timing="post",
@@ -1209,6 +1218,14 @@ class BoundModel:
     serialization. A bound executor reads the helper's tensor at each call;
     in-place changes apply to the next call (``.last_report`` records each
     helper tensor's version counter).
+
+    Examples
+    --------
+    >>> spec = tl.when(tl.func("relu"), tl.zero_ablate())
+    >>> bound = spec.bind(model)
+    >>> out = bound(x)
+    >>> isinstance(bound, BoundModel), bound.recipe == spec, tuple(out.shape)
+    (True, True, (1, 2, 8, 8))
     """
 
     def __init__(self, spec: Recipe, model: Any, *, on_zero_fire: str) -> None:
@@ -1261,16 +1278,8 @@ class BoundModel:
             )
         object.__setattr__(self, name, value)
 
-    def __repr__(self) -> str:
-        """Disclosure-first repr (read-only surface, lane, last status)."""
-
-        status = self._last_report.status if self._last_report is not None else "never called"
-        return (
-            f"<bound intervention executor: {len(self._spec.rules)} rule(s) "
-            f"{self._spec.digest} over {type(self._base_model).__name__}; "
-            f"capture-free live lane (values replaced after execution); "
-            f".recipe/.model read-only; last call: {status}>"
-        )
+    __repr__ = bound_model_repr
+    __str__ = bound_model_card
 
     # ------------------------------------------------------------------
     # refusal surfaces (items 7 and 9)

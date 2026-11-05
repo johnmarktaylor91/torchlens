@@ -57,7 +57,15 @@ remain ordinary bundles gated by the ordinary version rules.
 
 
 class MergeAlignment(str, Enum):
-    """STRUCTURAL merge verdict; value divergence never changes it (contract 3.3)."""
+    """STRUCTURAL merge verdict; value divergence never changes it (contract 3.3).
+
+    Examples
+    --------
+    >>> [member.value for member in MergeAlignment]
+    ['aligned', 'partial', 'conflicted']
+    >>> MergeAlignment("partial") is MergeAlignment.PARTIAL
+    True
+    """
 
     ALIGNED = "aligned"
     PARTIAL = "partial"
@@ -80,7 +88,15 @@ class BoundaryConsistency(str, Enum):
 
 
 class MergeValueStatus(str, Enum):
-    """Merge-level value verdict derived from the join ledger (contract 3.5)."""
+    """Merge-level value verdict derived from the join ledger (contract 3.5).
+
+    Examples
+    --------
+    >>> [member.value for member in MergeValueStatus]
+    ['divergent', 'attested_complete', 'attested_partial', 'unwitnessed']
+    >>> MergeValueStatus("divergent") is MergeValueStatus.DIVERGENT
+    True
+    """
 
     DIVERGENT = "divergent"
     ATTESTED_COMPLETE = "attested_complete"

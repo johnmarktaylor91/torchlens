@@ -2,37 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any, NoReturn, TypeVar, cast
 
-from .errors._base import CaptureError, ConfigurationError, TorchLensWarning
+from .errors._base import (
+    CaptureError,
+    ConfigurationError,
+    TorchLensError,
+    TorchLensWarning,
+    _actionable_message,
+)
+
+_ProjectionT = TypeVar("_ProjectionT")
 
 #: Layer declaration (architecture memo build item 2, seeding the layer map
 #: the C01 lint consumes): the exception vocabulary is homed at L0 BASIS --
 #: frozen vocabularies and contracts that execute no torchlens behavior --
 #: so importing it from any layer is a downward edge, never an inversion.
 __tl_layer__ = "L0"
-
-
-def _actionable_message(problem: str, remedy: str) -> str:
-    """Combine a refusal description with its required user remedy.
-
-    Parameters
-    ----------
-    problem:
-        Description of the rejected object or operation and its cause.
-    remedy:
-        Concrete action the caller can take to resolve the refusal.
-
-    Returns
-    -------
-    str
-        Stable human-readable message containing both clauses.
-    """
-
-    problem_clause = problem.rstrip()
-    if not problem_clause.endswith((".", "!", "?", ":", ";")):
-        problem_clause = f"{problem_clause}."
-    return f"{problem_clause} Remedy: {remedy.rstrip().rstrip('.')}."
 
 
 def _restore_actionable_error(
@@ -83,7 +69,15 @@ class _ActionableErrorMixin:
 
 
 class InvalidArgumentError(_ActionableErrorMixin, ConfigurationError, ValueError):
-    """Raised when a public argument value is outside its supported domain."""
+    """Raised when a public argument value is outside its supported domain.
+
+    Examples
+    --------
+    >>> issubclass(InvalidArgumentError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(InvalidArgumentError, ValueError)
+    True
+    """
 
     def __init__(
         self,
@@ -116,7 +110,15 @@ class InvalidArgumentError(_ActionableErrorMixin, ConfigurationError, ValueError
 
 
 class ArgumentTypeError(_ActionableErrorMixin, ConfigurationError, TypeError):
-    """Raised when a public argument has an unsupported Python type."""
+    """Raised when a public argument has an unsupported Python type.
+
+    Examples
+    --------
+    >>> issubclass(ArgumentTypeError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(ArgumentTypeError, TypeError)
+    True
+    """
 
     def __init__(
         self,
@@ -155,6 +157,13 @@ class ArgumentConflictError(_ActionableErrorMixin, ConfigurationError, ValueErro
     refusal raised a raw ``ValueError`` (the arguments are well-typed; the
     combination is the problem), so existing ``except ValueError`` handlers
     keep catching it.
+
+    Examples
+    --------
+    >>> issubclass(ArgumentConflictError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(ArgumentConflictError, ValueError)
+    True
     """
 
     def __init__(
@@ -235,6 +244,13 @@ class KeywordConflictError(_ActionableErrorMixin, ConfigurationError, TypeError)
     and every historical refusal at these sites raised a raw ``TypeError``.
     Value-combination conflicts (well-typed options whose values are mutually
     exclusive) use :class:`ArgumentConflictError` (``ValueError``) instead.
+
+    Examples
+    --------
+    >>> issubclass(KeywordConflictError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(KeywordConflictError, TypeError)
+    True
     """
 
     def __init__(
@@ -268,7 +284,15 @@ class KeywordConflictError(_ActionableErrorMixin, ConfigurationError, TypeError)
 
 
 class CaptureNotActiveError(_ActionableErrorMixin, CaptureError, RuntimeError):
-    """Raised when a capture-only operation is called outside an active capture."""
+    """Raised when a capture-only operation is called outside an active capture.
+
+    Examples
+    --------
+    >>> issubclass(CaptureNotActiveError, tl.errors.CaptureError)
+    True
+    >>> issubclass(CaptureNotActiveError, RuntimeError)
+    True
+    """
 
     def __init__(
         self,
@@ -301,7 +325,15 @@ class CaptureNotActiveError(_ActionableErrorMixin, CaptureError, RuntimeError):
 
 
 class RecordBindingError(_ActionableErrorMixin, CaptureError, RuntimeError):
-    """Raised when a record's owning Trace or live model is no longer reachable."""
+    """Raised when a record's owning Trace or live model is no longer reachable.
+
+    Examples
+    --------
+    >>> issubclass(RecordBindingError, tl.errors.CaptureError)
+    True
+    >>> issubclass(RecordBindingError, RuntimeError)
+    True
+    """
 
     def __init__(
         self,
@@ -340,6 +372,13 @@ class TraceCleanedUpError(_ActionableErrorMixin, CaptureError, AttributeError):
     probes on a husked trace still degrade instead of erroring, while giving
     direct readers one stable code to branch on instead of a raw missing-
     private-field ``AttributeError``.
+
+    Examples
+    --------
+    >>> issubclass(TraceCleanedUpError, tl.errors.CaptureError)
+    True
+    >>> issubclass(TraceCleanedUpError, AttributeError)
+    True
     """
 
     def __init__(
@@ -369,6 +408,76 @@ class TraceCleanedUpError(_ActionableErrorMixin, CaptureError, AttributeError):
         )
 
 
+def refuse_cleaned_up(problem: str, *, remedy: str, **context: object) -> NoReturn:
+    """Raise the one typed ``TraceCleanedUpError`` (code ``trace_cleaned_up``).
+
+    A husked ``Trace`` and a ``Drawing`` that retains no trace share this single
+    raise site, so both refuse with the same stable code and message shape.
+
+    Parameters
+    ----------
+    problem:
+        What the reader tried to touch.
+    remedy:
+        Concrete caller action that resolves the refusal.
+    **context:
+        Structured diagnostic context.
+
+    Raises
+    ------
+    TraceCleanedUpError
+        Always.
+    """
+
+    raise TraceCleanedUpError(problem, remedy=remedy, **context)
+
+
+class _InternalInvariantError(_ActionableErrorMixin, TorchLensError, RuntimeError, ValueError):
+    """Raised when TorchLens's own bookkeeping breaks an invariant (a TorchLens bug).
+
+    It subclasses both ``RuntimeError`` and ``ValueError`` because the invariant
+    checks it replaced raised one or the other.
+
+    Examples
+    --------
+    >>> issubclass(_InternalInvariantError, RuntimeError)
+    True
+    """
+
+    def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
+        """Initialize an internal-invariant refusal with its code and remedy."""
+
+        super().__init__(
+            _actionable_message(problem, remedy),
+            code=code,
+            remedy=remedy,
+            **cast(dict[str, Any], context),
+        )
+
+
+def require_recording_projection(trace: _ProjectionT | None) -> _ProjectionT:
+    """Return ``trace``; raise ``recording_projection_uninitialized`` when it is unset."""
+
+    if trace is None:
+        raise _InternalInvariantError(
+            "recording_trace projection was not initialized",
+            code="recording_projection_uninitialized",
+            remedy="report this as a TorchLens bug with the full traceback",
+        )
+    return trace
+
+
+def refuse_if_no_replay_events(capture_events: object) -> None:
+    """Raise ``recording_events_not_retained`` when a projection has no replay events."""
+
+    if capture_events is None:
+        raise CaptureNotActiveError(
+            "Recording.to_trace() core has no replay event facts",
+            code="recording_events_not_retained",
+            remedy="convert the in-session Recording rather than a disk-recovered one",
+        )
+
+
 class FacadeTeachingError(_ActionableErrorMixin, ConfigurationError, AttributeError):
     """Typed teaching refusal from a lazy-facade namespace (steps 2 and 3).
 
@@ -377,6 +486,13 @@ class FacadeTeachingError(_ActionableErrorMixin, ConfigurationError, AttributeEr
     precedent), while carrying a stable ``code`` (``facade_redirect`` /
     ``facade_refusal``) and the teaching remedy for direct readers.
     DOCUMENTED-UNSTABLE pending naming-session ratification.
+
+    Examples
+    --------
+    >>> issubclass(FacadeTeachingError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(FacadeTeachingError, AttributeError)
+    True
     """
 
     def __init__(
@@ -422,6 +538,13 @@ class MissingDependencyError(_ActionableErrorMixin, ConfigurationError, Attribut
     command, and ``fields["dependency"]`` / ``fields["install"]`` expose them
     programmatically. It is deliberately NOT caught by ``except
     ImportError``. DOCUMENTED-UNSTABLE pending naming-session ratification.
+
+    Examples
+    --------
+    >>> issubclass(MissingDependencyError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(MissingDependencyError, AttributeError)
+    True
     """
 
     def __init__(
@@ -455,7 +578,15 @@ class MissingDependencyError(_ActionableErrorMixin, ConfigurationError, Attribut
 
 
 class PayloadUnavailableError(_ActionableErrorMixin, CaptureError, ValueError):
-    """Raised when a requested saved payload was never retained or cannot be rebuilt."""
+    """Raised when a requested saved payload was never retained or cannot be rebuilt.
+
+    Examples
+    --------
+    >>> issubclass(PayloadUnavailableError, tl.errors.CaptureError)
+    True
+    >>> issubclass(PayloadUnavailableError, ValueError)
+    True
+    """
 
     def __init__(
         self,
@@ -502,6 +633,13 @@ class LazyStateUnsupportedError(_ActionableErrorMixin, CaptureError, RuntimeErro
     ``pending_parameters`` / ``pending_buffers``) for the buffer-side
     completion to consume. DOCUMENTED-UNSTABLE pending naming-session
     ratification.
+
+    Examples
+    --------
+    >>> issubclass(LazyStateUnsupportedError, tl.errors.CaptureError)
+    True
+    >>> issubclass(LazyStateUnsupportedError, RuntimeError)
+    True
     """
 
     def __init__(
@@ -535,11 +673,27 @@ class LazyStateUnsupportedError(_ActionableErrorMixin, CaptureError, RuntimeErro
 
 
 class CaptureGapError(CaptureError, RuntimeError):
-    """Reserved enforcement error for an unrepresented torch invocation."""
+    """Reserved enforcement error for an unrepresented torch invocation.
+
+    Examples
+    --------
+    >>> issubclass(CaptureGapError, tl.errors.CaptureError)
+    True
+    >>> issubclass(CaptureGapError, RuntimeError)
+    True
+    """
 
 
 class CaptureGapWarning(TorchLensWarning):
-    """Shadow-mode report for a possible unrepresented torch invocation."""
+    """Shadow-mode report for a possible unrepresented torch invocation.
+
+    Examples
+    --------
+    >>> issubclass(CaptureGapWarning, tl.errors.TorchLensWarning)
+    True
+    >>> issubclass(CaptureGapWarning, UserWarning)
+    True
+    """
 
 
 class OutputAttributionError(CaptureError, RuntimeError):
@@ -550,6 +704,13 @@ class OutputAttributionError(CaptureError, RuntimeError):
     result reaches the output walk with no label. Typed so the capture entry
     can treat it as an escape signal (rescue re-run trigger) instead of
     string-matching ``RuntimeError`` text.
+
+    Examples
+    --------
+    >>> issubclass(OutputAttributionError, tl.errors.CaptureError)
+    True
+    >>> issubclass(OutputAttributionError, RuntimeError)
+    True
     """
 
 
@@ -577,6 +738,13 @@ class TraceCaptureError(CaptureError):
     code (or an unattributable frame) raised, ``capture_internal_error`` when
     the innermost attributable frame was TorchLens (spellings
     DOCUMENTED-UNSTABLE).
+
+    Examples
+    --------
+    >>> issubclass(TraceCaptureError, tl.errors.CaptureError)
+    True
+    >>> issubclass(TraceCaptureError, tl.errors.TorchLensError)
+    True
     """
 
     def __init__(
@@ -643,7 +811,15 @@ def attach_partial_trace(error: BaseException, partial: Any) -> None:
 
 
 class UserTransformError(CaptureError, RuntimeError):
-    """Raised when activation_transform or grad_transform raises."""
+    """Raised when activation_transform or grad_transform raises.
+
+    Examples
+    --------
+    >>> issubclass(UserTransformError, tl.errors.CaptureError)
+    True
+    >>> issubclass(UserTransformError, RuntimeError)
+    True
+    """
 
 
 class BackwardStreamUnavailableError(CaptureError, RuntimeError):
@@ -653,6 +829,13 @@ class BackwardStreamUnavailableError(CaptureError, RuntimeError):
     buffer, so post-hoc backward capture appended into a container nothing
     read and reported success. A released or never-captured stream is now a
     typed refusal instead of a silent wrong answer.
+
+    Examples
+    --------
+    >>> issubclass(BackwardStreamUnavailableError, tl.errors.CaptureError)
+    True
+    >>> issubclass(BackwardStreamUnavailableError, RuntimeError)
+    True
     """
 
 
@@ -664,6 +847,13 @@ class AtenOpsUnavailableError(_ActionableErrorMixin, CaptureError, RuntimeError)
     no profile, so the accessors refuse typed instead of
     returning an empty answer that looks like "this op dispatched nothing".
     Branch on ``exc.fields["code"] == "aten_ops_unavailable"``.
+
+    Examples
+    --------
+    >>> issubclass(AtenOpsUnavailableError, tl.errors.CaptureError)
+    True
+    >>> issubclass(AtenOpsUnavailableError, RuntimeError)
+    True
     """
 
     def __init__(
@@ -698,15 +888,39 @@ class AtenOpsUnavailableError(_ActionableErrorMixin, CaptureError, RuntimeError)
 
 
 class MutatedReferenceError(CaptureError, RuntimeError):
-    """Raised when a reference-mode saved tensor changed before it was read."""
+    """Raised when a reference-mode saved tensor changed before it was read.
+
+    Examples
+    --------
+    >>> issubclass(MutatedReferenceError, tl.errors.CaptureError)
+    True
+    >>> issubclass(MutatedReferenceError, RuntimeError)
+    True
+    """
 
 
 class ParamReleasedError(CaptureError, RuntimeError):
-    """Raised when a released Param cannot re-fetch its live model parameter."""
+    """Raised when a released Param cannot re-fetch its live model parameter.
+
+    Examples
+    --------
+    >>> issubclass(ParamReleasedError, tl.errors.CaptureError)
+    True
+    >>> issubclass(ParamReleasedError, RuntimeError)
+    True
+    """
 
 
 class AmbiguousOpLookupError(_ActionableErrorMixin, ConfigurationError, ValueError):
-    """Raised when a bare Op lookup matches multiple pass-qualified Ops."""
+    """Raised when a bare Op lookup matches multiple pass-qualified Ops.
+
+    Examples
+    --------
+    >>> issubclass(AmbiguousOpLookupError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(AmbiguousOpLookupError, ValueError)
+    True
+    """
 
     def __init__(self, message: str, **context: object) -> None:
         """Initialize an actionable ambiguous-accessor refusal.
@@ -729,7 +943,15 @@ class AmbiguousOpLookupError(_ActionableErrorMixin, ConfigurationError, ValueErr
 
 
 class ShapeInferenceError(ConfigurationError, RuntimeError):
-    """Raised when debug input-shape inference cannot produce a valid input."""
+    """Raised when debug input-shape inference cannot produce a valid input.
+
+    Examples
+    --------
+    >>> issubclass(ShapeInferenceError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(ShapeInferenceError, RuntimeError)
+    True
+    """
 
 
 class SelectionError(ConfigurationError, ValueError):
@@ -738,5 +960,13 @@ class SelectionError(ConfigurationError, ValueError):
     Branch on ``exc.fields["code"]`` (``selection_trace_mismatch`` /
     ``selection_bool_ambiguous`` / ``selection_kind_incompatible`` /
     ``selection_unresolvable`` / ``selection_apply_invalid`` /
-    ``selection_alignment_invalid``), never on message text.
+    ``selection_alignment_invalid`` / ``selection_trace_released``), never
+    on message text.
+
+    Examples
+    --------
+    >>> issubclass(SelectionError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(SelectionError, ValueError)
+    True
     """

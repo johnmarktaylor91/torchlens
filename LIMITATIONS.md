@@ -91,9 +91,9 @@ transform storage is charged after it exists. The guard prevents the ordinary ov
 copy that it can project, while these allocations remain disclosed residuals.
 
 Only payloads retained in RAM are charged. Predicate-selected disk-only saves such as
-`save=tl.func("relu"), storage=tl.to_disk(...)` are exempt. Exhaustive `capture=CaptureOptions(layers_to_save="all")` plus
-`to_disk(...)` is **not** exempt: it keeps RAM copies until postprocess attaches disk refs and evicts
-them, so a tiny budget refuses. `layers_to_save="none"` remains uncharged.
+`save=tl.func("relu"), storage=tl.to_disk(...)` are exempt. Exhaustive `save="all"` (the default) plus
+`storage=tl.to_disk(...)` is **not** exempt: it keeps RAM copies until postprocess attaches disk refs and evicts
+them, so a tiny budget refuses. `save="none"` remains uncharged.
 
 When an automatic fraction cannot measure device headroom (including MPS and unknown device types),
 that device is left unbudgeted and a `UserWarning` fires on its first non-empty charge. Use an

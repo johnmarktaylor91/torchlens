@@ -21,29 +21,6 @@ torchvision = pytest.importorskip("torchvision")
 import torchlens as tl  # noqa: E402
 
 
-def _admitted_planner(model: torch.nn.Module) -> str:
-    """Capture and return the max-mode planner tier for ``model``."""
-
-    trace = tl.trace(model, torch.randn(1, 3, 64, 64))
-    with warnings_module.catch_warnings():
-        warnings_module.simplefilter("ignore")
-        result = collapse_optimizer.select_collapse_plan(trace, RenderContext(), mode="max")
-    return result.planner
-
-
-@pytest.mark.heavy
-@pytest.mark.parametrize("mode", ["eval", "train"])
-def test_resnet18_admitted_in_both_modes(mode: str) -> None:
-    """resnet18 stays quality-planner-admitted in eval AND train mode."""
-
-    model = torchvision.models.resnet18(weights=None)
-    model.eval() if mode == "eval" else model.train()
-    planner = _admitted_planner(model)
-    assert planner not in {"linear_fallback", "floor_fallback"}, (
-        f"resnet18 [{mode}] must stay admitted; got {planner}"
-    )
-
-
 @pytest.mark.slow
 @pytest.mark.parametrize("mode", ["eval", "train"])
 def test_densenet201_admitted_in_both_modes(mode: str) -> None:

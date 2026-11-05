@@ -53,7 +53,15 @@ NormKind = Literal["layernorm_affine", "rmsnorm_affine", "normalize_only"]
 
 
 class NormReconstructionError(TorchLensError, RuntimeError):
-    """Raised when a norm cannot be classified, reconstructed, or validated."""
+    """Raised when a norm cannot be classified, reconstructed, or validated.
+
+    Examples
+    --------
+    >>> issubclass(NormReconstructionError, tl.errors.TorchLensError)
+    True
+    >>> issubclass(NormReconstructionError, RuntimeError)
+    True
+    """
 
 
 def _refuse(code: str, message: str, remedy: str, **payload: Any) -> NoReturn:

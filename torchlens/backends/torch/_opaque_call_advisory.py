@@ -47,7 +47,9 @@ _GAP_REASONS = frozenset({"unowned_dispatch", "owner_not_captured"})
 _MAX_SITES = 32
 _CALLED_NAME = re.compile(r"([A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*)\s*\(")
 _DLPACK_CALL = re.compile(r"\bto_dlpack\s*\(")
-_GOTCHA_POINTER = "the TorchScript and DLPack entry in docs/agent-reference/known-gotchas.md"
+_GOTCHA_POINTER = (
+    "the TorchScript and DLPack entry in docs/internal/agent-reference/known-gotchas.md"
+)
 # Codes already emitted this session: each warning code fires once per session.
 _WARNED_CODES: set[str] = set()
 

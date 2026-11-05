@@ -40,10 +40,10 @@ from torchlens._selection.errors import SelectionError
 
 from ._selection.graph import (
     _edge_partition,
+    _ExecutedDag,
     _lift_region_group,
     _region_labels,
     _resolve_region,
-    _TraceGraph,
     resolve_between_labels,
 )
 from ._selection.selection import (
@@ -51,6 +51,8 @@ from ._selection.selection import (
     _lift,
     _SelectionOperand,
 )
+from ._utils._display_errors import lookup_message
+from ._utils._display_keys import display_key
 
 __all__ = [
     "TraceSlice",
@@ -64,6 +66,13 @@ class TraceSlice(_SelectionOperand):
     boundary. Never a ``Trace``; offers no save/replay/validate. Lift back
     into the selection algebra with ``__selection__`` (implicit under the
     ``| & - ~`` operators). Session-time only; never persisted.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> relus = trace.subgraph(tl.func("relu"))
+    >>> isinstance(relus, TraceSlice), len(relus)
+    (True, 1)
     """
 
     __slots__ = (
@@ -79,7 +88,7 @@ class TraceSlice(_SelectionOperand):
 
     _boundary_in: tuple[tuple[str, str], ...]
     _boundary_out: tuple[tuple[str, str], ...]
-    _graph: _TraceGraph
+    _graph: _ExecutedDag
     _internal_edges: tuple[tuple[str, str], ...]
     _labels: tuple[str, ...]
     _member_set: frozenset[str]
@@ -89,7 +98,7 @@ class TraceSlice(_SelectionOperand):
     def __init__(
         self,
         trace: Any,
-        graph: _TraceGraph,
+        graph: _ExecutedDag,
         members: frozenset[str],
         source: str,
     ) -> None:
@@ -177,10 +186,12 @@ class TraceSlice(_SelectionOperand):
         if len(bare_hits) == 1:
             return self._graph.ops[bare_hits[0]]
         if len(bare_hits) > 1:
-            spellings = ", ".join(repr(member) for member in bare_hits)
             raise KeyError(
-                f"{label!r} names {len(bare_hits)} member passes of this slice; "
-                f"use a pass-qualified label ({spellings})."
+                lookup_message(
+                    f"{label!r} names {len(bare_hits)} member passes of this slice.",
+                    [display_key(self._graph.ops[member]) for member in bare_hits],
+                    "Use a pass-qualified label.",
+                )
             )
         if label in self._graph.ops or any(
             getattr(op, "layer_label", None) == label for op in self._graph.ops.values()
@@ -189,12 +200,12 @@ class TraceSlice(_SelectionOperand):
                 f"{label!r} is an op of the underlying trace but not a member of "
                 f"this slice ({self._source}); read it off the trace directly."
             )
-        preview = ", ".join(repr(member) for member in self._labels[:5])
-        if len(self._labels) > 5:
-            preview += f", ... ({len(self._labels)} members)"
         raise KeyError(
-            f"{label!r} is not an op of this slice's underlying trace; "
-            f"members: {preview or '(none)'}."
+            lookup_message(
+                f"{label!r} is not an op of this slice's underlying trace.",
+                [display_key(self._graph.ops[member]) for member in self._labels],
+                "Use a member label, or read a different op off the underlying trace.",
+            )
         )
 
     # Structure ---------------------------------------------------------------
@@ -396,6 +407,6 @@ def build_slice_from_selection(trace: Any, selection_like: Any) -> TraceSlice:
             right_kind=lifted.kind,
             operator="subgraph",
         )
-    graph = _TraceGraph.from_trace(trace)
+    graph = _ExecutedDag.from_trace(trace)
     members = _region_labels(graph, _resolve_region(lifted, trace), "subgraph")
     return TraceSlice(trace, graph, members, f"subgraph({lifted!r})")

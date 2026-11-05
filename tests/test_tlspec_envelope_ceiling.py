@@ -13,63 +13,45 @@ import pytest
 
 from torchlens._io import (
     TLSPEC_VERSION,
-    ArtifactError,
     ArtifactRuntimeIncompatibleError,
     ArtifactTooNewError,
-    ArtifactTooOldError,
-    above_ceiling_error,
     read_tlspec_version,
 )
 
 FUTURE_VERSION = TLSPEC_VERSION + 1
 
 
-def test_chokepoint_builds_structured_refusal() -> None:
-    err = above_ceiling_error(observed=FUTURE_VERSION, subject="Bundle", path="/tmp/x")
-    assert isinstance(err, ArtifactTooNewError)
-    assert isinstance(err, ArtifactError)
-    assert err.fields["code"] == "artifact_version_above_runtime"
-    assert err.fields["observed"] == FUTURE_VERSION
-    assert err.fields["ceiling_tlspec_version"] == TLSPEC_VERSION
-    assert err.fields["path"] == "/tmp/x"
-    assert err.fields["remedy"]
-
-
-@pytest.mark.smoke
 def test_pickle_state_gate_raises_typed() -> None:
     with pytest.raises(ArtifactTooNewError) as excinfo:
         read_tlspec_version({"tlspec_version": FUTURE_VERSION}, cls_name="Trace")
     assert excinfo.value.fields["code"] == "artifact_version_above_runtime"
 
 
-def test_validation_entry_raises_typed_not_bare_valueerror() -> None:
-    """The site that used to raise bare ValueError and get laundered codeless."""
-
-    from torchlens.validation import _validate_tlspec_version_ceiling
-
-    with pytest.raises(ArtifactTooNewError) as excinfo:
-        _validate_tlspec_version_ceiling(FUTURE_VERSION)
-    assert excinfo.value.fields["code"] == "artifact_version_above_runtime"
-    # The load path's ``except ValueError`` laundering wrap can never catch it.
-    assert not isinstance(excinfo.value, ValueError)
-
-
 def _reference_manifest_dict() -> dict:
-    """The manifest of a freshly saved tiny trace (the current writer's own)."""
+    """A minimal valid manifest in the shape ``Manifest.from_dict`` reads.
 
-    import json
-    import tempfile
-    from pathlib import Path
+    The 3.0 artifact reader parses its own manifest and runs no torch-version policy;
+    ``Manifest`` and ``enforce_version_policy`` still gate the fastlog recovery manifest, so
+    the reference is a fastlog-shaped dict at the current format version.
+    """
 
     import torch
-    from torch import nn
 
-    import torchlens as tl
-
-    with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / "trace.tlspec"
-        tl.trace(nn.Linear(2, 2), torch.randn(1, 2)).save(path)
-        return json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    return {
+        "tlspec_version": TLSPEC_VERSION,
+        "torchlens_version": "3.0.0",
+        "torch_version": torch.__version__,
+        "python_version": "3.10.0",
+        "platform": "linux-x86_64",
+        "created_at": "2026-01-01T00:00:00Z",
+        "bundle_format": "fastlog-directory",
+        "n_layers": 0,
+        "n_out_blobs": 0,
+        "n_grad_blobs": 0,
+        "n_auxiliary_blobs": 0,
+        "tensors": [],
+        "unsupported_tensors": [],
+    }
 
 
 def test_manifest_policy_gate_raises_typed() -> None:
@@ -83,7 +65,6 @@ def test_manifest_policy_gate_raises_typed() -> None:
     assert drift.value.fields["code"] == "bundle_torch_incompatible"
 
 
-@pytest.mark.smoke
 def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
     """R6 (2026-10-01): a minor torch drift is advisory, never a load refusal.
 
@@ -132,17 +113,6 @@ def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
     assert not any(_is_minor_mismatch(item) for item in caught_exact)
 
 
-def test_recover_reraises_governed_refusals() -> None:
-    """recover() salvages corruption, never a governed compatibility refusal."""
-
-    from torchlens.recording.recover import _GOVERNED_COMPATIBILITY_REFUSALS
-
-    assert ArtifactTooOldError in _GOVERNED_COMPATIBILITY_REFUSALS
-    assert ArtifactTooNewError in _GOVERNED_COMPATIBILITY_REFUSALS
-    assert ArtifactRuntimeIncompatibleError in _GOVERNED_COMPATIBILITY_REFUSALS
-
-
-@pytest.mark.smoke
 def test_recover_refuses_future_version_bundle(tmp_path) -> None:
     """End-to-end: a future-versioned fastlog bundle refuses out of recover()."""
 
@@ -162,10 +132,3 @@ def test_recover_refuses_future_version_bundle(tmp_path) -> None:
 
     with pytest.raises(ArtifactTooNewError):
         recover(bundle)
-
-
-def test_public_errors_registry_serves_new_classes() -> None:
-    import torchlens.errors as errors
-
-    assert errors.ArtifactTooNewError is ArtifactTooNewError
-    assert errors.ArtifactRuntimeIncompatibleError is ArtifactRuntimeIncompatibleError

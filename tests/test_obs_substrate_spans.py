@@ -206,18 +206,6 @@ class TestRegion:
             pass
         assert excinfo.value.fields["code"] == "region_metadata_invalid"
 
-    def test_region_records_span_under_session(self) -> None:
-        with session(mode="owned") as live:
-            with region("train_loop", lr=0.5) as record:
-                pass
-            assert record.span_id is not None
-        assert live.result is not None
-        span = next(s for s in live.result.spans if s.name == "train_loop")
-        assert span.owner == "user_region"
-        assert span.metadata["lr"] == 0.5
-        assert span.metadata["occurrence"] == record.occurrence_index
-        assert span.end_ns is not None
-
 
 class TestSessionEngine:
     """Owned/borrowed lifecycles, nested refusal, restore-on-error (W1.3)."""

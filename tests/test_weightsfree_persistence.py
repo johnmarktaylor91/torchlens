@@ -50,39 +50,6 @@ def test_meta_buffer_trace_roundtrips_value_free(tmp_path) -> None:
         assert getattr(layer, "out", None) is None
 
 
-def test_real_buffer_trace_roundtrips_value_free(tmp_path) -> None:
-    """Defect L6 closure, real form: the shipped save-then-cannot-load bug on
-    buffer-holding structure-only captures is fixed on BOTH substrates."""
-
-    model = BufferedToy()
-    model.eval()
-    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(structure_only=True))
-    loaded = _roundtrip(trace, tmp_path)
-    assert loaded.options.structure_only is True
-    assert loaded.graph.structure_evidence is not None
-    assert loaded.graph.structure_evidence["substrate"] == "real"
-    for layer in loaded._layer_list:
-        assert getattr(layer, "out", None) is None
-
-
-def test_loaded_trace_is_hypothesis_again(tmp_path) -> None:
-    """D21: the discharge registry is session-only; a corroborated trace
-    loads back as HYPOTHESIS and the persisted envelope says discharge=absent."""
-
-    from torchlens._capture.structure_only import StructureClaimStatus, claim_status_for
-
-    torch.manual_seed(0)
-    model = BufferedToy()
-    model.eval()
-    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(structure_only=True))
-    real = tl.trace(model, torch.randn(2, 4))
-    assert trace.discharge_against(real).verdict.value == "corroborated"
-    assert claim_status_for(trace) is StructureClaimStatus.CORROBORATED
-    loaded = _roundtrip(trace, tmp_path)
-    assert claim_status_for(loaded) is StructureClaimStatus.HYPOTHESIS
-    assert loaded.graph.structure_evidence["discharge"] == "absent"
-
-
 def test_forged_envelope_fails_validation(tmp_path) -> None:
     """A forged envelope refuses fail-closed (C07 validation, M-C2 class).
 

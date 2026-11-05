@@ -103,6 +103,7 @@ def _assert_not_blessed(report) -> None:
     )
 
 
+# Kept: sole branch coverage of _input_walk.py.
 def test_enum_leaf_refuses_runnable_save_typed(tmp_path: Path) -> None:
     """r69 B supersedes the save-then-UNVERIFIABLE lane for enum leaves.
 
@@ -123,47 +124,7 @@ def test_enum_leaf_refuses_runnable_save_typed(tmp_path: Path) -> None:
     assert "semantic_scalar_type" in diagnostics
 
 
-def test_non_finite_inf_leaf_is_unverifiable_not_attested(tmp_path: Path) -> None:
-    """A non-finite ``inf`` float leaf is opaque to the frozen grammar: unverifiable."""
-
-    model = FloatFlagBranch()
-    x = torch.tensor([2.0, 3.0])
-    path = _save_runnable(model, [x, float("inf")], tmp_path / "inf.tlspec")
-
-    changed = tl.load(path).run(inputs=[x, 0.5])
-    _assert_not_blessed(changed.report)
-    assert not torch.equal(changed.output, model(x, 0.5))
-
-    unchanged = tl.load(path).run(inputs=[x, float("inf")])
-    _assert_not_blessed(unchanged.report)
-
-
-def test_non_finite_nan_leaf_is_unverifiable_not_attested(tmp_path: Path) -> None:
-    """A ``nan`` float leaf is non-finite hence opaque: unverifiable, never attested."""
-
-    model = FloatFlagBranch()
-    x = torch.tensor([2.0, 3.0])
-    path = _save_runnable(model, [x, float("nan")], tmp_path / "nan.tlspec")
-
-    # nan > 1.0 is False at capture, recording the x*10 arm.
-    changed = tl.load(path).run(inputs=[x, 5.0])
-    _assert_not_blessed(changed.report)
-    unchanged = tl.load(path).run(inputs=[x, float("nan")])
-    _assert_not_blessed(unchanged.report)
-
-
-def test_bytes_leaf_is_unverifiable_not_attested(tmp_path: Path) -> None:
-    """An opaque ``bytes`` control input makes the run unverifiable."""
-
-    model = BytesBranch()
-    x = torch.tensor([2.0, 3.0])
-    path = _save_runnable(model, [x, b"add"], tmp_path / "bytes.tlspec")
-
-    changed = tl.load(path).run(inputs=[x, b"mul"])
-    _assert_not_blessed(changed.report)
-    assert not torch.equal(changed.output, model(x, b"mul"))
-
-
+# Kept: sole branch coverage of _distributed.py, _io/runnable.py, _robustness.py; a sole mutation kill.
 def test_set_leaf_is_unverifiable_not_attested(tmp_path: Path) -> None:
     """An opaque ``set`` control input makes the run unverifiable."""
 
@@ -171,7 +132,7 @@ def test_set_leaf_is_unverifiable_not_attested(tmp_path: Path) -> None:
     x = torch.tensor([2.0, 3.0])
     path = _save_runnable(model, [x, {"add"}], tmp_path / "set.tlspec")
 
-    changed = tl.load(path).run(inputs=[x, {"mul"}])
+    changed = tl.load(path).run_transaction(inputs=[x, {"mul"}])
     _assert_not_blessed(changed.report)
     assert not torch.equal(changed.output, model(x, {"mul"}))
 
@@ -185,26 +146,6 @@ class FiniteFloatBranch(nn.Module):
         return value - 5
 
 
-def test_encodable_float_path_unregressed(tmp_path: Path) -> None:
-    """The grammar-encodable (finite-float) path keeps exact round-3 behaviour.
-
-    Guards against over-broad UNVERIFIABLE downgrade: a finite-float leaf must
-    still DIVERGE on change and VERIFY + ATTEST when unchanged.
-    """
-
-    model = FiniteFloatBranch()
-    value = torch.tensor([3.0, 4.0])
-    path = _save_runnable(model, [value, 2.0], tmp_path / "finite.tlspec")
-
-    same = tl.load(path).run(inputs=[value, 2.0])
-    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert same.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    torch.testing.assert_close(same.output, value * 2)
-
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=[value, 0.5])
-
-
 class SignedZeroBranch(nn.Module):
     """Branch on the sign bit of a finite Python float (``math.copysign``)."""
 
@@ -216,6 +157,7 @@ class SignedZeroBranch(nn.Module):
         return value - 10
 
 
+# Kept: the catch of its regression fault.
 def test_signed_zero_change_diverges(tmp_path: Path) -> None:
     """A changed float sign-bit (``-0.0`` -> ``+0.0``) must DIVERGE, not false-verify.
 
@@ -231,15 +173,16 @@ def test_signed_zero_change_diverges(tmp_path: Path) -> None:
     # Capture recorded the negative-zero arm (value + 10); positive zero takes the
     # other arm, so replaying the recorded path would be numerically wrong.
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=[value, +0.0])
+        tl.load(path).run_transaction(inputs=[value, +0.0])
 
     # Unchanged negative zero still verifies + attests: bit patterns match.
-    same = tl.load(path).run(inputs=[value, -0.0])
+    same = tl.load(path).run_transaction(inputs=[value, -0.0])
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert same.report.numeric_attestation is NumericAttestationStatus.ATTESTED
     torch.testing.assert_close(same.output, value + 10)
 
 
+# Kept: sole branch coverage of _io/runnable.py; a sole mutation kill.
 def test_unchanged_nan_leaf_does_not_falsely_diverge(tmp_path: Path) -> None:
     """An unchanged ``nan`` float input must not DIVERGE (``nan == nan`` is ``False``).
 
@@ -252,31 +195,7 @@ def test_unchanged_nan_leaf_does_not_falsely_diverge(tmp_path: Path) -> None:
     value = torch.tensor([2.0, 3.0])
     path = _save_runnable(model, [value, float("nan")], tmp_path / "nan_selfsame.tlspec")
 
-    result = tl.load(path).run(inputs=[value, float("nan")])
+    result = tl.load(path).run_transaction(inputs=[value, float("nan")])
     assert result.report.path_faithfulness is not PathFaithfulness.DIVERGED
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_normal_finite_float_change_still_diverges(tmp_path: Path) -> None:
-    """A normal finite-float control change keeps diverging (no over-broad relaxation)."""
-
-    model = FiniteFloatBranch()
-    value = torch.tensor([3.0, 4.0])
-    path = _save_runnable(model, [value, 2.0], tmp_path / "normal.tlspec")
-
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=[value, 0.5])
-
-
-def test_normal_finite_float_unchanged_still_verifies(tmp_path: Path) -> None:
-    """A normal finite-float unchanged input keeps verifying + attesting exactly."""
-
-    model = FiniteFloatBranch()
-    value = torch.tensor([3.0, 4.0])
-    path = _save_runnable(model, [value, 2.0], tmp_path / "normal.tlspec")
-
-    same = tl.load(path).run(inputs=[value, 2.0])
-    assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert same.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    torch.testing.assert_close(same.output, value * 2)

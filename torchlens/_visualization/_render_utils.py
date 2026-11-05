@@ -24,10 +24,15 @@ import warnings
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
-import graphviz
-
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
+from ._frame_penwidth import (  # noqa: F401  (spellings kept for importers)
+    MAX_MODULE_PENWIDTH,
+    MIN_MODULE_PENWIDTH,
+    PENWIDTH_RANGE,
+    compute_module_penwidth,
+)
+from ._render_names import DEFAULT_DRAW_STEM  # noqa: F401  (spelling kept for importers)
 
 #: Live viewer child handles (r-b6 R40-1). Retained so every launch can reap
 #: previously-exited viewers; without this the discarded ``Popen`` handle left
@@ -146,7 +151,7 @@ def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> boo
 
 
 if TYPE_CHECKING:
-    pass
+    import graphviz
 
 
 # Recognised file extensions that callers may include on ``vis_outpath``.
@@ -207,27 +212,19 @@ def run_bounded_subprocess(
             env=graphviz_font_env(),
         )
     except FileNotFoundError as exc:
-        # Lazy import: _render_common top-imports this module, so the typed
-        # class cannot be imported at module level without minting a cycle.
+        # The class is defined in _render_common, which top-imports this
+        # module: reach it through the public taxonomy (resolved on first
+        # use) so this module stays out of the renderer's import cycle.
         # The single most common cold-user viz failure: the Graphviz BINARY
         # is not installed (the python 'graphviz' package alone does not
         # ship it); the class carries the install remedy.
-        from ._render_common import GraphvizUnavailableError
+        from ..errors import GraphvizUnavailableError
 
         raise GraphvizUnavailableError(
             f"TorchLens could not render this graph: the Graphviz executable "
             f"{cmd[0]!r} was not found on PATH",
             executable=cmd[0],
         ) from exc
-
-
-# -- Module subgraph border widths (shared between Trace and bundle paths)
-# Outermost modules get the thickest border; deeper modules thin out by depth
-# fraction so visual hierarchy reads at a glance.  These constants are the
-# canonical source for both ``_render_dot.py`` and the bundle renderer.
-MAX_MODULE_PENWIDTH = 5
-MIN_MODULE_PENWIDTH = 2
-PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
 
 
 _VISUALIZER_DIR_MARKER = "torchlens_visualizers_"
@@ -256,8 +253,36 @@ def relativize_visualizer_image(path: str) -> str:
     return path[separator_index + 1 :]
 
 
-#: Stem a bare ``Trace.draw()`` (no ``vis_outpath``) writes under.
-DEFAULT_DRAW_STEM = "modelgraph"
+def resolve_draw_outpath(
+    vis_outpath: str | None, fileformat: str, announce_path: bool | None
+) -> tuple[str, bool]:
+    """Return the stem a draw writes under and whether it announces the path.
+
+    Parameters
+    ----------
+    vis_outpath:
+        User-provided render output path, or ``None`` for a bare draw.
+    fileformat:
+        Rendered file format.
+    announce_path:
+        Explicit announce choice, or ``None`` to announce exactly for a bare draw.
+
+    Returns
+    -------
+    tuple[str, bool]
+        Output stem without a render extension, and the announce flag.
+    """
+    # a bare draw (no vis_outpath) writes a collision-safe file and
+    # always prints where; an explicit path is written exactly, as before.
+    # ``Trace.draw`` resolves the collision-safe path itself and says so.
+    if announce_path is None:
+        announce_path = vis_outpath is None
+    resolved_outpath = (
+        collision_safe_outpath(DEFAULT_DRAW_STEM, fileformat)
+        if vis_outpath is None
+        else strip_known_extension(vis_outpath)
+    )
+    return resolved_outpath, announce_path
 
 
 def collision_safe_outpath(stem: str, fileformat: str) -> str:
@@ -347,23 +372,6 @@ def direction_to_rankdir(direction: str) -> str:
     )
 
 
-def compute_module_penwidth(call_depth: int, max_call_depth: int) -> float:
-    """Return the cluster border width for a module at ``call_depth``.
-
-    ``call_depth`` is 0-based (outermost is depth 0).  Outermost modules
-    get the maximum penwidth; deepest modules get the minimum.  When the
-    overall hierarchy has only one level (``max_call_depth == 0`` or
-    ``1``) we still return a sensible value so callers don't have to
-    special-case shallow models.
-    """
-
-    if max_call_depth <= 0:
-        return float(MIN_MODULE_PENWIDTH + PENWIDTH_RANGE)
-    nesting_fraction = (max_call_depth - call_depth) / max_call_depth
-    nesting_fraction = max(0.0, min(1.0, nesting_fraction))
-    return MIN_MODULE_PENWIDTH + nesting_fraction * PENWIDTH_RANGE
-
-
 def html_escape(value: str) -> str:
     """Escape the three Graphviz HTML-label specials.
 
@@ -379,6 +387,38 @@ def html_escape(value: str) -> str:
 #: An absolute POSIX or Windows file path: a root (``/`` or ``C:\\``), then
 #: directory segments, then the file name kept by ``strip_path_directories``.
 _ABSOLUTE_PATH_RE = re.compile(r"(?<![\w.~-])(?:[A-Za-z]:[\\/]|/)(?:[^\s()\[\]'\"<>:/\\]+[\\/])+")
+
+
+def _add_svg_accessibility(path: str, aria_label: str) -> None:
+    """Add figure-level accessibility attributes to a rendered SVG.
+
+    Parameters
+    ----------
+    path:
+        Rendered SVG path.
+    aria_label:
+        Root SVG accessibility label.
+
+    Returns
+    -------
+    None
+        The SVG is updated in place when it exists.
+    """
+
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as handle:
+        svg = handle.read()
+    if "aria-label=" not in svg:
+        escaped_label = html_escape(aria_label).replace('"', "&quot;")
+        svg = re.sub(
+            r"<svg\b",
+            f'<svg role="img" aria-label="{escaped_label}"',
+            svg,
+            count=1,
+        )
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(svg)
 
 
 def strip_path_directories(text: str) -> str:

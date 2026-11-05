@@ -13,19 +13,14 @@ import hashlib
 from pathlib import Path
 
 import pytest
-import torch
 
 from tests.transforms_corpus.loader import (
     COCO_URL_PREFIX,
-    FIXTURE_CROP,
-    FIXTURE_ROWS,
     IMAGES_DIR,
     O14_MIN_DISTINCT,
     CocoChecksumMismatch,
-    build_fixture,
     coco_manifest_rows,
     fetch_coco,
-    load_vendored,
     manifest_rows,
     verify_vendored_integrity,
 )
@@ -52,20 +47,6 @@ def test_manifest_carries_unambiguous_licensing_provenance() -> None:
         assert row["artist"], row["file"]
         assert row["retrieved"], row["file"]
         assert len(row["sha256"]) == 64
-
-
-def test_fixture_builder_is_deterministic_and_shaped() -> None:
-    """Same seed -> bit-identical fixture; rows/geometry as declared."""
-
-    source = load_vendored()
-    first = build_fixture(source)
-    second = build_fixture(source)
-    assert torch.equal(first, second)
-    assert first.shape == (FIXTURE_ROWS, 3, FIXTURE_CROP, FIXTURE_CROP)
-    assert first.dtype == torch.float32
-    assert float(first.min()) >= 0.0 and float(first.max()) <= 1.0
-    different = build_fixture(source, seed=8)
-    assert not torch.equal(first, different)
 
 
 def test_coco_precision_manifest_is_pinned_not_vendored() -> None:

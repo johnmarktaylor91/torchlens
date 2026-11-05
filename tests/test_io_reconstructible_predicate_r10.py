@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-import pytest
-
 from torchlens._io.scrub import (
     _factory_is_load_reconstructible,
     _type_is_load_reconstructible,
@@ -38,27 +36,10 @@ def test_off_allowlist_torchlens_type_is_not_reconstructible() -> None:
     assert not _type_is_load_reconstructible(_OffAllowlistTorchlensType)
 
 
-@pytest.mark.smoke
-def test_appliance_torchlens_type_is_not_reconstructible() -> None:
-    assert not _type_is_load_reconstructible(_ApplianceType)
-
-
 def test_allowlisted_torchlens_type_is_reconstructible() -> None:
     from torchlens._io import BlobRef  # ("torchlens._io", "BlobRef") is allowlisted
 
     assert _type_is_load_reconstructible(BlobRef)
-
-
-@pytest.mark.smoke
-def test_torch_data_type_is_reconstructible() -> None:
-    import torch
-
-    assert _type_is_load_reconstructible(torch.Size)
-
-
-def test_pure_data_builtin_factory_is_reconstructible() -> None:
-    for factory in (list, dict, set, int, tuple):
-        assert _factory_is_load_reconstructible(factory), factory
 
 
 def test_code_exec_builtin_factory_is_not_reconstructible() -> None:
@@ -66,12 +47,6 @@ def test_code_exec_builtin_factory_is_not_reconstructible() -> None:
     # them, so preserving them was a load-refuses trap.
     for factory in (eval, getattr):
         assert not _factory_is_load_reconstructible(factory), factory
-
-
-def test_collections_factory_is_reconstructible() -> None:
-    from collections import OrderedDict
-
-    assert _factory_is_load_reconstructible(OrderedDict)
 
 
 def test_defaultdict_with_code_exec_factory_survives_round_trip(tmp_path) -> None:
@@ -90,7 +65,12 @@ def test_defaultdict_with_code_exec_factory_survives_round_trip(tmp_path) -> Non
     # Plant a defaultdict with a code-exec factory on a portable-scrubbed field.
     trace.ops[0].annotations = defaultdict(eval, {"k": 1})  # type: ignore[assignment]
     bundle = tmp_path / "b.tlspec"
-    with pytest.warns(UserWarning):
-        trace.save(bundle, overwrite=True)
+    trace.save(bundle, overwrite=True)
     loaded = tl.load(bundle)  # must not raise UnpicklingError
+    assert loaded.ops[0].annotations["k"] == 1
+    assert type(loaded.ops[0].annotations) is dict
+    assert any(
+        row["kind"] == "unencodable_values_stringified"
+        for row in loaded.annotations["capture_advisories"]
+    )
     assert loaded is not None

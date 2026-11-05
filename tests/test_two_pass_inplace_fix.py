@@ -252,7 +252,7 @@ def test_two_pass_succeeds_with_resnet50_inplace_relu_modules() -> None:
     An op-label selector needs final numbering, so the capture escrows every op's
     output and spills the oldest past the escrow RAM budget. ResNet50's first conv
     output is the oldest, so it comes back detached and the capture discloses it
-    with the coded ``escrow_spill_detached`` warning (U27.1); the later selectors
+    with the coded ``escrow_spill_detached`` warning; the later selectors
     stay in RAM and warn nothing.
 
     Returns

@@ -13,7 +13,7 @@ states:
   counterfactual "what would one training backward cost" is requestable
   in every grad state through :func:`backward_estimate` (the named door),
   always labeled hypothetical.
-- ``backward_observed``: ``log_backward`` recorded backward passes --
+- ``backward_observed``: ``backward`` recorded backward passes --
   timing is measured where fire timings exist, and the executed backward
   compute is COUNTED over the ATen calls that backward dispatched (each
   pass's ``BackwardPass.aten_ops``), exact for the matmul and
@@ -176,6 +176,16 @@ class BackwardStatus:
     ``recompute_flops`` is the part that replayed forward kernels under
     activation checkpointing (``None`` when the evidence cannot tell). The
     three are empty or ``None`` outside the ``backward_observed`` state.
+
+    Examples
+    --------
+    >>> with torch.no_grad():
+    ...     trace = tl.trace(model, x)
+    >>> status = tl.report.backward_status(trace)
+    >>> status.state
+    'grad_disabled'
+    >>> status.executed_flops
+    0
     """
 
     state: str
@@ -366,7 +376,17 @@ def _sum_known(values: Any) -> int | None:
 
 
 def backward_status(trace: Trace) -> BackwardStatus:
-    """Derive the three-state backward status for one finished trace."""
+    """Derive the three-state backward status for one finished trace.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> status = tl.report.backward_status(trace)
+    >>> status.state
+    'grad_enabled_unobserved'
+    >>> status.executed_flops is None
+    True
+    """
 
     grad_fn_logs = trace._grad_fn_logs or {}
     backward_passes = trace._backward_pass_logs or {}
@@ -430,6 +450,14 @@ class BackwardEstimate:
     ``excluded_ops`` (never silently multiplied by 1.0), and the freeze
     pattern is disclosed: the multiplier is nearer 1.0x where weights are
     frozen (only dX is computed, not dW).
+
+    Examples
+    --------
+    >>> estimate = tl.report.backward_estimate(tl.trace(model, x))
+    >>> estimate.label
+    'hypothetical'
+    >>> estimate.multiplier_table
+    {'mac_family': 2.0}
     """
 
     label: str
@@ -489,6 +517,14 @@ def backward_estimate(trace: Trace) -> BackwardEstimate:
 
     Requestable in every grad state; the result is ALWAYS labeled
     hypothetical and never enters an actual-cost slot.
+
+    Examples
+    --------
+    >>> estimate = tl.report.backward_estimate(tl.trace(model, x))
+    >>> estimate.hypothetical_flops > 0
+    True
+    >>> "HYPOTHETICAL" in estimate.disclosure
+    True
     """
 
     from ._compute_truth import classify_row

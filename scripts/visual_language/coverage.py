@@ -70,6 +70,7 @@ EXEMPT_PREFIX = "exempt: "
 DRAW_ENTRY_POINTS: Mapping[str, str] = {
     "Trace.draw": "torchlens._data_classes.trace:Trace.draw",
     "Module.draw": "torchlens._data_classes.module:Module.draw",
+    "Bundle.draw": "torchlens.bundle:Bundle.draw",
 }
 CALL_ENTRY = {
     "draw": "Trace.draw",
@@ -77,6 +78,7 @@ CALL_ENTRY = {
     # The backward and combined pictures are graph= values of the one draw door.
     "draw_backward": "Trace.draw",
     "draw_combined": "Trace.draw",
+    "bundle_graph": "Bundle.draw",
 }
 
 # ---------------------------------------------------------------------------
@@ -227,7 +229,11 @@ def legend_universe() -> tuple[LegendText, ...]:
     sections: list[tuple[str, Any]] = []
     for name, theme in themes.THEME_PRESETS.items():
         swatches = _header_block.key_swatches(
-            theme, every_role, has_module=True, mutated_parameter=True
+            theme,
+            every_role,
+            has_module=True,
+            mutated_parameter=True,
+            module_marks=frozenset({"frame", "box", "box3d", "double"}),
         )
         rows = tuple(_legend.LegendRow(text=swatch.text) for swatch in swatches)
         sections.append((f"key_swatches({name})", _legend.LegendSection(title="key", rows=rows)))

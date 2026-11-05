@@ -25,7 +25,7 @@ common = ["torch==2.13.0+cpu"]
 # holds exact elsewhere (pyproject.toml comments name them).
 [constraints.extra]
 netron = ["netron==9.2.2"]
-model-explorer = ["ai-edge-model-explorer==0.1.33"]
+model-explorer = ["ai-edge-model-explorer==0.1.34"]
 
 [aliases]
 # Spellings that request exactly another extra (pyproject.toml rolls them up

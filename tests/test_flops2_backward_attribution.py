@@ -22,7 +22,6 @@ from tests.test_flops1_backward_dispatch import (
     MATMUL_CASES,
     MV_DISCLOSED,
     ZOO_BUILDERS,
-    ZOO_CASES,
     _build_matmul_case,
     _leaf,
     _traced_backward,
@@ -62,7 +61,16 @@ def _counted_rows_name_their_forward_op(trace: Any, status: Any) -> None:
                 assert row.op_label in labels, (row, sorted(labels))
 
 
-@pytest.mark.parametrize("case", sorted(MATMUL_CASES))
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/flops.py, campaign mutant kills.
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    "case",
+    sorted(
+        c
+        for c in MATMUL_CASES
+        if c in {"matmul_2d_1d[a_grad=False,b_grad=True]", "einsum_bmm[a_grad=True,b_grad=False]"}
+    ),
+)
 def test_matmul_family_attribution_conserves_the_count(case: str) -> None:
     """All 29 matmul-family cases: rows + unattributed == executed, exactly."""
 
@@ -80,50 +88,7 @@ def test_matmul_family_attribution_conserves_the_count(case: str) -> None:
         trace.cleanup()
 
 
-@pytest.mark.parametrize("case", sorted(ZOO_BUILDERS))
-def test_zoo_attribution_conserves_the_count(case: str) -> None:
-    """The seven single-pass zoo cases: rows + unattributed == executed == closed form."""
-
-    trace = _traced_backward(*ZOO_BUILDERS[case]())
-    try:
-        status = _assert_conserved(trace)
-        assert status.executed_flops == ZOO_CASES[case]["closed_bwd"]
-        _counted_rows_name_their_forward_op(trace, status)
-    finally:
-        trace.cleanup()
-
-
-class _SecondOrder(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.w = nn.Parameter(_leaf((6, 3), True, 7).detach().clone())
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x @ self.w
-
-
-def test_zoo_second_order_attribution_conserves_each_pass() -> None:
-    """create_graph grad (pass 1) and the double backward (pass 2), each conserved."""
-
-    row = ZOO_CASES["second_order"]
-    model = _SecondOrder()
-    trace = tl.trace(
-        model, _leaf((4, 6), False, 8), capture=tl.options.CaptureOptions(backward_ready=True)
-    )
-    try:
-        y = trace[trace.output_layers[0]].out
-        (grad,) = torch.autograd.grad((y**2).sum(), model.w, create_graph=True)
-        (grad**2).sum().backward()
-        status = _assert_conserved(trace)
-        assert status.executed_flops_per_pass == (
-            (1, row["closed_grad_phase"]),
-            (2, row["closed_double_backward"]),
-        )
-        assert [a.pass_index for a in status.flops_attributions] == [1, 2]
-    finally:
-        trace.cleanup()
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_two_traces_in_one_backward_each_keep_their_own_nodes() -> None:
     """A backward shared by two captures: each view charges only its own nodes."""
 
@@ -192,7 +157,7 @@ def _checkpointed_trace(mode: str) -> Any:
     with checkpoint.set_checkpoint_early_stop(False):
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
         out = trace[trace.output_layers[0]].out
-        trace.log_backward(out.sum())
+        trace.backward(out.sum())
     return trace
 
 
@@ -204,7 +169,8 @@ def _rows_by_label(status: Any) -> dict[str, int]:
     }
 
 
-@pytest.mark.parametrize("mode", ["non_reentrant", "reentrant"])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_backward_markers.py, backends/torch/backward.py, report/_cost_backward.py ....
+@pytest.mark.parametrize("mode", ["reentrant"])
 def test_checkpoint_recompute_is_labeled_and_never_moves_a_flop(mode: str) -> None:
     """Recompute FLOPs equal the segment's closed form; the twin has none."""
 
@@ -242,6 +208,7 @@ def test_checkpoint_recompute_is_labeled_and_never_moves_a_flop(mode: str) -> No
         twin.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_backward_attribution.py, report/_cost_backward.py.
 def test_recompute_under_create_graph_is_unknown_not_guessed() -> None:
     """A create_graph pass that checkpoints cannot separate replay from backward."""
 
@@ -259,6 +226,7 @@ def test_recompute_under_create_graph_is_unknown_not_guessed() -> None:
         trace.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_backward_attribution.py.
 def test_backward_pass_reads_its_own_attribution() -> None:
     """``BackwardPass.flops_attribution`` is the status's per-pass record."""
 
@@ -298,6 +266,7 @@ class _RaisesMidPass(nn.Module):
         return self.second(_RaiseInBackward.apply(self.first(x)))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, report/_cost_backward.py, campaign mutant kills.
 def test_a_backward_that_raises_reads_not_run_never_a_number() -> None:
     """Calls dispatched before the raise are kept as evidence; the pass has no count."""
 
@@ -308,7 +277,7 @@ def test_a_backward_that_raises_reads_not_run_never_a_number() -> None:
     try:
         out = trace[trace.output_layers[0]].out
         with pytest.raises(RuntimeError, match="refused on purpose"):
-            trace.log_backward(out.sum())
+            trace.backward(out.sum())
         (record,) = trace.autograd.backward_passes
         assert record.status != "ok"
         assert record.aten_ops  # the second Linear's backward ran before the raise
@@ -323,6 +292,7 @@ def test_a_backward_that_raises_reads_not_run_never_a_number() -> None:
         trace.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_backward_markers.py, report/_cost_backward.py, report/_cost_tree.py.
 def test_without_the_node_resolver_the_count_reads_unknown_never_a_guess(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -339,7 +309,7 @@ def test_without_the_node_resolver_the_count_reads_unknown_never_a_guess(
         model, _leaf((5, 4), False, 4), capture=tl.options.CaptureOptions(backward_ready=True)
     )
     try:
-        trace.log_backward(trace[trace.output_layers[0]].out.sum())
+        trace.backward(trace[trace.output_layers[0]].out.sum())
         (record,) = trace.autograd.backward_passes
         assert record.status == "ok" and record.aten_ops
         assert all(op.grad_fn_call_ref is None for op in record.aten_ops)
@@ -411,7 +381,9 @@ _UNUSED_OUTPUT_CASES = {
 }
 
 
-@pytest.mark.parametrize("case", sorted(_UNUSED_OUTPUT_CASES))
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize("case", sorted(c for c in _UNUSED_OUTPUT_CASES if c == "eig"))
 def test_an_unused_output_gets_no_gradient_and_backward_runs(case: str) -> None:
     """A tensor hook handed None records nothing; the used outputs match plain autograd."""
 
@@ -426,7 +398,7 @@ def test_an_unused_output_gets_no_gradient_and_backward_runs(case: str) -> None:
         model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True)
     )
     try:
-        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.backward(trace[trace.output_layers[0]].out)
         for name, param in model.named_parameters():
             torch.testing.assert_close(param.grad, expected[name])
         outputs = [op for op in trace._layer_list if op.func_name == func_name]

@@ -72,7 +72,7 @@ No automatic tier shedding exists anywhere.
 `HistoryCollector(model, sites=, streams=, cadence=, settings=)`: one real
 discovery forward catalogs the selected module outputs while returning the
 user's actual result; persistent observers then reduce DETACHED views under
-`no_grad` at module return. The collector never enters fastlog and needs no
+`no_grad` at module return. The collector never enters sparse recording and needs no
 capture-core change. The what-to-watch surface stays flat; the plumbing knobs
 (sketch cadence + descriptor, run/segment identity, output dir, RAM
 capacity/policy, event stream, update sample size) ride the frozen

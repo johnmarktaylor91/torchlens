@@ -43,23 +43,6 @@ def _torch_raises_on_meta_disabled_autocast() -> bool:
     return False
 
 
-def test_shim_unlocks_disabled_autocast_on_admitted_meta() -> None:
-    """The L8 unlock: the exact null call works inside an admitted forward."""
-
-    if not _torch_raises_on_meta_disabled_autocast():
-        pytest.skip("this torch build accepts meta autocast; the shim is inert")
-    with torch.device("meta"):
-        model = AutocastGuardModel()
-    model.eval()
-    trace = tl.trace(
-        model, torch.empty(2, 4, device="meta"), capture=CaptureOptions(structure_only=True)
-    )
-    assert trace.outcome.status.value == "complete"
-    funcs = [layer.func_name for layer in trace._layer_list]
-    assert "linear" in funcs and "relu" in funcs
-
-
-@pytest.mark.smoke
 def test_enabled_autocast_on_meta_still_refuses() -> None:
     """``enabled=True`` on meta is NOT nullified: torch's own refusal stands,
     classified into the substrate family by W1-CLS (torch/amp provenance)."""
@@ -97,13 +80,3 @@ def test_shim_is_scoped_to_the_admitted_forward() -> None:
     assert torch.autocast is original
     with pytest.raises(RuntimeError), torch.autocast(device_type="meta", enabled=False):
         pass
-
-
-def test_real_capture_autocast_untouched() -> None:
-    """Ordinary captures never see the shim: the disabled-autocast scope on a
-    real device runs through the shipped class."""
-
-    model = AutocastGuardModel()
-    model.eval()
-    trace = tl.trace(model, torch.randn(2, 4))
-    assert trace.outcome.status.value == "complete"

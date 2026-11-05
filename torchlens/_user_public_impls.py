@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import os
 import random
 import warnings
 from collections.abc import Callable
@@ -11,7 +10,6 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 from torch import nn
-from tqdm import tqdm
 
 from torchlens.backends.registry import BackendUnsupportedError
 
@@ -29,13 +27,11 @@ from ._data_classes.trace import Trace
 from ._deploy_env import restore_state_dict_resilient
 from ._deprecations import MISSING, MissingType
 from ._errors import CaptureNotActiveError, InvalidArgumentError
-from ._input_coerce import _coerce_input_args
+from ._input_coerce import _coerce_inputs
 from ._literals import (
     CollapseLiteral,
     FoldRepeatsLiteral,
     OutputDeviceLiteral,
-    VisDirectionLiteral,
-    VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
@@ -69,8 +65,6 @@ from .options import (
 )
 
 if TYPE_CHECKING:
-    import pandas as pd
-
     from ._data_classes.module import Module
 
 
@@ -151,7 +145,7 @@ def log_model_metadata(
 
 def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input rungs plus the two execution dials ARE the spec'd surface (F17 B11)
     model: nn.Module | str,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     *,
     input_shape: Any | None = None,
@@ -169,7 +163,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     and never auto-prints (the repr self-displays).
 
     Input precedence follows the quickstart ladder (F17, memo D2): real
-    ``input_args`` XOR ``input_shape=`` XOR nothing. ``input_shape=``
+    ``inputs`` XOR ``input_shape=`` XOR nothing. ``input_shape=``
     synthesizes seeded tensors per the quickstart grammar and the synthesis
     is disclosed in the render; a zero-input call infers a verified input
     and REUSES its verification trace (no second capture). Mixing the
@@ -183,7 +177,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         device (no weight download) and takes the weights-free path, so it
         needs ``input_shape=`` or meta inputs. Requires ``transformers``; the
         string form is DOCUMENTED-UNSTABLE.
-    input_args:
+    inputs:
         Positional args for ``model.forward()``. The quickstart input ladder
         applies (F17): a real input is the gold rung; omit it and pass
         ``input_shape=`` for a declared shape with synthesized values; omit
@@ -237,14 +231,14 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     ladder_provenance = None
     input_synthesis: str | None = None
     facade_report = _maybe_weightsfree_summary(
-        model, input_args, input_kwargs, input_shape, summary_kwargs
+        model, inputs, input_kwargs, input_shape, summary_kwargs
     )
     if facade_report is not None:
         return facade_report
-    if input_shape is not None or (input_args is None and not input_kwargs):
+    if input_shape is not None or (inputs is None and not input_kwargs):
         from ._quickstart._resolve import attach_provenance, resolve_inputs
 
-        resolved = resolve_inputs(model, input_args, input_kwargs, input_shape, verb="summary")
+        resolved = resolve_inputs(model, inputs, input_kwargs, input_shape, verb="summary")
         ladder_provenance = resolved.provenance
         input_synthesis = _ladder_synthesis_note(input_shape, resolved)
         if (
@@ -261,11 +255,11 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
                 grad_mode="off",
                 input_synthesis=input_synthesis,
             )
-        input_args = list(resolved.plan.input_args)
+        inputs = list(resolved.plan.input_args)
         input_kwargs = dict(resolved.plan.input_kwargs)
 
-    input_args = _coerce_input_args(model, input_args)
-    check_model_and_input_variants(model, input_args, input_kwargs)
+    inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
+    check_model_and_input_variants(model, inputs, input_kwargs)
 
     saved_training_flags = [(module, module.training) for module in model.modules()]
     rng_snapshot = log_current_rng_states()
@@ -279,7 +273,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         with grad_context:
             trace = _user_funcs._run_model_and_save_specified_outs(
                 model=model,
-                input_args=input_args,
+                input_args=inputs,
                 input_kwargs=input_kwargs,
                 layers_to_save=None,
                 recurrence_detection=True,
@@ -609,7 +603,7 @@ def show_model_graph(
     model = _unwrap_data_parallel(model)
     if not input_kwargs:
         input_kwargs = {}
-    input_args = _coerce_input_args(model, input_args)
+    input_args, input_kwargs = _coerce_inputs(model, input_args, input_kwargs)
     check_model_and_input_variants(model, input_args, input_kwargs)
 
     if recurrence_detection is MISSING:
@@ -655,104 +649,10 @@ def show_model_graph(
         trace.cleanup()
 
 
-def show_bundle_graph(
-    bundle: Any,
-    path: str = "bundle_modelgraph",
-    vis_mode: VisModeLiteral = "unrolled",
-    signal: str = "forward",
-    vis_direction: VisDirectionLiteral = "bottomup",
-    vis_graph_overrides: dict[str, Any] | None = None,
-    vis_node_overrides: dict[str, Any] | None = None,
-    vis_edge_overrides: dict[tuple[str, str], Any] | None = None,
-    vis_save_only: bool = False,
-    file_format: str = "pdf",
-    nodes: Literal["ops", "members"] = "ops",
-    theme: str = "torchlens",
-    show_legend: bool | None = None,
-) -> str | None:
-    """Render a multi-trace bundle graph.
-
-    Parameters
-    ----------
-    bundle:
-        ``torchlens.Bundle`` instance.
-    path:
-        Output path for Graphviz rendering.
-    vis_mode:
-        ``"rolled"``, ``"unrolled"``, or ``"none"``.
-    signal:
-        Which pass's graph to draw: ``"forward"``, ``"backward"``, ``"both"``, or
-        ``"overlay"``.
-    vis_direction:
-        Graphviz layout direction.
-    vis_graph_overrides:
-        Graph-level Graphviz overrides.
-    vis_node_overrides:
-        Per-node Graphviz style overrides.
-    vis_edge_overrides:
-        Per-edge Graphviz style overrides keyed by ``(source, target)``.
-    vis_save_only:
-        If True, save without opening a viewer.
-    file_format:
-        Output file format.
-    nodes:
-        What the picture's nodes are (spelling documented-unstable).
-        ``"ops"`` (default): the bundle's union op graph. ``"members"``: one
-        node per member and one edge per relation row, from the earlier
-        member to the later one, labelled with the kind, the row's
-        ``label`` and, on ``fed_by``, its basis and coverage; solid edges
-        carry token spans TorchLens checked, every other row is dashed.
-        Node overrides key by member name, edge overrides by
-        ``(earlier, later)``; ``signal`` must stay ``"forward"``.
-    theme:
-        Skin preset, the names ``Trace.draw`` takes: ``"torchlens"`` (default),
-        ``"paper"``, ``"dark"``, ``"colorblind"`` or ``"high_contrast"``.
-        Op nodes take ``draw``'s shapes and fills; a node or arrow every
-        member runs carries no member list.
-    show_legend:
-        ``True`` draws the key under the header, as ``draw`` does.
-
-    Returns
-    -------
-    str | None
-        DOT source, or ``None`` when ``vis_mode='none'``.
-    """
-
-    if nodes not in {"ops", "members"}:
-        raise ValueError("nodes must be 'ops' or 'members'.")
-    if nodes == "members" and signal != "forward":
-        raise ValueError("nodes='members' draws the relation graph; leave signal='forward'.")
-    if vis_mode == "none":
-        return None
-    if vis_mode not in {"rolled", "unrolled"}:
-        raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
-    if signal not in {"forward", "backward", "both", "overlay"}:
-        raise ValueError("signal must be 'forward', 'backward', 'both', or 'overlay'.")
-
-    from ._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
-    from ._visualization._render_utils import direction_to_rankdir
-
-    options = BundlePictureOptions(
-        outpath=path,
-        vis_mode=vis_mode,
-        direction=signal,
-        rankdir=direction_to_rankdir(vis_direction),
-        graph_overrides=vis_graph_overrides,
-        node_overrides=vis_node_overrides,
-        edge_overrides=vis_edge_overrides,
-        save_only=vis_save_only,
-        fileformat=file_format,
-        nodes=nodes,
-        theme_name=theme,
-        show_legend=show_legend is True,
-    )
-    return render_bundle_graph(bundle, options)
-
-
 @restores_rng_streams
 def validate_forward_pass(
     model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     seed: int | None = None,
     verbose: bool = False,
@@ -768,7 +668,7 @@ def validate_forward_pass(
     ----------
     model:
         Model or callable to validate.
-    input_args:
+    inputs:
         Input for which to validate the saved outs.
     input_kwargs:
         Keyword arguments for model forward pass.
@@ -800,6 +700,12 @@ def validate_forward_pass(
     ------
     BackendUnsupportedError
         If a non-default save option is requested for a non-torch backend.
+
+    Examples
+    --------
+    >>> ok = tl.validation.validate_forward_pass(model, x)
+    >>> type(ok).__name__, ok
+    ('bool', True)
     """
 
     from ._options_validation import _validate_output_device
@@ -807,7 +713,7 @@ def validate_forward_pass(
 
     _validate_output_device(output_device)
     resolve_save_budget(save_budget)
-    spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+    spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
     # Forward only non-default save options: a default call reaches every
     # backend's entry with exactly the keywords it always received.
     save_options: dict[str, Any] = {}
@@ -826,7 +732,7 @@ def validate_forward_pass(
         )
     return spec.validate_entry(
         model,
-        input_args,
+        inputs,
         input_kwargs=input_kwargs,
         seed=seed,
         verbose=verbose,
@@ -1253,7 +1159,7 @@ def _validate_forward_pass_torch(
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
-    input_args = _coerce_input_args(model, input_args)
+    input_args, input_kwargs = _coerce_inputs(model, input_args, input_kwargs)
     check_model_and_input_variants(model, input_args, input_kwargs)
     # Fix a random seed so both the ground-truth run and the logged run see
     # identical randomness (critical for models with dropout, etc.).
@@ -1672,7 +1578,7 @@ def _validate_forward_pass_torch(
 @restores_rng_streams
 def validate_backward_pass(
     model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
@@ -1690,8 +1596,8 @@ def validate_backward_pass(
     ----------
     model:
         PyTorch model.
-    input_args:
-        Positional args for ``model.forward()``.
+    inputs:
+        Positional args for ``model.forward()``; for a Hugging Face model also a string, PIL image or modality dict, resolved as ``tl.trace`` resolves it.
     input_kwargs:
         Keyword args for ``model.forward()``.
     loss_fn:
@@ -1725,12 +1631,18 @@ def validate_backward_pass(
     -------
     bool
         True if backward capture matches stock autograd.
+
+    Examples
+    --------
+    >>> ok = tl.validation.validate_backward_pass(model, x)
+    >>> type(ok).__name__, ok
+    ('bool', True)
     """
     from .validation.backward import validate_backward_pass as _impl
 
     return _impl(
         model,
-        input_args,
+        inputs,
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
         validate_metadata=validate_metadata,
@@ -1741,87 +1653,3 @@ def validate_backward_pass(
         layer_grad_atol=layer_grad_atol,
         layer_grad_rtol=layer_grad_rtol,
     )
-
-
-def validate_batch_of_models_and_inputs(
-    models_and_inputs_dict: dict[str, dict[str, Any]],
-    out_path: str,
-    redo_model_if_already_run: bool = True,
-    show_progress: bool = True,
-) -> pd.DataFrame:
-    """Batch-validate multiple models, writing incremental results to a CSV.
-
-    For each model/input pair, calls ``validate_forward_pass`` and appends the
-    result to a running CSV at *out_path*.  If the CSV already exists, previously
-    validated models can be skipped (controlled by *redo_model_if_already_run*).
-
-    Parameters
-
-    ----------
-        models_and_inputs_dict: Mapping of model_class_name to a dict with keys:
-            - ``model_category`` (str): grouping label (e.g. 'torchvision').
-            - ``model_loading_func`` (callable): zero-arg function returning an nn.Module.
-            - ``model_sample_inputs`` (dict[str, input]): named sample inputs.
-        out_path: File path for the results CSV (created if absent, appended otherwise).
-        redo_model_if_already_run: Re-validate models already present in the CSV.
-        show_progress: Show the tqdm bar and per-model status lines. Pass False
-            for quiet batch runs (b8 B8-38: the bar was ungated and a bare print
-            inside the loop corrupted the live bar).
-
-    Returns
-
-    -------
-        DataFrame with columns: model_category, model_class_name, input_name, validation_success.
-    """
-    try:
-        import pandas as pd
-    except ImportError as e:
-        raise ImportError(
-            "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
-        ) from e
-
-    if os.path.exists(out_path):
-        current_csv = pd.read_csv(out_path)
-    else:
-        current_csv = pd.DataFrame.from_dict(
-            {
-                "model_category": [],
-                "model_class_name": [],
-                "input_name": [],
-                "validation_success": [],
-            }
-        )
-    models_already_run = current_csv["model_class_name"].unique()
-    progress = tqdm(
-        models_and_inputs_dict.items(), desc="Validating models", disable=not show_progress
-    )
-    for model_class_name, model_info in progress:
-        # Route the status line through the bar so it never corrupts it.
-        progress.set_postfix_str(model_class_name)
-        if model_class_name in models_already_run and not redo_model_if_already_run:
-            continue
-        model_category = model_info["model_category"]
-        model_loading_func = model_info["model_loading_func"]
-        model = model_loading_func()
-        model_sample_inputs = model_info["model_sample_inputs"]
-        for input_name, input_data in model_sample_inputs.items():
-            validation_success = validate_forward_pass(model, input_data)
-            current_csv = pd.concat(
-                [
-                    current_csv,
-                    pd.DataFrame(
-                        [
-                            {
-                                "model_category": model_category,
-                                "model_class_name": model_class_name,
-                                "input_name": input_name,
-                                "validation_success": validation_success,
-                            }
-                        ]
-                    ),
-                ],
-                ignore_index=True,
-            )
-        current_csv.to_csv(out_path, index=False)
-        del model
-    return current_csv

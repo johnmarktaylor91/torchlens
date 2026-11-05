@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ._display import _ambiguous_rank_message
 from ._engine import JoinKey, JoinRecord, MergeDerivation, derive_merge
 from ._enums import BoundaryConsistency, MergeAlignment, MergedErrorCode, MergeValueStatus
 from ._errors import (
@@ -182,7 +183,19 @@ class CollectiveJoin:
 
 @dataclass(frozen=True)
 class MergeReport:
-    """Graph-free diagnostic summary of a merge derivation (3.2)."""
+    """Graph-free diagnostic summary of a merge derivation (3.2).
+
+    Examples
+    --------
+    >>> aligned = tl.types.MergeAlignment.ALIGNED
+    >>> report = MergeReport(
+    ...     ranks=(0, 1), expected_ranks=None, stored_alignment=aligned, alignment=aligned,
+    ...     value_status=tl.types.MergeValueStatus.UNWITNESSED, num_joins=2, findings=(),
+    ... )
+    >>> report.to_markdown().splitlines()[:2]
+    ['# Cross-rank merge report', '- ranks: [0, 1]']
+    >>> len(report.gaps), len(report.conflicts)
+    (0, 0)"""
 
     ranks: tuple[int, ...]
     expected_ranks: tuple[int, ...] | None
@@ -286,8 +299,19 @@ class MergedTrace:
     Lifetime contract (R37): the presenter holds its rank traces STRONGLY for
     its own lifetime -- ``merge_ranks([live_a, live_b])`` transitively pins
     both rank traces (and their retained activations) until the presenter is
-    dropped or :meth:`release` is called. Call :meth:`release` when finished
+    dropped or :meth:`cleanup` is called. Call :meth:`cleanup` when finished
     with a presenter built over live traces you do not otherwise retain.
+
+    Examples
+    --------
+    >>> callable(MergedTrace.cleanup)
+    True
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.merge_ranks([trace])
+    ... except tl.errors.MergeInputError as error:
+    ...     print(error.fields["remedy"])
+    capture each rank under torchlens.distributed.arm() and merge those
     """
 
     def __init__(
@@ -308,7 +332,7 @@ class MergedTrace:
         """Read each loaded member's settled capture-outcome status once.
 
         Computed at construction (statuses are settled and frozen) so the
-        disclosure stays readable after :meth:`release` and never forces a
+        disclosure stays readable after :meth:`cleanup` and never forces a
         lazy member load. Members whose object carries no settled outcome
         sidecar (hand-built evidence carriers) make no claim and are absent.
         """
@@ -341,12 +365,12 @@ class MergedTrace:
         self._released = True
 
     def _require_members(self, surface: str) -> None:
-        """Refuse typed when ``surface`` needs member traces after release()."""
+        """Refuse typed when ``surface`` needs member traces after cleanup()."""
 
         if self._released:
             raise MergedSurfaceUnsupportedError(
                 f"MergedTrace.{surface} needs the member rank traces, but "
-                "release() dropped them. Re-merge (or re-load) the rank cores "
+                "cleanup() dropped them. Re-merge (or re-load) the rank cores "
                 "to access members again; the derivation verdicts remain "
                 "readable on this presenter.",
                 code=MergedErrorCode.MERGED_MEMBER_RELEASED,
@@ -409,7 +433,7 @@ class MergedTrace:
         never claims ``attested_complete`` silently over a halted prefix.
         Ranks whose member object carries no settled outcome sidecar are
         absent. Settled at construction; stays readable after
-        :meth:`release`.
+        :meth:`cleanup`.
         """
 
         return dict(self._member_outcomes)
@@ -512,12 +536,7 @@ class MergedTrace:
         if len(hits) > 1:
             from .._errors import AmbiguousOpLookupError
 
-            spellings = ", ".join(f"r{rank_id}/{item}" for rank_id in sorted(hits))
-            raise AmbiguousOpLookupError(
-                f"Label {item!r} resolves on {len(hits)} ranks; disambiguate "
-                f"with a rank-qualified label ({spellings}) or use "
-                "merged.at() for the cross-rank fan."
-            )
+            raise AmbiguousOpLookupError(_ambiguous_rank_message(item, hits))
         return next(iter(hits.values()))
 
     def _split_sugar(self, item: str) -> tuple[int | None, str]:
@@ -791,10 +810,10 @@ class MergedTrace:
 
         self._refuse_surface("intervene()")
 
-    def log_backward(self, *args: Any, **kwargs: Any) -> Any:
+    def backward(self, *args: Any, **kwargs: Any) -> Any:
         """Refused: backward/gradient merging is deferred (fork F1, typed)."""
 
-        self._refuse_surface("log_backward()")
+        self._refuse_surface("backward()")
 
     def receptive_fields(self, *args: Any, **kwargs: Any) -> Any:
         """Refused: merged influence geometry does not exist (typed)."""
@@ -850,6 +869,15 @@ def merge_ranks(
         (pre-join lineage-audit conflicts, relation violations, order
         contradictions, correlation cross-check disagreements). The
         graph-free diagnostic escape hatch is :func:`merge_report`.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.merge_ranks([trace])
+    ... except tl.errors.MergeInputError as error:
+    ...     print(error.fields["reason"])
+    not_a_rank_capture
     """
 
     resolved = resolve_rank_inputs(inputs)
@@ -886,6 +914,15 @@ def merge_report(
     it is the escape hatch for diagnosing exactly those. Input validation
     (unloadable path, malformed core, out-of-scope boundary) still refuses
     typed.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.merge_report([trace])
+    ... except tl.errors.MergeInputError as error:
+    ...     print(error.fields["code"], error.fields["reason"])
+    merge_input_invalid not_a_rank_capture
     """
 
     resolved = resolve_rank_inputs(inputs)

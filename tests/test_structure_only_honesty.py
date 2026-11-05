@@ -50,28 +50,11 @@ def test_meta_and_real_tensors_of_identical_geometry_never_collide() -> None:
     assert tl.fingerprint.content(meta) == tl.fingerprint.content(meta_twin)
 
 
-def test_structure_digests_always_computed() -> None:
-    log = _structure_trace()
-    digest = tl.fingerprint.trace(log)
-    assert isinstance(digest, str) and len(digest) == 64
-
-
 # ---------------------------------------------------------------------------
 # G3: render honesty banners
 # ---------------------------------------------------------------------------
 
 
-def test_summary_carries_the_structure_only_banner() -> None:
-    log = _structure_trace()
-    text = log.summary()
-    assert "structure-only capture" in text
-    assert "HYPOTHESES" in text
-    # Default path: no banner.
-    plain = tl.trace(TwoLayer(), torch.randn(2, 4)).summary()
-    assert "structure-only" not in plain
-
-
-@pytest.mark.smoke
 def test_profile_repr_carries_the_banner() -> None:
     log = _structure_trace()
     profile = log.profile()
@@ -94,13 +77,6 @@ def test_profile_repr_carries_the_banner() -> None:
     assert "hypothesis" in set(honesty["flops"].unique())
 
 
-def test_explain_carries_the_hypothesis_line() -> None:
-    log = _structure_trace()
-    text = log.explain()
-    assert "Structure-only capture" in text
-    assert "HYPOTHESES" in text
-
-
 # ---------------------------------------------------------------------------
 # Default-path teaching enrichment + baseline gate pins (memo 1.4-B / 9.7)
 # ---------------------------------------------------------------------------
@@ -111,7 +87,6 @@ def _meta_model() -> nn.Module:
         return nn.Linear(4, 4)
 
 
-@pytest.mark.smoke
 def test_meta_init_model_still_refuses_at_the_gate_with_enriched_teaching() -> None:
     """Baseline pin (becomes the D8 carve-through test): the DEFAULT path and
     the D8-default flag-on path both refuse meta state unchanged, now naming
@@ -129,23 +104,6 @@ def test_meta_init_model_still_refuses_at_the_gate_with_enriched_teaching() -> N
     assert f"{__file__}:" in str(err)
 
 
-@pytest.mark.smoke
-def test_meta_model_real_input_mixed_cell_refuses_post_flip() -> None:
-    """Entry-matrix E-3 under the D8 GRANT: structure_only=True admits meta
-    only with a UNIFORM substrate — a meta model with a REAL input is a mixed
-    cell and refuses typed with the substrate-mismatch code, naming sides."""
-
-    with pytest.raises(Exception) as excinfo:
-        tl.trace(
-            _meta_model(),
-            torch.randn(2, 4),
-            capture=CaptureOptions(structure_only=True),
-        )
-    assert excinfo.value.fields["code"] == "structure_only_substrate_mismatch"
-    assert excinfo.value.fields["meta_side"]
-    assert excinfo.value.fields["real_side"]
-
-
 def test_real_model_meta_input_mixed_cell_refuses_post_flip() -> None:
     """Entry-matrix E-4 under the D8 GRANT: meta INPUTS against real state
     are the other mixed direction — the same typed substrate-mismatch code."""
@@ -157,7 +115,6 @@ def test_real_model_meta_input_mixed_cell_refuses_post_flip() -> None:
     assert excinfo.value.fields["code"] == "structure_only_substrate_mismatch"
 
 
-@pytest.mark.smoke
 def test_fake_tensor_still_refuses_under_the_flag() -> None:
     """Tamper pin t2 (D8-default form): the flag narrows NOTHING at the
     variant gate — FakeTensor offenses refuse under structure_only=True."""

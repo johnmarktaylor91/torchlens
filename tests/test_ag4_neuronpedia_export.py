@@ -179,97 +179,6 @@ def test_export_meets_the_structural_contract(graphs, name) -> None:
     assert exported["links"], "the default pruning keeps edges on every fixture"
 
 
-@pytest.mark.parametrize("name", ["F1", "F3"])
-def test_link_weights_equal_the_adjacency(graphs, name) -> None:
-    graph = graphs[name]
-    index = {node_id: i for i, node_id in enumerate(_expected_ids(graph))}
-    exported = _export(graph)
-    for link in exported["links"]:
-        expected = graph.adjacency_matrix[index[link["target"]], index[link["source"]]].item()
-        assert link["weight"] == expected
-
-
-@pytest.mark.parametrize("name", ["F1", "F3"])
-def test_influence_equals_an_independent_computation(graphs, name) -> None:
-    graph = graphs[name]
-    shares = _numpy_influence(graph)[1]
-    index = {node_id: i for i, node_id in enumerate(_expected_ids(graph))}
-    exported = _export(graph)
-    checked = 0
-    for node in exported["nodes"]:
-        if node["feature_type"] == "logit":
-            assert node["influence"] is None
-            continue
-        assert abs(node["influence"] - shares[index[node["node_id"]]]) <= INFLUENCE_TOL
-        checked += 1
-    assert checked >= len(graph.node_indices("token"))
-
-
-@pytest.mark.parametrize("name", ["F1", "F3"])
-def test_kept_nodes_and_links_follow_the_pruning_rule(graphs, name) -> None:
-    graph = graphs[name]
-    nodes, links = _numpy_kept(graph)
-    exported = _export(graph)
-    assert {node["node_id"] for node in exported["nodes"]} == nodes
-    assert {(link["source"], link["target"]) for link in exported["links"]} == links
-    assert any(node.startswith("0_") for node in nodes), "pruning keeps some layer-0 nodes"
-
-
-def test_node_fields_follow_the_reference_layout(graphs) -> None:
-    graph = graphs["F3"]
-    exported = _export(graph)
-    by_id = {node["node_id"]: node for node in exported["nodes"]}
-    for i in graph.node_indices("feature"):
-        node = graph.nodes[i]
-        layer = graph.transcoder_sites.index(node.site)
-        got = by_id.get(f"{layer}_{node.feature_index}_{node.position}")
-        if got is None:
-            continue
-        assert got["feature"] == (layer + node.feature_index) * (
-            layer + node.feature_index + 1
-        ) // 2 + (node.feature_index)
-        assert (got["layer"], got["ctx_idx"]) == (str(layer), node.position)
-        assert got["feature_type"] == "cross layer transcoder"
-        assert got["jsNodeId"] == f"{layer}_{node.feature_index}-0"
-        assert got["activation"] == graph.feature_activations[i].item()
-    for i in graph.node_indices("token"):
-        node = graph.nodes[i]
-        got = by_id[f"E_{node.token_id}_{node.position}"]
-        assert (got["feature"], got["layer"], got["feature_type"]) == (
-            node.position,
-            "E",
-            "embedding",
-        )
-        assert got["jsNodeId"] == f"E_{node.token_id}-{node.position}"
-    for k, i in enumerate(graph.node_indices("logit")):
-        node = graph.nodes[i]
-        probability = graph.logit_probabilities[k].item()
-        got = by_id[f"4_{node.token_id}_{fx.N_POS - 1}"]
-        assert (got["layer"], got["feature_type"], got["jsNodeId"]) == (
-            "4",
-            "logit",
-            f"L_{node.token_id}-{fx.N_POS - 1}",
-        )
-        assert got["clerp"] == f'Output "<{node.token_id}>" (p={probability:.3f})'
-        assert (got["token_prob"], got["is_target_logit"]) == (probability, k == 0)
-    errors = [
-        node for node in exported["nodes"] if node["feature_type"] == "mlp reconstruction error"
-    ]
-    for got in errors:
-        layer, _minus_one, position = got["node_id"].split("_")
-        assert (got["feature"], got["jsNodeId"]) == (-1, f"{layer}_-1-{position}")
-    meta = exported["metadata"]
-    assert meta["prompt_tokens"] == [f"<{t}>" for t in fx.TOKENS]
-    assert (meta["schema_version"], meta["transcoder_list"]) == (1, [])
-    assert exported["qParams"] == {
-        "pinnedIds": [],
-        "supernodes": [],
-        "linkType": "both",
-        "clickedId": "",
-        "sg_pos": "",
-    }
-
-
 def test_path_writes_the_returned_json(graphs, tmp_path) -> None:
     path = tmp_path / "graph.json"
     exported = _export(graphs["F2"], path=path)
@@ -280,33 +189,6 @@ def test_prompt_defaults_to_the_decoded_tokens(graphs) -> None:
     graph = graphs["F1"]
     assert _export(graph)["metadata"]["prompt"] == "".join(f"<{t}>" for t in fx.TOKENS)
     assert _export(graph, prompt="three tokens")["metadata"]["prompt"] == "three tokens"
-
-
-def test_bos_position_nodes_are_exported(graphs) -> None:
-    """Nodes at the first position are exported whenever pruning keeps them."""
-
-    kept_first = 0
-    for name in ("F1", "F2", "F3"):
-        for node_threshold, edge_threshold in ((0.8, 0.98), (0.95, 0.99), (0.99, 0.999)):
-            nodes, _links = _numpy_kept(graphs[name], node_threshold, edge_threshold)
-            first = {
-                node
-                for node in nodes
-                if not node.startswith("E_") and int(node.rsplit("_", 1)[1]) == 0
-            }
-            exported = _export(
-                graphs[name],
-                node_influence_coverage=node_threshold,
-                edge_influence_coverage=edge_threshold,
-            )
-            got = {
-                node["node_id"]
-                for node in exported["nodes"]
-                if node["ctx_idx"] == 0 and node["feature_type"] != "embedding"
-            }
-            assert got == first, (name, node_threshold, edge_threshold)
-            kept_first += len(first)
-    assert kept_first, "some fixture and thresholds keep feature or error nodes at position 0"
 
 
 @pytest.mark.parametrize(

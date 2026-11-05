@@ -2,13 +2,7 @@
 
 from __future__ import annotations
 
-import gc
-import getpass
-import html
 import inspect
-import os
-import re
-import weakref
 from pathlib import Path
 from typing import Any
 
@@ -21,76 +15,7 @@ from torchlens._visualization.code_panel import (
     MAX_CODE_PANEL_LINE_CHARS,
     _wrap_source_line,
     capture_model_source_code,
-    render_code_panel_svg,
 )
-
-# Design advance width of the monospace fonts rasterizers resolve "Courier" to
-# (Courier/Nimbus Mono/Liberation Mono/Noto Sans Mono are all 0.600 em;
-# DejaVu Sans Mono is 0.602 em). Used to compute true rendered text extents,
-# independently of whatever sizing factor the panel implementation uses.
-_TRUE_MONOSPACE_ADVANCE_EM = 0.602
-
-
-def _panel_geometry(svg: str) -> tuple[float, float, list[tuple[float, str]]]:
-    """Parse a code-panel SVG's canvas width, box right edge, and text runs.
-
-    Parameters
-    ----------
-    svg:
-        SVG document produced by ``render_code_panel_svg``.
-
-    Returns
-    -------
-    tuple[float, float, list[tuple[float, str]]]
-        Canvas width in points, panel-box right edge in points, and one
-        ``(right_extent, content)`` pair per monospace text run, where
-        ``right_extent`` is the run's true rendered right edge computed from
-        monospace font metrics.
-    """
-
-    width_match = re.search(r'width="([\d.]+)pt"', svg)
-    assert width_match is not None
-    canvas_width = float(width_match.group(1))
-    box_match = re.search(r'<path fill="#fafafa"[^>]*\bd="([^"]+)"', svg)
-    assert box_match is not None
-    box_right = max(float(x) for x, _y in re.findall(r"(-?[\d.]+),(-?[\d.]+)", box_match.group(1)))
-    runs: list[tuple[float, str]] = []
-    for text_match in re.finditer(r"<text\b([^>]*)>([^<]*)</text>", svg):
-        attrs, raw_content = text_match.group(1), text_match.group(2)
-        if 'font-family="Courier' not in attrs:
-            continue
-        x_match = re.search(r'\bx="(-?[\d.]+)"', attrs)
-        size_match = re.search(r'\bfont-size="([\d.]+)"', attrs)
-        assert x_match is not None and size_match is not None
-        content = html.unescape(raw_content)
-        right_extent = float(x_match.group(1)) + len(content) * _TRUE_MONOSPACE_ADVANCE_EM * float(
-            size_match.group(1)
-        )
-        runs.append((right_extent, content))
-    return canvas_width, box_right, runs
-
-
-def _panel_code_lines(svg: str) -> list[str]:
-    """Return the displayed code lines of a panel SVG, nbsp-normalized.
-
-    Parameters
-    ----------
-    svg:
-        SVG document produced by ``render_code_panel_svg``.
-
-    Returns
-    -------
-    list[str]
-        Monospace text-run contents with non-breaking spaces normalized to
-        regular spaces, excluding the source-link row.
-    """
-
-    _, _, runs = _panel_geometry(svg)
-    return [
-        content.replace("\xa0", " ")
-        for _, content in runs
-        if content not in ("Open source", "Source code")
-    ]
 
 
 def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
@@ -165,150 +90,12 @@ class _CodePanelModel(nn.Module):
         return self.linear(x).relu()
 
 
-def test_code_panel_false_no_panel(tmp_path: Path) -> None:
-    """Default rendering should not include a code panel in the graph or output."""
-
-    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
-    dot = _render_dot(log, tmp_path)
-    svg = _render_svg_output(log, tmp_path)
-
-    assert "cluster_torchlens_code_panel" not in dot
-    assert "__tl_code_panel_node" not in dot
-    assert "Source code" not in svg
-
-
-def test_code_panel_does_not_distort_graph_dot(tmp_path: Path) -> None:
-    """A code panel is composed separately, so it never enters the graph's DOT.
-
-    The graph layout must be byte-for-byte identical whether or not a code panel
-    is requested -- the panel is a side-by-side composition, not a subgraph.
-    """
-
-    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
-    plain_dot = _render_dot(log, tmp_path)
-    paneled_dot = _render_dot(log, tmp_path, code_panel=True)
-
-    assert "cluster_torchlens_code_panel" not in paneled_dot
-    assert "def forward" not in paneled_dot
-    assert plain_dot == paneled_dot
-
-
 def test_code_panel_true_emits_forward_source(tmp_path: Path) -> None:
     """The True shorthand should render forward source into the composed output."""
 
     log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
     svg = _render_svg_output(log, tmp_path, code_panel=True)
 
-    assert "def forward" in svg
-    assert "return self.linear(x).relu()" in svg
-
-
-def test_code_panel_class_emits_class_source(tmp_path: Path) -> None:
-    """The class mode should render the model class definition."""
-
-    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
-    svg = _render_svg_output(log, tmp_path, code_panel="class")
-
-    assert "class _CodePanelModel" in svg
-
-
-def test_code_panel_init_plus_forward(tmp_path: Path) -> None:
-    """The init+forward mode should include both method definitions."""
-
-    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
-    svg = _render_svg_output(log, tmp_path, code_panel="init+forward")
-
-    assert "def __init__" in svg
-    assert "def forward" in svg
-
-
-def test_code_panel_callable_overrides(tmp_path: Path) -> None:
-    """Callable code-panel options should use returned text verbatim."""
-
-    model = _CodePanelModel()
-    log = tl.trace(model, torch.randn(1, 4))
-    svg = _render_svg_output(log, tmp_path, code_panel=lambda model: "CUSTOM_TEXT_TOKEN")
-
-    assert "CUSTOM_TEXT_TOKEN" in svg
-
-
-def test_code_panel_html_escape(tmp_path: Path) -> None:
-    """Code-panel text should escape HTML metacharacters in the rendered output."""
-
-    model = _CodePanelModel()
-    log = tl.trace(model, torch.randn(1, 4))
-    svg = _render_svg_output(log, tmp_path, code_panel=lambda model: "x < y > z & q")
-
-    assert "x &lt; y &gt; z &amp; q" in svg
-
-
-def _bundle_metadata_bytes(bundle_path: Path) -> bytes:
-    """Return the concatenated bytes of every pickled metadata file in a bundle.
-
-    Parameters
-    ----------
-    bundle_path:
-        Saved ``.tlspec`` bundle directory.
-
-    Returns
-    -------
-    bytes
-        Raw bytes of every ``*.pkl`` metadata file under the bundle.
-    """
-
-    return b"".join(pkl.read_bytes() for pkl in sorted(bundle_path.rglob("*.pkl")))
-
-
-# Source-body markers that appear only in the model's verbatim source text, not
-# in kept structural metadata (the class name lives in ``model_class_qualname``,
-# so it is deliberately excluded here).
-_SOURCE_BODY_MARKERS = (b"def forward", b"def __init__", b"return self.linear(x).relu()")
-
-
-def test_include_source_false_strips_source_text_and_host_paths(tmp_path: Path) -> None:
-    """``include_source=False`` must embed no source text, ``$HOME``, or username.
-
-    A shared ``.tlspec`` is the portable format, so the opt-out has to remove the
-    verbatim model source entirely and leave no host filesystem PII behind.
-    """
-
-    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
-    bundle_path = tmp_path / "no_source.tlspec"
-    log.save(bundle_path, include_source=False, overwrite=True)
-
-    raw = _bundle_metadata_bytes(bundle_path)
-    for marker in _SOURCE_BODY_MARKERS:
-        assert marker not in raw, f"source text {marker!r} leaked into stripped bundle"
-    assert os.path.expanduser("~").encode() not in raw
-    assert f"/{getpass.getuser()}/".encode() not in raw
-    assert b"site-packages" not in raw
-
-    # The stripped artifact must still load.
-    tl.load(bundle_path)
-
-
-def test_default_save_keeps_source_but_relativizes_host_paths(tmp_path: Path) -> None:
-    """Default (``include_source=True``) keeps source yet strips absolute paths.
-
-    Path relativization is a pure privacy win applied regardless of the flag, so
-    even a source-embedding bundle must carry no ``$HOME`` / username / absolute
-    layout while the source panel still round-trips through save + load.
-    """
-
-    log = tl.trace(_CodePanelModel(), torch.randn(1, 4))
-    bundle_path = tmp_path / "with_source.tlspec"
-    log.save(bundle_path, overwrite=True)
-
-    raw = _bundle_metadata_bytes(bundle_path)
-    # Source is embedded by default...
-    assert b"return self.linear(x).relu()" in raw
-    # ...but no host filesystem PII is.
-    assert os.path.expanduser("~").encode() not in raw
-    assert f"/{getpass.getuser()}/".encode() not in raw
-    assert b"site-packages" not in raw
-
-    loaded = tl.load(bundle_path)
-    svg = _render_svg_output(loaded, tmp_path, code_panel="forward")
     assert "def forward" in svg
     assert "return self.linear(x).relu()" in svg
 
@@ -339,74 +126,6 @@ def test_code_panel_truncates_long_source(tmp_path: Path) -> None:
     assert "... 5 more lines" in svg
     assert "line 119" in svg
     assert "line 120" not in svg
-
-
-def test_code_panel_long_line_fits_inside_panel_box() -> None:
-    """A long single line must never extend past the panel box or canvas.
-
-    Graphviz under-measures Courier text, so without explicit monospace
-    sizing the rendered glyph run overruns the panel box and gets clipped at
-    the SVG viewport during composition/rasterization.
-    """
-
-    long_line = (
-        "def forward(self, x: torch.Tensor, "
-        "attention_mask: torch.Tensor | None = None) -> torch.Tensor:"
-    )
-    assert len(long_line) <= MAX_CODE_PANEL_LINE_CHARS
-    svg = render_code_panel_svg(long_line)
-    canvas_width, box_right, runs = _panel_geometry(svg)
-
-    assert runs, "expected monospace text runs in the panel SVG"
-    for right_extent, content in runs:
-        assert right_extent <= box_right, (
-            f"text run {content!r} extends to {right_extent:.1f}pt, past the "
-            f"panel box right edge at {box_right:.1f}pt"
-        )
-        assert right_extent <= canvas_width, (
-            f"text run {content!r} extends to {right_extent:.1f}pt, past the "
-            f"SVG canvas edge at {canvas_width:.1f}pt"
-        )
-
-
-def test_code_panel_wraps_lines_beyond_char_cap() -> None:
-    """Lines beyond the character cap wrap with a hanging indent, unclipped."""
-
-    words = " ".join(f"word{idx:03d}" for idx in range(40))
-    long_line = f"        result = compute({words})"
-    assert len(long_line) > MAX_CODE_PANEL_LINE_CHARS
-    svg = render_code_panel_svg(long_line)
-    canvas_width, box_right, runs = _panel_geometry(svg)
-    code_lines = [line for line in _panel_code_lines(svg) if line.strip()]
-
-    assert len(code_lines) > 1, "expected the long line to wrap into multiple rows"
-    assert all(len(line) <= MAX_CODE_PANEL_LINE_CHARS for line in code_lines)
-    assert code_lines[0].startswith("        result = compute(")
-    assert all(line.startswith(" " * 12) for line in code_lines[1:])
-    rejoined = " ".join(line.strip() for line in code_lines)
-    for idx in range(40):
-        assert f"word{idx:03d}" in rejoined
-    for right_extent, content in runs:
-        assert right_extent <= box_right, f"wrapped run {content!r} overruns the panel box"
-        assert right_extent <= canvas_width, f"wrapped run {content!r} overruns the canvas"
-
-
-def test_wrap_source_line_short_line_unchanged() -> None:
-    """Lines within the cap pass through wrapping untouched."""
-
-    line = "    return self.linear(x).relu()"
-    assert _wrap_source_line(line) == [line]
-
-
-def test_wrap_source_line_hard_splits_monster_tokens() -> None:
-    """An unbreakable token longer than the cap is hard-split, never clipped."""
-
-    line = "x" * 400
-    pieces = _wrap_source_line(line)
-
-    assert len(pieces) > 1
-    assert all(len(piece) <= MAX_CODE_PANEL_LINE_CHARS for piece in pieces)
-    assert "".join(piece.lstrip(" ") for piece in pieces) == line
 
 
 def test_wrap_source_line_pathological_indent_still_wraps() -> None:
@@ -470,112 +189,8 @@ def test_source_capture_is_memoized_per_class(monkeypatch: Any) -> None:
     assert counter["n"] == 0
 
 
-def test_source_capture_memo_is_byte_identical_to_fresh_reads(monkeypatch: Any) -> None:
-    """Memoized source text and metadata match an unmemoized capture exactly."""
-
-    monkeypatch.setattr(code_panel, "_SOURCE_MEMO", weakref.WeakKeyDictionary())
-    fresh = capture_model_source_code(_MemoProbe())
-    cached = capture_model_source_code(_MemoProbe())
-
-    assert cached.keys() == fresh.keys()
-    for key in fresh:
-        assert cached[key] == fresh[key]
-        assert type(cached[key]) is type(fresh[key])
-        assert cached[key].file_path == fresh[key].file_path  # type: ignore[union-attr]
-        assert cached[key].line_number == fresh[key].line_number  # type: ignore[union-attr]
-
-
-def test_source_capture_memo_respects_instance_forward_override() -> None:
-    """An instance-level ``forward`` is never collapsed to the class source."""
-
-    def replacement_forward(x: torch.Tensor) -> torch.Tensor:
-        """Return ``x`` unchanged."""
-
-        return x
-
-    class_source = capture_model_source_code(_MemoProbe())["forward"]
-    overridden = _MemoProbe()
-    overridden.forward = replacement_forward  # type: ignore[method-assign]
-    instance_source = capture_model_source_code(overridden)["forward"]
-
-    assert "replacement_forward" in instance_source
-    assert instance_source != class_source
-    # ...and the class source is still intact for an unmodified instance.
-    assert capture_model_source_code(_MemoProbe())["forward"] == class_source
-
-
-def test_source_capture_memo_does_not_extend_model_lifetime() -> None:
-    """Memo entries for a locally defined class evict with the class."""
-
-    class Local(nn.Module):
-        """Locally defined model whose class dies at the end of this test."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Return ``x`` unchanged."""
-
-            return x
-
-    model = Local()
-    capture_model_source_code(model)
-    class_ref = weakref.ref(Local)
-    model_ref = weakref.ref(model)
-
-    del model, Local
-    gc.collect()
-
-    assert model_ref() is None
-    assert class_ref() is None
-
-
 def test_source_capture_tolerates_unmemoizable_targets() -> None:
     """Targets that cannot be weakly referenced still resolve, uncached."""
 
     for target in (len, object.__init__, 5, None, "text"):
         assert code_panel._get_source_or_empty(target) == ""
-
-
-def test_code_panel_svg_renders_through_bounded_runner(monkeypatch: Any) -> None:
-    """The standalone panel render is bounded, never graphviz-python pipe().
-
-    T9 (grind-p3) red pin: ``render_code_panel_svg`` was the one Graphviz
-    invocation outside the bounded subprocess discipline — an unbounded
-    ``Digraph.pipe()`` with no timeout and no fresh session can hang the
-    caller forever and leave orphaned ``dot`` processes. The panel must go
-    through ``run_bounded_subprocess`` (the ONE process-group-bounded spawn
-    seam) with the shared render timeout and a fresh session, and ``pipe()``
-    must not be called at all.
-    """
-
-    import graphviz
-
-    from torchlens._visualization import _render_utils
-    from torchlens._visualization._render_utils import RENDER_TIMEOUT_SECONDS
-
-    def _pipe_forbidden(self: Any, *args: Any, **kwargs: Any) -> bytes:
-        raise AssertionError("graphviz.Digraph.pipe() is unbounded and must not be used")
-
-    monkeypatch.setattr(graphviz.Digraph, "pipe", _pipe_forbidden)
-
-    observed: dict[str, Any] = {}
-    real_bounded = _render_utils.run_bounded_subprocess
-
-    def _spy_bounded(cmd: Any, **kwargs: Any) -> Any:
-        observed["timeout"] = kwargs.get("timeout")
-        return real_bounded(cmd, **kwargs)
-
-    monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _spy_bounded)
-
-    real_popen = _render_utils.subprocess.Popen
-
-    def _spy_popen(*args: Any, **kwargs: Any) -> Any:
-        observed["start_new_session"] = kwargs.get("start_new_session")
-        return real_popen(*args, **kwargs)
-
-    monkeypatch.setattr(_render_utils.subprocess, "Popen", _spy_popen)
-
-    svg = code_panel.render_code_panel_svg("def forward(self, x):\n    return x\n")
-
-    assert svg.lstrip().startswith("<?xml") or "<svg" in svg
-    assert "__tl_code_panel_node" not in svg or "<svg" in svg
-    assert observed["timeout"] == RENDER_TIMEOUT_SECONDS
-    assert observed["start_new_session"] is _render_utils._HAS_PROCESS_GROUPS

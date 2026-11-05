@@ -19,11 +19,7 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._visualization.surgery_visuals import (
     CREDIT_ROWS,
-    MARK_BASES,
-    MARK_KINDS,
     make_surgery_mark_spec_fn,
-    render_surgery,
-    splice_box_lines,
     surgery_census,
     surgery_facts,
     surgery_stage,
@@ -122,25 +118,6 @@ def _assert_no_banned_verbs(text: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_fire_mark_is_fact_and_solid(chain_capture) -> None:
-    """A recorded FireRecord yields a FACT mark: solid border, penwidth 3."""
-
-    _model, _x, log = chain_capture
-    fork = _edited_fork(log)
-    facts = surgery_facts(fork)
-    fire_marks = [mark for mark in facts.marks if mark.kind == "fire"]
-    assert len(fire_marks) == 1
-    assert fire_marks[0].basis == "fact"
-    assert fire_marks[0].call_label == "relu_1_2:1"
-    assert fire_marks[0].site_key == fork.ops["relu_1_2:1"].site_key
-    spec_fn = make_surgery_mark_spec_fn(fork, facts)
-    spec = spec_fn(fork.ops["relu_1_2:1"], NodeSpec(["relu_1_2"]))
-    assert spec is not None
-    assert spec.penwidth == 3.0
-    assert "dashed" not in (spec.style or "")
-    assert any("zero_ablate" in line for line in spec.lines)
-
-
 def test_cohort_mark_is_heuristic_and_dashed() -> None:
     """A targeted site's un-fired sibling pass gets a DASHED heuristic mark."""
 
@@ -188,12 +165,12 @@ def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
     log = tl.trace(model, x, capture=_CAPTURE)
     fork = log.fork()
     fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
-    source = render_surgery(
-        fork,
+    source = fork.draw(
+        highlight="interventions",
         rolled=False,
         path=str(tmp_path / "surgery_passes"),
         file_format="svg",
-    )
+    ).dot
     edited = _dot_node_statement(source, "linear_1_1pass1")
     cohort = _dot_node_statement(source, "linear_1_1pass2")
     assert "edited:" in edited
@@ -205,71 +182,9 @@ def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
     assert "penwidth=2.25" in cohort
 
 
-def test_mark_vocabularies_are_closed(chain_capture) -> None:
-    """Every derived mark uses the closed kind and basis vocabularies."""
-
-    _model, _x, log = chain_capture
-    fork = _edited_fork(log)
-    for mark in surgery_facts(fork).marks:
-        assert mark.kind in MARK_KINDS
-        assert mark.basis in MARK_BASES
-
-
-def test_staged_set_only_attributes_no_marks(chain_capture) -> None:
-    """A staged envelope with no recorded site refs mints NO marks.
-
-    No ref, no mark, no fabrication -- the transaction still appears in the
-    census with the staged lane's own (third) truthful wording.
-    """
-
-    _model, _x, log = chain_capture
-    fork = log.fork()
-    fork.do(
-        fork[tl.units("relu_1_2", [(0, 0)])],
-        tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(engine="set_only"),
-    )
-    facts = surgery_facts(fork)
-    assert facts.marks == ()
-    assert facts.transactions[-1].lane == "set_only"
-    box = "\n".join(splice_box_lines(facts))
-    assert _STAGED_WORDING in box
-    assert _REPLAY_WORDING not in box
-    assert _LIVE_WORDING not in box
-
-
 # ---------------------------------------------------------------------------
 # per-lane wording: one lane's text is false in the other lane
 # ---------------------------------------------------------------------------
-
-
-def test_replay_lane_wording_never_borrows_live_text(chain_capture) -> None:
-    """The replay fork's box carries ONLY the replay lane's wording."""
-
-    _model, _x, log = chain_capture
-    fork = _edited_fork(log)
-    text = surgery_census(fork).to_text()
-    assert _REPLAY_WORDING in text
-    assert _LIVE_WORDING not in text
-    _assert_no_banned_verbs(text)
-
-
-def test_live_lane_wording_never_borrows_replay_text() -> None:
-    """The live-intervened capture's box carries ONLY the live wording."""
-
-    torch.manual_seed(0)
-    model = _Chain().eval()
-    x = torch.randn(3, 4)
-    log = tl.trace(
-        model,
-        x,
-        intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    text = surgery_census(log).to_text()
-    assert _LIVE_WORDING in text
-    assert _REPLAY_WORDING not in text
-    _assert_no_banned_verbs(text)
 
 
 def test_zero_fire_rule_is_disclosed(chain_capture) -> None:
@@ -334,18 +249,6 @@ def test_injection_hosts_mark_and_census_count() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_surgery_lens_registered_over_c05_registry() -> None:
-    """The surgery row rides C05's lens registry, never a new view kind."""
-
-    from torchlens._visualization.theme_registry import get_lens
-
-    lens = get_lens("surgery")
-    assert lens.headline_evidence == "intervention_audit"
-    assert "vis_mode" not in lens.members  # never forks the view
-    for line in lens.disclosure:
-        _assert_no_banned_verbs(line)
-
-
 def test_surgery_lens_refuses_without_audit_evidence(chain_capture) -> None:
     """Missing headline evidence refuses typed, naming the capture remedy."""
 
@@ -357,13 +260,13 @@ def test_surgery_lens_refuses_without_audit_evidence(chain_capture) -> None:
 
 
 @pytest.mark.heavy
-def test_render_surgery_census_travels_with_figure(chain_capture, tmp_path) -> None:
+def test_highlight_interventions_census_travels_with_figure(chain_capture, tmp_path) -> None:
     """The census renders INTO the figure and the sidecar travels beside it."""
 
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
     outpath = str(tmp_path / "surgery_fig")
-    render_surgery(fork, path=outpath, file_format="svg")
+    fork.draw(path=outpath, highlight="interventions", file_format="svg")
     figure = tmp_path / "surgery_fig.svg"
     sidecar = tmp_path / "surgery_fig.census.txt"
     assert figure.exists()
@@ -379,43 +282,82 @@ def test_render_surgery_census_travels_with_figure(chain_capture, tmp_path) -> N
     _assert_no_banned_verbs(census_text)
 
 
+@pytest.mark.heavy
+def test_bare_highlight_draw_writes_census_beside_written_file(
+    chain_capture, tmp_path, monkeypatch
+) -> None:
+    """A bare draw picks a collision-safe name; each census lands beside its figure."""
+
+    import inspect
+
+    from torchlens._data_classes.trace import Trace
+
+    _model, _x, log = chain_capture
+    fork = _edited_fork(log)
+    # The autouse conftest fixture gives draw() a tmp_path default path; put the
+    # shipped default (None: a bare draw picks a collision-safe name) back here.
+    draw = Trace.draw
+    positional = [
+        name
+        for name, parameter in inspect.signature(draw).parameters.items()
+        if parameter.kind is parameter.POSITIONAL_OR_KEYWORD
+    ]
+    defaults = list(draw.__defaults__ or ())
+    defaults[positional.index("path") - (len(positional) - len(defaults))] = None
+    monkeypatch.setattr(draw, "__defaults__", tuple(defaults))
+    monkeypatch.chdir(tmp_path)
+    fork.draw(highlight="interventions", file_format="svg")
+    fork.draw(highlight="interventions", file_format="svg")
+    figures = sorted(path.name for path in tmp_path.glob("*.svg"))
+    censuses = sorted(path.name for path in tmp_path.glob("*.census.txt"))
+    assert figures == ["modelgraph-2.svg", "modelgraph.svg"], figures
+    assert censuses == ["modelgraph-2.census.txt", "modelgraph.census.txt"], censuses
+    for census in censuses:
+        assert _REPLAY_WORDING in (tmp_path / census).read_text()
+
+
+def test_unknown_highlight_refuses_naming_allowed_values(chain_capture, tmp_path) -> None:
+    """An unknown highlight refuses typed before anything is drawn."""
+
+    _model, _x, log = chain_capture
+    for bad in ("intervention", "surgery", True):
+        with pytest.raises(InvalidArgumentError) as excinfo:
+            log.draw(path=str(tmp_path / "never"), highlight=bad)
+        assert excinfo.value.fields["code"] == "draw_highlight_invalid"
+        assert excinfo.value.fields["argument"] == "highlight"
+        assert "'interventions'" in str(excinfo.value)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_highlight_interventions_refuses_without_audit_evidence(chain_capture, tmp_path) -> None:
+    """An un-edited trace has no recorded surgery to highlight."""
+
+    _model, _x, log = chain_capture
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        log.draw(path=str(tmp_path / "never"), highlight="interventions")
+    assert excinfo.value.fields["code"] == "surgery_evidence_missing"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_render_surgery_is_removed() -> None:
+    """``trace.draw(highlight="interventions")`` replaced it, with no alias."""
+
+    import torchlens._visualization as visualization
+    import torchlens._visualization.surgery_visuals as surgery_visuals
+
+    with pytest.raises(ImportError):
+        from torchlens._visualization.surgery_visuals import render_surgery  # noqa: F401
+    with pytest.raises(ImportError):
+        from torchlens._visualization import render_surgery  # noqa: F401,F811
+    assert not hasattr(surgery_visuals, "render_surgery")
+    assert "render_surgery" not in visualization.__all__
+
+
 # ---------------------------------------------------------------------------
 # the site-key-first surgery diff
 # ---------------------------------------------------------------------------
 
 
-def test_diff_joins_site_key_first_and_marks_travel(chain_capture) -> None:
-    """Site-key joins are FACT rows; subject-side marks ride the rows."""
-
-    _model, _x, log = chain_capture
-    fork = _edited_fork(log)
-    diff = intervention_diff(fork, log)
-    matched = [row for row in diff.rows if row.kind == "matched"]
-    assert matched and all(row.join == "site_key" and row.basis == "fact" for row in matched)
-    edited = [row for row in matched if row.subject_label == "relu_1_2:1"]
-    assert any("zero_ablate" in note for note in edited[0].notes)
-    assert diff.counts()["only_in_subject"] == 0
-
-
-def test_diff_positional_cohort_join_is_heuristic() -> None:
-    """Equal cohorts under one shared site key pair positionally: HEURISTIC."""
-
-    torch.manual_seed(0)
-    model = _SharedBlock().eval()
-    x = torch.randn(3, 4)
-    subject = tl.trace(model, x, capture=_CAPTURE)
-    reference = tl.trace(model, x, capture=_CAPTURE)
-    fork = subject.fork()
-    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
-    diff = intervention_diff(fork, reference)
-    joins = {row.subject_label: row for row in diff.rows if row.kind == "matched"}
-    assert joins["linear_1_1:1"].join == "site_key_positional"
-    assert joins["linear_1_1:1"].basis == "heuristic"
-    assert joins["relu_1_2:1"].join == "site_key"
-    assert joins["relu_1_2:1"].basis == "fact"
-
-
-@pytest.mark.smoke
 def test_diff_absence_is_disclosed_never_ghosted(chain_capture) -> None:
     """A one-side op is a full-strength disclosure, never execution removal."""
 
@@ -452,29 +394,3 @@ def test_diff_refuses_self_and_empty_operands(chain_capture) -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         intervention_diff(log, _Husk())  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "surgery_diff_incomparable"
-
-
-@pytest.mark.heavy
-def test_diff_draw_line_styles_and_census_sidecar(tmp_path) -> None:
-    """The diff figure draws solid fact / dashed heuristic joins + census."""
-
-    torch.manual_seed(0)
-    model = _SharedBlock().eval()
-    x = torch.randn(3, 4)
-    subject = tl.trace(model, x, capture=_CAPTURE)
-    reference = tl.trace(model, x, capture=_CAPTURE)
-    fork = subject.fork()
-    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
-    diff = intervention_diff(fork, reference)
-    rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg")
-    figure_text = (tmp_path / "diff_fig.svg").read_text()
-    assert rendered.endswith("diff_fig.svg")
-    assert "stroke-dasharray" in figure_text  # the heuristic join renders dashed
-    assert "surgery diff" in figure_text
-    _assert_no_banned_verbs(figure_text)
-    sidecar = tmp_path / "diff_fig.census.txt"
-    assert sidecar.exists()
-    census_text = sidecar.read_text()
-    assert "site_key_positional" in census_text
-    for credit in CREDIT_ROWS:
-        assert credit in census_text

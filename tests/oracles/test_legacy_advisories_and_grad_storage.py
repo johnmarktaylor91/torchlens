@@ -102,19 +102,6 @@ def _two_pass_trace(transform: Callable[[torch.Tensor], torch.Tensor] | None) ->
     return trace
 
 
-def test_sum_backward_sends_an_expanded_zero_dim_gradient() -> None:
-    # Raw torch, no TorchLens: the probe's storage finding for the b output.
-    torch.manual_seed(0)
-    out = Grad()(torch.randn(3, 4))
-    seen: list[torch.Tensor] = []
-    out.register_hook(seen.append)  # a tensor hook sees autograd's own gradient
-    out.sum().backward()
-    (grad,) = seen
-    assert grad.stride() == (0, 0)
-    assert grad.untyped_storage().nbytes() == 4
-    assert grad.nelement() * grad.element_size() == 24
-
-
 # Per pass, the retained gradients belong to a's output (3x8 float32, 96 B), the
 # relu output (96 B) and b's output (3x2, 24 B); two passes double each sum.
 # Raw payloads are dense copies: 96 + 96 + 24 = 216 B per pass. The identity

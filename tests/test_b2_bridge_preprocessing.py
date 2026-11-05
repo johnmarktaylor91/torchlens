@@ -1,4 +1,4 @@
-"""Preprocessing registry gaps and the on-request card check (batch-1 gaps, walk U24.4).
+"""Preprocessing registry gaps and the on-request card check (batch-1 gaps).
 
 - torchvision weights: a model keeps no handle to its weights, so
   ``attach_authority`` records them and discovery resolves them;

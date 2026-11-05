@@ -2,18 +2,39 @@
 
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from .._constants import PRIMITIVE_OP_FIELD_ORDER
 from .._io import TLSPEC_VERSION, FieldPolicy, read_tlspec_version
 from .._trace_core.record_rows import install_record_facade as _install_record_facade
+from .._utils._display_bounded import short_dataclass_repr
+from ._aten_display import aten_repr, aten_str
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+
+if TYPE_CHECKING:
+    from .._kernel_telemetry import KernelLaunch
+
+#: The detachable kernel-telemetry lane. ``gpu_kernels`` resolves it by name on
+#: read, so the class always carries the view while neither this layer nor the
+#: package imports the lane (``torchlens/_kernel_telemetry.py``).
+_KERNEL_TELEMETRY_MODULE = "torchlens._kernel_telemetry"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OpRef:
-    """Redundant foreign key from an ATen row to a final Op row."""
+    """Redundant foreign key from an ATen row to a final Op row.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))
+    >>> ref = trace["relu_1_2"].aten_ops[0].parent_op_refs[0]
+    >>> type(ref).__name__, ref.op_label
+    ('OpRef', 'relu_1_2')
+    """
+
+    __repr__ = short_dataclass_repr
 
     op_row_index: int
     op_label: str
@@ -53,6 +74,8 @@ class _ModePausedInteriorGap:
 class _PrimitiveOpProfile:
     """Trace section carrying primitive rows and disclosure gaps."""
 
+    __repr__ = short_dataclass_repr
+
     primitive_ops: list[AtenOp] = field(default_factory=list)
     mode_paused_interior: list[_ModePausedInteriorGap] = field(default_factory=list)
     aten_event_watermark: int = 0
@@ -68,7 +91,22 @@ class _PrimitiveOpProfile:
 
 @dataclass(eq=False, kw_only=True)
 class AtenOp:
-    """One value-free ATen dispatcher call observed during capture."""
+    """One ATen dispatcher call observed during capture.
+
+    Rows are value-free unless the capture asked for values
+    (``CaptureOptions(aten_ops="values")``), in which case ``out`` holds the
+    call's returned tensor(s) under the same save rules as ``Op.out``.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))
+    >>> row = trace["relu_1_2"].aten_ops[0]
+    >>> type(row).__name__, row.capture_phase
+    ('AtenOp', 'forward')
+    """
+
+    __repr__ = aten_repr
+    __str__ = aten_str
 
     label: str
     sequence: int
@@ -102,10 +140,17 @@ class AtenOp:
     outcome: str = "returned"
     exception_type: str | None = None
     execution_context: Any = None
+    out: Any = None
+    """The tensor(s) this call returned, mirroring ``Op.out``: a tensor for a
+    single-tensor result, a tuple of tensors (one per ``output_tensor_facts``
+    entry, same order) for a container result, ``None`` when no value was kept
+    (values off, a raised call, a non-tensor result, an owner whose ``save=``
+    selection dropped it, or an artifact saved without outs)."""
 
-    _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = dict.fromkeys(
-        PRIMITIVE_OP_FIELD_ORDER, FieldPolicy.KEEP
-    )
+    _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = {
+        **dict.fromkeys(PRIMITIVE_OP_FIELD_ORDER, FieldPolicy.KEEP),
+        "out": FieldPolicy.BLOB_RECURSIVE,
+    }
     _FIELD_POLICY = build_record_field_policy_table(
         PRIMITIVE_OP_FIELD_ORDER,
         _PORTABLE_STATE_POLICY,
@@ -120,7 +165,11 @@ class AtenOp:
 
         from .._trace_core.record_rows import record_state_items
 
-        return record_state_items(self)
+        return (
+            (name, value)
+            for name, value in record_state_items(self)
+            if name != "_display_owner_keys"
+        )
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
         """Restore primitive state through the row-cell descriptors.
@@ -134,6 +183,13 @@ class AtenOp:
         from .._trace_core.record_rows import record_state_restore
 
         record_state_restore(self, mapping)
+        # ``include_outs=False`` omits the out column; the loader's true-up sets
+        # it to None after this hook, so an absent cell is read as None here.
+        out = getattr(self, "out", None)
+        if isinstance(out, list):
+            # A container result round-trips through JSON as a list; the
+            # user-facing shape is the capture-time tuple.
+            self.out = tuple(out)
 
     def __getstate__(self) -> dict[str, Any]:
         """Return primitive row state without its backing-store handle."""
@@ -155,6 +211,24 @@ class AtenOp:
 
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         self.__tl_state_restore__(state)
+
+    @property
+    def gpu_kernels(self) -> tuple[KernelLaunch, ...]:
+        """The GPU kernel launches this ATen call made, matched by the profiler's correlation id.
+
+        Each ``KernelLaunch`` row is a kernel the profiler saw launched while this
+        ATen call ran on the device. When kernel telemetry was off for the trace,
+        the value is one row with ``attribution_status="unavailable"``, never an
+        empty tuple. Reading it needs the optional kernel-telemetry adapter.
+
+        Returns
+        -------
+        tuple[KernelLaunch, ...]
+            The matched kernel launches, or one ``unavailable`` row.
+        """
+
+        telemetry = importlib.import_module(_KERNEL_TELEMETRY_MODULE)
+        return telemetry._aten_gpu_kernels(self)
 
 
 _PRIMITIVE_OP_STORE_LAYOUT = _install_record_facade(AtenOp, tuple(PRIMITIVE_OP_FIELD_ORDER))

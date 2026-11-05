@@ -9,7 +9,7 @@ generation, so hand edits cannot survive.
 
 from __future__ import annotations
 
-from .field_policy import StorageBinding, StorageKind
+from .._io._field_policy import StorageBinding, StorageKind
 
 TRACE_BINDINGS: dict[str, StorageBinding] = {
     "name": StorageBinding(StorageKind.SCALAR),
@@ -87,7 +87,6 @@ TRACE_BINDINGS: dict[str, StorageBinding] = {
     "_options_backward_ready": StorageBinding(StorageKind.RUNTIME),
     "_options_inference_only": StorageBinding(StorageKind.SCALAR),
     "_options_chunk_size": StorageBinding(StorageKind.SCALAR),
-    "_module_filter": StorageBinding(StorageKind.RUNTIME),
     "_options_emit_nvtx": StorageBinding(StorageKind.SCALAR),
     "_options_on_nonfinite": StorageBinding(StorageKind.SCALAR),
     "annotations": StorageBinding(StorageKind.SCALAR, annotation='dict[str, typing.Any]'),
@@ -329,7 +328,7 @@ TRACE_BINDINGS: dict[str, StorageBinding] = {
     "_tl_backward_hooked_tensor_keys": StorageBinding(StorageKind.RUNTIME),
     "_tl_grad_hook_owner_by_label": StorageBinding(StorageKind.RUNTIME),
     "_tl_rf_probe_active": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any'),
-    "_active_backward_pass_index": StorageBinding(StorageKind.RUNTIME),
+    "_active_backward_pass_number": StorageBinding(StorageKind.RUNTIME),
     "_backward_roots_by_pass": StorageBinding(StorageKind.RUNTIME),
     "_backward_projection_event_count": StorageBinding(StorageKind.RUNTIME),
     "_backward_projection_revision": StorageBinding(StorageKind.RUNTIME),

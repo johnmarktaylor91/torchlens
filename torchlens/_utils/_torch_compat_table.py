@@ -144,6 +144,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")
     ),
     _row("HAS_CPU_HALF_KERNELS", absent_on=("2.1.2", "2.2.2")),
+    _row("HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL"),
     _row("HAS_CUDA_GRAPHS"),
     _row("HAS_CURRENT_AUTOGRAD_NODE"),
     _row("HAS_CURRENT_GRAPH_TASK_ID"),
@@ -163,12 +164,16 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_DYNAMO_ORIG_CALLABLE_MARKER", absent_on=("2.9.1",)),
     _row("HAS_EXPANDED_WEIGHTS_CONV_PICKER"),
     _row("HAS_FAKE_TENSOR_MODE"),
+    # The flag reads whether the optional ``flash-attn-4`` distribution is installed, not a
+    # torch surface; the measured matrix (CPU-only wheels) carries no FlashAttention 4.
+    _row("HAS_FLASH_ATTENTION_4_INTERFACE", absent_on=MEASURED_TORCH_VERSIONS),
     _row(
         "HAS_FP32_PRECISION_CONTROLS",
         absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1", "2.6.0", "2.7.1", "2.8.0"),
     ),
     _row("HAS_FP8_DTYPES"),
     _row("HAS_FSDP_WRAPPER"),
+    _row("HAS_FUNCTION_APPLY_SLOT"),
     _row(
         "HAS_FUNCOL_GROUP_RESOLUTION",
         absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1", "2.6.0", "2.7.1", "2.8.0", "2.9.1"),
@@ -213,12 +218,14 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_NAMED_TENSOR_API", absent_on=("2.13.0",)),
     _row("HAS_NN_ATTENTION_MODULE", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_NODE_PREHOOK"),
+    _row("HAS_ORIGINAL_VIEW_TRACKING", measured=False),
     _row(
         "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
         absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1"),
     ),
     _row("HAS_PIPELINING"),
     _row("HAS_REDUCE_TUPLE_DIM", absent_on=("2.1.2",)),
+    _row("HAS_MPS_MEMORY_QUERY", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
     _row("HAS_RMSNORM_MODULE", absent_on=("2.1.2", "2.2.2", "2.3.1")),
     _row("HAS_SAFE_WEIGHTS_ONLY_LOAD", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")),
     _row("HAS_SAVED_TENSORS_HOOKS_PATCHABLE"),

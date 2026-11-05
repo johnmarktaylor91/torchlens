@@ -6,7 +6,7 @@ import time
 import warnings
 import weakref
 from collections import Counter
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -14,19 +14,26 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import torch
 from torch import nn
 
-from .._capture.prepare.chunked import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
+from .._capture.prepare.chunked import iter_chunked_inputs, normalize_chunk_paths
 from .._data_classes._trace_accessors import boundary_label_rows
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, TorchLensWarning
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _chunk_rerun_plan, _coerce_inputs
+from .._input_route import _routed_payload
 from .._trace_state import TraceState
 from .._utils._torch_compat import tensor_has_named_dims
 from .._utils.hashing import compute_graph_shape_hash
 from ..backends.torch.backward import _register_forward_grad_fn
 from ..options import ReplayOptions, merge_replay_options
 from ._helper_fingerprint import refuse_changed_staged_helpers
+from ._live_hook_plan import (
+    _assign_unique_plan_ids as _assign_unique_plan_ids,
+    _drop_handles_removed_mid_run,
+    _hook_plan_identifier as _hook_plan_identifier,
+)
 from ._rerun_ledger import _build_ledger_record
 from ._rerun_predicate import (
+    _make_raw_index_save_predicate,
     plan_rerun_spec,
     settle_predicate_rerun,
     translate_staged_final_labels,
@@ -143,8 +150,7 @@ def run(
             intervene_predicate=spec_plan.intervene_predicate,
         )
     _refuse_shifted_raw_index_resave(trace, new_log)
-    settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_functions = getattr(trace, "facet_functions", None)
+    hook_plan = _settle_rerun_capture(trace, new_log, (spec_plan, spec), hook_plan)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(
         new_log, hook_plan, source_log=trace
     )
@@ -201,6 +207,26 @@ def run(
     trace._has_direct_writes = False
     trace._out_recipe_revision = getattr(trace, "_spec_revision", 0)
     return trace
+
+
+def _settle_rerun_capture(
+    source: Trace,
+    new_log: Trace,
+    plan_and_spec: tuple[Any, Any],
+    hook_plan: list[NormalizedHookEntry],
+) -> list[NormalizedHookEntry]:
+    """Settle a finished candidate capture and return the plan its fire audit counts.
+
+    Predicate bookkeeping and the facet functions carry over from the source;
+    a sticky hook removed through its handle while the run was in progress
+    leaves the returned plan, so the fire audit and the ledger count the
+    recipe as it stands after the run.
+    """
+
+    spec_plan, spec = plan_and_spec
+    settle_predicate_rerun(spec_plan, spec, new_log)
+    new_log.facet_functions = getattr(source, "facet_functions", None)
+    return _drop_handles_removed_mid_run(hook_plan, spec)
 
 
 #: Rerun captures whose autograd graph a backward-ready rerun result adopted,
@@ -328,8 +354,7 @@ def _chunked_rerun(
     _preflight(log, model, x)
     model = _unwrap_compiled_model(model)
     model = _unwrap_model_for_chunk_plan(model)
-    x = _coerce_input_args(model, x)
-    plan = plan_chunks(x, chunk_size=chunk_size, chunk_paths=chunk_paths)
+    x, plan = _chunk_rerun_plan(model, x, chunk_size, chunk_paths)
     if chunk_size >= plan.total_size:
         return run(
             log,
@@ -445,8 +470,7 @@ def _append_rerun(
             output_transform=getattr(log, "_output_transform", None),
             intervene_predicate=spec_plan.intervene_predicate,
         )
-    settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_functions = getattr(log, "facet_functions", None)
+    hook_plan = _settle_rerun_capture(log, new_log, (spec_plan, spec), hook_plan)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
@@ -458,7 +482,7 @@ def _append_rerun(
     log._out_recipe_revision = getattr(log, "_spec_revision", 0)
 
     duration_s = time.monotonic() - started_at
-    chunk_size = _batch_size_from_input(x)
+    chunk_size = _batch_size_from_input(_routed_payload(x))
     total_batch_size = _first_saved_batch_size(log)
     log.last_run = {
         "engine": "append",
@@ -1009,15 +1033,15 @@ def _capture_with_active_spec(
     from .._robustness import check_model_and_input_variants
 
     model = _unwrap_data_parallel(model)
-    x = _coerce_input_args(model, x)
-    check_model_and_input_variants(model, x, {})
+    x, input_kwargs = _coerce_inputs(model, x, None)
+    check_model_and_input_variants(model, x, input_kwargs or {})
     save_grads_policy = log._options_save_grads
     grads_to_save = "all" if save_grads_policy is True else save_grads_policy
     with _share_source_state_clones(log):
         return _run_model_and_save_specified_outs(
             model=model,
             input_args=x,
-            input_kwargs={},
+            input_kwargs=input_kwargs or {},
             output_device=cast('Literal["same", "cpu", "cuda"]', log._options_output_device),
             activation_transform=log._options_activation_transform,
             grad_transform=log._options_grad_transform,
@@ -1207,16 +1231,21 @@ def _rerun_save_kwargs(log: Trace) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        Save keyword arguments for ``_run_model_and_save_specified_outs``.
+        Save keyword arguments for ``_run_model_and_save_specified_outs``,
+        including the source's ``aten_ops`` request: the rerun re-records the
+        ATen profile (and its values), so a same-shape refresh swaps in rows
+        and values that match the refreshed ``Op.out``.
     """
 
     # Session-only fields: a trace restored from pickle carries neither.
     options = log.__dict__.get("_predicate_save_options")
     request = log.__dict__.get("_rerun_save_request") or {}
+    aten_ops = cast('bool | Literal["values"]', log._options_aten_ops)
     if request.get("replayable", False) and getattr(options, "keep_op", None) is None:
-        return {key: value for key, value in request.items() if key != "replayable"}
+        return {"aten_ops": aten_ops, **{k: v for k, v in request.items() if k != "replayable"}}
     layers_to_save, save_predicate, lookback, lookback_payload_policy = _rerun_save_scope(log)
     return {
+        "aten_ops": aten_ops,
         "layers_to_save": layers_to_save,
         "save_predicate": save_predicate,
         "lookback": lookback,
@@ -1247,10 +1276,10 @@ def _validate_rerun_result(new_log: Trace, old_log: Trace, *, strict: bool) -> i
 
     old_hash = getattr(old_log, "_raw_event_shape_hash", None)
     new_hash = getattr(new_log, "_raw_event_shape_hash", None)
-    if old_hash is None or new_hash is None:
-        # The raw-event hash is session-only, so a loaded trace has none. Compare
-        # both postprocessed graphs the same way instead of a raw hash against a
-        # graph hash, which never match and would always report divergence.
+    if old_hash is None or new_hash is None or old_log.__dict__.get("_cooked_from") is not None:
+        # The raw hash is session-only (a loaded trace has none) and journal-shaped (a
+        # cooked Recording's op lane also holds module boundaries), so compare both
+        # postprocessed graphs the same way instead; raw against graph never matches.
         old_hash = compute_graph_shape_hash(old_log, rerun_signature=True)
         new_hash = compute_graph_shape_hash(new_log, rerun_signature=True)
     if old_hash == new_hash:
@@ -1358,85 +1387,6 @@ def _refuse_shifted_raw_index_resave(old_log: Trace, new_log: Trace) -> None:
         remedy=remedy,
         first_differing_position=first,
     )
-
-
-def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any], bool]:
-    """Build a predicate that mirrors a static raw-index save subset.
-
-    Parameters
-    ----------
-    selected_indices:
-        Raw operation indices selected by the original capture.
-
-    Returns
-    -------
-    Callable[[Any], bool]
-        Predicate returning ``True`` for matching capture contexts.
-    """
-
-    def keep_selected_raw_index(ctx: Any) -> bool:
-        """Return whether a predicate context matches the selected raw indices."""
-
-        raw_index = getattr(ctx, "raw_index", None)
-        if raw_index is None:
-            raw_index = getattr(ctx, "event_index", None)
-        return raw_index in selected_indices
-
-    return keep_selected_raw_index
-
-
-def _assign_unique_plan_ids(hook_plan: list[NormalizedHookEntry]) -> list[NormalizedHookEntry]:
-    """Give every planned entry a unique, stable accounting identifier.
-
-    The fallback identifier ladder (plan id -> hook id -> helper name ->
-    callable qualname) can COLLIDE across entries with different targets, and
-    the fire audit compares ``Counter`` values keyed by that string: two
-    fires of one entry hid the other entry's total miss (``fired=2``,
-    ``unfired=()``), so a partially-applied plan claimed every entry fired
-    (incomplete f9f5b140). Colliding identifiers get a stable occurrence
-    suffix stamped into ``metadata["plan_id"]``, which live execution writes
-    into each ``FireResult``, so the audit is per-entry; unique identifiers
-    are preserved verbatim.
-    """
-
-    import dataclasses as _dataclasses
-
-    counts = Counter(_hook_plan_identifier(entry) for entry in hook_plan)
-    seen: Counter[str] = Counter()
-    unique_plan: list[NormalizedHookEntry] = []
-    for entry in hook_plan:
-        base = _hook_plan_identifier(entry)
-        if counts[base] > 1:
-            metadata = dict(entry.metadata)
-            metadata["plan_id"] = f"{base}#occ{seen[base]}"
-            metadata["plan_id_base"] = base
-            entry = _dataclasses.replace(entry, metadata=metadata)
-        seen[base] += 1
-        unique_plan.append(entry)
-    return unique_plan
-
-
-def _hook_plan_identifier(entry: NormalizedHookEntry) -> str:
-    """Return the identifier written into a live ``FireResult``.
-
-    Parameters
-    ----------
-    entry:
-        Planned normalized hook entry.
-
-    Returns
-    -------
-    str
-        Plan id using the same fallback order as live execution.
-    """
-
-    if "plan_id" in entry.metadata:
-        return str(entry.metadata["plan_id"])
-    if "hook_id" in entry.metadata:
-        return str(entry.metadata["hook_id"])
-    if entry.helper_spec is not None:
-        return str(entry.helper_spec.name)
-    return str(getattr(entry.normalized_callable, "__qualname__", "user_hook"))
 
 
 def _reconcile_rerun_hook_fires(
@@ -1563,8 +1513,8 @@ def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:
     labels = list(getattr(source_log, "input_layers", None) or ())
     if not labels or labels != list(getattr(new_log, "input_layers", None) or ()):
         return False
-    source_rows = boundary_label_rows(labels, source_log.__getitem__)
-    new_rows = boundary_label_rows(labels, new_log.__getitem__)
+    source_rows = boundary_label_rows(labels, source_log.layers.__getitem__)
+    new_rows = boundary_label_rows(labels, new_log.layers.__getitem__)
     for source_op, new_op in zip(source_rows, new_rows, strict=True):
         before = getattr(source_op, "out", None)
         after = getattr(new_op, "out", None)

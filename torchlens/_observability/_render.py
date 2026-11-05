@@ -29,7 +29,6 @@ Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
-import base64
 import io
 import math
 from collections import OrderedDict
@@ -41,6 +40,7 @@ from ._kernels import HistogramResult, RunningStatsResult
 from ._payloads import observation_row
 from ._quantiles import WatchRenderError, derived_quantile
 from ._schema import ObservationRecord, RunRecord, SiteRecord, StepBlockRecord
+from ._svg import _C_TEXT, _Svg
 
 __tl_layer__ = "L5"
 
@@ -56,22 +56,34 @@ _FAN_QS = (0.05, 0.25, 0.5, 0.75, 0.95)
 _FAN_HEIGHT = 240
 _WATERFALL_HEIGHT = 320
 
-# Colorblind-safe fixed palette (Okabe-Ito derived), hex only.
-_C_MEDIAN = "#0072b2"
-_C_BAND_INNER = "#8ecae6"
-_C_BAND_OUTER = "#d0e7f5"
+# Colorblind-safe fixed palette (Okabe-Ito accents on neutral greys; no blue), hex only.
+_C_MEDIAN = "#222222"
+_C_BAND_INNER = "#bdbdbd"
+_C_BAND_OUTER = "#e6e6e6"
 _C_MINMAX = "#555555"
 _C_NONFINITE = "#d55e00"
 _C_SKIP = "#cc79a7"
 _C_SEGMENT = "#009e73"
-_C_TEXT = "#222222"
+# _C_TEXT, the body-text color, lives with the composer in ``._svg``.
 _C_GRID = "#dddddd"
 _C_COARSE = "#f4e3c1"
 
 
 @dataclass(frozen=True)
 class SeriesPoint:
-    """One (step-span, block-truth, observation) sample of a series."""
+    """One (step-span, block-truth, observation) sample of a series.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(2):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = tl.trackers.HistoryView.from_collector(session.collector)
+    >>> [point.step_lo for point in view.series(next(iter(view.sites)))]
+    [0, 1]"""
 
     step_lo: int
     step_hi: int
@@ -87,6 +99,18 @@ class HistoryView:
     Built from a :class:`HistoryReader` (disk artifact) or directly from
     committed blocks (RAM ring). Renderers, iterators, and the pandas
     conversion all read THIS one shape.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(3):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = HistoryView.from_collector(session.collector)
+    >>> len(view.series(next(iter(view.sites))))
+    3
     """
 
     run_record: RunRecord
@@ -240,117 +264,6 @@ class HistoryView:
             return render_contact_sheet(self)
         except WatchRenderError as error:
             return f"<pre>HistoryView (unrenderable: {error.fields.get('code')})</pre>"
-
-
-class _Svg:
-    """Minimal deterministic SVG composer (vector text, no timestamps)."""
-
-    def __init__(self, width: int, height: int) -> None:
-        self.width = width
-        self.height = height
-        self._parts: list[str] = []
-
-    def add(self, element: str) -> None:
-        """Append one raw SVG element."""
-
-        self._parts.append(element)
-
-    def line(  # noqa: PLR0913 -- flat coordinates mirror the SVG attribute grammar (x1/y1/x2/y2); packing them into point tuples reads worse at every call site
-        self,
-        x1: float,
-        y1: float,
-        x2: float,
-        y2: float,
-        color: str,
-        w: float = 1.0,
-        dash: str | None = None,
-    ) -> None:
-        """Append a line element."""
-
-        dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
-        self.add(
-            f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-            f'stroke="{color}" stroke-width="{w:.2f}"{dash_attr}/>'
-        )
-
-    def rect(  # noqa: PLR0913 -- flat geometry mirrors the SVG rect attribute grammar (x/y/width/height)
-        self,
-        x: float,
-        y: float,
-        w: float,
-        h: float,
-        fill: str,
-        opacity: float = 1.0,
-        stroke: str = "none",
-    ) -> None:
-        """Append a rectangle element."""
-
-        self.add(
-            f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" '
-            f'fill="{fill}" fill-opacity="{opacity:.2f}" stroke="{stroke}"/>'
-        )
-
-    def text(  # noqa: PLR0913 -- flat coordinates mirror the SVG text attribute grammar (x/y/text-anchor)
-        self,
-        x: float,
-        y: float,
-        content: str,
-        size: int = 10,
-        color: str = _C_TEXT,
-        anchor: str = "start",
-    ) -> None:
-        """Append a vector text element (escaped)."""
-
-        escaped = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        self.add(
-            f'<text x="{x:.2f}" y="{y:.2f}" font-family="monospace" '
-            f'font-size="{size}" fill="{color}" text-anchor="{anchor}">{escaped}</text>'
-        )
-
-    def polyline(
-        self, pts: list[tuple[float, float]], color: str, w: float = 1.5, dash: str | None = None
-    ) -> None:
-        """Append an open polyline."""
-
-        if len(pts) < 2:
-            return
-        coords = " ".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-        dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
-        self.add(
-            f'<polyline points="{coords}" fill="none" stroke="{color}" '
-            f'stroke-width="{w:.2f}"{dash_attr}/>'
-        )
-
-    def polygon(self, pts: list[tuple[float, float]], fill: str, opacity: float) -> None:
-        """Append a filled polygon (the fan bands)."""
-
-        if len(pts) < 3:
-            return
-        coords = " ".join(f"{x:.2f},{y:.2f}" for x, y in pts)
-        self.add(f'<polygon points="{coords}" fill="{fill}" fill-opacity="{opacity:.2f}"/>')
-
-    def image_png(self, x: float, y: float, w: float, h: float, png_bytes: bytes) -> None:
-        """Embed one PNG (the declared-resolution raster interior)."""
-
-        encoded = base64.b64encode(png_bytes).decode("ascii")
-        self.add(
-            f'<image x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" '
-            f'preserveAspectRatio="none" '
-            f'xlink:href="data:image/png;base64,{encoded}"/>'
-        )
-
-    def to_string(self) -> str:
-        """Serialize the document (root declares xmlns:xlink; cairosvg gate)."""
-
-        body = "\n".join(self._parts)
-        return (
-            f'<svg xmlns="http://www.w3.org/2000/svg" '
-            f'xmlns:xlink="http://www.w3.org/1999/xlink" '
-            f'width="{self.width}" height="{self.height}" '
-            f'viewBox="0 0 {self.width} {self.height}">\n'
-            f'<rect x="0" y="0" width="{self.width}" height="{self.height}" fill="white"/>\n'
-            f"{body}\n</svg>\n"
-        )
 
 
 @dataclass(frozen=True)
@@ -530,6 +443,18 @@ def render_fan(
     quantiles are outlier-robust by construction and need no
     outlier-rejection knob (D24). Strip height is fixed (``width`` is the
     one geometry knob, matching :func:`render_detail`).
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(3):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = tl.trackers.HistoryView.from_collector(session.collector)
+    >>> tl.viz.quantile_fan(view, next(iter(view.sites))).startswith("<svg")
+    True
     """
 
     height = _FAN_HEIGHT
@@ -612,17 +537,17 @@ def _waterfall_raster(points: tuple[SeriesPoint, ...], view: HistoryView) -> tup
     if peak > 0:
         density = density / peak
     rgb = np.full((n_rows, n_cols, 3), 255, dtype=np.uint8)
-    # Grid cells ramp white -> deep blue; special bands white -> vermillion.
+    # Grid cells ramp white -> dark grey; special bands white -> vermillion.
     ramp = (density * 255).astype(np.uint8)
     grid_mask = ~special
     rgb[..., 0] = np.where(
-        grid_mask, 255 - (ramp * 0.85).astype(np.uint8), 255 - (ramp * 0.16).astype(np.uint8)
+        grid_mask, 255 - (ramp * 0.80).astype(np.uint8), 255 - (ramp * 0.16).astype(np.uint8)
     )
     rgb[..., 1] = np.where(
-        grid_mask, 255 - (ramp * 0.55).astype(np.uint8), 255 - (ramp * 0.63).astype(np.uint8)
+        grid_mask, 255 - (ramp * 0.80).astype(np.uint8), 255 - (ramp * 0.63).astype(np.uint8)
     )
     rgb[..., 2] = np.where(
-        grid_mask, 255 - (ramp * 0.30).astype(np.uint8), 255 - (ramp * 1.0).astype(np.uint8)
+        grid_mask, 255 - (ramp * 0.80).astype(np.uint8), 255 - (ramp * 1.0).astype(np.uint8)
     )
     image = Image.fromarray(rgb, mode="RGB")
     buffer = io.BytesIO()
@@ -648,6 +573,18 @@ def render_waterfall(
     step (their ten averaged columns are the credited contrast). Strip
     height is fixed (``width`` is the one geometry knob, matching
     :func:`render_detail`).
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(3):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = tl.trackers.HistoryView.from_collector(session.collector)
+    >>> tl.viz.histogram_waterfall(view, next(iter(view.sites))).startswith("<svg")
+    True
     """
 
     height = _WATERFALL_HEIGHT
@@ -730,15 +667,6 @@ def rank_sites(view: HistoryView, stream: str = "activation") -> list[tuple[str,
     return rows
 
 
-def contact_sheet_pages(
-    view: HistoryView, stream: str = "activation", *, tiles_per_page: int = 12
-) -> int:
-    """Number of contact-sheet pages under deterministic full pagination."""
-
-    ranked = rank_sites(view, stream)
-    return max(1, math.ceil(len(ranked) / tiles_per_page))
-
-
 def _draw_tile(
     svg: _Svg,
     view: HistoryView,
@@ -783,6 +711,60 @@ def _draw_tile(
     svg.text(x + 4, y + h - 4, badge, size=7, color=color)
 
 
+class ContactSheet(str):
+    """One contact-sheet page: the SVG text plus where it sits in the pagination.
+
+    A ``str`` subclass, so every string use of the SVG keeps working (write it,
+    search it, compare it); the page facts ride along as attributes and the
+    notebook displays it inline.
+
+    Attributes
+    ----------
+    page:
+        Zero-based index of this page.
+    page_count:
+        Number of pages the full sheet has at this ``tiles_per_page`` (at least
+        1); the "N of M" footer prints the same number.
+    """
+
+    page: int
+    page_count: int
+
+    def __new__(cls, svg: str, *, page: int, page_count: int) -> ContactSheet:
+        """Wrap ``svg`` with its page index and the sheet's page count."""
+
+        obj = str.__new__(cls, svg)
+        obj.page = page
+        obj.page_count = page_count
+        return obj
+
+    def __getnewargs_ex__(self) -> tuple[tuple[str], dict[str, int]]:
+        """Keep the page facts through pickle and ``copy``."""
+
+        return (str(self),), {"page": self.page, "page_count": self.page_count}
+
+    def _repr_svg_(self) -> str:
+        """Inline SVG for notebook display."""
+
+        return str(self)
+
+
+def _draw_sheet_footer(
+    svg: _Svg, height: int, offset: int, shown: int, total: int, page: int, pages: int
+) -> None:
+    """Write the mandatory "N of M" footer: the sites shown and the page position."""
+
+    shown_lo = offset + 1 if shown else 0
+    shown_hi = offset + shown
+    svg.text(
+        12,
+        height - 10,
+        f"showing sites {shown_lo}-{shown_hi} of {total} -- page {page + 1} of {pages} "
+        f"(rank: {RANKING_SCORE}; nonfinite first)",
+        size=9,
+    )
+
+
 def render_contact_sheet(
     view: HistoryView,
     stream: str = "activation",
@@ -790,19 +772,34 @@ def render_contact_sheet(
     page: int = 0,
     tiles_per_page: int = 12,
     width: int = 900,
-) -> str:
+) -> ContactSheet:
     """Render one page of the ranked overview contact sheet (D24).
 
     Hierarchically ordered tiles (catalog order within equal rank), ranked
     by :data:`RANKING_SCORE` with nonfinite events first; a mandatory
     "N of M" footer and deterministic full pagination -- there is no
-    hidden top-N truncation, only numbered pages.
+    hidden top-N truncation, only numbered pages. The returned
+    :class:`ContactSheet` is the SVG text and carries ``page`` and
+    ``page_count``, so a caller learns how many pages to ask for from the
+    first one.
 
     Raises
     ------
     WatchRenderError
         ``watch_page_out_of_range`` when ``page`` exceeds the deterministic
         page count.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(3):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = tl.trackers.HistoryView.from_collector(session.collector)
+    >>> tl.viz.contact_sheet(view).startswith("<svg")
+    True
     """
 
     ranked = rank_sites(view, stream)
@@ -835,16 +832,8 @@ def render_contact_sheet(
             stream,
             (12 + col * (tile_w + 4), 28 + row * (tile_h + 8), tile_w, tile_h),
         )
-    shown_lo = page * tiles_per_page + 1 if subset else 0
-    shown_hi = page * tiles_per_page + len(subset)
-    svg.text(
-        12,
-        height - 10,
-        f"showing sites {shown_lo}-{shown_hi} of {total} -- page {page + 1} of {pages} "
-        f"(rank: {RANKING_SCORE}; nonfinite first)",
-        size=9,
-    )
-    return svg.to_string()
+    _draw_sheet_footer(svg, height, page * tiles_per_page, len(subset), total, page, pages)
+    return ContactSheet(svg.to_string(), page=page, page_count=pages)
 
 
 def render_detail(
@@ -859,6 +848,18 @@ def render_detail(
     disclosure line (grad scale, estimation, sample size, presence gaps,
     nonfinite events). Optimizer skips and segment boundaries mark every
     row identically, so cross-stream alignment is readable.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> session = tl.trackers.watch(net, to=tl.trackers.MemorySink(), signals=("activations",),
+    ...     select=["0"], inputs=torch.randn(2, 4), every=1, hist_every=1)
+    >>> for step in range(3):
+    ...     with session.step(step):
+    ...         _ = net(torch.randn(2, 4))
+    >>> view = tl.trackers.HistoryView.from_collector(session.collector)
+    >>> tl.viz.site_detail(view, next(iter(view.sites))).startswith("<svg")
+    True
     """
 
     pairs = view.site_streams(site_id)
@@ -944,10 +945,10 @@ def color_by_watch(
 
 __all__ = [
     "RANKING_SCORE",
+    "ContactSheet",
     "HistoryView",
     "SeriesPoint",
     "color_by_watch",
-    "contact_sheet_pages",
     "rank_sites",
     "render_contact_sheet",
     "render_detail",

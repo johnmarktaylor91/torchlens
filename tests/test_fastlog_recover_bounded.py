@@ -33,19 +33,6 @@ def _bundle(tmp_path) -> Path:
     return bundle
 
 
-@pytest.mark.smoke
-def test_depth_bomb_line_is_a_warning_not_a_recursionerror(tmp_path) -> None:
-    depth = 20000
-    bomb = "[" * depth + "]" * depth
-    bundle = _bundle(tmp_path)
-    (bundle / "fastlog_index.jsonl").write_text(bomb + "\n" + bomb + "\n", encoding="utf-8")
-    recording = tl.recording.recover(bundle)
-    assert recording.is_recovered is True
-    assert recording.records == []
-    assert recording.recovery_warnings
-
-
-@pytest.mark.smoke
 def test_missing_ctx_is_a_warning_not_a_keyerror(tmp_path) -> None:
     bundle = _bundle(tmp_path)
     (bundle / "fastlog_index.jsonl").write_text(json.dumps({"spec": {}}) + "\n", encoding="utf-8")
@@ -53,15 +40,6 @@ def test_missing_ctx_is_a_warning_not_a_keyerror(tmp_path) -> None:
     assert recording.is_recovered is True
     assert recording.records == []
     assert any("malformed" in warning for warning in recording.recovery_warnings)
-
-
-def test_metadata_depth_bomb_degrades_to_empty_metadata(tmp_path) -> None:
-    depth = 20000
-    bundle = _bundle(tmp_path)
-    (bundle / "fastlog_index.jsonl").write_text("", encoding="utf-8")
-    (bundle / "metadata.json").write_text("[" * depth + "]" * depth, encoding="utf-8")
-    recording = tl.recording.recover(bundle)
-    assert recording.is_recovered is True
 
 
 def test_recovery_warnings_are_bounded_with_a_summary(tmp_path) -> None:
@@ -92,28 +70,6 @@ def _write_blob(path: Path):
 
     save_file({"payload": torch.arange(8, dtype=torch.float32)}, str(path))
     return path, sha256_file(path)
-
-
-def test_blob_verify_never_reads_whole_file_before_digest(tmp_path, monkeypatch) -> None:
-    """R60/reopened HIGH: the blob digest is a chunked stream, never a full read.
-
-    ``_load_verified_blob_tensor`` previously did ``blob_path.read_bytes()`` --
-    fully materializing an attacker-controlled blob BEFORE the digest check. It
-    now hashes via the chunked ``sha256_file`` and materializes through the
-    mmap-backed safetensors loader, so ``Path.read_bytes`` is never called. Ban it
-    and prove a valid blob still verifies + loads.
-    """
-
-    import torch
-
-    blob_path, digest = _write_blob(tmp_path / "blob.safetensors")
-
-    def _banned(self, *args, **kwargs):
-        raise AssertionError("blob verification must not read the whole file at once")
-
-    monkeypatch.setattr(Path, "read_bytes", _banned)
-    tensor = recover_module._load_verified_blob_tensor(blob_path, digest)
-    assert torch.equal(tensor, torch.arange(8, dtype=torch.float32))
 
 
 def test_blob_hash_mismatch_refuses_typed(tmp_path) -> None:

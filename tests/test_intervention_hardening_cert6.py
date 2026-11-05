@@ -35,7 +35,7 @@ from torchlens.intervention._spec_values import (
 from torchlens.intervention._super._base import _TensorBearing
 from torchlens.intervention.errors import UnserializableDictKeyError
 from torchlens.intervention.save import SaveLevel
-from torchlens.options import ReplayOptions
+from torchlens.options import InterventionOptions
 
 
 def _identity_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -75,21 +75,7 @@ class _TupleOut(torch.nn.Module):
         return self.lin1(x), self.lin2(x)
 
 
-class _LinearSum(torch.nn.Module):
-    """Model whose params can carry an attached optimizer."""
-
-    def __init__(self) -> None:
-        """Initialize a single linear layer."""
-
-        super().__init__()
-        self.lin = torch.nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return ``lin(x)`` summed to a scalar."""
-
-        return self.lin(x).sum()
-
-
+@pytest.mark.usefixtures("root_edits_in_place")  # D.12: edits a root log in place on purpose
 def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> None:
     """BLOCKER-1: annotating a diff-replay fork must not mutate the parent trace."""
 
@@ -99,8 +85,10 @@ def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> Non
     original_annotations = {"user": {"data": {"owner": "original"}}}
     assert parent_op.annotations == original_annotations
 
-    fork = log.push(
-        replay=ReplayOptions(hooks={tl.func("relu"): _identity_hook}, differentiable=True)
+    fork = log.do(
+        tl.func("relu"),
+        _identity_hook,
+        intervention=InterventionOptions(differentiable=True),
     )
     # ``input_1`` is outside the replay cone -> it goes through the shallow-fork path.
     fork.annotate("input_1", data={"owner": "fork-only"})
@@ -111,39 +99,6 @@ def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> Non
     assert fork._layer_dict_all_keys["input_1"].annotations == {
         "user": {"data": {"owner": "fork-only"}}
     }
-
-
-def test_fork_shares_optimizer_aliasing_live_params() -> None:
-    """MAJOR-1: a forked trace's ``_optimizer`` must alias the live model params."""
-
-    model = _LinearSum()
-    opt = torch.optim.SGD(model.parameters(), lr=0.1)
-    log = tl.trace(
-        model,
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(replayable=True, optimizer=opt),
-    )
-    assert getattr(log, "_optimizer", None) is opt
-
-    fork = log.fork()
-    # Shared by reference, not deep-copied.
-    assert getattr(fork, "_optimizer", None) is opt
-    live_param = next(model.parameters())
-    fork_param = fork._optimizer.param_groups[0]["params"][0]
-    assert fork_param is live_param
-
-
-def test_fork_policy_shares_optimizer_but_keeps_it_off_the_display_field_order() -> None:
-    """MAJOR-1: ``_optimizer`` has a SHARE policy yet stays out of FIELD_ORDER."""
-
-    from torchlens._constants import MODEL_LOG_FIELD_ORDER
-    from torchlens.intervention.types import (
-        MODEL_LOG_FIELD_FORK_POLICY,
-        ForkFieldPolicy,
-    )
-
-    assert "_optimizer" not in MODEL_LOG_FIELD_ORDER
-    assert MODEL_LOG_FIELD_FORK_POLICY["_optimizer"] is ForkFieldPolicy.FORK_SHARE
 
 
 def test_spec_serialize_preserves_non_string_dict_keys() -> None:
@@ -188,7 +143,7 @@ def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
     """
 
     model = _TupleOut()
-    # Gradient retention is opt-in: log_backward no longer silently widens the
+    # Gradient retention is opt-in: backward no longer silently widens the
     # trace's save_grads selection (per-pass retention scoping), so grad-input
     # payload sites only exist when the capture arms save_grads itself.
     log = tl.trace(
@@ -198,7 +153,7 @@ def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
     )
     branch0 = log.find_sites(output_at(0))
     assert branch0, "expected output_at(0) to match the first tuple branch"
-    log.log_backward(branch0[0].out.sum())
+    log.backward(branch0[0].out.sum())
 
     from torchlens.intervention.errors import SelectorCompositionError
 

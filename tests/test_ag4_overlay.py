@@ -88,19 +88,6 @@ def _check_painting(trace, color_by, expected: dict[str, float]) -> int:
     return painted
 
 
-@pytest.mark.parametrize("name", ["F1", "F3"])
-def test_graph_overlay_colours_exactly_the_node_sites(built, name) -> None:
-    trace, graph = built[name]
-    influence = _numpy_influence(graph)
-    expected: dict[str, float] = {}
-    for index, node in enumerate(graph.nodes):
-        if node.kind in ("feature", "error"):
-            expected[node.site] = expected.get(node.site, 0.0) + abs(influence[index])
-    assert len(expected) >= 2
-    painted = _check_painting(trace, attribution_color_by(trace, graph), expected)
-    assert painted >= len(expected)
-
-
 def test_graph_overlay_refuses_a_graph_from_another_trace(built) -> None:
     _trace, graph = built["F1"]
     other = tl.trace(nn.Sequential(nn.Linear(2, 2)), torch.ones(1, 2))

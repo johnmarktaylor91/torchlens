@@ -133,6 +133,13 @@ class DistributedCaptureUnsupportedError(CompatibilityError, RuntimeError):
 
     The structured findings are retained on ``fields["findings"]`` so callers
     branch on :attr:`DistributedFinding.kind` rather than parsing message text.
+
+    Examples
+    --------
+    >>> issubclass(DistributedCaptureUnsupportedError, tl.errors.CompatibilityError)
+    True
+    >>> issubclass(DistributedCaptureUnsupportedError, RuntimeError)
+    True
     """
 
 
@@ -1046,7 +1053,7 @@ def _build_findings(evidence: _Evidence) -> tuple[DistributedFinding, ...]:
                     "(tl.merge_ranks) covers dense-parameter captures with "
                     "explicit collectives; DTensor/TP capture stays refused "
                     "until its capture fidelity is proven (planned design: "
-                    "docs/reference/tensor_parallel_design.md)."
+                    "docs/internal/reference/tensor_parallel_design.md)."
                 ),
                 sites=tp_sites,
                 exact=evidence.tp_module_exact,

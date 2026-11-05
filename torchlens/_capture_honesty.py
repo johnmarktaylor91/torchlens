@@ -242,9 +242,13 @@ def _step_join_fact(header: dict[str, Any]) -> str:
 
 
 def _host_source_location(op: Any) -> str | None:
-    """Return ``file:line`` of the op's first recorded user frame, when one was kept."""
+    """Return ``file:line`` of the op's innermost recorded user frame, when one was kept.
 
-    for frame in getattr(op, "code_context", None) or ():
+    ``code_context`` runs outermost to innermost, so the frame that created the
+    tensor is the last one.
+    """
+
+    for frame in reversed(tuple(getattr(op, "code_context", None) or ())):
         file = getattr(frame, "file", None)
         line = getattr(frame, "line_number", None)
         if isinstance(file, str) and isinstance(line, int) and "torchlens" not in file:

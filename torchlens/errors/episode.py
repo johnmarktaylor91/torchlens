@@ -154,7 +154,15 @@ class EpisodeErrorCode(str, Enum):
 
 
 class EpisodeCaptureError(TorchLensError):
-    """Base class for episode-capture (``capture_kind=episode``) failures."""
+    """Base class for episode-capture (``capture_kind=episode``) failures.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.EpisodeJoinError, EpisodeCaptureError)
+    True
+    >>> issubclass(EpisodeCaptureError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class EpisodeDeclarationError(EpisodeCaptureError, ConfigurationError, ValueError):
@@ -163,6 +171,13 @@ class EpisodeDeclarationError(EpisodeCaptureError, ConfigurationError, ValueErro
     ``fields["code"]`` carries ``episode_state_unsnapshotable``,
     ``episode_declaration_invalid``, or
     ``episode_step_ceiling_exceeded``.
+
+    Examples
+    --------
+    >>> issubclass(EpisodeDeclarationError, tl.errors.EpisodeCaptureError)
+    True
+    >>> issubclass(EpisodeDeclarationError, ValueError)
+    True
     """
 
 
@@ -172,6 +187,13 @@ class EpisodeLedgerError(EpisodeCaptureError, ValidationError, ValueError):
     ``fields["code"]`` carries ``episode_ledger_incoherent``,
     ``episode_ledger_without_declaration``, or
     ``episode_ledger_payload_in_structure_only``.
+
+    Examples
+    --------
+    >>> issubclass(EpisodeLedgerError, tl.errors.EpisodeCaptureError)
+    True
+    >>> issubclass(EpisodeLedgerError, ValueError)
+    True
     """
 
 
@@ -184,6 +206,13 @@ class EpisodeJoinError(EpisodeCaptureError, ValidationError, RuntimeError):
     ``fields["break_step"]`` names the broken join's step where one exists.
     Strict-arm instances raised mid-capture carry the settled partial
     product on ``exc.partial_trace``.
+
+    Examples
+    --------
+    >>> issubclass(EpisodeJoinError, tl.errors.EpisodeCaptureError)
+    True
+    >>> issubclass(EpisodeJoinError, RuntimeError)
+    True
     """
 
 
@@ -204,6 +233,13 @@ class BundleRelationError(ValidationError, ValueError):
     ``alternative_capture_position_dependent``,
     ``alternative_steer_undeclared``, ``alternative_member_name_taken`` or
     ``alternative_unchanged_call_diverged``.
+
+    Examples
+    --------
+    >>> issubclass(BundleRelationError, tl.errors.ValidationError)
+    True
+    >>> issubclass(BundleRelationError, ValueError)
+    True
     """
 
 
@@ -215,6 +251,13 @@ class BundleExperimentError(ValidationError, RuntimeError):
     ``vary_coverage_incomplete``, or ``vary_partial_failure`` (whose fields
     additionally carry ``material_action_completed`` and the per-member
     ``outcomes`` record — a mid-apply failure claims NO rollback).
+
+    Examples
+    --------
+    >>> issubclass(BundleExperimentError, tl.errors.ValidationError)
+    True
+    >>> issubclass(BundleExperimentError, RuntimeError)
+    True
     """
 
 
@@ -235,4 +278,11 @@ class ParamEvidenceMissingError(ValidationError, RuntimeError):
     parameter address, and ``fields["bases"]`` the per-member derived value
     bases. The class name is DOCUMENTED-UNSTABLE pending the naming session;
     branch on the code.
+
+    Examples
+    --------
+    >>> issubclass(ParamEvidenceMissingError, tl.errors.ValidationError)
+    True
+    >>> issubclass(ParamEvidenceMissingError, RuntimeError)
+    True
     """

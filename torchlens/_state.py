@@ -117,7 +117,7 @@ _active_fast_run_collector: Any | None = None
 
 The slot stays import-free so decorated torch wrappers can cheaply offer selected
 functional-op collection without importing the fast-run implementation. It is non-``None``
-only inside ``Trace.run(inputs=..., fast=True)`` and is restored in ``finally``.
+only inside ``Trace.run_transaction(inputs=..., fast=True)`` and is restored in ``finally``.
 """
 
 _pause_depth: int = 0
@@ -759,6 +759,20 @@ class ReentrantTraceError(CaptureError, RuntimeError):
     handlers keep working. Structured context on ``fields``: ``code`` is always
     ``"reentrant_trace"``, ``remedy`` names the fix, and ``active_model``
     carries the label of the capture already running (``None`` when unknown).
+
+    Examples
+    --------
+    >>> seen = []
+    >>> class Nested(nn.Module):
+    ...     def forward(self, v):
+    ...         try:
+    ...             tl.trace(nn.Identity(), v)
+    ...         except tl.errors.ReentrantTraceError as e:
+    ...             seen.append(e.fields["code"])
+    ...         return v + 1
+    >>> trace = tl.trace(Nested(), torch.zeros(1))
+    >>> seen
+    ['reentrant_trace']
     """
 
 

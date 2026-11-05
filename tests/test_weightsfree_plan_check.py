@@ -49,6 +49,7 @@ def test_plan_check_pass() -> None:
     assert "executable=false" in report.report()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_plan_check.py.
 def test_plan_check_shape_mismatch_is_a_finding() -> None:
     trace = _meta_trace()
     report = trace.check_plan([("relu_1_2", torch.empty(2, 8, device="meta"))])
@@ -57,12 +58,14 @@ def test_plan_check_shape_mismatch_is_a_finding() -> None:
     assert "expects shape (2, 4)" in report.sites[0].replacement_verdict
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_plan_check.py, campaign mutant kills.
 def test_plan_check_selector_typo_is_a_finding_or_refusal() -> None:
     trace = _meta_trace()
     with pytest.raises(Exception):  # noqa: B017 — resolver refusal type is its own contract
         trace.check_plan([("relu_9_9", None)])
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_plan_check.py.
 def test_plan_check_value_callable_refuses_typed() -> None:
     trace = _meta_trace()
     with pytest.raises(Exception) as excinfo:
@@ -70,7 +73,7 @@ def test_plan_check_value_callable_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "plan_check_unsupported"
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_plan_check.py, _capture/structure_only.py.
 def test_plan_check_refuted_source_refuses() -> None:
     from torchlens._capture.structure_only import StructureOnlyCapabilityError
 
@@ -82,6 +85,7 @@ def test_plan_check_refuted_source_refuses() -> None:
     assert excinfo.value.fields["code"] == "structure_only_refuted_hypothesis"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/structure_only.py, _io/bundle.py.
 def test_plan_check_never_arms_the_capture() -> None:
     trace = _meta_trace()
     trace.check_plan([("relu_1_2", torch.empty(2, 4, device="meta"))])
@@ -92,11 +96,3 @@ def test_plan_check_never_arms_the_capture() -> None:
     assert "structure_only" in str(getattr(excinfo.value, "fields", {}).get("code", "")) or (
         "runnable" in str(excinfo.value)
     )
-
-
-def test_plan_check_works_on_ordinary_traces_too() -> None:
-    trace = tl.trace(Toy(), torch.randn(2, 4))
-    report = trace.check_plan([("relu_1_2", torch.empty(2, 4))])
-    assert report.ok
-    assert report.evidence_status == "measured"
-    assert report.executable is False

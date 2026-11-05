@@ -8,6 +8,8 @@ from collections.abc import Sequence
 
 from PIL import Image
 
+from .._entry_refusals import refuse_if_below, refuse_viz_empty
+
 
 def montage(images: Sequence[Image.Image], max_items: int, max_size: int = 600) -> Image.Image:
     """Render a PIL image batch as a thumbnail montage.
@@ -30,13 +32,19 @@ def montage(images: Sequence[Image.Image], max_items: int, max_size: int = 600) 
     ------
     ValueError
         If ``max_items`` is less than one or ``images`` is empty.
+
+    Examples
+    --------
+    >>> from PIL import Image
+    >>> images = [Image.new("RGB", (8, 8), "red") for _ in range(4)]
+    >>> tl.viz.montage(images, max_items=4, max_size=64).size
+    (64, 64)
     """
 
-    if max_items < 1:
-        raise ValueError("max_n must be at least 1.")
+    refuse_if_below("max_n", max_items, 1)
     shown = list(images[:max_items])
     if not shown:
-        raise ValueError("montage requires at least one image.")
+        refuse_viz_empty("montage requires at least one image")
 
     cols = int(math.ceil(math.sqrt(len(shown))))
     rows = int(math.ceil(len(shown) / cols))
@@ -70,10 +78,15 @@ def text_table(strings: Sequence[str], max_items: int) -> str:
     ------
     ValueError
         If ``max_items`` is less than one.
+
+    Examples
+    --------
+    >>> label = tl.viz.nodes.text_table(["first", "second", "third"], max_items=2)
+    >>> label.startswith("<<TABLE"), "+1 more" in label
+    (True, True)
     """
 
-    if max_items < 1:
-        raise ValueError("max_n must be at least 1.")
+    refuse_if_below("max_n", max_items, 1)
 
     shown = list(strings[:max_items])
     rows = ["<TR><TD><B>input</B></TD></TR>"]

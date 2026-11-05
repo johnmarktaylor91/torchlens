@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 
 import pytest
@@ -238,82 +239,85 @@ def _find_edge_line(dot_source: str, parent_label: str, child_label: str) -> str
     raise AssertionError(f"Could not find edge line for {parent_label!r} -> {child_label!r}")
 
 
-def test_simple_if_else_graphviz_labels_then_and_else_edges() -> None:
-    """Simple ``if``/``else`` rendering shows THEN and ELSE labels on the right edges."""
-    positive_dot, positive_log = _render_dot_source(SimpleIfElseModel(), torch.ones(2, 2))
-    negative_dot, negative_log = _render_dot_source(SimpleIfElseModel(), -torch.ones(2, 2))
+def _find_node_line(dot_source: str, layer_label: str) -> str:
+    """Return the DOT line that declares one rendered node.
 
-    try:
-        positive_conditional_id = _get_only_event_id(positive_log)
-        negative_conditional_id = _get_only_event_id(negative_log)
-        then_parent, then_child = positive_log.graph.conditional_arm_entry_edges[
-            (positive_conditional_id, "then")
-        ][0]
-        else_parent, else_child = negative_log.graph.conditional_arm_entry_edges[
-            (negative_conditional_id, "else")
-        ][0]
+    Parameters
+    ----------
+    dot_source:
+        Graphviz DOT source.
+    layer_label:
+        Layer label from the model log.
 
-        then_line = _find_edge_line(positive_dot, then_parent, then_child)
-        else_line = _find_edge_line(negative_dot, else_parent, else_child)
-
-        assert "THEN" in then_line
-        assert "ELSE" in else_line
-    finally:
-        positive_log.cleanup()
-        negative_log.cleanup()
-
-
-def test_elif_ladder_graphviz_labels_elif_and_else_edges() -> None:
-    """Elif ladder rendering shows ``ELIF 1``, ``ELIF 2``, and ``ELSE`` labels."""
-    expected_cases = [
-        ("elif_1", torch.tensor([[-0.25]]), "ELIF 1"),
-        ("elif_2", torch.tensor([[0.25]]), "ELIF 2"),
-        ("else", torch.tensor([[1.0]]), "ELSE"),
-    ]
-
-    for branch_kind, x, label_text in expected_cases:
-        dot_source, trace = _render_dot_source(ElifLadderModel(), x)
-        try:
-            conditional_id = _get_only_event_id(trace)
-            parent_label, child_label = trace.graph.conditional_arm_entry_edges[
-                (conditional_id, branch_kind)
-            ][0]
-            edge_line = _find_edge_line(dot_source, parent_label, child_label)
-            assert label_text in edge_line
-        finally:
-            trace.cleanup()
+    Returns
+    -------
+    str
+        Matching DOT line.
+    """
+    # Unrolled node ids carry their pass (``lt_1_2pass1``); a bare layer label
+    # matches its first drawn pass.
+    pattern = re.compile(rf"{re.escape(layer_label.replace(':', 'pass'))}(pass\d+)?")
+    for line in dot_source.splitlines():
+        if "->" not in line and pattern.fullmatch(line.strip().split(" ", 1)[0]):
+            return line
+    raise AssertionError(f"Could not find node line for {layer_label!r}")
 
 
-def test_elif_ladder_condition_entry_edges_label_if_then_elif() -> None:
-    """Condition-entry edges label the first test ``IF`` and each later test ``ELIF``.
+def test_elif_ladder_names_if_then_elif_on_the_test_node_and_its_entry_edge() -> None:
+    """The leading test reads ``IF`` and each later test ``ELIF``, on the node and on the edge.
 
-    Distinct from the arm-entry labels (THEN/ELIF N/ELSE): these are the edges entering each
-    branch *test*. Historically every one was hardcoded ``IF``; an if/elif ladder must show
-    ``IF`` for the leading test and ``ELIF`` for every subsequent one.
+    Distinct from the arm-entry labels (THEN/ELIF N/ELSE): the test kind sits on the test
+    node's value row, and the edge entering each condition subgraph carries the same kind,
+    so a reader sees where the branch starts (the released behaviour).
     """
     dot_source, trace = _render_dot_source(ElifLadderModel(), torch.tensor([[0.25]]))
     try:
-        # bool_layers is ordered [if_bool, elif_1_bool, elif_2_bool]; the mean feeding each
-        # bool is that test's condition-entry child.
         bool_layers = trace.graph.conditional_records[0].bool_layers
         expected_by_bool = {bl: ("IF" if i == 0 else "ELIF") for i, bl in enumerate(bool_layers)}
-        # map each condition-entry child (mean_N) to its downstream bool via the single child
+        for index, bool_label in enumerate(bool_layers):
+            node_line = _find_node_line(dot_source, bool_label)
+            expected = "IF:" if index == 0 else "ELIF:"
+            assert expected in node_line, f"{bool_label} -> expected {expected}: {node_line}"
+            if index == 0:
+                assert "ELIF" not in node_line
+        # the mean feeding each bool is that test's condition-entry child
+        kinds = []
         for parent_label, child_label in trace.graph.conditional_branch_edges:
-            downstream = trace[child_label].children[0]
-            expected = expected_by_bool[downstream]
+            expected = expected_by_bool[trace[child_label].children[0]]
             edge_line = _find_edge_line(dot_source, parent_label, child_label)
-            assert expected in edge_line, f"{child_label} -> expected {expected}, line: {edge_line}"
-        # sanity: exactly one IF, and at least one ELIF (it is a ladder)
-        kinds = [
-            expected_by_bool[trace[c].children[0]] for _, c in trace.graph.conditional_branch_edges
-        ]
+            assert f"<u>{expected}</u>" in edge_line, f"{child_label}: {edge_line}"
+            kinds.append(expected)
         assert kinds.count("IF") == 1
         assert kinds.count("ELIF") == len(kinds) - 1
     finally:
         trace.cleanup()
 
 
-def test_loop_repeated_if_condition_entries_remain_if() -> None:
+def test_field_picker_keeps_the_if_row_on_the_test_node() -> None:
+    """``node_label_fields`` never drops a test's ``IF: TRUE`` row.
+
+    The IF kind lives on the test node's outcome row, not on an edge, so a picker
+    that omits it would erase the branch's IF from the drawing.
+    """
+
+    trace = tl.trace(
+        SimpleIfElseModel(), torch.ones(1, 3), capture=CaptureOptions(save_source_context=True)
+    )
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dot_source = trace.draw(
+                path=os.path.join(tmpdir, "picker"),
+                file_format="dot",
+                node_label_fields=["label", "shape"],
+            ).dot
+        bool_label = trace.graph.conditional_records[0].bool_layers[0]
+        assert "IF: TRUE" in _find_node_line(dot_source, bool_label)
+    finally:
+        trace.cleanup()
+
+
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
+def test_loop_repeated_if_tests_remain_if() -> None:
     """Repeated evaluations of one source ``if`` never become an ELIF ladder."""
 
     dot_source, trace = _render_dot_source(LoopRepeatedIfModel(), torch.ones(2, 2))
@@ -321,15 +325,18 @@ def test_loop_repeated_if_condition_entries_remain_if() -> None:
         event = trace.graph.conditional_records[0]
         assert len(event.bool_layers) == 4
         assert all(
-            {op.conditional_context_kind for op in trace[bool_label].ops.values()} == {"if_test"}
+            {op.conditional_context_kind for op in trace.layers[bool_label].ops.values()}
+            == {"if_test"}
             for bool_label in event.bool_layers
         )
+        node_lines = [_find_node_line(dot_source, label) for label in event.bool_layers]
+        assert all("IF:" in line and "ELIF" not in line for line in node_lines)
         edge_lines = [
             _find_edge_line(dot_source, parent_label, child_label)
             for parent_label, child_label in trace.graph.conditional_branch_edges
         ]
         assert len(edge_lines) == 4
-        assert all("IF" in line and "ELIF" not in line for line in edge_lines)
+        assert all("<u>IF</u>" in line and "ELIF" not in line for line in edge_lines)
     finally:
         trace.cleanup()
 
@@ -367,32 +374,6 @@ def test_basic_ternary_graphviz_labels_then_and_else_edges() -> None:
     finally:
         positive_log.cleanup()
         negative_log.cleanup()
-
-
-def test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate() -> None:
-    """Branch-entry edges retain the branch label and move arg labels to the head/x label."""
-    dot_source, trace = _render_dot_source(BranchEntryWithArgLabelModel(), torch.ones(2, 2))
-
-    try:
-        conditional_id = _get_only_event_id(trace)
-        parent_label, child_label = trace.graph.conditional_arm_entry_edges[
-            (conditional_id, "then")
-        ][0]
-        edge_line = _find_edge_line(dot_source, parent_label, child_label)
-
-        assert 'label=<<FONT POINT-SIZE="18"><b><u>THEN</u></b></FONT>>' in edge_line
-        # Argument labels route through the padded non-bold builder now
-        # (vizmech D9); the separation contract is unchanged -- the semantic
-        # branch label keeps the midpoint, the arg label rides head/x.
-        assert (
-            'headlabel=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6">'
-            in edge_line
-            or 'xlabel=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6">'
-            in edge_line
-        )
-        assert ">arg" in edge_line
-    finally:
-        trace.cleanup()
 
 
 def test_rolled_mixed_arm_graphviz_shows_composite_call_label() -> None:

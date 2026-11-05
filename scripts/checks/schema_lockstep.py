@@ -265,7 +265,7 @@ def check_alias_catalogs_share_the_primary_object() -> None:
 PRIVATE_ORDERED_DROP_FIELDS: dict[str, dict[str, str]] = {
     "Trace": {
         "_runnable": "sparse-runnable state container; rebuilt at load, never portable itself",
-        "_fast_run_session": "session-time guarded-static-loop handle (tl.Trace.run(fast=True))",
+        "_fast_run_session": "session-time guarded-static-loop handle (tl.Trace.run_transaction(inputs=..., fast=True))",
         "_distributed_plane_p": "session-time plane-P dispatch journal for armed captures (merge-ranks C2 census evidence)",
         "_transform": "capture-time input transform callable; opaque, session-only",
         "_output_transform": "capture-time output transform callable; opaque, session-only",
@@ -294,7 +294,6 @@ PRIVATE_ORDERED_DROP_FIELDS: dict[str, dict[str, str]] = {
         "_health_num_expected_opaque_witness_events": "v11 private store behind the `trace.health` view; session-only diagnostic, dropped from the artifact as before the rename",
         "_health_num_unaccounted_witness_events": "v11 private store behind the `trace.health` view; session-only diagnostic, dropped from the artifact as before the rename",
         "_health_num_witness_events": "v11 private store behind the `trace.health` view; session-only diagnostic, dropped from the artifact as before the rename",
-        "_module_filter": "v11-privatised module filter callable/spec; opaque, session-only",
         "_options_activation_transform": "v11 private store behind the `trace.options` view; session-only diagnostic, dropped from the artifact as before the rename",
         "_options_backward_ready": "v11 private store behind the `trace.options` view; session-only diagnostic, dropped from the artifact as before the rename",
         "_options_grad_transform": "v11 private store behind the `trace.options` view; session-only diagnostic, dropped from the artifact as before the rename",
@@ -1120,8 +1119,12 @@ VERSION_AUTHORITY_PINS: dict[str, int] = {
     # the privatised Trace members and the floor raised to v11 (older artifacts
     # re-save from source; tests/test_rehydration_floor.py). Contract of record:
     # torchlens/schemas/writer_contract_v11.json. MERGED_TLSPEC_VERSION did not move.
-    "TLSPEC_VERSION": 11,
-    "MIN_TLSPEC_VERSION": 11,
+    # v12: the 3.0 columnar-record write — Op.is_constant (stamped by the shared
+    # constants rule) and Op.arg_expressions persist on the op record, and the floor
+    # moves with the contract (tests/test_rehydration_floor.py). Contract of record:
+    # torchlens/schemas/writer_contract_v12.json. MERGED_TLSPEC_VERSION did not move.
+    "TLSPEC_VERSION": 12,
+    "MIN_TLSPEC_VERSION": 12,
     "MERGED_TLSPEC_VERSION": 7,
 }
 

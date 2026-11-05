@@ -12,6 +12,8 @@ import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
+from .._utils._display_errors import lookup_message
+
 if TYPE_CHECKING:
     from . import Bundle
 
@@ -23,7 +25,18 @@ _COMMON_BUFFER_SUFFIXES = (".running_mean", ".running_var", ".num_batches_tracke
 
 
 class AmbiguousLabelError(KeyError):
-    """Raised when ``Bundle.at`` finds a label in multiple accessors."""
+    """Raised when ``Bundle.at`` finds a label in multiple accessors.
+
+    Examples
+    --------
+    >>> issubclass(AmbiguousLabelError, KeyError)
+    True
+    >>> try:
+    ...     raise AmbiguousLabelError("relu_1 names an op and a layer")
+    ... except KeyError as error:
+    ...     print(type(error).__name__)
+    AmbiguousLabelError
+    """
 
 
 # Defined here so this leaf never imports the package at call time (layering:
@@ -136,8 +149,9 @@ def missing_label_message(bundle: Bundle, label: str) -> str:
                 seen.add(suggestion)
                 suggestions.append(suggestion)
     if suggestions:
-        suggestion_str = ", ".join(repr(suggestion) for suggestion in suggestions)
-        return f"Label {label!r} not found. Did you mean {suggestion_str}?"
+        return lookup_message(
+            f"Label {label!r} not found.", suggestions, "pass a label from a bundle accessor."
+        )
     return f"Label {label!r} not found."
 
 

@@ -187,6 +187,19 @@ class ChecksSession:
     Construction is SILENT and does no device work (memo D20): no hooks, no
     syncs, no stdout. ``estimated_snapshot_bytes`` is pure metadata;
     ``profile()`` runs the measured scan on demand.
+
+    Examples
+    --------
+    >>> net = nn.Linear(4, 2)
+    >>> opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> session = ChecksSession(net, opt)
+    >>> session.register_nonfinite_grad_check(action="collect")
+    >>> with session:
+    ...     opt.zero_grad()
+    ...     net(torch.randn(3, 4)).sum().backward()
+    ...     opt.step()
+    >>> (session.final_report.counters["accepted_steps"], session.final_report.finalized_reason)
+    (1, 'scope_exit')
     """
 
     def __init__(  # noqa: PLR0913 -- the memo-4.2 chassis constructor: model + optimizer + the four declared loop facts (scaler/clip_norm/accumulation/event_stream); bundling them would hide the disclosure contract
@@ -364,23 +377,23 @@ class ChecksSession:
         self,
         names: Any,
         *,
-        evidence: str = "clone",
+        snapshot_kind: str = "clone",
         action: str = "raise",
     ) -> None:
         """Register the declared-frozen invariant (memo D5).
 
-        ``evidence="clone"`` (default) keeps exact detached dtype-preserving
-        snapshots and can SHOW the offending delta; ``evidence="digest"`` is
+        ``snapshot_kind="clone"`` (default) keeps exact detached dtype-preserving
+        snapshots and can SHOW the offending delta; ``snapshot_kind="digest"`` is
         the labeled opt-in (content digests; a differing digest PROVES
         change, equality is probabilistic and may never emit an exact pass).
         """
 
-        if evidence not in ("clone", "digest"):
+        if snapshot_kind not in ("clone", "digest"):
             raise CheckConfigError(
-                f"frozen evidence={evidence!r} must be 'clone' or 'digest'.",
+                f"frozen snapshot_kind={snapshot_kind!r} must be 'clone' or 'digest'.",
                 code="check_vocab_invalid",
-                field="evidence",
-                remedy="Pass evidence='clone' (exact) or evidence='digest' (labeled opt-in).",
+                field="snapshot_kind",
+                remedy="Pass snapshot_kind='clone' (exact) or snapshot_kind='digest' (labeled opt-in).",
             )
         validated = self._validate_within("names", names)
         if not validated:
@@ -391,7 +404,7 @@ class ChecksSession:
             )
         self._frozen = FrozenCheck(
             names=validated,
-            evidence=evidence,
+            evidence=snapshot_kind,
             action=validate_action(action),
         )
 

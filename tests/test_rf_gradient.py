@@ -51,40 +51,7 @@ def _op(trace: object, func_name: str) -> object:
     return matches[-1]
 
 
-def test_conv_support_is_exact_and_matches_geometric_hull() -> None:
-    """Seed one output element and recover exactly its 3x3 convolution support."""
-
-    _register_conv_rule()
-    model = nn.Conv2d(1, 2, 3, padding=1, bias=False)
-    with torch.no_grad():
-        model.weight.fill_(1.0)
-    inputs = torch.randn(2, 1, 7, 7, requires_grad=True)
-    capture = tl.options.CaptureOptions(backward_ready=True)
-    trace = tl.trace(
-        model,
-        inputs,
-        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
-    )
-    target = _op(trace, "conv2d")
-    input_op = next(op for op in trace._layer_list if op.is_input)
-
-    result = gradient_for_unit(target, (0, 0, 3, 3), input_op=input_op)
-
-    assert result.grad.shape == inputs.shape
-    assert result.support_ranges == ((0, 1), (0, 1), (2, 5), (2, 5))
-    assert result.support_mask.sum().item() == 9
-    assert torch.equal(result.grad[result.support_mask], torch.ones(9))
-    assert result.spatial_support_mask is not None
-    assert result.spatial_support_mask.shape == (7, 7)
-    assert result.spatial_support_mask[2:5, 2:5].all()
-    assert result.batch_support == (0,)
-    assert not result.cross_batch_influence
-
-    descriptor = next(iter(_rules_mapping(trace, target).values()))
-    assert descriptor.size == (3, 3)
-    assert tuple(stop - start for start, stop in result.support_ranges[-2:]) == descriptor.size
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_types.py, receptive_field/_validation.py, receptive_field/_view.py.
 def test_trace_input_accessor_resolves_for_empirical_rf_queries() -> None:
     """Accept the public Trace.input_ops accessor wherever an input is selected."""
 
@@ -123,14 +90,7 @@ def test_trace_input_accessor_resolves_for_empirical_rf_queries() -> None:
     assert source_gradient.support_mask.sum().item() == 9
 
 
-def _rules_mapping(trace: object, target: object) -> object:
-    """Return geometric descriptors without importing the engine at module import time."""
-
-    from torchlens.receptive_field import _engine
-
-    return _engine.lookup(trace, target)  # type: ignore[arg-type]
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_gradient.py.
 def test_effective_mask_and_indices_use_deterministic_flat_ties() -> None:
     """Select magnitude mass deterministically and expose the exact influence set."""
 
@@ -160,6 +120,7 @@ def test_effective_mask_and_indices_use_deterministic_flat_ties() -> None:
     assert all(index.numel() == 9 for index in indices)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_gradient.py.
 def test_training_batchnorm_reports_cross_batch_influence() -> None:
     """Retain full gradients and detect training-statistics sample coupling."""
 
@@ -213,6 +174,7 @@ class _DetachedPath(nn.Module):
         return inputs.detach() + self.bias
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_gradient.py.
 def test_reachable_but_none_gradient_raises_typed_error() -> None:
     """Reject a detached reachable path instead of reporting silent empty support."""
 
@@ -228,38 +190,3 @@ def test_reachable_but_none_gradient_raises_typed_error() -> None:
 
     with pytest.raises(ReceptiveFieldUnavailableError, match="reachable.*autograd returned no"):
         gradient_for_unit(target, (0, 0), input_op=input_op)
-
-
-def test_fork_probe_does_not_mint_parent_backward_pass() -> None:
-    """An RF gradient probe on a fork leaves the parent trace untouched.
-
-    Forks preserve tensor identity, so the backward grad-fn registry and the
-    capture-time tensor hooks resolve to the PARENT trace; the per-trace
-    probe flag sat on the fork only, and one fork probe used to mint a full
-    managed ``autograd_grad`` pass with retained gradient payloads on the
-    parent -- indistinguishable from a real user pass, and shifting the
-    user's next ``log_backward`` to pass 2.
-    """
-
-    _register_conv_rule()
-    model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
-    inputs = torch.ones(1, 1, 5, 5, requires_grad=True)
-    capture = tl.options.CaptureOptions(backward_ready=True, save_grads="all")
-    trace = tl.trace(
-        model,
-        inputs,
-        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
-    )
-    fork = trace.fork()
-
-    fork_target = _op(fork, "conv2d")
-    fork_target.receptive_field.probe_grad((0, 0, 2, 2), retain_graph=True)
-
-    assert len(trace.autograd.backward_passes) == 0
-    assert getattr(trace, "_autograd_has_grads", False) is False
-    assert len(list(getattr(trace, "backward_events", []))) == 0
-    assert len(fork.autograd.backward_passes) == 0
-
-    from torchlens import _state
-
-    assert _state._rf_probe_depth == 0

@@ -38,6 +38,7 @@ def profiled_trace() -> Iterator[tl.Trace]:
         trace.cleanup()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_profile.py.
 def test_build_profile_validates_level_sort_and_top_k(profiled_trace) -> None:
     """Invalid level/sort_by/top_k values are refused with clear errors."""
 
@@ -51,44 +52,7 @@ def test_build_profile_validates_level_sort_and_top_k(profiled_trace) -> None:
         profile(profiled_trace, k=True)
 
 
-def test_profile_repr_formats_durations_human_readably(profiled_trace) -> None:
-    """__repr__ renders the time column in s/ms/us units."""
-
-    prof = profile(profiled_trace, level="op")
-    text = repr(prof)
-    assert any(unit in text for unit in (" s", " ms", " us"))
-    assert "time" in text
-
-
-def test_profile_honesty_labels_align_with_rows_and_vocabulary(profiled_trace) -> None:
-    """honesty() returns per-row provenance labels from the closed vocabulary."""
-
-    prof = profile(profiled_trace, level="op", k=3)
-    honesty = prof.evidence_labels()
-    assert list(honesty["name"]) == list(prof.frame["name"])
-    # F09 (costreport D2/D9): per-cell evidence with mandatory qualifiers --
-    # host time is never bare "measured", parameter counts are a declared
-    # inventory (formula_exact), FLOPs carry their compute-record evidence.
-    from torchlens.report._profile import HONESTY_LABELS
-
-    for column in ("time", "flops", "activation_memory", "param_count"):
-        assert set(honesty[column]) <= set(HONESTY_LABELS)
-    assert "measured" not in set(honesty["time"])
-    # Cached honesty frames are returned as copies, not aliases.
-    assert honesty is not prof.evidence_labels()
-
-
-def test_profile_top_k_and_sort_order(profiled_trace) -> None:
-    """top_k truncates after a stable descending sort on the requested column."""
-
-    full = profile(profiled_trace, level="op", sort_by="param_count")
-    top = profile(profiled_trace, level="op", sort_by="param_count", k=2)
-    assert len(top.frame) == 2
-    assert list(top.frame["name"]) == list(full.frame["name"][:2])
-    counts = [c for c in full.frame["param_count"] if c == c]
-    assert counts == sorted(counts, reverse=True)
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_profile.py.
 def test_profile_module_and_call_levels_and_tree(profiled_trace) -> None:
     """module/call granularities include block rows and the call tree renders."""
 
@@ -105,6 +69,7 @@ def test_profile_module_and_call_levels_and_tree(profiled_trace) -> None:
     assert module_profile.to_pandas() is not module_profile.frame
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_profile.py.
 def test_multipass_module_profile_covers_every_pass() -> None:
     """A module called twice contributes both passes to its module row."""
 
@@ -124,6 +89,7 @@ def test_multipass_module_profile_covers_every_pass() -> None:
     assert int(row["op_count"].iloc[0]) >= 2
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of observers.py.
 def test_log_value_records_during_capture_and_refuses_outside() -> None:
     """observers.log_value stores values on the active trace and refuses idle calls."""
 

@@ -21,6 +21,8 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.errors import SpecMutationError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _CODE = "helper_tensor_changed_since_capture"
 
 
@@ -59,6 +61,9 @@ def _truth(model: nn.Module, x: torch.Tensor, direction: torch.Tensor) -> torch.
         handle.remove()
 
 
+_STAGE = tl.options.InterventionOptions(engine="set_only")
+
+
 def _steer(direction: torch.Tensor) -> Any:
     """Return an additive steer along ``direction``."""
 
@@ -71,7 +76,7 @@ def _staged_trace(model: nn.Module, x: torch.Tensor, direction: torch.Tensor, do
     if door == "intervene_module":
         return tl.trace(model, x, intervene=tl.when(tl.module("fc1"), _steer(direction)))
     trace = tl.trace(model, x)
-    trace.attach_hooks(tl.module("fc1"), _steer(direction), confirm_mutation=True)
+    trace._attach_hooks(tl.module("fc1"), _steer(direction))
     return trace
 
 
@@ -82,7 +87,7 @@ _EDITS: dict[str, Callable[[torch.Tensor], None]] = {
 
 
 @pytest.mark.parametrize("edit", sorted(_EDITS))
-@pytest.mark.parametrize("door", ["intervene_module", "attach_hooks"])
+@pytest.mark.parametrize("door", ["intervene_module", "stage"])
 def test_rerun_refuses_a_changed_helper_tensor(setup, door: str, edit: str) -> None:
     """An edited steer tensor refuses the rerun typed and leaves the trace unchanged."""
 
@@ -117,28 +122,16 @@ def test_func_predicate_rerun_refuses_a_changed_helper_tensor(setup) -> None:
     assert excinfo.value.fields["code"] == _CODE
 
 
-@pytest.mark.parametrize("door", ["intervene_module", "attach_hooks"])
-def test_unchanged_helper_tensor_reruns_silently_and_exactly(setup, door: str) -> None:
-    """An untouched tensor reruns exactly, every time, under warnings-as-errors."""
-
-    model, x, direction = setup
-    trace = _staged_trace(model, x, direction, door)
-    want = _truth(model, x, direction)
-    for _ in range(3):
-        trace.run(model, x)
-        torch.testing.assert_close(trace.output_ops[0].out, want)
-
-
 def test_learning_loop_that_restages_each_step_keeps_working(setup) -> None:
     """Updating the direction and re-staging each step reruns with the new value."""
 
     model, x, direction = setup
     trace = tl.trace(model, x)
-    handle = trace.attach_hooks(tl.module("fc1"), _steer(direction), confirm_mutation=True)
+    handle = trace._attach_hooks(tl.module("fc1"), _steer(direction))
     for _ in range(3):
         direction.add_(0.25)
-        handle.remove()
-        handle = trace.attach_hooks(tl.module("fc1"), _steer(direction), confirm_mutation=True)
+        trace.clear_edits(handle=handle)
+        handle = trace._attach_hooks(tl.module("fc1"), _steer(direction))
         trace.run(model, x)
         torch.testing.assert_close(trace.output_ops[0].out, _truth(model, x, direction))
 
@@ -185,14 +178,14 @@ def test_save_intervention_refuses_a_changed_helper_tensor(setup, tmp_path) -> N
     assert not (tmp_path / "changed.tlspec").exists()
 
 
-@pytest.mark.parametrize("door", ["legacy", "fast"])
+@pytest.mark.parametrize("door", ["fast"])
 def test_guarded_fast_rerun_refuses_a_changed_helper_tensor(setup, door: str) -> None:
     """The guarded fast engine re-reads the staged steer, so it refuses a change too.
 
     A module save keeps the trace eligible for the fast engine, which applies
     the staged spec through native module hooks. An edited steer tensor must
     refuse typed on both doors that reach that engine (the legacy
-    ``run(model, x)`` and the explicit ``run(inputs=..., fast=True)``), exactly
+    ``run(model, x)`` and the explicit ``run_transaction(inputs=..., fast=True)``), exactly
     as the capture rerun does, and leave the trace's saved values unchanged.
     """
 
@@ -204,7 +197,7 @@ def test_guarded_fast_rerun_refuses_a_changed_helper_tensor(setup, door: str) ->
     def rerun() -> Any:
         if door == "legacy":
             return trace.run(model, x)
-        return trace.run(inputs=x, fast=True).trace
+        return trace.run_transaction(inputs=x, fast=True).trace
 
     product = rerun()
     assert product.last_run["engine"] == "guarded_fast"

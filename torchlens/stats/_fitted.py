@@ -39,7 +39,20 @@ FITTED_SIDECAR_SCHEMA = "tl_pca_fitted_v1"
 
 
 class FittedArtifactError(_ActionableErrorMixin, ConfigurationError, RuntimeError):
-    """Raised when a fitted-projection payload or sidecar violates its contract."""
+    """Raised when a fitted-projection payload or sidecar violates its contract.
+
+    Examples
+    --------
+    >>> import os, tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     bad = os.path.join(tmp, "bad.safetensors")
+    ...     _ = open(bad, "w").write("not a fitted sidecar")
+    ...     try:
+    ...         tl.stats.load_fitted(bad)
+    ...     except FittedArtifactError as error:
+    ...         print(type(error).__name__, error.fields["code"])
+    FittedArtifactError pca_fitted_record_invalid
+    """
 
     def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
         """Initialize an actionable fitted-artifact refusal.
@@ -125,6 +138,16 @@ class FittedPCA:
         arrays).
     digest:
         ``sha256:`` content digest of the arrays (:func:`fitted_digest`).
+
+    Examples
+    --------
+    >>> pca = tl.stats.PCA(num_components=2)
+    >>> pca.update(torch.randn(40, 5))
+    >>> fitted = pca.fitted(fit_scope="training stimuli")
+    >>> isinstance(fitted, FittedPCA), fitted.components.shape, fitted.num_samples
+    (True, torch.Size([2, 5]), 40)
+    >>> fitted.digest.startswith("sha256:")
+    True
     """
 
     components: torch.Tensor
@@ -168,6 +191,16 @@ def save_fitted(fitted: Any, path: str | Path) -> Path:
     -------
     Path
         The written path.
+
+    Examples
+    --------
+    >>> import os, tempfile
+    >>> pca = tl.stats.PCA(num_components=2)
+    >>> pca.update(torch.randn(40, 5))
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = tl.stats.save_fitted(pca.fitted(), os.path.join(tmp, "pca.safetensors"))
+    ...     print(path.name, path.exists())
+    pca.safetensors True
     """
 
     from safetensors.torch import save_file
@@ -240,6 +273,17 @@ def load_fitted(path: str | Path, *, encoder: Callable[[Any], Any] | None = None
         not match the recorded one; the ``stats_state_*`` codes for an
         accumulator state (unknown format version, digest mismatch, encoder
         mismatch, malformed state).
+
+    Examples
+    --------
+    >>> import os, tempfile
+    >>> running = tl.stats.Mean()
+    >>> running.update(torch.tensor([1.0, 3.0]))
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = tl.stats.save_fitted(running, os.path.join(tmp, "mean.safetensors"))
+    ...     restored = tl.stats.load_fitted(path)
+    >>> restored.update(torch.tensor([5.0])); restored.compute()
+    3.0
     """
 
     from safetensors import safe_open

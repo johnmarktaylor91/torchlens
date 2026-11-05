@@ -78,6 +78,12 @@ from typing import Any, Literal
 
 from ..errors.episode import BundleRelationError
 from ._fed_by import FED_BY_KIND, check_fed_by_params, validate_fed_by_param
+from ._relation_evidence import (
+    validate_carry_mode,
+    validate_evidence_class,
+    validate_evidence_seam,
+    validate_seams,
+)
 from ._selected_by import (
     SELECTED_BY_DECISION_PARAMS,
     SELECTED_BY_KIND,
@@ -195,7 +201,7 @@ PAIR_ROW_KINDS: dict[str, RelationKindSpec] = {
     "forked_from": RelationKindSpec(frozenset({"at_step"})),
     "successor_of": RelationKindSpec(
         frozenset(),
-        frozenset({"evidence", "carry_mode", "state_source"}),
+        frozenset({"evidence", "carry_mode", "state_source", "seams"}),
     ),
     "escalates": RelationKindSpec(frozenset({"at_step"})),
     # tlspec v10 (harness bundles): "B fed_by A" -- B's prompt contains A's
@@ -291,7 +297,9 @@ def _validated_param_value(kind: str, key: str, value: Any) -> Any:
     if kind == SELECTED_BY_KIND and key in SELECTED_BY_DECISION_PARAMS:
         return validate_selected_by_param(key, value)
     _validate_param_value(kind, key, value)
-    return _clamp_evidence_grades(value) if key == "evidence" else value
+    if key == "evidence":
+        return _clamp_evidence_grades(value)
+    return list(value) if key == "seams" else value
 
 
 def _check_cross_params(kind: str, validated: Mapping[str, Any]) -> None:
@@ -304,6 +312,10 @@ def _check_cross_params(kind: str, validated: Mapping[str, Any]) -> None:
             _enforce_evidence_budget(kind, spans, param="token_spans")
     if kind == SELECTED_BY_KIND:
         check_selected_by_params(validated)
+    if "evidence" in validated:
+        seams = tuple(validated.get("seams", ()))
+        for index, item in enumerate(validated["evidence"]["items"]):
+            validate_evidence_seam(index, item, seams=seams)
 
 
 def _clamp_evidence_grades(envelope: Mapping[str, Any]) -> dict[str, Any]:
@@ -346,13 +358,17 @@ def _validate_param_value(kind: str, key: str, value: Any) -> None:
             f"vocabulary {sorted(_EPISODE_ROLES)}"
         )
     elif key in ("carry_mode", "state_source"):
-        # D16 spellings, reserved at amendment time. Values are DECLARED
-        # facts whose vocabularies belong to the F-CHAIN/F-WITNESS lanes;
-        # the grammar pins the type envelope only.
+        # D16 spellings, reserved at amendment time. ``carry_mode`` is the
+        # closed carry-mode vocabulary (``none`` is a declared fresh start that
+        # grades disclosed); ``state_source`` keeps the type envelope only.
         if not isinstance(value, str) or not value:
             raise ValueError(
                 f"bundle-relation param {key!r} must be a non-empty string, got {value!r}"
             )
+        if key == "carry_mode":
+            validate_carry_mode(value)
+    elif key == "seams":
+        validate_seams(value)
     elif key == "evidence":
         _validate_evidence_envelope(kind, value)
 
@@ -388,6 +404,7 @@ def _validate_evidence_envelope(kind: str, value: Any) -> None:
         raise ValueError("bundle-relation evidence 'items' must be a list of graded claims")
     for index, item in enumerate(items):
         _validate_evidence_item(index, item)
+        validate_evidence_class(index, item, schema=schema)
     _enforce_evidence_budget(kind, value)
 
 

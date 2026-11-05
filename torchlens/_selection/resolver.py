@@ -18,6 +18,8 @@ from .._ir.selector_eval import (
     selector_contains_kind,
     walk_selector,
 )
+from .._trace_core.label_cells import shared_site_index
+from ._display import site_table_card, site_table_repr
 from ._site_refusals import (
     check_site_query_arguments,
     refuse_excess_fanout,
@@ -138,16 +140,12 @@ class _SiteTable:
             Summary including count and first labels.
         """
 
-        count = len(self)
-        if count == 0:
-            return "_SiteTable(0 sites)"
-        labels = self.labels()
-        if count == 1:
-            return f"_SiteTable(1 site: {labels[0]})"
-        if count <= 3:
-            return f"_SiteTable({count} sites: {', '.join(labels)})"
-        prefix = ", ".join(labels[:3])
-        return f"_SiteTable({count} sites: {prefix}, ... {labels[-1]})"
+        return site_table_repr(self)
+
+    def __str__(self) -> str:
+        """Show a bounded prefix of the resolved sites."""
+
+        return site_table_card(self)
 
     def where(self, predicate: Callable[[Site], bool]) -> _SiteTable:
         """Filter the table with a predicate.
@@ -305,10 +303,10 @@ def _resolve_facet_sites(
 ) -> tuple[Any, ...]:
     """Resolve a facet selector on a finished trace to the facets it reads.
 
-    The facets are the ones the write doors (``Trace.set``, ``attach_hooks``,
-    ``do``) resolve for the same selector, each the ``Facet`` that
+    The facets are the ones the write door (``do``, on any engine)
+    resolves for the same selector, each the ``Facet`` that
     ``record.facets[...]`` serves, so its ``.value`` is the slice an edit at
-    those doors receives (a head's slice, an SAE latent's encoder activation).
+    that door receives (a head's slice, an SAE latent's encoder activation).
     A selector that matches several facets keeps its broadcast; the caller's
     fan-out check and multi-match count report apply to them as to op sites.
 
@@ -357,8 +355,7 @@ def _site_record(site: Any) -> Any:
     return site.spec.home if isinstance(site, Facet) else site
 
 
-#: Label indexes of the active :func:`_label_index_scope`, keyed by ``id(log)``:
-#: ``(log, site universe, universe length, index)``. ``None`` outside a scope.
+#: Active :func:`_label_index_scope` indexes by ``id(log)``: ``(log, sites, len, index)``.
 _LABEL_INDEXES: ContextVar[dict[int, tuple[Any, Sequence[Site], int, Any]] | None] = ContextVar(
     "torchlens_label_indexes", default=None
 )
@@ -429,7 +426,7 @@ def _indexed_label_match(
     ensure_supported(selector, lifecycle="site")
     cached = indexes.get(id(log))
     if cached is None or cached[0] is not log or cached[1] is not sites or cached[2] != len(sites):
-        index = _label_site_index(sites)
+        index = shared_site_index(sites, _label_site_index)
         if index is None:
             return None
         cached = (log, sites, len(sites), index)
@@ -621,7 +618,7 @@ def _iter_sites(log: Trace, universe: str) -> Sequence[Site]:
     if resolved != "node":
         raise SiteResolutionError(f"unknown site universe {universe!r}.")
     if not log._autograd_has_backward_pass:
-        raise SiteResolutionError("Backward selectors require log_backward() to run first.")
+        raise SiteResolutionError("Backward selectors require backward() to run first.")
     return tuple(log._grad_fn_logs.values())
 
 

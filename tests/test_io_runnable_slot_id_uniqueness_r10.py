@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import read_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
@@ -36,18 +37,7 @@ def _runnable_descriptor(tmp_path: Path) -> dict:
     )
     path = tmp_path / "sparse.tlspec"
     trace.save(path, level="runnable")
-    import json
-
-    with (path / "manifest.json").open(encoding="utf-8") as handle:
-        manifest = json.load(handle)
-    return manifest["run"]
-
-
-def test_honest_descriptor_parses(tmp_path: Path) -> None:
-    run = _runnable_descriptor(tmp_path)
-    descriptor = runnable_load.parse_sparse_run_descriptor(run)
-    ids = [slot.slot_id for slot in descriptor.tensor_slots]
-    assert len(ids) == len(set(ids))
+    return read_runnable_descriptor(path)
 
 
 def test_duplicate_slot_id_refuses_at_parse(tmp_path: Path) -> None:

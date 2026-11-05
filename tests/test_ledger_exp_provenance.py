@@ -50,7 +50,6 @@ def test_why_exact_on_event_lineage_fork_chain() -> None:
     assert "'child' = 'base' + [" in text
 
 
-@pytest.mark.smoke
 def test_why_diverged_refuses_additive_wording() -> None:
     base = _ready().fork()
     base.do(tl.when(tl.func("relu"), tl.scale(0.5)))
@@ -67,7 +66,6 @@ def test_why_diverged_refuses_additive_wording() -> None:
     assert "= 'base' +" not in text
 
 
-@pytest.mark.smoke
 def test_why_ordered_multiplicity_stays_distinct() -> None:
     base = _ready().fork()
     base.do(tl.when(tl.func("relu"), tl.scale(0.5)))
@@ -84,7 +82,6 @@ def test_why_ordered_multiplicity_stays_distinct() -> None:
     assert len(report_twice.member_suffix) == 1  # A-then-A != A
 
 
-@pytest.mark.smoke
 def test_why_container_basis_on_sweep_bundle() -> None:
     torch.manual_seed(0)
     model = _Tiny()
@@ -139,7 +136,7 @@ def test_value_residual_flags_unrecorded_write() -> None:
     # An unrecorded write: replace the clone's output value without any event
     # (assignment on the Op record; no envelope row is minted).
     out_label = clone.output_layers[0]
-    output_op = clone[out_label].ops[0]
+    output_op = clone.layers[out_label].ops[0]
     output_op.out = output_op.out + 1.0
     dirty = bundle.why("clone")
     assert dirty.value_residual == "unexplained"

@@ -498,6 +498,13 @@ class SamplingPlan:
     (:func:`assign_batch_donor_groups`) suffixes distinct equal-content
     ``per_rule``/``per_group`` plan objects inside one transaction by their
     clause selections so kwargs coincidence never shares a group.
+
+    Examples
+    --------
+    >>> donors = tl.intervention.population(torch.randn(5, 1, 4, 8, 8), origin="doc")
+    >>> plan = tl.intervention.sample_from(donors, seed=3)
+    >>> isinstance(plan, SamplingPlan), plan.share_draw, len(plan.population)
+    (True, 'per_firing', 5)
     """
 
     population: Population
@@ -651,6 +658,14 @@ def sample_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D1/D7/D
     -------
     SamplingPlan
         The immutable plan; apply it with ``tl.patch_from(plan)``.
+
+    Examples
+    --------
+    >>> donors = tl.intervention.population(torch.randn(5, 1, 4, 8, 8), origin="doc")
+    >>> plan = sample_from(donors, seed=3)
+    >>> patched = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.patch_from(plan)))
+    >>> any(torch.equal(patched["relu_1_2"].out, member) for member in donors.members)
+    True
     """
 
     if not isinstance(population, Population):
@@ -939,6 +954,15 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
     never a detach); append-incompatible by derived flag.
 
     DOCUMENTED-UNSTABLE spelling pending naming-session ratification.
+
+    Examples
+    --------
+    >>> xb = torch.randn(4, 3, 8, 8)
+    >>> clean = tl.trace(model, xb)
+    >>> edited = tl.trace(model, xb, intervene=tl.when(tl.func("relu"), permute_batch(seed=0, axis=0)))
+    >>> rows = lambda t: t["relu_1_2"].out.sum(dim=(1, 2, 3)).sort().values
+    >>> torch.allclose(rows(edited), rows(clean))
+    True
     """
 
     validated_seed = _require_seed(seed, "permute_batch")
@@ -1064,6 +1088,15 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
         Subject datums: ``PerRowDatums`` (one per batch row) or ``OneDatum``.
     strict:
         Refuse agreement classes of size 1 (D15).
+
+    Examples
+    --------
+    >>> xb = torch.randn(3, 3, 8, 8)
+    >>> donors = tl.intervention.population(torch.randn(6, 4, 8, 8), origin="doc rows")
+    >>> edit = resample_rows_from(donors, seed=1, axis=0)
+    >>> edited = tl.trace(model, xb, intervene=tl.when(tl.func("relu"), edit))
+    >>> tuple(edited["relu_1_2"].out.shape)
+    (3, 4, 8, 8)
     """
 
     if not isinstance(source, Population):
@@ -1263,6 +1296,14 @@ def set_direction_mean(
     dim:
         Explicit axis of the site value that ``direction`` lives on (the
         D24/D25 axis law: never guessed from rank).
+
+    Examples
+    --------
+    >>> reference = tl.intervention.population(torch.randn(3, 1, 4, 8, 8), origin="doc")
+    >>> edit = set_direction_mean(torch.ones(4), reference, dim=1)
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), edit))
+    >>> tuple(edited["relu_1_2"].out.shape)
+    (1, 4, 8, 8)
     """
 
     if not isinstance(direction, torch.Tensor) or direction.ndim != 1:

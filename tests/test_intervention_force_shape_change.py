@@ -4,7 +4,7 @@ Round 26 W3 audit MED-1: ``normalize_hook_plan`` stamped the per-entry
 ``force_shape_change`` metadata from its own default-False parameter instead of
 the helper's kwargs. No production caller passes the parameter, so the
 documented escape hatch was dead through every public path (``intervene=``,
-``hooks=``, ``Trace.push(replay=ReplayOptions(hooks=...))``): a requested shape/dtype-changing
+``hooks=``, ``Trace.do({site: hook})``): a requested shape/dtype-changing
 intervention raised ``HookValueError``. These tests drive the flag through the
 PUBLIC chain (the prior test called ``_execute_hook`` directly, which bypassed
 the exact hop that dropped the flag) and pin the default-False guard.
@@ -22,6 +22,11 @@ import torchlens as tl
 from torchlens.intervention.errors import HookValueError
 from torchlens.intervention.hooks import normalize_hook_plan
 from torchlens.intervention.types import Edit
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: The replay doors below edit a root capture in place on purpose.
+_CONFIRM = tl.options.InterventionOptions()
 
 
 class _ReluNet(nn.Module):
@@ -73,7 +78,6 @@ _FLAG_HELPERS: dict[str, Callable[[], Edit]] = {
 }
 
 
-@pytest.mark.smoke_cells("test_helper_flag_reaches_entry_metadata[grad_scale]")
 @pytest.mark.parametrize("helper_name", sorted(_FLAG_HELPERS))
 def test_helper_flag_reaches_entry_metadata(helper_name: str) -> None:
     """helper(force_shape_change=True) must stamp True on every plan entry."""
@@ -135,8 +139,8 @@ def test_hooks_kwarg_shape_change_applies() -> None:
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-def test_replay_hooks_shape_change_applies() -> None:
-    """Trace.push(replay=ReplayOptions(hooks=...)) with force_shape_change=True applies the replacement."""
+def test_do_mapping_shape_change_applies() -> None:
+    """Trace.do({site: hook}) with force_shape_change=True applies the replacement."""
 
     model, x = _model_and_input()
     log = tl.trace(
@@ -145,18 +149,15 @@ def test_replay_hooks_shape_change_applies() -> None:
         save=lambda ctx: True,
         capture=tl.options.CaptureOptions(replayable=True),
     )
-    replayed = log.push(
-        replay=tl.options.ReplayOptions(
-            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), allow_shape_change=True)}
-        )
+    replayed = log.do(
+        {tl.func("relu"): tl.replace_with(torch.ones(1, 8), allow_shape_change=True)},
+        intervention=_CONFIRM,
     )
     assert float(_output_out(replayed)) == pytest.approx(8.0)
 
 
-def test_push_replay_options_shape_change_applies() -> None:
-    """The canonical push(replay=ReplayOptions(hooks=...)) spelling honors the flag."""
-
-    from torchlens.options import ReplayOptions
+def test_do_site_hook_shape_change_applies() -> None:
+    """The canonical do(site, hook) spelling honors the flag."""
 
     model, x = _model_and_input()
     log = tl.trace(
@@ -165,15 +166,14 @@ def test_push_replay_options_shape_change_applies() -> None:
         save=lambda ctx: True,
         capture=tl.options.CaptureOptions(replayable=True),
     )
-    pushed = log.push(
-        replay=ReplayOptions(
-            hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8), allow_shape_change=True)}
-        )
+    pushed = log.do(
+        tl.func("relu"),
+        tl.replace_with(torch.ones(1, 8), allow_shape_change=True),
+        intervention=_CONFIRM,
     )
     assert float(_output_out(pushed)) == pytest.approx(8.0)
 
 
-@pytest.mark.smoke
 def test_splice_module_dtype_change_applies() -> None:
     """splice_module(force_shape_change=True) may change dtype through intervene=."""
 
@@ -212,8 +212,4 @@ def test_default_false_still_raises_on_shape_change_replay() -> None:
         capture=tl.options.CaptureOptions(replayable=True),
     )
     with pytest.raises(HookValueError):
-        log.push(
-            replay=tl.options.ReplayOptions(
-                hooks={tl.func("relu"): tl.replace_with(torch.ones(1, 8))}
-            )
-        )
+        log.do({tl.func("relu"): tl.replace_with(torch.ones(1, 8))}, intervention=_CONFIRM)

@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 
 from tests.test_agent_surface_helpers import save_ablated_artifact, save_clean_artifact
-from torchlens.agent import call_tool, tool_specs
-from torchlens.agent._schemas import SCHEMA_FILES, load_schema, schema_index
+from torchlens.agent import call_tool
+from torchlens.agent._schemas import load_schema
 
 # Per-test marks, not a module pytestmark: the live-results lockstep test is
 # heavy (measured ~8s -- ten live tool calls over two saved artifacts) and a
@@ -28,29 +28,7 @@ def clean(tmp_path: Path) -> Path:
     return save_clean_artifact(tmp_path)
 
 
-def test_every_schema_file_ships_and_parses() -> None:
-    """Index == files on disk; every document is Draft 2020-12 with an $id."""
-
-    for schema_id in schema_index():
-        document = load_schema(schema_id)
-        assert document["$schema"] == "https://json-schema.org/draft/2020-12/schema"
-        assert schema_id in document["$id"]
-        assert document["title"]
-
-
-def test_registry_output_schemas_are_all_served() -> None:
-    """Every registry output schema id has a shipped document; none dangle."""
-
-    declared = {spec.output_schema for spec in tool_specs()}
-    served = set(schema_index())
-    assert declared <= served
-    # The overview tool serves TWO schemas (distinct modes, by contract).
-    assert "torchlens.agent.overview_manifest.v1" in served
-    # The envelope + error schemas ship even though no tool declares them.
-    assert {"torchlens.agent.envelope.v1", "torchlens.agent.error.v1"} <= served
-    assert set(SCHEMA_FILES) == served
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_schemas.py.
 def test_unknown_schema_id_refuses_typed() -> None:
     """The schema tool refusal names the served index."""
 
@@ -59,6 +37,7 @@ def test_unknown_schema_id_refuses_typed() -> None:
     assert exc.value.fields["code"] == "agent_schema_unknown"
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _deprecations.py, agent/_apimap.py and more.
 @pytest.mark.heavy
 def test_live_results_validate_against_their_schemas(clean: Path, tmp_path: Path) -> None:
     """Direction 2 of the lockstep: real envelopes validate under jsonschema."""
@@ -85,6 +64,7 @@ def test_live_results_validate_against_their_schemas(clean: Path, tmp_path: Path
         jsonschema.Draft202012Validator(document).validate(envelope)
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_registry.py.
 def test_error_envelope_validates(clean: Path) -> None:
     """The error envelope validates against its shipped schema."""
 

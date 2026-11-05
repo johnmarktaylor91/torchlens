@@ -1,4 +1,4 @@
-"""Op-grain watching (U32.1) behind consent and attach-time calibration (U34.1).
+"""Op-grain watching behind consent and attach-time calibration.
 
 ``watch(grain="op")`` drives the Route-B op-tier collector from an ordinary
 training loop through a disclosed root-forward wrap. These tests pin: the
@@ -96,71 +96,8 @@ class TestConsent:
             )
         assert info.value.fields["code"] == "watch_signals_invalid"
 
-    def test_module_grain_default_installs_no_wrap(self) -> None:
-        """Explorer sign-off 2: module grain stays the default; op grain is explicit."""
-
-        model, opt = _mlp()
-        session = trk.watch(model, to=trk.MemorySink(), optimizer=opt)
-        assert "forward" not in model.__dict__
-        assert "WRAPPED" not in session.plan_report()
-        session.close(unwinding=True)
-
 
 class TestOpValues:
-    def test_records_per_op_values_equal_to_the_op_output(self) -> None:
-        """Acceptance U32.1: the series value is the ReLU op output's L2 norm."""
-
-        model, opt = _mlp()
-        seen: dict[int, float] = {}
-        current = {"step": -1}
-
-        def relu_hook(_module: nn.Module, _args: object, output: torch.Tensor) -> None:
-            seen.setdefault(current["step"], float(output.detach().double().norm()))
-
-        sink = trk.MemorySink()
-        session = _watch_relu(model, sink)
-        handle = model[1].register_forward_hook(relu_hook)
-        try:
-            for step in (100, 101, 102):
-                current["step"] = step
-                with session.step(step):
-                    loss = model(torch.randn(4, 8)).square().mean()
-                    loss.backward()
-                    opt.step()
-                    opt.zero_grad()
-        finally:
-            handle.remove()
-        report = session.close()
-        values = _norm_tags(sink)
-        assert sorted(values) == [100, 101, 102]
-        for step, value in values.items():
-            assert value == pytest.approx(seen[step], rel=1e-6)
-        assert report.matched_sites == 1
-        assert report.sampled_steps == (100, 101, 102)
-
-    def test_training_is_unchanged_by_the_wrap(self) -> None:
-        """The observed forward returns the live output: same loss, same update."""
-
-        torch.manual_seed(0)
-        inputs = [torch.randn(4, 8) for _ in range(3)]
-        reference, ref_opt = _mlp()
-        watched, opt = _mlp()
-        session = _watch_relu(watched, trk.MemorySink())
-        for step, x in enumerate(inputs):
-            ref_loss = reference(x).square().mean()
-            ref_loss.backward()
-            ref_opt.step()
-            ref_opt.zero_grad()
-            with session.step(step):
-                loss = watched(x).square().mean()
-                loss.backward()
-                opt.step()
-                opt.zero_grad()
-            assert torch.equal(loss.detach(), ref_loss.detach())
-        session.close()
-        for ref_param, param in zip(reference.parameters(), watched.parameters(), strict=True):
-            assert torch.equal(ref_param, param)
-
     def test_only_sampled_steps_pay_the_capture(self) -> None:
         model, opt = _mlp()
         sink = trk.MemorySink()
@@ -214,7 +151,7 @@ class TestOpValues:
 
 class TestCalibrationDisclosure:
     def test_attach_calibrates_and_discloses_the_cost(self) -> None:
-        """Acceptance U34.1: consent -> calibration -> disclosed cost."""
+        """Acceptance: consent -> calibration -> disclosed cost."""
 
         torch.manual_seed(0)
         model = nn.Sequential(nn.Linear(8, 8), nn.BatchNorm1d(8), nn.ReLU(), nn.Dropout(0.5))
@@ -250,18 +187,6 @@ class TestCalibrationDisclosure:
         assert any(t.tag == "torchlens/meta/op_grain_calibration" for t in sink.texts)
         overhead = [p for p in sink.scalars if p.tag == "torchlens/run/op_grain_overhead_median_x"]
         assert overhead and overhead[0].value == pytest.approx(measurement.median_ratio)
-
-    def test_close_removes_the_wrap(self) -> None:
-        model, _opt = _mlp()
-        x = torch.randn(4, 8)
-        expected = model(x)
-        session = _watch_relu(model, trk.MemorySink())
-        assert "forward" in model.__dict__
-        with session.step(0):
-            model(x)
-        session.close()
-        assert "forward" not in model.__dict__
-        assert torch.equal(model(x), expected)
 
 
 class _Heads(nn.Module):

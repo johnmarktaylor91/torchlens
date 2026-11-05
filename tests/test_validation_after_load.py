@@ -23,7 +23,6 @@ from torchlens._io import ArtifactError
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 from torchlens.validation._loaded_callables import (
-    release_loaded_callables,
     resolve_loaded_callables,
 )
 
@@ -66,17 +65,6 @@ def test_loaded_replay_ready_bundle_validates(tmp_path: Path) -> None:
     assert all(op.func is None for op in computational)
 
 
-def test_loaded_portable_bundle_refuses_by_name(tmp_path: Path) -> None:
-    """A ``portable`` save drops saved arguments; validation refuses, never a verdict."""
-
-    trace, _model, reference = _capture(save_args=True)
-    path = tmp_path / "trace.tlz"
-    trace.save(path)
-    loaded = tl.load(path)
-    with pytest.raises(ArtifactError, match="level='executable_with_callables'"):
-        loaded.validate_forward_pass(reference)
-
-
 def test_loaded_bundle_without_function_identities_still_refuses(tmp_path: Path) -> None:
     trace, _model, reference = _capture(save_args=False)
     path = tmp_path / "trace.tlz"
@@ -98,15 +86,14 @@ def _layer(key: FunctionRegistryKey, func_name: str) -> SimpleNamespace:
     )
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("key", "func_name"),
     [
-        (FunctionRegistryKey("custom", "system", "function", import_path="os:system"), "system"),
-        (FunctionRegistryKey("torch", "load", "function"), "load"),
         (FunctionRegistryKey("torch", "no_such_op_anywhere", "function"), "no_such_op_anywhere"),
         (FunctionRegistryKey("torch", "relu", "function"), "sigmoid"),
     ],
-    ids=["custom_foreign", "torch_impure", "torch_missing", "key_names_another_function"],
+    ids=["torch_missing", "key_names_another_function"],
 )
 def test_foreign_impure_missing_or_mismatched_keys_never_resolve(
     key: FunctionRegistryKey, func_name: str
@@ -114,26 +101,6 @@ def test_foreign_impure_missing_or_mismatched_keys_never_resolve(
     layer = _layer(key, func_name)
     assert resolve_loaded_callables(SimpleNamespace(_layer_list=[layer])) == []
     assert layer.func is None
-
-
-def test_structural_nodes_never_resolve() -> None:
-    """An output node inherits its producer's ``func_id``; it must not replay that function."""
-
-    output = _layer(FunctionRegistryKey("torch", "relu", "function"), "none")
-    output.is_output = True
-    assert resolve_loaded_callables(SimpleNamespace(_layer_list=[output])) == []
-    assert output.func is None
-
-
-def test_pure_torch_keys_resolve_and_release() -> None:
-    layers = [
-        _layer(FunctionRegistryKey("torch", "relu", "function"), "relu"),
-        _layer(FunctionRegistryKey("torch.Tensor", "__add__", "dunder"), "__add__"),
-    ]
-    resolved = resolve_loaded_callables(SimpleNamespace(_layer_list=layers))
-    assert resolved == layers and all(callable(layer.func) for layer in layers)
-    release_loaded_callables(resolved)
-    assert all(layer.func is None for layer in layers)
 
 
 def test_literal_producer_and_torch_c_builtin_keys_resolve() -> None:

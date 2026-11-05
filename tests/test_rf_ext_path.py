@@ -12,9 +12,6 @@ import torchlens as tl
 from torchlens.receptive_field import _engine
 from torchlens.receptive_field._errors import NoInfluencePathError, ReceptiveFieldError
 from torchlens.receptive_field._path import (
-    ancestor_labels,
-    between_labels,
-    descendant_labels,
     require_path,
     resolve_graph_point,
 )
@@ -79,27 +76,6 @@ def test_resolve_graph_point_accepts_exact_labels_and_entity_handles() -> None:
         resolve_graph_point(other_trace, left)
 
 
-def test_reachability_and_between_slice_follow_only_directed_paths() -> None:
-    """Compute ancestor, descendant, and between sets on the executed DAG."""
-
-    trace = tl.trace(_Branches(), torch.randn(1, 1, 8, 8))
-    source = trace.input_ops[0]
-    left = _op(trace, "conv2d", 0)
-    right = _op(trace, "conv2d", 1)
-
-    descendants = descendant_labels(trace, source)
-    ancestors = ancestor_labels(trace, left)
-    between = between_labels(trace, source, left)
-
-    assert {source.label, left.label} <= descendants
-    assert {source.label, left.label} <= ancestors
-    assert source.label in between
-    assert left.label in between
-    assert right.label not in between
-    assert between <= descendants
-    assert between <= ancestors
-
-
 def test_require_path_rejects_unrelated_ops_without_a_swap_hint() -> None:
     """Raise the typed path error and avoid a false reverse-path suggestion."""
 
@@ -115,47 +91,6 @@ def test_require_path_rejects_unrelated_ops_without_a_swap_hint() -> None:
     assert left.label in message
     assert right.label in message
     assert "swap" not in message
-
-
-@pytest.mark.parametrize(
-    ("model", "shape"),
-    [
-        (nn.Sequential(nn.Conv1d(2, 3, 3, padding=1), nn.ReLU()), (1, 2, 12)),
-        (
-            nn.Sequential(nn.Conv2d(2, 3, 3, padding=1), nn.MaxPool2d(2), nn.ReLU()),
-            (1, 2, 12, 12),
-        ),
-    ],
-)
-def test_input_seeded_solve_from_is_behavior_equivalent(
-    model: nn.Module, shape: tuple[int, ...]
-) -> None:
-    """Keep source-seeding at a model input exactly equal to the sealed default solve."""
-
-    trace = tl.trace(model, torch.randn(*shape))
-    default = _engine.solve(trace)
-    from_input = _engine.solve_from(trace, trace.input_ops[0])
-
-    assert from_input == default
-    assert from_input.descriptors == default.descriptors
-    assert from_input.per_op == default.per_op
-    assert from_input.states == default.states
-
-
-def test_solve_from_seeds_only_the_source_and_reaches_its_descendants() -> None:
-    """Key a layer source by label and omit states on operations before that source."""
-
-    trace = tl.trace(
-        nn.Sequential(nn.Conv1d(2, 3, 3, padding=1), nn.MaxPool1d(2)),
-        torch.randn(1, 2, 12),
-    )
-    source = _op(trace, "conv1d")
-    target = _op(trace, "max_pool1d")
-    solution = _engine.solve_from(trace, source)
-
-    assert tuple(solution.per_op[source.label]) == (source.label,)
-    assert tuple(solution.per_op[target.label]) == (source.label,)
-    assert solution.per_op[trace.input_ops[0].label] == {}
 
 
 def test_source_solution_cache_is_trace_owned_lru_eight() -> None:

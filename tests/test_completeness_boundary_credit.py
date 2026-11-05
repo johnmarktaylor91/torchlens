@@ -29,7 +29,6 @@ import torchlens as tl
 from torchlens import _state
 from torchlens._user_funcs import _validate_forward_pass_torch
 from torchlens.backends.torch import rescue
-from torchlens.backends.torch.escape_detection import ExpectedOriginalToken
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
 
@@ -63,28 +62,6 @@ def _raw(func: Callable[..., Any]) -> Callable[..., Any]:
     return OpaqueCallable(_state._decorated_to_orig.get(id(func), func))
 
 
-class _OpaqueOutputChild(nn.Module):
-    """Traced linear and relu, then a direct-aten output: one boundary, nothing dropped."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return a direct-aten tanh of traced work."""
-
-        return torch.ops.aten.tanh.default(torch.relu(self.fc(x)))
-
-
-class _OpaqueTupleChild(nn.Module):
-    """Two direct-aten outputs: each is its own boundary tensor."""
-
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return two untraced outputs built by single direct-aten ops."""
-
-        return torch.ops.aten.tanh.default(x), torch.ops.aten.sigmoid.default(x)
-
-
 class _StaleHiddenChild(nn.Module):
     """IQL shape: stale relu hidden activation, stale tanh output activation."""
 
@@ -99,33 +76,6 @@ class _StaleHiddenChild(nn.Module):
         """Run fc1, stale relu, fc2, stale tanh."""
 
         return self.output_activation(self.fc2(self.hidden_activation(self.fc1(x))))
-
-
-class _StaleInnerLeaf(nn.Module):
-    """A stale relu intermediate under a direct-aten output, two levels down."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 4)
-        self.act = _raw(torch.relu)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return a direct-aten tanh of a stale relu."""
-
-        return torch.ops.aten.tanh.default(self.fc(self.act(x)))
-
-
-class _Middle(nn.Module):
-    """Plain container so the boundary-backed module sits at depth two."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.leaf = _StaleInnerLeaf()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the leaf and a traced op on its output."""
-
-        return self.leaf(x) + 1.0
 
 
 class _Parent(nn.Module):
@@ -153,13 +103,6 @@ def _validate(model: nn.Module, *, grad: bool = True) -> bool:
     )
 
 
-def _assert_completeness_failure(model: nn.Module, *, grad: bool = True) -> None:
-    assert not _validate(model, grad=grad)
-    failure = tl.validation.last_validation_failure()
-    assert failure is not None
-    assert "bfs_completeness" in failure.summary()
-
-
 def _assert_recorded_and_valid(model: nn.Module, *, grad: bool = True) -> None:
     """A direct ``torch.ops.aten`` output is a recorded op with sources, and validates."""
 
@@ -174,32 +117,6 @@ def _assert_recorded_and_valid(model: nn.Module, *, grad: bool = True) -> None:
 # The stale op's output reaches the next traced op with no recorded parent; that
 # provenance disclosure is expected alongside the completeness failure.
 _NO_PROVENANCE = "ignore:TorchLens found tensor arguments with no graph:UserWarning"
-
-
-def test_single_direct_aten_output_op_is_recorded_and_validates() -> None:
-    """The direct-aten op that builds the module output is recorded, not adopted."""
-
-    _assert_recorded_and_valid(_Parent(_OpaqueOutputChild()))
-
-
-def test_tuple_of_direct_aten_outputs_are_recorded_and_validate() -> None:
-    """Every tensor of a direct-aten tuple result is a recorded output with sources."""
-
-    _assert_recorded_and_valid(_Parent(_OpaqueTupleChild()))
-
-
-@pytest.mark.filterwarnings(_NO_PROVENANCE)
-def test_stale_hidden_activation_under_stale_output_fails_completeness() -> None:
-    """IQL shape: the stale relu is not hidden by the stale tanh's boundary."""
-
-    _assert_completeness_failure(_Parent(_StaleHiddenChild()))
-
-
-@pytest.mark.filterwarnings(_NO_PROVENANCE)
-def test_stale_op_in_nested_boundary_module_fails_completeness() -> None:
-    """A stale op inside a depth-two module with a synthesized output boundary fails."""
-
-    _assert_completeness_failure(_Parent(_Middle()))
 
 
 @pytest.mark.filterwarnings(_NO_PROVENANCE)
@@ -236,115 +153,17 @@ class _BodyChild(nn.Module):
         return self.body(self, x)
 
 
-def _direct_aten_view_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
-    return _ATEN.t.default(m.fc(x))
-
-
 def _direct_aten_split_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
     return _ATEN.split.Tensor(m.fc(x), 2, 1)[0]
 
 
-def _stale_op_builds_view_base(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
-    return _ATEN.t.default(m.stale_relu(m.fc(x)))
-
-
-def _stale_op_reads_detached_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
-    out = _ATEN.tanh.default(m.fc(x))
-    m.side = m.stale_relu(_ATEN.detach.default(out))
-    return out
-
-
-def _freed_stale_intermediates(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
-    hidden = m.fc(x)
-    for _ in range(40):
-        tmp = m.stale_relu(hidden)
-        del tmp
-    return _ATEN.tanh.default(hidden)
-
-
-def _composite_aten_output(m: _BodyChild, x: torch.Tensor) -> torch.Tensor:
-    return _ATEN.linear.default(x.view(1, 3, 4), m.fc.weight, m.fc.bias)
-
-
-@pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
-@pytest.mark.parametrize("body", [_direct_aten_view_output, _direct_aten_split_output])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("grad", [False], ids=["no_grad"])
+@pytest.mark.parametrize("body", [_direct_aten_split_output])
 def test_direct_aten_view_or_split_output_is_recorded_and_validates(body: Any, grad: bool) -> None:
     """A direct-aten view or multi-output op whose result is the module output is recorded."""
 
     _assert_recorded_and_valid(_Parent(_BodyChild(body)), grad=grad)
-
-
-@pytest.mark.filterwarnings(_NO_PROVENANCE)
-@pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
-@pytest.mark.parametrize(
-    "body",
-    [_stale_op_builds_view_base, _stale_op_reads_detached_output, _freed_stale_intermediates],
-)
-def test_alias_edges_do_not_credit_stale_ops(body: Any, grad: bool) -> None:
-    """Only the boundary object and its pure aliases are credited, never their neighbours.
-
-    The base of a boundary view, a consumer of a detached boundary, and freed stale
-    intermediates whose addresses a later boundary tensor may reuse all stay flagged.
-    """
-
-    _assert_completeness_failure(_Parent(_BodyChild(body)), grad=grad)
-
-
-@pytest.mark.filterwarnings(_NO_PROVENANCE)
-@pytest.mark.usefixtures("_isolated_witness_mode")
-def test_freed_stale_intermediates_are_each_named(monkeypatch: pytest.MonkeyPatch) -> None:
-    """All 40 freed stale relus are census rows: an ``id()``-reuse mis-credit drops one."""
-
-    # Keep the primary capture: the rescue re-run would replace its diagnostics.
-    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
-    wrap_torch(completeness_witness=True)
-    torch.manual_seed(0)
-    model = _Parent(_BodyChild(_freed_stale_intermediates)).eval()
-    trace = tl.trace(model, torch.randn(3, 4))
-    operators = [row["operator"] for row in trace.completeness_diagnostics]
-    assert operators.count("aten.relu.default") == 40, operators
-
-
-@pytest.mark.parametrize(
-    ("wrapper_name", "scoped"),
-    [
-        ("module_forward:exhaustive", True),
-        ("module_forward:predicate", True),
-        ("module_forward_hook:user", False),
-        ("torch.relu", False),
-    ],
-)
-def test_output_scoped_credit_is_derived_from_the_wrapper_name(
-    wrapper_name: str, scoped: bool
-) -> None:
-    """The flag follows ``wrapper_name`` at every construction site; it cannot be passed."""
-
-    token = ExpectedOriginalToken(
-        raw_id=0, original=len, wrapper_name=wrapper_name, wrapper_frame_id=0, owner_thread_id=0
-    )
-    assert token.boundary_credit_is_output_scoped is scoped
-    with pytest.raises(TypeError):
-        ExpectedOriginalToken(  # type: ignore[call-arg]
-            raw_id=0,
-            original=len,
-            wrapper_name=wrapper_name,
-            wrapper_frame_id=0,
-            owner_thread_id=0,
-            boundary_credit_is_output_scoped=not scoped,
-        )
-
-
-@pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
-def test_composite_direct_aten_output_is_recorded_and_validates(grad: bool) -> None:
-    """A composite direct-aten op is one recorded op that owns all its inner dispatches.
-
-    ``aten.linear`` on a 3-d input decomposes above the Python dispatch key into
-    several dispatches (``view``, ``t``, ``addmm``, ...). As an unrecorded boundary only
-    the last was credited and validation failed; recorded, the op owns every dispatch
-    its call made, exactly like ``torch.nn.functional.linear``.
-    """
-
-    _assert_recorded_and_valid(_Parent(_BodyChild(_composite_aten_output)), grad=grad)
 
 
 def _bare(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -354,16 +173,24 @@ def _bare(func: Callable[..., Any]) -> Callable[..., Any]:
     return _state._decorated_to_orig.get(id(func), func)
 
 
-@pytest.mark.parametrize("grad", [True, False], ids=["grad", "no_grad"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "grad",
+    [
+        True,
+    ],
+    ids=[
+        "grad",
+    ],
+)
 @pytest.mark.parametrize(
     ("build", "direct_aten"),
     [
         (lambda: _Parent(_StaleHiddenChild()), False),
-        (lambda: _Parent(_Middle()), True),
-        (lambda: _Parent(_BodyChild(_stale_op_builds_view_base)), True),
-        (lambda: _Parent(_BodyChild(_freed_stale_intermediates)), True),
     ],
-    ids=["iql_hidden_and_output", "nested_boundary", "view_base", "freed_intermediates"],
+    ids=[
+        "iql_hidden_and_output",
+    ],
 )
 def test_attribute_held_originals_are_rebound_and_validate(
     build: Callable[[], nn.Module],

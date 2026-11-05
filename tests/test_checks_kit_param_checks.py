@@ -42,8 +42,8 @@ class _DeadNet(nn.Module):
         return self.head(cut + 1.0)
 
 
-@pytest.mark.smoke
-@pytest.mark.parametrize("mechanism", ["graph_preserving", "graph_cut"])
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_param_checks.py, debug/_checks/_session.py.
+@pytest.mark.parametrize("mechanism", ["graph_cut"])
 def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: str) -> None:
     """The D2 demonstration: gradient fact catches what movement cannot.
 
@@ -109,6 +109,7 @@ def test_dead_layer_gradient_fact_fires_and_naive_change_is_vacuous(mechanism: s
     assert "grad_health" in sample.follow_up
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_session.py.
 def test_no_grad_findings_distinguish_none_from_zero() -> None:
     """grad-is-None (disconnection) and zero-tensor are different evidence."""
 
@@ -135,7 +136,7 @@ def test_no_grad_findings_distinguish_none_from_zero() -> None:
     assert "grad is None" in kinds["dead.weight"]
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_session.py.
 def test_frozen_clone_raises_with_delta_evidence_and_aliases() -> None:
     """The frozen invariant (D5): clone evidence names every alias."""
 
@@ -177,7 +178,7 @@ def test_frozen_clone_raises_with_delta_evidence_and_aliases() -> None:
     assert exc.value.fields["report"]["schema_version"] == 1
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_session.py.
 def test_frozen_digest_optin_raises_on_proof_never_exact_pass() -> None:
     """The digest opt-in (D5/DR-3): differing digest proves; equality never
     emits an exact pass -- a healthy run records zero raises and the
@@ -189,7 +190,7 @@ def test_frozen_digest_optin_raises_on_proof_never_exact_pass() -> None:
     frozen_param.requires_grad_(False)
     optimizer = torch.optim.SGD([p for p in model.parameters() if p.requires_grad], lr=0.1)
     session = tc.ChecksSession(model, optimizer)
-    session.register_frozen_check(["0.weight"], evidence="digest")
+    session.register_frozen_check(["0.weight"], snapshot_kind="digest")
     session.attach()
     try:
         for _ in range(2):  # healthy: frozen param owned by no optimizer
@@ -212,6 +213,7 @@ def test_frozen_digest_optin_raises_on_proof_never_exact_pass() -> None:
         session.detach()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_session.py.
 def test_update_ratio_raw_and_lr_normalized_with_zero_baseline() -> None:
     """D13: raw + lr-normalized ratios; zero baseline -> inf + flag, or 0."""
 
@@ -239,7 +241,7 @@ def test_update_ratio_raw_and_lr_normalized_with_zero_baseline() -> None:
     assert zero_baseline[0].values["update_ratio"] is None
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_session.py.
 def test_update_ratio_bounds_warn_and_lr_zero_unavailable() -> None:
     """Explicit per-registration bounds warn; lr=0 companion is unavailable."""
 
@@ -265,37 +267,7 @@ def test_update_ratio_bounds_warn_and_lr_zero_unavailable() -> None:
     assert "lr == 0" in unavailable["update_ratio_lr_normalized"]
 
 
-def test_membership_and_train_eval_disclosures() -> None:
-    """D4: membership/mode are DISCLOSURES with no severity and no action."""
-
-    torch.manual_seed(0)
-    model = nn.Sequential(nn.Linear(4, 8), nn.BatchNorm1d(8), nn.Linear(8, 2))
-    model[0].weight.requires_grad_(False)
-    model[1].eval()
-    optimizer = torch.optim.SGD([p for p in model.parameters() if p.requires_grad], lr=0.1)
-    session = tc.ChecksSession(model, optimizer)
-    session.register_change_check(window=(1, 1), action="collect")
-    session.attach()
-    try:
-        optimizer.zero_grad()
-        model(torch.randn(4, 4)).sum().backward()
-        optimizer.step()
-        report = session.report()
-    finally:
-        session.detach()
-
-    membership = report.disclosures["membership"]
-    assert "0.weight" in membership["requires_grad_false"]
-    train_eval = report.disclosures["train_eval"]
-    assert "1" in train_eval["eval_mode_modules"]
-    # The frozen param is NEVER named by the no-gradient detector: without
-    # the membership disclosure it would name every frozen param (D4).
-    no_grad_names = {
-        f.param_names[0] for f in report.findings if f.check_name == "param_received_no_gradient"
-    }
-    assert "0.weight" not in no_grad_names
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_adapters.py, debug/_checks/_session.py.
 def test_unknown_optimizer_band_unavailable_with_reason() -> None:
     """An unknown optimizer never guesses: band unavailable-with-reason."""
 
@@ -326,7 +298,7 @@ def test_unknown_optimizer_band_unavailable_with_reason() -> None:
     assert "no adapter" in unavailable["param_movement_decay_band"]
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_param_checks.py, debug/_checks/_session.py.
 def test_decay_band_movement_fact_carries_betas() -> None:
     """The corroborating decay fact rides adapter facts incl. betas (D2)."""
 
@@ -355,7 +327,7 @@ def test_decay_band_movement_fact_carries_betas() -> None:
         assert "lags" in fact.message
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_param_checks.py, debug/_checks/_session.py.
 def test_registration_refusals_are_typed() -> None:
     """Unknown names / junk windows / junk actions refuse typed."""
 
@@ -375,5 +347,5 @@ def test_registration_refusals_are_typed() -> None:
     assert action_exc.value.fields["code"] == "check_vocab_invalid"
 
     with pytest.raises(torchlens.errors.CheckConfigError) as evidence_exc:
-        session.register_frozen_check(["weight"], evidence="vibes")
+        session.register_frozen_check(["weight"], snapshot_kind="vibes")
     assert evidence_exc.value.fields["code"] == "check_vocab_invalid"

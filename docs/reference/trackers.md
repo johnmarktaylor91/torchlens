@@ -5,7 +5,7 @@
 
 TorchLens never builds dashboards. It computes more and better statistics
 than the trackers' built-in watchers and feeds their dashboards: one
-collection engine (the `torchlens._observability` per-step records), one
+collection engine (the private observability package's per-step records), one
 conversion layer, and first-party sinks.
 
 ```python
@@ -32,7 +32,7 @@ print(watch.close().format())
 |---|---|---|---|---|
 | P (default) | parameters, gradients, updates | optimizer-boundary hooks; NO forward is wrapped or run | cheap (whole-step numbers publish only after the quiet-GPU gate) | shipped |
 | M | module-output activations | ordinary forward hooks; one real discovery forward at attach (`inputs=`), run in the model's CURRENT mode | ~1.1x class (forward-only ratio) | shipped |
-| O | op-grain (and facet) activations | the root `forward` is WRAPPED: sampled steps run inside one fastlog capture, other steps run plain | calibrated at attach and disclosed; op capture is WRAP-dominated | shipped behind consent |
+| O | op-grain (and facet) activations | the root `forward` is WRAPPED: sampled steps run inside one sparse-recording capture, other steps run plain | calibrated at attach and disclosed; op capture is WRAP-dominated | shipped behind consent |
 
 Tier O needs explicit consent because it is the one tier that wraps your
 model's forward:

@@ -241,6 +241,11 @@ jobs:
           pytest "${serial_files[@]}" -m "serial and not slow and not rare and not heavy" --tb=short -q
           # The compat file's smoke tests ran in the selection above.
           pytest tests/test_torch_compat.py -m "not smoke" --tb=short -q
+          # The major-version release guard and its marker hooks: named here,
+          # not smoke-marked, so every pull request and every release tag (the
+          # release workflow re-runs this file) runs them under the smoke size
+          # ceiling. tests/test_major_version_guard.py pins this line.
+          pytest tests/test_major_version_guard.py tests/test_no_breaking_markers_arming.py --tb=short -q
 
       - name: Declare the executed-test floor (smoke suite)
         if: matrix.scope == 'smoke'
@@ -336,6 +341,17 @@ jobs:
         with:
           cache-dependency-glob: "pyproject.toml"
 
+      # Two checks need more than the dev extra: known_failures_ledger collects
+      # tests/test_real_world_models.py (module-level importorskip of
+      # torchvision, so without it pytest collects no ids), and schema_lockstep
+      # re-renders docs/images/collapse (traces torchvision models, renders
+      # with dot). The collapse gallery is recorded against this apt Graphviz.
+      - name: Install Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          dot -V
+
       - name: Install dependencies
         run: |
           uv pip install --system \
@@ -343,7 +359,8 @@ jobs:
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
             -e ".[dev]" \
-            "torch==2.13.0+cpu"
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu"
           uv pip check
 
       - name: Run the repository checks

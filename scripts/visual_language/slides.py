@@ -228,7 +228,7 @@ SLIDES: tuple[Slide, ...] = (
         keys=(
             Key("Green: the input, named @input.<argument>", "node(fillcolor={input_color})"),
             Key("Arrows point from producer to consumer", "edge(style=solid)"),
-            Key("Vermillion: the output, at the top", "node(fillcolor={output_color})"),
+            Key("Salmon: the output, at the top", "node(fillcolor={output_color})"),
         ),
         footnote="A caption under the graph names the model and counts tensors, memory and "
         "parameters; bold warning lines join it when a capture was poisoned or unverified.",
@@ -243,7 +243,7 @@ SLIDES: tuple[Slide, ...] = (
         keys=(
             Key("Box: nn.Linear called as a module", "node(shape=box)"),
             Key("Oval: F.linear called as a function", "node(shape=oval, text~linear)"),
-            Key("Blue: the op uses parameters", "node(fillcolor={trainable})"),
+            Key("Grey: the op uses parameters", "node(fillcolor={trainable})"),
             Key("White: no parameters", "node(fillcolor=white, shape=oval)"),
         ),
         rows=("VN01", "VN02"),
@@ -279,13 +279,13 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="grey-params",
-        title="Blue means parameters",
-        rule="Light blue trains, dark blue is frozen, two-tone is both. Fill precedence: input, "
+        title="Grey means parameters",
+        rule="Light grey trains, dark grey is frozen, two-tone is both. Fill precedence: input, "
         "output, boolean, then parameters.",
         panels=(Panel("a", "Params", kwargs={**CAP, **FULL}),),
         keys=(
-            Key("Light blue {trainable}: all trainable", "node(fillcolor={trainable})"),
-            Key("Dark blue {frozen}: frozen, shapes in brackets", "node(fillcolor={frozen})"),
+            Key("Light grey {trainable}: all trainable", "node(fillcolor={trainable})"),
+            Key("Dark grey {frozen}: frozen, shapes in brackets", "node(fillcolor={frozen})"),
             Key("Two-tone: some of each", "node(fillcolor~:)"),
             Key("Caption counts trainable parameters", "graph(label~trainable)", at="Params"),
         ),
@@ -311,12 +311,12 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="module-boxes",
         title="Module boxes: path, class, depth",
-        rule="Each call is a box titled @path over (Class); the border thins with depth, "
-        "{pen_max} pt outside to {pen_min} pt at the deepest.",
+        rule="Each call is a box titled @path over (Class); every border is {pen_max} pt, "
+        "at any depth, so nesting reads from the boxes and their titles.",
         panels=(Panel("a", "Nested", kwargs=CALLS),),
         keys=(
             Key("@block:1 over (Sequential): the first call", "cluster(label~@block:1)"),
-            Key("Thick outer border, thinner inside", "cluster(penwidth={pen_max})"),
+            Key("Same border at every depth", "cluster(penwidth={pen_max})"),
             Key("Second call of the same module: @block:2", "cluster(label~@block:2)"),
             Key("Rows name the call: @block.0.fc:2", "node(text~@block.0.fc:2)"),
         ),
@@ -400,7 +400,7 @@ SLIDES: tuple[Slide, ...] = (
         id="loop-rolled",
         title="Loops, rolled: pass counts",
         rule="(x3) means one node ran three times with the same weights; In and Out say which "
-        "passes used each edge.",
+        "passes used an edge when not every pass did.",
         panels=(
             Panel(
                 "a",
@@ -447,12 +447,12 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="branches",
         title="Branches: which arm ran",
-        rule="Yellow TRUE is the comparison that chose the arm; it has no outgoing arrow because "
-        "it steered Python, not tensors.",
+        rule="The yellow IF test is the comparison that chose the arm; its first row reads IF: TRUE "
+        "or IF: FALSE. It has no outgoing arrow because it steered Python, not tensors.",
         panels=(Panel("a", "Branch"),),
         keys=(
             Key("Yellow boolean, a dead end", "node(fillcolor={bool_color})"),
-            Key("IF where the condition's computation starts", "edge(text~IF)"),
+            Key("IF on the test, with its outcome", "node(text~IF)"),
             Key("THEN into the first op of the arm that ran", "edge(text~THEN)"),
             Key("The arm that did not run is absent", None),
         ),
@@ -496,7 +496,7 @@ SLIDES: tuple[Slide, ...] = (
                 at="mutated parameter",
             ),
         ),
-        footnote="A frozen Parameter takes the dark blue fill.",
+        footnote="A frozen Parameter takes the dark grey fill.",
         rows=("VN09", "VE11", "VI01"),
     ),
     Slide(
@@ -686,12 +686,12 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="focus",
         title="Focus on one module: module=",
-        rule="Only the module's own ops; green and vermillion ovals stand for the outside. "
+        rule="Only the module's own ops; green and salmon ovals stand for the outside. "
         'trace.modules["blocks.0"].draw() is the same.',
         panels=(Panel("a", "Stack", kwargs={"module": "blocks.0"}),),
         keys=(
             Key("Green: where data enters", "node(fillcolor={input_color})"),
-            Key("Vermillion: where data leaves", "node(fillcolor={output_color})"),
+            Key("Salmon: where data leaves", "node(fillcolor={output_color})"),
             Key("Only the module's own ops", "node(text~relu)"),
         ),
         rows=("VN15", "VR08"),
@@ -764,6 +764,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery",
+                kwargs={"highlight": "interventions"},
                 capture={"replayable": True, "save_args": True},
                 prep="fork_edit",
                 # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
@@ -807,7 +808,7 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="color-by",
         title="Colour a measurement: color_by",
-        rule="Fill ramps light to blue by value; the legend appears by itself and states source, "
+        rule="Fill ramps pale yellow to brown by value; the legend appears by itself and states source, "
         "coverage, scale and range.",
         panels=(
             Panel("a", "Sizes", kwargs={"color_by": "flops", **QUIET}, label='color_by="flops"'),
@@ -988,7 +989,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Nonfinite",
                 call="lens",
-                capture={"module_filter": "@unsaved_abs"},
+                capture={"save": "@unsaved_abs"},
                 kwargs={"lens": "debug", "node_label_fields": ["label"]},
             ),
         ),
@@ -1012,14 +1013,14 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Grad",
                 capture={"save_grads": "all"},
-                prep="log_backward",
+                prep="backward",
                 kwargs={"graph": "backward", **QUIET},
                 label='draw(graph="backward")',
                 crop=("node(text~sum_back_1_2)", "node(text~accumulategrad)"),
             ),
         ),
         keys=(
-            Key("grad_fn node", "node(fillcolor=#F2F3FF)"),
+            Key("grad_fn node", "node(fillcolor=#F8E1E7)"),
             Key("Dotted accum edge to a leaf", "edge(style=dotted)"),
         ),
         rows=("VN26", "VE09", "VC04", "VV02"),
@@ -1079,7 +1080,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Grad",
                 capture={"save_grads": "all"},
-                prep="log_backward",
+                prep="backward",
                 kwargs={"graph": "combined"},
                 label='draw(graph="combined")',
                 crop=("node(name=mul_1_1pass1)", "node(text~mul_back_1_3)"),
@@ -1088,7 +1089,7 @@ SLIDES: tuple[Slide, ...] = (
                 "b",
                 "Grad",
                 capture={"save_grads": "all"},
-                prep="log_backward",
+                prep="backward",
                 kwargs={"grad_edge_overrides": {"penwidth": "2"}},
                 label="draw() with gradients",
                 # Gradient arrows attach to the declared per-pass nodes (the F37 fix removed the
@@ -1203,9 +1204,10 @@ SLIDES: tuple[Slide, ...] = (
         id="builtin-legend",
         title="The legend TorchLens draws",
         rule="show_legend=True adds the key under the header, one entry per mark drawn, each with its "
-        "real shape and fill (input, output, trainable and frozen weights, module, and buffer, "
-        "true/false test, mutated parameter or intervention/cone when drawn); None shows only an "
-        "active channel's section.",
+        "real shape and fill (input, output, trainable and frozen weights, module, module run as "
+        "one op, collapsed module, hidden buffers, and buffer, true/false test, mutated parameter "
+        "or intervention/cone when drawn); None shows only an active channel's section, except "
+        "that a module= focused draw also shows the key and a reading key.",
         panels=(
             Panel(
                 "a",
@@ -1232,7 +1234,7 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Flow",
-                kwargs={"node_spec_fn": "@badge", "edge_overrides": {"color": "#0072B2"}},
+                kwargs={"node_spec_fn": "@badge", "edge_overrides": {"color": "#D55E00"}},
                 label="node_spec_fn, edge_overrides",
             ),
             Panel(
@@ -1242,14 +1244,14 @@ SLIDES: tuple[Slide, ...] = (
                     "depth": 1,
                     "collapsed_node_spec_fn": "@boxbadge",
                     "graph_overrides": {"label": "", "bgcolor": "#F7F7F7"},
-                    "module_overrides": {"color": "#0072B2"},
+                    "module_overrides": {"color": "#D55E00"},
                 },
                 label="collapsed_node_spec_fn, graph and module overrides",
             ),
         ),
         keys=(
             Key("NodeSpec callback restyles a node", "node(fillcolor=#FFE9A8)"),
-            Key("Edge override recolours every arrow", "edge(color=#0072B2)"),
+            Key("Edge override recolours every arrow", "edge(color=#D55E00)"),
             Key("Collapsed-node callback", "node(fillcolor=#FFE9A8)", panel="b"),
             Key("Graph override: background", "graph(bgcolor=#F7F7F7)", panel="b"),
         ),
@@ -1309,7 +1311,7 @@ SLIDES: tuple[Slide, ...] = (
         rule="Bundle graph and diff, fastlog preview, summary, tviz and more have their own keys; "
         "red delta is not an intervention.",
         layout="table",
-        rows=("VS01", "VS02", "VS03", "VS04", "VI05", "VY03"),
+        rows=("VS01", "VS02", "VS03", "VS04", "VI05"),
     ),
     Slide(
         id="cheat-sheet",
@@ -1358,7 +1360,11 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "show_buffers, show_containers, show_orphans",
         ("show_buffers", "show_containers", "container_max_inline", "show_orphans"),
     ),
-    ("Edits", "intervention_mode, show_cone", ("intervention_mode", "show_cone")),
+    (
+        "Edits",
+        "intervention_mode, highlight",
+        ("intervention_mode", "show_cone", "highlight"),
+    ),
     (
         "Measurements",
         "color_by, size_by, node_overlay",
@@ -1438,8 +1444,9 @@ UNENCODED: tuple[tuple[str, str], ...] = (
 OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
     (
         "Bundle graph",
-        "several traces of one model, grouped",
-        "tl._visualization.show_bundle_graph(bundle)",
+        "several traces of one model, grouped; nodes='members' draws one box per "
+        "trace and on='grad' compares gradients",
+        "bundle.draw(path)",
         "docs/reference/glossary.md",
     ),
     (
@@ -1464,12 +1471,6 @@ OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
     ),
     ("Treescope cards", "notebook cards", "treescope", "docs/guides/treescope_cards.md"),
     ("Offline report", "a standalone HTML report", "report", "docs/guides/offline_report.md"),
-    (
-        "Dagua renderer",
-        "experimental second renderer; channels refuse",
-        'renderer="dagua"',
-        "torchlens/experimental/dagua",
-    ),
 )
 
 
@@ -1492,13 +1493,14 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("buffer", "buffers", "a", "node(shape=cylinder)"),
             ("fed by hidden buffers", "buffers", "a", "node(peripheries=2)"),
             ("boolean that chose a branch", "branches", "a", "node(fillcolor={bool_color})"),
+            ("IF test and its outcome", "branches", "a", "node(text~IF)"),
             ("whole module", "depth", "a", "node(shape=box3d)"),
             ("run of ops (segment)", "collapse-max", "a", "node(style^rounded)"),
             ("named pattern", "fold-patterns", "a", "node(text~PATTERN)"),
             ("+N more repeats", "fold-repeats", "a", "node(shape=plaintext, text~more)"),
             ("orphan", "orphans", "a", "node(text~sin)"),
             ("focused module's input", "focus", "a", "node(fillcolor={input_color})"),
-            ("grad_fn (backward)", "backward", "a", "node(fillcolor=#F2F3FF)"),
+            ("grad_fn (backward)", "backward", "a", "node(fillcolor=#F8E1E7)"),
             ("grad_fn of order 2+", "grad-of-grad", "a", "node(fillcolor=#FFF4D6)"),
             ("edited site", "interventions", "a", "node(color={site_color})"),
             ("downstream of an edit", "interventions", "a", "node(class~tl_downstream)"),
@@ -1510,7 +1512,6 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("not from the input", "dashed", "a", "edge(style=dashed)"),
             ("through hidden ops", "skip", "a", "edge(text~hidden)"),
             ("argument slot", "arrow-words", "a", 'edge(text~"arg 1")'),
-            ("condition starts here", "branches", "a", "edge(text~IF)"),
             ("branch taken", "branches", "a", "edge(text~THEN)"),
             ("passes using this edge", "loop-rolled", "a", "edge(text~In)"),
             ("N edges drawn as one", "arrows-as-one", "a", "edge(text~x2)"),

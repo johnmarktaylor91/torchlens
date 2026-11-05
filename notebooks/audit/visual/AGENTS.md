@@ -112,7 +112,7 @@ it is in this pack:
   missing trace flag, not a broken renderer):
   - intervention site/cone/hook styling marks PLANNED interventions:
     `tl.trace(..., capture=CaptureOptions(replayable=True))` then
-    `trace.set(...)`. Live
+    `trace.do(..., intervention=InterventionOptions(engine="set_only"))`. Live
     `intervene=` fire records do not style nodes.
   - raw-input thumbnails need `tl.trace(model, raw,
     capture=CaptureOptions(input_transform=fn))` (raw input

@@ -138,6 +138,6 @@ def test_chained_param_scaling_composes_and_never_writes_the_live_param(two) -> 
         expected_add = a + torch.tanh(x @ (0.25 * model.fc2.weight).T + model.fc2.bias)
     assert torch.allclose(fork[_add(trace).label].out, expected_add, atol=ATOL)
     assert torch.equal(model.fc2.weight.detach(), live_before)
-    consumer = fork["linear_2_3"].ops[0]
+    consumer = fork.layers["linear_2_3"].ops[0]
     assert len([r for r in consumer.edits if r.edge_address is not None]) == 2
     assert _validate(fork, 2.0 * expected_add) is True

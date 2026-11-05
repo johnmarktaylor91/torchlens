@@ -1327,6 +1327,18 @@ def open_extraction(
     torchlens.errors.InvalidArgumentError
         ``extraction_reader_verify_invalid`` outside the closed
         verification vocabulary.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> stimuli = [torch.randn(3, 8, 8) for _ in range(4)]
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     _ = tl.dataset_extraction.extract_dataset(
+    ...         model, stimuli, {"relu": "1"}, batch_size=2, path=folder, progress=False
+    ...     )
+    ...     reader = open_extraction(folder)
+    ...     print(reader.keys, reader.n_stimuli, tuple(reader.row(0)["relu"].shape))
+    ['relu'] 4 (4, 8, 8)
     """
 
     if verify not in ("structural", "first_access"):

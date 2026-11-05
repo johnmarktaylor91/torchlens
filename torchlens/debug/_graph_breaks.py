@@ -13,7 +13,7 @@ from torch import nn
 
 from .._debug_report import Report, rows_of
 from .._errors import _actionable_message, _ActionableErrorMixin
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _coerce_inputs
 from .._utils import _torch_compat
 from .._utils.arg_handling import normalize_input_args
 from ..errors._base import CompatibilityError
@@ -29,6 +29,14 @@ class GraphBreaksUnavailableError(_ActionableErrorMixin, CompatibilityError, Run
     Keeps its historical ``RuntimeError`` base while joining the taxonomy
     with a stable code and a default remedy, so single-message raise sites
     and existing ``except RuntimeError`` callers stay valid (R64).
+
+    Examples
+    --------
+    >>> err = GraphBreaksUnavailableError("no explain")
+    >>> err.fields["code"]
+    'graph_breaks_unavailable'
+    >>> isinstance(err, RuntimeError), isinstance(err, tl.errors.CompatibilityError)
+    (True, True)
     """
 
     code: str = "graph_breaks_unavailable"
@@ -71,6 +79,14 @@ class GraphBreaksNormalizationError(_ActionableErrorMixin, CompatibilityError, R
     Keeps its historical ``RuntimeError`` base while joining the taxonomy
     with a stable code and a default remedy, so single-message raise sites
     and existing ``except RuntimeError`` callers stay valid (R64).
+
+    Examples
+    --------
+    >>> err = GraphBreaksNormalizationError("odd shape")
+    >>> err.fields["code"]
+    'graph_breaks_normalization_failed'
+    >>> isinstance(err, RuntimeError), isinstance(err, tl.errors.CompatibilityError)
+    (True, True)
     """
 
     code: str = "graph_breaks_normalization_failed"
@@ -194,7 +210,7 @@ def _snapshot_model_state(model: nn.Module) -> tuple[dict[str, torch.Tensor], An
 
     with torch.no_grad():
         params = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
-    cpu_rng = torch.get_rng_state()
+    cpu_rng = torch.default_generator.get_state()
     # Initialized-CUDA-only, latch-guarded (R36-4): the bare is_available()
     # gate allocated a CUDA context per visible device on CPU-only runs.
     from .._utils.rng import _snapshot_cuda_rng_states
@@ -280,11 +296,12 @@ def _model_call_args(
         Positional and keyword arguments for Dynamo explain.
     """
 
-    coerced = _coerce_input_args(model, x)
-    args = tuple(normalize_input_args(coerced, model))
     input_kwargs = trace_kwargs.get("input_kwargs")
-    kwargs = dict(input_kwargs) if isinstance(input_kwargs, dict) else {}
-    return args, kwargs
+    coerced, routed_kwargs = _coerce_inputs(
+        model, x, dict(input_kwargs) if isinstance(input_kwargs, dict) else None
+    )
+    args = tuple(normalize_input_args(coerced, model))
+    return args, dict(routed_kwargs or {})
 
 
 def _op_locations(op: Any) -> tuple[tuple[str, int], ...]:
@@ -398,6 +415,15 @@ def graph_breaks(model: nn.Module, inputs: Any, **trace_kwargs: Any) -> GraphBre
         If this torch runtime lacks ``torch._dynamo.explain``.
     GraphBreaksNormalizationError
         If the runtime returns an unrecognized explain-result shape.
+
+    Examples
+    --------
+    >>> try:
+    ...     report = graph_breaks(model, x)
+    ... except tl.errors.GraphBreaksUnavailableError:
+    ...     report = None
+    >>> report is None or len(report) == 0
+    True
     """
 
     if not _torch_compat.HAS_DYNAMO_EXPLAIN:

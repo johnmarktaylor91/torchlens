@@ -6,11 +6,27 @@ from ._base import CompatibilityError, ConfigurationError, TorchLensError, Valid
 
 
 class RunnableTLSPECError(TorchLensError):
-    """Base class for sparse runnable ``.tlspec`` failures."""
+    """Base class for sparse runnable ``.tlspec`` failures.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.PoisonedRunError, RunnableTLSPECError)
+    True
+    >>> issubclass(RunnableTLSPECError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class RunnablePreflightError(RunnableTLSPECError, ConfigurationError, ValueError):
-    """Whole-graph producer preflight rejected a runnable claim."""
+    """Whole-graph producer preflight rejected a runnable claim.
+
+    Examples
+    --------
+    >>> issubclass(RunnablePreflightError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(RunnablePreflightError, ValueError)
+    True
+    """
 
 
 class SparseCorePayloadError(RunnableTLSPECError, ValidationError, AssertionError):
@@ -21,23 +37,63 @@ class SparseCorePayloadError(RunnableTLSPECError, ValidationError, AssertionErro
     with ``fields["code"] == "sparse_core_payload_invalid"``. ``AssertionError``
     stays in the MRO deliberately: the tripwire's historical raise class was a
     bare ``AssertionError``, so existing ``except AssertionError`` callers keep
-    working while new callers branch on the stable code."""
+    working while new callers branch on the stable code.
+
+    Examples
+    --------
+    >>> issubclass(SparseCorePayloadError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(SparseCorePayloadError, AssertionError)
+    True
+    """
 
 
 class RunCapabilityUnavailableError(RunnableTLSPECError, CompatibilityError, RuntimeError):
-    """A Trace has no runnable provider or supported backend adapter."""
+    """A Trace has no runnable provider or supported backend adapter.
+
+    Examples
+    --------
+    >>> issubclass(RunCapabilityUnavailableError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(RunCapabilityUnavailableError, RuntimeError)
+    True
+    """
 
 
 class ReattachError(RunnableTLSPECError, CompatibilityError, RuntimeError):
-    """Atomic callable reattachment failed with a complete readiness report."""
+    """Atomic callable reattachment failed with a complete readiness report.
+
+    Examples
+    --------
+    >>> issubclass(ReattachError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(ReattachError, RuntimeError)
+    True
+    """
 
 
 class StateBindingError(RunnableTLSPECError, ConfigurationError, ValueError):
-    """A state mapping failed strict name, role, tensor, or alias validation."""
+    """A state mapping failed strict name, role, tensor, or alias validation.
+
+    Examples
+    --------
+    >>> issubclass(StateBindingError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(StateBindingError, ValueError)
+    True
+    """
 
 
 class RunPreconditionError(RunnableTLSPECError, ConfigurationError, ValueError):
-    """Runtime inputs or sparse call construction violated a frozen contract."""
+    """Runtime inputs or sparse call construction violated a frozen contract.
+
+    Examples
+    --------
+    >>> issubclass(RunPreconditionError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(RunPreconditionError, ValueError)
+    True
+    """
 
 
 class BufferSinkRoutingError(RunnableTLSPECError, ConfigurationError, ValueError):
@@ -52,11 +108,27 @@ class BufferSinkRoutingError(RunnableTLSPECError, ConfigurationError, ValueError
     refreshed rerun's own journal recorded a value-changing buffer write on
     the newly-allowed no-write path). ``ValueError`` stays in the MRO and the
     message keeps the pinned "computational graph changed" term, so every
-    historical ``except ValueError`` caller and pinned match survive."""
+    historical ``except ValueError`` caller and pinned match survive.
+
+    Examples
+    --------
+    >>> issubclass(BufferSinkRoutingError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(BufferSinkRoutingError, ValueError)
+    True
+    """
 
 
 class RuntimeSignatureDriftError(RunnableTLSPECError, CompatibilityError, RuntimeError):
-    """A resolved native callable rejected the frozen recipe during execution."""
+    """A resolved native callable rejected the frozen recipe during execution.
+
+    Examples
+    --------
+    >>> issubclass(RuntimeSignatureDriftError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(RuntimeSignatureDriftError, RuntimeError)
+    True
+    """
 
 
 class PathDivergenceError(RunnableTLSPECError, ValidationError, RuntimeError, ValueError):
@@ -66,19 +138,50 @@ class PathDivergenceError(RunnableTLSPECError, ValidationError, RuntimeError, Va
     callers and the pinned ``match="computational graph changed"`` on a refresh
     graph change keep holding while the RAISE policy surfaces the TYPED error
     (structured ``fields``) instead of the projector's bare ``ValueError``.
+
+    Examples
+    --------
+    >>> issubclass(PathDivergenceError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(PathDivergenceError, RuntimeError)
+    True
     """
 
 
 class ReplayValueMismatchError(RunnableTLSPECError, ValidationError, RuntimeError):
-    """A recomputed selected activation differed from its archived bytes."""
+    """A recomputed selected activation differed from its archived bytes.
+
+    Examples
+    --------
+    >>> issubclass(ReplayValueMismatchError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(ReplayValueMismatchError, RuntimeError)
+    True
+    """
 
 
 class PoisonedRunError(RunnableTLSPECError, ValidationError, RuntimeError):
-    """A downstream faithful-result consumer refused a poisoned run."""
+    """A downstream faithful-result consumer refused a poisoned run.
+
+    Examples
+    --------
+    >>> issubclass(PoisonedRunError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(PoisonedRunError, RuntimeError)
+    True
+    """
 
 
 class CollectiveBoundaryReplayError(RunnableTLSPECError, ValidationError, RuntimeError):
-    """Runnable save or forward replay refused a collective-crossing trace."""
+    """Runnable save or forward replay refused a collective-crossing trace.
+
+    Examples
+    --------
+    >>> issubclass(CollectiveBoundaryReplayError, tl.errors.RunnableTLSPECError)
+    True
+    >>> issubclass(CollectiveBoundaryReplayError, RuntimeError)
+    True
+    """
 
 
 __all__ = [

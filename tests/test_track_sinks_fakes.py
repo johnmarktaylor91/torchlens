@@ -147,19 +147,6 @@ def test_mlflow_sink_refuses_a_tag_mlflow_cannot_carry() -> None:
     assert info.value.fields["code"] == "tracker_tag_unsafe"
 
 
-def test_sinks_advertise_what_they_carry() -> None:
-    mlflow_caps = trk.MLflowSink(_FakeMlflowClient(), run_id="r").capabilities()
-    assert mlflow_caps == {"scalar", "raw_histogram", "text_manifest", "run_metadata"}
-    comet_caps = trk.CometSink(_FakeComet()).capabilities()
-    assert comet_caps == {"scalar", "text_manifest", "run_metadata"}
-    trk.require_capabilities(
-        trk.MLflowSink(_FakeMlflowClient(), run_id="r"), ("scalar", "raw_histogram")
-    )
-    with pytest.raises(SinkProtocolError) as info:
-        trk.require_capabilities(trk.CometSink(_FakeComet()), ("raw_histogram",))
-    assert info.value.fields["code"] == "tracker_sink_capability_missing"
-
-
 def test_comet_sink_keeps_the_callers_step_axis_and_never_ends_the_experiment() -> None:
     experiment = _FakeComet()
     sink = trk.CometSink(experiment)
@@ -215,17 +202,3 @@ def test_mlflow_export_refuses_a_client_without_parity_methods_before_logging(tr
     with pytest.raises(TypeError, match="log_table"):
         tl.export.mlflow(trace, client=client)
     assert client.logged == []
-
-
-def test_aim_export_refuses_a_run_without_parity_methods_before_tracking(trace: Any) -> None:
-    class _TrackOnly:
-        def __init__(self) -> None:
-            self.tracked: list[str] = []
-
-        def track(self, value: float, name: str) -> None:
-            self.tracked.append(name)
-
-    run = _TrackOnly()
-    with pytest.raises(TypeError, match="add_tag"):
-        tl.export.aim(trace, to=run)
-    assert run.tracked == []

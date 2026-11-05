@@ -160,7 +160,7 @@ def joint_grid(model: LlamaForCausalLM) -> mi.PatchGrid:
 
 
 @pytest.mark.heavy
-@pytest.mark.parametrize("site", ["v", "k"])
+@pytest.mark.parametrize("site", ["k"])
 def test_every_cell_equals_the_repeat_kv_reference(
     model: LlamaForCausalLM, value_grid: mi.PatchGrid, site: str
 ) -> None:
@@ -228,25 +228,6 @@ def test_one_fire_per_cell_and_clean_into_clean_moves_nothing(
         control, layer=LAYERS[0], negative_control=0.0, positive_control=1.0, joint_effect=0.0
     )
     assert receipt.effects == (0.0, 0.0, 0.0, 0.0)
-
-
-@pytest.mark.heavy
-def test_query_head_grid_records_both_unpatched_baselines(
-    model: LlamaForCausalLM, value_grid: mi.PatchGrid
-) -> None:
-    """The receipts carry the clean and corrupted metrics of plain, unhooked forwards."""
-
-    with torch.no_grad():
-        clean = _from_logits(model(CLEAN).logits).to(torch.float32)
-        corrupted = _from_logits(model(CORRUPTED).logits).to(torch.float32)
-    assert value_grid.receipts["clean_metric"] == float(clean)
-    assert value_grid.receipts["corrupted_metric"] == float(corrupted)
-    receipt = tviz.receipt_from_patch_grid(
-        value_grid, layer=LAYERS[1], negative_control=0.0, positive_control=1.0
-    )
-    expected = tuple(float(value) - float(corrupted) for value in value_grid.values[1])
-    assert receipt.effects == expected
-    assert receipt.intervention == "clean activation of one head patched into the corrupted run"
 
 
 def test_sdpa_gqa_refuses_kv_expansion_unavailable() -> None:

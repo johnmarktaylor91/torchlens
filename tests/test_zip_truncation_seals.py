@@ -42,7 +42,6 @@ class _TwoOutputModel(nn.Module):
         return torch.relu(y), torch.sigmoid(y)
 
 
-@pytest.mark.smoke
 def test_bundle_output_delta_refuses_output_arity_mismatch() -> None:
     """A member missing an output must refuse, not report only the survivor."""
 
@@ -86,7 +85,7 @@ def test_fast_run_refuses_slot_label_parity_tamper(tmp_path) -> None:
     trace.save(str(bundle), level="runnable", include_weights=True)
     loaded = tl.load(str(bundle))
 
-    loaded.run(inputs=x, fast=True)  # first fast run = ordinary verified run
+    loaded.run_transaction(inputs=x, fast=True)  # first fast run = ordinary verified run
 
     descriptor = None
     for holder in vars(loaded).values():
@@ -105,4 +104,4 @@ def test_fast_run_refuses_slot_label_parity_tamper(tmp_path) -> None:
     object.__setattr__(tampered[-1], "op_labels", ())
 
     with pytest.raises(Exception, match="op label|parity|tampered"):
-        loaded.run(inputs=x, fast=True)
+        loaded.run_transaction(inputs=x, fast=True)

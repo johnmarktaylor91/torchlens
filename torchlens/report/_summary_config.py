@@ -14,11 +14,11 @@ Spellings DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
-import difflib
 from dataclasses import dataclass, field
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from .._utils._display_errors import lookup_message
 from ._stats_view import resolve_stats_columns
 from ._summary_ladder import DEFAULT_ROW_BUDGET
 
@@ -55,7 +55,7 @@ REMOVED_SUMMARY_LEVELS: dict[str, str] = {
 #: typed (``summary_option_invalid``) naming the replacement; there is no
 #: alias and no historical renderer behind them.
 REMOVED_SUMMARY_OPTIONS: dict[str, str] = {
-    "filter": "where= (regex string or callable row -> bool; presentation-only)",
+    "filter": "where= (regex string, selector or callable row -> bool; presentation-only)",
     "preset": "view= ('overview' | 'compute') for the column bundle, level= for row grain",
     "fields": "columns= (bundle name, exact ordered list, or +name/-name deltas)",
     "show_ops": "level='op' (one row per executed op pass)",
@@ -156,14 +156,6 @@ class SummaryConfig:
         return tuple(COLUMN_REGISTRY[name] for name in names)
 
 
-def _did_you_mean(name: str, valid: tuple[str, ...]) -> str:
-    """A teaching suffix naming the nearest valid choice."""
-
-    close = difflib.get_close_matches(name, valid, n=1)
-    hint = f" (did you mean {close[0]!r}?)" if close else ""
-    return f"{hint} Valid choices: {', '.join(valid)}."
-
-
 def _refuse_choice(
     axis: str,
     value: Any,
@@ -181,9 +173,13 @@ def _refuse_choice(
         problem = f"summary() no longer accepts {axis}={value!r} (removed); use {successor}."
         remedy = f"use {successor}"
     else:
-        problem = f"summary() got invalid {axis}={value!r}.{_did_you_mean(str(value), valid)}"
+        problem = f"summary() got invalid {axis}={value!r}."
         remedy = f"pass one of: {', '.join(valid)}"
-    raise InvalidArgumentError(problem, code=code, remedy=remedy)
+    raise InvalidArgumentError(
+        lookup_message(problem, valid if successor is None else (), remedy, query=str(value)),
+        code=code,
+        remedy=remedy,
+    )
 
 
 def _insert_in_registry_order(names: list[str], name: str) -> None:
@@ -329,10 +325,13 @@ def _refuse_unknown_options(unknown: list[str]) -> None:
         )
         remedy = f"replace {successors}"
     else:
-        problem = f"summary() got unknown option(s): {', '.join(unknown)}." + _did_you_mean(
-            unknown[0], GRAMMAR_OPTIONS
-        )
         remedy = "see docs/reference/summary.md for the option grammar"
+        problem = lookup_message(
+            f"summary() got unknown option(s): {', '.join(unknown)}.",
+            GRAMMAR_OPTIONS,
+            remedy,
+            query=unknown[0],
+        )
     raise InvalidArgumentError(problem, code="summary_option_invalid", remedy=remedy)
 
 

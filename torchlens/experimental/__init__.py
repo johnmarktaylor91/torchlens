@@ -11,9 +11,15 @@ from typing import Any, cast
 
 from torch import nn
 
+from .._entry_refusals import (
+    refuse_attribute_walk_segment,
+    refuse_auto_environment,
+    refuse_if_nonpositive_every,
+)
+
 _ATTRIBUTE_PART_RE = re.compile(r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<indexes>(?:\[[0-9]+\])*)")
 _STOP_AFTER_SITE: Any | None = None
-_LAZY_SUBMODULE_EXPORTS = {"dagua", "node_styles"}
+_LAZY_SUBMODULE_EXPORTS = {"node_styles"}
 
 
 def __getattr__(name: str) -> Any:
@@ -65,6 +71,13 @@ def attribute_walk(model: nn.Module, address: str) -> Any:
         If any index component is invalid.
     ValueError
         If the address syntax is malformed.
+
+    Examples
+    --------
+    >>> net = nn.Sequential()
+    >>> net.add_module("block", nn.Sequential(nn.Linear(4, 4), nn.ReLU()))
+    >>> type(attribute_walk(net, "block[1]")).__name__
+    'ReLU'
     """
 
     current: Any = model
@@ -73,7 +86,7 @@ def attribute_walk(model: nn.Module, address: str) -> Any:
     for part in address.split("."):
         match = _ATTRIBUTE_PART_RE.fullmatch(part)
         if match is None:
-            raise ValueError(f"Malformed attribute-walk segment: {part!r}")
+            refuse_attribute_walk_segment(part)
         name = match.group("name")
         if not hasattr(current, name):
             raise AttributeError(f"{type(current).__name__!s} has no attribute {name!r}")
@@ -106,6 +119,14 @@ def stop_after(site: Any) -> Iterator[None]:
     ------
     None
         Context body.
+
+    Examples
+    --------
+    >>> full = tl.trace(model, x)
+    >>> with stop_after("1"):
+    ...     early = tl.trace(model, x)
+    >>> len(early.ops) < len(full.ops)
+    True
     """
 
     global _STOP_AFTER_SITE
@@ -136,18 +157,26 @@ class Session:
     ----------
     model:
         Model to invoke repeatedly.
+
+    Examples
+    --------
+    >>> session = Session(model)
+    >>> first = session.invoke(x)
+    >>> second = session.invoke(x + 1)
+    >>> len(session.traces), len(session.to_bundle())
+    (2, 2)
     """
 
     model: nn.Module
     traces: list[Any] = field(default_factory=list)
     invocations: list[dict[str, Any]] = field(default_factory=list)
 
-    def invoke(self, input_args: Any, input_kwargs: dict[str, Any] | None = None) -> Any:
+    def invoke(self, inputs: Any, input_kwargs: dict[str, Any] | None = None) -> Any:
         """Capture one model invocation and add it to this session.
 
         Parameters
         ----------
-        input_args:
+        inputs:
             Positional model input.
         input_kwargs:
             Keyword model input.
@@ -164,12 +193,9 @@ class Session:
         trace_fn = cast(Callable[..., Any], torchlens.trace)
         log = trace_fn(
             self.model,
-            input_args,
+            inputs,
             input_kwargs=input_kwargs,
-            capture=torchlens.options.CaptureOptions(
-                replayable=True,
-                name=f"session_{index}",
-            ),
+            capture=torchlens.options.CaptureOptions(name=f"session_{index}"),
         )
         metadata = {"index": index, "name": log.name}
         setattr(log, "session_invocation", metadata)
@@ -226,6 +252,15 @@ def freeze_module(layer: nn.Module) -> Iterator[nn.Module]:
     ------
     nn.Module
         The frozen module.
+
+    Examples
+    --------
+    >>> layer = nn.Linear(4, 2)
+    >>> with freeze_module(layer) as frozen:
+    ...     print(frozen.weight.requires_grad)
+    False
+    >>> layer.weight.requires_grad
+    True
     """
 
     parameters = list(layer.parameters(recurse=True))
@@ -267,14 +302,21 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
     ------
     RuntimeError
         If ``TORCHLENS_AUTO=1`` is set.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> with auto_capture(net, every=2) as session:
+    ...     outputs = [net(torch.randn(1, 4)) for _ in range(4)]
+    >>> session.calls, len(session.logs)
+    (4, 2)
     """
 
     from .._utils.env_flags import closed_bool_env
 
     if closed_bool_env("TORCHLENS_AUTO"):
-        raise RuntimeError("TORCHLENS_AUTO is intentionally unsupported; use auto_capture().")
-    if every <= 0:
-        raise ValueError("every must be positive.")
+        refuse_auto_environment()
+    refuse_if_nonpositive_every(every)
 
     import torchlens
 
@@ -319,7 +361,6 @@ __all__ = [
     "Session",
     "attribute_walk",
     "auto_capture",
-    "dagua",
     "freeze_module",
     "node_styles",
     "stop_after",

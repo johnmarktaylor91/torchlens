@@ -24,6 +24,7 @@ pytestmark = [
         os.environ.get("TORCHLENS_CONFORMANCE_ECOSYSTEM") != "1",
         reason="ecosystem rows need TORCHLENS_CONFORMANCE_ECOSYSTEM=1 (checkpoint download)",
     ),
+    pytest.mark.rare,
 ]
 
 _ROWS = {

@@ -193,7 +193,7 @@ def test_trace_signature_never_absorbs_forward_kwarg_names():
 
     import torchlens as tl
 
-    params = set(inspect.signature(tl.trace).parameters) - {"model", "input_args", "input_kwargs"}
+    params = set(inspect.signature(tl.trace).parameters) - {"model", "inputs", "input_kwargs"}
     collisions = tuple(sorted(params & set(FORWARD_KWARG_CORPUS)))
     assert collisions == EXPECTED_TRACE_PARAM_COLLISIONS, (
         f"tl.trace parameter names colliding with the committed forward-kwarg"

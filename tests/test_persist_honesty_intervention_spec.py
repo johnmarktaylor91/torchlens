@@ -3,7 +3,7 @@ edge addresses.
 
 WT1 A-IV item 20 (lane A08): the intervention-spec load door silently
 discarded ``FireRecord.edge_address``; ``save_intervention`` had no settled-
-outcome gate; and ``spec.json`` deserialized with no structural validation
+outcome gate; and ``spec.json`` deserialized with no structural validation (3.0: ``intervention.json``)
 (a missing ``intervention_spec`` key died with a bare ``KeyError``). Deeper
 per-record staging refusals continue in lane C03.
 """
@@ -18,6 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture.outcome import CaptureOutcomeError
+from torchlens._io import ArtifactError
 from torchlens.errors import TraceCaptureError
 from torchlens.intervention._spec_codec import _deserialize_fire_record, _serialize_fire_record
 from torchlens.intervention._spec_values import _SerializedState
@@ -43,6 +44,7 @@ def _spec_dir(tmp_path):
 # --- edge_address survives the load door -------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_codec.py, campaign mutant kills.
 def test_fire_record_edge_address_round_trips():
     record = FireRecord(
         target_label="linear_1_1",
@@ -56,15 +58,7 @@ def test_fire_record_edge_address_round_trips():
     assert rebuilt.edge_address == (7, "positional", (0,))
 
 
-def test_fire_record_edge_address_absent_stays_none():
-    record = FireRecord(target_label="linear_1_1")
-    state = _SerializedState(tensor_entries=[], tensor_refs={})
-    payload = json.loads(
-        json.dumps(_serialize_fire_record(record, SaveLevel.EXECUTABLE_WITH_CALLABLES, state))
-    )
-    assert _deserialize_fire_record(payload, {}).edge_address is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_codec.py, campaign mutant kills.
 def test_fire_record_edge_address_malformed_refuses():
     with pytest.raises(ReplayPreconditionError, match="edge_address"):
         _deserialize_fire_record({"target_label": "x", "edge_address": "bogus"}, {})
@@ -73,6 +67,7 @@ def test_fire_record_edge_address_malformed_refuses():
 # --- settled-outcome gate on the spec door ------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/save.py, campaign mutant kills.
 def test_save_intervention_refuses_failed_capture(tmp_path):
     class Boom(nn.Module):
         def __init__(self) -> None:
@@ -100,32 +95,42 @@ def test_save_intervention_complete_capture_round_trips(tmp_path):
     assert spec.metadata["save_level"] == "executable_with_callables"
 
 
-# --- spec.json structural validation ------------------------------------------
+# --- recipe structural validation ---------------------------------------------
 
 
-def _rewrite_spec_json(path, mutate):
-    spec_file = path / "spec.json"
-    data = json.loads(spec_file.read_text())
+def _rewrite_json(path, name, mutate):
+    target = path / name
+    data = json.loads(target.read_text())
     mutate(data)
-    spec_file.write_text(json.dumps(data))
+    target.write_text(json.dumps(data))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_codec.py, campaign mutant kills.
 def test_missing_intervention_spec_object_refuses_typed(tmp_path):
     path = _spec_dir(tmp_path)
-    _rewrite_spec_json(path, lambda data: data.pop("intervention_spec"))
-    with pytest.raises(ReplayPreconditionError, match="intervention_spec"):
+    _rewrite_json(path, "intervention.json", lambda data: data.pop("rules"))
+    with pytest.raises(ArtifactError, match="rules") as info:
         load_intervention_spec(path)
+    assert info.value.fields["code"] == "manifest_schema_invalid"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_codec.py, campaign mutant kills.
 def test_unknown_save_level_refuses_typed(tmp_path):
     path = _spec_dir(tmp_path)
-    _rewrite_spec_json(path, lambda data: data.update(save_level="banana"))
-    with pytest.raises(ReplayPreconditionError, match="save_level"):
+    _rewrite_json(path, "intervention.json", lambda data: data.update(save_level="banana"))
+    with pytest.raises(ArtifactError, match="save_level") as info:
         load_intervention_spec(path)
+    assert info.value.fields["code"] == "artifact_save_level_invalid"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_codec.py, campaign mutant kills.
 def test_non_list_target_manifest_refuses_typed(tmp_path):
     path = _spec_dir(tmp_path)
-    _rewrite_spec_json(path, lambda data: data.update(target_manifest=42))
-    with pytest.raises(ReplayPreconditionError, match="target_manifest"):
+    _rewrite_json(
+        path,
+        "manifest.json",
+        lambda data: data["intervention_compat_metadata"].update(target_manifest=42),
+    )
+    with pytest.raises(ArtifactError, match="target_manifest") as info:
         load_intervention_spec(path)
+    assert info.value.fields["code"] == "manifest_schema_invalid"

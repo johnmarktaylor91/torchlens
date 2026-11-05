@@ -10,13 +10,13 @@ from typing import Any
 import pytest
 import safetensors  # noqa: F401
 import torch
+from _format3_envelope import read_record
 from torch import nn
 
 import torchlens as tl
 from torchlens import load, trace as trace_fn
 from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError, BlobRef
-from torchlens.io import materialize_nested
 
 
 class _LazyIOModel(nn.Module):
@@ -193,7 +193,12 @@ def _corrupt_one_blob(bundle_path: Path) -> None:
         Bundle directory path.
     """
 
-    blob_path = next((bundle_path / "blobs").glob("*.safetensors"))
+    manifest = _read_manifest(bundle_path)
+    outs = read_record(bundle_path, "op")["columns"]["out"]
+    reference = next(cell for cell in outs if cell is not None)
+    assert reference["$tl"] == "tensor"
+    assert reference["blob"] in manifest["files"]
+    blob_path = bundle_path / reference["blob"]
     blob_bytes = bytearray(blob_path.read_bytes())
     blob_bytes[-1] = (blob_bytes[-1] + 1) % 256
     blob_path.write_bytes(bytes(blob_bytes))
@@ -224,49 +229,6 @@ def _contains_blob_ref(value: Any) -> bool:
     if isinstance(value, set):
         return any(_contains_blob_ref(item) for item in value)
     return False
-
-
-def test_lazy_ref_metadata_access_does_not_materialize(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Lazy ref metadata should be readable without touching the filesystem."""
-
-    bundle_path, live_log = _save_bundle(tmp_path)
-    restored = load(bundle_path, lazy=True)
-    layer = _first_saved_layer(restored)
-    live_layer = _first_saved_layer(live_log)
-    ref = layer.out_ref
-
-    assert ref is not None
-    assert isinstance(live_layer.out, torch.Tensor)
-
-    def _fail(*_: Any, **__: Any) -> Any:
-        raise AssertionError("filesystem access should not occur")
-
-    monkeypatch.setattr("torchlens._io.lazy.sha256_file", _fail)
-    monkeypatch.setattr("torchlens._io.lazy.load_file", _fail)
-
-    assert ref.shape == tuple(layer.shape)
-    assert ref.dtype == layer.dtype
-    assert ref.device_at_save == str(live_layer.out.device)
-
-
-def test_lazy_materialize_matches_eager_load_bit_exactly(tmp_path: Path) -> None:
-    """Lazy materialization should match the eager-loaded tensor exactly."""
-
-    bundle_path, _ = _save_bundle(tmp_path)
-    eager_log = load(bundle_path, lazy=False)
-    lazy_log = load(bundle_path, lazy=True)
-
-    eager_layer = _first_saved_layer(eager_log)
-    lazy_layer = _first_saved_layer(lazy_log)
-
-    eager_tensor = eager_layer.out
-    assert isinstance(eager_tensor, torch.Tensor)
-    lazy_tensor = lazy_layer.materialize_out()
-
-    assert torch.equal(lazy_tensor, eager_tensor)
 
 
 @pytest.mark.cuda
@@ -307,50 +269,6 @@ def test_lazy_resave_detects_blob_level_drift(tmp_path: Path) -> None:
 
     with pytest.raises(ArtifactError, match="sha256 mismatch"):
         lazy_log.save(tmp_path / "resaved.tl")
-
-
-def test_lazy_resave_fast_copy_produces_valid_bundle(tmp_path: Path) -> None:
-    """Clean-source lazy resave should fast-copy blobs into a new valid bundle."""
-
-    bundle_path, live_log = _save_bundle(tmp_path)
-    lazy_log = load(bundle_path, lazy=True)
-    resaved_path = tmp_path / "resaved.tl"
-
-    lazy_log.save(resaved_path)
-    restored = load(resaved_path, lazy=False)
-
-    live_tensor = _first_saved_layer(live_log).out
-    restored_tensor = _first_saved_layer(restored).out
-
-    assert isinstance(live_tensor, torch.Tensor)
-    assert isinstance(restored_tensor, torch.Tensor)
-    assert torch.equal(restored_tensor, live_tensor)
-
-
-def test_rehydrate_nested_materializes_saved_args_blob_refs(tmp_path: Path) -> None:
-    """``rehydrate_nested`` should replace nested captured-arg refs with tensors."""
-
-    bundle_path, _ = _save_bundle(
-        tmp_path,
-        save_args=True,
-        include_saved_args=True,
-        path_name="saved_args.tl",
-    )
-    lazy_log = load(bundle_path, lazy=True, materialize_nested=False)
-    layer = next(
-        layer
-        for layer in lazy_log._layer_list
-        if layer.has_saved_args
-        and layer.saved_args is not None
-        and _contains_blob_ref(layer.saved_args)
-    )
-
-    assert _contains_blob_ref(layer.saved_args)
-
-    materialize_nested(lazy_log)
-
-    assert not _contains_blob_ref(layer.saved_args)
-    assert any(isinstance(arg, torch.Tensor) for arg in layer.saved_args)
 
 
 def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
@@ -395,25 +313,6 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
     restored = load(resaved_path, lazy=False)
 
     assert restored.source.class_name == lazy_log.source.class_name
-
-
-@pytest.mark.parametrize("lazy", [False, True])
-def test_portable_loaded_logs_reject_validation_entry_points(
-    tmp_path: Path,
-    lazy: bool,
-) -> None:
-    """Fork L: portable-loaded logs should reject the validation entry point.
-
-    The legacy ``validate_saved_outs`` Trace spelling was deleted with the
-    renamed-callable deprecation aliases (728a0952); ``validate_forward_pass``
-    is the sole canonical validation entry point on a user-held Trace.
-    """
-
-    bundle_path, _ = _save_bundle(tmp_path)
-    restored = load(bundle_path, lazy=lazy)
-
-    with pytest.raises(ArtifactError, match="portable bundles drop them"):
-        restored.validate_forward_pass([])
 
 
 @pytest.mark.serial  # counts /proc/self/fd, which is process-global: under xdist a

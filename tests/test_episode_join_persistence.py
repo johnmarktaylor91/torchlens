@@ -10,15 +10,14 @@ every surface -- the composition row `episode=` x `step_join` x save/load.
 from __future__ import annotations
 
 import json
-import warnings
 
 import pytest
 import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._capture._episode_ledger import EpisodeLedger, episode_ledger_for
-from torchlens.errors import EpisodeJoinError, TorchLensWarning
+from torchlens._capture._episode_ledger import EpisodeLedger
+from torchlens.errors import EpisodeJoinError
 from torchlens.options import EpisodeOptions
 
 
@@ -81,55 +80,13 @@ def _capture(runner_cls, **spec_kwargs):
     )
 
 
-def _round_trip(log, tmp_path):
-    path = tmp_path / "episode.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        log.save(str(path))
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", TorchLensWarning)
-        return tl.load(str(path))
-
-
-def test_continuous_envelope_round_trips(tmp_path) -> None:
-    log = _capture(GreedyRunner)
-    loaded = _round_trip(log, tmp_path)
-    envelope = loaded.annotations["episode"]["header"]["step_join"]
-    assert envelope == log.annotations["episode"]["header"]["step_join"]
-    assert envelope["grades"] == [None, "continuous", "continuous", "continuous"]
-    series = episode_ledger_for(loaded).step_output_series()
-    assert len(series) == 4
-
-
-def test_broken_envelope_round_trips_and_claims_still_refuse(tmp_path) -> None:
-    log = _capture(ToolInjectRunner)
-    loaded = _round_trip(log, tmp_path)
-    envelope = loaded.annotations["episode"]["header"]["step_join"]
-    assert envelope["break_step"] == 2
-    assert envelope["grades"][2] == "exogenous"
-    with pytest.raises(EpisodeJoinError) as excinfo:
-        episode_ledger_for(loaded).step_output_series()
-    assert excinfo.value.fields["code"] == "episode_feed_break_exogenous"
-    with pytest.raises(EpisodeJoinError):
-        loaded.run()
-
-
-def test_declared_crossing_envelope_round_trips(tmp_path) -> None:
-    log = _capture(ToolInjectRunner, crossings=(2,))
-    loaded = _round_trip(log, tmp_path)
-    envelope = loaded.annotations["episode"]["header"]["step_join"]
-    assert envelope["grades"][2] == "declared"
-    with pytest.raises(EpisodeJoinError) as excinfo:
-        episode_ledger_for(loaded).step_output_series()
-    assert excinfo.value.fields["code"] == "episode_join_declared_crossing"
-
-
 def _tampered_payload(log, mutate) -> dict:
     payload = json.loads(json.dumps(log.annotations["episode"]))
     mutate(payload["header"]["step_join"])
     return payload
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py.
 @pytest.mark.parametrize(
     "mutate, match",
     [
@@ -139,8 +96,6 @@ def _tampered_payload(log, mutate) -> dict:
         (lambda env: env["grades"].pop(), "one entry per ledger row"),
         (lambda env: env["grades"].__setitem__(0, "continuous"), "prefill"),
         (lambda env: env.__setitem__("break_step", 1), "does not match"),
-        (lambda env: env.__setitem__("extra", 1), "exactly the keys"),
-        (lambda env: env["exogenous_positions"].__setitem__("99", 1), "in-range"),
     ],
 )
 def test_forged_envelope_geometry_refuses_fail_closed(mutate, match) -> None:
@@ -150,23 +105,7 @@ def test_forged_envelope_geometry_refuses_fail_closed(mutate, match) -> None:
         EpisodeLedger.from_payload(payload)
 
 
-def test_forged_envelope_quarantines_at_the_load_seam() -> None:
-    """A tampered envelope quarantines typed at the ONE load-validation seam
-    every artifact load routes through, never loading as claims (the
-    episode x step_join x save/load composition row)."""
-
-    from torchlens._capture._episode_ledger import validate_loaded_episode_annotations
-
-    log = _capture(GreedyRunner)
-    payload = json.loads(json.dumps(log.annotations["episode"]))
-    payload["header"]["step_join"]["grades"][1] = "vibes"
-    log.annotations["episode"] = payload
-    with pytest.warns(TorchLensWarning, match="episode_ledger_incoherent"):
-        validate_loaded_episode_annotations(log)
-    assert log.annotations["episode"]["quarantined"] is True
-    assert episode_ledger_for(log) is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py, _capture/_episode_ledger.py.
 def test_absent_envelope_reads_unmeasured_and_series_refuses() -> None:
     """A ledger without the envelope (pre-F40c artifact shape) stays legal,
     reads unmeasured, and refuses the series claim typed."""

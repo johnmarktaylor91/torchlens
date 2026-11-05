@@ -155,7 +155,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         UNAVAILABLE_OK,
         "model-explorer export-bridge demo dependency, no declared extra",
     ),
-    "dagua": (UNAVAILABLE_OK, "unreleased in-development layout engine"),
     "delphi.latents.loader": (
         OPTIONAL_PREVIEW,
         "SAE latent-export consumer (eai-delphi, no declared extra); nightly.yml "
@@ -250,9 +249,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "path-filtered export job requested via the packaging-request ledger "
         "(F14 2026-08-28)",
     ),
-    "numpy": (TEST_EXTRA, "core torchlens dependency; a skip means install breakage"),
     "pandas": (OPTIONAL_PREVIEW, "tabular extra"),
-    "pandas.api.types": (OPTIONAL_PREVIEW, "tabular extra"),
     "peft": (
         OPTIONAL_PREVIEW,
         "deploy extra (requested in the packaging-request ledger, F37 "
@@ -335,6 +332,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     "torchvision": (TEST_EXTRA, "torchvision"),
     "torchvision.models": (TEST_EXTRA, "torchvision"),
+    "torchvision.models.convnext": (TEST_EXTRA, "torchvision"),
     "torchvision.models.resnet": (TEST_EXTRA, "torchvision"),
     "torchvision.models.segmentation": (TEST_EXTRA, "torchvision"),
     "torchvision.ops": (TEST_EXTRA, "torchvision"),
@@ -375,6 +373,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
 DYNAMIC_IMPORTORSKIP_SITES = frozenset(
     {
         "test_backend_registry.py",  # importorskips the registry's own dependency map
+        "test_docstring_examples.py",  # importorskips each `# requires:` module of an example
         "test_subfolder_imports.py",  # importorskips each subfolder's declared optional deps
     }
 )
@@ -1055,6 +1054,18 @@ _CUDA_DARK = (
 )
 
 DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
+    "test_extract_dataset_device.py::test_cuda_model_returns_cuda_results_in_memory": (
+        "[2026-11-03] in-memory extract_dataset results stay on the model's device: "
+        "the CUDA-resident result is only observable with a CUDA model; dark on "
+        "CPU-only CI, executed on the owner's GPU box (its CPU sibling "
+        "test_memory_mode_keeps_stored_batches_on_the_capture_device runs everywhere)"
+    ),
+    "test_debug_findings_source_lines.py::test_compare_cpu_against_cuda": (
+        "[2026-11-03] compare of a CPU run against a CUDA run (payloads moved to "
+        "the CPU before comparing): needs a CUDA device; dark on CPU-only CI, "
+        "executed on the owner's GPU box (its dtype sibling "
+        "test_compare_across_dtypes_compares_in_the_wider_dtype runs everywhere)"
+    ),
     "test_valmem_validation_memory.py::test_forward_validation_weight_copies_on_an_accelerator": (
         "[2026-10-17] forward-validation weight-copy counter on an accelerator: "
         "the snapshot-on-host claim is only observable with a device-resident "
@@ -1307,7 +1318,6 @@ OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
         "everywhere, so absence costs validation breadth only"
     ),
     "dacite": "model-explorer export-bridge demo dependency",
-    "dagua": "unreleased in-development layout engine",
     "e3nn.o3": "research-model real-world coverage, deliberately undeclared",
     "fvcore.nn": (
         "supplementary FLOP-counter cross-oracle (A07); the closed-form and "

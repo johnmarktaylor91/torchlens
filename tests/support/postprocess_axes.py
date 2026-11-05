@@ -414,7 +414,7 @@ def _axis_deferred_retention() -> Any:
     model, model_input = _oracle_case("plain_cnn")
     # A final-label-only selector (negative index) defers the retention
     # decision to step 11.75 (resolve_deferred_retention), the axis that
-    # populates its save_activation write family.
+    # populates its _save_activation write family.
     return tl.trace(model, model_input, save=[-2, -1])
 
 
@@ -476,7 +476,7 @@ def _axis_refresh() -> Any:
     model, model_input = _oracle_case("plain_cnn")
     trace = tl.trace(model, model_input)
     try:
-        result = trace.run(inputs=model_input)
+        result = trace.run_transaction(inputs=model_input)
         result.trace.cleanup()
     finally:
         trace.cleanup()

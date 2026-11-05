@@ -150,6 +150,14 @@ def subspace_ablate(
     InvalidArgumentError
         ``subspace_basis_invalid`` / ``subspace_mode_invalid`` on bad
         arguments.
+
+    Examples
+    --------
+    >>> edit = subspace_ablate(torch.eye(4)[:2], dim=1)
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), edit))
+    >>> out = edited["relu_1_2"].out
+    >>> bool(out[:, :2].abs().max() < 1e-5), bool((out[:, 2:] != 0).any())
+    (True, True)
     """
 
     rows = _orthonormal_rows(basis, "subspace_ablate")
@@ -233,6 +241,14 @@ def subspace_interchange(
     -------
     Edit
         The interchange edit.
+
+    Examples
+    --------
+    >>> donor = tl.trace(model, torch.randn(1, 3, 8, 8))
+    >>> edit = subspace_interchange(torch.eye(4)[:2], donor, dim=1)
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), edit))
+    >>> torch.allclose(edited["relu_1_2"].out[:, :2], donor["relu_1_2"].out[:, :2], atol=1e-6)
+    True
     """
 
     rows = _orthonormal_rows(basis, "subspace_interchange")

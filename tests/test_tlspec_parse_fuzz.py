@@ -34,8 +34,10 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import read_manifest, read_record, redigest, set_cell, tensor_columns
 
 import torchlens as tl
+from torchlens._io.format3 import contract
 from torchlens.errors import ArtifactError
 
 pytestmark = pytest.mark.heavy
@@ -50,14 +52,13 @@ _BYTE_FLIP_SEED = 2026 if _FUZZ_SEED_ENV is None else int(_FUZZ_SEED_ENV) + 1
 #: Top-level manifest keys that may legitimately be ABSENT (older manifests
 #: predate them; the loader defaults them). Deleting any OTHER key must be a
 #: typed refusal — a new manifest key lands in the required contract until
-#: consciously ledgered here.
+#: consciously ledgered here. Format 3 requires ``kind``; its optional carried
+#: fields and the two optional summaries (``model_fingerprint``,
+#: ``backward_summary``) are the contract's own optional tables.
 _OPTIONAL_KEYS = frozenset(
     {
-        "unsupported_tensors",
-        "provenance",
-        "custom_attributes_disclosure",
-        "buffer_values_disclosure",
-        "kind",
+        *contract.MANIFEST_CARRIED_OPTIONAL_FIELDS,
+        *contract.MANIFEST_SUMMARY_FIELDS,
     }
 )
 
@@ -101,6 +102,7 @@ def _rewrite_manifest(artifact: Path, mutate) -> None:
     manifest_path.write_text(json.dumps(data), encoding="utf-8")
 
 
+# Kept: sole branch coverage of _io/bundle.py, _io/manifest.py, validation/__init__.py; a sole mutation kill.
 def test_every_toplevel_key_deletion_is_adjudicated(seed_artifact: Path, tmp_path: Path) -> None:
     """Deleting each discovered key: typed refusal or ledgered tolerance.
 
@@ -133,6 +135,7 @@ def test_every_toplevel_key_deletion_is_adjudicated(seed_artifact: Path, tmp_pat
     )
 
 
+# Kept: sole branch coverage of _io/bundle.py, _io/manifest.py, validation/__init__.py; a sole mutation kill.
 def test_every_toplevel_key_type_swap_is_typed_refusal(seed_artifact: Path, tmp_path: Path) -> None:
     """Swapping each discovered key's type must raise ArtifactError."""
 
@@ -155,33 +158,50 @@ def test_every_toplevel_key_type_swap_is_typed_refusal(seed_artifact: Path, tmp_
     assert not survivors, f"type-swapped manifest keys escaped the typed refusal: {survivors}"
 
 
+# Kept: sole branch coverage of _io/manifest.py, _io/paths.py, _io/rehydrate.py; a sole mutation kill.
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("blob_id", "9999999999"),
+        ("key", "t9999999999"),
         ("dtype", "float999"),
         ("shape", "bogus"),
-        ("relative_path", "../../outside.safetensors"),
-        ("relative_path", "/etc/passwd"),
+        ("blob", "../../outside.safetensors"),
+        ("blob", "/etc/passwd"),
     ],
 )
 def test_tensor_entry_mutations_are_typed_refusals(
     seed_artifact: Path, tmp_path: Path, field: str, value: str
 ) -> None:
-    """Tensor-entry corruption (including path escapes) must refuse typed."""
+    """Tensor-reference corruption (including path escapes) must refuse typed.
+
+    Format 3 keeps no manifest tensor list: each stored tensor is a typed
+    ``tensor`` reference cell in a record table, so the mutation lands on the
+    first op column holding one (the record digest re-listed, so only the
+    reference itself is wrong).
+    """
 
     artifact = _corrupt_copy(seed_artifact, tmp_path)
-    _rewrite_manifest(artifact, lambda data: data["tensors"][0].__setitem__(field, value))
+    columns = tensor_columns(artifact, "op")
+    assert columns, "seed artifact stored no op tensor reference"
+    cells = read_record(artifact, "op")["columns"][columns[0]]
+    row = next(i for i, cell in enumerate(cells) if isinstance(cell, dict) and "blob" in cell)
+    set_cell(artifact, "op", columns[0], row, {**cells[row], field: value})
     with pytest.raises(ArtifactError):
         tl.load(str(artifact))
 
 
+# Kept: sole branch coverage of _io/_json.py, _io/_pickle_prescan.py, _io/_safe_unpickle.py and more; a sole mutation kill.
 def test_seeded_truncations_are_typed_refusals(seed_artifact: Path, tmp_path: Path) -> None:
-    """Seeded truncations of manifest and metadata must refuse typed."""
+    """Seeded truncations of the manifest and of a record table must refuse typed.
+
+    The record truncations re-list the cut file's digest, so the refusal comes
+    from the record parse itself, not only from the digest check.
+    """
 
     rng = random.Random(_TRUNCATION_SEED)
     manifest_bytes = (seed_artifact / "manifest.json").read_bytes()
-    metadata_bytes = (seed_artifact / "metadata.pkl").read_bytes()
+    record_relpath = read_manifest(seed_artifact)["records"]["op"]["path"]
+    record_bytes = (seed_artifact / record_relpath).read_bytes()
     for _ in range(8):
         artifact = _corrupt_copy(seed_artifact, tmp_path)
         cut = rng.randrange(1, len(manifest_bytes))
@@ -195,50 +215,19 @@ def test_seeded_truncations_are_typed_refusals(seed_artifact: Path, tmp_path: Pa
         )
     for _ in range(4):
         artifact = _corrupt_copy(seed_artifact, tmp_path)
-        cut = rng.randrange(1, len(metadata_bytes))
-        (artifact / "metadata.pkl").write_bytes(metadata_bytes[:cut])
+        cut = rng.randrange(1, len(record_bytes))
+        (artifact / record_relpath).write_bytes(record_bytes[:cut])
+        redigest(artifact, record_relpath)
         try:
             tl.load(str(artifact))
         except ArtifactError:
             continue
         pytest.fail(
-            f"metadata truncated at byte {cut} loaded silently (seed {_TRUNCATION_SEED}; reproduce with TORCHLENS_FUZZ_SEED)"
+            f"{record_relpath} truncated at byte {cut} loaded silently (seed {_TRUNCATION_SEED}; reproduce with TORCHLENS_FUZZ_SEED)"
         )
 
 
-def test_seeded_manifest_byte_flips_never_escape_untyped(
-    seed_artifact: Path, tmp_path: Path
-) -> None:
-    """Random byte flips: typed refusal or clean load, never stack soup.
-
-    A flip landing in an insignificant JSON position can legitimately load;
-    the tripwire is the third outcome — an UNTYPED exception leaking from the
-    parse path.
-    """
-
-    rng = random.Random(_BYTE_FLIP_SEED)
-    manifest_bytes = (seed_artifact / "manifest.json").read_bytes()
-    escapes: list[str] = []
-    for index in range(12):
-        artifact = _corrupt_copy(seed_artifact, tmp_path)
-        flipped = bytearray(manifest_bytes)
-        offset = rng.randrange(len(flipped))
-        flipped[offset] ^= 0xFF
-        (artifact / "manifest.json").write_bytes(bytes(flipped))
-        try:
-            loaded = tl.load(str(artifact))
-        except ArtifactError:
-            continue
-        except Exception as exc:  # noqa: BLE001 - adjudicating the full surface
-            escapes.append(f"case {index} offset {offset}: {type(exc).__name__}: {exc}")
-        else:
-            loaded.cleanup()
-    assert not escapes, (
-        f"manifest byte flips escaped the typed surface (seed {_BYTE_FLIP_SEED}; reproduce "
-        f"with TORCHLENS_FUZZ_SEED): {escapes}"
-    )
-
-
+# Kept: sole branch coverage of _io/_json.py; a sole mutation kill; the catch of its regression fault.
 def test_non_utf8_manifest_byte_is_typed_refusal(seed_artifact: Path, tmp_path: Path) -> None:
     """R73: a non-UTF8 manifest byte refuses typed, never a raw decode error.
 
@@ -256,6 +245,7 @@ def test_non_utf8_manifest_byte_is_typed_refusal(seed_artifact: Path, tmp_path: 
         tl.load(str(artifact))
 
 
+# Kept: sole branch coverage of _io/bundle.py, _io/format_errors.py; a sole mutation kill.
 def test_blob_corruption_is_typed_refusal(seed_artifact: Path, tmp_path: Path) -> None:
     """Blob deletion, truncation, and byte flips must all refuse typed."""
 

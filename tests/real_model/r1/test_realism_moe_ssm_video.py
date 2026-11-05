@@ -1,7 +1,7 @@
 """Real MoE, SSM and video checkpoints: real weights, capture, validation.
 
 forks.3 adds one small mixture-of-experts (Switch Transformer, 8 experts,
-top-1 routing) and one small state-space model (Mamba 130M); U55.4's CPU
+top-1 routing) and one small state-space model (Mamba 130M); the CPU
 fallback adds one video transformer (VideoMAE small, Kinetics-400). Each test
 first proves the registry checkpoint's REAL weights loaded: an exact SHA-256
 of one named weight tensor, then the checkpoint's known output on a fixed
@@ -132,7 +132,7 @@ def test_switch_base_8_real_weights_sparse_routing_capture_and_validate(r1_loade
 
 
 def test_videomae_small_real_weights_tubelet_capture_and_validate(r1_loader):
-    """CPU CI video row (U55.4 fallback): 16 frames -> 8 x 14 x 14 = 1568 tubelet tokens."""
+    """CPU CI video row (fallback): 16 frames -> 8 x 14 x 14 = 1568 tubelet tokens."""
 
     model = r1_loader("r1-videomae-small-kinetics")["model"]
     patch = model.get_parameter("videomae.embeddings.patch_embeddings.projection.weight")

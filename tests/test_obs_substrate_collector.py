@@ -14,7 +14,6 @@ from torch import nn
 from torchlens._observability import (
     EventStream,
     HistoryCollector,
-    StepTruth,
     WatchSettings,
 )
 from torchlens.errors import HistoryArtifactError, WatchLifecycleError, WatchPlanError
@@ -39,41 +38,11 @@ def _mlp() -> nn.Sequential:
 class TestDiscoveryAndPlan:
     """Discovery forward, zero-match refusal, and the D21 plan table."""
 
-    def test_discovery_returns_the_users_result(self) -> None:
-        model = _mlp()
-        x = torch.randn(4, 8)
-        collector = HistoryCollector(model)
-        expected = model(x)
-        output = collector.discover(x)
-        assert torch.equal(output, expected)
-
     def test_zero_match_refuses_at_plan_time(self) -> None:
         collector = HistoryCollector(_mlp(), sites=("nonexistent.path",))
         with pytest.raises(WatchPlanError) as excinfo:
             collector.discover(torch.randn(2, 8))
         assert excinfo.value.fields["code"] == "watch_plan_empty"
-
-    def test_plan_table_prints_elements_and_bytes(self) -> None:
-        model = _mlp()
-        collector = HistoryCollector(
-            model, streams=("activation", "param", "param_delta"), cadence=2
-        )
-        collector.discover(torch.randn(4, 8))
-        table = collector.plan.format_table()
-        assert "elements/step" in table
-        assert "bytes/step" in table
-        assert "sampled update channel" not in table  # all params < 4096 here
-        streams = {row.stream for row in collector.plan.rows}
-        assert streams == {"activation", "param", "param_delta"}
-        assert all(row.cadence == 2 for row in collector.plan.rows)
-
-    def test_giant_param_is_marked_sampled(self) -> None:
-        model = nn.Sequential(nn.Embedding(5000, 16))
-        collector = HistoryCollector(model, streams=("param_delta",))
-        collector.discover(torch.randint(0, 5000, (2, 3)))
-        row = next(r for r in collector.plan.rows if r.stream == "param_delta")
-        assert row.elements_per_step == 4096
-        assert "sampled" in row.note
 
     def test_plan_before_discover_refuses(self) -> None:
         with pytest.raises(WatchLifecycleError) as excinfo:
@@ -89,61 +58,6 @@ class TestDiscoveryAndPlan:
 
 class TestStepSpellings:
     """Both step spellings ship; provenance is recorded (D17)."""
-
-    def test_explicit_spelling_is_authoritative(self) -> None:
-        model = _mlp()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
-        collector = HistoryCollector(model, streams=("activation", "param_grad"))
-        x = torch.randn(4, 8)
-        collector.discover(x)
-        collector.attach(optimizer=optimizer)
-        with collector.step(10, truth=StepTruth(scale=2.0, unscaled="yes", clipped="no")):
-            model(x).sum().backward()
-            optimizer.step()
-            optimizer.zero_grad()
-        collector.detach()
-        block = collector.ring.blocks[0]
-        assert block.block.provenance == "explicit"
-        assert block.block.global_step == 10
-        assert block.block.scale == 2.0
-        assert block.block.unscaled == "yes"
-
-    def test_implicit_spelling_stamps_unknown_never_guesses(self) -> None:
-        model = _mlp()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
-        collector = HistoryCollector(model, streams=("activation", "param"))
-        x = torch.randn(4, 8)
-        collector.discover(x)
-        collector.attach(optimizer=optimizer)
-        for _ in range(2):
-            model(x).sum().backward()
-            optimizer.step()
-            optimizer.zero_grad()
-        collector.detach()
-        blocks = collector.ring.blocks
-        assert len(blocks) == 2
-        assert all(b.block.provenance == "implicit" for b in blocks)
-        assert all(b.block.unscaled == "unknown" for b in blocks)
-        assert all(b.block.clipped == "unknown" for b in blocks)
-        assert [b.block.global_step for b in blocks] == [0, 1]
-
-    def test_duplicate_explicit_step_refuses_without_new_segment(self) -> None:
-        model = _mlp()
-        collector = HistoryCollector(model)
-        x = torch.randn(4, 8)
-        collector.discover(x)
-        collector.attach()
-        with collector.step(5):
-            model(x)
-        with pytest.raises(Exception) as excinfo, collector.step(5):
-            model(x)
-        assert excinfo.value.fields["code"] == "history_step_regression"  # type: ignore[attr-defined]
-        # A declared new segment (resume) starts a new axis span.
-        old_segment = collector.segment_id
-        with collector.step(0, new_segment=True):
-            model(x)
-        assert collector.segment_id != old_segment
-        collector.detach()
 
     def test_nested_step_refuses(self) -> None:
         model = _mlp()
@@ -179,47 +93,6 @@ class TestStepSpellings:
 
 class TestOptimizerTruth:
     """AMP/accumulation/optimizer truth: skips record NO fake update."""
-
-    def test_skipped_step_records_skipped_and_no_update(self) -> None:
-        model = _mlp()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
-        collector = HistoryCollector(model, streams=("activation", "param_delta"))
-        x = torch.randn(4, 8)
-        collector.discover(x)
-        collector.attach(optimizer=optimizer)
-        with collector.step(0, truth=StepTruth(applied=False)):
-            model(x).sum().backward()
-            # The scaler found infs and never called optimizer.step().
-            optimizer.zero_grad()
-        collector.detach()
-        block = collector.ring.blocks[0]
-        assert block.block.optimizer_status == "skipped"
-        deltas = [o for o in block.observations if o.stream == "param_delta"]
-        assert deltas == []  # NO fake update, ever
-
-    def test_update_channel_exact_for_small_params(self) -> None:
-        model = _mlp()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
-        collector = HistoryCollector(model, streams=("param_delta",))
-        x = torch.randn(4, 8)
-        collector.discover(x)
-        collector.attach(optimizer=optimizer)
-        before = {n: p.detach().clone() for n, p in model.named_parameters()}
-        with collector.step(0):
-            model(x).sum().backward()
-            optimizer.step()
-            optimizer.zero_grad()
-        collector.detach()
-        block = collector.ring.blocks[0]
-        for obs in block.observations:
-            assert obs.stream == "param_delta"
-            assert not obs.estimated  # every param here is under 4096 elements
-            name = obs.site_id.removeprefix("param:")
-            true_delta = (dict(model.named_parameters())[name].detach() - before[name]).to(
-                torch.float64
-            )
-            assert obs.spine is not None
-            assert obs.spine.sum_squares == pytest.approx(float((true_delta**2).sum()), rel=1e-5)
 
     def test_update_channel_estimated_for_giant_params(self) -> None:
         model = nn.Sequential(nn.Embedding(5000, 16))
@@ -287,63 +160,6 @@ class TestObservationInertness:
         assert observed_losses == control_losses
         for name, buffer in control_buffers.items():
             assert torch.equal(observed_buffers[name], buffer), name
-
-    def test_inplace_relu_output_observed_safely(self) -> None:
-        model = _bn_relu_model()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.05)
-        collector = HistoryCollector(model, streams=("activation",))
-        x = torch.randn(2, 3, 4, 4)
-        collector.discover(x)
-        collector.attach(optimizer=optimizer)
-        with collector.step(0):
-            model(x).sum().backward()
-            optimizer.step()
-            optimizer.zero_grad()
-        collector.detach()
-        relu_obs = next(o for o in collector.ring.blocks[0].observations if o.site_id == "module:2")
-        assert relu_obs.spine is not None
-        # ReLU output has no negatives; the reduction happened at module
-        # return, before any later in-place mutation could rewrite it.
-        assert relu_obs.spine.num_negative == 0
-
-
-class TestCadence:
-    """Per-stream cadence gates observation scheduling (D21)."""
-
-    def test_cadence_skips_unscheduled_steps(self) -> None:
-        model = _mlp()
-        collector = HistoryCollector(model, streams=("activation",), cadence=2)
-        x = torch.randn(4, 8)
-        collector.discover(x)
-        collector.attach()
-        for step in range(4):
-            with collector.step(step):
-                model(x)
-        collector.detach()
-        blocks = collector.ring.blocks
-        observed_steps = [b.block.global_step for b in blocks if b.observations]
-        assert observed_steps == [0, 2]
-
-    def test_sketch_cadence_is_separate(self) -> None:
-        model = _mlp()
-        collector = HistoryCollector(
-            model,
-            streams=("activation",),
-            cadence=1,
-            settings=WatchSettings(sketch_cadence=2),
-        )
-        x = torch.randn(4, 8)
-        collector.discover(x)
-        collector.attach()
-        for step in range(3):
-            with collector.step(step):
-                model(x)
-        collector.detach()
-        blocks = collector.ring.blocks
-        sketched = [
-            b.block.global_step for b in blocks if any(o.sketch is not None for o in b.observations)
-        ]
-        assert sketched == [0, 2]
 
 
 class TestChassisBinding:

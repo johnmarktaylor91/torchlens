@@ -9,7 +9,7 @@ import pytest
 
 jax = pytest.importorskip("jax")
 
-pytestmark = [pytest.mark.backend_jax]
+pytestmark = [pytest.mark.backend_jax, pytest.mark.rare]
 
 _PAGE = Path(__file__).resolve().parents[1] / "docs" / "backends" / "jax.md"
 _BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)

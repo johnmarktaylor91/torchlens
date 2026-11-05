@@ -60,7 +60,7 @@ def _expected_stimulus_counts(trace: Any) -> frozenset[int]:
         return frozenset()
     for label in input_labels:
         try:
-            shape = getattr(trace[label], "shape", None)
+            shape = getattr(trace.layers[label], "shape", None)
         except evidence_errors:
             shape = None
         if shape and len(shape) >= 1 and int(shape[0]) > 0:

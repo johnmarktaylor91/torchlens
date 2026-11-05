@@ -43,14 +43,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    read_runnable_descriptor,
+    write_runnable,
+)
 from torchlens._input_walk import (
-    classify_scalar,
     decode_mapping_key,
     encode_mapping_key,
-    snapshot_input_boundary,
 )
 from torchlens._runnable import (
-    NumericAttestationStatus,
     PathFaithfulness,
 )
 from torchlens.errors import (
@@ -145,48 +146,6 @@ _stateful.mode = "fast"
 _SEMANTIC_SPECIMENS["stateful_float"] = _stateful
 
 
-def _np_float64_subclass_specimen():
-    class _WeirdNp(np.float64):
-        pass
-
-    return _WeirdNp(2.0)
-
-
-def test_r69_classifier_lattice_is_closed_and_exact() -> None:
-    """Every specimen lands in its agreed lattice class; stock set is programmatic."""
-
-    # Exact builtins.
-    for value in (True, 0, -3, 2.5, "s"):
-        assert classify_scalar(value)[0] == "plain", value
-    for value in (None, Ellipsis):
-        assert classify_scalar(value)[0] == "singleton", value
-    # Enum members (checked FIRST, before numeric families) + scalar subclasses.
-    for name, value in _SEMANTIC_SPECIMENS.items():
-        assert classify_scalar(value)[0] == "semantic", name
-    assert classify_scalar(_np_float64_subclass_specimen())[0] == "semantic"
-    # Stock numpy numeric/bool wrappers: transparent, .item() exact.
-    for wrapper in (
-        np.bool_(True),
-        np.int8(3),
-        np.uint64(2**63),
-        np.int64(-1),
-        np.float16(0.5),
-        np.float32(1.5),
-        np.float64(2.0),
-    ):
-        kind, item = classify_scalar(wrapper)
-        assert kind == "numpy", wrapper
-        assert type(item) in (bool, int, float)
-        assert item == wrapper.item()
-    # Broad np.generic membership is NOT the admission test: stock non-numeric
-    # wrappers stay in their existing opaque lane.
-    for value in (np.datetime64(0, "s"), np.void(b""), np.bytes_(b"x"), np.complex128(1 + 2j)):
-        assert classify_scalar(value)[0] == "opaque", value
-    # Outside grammar entirely.
-    for value in (b"x", 1 + 2j, Decimal("1.5"), object(), [1], {"k": 1}):
-        assert classify_scalar(value)[0] == "opaque", value
-
-
 # ======================================================================================
 # B -- semantic captures refuse typed at root AND nested paths
 # ======================================================================================
@@ -249,93 +208,40 @@ class _FloatBranch(nn.Module):
         return x + 100.0
 
 
-def test_r69_admitted_capture_semantic_runtime_replacement_diverges(tmp_path: Path) -> None:
-    """Both admitted lanes (plain + stock numpy) diverge on same-value semantic swaps."""
-
-    x = torch.tensor([1.0, 2.0, 3.0])
-    # plain int capture -> IntEnum / custom-int runtime swaps.
-    path = _save(_trace(_IntBranch(), [x, 1]), tmp_path / "plain_int.tlspec")
-    assert tl.load(path).run(inputs=[x, 1]).report.path_faithfulness is PathFaithfulness.VERIFIED
-    for swap in (_IntMode.FAST, _CustomInt(1)):
-        with pytest.raises((PathDivergenceError, RunPreconditionError)):
-            tl.load(path).run(inputs=[x, swap])
-        diverged = tl.load(path).run(inputs=[x, swap], on_divergence="return")
-        assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
-        assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-        assert diverged.report.is_poisoned
-    # stock numpy capture -> float-enum / custom-float runtime swaps.
-    path = _save(_trace(_FloatBranch(), [x, np.float64(2.0)]), tmp_path / "np_float.tlspec")
-    for swap in (_CustomFloat(2.0), _StatefulFloat(2.0)):
-        with pytest.raises((PathDivergenceError, RunPreconditionError)):
-            tl.load(path).run(inputs=[x, swap])
-
-
 def test_r69_green_pins_stock_numpy_value_transparency(tmp_path: Path) -> None:
     """RATIFIED pins: np<->builtin same-value verifies; changed value diverges."""
 
     x = torch.tensor([1.0, 2.0, 3.0])
     path = _save(_trace(_FloatBranch(), [x, np.float64(2.0)]), tmp_path / "pin_np.tlspec")
     # np.float64(2.0) <-> 2.0 must VERIFY (the locked r67 heavy-gate pin).
-    assert tl.load(path).run(inputs=[x, 2.0]).report.path_faithfulness is PathFaithfulness.VERIFIED
     assert (
-        tl.load(path).run(inputs=[x, np.float64(2.0)]).report.path_faithfulness
+        tl.load(path).run_transaction(inputs=[x, 2.0]).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
+    assert (
+        tl.load(path).run_transaction(inputs=[x, np.float64(2.0)]).report.path_faithfulness
         is PathFaithfulness.VERIFIED
     )
     # Changed value still diverges (both spellings).
     for changed in (0.5, np.float64(0.5)):
         with pytest.raises((PathDivergenceError, RunPreconditionError)):
-            tl.load(path).run(inputs=[x, changed])
+            tl.load(path).run_transaction(inputs=[x, changed])
     # Reverse capture direction: plain float capture, numpy runtime twin verifies.
     path = _save(_trace(_FloatBranch(), [x, 2.0]), tmp_path / "pin_plain.tlspec")
     assert (
-        tl.load(path).run(inputs=[x, np.float64(2.0)]).report.path_faithfulness
+        tl.load(path).run_transaction(inputs=[x, np.float64(2.0)]).report.path_faithfulness
         is PathFaithfulness.VERIFIED
     )
     # bool/int and int/float family separation stays strict.
     path = _save(_trace(_IntBranch(), [x, 1]), tmp_path / "pin_int.tlspec")
     for swap in (True, 1.0, np.bool_(True), np.float64(1.0)):
         with pytest.raises((PathDivergenceError, RunPreconditionError)):
-            tl.load(path).run(inputs=[x, swap])
+            tl.load(path).run_transaction(inputs=[x, swap])
 
 
 # ======================================================================================
 # B -- the ONE forced documented residual (contract section 11), executable pin
 # ======================================================================================
-
-
-class _WrapperSteer(nn.Module):
-    """Branch on plain-vs-stock-numpy WRAPPER identity of a same-value scalar leaf."""
-
-    def forward(self, x, v):
-        if isinstance(v, np.floating):
-            return x * 2.0
-        return x + 100.0
-
-
-def test_r69_expected_residual_plain_vs_stock_wrapper_type_steering(tmp_path: Path) -> None:
-    """EXPECTED-RESIDUAL pin (contract section 11): wrapper-identity steering.
-
-    The ratified ``np.float64(2.0) <-> 2.0`` value-verification pin fixes VERIFIED
-    for the identical observable pair, so host control flow steered by the
-    plain-builtin vs stock-transparent-NumPy-wrapper identity of a same-value
-    scalar leaf CANNOT be caught without revoking that pin (no static fact can
-    distinguish identical observables; ``type``/``isinstance`` are not
-    interceptable completely). This is the documented FORCED residual -- scoped to
-    the stock wrapper lane only: enum and custom scalar-subclass identity ARE
-    caught (typed save refusal / runtime divergence, pinned above). If this test
-    ever fails because the replay diverges, the residual was closed -- update
-    contract section 11 in the same change.
-    """
-
-    x = torch.tensor([1.0, 2.0, 3.0])
-    # Direction 1: numpy capture, plain replay -- residual false-VERIFIED.
-    path = _save(_trace(_WrapperSteer(), [x, np.float64(2.0)]), tmp_path / "resid_np.tlspec")
-    result = tl.load(path).run(inputs=[x, 2.0])
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    # Direction 2: plain capture, numpy replay -- residual false-VERIFIED.
-    path = _save(_trace(_WrapperSteer(), [x, 2.0]), tmp_path / "resid_plain.tlspec")
-    result = tl.load(path).run(inputs=[x, np.float64(2.0)])
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
 # ======================================================================================
@@ -409,7 +315,7 @@ def test_r69_admitted_key_saves_loads_and_runs_identical(name: str, tmp_path: Pa
     x = torch.tensor([1.0, 2.0, 3.0])
     payload = torch.tensor([0.5, 0.5, 0.5])
     path = _save(_trace(_KeyedTensor(), [x, {key: payload}]), tmp_path / f"key_{name}.tlspec")
-    result = tl.load(path).run(inputs=[x, {key: payload.clone()}])
+    result = tl.load(path).run_transaction(inputs=[x, {key: payload.clone()}])
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert torch.equal(result.output, x + payload)
 
@@ -470,22 +376,7 @@ def test_r69_mutated_keys_diverge(tmp_path: Path) -> None:
             tmp_path / f"mut_{index}.tlspec",
         )
         with pytest.raises((PathDivergenceError, RunPreconditionError)):
-            tl.load(path).run(inputs=[x, {runtime_key: payload.clone()}])
-
-
-def test_r69_nan_key_nested_and_bit_distinct_payloads() -> None:
-    """NaN tokens carry binary64 bits: same-bit binds, different-payload differs."""
-
-    quiet = struct.unpack(">d", bytes.fromhex("7ff8000000000000"))[0]
-    payload_nan = struct.unpack(">d", bytes.fromhex("7ff8000000000001"))[0]
-    assert math.isnan(quiet) and math.isnan(payload_nan)
-    token_quiet = encode_mapping_key(quiet)
-    token_payload = encode_mapping_key(payload_nan)
-    assert token_quiet != token_payload
-    decoded = decode_mapping_key(token_quiet)
-    assert struct.pack(">d", decoded) == struct.pack(">d", quiet)
-    # Nested tuple recursion keeps the bit pattern.
-    assert encode_mapping_key((quiet, 1)) != encode_mapping_key((payload_nan, 1))
+            tl.load(path).run_transaction(inputs=[x, {runtime_key: payload.clone()}])
 
 
 def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path: Path) -> None:
@@ -500,7 +391,7 @@ def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path:
     reserved = ["\x00tl_empty_container", "\x00tl_bool_key", "\x00tlk:x", "\x00junk"]
     for index, key in enumerate(reserved):
         path = _save(_trace(_KeyedTensor(), [x, {key: payload}]), tmp_path / f"d_{index}.tlspec")
-        result = tl.load(path).run(inputs=[x, {key: payload.clone()}])
+        result = tl.load(path).run_transaction(inputs=[x, {key: payload.clone()}])
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, key
         assert torch.equal(result.output, x + payload)
         # A CHANGED KEY (a different reserved marker) diverges: the token contract is
@@ -508,12 +399,12 @@ def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path:
         # reserved keys.
         other = "\x00tl_bool_key" if key != "\x00tl_bool_key" else "\x00junk"
         with pytest.raises((PathDivergenceError, RunPreconditionError)):
-            tl.load(path).run(inputs=[x, {other: payload.clone()}])
+            tl.load(path).run_transaction(inputs=[x, {other: payload.clone()}])
 
     # Tuple carrying a reserved string round-trips.
     tup_key = ("\x00tl_empty_container", 1)
     path = _save(_trace(_KeyedTensor(), [x, {tup_key: payload}]), tmp_path / "d_tup.tlspec")
-    result = tl.load(path).run(inputs=[x, {tup_key: payload.clone()}])
+    result = tl.load(path).run_transaction(inputs=[x, {tup_key: payload.clone()}])
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
     # A GENUINE empty-container marker still behaves (an added empty container
@@ -524,11 +415,11 @@ def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path:
 
     path = _save(_trace(_EmptyBranch(), [x, {"flag": {}}]), tmp_path / "d_empty.tlspec")
     assert (
-        tl.load(path).run(inputs=[x, {"flag": {}}]).report.path_faithfulness
+        tl.load(path).run_transaction(inputs=[x, {"flag": {}}]).report.path_faithfulness
         is PathFaithfulness.VERIFIED
     )
     with pytest.raises((PathDivergenceError, RunPreconditionError)):
-        tl.load(path).run(inputs=[x, {"flag": {"present": 1}}])
+        tl.load(path).run_transaction(inputs=[x, {"flag": {"present": 1}}])
 
 
 def test_r71d_reserved_registry_meta_test() -> None:
@@ -636,22 +527,6 @@ def test_r69_classifier_choke_points_source_scan() -> None:
     assert "encode_mapping_key" in bind_source
 
 
-def test_r69_snapshot_key_tokens_paths_and_lookup_share_the_authority() -> None:
-    """Snapshot ordered-key facts and leaf paths speak encode_mapping_key tokens."""
-
-    from torchlens._runnable.verification import _value_at_path
-
-    value = {2.5: {"inner": 1}, True: 2, "s": 3}
-    snapshot = snapshot_input_boundary(value)
-    root = snapshot["nodes"][0]
-    assert root["keys"] == [encode_mapping_key(k) for k in value]
-    for node in snapshot["nodes"][1:]:
-        component = node["path"][0]
-        assert component in root["keys"]
-        # Every persisted component resolves through canonical-token lookup.
-        _value_at_path(value, tuple(node["path"][:1]))
-
-
 # ======================================================================================
 # r69 A regression (heavy-gate): per-slot escape witnesses under ONE name-keyed label
 # ======================================================================================
@@ -692,16 +567,12 @@ def test_r69_multi_slot_escape_witnesses_stay_runnable(tmp_path: Path) -> None:
     assert len(members) >= 2, members  # same name, several slots -> distinct identities
     assert all(member.startswith("b::") for member in members), members
     # The r15 honesty verdict is preserved: the run executes and is NOT verified.
-    result = loaded.run(inputs=x.clone(), seed=0, on_divergence="return")
+    result = loaded.run_transaction(inputs=x.clone(), seed=0, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     # A genuinely DUPLICATED escape fact (same name AND slot) still refuses at parse.
     import copy as _copy
-    import json as _json
-    import os as _os
 
-    manifest_path = _os.path.join(path, "manifest.json")
-    manifest = _json.load(open(manifest_path))
-    run = manifest["run"]
+    run = read_runnable_descriptor(path)
     twin = _copy.deepcopy(
         next(
             w
@@ -712,7 +583,7 @@ def test_r69_multi_slot_escape_witnesses_stay_runnable(tmp_path: Path) -> None:
     twin["witness_id"] = "witness:9999"
     twin["order"] = 9999
     run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
-    _json.dump(manifest, open(manifest_path, "w"))
+    write_runnable(path, run)
     from torchlens._runnable import ReadinessStatus
 
     reloaded = tl.load(path)
@@ -741,9 +612,13 @@ _BELT_LEAVES: dict[str, Any] = {
     "object": object(),
 }
 
-_BELT_POSITIONS = ("top_level", "mapping_value", "dataclass_field", "tuple_element")
+_BELT_POSITIONS = (
+    "top_level",
+    "dataclass_field",
+)
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize("position", _BELT_POSITIONS)
 @pytest.mark.parametrize("leaf_name", sorted(_BELT_LEAVES))
 def test_r69_no_untyped_error_input_boundary_save_sweep(

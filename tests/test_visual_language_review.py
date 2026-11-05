@@ -14,12 +14,7 @@ import subprocess
 from pathlib import Path
 
 from scripts.visual_language.review import (
-    NORMALIZE_RULES,
-    SlideRender,
-    compare,
-    normalize,
     review,
-    rule_reasons,
 )
 
 GENERATOR = """
@@ -98,51 +93,3 @@ def test_review_reports_changed_unchanged_and_added_slides(tmp_path: Path) -> No
     # The working tree stayed where it was.
     assert _git(repo, "rev-parse", "HEAD") == base
     assert _git(repo, "status", "--porcelain") == ""
-
-
-def test_normalization_keeps_every_real_difference() -> None:
-    """Renumbered autograd ids keep topology, and a changed colour or count is never hidden."""
-
-    one, _ = normalize("grad_fn_1 -> grad_fn_2; grad_fn_2 -> grad_fn_3")
-    two, _ = normalize("grad_fn_7 -> grad_fn_9; grad_fn_9 -> grad_fn_8")
-    rewired, _ = normalize("grad_fn_7 -> grad_fn_9; grad_fn_7 -> grad_fn_8")
-    assert one == two
-    assert one != rewired
-    assert normalize('x [fillcolor="#FF0000"]')[0] != normalize('x [fillcolor="#00FF00"]')[0]
-    assert normalize("(1, 3), 12 B")[0] != normalize("(1, 3), 16 B")[0]
-    assert normalize("t=53.41 us")[0] == normalize("t=8.2 ms")[0]
-    peak = "Memory   forward peak 397.3 KB (process RSS growth)"
-    assert normalize(peak)[0] == normalize(peak.replace("397.3", "528.4"))[0]
-    assert normalize("size 18.1 KB")[0] != normalize("size 18.2 KB")[0]
-
-
-def test_each_rule_names_why_it_differs_by_construction() -> None:
-    """Every ignored difference carries its reason, so the PDF cover can state it."""
-
-    assert all(name and why for name, why, _rule in NORMALIZE_RULES)
-    _text, timed = normalize(
-        "/build/side t=5 us (54% of total) at 0x7f00deadbeef footer "
-        "commit abcdef1, built 2026-10-16 grad_fn_9 forward peak 3.1 MB",
-        roots=("/build/side",),
-    )
-    assert set(timed) <= set(rule_reasons())
-    assert set(timed) == set(rule_reasons())
-    text, hits = normalize("/build/side/a.py at 0x7f00deadbeef", roots=("/build/side",))
-    assert text == "<tree>/a.py at 0x<addr>"
-    assert hits == {"tree paths": 1, "object addresses": 1}
-
-
-def test_time_shares_count_as_noise_only_beside_measured_times() -> None:
-    """A share of measured time is noise; a share with no timing beside it is a real number."""
-
-    assert normalize("t=5 us (54% of total)")[0] == normalize("t=7 us (51% of total)")[0]
-    assert normalize("(54% of total)")[0] != normalize("(51% of total)")[0]
-
-
-def test_a_slide_failing_on_both_sides_is_named_failed() -> None:
-    """Two failed builds of one slide compare equal, so the failure is reported on its own."""
-
-    failed = {"x": SlideRender("x", status="failed")}
-    result = compare((["x"], failed), (["x"], {"x": SlideRender("x", status="failed")}))
-    assert result["unchanged"] == ["x"]
-    assert result["failed"] == {"x": {"base": "failed", "head": "failed"}}

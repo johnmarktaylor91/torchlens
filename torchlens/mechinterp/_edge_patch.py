@@ -196,7 +196,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> An
     ----------
     trace:
         The clean trace the edges' graph was built from, captured with
-        ``layers_to_save='all'`` and ``replayable=True``.
+        ``save='all'`` and ``replayable=True``.
     edges:
         :class:`ComponentEdge` objects, into one receiver or several. A
         circuit runs as one call: pass every edge outside it,
@@ -214,6 +214,20 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> An
         sum(s_corrupt)`` over its patched edges, with ``input`` and ``s``
         taken from the patched forward itself (the clean values when one
         receiver is patched); the input trace is not modified.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=1, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> clean, other = [tl.trace(lm, ids, capture=tl.options.CaptureOptions(
+    ...     replayable=True)) for ids in torch.randint(0, 32, (2, 1, 6))]
+    >>> edge = tl.mechinterp.component_graph(clean).edges["m0->logits"]
+    >>> patch_edges(clean, [edge],
+    ...             corrupted_graph=tl.mechinterp.component_graph(other)) is not clean
+    True
     """
 
     from ._edges import component_graph

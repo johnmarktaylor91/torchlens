@@ -30,7 +30,6 @@ CaptureOptions.lookback
 CaptureOptions.lookback_payload_policy
 CaptureOptions.measure_host_peak_memory
 CaptureOptions.measure_python_peak_memory
-CaptureOptions.module_filter
 CaptureOptions.module_identity_mode
 CaptureOptions.name
 CaptureOptions.on_nonfinite
@@ -60,15 +59,13 @@ CaptureOptions.unwrap_when_done
 CaptureOptions.verbose
 InterventionOptions._specified_fields
 InterventionOptions.allow_changed_params
-InterventionOptions.confirm_mutation
+InterventionOptions.differentiable
 InterventionOptions.engine
 InterventionOptions.strict
 ReplayOptions._specified_fields
 ReplayOptions.allow_changed_params
 ReplayOptions.append
 ReplayOptions.chunk_size
-ReplayOptions.differentiable
-ReplayOptions.hooks
 ReplayOptions.strict
 StorageOptions._specified_fields
 StorageOptions.async_writes
@@ -107,6 +104,7 @@ VisualizationOptions.renderer
 VisualizationOptions.rolled
 VisualizationOptions.show_buffers
 VisualizationOptions.show_cone
+VisualizationOptions.show_edge_shapes
 VisualizationOptions.show_legend
 VisualizationOptions.show_redundant_args
 VisualizationOptions.size_by

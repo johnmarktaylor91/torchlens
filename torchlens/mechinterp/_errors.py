@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any, NoReturn
 
+from .._errors import _actionable_message
 from ..errors._base import TorchLensError
 
 __all__ = ["MechInterpError", "refuse"]
@@ -24,6 +25,17 @@ class MechInterpError(TorchLensError, RuntimeError):
     Contracted refusals carry a stable ``fields["code"]`` and a structured
     ``fields["remedy"]``; the ``RuntimeError`` lineage keeps kit refusals
     catchable alongside the semantic package's existing error classes.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.mechinterp.residual_decomposition(trace)
+    ... except MechInterpError as err:
+    ...     print(err.fields["code"])
+    mi_target_unresolvable
+    >>> issubclass(MechInterpError, tl.errors.TorchLensError)
+    True
     """
 
 
@@ -44,4 +56,7 @@ def refuse(code: str, message: str, remedy: str, **payload: Any) -> NoReturn:
         retention plans) surfaced on ``exc.fields``.
     """
 
-    raise MechInterpError(f"{message} Remedy: {remedy}", code=code, remedy=remedy, **payload)
+    rendered = f"{message} Remedy: {remedy}"
+    if "\n  remedy " in message:
+        rendered = _actionable_message(message, remedy)
+    raise MechInterpError(rendered, code=code, remedy=remedy, **payload)

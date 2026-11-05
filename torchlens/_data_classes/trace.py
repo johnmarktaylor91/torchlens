@@ -76,6 +76,7 @@ from .._ir.workspaces import (
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    DrawHighlightLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -90,7 +91,6 @@ from .._runnable.seam import (
 )
 from .._save_budget import SaveBudget, SaveBudgetOption
 from .._trace_state import TraceState
-from .._utils.fail_open import fail_open
 from .._utils.tensor_utils import SaveMode
 from ..backends import BackendName
 from ..intervention.types import (
@@ -114,6 +114,7 @@ from . import (
     _trace_views,
 )
 from ._accessor_base import Accessor
+from ._conditional_arms import ArmRef, ConditionalOutcome, arm_role_ops, derive_conditional_outcome
 from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from ._preprocessing_provenance import status_of
 from ._trace_accessors import (
@@ -171,7 +172,6 @@ if TYPE_CHECKING:
     from .._runnable import RunResult
     from .._trace_slice import TraceSlice
     from .._visualization.code_panel import CodePanelOption
-    from .._visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from ..intervention.types import FireRecord
     from ..receptive_field._types import (
         ReceptiveFieldDirection,
@@ -249,6 +249,19 @@ class ResolvedPostprocessing:
         Number of decoded rows captured per item.
     ambiguous:
         Whether detection found multiple plausible postprocessing choices.
+
+    Examples
+    --------
+    >>> resolved = tl.postprocessing.ResolvedPostprocessing(
+    ...     source="project",
+    ...     identifier="my_labels",
+    ...     verified=True,
+    ...     config={"id2label": {0: "cat", 1: "dog"}},
+    ...     description="project label bank",
+    ...     style="classification",
+    ... )
+    >>> resolved.identifier, resolved.verified, resolved.style
+    ('my_labels', True, 'classification')
     """
 
     source: str
@@ -269,13 +282,10 @@ class ResolvedPostprocessing:
 class ConditionalEvent:
     """Structured metadata for one conditional event in user source code."""
 
-    # Declared so the scrubber walks this record field-by-field instead of
-    # persisting it verbatim: ``source_file`` is the ABSOLUTE path of the user's
-    # forward-defining module, and without a spec the source-path relativizer never
-    # ran, leaking host paths at every save level including ``include_source=False``
-    # (B8-18). The scrubber applies the source-privacy policy to ``source_file`` via
-    # ``_apply_conditional_source_policy``; every other field is portable structural
-    # metadata. Declared ``ClassVar`` so ``@dataclass`` does not treat it as a field.
+    # Declared so the scrubber walks this record field-by-field: ``source_file`` is the
+    # ABSOLUTE forward-module path, and without a spec the relativizer never ran, leaking
+    # host paths at every save level (B8-18). ``_apply_conditional_source_policy`` scrubs
+    # it; every other field is portable. ``ClassVar`` so ``@dataclass`` ignores it.
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "id": FieldPolicy.KEEP,
         "kind": FieldPolicy.KEEP,
@@ -324,14 +334,14 @@ class ConditionalRoleRef:
     arm_index:
         Index of the arm within ``Conditional.arms``.
     arm_kind:
-        Arm kind: ``"then"``, ``"elif"``, or ``"else"``.
+        Arm kind: ``"then"``, ``"elif"``, ``"else"`` or ``"fallthrough"``.
     role:
         Role within the arm: ``"evaluation"`` or ``"body"``.
     """
 
     conditional_id: str
     arm_index: int
-    arm_kind: Literal["then", "elif", "else"]
+    arm_kind: Literal["then", "elif", "else", "fallthrough"]
     role: Literal["evaluation", "body"]
 
 
@@ -339,14 +349,14 @@ class ConditionalRoleRef:
 class ConditionalArm:
     """One arm of an if-chain."""
 
-    kind: Literal["then", "elif", "else"]
+    kind: Literal["then", "elif", "else", "fallthrough"]
     terminal_bool_op_label: str | None = None
     bool_value_at_run: bool | None = None
     condition_evaluated: bool = False
     evaluation_entry_edge: tuple[str, str] | None = None
     fired: bool = False
     execution_entry_edge: tuple[str, str] | None = None
-    _trace: Any = field(default=None, repr=False, compare=False)
+    _trace: Any = field(default=ArmRef(), repr=False, compare=False)
     _conditional_id: str | None = field(default=None, repr=False, compare=False)
     _arm_index: int | None = field(default=None, repr=False, compare=False)
 
@@ -360,7 +370,7 @@ class ConditionalArm:
             Labels for ops with an evaluation role in this arm.
         """
 
-        return self._role_ops("evaluation")
+        return arm_role_ops(self._trace, self._conditional_id, self._arm_index, "evaluation")
 
     @property
     def execution_ops(self) -> list[str]:
@@ -372,7 +382,7 @@ class ConditionalArm:
             Labels for ops with a body role in this arm.
         """
 
-        return self._role_ops("body")
+        return arm_role_ops(self._trace, self._conditional_id, self._arm_index, "body")
 
     def _bind(self, trace: Any, conditional_id: str, arm_index: int) -> None:
         """Bind this arm to its Trace and owning conditional identity.
@@ -390,33 +400,6 @@ class ConditionalArm:
         self._trace = trace
         self._conditional_id = conditional_id
         self._arm_index = arm_index
-
-    def _role_ops(self, role: Literal["evaluation", "body"]) -> list[str]:
-        """Return op labels participating in this arm with a given role.
-
-        Parameters
-        ----------
-        role:
-            Conditional role to collect.
-
-        Returns
-        -------
-        list[str]
-            Participating op labels.
-        """
-
-        if self._trace is None or self._conditional_id is None or self._arm_index is None:
-            return []
-        labels: list[str] = []
-        for op in self._trace._layer_list:
-            if any(
-                ref.conditional_id == self._conditional_id
-                and ref.arm_index == self._arm_index
-                and ref.role == role
-                for ref in op.in_conditionals or []
-            ):
-                labels.append(op.layer_label)
-        return labels
 
 
 @dataclass
@@ -438,7 +421,7 @@ class Conditional:
     id: str
     arms: list[ConditionalArm]
     fired_arm_index: int | None
-    fired_arm_kind: Literal["then", "elif", "else"] | None
+    fired_arm_kind: Literal["then", "elif", "else", "fallthrough"] | None
     source_file: str | None
     source_line: int | None
 
@@ -459,6 +442,12 @@ class Conditional:
         if self.fired_arm_index < 0 or self.fired_arm_index >= len(self.arms):
             return None
         return self.arms[self.fired_arm_index]
+
+    @property
+    def outcome(self) -> ConditionalOutcome:
+        """Which way this conditional went, derived from its arms; never persisted."""
+
+        return derive_conditional_outcome(self.arms)
 
     @property
     def has_else(self) -> bool:
@@ -553,6 +542,14 @@ class Trace(TraceOutputMixin, TraceLike):
 
     Supports ``len()``, iteration, and flexible ``__getitem__`` lookup by
     integer index, layer label, module address, or substring.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace.layer_labels
+    ['input_1', 'conv2d_1_1', 'relu_1_2', 'conv2d_2_3', 'output_1']
+    >>> tuple(trace["relu_1_2"].out.shape)
+    (1, 4, 8, 8)
     """
 
     @property
@@ -843,7 +840,6 @@ class Trace(TraceOutputMixin, TraceLike):
         backward_ready: bool = False,
         inference_only: bool = False,
         chunked_forward: bool = False,
-        module_filter: Callable[[Any], bool] | None = None,
         emit_nvtx: bool = False,
         measure_python_peak_memory: bool = False,
         distributed_witness: str = "none",
@@ -955,20 +951,16 @@ class Trace(TraceOutputMixin, TraceLike):
 
         self._module_capture_ws.module_build_data = _init_module_hierarchy_data()
         self._options_mode: Literal["exhaustive", "predicate"] = "exhaustive"
-        # L7a: True marks a structure-only capture (the flag declares the
-        # mode; every value-bearing claim is a hypothesis and value consumers
-        # gate through torchlens._capture.structure_only). DOCUMENTED-UNSTABLE
-        # spelling pending naming-session ratification.
+        # L7a: a structure-only capture; value consumers gate through
+        # torchlens._capture.structure_only. DOCUMENTED-UNSTABLE spelling.
         self._options_structure_only: bool = False
         # tlspec v9 entry-dark slots (C07): the structure-only evidence
         # envelope (F33 writer) and the (path, digest) source-snapshot table
         # (F30 writer). Declared, persisted, load-validated; no writer yet.
         self._graph_structure_evidence: dict[str, Any] | None = None
         self._source_snapshots: list[dict[str, Any]] = []
-        # L6: session-time audit records for resolved-selection interventions
-        # (query repr + resolve digest + per-site relations; patch_from adds
-        # source identity + value digests). DROP under v7; pre-release-
-        # registered, flips to KEEP at the wave-3 bump. DOCUMENTED-UNSTABLE.
+        # L6: session-time audit rows of resolved-selection interventions (query repr,
+        # resolve digest, per-site relations). DROP under v7. DOCUMENTED-UNSTABLE.
         self.intervention_audit: list[dict[str, Any]] = []
         self._runnable = RunnableTraceState()
         self._fast_run_session: Any | None = None
@@ -1025,7 +1017,6 @@ class Trace(TraceOutputMixin, TraceLike):
         self._options_backward_ready = backward_ready
         self._options_inference_only = inference_only
         self._options_chunk_size = chunked_forward
-        self._module_filter = module_filter
         self._options_emit_nvtx = emit_nvtx
         self.measure_python_peak_memory = measure_python_peak_memory
         self.distributed_witness = distributed_witness
@@ -1037,7 +1028,7 @@ class Trace(TraceOutputMixin, TraceLike):
         self.track_nonfinite: bool = False
         self.track_device_memory: bool = False
         self.measure_host_peak_memory: bool = False
-        self._options_aten_ops: bool = False
+        self._options_aten_ops: bool | str = False
         self.annotations: dict[str, Any] = {}
         self._source_frames: list[FuncCallLocation] = []
         self._graph_manual_tensor_connections: list[tuple[str, str]] = []
@@ -1222,18 +1213,12 @@ class Trace(TraceOutputMixin, TraceLike):
         self._backward_pass_logs: dict[int, BackwardPass] = OrderedDict()
         self._grad_fn_param_refs: dict[str, str] = {}
         self._param_log_by_pid: dict[int, str] = {}
-        # r79 session-leak fix: the RECORDED prep inventories of stamped
-        # parameters/buffers. Session-scoped strong refs -- authoritative source
-        # for stamp cleanup (a param/buffer popped from the live module tree
-        # mid-forward escapes re-traversal but never this list); emptied by
-        # ``_cleanup_model_session``. Never portable.
+        # r79: the RECORDED prep inventories of stamped parameters/buffers, the source
+        # for stamp cleanup; emptied by ``_cleanup_model_session``. Never portable.
         self._session_param_inventory: list[Any] = []
         self._session_buffer_inventory: list[Any] = []
-        # r81: id(tensor) -> _SessionBufferStamp identity records for every
-        # buffer stamp written this session -- the buffer-rung storage-identity
-        # belt (param-rung ``_param_ref is value`` parity). Session-scoped
-        # strong refs (tensor + stamp-time storage keeper); emptied by
-        # ``_cleanup_model_session``. Never portable.
+        # r81: id(tensor) -> _SessionBufferStamp for every buffer stamp written this
+        # session (storage-identity belt); emptied by ``_cleanup_model_session``.
         self._session_buffer_identity: dict[int, Any] = {}
         self._autograd_backward_root_grad_fn_object_ids: list[int] = []
         self._cost_backward_durations: list[Duration] = []
@@ -1256,20 +1241,20 @@ class Trace(TraceOutputMixin, TraceLike):
     def __getitem__(self, ix: Any) -> Any:
         """Return one record, or the Selection a selector names.
 
-        After the pass: an int, slice or string addresses records as before;
-        a selector is the one resolution door. A set-naming selector
-        (``tl.func``, ``tl.in_module``, ``tl.where``, ``tl.label_contains``,
-        a ``tl.Selector`` and their compositions) returns a ``tl.Selection``
-        of every matching site, never capped (``len`` and ``repr`` report the
-        count). A spelling that names one thing (an exact label, a target
-        spec, a facet selector) must match exactly one and returns that
-        record. During the pass, the raw barcode lookup applies.
+        After the pass an int, slice or string addresses records; a set-naming
+        selector (``tl.func``, ``tl.where``, ``tl.in_module``, compositions)
+        returns a ``tl.Selection`` of every match; a one-thing spelling must match
+        exactly one. A key gives the kind it names: a layer label its Op (a bare
+        multi-pass label refuses; ``label:N``, ``:last``, ``:all``), never a
+        ``Layer`` (that door is ``trace.layers[...]``); a module address its
+        Module, ``address:N`` its ModuleCall, a parameter, buffer or grad_fn key
+        its record. Typed doors convert: ``trace.ops[address]`` is the output Op.
 
         Args:
             ix: index, slice, label, address, substring or selector.
 
         Returns:
-            Op, Layer, Module, ModuleCall, Param, Buffer, GradFn or Selection.
+            Op, Selection, Module, ModuleCall, Param, Buffer or GradFn.
         """
         if self._tracing_finished:
             return _getitem_after_pass(self, ix)
@@ -1433,24 +1418,6 @@ class Trace(TraceOutputMixin, TraceLike):
             The cached sibling-ordering decision is discarded.
         """
         return _trace_annotations.mark_annotations_mutated(self)
-
-    def find_layers(self, selector: str, *, limit: int = 10) -> list[str]:
-        """Return layer labels matching a fuzzy query.
-
-        Parameters
-        ----------
-        selector:
-            Layer-label substring or approximate layer name.
-        limit:
-            Maximum number of labels to return.
-
-        Returns
-        -------
-        List[str]
-            Matching no-pass layer labels in execution order, followed by close
-            fuzzy matches when substring matches are insufficient.
-        """
-        return _trace_views.find_layers(self, selector=selector, limit=limit)
 
     @property
     def uncalled_modules(self) -> _CallableList:
@@ -1656,37 +1623,19 @@ class Trace(TraceOutputMixin, TraceLike):
         else:
             return _str_during_pass(self)
 
+    def _repr_card_rows(self) -> list[tuple[str, str]]:
+        """Stored summary facts shared with the notebook renderer."""
+        return _doors.report()._trace_summary._trace_rows(self)
+
     def __repr__(self) -> str:
-        """Short identity-card representation for REPL display.
+        """One-line identity and stored health; never triggers an analysis."""
 
-        F10 (lovely matrix): the identity card gains the settled capture
-        outcome and the whole-trace health verdict -- ``no NaN/Inf (exact)``
-        is a per-trace PROOF served by the C02 three-state verdict, printed
-        only when the evidence supports it; NOT-CHECKED and FOUND states
-        print honestly instead. Never raises; the suffix degrades silently
-        when the facts are unavailable (mid-capture, legacy artifacts).
-        """
-        from .._visualization._summary_internal import format_model_repr
-
-        return f"{format_model_repr(self)}{self._repr_honesty_suffix()}"
+        return _doors.report()._trace_summary._trace_repr(self)
 
     def _repr_honesty_suffix(self) -> str:
         """Outcome + health suffix tokens for the identity repr (F10)."""
 
-        tokens: list[str] = []
-        outcome = fail_open(lambda: self.outcome, lambda _error: None)
-        status = getattr(getattr(outcome, "status", None), "value", None)
-        if status and status != "complete":
-            tokens.append(f"outcome={status}")
-        verdict = fail_open(lambda: self.nonfinite_verdict, lambda _error: None)
-        if verdict == "checked_and_clean":
-            tokens.append("no NaN/Inf (exact)")
-        elif verdict == "found":
-            tokens.append("NaN/Inf FOUND (.nonfinite_ops)")
-        armed = fail_open(self._armed_summary_line, lambda _error: None)
-        if armed:
-            tokens.append(armed)
-        return f" [{'; '.join(tokens)}]" if tokens else ""
+        return _doors.report()._trace_summary._trace_honesty_suffix(self)
 
     def __treescope_repr__(self, path: Any, subtree_renderer: Any) -> Any:
         """Thin lazy treescope hook (memo 3.2): the dataclass-dump guard.
@@ -2017,7 +1966,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
     @property
     def source(self) -> "TraceSource":
-        """Source facts of the traced model class: locations, signatures, docstrings."""
+        """Where the traced model's source lives: class, ``__init__`` and ``forward`` facts."""
 
         return TraceSource(self)
 
@@ -2371,29 +2320,23 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.visualization()._trace_collapse.module_collapse_order(self)
 
-    def collapse_order(self, mode: Literal["auto", "max"] = "auto") -> list[tuple[str, float]]:
-        """Return smart-collapse ranking for a policy."""
+    def _collapse_schedule(self, context: Any = None) -> Any:
+        """Private door for ``lenses._budget``: the collapse schedule under ``context``.
 
-        return _doors.visualization()._trace_collapse.collapse_order(self, mode)
-
-    def collapse_plan(
-        self,
-        mode: Literal["auto", "max"] | float = "auto",
-        context: "RenderContext | None" = None,
-    ) -> "CollapsePlan":
-        """Return the v2 diagnostic collapse plan for this trace."""
-
-        return _doors.visualization()._trace_collapse.collapse_plan(self, mode, context)
-
-    def collapse_schedule(self, context: "RenderContext | None" = None) -> "CollapseSchedule":
-        """Return the public monotone float collapse schedule."""
+        Reached through ``_doors.visualization()`` so the lens modules import no collapse code.
+        """
 
         return _doors.visualization()._trace_collapse.collapse_schedule(self, context)
 
-    def modules_with_facet(self, name: str) -> Iterator[Any]:
-        """Yield Modules whose semantic facet view has a facet available now."""
+    def _suggest_layer_labels(self, selector: str, *, limit: int = 10) -> list[str]:
+        """Did-you-mean layer labels for a failed lookup (the refusal text's candidates)."""
 
-        return (module for module in self.modules if module.facets.has(name))
+        return _trace_views.suggest_layer_labels(self, selector, limit=limit)
+
+    def modules_with_facet(self, name: str) -> Iterator[Any]:
+        """Yield single-call Modules whose semantic facet view has a facet available now."""
+
+        return _trace_views.modules_with_facet(self, name)
 
     def attention_blocks(self) -> Iterator[Any]:
         """Yield Modules with an available query-projection facet."""
@@ -2757,40 +2700,21 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _trace_intervention_records.history_site_payload(site)
 
-    def set(
-        self,
-        site: Any,
-        value: Any,
-        *,
-        direction: str = "forward",
-        strict: bool = False,
-        confirm_mutation: bool = False,
-    ) -> "Trace":
-        """Set a site out recipe without propagating it."""
-
-        return _doors.intervention()._trace_edits.set_site(
-            self, site, value, direction=direction, strict=strict, confirm_mutation=confirm_mutation
-        )
-
-    def attach_hooks(
+    def _attach_hooks(
         self,
         hooks_or_site: Any,
         hook: Any = None,
         *extra_hooks: Any,
         strict: bool = False,
-        prepend: bool = False,
-        confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to the current intervention spec."""
+    ) -> tuple[str, ...]:
+        """Stage sticky hooks on the recipe (the ``do`` attach path); returns the handle ids."""
 
-        return _doors.intervention()._trace_hooks.attach_hooks(
+        return _doors.intervention()._trace_hooks.attach_sticky_hooks(
             self,
             hooks_or_site,
             hook,
             *extra_hooks,
             strict=strict,
-            prepend=prepend,
-            confirm_mutation=confirm_mutation,
         )
 
     def _refuse_chunked_batch_coupling(self, entries: list[Any]) -> None:
@@ -2798,20 +2722,15 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.intervention()._edit_guards.refuse_chunked_batch_coupling(self, entries)
 
-    def remove(self) -> None:
-        """Remove the most recent legacy-returned hook attachment."""
-
-        return _doors.intervention()._trace_edits.remove(self)
-
     def __enter__(self) -> "Trace":
-        """Enter a legacy scoped hook attachment."""
+        """Enter a scoped edit: ``with trace.fork() as scoped: scoped.do(...)``."""
 
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
-        """Clean up a legacy scoped hook attachment."""
+        """Leave the scope: detach the sticky hooks the last ``do()`` inside it staged."""
 
-        self.remove()
+        _doors.intervention()._trace_edits.detach_last_do_hooks(self)
 
     def clear_edits(
         self,
@@ -2819,20 +2738,15 @@ class Trace(TraceOutputMixin, TraceLike):
         handle: Any = None,
         *,
         strict: bool = False,
-        confirm_mutation: bool = False,
     ) -> "Trace":
         """Detach sticky hooks by site or handle."""
 
-        return _doors.intervention()._trace_edits.clear_edits(
-            self, site, handle, strict=strict, confirm_mutation=confirm_mutation
-        )
+        return _doors.intervention()._trace_edits.clear_edits(self, site, handle, strict=strict)
 
-    def clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
-        """Clear all sticky hooks from the current intervention spec."""
+    def _clear_hooks(self) -> "Trace":
+        """Clear every sticky hook from the recipe (internal; ``clear_edits`` is the public door)."""
 
-        return _doors.intervention()._trace_hooks.clear_hooks(
-            self, confirm_mutation=confirm_mutation
-        )
+        return _doors.intervention()._trace_hooks.clear_hooks(self)
 
     @property
     def _graph_edges(self) -> tuple[Any, ...]:
@@ -2851,8 +2765,9 @@ class Trace(TraceOutputMixin, TraceLike):
 
     def do(
         self,
-        hooks_or_site: Any,
-        value_or_hook: Any = None,
+        site: Any,
+        edit: Any = None,
+        /,
         *,
         model: nn.Module | None = None,
         inputs: Any = None,
@@ -2863,8 +2778,8 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.intervention()._trace_edits.do(
             self,
-            hooks_or_site,
-            value_or_hook,
+            site,
+            edit,
             model=model,
             inputs=inputs,
             intervention=intervention,
@@ -2873,7 +2788,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
     def _do_with_options(
         self,
-        hooks_or_site: Any,
+        site: Any,
         value_or_hook: Any,
         *,
         model: nn.Module | None,
@@ -2884,7 +2799,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.intervention()._trace_edits.do_with_options(
             self,
-            hooks_or_site,
+            site,
             value_or_hook,
             model=model,
             x=x,
@@ -2934,12 +2849,10 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _trace_intervention_records.record_operation(self, op, **payload)
 
-    def _warn_if_root_mutation(self, *, confirm_mutation: bool) -> None:
+    def _warn_if_root_mutation(self) -> None:
         """Forward to ``_doors.intervention()._edit_guards.warn_if_root_mutation``."""
 
-        return _doors.intervention()._edit_guards.warn_if_root_mutation(
-            self, confirm_mutation=confirm_mutation
-        )
+        return _doors.intervention()._edit_guards.warn_if_root_mutation(self)
 
     def _select_do_engine(self, engine: str, *, model: nn.Module | None, x: Any) -> str:
         """Forward to ``_doors.intervention()._edit_guards.select_do_engine``."""
@@ -2948,22 +2861,20 @@ class Trace(TraceOutputMixin, TraceLike):
 
     def _apply_do_mutation(
         self,
-        hooks_or_site: Any,
+        site: Any,
         value_or_hook: Any,
         *,
         engine: str,
         strict: bool,
-        confirm_mutation: bool,
     ) -> tuple[str, tuple[str, ...]]:
         """Forward to ``_doors.intervention()._trace_edits.apply_do_mutation``."""
 
         return _doors.intervention()._trace_edits.apply_do_mutation(
             self,
-            hooks_or_site,
+            site,
             value_or_hook,
             engine=engine,
             strict=strict,
-            confirm_mutation=confirm_mutation,
         )
 
     @staticmethod
@@ -3099,28 +3010,30 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.intervention()._trace_edits.target_spec_from_site(self, site, strict=strict)
 
-    def save_new_outs(
+    def _save_new_outs(
         self,
         model: torch.nn.Module,
-        input_args: torch.Tensor | list[Any],
+        inputs: torch.Tensor | list[Any],
         input_kwargs: dict[Any, Any] | None = None,
-        layers_to_save: str | list[str] = "all",
-        grad_layers_to_save: str | list[str] | None = "all",
+        save: str | list[str] = "all",
+        save_grads: str | list[str] | None = "all",
         seed: int | None = None,
         backward_ready: bool | None = None,
         _run_until_plan: Any | None = None,
+        _staged_plan: Any | None = None,
     ) -> None:
-        """Re-run the model with new inputs, saving only outs."""
+        """Re-run the model with new inputs, saving only outs (internal refresh engine)."""
         return _doors.validation()._trace_checks.save_new_outs(
             self,
             model,
-            input_args,
+            inputs,
             input_kwargs=input_kwargs,
-            layers_to_save=layers_to_save,
-            grad_layers_to_save=grad_layers_to_save,
+            save=save,
+            save_grads=save_grads,
             seed=seed,
             backward_ready=backward_ready,
             _run_until_plan=_run_until_plan,
+            _staged_plan=_staged_plan,
         )
 
     def validate_forward_pass(
@@ -3145,50 +3058,40 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return derive_pristine(self)
 
-    def push(self, replay: "ReplayOptions | None" = None) -> "Trace":
-        """Push the edit downstream through the recorded graph (DAG replay)."""
-        return _doors.intervention()._trace_run.push(self, replay=replay)
-
-    def push_from(self, site: Any, replay: "ReplayOptions | None" = None) -> "Trace":
-        """Push downstream from a pre-mutated site."""
-        return _doors.intervention()._trace_run.push_from(self, site, replay=replay)
-
     def run(
         self,
         model: Any = None,
         x: Any = None,
+        /,
         *,
-        inputs: Any | MissingType = MISSING,
+        chunk_paths: Any | None = None,
+        replay: "ReplayOptions | None" = None,
+        input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        on_zero_fire: str | MissingType = MISSING,
+    ) -> "Trace":
+        """Rerun the live model on new input and refresh this Trace."""
+        options = {k: v for k, v in locals().items() if k not in ("self", "model", "x")}
+        result = _doors.intervention()._trace_run.run(self, model, x, **options, transaction=False)
+        return cast("Trace", result)
+
+    def run_transaction(
+        self,
+        *,
+        inputs: Any,
         seed: int | None = None,
         fast: bool = False,
         carry_state: bool = False,
         until: Any = None,
         save: Any = None,
         on_divergence: Literal["raise", "return"] = "raise",
-        chunk_paths: Any | None = None,
-        replay: "ReplayOptions | None" = None,
         input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         on_zero_fire: str | MissingType = MISSING,
-    ) -> "Trace | RunResult":
-        """Execute this Trace through its live or loaded provider."""
-        return _doors.intervention()._trace_run.run(
-            self,
-            model,
-            x,
-            inputs=inputs,
-            seed=seed,
-            fast=fast,
-            carry_state=carry_state,
-            until=until,
-            save=save,
-            on_divergence=on_divergence,
-            chunk_paths=chunk_paths,
-            replay=replay,
-            input_transform=input_transform,
-            output_transform=output_transform,
-            on_zero_fire=on_zero_fire,
-        )
+    ) -> "RunResult":
+        """Run a verified fresh execution with a report, leaving this Trace unchanged."""
+        options = {name: value for name, value in locals().items() if name != "self"}
+        return cast("RunResult", _doors.intervention()._trace_run.run(self, **options))
 
     def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log."""
@@ -3244,22 +3147,18 @@ class Trace(TraceOutputMixin, TraceLike):
             reservation_resume=reservation_resume,
         )
 
-    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
-        """Run backward from ``loss`` while capturing first-class backward metadata."""
-        return _doors.backends_torch()._trace_backward.log_backward(self, loss, **backward_kwargs)
-
     def backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` and populate this Trace with backward metadata."""
 
-        return self.log_backward(loss, **backward_kwargs)
+        return _doors.backends_torch()._trace_backward.backward(self, loss, **backward_kwargs)
 
     def capture_backward(self) -> Any:
         """Return a context manager that captures user-managed backward calls."""
         return _doors.backends_torch()._trace_backward.capture_backward(self)
 
-    def disarm_triggers(self) -> None:
+    def _disarm_autograd(self) -> None:
         """Detach this Trace from global autograd backward interception."""
-        _doors.intervention()._trace_run.disarm_triggers(self)
+        _doors.intervention()._trace_run.disarm(self)
 
     def _remove_log_entry(
         self,
@@ -3365,6 +3264,7 @@ class Trace(TraceOutputMixin, TraceLike):
         direction: VisDirectionLiteral | None = None,
         node_style: VisNodeModeLiteral = "default",
         show_buffers: BufferVisibilityLiteral = "meaningful",
+        show_edge_shapes: bool = False,
         show_legend: bool | None = None,
         color_by: Any = None,
         size_by: str | Callable[[Any], Any] | None = None,
@@ -3397,8 +3297,9 @@ class Trace(TraceOutputMixin, TraceLike):
         show_grad_values: bool = False,
         backward_node_spec_fn: Callable[..., Any] | None = None,
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-        file_format: str = "pdf",
+        file_format: str | None = None,
         open_viewer: bool = False,
+        highlight: DrawHighlightLiteral | None = None,
     ) -> "Drawing":
         """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`."""
 
@@ -3480,32 +3381,12 @@ class Trace(TraceOutputMixin, TraceLike):
         # Internal plumbing from the one-call door (not public grammar).
         _execution_note: str | None = None,
         _input_synthesis: str | None = None,
-        # Anything else refuses typed (removed legacy spellings name their
-        # successor; unknown names get the nearest grammar option).
+        # Refuse unknown names with their replacement or nearest grammar option.
         **unsupported: Any,
     ) -> str:
         """Render a summary of this capture."""
 
         return _forward_summary(_doors.report()._trace_summary.summary, locals())
-
-    def to_dagua_graph(
-        self,
-        rolled: bool = False,
-        depth: int = 1000,
-        show_buffers: bool = False,
-        direction: str = "bottomup",
-        include_grad_edges: bool | None = None,
-    ) -> Any:
-        """Translate this model log into an experimental Dagua graph."""
-
-        return _doors.visualization()._trace_draw.to_dagua_graph(
-            self,
-            vis_mode="rolled" if rolled else "unrolled",
-            vis_call_depth=depth,
-            show_buffers=show_buffers,
-            direction=direction,
-            include_grad_edges=include_grad_edges,
-        )
 
     def narrate(self, last: "int | None" = None, *, select: "Any" = None) -> "str":
         """Render this trace's events in the live-narration grammar."""

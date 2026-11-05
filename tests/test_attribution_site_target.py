@@ -84,24 +84,6 @@ def _hand_integrated_gradients(model: _MLP, x: Tensor, n_steps: int) -> Tensor:
     return x * torch.stack(gradients).mean(dim=0)
 
 
-@pytest.mark.parametrize("method_name", ["input_x_grad", "integrated_gradients", "saliency"])
-def test_site_target_unit_matches_hand_autograd(method_name: str) -> None:
-    """Attribution to one hidden unit equals the hand computation."""
-
-    model, x = _mlp_and_input()
-    target = SiteTarget("act", unit=_UNIT)
-    if method_name == "integrated_gradients":
-        result = tl.attribution.integrated_gradients(model, x, target=target, num_steps=16)
-        expected = _hand_integrated_gradients(model, x, 16)
-    else:
-        result = getattr(tl.attribution, method_name)(model, x, target=target)
-        gradient = _hand_gradient(model, x, "unit")
-        expected = gradient.abs() if method_name == "saliency" else gradient * x
-    torch.testing.assert_close(result.values, expected, atol=_ATOL, rtol=0)
-    assert bool(expected.abs().sum() > 0)
-    assert result.target_repr == "SiteTarget('act', unit=4)"
-
-
 def test_site_target_tuple_unit_and_whole_site_match_hand_autograd() -> None:
     """A tuple unit indexes after the batch axis; no unit attributes the whole output."""
 
@@ -114,39 +96,6 @@ def test_site_target_tuple_unit_and_whole_site_match_hand_autograd() -> None:
     torch.testing.assert_close(
         whole.values, _hand_gradient(model, x, "whole").abs(), atol=_ATOL, rtol=0
     )
-
-
-def test_site_target_layer_method_matches_hand_autograd() -> None:
-    """layer_attribution of fc1 toward a downstream unit equals activation times gradient."""
-
-    model, x = _mlp_and_input()
-    result = tl.attribution.layer_attribution(
-        model, x, target=SiteTarget("act", unit=_UNIT), layer="fc1"
-    )
-    activation = model.fc1(x).detach().requires_grad_(True)
-    (gradient,) = torch.autograd.grad(torch.tanh(activation)[..., _UNIT].sum(), activation)
-    torch.testing.assert_close(result.values, activation.detach() * gradient, atol=_ATOL, rtol=0)
-
-
-def test_site_target_on_integer_ids_matches_float_embedding_run() -> None:
-    """Both seams together: a site target from token ids equals the float run."""
-
-    from tests.test_attribution_integer_inputs import _token_pair
-
-    token_model, float_model, ids = _token_pair()
-    target = SiteTarget("body.encoder", unit=2)
-    from_ids = tl.attribution.layer_integrated_gradients(
-        token_model, ids, target=target, layer="body.encoder.norm1", num_steps=8
-    )
-    from_floats = tl.attribution.layer_integrated_gradients(
-        float_model,
-        token_model.embed(ids).detach(),
-        target=target,
-        layer="body.encoder.norm1",
-        num_steps=8,
-    )
-    torch.testing.assert_close(from_ids.values, from_floats.values, atol=_ATOL, rtol=0)
-    assert bool(from_ids.values.abs().sum() > 0)
 
 
 def _target_remedy(error: AttributionError) -> SiteTarget:

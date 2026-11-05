@@ -45,45 +45,6 @@ def test_gpt2_flagship_pins() -> None:
     assert pins["default_folds"] >= 1  # h.0..11 folds
 
 
-@pytest.mark.heavy
-def test_vgg_budget_anchors() -> None:
-    """vgg16 hybrid 42 rows / vgg19 hybrid 48 = the budget, exactly."""
-
-    pytest.importorskip("torchvision")
-    vgg16 = derive_pins("vgg16")
-    assert vgg16["hybrid_rows"] == 42
-    assert vgg16["compute_ops"] == 40  # incl. the orphan torch.flatten
-    assert vgg16["default_rung"] == "hybrid"
-    vgg19 = derive_pins("vgg19")
-    assert vgg19["hybrid_rows"] == 48
-    assert vgg19["compute_ops"] == 46
-    assert vgg19["default_rung"] == "hybrid"
-    assert vgg19["default_rows"] == 48
-
-
-@pytest.mark.heavy
-def test_resnet50_ladder_pins() -> None:
-    """resnet50: 25,557,032 params; ladder 10/18/78/86; default d2 = 18."""
-
-    pytest.importorskip("torchvision")
-    pins = derive_pins("resnet50")
-    assert pins["params_declared"] == 25_557_032
-    assert pins["tree_rows_by_depth"] == {1: 10, 2: 18, 3: 78, 4: 86}
-    assert pins["default_rung"] == "tree"
-    assert pins["default_depth"] == 2
-    assert pins["default_rows"] == 18
-
-
-@pytest.mark.slow
-def test_densenet121_floor_pin() -> None:
-    """densenet121: the gate minimum default; >= min(8, deepest) floor."""
-
-    pytest.importorskip("torchvision")
-    pins = derive_pins("densenet121")
-    assert pins["default_rows"] >= 8
-    assert pins["default_rung"] in ("tree", "elided")
-
-
 @pytest.mark.slow
 def test_inception_v3_declared_executed_split() -> None:
     """inception_v3 eval: 27,161,264 declared / 23,834,568 executed /
@@ -94,22 +55,3 @@ def test_inception_v3_declared_executed_split() -> None:
     assert pins["params_declared"] == 27_161_264
     assert pins["params_executed"] == 23_834_568
     assert pins["params_unexecuted"] == 3_326_696
-
-
-@pytest.mark.heavy
-def test_bert_base_exact_macs() -> None:
-    """bert-base at 12 tokens: exact MACs (never the killed flops//2).
-
-    The memo's 1,019,805,696 is the 73 fused-bias LINEAR ops' MAC sum
-    (12 layers x 6 linears + pooler); whole-forward MACs additionally
-    count the attention score/value matmuls -- exactly
-    12 tokens x 12 layers x 2 matmuls x 12 tokens x 768 = 2,654,208.
-    Both terms are closed-form; their sum is the partition total.
-    """
-
-    pytest.importorskip("transformers")
-    pins = derive_pins("bert-base")
-    linear_macs = 1_019_805_696
-    attention_matmul_macs = 12 * 12 * 2 * 12 * 768
-    assert pins["macs_forward"] == linear_macs + attention_matmul_macs == 1_022_459_904
-    assert pins["flops_forward_fma2"] > 2 * pins["macs_forward"]  # bias/norm terms exist

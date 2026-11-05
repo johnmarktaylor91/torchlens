@@ -11,7 +11,7 @@ are in [Performance: choosing a fast path](guides/fast_paths.md).
 
 Backend note: `backend=None` preserves the torch eager default, and EVERY preview backend
 auto-routes genuine framework models (MLX, JAX, tinygrad, Paddle, TensorFlow).
-`tl.record()`/fastlog and true backward capture are torch-only in backend v1. Backend-neutral
+`tl.record()` (sparse recording) and true backward capture are torch-only in backend v1. Backend-neutral
 metadata lives on `Trace.provenance.backend`, `Trace.options.module_identity_mode`, `Trace.provenance.param_source`,
 `Trace.autograd.derived_grads`, `Trace.autograd.intermediate_derived_grads`, `Trace.payload_load_status`,
 `Trace.validation_replay_status`, `dtype_ref`, `device_ref`, `backend_address`, and
@@ -62,6 +62,37 @@ The retained-memory baseline for Op `__slots__` lives at
 `benchmarks/perf/slots_baseline.md` and records roughly 10-15% lower trace-level retained memory
 on the measured fixtures.
 
+## Set up your coding agent
+
+Run this once in a project that uses TorchLens:
+
+```bash
+torchlens agent init
+```
+
+It adds a short marked block to `AGENTS.md` (created if missing) that tells any coding agent
+to read the agent index shipped with the installed version, `torchlens/_docs/AGENT_INDEX.md`.
+Name other instruction files with `--file`, repeatable (for example `--file CLAUDE.md`); run it
+again after an upgrade to refresh the version, and `torchlens agent init --remove` to take the
+block out. It never edits text outside its markers and refuses a file whose markers are
+damaged. It is torch-free.
+
+The index stays under 8 KB: the mistakes agents make most often, the core calls, and one row
+per task with the call to reach for first, the wrong turn to avoid, and the page with the worked
+recipe. It, the skill router, the capabilities list and `llms.txt` are generated from one set of
+task cards, `docs/field-guide/task_cards.yaml`, by `tools/docs/build_agent_index.py`.
+
+- The installable skill for Claude Code and Codex is `skills/torchlens/` (a thin `SKILL.md`
+  plus `ROUTER.md`, the same text as the index). Copy that folder into `~/.claude/skills/` or a
+  project's `.claude/skills/` for Claude Code, or into `~/.codex/skills/` for Codex. The
+  repository root is also a Claude Code plugin marketplace (`.claude-plugin/`): run
+  `/plugin marketplace add johnmarktaylor91/torchlens`, then `/plugin install torchlens@torchlens`.
+- [Agent capabilities](reference/agent_capabilities.md) lists what TorchLens covers under
+  common interpretability capability names.
+- `tools/docs/generated/llms.txt` is the llms.txt index of the task pages.
+- `tools/agent_evals/first_call.py` checks that a fresh agent given the index picks each task's
+  canonical call first.
+
 ## Public surface map
 
 `torchlens.__all__` currently exposes 85 names. The most-used ones, grouped by job (this
@@ -71,7 +102,7 @@ table is a selection, not the full list — read `torchlens.__all__` for that):
 | --- | --- |
 | Capture and sparse recording | `trace`, `recording`, `span`, `tap` (the former `record_span` alias is removed) |
 | Persistence and bundles | `load`, `save`, `bundle`, `Bundle`; schema-v2 manifests add `backend`, `backend_runtime`, and `payload_policy` |
-| Replay and edits | `do`, `push`, `push_from`, `run` (the former `replay`/`replay_from`/`rerun` aliases are removed) |
+| Replay and edits | `do` (the one editing verb: stages and propagates), `clear_edits`, `run` (the former `replay`/`replay_from`/`rerun` aliases are removed) |
 | Data objects | `Trace`, `Layer`, `Op`, `Quantity`, `Bytes`, `Duration`, `Flops`, `Macs` |
 | Site discovery | `label`, `func`, `func_transform`, `module`, `contains`, `where`, `in_module`, `head`, `output`, `grad_fn`, `facet` |
 | Predicate composition | `followed_by`, `preceded_by`, `without_op`, `when` (the former `intervening` alias is removed) |
@@ -268,7 +299,8 @@ One inspection core, one tool registry, three thin transports (all
 DOCUMENTED-UNSTABLE): Python (`torchlens.agent.call_tool`), the MCP stdio server
 (`python -m torchlens.bridge.mcp`; extra `pip install torchlens[mcp]`, `mcp>=2.0`), and
 the CLI (`python -m torchlens --help`). Every tool is read-only and idempotent; nothing
-executes user code, writes files, or mutates artifacts — unconditionally. Every result
+executes user code, writes files, or mutates artifacts — unconditionally. (`torchlens agent
+init` is a setup command, not a tool: it writes only its own block in instruction files.) Every result
 rides one versioned envelope (schema id, artifact content digest, request/limits echoes,
 an always-present `truncation` key) serialized canonically: same artifact bytes + version
 + arguments -> byte-identical output. `torchlens.agent.guide()` returns the curated

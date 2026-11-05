@@ -4,20 +4,18 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import pickle
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import read_record, read_runnable
 from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
 from torchlens._runnable import (
     NumericAttestationStatus,
-    PathFaithfulness,
-    StateSource,
 )
 from torchlens.errors import ReplayValueMismatchError
 from torchlens.options import CaptureOptions
@@ -40,57 +38,6 @@ class ActivationPayloadModel(nn.Module):
         """Apply a deterministic state-bearing graph."""
 
         return torch.relu(self.linear(value)) * self.scale
-
-
-class DropoutActivationModel(nn.Module):
-    """Nondeterministic model whose replay is ineligible for byte attestation."""
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Apply training-mode dropout at a recorded RNG boundary."""
-
-        return torch.nn.functional.dropout(value, p=0.5, training=True)
-
-
-class InplaceInputActivationModel(nn.Module):
-    """Deterministic model that mutates its model input during execution."""
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Mutate the input and return a deterministic downstream value."""
-
-        value.add_(1)
-        return value * 2
-
-
-class InplaceInternalActivationModel(nn.Module):
-    """Model that mutates a previously saved internal activation in place."""
-
-    def __init__(self) -> None:
-        """Initialize an identity linear layer for byte-stable activations."""
-
-        super().__init__()
-        self.linear = nn.Linear(3, 3)
-        with torch.no_grad():
-            self.linear.weight.copy_(torch.eye(3))
-            self.linear.bias.zero_()
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Consume then mutate the saved internal linear output.
-
-        Parameters
-        ----------
-        value:
-            Model input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Deterministic result that includes both pre- and post-mutation values.
-        """
-
-        activation = self.linear(value)
-        before_mutation = activation * 2.0
-        activation.add_(100.0)
-        return before_mutation + activation.sum()
 
 
 class SeededRngActivationModel(nn.Module):
@@ -188,12 +135,9 @@ def _manifest(path: Path) -> dict[str, Any]:
 
 
 def _metadata(path: Path) -> dict[str, Any]:
-    """Read trusted test-produced sparse metadata for invariant checks."""
+    """Inspect the authoritative JSON record cells without invoking pickle."""
 
-    with (path / "metadata.pkl").open("rb") as handle:
-        value = pickle.load(handle)  # noqa: S301 - created in this test process
-    assert isinstance(value, dict)
-    return value
+    return {kind: read_record(path, kind) for kind in _manifest(path)["records"]}
 
 
 def _physical_outs(trace: tl.Trace) -> tuple[torch.Tensor | None, ...]:
@@ -241,7 +185,7 @@ def test_include_activations_persists_exact_save_selected_family_and_digests(
     trace.save(path, level="runnable", include_activations=True)
 
     manifest = _manifest(path)
-    activation_layer = manifest["run"]["payload_layers"]["activations"]
+    activation_layer = read_runnable(path)["payload_layers"]["activations"]
     members = activation_layer["members"]
     selected_labels = {str(op.label) for op in trace._layer_list if bool(op.has_saved_activation)}
     assert activation_layer["present"] is True
@@ -251,12 +195,12 @@ def test_include_activations_persists_exact_save_selected_family_and_digests(
     assert {member["slot_id"] for member in members} == {
         f"slot:{label}" for label in selected_labels
     }
-    entries = [entry for entry in manifest["tensors"] if entry["kind"] == "runnable_activation"]
-    assert {entry["kind"] for entry in manifest["tensors"]} == {"runnable_activation"}
-    assert {entry["blob_id"] for entry in entries} == {member["blob_id"] for member in members}
-    assert_sparse_core_has_no_tensor_payload(manifest["run"])
+    entries = manifest["runnable"]["activations_tensors"]
+    assert set(entries) == {member["blob_id"] for member in members}
+    assert all(ref["blob"].startswith("runnable/activations-") for ref in entries.values())
+    assert_sparse_core_has_no_tensor_payload(read_runnable(path))
     assert_sparse_core_has_no_tensor_payload(_metadata(path))
-    assert all(op.func is None for op in _metadata(path)["_layer_list"])
+    assert "func" not in _metadata(path)["op"]["columns"]
     tl.validation.validate_tlspec(path)
 
 
@@ -270,113 +214,25 @@ def test_include_activations_default_is_absent_and_requires_runnable_level(
     trace.save(path, level="runnable")
 
     manifest = _manifest(path)
-    assert manifest["run"]["payload_layers"]["activations"] == {
+    assert read_runnable(path)["payload_layers"]["activations"] == {
         "present": False,
         "schema": "selected_activation_v2",
     }
-    assert not any(entry["kind"] == "runnable_activation" for entry in manifest["tensors"])
+    assert "activations_tensors" not in manifest["runnable"]
     assert tl.load(path).archived_activations == {}
     with pytest.raises(ValueError, match="set level='runnable' or set include_activations=False"):
         trace.save(tmp_path / "portable.tlspec", include_activations=True)
 
 
-def test_archived_activations_are_inspectable_but_never_execution_inputs(
-    tmp_path: Path,
-) -> None:
-    """Expose archives separately while changed-input execution remains freshly computed."""
-
-    model = ActivationPayloadModel().eval()
-    capture_inputs = torch.ones(2, 3)
-    trace = _capture(model, capture_inputs)
-    path = tmp_path / "activation-only.tlspec"
-    trace.save(path, level="runnable", include_activations=True)
-    loaded = tl.load(path)
-    loaded.load_state_dict(model.state_dict())
-
-    assert loaded.archived_activations
-    assert all(
-        isinstance(record.value, torch.Tensor) for record in loaded.archived_activations.values()
-    )
-    for record in loaded.archived_activations.values():
-        record.value.zero_()
-    changed_inputs = torch.tensor([[2.0, -1.0, 0.5], [-3.0, 0.25, 4.0]])
-    result = loaded.run(inputs=changed_inputs)
-
-    assert torch.equal(result.output, model(changed_inputs))
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_original_input_real_state_attests_for_embedded_and_user_state(
-    tmp_path: Path,
-) -> None:
-    """Attest every archived raw slot with both supported real-state sources."""
-
-    model = ActivationPayloadModel().eval()
-    inputs = torch.ones(2, 3)
-    trace = _capture(model, inputs)
-    both_path = tmp_path / "both.tlspec"
-    activation_path = tmp_path / "activation-only.tlspec"
-    trace.save(
-        both_path,
-        level="runnable",
-        include_weights=True,
-        include_activations=True,
-    )
-    trace.save(activation_path, level="runnable", include_activations=True)
-
-    embedded_result = tl.load(both_path).run(inputs=inputs)
-    user_loaded = tl.load(activation_path)
-    user_loaded.load_state_dict(model.state_dict())
-    user_result = user_loaded.run(inputs=inputs)
-
-    assert torch.equal(embedded_result.output, model(inputs))
-    assert embedded_result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
-    assert embedded_result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert user_result.report.state_source is StateSource.USER_STATE_DICT
-    assert user_result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert any(
-        check.name.startswith("numeric_attestation") for check in user_result.report.contract_checks
-    )
-
-
-def test_rng_model_activation_attestation_is_not_applicable_instead_of_failing(
-    tmp_path: Path,
-) -> None:
-    """Treat expected dropout nondeterminism as ineligible, not archive corruption."""
-
-    model = DropoutActivationModel()
-    inputs = torch.ones(32)
-    path = tmp_path / "dropout.tlspec"
-    _capture(model, inputs).save(
-        path,
-        level="runnable",
-        include_weights=True,
-        include_activations=True,
-    )
-
-    result = tl.load(path).run(inputs=inputs)
-
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.smoke_cells(
+    "test_seeded_rng_operations_skip_original_input_numeric_attestation[randint]"
+)
 @pytest.mark.parametrize(
     "operation",
     (
-        "rand",
-        "randn",
         "randint",
-        "randperm",
-        "multinomial",
-        "bernoulli",
-        "poisson",
-        "normal",
-        "uniform_",
-        "rand_like",
-        "randn_like",
-        "randint_like",
-        "dropout",
         "dropout3d",
-        "rrelu",
         "gumbel_softmax",
     ),
 )
@@ -395,7 +251,7 @@ def test_seeded_rng_operations_skip_original_input_numeric_attestation(
         include_activations=True,
     )
 
-    result = tl.load(path).run(
+    result = tl.load(path).run_transaction(
         inputs=inputs.clone(),
         on_divergence="return",
     )
@@ -403,46 +259,6 @@ def test_seeded_rng_operations_skip_original_input_numeric_attestation(
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-def test_inplace_input_attestation_uses_pre_execution_input_digest(tmp_path: Path) -> None:
-    """Keep original-input attestation applicable when replay mutates its input slot."""
-
-    model = InplaceInputActivationModel()
-    capture_inputs = torch.ones(4)
-    path = tmp_path / "inplace-input.tlspec"
-    _capture(model, capture_inputs).save(
-        path,
-        level="runnable",
-        include_weights=True,
-        include_activations=True,
-    )
-
-    result = tl.load(path).run(inputs=torch.ones(4))
-
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-
-def test_inplace_internal_activation_attestation_uses_production_snapshot(
-    tmp_path: Path,
-) -> None:
-    """Attest the pre-mutation internal activation rather than its live alias."""
-
-    model = InplaceInternalActivationModel().eval()
-    inputs = torch.ones(2, 3)
-    path = tmp_path / "inplace-internal.tlspec"
-    _capture(model, inputs).save(
-        path,
-        level="runnable",
-        include_weights=True,
-        include_activations=True,
-    )
-
-    result = tl.load(path).run(inputs=inputs.clone())
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-
-@pytest.mark.smoke
 def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -> None:
     """Fail on the first declared byte-digest mismatch without mutating the source Trace.
 
@@ -481,7 +297,7 @@ def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -
     before = _physical_outs(loaded)
 
     with pytest.raises(ReplayValueMismatchError) as caught:
-        loaded.run(inputs=inputs)
+        loaded.run_transaction(inputs=inputs)
 
     mismatch = caught.value.fields["first_mismatch"]
     details = dict(mismatch.details)
@@ -514,15 +330,15 @@ def test_random_state_changed_input_and_non_equivalent_state_are_not_applicable(
     path = tmp_path / "activation-only.tlspec"
     _capture(model, inputs).save(path, level="runnable", include_activations=True)
 
-    random_result = tl.load(path).run(inputs=inputs, seed=41)
+    random_result = tl.load(path).run_transaction(inputs=inputs, seed=41)
     changed = tl.load(path)
     changed.load_state_dict(model.state_dict())
-    changed_result = changed.run(inputs=torch.full_like(inputs, 2.0))
+    changed_result = changed.run_transaction(inputs=torch.full_like(inputs, 2.0))
     different_state = tl.load(path)
     different_state.load_state_dict(
         {name: torch.zeros_like(value) for name, value in model.state_dict().items()}
     )
-    different_result = different_state.run(inputs=inputs)
+    different_result = different_state.run_transaction(inputs=inputs)
 
     assert random_result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert changed_result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
@@ -556,6 +372,6 @@ def test_transformed_outputs_are_archived_without_overclaiming_attestation(
 
     fields = {record.field for record in loaded.archived_activations.values()}
     assert fields == {"out", "transformed_out"}
-    result = loaded.run(inputs=torch.ones(2, 3))
+    result = loaded.run_transaction(inputs=torch.ones(2, 3))
 
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE

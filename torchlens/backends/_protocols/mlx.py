@@ -36,6 +36,12 @@ MLX_FRAMEWORK = FrameworkRequirement(
     excluded=("0.26.5",),
 )
 
+#: Test-only dependencies of the MLX ecosystem roster rows: installed by the
+#: nightly preview leg only, never by a pyproject extra or the per-change leg.
+#: The range follows the ``mlx`` pin: mlx-lm 0.26.x needs ``mlx>=0.26`` and
+#: 0.27 needs ``mlx>=0.29``. The pins test holds the nightly install to it.
+MLX_ECOSYSTEM_TEST_REQUIREMENTS: tuple[str, ...] = ("mlx-lm>=0.26,<0.27",)
+
 
 class MLXProtocol(SpecBackedProtocol):
     """The MLX preview's protocol object."""

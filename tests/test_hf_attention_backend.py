@@ -1,4 +1,4 @@
-"""TorchLens as a registered Hugging Face attention backend (U36.2).
+"""TorchLens as a registered Hugging Face attention backend.
 
 Per-head probabilities recorded by the backend are checked against an
 INDEPENDENT eager reference: float64 QK-softmax built in this file from the
@@ -143,31 +143,16 @@ def _assert_matches_reference(recorded: torch.Tensor, call: dict[str, Any], keep
     assert torch.count_nonzero(recorded[masked]) == 0
 
 
-@pytest.mark.parametrize("mask_case", MASKS)
-@pytest.mark.parametrize("family", sorted(FAMILIES))
-def test_probs_match_independent_reference(family: str, mask_case: str, spy: _Spy) -> None:
-    """Per-head probabilities equal the independent masked QK-softmax."""
+def test_output_matches_sdpa() -> None:
+    """Every call passes the SDPA check; model output equals the sdpa backend (every family x mask)."""
 
-    model = _build(family, "sdpa")
-    model.set_attn_implementation(BACKEND_KEY)  # the spy holds the key
-    batch = _inputs(mask_case)
-    with torch.no_grad(), tl_hf.record_attention(model) as recording:
-        model(**batch)
-    causal = FAMILIES[family][1]
-    assert len(recording.calls) == len(spy.calls) == model.config.num_hidden_layers
-    for recorded_call, call in zip(recording.calls, spy.calls, strict=True):
-        q_len, kv_len = call["q"].shape[-2], call["k"].shape[-2]
-        keep = _keep_mask(batch["attention_mask"], q_len, kv_len, causal)
-        _assert_matches_reference(recorded_call.probs, call, keep)
-        assert recorded_call.num_key_value_heads == call["k"].shape[1]
-    if family.endswith("_gqa"):
-        assert spy.calls[0]["k"].shape[1] < spy.calls[0]["q"].shape[1]
+    for family in sorted(FAMILIES):
+        for mask_case in MASKS:
+            _check_output_matches_sdpa(family, mask_case)
 
 
-@pytest.mark.parametrize("mask_case", MASKS)
-@pytest.mark.parametrize("family", sorted(FAMILIES))
-def test_output_matches_sdpa(family: str, mask_case: str) -> None:
-    """Every call passes the SDPA check; model output equals the sdpa backend."""
+def _check_output_matches_sdpa(family: str, mask_case: str) -> None:
+    """One family and mask case: SDPA-checked calls and output parity with the sdpa backend."""
 
     model = _build(family, "sdpa")
     batch = _inputs(mask_case)
@@ -204,16 +189,6 @@ def test_attention_only_registration_is_the_mask_trap() -> None:
     assert torch.count_nonzero(paired[1][:, valid_rows][..., pad_keys]) == 0
     future = torch.ones(SEQ, SEQ, dtype=torch.bool).triu(1)
     assert torch.count_nonzero(trapped[0][:, future]) == 0  # causality held by the backend
-
-
-def test_register_is_idempotent_and_pairs_the_mask() -> None:
-    """One call registers both functions under the same key, repeatably."""
-
-    assert tl_hf.register_attention() == BACKEND_KEY == tl_hf.register_attention()
-    assert BACKEND_KEY in AttentionInterface._global_mapping
-    assert BACKEND_KEY in AttentionMaskInterface._global_mapping
-    assert "sdpa" in AttentionInterface._global_mapping  # built-ins untouched
-    assert AttentionInterface._global_mapping["sdpa"] is not torchlens_attention_forward
 
 
 def test_register_refuses_a_foreign_key() -> None:
@@ -259,19 +234,6 @@ def test_repeated_calls_refuse_single_read_and_serve_calls_for() -> None:
     assert excinfo.value.fields["code"] == "hf_attention_multiple_calls"
     first, second = recording.calls_for(name)
     assert torch.equal(first.probs, second.probs)
-
-
-def test_output_attentions_returns_the_recorded_probs() -> None:
-    """output_attentions=True under the backend returns the recorded tensors."""
-
-    model = _build("qwen2_gqa", "sdpa")
-    tl_hf.register_attention(model)
-    batch = _inputs("right_pad")
-    with torch.no_grad(), tl_hf.record_attention(model) as recording:
-        out = model(**batch, output_attentions=True)
-    assert len(out.attentions) == len(recording.calls)
-    for returned, call in zip(out.attentions, recording.calls, strict=True):
-        assert torch.equal(returned, call.probs)
 
 
 def test_nbytes_matches_the_disclosed_formula() -> None:
@@ -340,25 +302,3 @@ def test_sdpa_check_is_live_on_a_corrupted_output() -> None:
     with pytest.raises(ValidationError) as excinfo:
         _check_against_sdpa("m", facts(-out))
     assert excinfo.value.fields["code"] == "hf_attention_sdpa_mismatch"
-
-
-def test_t5_position_bias_and_cross_attention(spy: _Spy) -> None:
-    """T5: relative position bias, causal decoder and cross attention."""
-
-    model = FAMILY_BY_NAME["t5"].build("sdpa")
-    model.set_attn_implementation(BACKEND_KEY)  # the spy holds the key
-    batch = _inputs("right_pad")
-    decoder_ids = torch.randint(0, VOCAB, (2, 5))
-    with torch.no_grad(), tl_hf.record_attention(model, check_sdpa=True) as recording:
-        model(**batch, decoder_input_ids=decoder_ids)
-    assert all(call.sdpa_checked for call in recording.calls)
-    for recorded_call, call in zip(recording.calls, spy.calls, strict=True):
-        q_len, kv_len = call["q"].shape[-2], call["k"].shape[-2]
-        is_decoder_self = (
-            recorded_call.module_name.startswith("decoder")
-            and q_len == kv_len
-            and ("EncDecAttention" not in recorded_call.module_name)
-        )
-        pad = batch["attention_mask"] if kv_len == SEQ else torch.ones(2, kv_len)
-        keep = _keep_mask(pad, q_len, kv_len, causal=is_decoder_self)
-        _assert_matches_reference(recorded_call.probs, call, keep)

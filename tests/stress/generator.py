@@ -2,7 +2,7 @@
 
 A cell is one (model, input, dtype, device, options) combination. Axes are
 plain lists of frozen row dataclasses defined under ``axes/``; this module
-turns them into cells with stable ids, selects the pre-merge subset, and
+turns them into cells with stable ids, selects the scheduled subset, and
 reads ``subset.json`` back for the test module.
 
 Run ``python -m tests.stress.generator --write-subset`` after adding a row so
@@ -28,9 +28,9 @@ Inputs = tuple[tuple[Any, ...], dict[str, Any]]
 """Positional arguments and keyword arguments for one forward call."""
 
 SUBSET_PATH = Path(__file__).with_name("subset.json")
-SUBSET_SIZE = 200
+SUBSET_SIZE = 300
 FULL_MATRIX_ENV = "TORCHLENS_STRESS_FULL"
-"""Set to ``1`` to run every generated cell instead of the pre-merge subset."""
+"""Set to ``1`` to run every generated cell instead of the scheduled subset."""
 
 _ROW_ID = re.compile(r"^[a-z0-9_]+$")
 _SEPARATOR = "-"
@@ -284,7 +284,7 @@ def _cross(axes: Axes, dtype_rows: Mapping[str, DtypeSpec]) -> Iterator[Cell]:
 
 
 def select_subset(cells: tuple[Cell, ...], size: int = SUBSET_SIZE) -> tuple[str, ...]:
-    """Choose the pre-merge subset: cover every axis value once, then the cheapest.
+    """Choose the scheduled subset: cover every axis value once, then the cheapest.
 
     Parameters
     ----------
@@ -381,7 +381,7 @@ def selected_cells(axes: Axes, *, full: bool | None = None) -> tuple[Cell, ...]:
     ------
     ValueError
         When ``subset.json`` names a cell the axes no longer generate, so a
-        row rename cannot silently shrink the pre-merge run.
+        row rename cannot silently shrink the scheduled run.
     """
 
     cells = generate(axes)

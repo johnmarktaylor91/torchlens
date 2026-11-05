@@ -1,17 +1,14 @@
 """Running budget for retained activation bytes, with a typed refusal.
-
 ``tl.trace(model, x)`` retains every operation's output by default. That is the
 right default for the models TorchLens was designed around and a footgun at
 frontier shapes: a first-time user pointing the default at a large model gets an
 OOM kill (or an allocator ``RuntimeError`` from somewhere deep inside torch)
 rather than an explanation.
-
 This module makes that failure more predictable without claiming a general OOM
 guarantee. The primary retained copy is admitted from source-tensor bytes before
 allocation, then alias-aware physical storage is reconciled after user transforms.
 The model forward, cross-device temporaries, and transform-only deltas can allocate
 before their size is knowable.
-
 The accounting is deliberately a **lower bound, labelled as one**. At the moment
 of the trip the forward is incomplete, so the true footprint of the finished
 capture would have been larger; the error says exactly that instead of
@@ -46,6 +43,7 @@ from ._memory_probes import (  # noqa: F401  (``_available_host_bytes`` is read 
     available_device_bytes,
 )
 from ._state import pause_logging
+from ._utils._display_bounded import short_dataclass_repr
 from .errors._base import CaptureError
 
 #: A retained payload the accountant charges: a tensor, or a storage kept as a
@@ -85,6 +83,15 @@ class SaveBudgetExceededError(CaptureError, RuntimeError):
     ``committed_bytes`` or ``projected_bytes``, ``budget_bytes``, ``device``,
     ``num_saved``, ``label``, ``accounting_phase``) so callers branch on numbers
     rather than parsing the message.
+
+    Examples
+    --------
+    >>> opts = tl.options.CaptureOptions(save_budget=16)
+    >>> try:
+    ...     tl.trace(model, x, capture=opts)
+    ... except SaveBudgetExceededError as err:
+    ...     print(type(err).__name__)
+    SaveBudgetExceededError
     """
 
 
@@ -227,6 +234,8 @@ class _RetainedStorageEntry:
 @dataclass
 class _DeviceLedger:
     """Per-device running total and resolved limit."""
+
+    __repr__ = short_dataclass_repr
 
     committed_bytes: int = 0
     num_saved: int = 0

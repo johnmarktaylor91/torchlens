@@ -36,12 +36,13 @@ __all__ = [
 StackGrading = Literal["complete", "closed_constant", "closed_unresolved"]
 
 #: Row-kind vocabulary for spine writers and constants. ``expert`` is carried
-#: from day one for future MoE per-expert rows (mikit plumbing ledger).
+#: by structurally recognized MoE per-expert writers.
 RowKind = Literal[
     "embedding",
     "attention",
     "mlp",
     "writer",
+    "expert",
     "constant",
     "unresolved_remainder",
     "residual",
@@ -65,14 +66,22 @@ class Coordinate:
         Pass qualifier of the op (within-forward reuse disambiguation).
     kind:
         Row-kind classification (embedding / attention / mlp / writer /
-        constant / unresolved_remainder / residual).
+        expert / constant / unresolved_remainder / residual).
     module_address:
         Innermost containing module address, when resolved.
     provenance:
         How the value was obtained (``"captured"``, ``"computed"``,
         ``"verified_constant"``, ``"injected"``), extension-open by design.
     expert:
-        MoE expert index when the writer is a routed expert; ``None`` today.
+        MoE expert index when the writer is a routed expert; otherwise ``None``.
+
+    Examples
+    --------
+    >>> coord = Coordinate("transformer.h.0.attn", kind="attention")
+    >>> coord.kind
+    'attention'
+    >>> coord.provenance
+    'captured'
     """
 
     label: str
@@ -87,7 +96,17 @@ class Coordinate:
 
 @dataclass(frozen=True)
 class ComponentRow:
-    """One component row: a coordinate plus its tensor value."""
+    """One component row: a coordinate plus its tensor value.
+
+    Examples
+    --------
+    >>> coord = tl.mechinterp.Coordinate("embed", kind="embedding")
+    >>> row = ComponentRow(coord, torch.zeros(1, 2, 4))
+    >>> row.coefficient
+    1.0
+    >>> tuple(row.value.shape)
+    (1, 2, 4)
+    """
 
     coordinate: Coordinate
     value: torch.Tensor
@@ -114,6 +133,18 @@ class ComponentStack:
 
     Tuple unpacking (``stack_tensor, labels = record``) serves TLens
     muscle memory; iteration order is (values, labels).
+
+    Examples
+    --------
+    >>> coord = tl.mechinterp.Coordinate
+    >>> rows = tuple(tl.mechinterp.ComponentRow(coord(name), torch.ones(1, 2, 4))
+    ...              for name in ("embed", "mlp"))
+    >>> stack = ComponentStack(rows, grading="complete", target_coordinate=coord("resid"),
+    ...                        target_value=2 * torch.ones(1, 2, 4), identity_receipt={})
+    >>> len(stack), stack.labels
+    (2, ('embed', 'mlp'))
+    >>> bool(torch.equal(stack.sum(), stack.target_value))
+    True
     """
 
     def __init__(  # noqa: PLR0913 -- a graded stack's invariants are its fields
@@ -332,6 +363,18 @@ class ContributionScores:
     writers). ``native`` is the model's own captured logits (or logit
     diffs) at the same coordinates, and ``identity_receipt`` records the
     in-API check ``sum(rows) + constant == native``.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)), save="all")
+    >>> scores = tl.mechinterp.direct_logit_contributions(trace, answer=3, vs=4)
+    >>> isinstance(scores, ContributionScores), len(scores.labels) > 0
+    (True, True)
     """
 
     def __init__(  # noqa: PLR0913 -- a contribution table's invariants are its fields

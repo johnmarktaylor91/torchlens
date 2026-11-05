@@ -52,6 +52,14 @@ def detect_relays() -> dict[str, str]:
     ``clearml.binding.frameworks.tensorflow_bind`` (configuration evidence
     only). Detection never imports a vendor package that is not already in
     the process.
+
+    Examples
+    --------
+    >>> relays = detect_relays()
+    >>> isinstance(relays, dict)
+    True
+    >>> set(relays) <= {"wandb", "clearml"}
+    True
     """
 
     relays: dict[str, str] = {}
@@ -75,7 +83,20 @@ def detect_relays() -> dict[str, str]:
 
 
 class TensorBoardSink:
-    """The reference sink over an existing writer or a fresh log dir."""
+    """The reference sink over an existing writer or a fresh log dir.
+
+    Examples
+    --------
+    >>> from torchlens.trackers import ScalarPoint
+    >>> class Writer:
+    ...     rows = []
+    ...     def add_scalar(self, tag, value, global_step=None): self.rows.append((tag, global_step))
+    ...     def flush(self): pass
+    >>> sink = TensorBoardSink(Writer())
+    >>> sink.emit_scalar(ScalarPoint("gradients/norm/0.weight", 3, 0.5))
+    >>> Writer.rows
+    [('gradients/norm/0.weight', 3)]
+    """
 
     def __init__(self, writer_or_logdir: Any) -> None:
         """Wrap an existing ``SummaryWriter`` or open one on a log dir.

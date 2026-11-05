@@ -6,6 +6,8 @@ import weakref
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from .._utils._display_records import backward_repr, backward_str
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -90,12 +92,26 @@ def _grad_fn_payload_equal(left: Any, right: Any, _depth: int = 0) -> bool:
 
 @dataclass
 class GradFnCall:
-    """Runtime data for one execution of an autograd ``grad_fn_handle`` node."""
+    """Runtime data for one execution of an autograd ``grad_fn_handle`` node.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
+    >>> opts = tl.options.CaptureOptions(backward_ready=True)
+    >>> trace = tl.trace(net, torch.randn(2, 4), capture=opts)
+    >>> _ = trace.backward(trace[trace.output_layers[0]].out.sum())
+    >>> call = trace.autograd.grad_fn_calls[0]
+    >>> type(call).__name__, call.grad_fn_label in [fn.label for fn in trace.autograd.grad_fns]
+    ('GradFnCall', True)
+    """
+
+    __repr__ = backward_repr
+    __str__ = backward_str
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "call_index": FieldPolicy.KEEP,
         "ordinal": FieldPolicy.KEEP,
-        "backward_pass_index": FieldPolicy.KEEP,
+        "backward_pass_number": FieldPolicy.KEEP,
         "grad_fn_label": FieldPolicy.KEEP,
         "grad_inputs": FieldPolicy.BLOB_RECURSIVE,
         "grad_outputs": FieldPolicy.BLOB_RECURSIVE,
@@ -117,7 +133,7 @@ class GradFnCall:
 
     call_index: int
     ordinal: int | None = None
-    backward_pass_index: int | None = None
+    backward_pass_number: int | None = None
     grad_fn_label: str = ""
     grad_inputs: Any = None
     grad_outputs: Any = None
@@ -167,7 +183,7 @@ class GradFnCall:
             **_GRAD_FN_CALL_CONTAINER_DEFAULTS,
             "grad_fn_label": "",
             "ordinal": state.get("call_index"),
-            "backward_pass_index": None,
+            "backward_pass_number": None,
             "grad_inputs": None,
             "grad_outputs": None,
             "fire_record": None,
@@ -230,7 +246,7 @@ class GradFnCall:
         if (
             self.call_index,
             self.ordinal,
-            self.backward_pass_index,
+            self.backward_pass_number,
             self.grad_fn_label,
             self.timestamp,
             self._time_started,
@@ -238,7 +254,7 @@ class GradFnCall:
         ) != (
             other.call_index,
             other.ordinal,
-            other.backward_pass_index,
+            other.backward_pass_number,
             other.grad_fn_label,
             other.timestamp,
             other._time_started,
@@ -255,7 +271,7 @@ class GradFnCall:
         """Hash on the immutable scalar identity fields (eq-consistent)."""
 
         return hash(
-            (type(self).__name__, self.call_index, self.backward_pass_index, self.grad_fn_label)
+            (type(self).__name__, self.call_index, self.backward_pass_number, self.grad_fn_label)
         )
 
     @property
@@ -356,7 +372,7 @@ class GradFnCall:
 _GRAD_FN_CALL_STORED_FIELDS: tuple[str, ...] = (
     "call_index",
     "ordinal",
-    "backward_pass_index",
+    "backward_pass_number",
     "grad_fn_label",
     "grad_inputs",
     "grad_outputs",

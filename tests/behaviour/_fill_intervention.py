@@ -28,12 +28,12 @@ glossary documents:
   cases too;
 * two edits on one site apply in order, an edit on a view site stays inside
   its cone, and a seeded stochastic edit reproduces;
-* an intervened capture persists as documented: the loaded trace carries
-  the same replaced-op set and fire records, its ``recipe`` is empty because
-  ``trace.save()`` does not persist the intervention spec, and its replay
-  refuses by the door ``run_intervention_spec_not_persisted``
-  (:data:`RECIPE_PERSISTS` flips the check when the saved format decides to
-  carry the spec).
+* an intervened capture persists its recipe (io.1): the loaded trace carries
+  the same replaced-op set, fire records and recipe rules; a recipe of
+  built-in edits reruns on the loaded trace and reproduces the captured
+  output, and a recipe holding a user callable (saved as a placeholder)
+  refuses the rerun by the door ``run_intervention_spec_not_persisted``. The
+  per-door cells live in ``test_f7_intervention_persistence.py``.
 """
 
 from __future__ import annotations
@@ -46,6 +46,11 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 import torchlens as tl
+from tests.behaviour._hook_passes import (
+    hook_pass_problems,
+    start_recording,
+    stop_recording,
+)
 from torchlens.errors import TorchLensError
 
 if TYPE_CHECKING:
@@ -54,12 +59,8 @@ if TYPE_CHECKING:
     from tests.behaviour.harness import Cell
 
 SEED = 0
-#: Whether ``trace.save()`` persists the intervention recipe. ``False`` is the
-#: documented state (door ``run_intervention_spec_not_persisted`` in
-#: ``torchlens/intervention/_staged_spec_persistence.py``); flip it when the
-#: saved format decides to carry the spec and the loaded-trace checks assert
-#: an equal recipe and a reproducing replay instead.
-RECIPE_PERSISTS = False
+#: The refusal of a rerun whose loaded recipe holds a callable placeholder.
+NOT_PERSISTED = "run_intervention_spec_not_persisted"
 _VIEW_FUNCS = frozenset(
     {
         "view",
@@ -141,7 +142,7 @@ def _descendants(trace: Any, label: str) -> set[str]:
     frontier = [label]
     while frontier:
         current = frontier.pop()
-        for child in trace[current].children or ():
+        for child in trace.layers[_no_pass(current)].children or ():
             child_label = child if isinstance(child, str) else getattr(child, "label", str(child))
             child_label = _no_pass(child_label)
             if child_label not in seen:
@@ -372,19 +373,29 @@ def _self_hook_outputs(cell: Cell, trace: Any, labels: set[str]) -> set[str]:
     }
 
 
-def _recipe_is_empty(recipe: Any) -> bool:
-    """Return whether a frozen recipe carries no targets and no fire records."""
+def _persisted_rules(recipe: Any) -> list[tuple[str, str | None]]:
+    """Return each rule of a frozen recipe as its site and its built-in edit.
 
-    return not recipe.targets and not recipe.records
+    A rule whose edit is a user callable reads ``None``: the saved format keeps
+    a placeholder for it (position and qualified name), never the callable, so
+    the live and loaded rules agree on the site and on the absence of a
+    replayable edit.
+    """
+
+    rows = []
+    for spec in recipe.hook_specs:
+        helper = spec.helper
+        builtin = helper is not None and helper.portability == "builtin"
+        rows.append((repr(spec.site_target), repr(helper) if builtin else None))
+    return rows
 
 
 def _after_intervene(cell: Cell) -> None:
     """Selected ops record a replaced value, and the edit persists through save and load.
 
-    The persisted part follows the documented saved format: replaced-op set and
-    fire records survive, the recipe does not (``loaded.recipe`` is empty) and
-    the loaded trace's replay refuses by the typed door. :data:`RECIPE_PERSISTS`
-    selects the other reading once the format carries the spec.
+    The loaded trace carries the live replaced-op set, fire records and recipe
+    rules (io.1); its rerun reproduces the captured output, or refuses by the
+    typed door when the recipe holds a user callable.
     """
 
     trace = cell.require_trace()
@@ -410,19 +421,14 @@ def _after_intervene(cell: Cell) -> None:
             _fire_facts(trace[label]) == _fire_facts(loaded[label]),
             f"{label}: fire records differ after load",
         )
-    live_rules, loaded_rules = _rule_facts(trace.recipe), _rule_facts(loaded.recipe)
-    if RECIPE_PERSISTS:
-        cell.expect(
-            live_rules == loaded_rules,
-            f"recipe differs after load: live {live_rules!r:.160} vs loaded {loaded_rules!r:.160}",
-        )
-    else:
-        cell.expect(
-            _recipe_is_empty(loaded.recipe),
-            f"trace.save() does not persist the recipe, yet loaded.recipe holds {loaded_rules!r:.160}",
-        )
+    live_rules, loaded_rules = _persisted_rules(trace.recipe), _persisted_rules(loaded.recipe)
+    cell.expect(
+        live_rules == loaded_rules,
+        f"recipe differs after load: live {live_rules!r:.160} vs loaded {loaded_rules!r:.160}",
+    )
     before = None if cell.case.has("stochastic") else cell.output_leaves(trace)
-    _expect_loaded_replay(cell, loaded, before)
+    holds_callable = any(edit is None for _, edit in live_rules)
+    _expect_loaded_rerun(cell, loaded, before, holds_callable=holds_callable)
     if before is None:
         return
     torch.manual_seed(SEED)
@@ -430,34 +436,36 @@ def _after_intervene(cell: Cell) -> None:
     cell.expect_same_leaves(before, cell.output_leaves(trace), "replay of the intervened trace")
 
 
-def _expect_loaded_replay(cell: Cell, loaded: Any, before: list[Any] | None) -> None:
-    """A loaded intervened trace replays as the saved format documents.
+def _expect_loaded_rerun(
+    cell: Cell, loaded: Any, before: list[Any] | None, *, holds_callable: bool
+) -> None:
+    """A loaded intervened trace reruns its persisted recipe (io.1).
 
-    Without a persisted recipe (:data:`RECIPE_PERSISTS` false) ``loaded.run``
-    must refuse by the door ``run_intervention_spec_not_persisted``: a run that
-    goes through would return un-intervened numbers under intervened records.
-    With a persisted recipe it must reproduce the captured output (``before``;
-    ``None`` for a stochastic case, whose output is not comparable).
+    A recipe of built-in edits must rerun and reproduce the captured output
+    (``before``; ``None`` for a stochastic case, whose output is not
+    comparable). A recipe holding a user callable must refuse by the door
+    ``run_intervention_spec_not_persisted``: a rerun without the callable would
+    return numbers that do not match the trace's records.
     """
 
     torch.manual_seed(SEED)
     try:
         loaded.run(cell.model, cell.fresh_inputs())
     except TorchLensError as exc:
-        if _error_code(exc) != "run_intervention_spec_not_persisted":
+        if _error_code(exc) != NOT_PERSISTED:
             raise
         cell.expect(
-            not RECIPE_PERSISTS,
-            "the loaded trace refuses run() as not persisted although the recipe persists",
+            holds_callable,
+            f"the loaded recipe holds only built-in edits, yet run() refused: {exc}",
         )
         return
     cell.expect(
-        RECIPE_PERSISTS,
-        "the loaded intervened trace ran without its recipe instead of refusing by "
-        "run_intervention_spec_not_persisted",
+        not holds_callable,
+        f"the loaded recipe holds a callable placeholder, yet run() went through instead of "
+        f"refusing by {NOT_PERSISTED}",
     )
-    if before is not None:
-        cell.expect_same_leaves(before, cell.output_leaves(loaded), "replay of the loaded trace")
+    if before is not None and not holds_callable:
+        cell.expect_same_leaves(before, cell.output_leaves(loaded), "rerun of the loaded trace")
 
 
 # --- claimed rows: fork_do ----------------------------------------------------
@@ -577,17 +585,20 @@ def _prepare_hooks(cell: Cell) -> None:
     target = _second_float_func(cell)
     if target is None:
         _not_applicable("no second floating-point function to hook")
-    log: dict[str, Any] = {"fires": [], "states": [], "run_state": None}
+    log: dict[str, Any] = {"fires": [], "states": [], "run_states": []}
 
     def hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         ctx.state["n"] = ctx.state.get("n", 0) + 1
         ctx.run_state["fires"] = ctx.run_state.get("fires", 0) + 1
-        log["run_state"] = ctx.run_state
+        log["run_states"].append(ctx.run_state)
         if not any(state is ctx.state for state in log["states"]):
             log["states"].append(ctx.state)
         log["fires"].append((ctx.signal, ctx.state["n"], ctx.timing))
         return out + 1
 
+    # Every pass the cell runs with this hook armed is counted at the capture door
+    # (tests/behaviour/_hook_passes.py), never inferred from the fires.
+    log["passes"] = start_recording(hook, log["run_states"])
     # The cell is the only object both hooks share; capture_fields would reach CaptureOptions.
     vars(cell)[_HOOKS_KEY] = (log, target)
     _merge_intervene(cell, tl.when(tl.func(target), hook))
@@ -604,15 +615,31 @@ def _hook_fields(cell: Cell) -> tuple[dict[str, Any], str]:
 
 
 def _after_hooks(cell: Cell) -> None:
-    """Hooks fire once per site per pass with the forward signal; scratch survives; a raise refuses typed."""
+    """Hooks fire once per site per pass with the forward signal; scratch survives; a raise refuses typed.
+
+    Every armed pass the cell ran (the capture, the ``forward_match`` replay,
+    the partner feature's reruns and second captures, counted at the capture
+    door, and its saved-DAG replays such as ``fork.do``, counted at the replay
+    door) must fire exactly once per op the hook selects in that pass, and no
+    fire may fall outside a counted pass.
+    """
 
     trace = cell.require_trace()
     log, target = _hook_fields(cell)
+    recorder = log["passes"]
+    stop_recording(recorder)
     selected = [op for op in trace.ops if op.func_name == target]
     fires = log["fires"]
+    problems = hook_pass_problems(
+        recorder.passes,
+        {op.label for op in selected},
+        fires_outside=recorder.fires_outside_passes(),
+    )
+    armed = [one for one in recorder.passes if one.armed]
     cell.expect(
-        len(fires) == len(selected),
-        f"hook fired {len(fires)} times for {len(selected)} selected ops",
+        not problems,
+        f"hook fired {len(fires)} times for {len(selected)} selected ops over "
+        f"{len(armed)} armed passes: {'; '.join(problems[:4])}",
     )
     cell.expect(
         all(signal == "forward" for signal, _, _ in fires), "a forward hook saw another signal"
@@ -622,7 +649,10 @@ def _after_hooks(cell: Cell) -> None:
         "ctx.state scratch did not survive the pass with its fire counts",
     )
     cell.expect(
-        log["run_state"] is not None and log["run_state"].get("fires") == len(fires),
+        all(
+            state.get("fires") == sum(1 for seen in log["run_states"] if seen is state)
+            for state in log["run_states"]
+        ),
         "ctx.run_state did not survive the run",
     )
     marked = {op.label for op in trace.ops if op.is_edited}
@@ -699,10 +729,10 @@ def _after_mean_ablate(cell: Cell) -> None:
     donors = tl.intervention.population(
         torch.stack([out, out * 3]), origin="behaviour net: two donors from the site itself"
     )
-    fork = _apply_on_fork(trace, label, tl.mean_ablate(donors, dim=None))
+    fork = _apply_on_fork(trace, label, tl.mean_ablate(donors, dim="members"))
     cell.expect(
         torch.allclose(fork[label].out, out * 2, equal_nan=True),
-        f"mean_ablate(Population, dim=None) at {label} is not the elementwise member mean",
+        f"mean_ablate(Population, dim='members') at {label} is not the elementwise member mean",
     )
     names = [name for name, *_ in _fire_facts(fork[label])]
     cell.expect("mean_ablate" in names, f"no mean_ablate fire record on {label}: {names}")

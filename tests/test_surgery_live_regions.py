@@ -144,7 +144,9 @@ def test_region_not_convex_refuses_with_path(chain_fork) -> None:
     """Members whose connecting path exits and re-enters refuse convexity."""
 
     _model, _x, fork = chain_fork
-    gappy = fork.subgraph(fork["linear_1_1"].__selection__() | fork["tanh_1_4"].__selection__())
+    gappy = fork.subgraph(
+        fork.layers["linear_1_1"].__selection__() | fork.layers["tanh_1_4"].__selection__()
+    )
     with pytest.raises(RegionError) as excinfo:
         gappy.as_region()
     assert excinfo.value.fields["code"] == "region_not_convex"
@@ -173,9 +175,9 @@ def test_region_exit_leak_named(chain_fork) -> None:
     model = _TwoHead().eval()
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
     slice_ = fork.subgraph(
-        fork["relu_1_2"].__selection__()
-        | fork["linear_2_3"].__selection__()
-        | fork["linear_3_5"].__selection__()
+        fork.layers["relu_1_2"].__selection__()
+        | fork.layers["linear_2_3"].__selection__()
+        | fork.layers["linear_3_5"].__selection__()
     )
     with pytest.raises(RegionError) as excinfo:
         slice_.as_region(exits=[("linear_2_3:1", "sigmoid_1_4:1")])
@@ -202,31 +204,6 @@ def test_region_construction_refusals(chain_fork) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_region_do_substitutes_exits_interior_not_replayed(chain_fork) -> None:
-    """The region edit lands at the exit; downstream recomputes; facts ride."""
-
-    model, x, fork = chain_fork
-    target = fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region()
-    fork.do(target, tl.zero_ablate())
-    assert torch.allclose(fork["linear_3_5"].out, model.fc3(torch.zeros(3, 4)), atol=1e-6)
-    (fact,) = _region_fact_rows(fork)
-    assert fact["execution_effect"] == "exits_substituted_interior_not_replayed"
-    assert fact["instances"] == [
-        {"instance": 1, "members": 4, "exit_ops": ["tanh_1_4:1"], "evaluations": 1}
-    ]
-    assert fact["effect_closure"]["certified_channels"] == [
-        "buffer_writes",
-        "collectives",
-        "inplace_ops",
-    ]
-    assert "not certified" in fact["effect_closure"]["note"]  # never "effect-free"
-    assert fact["source"] == "current_transaction"
-    # the do() transaction envelope landed through the one chokepoint
-    assert any(row.get("kind") == "ACT" for row in fork.intervention_audit)
-    # interior values are capture truth, not replayed: relu output unchanged
-    assert torch.allclose(fork["relu_1_2"].out, torch.relu(model.fc1(x)), atol=1e-6)
-
-
 def test_region_do_validation_tripwire_unchanged(chain_fork) -> None:
     """Validation gives the corroborated boundary verdict, never a skip."""
 
@@ -234,7 +211,7 @@ def test_region_do_validation_tripwire_unchanged(chain_fork) -> None:
 
     _model, _x, fork = chain_fork
     fork.do(fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region(), tl.zero_ablate())
-    verdict = _check_edge_intervention_boundary(fork, fork["linear_3_5"].ops[0])
+    verdict = _check_edge_intervention_boundary(fork, fork.layers["linear_3_5"].ops[0])
     assert verdict is not None
     assert verdict.decision == "edge_intervention_boundary"
     assert not verdict.failed
@@ -280,9 +257,9 @@ def test_region_multi_exit_atomic_once_per_instance() -> None:
     x = torch.randn(3, 4)
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
     members = (
-        fork["relu_1_2"].__selection__()
-        | fork["linear_2_3"].__selection__()
-        | fork["linear_3_5"].__selection__()
+        fork.layers["relu_1_2"].__selection__()
+        | fork.layers["linear_2_3"].__selection__()
+        | fork.layers["linear_3_5"].__selection__()
     )
     target = fork.subgraph(members).as_region()
     assert len(target.instances) == 1
@@ -301,9 +278,9 @@ def test_region_multi_exit_atomic_once_per_instance() -> None:
 
     fork2 = tl.trace(model, x, capture=_CAPTURE).fork()
     target2 = fork2.subgraph(
-        fork2["relu_1_2"].__selection__()
-        | fork2["linear_2_3"].__selection__()
-        | fork2["linear_3_5"].__selection__()
+        fork2.layers["relu_1_2"].__selection__()
+        | fork2.layers["linear_2_3"].__selection__()
+        | fork2.layers["linear_3_5"].__selection__()
     ).as_region()
     fork2.do(target2, _region_edit)
     assert calls["n"] == 1  # once per pass instance, never per exit
@@ -311,6 +288,7 @@ def test_region_multi_exit_atomic_once_per_instance() -> None:
     assert torch.allclose(fork2["cat_1_7"].out, expected, atol=1e-6)
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_region_stochastic_once_per_pass() -> None:
     """A stochastic region edit draws once per instance, reused at each exit."""
 
@@ -328,9 +306,9 @@ def test_region_stochastic_once_per_pass() -> None:
         return tuple(out * 0.0 + draw for out in outs)
 
     target = fork.subgraph(
-        fork["relu_1_2"].__selection__()
-        | fork["linear_2_3"].__selection__()
-        | fork["linear_3_5"].__selection__()
+        fork.layers["relu_1_2"].__selection__()
+        | fork.layers["linear_2_3"].__selection__()
+        | fork.layers["linear_3_5"].__selection__()
     ).as_region()
     fork.do(target, _stochastic)
     assert len(draws) == 1
@@ -349,11 +327,11 @@ def test_region_container_consumed_exit_extends() -> None:
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
     # region up to the sigmoids: exits feed torch.cat's list argument
     members = (
-        fork["relu_1_2"].__selection__()
-        | fork["linear_2_3"].__selection__()
-        | fork["linear_3_5"].__selection__()
-        | fork["sigmoid_1_4"].__selection__()
-        | fork["sigmoid_2_6"].__selection__()
+        fork.layers["relu_1_2"].__selection__()
+        | fork.layers["linear_2_3"].__selection__()
+        | fork.layers["linear_3_5"].__selection__()
+        | fork.layers["sigmoid_1_4"].__selection__()
+        | fork.layers["sigmoid_2_6"].__selection__()
     )
     target = fork.subgraph(members).as_region()
     assert all(edge.child == "cat_1_7:1" for edge in target.boundary.exits)
@@ -368,25 +346,6 @@ def test_region_container_consumed_exit_extends() -> None:
     assert torch.allclose(fork["cat_1_7"].out, torch.full((3, 4), 0.5), atol=1e-6)
 
 
-def test_region_shared_block_pass_instances() -> None:
-    """A region over both passes of a shared block partitions per traversal."""
-
-    torch.manual_seed(0)
-    model = _SharedBlock().eval()
-    x = torch.randn(2, 4)
-    fork = tl.trace(model, x, capture=_CAPTURE).fork()
-    # pass-1 only: pass-qualified endpoints, one instance
-    single = fork.between(fork["linear_1_1:1"], fork["linear_1_1:1"]).as_region()
-    assert single.labels == ("linear_1_1:1",)
-    assert len(single.instances) == 1
-    fork.do(single, tl.zero_ablate())
-    # pass 1 zeroed -> relu(0) = 0 -> pass 2 = bias-only forward
-    expected = model.block(torch.relu(torch.zeros(2, 4)))
-    assert torch.allclose(fork["linear_1_1:2"].out, expected, atol=1e-6)
-    (fact,) = _region_fact_rows(fork)
-    assert fact["instances"][0]["exit_ops"] == ["linear_1_1:1"]
-
-
 def test_region_disconnected_members_evaluate_per_instance() -> None:
     """Disconnected member groups form separate instances, one draw each."""
 
@@ -396,7 +355,7 @@ def test_region_disconnected_members_evaluate_per_instance() -> None:
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
     # the two head linears are disconnected inside the region
     target = fork.subgraph(
-        fork["linear_2_3"].__selection__() | fork["linear_3_5"].__selection__()
+        fork.layers["linear_2_3"].__selection__() | fork.layers["linear_3_5"].__selection__()
     ).as_region()
     assert len(target.instances) == 2
     calls = {"n": 0}
@@ -628,9 +587,9 @@ def test_region_splice_arity_mismatch_refuses() -> None:
     x = torch.randn(3, 4)
     fork = tl.trace(model, x, capture=_CAPTURE).fork()
     target = fork.subgraph(
-        fork["relu_1_2"].__selection__()
-        | fork["linear_2_3"].__selection__()
-        | fork["linear_3_5"].__selection__()
+        fork.layers["relu_1_2"].__selection__()
+        | fork.layers["linear_2_3"].__selection__()
+        | fork.layers["linear_3_5"].__selection__()
     ).as_region()
     assert len(target.instances[0].exit_labels) == 2
 

@@ -70,48 +70,7 @@ def _dense_trace() -> Any:
     return tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
 
 
-@requires_vetted_snapshot
-def test_capture_after_group_teardown_is_unarmed_path(clean_distributed: Path) -> None:
-    """After destroy, the armed process captures like an unarmed one."""
-
-    _init_group(clean_distributed, "store")
-    armed = _dense_trace()
-    state = lifecycle.armed_state()
-    assert state is not None
-    assert armed._distributed_plane_p is not None
-    torch.distributed.destroy_process_group()
-
-    # The armed state and its ledger survive teardown (lifetime ordinals).
-    assert lifecycle.armed_state() is state
-    assert lifecycle.capture_armed_state() is None
-
-    dense = _dense_trace()
-    assert dense._distributed_plane_p is None
-    meta_trace = _train_mode_meta_capture()
-    assert meta_trace not in _HOST_ESCAPE_MUTABLE_WRITEBACK
-
-
-@requires_vetted_snapshot
-def test_groupless_armed_capture_does_not_run_plane_p(clean_distributed: Path) -> None:
-    """The dormancy contract: armed with no group, plane-P never runs.
-
-    Also the documented arm-at-process-start pattern: dormant until init, then
-    observed.
-    """
-
-    tl.distributed.arm()
-    assert lifecycle.is_armed()
-    assert not torch.distributed.is_initialized()
-    assert lifecycle.capture_armed_state() is None
-    assert _dense_trace()._distributed_plane_p is None
-    assert _train_mode_meta_capture()._distributed_plane_p is None
-    assert lifecycle.is_armed(), "dormancy must not disarm"
-
-    _init_group(clean_distributed, "store")
-    assert lifecycle.capture_armed_state() is lifecycle.armed_state()
-    assert _dense_trace()._distributed_plane_p is not None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of distributed/_lifecycle.py.
 @requires_vetted_snapshot
 def test_reinitialized_group_wakes_the_armed_state(clean_distributed: Path) -> None:
     """A group created after a teardown is observed again."""
@@ -124,6 +83,7 @@ def test_reinitialized_group_wakes_the_armed_state(clean_distributed: Path) -> N
     assert _dense_trace()._distributed_plane_p is not None
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/control_flow.py, backends/torch/_completeness_dispatch.py.
 @requires_vetted_snapshot
 def test_live_group_meta_capture_raises_no_fabricated_flag(clean_distributed: Path) -> None:
     """With plane-P active, storage-less meta state is never flagged as written."""

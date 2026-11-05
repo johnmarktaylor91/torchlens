@@ -327,7 +327,6 @@ def test_forward_peak_bracket_never_resets_cuda_peak_counter() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_mps_style_no_arg_synchronize_does_not_typeerror() -> None:
     """A backend synchronize that takes no device argument drains cleanly (R36).
 
@@ -356,7 +355,6 @@ def test_mps_style_no_arg_synchronize_does_not_typeerror() -> None:
     assert calls["noarg"] == 1
 
 
-@pytest.mark.smoke
 def test_cpu_async_pending_events_are_bounded() -> None:
     """The fence-event registry is hard-bounded, never unbounded cross-capture (R36).
 

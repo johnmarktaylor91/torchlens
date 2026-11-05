@@ -35,7 +35,7 @@ from ..._errors import (
     TorchLensWarning,
 )
 from ..._input_coerce import (
-    _coerce_input_args,
+    _coerce_inputs,
     _reject_non_mapping_input_kwargs,
 )
 from ..._ir.selector_eval import looks_like_finalized_label
@@ -447,7 +447,6 @@ def _merge_door_capture_options(args: _DoorArgs) -> CaptureOptions:
         name=args.name,
         cache=args.cache,
         cache_dir=args.cache_dir,
-        module_filter=args.module_filter,
         jax_control_flow=args.jax_control_flow,
         jax_max_control_flow_unroll=args.jax_max_control_flow_unroll,
         module_identity_mode=args.module_identity_mode,
@@ -494,15 +493,15 @@ def _open_door_state(
     if input_transform is not None:
         raw_input = input_args
         transformed_input = input_transform(input_args)
+        # The caller's own ``input_kwargs`` survive the transform and win on a shared key.
         if isinstance(transformed_input, collections.abc.Mapping):
             input_args = []
-            input_kwargs = dict(transformed_input)
+            input_kwargs = {**dict(transformed_input), **(input_kwargs or {})}
         else:
             input_args = transformed_input
-            input_kwargs = None
     else:
         original_input_args = input_args
-        input_args = _coerce_input_args(model, input_args)
+        input_args, input_kwargs = _coerce_inputs(model, input_args, input_kwargs)
         if _should_store_auto_coerced_raw_input(original_input_args, input_args):
             raw_input = original_input_args
     return _DoorState(
@@ -656,7 +655,7 @@ def _unpack_save_policies(state: _DoorState) -> _DoorState:
         state,
         layers_to_save=capture_options._layers_to_save,
         save_raw_input_policy=capture_options.save_raw_input,
-        save_raw_output_policy=capture_options.save_transformed_output,
+        save_transformed_output_policy=capture_options.save_transformed_output,
         save_mode_value=save_mode_value,
         facet_recipes=facet_recipes,
         halt=state.args.halt,
@@ -794,7 +793,7 @@ def _apply_structure_only_entry(state: _DoorState) -> _DoorState:
         state,
         layers_to_save=layers_to_save,
         save_raw_input_policy=False,
-        save_raw_output_policy=False,
+        save_transformed_output_policy=False,
     )
 
 

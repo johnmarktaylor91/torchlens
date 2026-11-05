@@ -245,7 +245,7 @@ def _bundle_derive_episode_status(
     self: Bundle,
     episode_id: str,
     *,
-    ledger: EpisodeLedger | None = None,
+    episode_ledger: EpisodeLedger | None = None,
 ) -> EpisodeFoldResult:
     """Fold a bundle's episode members into a derived episode status.
 
@@ -263,7 +263,7 @@ def _bundle_derive_episode_status(
         Bundle whose episode members are folded.
     episode_id:
         Episode entity named by ``episode_member`` relation rows.
-    ledger:
+    episode_ledger:
         Optional episode ledger; supplies ``n_steps_declared`` and the
         driver-halt geometry (fold arms 2 and 4 are ledger-only facts and
         degrade fail-closed to ``episode_unknown`` without it).
@@ -311,11 +311,11 @@ def _bundle_derive_episode_status(
         # of the prefix law and leave the fold domain here.
         if row.member in escalation_sources:
             excluded.add(index)
-    n_declared = ledger.header.n_steps_declared if ledger is not None else None
+    n_declared = episode_ledger.header.n_steps_declared if episode_ledger is not None else None
     return _fold_episode_status(
         member_outcomes,
         n_declared=n_declared,
-        ledger=ledger,
+        ledger=episode_ledger,
         escalation_members=frozenset(excluded),
     )
 

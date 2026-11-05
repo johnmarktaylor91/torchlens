@@ -47,6 +47,15 @@ def derived_cadence(
     A framework that logs every N steps gets tracker samples at the same
     rhythm (never sparser than the panel the user already reads); a visible
     run length targets ~100 points. Neither signal -> the package default.
+
+    Examples
+    --------
+    >>> derived_cadence(logging_steps=10)
+    10
+    >>> derived_cadence(max_steps=10000)
+    100
+    >>> derived_cadence()
+    50
     """
 
     if logging_steps is not None and logging_steps > 0:
@@ -76,6 +85,14 @@ class HFTrainerWatchCallback:
     from ``TORCHLENS_WATCH_*`` variables; the source of each is printed at
     train begin through ``print_fn``. Requires the transformers package at
     construction (typed refusal otherwise).
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from torchlens.trackers import MemorySink
+    >>> callback = HFTrainerWatchCallback(to=MemorySink(), every=10)
+    >>> (callback.every, callback.session)
+    (10, None)
     """
 
     def __init__(  # noqa: PLR0913 -- each knob is a documented, separately sourced watch setting (the repr prints the source of each)
@@ -166,6 +183,14 @@ class LightningWatchCallback:
     derives the cadence. Settings not passed here may come from
     ``TORCHLENS_WATCH_*`` variables; the source of each is printed at train
     start through ``print_fn``. Requires lightning at construction.
+
+    Examples
+    --------
+    >>> # requires: lightning
+    >>> from torchlens.trackers import MemorySink
+    >>> callback = LightningWatchCallback(to=MemorySink(), every=10)
+    >>> (callback.every, callback.session)
+    (10, None)
     """
 
     def __init__(  # noqa: PLR0913 -- each knob is a documented, separately sourced watch setting (the repr prints the source of each)

@@ -30,29 +30,53 @@ REPO = Path(__file__).resolve().parents[1]
 
 #: Page or notebook (repo-relative) -> the one tool its fences need.
 PAGES: dict[str, str] = {
-    "docs/recipes/acdc_ioi.md": "transformers",
-    "docs/recipes/lrp_transformers_lxt.md": "lxt",
-    "docs/recipes/seeded_subsample.md": "torchlens",
-    "docs/recipes/training_ribbon.md": "matplotlib",
-    "docs/recipes/tcav.md": "torchlens",
-    "docs/recipes/generation_step_attribution.md": "transformers",
-    "docs/recipes/trainable_backbone.md": "torchvision",
-    "docs/recipes/tuned_lens.md": "tuned_lens",
-    "docs/recipes/conditional_steering.md": "transformers",
-    "docs/recipes/weightwatcher.md": "weightwatcher",
-    "docs/recipes/quantus.md": "quantus",
-    "docs/recipes/torchcam.md": "torchcam",
-    "docs/recipes/feature_visualisation.md": "torchlens",
-    "docs/recipes/dissection.md": "torchlens",
-    "docs/recipes/pretrained_saes.md": "sae_lens",
-    "docs/recipes/sae_latent_export.md": "torchlens",
-    "docs/recipes/sae_trainers.md": "sae_trainers",
-    "docs/recipes/sae_crosscoder_diff.md": "crosscoder",
-    "docs/recipes/prisma_clip_sae.md": "prisma",
+    "docs/field-guide/acdc_ioi.md": "transformers",
+    "docs/field-guide/lrp_transformers_lxt.md": "lxt",
+    "docs/field-guide/seeded_subsample.md": "torchlens",
+    "docs/field-guide/training_ribbon.md": "matplotlib",
+    "docs/field-guide/tcav.md": "torchlens",
+    "docs/field-guide/generation_step_attribution.md": "transformers",
+    "docs/field-guide/generation_attention.md": "transformers",
+    "docs/field-guide/tensor_images.md": "torchvision",
+    "docs/field-guide/trainable_backbone.md": "torchvision",
+    "docs/field-guide/tuned_lens.md": "tuned_lens",
+    "docs/field-guide/jacobian_lens.md": "transformers",
+    "docs/field-guide/conditional_steering.md": "transformers",
+    "docs/field-guide/weightwatcher.md": "weightwatcher",
+    "docs/field-guide/quantus.md": "quantus",
+    "docs/field-guide/torchcam.md": "torchcam",
+    "docs/field-guide/feature_visualisation.md": "torchlens",
+    "docs/field-guide/dissection.md": "torchlens",
+    "docs/field-guide/pretrained_saes.md": "sae_lens",
+    "docs/field-guide/sae_latent_export.md": "torchlens",
+    "docs/field-guide/sae_trainers.md": "sae_trainers",
+    "docs/field-guide/sae_crosscoder_diff.md": "crosscoder",
+    "docs/field-guide/prisma_clip_sae.md": "prisma",
+    "docs/field-guide/linear_probes.md": "sklearn",
+    "docs/field-guide/craft_concepts.md": "sklearn",
+    "docs/field-guide/das_gpt2.md": "transformers",
+    "docs/field-guide/entropy_steering.md": "transformers",
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
-    "examples/recipes/train_tuned_lens_recipe.ipynb": "torchlens",
+    "docs/neuroai/task_rnn_circuits.md": "torchlens",
+    "docs/neuroai/protein_language_model.md": "esm",
+    "examples/methods/train_tuned_lens_recipe.ipynb": "torchlens",
+    "examples/methods/das_causal_basis_recipe.ipynb": "torchlens",
+    "examples/methods/function_vectors_recipe.ipynb": "transformers",
+    "examples/methods/clip_head_attention_recipe.ipynb": "clip",
+    "examples/methods/clip_text_decomposition_recipe.ipynb": "clip",
+    "examples/methods/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
+    "examples/methods/cka_rsa_two_models_recipe.ipynb": "matplotlib",
+    "examples/methods/attribution_graph_transcoders_recipe.ipynb": "transcoders",
+    "examples/methods/jacobian_lens_recipe.ipynb": "transformers_plot",
+    "examples/methods/eap_ig_circuit_recipe.ipynb": "transformers",
+    "examples/methods/vision_logit_lens_recipe.ipynb": "transformers",
+    "examples/methods/leace_concept_erasure_recipe.ipynb": "transformers",
+    "docs/gallery/causal_tracing.md": "transformers",
+    "docs/gallery/cnn_fields.md": "torchvision",
+    "docs/gallery/neuro_rdms.md": "torchvision",
+    "docs/gallery/ioi_circuit.md": "transformers",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
@@ -64,6 +88,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "torchlens": (),
     "matplotlib": ("matplotlib",),
     "transformers": ("transformers", "tokenizers"),
+    "transformers_plot": ("transformers", "tokenizers", "matplotlib"),
     "torchvision": ("torchvision",),
     "lxt": ("lxt", "transformers"),
     "tuned_lens": ("tuned_lens", "transformers"),
@@ -77,6 +102,10 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "netrep": ("netrep",),
     "himalaya": ("himalaya",),
     "cornet": ("cornet",),
+    "clip": ("transformers", "tokenizers", "PIL", "matplotlib"),
+    "transcoders": ("transformer_lens", "huggingface_hub", "safetensors"),
+    "sklearn": ("sklearn", "transformers"),
+    "esm": ("transformers", "tokenizers", "matplotlib"),
 }
 
 #: Pages measured above the 5 s tier (heavy, 5-20 s) in the peer-recipe leg, or
@@ -90,16 +119,38 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: wave-three pages the unmarked family charged 15.8 s against its 13.6 s
 #: aggregate budget; its two largest pages, the tuned-lens training notebook
 #: (7.1 s) and the Prisma CLIP SAE page (2.0 s), are listed for that reason.
+#: The distributed alignment search notebook trains its model and two rotations:
+#: 8.5 s on one pinned Linux core.
+#: The probe-by-layer notebook measured 4.2 and 4.5 s run alone on one thread
+#: (at the boundary, and past the unmarked family's aggregate budget); the
+#: two-model CKA/RSA notebook measured 12.5 and 16.9 s.
+#: The Jacobian lens page measures 3.8 s on a two-thread worker (two prompts of
+#: batched autograd plus a jacrev check) and is listed to keep the unmarked
+#: family inside its aggregate budget.
+#: The linear-probe page measured 5.9 s through its sixth fence alone on one
+#: core (OMP_NUM_THREADS=1), before its streaming fence.
+#: The CRAFT page trains a small CNN for 150 steps and estimates Sobol indices
+#: over 32 images; it measured 12.4 s on a two-core worker.
+#: The task-RNN circuits page trains its RNN, captures 40 timesteps and runs a
+#: fixed-point search: 10.7 s on one thread of a two-core worker.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
-        "docs/recipes/lrp_transformers_lxt.md",
+        "docs/field-guide/jacobian_lens.md",
+        "docs/field-guide/lrp_transformers_lxt.md",
         "docs/neuroai/journey.md",
-        "docs/recipes/tcav.md",
-        "docs/recipes/pretrained_saes.md",
-        "docs/recipes/sae_trainers.md",
-        "docs/recipes/feature_visualisation.md",
-        "examples/recipes/train_tuned_lens_recipe.ipynb",
-        "docs/recipes/prisma_clip_sae.md",
+        "docs/field-guide/tcav.md",
+        "docs/field-guide/pretrained_saes.md",
+        "docs/field-guide/sae_trainers.md",
+        "docs/field-guide/feature_visualisation.md",
+        "examples/methods/train_tuned_lens_recipe.ipynb",
+        "docs/field-guide/prisma_clip_sae.md",
+        "examples/methods/das_causal_basis_recipe.ipynb",
+        "examples/methods/probe_accuracy_by_layer_recipe.ipynb",
+        "examples/methods/cka_rsa_two_models_recipe.ipynb",
+        "docs/gallery/causal_tracing.md",  # 5.37 s in the test call, one core (OMP_NUM_THREADS=1)
+        "docs/field-guide/linear_probes.md",
+        "docs/field-guide/craft_concepts.md",
+        "docs/neuroai/task_rnn_circuits.md",
     }
 )
 
@@ -108,8 +159,47 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: host load about 8 of 20 cores), measured 30.1 s, 23.5 s and 30.2 s in the
 #: test call (session wall 48.1 s, 30.8 s and 37.9 s; CPU 47.3 s, 30.3 s and
 #: 37.3 s), median 30.1 s. Earlier runs: 17 s alone, 30.8 s unloaded, 37.1 s and
-#: 42.5 s under gate load.
-SLOW_PAGES: frozenset[str] = frozenset({"docs/recipes/acdc_ioi.md"})
+#: 42.5 s under gate load. The function vectors notebook (GPT-2 small, two
+#: saved traces and 144 head scores) measured 73.3 s on one pinned Linux core.
+#: The two CLIP notebooks download the public ``openai/clip-vit-base-patch32``
+#: checkpoint (about 600 MB) on first use and trace its vision tower on real
+#: pictures, so they sit in the slow tier with the other real-checkpoint pages.
+#: The transcoder attribution-graph notebook downloads GPT-2 small and twelve
+#: transcoders (about 2.2 GB) on a cold cache, and its graph build alone took
+#: 180 s on four cores (8,963 feature nodes).
+#: The Jacobian lens notebook downloads GPT-2 small and fits sixteen prompts of
+#: batched autograd through the whole model, then a jacrev check on two blocks.
+#: In the peer-recipe leg (OMP_NUM_THREADS=1, torch 2.13.0, 2026-11-03) the
+#: EAP-IG notebook (GPT-2 small, 35k edge scores and four faithfulness replays)
+#: measured 168.3 and 193.0 s in the test call and 175.7 and 195.6 s run alone
+#: (two runs); the LEACE notebook (GPT-2 small, twelve block erasers) measured
+#: 73.3 and 72.6 s, and 82.0 and 76.9 s. The vision logit lens notebook measured
+#: 8.1 and 7.4 s, and 6.4 and 5.9 s, with a warm cache, but it
+#: downloads ViT-tiny and CLIP ViT-B/32 (about 620 MB) and a test image on first
+#: use, so it sits in the slow tier with the CLIP notebooks.
+#: The DAS page downloads GPT-2 small and trains a basis for 32 steps through a
+#: bound hook: 66 s and 329 s on a four-core worker under light and heavy host
+#: load. The entropy-vector page downloads GPT-2 small, samples continuations
+#: and decodes greedily under four steering settings: 48 s on four cores.
+#: The ESM-2 protein page downloads the public ``facebook/esm2_t6_8M_UR50D``
+#: checkpoint (31 MB) on first use: 14.1 s on one thread with a warm cache, in
+#: the slow tier with the other real-checkpoint pages.
+SLOW_PAGES: frozenset[str] = frozenset(
+    {
+        "docs/field-guide/acdc_ioi.md",
+        "examples/methods/function_vectors_recipe.ipynb",
+        "examples/methods/clip_head_attention_recipe.ipynb",
+        "examples/methods/clip_text_decomposition_recipe.ipynb",
+        "examples/methods/attribution_graph_transcoders_recipe.ipynb",
+        "examples/methods/jacobian_lens_recipe.ipynb",
+        "examples/methods/eap_ig_circuit_recipe.ipynb",
+        "examples/methods/vision_logit_lens_recipe.ipynb",
+        "examples/methods/leace_concept_erasure_recipe.ipynb",
+        "docs/field-guide/das_gpt2.md",
+        "docs/field-guide/entropy_steering.md",
+        "docs/neuroai/protein_language_model.md",
+    }
+)
 
 HEADER_RE = re.compile(r"# recipe-test: tool=(?P<tool>[a-z0-9_]+) expected=(?P<expected>.+)")
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
@@ -178,12 +268,76 @@ def _require_tool(page: str) -> None:
         Repo-relative page path.
     """
 
-    for module in TOOL_MODULES[PAGES[page]]:
+    for module in (*TOOL_MODULES[PAGES[page]], *_running_example_modules(page)):
         if importlib.util.find_spec(module) is None:
             message = f"{page} needs {module!r}"
             if PEERS_REQUIRED:
                 pytest.fail(f"{message}, and the peer-recipe leg installs it")
             pytest.skip(message)
+
+
+RUNNING_EXAMPLES_PAGE = "docs/field-guide/running_examples.md"
+# The former docs/recipes pages, now in the field guide: every executed page above plus the
+# LRP litmus page, which tests/test_docs_snippets.py runs block by block.
+RECIPE_PAGES: tuple[str, ...] = tuple(
+    sorted(
+        {page for page in PAGES if page.startswith("docs/field-guide/")}
+        | {"docs/field-guide/lrp_epsilon_litmus.md"}
+    )
+)
+
+
+def _running_examples() -> dict[str, str]:
+    """Return the two canonical running-example fences, keyed by the module each needs.
+
+    Returns
+    -------
+    dict[str, str]
+        ``{"transformers": decoder fence, "torchvision": ResNet-18 fence}``.
+    """
+
+    decoder, resnet = _fences(RUNNING_EXAMPLES_PAGE)[:2]
+    return {"transformers": decoder, "torchvision": resnet}
+
+
+def _opening_body(page: str) -> str:
+    """Return a page's first Python fence without its recipe-test header line.
+
+    Parameters
+    ----------
+    page:
+        Repo-relative page path.
+
+    Returns
+    -------
+    str
+        The fence source after the header (the whole fence when it has none).
+    """
+
+    first = _fences(page)[0]
+    if HEADER_RE.match(first.splitlines()[0]):
+        return first.split("\n", 1)[1]
+    return first
+
+
+def _running_example_modules(page: str) -> tuple[str, ...]:
+    """Return the module the page's opening running example needs, if it has one.
+
+    Parameters
+    ----------
+    page:
+        Repo-relative page path.
+
+    Returns
+    -------
+    tuple[str, ...]
+        ``("transformers",)`` or ``("torchvision",)``; empty for a page without one.
+    """
+
+    body = _opening_body(page) if page.endswith(".md") else ""
+    return tuple(
+        module for module, fence in _running_examples().items() if body.startswith(fence + "\n")
+    )
 
 
 @pytest.mark.parametrize("page", _params())
@@ -229,7 +383,7 @@ def test_every_recipe_fence_is_headed(page: str) -> None:
 def test_lrp_page_states_the_patent_notice_and_points_to_lxt() -> None:
     """The LRP recipe warns of patents and keeps LRP a recipe, not a product feature."""
 
-    text = (REPO / "docs/recipes/lrp_epsilon_litmus.md").read_text("utf-8")
+    text = (REPO / "docs/field-guide/lrp_epsilon_litmus.md").read_text("utf-8")
     assert "LRP methods may be patent-encumbered for commercial" in text
     assert "keeps LRP a recipe, not a product feature" in text
     assert "(lrp_transformers_lxt.md)" in text
@@ -257,11 +411,14 @@ def test_token_result_save_line_names_a_real_method() -> None:
 
 
 def test_roadmap_names_the_quantized_summary_footer() -> None:
-    """The bits-per-weight footer and flax-tabulate recipe are a roadmap note."""
+    """The bits-per-weight footer stays a roadmap note; the flax-tabulate page says so."""
 
     text = (REPO / "ROADMAP.md").read_text("utf-8")
     assert "bits-per-weight footer" in text
-    assert "coming from flax\n  `tabulate`" in text
+    assert "`docs/migration/from_flax_tabulate.md`" in text
+    page = (REPO / "docs/migration/from_flax_tabulate.md").read_text("utf-8")
+    assert "There is no\nbits-per-weight line in the footer" in page
+    assert "`quantized_tensor` row" in page
 
 
 def test_neuro_refusal_homes_have_recipe_pages() -> None:
@@ -276,3 +433,18 @@ def test_neuro_refusal_homes_have_recipe_pages() -> None:
     for page in ("neuroai/netrep.md", "neuroai/himalaya.md"):
         assert f"(../{page})" in text
         assert f"docs/{page}" in PAGES
+
+
+@pytest.mark.parametrize("page", RECIPE_PAGES)
+def test_recipe_page_opens_with_a_running_example(page: str) -> None:
+    """Each recipe page opens with one running example, byte for byte, then one verb on it."""
+
+    text = (REPO / page).read_text("utf-8")
+    heading = "## Minimal example on the running model"
+    assert heading in text, page
+    assert text.index(heading) < text.index("```python"), page
+    assert _running_example_modules(page), (page, "first fence is not a running example")
+    assert _opening_body(page).rstrip().split("trace = tl.trace(model, x)", 1)[1].strip(), (
+        page,
+        "the opening fence adds no verb after the running example",
+    )

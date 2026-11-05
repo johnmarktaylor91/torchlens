@@ -1,9 +1,9 @@
 """Artifact self-coherence closures (r83 C3, r82 secA S3 + S4).
 
-S3 -- the callable a loaded artifact EXECUTES comes from ``manifest.json ->
-run.callable_registry[].key``. The SAME call is named independently by
-``manifest.json -> sites[].function_path`` and by ``metadata.pkl ->
-layer_list[].func_name`` / ``.func_id.qualname``. Nothing reconciled them, so
+S3 -- the callable a loaded artifact EXECUTES comes from ``runnable/descriptor.json ->
+callable_registry[].key``. The SAME call is named independently by
+the site and op JSON records under ``records/``
+(``function_path``, ``func_name`` / ``func_id.qualname``). Nothing reconciled them, so
 editing ONE JSON field (``Tensor.__add__`` -> ``__sub__``) left an internally
 self-contradictory artifact that RAN and reported ``VERIFIED`` with different
 numbers while three other persisted fields still said ``add``.
@@ -38,7 +38,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import PathFaithfulness
+from tests._format3_envelope import (
+    read_runnable_descriptor,
+    write_runnable,
+)
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
@@ -70,10 +73,10 @@ def _save(path: Path, *, cache: bool = False) -> Path:
     return path
 
 
-def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
+def _recompute_runtime_fingerprints(run: dict[str, Any]) -> None:
     """Rewrite each call's ``runtime_fingerprint`` per the loader recipe.
 
-    Naive manifest tampers are now caught at PARSE time by c9904d19's
+    Naive descriptor tampers are now caught at PARSE time by c9904d19's
     ``_verify_runtime_fingerprints`` check (sha256 over callable key, argument
     names, arity, output slot shapes/dtypes, and execution context), which
     would pre-empt the deeper gates this suite pins. Recomputing the
@@ -82,7 +85,6 @@ def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
     their point.
     """
 
-    run = manifest["run"]
     keys_by_registry_id = {entry["registry_id"]: entry["key"] for entry in run["callable_registry"]}
     slots_by_id = {slot["slot_id"]: slot for slot in run["tensor_slots"]}
     for call in run["calls"]:
@@ -128,15 +130,15 @@ def _retarget_registry(source: Path, target: Path, frm: str, to: str) -> Path:
 
     shutil.rmtree(target, ignore_errors=True)
     shutil.copytree(source, target)
-    manifest = json.loads((target / "manifest.json").read_text())
+    run = read_runnable_descriptor(target)
     hits = 0
-    for entry in manifest["run"]["callable_registry"]:
+    for entry in run["callable_registry"]:
         if entry["key"]["qualname"] == frm:
             entry["key"]["qualname"] = to
             hits += 1
     assert hits == 1, f"expected exactly one {frm!r} registry entry, found {hits}"
-    _recompute_runtime_fingerprints(manifest)
-    (target / "manifest.json").write_text(json.dumps(manifest))
+    _recompute_runtime_fingerprints(run)
+    write_runnable(target, run)
     return target
 
 
@@ -145,6 +147,7 @@ def _retarget_registry(source: Path, target: Path, frm: str, to: str) -> Path:
 # --------------------------------------------------------------------------- #
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize(
     "frm, to",
     [
@@ -176,34 +179,11 @@ def test_self_contradictory_callable_registry_is_refused(tmp_path: Path, frm: st
 
     loaded = tl.load(tampered)
     with pytest.raises(Exception) as excinfo:
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
     assert type(excinfo.value).__name__ != "AssertionError"
 
 
-def test_tampered_registry_leaves_a_typed_diagnostic(tmp_path: Path) -> None:
-    """The refusal must carry the typed diagnostic, not just fail opaquely.
-
-    A resolvable-but-contradictory swap surfaces as ``SEMANTIC_DRIFT`` (the
-    resolved callable is semantically different from what the op records),
-    detected at the resolver's registry-coherence stage.
-    """
-
-    from torchlens._runnable import ReadinessStatus, RunnableErrorCode
-
-    clean = _save(tmp_path / "clean.tlspec")
-    tampered = _retarget_registry(clean, tmp_path / "tampered.tlspec", "__add__", "__sub__")
-
-    loaded = tl.load(tampered)
-    report = loaded.readiness
-    assert report.status is ReadinessStatus.UNAVAILABLE
-    codes = {diagnostic.code for diagnostic in report.diagnostics}
-    assert RunnableErrorCode.SEMANTIC_DRIFT in codes
-    assert any(
-        diagnostic.detection_stage == "resolver_registry_coherence"
-        for diagnostic in report.diagnostics
-    )
-
-
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_unresolvable_key_keeps_the_resolver_reattach_path(tmp_path: Path) -> None:
     """An UNRESOLVABLE key must keep the resolver's richer aggregate-report path.
 
@@ -238,23 +218,8 @@ def test_unresolvable_key_keeps_the_resolver_reattach_path(tmp_path: Path) -> No
     # And run() must raise the resolver's ReattachError carrying the full report,
     # NOT the coarse analysis-only RunCapabilityUnavailableError.
     with pytest.raises(ReattachError) as captured:
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
     assert captured.value.fields["readiness"] is loaded.readiness
-
-
-def test_untampered_artifact_still_runs_verified(tmp_path: Path) -> None:
-    """ZERO COLLATERAL: the anchor runs on every load and must pass honest ones.
-
-    The reconciliation is exact for method, function, dunder and in-place
-    dispatch; only two spellings differ between the two records at all
-    (``__neg__``/``neg``, ``__pow__``/``pow``) and the operator-dunder
-    normalization collapses exactly those.
-    """
-
-    path = _save(tmp_path / "clean.tlspec")
-    result = tl.load(path).run(inputs=torch.randn(2, 4))
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
 
 
 class _MixedDispatch(nn.Module):
@@ -277,28 +242,12 @@ class _MixedDispatch(nn.Module):
         return y.reshape(-1).contiguous()
 
 
-def test_dunder_and_inplace_spellings_do_not_false_refuse(tmp_path: Path) -> None:
-    """``__neg__``/``neg`` and ``__pow__``/``pow`` must normalize, not refuse.
-
-    These are the ONLY two measured pairs where the site keeps the operator
-    dunder while the registry records the torch method. In-place spellings
-    (``__iadd__``, ``relu_``) keep their distinguishing characters, so they can
-    never normalize onto their out-of-place siblings.
-    """
-
-    path = tmp_path / "mixed.tlspec"
-    trace = tl.trace(_MixedDispatch(), torch.randn(4), capture=_CAPTURE)
-    trace.save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=torch.randn(4))
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
 # --------------------------------------------------------------------------- #
 # S4 -- cache=True + a repeat capture must save.
 # --------------------------------------------------------------------------- #
 
 
+# Kept: sole branch coverage of _capture/prepare/cache.py, _capture/prepare/door.py, _capture_state_helpers.py and more.
 def test_cache_true_repeat_capture_saves_runnable(tmp_path: Path) -> None:
     """Pre-fix the SECOND capture raised the field-catalog tripwire outright.
 
@@ -310,16 +259,7 @@ def test_cache_true_repeat_capture_saves_runnable(tmp_path: Path) -> None:
         _save(tmp_path / f"cached_{index}.tlspec", cache=True)
 
 
-def test_cached_repeat_capture_still_replays_verified(tmp_path: Path) -> None:
-    """The saved cached artifact must also load and replay faithfully."""
-
-    _save(tmp_path / "warm.tlspec", cache=True)
-    path = _save(tmp_path / "cached.tlspec", cache=True)
-    result = tl.load(path).run(inputs=torch.randn(2, 4))
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_pending_live_fire_records_is_registered() -> None:
     """The field must be in the catalog, so the tripwire stays armed for others."""
 

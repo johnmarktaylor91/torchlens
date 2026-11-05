@@ -72,9 +72,6 @@ def test_every_census_root_is_described_and_baselined() -> None:
         )
 
 
-@pytest.mark.smoke_cells(
-    "test_machine_census_matches_baseline[census_signature_params-signature_params.tsv]"
-)
 @pytest.mark.parametrize(
     ("census", "baseline"),
     [

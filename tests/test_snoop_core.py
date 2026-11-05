@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import io
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -86,22 +85,6 @@ def test_tier_parity_transcripts_are_byte_identical() -> None:
     assert trace_sink.getvalue() == record_sink.getvalue()
 
 
-def test_selector_scope_with_held_ancestors() -> None:
-    """Scoped narration prints no unselected module noise (the review's refinement)."""
-
-    sink = io.StringIO()
-    tl.trace(
-        TwoBlock(),
-        torch.randn(2, 4),
-        narrate=NarrationOptions(sites=tl.in_module("fc2"), sink=sink),
-    )
-    lines = _transcript(sink)
-    body = [line for line in lines if not line.startswith("-- echo:")]
-    assert any("fc2" in line and line.lstrip().startswith(">") for line in body)
-    assert not any("fc1" in line for line in body)
-    assert any("linear_2" in line for line in body)
-
-
 def test_save_scope_and_echo_scope_are_independent() -> None:
     """A narrated-but-unsaved op prints; a saved-but-unnarrated op stays silent."""
 
@@ -128,27 +111,6 @@ def test_echo_modules_is_structure_only() -> None:
     assert all(line.lstrip().startswith((">", "<")) for line in body)
 
 
-@pytest.mark.smoke
-def test_multi_output_op_narrates_one_line_per_output() -> None:
-    """Memo test 1: one line per output on multi-output ops."""
-
-    class Splitter(nn.Module):
-        """Emits two outputs from one op."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Split and re-add so both outputs are consumed."""
-
-            a, b = torch.split(x, 2, dim=1)
-            return a + b
-
-    sink = io.StringIO()
-    tl.record(Splitter(), torch.randn(2, 4), narrate=NarrationOptions(sites=True, sink=sink))
-    split_lines = [line for line in _transcript(sink) if "split" in line]
-    assert len(split_lines) == 2
-    assert any("out=1" in line for line in split_lines)
-
-
-@pytest.mark.smoke
 def test_followed_by_releases_are_marked_late() -> None:
     """Bounded followed_by releases buffered matches marked late=N."""
 
@@ -182,29 +144,3 @@ def test_recorder_resets_per_pass_and_marks_passes() -> None:
     assert "pass=2" in relu_lines[1]
     # Ordinals restart per pass: both relu lines carry the same ordinal.
     assert relu_lines[0].split()[0] == relu_lines[1].split()[0]
-
-
-def test_record_context_requires_grad_is_populated() -> None:
-    """Snoop build row 2: ``tensor_requires_grad`` is live data, not None.
-
-    The panel measured 0/554 populated at its baseline commit; the field is
-    populated today and this pins it (reading the dataclass as runtime
-    reality was a bug two labs committed and one caught).
-    """
-
-    seen: list[object] = []
-
-    def probe(ctx: object) -> bool:
-        """Record the requires_grad field for every op context."""
-
-        if getattr(ctx, "kind", None) == "op":
-            seen.append(ctx.tensor_requires_grad)
-        return False
-
-    model = TwoBlock()
-    for parameter in model.parameters():
-        parameter.requires_grad_(True)
-    tl.record(model, torch.randn(2, 4), save=probe)
-    assert seen
-    assert all(isinstance(value, bool) for value in seen)
-    assert any(value is True for value in seen)

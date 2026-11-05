@@ -203,11 +203,11 @@ def pop_static_label_save_predicate(
     Returns
     -------
     Callable[[Any], Any] | BaseSelector | None
-        Static-label save predicate, or ``None`` when no predicate was supplied.
+        Static-label save predicate, or ``None`` for save-all (omitted or ``"all"``).
     """
 
     save_value = kwargs.pop("save", None)
-    if save_value is None:
+    if save_value is None or (isinstance(save_value, str) and save_value == "all"):
         return None
     if not isinstance(save_value, BaseSelector):
         raise BackendUnsupportedError(
@@ -216,7 +216,7 @@ def pop_static_label_save_predicate(
             "Value-dependent predicates need concrete activation values at predicate time, "
             "which traced/lazy non-torch captures do not expose without changing execution. "
             "Use static-label save= selectors or the PyTorch backend for value-dependent "
-            "predicates, intervene=, and halt=."
+            "predicates, intervene=, and stop_after=."
         )
     _reject_non_static_save_predicate(save_value, backend_name=backend_name)
     return save_value
@@ -328,7 +328,7 @@ def _reject_non_static_save_predicate(
             "Value-dependent predicates need concrete activation values at predicate time, "
             "which traced/lazy non-torch captures do not expose without changing execution. "
             "Use static-label save= selectors or the PyTorch backend for value-dependent "
-            "predicates, intervene=, and halt=."
+            "predicates, intervene=, and stop_after=."
         )
     unsupported = first_selector_kind_outside(predicate, allowed=_STATIC_SELECTOR_KINDS)
     if unsupported is None:
@@ -339,5 +339,5 @@ def _reject_non_static_save_predicate(
         "supported, but value-dependent predicates need concrete activation values at "
         "predicate time, which traced/lazy non-torch captures do not expose without changing "
         "execution. Use the PyTorch backend for value-dependent predicates, intervene=, and "
-        "halt=."
+        "stop_after=."
     )

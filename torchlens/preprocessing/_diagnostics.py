@@ -62,6 +62,13 @@ class DiagnosticFinding:
     detail:
         Human-readable evidence, printing measured values and (for the
         confinement arm) both blind spots.
+
+    Examples
+    --------
+    >>> result = tl.preprocessing.diagnose(torch.full((2, 3, 4, 4), float("nan")))
+    >>> row = next(f for f in result.findings if f.check_name == "nonfinite")
+    >>> isinstance(row, DiagnosticFinding), row.outcome
+    (True, 'contradiction')
     """
 
     check_name: str
@@ -82,6 +89,14 @@ class InputDiagnostics:
     ----------
     findings:
         One row per requested check.
+
+    Examples
+    --------
+    >>> result = tl.preprocessing.diagnose(torch.full((2, 3, 4, 4), float("nan")))
+    >>> isinstance(result, InputDiagnostics)
+    True
+    >>> [f.check_name for f in result.contradictions]
+    ['nonfinite']
     """
 
     findings: tuple[DiagnosticFinding, ...]
@@ -290,6 +305,14 @@ def diagnose(
     ------
     torchlens.InvalidArgumentError
         On an unknown check name (closed vocabulary, teaching the valid set).
+
+    Examples
+    --------
+    >>> declared = tl.preprocessing.DeclaredPreprocessing(mean=(0.5,) * 3, std=(0.5,) * 3)
+    >>> batch = torch.randint(0, 255, (2, 3, 4, 4), dtype=torch.uint8)
+    >>> result = tl.preprocessing.diagnose(batch, declared=declared)
+    >>> any(f.check_name == "dtype_regime" for f in result.contradictions)
+    True
     """
 
     runners = {

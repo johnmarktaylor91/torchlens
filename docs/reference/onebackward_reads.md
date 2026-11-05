@@ -34,7 +34,7 @@ from the graph on every default capture, so the registry route is the only
 correct one: a naive `autograd.grad` over payloads returns `None` at every
 site.
 
-The id rejoin is a fallback: a user `log_backward` before the read nulls the
+The id rejoin is a fallback: a user `backward` before the read nulls the
 per-op handles, and the read transparently rejoins through the trace's
 pinned refs, bitwise-equal.
 

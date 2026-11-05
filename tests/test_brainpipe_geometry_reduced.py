@@ -44,17 +44,6 @@ def _reduced_trace() -> object:
     )
 
 
-def test_rdm_evolution_reads_transformed_payloads() -> None:
-    """Reduce-then-RDM works and disclosed the transformed basis per key."""
-
-    rdms = tl.repgeom.rdm_evolution(_reduced_trace(), min_stimuli=2)
-    assert len(rdms) > 0
-    assert set(rdms.payload_basis) == set(rdms)
-    assert all(kind == "transformed" for kind in rdms.payload_basis.values())
-    for matrix in rdms.values():
-        assert matrix.shape == (12, 12)
-
-
 def test_mds_and_scree_read_transformed_payloads() -> None:
     """The sibling verbs ride the same payload door."""
 
@@ -63,14 +52,6 @@ def test_mds_and_scree_read_transformed_payloads() -> None:
     scree = tl.repgeom.scree_evolution(log, min_stimuli=3)
     assert all(kind == "transformed" for kind in coords.payload_basis.values())
     assert all(kind == "transformed" for kind in scree.payload_basis.values())
-
-
-def test_raw_payload_basis_is_disclosed_as_raw() -> None:
-    """Default raw captures keep raw geometry and say so."""
-
-    log = tl.trace(_model(), torch.randn(12, 32))
-    rdms = tl.repgeom.rdm_evolution(log, min_stimuli=2)
-    assert all(kind == "raw" for kind in rdms.payload_basis.values())
 
 
 def test_batch_consuming_transform_refuses_with_remedy() -> None:

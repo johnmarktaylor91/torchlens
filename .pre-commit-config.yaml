@@ -5,7 +5,8 @@
 # mypy, the repository checks (scripts/checks/run_all.py), actionlint and the
 # full-tree gitleaks scan in .github/workflows/pr.yml; the tier marker lint at
 # pytest collection. The public-repo marker check is the global git hook's.
-default_install_hook_types: [pre-commit, pre-push]
+# commit-msg installs the major-marker check below; without it that layer is config only.
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -32,6 +33,22 @@ repos:
       - id: ruff-format
   - repo: local
     hooks:
+      # A major version ships only on the maintainer's explicit command: commit
+      # messages never carry `!` types or breaking-change footers unless
+      # .github/MAJOR_RELEASE_APPROVED exists (scripts/check_no_breaking_markers.py).
+      - id: no-breaking-markers-commit-msg
+        name: Block major-bump markers (commit-msg)
+        entry: scripts/check_no_breaking_markers.py --commit-msg
+        language: system
+        stages: [commit-msg]
+        pass_filenames: true
+      - id: no-breaking-markers-pre-push
+        name: Block major-bump markers (pre-push)
+        entry: scripts/check_no_breaking_markers.py --pre-push
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
       - id: no-internal-notes
         name: Internal planning notes must stay private
         entry: >-

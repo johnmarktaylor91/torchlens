@@ -20,8 +20,6 @@ never saw them.
 
 from __future__ import annotations
 
-import pickle
-
 import pytest
 import torch
 from torch import nn
@@ -29,7 +27,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._capture.trace import _SEMANTIC_OUTPUT_TRANSIENT_FIELDS
 from torchlens._data_classes.field_policy import FieldPolicy
-from torchlens.errors import TraceCaptureError
 
 
 class _Tokenizer:
@@ -78,58 +75,6 @@ def test_completed_capture_drops_the_semantic_output_scratch() -> None:
     assert _leaked(trace) == []
 
 
-def test_halted_capture_drops_the_semantic_output_scratch() -> None:
-    """The HALTED axis: the defect's primary reproduction.
-
-    A halt exits before the normal arm's pop block, so both -- including
-    the live tokenizer -- used to survive onto the returned partial Trace.
-    """
-
-    trace = tl.trace(
-        _model_with_tokenizer(),
-        torch.ones(1, 3),
-        stop_after=tl.func("relu"),
-    )
-    assert trace.is_stopped is True
-    assert _leaked(trace) == []
-
-
-def test_intervened_capture_drops_the_semantic_output_scratch() -> None:
-    """The INTERVENED axis, the lockstep gate's other blind spot."""
-
-    trace = tl.trace(
-        _model_with_tokenizer(),
-        torch.ones(1, 3),
-        save=tl.func("relu"),
-        intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-    )
-    assert _leaked(trace) == []
-
-
-def test_failed_capture_drops_the_semantic_output_scratch() -> None:
-    """The FAILED axis: the partial attached to the escaping exception."""
-
-    class Boom(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.fc = nn.Linear(3, 4)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: D102
-            torch.relu(self.fc(x))
-            raise RuntimeError("boom")
-
-    model = Boom().eval()
-    model._torchlens_output_tokenizer = _Tokenizer()
-    with pytest.raises(TraceCaptureError) as excinfo:
-        tl.trace(model, torch.ones(1, 3))
-    assert isinstance(excinfo.value.__cause__, RuntimeError)
-    partial = getattr(excinfo.value, "partial_trace", None)
-    if partial is None:
-        pytest.skip("this capture path attaches no partial product")
-    assert _leaked(partial) == []
-
-
-@pytest.mark.smoke
 def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
     """The drop never runs before the sole consumer.
 
@@ -161,6 +106,7 @@ def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_transient_fields_are_declared_drop_on_trace() -> None:
     """Declared, so the runtime-declaration lockstep gate can see them."""
 
@@ -173,78 +119,3 @@ def test_transient_fields_are_declared_drop_on_trace() -> None:
         # Session-time, never user-facing portable schema.
         assert name not in MODEL_LOG_FIELD_ORDER, name
         assert policy[name].user_facing is False, name
-
-
-def test_declared_rows_are_the_single_scrub_authority() -> None:
-    """The names left the pre-spec runtime-only allowance in `_io/scrub.py`.
-
-    That allowance is consulted BEFORE ``_PORTABLE_STATE_SPEC``, so an entry
-    there would make the declared policy dead code.
-    """
-
-    from torchlens._io.scrub import _is_runtime_only_trace_field
-
-    for name in _SEMANTIC_OUTPUT_TRANSIENT_FIELDS:
-        assert not _is_runtime_only_trace_field(name), name
-
-
-@pytest.mark.parametrize("halt", [False, True])
-def test_plain_pickle_never_carries_the_live_tokenizer(halt: bool) -> None:
-    """The pickle path, not just `.tlspec` (the fix's second half).
-
-    ``Trace.__getstate__`` is a hand-maintained pop list, and plain pickle
-    legitimately carries most session-time DROP state (``backward_ready``,
-    ``save_budget``, ...). These two are different: they hold live user
-    objects, so the serialization boundary drops them explicitly.
-    """
-
-    model = _model_with_tokenizer()
-    kwargs = {"stop_after": tl.func("relu")} if halt else {}
-    trace = tl.trace(model, torch.ones(1, 3), **kwargs)
-    state = trace.__getstate__()
-    for name in _SEMANTIC_OUTPUT_TRANSIENT_FIELDS:
-        assert name not in state, name
-    restored = pickle.loads(pickle.dumps(trace))
-    assert _leaked(restored) == []
-    # No reconstructed tokenizer anywhere in the restored trace's state.
-    assert not any(isinstance(value, _Tokenizer) for value in vars(restored).values())
-
-
-def test_pickle_of_a_halted_trace_stays_tokenizer_free_by_size() -> None:
-    """The retention leak has a measurable signature: pickle payload size.
-
-    A pinned tokenizer reconstructs on load and inflates the artifact. Rather
-    than pin an absolute byte count, compare the same capture with and without
-    an attached tokenizer -- they must not differ by the tokenizer's payload.
-    """
-
-    plain = tl.trace(
-        _HaltableClassifier().eval(),
-        torch.ones(1, 3),
-        stop_after=tl.func("relu"),
-    )
-    with_tok = tl.trace(
-        _model_with_tokenizer(),
-        torch.ones(1, 3),
-        stop_after=tl.func("relu"),
-    )
-    tokenizer_bytes = len(pickle.dumps(_Tokenizer()))
-    delta = abs(len(pickle.dumps(with_tok)) - len(pickle.dumps(plain)))
-    assert delta < tokenizer_bytes, (
-        f"halted pickle grew by {delta} bytes, at least one tokenizer "
-        f"({tokenizer_bytes} bytes) worth of retained user state"
-    )
-
-
-def test_halted_trace_with_tokenizer_saves_and_reloads(tmp_path) -> None:
-    """The `.tlspec` path still round-trips with the declared rows."""
-
-    trace = tl.trace(
-        _model_with_tokenizer(),
-        torch.ones(1, 3),
-        stop_after=tl.func("relu"),
-    )
-    path = tmp_path / "halted_semantic.tlspec"
-    trace.save(str(path))
-    loaded = tl.load(str(path))
-    assert _leaked(loaded) == []

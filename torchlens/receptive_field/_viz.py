@@ -9,6 +9,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
+from ..errors import InvalidArgumentError
 from ..viz import node_plots
 from ._errors import (
     AmbiguousInputError,
@@ -152,7 +153,7 @@ def _blend_heatmap(
     footer_width = max(blended.width, int(text_box[2] - text_box[0]) + 8)
     artifact = Image.new("RGB", (footer_width, blended.height + footer_height), "white")
     artifact.paste(blended, (0, 0))
-    ImageDraw.Draw(artifact).text((4, blended.height + 3), disclosure, fill="#111827")
+    ImageDraw.Draw(artifact).text((4, blended.height + 3), disclosure, fill="#1A1A1A")
     artifact.info["torchlens_disclosure"] = disclosure
     return artifact
 
@@ -191,6 +192,13 @@ def node_spec(
     ------
     AmbiguousInputError
         If more than one model input reaches ``op`` and ``input`` is omitted.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> style = node_spec(trace["conv2d_2_3"])
+    >>> callable(style)
+    True
     """
 
     _ = overlay, grad, box_color, alpha, cmap
@@ -214,7 +222,7 @@ def node_spec(
         if not in_cone:
             if not dim_others:
                 return None
-            return spec.replace(fillcolor=_DIM_FILL, fontcolor="#667085", tooltip=spec.tooltip)
+            return spec.replace(fillcolor=_DIM_FILL, fontcolor="#707070", tooltip=spec.tooltip)
         node_descriptor = _descriptor_for_labels(trace, labels, descriptor.io_role)
         tooltip = _tooltip(node_descriptor) if node_descriptor is not None else "RF ancestor cone"
         return spec.replace(fillcolor=_CONE_FILL, color="#D97706", penwidth=2.0, tooltip=tooltip)
@@ -536,7 +544,12 @@ def _rendered_labels(layer: Any) -> frozenset[str]:
 
     values = set(getattr(layer, "op_labels", ()))
     for name in ("label", "layer_label", "_layer_label_raw"):
-        value = getattr(layer, name, None)
+        try:
+            value = getattr(layer, name, None)
+        except InvalidArgumentError:
+            # A multi-pass Layer refuses its single-pass fields; its ops are
+            # already represented through ``op_labels``.
+            continue
         if isinstance(value, str):
             values.add(value)
     return frozenset(values)

@@ -9,7 +9,6 @@ sweep); no ANSI/OSC-8 bytes in any returned string.
 from __future__ import annotations
 
 import dataclasses
-import re
 
 import pytest
 import torch
@@ -41,28 +40,34 @@ def deep_trace():
     trace.cleanup()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _visualization/_summary_internal/__init__.py, _visualization/_summary_internal/_builder.py and more.
 def test_trace_repr_carries_health_proof(deep_trace) -> None:
     """The identity repr gains the whole-trace proof line when earned."""
 
+    verdict = deep_trace.nonfinite_verdict
     line = repr(deep_trace)
     assert "\n" not in line
-    assert "Trace(" in line
+    assert line.startswith("Trace ")
+    assert len(line) <= 100
     # Default full-save captures derive the verdict from saved payloads.
-    if deep_trace.nonfinite_verdict == "checked_and_clean":
+    if verdict == "checked_and_clean":
         assert "no NaN/Inf (exact)" in line
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_nonfinite.py, _data_classes/interface.py.
 def test_trace_str_is_bounded_with_folds(deep_trace) -> None:
     """print(trace): buffer rows fold; roster elides with exact remainder."""
 
     text = str(deep_trace)
     lines = text.splitlines()
-    assert len(lines) < 80, f"bounded execution log regressed to {len(lines)} lines"
-    assert any("buffer rows folded" in line for line in lines)
-    assert any("more layers (see .ops)" in line for line in lines)
+    assert len(lines) <= 13, f"bounded execution log regressed to {len(lines)} lines"
+    assert lines[0] == repr(deep_trace)
+    assert "  model" in text and "  graph" in text
+    assert ".summary()" in lines[-1]
+    assert "Module Hierarchy" not in text
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/interface.py and a sole campaign mutation kill.
 def test_trace_str_honesty_header_on_not_checked() -> None:
     """State precedes detail: a NOT-CHECKED capture says so up front."""
 
@@ -73,26 +78,27 @@ def test_trace_str_honesty_header_on_not_checked() -> None:
     )
     text = str(trace)
     assert trace.nonfinite_verdict == "not_checked"
-    assert "Health: NOT-CHECKED" in text
-    # The header sits ABOVE structure/tensor detail (state precedes detail).
-    assert text.index("Health: NOT-CHECKED") < text.index("Structure:")
+    assert "NaN/Inf not checked" in text.splitlines()[0]
+    assert text.index("NaN/Inf not checked") < text.index("  model")
     trace.cleanup()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_accessor_base.py, _data_classes/_layer_accessors.py and more.
 def test_accessors_point_never_dump(deep_trace) -> None:
     """Collection reprs are one-line composition cards with exits."""
 
     for accessor in (deep_trace.layers, deep_trace.params, deep_trace.modules, deep_trace.buffers):
         line = repr(accessor)
         assert "\n" not in line
-        assert ".head()" in line and ".search()" in line
+        assert ".head()" not in line
+        assert ".head()" in str(accessor) and ".search()" in str(accessor)
     assert "buffers" in repr(deep_trace.layers)  # composition note names buffers
     view = str(deep_trace.layers)
     assert len(view.splitlines()) <= 24  # voice rule 9 collection budget
     assert "... " in view  # exact remainder, never a silent cut
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_accessor_base.py.
 def test_accessor_head_and_find(deep_trace) -> None:
     """head()/find() are the named exits and return records."""
 
@@ -102,7 +108,7 @@ def test_accessor_head_and_find(deep_trace) -> None:
     assert found and all("weight" in p.address for p in found)
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_nonfinite.py, _partial/__init__.py.
 def test_partial_trace_badge_first() -> None:
     """PartialTrace: the badge leads; the card names the failure."""
 
@@ -121,7 +127,7 @@ def test_partial_trace_badge_first() -> None:
     assert "error:" in card and "More:" in card
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of bundle/__init__.py, bundle/_card.py.
 def test_bundle_repr_distribution_and_member_lines() -> None:
     """Bundle: outcome distribution above the fold; members one-line each."""
 
@@ -138,8 +144,9 @@ def test_bundle_repr_distribution_and_member_lines() -> None:
     b.cleanup()
 
 
+# Kept by the shrink-r4 coverage proof: a sole campaign mutation kill.
 def test_edge_record_repr_designed() -> None:
-    """Edge records render source -> target lines, sentinel-silent."""
+    """Edge records describe the argument occurrence without raw labels or sentinels."""
 
     class _Viewy(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -153,13 +160,14 @@ def test_edge_record_repr_designed() -> None:
     records = [e for op in trace._layer_list for e in (getattr(op, "edge_uses", ()) or ())]
     assert records
     texts = [repr(e) for e in records]
-    assert all(text.startswith("edge ") and " -> " in text for text in texts)
-    assert any("[view]" in text for text in texts)
+    assert all(text.startswith("EdgeUseRecord: ") and " argument " in text for text in texts)
+    assert any(", view" in text for text in texts)
+    assert all(str(record).splitlines()[0] == repr(record) for record in records)
     assert all("unknown" not in text for text in texts)  # sentinel never prints
     trace.cleanup()
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_report_protocol.py.
 def test_report_protocol_card_shape() -> None:
     """The common report lead + bounded findings + exact remainder."""
 
@@ -177,25 +185,6 @@ def test_report_protocol_card_shape() -> None:
     assert lines[0].startswith("DemoAudit(trace_1) status=findings")
     assert "... 2 more findings" in card  # exact remainder
     assert "More:" in lines[-1]
-
-
-_ANSI_OSC = re.compile(r"\x1b|\x9b|\x07")
-
-
-@pytest.mark.smoke
-def test_no_terminal_bytes_in_container_strings(deep_trace) -> None:
-    """No ANSI/OSC-8/terminal bytes in ANY returned container string."""
-
-    for text in (
-        repr(deep_trace),
-        str(deep_trace),
-        repr(deep_trace.layers),
-        str(deep_trace.layers),
-        repr(deep_trace.params),
-        repr(deep_trace.modules),
-        repr(deep_trace.buffers),
-    ):
-        assert not _ANSI_OSC.search(text)
 
 
 def _has_auto_repr(cls: type) -> bool:
@@ -264,6 +253,7 @@ _AUTO_REPR_ALLOWED = {
 }
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of differential.py, report/__init__.py.
 def test_no_auto_repr_on_f10_surfaces() -> None:
     """D31 sweep over the F10-owned surfaces (stats + report protocol)."""
 

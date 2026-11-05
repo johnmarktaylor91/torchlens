@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.backend_parity
+pytestmark = [pytest.mark.backend_parity, pytest.mark.rare]
 
 
 def _assert_conditional_label(trace, label: str, *, context: str) -> None:

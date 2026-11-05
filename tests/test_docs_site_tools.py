@@ -1,0 +1,306 @@
+"""The docs site tools: task-card generator, site map, page mover and link checker.
+
+The generator's committed outputs (``tools/docs/generated``) must match a fresh
+run over the Field guide cards, and ``mkdocs.yml`` must match the site map; both
+are lockstep checks in the spirit of the other generated-docs gates.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import posixpath
+import re
+import sys
+from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+import pytest
+
+pytest.importorskip("yaml")
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+def _load(name: str) -> ModuleType:
+    path = REPO / "tools" / "docs" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"_docs_tool_{name}", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve their module by name
+    spec.loader.exec_module(module)
+    return module
+
+
+index_tool = _load("build_agent_index")
+site_nav = _load("site_nav")
+move_pages = _load("move_pages")
+links = _load("check_site_links")
+
+CARD = """---
+task: {task}
+one_liner: {task} in one line.
+canonical: {call}
+avoid: "Calling {call} in a loop."
+tier: {tier}
+doors: [mechinterp]
+related: {related}
+---
+
+# {task}
+
+Body of {task}.
+"""
+
+
+def _write_cards(folder: Path) -> Path:
+    folder.mkdir()
+    (folder / "see.md").write_text(
+        CARD.format(task="See a model", call="tl.trace(model, x)", tier="core", related="[edit]")
+    )
+    (folder / "edit.md").write_text(
+        CARD.format(task="Edit a run", call="trace.do(site, edit)", tier="advanced", related="[]")
+    )
+    (folder / "pick.md").write_text(
+        CARD.format(task="Pick | sites", call="tl.select(x)", tier="kit", related="[see]")
+    )
+    (folder / "plain.md").write_text("# A page with no card\n")
+    return folder
+
+
+def _card_set(folder: Path) -> Any:
+    """Load the carded pages in ``folder`` with an empty cards file beside them."""
+    cards_file = folder.parent / "task_cards.yaml"
+    cards_file.write_text("cards: []\n")
+    return index_tool.load_card_set(cards_file, folder, folder.parent)
+
+
+def test_generator_renders_cards_in_tier_order(tmp_path: Path) -> None:
+    card_set = _card_set(_write_cards(tmp_path / "cards"))
+    assert [card.slug for card in card_set.cards] == ["see", "pick", "edit"]
+    assert card_set.by_slug()["pick"].tier == "kit"
+    base = "https://example.org/docs/9.x/"
+    outputs = index_tool.render_all(card_set, base)
+    index = outputs[index_tool.INDEX_PATH]
+    core_block = index.split("```python\n", 1)[1].split("```", 1)[0]
+    assert core_block == "import torchlens as tl\ntl.trace(model, x)\n"
+    pick_row = (
+        "| Pick \\| sites | `tl.select(x)` | Calling tl.select(x) in a loop. | cards/pick.md |"
+    )
+    assert pick_row in index
+    assert f"Page paths below are relative to {base}" in index
+    assert "| cards/edit.md |" in index
+    llms = outputs[index_tool.LLMS_PATH]
+    assert "- [See a model](https://example.org/docs/9.x/cards/see.md): " in llms
+    full = index_tool.render_llms_full(card_set, base, "Summary", tmp_path)
+    assert "Body of Edit a run." in full and "tier:" not in full
+    assert outputs == index_tool.render_all(card_set, base)
+
+
+#: Messages are matched loosely: cards are validated through the shared schema
+#: module when it sits beside the generator, else through the generator's own check.
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("tier", "core\nextra: 1", "unknown"),
+        ("tier", "basic", "tier"),
+        ("doors", "[mechinterp, astronomy]", "unknown"),
+        ("related", "[nowhere]", "related names no card"),
+        ("canonical", '""', "non-empty string"),
+    ],
+)
+def test_generator_refuses_malformed_cards(
+    tmp_path: Path, field: str, value: str, message: str
+) -> None:
+    folder = _write_cards(tmp_path / "cards")
+    page = folder / "see.md"
+    lines = [
+        f"{field}: {value}" if line.startswith(f"{field}:") else line
+        for line in page.read_text().splitlines()
+    ]
+    page.write_text("\n".join(lines) + "\n")
+    with pytest.raises(index_tool.CardError, match=message):
+        _card_set(folder)
+
+
+def test_generator_validates_through_the_shared_schema_when_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[dict[str, object]] = []
+
+    class FakeSchema:
+        @staticmethod
+        def card_problems(meta: dict[str, object]) -> list[str]:
+            seen.append(meta)
+            return ["rejected by the shared schema"] if meta["task"] == "Edit a run" else []
+
+    monkeypatch.setattr(index_tool, "_schema_module", lambda: FakeSchema)
+    with pytest.raises(index_tool.CardError, match="rejected by the shared schema"):
+        _card_set(_write_cards(tmp_path / "cards"))
+    assert "Edit a run" in {meta["task"] for meta in seen}
+
+
+def test_field_guide_label_agrees_with_the_shared_schema() -> None:
+    schema = index_tool._schema_module()
+    if schema is None:
+        pytest.skip("tools/docs/task_card.py is not on this branch yet")
+    site_map = site_nav.load_site_map()
+    assert site_map.sections["field-guide"] == schema.SECTION_LABEL, (
+        "the Field guide label differs between docs/_site_map.yaml and tools/docs/task_card.py"
+    )
+
+
+def test_generator_enforces_the_index_size_limit(tmp_path: Path) -> None:
+    folder = _write_cards(tmp_path / "cards")
+    for number in range(60):
+        (folder / f"bulk{number:02d}.md").write_text(
+            CARD.format(
+                task=f"Task number {number} " + "x" * 80, call="tl.x()", tier="kit", related="[]"
+            )
+        )
+    with pytest.raises(index_tool.CardError, match="limit is 8192"):
+        index_tool.render_all(_card_set(folder), "https://e.org/")
+
+
+def test_generator_check_mode_detects_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    card_set = _card_set(_write_cards(tmp_path / "cards"))
+    out = tmp_path / "out"
+    monkeypatch.setattr(index_tool, "load_card_set", lambda: card_set)
+    monkeypatch.setattr(index_tool, "REPO", out)
+    assert index_tool.main(["--check"]) == 1
+    assert index_tool.main([]) == 0
+    assert index_tool.main(["--check"]) == 0
+    (out / index_tool.LLMS_PATH).write_text("edited by hand\n")
+    assert index_tool.main(["--check"]) == 1
+
+
+def test_committed_agent_index_matches_a_fresh_run() -> None:
+    assert index_tool.main(["--check"]) == 0, (
+        "the agent index outputs are stale: run python tools/docs/build_agent_index.py"
+    )
+
+
+def test_site_map_covers_every_page_and_mkdocs_matches_it() -> None:
+    site_map = site_nav.load_site_map()
+    assert site_nav.coverage_problems(site_map) == []
+    current = site_nav.MKDOCS.read_text("utf-8")
+    assert site_nav.render_mkdocs(current, site_map) == current, (
+        "mkdocs.yml is stale: run python tools/docs/site_nav.py"
+    )
+
+
+def test_site_map_never_publishes_internal_pages(tmp_path: Path) -> None:
+    bad = tmp_path / "map.yaml"
+    bad.write_text(
+        "sections:\n  - {id: internal, title: Internal, internal: true}\n"
+        "pages:\n  - {path: a.md, section: internal, publish: true}\n"
+    )
+    with pytest.raises(ValueError, match="never published"):
+        site_nav.load_site_map(bad)
+
+
+def test_internal_directory_is_excluded_from_every_build() -> None:
+    """``docs/internal/`` is excluded as a directory, not only page by page."""
+    site_map = site_nav.load_site_map(site_nav.SITE_MAP)
+    assert "  /internal/" in site_nav.render_excludes(site_map)
+    assert all(
+        page.section in site_map.internal_sections
+        for page in site_map.pages
+        if page.path.startswith("internal/")
+    )
+
+
+_MD_LINK = re.compile(r"\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)|^\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
+
+#: Links from public pages into internal pages that are still waiting for their
+#: source page to be regenerated: (source page, target page), both docs-relative.
+#: A row that no longer matches a link fails the test until it is removed.
+_PENDING_INTERNAL_LINKS = frozenset(
+    {
+        ("reference/glossary.md", "reference/merged_trace_contract.md"),
+        ("reference/glossary.md", "reference/runnable_tlspec_contract.md"),
+    }
+)
+
+
+def _links_into_internal_pages(site_map: Any, docs: Path) -> set[tuple[str, str]]:
+    pages = {page.path: page for page in site_map.pages}
+    internal = site_map.internal_sections
+    found: set[tuple[str, str]] = set()
+    for source, page in pages.items():
+        if page.section in internal:
+            continue
+        text = (docs / source).read_text("utf-8")
+        for match in _MD_LINK.finditer(text):
+            href = (match.group(1) or match.group(2)).split("#", 1)[0]
+            if not href or "://" in href or href.startswith(("mailto:", "/")):
+                continue
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(source), href))
+            if target in pages and pages[target].section in internal:
+                found.add((source, target))
+    return found
+
+
+def test_public_pages_never_link_into_internal_pages() -> None:
+    site_map = site_nav.load_site_map()
+    found = _links_into_internal_pages(site_map, site_nav.DOCS)
+    assert found - _PENDING_INTERNAL_LINKS == set(), (
+        "public pages link into internal pages; point the link at a public page, "
+        "drop it, or make the target public in docs/_site_map.yaml"
+    )
+    assert _PENDING_INTERNAL_LINKS - found == set(), "stale rows in _PENDING_INTERNAL_LINKS"
+
+
+def test_internal_link_finder_sees_inline_reference_and_relative_links(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    (docs / "reference").mkdir(parents=True)
+    (docs / "reference" / "secret.md").write_text("# Secret\n")
+    (docs / "reference" / "page.md").write_text(
+        "[a](secret.md#part) [b](https://example.org/secret.md)\n[c]: ./secret.md\n"
+    )
+    (docs / "index.md").write_text('[d](reference/secret.md "title") [e](reference/page.md)\n')
+    site_map = tmp_path / "map.yaml"
+    site_map.write_text(
+        "sections:\n  - {id: ref, title: Reference}\n"
+        "  - {id: internal, title: Internal, internal: true}\n"
+        "pages:\n  - {path: index.md, section: ref}\n"
+        "  - {path: reference/page.md, section: ref}\n"
+        "  - {path: reference/secret.md, section: internal}\n"
+    )
+    assert _links_into_internal_pages(site_nav.load_site_map(site_map), docs) == {
+        ("index.md", "reference/secret.md"),
+        ("reference/page.md", "reference/secret.md"),
+    }
+
+
+def test_page_mover_retargets_links_when_depth_changes() -> None:
+    moves = {"docs/reference/a.md": "docs/internal/reference/a.md"}
+    linking = "See [a](reference/a.md#part) and `docs/reference/a.md`."
+    assert move_pages.rewrite_text(linking, "docs/index.md", moves) == (
+        "See [a](internal/reference/a.md#part) and `docs/internal/reference/a.md`."
+    )
+    inside = "Back to [the guide](../quickstart.md)."
+    assert move_pages.rewrite_text(inside, "docs/internal/reference/a.md", moves) == (
+        "Back to [the guide](../../quickstart.md)."
+    )
+    assert move_pages.rewrite_text('"reference/a.md"', "tests/x.py", moves) == (
+        '"internal/reference/a.md"'
+    )
+
+
+def test_link_checker_finds_missing_pages_and_anchors(tmp_path: Path) -> None:
+    site = tmp_path / "site"
+    (site / "page").mkdir(parents=True)
+    (site / "page" / "index.html").write_text('<h2 id="here">x</h2><a href="../#top">up</a>')
+    (site / "index.html").write_text(
+        '<p id="top"></p><a href="page/#here">ok</a><a href="page/#gone">bad anchor</a>'
+        '<a href="missing/">bad page</a><a href="https://example.org/x">external</a>'
+        '<img src="/docs/page/index.html">'
+    )
+    problems = links.check_site(site, base_path="/docs/")
+    assert problems == [
+        "index.html: page/#gone (no anchor #gone)",
+        "index.html: missing/ (no such file)",
+    ]

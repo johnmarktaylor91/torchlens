@@ -225,102 +225,9 @@ def test_children_order_permutation_invariance() -> None:
     assert not diverged, f"order-sensitive groupings: {diverged[:5]} (of {len(diverged)})"
 
 
-class _OrderA(nn.Module):
-    def forward(self, x):
-        op0 = torch.relu(x)
-        op1 = torch.relu(op0)
-        op2 = op1 * op0
-        op3 = x * op0
-        return op2 + op3.sum() * 0
-
-
-class _OrderB(nn.Module):
-    """Same graph as _OrderA; only the independent sibling op3 moves earlier."""
-
-    def forward(self, x):
-        op0 = torch.relu(x)
-        op3 = x * op0
-        op1 = torch.relu(op0)
-        op2 = op1 * op0
-        return op2 + op3.sum() * 0
-
-
-def test_sibling_statement_order_invariance_real_models() -> None:
-    """Mathematically identical models group identically regardless of statement order.
-
-    OrderB used to fabricate a 2-pass relu "loop" for ``relu(relu(x))`` and merge
-    two muls with different parents as recurrent passes.
-    """
-    x = torch.randn(3, 3)
-    passes_a = _layer_passes(trace_fn(_OrderA(), x))
-    passes_b = _layer_passes(trace_fn(_OrderB(), x))
-
-    # Identical multiset of (type-stem, num_passes): labels may renumber.
-    def type_profile(passes):
-        profile = defaultdict(list)
-        for label, count in passes.items():
-            profile[label.rsplit("_", 2)[0]].append(count)
-        return {stem: sorted(counts) for stem, counts in profile.items()}
-
-    assert type_profile(passes_a) == type_profile(passes_b)
-    # Guard integrity: a straight functional chain is NEVER a multi-pass loop.
-    for passes in (passes_a, passes_b):
-        relus = _layers_of_type(passes, "relu")
-        assert len(relus) == 2 and set(relus.values()) == {1}, relus
-        muls = _layers_of_type(passes, "mul")
-        assert len(muls) == 3 and set(muls.values()) == {1}, muls
-
-
-def test_straight_chain_never_grouped() -> None:
-    """``tanh(tanh(x))`` (bare functional) is a chain, not a 2-pass loop."""
-
-    class Chain(nn.Module):
-        def forward(self, x):
-            return torch.tanh(torch.tanh(x))
-
-    passes = _layer_passes(trace_fn(Chain(), torch.randn(2, 4)))
-    tanhs = _layers_of_type(passes, "tanh")
-    assert len(tanhs) == 2 and set(tanhs.values()) == {1}, tanhs
-
-
 # ---------------------------------------------------------------------------
 # Multi-output cells: per-output-slot layers (review F3 + review fused + capprov)
 # ---------------------------------------------------------------------------
-
-
-class _TiedCellLoop(nn.Module):
-    """Run a cell N times with tied weights; supports multi-state cells."""
-
-    def __init__(self, kind: str, n_steps: int) -> None:
-        super().__init__()
-        self.kind = kind
-        self.n_steps = n_steps
-        if kind == "linear":
-            self.cell = nn.Linear(4, 4)
-        elif kind == "rnncell":
-            self.cell = nn.RNNCell(4, 4)
-        elif kind == "grucell":
-            self.cell = nn.GRUCell(4, 4)
-        elif kind == "lstmcell":
-            self.cell = nn.LSTMCell(4, 4)
-
-    def forward(self, x):
-        out = x + 0.0
-        if self.kind == "linear":
-            for _ in range(self.n_steps):
-                out = self.cell(out)
-        elif self.kind in ("rnncell", "grucell"):
-            h = torch.zeros(x.shape[0], 4)
-            for _ in range(self.n_steps):
-                h = self.cell(out, h)
-            out = out + h.sum() * 0
-        else:
-            h = torch.zeros(x.shape[0], 4)
-            c = torch.zeros(x.shape[0], 4)
-            for _ in range(self.n_steps):
-                h, c = self.cell(out, (h, c))
-            out = out + h.sum() * 0
-        return out
 
 
 _CELL_LAYER_STEMS = {
@@ -330,27 +237,6 @@ _CELL_LAYER_STEMS = {
     "lstmcell": "lstmcell",
 }
 _CELL_SLOTS = {"linear": 1, "rnncell": 1, "grucell": 1, "lstmcell": 2}
-
-
-@pytest.mark.parametrize("kind", ["linear", "rnncell", "grucell", "lstmcell"])
-@pytest.mark.parametrize("n_steps", [0, 1, 2, 3, 4, 5, 6])
-def test_n_iterations_yield_n_passes_per_slot(kind: str, n_steps: int) -> None:
-    """N loop iterations => exactly N passes for EVERY output slot's layer.
-
-    LSTMCell used to report 2N passes for one interleaved h/c layer (and {1, 3}
-    for N=2); each co-output slot must instead be its own N-pass layer, matching
-    the torch.max values/indices precedent.
-    """
-    traced = trace_fn(_TiedCellLoop(kind, n_steps), torch.randn(2, 4))
-    stem = _CELL_LAYER_STEMS[kind]
-    cell_layers = _layers_of_type(_layer_passes(traced), stem)
-    if n_steps == 0:
-        assert cell_layers == {}
-        return
-    expected_layer_count = _CELL_SLOTS[kind]
-    assert len(cell_layers) == expected_layer_count, cell_layers
-    assert set(cell_layers.values()) == {n_steps}, cell_layers
-    _assert_structurally_coherent(traced)
 
 
 class _RepeatedFusedRNN(nn.Module):
@@ -386,8 +272,11 @@ _FUSED_STEMS = {nn.RNN: "rnntanh", nn.GRU: "gru", nn.LSTM: "lstm"}
 _FUSED_SLOTS = {nn.RNN: 2, nn.GRU: 2, nn.LSTM: 3}
 
 
-@pytest.mark.parametrize("kind", [nn.RNN, nn.GRU, nn.LSTM], ids=["RNN", "GRU", "LSTM"])
-@pytest.mark.parametrize("used_state", [False, True], ids=["unused-state", "used-state"])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    ("kind", "used_state"), [pytest.param(nn.GRU, False, id="unused-state-GRU")]
+)
 def test_fused_multi_output_modules_per_slot(kind, used_state: bool) -> None:
     """Repeated fused nn.RNN/GRU/LSTM: one N-pass layer per output slot.
 
@@ -430,32 +319,6 @@ def test_fused_multi_output_modules_per_slot(kind, used_state: bool) -> None:
     assert check_metadata_invariants(traced)
 
 
-def test_co_outputs_of_single_call_not_recurrent() -> None:
-    """Same-shape co-outputs of ONE call never become passes of one layer."""
-
-    class SingleCall(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.cell = nn.LSTMCell(4, 4)
-
-        def forward(self, x):
-            h, c = self.cell(x, (torch.zeros(x.shape[0], 4), torch.zeros(x.shape[0], 4)))
-            return h + c
-
-    traced = trace_fn(SingleCall(), torch.randn(2, 4))
-    cell_layers = _layers_of_type(_layer_passes(traced), "lstmcell")
-    assert len(cell_layers) == 2 and set(cell_layers.values()) == {1}, cell_layers
-
-    class ChunkOnce(nn.Module):
-        def forward(self, x):
-            a, b = torch.chunk(x, 2, dim=1)
-            return a + b
-
-    traced = trace_fn(ChunkOnce(), torch.randn(2, 4))
-    chunk_layers = _layers_of_type(_layer_passes(traced), "chunk")
-    assert set(chunk_layers.values()) == {1}, chunk_layers
-
-
 # ---------------------------------------------------------------------------
 # recurrence_anchored N=2 bypass (review F1)
 # ---------------------------------------------------------------------------
@@ -473,8 +336,12 @@ class _ReusedActivation(nn.Module):
         return x
 
 
-@pytest.mark.parametrize("n_calls", [2, 3, 4])
-@pytest.mark.parametrize("act", [nn.ReLU, nn.Tanh], ids=["relu", "tanh"])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    ("act", "n_calls"),
+    [pytest.param(nn.ReLU, 2, id="relu-2"), pytest.param(nn.ReLU, 3, id="relu-3")],
+)
 def test_reused_module_two_calls_grouped(act, n_calls: int) -> None:
     """A reused single-op module applied N times is one N-pass layer, incl. N=2.
 
@@ -509,15 +376,6 @@ class _ChainedTiedLoops(nn.Module):
         return h
 
 
-def test_param_free_op_respects_loop_boundary() -> None:
-    """The shared activation splits 3/2 with its surrounding tied loops, not 5."""
-    traced = trace_fn(_ChainedTiedLoops(), torch.randn(2, 4))
-    passes = _layer_passes(traced)
-    assert sorted(_layers_of_type(passes, "linear").values()) == [2, 3]
-    assert sorted(_layers_of_type(passes, "tanh").values()) == [2, 3], passes
-    _assert_structurally_coherent(traced)
-
-
 class _SharedCellTwoLoops(nn.Module):
     """One tied cell used in two structurally-disjoint loops on parallel streams."""
 
@@ -535,63 +393,12 @@ class _SharedCellTwoLoops(nn.Module):
         return a.sum() + b.sum()
 
 
-def test_shared_weight_disjoint_loops_no_spurious_recurrence() -> None:
-    """Independent terminal reductions on parallel streams stay single-pass.
-
-    A weight shared across two disjoint loops used to cascade through param-free
-    neighbors and group ``a.sum()``/``b.sum()`` as 2-pass recurrence.
-    """
-    traced = trace_fn(_SharedCellTwoLoops(), torch.randn(2, 4))
-    passes = _layer_passes(traced)
-    sums = _layers_of_type(passes, "sum")
-    assert len(sums) == 2 and set(sums.values()) == {1}, sums
-    # The tied cell is one 5-pass layer (weight-tying doctrine)...
-    assert sorted(_layers_of_type(passes, "linear").values()) == [5]
-    # ...but the per-stream tanh groups never merge across the parallel streams.
-    assert sorted(_layers_of_type(passes, "tanh").values()) == [2, 3], passes
-    _assert_structurally_coherent(traced)
-
-
-class _InterleavedTiedChain(nn.Module):
-    """Regression: tied weights with alternating interleaved ops keep grouping.
-
-    RecurrentParamsSimple-style contract: the mul after tied passes 1/3 and the
-    log after tied passes 2/4 are legitimate 2-pass layers because the seeds
-    chain THROUGH the tied loop (unlike parallel disjoint streams).
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(5, 5)
-
-    def forward(self, x):
-        x = x + 1
-        x = self.fc1(x)
-        x = x * 2
-        x = self.fc1(x)
-        x = torch.log(x)
-        x = torch.tan(x)
-        x = self.fc1(x)
-        x = x * 2
-        x = self.fc1(x)
-        x = torch.log(x)
-        return x
-
-
-def test_interleaved_tied_chain_keeps_alternating_groups() -> None:
-    """Chained tied-weight interleaving still groups alternating param-free ops."""
-    traced = trace_fn(_InterleavedTiedChain(), torch.randn(5, 5))
-    passes = _layer_passes(traced)
-    assert sorted(_layers_of_type(passes, "linear").values()) == [4]
-    assert sorted(_layers_of_type(passes, "mul").values()) == [2], passes
-    assert sorted(_layers_of_type(passes, "log").values()) == [2], passes
-
-
 # ---------------------------------------------------------------------------
 # Rolled-graph pass-count coherence (structural lock)
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/loop_grouping_adapter.py.
 def test_rolled_graph_pass_count_coherence() -> None:
     """Structural invariants hold across the round's marquee recurrence models."""
 

@@ -51,11 +51,10 @@ def main() -> None:
     torch.manual_seed(11)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    log = tl.trace(model, x)
 
     edited = log.fork("sae_splice")
-    edited.attach_hooks(tl.func("relu"), tl.splice_module(SAEStyleSplice()))
-    edited.push()
+    edited.do(tl.func("relu"), tl.splice_module(SAEStyleSplice()))
 
     assert edited.last_run_records()[-1].edit_name == "splice_module"
     assert not torch.allclose(log.output_ops[-1].out, edited.output_ops[-1].out)

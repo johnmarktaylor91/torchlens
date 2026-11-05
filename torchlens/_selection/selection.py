@@ -41,13 +41,16 @@ from __future__ import annotations
 import hashlib
 import random as _random_module
 from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
 from .._utils.fail_open import fail_open
 from ..errors._base import TorchLensError
+from ._display import selection_card, selection_repr, site_card, site_repr
+from ._site_record import _require_edge_provenance, bind_entries, edge_address_of, site_record
+from ._site_refusals import multipass_bare_label_message
 from .align import align_resolved_selection
 from .errors import SelectionError, SelectorCompositionError
 from .mask import (
@@ -101,6 +104,13 @@ class Site:
     the L1 structural site key when present (bridging relation; ``None``
     otherwise). ``mask`` returns a FRESH dense bool materialization on every
     access — mutating the returned tensor cannot alter the selection.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> site = trace[tl.units("relu_1_2", [(0, 0, 1, 1)])][0]
+    >>> site.key, site.shape, site.num_selected
+    (('relu_1_2', 1), (1, 4, 8, 8), 1)
     """
 
     kind: str
@@ -108,6 +118,18 @@ class Site:
     provenance: SelectionProvenance
     _mask: _Mask
     structural_site_key: Any = None
+    #: Weak trace link filled by ``Selection``; outside equality and hashing.
+    _trace_ref: Any = field(default=None, compare=False, repr=False)
+
+    @property
+    def record(self) -> Any:
+        """The ``Op`` (ACT), ``Param`` (PARAM) or ``EdgeUseRecord`` (EDGE) this row names.
+
+        Weak trace link: ``selection_trace_released`` once the trace is gone,
+        ``selection_unresolvable`` (``site_not_in_trace``) when it has no such record.
+        """
+
+        return site_record(self, _forward_ops, _trace_edge_records)
 
     @property
     def mask(self) -> torch.Tensor:
@@ -127,13 +149,8 @@ class Site:
 
         return self._mask.count()
 
-    def __repr__(self) -> str:
-        """Return a compact disclosure row."""
-
-        return (
-            f"Site({self.key!r}, {self.num_selected}/{self._mask.numel()} "
-            f"elements, relation={self.provenance.relation})"
-        )
+    __repr__ = site_repr
+    __str__ = site_card
 
 
 def _canonical_entry_order(entries: Iterable[Site]) -> tuple[Site, ...]:
@@ -200,6 +217,15 @@ class Selection:
     level of the two-level denotation. ``.empty`` and ``__bool__`` report the
     ELEMENT level only; read the family via iteration / ``len()``.
     Session-time only; never persisted.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> selection = trace[tl.func("conv2d")]
+    >>> isinstance(selection, tl.Selection)
+    True
+    >>> selection.labels, selection.kind, selection.is_empty
+    (('conv2d_1_1:1', 'conv2d_2_3:1'), 'ACT', False)
     """
 
     __slots__ = ("_digest", "_entries", "_kind", "_selector", "_trace")
@@ -234,6 +260,7 @@ class Selection:
         object.__setattr__(self, "_kind", kind)
         object.__setattr__(self, "_selector", selector)
         object.__setattr__(self, "_entries", _graph_entry_order(trace, entries))
+        bind_entries(trace, self._entries)
         digest = hashlib.sha256()
         digest.update(kind.encode())
         for entry in self._entries:
@@ -300,8 +327,8 @@ class Selection:
         both sides; anything else refuses typed). Masks travel unchanged
         onto an identical index space; per-entry provenance discloses the
         cross-run origin. ``do()`` still refuses foreign resolved selections
-        (``selection_trace_mismatch``) — this explicit spelling is the only
-        rebind. DOCUMENTED-UNSTABLE pending naming-session ratification.
+        (``selection_trace_mismatch``) unless the fork descends from the selection's
+        trace (it then rebinds itself). DOCUMENTED-UNSTABLE pending ratification.
 
         Raises
         ------
@@ -390,11 +417,8 @@ class Selection:
 
         return hash(self._digest)
 
-    def __repr__(self) -> str:
-        """Return a compact two-level summary."""
-
-        elements = sum(entry.num_selected for entry in self._entries)
-        return f"Selection[{self._kind}]({len(self._entries)} sites, {elements} elements)"
+    __repr__ = selection_repr
+    __str__ = selection_card
 
     def __selection__(self) -> Selection:
         """Pass anywhere a selection is expected."""
@@ -568,6 +592,15 @@ class Selector:
     (``selection_bool_ambiguous``) because ``a and b`` on a lazily-composable
     AST silently discards the left operand. Resolve first; the
     ``Selection`` is truthy on "has any selected element".
+
+    Examples
+    --------
+    >>> query = tl.units("relu_1_2", [(0, 0, 1, 1)]) | tl.units("relu_1_2", [(0, 1, 2, 2)])
+    >>> isinstance(query, tl.Selector), query.kind
+    (True, 'ACT')
+    >>> trace = tl.trace(model, x)
+    >>> trace[query][0].num_selected
+    2
     """
 
     __slots__ = ("_kind", "_node", "_signal")
@@ -1212,9 +1245,7 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
 
 def _multipass_bare_label_refusal(site: str, matches: Sequence[Any]) -> SelectionError:
     """Refuse a multi-pass layer's bare spelling: units() addresses ONE op's index space."""
-    from ._site_refusals import multipass_bare_label_message
-
-    layer_label = getattr(matches[0], "layer_label", None) or site
+    layer_label = getattr(matches[0], "short_layer_label", None) or site
     pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
     return _unresolvable(
         "multipass_bare_label",
@@ -1382,6 +1413,13 @@ def units(
     indices:
         Either a bool mask over the site's output index space, or an iterable
         of integer coordinate tuples (ints accepted for 1-d sites).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> selection = trace[tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)])]
+    >>> selection.labels, selection[0].num_selected
+    (('relu_1_2:1',), 2)
     """
 
     if not isinstance(site, str) or not site:
@@ -1410,6 +1448,13 @@ def param(name: str, mask: torch.Tensor | None = None) -> Selector:
     ``mask=None`` selects the whole parameter. Fenced from
     ``module.parameters()``: this addresses the TRACE's recorded parameter
     geometry by name/address.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> selection = trace[tl.param("0.weight")]
+    >>> selection.kind, selection[0].num_selected
+    ('PARAM', 108)
     """
 
     if not isinstance(name, str) or not name:
@@ -1434,6 +1479,14 @@ def random_like(
     kind; ``|result| == |like|`` sampled without replacement. A population
     smaller than ``|like|`` (including an empty complement) refuses typed
     (``selection_unresolvable``, ``reason="population_too_small"``).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> probe = tl.units("relu_1_2", [(0, 0, 0, 0), (0, 1, 1, 1)])
+    >>> control = tl.random_like(like=probe, within=tl.func("conv2d"), seed=0)
+    >>> sum(site.num_selected for site in trace[control])
+    2
     """
 
     if not isinstance(seed, int) or isinstance(seed, bool) or seed < 0:
@@ -1553,25 +1606,6 @@ class _EdgeTerm:
         if self.display:
             return f"edges({', '.join(self.display)})"
         return f"edges(n={len(self.addresses)})"
-
-
-def edge_address_of(record: Any) -> tuple[Any, ...]:
-    """Return one EdgeUseRecord's canonical occurrence address."""
-
-    return (record.child_func_call_id, record.arg_kind, tuple(record.arg_path))
-
-
-def _require_edge_provenance(trace: Any) -> None:
-    """Refuse typed when edge provenance was not captured."""
-
-    if not bool(getattr(trace, "is_replayable", False)):
-        raise SelectionError(
-            "edge provenance requires an replayable capture "
-            "(EdgeUseRecords exist only under it). Re-capture with "
-            "tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "replayable=True)).",
-            code="edge_provenance_unavailable",
-        )
 
 
 def _trace_edge_records(trace: Any) -> tuple[Any, ...]:

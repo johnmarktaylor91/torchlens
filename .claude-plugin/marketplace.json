@@ -1,0 +1,14 @@
+{
+  "name": "torchlens",
+  "description": "The TorchLens agent skill.",
+  "owner": {
+    "name": "JohnMark Taylor"
+  },
+  "plugins": [
+    {
+      "name": "torchlens",
+      "source": "./",
+      "description": "Teaches coding agents the TorchLens call to reach for first: capture, steer, ablate, patch, compare and draw a PyTorch model's activations."
+    }
+  ]
+}

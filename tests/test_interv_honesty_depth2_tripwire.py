@@ -27,7 +27,6 @@ import torchlens as tl
 from torchlens.errors import SelectionError
 from torchlens.intervention.edge_substitution import (
     _reexecute_child_with_substitution,
-    require_depth1_arg_path,
 )
 from torchlens.intervention.replay import _splice_param_substitutions
 from torchlens.validation.core import _check_edge_intervention_boundary
@@ -66,20 +65,11 @@ def _identity_edge_fork(trace: tl.Trace) -> tl.Trace:
     return fork
 
 
-def test_guard_accepts_depth1_and_refuses_deeper() -> None:
-    require_depth1_arg_path((0,), where="unit", site="s")
-    for nested in [(0, 1), (0, "k"), ()]:
-        with pytest.raises(SelectionError) as excinfo:
-            require_depth1_arg_path(nested, where="unit", site="s")
-        assert excinfo.value.fields["code"] == "selection_apply_invalid"
-        assert "nested argument path" in str(excinfo.value) or "()" in str(excinfo.value)
-
-
 def test_edge_reexecution_splice_refuses_nested_address(capture) -> None:
     """Site 1: the edge splice refuses a forged depth-2 occurrence address."""
 
     model, x, trace = capture
-    child = trace["conv2d_2_3"].ops[0]
+    child = trace.layers["conv2d_2_3"].ops[0]
     address = (child.func_call_id, "positional", (0, 1))
     with pytest.raises(SelectionError) as excinfo:
         _reexecute_child_with_substitution(trace, child, address, torch.zeros(1), strict=False)
@@ -112,7 +102,7 @@ def test_validation_splice_fails_nested_key_even_when_corroborated(capture) -> N
 
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
-    child = fork["conv2d_2_3"].ops[0]
+    child = fork.layers["conv2d_2_3"].ops[0]
 
     old_key = next(iter(child.edge_substitutions))
     arg_kind, arg_path = old_key

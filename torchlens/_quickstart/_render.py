@@ -17,6 +17,7 @@ Every spelling is DOCUMENTED-UNSTABLE pending the naming sprint.
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +69,7 @@ def _gate_value_channels(trace: Any, draw_kwargs: dict[str, Any]) -> None:
 
 def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input ladder plus the render dials ARE the spec'd surface
     model: nn.Module,
-    input_args: Any = None,
+    inputs: Any = None,
     *,
     input_kwargs: dict[str, Any] | None = None,
     input_shape: Any = None,
@@ -94,7 +95,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
     ----------
     model:
         The model to picture.
-    input_args:
+    inputs:
         Real input (tensor, tuple of tensors, or an HF string prompt).
     input_kwargs:
         Keyword inputs forwarded to the model.
@@ -113,7 +114,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
         scripts write collision-safe ``<ModelClass>-graph.pdf`` plus one printed line when
         ``BARE_RENDER_WRITES_FILE_IN_SCRIPTS`` is True (fork F1 branch A).
     file_format:
-        Output format (``"pdf"``, ``"svg"``, ...): ``"svg"`` inline, ``"pdf"`` otherwise.
+        Format for a path with no extension (an extension picks it): ``"svg"`` inline, else ``"pdf"``.
     open_viewer:
         Explicit opt-in to open the written file with the system viewer. Never the default (memo D14).
     **draw_kwargs:
@@ -130,7 +131,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
 
 def _capture_and_render(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None,
     input_shape: Any,
     draw_kwargs: dict[str, Any],
@@ -138,7 +139,7 @@ def _capture_and_render(
 ) -> Drawing:
     """Capture the model's concrete forward and render it with the facade's dials."""
 
-    resolved = resolve_inputs(model, input_args, input_kwargs, input_shape, verb="draw")
+    resolved = resolve_inputs(model, inputs, input_kwargs, input_shape, verb="draw")
     trace, receipt = capture_concrete(
         model,
         resolved.plan,
@@ -185,7 +186,8 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
     if depth is not None:
         call_kwargs["depth"] = depth
     call_kwargs["open_viewer"] = False  # never auto-open (D14); open_viewer= is handled below
-    call_kwargs["file_format"] = fileformat
+    # An explicit path keeps the caller's file_format: Trace.draw takes the format from its extension.
+    call_kwargs["file_format"] = fileformat if path is None else file_format
 
     target: Path | None
     data: bytes | None = None
@@ -196,31 +198,29 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
     else:
         target = _collision_safe_path(type(model).__name__, fileformat)
 
-    import tempfile
-
     if target is None:
         with tempfile.TemporaryDirectory(prefix="tl-render-") as tmpdir:
             call_kwargs["path"] = str(Path(tmpdir) / "graph")
-            dot = str(trace.draw(**call_kwargs))
+            drawn = trace.draw(**call_kwargs)
             rendered = Path(tmpdir) / f"graph.{fileformat}"
             data = rendered.read_bytes() if rendered.exists() else None
     else:
-        outpath = str(target)
-        if outpath.endswith(f".{fileformat}"):
-            outpath = outpath[: -(len(fileformat) + 1)]
-        call_kwargs["path"] = outpath
-        dot = str(trace.draw(**call_kwargs))
+        call_kwargs["path"] = str(target)
+        drawn = trace.draw(**call_kwargs)
+        fileformat = drawn.file_format
+        target = drawn.path if drawn.path is not None else target
         print(f"TorchLens graph written to {target}")
         if open_viewer:
             _open_viewer(target)
 
     result = Drawing(
-        dot=dot,
+        dot=str(drawn),
         _data=data,
         file_format=fileformat,
         path=target,
         provenance=provenance,
         receipt=receipt,
+        _render=drawn._render,  # re-render (display, save) the way the draw rendered
         num_ops=len(trace) if hasattr(trace, "__len__") else None,
         policy={
             "theme": theme,

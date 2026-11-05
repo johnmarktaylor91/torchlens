@@ -76,6 +76,15 @@ def to_model_explorer_dict(trace: Any, **options: Any) -> dict[str, Any]:
     -------
     dict[str, Any]
         A strict vendor ``GraphCollection`` payload.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> payload = to_model_explorer_dict(trace, label="demo")
+    >>> payload["label"]
+    'demo'
+    >>> len(payload["graphs"]) >= 1
+    True
     """
 
     _require_trace(trace, exporter="tl.export.model_explorer")

@@ -15,6 +15,10 @@ q = log.modules["blocks.0.attn"].facets["q"]
 h_n = log.modules["lstm"].facets["h_n"]
 ```
 
+Facets live on a `Trace`. `tl.record` takes no facet keyword and a `Recording` has no
+`modules[...].facets`; cook it first with `recording.to_trace()` and read the facets there
+(a facet whose inputs the `save=` predicate did not keep fails explicitly).
+
 Attribute access is convenience sugar for valid Python identifiers that do not
 collide with `FacetView` methods:
 
@@ -38,6 +42,9 @@ nested positional    -> out1.0
 `module.outs` remains a thin alias for raw structural outputs. `module.facets` is
 the unified named access layer. If a module was called more than once,
 `module.facets` raises; choose an explicit pass with `module.calls[n].facets`.
+A call's view runs the module's recipes for that call alone, and child modules
+resolve to their call inside it: for an attention layer shared across depth
+(ALBERT), `module.calls[n].facets.q` is the query projection of pass `n`.
 
 `keys()`, iteration, `in`, `has(name)`, and item/attribute access are
 available-now surfaces: recipes run once and only facets readable in the current
@@ -107,7 +114,7 @@ log = tl.trace(
     x,
     capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
 )
-log.log_backward(log[log.output_layers[0]].out.sum())
+log.backward(log[log.output_layers[0]].out.sum())
 q_grad = log.modules["attn"].facets["q"].grad
 ```
 
@@ -138,6 +145,11 @@ with tl.facets.adding(my_attention):
     log = tl.trace(model, x)
 ```
 
+The guide [Adding conveniences for your model](guides/model_conveniences.md)
+builds a custom facet next to a custom input detector (`tl.preprocessing.register`)
+and output decoder (`tl.postprocessing.register`); [Semantic input and output](semantic_io.md)
+covers the built-in routes those registries already hold.
+
 `tl.facets.reset()` restores the process registry to built-ins. `tl.facets.functions()`
 and `tl.facets.describe(class_name)` expose registry metadata.
 
@@ -149,18 +161,25 @@ only within the same specificity tier. True same-tier facet collisions warn.
 
 A recipe receives the TorchLens **`Module` record**, not the live `nn.Module`. The
 record does not proxy arbitrary live attributes as direct attributes -- they are
-snapshotted into `module.custom_attributes`. Use `config_value(module, *names)`
-(from `torchlens._semantic.recipes._helpers`), which checks record attributes **and**
-the `custom_attributes` snapshot, instead of `module.num_heads` directly:
+snapshotted into `module.custom_attributes`. Use `tl.facets.config_value(module, *names)`,
+which checks record attributes **and** the `custom_attributes` snapshot, instead of
+`module.num_heads` directly. The recipe-authoring helpers are public under `tl.facets`:
+`config_value`, `child_output_spec(module, child_name, recipe_id)` (a child module's
+output as a spec) and `parameter_spec(module, name, recipe_id)` (a parameter as a spec);
+no private import is needed:
 
 ```python
-from torchlens._semantic.recipes._helpers import config_value, child_output_spec
-
+@tl.facets.register(class_name="MyAttention", target_scope="module")
 def my_attention(module):
-    n_heads = config_value(module, "num_heads", "n_heads", "num_attention_heads", "n_head")
-    qkv = child_output_spec(module, "qkv", "my_attention")
-    return {"q": qkv.split(3, dim=-1)[0].heads(n_heads, None)}  # d_head inferred from shape
+    n_heads = tl.facets.config_value(module, "num_heads", "n_heads", "num_attention_heads", "n_head")
+    qkv = tl.facets.child_output_spec(module, "qkv", "my_attention")
+    return {"q": qkv.split(3, dim=-1)[0].heads(n_heads)}  # d_head inferred from shape
 ```
+
+`FacetSpec.heads(num_heads, d_head=None)` infers the head dimension from the
+projection's last axis when the facet is read (`last_dim // num_heads`); a last
+axis the head count does not divide refuses at read time. Pass `d_head` explicitly
+when the projection carries extra columns.
 
 Head counts are inferred automatically for any module that stores a conventionally
 named count -- HF configs, `torch.nn.MultiheadAttention` (`.num_heads`), or a custom
@@ -207,8 +226,7 @@ log = tl.trace(
     capture=tl.options.CaptureOptions(save_args=True), save="all",
 )
 edited = log.fork("ablated")
-edited.attach_hooks(tl.head(3, "q"), tl.zero_ablate())
-edited.run(model, x)
+edited.do(tl.head(3, "q"), tl.zero_ablate(), model=model, inputs=x)
 ```
 
 Static patching uses the same scatter-back path:
@@ -216,7 +234,7 @@ Static patching uses the same scatter-back path:
 ```python
 patch = torch.zeros_like(log.modules["blocks.0.attn"].facets.head(3).q)
 edited = log.fork("patched")
-edited.set(tl.facet("q").head(3), patch)
+edited.do(tl.facet("q").head(3), patch, intervention=tl.options.InterventionOptions(engine="set_only"))
 edited.run(model, x)
 ```
 
@@ -224,7 +242,7 @@ edited.run(model, x)
 facets `q`, `k`, and `v` wherever they are present:
 
 ```python
-edited.attach_hooks(tl.head(3), tl.zero_ablate())
+edited.do(tl.head(3), tl.zero_ablate(), model=model, inputs=x)
 ```
 
 Scatter-back preserves the home tensor dtype, device, shape, and memory format.
@@ -255,7 +273,7 @@ is backed by a real op.
 
 Patching helpers live at `tl.facets.patching`. They run a clean trace and a
 corrupted trace, then reuse the facet intervention path (`fork`,
-`attach_hooks`, `rerun`, and `tl.facet`/`tl.head` selectors) to patch clean
+`do` with `model=`/`inputs=` (a rerun), and `tl.facet`/`tl.head` selectors) to patch clean
 facet activations into the corrupted run.
 
 The metric callable receives the patched `Trace` and must return a scalar
@@ -317,7 +335,7 @@ pattern = log.modules["blocks.0.attn"].facets.pattern
 z = log.modules["blocks.0.attn"].facets.z
 ```
 
-`reconstruction_ready=True` enables `save_args=True` and
+`CaptureOptions(reconstruction_ready=True)` enables `save_args=True` and
 `save_rng=True`. The reconstruction uses the SDPA op's saved Q/K/V args,
 so RoPE models use the post-RoPE tensors that actually fed the fused kernel, not
 the q_proj/k_proj outputs.
@@ -409,7 +427,9 @@ layer's residual stream, and earlier layers do not use that basis, so early-laye
 weak evidence and often look like noise even when the layer carries the information
 (Belrose et al., 2023, introduced the tuned lens for this reason). Read the lens as a trend
 across depth, compare it with a probe or a tuned lens passed as `lens=`, and do not read one early
-layer's top token as what that layer "thinks".
+layer's top token as what that layer "thinks". A Jacobian lens (the corpus-average Jacobian
+of the final residual with respect to a block's, passed as `lens=`) is fitted from public
+primitives in [the Jacobian lens recipe](field-guide/jacobian_lens.md).
 
 `torchlens._semantic.logit_lens_predictions` is the streaming reduction of the
 same sweep: it projects ONE layer at a time, keeps only per-position top-k
@@ -465,7 +485,7 @@ logits):
   `result.lens_source` is `"contrastive_head"`, each layer's logits are
   `[n_images, n_prompts]`, and the last layer equals CLIP's
   `logits_per_image`. Only vision-tower blocks are projected; passing a
-  text-tower block in `layers=` refuses `logit_lens_layer_outside_head`.
+  text-tower block in `modules=` refuses `logit_lens_layer_outside_head`.
 
 ```text
 classification_head facets          contrastive_image_head facets
@@ -556,8 +576,8 @@ wrong facet label is a confidently mislabelled part of someone's model.
 ## Recipe Plugins
 
 On FIRST USE of the facet-recipe subsystem (not at `import torchlens` --
-the loader is module-level in `torchlens/_semantic/recipes/__init__.py`, and
-`torchlens._semantic` is lazy), TorchLens loads installed setuptools entry
+the loader is module-level in the facet-recipes package initializer, and
+the facet subsystem is lazy), TorchLens loads installed setuptools entry
 points in the `torchlens.recipes` group. A broken entry point therefore warns
 when facets are first touched, not at import. Entry points are never scanned
 from local directories.
@@ -565,7 +585,7 @@ from local directories.
 ## Built-In Inventory
 
 TorchLens records built-in facet capabilities as data in
-`torchlens._semantic.recipes.BUILTIN_FACET_CAPABILITY_INVENTORY`. Current classes
+`BUILTIN_FACET_CAPABILITY_INVENTORY` in the private facet-recipes package (no public spelling yet). Current classes
 are:
 
 ```text

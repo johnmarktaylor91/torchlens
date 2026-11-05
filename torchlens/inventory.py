@@ -42,6 +42,13 @@ class SiteInventoryError(_ActionableErrorMixin, ConfigurationError, ValueError):
     Codes: ``site_selector_unknown`` (nothing matched; remedy names the
     nearest working spellings) and ``site_selector_ambiguous`` (several
     sites matched; remedy lists every working spelling).
+
+    Examples
+    --------
+    >>> issubclass(SiteInventoryError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(SiteInventoryError, ValueError)
+    True
     """
 
     def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
@@ -100,6 +107,12 @@ class SiteRow:
     training:
         The owning module's ``training`` flag (reported, never mutated;
         ``None`` for module-less ops).
+
+    Examples
+    --------
+    >>> row = tl.inventory.list_sites(model).rows[0]
+    >>> row.selector, row.kind, row.module_type
+    ('0', 'module', 'Conv2d')
     """
 
     selector: str
@@ -151,6 +164,14 @@ class SiteInventory:
     shapes_are_hypotheses:
         True when the backing capture was ``structure_only``: every shape is
         a HYPOTHESIS, not an observed value.
+
+    Examples
+    --------
+    >>> inventory = tl.inventory.list_sites(model)
+    >>> len(inventory), inventory.resolve("2").module_type
+    (3, 'Conv2d')
+    >>> inventory.to_json()["schema"]
+    'tl_site_inventory_v1'
     """
 
     rows: tuple[SiteRow, ...]
@@ -290,7 +311,7 @@ def _op_selector(trace: Any, layer: Any, address_counts: Counter[str]) -> str:
     The qualified module address (the INNERMOST owning module --
     ``output_of_modules`` is innermost-first) wins ONLY when the engine's
     own matcher certifies it: it names exactly one executed site in this
-    inventory AND ``trace[address]`` resolves to this very layer (a
+    inventory AND ``trace.ops[address]`` resolves to this very layer (a
     multi-output container module's address is engine-ambiguous even when
     the inventory holds one row for it). Otherwise the exact layer label,
     pass-qualified when the owning layer is multi-pass. This certification
@@ -316,7 +337,7 @@ def _op_selector(trace: Any, layer: Any, address_counts: Counter[str]) -> str:
     if address and address_counts[address] == 1:
         # engine-ambiguous or unresolvable addresses fall to the label
         with contextlib.suppress(Exception):
-            resolved = trace[str(address)]
+            resolved = trace.ops[str(address)]  # the module's output Op
             if str(getattr(resolved, "layer_label", "")) == str(layer.layer_label):
                 return str(address)
     if int(getattr(layer, "num_passes", 1) or 1) > 1:
@@ -337,6 +358,12 @@ def sites_of_trace(trace: Any) -> SiteInventory:
     -------
     SiteInventory
         One row per executed non-input/output layer, execution order.
+
+    Examples
+    --------
+    >>> inventory = sites_of_trace(tl.trace(model, x))
+    >>> inventory.rung, len(inventory) > 0
+    ('forward', True)
     """
 
     address_counts: Counter[str] = Counter()
@@ -432,6 +459,13 @@ def list_sites(
     -------
     SiteInventory
         Structured rows with the copy-paste-safe selector first.
+
+    Examples
+    --------
+    >>> [row.selector for row in list_sites(model)]
+    ['0', '1', '2']
+    >>> list_sites(model, x).rung
+    'forward'
     """
 
     if inputs is None and input_kwargs is None:

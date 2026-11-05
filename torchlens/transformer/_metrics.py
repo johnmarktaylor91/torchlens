@@ -80,6 +80,17 @@ def token_metrics(
     -------
     tuple[TokenMetrics, TokenMetrics]
         ``(loss_strip, entropy_strip)`` sharing one source fingerprint.
+
+    Examples
+    --------
+    >>> logits = torch.randn(4, 6)
+    >>> loss, entropy = tl.transformer.token_metrics(
+    ...     logits, torch.tensor([0, 1, 2, 3]), ("a", "b", "c", "d")
+    ... )
+    >>> len(loss.values), loss.values[0] is None
+    (4, True)
+    >>> loss.source_fingerprint == entropy.source_fingerprint
+    True
     """
 
     _validate_metric_inputs(logits, token_ids, padding_mask)
@@ -130,7 +141,17 @@ def token_metrics(
 
 
 def metric_strip(metrics: TokenMetrics) -> TokenScores:
-    """Convert a metric record to a strip record for rendering."""
+    """Convert a metric record to a strip record for rendering.
+
+    Examples
+    --------
+    >>> loss, _ = tl.transformer.token_metrics(
+    ...     torch.randn(3, 5), torch.tensor([0, 1, 2]), ("a", "b", "c")
+    ... )
+    >>> strip = tl.transformer.metric_strip(loss)
+    >>> type(strip).__name__, strip.domain
+    ('TokenScores', 'magnitude_sequential')
+    """
 
     return TokenScores(
         tokens=metrics.tokens,
@@ -162,6 +183,18 @@ def render_metric_strip(
     -------
     Artifact
         The written file plus rendered disclosure lines.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> loss, _ = tl.transformer.token_metrics(
+    ...     torch.randn(3, 5), torch.tensor([0, 1, 2]), ("a", "b", "c")
+    ... )
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.viz.metric_strip(loss, pathlib.Path(tmp) / "loss.png")
+    ...     written = saved.paths[0].exists()
+    >>> written, saved.file_format
+    (True, 'png')
     """
 
     return render_token_strip(metric_strip(metrics), path, svg_fonttype=svg_fonttype)

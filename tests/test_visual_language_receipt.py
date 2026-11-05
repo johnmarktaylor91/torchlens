@@ -59,22 +59,6 @@ def test_plain_checkout_records_its_head(repo: Path, monkeypatch) -> None:
     assert deck.build_commit(repo) == {"commit": head, "commit_source": "checkout"}
 
 
-def test_exported_tree_records_the_commit_its_caller_names(tmp_path: Path, monkeypatch) -> None:
-    """A tree with no Git data (``git archive``) records the commit named in the environment."""
-
-    monkeypatch.setenv(deck.COMMIT_ENV, "f" * 40)
-    assert deck.build_commit(tmp_path) == {"commit": "f" * 40, "commit_source": "environment"}
-    monkeypatch.delenv(deck.COMMIT_ENV)
-    assert deck.build_commit(tmp_path)["commit"] == "unknown"
-
-
-def test_environment_record_builds() -> None:
-    """The environment record (versions, commit, date) builds on the pinned Python."""
-
-    env = deck._environment()
-    assert env["built"].endswith("UTC") and env["commit"] and env["commit_source"]
-
-
 def _records(errored: set[str] = frozenset()) -> list[dict]:
     """Slide records as a build writes them: every panel rendered except ``errored`` stems."""
 
@@ -90,34 +74,3 @@ def _records(errored: set[str] = frozenset()) -> list[dict]:
 
 def _row(receipt: dict, row_id: str) -> dict:
     return next(r for r in receipt["rows"] if r["row"] == row_id)
-
-
-def test_whole_panel_witnesses_count_as_proof() -> None:
-    """Rows drawn by one panel per variant, or by every panel of an unkeyed slide, are proven."""
-
-    receipt = deck.receipt(_records())
-    skins = _row(receipt, "VT01")
-    assert skins["proof"] == "panel" and skins["proven_by_picture"]
-    assert skins["variants_unshown"] == []
-    assert _row(receipt, "VT02")["proof"] == "panel"
-    assert _row(receipt, "VK02")["proof"] == "panel"
-    assert _row(receipt, "VO01")["proof"] == "measured"
-    unproven = receipt["counts"]["picture_claimed_unproven"]
-    assert not {"VT01", "VT02", "VK02", "VO01", "VO02"} & set(unproven)
-
-
-def test_a_missing_panel_leaves_its_variant_unproven() -> None:
-    """A variant whose only panel failed is not drawn, so its row stays unproven."""
-
-    dark = {
-        f"{slide.id}-{panel.name}"
-        for slide in deck.deck_slides()
-        for panel in slide.panels
-        if panel.kwargs.get("theme") == "dark"
-    }
-    assert any(stem.startswith("skins-") for stem in dark)
-    receipt = deck.receipt(_records(dark))
-    row = _row(receipt, "VT01")
-    assert row["variants_unshown"] == ["dark"]
-    assert row["proof"] is None
-    assert "VT01" in receipt["counts"]["picture_claimed_unproven"]

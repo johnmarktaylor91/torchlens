@@ -103,7 +103,6 @@ def test_vary_duplicate_after_normalization_refuses() -> None:
     assert excinfo.value.fields["code"] == "vary_member_duplicate"
 
 
-@pytest.mark.smoke
 def test_vary_partial_failure_disclosed_no_rollback() -> None:
     bundle = _pair()
     good = tl.when(tl.func("relu"), tl.scale(0.0))
@@ -121,7 +120,6 @@ def test_vary_partial_failure_disclosed_no_rollback() -> None:
     assert bundle.history[-1].params["outcomes"]["b"] == "failed"
 
 
-@pytest.mark.smoke
 def test_vary_shared_plan_keeps_one_donor_group() -> None:
     bundle = _pair()
     population = tl.intervention.population(

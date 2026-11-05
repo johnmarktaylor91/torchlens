@@ -143,9 +143,9 @@ def _bind_call_outputs(
             # for downstream reads and activation attestation.
             slot_values[out_argument_slot_id] = value
             produced_slot_ids.add(out_argument_slot_id)
-        for version_slot_id in version_alias_ids.get(slot_id, ()):
-            slot_values[version_slot_id] = value
-            produced_slot_ids.add(version_slot_id)
+        aliases = version_alias_ids.get(slot_id, ())
+        checks += _bind_version_aliases(call, value, op_label, slots, aliases, slot_values)
+        produced_slot_ids.update(aliases)
         for produced_slot_id in produced_slot_ids & attestation_slot_ids:
             # r59 gate 3: byte-guard every op-output snapshot before it allocates.
             attestation_slot_values[produced_slot_id] = ceiling.guarded_clone(
@@ -231,6 +231,69 @@ def _bind_call_outputs(
         _mutation_contract_checks(call, output, slot_values, before_versions, state_slot_ids)
     )
     return tuple(checks)
+
+
+def _bind_version_aliases(
+    call: RunnableCallDescriptor,
+    value: torch.Tensor,
+    op_label: str,
+    slots: Mapping[str, TensorSlotDescriptor],
+    alias_ids: tuple[str, ...],
+    slot_values: dict[str, torch.Tensor],
+) -> list[ContractCheck]:
+    """Bind ``value`` into each direct version alias of its slot; return their checks.
+
+    A direct version alias receives the produced value itself, so its recorded
+    shape and dtype must describe that value: an alias recorded smaller than its
+    producer would otherwise bind a larger tensor than its readers were admitted
+    for.
+    """
+
+    checks: list[ContractCheck] = []
+    for alias_id in alias_ids:
+        checks.extend(_version_alias_checks(call, slots[alias_id], value, op_label))
+        slot_values[alias_id] = value
+    return checks
+
+
+def _version_alias_checks(
+    call: RunnableCallDescriptor,
+    alias: TensorSlotDescriptor,
+    value: torch.Tensor,
+    op_label: str,
+) -> tuple[ContractCheck, ContractCheck]:
+    """Check a direct version alias's recorded shape and dtype against the bound value."""
+
+    actual_shape = tuple(value.shape)
+    details_slot = ("slot_id", alias.slot_id)
+    return (
+        _contract_check(
+            f"output_shape:{alias.slot_id}",
+            actual_shape == alias.shape,
+            RunnableErrorCode.OUTPUT_SHAPE_MISMATCH,
+            f"Version alias {alias.slot_id!r} of call {call.call_id!r} binds shape "
+            f"{actual_shape}, recorded {alias.shape}.",
+            affected_op_labels=(op_label,),
+            details=(
+                details_slot,
+                ("expected_shape", repr(alias.shape)),
+                ("actual_shape", repr(actual_shape)),
+            ),
+        ),
+        _contract_check(
+            f"output_dtype:{alias.slot_id}",
+            str(value.dtype) == alias.dtype,
+            RunnableErrorCode.OUTPUT_DTYPE_MISMATCH,
+            f"Version alias {alias.slot_id!r} of call {call.call_id!r} binds dtype "
+            f"{value.dtype}, recorded {alias.dtype}.",
+            affected_op_labels=(op_label,),
+            details=(
+                details_slot,
+                ("expected_dtype", alias.dtype),
+                ("actual_dtype", str(value.dtype)),
+            ),
+        ),
+    )
 
 
 def _mutation_contract_checks(

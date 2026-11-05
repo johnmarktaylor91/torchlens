@@ -253,7 +253,7 @@ def _after_fast_run(cell: Cell) -> None:
     trace = cell.require_trace()
     before = cell.output_leaves(trace)
     torch.manual_seed(SEED)
-    result = trace.run(inputs=cell.fresh_inputs(), fast=True)
+    result = trace.run_transaction(inputs=cell.fresh_inputs(), fast=True)
     got = [
         leaf.detach() if isinstance(leaf, torch.Tensor) else leaf
         for leaf in cell.leaves(result.output)
@@ -327,7 +327,9 @@ def _after_record(cell: Cell) -> None:
     # which no capture, trace or record, can see past.
     model, _ = cell.case.build()
     torch.manual_seed(SEED)
-    recording = tl.record(model, cell.fresh_inputs(), default_op=True)
+    recording = tl.record(
+        model, cell.fresh_inputs(), recording=tl.options.RecordingOptions(default_op=True)
+    )
     cooked = recording.to_trace()
     from tests.behaviour.harness import execution_order
 

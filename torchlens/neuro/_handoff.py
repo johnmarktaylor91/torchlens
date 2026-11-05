@@ -23,9 +23,14 @@ from typing import Any, cast
 
 import torch
 
+from .._data_classes._lookup_kinds import _record_view
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import _actionable_message, _ActionableErrorMixin
 from ..errors._base import ConfigurationError
+from ._conflicts import (
+    require_rsatoolbox as require_rsatoolbox,
+    rsatoolbox_version as rsatoolbox_version,
+)
 
 #: Observation-descriptor key of the ALWAYS-written original-row-index
 #: descriptor (neuro memo D10): rsatoolbox's ``calc_rdm(descriptor=...)``
@@ -50,6 +55,13 @@ class NeuroHandoffError(_ActionableErrorMixin, ConfigurationError, ValueError):
     ``neuro_site_ambiguous``, ``neuro_source_invalid``,
     ``neuro_sites_inconsistent_rows``, ``neuro_rdms_mode_conflict``,
     ``neuro_matrix_invalid``.
+
+    Examples
+    --------
+    >>> issubclass(NeuroHandoffError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(NeuroHandoffError, ValueError)
+    True
     """
 
     def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
@@ -106,52 +118,6 @@ class SiteDatasets(OrderedDict):
     """
 
     ledger: tuple[SiteOutcome, ...] = ()
-
-
-def require_rsatoolbox() -> Any:
-    """Import and return rsatoolbox, teaching the extra when absent.
-
-    Returns
-    -------
-    Any
-        The imported ``rsatoolbox`` package.
-
-    Raises
-    ------
-    ImportError
-        When rsatoolbox is not installed; the message names the exact
-        extra spelling.
-    """
-
-    try:
-        import rsatoolbox
-    except ImportError as exc:
-        raise ImportError(
-            'torchlens.neuro requires rsatoolbox: install it with `pip install "torchlens[neuro]"`.'
-        ) from exc
-    return rsatoolbox
-
-
-def rsatoolbox_version() -> str:
-    """Return the installed rsatoolbox version via package metadata.
-
-    Neither validated rsatoolbox version (0.1.5 floor, 0.3.x current)
-    exposes ``__version__`` (measured), so the recorded version comes from
-    ``importlib.metadata``.
-
-    Returns
-    -------
-    str
-        The installed distribution version, or ``"unknown"`` when metadata
-        is unavailable (e.g. a path-injected source tree).
-    """
-
-    import importlib.metadata
-
-    try:
-        return importlib.metadata.version("rsatoolbox")
-    except importlib.metadata.PackageNotFoundError:
-        return "unknown"
 
 
 def check_pool(pool: Any) -> str:
@@ -598,7 +564,7 @@ def enumerate_trace_sites(
     seen: set[str] = set()
     for requested in requested_list:
         lookup = str(requested)
-        record = trace[lookup]
+        record = _record_view(trace, lookup)  # a module address names its output Op
         layer_label = str(getattr(record, "layer_label", lookup))
         if int(getattr(record, "num_passes", 1)) > 1 and not _is_pass_qualified(record):
             alternatives = [str(op.label) for op in getattr(record, "ops", {}).values()]
@@ -617,10 +583,8 @@ def enumerate_trace_sites(
         # Canonical key rule (memo D13): pass-qualified keys ONLY for
         # multi-pass layers; single-pass sites use the bare layer label so
         # explicit requests, default sweeps, and the repgeom verbs agree.
-        if int(getattr(record, "num_passes", 1)) > 1:
-            key = _safe_label(record) or layer_label
-        else:
-            key = layer_label
+        multi_pass = int(getattr(record, "num_passes", 1)) > 1
+        key = (_safe_label(record) or layer_label) if multi_pass else layer_label
         if key in seen:
             continue
         seen.add(key)

@@ -29,6 +29,7 @@ from __future__ import annotations
 import functools
 import threading
 import time
+import types
 import warnings
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
@@ -39,11 +40,13 @@ import torch
 
 from ... import _state
 from ..._data_classes.internal_types import FuncExecutionContext
+from ..._utils import _torch_compat
 from ..._utils.rng import log_current_autocast_state, log_current_rng_states
 from ._foreign_data import (
     FOREIGN_DATA_EXPORT_WRAPPER_NAME,
     FOREIGN_DATA_FUNC_NAME,
     TOLIST_EXPORT_FUNC_NAME,
+    known_foreign_kernel_exits,
     note_plain_export,
 )
 
@@ -87,6 +90,16 @@ PLAIN_EXPORT_FUNC_NAMES = EXPORT_FUNC_NAMES | frozenset({TOLIST_EXPORT_FUNC_NAME
 Inside a live ``Function.apply`` frame only :data:`EXPORT_FUNC_NAMES` mark the frame
 as leaving torch: ``tolist`` is metadata inside most Functions, never a kernel exit.
 """
+
+FILE_LOAD_FUNC_NAMES = frozenset({"load"})
+"""``torch.load`` / ``torch.serialization.load``: wrapped so a capture notes the call.
+
+The load records no op of its own, and replay never resolves it (``_callable_safety``), so the
+loaded tensor stays sourceless; the provenance warning names the load (exclusion on record).
+"""
+
+BOUNDARY_NOTE_FUNC_NAMES = PLAIN_EXPORT_FUNC_NAMES | FILE_LOAD_FUNC_NAMES
+"""Wrapped names whose wrapper reports through :func:`note_function_boundary`."""
 
 _FRAMES: list[set[str]] = []
 """Export names seen inside each live ``Function.apply`` frame, innermost last."""
@@ -132,6 +145,25 @@ def note_function_export(name: str, args: tuple[Any, ...] = ()) -> None:
     trace = _active_plain_capture()
     if trace is not None and args:
         note_plain_export(trace, name, args[0])
+
+
+def note_function_boundary(name: str, args: tuple[Any, ...] = ()) -> None:
+    """Record an export (:func:`note_function_export`) or a file load in the live capture.
+
+    Parameters
+    ----------
+    name:
+        Wrapped function name, one of :data:`BOUNDARY_NOTE_FUNC_NAMES`.
+    args:
+        The call's positional arguments.
+    """
+
+    if name not in FILE_LOAD_FUNC_NAMES:
+        note_function_export(name, args)
+        return
+    trace = _active_plain_capture()
+    if trace is not None:
+        trace.__dict__["_torch_file_loads"] = True
 
 
 def _active_plain_capture() -> Any | None:
@@ -233,15 +265,47 @@ def is_foreign_function_recorder(func: Any) -> bool:
     return getattr(func, FOREIGN_FUNCTION_RECORDER_ATTR, False) is True
 
 
+def apply_slot_function(slot: object) -> Callable[..., Any] | None:
+    """Return ``Function.apply`` as a plain ``(cls, *args, **kwargs)`` callable.
+
+    Parameters
+    ----------
+    slot:
+        ``torch.autograd.Function.__dict__["apply"]``.
+
+    Returns
+    -------
+    Callable[..., Any] | None
+        The classmethod's function (torch through 2.13), the C classmethod descriptor of
+        ``_C._FunctionBase`` bound to the applied subclass through ``__get__`` (torch 2.14
+        and later), or ``None`` for a shape the boundary cannot wrap.
+    """
+
+    if isinstance(slot, classmethod):
+        return slot.__func__
+    if isinstance(slot, types.ClassMethodDescriptorType):
+
+        def call_descriptor(cls: type[Any], *args: Any, **kwargs: Any) -> Any:
+            """Call the C classmethod descriptor bound to ``cls`` (its own doc replaces this)."""
+            return slot.__get__(None, cls)(*args, **kwargs)
+
+        call_descriptor.__name__, call_descriptor.__qualname__ = slot.__name__, slot.__qualname__
+        call_descriptor.__doc__ = slot.__doc__
+        return call_descriptor
+    return None
+
+
 def install_function_apply_wrapper() -> None:
     """Wrap ``torch.autograd.Function.apply`` idempotently.
 
     Returns
     -------
     None
-        The base-class classmethod is replaced; subclasses overriding ``apply`` are
-        untouched, and a foreign patch layered over ours is never clobbered. The
-        TorchScript call hook (``_script_boundary``) is installed alongside.
+        The base-class ``apply`` slot (a Python classmethod or the C classmethod
+        descriptor; ``HAS_FUNCTION_APPLY_SLOT``) is replaced; subclasses overriding
+        ``apply`` are untouched, and a foreign patch layered over ours is never clobbered.
+        An unknown slot shape flips the flag and leaves the slot alone. The TorchScript
+        call hook (``_script_boundary``) is installed alongside.
     """
 
     global _INSTALLED_APPLY, _ORIGINAL_APPLY
@@ -252,9 +316,13 @@ def install_function_apply_wrapper() -> None:
     if _INSTALLED_APPLY is not None:
         return
     original = torch.autograd.Function.__dict__.get("apply")
-    if not isinstance(original, classmethod):
+    original_function = apply_slot_function(original)
+    if original_function is None:
+        _torch_compat.mark_torch_capability_missing(
+            "HAS_FUNCTION_APPLY_SLOT",
+            "autograd.Function forwards that leave torch are not recorded as boundary ops",
+        )
         return
-    original_function = original.__func__
 
     def wrapped_apply(cls: type[Any], *args: Any, **kwargs: Any) -> Any:
         """Run ``Function.apply``, collapsing a forward that left torch into one op."""
@@ -651,6 +719,11 @@ def record_function_apply(
 ) -> Any:
     """Run one ``Function.apply`` under capture, collapsing it if the forward left torch.
 
+    A forward leaves torch when the frame saw an export or host re-entry, or when the
+    Function is a known foreign kernel (``_foreign_data.known_foreign_kernel_exits``:
+    FlashAttention 4 hands its tensors to a CuTe kernel through TVM FFI, which no export
+    patch sees).
+
     Parameters
     ----------
     trace:
@@ -685,7 +758,7 @@ def record_function_apply(
         return out
     collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
     host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
-    exits = tuple(sorted(frame_exports)) + host_entry_ops
+    exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
     if not exits:
         return out
     spec = BoundarySpec(

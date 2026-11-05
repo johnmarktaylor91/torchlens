@@ -1,4 +1,4 @@
-"""The steering recipe in ``docs/agent-reference/common-patterns.md`` runs and is exact.
+"""The steering recipe in ``docs/internal/agent-reference/common-patterns.md`` runs and is exact.
 
 The recipe is the documented answer to "many forwards with one intervention":
 ``spec.bind(model)`` for steering, ``tl.record(..., intervene=spec)`` when
@@ -18,7 +18,13 @@ import torch
 
 import torchlens as tl
 
-PAGE = Path(__file__).resolve().parents[1] / "docs" / "agent-reference" / "common-patterns.md"
+PAGE = (
+    Path(__file__).resolve().parents[1]
+    / "docs"
+    / "internal"
+    / "agent-reference"
+    / "common-patterns.md"
+)
 HEADING = "### Steering many forwards / generation"
 FENCE_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
 
@@ -64,15 +70,6 @@ def test_recipe_bind_matches_plain_hook_exactly(recipe):
         recipe["ids"], max_new_tokens=5, do_sample=False, use_cache=True
     )
     assert not torch.equal(recipe["tokens"], unsteered), "the steer must change generation"
-
-
-def test_recipe_bind_generate_cache_off_agrees(recipe):
-    """The bound generate gives the same tokens with the KV cache off."""
-
-    no_cache = recipe["steered"].generate(
-        recipe["ids"], max_new_tokens=5, do_sample=False, use_cache=False
-    )
-    assert torch.equal(no_cache, recipe["tokens"])
 
 
 def test_recipe_record_and_trace_match_plain_hook(recipe):

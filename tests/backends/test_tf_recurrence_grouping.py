@@ -13,7 +13,7 @@ keras = pytest.importorskip("keras")
 import torchlens as tl  # noqa: E402
 from torchlens.backends.tf import TFBackend  # noqa: E402
 
-pytestmark = pytest.mark.tf_backend
+pytestmark = [pytest.mark.tf_backend, pytest.mark.rare]
 
 
 class _Repeated(keras.Model):

@@ -1,18 +1,4 @@
 {
- "capture/conv/and_func_inmodule": [
-  "relu_1_2"
- ],
- "capture/conv/and_nested_three": [
-  "relu_1_2"
- ],
- "capture/conv/contains_lower": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "capture/conv/contains_mixed": [
-  "conv2d_1_1",
-  "conv2d_2_3"
- ],
  "capture/conv/contains_raw_sub": [
   "add_1_5",
   "conv2d_1_1",
@@ -24,11 +10,6 @@
   "relu_1_2",
   "relu_2_4"
  ],
- "capture/conv/contains_upper": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "capture/conv/facet_named": [],
  "capture/conv/followed_by_bare": "ERROR:PredicateError",
  "capture/conv/followed_by_combo": [
   "conv2d_1_1",
@@ -44,30 +25,10 @@
   "relu_1_2",
   "relu_2_4"
  ],
- "capture/conv/func_transform_any": [],
  "capture/conv/grad_fn_on_forward": [],
  "capture/conv/head_indexed": [],
- "capture/conv/in_module_container": [
-  "conv2d_1_1",
-  "conv2d_2_3",
-  "relu_1_2"
- ],
- "capture/conv/in_module_pass": [
-  "conv2d_1_1",
-  "conv2d_2_3",
-  "relu_1_2"
- ],
  "capture/conv/input_at_0": [],
  "capture/conv/label_final": "ERROR:LiveModeLabelError",
- "capture/conv/label_raw": [
-  "relu_1_2"
- ],
- "capture/conv/module_address": [
-  "conv2d_1_1"
- ],
- "capture/conv/module_container": [
-  "conv2d_2_3"
- ],
  "capture/conv/not_func": [
   "add_1_5",
   "conv2d_1_1",
@@ -77,73 +38,14 @@
   "linear_1_7",
   "output_1"
  ],
- "capture/conv/or_funcs": [
-  "conv2d_1_1",
-  "conv2d_2_3",
-  "relu_1_2",
-  "relu_2_4"
- ],
- "capture/conv/output_at_0": [],
- "capture/conv/output_index": [],
  "capture/conv/preceded_by_conv": [
   "relu_1_2",
   "relu_2_4"
  ],
- "capture/conv/regex_anchored": [
-  "conv2d_2_3"
- ],
- "capture/conv/regex_lower": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "capture/conv/regex_raw_anchor": [
-  "add_1_5",
-  "conv2d_1_1",
-  "conv2d_2_3",
-  "flatten_1_6",
-  "input_1",
-  "linear_1_7",
-  "output_1",
-  "relu_1_2",
-  "relu_2_4"
- ],
- "capture/conv/regex_upper": [],
- "capture/conv/where_type_relu": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "capture/dictin/dictin_input_at_a": [],
- "capture/dictin/dictin_input_at_b": [],
- "capture/dictin/dictin_input_at_missing": [],
- "capture/dictout/dict_output_at_aux0": [],
- "capture/dictout/dict_output_at_aux1": [],
- "capture/dictout/dict_output_at_logits": [],
  "capture/dictout/dict_output_name": [],
- "capture/loop/loop_in_module_block": [
-  "linear_1_1",
-  "linear_1_1"
- ],
- "capture/loop/loop_in_module_pass2": [
-  "linear_1_1"
- ],
- "capture/loop/loop_label_recurrent": "ERROR:LiveModeLabelError",
- "capture/loop/loop_module_block": [
-  "linear_1_1",
-  "linear_1_1"
- ],
- "capture/loop/loop_module_pass2": [
-  "linear_1_1"
- ],
- "capture/ntout/nt_output_at_extra": [],
  "capture/ntout/nt_output_at_main": [],
- "capture/split/split_contains_mul": [
-  "mul_1_3"
- ],
  "capture/split/split_func_chunk_out1": [
   "chunk_2_2"
- ],
- "capture/split/split_output_0": [
-  "chunk_1_1"
  ],
  "capture/split/split_output_1": [
   "chunk_2_2"
@@ -151,32 +53,15 @@
  "capture/vmap/vmap_transform_any": [
   "vmap_1_1"
  ],
- "capture/vmap/vmap_transform_grad": [],
  "capture/vmap/vmap_transform_vmap": [
   "vmap_1_1"
  ],
- "construct/activation_and_pass_qualifier": "ERROR:SelectorCompositionError",
- "construct/cross_direction_and": "ERROR:SelectorCompositionError",
  "construct/double_followed_by": "ERROR:SelectorCompositionError",
- "construct/func_non_string": "ERROR:ArgumentTypeError",
  "construct/grad_and_activation": "ERROR:SelectorCompositionError",
  "construct/grad_and_node": "ERROR:SelectorCompositionError",
- "construct/grad_inner_node": "ERROR:SelectorCompositionError",
- "construct/grad_inner_pass_qualifier": "ERROR:SelectorCompositionError",
  "construct/grad_nested": "ERROR:SelectorCompositionError",
- "construct/grad_not": "tl.grad((~tl.func('relu')))",
- "construct/grad_or_grad": "(tl.grad(tl.func('relu')) | tl.grad(tl.func('add')))",
  "construct/not_followed_by": "ERROR:SelectorCompositionError",
  "construct/or_with_followed_by": "ERROR:SelectorCompositionError",
- "facet_spec/facet_head": {
-  "capture_repr": "tl.facet('q').head(3)",
-  "hooks_repr": "ERROR:SelectorCapabilityError",
-  "kind": "facet",
-  "resolver_repr": "tl.facet('q').head(3)",
-  "resolver_universe": null,
-  "spec_kind": "facet",
-  "universe": null
- },
  "facet_spec/facet_head_scoped": {
   "capture_repr": "tl.facet('q').head(3).in_module('encoder.block.0')",
   "hooks_repr": "ERROR:SelectorCapabilityError",
@@ -186,43 +71,6 @@
   "spec_kind": "facet",
   "universe": null
  },
- "facet_spec/facet_scoped": {
-  "capture_repr": "tl.facet('q').in_module('encoder.block.0')",
-  "hooks_repr": "ERROR:SelectorCapabilityError",
-  "kind": "facet",
-  "resolver_repr": "tl.facet('q').in_module('encoder.block.0')",
-  "resolver_universe": null,
-  "spec_kind": "facet",
-  "universe": null
- },
- "flat_spec/conv/flat_and_single_child": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "flat_spec/conv/flat_and_three": [
-  "relu_1_2"
- ],
- "flat_spec/conv/flat_or_three": [
-  "conv2d_1_1",
-  "conv2d_2_3",
-  "flatten_1_6",
-  "relu_1_2",
-  "relu_2_4"
- ],
- "live/conv/and_func_inmodule": [
-  "relu_1_3_raw"
- ],
- "live/conv/and_nested_three": [
-  "relu_1_3_raw"
- ],
- "live/conv/contains_lower": [
-  "relu_1_3_raw",
-  "relu_2_5_raw"
- ],
- "live/conv/contains_mixed": [
-  "conv2d_1_2_raw",
-  "conv2d_2_4_raw"
- ],
  "live/conv/contains_raw_sub": [
   "add_1_6_raw",
   "conv2d_1_2_raw",
@@ -232,11 +80,6 @@
   "relu_1_3_raw",
   "relu_2_5_raw"
  ],
- "live/conv/contains_upper": [
-  "relu_1_3_raw",
-  "relu_2_5_raw"
- ],
- "live/conv/facet_named": "ERROR:SelectorCapabilityError",
  "live/conv/followed_by_bare": "ERROR:SelectorCapabilityError",
  "live/conv/followed_by_combo": "ERROR:SelectorCapabilityError",
  "live/conv/func_add_dunder": [
@@ -249,30 +92,10 @@
   "relu_1_3_raw",
   "relu_2_5_raw"
  ],
- "live/conv/func_transform_any": [],
  "live/conv/grad_fn_on_forward": [],
  "live/conv/head_indexed": "ERROR:SelectorCapabilityError",
- "live/conv/in_module_container": [
-  "conv2d_1_2_raw",
-  "conv2d_2_4_raw",
-  "relu_1_3_raw"
- ],
- "live/conv/in_module_pass": [
-  "conv2d_1_2_raw",
-  "conv2d_2_4_raw",
-  "relu_1_3_raw"
- ],
  "live/conv/input_at_0": "ERROR:SelectorCapabilityError",
  "live/conv/label_final": "ERROR:LiveModeLabelError",
- "live/conv/label_raw": [
-  "relu_1_3_raw"
- ],
- "live/conv/module_address": [
-  "features.0:1"
- ],
- "live/conv/module_container": [
-  "features:1"
- ],
  "live/conv/not_func": [
   "add_1_6_raw",
   "conv2d_1_2_raw",
@@ -285,71 +108,14 @@
   "head:1",
   "linear_1_8_raw"
  ],
- "live/conv/or_funcs": [
-  "conv2d_1_2_raw",
-  "conv2d_2_4_raw",
-  "relu_1_3_raw",
-  "relu_2_5_raw"
- ],
- "live/conv/output_at_0": [],
- "live/conv/output_index": [],
  "live/conv/preceded_by_conv": "ERROR:SelectorCapabilityError",
- "live/conv/regex_anchored": [
-  "conv2d_2_4_raw"
- ],
- "live/conv/regex_lower": [
-  "relu_1_3_raw",
-  "relu_2_5_raw"
- ],
- "live/conv/regex_raw_anchor": [
-  "add_1_6_raw",
-  "conv2d_1_2_raw",
-  "conv2d_2_4_raw",
-  "flatten_1_7_raw",
-  "linear_1_8_raw",
-  "relu_1_3_raw",
-  "relu_2_5_raw"
- ],
- "live/conv/regex_upper": [],
- "live/conv/where_type_relu": [
-  "features.1:1",
-  "relu_1_3_raw",
-  "relu_2_5_raw"
- ],
- "live/dictin/dictin_input_at_a": "ERROR:SelectorCapabilityError",
- "live/dictin/dictin_input_at_b": "ERROR:SelectorCapabilityError",
- "live/dictin/dictin_input_at_missing": "ERROR:SelectorCapabilityError",
- "live/dictout/dict_output_at_aux0": [],
- "live/dictout/dict_output_at_aux1": [],
- "live/dictout/dict_output_at_logits": [],
  "live/dictout/dict_output_name": [],
- "live/loop/loop_in_module_block": [
-  "linear_1_2_raw",
-  "linear_2_4_raw"
- ],
- "live/loop/loop_in_module_pass2": [
-  "linear_2_4_raw"
- ],
- "live/loop/loop_label_recurrent": "ERROR:LiveModeLabelError",
- "live/loop/loop_module_block": [
-  "block:1",
-  "block:2"
- ],
- "live/loop/loop_module_pass2": [
-  "block:2"
- ],
- "live/ntout/nt_output_at_extra": [],
  "live/ntout/nt_output_at_main": [],
- "live/split/split_contains_mul": [
-  "mul_1_4_raw"
- ],
  "live/split/split_func_chunk_out1": [],
- "live/split/split_output_0": [],
  "live/split/split_output_1": [],
  "live/vmap/vmap_transform_any": [
   "vmap_1_2_raw"
  ],
- "live/vmap/vmap_transform_grad": [],
  "live/vmap/vmap_transform_vmap": [
   "vmap_1_2_raw"
  ],
@@ -357,136 +123,12 @@
   "relu_back_1_9",
   "relu_back_2_11"
  ],
- "live_bwd/conv/bwd_and_nary_flat": [],
- "live_bwd/conv/bwd_label_finalized": [],
  "live_bwd/conv/bwd_not": [],
- "live_bwd/conv/func_relu_bridge": [],
- "live_bwd/conv/grad_fn_class": [
-  "relu_back_1_9",
-  "relu_back_2_11"
- ],
  "live_bwd/conv/grad_func_relu": [
   "relu_back_1_9",
   "relu_back_2_11"
  ],
- "live_bwd/conv/grad_input": [
-  "add_back_1_7",
-  "addmm_back_1_3",
-  "clone_back_2_15",
-  "convolution_back_1_10",
-  "convolution_back_2_14",
-  "relu_back_1_9",
-  "relu_back_2_11",
-  "view_back_1_5"
- ],
- "live_bwd/conv/grad_output": [
-  "add_back_1_7",
-  "addmm_back_1_3",
-  "clone_back_2_15",
-  "convolution_back_1_10",
-  "convolution_back_2_14",
-  "relu_back_1_9",
-  "relu_back_2_11",
-  "view_back_1_5"
- ],
- "live_bwd/conv/without_op": [
-  "accumulategrad_back_1_4",
-  "accumulategrad_back_2_8",
-  "accumulategrad_back_3_12",
-  "accumulategrad_back_4_13",
-  "accumulategrad_back_5_16",
-  "accumulategrad_back_6_17",
-  "accumulategrad_back_7_18",
-  "clone_back_1_2",
-  "sum_back_1_1",
-  "t_back_1_6"
- ],
- "short_circuit/conv/and_where": {
-  "labels": [
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "where_saw": [
-   "relu_1_2",
-   "relu_2_4"
-  ]
- },
- "short_circuit/conv/and_where_left": {
-  "labels": [
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "where_saw": [
-   "add_1_5",
-   "conv2d_1_1",
-   "conv2d_2_3",
-   "flatten_1_6",
-   "input_1",
-   "linear_1_7",
-   "output_1",
-   "relu_1_2",
-   "relu_2_4"
-  ]
- },
- "short_circuit/conv/not_where": {
-  "labels": [
-   "add_1_5",
-   "conv2d_1_1",
-   "conv2d_2_3",
-   "flatten_1_6",
-   "input_1",
-   "linear_1_7",
-   "output_1",
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "where_saw": [
-   "add_1_5",
-   "conv2d_1_1",
-   "conv2d_2_3",
-   "flatten_1_6",
-   "input_1",
-   "linear_1_7",
-   "output_1",
-   "relu_1_2",
-   "relu_2_4"
-  ]
- },
- "short_circuit/conv/or_where": {
-  "labels": [
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "where_saw": [
-   "add_1_5",
-   "conv2d_1_1",
-   "conv2d_2_3",
-   "flatten_1_6",
-   "input_1",
-   "linear_1_7",
-   "output_1"
-  ]
- },
- "sites/conv/and_func_inmodule": [
-  "relu_1_2"
- ],
- "sites/conv/and_nested_three": [
-  "relu_1_2"
- ],
- "sites/conv/contains_lower": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "sites/conv/contains_mixed": [
-  "conv2d_1_1",
-  "conv2d_2_3"
- ],
  "sites/conv/contains_raw_sub": [],
- "sites/conv/contains_upper": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "sites/conv/facet_named": "ERROR:SelectorCapabilityError",
  "sites/conv/followed_by_bare": "ERROR:SelectorCapabilityError",
  "sites/conv/followed_by_combo": "ERROR:SelectorCapabilityError",
  "sites/conv/func_add_dunder": [
@@ -499,31 +141,11 @@
   "relu_1_2",
   "relu_2_4"
  ],
- "sites/conv/func_transform_any": [],
  "sites/conv/grad_fn_on_forward": "ERROR:SiteResolutionError",
  "sites/conv/head_indexed": "ERROR:SelectorCapabilityError",
- "sites/conv/in_module_container": [
-  "conv2d_1_1",
-  "conv2d_2_3",
-  "relu_1_2"
- ],
- "sites/conv/in_module_pass": [
-  "conv2d_1_1",
-  "conv2d_2_3",
-  "relu_1_2"
- ],
  "sites/conv/input_at_0": [],
  "sites/conv/label_final": [
   "relu_1_2"
- ],
- "sites/conv/label_raw": [
-  "relu_1_2"
- ],
- "sites/conv/module_address": [
-  "conv2d_1_1"
- ],
- "sites/conv/module_container": [
-  "conv2d_2_3"
  ],
  "sites/conv/not_func": [
   "add_1_5",
@@ -534,77 +156,13 @@
   "linear_1_7",
   "output_1"
  ],
- "sites/conv/or_funcs": [
-  "conv2d_1_1",
-  "conv2d_2_3",
-  "relu_1_2",
-  "relu_2_4"
- ],
- "sites/conv/output_at_0": [],
- "sites/conv/output_index": [],
  "sites/conv/preceded_by_conv": "ERROR:SelectorCapabilityError",
- "sites/conv/regex_anchored": [
-  "conv2d_2_3"
- ],
- "sites/conv/regex_lower": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "sites/conv/regex_raw_anchor": [],
- "sites/conv/regex_upper": [],
- "sites/conv/where_type_relu": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "sites/dictin/dictin_input_at_a": [
-  "input_1"
- ],
- "sites/dictin/dictin_input_at_b": [
-  "input_2"
- ],
- "sites/dictin/dictin_input_at_missing": [],
- "sites/dictout/dict_output_at_aux0": [
-  "output_2"
- ],
- "sites/dictout/dict_output_at_aux1": [
-  "output_3"
- ],
- "sites/dictout/dict_output_at_logits": [
-  "output_1"
- ],
  "sites/dictout/dict_output_name": [],
- "sites/loop/loop_in_module_block": [
-  "linear_1_1",
-  "linear_1_1"
- ],
- "sites/loop/loop_in_module_pass2": [
-  "linear_1_1"
- ],
- "sites/loop/loop_label_recurrent": [
-  "linear_1_1",
-  "linear_1_1"
- ],
- "sites/loop/loop_module_block": [
-  "linear_1_1",
-  "linear_1_1"
- ],
- "sites/loop/loop_module_pass2": [
-  "linear_1_1"
- ],
- "sites/ntout/nt_output_at_extra": [
-  "output_2"
- ],
  "sites/ntout/nt_output_at_main": [
   "output_1"
  ],
- "sites/split/split_contains_mul": [
-  "mul_1_3"
- ],
  "sites/split/split_func_chunk_out1": [
   "chunk_2_2"
- ],
- "sites/split/split_output_0": [
-  "chunk_1_1"
  ],
  "sites/split/split_output_1": [
   "chunk_2_2"
@@ -612,49 +170,11 @@
  "sites/vmap/vmap_transform_any": [
   "vmap_1_1"
  ],
- "sites/vmap/vmap_transform_grad": [],
  "sites/vmap/vmap_transform_vmap": [
   "vmap_1_1"
  ],
- "sites_bwd/conv/backward_pass_1": [
-  "accumulategrad_back_1_4",
-  "accumulategrad_back_2_8",
-  "accumulategrad_back_3_12",
-  "accumulategrad_back_4_13",
-  "accumulategrad_back_5_16",
-  "accumulategrad_back_6_17",
-  "accumulategrad_back_7_18",
-  "add_back_1_7",
-  "addmm_back_1_3",
-  "clone_back_1_2",
-  "clone_back_2_15",
-  "convolution_back_1_10",
-  "convolution_back_2_14",
-  "relu_back_1_9",
-  "relu_back_2_11",
-  "sum_back_1_1",
-  "t_back_1_6",
-  "view_back_1_5"
- ],
  "sites_bwd/conv/backward_pass_2": [],
- "sites_bwd/conv/bwd_and_direction_agnostic": "ERROR:SelectorCompositionError",
- "sites_bwd/conv/bwd_input_at_and_grad_output": "ERROR:SelectorCompositionError",
- "sites_bwd/conv/bwd_not_accumulate": [
-  "add_back_1_7",
-  "addmm_back_1_3",
-  "clone_back_1_2",
-  "clone_back_2_15",
-  "convolution_back_1_10",
-  "convolution_back_2_14",
-  "relu_back_1_9",
-  "relu_back_2_11",
-  "sum_back_1_1",
-  "t_back_1_6",
-  "view_back_1_5"
- ],
  "sites_bwd/conv/bwd_output0_and_grad_input": "ERROR:SelectorCompositionError",
- "sites_bwd/conv/bwd_output_at_and_grad_input": "ERROR:SelectorCompositionError",
- "sites_bwd/conv/bwd_plain_label": [],
  "sites_bwd/conv/grad_fn_class": [
   "relu_back_1_9",
   "relu_back_2_11"
@@ -666,48 +186,6 @@
   "relu_back_1_9",
   "relu_back_2_11"
  ],
- "sites_bwd/conv/grad_fn_not_custom": [
-  "accumulategrad_back_1_4",
-  "accumulategrad_back_2_8",
-  "accumulategrad_back_3_12",
-  "accumulategrad_back_4_13",
-  "accumulategrad_back_5_16",
-  "accumulategrad_back_6_17",
-  "accumulategrad_back_7_18",
-  "add_back_1_7",
-  "addmm_back_1_3",
-  "clone_back_1_2",
-  "clone_back_2_15",
-  "convolution_back_1_10",
-  "convolution_back_2_14",
-  "relu_back_1_9",
-  "relu_back_2_11",
-  "sum_back_1_1",
-  "t_back_1_6",
-  "view_back_1_5"
- ],
- "sites_bwd/conv/grad_fn_type": [
-  "relu_back_1_9",
-  "relu_back_2_11"
- ],
- "sites_bwd/conv/grad_func_relu": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "sites_bwd/conv/grad_func_relu_pass_1": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "sites_bwd/conv/grad_input": [
-  "add_back_1_7",
-  "addmm_back_1_3",
-  "clone_back_2_15",
-  "convolution_back_1_10",
-  "convolution_back_2_14",
-  "relu_back_1_9",
-  "relu_back_2_11",
-  "view_back_1_5"
- ],
  "sites_bwd/conv/grad_not_relu": [
   "add_1_5",
   "conv2d_1_1",
@@ -716,12 +194,6 @@
   "input_1",
   "linear_1_7",
   "output_1"
- ],
- "sites_bwd/conv/grad_or_activation_relu": [
-  "relu_1_2",
-  "relu_1_2",
-  "relu_2_4",
-  "relu_2_4"
  ],
  "sites_bwd/conv/grad_output": [
   "add_back_1_7",
@@ -745,88 +217,9 @@
   "sum_back_1_1",
   "t_back_1_6"
  ],
- "sites_bwd/dictout/dictout_grad_output_at_logits": [
-  "output_1"
- ],
  "sites_bwd/dictout/dictout_output_at_logits": [
   "output_1"
  ],
- "sites_bwd/dictout/dictout_output_at_logits_and_grad_input": "ERROR:SelectorCompositionError",
- "sites_bwd/split/split_grad_output0": [
-  "chunk_1_1"
- ],
- "sites_bwd/split/split_output0_and_grad_input": "ERROR:SelectorCompositionError",
- "sites_bwd/split/split_output1_and_grad_input": "ERROR:SelectorCompositionError",
- "sites_default_fanout/conv/contains_relu": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "sites_default_fanout/conv/func_add_type": [
-  "add_1_5"
- ],
- "sites_default_fanout/conv/func_conv2d": [
-  "conv2d_1_1",
-  "conv2d_2_3"
- ],
- "sites_default_fanout/conv/func_relu": [
-  "relu_1_2",
-  "relu_2_4"
- ],
- "sites_default_fanout/conv/not_func_missing": "ERROR:AmbiguousSiteError",
- "spec/and_func_inmodule": {
-  "capture_repr": "(tl.func('relu') & tl.in_module('features'))",
-  "hooks_repr": "(tl.func('relu') & tl.in_module('features'))",
-  "hooks_universe": "activation",
-  "kind": "and",
-  "resolver_labels": [
-   "relu_1_2"
-  ],
-  "resolver_repr": "(tl.func('relu') & tl.in_module('features'))",
-  "resolver_universe": "activation",
-  "spec_kind": "and",
-  "universe": "activation"
- },
- "spec/and_nested_three": {
-  "capture_repr": "(tl.func('relu') & tl.in_module('features') & tl.label_contains('relu'))",
-  "hooks_repr": "(tl.func('relu') & tl.in_module('features') & tl.label_contains('relu'))",
-  "hooks_universe": "activation",
-  "kind": "and",
-  "resolver_labels": [
-   "relu_1_2"
-  ],
-  "resolver_repr": "(tl.func('relu') & tl.in_module('features') & tl.label_contains('relu'))",
-  "resolver_universe": "activation",
-  "spec_kind": "and",
-  "universe": "activation"
- },
- "spec/contains_lower": {
-  "capture_repr": "tl.label_contains('relu')",
-  "hooks_repr": "tl.label_contains('relu')",
-  "hooks_universe": null,
-  "kind": "contains",
-  "resolver_labels": [
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "resolver_repr": "tl.label_contains('relu')",
-  "resolver_universe": null,
-  "spec_kind": "contains",
-  "universe": null
- },
- "spec/contains_mixed": {
-  "capture_repr": "tl.label_contains('Conv2d')",
-  "hooks_repr": "tl.label_contains('Conv2d')",
-  "hooks_universe": null,
-  "kind": "contains",
-  "resolver_labels": [
-   "conv2d_1_1",
-   "conv2d_2_3"
-  ],
-  "resolver_repr": "tl.label_contains('Conv2d')",
-  "resolver_universe": null,
-  "spec_kind": "contains",
-  "universe": null
- },
  "spec/contains_raw_sub": {
   "capture_repr": "tl.label_contains('_raw')",
   "hooks_repr": "tl.label_contains('_raw')",
@@ -838,59 +231,6 @@
   "spec_kind": "contains",
   "universe": null
  },
- "spec/contains_upper": {
-  "capture_repr": "tl.label_contains('RELU')",
-  "hooks_repr": "tl.label_contains('RELU')",
-  "hooks_universe": null,
-  "kind": "contains",
-  "resolver_labels": [
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "resolver_repr": "tl.label_contains('RELU')",
-  "resolver_universe": null,
-  "spec_kind": "contains",
-  "universe": null
- },
- "spec/dict_output_at_aux0": {
-  "capture_repr": "tl.intervention.output_at(('aux', 0))",
-  "hooks_repr": "tl.intervention.output_at(('aux', 0))",
-  "hooks_universe": null,
-  "kind": "output_at",
-  "resolver_labels": [
-   "output_2"
-  ],
-  "resolver_repr": "tl.intervention.output_at(('aux', 0))",
-  "resolver_universe": null,
-  "spec_kind": "output_at",
-  "universe": null
- },
- "spec/dict_output_at_aux1": {
-  "capture_repr": "tl.intervention.output_at(('aux', 1))",
-  "hooks_repr": "tl.intervention.output_at(('aux', 1))",
-  "hooks_universe": null,
-  "kind": "output_at",
-  "resolver_labels": [
-   "output_3"
-  ],
-  "resolver_repr": "tl.intervention.output_at(('aux', 1))",
-  "resolver_universe": null,
-  "spec_kind": "output_at",
-  "universe": null
- },
- "spec/dict_output_at_logits": {
-  "capture_repr": "tl.intervention.output_at(('logits',))",
-  "hooks_repr": "tl.intervention.output_at(('logits',))",
-  "hooks_universe": null,
-  "kind": "output_at",
-  "resolver_labels": [
-   "output_1"
-  ],
-  "resolver_repr": "tl.intervention.output_at(('logits',))",
-  "resolver_universe": null,
-  "spec_kind": "output_at",
-  "universe": null
- },
  "spec/dict_output_name": {
   "capture_repr": "tl.model_output('logits')",
   "hooks_repr": "tl.model_output('logits')",
@@ -900,50 +240,6 @@
   "resolver_repr": "tl.model_output('logits')",
   "resolver_universe": null,
   "spec_kind": "output",
-  "universe": null
- },
- "spec/dictin_input_at_a": {
-  "capture_repr": "tl.model_input(('a',))",
-  "hooks_repr": "ERROR:SelectorCapabilityError",
-  "kind": "input_at",
-  "resolver_labels": [
-   "input_1"
-  ],
-  "resolver_repr": "tl.model_input(('a',))",
-  "resolver_universe": null,
-  "spec_kind": "input_at",
-  "universe": null
- },
- "spec/dictin_input_at_b": {
-  "capture_repr": "tl.model_input(('b',))",
-  "hooks_repr": "ERROR:SelectorCapabilityError",
-  "kind": "input_at",
-  "resolver_labels": [
-   "input_2"
-  ],
-  "resolver_repr": "tl.model_input(('b',))",
-  "resolver_universe": null,
-  "spec_kind": "input_at",
-  "universe": null
- },
- "spec/dictin_input_at_missing": {
-  "capture_repr": "tl.model_input(('zzz',))",
-  "hooks_repr": "ERROR:SelectorCapabilityError",
-  "kind": "input_at",
-  "resolver_labels": [],
-  "resolver_repr": "tl.model_input(('zzz',))",
-  "resolver_universe": null,
-  "spec_kind": "input_at",
-  "universe": null
- },
- "spec/facet_named": {
-  "capture_repr": "tl.facet('q')",
-  "hooks_repr": "ERROR:SelectorCapabilityError",
-  "kind": "facet",
-  "resolver_labels": "ERROR:SelectorCapabilityError",
-  "resolver_repr": "tl.facet('q')",
-  "resolver_universe": null,
-  "spec_kind": "facet",
   "universe": null
  },
  "spec/followed_by_bare": {
@@ -1002,17 +298,6 @@
   "spec_kind": "func",
   "universe": "activation"
  },
- "spec/func_transform_any": {
-  "capture_repr": "tl.func_transform(None)",
-  "hooks_repr": "tl.func_transform(None)",
-  "hooks_universe": "activation",
-  "kind": "func_transform",
-  "resolver_labels": [],
-  "resolver_repr": "tl.func_transform(None)",
-  "resolver_universe": "activation",
-  "spec_kind": "func_transform",
-  "universe": "activation"
- },
  "spec/grad_fn_on_forward": {
   "capture_repr": "tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None})",
   "hooks_repr": "tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None})",
@@ -1032,36 +317,6 @@
   "resolver_repr": "tl.head(0)",
   "resolver_universe": null,
   "spec_kind": "facet",
-  "universe": null
- },
- "spec/in_module_container": {
-  "capture_repr": "tl.in_module('features')",
-  "hooks_repr": "tl.in_module('features')",
-  "hooks_universe": null,
-  "kind": "in_module",
-  "resolver_labels": [
-   "conv2d_1_1",
-   "conv2d_2_3",
-   "relu_1_2"
-  ],
-  "resolver_repr": "tl.in_module('features')",
-  "resolver_universe": null,
-  "spec_kind": "in_module",
-  "universe": null
- },
- "spec/in_module_pass": {
-  "capture_repr": "tl.in_module('features:1')",
-  "hooks_repr": "tl.in_module('features:1')",
-  "hooks_universe": null,
-  "kind": "in_module",
-  "resolver_labels": [
-   "conv2d_1_1",
-   "conv2d_2_3",
-   "relu_1_2"
-  ],
-  "resolver_repr": "tl.in_module('features:1')",
-  "resolver_universe": null,
-  "spec_kind": "in_module",
   "universe": null
  },
  "spec/input_at_0": {
@@ -1087,113 +342,6 @@
   "spec_kind": "label",
   "universe": null
  },
- "spec/label_raw": {
-  "capture_repr": "tl.label('relu_1_3_raw')",
-  "hooks_repr": "tl.label('relu_1_3_raw')",
-  "hooks_universe": null,
-  "kind": "label",
-  "resolver_labels": [
-   "relu_1_2"
-  ],
-  "resolver_repr": "tl.label('relu_1_3_raw')",
-  "resolver_universe": null,
-  "spec_kind": "label",
-  "universe": null
- },
- "spec/loop_in_module_block": {
-  "capture_repr": "tl.in_module('block')",
-  "hooks_repr": "tl.in_module('block')",
-  "hooks_universe": null,
-  "kind": "in_module",
-  "resolver_labels": [
-   "linear_1_1",
-   "linear_1_1"
-  ],
-  "resolver_repr": "tl.in_module('block')",
-  "resolver_universe": null,
-  "spec_kind": "in_module",
-  "universe": null
- },
- "spec/loop_in_module_pass2": {
-  "capture_repr": "tl.in_module('block:2')",
-  "hooks_repr": "tl.in_module('block:2')",
-  "hooks_universe": null,
-  "kind": "in_module",
-  "resolver_labels": [
-   "linear_1_1"
-  ],
-  "resolver_repr": "tl.in_module('block:2')",
-  "resolver_universe": null,
-  "spec_kind": "in_module",
-  "universe": null
- },
- "spec/loop_label_recurrent": {
-  "capture_repr": "tl.label('linear_1_1')",
-  "hooks_repr": "tl.label('linear_1_1')",
-  "hooks_universe": null,
-  "kind": "label",
-  "resolver_labels": [
-   "linear_1_1",
-   "linear_1_1"
-  ],
-  "resolver_repr": "tl.label('linear_1_1')",
-  "resolver_universe": null,
-  "spec_kind": "label",
-  "universe": null
- },
- "spec/loop_module_block": {
-  "capture_repr": "tl.module('block')",
-  "hooks_repr": "tl.module('block')",
-  "hooks_universe": null,
-  "kind": "module",
-  "resolver_labels": [
-   "linear_1_1",
-   "linear_1_1"
-  ],
-  "resolver_repr": "tl.module('block')",
-  "resolver_universe": null,
-  "spec_kind": "module",
-  "universe": null
- },
- "spec/loop_module_pass2": {
-  "capture_repr": "tl.module('block:2')",
-  "hooks_repr": "tl.module('block:2')",
-  "hooks_universe": null,
-  "kind": "module",
-  "resolver_labels": [
-   "linear_1_1"
-  ],
-  "resolver_repr": "tl.module('block:2')",
-  "resolver_universe": null,
-  "spec_kind": "module",
-  "universe": null
- },
- "spec/module_address": {
-  "capture_repr": "tl.module('features.0')",
-  "hooks_repr": "tl.module('features.0')",
-  "hooks_universe": null,
-  "kind": "module",
-  "resolver_labels": [
-   "conv2d_1_1"
-  ],
-  "resolver_repr": "tl.module('features.0')",
-  "resolver_universe": null,
-  "spec_kind": "module",
-  "universe": null
- },
- "spec/module_container": {
-  "capture_repr": "tl.module('features')",
-  "hooks_repr": "tl.module('features')",
-  "hooks_universe": null,
-  "kind": "module",
-  "resolver_labels": [
-   "conv2d_2_3"
-  ],
-  "resolver_repr": "tl.module('features')",
-  "resolver_universe": null,
-  "spec_kind": "module",
-  "universe": null
- },
  "spec/not_func": {
   "capture_repr": "(~tl.func('relu'))",
   "hooks_repr": "(~tl.func('relu'))",
@@ -1213,19 +361,6 @@
   "spec_kind": "not",
   "universe": "activation"
  },
- "spec/nt_output_at_extra": {
-  "capture_repr": "tl.intervention.output_at(('extra',))",
-  "hooks_repr": "tl.intervention.output_at(('extra',))",
-  "hooks_universe": null,
-  "kind": "output_at",
-  "resolver_labels": [
-   "output_2"
-  ],
-  "resolver_repr": "tl.intervention.output_at(('extra',))",
-  "resolver_universe": null,
-  "spec_kind": "output_at",
-  "universe": null
- },
  "spec/nt_output_at_main": {
   "capture_repr": "tl.intervention.output_at(('main',))",
   "hooks_repr": "tl.intervention.output_at(('main',))",
@@ -1239,112 +374,12 @@
   "spec_kind": "output_at",
   "universe": null
  },
- "spec/or_funcs": {
-  "capture_repr": "(tl.func('relu') | tl.func('conv2d'))",
-  "hooks_repr": "(tl.func('relu') | tl.func('conv2d'))",
-  "hooks_universe": "activation",
-  "kind": "or",
-  "resolver_labels": [
-   "conv2d_1_1",
-   "conv2d_2_3",
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "resolver_repr": "(tl.func('relu') | tl.func('conv2d'))",
-  "resolver_universe": "activation",
-  "spec_kind": "or",
-  "universe": "activation"
- },
- "spec/output_at_0": {
-  "capture_repr": "tl.intervention.output_at((0,))",
-  "hooks_repr": "tl.intervention.output_at((0,))",
-  "hooks_universe": null,
-  "kind": "output_at",
-  "resolver_labels": [],
-  "resolver_repr": "tl.intervention.output_at((0,))",
-  "resolver_universe": null,
-  "spec_kind": "output_at",
-  "universe": null
- },
- "spec/output_index": {
-  "capture_repr": "tl.model_output(0)",
-  "hooks_repr": "tl.model_output(0)",
-  "hooks_universe": null,
-  "kind": "output",
-  "resolver_labels": [],
-  "resolver_repr": "tl.model_output(0)",
-  "resolver_universe": null,
-  "spec_kind": "output",
-  "universe": null
- },
  "spec/preceded_by_conv": {
   "capture_repr": "tl.preceded_by(tl.func('conv2d'))",
   "hooks_repr": "ERROR:SelectorCapabilityError",
   "kind": "preceded_by",
   "resolver_repr": "ERROR:SelectorCapabilityError",
   "spec_kind": "preceded_by",
-  "universe": null
- },
- "spec/regex_anchored": {
-  "capture_repr": "tl.label_matches('^conv2d_2')",
-  "hooks_repr": "tl.label_matches('^conv2d_2')",
-  "hooks_universe": null,
-  "kind": "regex",
-  "resolver_labels": [
-   "conv2d_2_3"
-  ],
-  "resolver_repr": "tl.label_matches('^conv2d_2')",
-  "resolver_universe": null,
-  "spec_kind": "regex",
-  "universe": null
- },
- "spec/regex_lower": {
-  "capture_repr": "tl.label_matches('relu_\\\\d')",
-  "hooks_repr": "tl.label_matches('relu_\\\\d')",
-  "hooks_universe": null,
-  "kind": "regex",
-  "resolver_labels": [
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "resolver_repr": "tl.label_matches('relu_\\\\d')",
-  "resolver_universe": null,
-  "spec_kind": "regex",
-  "universe": null
- },
- "spec/regex_raw_anchor": {
-  "capture_repr": "tl.label_matches('_raw$')",
-  "hooks_repr": "tl.label_matches('_raw$')",
-  "hooks_universe": null,
-  "kind": "regex",
-  "resolver_labels": [],
-  "resolver_repr": "tl.label_matches('_raw$')",
-  "resolver_universe": null,
-  "spec_kind": "regex",
-  "universe": null
- },
- "spec/regex_upper": {
-  "capture_repr": "tl.label_matches('RELU')",
-  "hooks_repr": "tl.label_matches('RELU')",
-  "hooks_universe": null,
-  "kind": "regex",
-  "resolver_labels": [],
-  "resolver_repr": "tl.label_matches('RELU')",
-  "resolver_universe": null,
-  "spec_kind": "regex",
-  "universe": null
- },
- "spec/split_contains_mul": {
-  "capture_repr": "tl.label_contains('mul')",
-  "hooks_repr": "tl.label_contains('mul')",
-  "hooks_universe": null,
-  "kind": "contains",
-  "resolver_labels": [
-   "mul_1_3"
-  ],
-  "resolver_repr": "tl.label_contains('mul')",
-  "resolver_universe": null,
-  "spec_kind": "contains",
   "universe": null
  },
  "spec/split_func_chunk_out1": {
@@ -1359,19 +394,6 @@
   "resolver_universe": "activation",
   "spec_kind": "func",
   "universe": "activation"
- },
- "spec/split_output_0": {
-  "capture_repr": "tl.model_output(0)",
-  "hooks_repr": "tl.model_output(0)",
-  "hooks_universe": null,
-  "kind": "output",
-  "resolver_labels": [
-   "chunk_1_1"
-  ],
-  "resolver_repr": "tl.model_output(0)",
-  "resolver_universe": null,
-  "spec_kind": "output",
-  "universe": null
  },
  "spec/split_output_1": {
   "capture_repr": "tl.model_output(1)",
@@ -1399,17 +421,6 @@
   "spec_kind": "func_transform",
   "universe": "activation"
  },
- "spec/vmap_transform_grad": {
-  "capture_repr": "tl.func_transform('grad')",
-  "hooks_repr": "tl.func_transform('grad')",
-  "hooks_universe": "activation",
-  "kind": "func_transform",
-  "resolver_labels": [],
-  "resolver_repr": "tl.func_transform('grad')",
-  "resolver_universe": "activation",
-  "spec_kind": "func_transform",
-  "universe": "activation"
- },
  "spec/vmap_transform_vmap": {
   "capture_repr": "tl.func_transform('vmap')",
   "hooks_repr": "tl.func_transform('vmap')",
@@ -1423,50 +434,6 @@
   "spec_kind": "func_transform",
   "universe": "activation"
  },
- "spec/where_type_relu": {
-  "capture_repr": "tl.where(<predicate>, name_hint='type_relu')",
-  "hooks_repr": "tl.where(<predicate>, name_hint='type_relu')",
-  "hooks_universe": null,
-  "kind": "predicate",
-  "resolver_labels": [
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "resolver_repr": "tl.where(<predicate>, name_hint='type_relu')",
-  "resolver_universe": null,
-  "spec_kind": "predicate",
-  "universe": null
- },
- "spec_bwd/backward_pass_1": {
-  "capture_repr": "tl.in_backward_pass(1)",
-  "hooks_repr": "tl.in_backward_pass(1)",
-  "hooks_universe": "qualifier",
-  "kind": "backward_pass",
-  "resolver_labels": [
-   "accumulategrad_back_1_4",
-   "accumulategrad_back_2_8",
-   "accumulategrad_back_3_12",
-   "accumulategrad_back_4_13",
-   "accumulategrad_back_5_16",
-   "accumulategrad_back_6_17",
-   "accumulategrad_back_7_18",
-   "add_back_1_7",
-   "addmm_back_1_3",
-   "clone_back_1_2",
-   "clone_back_2_15",
-   "convolution_back_1_10",
-   "convolution_back_2_14",
-   "relu_back_1_9",
-   "relu_back_2_11",
-   "sum_back_1_1",
-   "t_back_1_6",
-   "view_back_1_5"
-  ],
-  "resolver_repr": "tl.in_backward_pass(1)",
-  "resolver_universe": "qualifier",
-  "spec_kind": "backward_pass",
-  "universe": "qualifier"
- },
  "spec_bwd/backward_pass_2": {
   "capture_repr": "tl.in_backward_pass(2)",
   "hooks_repr": "tl.in_backward_pass(2)",
@@ -1478,44 +445,7 @@
   "spec_kind": "backward_pass",
   "universe": "qualifier"
  },
- "spec_bwd/bwd_and_direction_agnostic": "ERROR:SelectorCompositionError",
- "spec_bwd/bwd_input_at_and_grad_output": "ERROR:SelectorCompositionError",
- "spec_bwd/bwd_not_accumulate": {
-  "capture_repr": "(~tl.grad_fn({'type': 'AccumulateGrad', 'grad_fn_label_pattern': None, 'is_custom': None}))",
-  "hooks_repr": "(~tl.grad_fn({'type': 'AccumulateGrad', 'grad_fn_label_pattern': None, 'is_custom': None}))",
-  "hooks_universe": "node",
-  "kind": "not",
-  "resolver_labels": [
-   "add_back_1_7",
-   "addmm_back_1_3",
-   "clone_back_1_2",
-   "clone_back_2_15",
-   "convolution_back_1_10",
-   "convolution_back_2_14",
-   "relu_back_1_9",
-   "relu_back_2_11",
-   "sum_back_1_1",
-   "t_back_1_6",
-   "view_back_1_5"
-  ],
-  "resolver_repr": "(~tl.grad_fn({'type': 'AccumulateGrad', 'grad_fn_label_pattern': None, 'is_custom': None}))",
-  "resolver_universe": "node",
-  "spec_kind": "not",
-  "universe": "node"
- },
  "spec_bwd/bwd_output0_and_grad_input": "ERROR:SelectorCompositionError",
- "spec_bwd/bwd_output_at_and_grad_input": "ERROR:SelectorCompositionError",
- "spec_bwd/bwd_plain_label": {
-  "capture_repr": "tl.label('relu_back_1_9')",
-  "hooks_repr": "tl.label('relu_back_1_9')",
-  "hooks_universe": null,
-  "kind": "label",
-  "resolver_labels": [],
-  "resolver_repr": "tl.label('relu_back_1_9')",
-  "resolver_universe": null,
-  "spec_kind": "label",
-  "universe": null
- },
  "spec_bwd/grad_fn_class": {
   "capture_repr": "tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None})",
   "hooks_repr": "tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None})",
@@ -1557,98 +487,6 @@
   "spec_kind": "grad_fn",
   "universe": "node"
  },
- "spec_bwd/grad_fn_not_custom": {
-  "capture_repr": "tl.grad_fn({'type': None, 'grad_fn_label_pattern': None, 'is_custom': False})",
-  "hooks_repr": "tl.grad_fn({'type': None, 'grad_fn_label_pattern': None, 'is_custom': False})",
-  "hooks_universe": "node",
-  "kind": "grad_fn",
-  "resolver_labels": [
-   "accumulategrad_back_1_4",
-   "accumulategrad_back_2_8",
-   "accumulategrad_back_3_12",
-   "accumulategrad_back_4_13",
-   "accumulategrad_back_5_16",
-   "accumulategrad_back_6_17",
-   "accumulategrad_back_7_18",
-   "add_back_1_7",
-   "addmm_back_1_3",
-   "clone_back_1_2",
-   "clone_back_2_15",
-   "convolution_back_1_10",
-   "convolution_back_2_14",
-   "relu_back_1_9",
-   "relu_back_2_11",
-   "sum_back_1_1",
-   "t_back_1_6",
-   "view_back_1_5"
-  ],
-  "resolver_repr": "tl.grad_fn({'type': None, 'grad_fn_label_pattern': None, 'is_custom': False})",
-  "resolver_universe": "node",
-  "spec_kind": "grad_fn",
-  "universe": "node"
- },
- "spec_bwd/grad_fn_type": {
-  "capture_repr": "tl.grad_fn({'type': 'relu', 'grad_fn_label_pattern': None, 'is_custom': None})",
-  "hooks_repr": "tl.grad_fn({'type': 'relu', 'grad_fn_label_pattern': None, 'is_custom': None})",
-  "hooks_universe": "node",
-  "kind": "grad_fn",
-  "resolver_labels": [
-   "relu_back_1_9",
-   "relu_back_2_11"
-  ],
-  "resolver_repr": "tl.grad_fn({'type': 'relu', 'grad_fn_label_pattern': None, 'is_custom': None})",
-  "resolver_universe": "node",
-  "spec_kind": "grad_fn",
-  "universe": "node"
- },
- "spec_bwd/grad_func_relu": {
-  "capture_repr": "tl.grad(tl.func('relu'))",
-  "hooks_repr": "tl.grad(tl.func('relu'))",
-  "hooks_universe": "gradient",
-  "kind": "grad",
-  "resolver_labels": [
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "resolver_repr": "tl.grad(tl.func('relu'))",
-  "resolver_universe": "gradient",
-  "spec_kind": "grad",
-  "universe": "gradient"
- },
- "spec_bwd/grad_func_relu_pass_1": {
-  "capture_repr": "(tl.grad(tl.func('relu')) & tl.in_backward_pass(1))",
-  "hooks_repr": "(tl.grad(tl.func('relu')) & tl.in_backward_pass(1))",
-  "hooks_universe": "gradient",
-  "kind": "and",
-  "resolver_labels": [
-   "relu_1_2",
-   "relu_2_4"
-  ],
-  "resolver_repr": "(tl.grad(tl.func('relu')) & tl.in_backward_pass(1))",
-  "resolver_universe": "gradient",
-  "spec_kind": "and",
-  "universe": "gradient"
- },
- "spec_bwd/grad_input": {
-  "capture_repr": "tl.grad_kind('grad_input')",
-  "hooks_repr": "tl.grad_kind('grad_input')",
-  "hooks_universe": "node",
-  "kind": "grad_kind",
-  "resolver_labels": [
-   "add_back_1_7",
-   "addmm_back_1_3",
-   "clone_back_2_15",
-   "convolution_back_1_10",
-   "convolution_back_2_14",
-   "relu_back_1_9",
-   "relu_back_2_11",
-   "view_back_1_5"
-  ],
-  "resolver_repr": "tl.grad_kind('grad_input')",
-  "resolver_universe": "node",
-  "spec_kind": "grad_kind",
-  "universe": "node"
- },
  "spec_bwd/grad_not_relu": {
   "capture_repr": "tl.grad((~tl.func('relu')))",
   "hooks_repr": "tl.grad((~tl.func('relu')))",
@@ -1667,22 +505,6 @@
   "resolver_universe": "gradient",
   "spec_kind": "grad",
   "universe": "gradient"
- },
- "spec_bwd/grad_or_activation_relu": {
-  "capture_repr": "(tl.grad(tl.func('relu')) | tl.func('relu'))",
-  "hooks_repr": "(tl.grad(tl.func('relu')) | tl.func('relu'))",
-  "hooks_universe": "mixed",
-  "kind": "or",
-  "resolver_labels": [
-   "relu_1_2",
-   "relu_1_2",
-   "relu_2_4",
-   "relu_2_4"
-  ],
-  "resolver_repr": "(tl.grad(tl.func('relu')) | tl.func('relu'))",
-  "resolver_universe": "mixed",
-  "spec_kind": "or",
-  "universe": "mixed"
  },
  "spec_bwd/grad_output": {
   "capture_repr": "tl.grad_kind('grad_output')",

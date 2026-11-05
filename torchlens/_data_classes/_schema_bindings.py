@@ -9,7 +9,7 @@ generation, so hand edits cannot survive. The declared axes live in
 from __future__ import annotations
 
 from ._schema_bindings_trace import TRACE_BINDINGS
-from .field_policy import StorageBinding, StorageKind
+from .._io._field_policy import StorageBinding, StorageKind
 
 STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
     "trace": TRACE_BINDINGS,
@@ -159,6 +159,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "min_distance_to_output": StorageBinding(StorageKind.INTERNED),
         "max_distance_to_output": StorageBinding(StorageKind.INTERNED),
         "is_buffer": StorageBinding(StorageKind.INTERNED),
+        "is_constant": StorageBinding(StorageKind.INTERNED),
         "address": StorageBinding(StorageKind.INTERNED),
         "buffer_pass": StorageBinding(StorageKind.INTERNED),
         "buffer_source": StorageBinding(StorageKind.INTERNED),
@@ -590,7 +591,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
     "grad_fn_call": {
         "call_index": StorageBinding(StorageKind.SCALAR, annotation='int'),
         "ordinal": StorageBinding(StorageKind.SCALAR, annotation='int | None'),
-        "backward_pass_index": StorageBinding(StorageKind.SCALAR, annotation='int | None'),
+        "backward_pass_number": StorageBinding(StorageKind.SCALAR, annotation='int | None'),
         "label": StorageBinding(StorageKind.COMPUTED),
         "backward_duration": StorageBinding(StorageKind.COMPUTED),
         "grad_inputs": StorageBinding(StorageKind.SCALAR, annotation='Any'),
@@ -685,5 +686,6 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "outcome": StorageBinding(StorageKind.SCALAR, annotation='str'),
         "exception_type": StorageBinding(StorageKind.SCALAR, annotation='str | None'),
         "execution_context": StorageBinding(StorageKind.INTERNED, annotation='Any'),
+        "out": StorageBinding(StorageKind.PAYLOAD, annotation='Any'),
     },
 }

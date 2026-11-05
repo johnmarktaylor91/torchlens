@@ -295,6 +295,13 @@ def flatten(start_axis: int = 1) -> TransformSpec:
     -------
     TransformSpec
         The frozen flatten step.
+
+    Examples
+    --------
+    >>> tl.transforms.flatten().apply(x).shape
+    torch.Size([1, 192])
+    >>> tl.transforms.flatten(start_axis=2).apply(x).shape
+    torch.Size([1, 3, 64])
     """
 
     params = _flatten_normalize({"start_axis": start_axis})
@@ -404,6 +411,12 @@ def cast(dtype: torch.dtype | str) -> TransformSpec:
     -------
     TransformSpec
         The frozen cast step.
+
+    Examples
+    --------
+    >>> step = tl.transforms.cast(torch.float16)
+    >>> step.name, step.apply(x).dtype
+    ('cast', torch.float16)
     """
 
     params = _cast_normalize({"dtype": dtype})
@@ -506,6 +519,12 @@ def magnitude() -> TransformSpec:
     -------
     TransformSpec
         The frozen magnitude step.
+
+    Examples
+    --------
+    >>> out = tl.transforms.magnitude().apply(x)
+    >>> out.shape, bool((out >= 0).all())
+    (torch.Size([1, 3, 8, 8]), True)
     """
 
     return TransformSpec(name="magnitude", version=1, params=())
@@ -615,6 +634,12 @@ def unit_norm(axis: int = -1, eps: float = 1.0e-12) -> TransformSpec:
     -------
     TransformSpec
         The frozen unit_norm step.
+
+    Examples
+    --------
+    >>> out = tl.transforms.unit_norm(axis=-1).apply(torch.randn(4, 16))
+    >>> torch.allclose(out.norm(dim=-1), torch.ones(4))
+    True
     """
 
     params = _unit_norm_normalize({"axis": axis, "eps": eps})
@@ -732,6 +757,12 @@ def take_index(axis: int, index: int) -> TransformSpec:
     -------
     TransformSpec
         The frozen take_index step.
+
+    Examples
+    --------
+    >>> step = tl.transforms.take_index(axis=1, index=-1)
+    >>> step.name, step.apply(x).shape
+    ('take_index', torch.Size([1, 8, 8]))
     """
 
     params = _take_index_normalize({"axis": axis, "index": index})
@@ -880,6 +911,13 @@ def reduce(op: str, axis: int | tuple[int, ...]) -> TransformSpec:
     -------
     TransformSpec
         The frozen reduce step.
+
+    Examples
+    --------
+    >>> tl.transforms.reduce("max", axis=(2, 3)).apply(x).shape
+    torch.Size([1, 3])
+    >>> tl.transforms.reduce("sum", axis=1).apply(x).shape
+    torch.Size([1, 8, 8])
     """
 
     params = _reduce_normalize({"op": op, "axis": axis})

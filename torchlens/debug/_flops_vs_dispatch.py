@@ -28,6 +28,7 @@ from typing import Any
 import torch
 
 from .._debug_report import Report
+from .._input_coerce import _coerce_inputs
 from ..errors import CaptureError
 
 
@@ -38,6 +39,14 @@ class FlopsCrossCheck(Report):
     ``native_total`` and ``torchlens_total`` are both fma=2 analytic
     counts; ``delta`` is signed (native - torchlens). A zero paired with a
     non-empty ``coverage_notes`` row is a registry gap, not a measurement.
+
+    Examples
+    --------
+    >>> check = tl.report.flops_vs_dispatch(model, x)
+    >>> isinstance(check, FlopsCrossCheck), check.convention.startswith("fma2")
+    (True, True)
+    >>> check.native_total > 0, check.torchlens_total > 0
+    (True, True)
     """
 
     torch_version: str
@@ -121,9 +130,43 @@ def _first_tensor(value: Any) -> torch.Tensor | None:
     return None
 
 
+def _raw_call_inputs(
+    model: Any, inputs: Any, input_kwargs: dict[str, Any] | None
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Return the raw forward's call inputs, routed as the trace routed them.
+
+    Text, a modality dict or PIL images go through the one coercion door, so
+    the raw forward sees the same model inputs the trace did.
+
+    Parameters
+    ----------
+    model:
+        Model under comparison.
+    inputs:
+        Forward input as the caller passed it.
+    input_kwargs:
+        Keyword inputs as the caller passed them.
+
+    Returns
+    -------
+    tuple[tuple[Any, ...], dict[str, Any]]
+        Positional and keyword inputs for ``model(*args, **kwargs)``.
+    """
+
+    routed, routed_kwargs = _coerce_inputs(model, inputs, input_kwargs)
+    args: tuple[Any, ...]
+    if routed is None:
+        args = ()
+    elif isinstance(routed, (list, tuple)):
+        args = tuple(routed)
+    else:
+        args = (routed,)
+    return args, dict(routed_kwargs or {})
+
+
 def flops_vs_dispatch(
     model: Any,
-    input_args: Any = None,
+    inputs: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     sdpa_backend: str | None = None,
@@ -135,7 +178,7 @@ def flops_vs_dispatch(
     ----------
     model:
         The model (any ``tl.trace``-able ``nn.Module``).
-    input_args, input_kwargs:
+    inputs, input_kwargs:
         Forwarded to both executions identically.
     sdpa_backend:
         Provenance disclosure of the SELECTED SDPA backend when the caller
@@ -158,6 +201,14 @@ def flops_vs_dispatch(
         ``flops_crosscheck_witness_failed`` when the two executions diverge
         in output -- the formulas would then describe different programs
         and no comparison is honest.
+
+    Examples
+    --------
+    >>> check = flops_vs_dispatch(model, x)
+    >>> check.witness["output_agrees"]
+    True
+    >>> check.native_total > 0, check.torchlens_total > 0
+    (True, True)
     """
 
     from torch.utils.flop_counter import FlopCounterMode
@@ -165,11 +216,11 @@ def flops_vs_dispatch(
     from .. import _user_funcs as user_funcs
     from ..report._compute_truth import compute_aggregation
 
-    rng_state = torch.get_rng_state()
+    rng_state = torch.default_generator.get_state()
     training_flags = {name: module.training for name, module in model.named_modules()}
 
     trace_kwargs.setdefault("save", "all")
-    trace = user_funcs.trace(model, input_args, input_kwargs=input_kwargs, **trace_kwargs)
+    trace = user_funcs.trace(model, inputs, input_kwargs=input_kwargs, **trace_kwargs)
     try:
         aggregation = compute_aggregation(trace)
         torchlens_total = int(aggregation.partition_total)
@@ -194,14 +245,7 @@ def flops_vs_dispatch(
         if name in training_flags:
             module.train(training_flags[name])
 
-    args: tuple[Any, ...]
-    if input_args is None:
-        args = ()
-    elif isinstance(input_args, (list, tuple)):
-        args = tuple(input_args)
-    else:
-        args = (input_args,)
-    kwargs = dict(input_kwargs or {})
+    args, kwargs = _raw_call_inputs(model, inputs, input_kwargs)
     with FlopCounterMode(display=False) as counter:
         raw_output = model(*args, **kwargs)
     native_total = int(counter.get_total_flops())

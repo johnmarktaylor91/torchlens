@@ -131,7 +131,6 @@ def test_interrupted_capture_propagates_and_next_capture_is_clean() -> None:
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_partial_diagnostics_survive_the_scrub() -> None:
     """Recovery stays intact: raw layers, nonfinite summary, DOT render."""
 

@@ -1,8 +1,6 @@
 """Bounded beam-search tree-cut optimizer for v2 auto collapse.
-
 The selection is a memoized tree cut with a deterministic, bounded frontier,
 not an exact optimizer:
-
 - every frontier merge keeps at most one point per rendered node count and at
   most ``FRONTIER_CAP`` node-count buckets, so reachable counts can be pruned
   (a beam, with classic beam suboptimality);
@@ -12,7 +10,6 @@ not an exact optimizer:
   wins globally can be pruned locally;
 - subtrees larger than ``K_CAP`` rendered nodes are dropped from frontiers
   entirely.
-
 The result is a deterministic approximation of the stated objective. "DP" and
 "frontier" in the helper names refer to the memoized structure, not to an
 optimality guarantee.
@@ -30,6 +27,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._errors import InvalidArgumentError
+from .._utils._display_bounded import short_dataclass_repr
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _boundary_bundle as _bundle
@@ -48,6 +46,7 @@ from ._collapse_frontier import (
 )
 from ._collapse_runs import FlowAdjacency, _flow_adjacency, longest_uniform_legal_run
 from ._collapse_signatures import fingerprints_for
+from ._render_names import COLLAPSE_OPTIMIZER_MAX_OPS
 from ._segment_descriptors import (
     _child_segment_covered_ops,
     _crosses_module_call_boundary,
@@ -117,24 +116,13 @@ if TYPE_CHECKING:
 
 MAX_SALIENCE_FLOOR = 0.75
 
-#: Preflight compute ceiling for the v2 collapse selection (b8 R60). The
-#: frontier DP is measured superlinear (~n^1.75) in rendered op count with no
-#: internal time budget, so above this many ops the optimizer DECLINES with a
-#: disclosed warning instead of silently burning CPU-hours: ``draw`` renders
-#: uncollapsed, ``Trace.collapse_plan()`` refuses typed
-#: (``collapse_plan_unavailable``), and the schedule degrades to its single
-#: full-graph step. Calibration: the largest shipped-suite models
-#: (densenet201 at 1,517 ops, maxvit_t at 1,307) must stay admitted -- their
-#: schedules are the suite's slow cells at tens of seconds -- while the
-#: extrapolated multi-thousand-op cost (an hour-class compute at ~5,000 ops)
-#: is exactly what the ceiling exists to refuse.
-COLLAPSE_OPTIMIZER_MAX_OPS = 2000
+# COLLAPSE_OPTIMIZER_MAX_OPS (imported above) lives in ``_render_names`` so the
+# lens budget reads it without importing this module.
 
 
 @dataclass(frozen=True)
 class OptimizerWeights:
     """Cost weights for the v2 tree-cut optimizer.
-
     Parameters
     ----------
     w_grain:
@@ -173,7 +161,6 @@ class OptimizerWeights:
 @dataclass(frozen=True)
 class RoleComponent:
     """Flow-ordered sibling role component.
-
     Parameters
     ----------
     members:
@@ -316,6 +303,8 @@ class _FrontierPoint:
 @dataclass(frozen=True)
 class _OptimizerState:
     """Immutable shared state for one g-star DP run."""
+
+    __repr__ = short_dataclass_repr
 
     trace: Trace
     context: RenderContext
@@ -569,6 +558,8 @@ def _run_admitted_selection(
 @dataclass(frozen=True)
 class _PlanMemos:
     """Plan-local pricing memos shared across one selection's passes."""
+
+    __repr__ = short_dataclass_repr
 
     expanded_cache: dict[
         str, tuple[ChildCondensedFlowGraph | None, tuple[str, ...], tuple[str, ...]]

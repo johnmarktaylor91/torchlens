@@ -107,6 +107,16 @@ class InputProvenance:
         prompt string was the gold input).
     d8_meta / cache_status / cache_key_version:
         Reserved slots (memo section 7). Unused in wave 1.
+
+    Examples
+    --------
+    >>> prov = InputProvenance(
+    ...     origin="user", rung=1, has_semantic_values=True, call_structure={}, tensors=()
+    ... )
+    >>> prov.describe()
+    'input: user-provided (real values)'
+    >>> prov.has_semantic_values
+    True
     """
 
     origin: str

@@ -25,7 +25,7 @@ unaffected.
 | `ModuleAccessor` | none (no longer public) | removed |
 | `Module` | `torchlens.types.Module` | removed |
 | `ModuleCall` | `torchlens.types.ModuleCall` | removed |
-| `NodeSpec` | `torchlens.experimental.dagua.NodeSpec` | removed |
+| `NodeSpec` | `torchlens.viz.NodeSpec` | removed |
 | `Param` | `torchlens.types.Param` | removed |
 | `PostTraceParamUnavailable` | `torchlens.errors.ParamReleasedError` | removed |
 | `TraceState` | `torchlens.io.TraceState` | removed |
@@ -46,17 +46,15 @@ unaffected.
 | `get_model_metadata` | `torchlens.trace(model, x, save="none")` | removed |
 | `list_logs` | `torchlens.io.list_traces` | removed |
 | `log_model_metadata` | `torchlens.trace(model, x, save="none")` | removed |
-| `trace_to_dagua_graph` | `torchlens.experimental.dagua.trace_to_dagua_graph` | removed |
 | `preview_fastlog` | none (no longer public) | removed |
 | `rehydrate_nested` | `torchlens.io.materialize_nested` | removed |
 | `render_lines_to_html` | none (no longer public) | removed |
-| `render_trace_with_dagua` | none (no longer public) | removed |
 | `reset_naming_counter` | `torchlens.io.reset_naming_counter` | removed |
 | `resolve_sites` | `torchlens.Trace` indexing (`trace[selector]` returns every matching site as a `torchlens.Selection`) | removed |
 | `save_intervention` | `torchlens.io.save_intervention` | removed |
-| `suppress_mutate_warnings` | `torchlens.io.suppress_mutate_warnings` | removed |
+| `suppress_mutate_warnings` | `torchlens.errors.quiet()` | removed |
 | `unwrap_torch` | `torchlens.backends.torch.wrappers.unwrap_torch` | removed |
-| `validate_batch_of_models_and_inputs` | `torchlens.validation.validate_batch_of_models_and_inputs` | removed |
+| `validate_batch_of_models_and_inputs` | none: call `torchlens.validate(model, x)` per model | removed |
 | `wrap_torch` | `torchlens.backends.torch.wrappers.wrap_torch` | removed |
 | `wrapped` | `torchlens.backends.torch.wrappers.wrapped` | removed |
 
@@ -87,6 +85,7 @@ unaffected.
 | `show_model_graph` | `torchlens.draw` | removed |
 | `draw_backward` | `torchlens.draw` | removed; pass `graph="backward"` |
 | `draw_combined` | `torchlens.draw` | removed; pass `graph="combined"` |
+| `show_bundle_graph` | `torchlens.Bundle.draw` | removed; call `bundle.draw(path)` (`graph=` replaces `signal=`, `node_overrides=` replaces `vis_node_overrides=`, `open_viewer=True` opens a viewer) |
 | `load_intervention_spec` | `torchlens.io.load_intervention_spec` | removed |
 | `ModuleInputSnapshot` | `torchlens.types.ModuleInputSnapshot` | removed |
 | `PreHookEffect` | `torchlens.types.PreHookEffect` | removed |
@@ -152,16 +151,23 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Trace.conditional_elif_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
 | `Trace.conditional_else_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
 | `Trace.validate_saved_outs()` | `Trace.validate_forward_pass()` | removed |
-| `Trace.replay()` | `Trace.push()` | removed |
-| `Trace.replay_from()` | `Trace.push_from()` | removed |
+| `Trace.replay()` | `Trace.do(site, edit)` | removed |
+| `Trace.replay_from()` | `Trace.do(site, value)` | removed |
+| `Trace.push()` | `Trace.do(site, edit)`: one verb stages and propagates | removed |
+| `Trace.push_from()` | `Trace.do(site, value)` | removed |
+| `Trace.attach_hooks()`, `Op.attach_hooks()`, `Layer.attach_hooks()` | `Trace.do(site, hook)`; `InterventionOptions(engine="set_only")` stages without propagating | removed |
+| `Trace.set()`, `Layer.set()`, `Op.set()` | `Trace.do(site, value, intervention=InterventionOptions(engine="set_only"))` | removed |
+| `Trace.remove()` and `with trace.attach_hooks(...)` | `Trace.clear_edits(site)`; the scoped form stays as `with trace.fork() as scoped: scoped.do(...)`, which detaches the last `do` hooks on exit | removed |
+| `ReplayOptions(hooks=)` | a mapping of sites to edits on `Trace.do` | removed |
+| `ReplayOptions(differentiable=)` | `InterventionOptions(differentiable=True)` on `Trace.do` | removed |
 | `Trace.rerun()` | `Trace.run()` | removed |
 
 ## Intervention, Sweep, And Observer Aliases
 
 | Old name | New name | Status |
 | --- | --- | --- |
-| `replay()` | `push()` | removed |
-| `replay_from()` | `push_from()` | removed |
+| `replay()` | `do(site, edit)` | removed |
+| `replay_from()` | `do(site, value)` | removed |
 | `rerun()` | `run()` | removed |
 | `Bundle.replay()` | `Bundle.do(site, edit)` | removed |
 | `Bundle.rerun()` | `Bundle.run()` | removed |
@@ -184,7 +190,7 @@ The site, not a keyword or a gradient-only helper, says which tensor an edit app
 | `tl.add_grad_noise(std, seed=)` | `tl.add_noise(std, seed=)` on `tl.grad(site)` | removed |
 | `tl.clip_grad(max_norm)` | `tl.clip_norm(max_norm)` on `tl.grad(site)` | removed |
 | `tl.hook_grad(fn)` | `fn` on `tl.grad(site)` | removed |
-| `direction=` on `Trace.do`, `Trace.attach_hooks`, `tl.when`, `tl.observers.tap`, `tl.stats.narrate`, `tl.sweep` | the site: `tl.grad(site)`, or `tl.grad(site) \| site` for both | removed |
+| `direction=` on `Trace.do`, `tl.when`, `tl.observers.tap`, `tl.stats.narrate`, `tl.sweep` | the site: `tl.grad(site)`, or `tl.grad(site) \| site` for both | removed |
 | `tl.stats.aggregate(target=)` | metric keys are sites (`tl.grad(site)` for a gradient) | removed |
 | `tl.observers.span(direction=)` | `span(signal=)` | removed |
 | `show_bundle_graph(direction=)` | `show_bundle_graph(signal=)` | removed |
@@ -192,6 +198,7 @@ The site, not a keyword or a gradient-only helper, says which tensor an edit app
 | `Edit.kind`, `Edit.direction` | `Edit.signal`; `Rule.signal` (derived) | removed |
 | `Rule.direction`, `Rule(direction=)` | the target decides the pass: `Rule(tl.grad(site), edit)` for the gradient, `Rule(site, edit)` for the activation; `Rule.signal` (derived) | removed |
 | `HookContext.ctx`, `HookContext.run_ctx` | `HookContext.state`, `HookContext.run_state` | removed |
+| `torchlens.intervention.sites` (`sites()`, `SiteCollection`, `SiteSpec`) | pass selectors to `torchlens.experiment.sweep_sites(...)` directly | removed |
 
 ## Experiment Ledger
 

@@ -20,7 +20,10 @@ rewrites every parameter whenever any state changed) and before the replay
 reads anything. On any change the whole validation reruns with every argument
 copied, exactly as before, and the rerun's trace carries a diagnostic saying
 so. A user's own ``save_args=True`` trace never sees any of this: outside
-the validation capture the copy path is unchanged.
+the validation capture the copy path is unchanged. The facet patching helpers
+use the same by-reference saving for the internal traces they capture and tear
+down before returning (:func:`helper_parameter_references`), with the same
+recapture on the copy path when a referenced parameter changed.
 
 When validation runs with an ``output_device`` other than ``"same"``, the same
 capture also keeps its retained copy of every other eligible tensor argument on
@@ -365,6 +368,45 @@ def parameter_argument_references(
     finally:
         _ACTIVE.reset(token)
     references.raise_if_changed()
+
+
+@contextlib.contextmanager
+def helper_parameter_references(model: nn.Module) -> Iterator[ParameterArgumentReferences]:
+    """Keep ``model``'s parameter arguments by reference for one patching-helper capture.
+
+    The facet patching helpers (``tl.facets.patching.*``,
+    ``tl.mechinterp.patch_grid``/``patch_heads_grid`` and their siblings) capture
+    with ``save_args=True`` so reconstructed facets can read their op's
+    arguments, and keep a clean, a corrupted and a patched trace alive at once.
+    On the copy path each of those traces held its own copy of every weight
+    argument (GPT-2's 50257 x 768 embedding twice: the lookup and the tied
+    ``lm_head``). These traces never leave the helper: they are torn down,
+    under the helper's state guard, before it returns. So, as for validation's
+    own capture, a parameter argument is saved as a detached alias of the
+    parameter's storage instead of a copy.
+
+    The caller checks the guard after the capture (:meth:`~ParameterArgumentReferences.first_change`,
+    plus the parameters' bytes against its own pre-run snapshot, which also
+    catches a ``param.data`` write) and recaptures on the copy path when a
+    referenced parameter changed during the forward.
+
+    Parameters
+    ----------
+    model:
+        The live model the helper captures.
+
+    Yields
+    ------
+    ParameterArgumentReferences
+        The guard over the parameters kept by reference.
+    """
+
+    references = ParameterArgumentReferences(_parameter_owners(model))
+    token = _ACTIVE.set(references)
+    try:
+        yield references
+    finally:
+        _ACTIVE.reset(token)
 
 
 def with_parameter_reference_fallback(validate: Callable[..., bool]) -> Callable[..., bool]:

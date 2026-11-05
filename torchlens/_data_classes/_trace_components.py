@@ -2,7 +2,7 @@
 
 Every field in ``Trace._FIELD_POLICY`` (declared FIELD_ORDER surface plus
 portable/runtime internals) is owned by exactly ONE lifecycle component of
-the decomposed Trace (docs/reference/trace_core_design.md section 3.7).
+the decomposed Trace (docs/internal/reference/trace_core_design.md section 3.7).
 A new Trace field must be added here with an owner, or the lockstep test
 fails — the ratchet that keeps the god object from regrowing.
 
@@ -144,7 +144,6 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_options_backward_ready": "capture_config",
     "_options_inference_only": "capture_config",
     "_options_chunk_size": "capture_config",
-    "_module_filter": "capture_config",
     "_options_emit_nvtx": "capture_config",
     "_options_on_nonfinite": "capture_config",
     "track_nonfinite": "capture_config",
@@ -393,7 +392,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_tl_backward_hooked_tensor_keys": "session",
     "_tl_grad_hook_owner_by_label": "session",
     "_tl_rf_probe_active": "session",
-    "_active_backward_pass_index": "graph",
+    "_active_backward_pass_number": "graph",
     "_backward_roots_by_pass": "graph",
     "_backward_projection_event_count": "graph",
     "_backward_projection_revision": "graph",
@@ -567,6 +566,10 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
     "_plain_direct_escape_gaps": (
         "torch plain escape belt: user-code data reads of source-less tensors (no op); "
         "popped by the provenance disclosure step and scrub-declared"
+    ),
+    "_torch_file_loads": (
+        "torch wrappers: a torch.load call ran in the forward; popped by the provenance "
+        "disclosure step, which names the load in its warning, and scrub-declared"
     ),
     "_unrecorded_operator_mutations": (
         "torch.ops recorder: mutating operator calls it could not record in place; popped by "

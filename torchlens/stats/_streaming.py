@@ -15,7 +15,15 @@ __tl_layer__ = "L5"
 
 
 class StreamingStat(Protocol):
-    """Protocol implemented by all streaming statistic accumulators."""
+    """Protocol implemented by all streaming statistic accumulators.
+
+    Examples
+    --------
+    >>> stat: StreamingStat = tl.stats.Mean(name="activation_mean")
+    >>> stat.update(torch.ones(4))
+    >>> stat.name, stat.compute()
+    ('activation_mean', 1.0)
+    """
 
     name: str | None
 
@@ -46,7 +54,16 @@ def _as_float_tensor(value: Any) -> torch.Tensor:
 
 
 class Mean:
-    """Running mean accumulator."""
+    """Running mean accumulator.
+
+    Examples
+    --------
+    >>> running = Mean()
+    >>> running.update(torch.tensor([1.0, 2.0, 3.0]))
+    >>> running.update(torch.tensor([5.0]))
+    >>> running.compute()
+    2.75
+    """
 
     def __init__(self, name: str | None = None) -> None:
         """Initialize the accumulator.
@@ -104,6 +121,14 @@ class Norm:
     running mean is updated. This is intentionally different from a global norm
     over all elements seen across all updates, so regrouping the same values
     into different update batches can change the reported result.
+
+    Examples
+    --------
+    >>> running = Norm(p=2)
+    >>> running.update(torch.tensor([3.0, 4.0]))
+    >>> running.update(torch.tensor([0.0, 0.0]))
+    >>> running.compute()
+    2.5
     """
 
     def __init__(self, p: float = 2.0, name: str | None = None) -> None:
@@ -136,7 +161,16 @@ class Norm:
 
 
 class Covariance:
-    """Running covariance matrix accumulator."""
+    """Running covariance matrix accumulator.
+
+    Examples
+    --------
+    >>> cov = Covariance()
+    >>> cov.update(torch.randn(16, 3))
+    >>> cov.update(torch.randn(16, 3))
+    >>> cov.compute().shape
+    torch.Size([3, 3])
+    """
 
     def __init__(
         self,
@@ -286,6 +320,13 @@ class CrossCovariance:
     The accumulator retains only feature-sized running means and the cross
     second moment. Inputs are converted to detached tensors on the resolved
     placement (default: the historical CPU ``float64``).
+
+    Examples
+    --------
+    >>> cross = CrossCovariance()
+    >>> cross.update(torch.randn(10, 3), torch.randn(10, 2))
+    >>> cross.compute().shape
+    torch.Size([3, 2])
     """
 
     def __init__(
@@ -442,6 +483,14 @@ class SimilarityScore(float):
     ``measure/*/cka-kernel=linear-hsic=gretton-score``. :meth:`to_dict` is the
     serialized form that keeps the identifier; arithmetic on a score returns a
     plain ``float``. Spelling DOCUMENTED-UNSTABLE.
+
+    Examples
+    --------
+    >>> score = SimilarityScore(0.5, "measure/demo")
+    >>> score + 0.25, score.similarity_repository_id
+    (0.75, 'measure/demo')
+    >>> score.to_dict()
+    {'score': 0.5, 'similarity_repository_id': 'measure/demo'}
     """
 
     similarity_repository_id: str | None
@@ -489,6 +538,15 @@ class CKA:
     ``cka-kernel=linear-hsic=gretton-score`` (linear kernel, biased Gretton
     HSIC); :attr:`similarity_repository_id` records it (spelling
     DOCUMENTED-UNSTABLE).
+
+    Examples
+    --------
+    >>> acc = CKA()
+    >>> a = torch.randn(32, 6)
+    >>> acc.update(a, 3 * a + 1)
+    >>> score = acc.compute()
+    >>> abs(score - 1.0) < 1e-6, score.similarity_repository_id.startswith("measure/")
+    (True, True)
     """
 
     #: Similarity-repository identifier of the exact CKA variant computed.
@@ -604,6 +662,14 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> SimilarityS
     ------
     InvalidArgumentError
         ``cka_input_nonfinite`` when either input holds NaN or Inf.
+
+    Examples
+    --------
+    >>> a = torch.randn(32, 6)
+    >>> abs(tl.stats.cka(a, 2 * a) - 1.0) < 1e-6
+    True
+    >>> tl.stats.cka(a, torch.randn(32, 4)) < 1.0
+    True
     """
 
     resolved_device, resolved_dtype = _resolve_placement(device, dtype)
@@ -630,7 +696,16 @@ def cka(a: Any, b: Any, *, device: Any = None, dtype: Any = None) -> SimilarityS
 
 
 class PCA:
-    """Simple incremental PCA backed by running covariance."""
+    """Simple incremental PCA backed by running covariance.
+
+    Examples
+    --------
+    >>> pca = PCA(num_components=2)
+    >>> pca.update(torch.randn(50, 4))
+    >>> result = pca.compute()
+    >>> result["components"].shape, result["n_samples"], result["n_features"]
+    (torch.Size([2, 4]), 50, 4)
+    """
 
     def __init__(self, num_components: int, name: str | None = None) -> None:
         """Initialize the estimator.

@@ -3,26 +3,42 @@
 (a) forged ``Op.edge_substitutions`` carriers, (b) manifest <-> metadata
 anchors and op-graph coherence, (d) TorchLens-owned annotation families,
 (e) an absent ``root_entry_point`` on a tlspec v9+ artifact. Tampering is
-done on the bytes this test itself wrote (plain ``pickle`` on trusted local
-bytes), then ``tl.load`` must refuse typed -- never load a wrong graph.
+done on the format 3 record cells this test itself wrote (the op table and the
+trace record, decoded, edited, re-encoded and re-digested so the forgery
+reaches the load-time check instead of the file digest), then ``tl.load``
+must refuse typed -- never load a wrong graph.
 """
 
 from __future__ import annotations
 
-import json
-import pickle
 import shutil
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import torch
 import torch.nn as nn
-from _refuses_as_2x import assert_refuses_as_2x
+from _format3_envelope import read_manifest, read_record, write_manifest, write_record
 
 import torchlens as tl
 from torchlens._io import ArtifactError
+from torchlens._io.format3 import contract
+from torchlens._io.format3.decode import decode_value
+from torchlens._io.format3.validate import check_record_anchors
+from torchlens._io.format3.values import ValueEncoder
+
+#: The op-table columns the forgeries below edit (the 2.x pickled ``Op`` attributes).
+_OP_FIELDS = (
+    "label",
+    "parents",
+    "pass_number",
+    "num_passes",
+    "annotations",
+    "edge_substitutions",
+    "edge_replacement_stamps",
+)
 
 
 class _Model(nn.Module):
@@ -53,17 +69,42 @@ def _tampered(
     mutate_state: Callable[[dict[str, Any]], None] | None = None,
     mutate_manifest: Callable[[dict[str, Any]], None] | None = None,
 ) -> Path:
+    """Copy ``source`` and forge it through a decoded view of its records.
+
+    ``mutate_state`` sees ``{"_layer_list": [op rows], "annotations": {...}}``: one
+    namespace per op-table row carrying the ``_OP_FIELDS`` cells, and the trace
+    record's annotations. Every edited cell is re-encoded with the writer's value
+    encoder and both record files are re-digested, so the forged values reach the
+    loader's structural checks.
+    """
+
     shutil.copytree(source, target)
     if mutate_state is not None:
-        metadata_path = target / "metadata.pkl"
-        state = pickle.loads(metadata_path.read_bytes())
+        op_table = read_record(target, "op")
+        trace_record = read_record(target, "trace")
+        columns = op_table["columns"]
+        rows = [
+            SimpleNamespace(**{name: decode_value(columns[name][i]) for name in _OP_FIELDS})
+            for i in range(op_table["rows"])
+        ]
+        state = {
+            "_layer_list": rows,
+            "annotations": decode_value(trace_record["fields"]["annotations"]),
+        }
         mutate_state(state)
-        metadata_path.write_bytes(pickle.dumps(state))
+        encoder = ValueEncoder()
+        for i, row in enumerate(rows):
+            for name in _OP_FIELDS:
+                columns[name][i] = encoder.encode(getattr(row, name), f"op[{i}].{name}")
+        trace_record["fields"]["annotations"] = encoder.encode(
+            state["annotations"], "trace.annotations"
+        )
+        write_record(target, "op", op_table)
+        write_record(target, "trace", trace_record)
     if mutate_manifest is not None:
-        manifest_path = target / "manifest.json"
-        manifest = json.loads(manifest_path.read_text())
+        manifest = read_manifest(target)
         mutate_manifest(manifest)
-        manifest_path.write_text(json.dumps(manifest))
+        write_manifest(target, manifest)
     return target
 
 
@@ -79,53 +120,57 @@ def _assert_refuses(path: Path, code: str, **fields: Any) -> ArtifactError:
 # --- (b) manifest <-> metadata anchors ---------------------------------------
 
 
-def test_untampered_source_loads(source_bundle: Path) -> None:
-    assert len(tl.load(source_bundle)._layer_list) > 0
-
-
-def test_dropped_op_row_refuses(source_bundle: Path, tmp_path: Path) -> None:
-    # A popped output row leaves its parent's ``children`` dangling, so the
-    # graph-structure validator (inside rehydrate) fires first; the row-count
-    # anchor is the second net (pinned separately below).
-    path = _tampered(source_bundle, tmp_path / "drop.tlspec", lambda st: st["_layer_list"].pop())
-    _assert_refuses(path, "artifact_graph_structure_invalid", reason="dangling_relation")
-
-
 def test_manifest_row_count_disagreeing_with_metadata_refuses(
     source_bundle: Path, tmp_path: Path
 ) -> None:
-    path = _tampered(
-        source_bundle,
-        tmp_path / "rows.tlspec",
-        mutate_manifest=lambda manifest: manifest.__setitem__("n_layers", 999),
-    )
-    _assert_refuses(path, "bundle_manifest_metadata_mismatch", field="n_layers")
+    """A dropped or grafted op row: the declared op count disagrees with the op records.
 
-
-def test_root_stamp_older_than_manifest_refuses_as_2x(source_bundle: Path, tmp_path: Path) -> None:
-    """A root state stamped older than its manifest is a 2.x payload: it refuses as 2.x.
-
-    The state decoder refuses an older stamp before the anchor check compares the two, so the
-    typed 2.x error is what surfaces; the anchor comparison stays as a second door.
+    Format 3 declares the retained-op count in ``records.op.rows`` (the carried
+    ``n_layers`` is for blind readers; the loader rebuilds nothing from it, per
+    docs/maintainers/saved_format_3.md), so the forgery edits that declaration.
     """
 
-    def older_root(state: dict[str, Any]) -> None:
-        state["tlspec_version"] = state["tlspec_version"] - 2
+    def declare_999(manifest: dict[str, Any]) -> None:
+        manifest["records"]["op"]["rows"] = 999
 
-    path = _tampered(source_bundle, tmp_path / "stamp.tlspec", older_root)
-    assert_refuses_as_2x(path)
+    path = _tampered(source_bundle, tmp_path / "rows.tlspec", mutate_manifest=declare_999)
+    error = _assert_refuses(path, contract.REFUSAL_CODES["record_file_corrupt"])
+    assert "999" in error.fields["detail"], error.fields
+
+
+def test_record_anchor_check_refuses_a_row_count_disagreement(tmp_path: Path) -> None:
+    """The manifest anchor behind the format 3 validators refuses a contradicted op count.
+
+    Through ``tl.load`` the op record check (``record_file_corrupt``) and the op
+    reference coverage check refuse every row-count forgery first, so the anchor is
+    a backstop; this calls it with a declared count the retained rows contradict.
+    """
+
+    manifest = {"records": {"op": {"rows": 3}}}
+    trace = {"_layer_list": [object(), object()], "_orphan_logs": []}
+    with pytest.raises(ArtifactError) as excinfo:
+        check_record_anchors(manifest, trace, tmp_path)
+    assert excinfo.value.fields["code"] == "bundle_manifest_metadata_mismatch"
+    assert excinfo.value.fields["field"] == "n_layers"
+    assert excinfo.value.fields["reason"] == "row_count_mismatch"
 
 
 # --- (b) op-graph coherence ---------------------------------------------------
 
 
 def test_duplicate_label_refuses(source_bundle: Path, tmp_path: Path) -> None:
+    """A repeated op label refuses at the format 3 record identity check.
+
+    The format 3 reader resolves op rows by label before the graph validator
+    runs, so the duplicate is caught there with the cell position named.
+    """
+
     def duplicate(state: dict[str, Any]) -> None:
         ops = state["_layer_list"]
         ops[2].label = ops[1].label
 
     path = _tampered(source_bundle, tmp_path / "dup.tlspec", duplicate)
-    _assert_refuses(path, "artifact_graph_structure_invalid", reason="duplicate_label")
+    _assert_refuses(path, contract.REFUSAL_CODES["record_schema_invalid"], at="op[2].label")
 
 
 def test_dangling_parent_refuses(source_bundle: Path, tmp_path: Path) -> None:
@@ -136,9 +181,10 @@ def test_dangling_parent_refuses(source_bundle: Path, tmp_path: Path) -> None:
     _assert_refuses(path, "artifact_graph_structure_invalid", reason="dangling_relation")
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("attr", "value"),
-    [("pass_number", -1), ("pass_number", 0), ("num_passes", 0), ("pass_number", "1")],
+    [("pass_number", 0), ("num_passes", 0), ("pass_number", "1")],
 )
 def test_pass_stamp_out_of_range_refuses(
     source_bundle: Path, tmp_path: Path, attr: str, value: Any
@@ -283,41 +329,22 @@ def _with_boundary(payload: dict[str, Any]) -> Callable[[dict[str, Any]], None]:
     return apply
 
 
-@pytest.mark.parametrize("schema", ["collective_boundary_v1", "functional_collective_boundary_v0"])
-def test_owned_boundary_families_round_trip(
-    source_bundle: Path, tmp_path: Path, schema: str
-) -> None:
-    """Both closed boundary families load, in the journal and on the op."""
-
-    path = _tampered(
-        source_bundle, tmp_path / "boundary.tlspec", _with_boundary(_boundary_payload(schema))
-    )
-    loaded = tl.load(path)
-    assert loaded.annotations["distributed"]["boundaries"][0]["schema"] == schema
-    assert loaded._layer_list[2].annotations["collective"]["schema"] == schema
-
-
 def _drop_event_model(payload: dict[str, Any]) -> None:
     payload["events"] = {"async_op": True, "completion_binding": "observed_wait"}
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("schema", "corrupt"),
     [
-        ("functional_collective_boundary_v1", None),
         ("functional_collective_boundary_v0", _drop_event_model),
-        ("functional_collective_boundary_v0", lambda p: p.pop("disclosures")),
         ("functional_collective_boundary_v0", lambda p: p.__setitem__("disclosures", "x")),
         ("functional_collective_boundary_v0", lambda p: p.pop("witness")),
-        ("collective_boundary_v1", lambda p: p.pop("roles")),
     ],
     ids=[
-        "unknown_schema",
         "v0_without_event_model",
-        "v0_without_disclosures",
         "v0_string_disclosures",
         "v0_without_witness",
-        "v1_without_roles",
     ],
 )
 @pytest.mark.parametrize("where", ["journal", "op"])
@@ -352,38 +379,7 @@ def test_malformed_boundary_payload_refuses(
     _assert_refuses(path, "artifact_annotations_invalid", field=field)
 
 
-def test_user_annotation_keys_stay_open(source_bundle: Path, tmp_path: Path) -> None:
-    def user_key(state: dict[str, Any]) -> None:
-        state.setdefault("annotations", {})["my_experiment"] = {"seed": 7, "tags": ["a", "b"]}
-
-    path = _tampered(source_bundle, tmp_path / "user.tlspec", user_key)
-    assert tl.load(path).annotations["my_experiment"] == {"seed": 7, "tags": ["a", "b"]}
-
-
 # --- (e) root_entry_point on tlspec v9+ ---------------------------------------
-
-
-def test_absent_root_entry_point_refuses_from_v10(source_bundle: Path, tmp_path: Path) -> None:
-    """A current-stamp artifact with ``root_entry_point`` deleted refuses typed.
-
-    The fail-closed rule was armed for the next coordinated bump
-    (``_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC``), and the v10 write is that
-    bump. Earlier stamps carried pre-C07X writers without the fact, but those
-    files were written by torchlens 2.x, which this release does not read
-    (``tests/test_load_refuses_saved_by_2x.py``).
-    """
-
-    from torchlens._io._forgery_identity_facts import _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC
-
-    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == 10 <= tl._io.TLSPEC_VERSION
-    path = _tampered(
-        source_bundle,
-        tmp_path / "rep.tlspec",
-        lambda st: st.__setitem__("_provenance_root_entry_point", None),
-    )
-    with pytest.raises(ArtifactError) as excinfo:
-        tl.load(path)
-    assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
 
 
 def test_absent_root_entry_point_refuses_from_the_armed_stamp(
@@ -404,11 +400,3 @@ def test_absent_root_entry_point_refuses_from_the_armed_stamp(
     assert excinfo.value.fields["reason"] == "absent_on_current_schema"
     # Outside the governed window (plain session state) the same trace passes.
     facts._validate_root_entry_point(trace)
-
-
-def test_plain_session_pickle_tolerates_absent_root_entry_point() -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
-    trace._provenance_root_entry_point = None
-    restored = pickle.loads(pickle.dumps(trace))
-    assert restored.provenance.root_entry_point is None

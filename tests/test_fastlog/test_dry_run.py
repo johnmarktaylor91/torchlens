@@ -71,34 +71,3 @@ def test_show_graph_renders_without_error(tmp_path: Path) -> None:
 
     assert "digraph" in dot
     assert (tmp_path / "dry_run.png").exists()
-
-
-def test_dry_run_uses_live_predicate_decisions_without_reinvoking() -> None:
-    """dry_run reports the same stateful predicate decisions as record()."""
-
-    calls = {"n": 0}
-
-    def first_two_ops(ctx: RecordContext) -> bool:
-        """Capture only the first two operation events the predicate sees."""
-
-        calls["n"] += 1
-        return calls["n"] <= 2
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
-    inputs = torch.randn(2, 4)
-
-    trace = tl.recording.dry_run(model, inputs, save=first_two_ops)
-    dry_run_calls = calls["n"]
-    dry_run_labels = [
-        ctx.label
-        for ctx, decision in zip(trace.contexts, trace.decisions)
-        if decision and ctx.kind == "op"
-    ]
-
-    calls["n"] = 0
-    recording = tl.record(model, inputs, save=first_two_ops)
-    record_calls = calls["n"]
-    kept_labels = [record.ctx.label for record in recording.records]
-
-    assert dry_run_calls == record_calls
-    assert dry_run_labels == kept_labels

@@ -10,12 +10,14 @@ phase-local peaks.
 from __future__ import annotations
 
 import gc
+from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
 from torch import nn
 
+from benchmarks.artifact_size import artifact_size_bytes
 from benchmarks.perf_gate import compare_gate_payloads, normalize_gate_payload
 from benchmarks.perf_runner import (
     _operation,
@@ -117,6 +119,46 @@ def _payload(rows: list[dict[str, object]]) -> dict[str, object]:
     )
 
 
+def test_artifact_size_bytes_sums_a_directory_artifact(tmp_path: Path) -> None:
+    """A directory artifact measures the bytes of its files, never the directory entry."""
+
+    bundle = tmp_path / "trace.tlspec"
+    (bundle / "nested").mkdir(parents=True)
+    (bundle / "manifest.json").write_bytes(b"m" * 10)
+    (bundle / "nested" / "blob.bin").write_bytes(b"b" * 1000)
+    assert artifact_size_bytes(bundle) == 1010
+    assert artifact_size_bytes(bundle) != bundle.stat().st_size
+
+    single = tmp_path / "single.bin"
+    single.write_bytes(b"s" * 7)
+    assert artifact_size_bytes(single) == 7
+
+    empty = tmp_path / "empty.tlspec"
+    empty.mkdir()
+    assert artifact_size_bytes(empty) == 0
+    with pytest.raises(FileNotFoundError):
+        artifact_size_bytes(tmp_path / "missing.tlspec")
+
+
+def test_runner_save_and_load_operations_report_artifact_bytes() -> None:
+    """Both save-path operations record the saved bundle's bytes, not the directory entry."""
+
+    model, x = _tiny_model()
+    for operation, name in (("aux_save", "trace_0.tlspec"), ("aux_load", "trace_fixture.tlspec")):
+        state: dict[str, Any] = {}
+        fn = _operation(operation, model, x, "cpu", state)
+        if operation == "aux_save":
+            fn()
+        tempdir = state["_tempdir"]
+        saved = Path(tempdir.name) / name
+        try:
+            assert saved.is_dir(), operation
+            assert state["serialized_file_size_bytes"] == artifact_size_bytes(saved), operation
+            assert state["serialized_file_size_bytes"] != saved.stat().st_size, operation
+        finally:
+            tempdir.cleanup()
+
+
 def test_runner_fastlog_zero_operation_executes_on_current_api() -> None:
     """The fastlog_zero cell runs against the current ``save=`` predicate API."""
 
@@ -130,7 +172,24 @@ def test_runner_fastlog_zero_operation_executes_on_current_api() -> None:
     assert "save=" in str(state["fastlog_zero_policy"])
 
 
-@pytest.mark.smoke
+@pytest.mark.parametrize(
+    "operation",
+    ["fastlog_module", "fastlog_all", "aux_validate", "aux_compat_report"],
+)
+def test_runner_record_validate_and_doctor_operations_execute_on_current_api(
+    operation: str,
+) -> None:
+    """The tl.record, tl.validate and tl.report.doctor cells run on the current API."""
+
+    model, x = _tiny_model()
+    state: dict[str, object] = {}
+
+    fn = _operation(operation, model, x, "cpu", state)
+    result = fn()
+
+    assert result is not None
+
+
 def test_runner_fastlog_selectivity_operations_execute_on_current_api() -> None:
     """Selectivity cells (dry_run + record) run against the ``save=`` API."""
 
@@ -155,6 +214,25 @@ def test_runner_fastlog_halt_operation_executes_on_current_api() -> None:
 
     assert recording is not None
     assert state["fastlog_halt_raw_index"] >= 1
+
+
+def test_runner_aux_save_reports_the_saved_bytes_not_the_directory_entry() -> None:
+    """``serialized_file_size_bytes`` sums the files a save wrote (a ``.tlspec`` is a directory)."""
+
+    model, x = _tiny_model()
+    state: dict[str, object] = {}
+
+    fn = _operation("aux_save", model, x, "cpu", state)
+    fn()
+
+    tempdir = state["_tempdir"]
+    saved = Path(tempdir.name) / "trace_0.tlspec"  # type: ignore[attr-defined]
+    expected = sum(child.stat().st_size for child in saved.rglob("*") if child.is_file())
+    assert expected > 0
+    assert state["serialized_file_size_bytes"] == expected
+    if saved.is_dir():
+        assert state["serialized_file_size_bytes"] != saved.stat().st_size
+    tempdir.cleanup()  # type: ignore[attr-defined]
 
 
 def test_select_fastlog_names_returns_nonempty_selection() -> None:

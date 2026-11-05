@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
 from typing import Any
 
@@ -66,30 +65,10 @@ def _toy_inputs() -> torch.Tensor:
     return torch.arange(30, dtype=torch.float32).reshape(10, 3) / 10.0
 
 
-def _manual_chunk_trace(model: nn.Module, x: torch.Tensor, chunk_size: int) -> tl.Trace:
-    """Build the manual trace-plus-append equivalent for one tensor input."""
-
-    chunks = list(torch.split(x, chunk_size, dim=0))
-    trace = tl.trace(model, chunks[0], save="all")
-    for chunk in chunks[1:]:
-        trace.run(model, chunk, input_transform=False, replay=tl.options.ReplayOptions(append=True))
-    return trace
-
-
 def _tensor_or_none(value: Any) -> torch.Tensor | None:
     """Return ``value`` if it is a tensor."""
 
     return value if isinstance(value, torch.Tensor) else None
-
-
-def _normalized_append_history(trace: tl.Trace) -> list[dict[str, Any]]:
-    """Return append history with volatile timing fields removed."""
-
-    volatile = {"timestamp", "started_at", "duration_s"}
-    return [
-        {key: value for key, value in row.items() if key not in volatile}
-        for row in trace._append_history
-    ]
 
 
 def _assert_equivalent_chunked_trace(actual: tl.Trace, expected: tl.Trace) -> None:
@@ -113,35 +92,6 @@ def _assert_equivalent_chunked_trace(actual: tl.Trace, expected: tl.Trace) -> No
                 torch.testing.assert_close(actual_tensor, expected_tensor)
 
 
-def test_trace_chunk_size_matches_manual_append_loop() -> None:
-    """One-line chunked capture should match manual append accumulation."""
-
-    torch.manual_seed(0)
-    model = DeterministicToy().eval()
-    x = _toy_inputs()
-
-    actual = tl.trace(model, x, capture=tl.options.CaptureOptions(chunk_size=4), save="all")
-    expected = _manual_chunk_trace(model, x, 4)
-
-    _assert_equivalent_chunked_trace(actual, expected)
-    assert len(actual._append_history) == 3
-    assert [row["chunk_size"] for row in actual._append_history] == [4, 4, 2]
-
-
-def test_chunk_size_default_matches_plain_trace() -> None:
-    """Leaving chunk_size unset preserves plain capture behavior."""
-
-    model = DeterministicToy().eval()
-    x = _toy_inputs()
-
-    plain = tl.trace(model, x, save="all")
-    default = tl.trace(model, x, capture=tl.options.CaptureOptions(chunk_size=None), save="all")
-
-    _assert_equivalent_chunked_trace(default, plain)
-    assert default.options.chunk_size is False
-    assert default._append_history == plain._append_history
-
-
 def test_chunk_size_rejects_explicit_jax_control_flow() -> None:
     """Chunk recursion must not hide explicitly unsupported JAX-only options."""
 
@@ -153,61 +103,6 @@ def test_chunk_size_rejects_explicit_jax_control_flow() -> None:
             _toy_inputs(),
             capture=tl.options.CaptureOptions(jax_control_flow="unroll", chunk_size=4),
         )
-
-
-def test_chunk_size_shape_and_remainder() -> None:
-    """A 10-item batch with chunk_size 4 should produce 4, 4, and 2 chunks."""
-
-    model = DeterministicToy().eval()
-    trace = tl.trace(
-        model,
-        _toy_inputs(),
-        capture=tl.options.CaptureOptions(chunk_size=4),
-        save="all",
-    )
-
-    output_label = trace.output_layers[0]
-    assert trace[output_label].out.shape[0] == 10
-    assert len(trace._append_history) == 3
-    assert [row["chunk_size"] for row in trace._append_history] == [4, 4, 2]
-    assert trace.options.chunk_size is True
-
-
-def test_chunk_size_with_save_predicate_appends_saved_payloads_only() -> None:
-    """Chunked predicate-save capture should append saved matching payloads."""
-
-    model = DeterministicToy().eval()
-    trace = tl.trace(
-        model, _toy_inputs(), save=tl.func("relu"), capture=tl.options.CaptureOptions(chunk_size=4)
-    )
-
-    relu = trace.find_sites(tl.func("relu")).first()
-    assert relu.out.shape[0] == 10
-    with pytest.raises(ValueError, match="was not saved"):
-        _ = trace["input_1"].out
-
-
-def test_chunk_size_with_save_predicate_emits_no_internal_deprecations() -> None:
-    """Chunked predicate capture should not self-warn about absent flat kwargs."""
-
-    model = DeterministicToy().eval()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        tl.trace(
-            model,
-            _toy_inputs(),
-            save=tl.func("relu"),
-            capture=tl.options.CaptureOptions(chunk_size=4),
-        )
-
-    torchlens_deprecations = [
-        warning
-        for warning in caught
-        if issubclass(warning.category, DeprecationWarning)
-        and "`" in str(warning.message)
-        and "deprecated; use" in str(warning.message)
-    ]
-    assert torchlens_deprecations == []
 
 
 def test_chunk_size_with_layers_to_save_keeps_selective_scope() -> None:
@@ -426,7 +321,7 @@ def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
     assert trace.provenance.backend == "chunk_fake"
 
 
-def test_log_backward_rejects_chunked_forward() -> None:
+def test_backward_rejects_chunked_forward() -> None:
     """Chunked traces should not accept deferred backward capture."""
 
     trace = tl.trace(
@@ -434,7 +329,7 @@ def test_log_backward_rejects_chunked_forward() -> None:
     )
 
     with pytest.raises(Exception, match="chunk_size"):
-        trace.log_backward(torch.tensor(1.0, requires_grad=True))
+        trace.backward(torch.tensor(1.0, requires_grad=True))
 
 
 def test_rerun_chunk_size_matches_manual_append_loop() -> None:

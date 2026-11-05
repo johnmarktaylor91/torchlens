@@ -436,6 +436,13 @@ def top_k(
     ``selection_unresolvable`` / ``population_too_small`` at resolve time.
     ``provenance.relation`` is ``exact``: the claim is about THIS capture's
     values. DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> top = trace[tl.top_k("conv2d_1_1", 3)]
+    >>> top[0].num_selected
+    3
     """
 
     if isinstance(k, bool) or not isinstance(k, int) or k < 0:
@@ -466,6 +473,13 @@ def top_fraction(
     at resolve time against the rankable (non-NaN) population size, so
     "top 1%" of a non-empty population is never zero elements. ``fraction``
     must lie in ``[0, 1]``. DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> top = trace[tl.top_fraction("conv2d_1_1", 0.5)]
+    >>> top[0].num_selected
+    128
     """
 
     fraction = _validate_real_number(fraction, "fraction", "top_fraction")
@@ -504,6 +518,13 @@ def threshold(
     required. ``by='abs'`` compares magnitudes. NaN elements never satisfy a
     comparison. ``provenance.relation`` is ``exact``. DOCUMENTED-UNSTABLE
     spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> active = trace[tl.threshold("relu_1_2", above=0.0)]
+    >>> active[0].num_selected == int((trace["relu_1_2"].out > 0).sum())
+    True
     """
 
     if above is None and below is None:
@@ -544,6 +565,13 @@ def sign(
     multi-sample "never fires" claim is :func:`dead`, deliberately a
     different name. ``provenance.relation`` is ``exact``.
     DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> zeros = trace[tl.sign("relu_1_2", "zero")]
+    >>> zeros[0].num_selected == int((trace["relu_1_2"].out == 0).sum())
+    True
     """
 
     if which not in _SIGN_CLASSES:
@@ -685,6 +713,14 @@ def dead(
     ``sign(site, 'zero')``. The resolution trace supplies geometry and
     population only; include it in ``samples`` to count it as evidence.
     DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> other = tl.trace(model, -x)
+    >>> silent = trace[tl.dead([trace, other], within="relu_1_2")]
+    >>> silent[0].provenance.relation
+    'upper_bound'
     """
 
     atol = _validate_real_number(atol, "tol", "dead")
@@ -718,6 +754,14 @@ def saturated(
     dispositional claim from finite evidence: ``provenance.relation`` is
     ``upper_bound`` and requires at least two samples. DOCUMENTED-UNSTABLE
     spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> other = tl.trace(model, -x)
+    >>> pinned = trace[tl.saturated([trace, other], low=0.0, within="relu_1_2")]
+    >>> pinned[0].provenance.relation
+    'upper_bound'
     """
 
     if low is None and high is None:
@@ -766,6 +810,14 @@ def low_variance(
     The high-variance selection is its touched-family complement:
     ``~low_variance(...)``. Requires at least two samples.
     DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> other = tl.trace(model, x + 0.01)
+    >>> steady = trace[tl.low_variance([trace, other], threshold=1.0, within="relu_1_2")]
+    >>> steady[0].provenance.relation, steady[0].num_selected
+    ('exact', 256)
     """
 
     threshold = _validate_real_number(threshold, "threshold", "low_variance")

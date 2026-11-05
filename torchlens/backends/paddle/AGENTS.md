@@ -11,7 +11,11 @@ Paddle preview backend: eager dygraph wrapper capture. It fills the backend prot
 - Live forward `intervene=` AND `stop_after=` both ship (the wrapper holds each
   concrete output before the caller sees it); combining `grad_options=` with
   either refuses typed. Halted traces set `is_stopped` / `stop_reason` /
-  `halt_frontier`.
+  `halt_frontier`. A `stop_after` that never fires follows torch's policy
+  (`PaddleInterventionRuntime.settle_unfired`, shared
+  `torchlens/_capture/_stop_after_policy.py`): a selector refuses typed
+  `stop_after_never_fired`, a plain callable warns
+  `stop_after_never_fired_callable`.
 - Intervention/halt predicates may be VALUE-DEPENDENT: dygraph is eager, so the
   `RecordContext` fields `tensor_requires_grad`, `is_scalar_bool`, and
   `bool_value` carry real values, not the lazy-backend deferred sentinel.

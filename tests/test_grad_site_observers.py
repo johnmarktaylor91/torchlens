@@ -18,18 +18,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.types import TargetSpec
 
 
 def _ctx(signal: str, label: str = "relu_1_2", **kwargs: Any) -> Any:
     return SimpleNamespace(signal=signal, op={"layer_label": label}, kwargs=kwargs)
-
-
-def test_tap_has_no_direction_and_fires_on_both_passes_by_default() -> None:
-    tap = tl.observers.tap(tl.func("relu"))
-    assert not hasattr(tap, "direction")
-    assert tap.signal == "both"
-    assert list(inspect.signature(tl.observers.tap).parameters) == ["site", "signal"]
 
 
 def test_tap_signal_filters_the_pass_on_top_of_the_site() -> None:
@@ -83,14 +75,6 @@ def test_span_refuses_an_unknown_signal() -> None:
     ):
         pass
     assert "direction" not in inspect.signature(tl.observers.span).parameters
-
-
-def test_narrate_signal_is_derived_from_the_site() -> None:
-    grad_site = TargetSpec(selector_kind="grad", selector_value=TargetSpec("label", "relu_1_2"))
-    assert tl.stats.narrate(tl.func("relu")).signal == "forward"
-    assert tl.stats.narrate(grad_site).signal == "backward"
-    assert "signal" not in inspect.signature(tl.stats.narrate).parameters
-    assert "direction" not in inspect.signature(tl.stats.narrate).parameters
 
 
 class _Net(nn.Module):

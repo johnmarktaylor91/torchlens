@@ -16,6 +16,7 @@ from .._io import (
 from .._quantities import Bytes, Duration
 from .._trace_state import TraceState
 from . import _doors, _trace_rehydrate
+from ._aten_display import bind_owner_keys
 from ._trace_pickle_state import _restore_pickled_verification, _sanitize_pickled_verification
 from ._transform_repr import _scrubbed_transform_repr
 from .derived_grad import DerivedGradAccessor
@@ -149,7 +150,6 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_provenance_input_object_id": None,
     "_provenance_input_signature_hash": None,
     "_provenance_fingerprint": None,
-    "_module_filter": None,
     "_options_emit_nvtx": False,
     "measure_python_peak_memory": False,
     "distributed_witness": "none",
@@ -424,9 +424,8 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     _restore_pickled_verification(state)
     for field_name in (
         *_doors.ir().workspaces.LEGACY_TRACE_BUILD_STATE_KEYS,
-        # "_build_state" is the pre-M10 flat scratchpad key; the three
-        # workspace keys are its dissolved successors. All transient,
-        # all dropped on restore.
+        # "_build_state": the pre-M10 flat scratchpad; the three workspace keys are its
+        # dissolved successors. All transient, all dropped on restore.
         "_build_state",
         "_raw_graph_ws",
         "_module_capture_ws",
@@ -511,9 +510,10 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
         }
     if state["_options_backward_ready"] is None:
         state["_options_backward_ready"] = False
-    # Session-time DROP knobs (``track_nonfinite`` too: a loaded artifact never
-    # re-records, so load restores the default and the queryable record falls
-    # back to the saved-payload basis).
+    if state.get("_autograd_derived_grads") == []:  # 3.0 writes an empty accessor as []
+        state["_autograd_derived_grads"] = DerivedGradAccessor()
+    # Session-time DROP knobs (``track_nonfinite`` too: a loaded artifact never re-records, so load
+    # restores the default and the queryable record falls back to the saved-payload basis).
     for knob in _SESSION_BOOL_KNOBS:
         if state.get(knob) is None:
             state[knob] = False
@@ -575,8 +575,8 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
         from ..validation._invariants_primitive_ops import validate_loaded_primitive_profile
 
         validate_loaded_primitive_profile(trace)
-    # Event streams never serialize (FieldPolicy.DROP), but a restored
-    # trace remains a supported backward-capture target within the live
+        bind_owner_keys(trace)
+    # Event streams never serialize; a restored trace supports backward capture in the live
     # process, so restore installs a fresh stream EXPLICITLY here rather
     # than letting backward capture fabricate one silently on demand.
     # The stream is DETACHED, not blank: it records the restored

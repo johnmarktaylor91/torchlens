@@ -1,5 +1,4 @@
 """The private candidate engine + the ``site_sweep`` face (F03 items 6-8).
-
 ONE engine, three customers: the ``site_sweep`` face, the
 tier-c selector conversion (:meth:`EffectsView.to_selection`), and the shipped
 occlusion attribution loop it generalizes. Given a baseline trace, an
@@ -11,12 +10,10 @@ husks the trace — every logged field dies with it), retains or releases
 under policy, and appends one effect row per candidate — including released,
 refused, and failed candidates, which are table rows and NEVER falsely
 members (D3c).
-
-Lane ruling (D3d): default ``engine="live_hook"`` — fork + attach_hooks +
+Lane ruling (D3d): default ``engine="live_hook"`` — fork + _attach_hooks +
 run(model, x), a real forward with hooks attached. ``engine="replay"`` is
 the cone-recompute opt-in (fork + do on saved payloads). The lane is stamped
 in every event envelope and effect table; escalation is never silent.
-
 Required arguments (D3b): ``edit=``, ``metric=``, and ``retain=`` have NO
 defaults — which ablation is sound is a live scientific argument, the metric
 IS the experiment, and retention decides what evidence is DESTROYED.
@@ -28,10 +25,12 @@ from __future__ import annotations
 
 import hashlib
 import math
+import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
+from .._utils._display_bounded import short_dataclass_repr
 from ..bundle import Bundle
 from ..bundle._bytes import preflight_retention_projection
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
@@ -328,7 +327,7 @@ def _run_live_candidate(
     """Run one candidate on the live_hook lane, with the DISCLOSED door split.
 
     Structural terms (facet selectors, func/in_module, predicates) ride the
-    rerun door (fork + attach_hooks + run). Site-key terms cannot be matched
+    rerun door (fork + _attach_hooks + run). Site-key terms cannot be matched
     mid-attach (final structural numbering is absent), so they ride the
     CAPTURE door (``trace(model, x, intervene=spec)``, which arms the live
     site-key minter) — the same real forward with the edit installed, and the
@@ -339,11 +338,9 @@ def _run_live_candidate(
     from ..intervention.errors import SelectorCapabilityError
 
     try:
-        import time as _time
-
         member = baseline.fork(name=candidate.candidate_id)
-        member.attach_hooks(spec)
-        started = _time.monotonic()
+        member._attach_hooks(spec)
+        started = time.monotonic()
         member.run(model, x)
         _record_run_envelope(member, spec, started=started)
         return member, "live_hook"
@@ -362,7 +359,7 @@ def _run_live_candidate(
 def _record_run_envelope(member: Any, spec: Any, *, started: float) -> None:
     """Write the run-door transaction envelope (the historical fourth-door gap).
 
-    ``attach_hooks`` stages the spec and ``run()`` fires it, but the run door
+    ``_attach_hooks`` stages the spec and ``run()`` fires it, but the run door
     wrote no InterventionEvent before this engine — exactly the design memo's
     3.1 finding ("three of the four write doors record nothing"). The engine
     is the run door's first experiment customer, so it writes the envelope
@@ -397,11 +394,11 @@ def _record_run_envelope(member: Any, spec: Any, *, started: float) -> None:
 
 
 def _capture_options_like(baseline: Trace) -> Any:
-    """Capture options for a capture-door candidate (intervention-ready)."""
+    """Capture options for a capture-door candidate."""
 
     from ..options import CaptureOptions
 
-    return CaptureOptions(replayable=True)
+    return CaptureOptions()
 
 
 def _measure(metric: Callable[[Any], Any], member: Any, candidate_id: str) -> float:
@@ -565,6 +562,8 @@ def _preflight_retention(
 @dataclass
 class _SweepState:
     """Mutable per-sweep accumulator: bundle, effect rows, retention."""
+
+    __repr__ = short_dataclass_repr
 
     bundle: Bundle
     baseline: Trace
@@ -744,7 +743,7 @@ def sweep_sites(
     Parameters
     ----------
     baseline:
-        The un-edited capture (``replayable``); becomes the
+        The un-edited capture; becomes the
         ``"baseline"`` member and the comparison anchor.
     candidates:
         Ordered candidate plan: ``{candidate_id: site}`` or a sequence of
@@ -765,7 +764,7 @@ def sweep_sites(
         ``retain_ceiling_bytes=`` for the typed BEFORE-the-first-candidate
         byte preflight.
     engine:
-        ``"live_hook"`` (default; fork + attach_hooks + run(model, x) — a
+        ``"live_hook"`` (default; fork + _attach_hooks + run(model, x) — a
         real forward) or ``"replay"`` (fork + do on saved payloads). The
         lane is stamped in the envelope and the effect table.
     model, x:
@@ -787,6 +786,16 @@ def sweep_sites(
         Baseline + retained members; the COMPLETE per-candidate effect table
         (released/refused/failed rows included) persists in the bundle
         artifact keyed by operation id and survives discard/save/load.
+
+    Examples
+    --------
+    >>> base = tl.trace(model, x)
+    >>> bundle = tl.experiment.sweep_sites(
+    ...     base, candidates={"relu": "relu_1_2"}, edit=tl.zero_ablate(),
+    ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="all",
+    ...     model=model, inputs=x)
+    >>> bundle.names
+    ['baseline', 'relu']
     """
 
     _validate_sweep_entry(engine=engine, metric=metric, retain=retain, model=model, x=inputs)

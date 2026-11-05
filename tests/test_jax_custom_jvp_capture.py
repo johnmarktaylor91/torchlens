@@ -25,7 +25,7 @@ from torchlens.errors import BackendUnsupportedError
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
-pytestmark = pytest.mark.backend_jax
+pytestmark = [pytest.mark.backend_jax, pytest.mark.rare]
 
 
 def _params() -> dict[str, Any]:

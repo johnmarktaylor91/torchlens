@@ -55,7 +55,7 @@ def _captured_backward_trace() -> tl.Trace:
     x = torch.randn(3, 4, requires_grad=True)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"), save="all")
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
     check_metadata_invariants(trace)
     return trace
 

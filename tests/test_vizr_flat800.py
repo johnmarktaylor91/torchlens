@@ -1,4 +1,4 @@
-"""Execution check for the big-model render default on a flat 800-layer model (U07.4).
+"""Execution check for the big-model render default on a flat 800-layer model.
 
 The ruling asks for one execution check before launch copy claims a readable
 default on big models. The check runs the default route (the quickstart

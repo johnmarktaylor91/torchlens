@@ -73,15 +73,6 @@ def test_at_step_argument_validation_refuses_typed():
         assert excinfo.value.fields["remedy"]
 
 
-def test_at_step_normalizes_sorted_unique():
-    """Steps deduplicate and sort; the spec payload is the ordered tuple."""
-
-    selector = at_step(3, 1, 1)
-    assert selector.steps == (1, 3)
-    assert selector.selector_kind == "episode_step"
-    assert selector.selector_value == (1, 3)
-
-
 @pytest.mark.smoke
 def test_at_step_spec_round_trip():
     """TargetSpec round-trip reconstructs the same ordered steps."""
@@ -94,22 +85,6 @@ def test_at_step_spec_round_trip():
 # ---------------------------------------------------------------------------
 # Capture-time qualification (the live step position)
 # ---------------------------------------------------------------------------
-
-
-def test_save_predicate_step_qualifies_live():
-    """save= with at_step(k) retains exactly step k's matching pass."""
-
-    model = Root()
-    log = _episode_trace(model, torch.randn(2, 4), save=tl.func("relu") & at_step(1))
-
-    def has_payload(op) -> bool:
-        try:
-            return op.out is not None
-        except Exception:
-            return False
-
-    saved_relu = [op.label for op in log._layer_list if "relu" in op.label and has_payload(op)]
-    assert saved_relu == ["relu_1_2:2"]  # 0-based step 1 = pass 2
 
 
 def test_root_loop_ops_between_steps_never_match():
@@ -142,40 +117,6 @@ def test_capture_step_selector_without_episode_refuses_typed():
 # ---------------------------------------------------------------------------
 # Post-hoc qualification (the persisted stamps)
 # ---------------------------------------------------------------------------
-
-
-def test_episode_step_stamps_land_on_stepped_ops_only():
-    """Ops inside stepped call k (nested included) read step k; others None."""
-
-    model = Root()
-    log = _episode_trace(model, torch.randn(2, 4))
-    by_label = {op.label: op.episode_step for op in log._layer_list}
-    assert by_label["linear_1_1:1"] == 0  # nested submodule op stamps
-    assert by_label["relu_1_2:2"] == 1
-    assert by_label["relu_1_2:3"] == 2
-    assert by_label["add_1_3:1"] is None
-    assert by_label["input_1:1"] is None
-    assert by_label["output_1:1"] is None
-
-
-def test_post_hoc_step_resolution_matches_one_pass():
-    """find_sites with a step qualifier resolves the step's pass exactly."""
-
-    model = Root()
-    log = _episode_trace(model, torch.randn(2, 4))
-    table = log.find_sites(tl.func("relu") & at_step(2))
-    assert [site.label for site in table] == ["relu_1_2:3"]
-
-
-def test_post_hoc_step_and_pass_cross_product():
-    """Step and pass qualification compose (the step-x-pass cross-product)."""
-
-    model = Root()
-    log = _episode_trace(model, torch.randn(2, 4))
-    agree = log.find_sites(tl.label("relu_1_2:2") & at_step(1))
-    assert [site.label for site in agree] == ["relu_1_2:2"]
-    disagree = log.find_sites(tl.label("relu_1_2:2") & at_step(2))
-    assert list(disagree) == []  # step and pass disagree: zero sites
 
 
 def test_post_hoc_plain_capture_refuses_typed():

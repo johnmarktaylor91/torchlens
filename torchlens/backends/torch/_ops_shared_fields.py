@@ -1,5 +1,6 @@
 """Shared operation fields and tensor variation tracking."""
 
+from collections import defaultdict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -18,6 +19,8 @@ from ..._data_classes.op import (
 from ..._ir.events import (
     OutputVersionEvent,
 )
+from ..._ir.predicate import RecordContext
+from ..._ir.refs import ParamRef
 from ..._utils.introspection import (
     _get_code_context,
     get_arg_tensors_for_resolution,
@@ -39,6 +42,9 @@ from .buffer_writes import resolve_registered_buffer_address, session_validated_
 from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import (
     _add_tensor_backward_hook,
+    _append_module_suffix_to_equivalence_class,
+    _get_equivalence_class,
+    _make_raw_param_group_barcode,
 )
 
 if TYPE_CHECKING:
@@ -50,6 +56,9 @@ __all__ = (
     "_classify_new_tensor_in_trace",
     "_tag_tensor_and_track_variations",
     "_get_parent_output_version_snapshot",
+    "_predicate_call_site_chain",
+    "_predicate_equivalence_class",
+    "_prepared_param_refs",
 )
 
 
@@ -66,6 +75,41 @@ def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
     fields_dict["transformed_grad_dtype"] = None
     fields_dict["gradient_memory"] = 0
     fields_dict["transformed_gradient_memory"] = None
+
+
+def _set_arg_template_fields(
+    self: "Trace",
+    fields_dict: dict[str, Any],
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> None:
+    """Seed the replay argument templates and the portable function identity of one call."""
+    should_capture_template = bool(
+        getattr(self, "is_replayable", False) or self._options_save_arg_templates
+    )
+    if should_capture_template:
+        captured_template = _build_args_template(func, args, kwargs, self, func_name=func_name)
+        fields_dict["args_template"] = captured_template
+        fields_dict["kwargs_template"] = captured_template if kwargs else None
+        # The portable function identity is what lets a LOADED bundle resolve its
+        # callables for validation; a default capture records templates only for
+        # in-process replay, so it keeps the default bundle's identity-free contract.
+        fields_dict["func_id"] = (
+            captured_template.func_id
+            if getattr(self, "is_replayable", False) or self._options_save_args
+            else None
+        )
+    else:
+        fields_dict["args_template"] = None
+        fields_dict["kwargs_template"] = None
+        # A capture that saves arguments is replay-ready; its portable function
+        # identity lets replay validation resolve the callable on a loaded
+        # bundle (``validation/_loaded_callables.py``), which carries no callables.
+        fields_dict["func_id"] = (
+            _function_registry_key(func, func_name, self) if self._options_save_args else None
+        )
 
 
 def _build_shared_fields_dict(
@@ -132,23 +176,7 @@ def _build_shared_fields_dict(
     fields_dict["output_device"] = self._options_output_device
     fields_dict["_construction_done"] = False
     fields_dict["edits"] = []
-    should_capture_template = bool(
-        getattr(self, "is_replayable", False) or self._options_save_arg_templates
-    )
-    if should_capture_template:
-        captured_template = _build_args_template(func, args, kwargs, self, func_name=func_name)
-        fields_dict["args_template"] = captured_template
-        fields_dict["kwargs_template"] = captured_template if kwargs else None
-        fields_dict["func_id"] = captured_template.func_id
-    else:
-        fields_dict["args_template"] = None
-        fields_dict["kwargs_template"] = None
-        # A capture that saves arguments is replay-ready; its portable function
-        # identity lets replay validation resolve the callable on a loaded
-        # bundle (``validation/_loaded_callables.py``), which carries no callables.
-        fields_dict["func_id"] = (
-            _function_registry_key(func, func_name) if self._options_save_args else None
-        )
+    _set_arg_template_fields(self, fields_dict, func, func_name, args, kwargs)
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
     fields_dict["multi_output_name"] = None
@@ -383,6 +411,126 @@ def _get_parent_output_version_snapshot(
     return None
 
 
+def _predicate_call_site_chain(trace: "Trace") -> tuple[Any, ...]:
+    """Return the call-site chain of the torch call being recorded.
+
+    The same frame walk exhaustive capture runs for its code context
+    (``_ops_shared_fields``), asked only for the chain: no source lines, no
+    column offsets, and the per-capture anchor in ``trace._code_context_cache``
+    stops the walk at the capture call. Empty when no Python frame lies
+    inside the innermost module call. The key and class string it feeds are
+    the ones exhaustive capture mints (``_ops_activations``), so the cooked
+    Trace groups by call site (``callsite_v1``) with the same result.
+    """
+
+    context_cache = trace._code_context_cache
+    call_site_out: list[Any] = []
+    _get_code_context(
+        0,
+        source_loading_enabled=False,
+        disable_col_offset=True,
+        context_cache=context_cache,
+        call_site_out=call_site_out,
+    )
+    return call_site_out[0] if call_site_out else ()
+
+
+def _prepared_param_refs(
+    state: Any,
+    arg_parameters: list[torch.nn.Parameter],
+) -> tuple[ParamRef, ...]:
+    """Resolve the Parameters an op read to their prep-time identities.
+
+    Parameters
+    ----------
+    state
+        Active recording state holding ``prepared_param_refs``.
+    arg_parameters
+        Parameters found among the call's arguments.
+
+    Returns
+    -------
+    tuple[ParamRef, ...]
+        One ref per prepared parameter occurrence, in argument order. A
+        Parameter the prep never saw (created inside the forward) has no
+        identity and is skipped, as exhaustive capture skips unstamped ones.
+    """
+
+    if not arg_parameters:
+        return ()
+    registry = state.prepared_param_refs
+    if not registry:
+        return ()
+    return tuple(ref for param in arg_parameters if (ref := registry.get(id(param))) is not None)
+
+
+def _predicate_equivalence_class(
+    state: Any,
+    ctx: RecordContext,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    param_refs: tuple[ParamRef, ...],
+    *,
+    func_name: str,
+    layer_type: str,
+    output_index: int,
+    in_multi_output: bool,
+    is_inplace_dunder: Callable[[str], bool],
+) -> str:
+    """Build the loop-grouping fingerprint of one predicate-mode op output.
+
+    The same two fingerprints exhaustive capture mints (``_ops_activations``):
+    parameterized ops key on ``layer_type`` plus the sorted parameter barcodes,
+    parameter-free ops on ``layer_type`` plus a hash of the non-tensor
+    arguments, both suffixed with the output slot of a multi-output call and
+    the module stack.
+    """
+
+    _frames, modules = state.module_fields_for(ctx)
+    if param_refs:
+        barcodes = [ref.barcode for ref in param_refs]
+        base = _make_raw_param_group_barcode(
+            barcodes, layer_type, output_index=output_index if in_multi_output else None
+        )
+        return _append_module_suffix_to_equivalence_class(base, modules)
+    is_inplace_output = is_inplace_dunder(func_name) or (
+        func_name.endswith("_") and not func_name.startswith("__")
+    )
+    equivalence_layer_type = f"{layer_type}_inplace" if is_inplace_output else layer_type
+    base = _get_equivalence_class(
+        args,
+        kwargs,
+        output_index,
+        equivalence_layer_type,
+        {"in_multi_output": in_multi_output, "module": modules[-1] if modules else None},
+    )
+    return _append_module_suffix_to_equivalence_class(base, modules)
+
+
+def _build_module_context_fields(
+    self: "Trace",
+    fields_dict: dict[str, Any],
+    arg_tensors: list[torch.Tensor],
+    parent_layer_entries: list[Op],
+) -> None:
+    """Populate module nesting, address, and input/output status fields."""
+    modules = _snapshot_exhaustive_module_stack(self)
+    module = modules[-1] if modules else None
+
+    fields_dict["module"] = module
+    fields_dict["modules"] = modules
+    # B3R7-R05-1: same containment fact as ``modules`` (relabeled together at
+    # step 11), never the fed-call stack -- that is ``input_to_module_calls``.
+    fields_dict["module_call_stack"] = list(modules)
+    fields_dict["module_entry_arg_keys"] = defaultdict(list)
+    fields_dict["input_to_module_calls"] = []
+    fields_dict["output_of_modules"] = []
+    fields_dict["output_of_module_calls"] = []
+    fields_dict["is_module_output"] = False
+    fields_dict["is_atomic_module"] = False
+    fields_dict["atomic_module_call"] = None
+
+
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from ._ops_arguments import (  # noqa: E402
@@ -392,6 +540,7 @@ from ._ops_arguments import (  # noqa: E402
 from ._ops_capture_records import (  # noqa: E402
     _bind_writeback_receiver_label,
     _record_label_version_snapshot,
+    _snapshot_exhaustive_module_stack,
 )
 from ._ops_emission import (  # noqa: E402
     _unattributed_tensor_arg_positions,
@@ -401,7 +550,6 @@ from ._ops_exhaustive import (  # noqa: E402
 )
 from ._ops_predicate_events import (  # noqa: E402
     _build_graph_relationship_fields,
-    _build_module_context_fields,
     _build_param_fields,
     _extract_arg_tensors_and_params,
 )

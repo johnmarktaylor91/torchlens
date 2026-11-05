@@ -7,6 +7,8 @@ from typing import Any, ClassVar
 
 from typing_extensions import Self
 
+from ._utils._display_numbers import format_duration, format_iec_bytes
+
 
 class Quantity(ABC):  # noqa: B024 - deliberate marker ABC, see the docstring
     """Marker base class for TorchLens numeric quantity wrappers.
@@ -14,6 +16,13 @@ class Quantity(ABC):  # noqa: B024 - deliberate marker ABC, see the docstring
     Quantity subclasses also subclass a concrete numeric type such as ``int`` or
     ``float``.  The marker base lets callers test for all unit-aware quantities
     with ``isinstance(value, Quantity)``.
+
+    Examples
+    --------
+    >>> isinstance(tl.types.Bytes(2048), Quantity)
+    True
+    >>> isinstance(2048, Quantity)
+    False
     """
 
 
@@ -373,7 +382,18 @@ def _scaled_unit_divisor(unit_name: str, units: tuple[tuple[str, float], ...]) -
 
 
 class Bytes(_IntQuantity):
-    """Memory quantity stored as bytes with human-readable display."""
+    """Memory quantity stored as bytes with human-readable display.
+
+    Examples
+    --------
+    >>> size = Bytes(2048)
+    >>> str(size)
+    '2.00 KiB'
+    >>> format(size, "raw")
+    '2048'
+    >>> size == 2048
+    True
+    """
 
     _unit_name: ClassVar[str] = "byte"
     _UNITS: ClassVar[tuple[tuple[str, float], ...]] = (
@@ -388,7 +408,7 @@ class Bytes(_IntQuantity):
     def __str__(self) -> str:
         """Return a human-readable byte string."""
 
-        return self._format_bytes("")
+        return ("-" if self < 0 else "") + format_iec_bytes(abs(int(self)))
 
     def __format__(self, format_spec: str) -> str:
         """Format bytes with optional precision and forced unit.
@@ -405,6 +425,8 @@ class Bytes(_IntQuantity):
             Formatted byte quantity.
         """
 
+        if not format_spec:
+            return str(self)
         if format_spec == "raw":
             return str(int(self))
         return self._format_bytes(format_spec)
@@ -511,7 +533,16 @@ class Bytes(_IntQuantity):
 
 
 class Duration(_FloatQuantity):
-    """Duration quantity stored in seconds."""
+    """Duration quantity stored in seconds.
+
+    Examples
+    --------
+    >>> elapsed = Duration(0.0015)
+    >>> str(elapsed)
+    '1.50 ms'
+    >>> isinstance(elapsed, float)
+    True
+    """
 
     _unit_name: ClassVar[str] = "duration"
     _UNITS: ClassVar[tuple[tuple[str, float], ...]] = (
@@ -524,11 +555,13 @@ class Duration(_FloatQuantity):
     def __str__(self) -> str:
         """Return a human-readable duration string."""
 
-        return self._format_duration("")
+        return format_duration(float(self))
 
     def __format__(self, format_spec: str) -> str:
         """Format seconds with optional precision and forced unit."""
 
+        if not format_spec:
+            return str(self)
         if format_spec == "raw":
             return str(float(self))
         return self._format_duration(format_spec)
@@ -551,7 +584,16 @@ class Duration(_FloatQuantity):
 
 
 class Flops(_IntQuantity):
-    """Floating-point operation count quantity."""
+    """Floating-point operation count quantity.
+
+    Examples
+    --------
+    >>> work = Flops(1_500_000)
+    >>> str(work)
+    '1.5 MFLOPs'
+    >>> format(work, "raw")
+    '1500000'
+    """
 
     _unit_name: ClassVar[str] = "FLOP"
     _UNITS: ClassVar[tuple[tuple[str, float], ...]] = (
@@ -582,7 +624,16 @@ class Flops(_IntQuantity):
 
 
 class Macs(_IntQuantity):
-    """Multiply-accumulate operation count quantity."""
+    """Multiply-accumulate operation count quantity.
+
+    Examples
+    --------
+    >>> work = Macs(1_500_000)
+    >>> str(work)
+    '1.5 MMACs'
+    >>> work == 1_500_000
+    True
+    """
 
     _unit_name: ClassVar[str] = "MAC"
     _UNITS: ClassVar[tuple[tuple[str, float], ...]] = (

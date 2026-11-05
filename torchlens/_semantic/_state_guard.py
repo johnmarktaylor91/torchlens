@@ -73,12 +73,26 @@ class _CounterfactualStateGuard:
         self._restore_model()
         _restore_rng(self._rng)
 
+    def parameters_drifted(self) -> bool:
+        """Return whether any parameter's value differs from the snapshot.
+
+        Used after a capture that kept parameter arguments by reference: a
+        forward that wrote a parameter (through ``param.data`` too, which no
+        version counter on the parameter records) leaves aliases that no
+        longer hold the call-time value.
+        """
+
+        return any(
+            isinstance(tensor, nn.Parameter) and not torch.equal(tensor, saved)
+            for tensor, saved in self._tensors
+        )
+
     def _restore_model(self) -> None:
         """Restore every DRIFTED parameter/buffer value and grad in place.
 
         The copy is equality-gated on purpose: an unconditional ``copy_``
         bumps the autograd version counter of every parameter consumed by an
-        earlier captured forward, so the later ``log_backward`` on the clean
+        earlier captured forward, so the later ``backward`` on the clean
         and corrupted baselines raised "modified by an inplace operation" on
         ANY model with parameters (attribution patching was unusable outside
         zero-parameter toys). A value-equal tensor needs no write and keeps
@@ -164,7 +178,7 @@ def _snapshot_rng() -> dict[str, Any]:
 
     from .._utils.rng import _snapshot_cuda_rng_states
 
-    snapshot: dict[str, Any] = {"cpu": torch.get_rng_state()}
+    snapshot: dict[str, Any] = {"cpu": torch.default_generator.get_state()}
     # Initialized-CUDA-only, latch-guarded (R36-4): returns [] on a
     # CUDA-less or never-initialized process without touching the driver.
     cuda_states = _snapshot_cuda_rng_states()

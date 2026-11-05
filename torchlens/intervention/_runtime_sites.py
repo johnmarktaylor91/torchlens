@@ -6,6 +6,8 @@ import warnings
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+from .._capture.arg_positions import _normalize_func_name
+
 if TYPE_CHECKING:
     from .hooks import HookContext, NormalizedHookEntry
 
@@ -265,3 +267,55 @@ def _site_name(hook_context: HookContext | None) -> str:
     if layer_label is None:
         return "<unknown site>"
     return str(layer_label)
+
+
+def _provisional_inplace_site(
+    func_name: str, trace: Any, func_call_id: int, modules: tuple[Any, ...]
+) -> Any:
+    """Build a selector-matchable site for a not-yet-executed in-place op.
+
+    Parameters
+    ----------
+    func_name:
+        Decorated torch function name.
+    trace:
+        Active trace.
+    func_call_id:
+        Function-call id allocated by the torch wrapper.
+    modules:
+        The exhaustive module stack at the op (outermost first), snapshotted
+        by the caller.
+
+    Returns
+    -------
+    Any
+        Minimal live-site proxy for pre-execution selector matching.
+    """
+
+    layer_type = _normalize_func_name(func_name)
+    raw_index = trace._raw_graph_ws.layer_counter + 1
+    type_index = trace._raw_graph_ws.raw_layer_type_counter.get(layer_type, 0) + 1
+    raw_label = f"{layer_type}_{type_index}_{raw_index}_raw"
+    return SimpleNamespace(
+        layer_label=raw_label,
+        _layer_label_raw=raw_label,
+        _label_raw=raw_label,
+        raw_index=raw_index,
+        layer_type=layer_type,
+        func_name=func_name,
+        func_call_id=func_call_id,
+        container_path=(),
+        module=modules[-1] if modules else None,
+        modules=modules,
+        output_of_module_calls=(),
+        output_of_modules=(),
+        _tl_module_boundary=False,
+        is_transform=False,
+        transform_kind=None,
+        transform_chain=(),
+        transform_config={},
+        is_inplace=True,
+        _tl_input_snapshot=False,
+        call_index=1,
+        lookup_keys=[],
+    )

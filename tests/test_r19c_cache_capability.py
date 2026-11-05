@@ -60,7 +60,6 @@ def test_cache_with_activation_transform_roundtrips(tmp_path):
     assert second.provenance.cache_hit is True
 
 
-@pytest.mark.smoke
 def test_cache_with_grad_transform_roundtrips(tmp_path):
     """The sibling grad_transform path must also survive cache serialization."""
     model = _tiny_model()

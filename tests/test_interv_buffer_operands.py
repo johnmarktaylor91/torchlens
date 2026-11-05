@@ -1,4 +1,4 @@
-"""Buffer operands for substitution (R2-25, N-IV-9): BatchNorm-stat and state what-ifs.
+"""Buffer operands for substitution: BatchNorm-stat and state what-ifs.
 
 ``trace.do(tl.param("<buffer address>"), edit)`` substitutes the buffer's
 initial version (the value its consumers read) and replays the cone. Each row
@@ -17,8 +17,10 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors import SelectionError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _CAPTURE = tl.options.CaptureOptions(replayable=True)
-_CONFIRM = tl.options.InterventionOptions(confirm_mutation=True)
+_CONFIRM = tl.options.InterventionOptions()
 
 
 def _batchnorm_model() -> nn.Sequential:

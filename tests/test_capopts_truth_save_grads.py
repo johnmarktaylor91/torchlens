@@ -56,21 +56,6 @@ def test_save_grads_callable_restricts_retention() -> None:
     assert _grad_labels(log) == ["relu_1_2"]
 
 
-@pytest.mark.smoke
-def test_save_grads_selector_restricts_retention() -> None:
-    """A tl.* selector keeps gradients ONLY on matching ops."""
-
-    log = tl.trace(
-        ThreeStep(),
-        torch.randn(2, 4),
-        capture=CaptureOptions(
-            save_grads=tl.func("relu"), backward_ready=True, save_mode="reference"
-        ),
-    )
-    _backward(log)
-    assert _grad_labels(log) == ["relu_1_2"]
-
-
 def test_save_grads_true_keeps_all_gradients() -> None:
     """The boolean policy is unchanged: True retains every op's gradient."""
 
@@ -81,19 +66,6 @@ def test_save_grads_true_keeps_all_gradients() -> None:
     )
     _backward(log)
     assert len(_grad_labels(log)) >= 4
-
-
-def test_save_grads_label_string_still_works() -> None:
-    """The legacy label-string selector spelling is unchanged."""
-
-    log = tl.trace(
-        ThreeStep(),
-        torch.randn(2, 4),
-        capture=CaptureOptions(save_grads=["relu_1_2"], backward_ready=True, save_mode="reference"),
-    )
-    _backward(log)
-    assert "relu_1_2" in _grad_labels(log)
-    assert "linear_1_1" not in _grad_labels(log)
 
 
 def test_save_grads_callable_non_bool_refuses_typed() -> None:

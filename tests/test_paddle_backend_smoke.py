@@ -9,7 +9,7 @@ paddle = pytest.importorskip("paddle")
 import torchlens as tl  # noqa: E402
 from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 
 def _input(shape: tuple[int, ...] = (2, 4)) -> object:

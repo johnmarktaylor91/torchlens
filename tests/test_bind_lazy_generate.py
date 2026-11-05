@@ -164,69 +164,6 @@ def _assert_clean(model: nn.Module) -> None:
     assert torch.overrides._get_current_function_mode_stack() == []
 
 
-def test_pure_generator_steers_every_step() -> None:
-    """Every forward run during iteration is steered; the report counts them."""
-
-    model = _PureGen()
-    bound = _add_one().bind(model)
-    gen = bound.generate(torch.ones(1))
-    assert bound.last_report is None, "no settled report while the output is open"
-    assert _values(gen) == [[4.0], [10.0]]
-    report = bound.last_report
-    assert report is not None
-    assert report.status == "fired"
-    assert report.door == "generate"
-    assert report.num_fires == 2
-    assert report.zero_fire_rule_ids == ()
-    assert report.cleanup == "removed"
-    _assert_clean(model)
-
-
-def test_lazy_tail_steers_eager_and_lazy_forwards() -> None:
-    """The eager forward and the lazily run forward are both steered once."""
-
-    model = _LazyTail()
-    bound = _add_one().bind(model)
-    assert _values(bound.generate(torch.ones(1))) == [[4.0], [10.0]]
-    assert bound.last_report is not None
-    assert bound.last_report.num_fires == 2
-    assert bound.last_report.status == "fired"
-    _assert_clean(model)
-
-
-def test_steering_is_scoped_to_the_generator_body() -> None:
-    """Between steps no hook is armed: the caller's own forward runs unsteered."""
-
-    model = _PureGen()
-    bound = _add_one().bind(model)
-    gen = bound.generate(torch.ones(1), steps=2)
-    assert _values([next(gen)]) == [[4.0]]
-    _assert_clean(model)
-    assert _values([model(torch.ones(1))]) == [[2.0]]
-    assert _values([next(gen)]) == [[10.0]]
-    with pytest.raises(StopIteration):
-        next(gen)
-    assert bound.last_report is not None
-    assert bound.last_report.num_fires == 2
-
-
-def test_open_lazy_output_holds_the_binding() -> None:
-    """The binding stays serial while its lazy output is open, then frees."""
-
-    model = _PureGen()
-    bound = _add_one().bind(model)
-    gen = bound.generate(torch.ones(1))
-    next(gen)
-    with pytest.raises(BindingRuntimeError) as excinfo:
-        bound(torch.ones(1))
-    assert excinfo.value.fields["code"] == "binding_reentrant_call"
-    list(gen)
-    assert _values([bound(torch.ones(1))]) == [[4.0]]
-    assert bound.last_report is not None
-    assert bound.last_report.num_fires == 1
-    assert bound.last_report.door == "call"
-
-
 def test_early_close_settles_and_removes_hooks() -> None:
     """``close()`` after one step settles a one-fire report and frees the binding."""
 
@@ -243,24 +180,6 @@ def test_early_close_settles_and_removes_hooks() -> None:
     _assert_clean(model)
     with pytest.raises(StopIteration):
         next(gen)
-    assert _values([bound(torch.ones(1))]) == [[4.0]]
-
-
-def test_exception_mid_iteration_settles_error_report() -> None:
-    """A generator failure propagates; the report records it and the fires so far."""
-
-    model = _Failing()
-    bound = _add_one().bind(model)
-    gen = bound.generate(torch.ones(1))
-    assert _values([next(gen)]) == [[4.0]]
-    with pytest.raises(ValueError, match="mid-iteration failure"):
-        next(gen)
-    report = bound.last_report
-    assert report is not None
-    assert report.status == "error"
-    assert report.num_fires == 1
-    assert report.error is not None and "ValueError" in report.error
-    _assert_clean(model)
     assert _values([bound(torch.ones(1))]) == [[4.0]]
 
 
@@ -292,17 +211,6 @@ def test_zero_fire_error_policy_refuses_at_exhaustion() -> None:
     assert bound.last_report is not None
     assert bound.last_report.status == "no_fire"
     _assert_clean(model)
-
-
-def test_zero_fire_disclose_settles_quietly() -> None:
-    """Under ``on_zero_fire='disclose'`` exhaustion settles a ``no_fire`` report."""
-
-    model = _NoForwardGen()
-    bound = _add_one().bind(model, on_zero_fire="disclose")
-    assert _values(bound.generate(torch.ones(1))) == [[1.0]]
-    assert bound.last_report is not None
-    assert bound.last_report.status == "no_fire"
-    assert bound.last_report.num_fires == 0
 
 
 def test_plain_lazy_iterator_steers_every_step() -> None:

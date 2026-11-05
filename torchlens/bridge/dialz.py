@@ -41,6 +41,17 @@ def from_direction(
         If dialz is unavailable.
     InvalidArgumentError
         ``direction_model_type_unknown`` when no model type is given or recorded.
+
+    Examples
+    --------
+    >>> # requires: dialz
+    >>> net = nn.Sequential(nn.Linear(4, 4)).eval()
+    >>> pos = tl.trace(net, torch.randn(3, 4))
+    >>> neg = tl.trace(net, torch.randn(3, 4))
+    >>> direction = tl.intervention.fit_direction(pos, neg, "linear", read_token_index=None)
+    >>> vector = tl.bridge.dialz.from_direction(direction, layer=1, model_type="tiny")
+    >>> list(vector.directions)
+    [1]
     """
 
     try:

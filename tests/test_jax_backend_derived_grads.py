@@ -25,7 +25,7 @@ jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
 
-pytestmark = pytest.mark.backend_jax
+pytestmark = [pytest.mark.backend_jax, pytest.mark.rare]
 
 
 def _params() -> dict[str, Any]:
@@ -473,7 +473,7 @@ def test_jax_derived_grads_are_not_backward_capture() -> None:
     )
 
     with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
-        trace.log_backward(cast(Any, trace[trace.output_layers[0]].out))
+        trace.backward(cast(Any, trace[trace.output_layers[0]].out))
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):

@@ -9,15 +9,16 @@ the load-validated embedded family.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import read_manifest, read_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
+from torchlens._io import ArtifactError
 from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
@@ -50,9 +51,9 @@ def _save(model: nn.Module, x: Any, path: Path, **save_kwargs: Any) -> Path:
 
 
 def _fresh_warning() -> bool:
-    import torchlens._io.bundle as bundle
+    from torchlens._io import _save_gates
 
-    return not bundle._NONPERSISTENT_DISCLOSURE_WARNED
+    return not _save_gates._NONPERSISTENT_DISCLOSURE_WARNED
 
 
 def _null():
@@ -77,30 +78,11 @@ def test_r35_mixed_buffer_original_run_attests(tmp_path: Path) -> None:
         include_weights=True,
         include_activations=True,
     )
-    result = tl.load(str(path)).run(inputs=x)
+    result = tl.load(str(path)).run_transaction(inputs=x)
     assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
     assert torch.equal(result.output, model(x))
-
-
-def test_r35_changed_persistent_state_is_not_applicable(tmp_path: Path) -> None:
-    """A changed persistent buffer keeps the eligibility partition honest."""
-
-    model = _MixedBufferModel().eval()
-    x = torch.tensor([1.0, 2.0, 3.0])
-    path = _save(
-        model,
-        x,
-        tmp_path / "changedstate.tlspec",
-        include_weights=True,
-        include_activations=True,
-    )
-    loaded = tl.load(str(path))
-    loaded.load_state_dict({"shift": torch.tensor([9.0, 9.0, 9.0])})
-    result = loaded.run(inputs=x)
-    assert result.report.state_source is StateSource.USER_STATE_DICT
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
 def test_r35_user_state_cannot_supply_nonpersistent_buffers(tmp_path: Path) -> None:
@@ -124,22 +106,23 @@ def test_r35_mandatory_family_presence_and_tamper_rejection(tmp_path: Path) -> N
     model = _MixedBufferModel().eval()
     x = torch.tensor([1.0, 2.0, 3.0])
     path = _save(model, x, tmp_path / "family.tlspec")
-    manifest = json.loads((path / "manifest.json").read_text())
-    layer = manifest["run"]["payload_layers"]["nonpersistent_buffers"]
+    manifest = read_manifest(path)
+    layer = read_runnable_descriptor(path)["payload_layers"]["nonpersistent_buffers"]
     assert layer == {"present": True, "schema": "runnable_nonpersistent_buffer_v1"}
-    entries = [
-        entry
-        for entry in manifest["tensors"]
-        if entry.get("kind") == "runnable_nonpersistent_buffer"
-    ]
-    assert [entry["label"] for entry in entries] == ["scale"]
+    family = manifest["runnable"]
+    assert family["buffers_family"] == "runnable_nonpersistent_buffer_v1"
+    assert list(family["buffers_tensors"]) == ["scale"]
+    reference = family["buffers_tensors"]["scale"]
+    assert reference["blob"] == family["buffers"]
+    assert reference["blob"] in manifest["files"]
     # Tamper the blob bytes: load must fail its checksum validation.
-    blob_path = path / entries[0]["relative_path"]
+    blob_path = path / reference["blob"]
     blob_bytes = bytearray(blob_path.read_bytes())
     blob_bytes[-1] ^= 0xFF
     blob_path.write_bytes(bytes(blob_bytes))
-    with pytest.raises(Exception, match="[Cc]hecksum|corrupt|mismatch"):
+    with pytest.raises(ArtifactError, match="SHA-256 differs") as caught:
         tl.load(str(path))
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
 def test_r35_unused_nonpersistent_buffer_needs_no_family(tmp_path: Path) -> None:
@@ -161,7 +144,9 @@ def test_r35_unused_nonpersistent_buffer_needs_no_family(tmp_path: Path) -> None
     )
     path = tmp_path / "unused.tlspec"
     trace.save(str(path), level="runnable")
-    manifest = json.loads((path / "manifest.json").read_text())
-    assert manifest["run"]["payload_layers"]["nonpersistent_buffers"]["present"] is False
-    result = tl.load(str(path)).run(inputs=x)
+    manifest = read_manifest(path)
+    descriptor = read_runnable_descriptor(path)
+    assert descriptor["payload_layers"]["nonpersistent_buffers"]["present"] is False
+    assert {"buffers", "buffers_family", "buffers_tensors"}.isdisjoint(manifest["runnable"])
+    result = tl.load(str(path)).run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

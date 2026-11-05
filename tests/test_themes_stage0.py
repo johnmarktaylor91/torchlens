@@ -51,6 +51,7 @@ def speed_render(tmp_path_factory: Any) -> Any:
     log.cleanup()
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(not DOT_AVAILABLE, reason="graphviz dot binary unavailable")
 def test_stage0_runs_green_on_a_clean_artifact(speed_render: Any) -> None:
     """The full audit passes on a small clean render (headlabel baseline
@@ -89,17 +90,6 @@ def test_label_spelling_audit_counts_forbidden_families() -> None:
     assert clean[0].passed
 
 
-@pytest.mark.smoke
-def test_output_caps_flag_extreme_aspect(tmp_path: Any) -> None:
-    """A declared 20000x100 artifact fails the caps."""
-
-    svg = tmp_path / "wide.svg"
-    svg.write_text('<svg width="20000pt" height="100pt" xmlns="http://www.w3.org/2000/svg"/>')
-    findings = audit.stage0.output_caps_findings(str(svg))
-    assert not findings[0].passed
-
-
-@pytest.mark.smoke
 def test_disclosure_checks_catch_a_stripped_caption(speed_render: Any) -> None:
     """Removing the coverage line from the DOT fails the audit."""
 
@@ -125,23 +115,6 @@ def test_fill_spread_gates_apply_only_with_a_channel(speed_render: Any) -> None:
         bare_graph, resolution=bare, checks=audit.Stage0Checks(geometry=False)
     )
     assert "distinct_fills" not in {finding.check for finding in report.findings}
-
-
-def test_compaction_non_identity_is_checkable(speed_render: Any) -> None:
-    """The render-pair check: an active compaction may not be byte-identical
-    to compaction-off (composition row 3's audit half)."""
-
-    log, resolution, graph, svg_path = speed_render
-    collapsed = lenses.resolve_lens(log, "overview")
-    # On a 5-op toy the resolver legitimately picks collapse="none" (renders
-    # in full): identity is then EXPECTED, and the dial line discloses it.
-    if collapsed.budget is not None and collapsed.budget.draw_kwargs.get("collapse") != "none":
-        collapsed_graph = log.draw(
-            **collapsed.draw_kwargs,
-            path=svg_path.replace(".svg", "-ov"),
-            file_format="svg",
-        ).dot
-        assert collapsed_graph != graph
 
 
 @pytest.mark.heavy

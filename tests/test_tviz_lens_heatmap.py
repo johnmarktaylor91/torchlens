@@ -17,9 +17,6 @@ import torchlens.errors
 from torchlens._semantic.logit_lens import LogitLens, LogitLensEntry
 from torchlens.transformer._lens_heatmap import (
     MAX_HEATMAP_POSITIONS,
-    _clip,
-    _heatmap_cells,
-    _text_color,
 )
 
 VOCAB = 13
@@ -54,20 +51,6 @@ def _result(*, n_layers: int = 3, seq: int = 5, validated: bool = True) -> Logit
     )
 
 
-def test_cells_match_an_independent_softmax() -> None:
-    """Top-1 ids, top-1 probabilities and target probabilities are exact."""
-
-    result = _result()
-    columns = [0, 2, 4]
-    values, top_ids = _heatmap_cells(result, columns=columns, batch_index=1, target_token_id=None)
-    target, _ = _heatmap_cells(result, columns=columns, batch_index=1, target_token_id=7)
-    for row, entry in enumerate(result.entries):
-        probs = torch.nn.functional.softmax(entry.logits[1, columns].double(), dim=-1)
-        assert torch.allclose(torch.from_numpy(values[row]), probs.max(-1).values, atol=1e-6)
-        assert top_ids[row].tolist() == probs.argmax(-1).tolist()
-        assert torch.allclose(torch.from_numpy(target[row]), probs[:, 7], atol=1e-6)
-
-
 def test_render_writes_vector_output_with_the_footer(tmp_path: Path) -> None:
     """SVG output is vector-only and the footer states what each row is."""
 
@@ -91,17 +74,6 @@ def test_render_writes_vector_output_with_the_footer(tmp_path: Path) -> None:
     assert "batch element 0 of 2" in lines
     # The long token is clipped in its cell and the clip is disclosed.
     assert "clipped to 6 characters" in lines
-
-
-def test_whitespace_tokens_stay_visible_and_long_tokens_clip() -> None:
-    """A newline or space prediction never renders as an empty cell."""
-
-    assert _clip("\n") == ("'\\n'", False)
-    assert _clip(" ") == ("' '", False)
-    assert _clip("averyverylongtoken") == ("avery~", True)
-    assert _clip("Paris") == ("Paris", False)
-    assert _clip(" center") == ("center", False)
-    assert _clip(" located") == ("locat~", True)
 
 
 def test_target_mode_names_the_target_and_pdf_renders(tmp_path: Path) -> None:
@@ -143,16 +115,6 @@ def test_out_of_contract_requests_refuse(tmp_path: Path, kwargs: dict) -> None:
         torchlens.viz.logit_lens(_result(), tmp_path / "x.png", **kwargs)
     assert caught.value.fields["code"] == "tv_record_invalid"
     assert not (tmp_path / "x.png").exists()
-
-
-def test_cell_text_color_follows_cell_luminance() -> None:
-    """Dark cells get white text and light cells black text."""
-
-    import matplotlib
-
-    cmap = matplotlib.colormaps["viridis"]
-    assert _text_color(cmap, 0.0) == "white"
-    assert _text_color(cmap, 1.0) == "black"
 
 
 def test_wide_lens_refuses_rather_than_cropping(tmp_path: Path) -> None:

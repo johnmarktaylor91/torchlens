@@ -48,25 +48,6 @@ class _RecordingWriter:
         self.flushed = True
 
 
-def test_tensorboard_writes_layer_count_memory_and_model_name() -> None:
-    """tensorboard() emits the documented scalar/text summaries to any writer."""
-
-    log = _small_trace()
-    writer = _RecordingWriter()
-
-    returned = tl.export.tensorboard(log, writer, step=7, prefix="tlx")
-
-    assert returned is writer
-    assert writer.scalars["tlx/num_layers"] == (len(log._layer_list), 7)
-    memory_value, memory_step = writer.scalars["tlx/total_activation_memory"]
-    assert memory_step == 7
-    assert memory_value == int(log.cost.total_activation_memory or 0)
-    text_value, text_step = writer.texts["tlx/model_class_name"]
-    assert text_step == 7
-    assert text_value == str(log.source.class_name)
-    assert writer.flushed
-
-
 def test_tracker_exports_reject_objects_without_required_method() -> None:
     """A tracker object missing its required method fails with a clear TypeError."""
 
@@ -217,6 +198,41 @@ def test_wandb_builds_scalar_safe_table_and_logs_to_run(
             assert cell is None or isinstance(cell, primitive)
 
 
+def test_wandb_table_cells_stay_primitive_for_nullable_missing_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing cells of nullable columns reach the W&B table as ``None``, never ``pd.NA``."""
+
+    log = _small_trace()
+    rows = len(log._layer_list)
+    nullable = pd.DataFrame(
+        {
+            "count": pd.array([None] + [1] * (rows - 1), dtype="Int64"),
+            "flag": pd.array([None] + [True] * (rows - 1), dtype="boolean"),
+            "name": pd.array([None] + ["x"] * (rows - 1), dtype="string"),
+        }
+    )
+    monkeypatch.setattr(type(log), "to_pandas", lambda self: nullable)
+    built: list[Any] = []
+
+    class _Table:
+        def __init__(self, dataframe: Any) -> None:
+            self.dataframe = dataframe
+            built.append(self)
+
+    monkeypatch.setitem(sys.modules, "wandb", SimpleNamespace(Table=_Table, run=None))
+
+    tl.export.wandb(log)
+
+    dataframe = built[0].dataframe
+    assert list(dataframe.columns) == ["count", "flag", "name"]
+    assert [dataframe[column].iloc[0] for column in dataframe.columns] == [None, None, None]
+    assert [dataframe[column].iloc[1] for column in dataframe.columns] == [1, True, "x"]
+    for column in dataframe.columns:
+        for cell in dataframe[column]:
+            assert cell is None or isinstance(cell, (str, int, float, bool))
+
+
 def test_wandb_names_extra_when_dependency_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -264,7 +280,6 @@ def _stub_xarray(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     return captured
 
 
-@pytest.mark.smoke
 def test_xarray_flattens_scalar_vector_and_matrix_outs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -338,7 +353,6 @@ def test_xarray_exports_buffers_as_module_state_variables(
         assert variable.attrs["layer_label"] == variable.name
 
 
-@pytest.mark.smoke
 def test_xarray_rejects_mismatched_presentation_counts_and_empty_logs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

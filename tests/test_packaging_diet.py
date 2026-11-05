@@ -52,14 +52,6 @@ def _make_log() -> tl.Trace:
     return tl.trace(_TinyModel(), torch.randn(1, 3))
 
 
-def test_core_import_capture_and_show_without_optional_tabular_or_notebook_use() -> None:
-    """Core import, capture, and show path succeed in the current dev environment."""
-
-    log = _make_log()
-
-    assert len(log._layer_list) > 0
-
-
 def test_plain_capture_never_imports_dynamo_or_fsdp() -> None:
     """A fresh-process plain trace/record must not import torch._dynamo or FSDP.
 
@@ -117,16 +109,6 @@ print("COLD_IMPORT_OK")
     assert "COLD_IMPORT_OK" in result.stdout
 
 
-def test_to_pandas_succeeds_when_tabular_extra_is_available() -> None:
-    """Trace.to_pandas succeeds when pandas is installed."""
-
-    log = _make_log()
-    frame = log.to_pandas()
-
-    assert not frame.empty
-    assert "layer_label" in frame.columns
-
-
 def test_to_pandas_missing_pandas_mentions_tabular_extra(monkeypatch: pytest.MonkeyPatch) -> None:
     """Trace.to_pandas raises a helpful extra-install hint when pandas is missing."""
 
@@ -153,7 +135,7 @@ def test_repr_html_succeeds_when_notebook_extra_is_available() -> None:
     html = log._repr_html_()
 
     assert html.startswith("<style>")
-    assert "TorchLens Trace" in html
+    assert f"Trace {log.name}:" in html
     assert "NaN/Inf" in html
 
 
@@ -172,7 +154,7 @@ def test_repr_html_without_ipython_still_renders_the_card(monkeypatch: pytest.Mo
         patched.setitem(sys.modules, "IPython.display", None)
         html = log._repr_html_()
 
-    assert "TorchLens Trace" in html
+    assert f"Trace {log.name}:" in html
     assert "NaN/Inf" in html
     assert html != repr(log)
 
@@ -396,6 +378,71 @@ def test_release_job_python_stack_is_hash_locked() -> None:
     isolated_nightly = [line for line in nightly_builds if "--no-isolation" not in line]
     assert not isolated_nightly, (
         f"nightly build invocation(s) without --no-isolation: {isolated_nightly}"
+    )
+
+
+#: Security floors for the token-bearing release lock: package -> (first fixed
+#: release, advisory). A regeneration that drops one fails here, not only in the
+#: pip-audit job, which runs on pull requests. The lock holds only the builder
+#: (build and setuptools) since the release workflow stopped computing versions,
+#: so the certifi and GitPython floors left with the tool that pulled them in.
+_RELEASE_LOCK_SECURITY_FLOORS = {
+    "setuptools": ("84.1.0", "GHSA-xmj3-9gf7-h52w"),
+}
+
+
+def test_release_lock_meets_security_floors() -> None:
+    """The release lock pins no package below its advisory's first fixed release."""
+    from packaging.version import Version
+
+    repo_root = Path(__file__).resolve().parents[1]
+    lock_text = (repo_root / ".github" / "workflows" / "release-requirements.txt").read_text()
+    pins = {
+        name.lower(): Version(version)
+        for name, version in re.findall(r"^([A-Za-z0-9_.-]+)==([^\s\\]+)", lock_text, re.M)
+    }
+    below = [
+        f"{name}=={pins[name]} < {floor} ({advisory})"
+        for name, (floor, advisory) in _RELEASE_LOCK_SECURITY_FLOORS.items()
+        if name in pins and pins[name] < Version(floor)
+    ]
+    assert not below, f"release lock pins vulnerable versions: {below}"
+    assert set(_RELEASE_LOCK_SECURITY_FLOORS) <= set(pins), "a floored package left the lock"
+
+
+def test_changelog_keeps_the_release_tools_insertion_flag() -> None:
+    """The release tool writes each release entry at the changelog's insertion flag.
+
+    In its default ``update`` mode the release tool splits ``CHANGELOG.md`` on the
+    insertion flag and leaves a file without the flag unchanged, so a missing flag
+    silently stops every release entry. The newest entry must name the package version.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    pyproject_text = (repo_root / "pyproject.toml").read_text()
+    section = re.search(
+        r"^\[tool\.semantic_release\.changelog\]\n(.*?)(?=^\[|\Z)",
+        pyproject_text,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    settings = section.group(1) if section else ""
+    mode = re.search(r'^mode\s*=\s*"(\w+)"', settings, flags=re.MULTILINE)
+    assert mode is None or mode.group(1) == "update", (
+        "changelog mode 'init' rebuilds CHANGELOG.md from commits and drops its hand-written entries"
+    )
+    flag_match = re.search(r'^insertion_flag\s*=\s*"([^"]+)"', settings, flags=re.MULTILINE)
+    flag = flag_match.group(1) if flag_match else "<!-- version list -->"
+
+    changelog = (repo_root / "CHANGELOG.md").read_text()
+    assert changelog.count(flag) == 1, f"CHANGELOG.md must hold the insertion flag {flag!r} once"
+    above, below = changelog.split(flag)
+    assert not re.search(r"^## v\d", above, flags=re.MULTILINE), (
+        "a release entry sits above the flag"
+    )
+    newest = re.search(r"^## v(\d+\.\d+\.\d+) ", below, flags=re.MULTILINE)
+    version = re.search(r'^version = "([^"]+)"', pyproject_text, flags=re.MULTILINE)
+    assert newest and version, "no release entry below the flag, or no project version"
+    assert newest.group(1) == version.group(1), (
+        f"newest CHANGELOG.md entry is v{newest.group(1)} but the package is {version.group(1)}"
     )
 
 

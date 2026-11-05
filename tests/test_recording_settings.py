@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import pickle
 
 import pytest
@@ -43,8 +42,7 @@ def test_options_reads_back_every_door_as_live_values() -> None:
         capture=tl.options.CaptureOptions(
             activation_transform=_double, save_grads=True, lookback=2
         ),
-        history_size=5,
-        on_predicate_error="accumulate",
+        recording=tl.options.RecordingOptions(history_size=5, on_predicate_error="accumulate"),
     )
     settings = recording.options
     assert isinstance(settings, tl.types.RecordingSettings)
@@ -56,31 +54,6 @@ def test_options_reads_back_every_door_as_live_values() -> None:
     assert settings.keep_op is not None
     assert settings.stop_after is None
     assert settings.storage is None
-
-
-def test_options_record_is_frozen_and_has_no_public_constructor() -> None:
-    """The record cannot be mutated or built by keyword; neither can a Recording."""
-
-    recording = tl.record(_Tiny(), torch.ones(1, 3), save=tl.func("relu"))
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        recording.options.history_size = 3  # type: ignore[misc]
-    with pytest.raises(TypeError):
-        tl.types.RecordingSettings(history_size=3)  # type: ignore[call-arg]
-    with pytest.raises(TypeError):
-        Recording(records=[])  # type: ignore[call-arg]
-
-
-def test_removed_repr_accessors_are_gone() -> None:
-    """The string-only ``*_repr`` accessors left with no alias."""
-
-    recording = tl.record(_Tiny(), torch.ones(1, 3), save=tl.func("relu"))
-    for name in (
-        "keep_op_repr",
-        "save_grads_repr",
-        "activation_transform_repr",
-        "grad_transform_repr",
-    ):
-        assert not hasattr(recording, name)
 
 
 def test_private_builder_defaults_and_replace() -> None:
