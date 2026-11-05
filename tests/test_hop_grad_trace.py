@@ -518,6 +518,50 @@ def _plant_over_broad_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(wrappers, "inside_tracing_tensor_pass", over_broad_guard)
 
 
+def _plant_unpaused_drop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plant the over-broad guard and run the calls it swallows unpaused.
+
+    A real tracing-pass call runs paused, so the witness never counts it. A
+    wrapper that skips logging a model op does not pause, so the witness sees
+    that op's aten call with nothing logged for it: the drop the census exists
+    to name.
+
+    Parameters
+    ----------
+    monkeypatch:
+        The test's monkeypatch; every patch is undone at teardown.
+    """
+
+    _plant_over_broad_guard(monkeypatch)
+    real_call = wrappers.call_inside_tracing_pass
+
+    def unpaused_call(
+        func: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> Any:
+        """Run a planted call unpaused and unlogged, and any other call as before.
+
+        Parameters
+        ----------
+        func:
+            The original torch callable.
+        args:
+            Positional arguments of the call.
+        kwargs:
+            Keyword arguments of the call.
+
+        Returns
+        -------
+        Any
+            Whatever ``func`` returns.
+        """
+
+        if any(isinstance(arg, float) and arg == 2.0 for arg in args):
+            return func(*args, **kwargs)
+        return real_call(func, args, kwargs)
+
+    monkeypatch.setattr(wrappers, "call_inside_tracing_pass", unpaused_call)
+
+
 @pytest.mark.parametrize("name", sorted(_LOOP_CASES))
 def test_loop_hop_grad_trace_with_an_over_broad_guard_fails_validation(
     name: str, monkeypatch: pytest.MonkeyPatch
