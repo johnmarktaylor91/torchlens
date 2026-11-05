@@ -15,6 +15,7 @@ slot gets no proof; plain eager capture is unaffected.
 from __future__ import annotations
 
 import warnings
+from typing import Optional
 
 import pytest
 import torch
@@ -353,8 +354,9 @@ def size_then_tuple_value(x: torch.Tensor, pair: tuple[torch.Tensor, int]) -> to
     return pair[0] * x.size(-1)
 
 
+# Optional, not `X | None`: torch 2.1's TorchScript rejects PEP 604 unions.
 @torch.jit.script
-def size_then_optional_value(x: torch.Tensor, y: torch.Tensor | None) -> torch.Tensor:
+def size_then_optional_value(x: torch.Tensor, y: Optional[torch.Tensor]) -> torch.Tensor:  # noqa: UP045
     """``x`` is read for its size; the optional argument is read for values."""
 
     if y is None:

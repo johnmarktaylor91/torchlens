@@ -80,4 +80,4 @@ and how many lack a runnable `Examples` section. Regenerate with
 | viz | 14 | 0 |
 | **total** | **1062** | **0** |
 
-Public callable members of those classes (methods and properties): 1497.
+Public callable members of those classes (methods and properties): 1498.

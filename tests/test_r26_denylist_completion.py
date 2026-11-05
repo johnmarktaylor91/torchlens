@@ -39,6 +39,7 @@ import torchlens.intervention._resolver_registry as _resolver
 from torchlens._io import _safe_unpickle
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._utils._callable_safety import is_pure_forward_callable
+from torchlens._utils._torch_compat import get_tensorbase_class
 from torchlens.intervention._resolver_registry import resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
 
@@ -177,7 +178,7 @@ def test_explicit_name_list_alone_denies_code_running_callables(owner: object, n
         resolve_import_ref(f"{owner_path}:{name}", trust_custom_callables=True)
     if name in _CALLABLE_RUNNER_NAMES:
         with pytest.raises(pickle.UnpicklingError, match="side-effecting"):
-            _safe_unpickle._safe_getattr(torch._C.TensorBase, name)
+            _safe_unpickle._safe_getattr(get_tensorbase_class(), name)
 
 
 # --------------------------------------------------------------------------- #
