@@ -13,11 +13,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from _validation_capture import _capture
+from _validation_capture import _capture, _quiet_validate
 
+from torchlens.validation import last_validation_failure
 from torchlens.validation._core import _check_whether_func_on_saved_parents_yields_saved_tensor
 from torchlens.validation._degenerate_domains import (
     _check_index_domain_degenerate,
@@ -365,3 +367,26 @@ def test_setitem_empty_mask_proof_refuses_other_slots_and_forged_outputs() -> No
     assert setitem_empty_mask_value_decision(layer, {2}, (destination, ~mask, args[2])) is None
     forged = SimpleNamespace(out=destination + 1.0)
     assert setitem_empty_mask_value_decision(forged, {2}, args) is None
+
+
+@pytest.mark.smoke
+def test_degenerate_domain_models_validate_on_the_public_path() -> None:
+    """Models whose argument has a one-value domain validate end to end through ``validate_forward_pass``.
+
+    Index-add into one row, a mask over an empty scatter source, the target
+    length of a CTC batch of one, an argsort over one element and a write under
+    an all-False mask each leave the output unchanged under perturbation;
+    without the degenerate-domain checks these models fail as
+    perturbation-insensitive.
+    """
+
+    cases = (
+        (_PoolIntoRows(graphs=1), _NODES),
+        (_ScatterIntoMask(empty_source=True), _NODES),
+        (_CtcHead((3,)), torch.randn(1, 6, 4)),
+        (_RankFeatures(), _NODES[:, :1]),
+        (_MaskedWrite(threshold=100.0), _NODES),
+    )
+    torch.manual_seed(0)
+    for model, x in cases:
+        assert _quiet_validate(model, x), (type(model).__name__, last_validation_failure())

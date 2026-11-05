@@ -16,8 +16,9 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
-from _validation_capture import _capture
+from _validation_capture import _capture, _quiet_validate
 
+from torchlens.validation import last_validation_failure
 from torchlens.validation._core import _check_whether_func_on_saved_parents_yields_saved_tensor
 from torchlens.validation._unread_value_proofs import unread_value_proof_decision
 
@@ -328,3 +329,32 @@ def test_deform_conv2d_unused_mask_planted_bug_fails() -> None:
     _freeze(op, op.out.detach().clone())
     _assert_insensitive(_perturb(trace, op, 3))
     assert not unread_value_proof_decision(op, {2}, op.call.saved_args).exempt
+
+
+def _assert_validates(model: nn.Module, x: torch.Tensor) -> None:
+    assert _quiet_validate(model, x), (type(model).__name__, last_validation_failure())
+
+
+@pytest.mark.smoke
+def test_setitem_unread_writes_validate_on_the_public_path() -> None:
+    """Models whose index write is proved dead validate end to end through ``validate_forward_pass``.
+
+    The row index of an empty masked write and the column index of a write
+    into cells that already hold the value change nothing under perturbation;
+    without the setitem proofs both models fail as perturbation-insensitive.
+    """
+
+    torch.manual_seed(0)
+    _assert_validates(_MaskedRowWrite(threshold=100.0), torch.randn(4, 5))
+    _assert_validates(_ZeroMemoryWrite(held_elsewhere=False), _held_input())
+
+
+@pytest.mark.smoke
+def test_unread_operand_models_validate_on_the_public_path() -> None:
+    """Clamp, spmm, masked_scatter and embedding_bag models with unread operands validate end to end."""
+
+    torch.manual_seed(0)
+    _assert_validates(_Clamp(1, 1), torch.randn(8, 1))
+    _assert_validates(_SparseTimesDense(nnz=0), torch.randn(3, 4))
+    _assert_validates(_MaskedScatter(threshold=-100.0), torch.tensor([[1.0, -1.0, 2.0, -2.0]]))
+    _assert_validates(_Bags("sum"), _BAG_IDS)

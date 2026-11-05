@@ -196,7 +196,6 @@ class _TensorLiteralOutputModel(nn.Module):
 # =============================================================================
 
 
-@pytest.mark.smoke
 def test_validation_import_path():
     """The removed validate_saved_outs alias no longer imports."""
     with pytest.raises(ImportError):
@@ -1079,7 +1078,6 @@ def _cast_layer(source: torch.Tensor, target: object) -> SimpleNamespace:
     )
 
 
-@pytest.mark.smoke
 def test_posthoc_integer_cast_quantization_is_exempt_only_for_float_to_int() -> None:
     """Float->int cast insensitivity is quantization; other casts stay strict.
 
@@ -1106,7 +1104,6 @@ def test_posthoc_integer_cast_quantization_is_exempt_only_for_float_to_int() -> 
     assert int_to_int.exempt is False
 
 
-@pytest.mark.smoke
 def test_pure_out_kwarg_destination_perturbation_is_exempt_only_when_pure() -> None:
     """A parent occupying ONLY kwargs['out'] is exempt; mixed positions stay strict.
 
