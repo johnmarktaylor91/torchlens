@@ -44,7 +44,9 @@ wrong parent tag, or a value changed in place after it was saved) never matches,
 so the argument keeps its copy and every check that compares the two still sees
 the difference. The parent's saved output is TorchLens's own copy; its version
 is recorded with the parameters' and checked at the same two points, with the
-same clone-path rerun on any change.
+same clone-path rerun on any change. A digest of each alias's bytes is also
+taken when it is made and compared before replay, so a write that skips the
+version counter (through ``.data``, or into the storage) reruns the same way.
 """
 
 from __future__ import annotations
@@ -53,6 +55,7 @@ import contextlib
 import dataclasses
 import functools
 import gc
+import hashlib
 from collections.abc import Callable, Iterator
 from contextvars import ContextVar
 from typing import Any, cast
@@ -60,6 +63,7 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from ._state import pause_logging
 from ._utils import tensor_utils as _tensor_utils
 from ._utils._internal_read import internal_scalar_read
 from ._utils._tensor_label import get_tensor_label, set_tensor_label
@@ -137,6 +141,7 @@ class ParameterArgumentReferences:
         self._offload_device = None if offload_device is None else torch.device(offload_device)
         self._alias_saved_values = alias_saved_values
         self._value_aliases: dict[int, tuple[torch.Tensor, int, str]] = {}
+        self._value_digests: dict[int, bytes] = {}
         self._versions: dict[int, tuple[torch.Tensor, int, str]] = {}
         self._owners_seen: dict[int, tuple[str, nn.Parameter]] = {}
         self._first_change: str | None = None
@@ -195,11 +200,26 @@ class ParameterArgumentReferences:
         requires grad exactly when the copy would, and is then a non-leaf with
         an identity gradient edge; it carries the argument's capture label. Its
         version, shared with the parent's saved output, is recorded and checked
-        by :meth:`first_change`. Callers hold ``pause_logging``.
+        by :meth:`first_change`, and a digest of its bytes by
+        :meth:`first_digest_change`. Callers hold ``pause_logging``.
+
+        This runs inside the model's forward: any exception raised while
+        deciding or building the alias is not the model's, so it is dropped and
+        the argument is copied as on the copy path (the alias is fail-closed).
         """
 
         if not self._alias_saved_values:
             return None
+        try:
+            return self._build_value_alias(tensor, saved_value, parent_label)
+        except Exception:  # noqa: BLE001 - fail closed to the copy path, see docstring
+            return None
+
+    def _build_value_alias(
+        self, tensor: torch.Tensor, saved_value: Any, parent_label: str
+    ) -> torch.Tensor | None:
+        """Decide and build one :meth:`value_alias`; may raise on exotic tensors."""
+
         target = self.retention_device(tensor)
         with internal_scalar_read():
             if not _value_alias_eligible(tensor, saved_value, target or tensor.device):
@@ -209,6 +229,7 @@ class ParameterArgumentReferences:
             consumed = tensor if target is None else _detached_on(tensor, target)
             if not _same_bits(consumed, saved_value):
                 return None
+            digest = _value_digest(saved_value)
         alias = _alias_like_copy(tensor, saved_value)
         if alias is None:
             return None
@@ -218,6 +239,7 @@ class ParameterArgumentReferences:
         if target is not None:
             setattr(alias, CONSUMED_DEVICE_ATTR, tensor.device)
         self._value_aliases[id(alias)] = (alias, alias._version, parent_label)
+        self._value_digests[id(alias)] = digest
         return alias
 
     def is_value_alias(self, tensor: torch.Tensor) -> bool:
@@ -316,6 +338,24 @@ class ParameterArgumentReferences:
                 )
         return None
 
+    def first_digest_change(self) -> str | None:
+        """Name the first saved-value alias whose bytes no longer match their capture digest.
+
+        A write that does not move the version counter (through ``.data``, or
+        straight into the storage) would change an alias and its parent's saved
+        output together, so the argument check could no longer see it: the
+        digest taken when the alias was made catches it instead.
+        """
+
+        with pause_logging(), internal_scalar_read():
+            for key, (alias, _, parent_label) in self._value_aliases.items():
+                if _value_digest(alias) != self._value_digests[key]:
+                    return (
+                        f"the saved output of {parent_label!r}, kept by reference as an "
+                        "argument, changed bytes without a version change"
+                    )
+        return None
+
     def first_value_change(self, snapshot: Any) -> str | None:
         """Name the first referenced parameter whose bytes differ from ``snapshot``.
 
@@ -356,6 +396,8 @@ class ParameterArgumentReferences:
         change = self.first_change()
         if change is None and snapshot is not None:
             change = self.first_value_change(snapshot)
+        if change is None and trace is not None:
+            change = self.first_digest_change()
         if change is not None:
             raise _ParameterArgumentChanged(change)
 
@@ -438,6 +480,14 @@ def _alias_like_copy(tensor: torch.Tensor, saved_value: torch.Tensor) -> torch.T
     if not saved_value.requires_grad:
         return None
     return _tensor_utils._mint_graph_connected_alias(saved_value)
+
+
+def _value_digest(tensor: torch.Tensor) -> bytes:
+    """Return a digest of a dense tensor's bytes (read in place on the CPU)."""
+
+    with torch.no_grad():
+        flat = tensor.detach().reshape(-1).cpu().contiguous()
+        return hashlib.blake2b(flat_byte_view(flat).numpy(), digest_size=16).digest()
 
 
 def _same_bits(tensor: torch.Tensor, saved_value: torch.Tensor) -> bool:
