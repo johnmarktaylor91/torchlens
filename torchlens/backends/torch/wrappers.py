@@ -62,6 +62,7 @@ from ..._utils.tensor_utils import (
     materialize_deferred_for_call,
     print_override,
 )
+from . import _tracing_pass
 from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from ._completeness_boundaries import completeness_scope_for_wrapper
 from ._completeness_cross_thread import (
@@ -82,7 +83,7 @@ from ._function_boundary import (
     print_funcs,
     unlogged_wrapper_name,
 )
-from ._logged_arguments import logged_args
+from ._logged_arguments import logged_args, logged_receiver_output
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
@@ -1186,21 +1187,21 @@ def torch_func_decorator(
     @wraps(func)
     def wrapped_func(*args: Any, **kwargs: Any) -> Any:
         """Dispatch a decorated torch callable through the logging gate."""
+        # Dynamo tracing a lifted operator entry compile sees data-free values (_tracing_pass).
+        if _tracing_pass.hop_compile_depth and _tracing_pass.inside_hop_internal_compile():
+            return func(*args, **kwargs)
         # Ordered call fingerprint, counted identically with and without capture
         # (unpaused owner-thread calls only; see ``_state.CallFingerprint``).
         fingerprint = _state._call_fingerprint
         if fingerprint is not None and fingerprint_token is not None:
             fingerprint.note(fingerprint_token)
         # ---- Fast path ----
-        # When logging is off, pass through with minimal overhead.
-        # DeviceContext injection is still needed even when not logging,
-        # because the user's model may rely on torch.device('meta') context.
-        # r43 hon2_4: op-logging is OWNER-thread-scoped. A NON-owner thread running torch ops
-        # during a capture (a worker formatting ``str(tensor)``, a DataLoader thread) must NOT
-        # be logged into the owner's Trace -- doing so tags its temporaries with capture labels
-        # (a false cross-thread ceiling) and corrupts owner-op attribution (an observed crash).
-        # Cross-thread tensor->host escapes are still observed by the mode-independent belt
-        # (tensor-method patches), which is independent of this wrapper.
+        # When logging is off, pass through with minimal overhead; DeviceContext injection
+        # is still needed, because the user's model may rely on torch.device('meta') context.
+        # r43 hon2_4: op-logging is OWNER-thread-scoped. A NON-owner thread's torch ops during a
+        # capture (``str(tensor)`` in a worker, a DataLoader thread) are never logged into the
+        # owner's Trace (false cross-thread ceiling, corrupt owner-op attribution, a crash);
+        # cross-thread tensor->host escapes are still seen by the tensor-method belt.
         if not _state._logging_enabled:
             # Deferred payload clones: pending aliases stay zero-copy for the process lifetime,
             # so the fast path carries the SAME pre-execution interception as the logging path:
@@ -1256,8 +1257,7 @@ def torch_func_decorator(
         if needs_device_injection:
             kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
 
-        # A higher-order op's Autograd kernel fake-traces its branches before the
-        # eager run that is recorded; that pass is not the model's (_tracing_pass).
+        # A HOP Autograd kernel's fake-tensor pass over its branches is not the model's.
         if inside_tracing_tensor_pass(args, kwargs):
             return call_inside_tracing_pass(func, args, kwargs)
         # Skip logging inside vmap/functorch transforms — internal TorchLens
@@ -1513,17 +1513,11 @@ def torch_func_decorator(
             # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.
             _adopt_minted_parameter_label(trace, out_orig, args)
 
-        # __setitem__, zero_, __delitem__ modify in-place and return None;
-        # treat the first arg (the modified tensor) as the output. Mutating
-        # property setters (``t.real = rhs`` and friends, round-31 M6) have the
-        # exact same shape: real dataflow, ``None`` return, mutated receiver.
-        if reconstructs_receiver_output or (
-            is_mutating_property_setter
-            and out_orig is None
-            and len(args) > 0
-            and isinstance(args[0], torch.Tensor)
-        ):
-            out_orig = args[0]
+        # A receiver-mutating call that returns ``None`` (or always, for __setitem__,
+        # zero_, __delitem__) logs its mutated receiver(s) as the output.
+        out_orig = logged_receiver_output(
+            out_orig, args, func_name, reconstructs_receiver_output, is_mutating_property_setter
+        )
 
         # ---- In-place detection and safe copy ----
         same_object_returned = len(args) > 0 and id(out_orig) == id(args[0])

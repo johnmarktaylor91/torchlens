@@ -22,6 +22,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from ..._utils._hop_entry_compile import compile_disabled
 from ..._utils._torch_compat import (
     get_cond_witness_operator,
     get_higher_order_eager_kernel,
@@ -259,7 +260,9 @@ def register_witness_hop_rules(mode_type: type[_TorchLensDispatchMode]) -> tuple
     rules = _witness_hop_rules()
     for op, rule in rules:
         if mode_type not in witness_rule_table(op):
-            op.py_impl(mode_type)(rule)
+            # The operator pops the mode before the rule; inside a lifted entry compile
+            # Dynamo would otherwise trace the rule's ``with mode:`` (_tracing_pass).
+            op.py_impl(mode_type)(compile_disabled(rule))
         registered.append(str(op.name()))
     unresolved = len(rules) < 2 + len(_DENSE_UNDER_MODE)
     mode_type._hop_rules_pending = register_witness_hop_rules if unresolved else None

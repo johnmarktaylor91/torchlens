@@ -33,7 +33,6 @@ import types
 import warnings
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from typing import Any
 
 import torch
@@ -42,6 +41,7 @@ from ... import _state
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._utils import _torch_compat
 from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ._boundary_types import BoundaryMarks, BoundarySpec, _BoundaryCall
 from ._foreign_data import (
     FOREIGN_DATA_EXPORT_WRAPPER_NAME,
     FOREIGN_DATA_FUNC_NAME,
@@ -49,6 +49,7 @@ from ._foreign_data import (
     known_foreign_kernel_exits,
     note_plain_export,
 )
+from ._function_input_views import log_native_input_views, own_view_dispatch
 
 FOREIGN_FUNCTION_FUNC_NAME = "autogradfunction"
 """Op type / func name of the boundary op."""
@@ -459,42 +460,6 @@ def _make_replay_callable(
     return autogradfunction
 
 
-@dataclass(frozen=True)
-class BoundarySpec:
-    """What a boundary op is: its callable, op type, census owner token and source."""
-
-    replay: Callable[..., Any]
-    func_name: str
-    wrapper_name: str
-    original: Any
-
-
-@dataclass(frozen=True)
-class _BoundaryCall:
-    """One collapsed call, ready to be logged as its boundary op."""
-
-    spec: BoundarySpec
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
-    out: Any
-    exec_ctx: FuncExecutionContext
-    func_call_id: int
-
-
-@dataclass(frozen=True)
-class BoundaryMarks:
-    """Journal, census and context marks taken just before a boundary call runs."""
-
-    op_events: list[Any] | None
-    journal_mark: int
-    witness_state: Any | None
-    witness_mark: int
-    capture_start_time: float
-    rng_states: dict[str, Any]
-    autocast_state: Any
-    arg_labels: list[tuple[Any, str | None]]
-
-
 def _reown_witness_events(
     state: Any,
     start: int,
@@ -710,6 +675,21 @@ def close_boundary_call(
     return True
 
 
+def _log_input_view(
+    trace: Any, view_as: Any, source: Any, output: Any, marks: BoundaryMarks
+) -> None:
+    """Log one view torch made in C++ as ``view_as``; that op owns its ``aten.view`` dispatch."""
+
+    spec = BoundarySpec(
+        replay=view_as, func_name="view_as", wrapper_name="view_as", original=view_as
+    )
+    ctx = FuncExecutionContext(time_elapsed=0.0, rng_states={}, autocast_state=marks.autocast_state)
+    call = _BoundaryCall(spec, (source, source), {}, output, ctx, _state.next_func_call_id())
+    _log_boundary_op(trace, call)
+    token = _accounted_boundary_token(view_as, "view_as", "view_as", call.func_call_id)
+    own_view_dispatch(marks.witness_state, marks.witness_mark, token)
+
+
 def record_function_apply(
     trace: Any,
     cls: type[Any],
@@ -753,13 +733,13 @@ def record_function_apply(
             _FRAMES.pop()
         elif frame_exports in _FRAMES:
             _FRAMES.remove(frame_exports)
-
-    if marks.op_events is None:
-        return out
-    collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
-    host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
-    exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
+    exits: tuple[str, ...] = ()
+    if marks.op_events is not None:
+        collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
+        host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
+        exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
     if not exits:
+        log_native_input_views(trace, args, out, marks, _log_input_view)
         return out
     spec = BoundarySpec(
         replay=_make_replay_callable(cls, original_function, exits),
