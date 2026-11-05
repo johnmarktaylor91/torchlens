@@ -159,9 +159,9 @@ def _build_shared_fields_dict(
 
     # Non-tensor args (metadata, equivalence hashing) are op-time snapshots.
     non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
-    parent_layer_labels = get_live_label_list(
-        arg_tensors, self.capture_events.live_index.by_raw_label
-    )
+    # One entry per distinct parent: a repeat's multiplicity is its parent_arg_positions.
+    live_labels = get_live_label_list(arg_tensors, self.capture_events.live_index.by_raw_label)
+    parent_layer_labels = list(dict.fromkeys(live_labels))
     parent_layer_entries = [
         cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
         for label in parent_layer_labels
