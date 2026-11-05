@@ -69,8 +69,43 @@ def hop_compile_stance_lift_scope(
         yield False
         return
     original, original_env = entries
-    copies: dict[Any, Any] = {}
     cond_calls: list[_CondCall | None] = []
+    lifted = _lifted_entry(original, around, cond_calls, cond_branches=original_env is not None)
+    env = None if original_env is None else _branch_callback_env(original_env, cond_calls)
+    swap_hop_entry_compile(lifted, env)
+    try:
+        yield True
+    finally:
+        swap_hop_entry_compile(original, original_env)
+
+
+def _lifted_entry(
+    original: Callable[..., Any],
+    around: Callable[[bool], contextlib.AbstractContextManager[Any]],
+    cond_calls: list[_CondCall | None],
+    *,
+    cond_branches: bool,
+) -> Callable[..., Any]:
+    """Return the replacement for torch's operator entry compile in one lift scope.
+
+    Parameters
+    ----------
+    original:
+        torch's entry compile.
+    around:
+        Context factory entered for each lifted compile, given ``cond_branches``.
+    cond_calls:
+        The scope's stack of active entries; a ``cond`` entry pushes its call.
+    cond_branches:
+        Whether a ``cond`` entry's real run may call the user's own branches.
+
+    Returns
+    -------
+    Callable[..., Any]
+        The lifted entry compile.
+    """
+
+    copies: dict[Any, Any] = {}
 
     def _lifted(fn: Any, args: Any, kwargs: Any = None) -> Any:
         """Run one operator entry compile under the default stance inside ``around()``.
@@ -93,7 +128,7 @@ def hop_compile_stance_lift_scope(
         target = copies.get(fn)
         if target is None:
             target = copies[fn] = _with_fresh_code(fn)
-        call = _cond_call(fn, args) if original_env is not None else None
+        call = _cond_call(fn, args) if cond_branches else None
         cond_calls.append(call)
         try:
             with around(call is not None), torch.compiler.set_stance("default"):
@@ -101,12 +136,7 @@ def hop_compile_stance_lift_scope(
         finally:
             cond_calls.pop()
 
-    env = None if original_env is None else _branch_callback_env(original_env, cond_calls)
-    swap_hop_entry_compile(_lifted, env)
-    try:
-        yield True
-    finally:
-        swap_hop_entry_compile(original, original_env)
+    return _lifted
 
 
 @dataclass(frozen=True)
