@@ -253,7 +253,7 @@ def _differentiated_param_equivalence_classes(self: "Trace") -> dict[str, str]:
         if record_member(node, "is_orphan", False):
             continue
         if node.has_params and node._param_barcodes:
-            cohorts[node.graph.equivalence_class].append((label, _structural_arg_signature(node)))
+            cohorts[node._graph_equivalence_class].append((label, _structural_arg_signature(node)))
 
     effective: dict[str, str] = {}
     for eq_class, members in cohorts.items():
@@ -414,7 +414,7 @@ def _call_site_group_key(node: Any, classes: dict[str, str]) -> tuple[Any, ...]:
         return ("call_site", site_class)
     if node.is_input or node.is_output:
         return ("single", node._label_raw)
-    return ("position", node.graph.site_key, node.func_name, node.graph.equivalence_class)
+    return ("position", node._graph_site_key, node.func_name, node._graph_equivalence_class)
 
 
 def _buffer_group_keys(
@@ -513,7 +513,7 @@ def _check_call_site_contract(self: "Trace", classes: dict[str, str]) -> None:
             raw_label=node._label_raw,
             layer=node._layer_label_raw,
             func_name=node.func_name,
-            group=tuple(node.graph.recurrent_ops or ()),
+            group=tuple(node._graph_recurrent_ops or ()),
         )
         for node in (self[label] for label in self._raw_graph_ws.raw_layer_labels_list)
         if not record_member(node, "is_orphan", False)
@@ -579,7 +579,7 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
 
     for label in raw_labels:
         node = self[label]
-        effective_key = effective_equivalence.get(label, node.graph.equivalence_class)
+        effective_key = effective_equivalence.get(label, node._graph_equivalence_class)
         raw_equivalent_labels = node._slot("equivalent_ops")
         # ``equivalent_labels`` must agree with ``equivalence_key``: the argsig
         # split subdivides a capture-time equivalence class, and passing the
@@ -595,7 +595,7 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
             equivalent_labels = tuple(
                 member
                 for member in raw_equivalent_labels
-                if effective_equivalence.get(member, node.graph.equivalence_class) == effective_key
+                if effective_equivalence.get(member, node._graph_equivalence_class) == effective_key
             )
             equivalent_labels_memo[memo_key] = (
                 raw_equivalent_labels,

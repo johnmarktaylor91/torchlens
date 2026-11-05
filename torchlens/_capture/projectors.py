@@ -450,16 +450,16 @@ class RefreshProjector:
         from .._runnable import is_mode_sensitive_qualname
 
         claims: list[tuple[str, bool]] = []
-        qualname = getattr(sink_layer.graph, "buffer_source_func_name", None)
+        qualname = getattr(sink_layer, "_graph_buffer_source_func_name", None)
         if not is_mode_sensitive_qualname(qualname):
             return claims
-        source_label = getattr(sink_layer.graph, "buffer_source", None)
+        source_label = getattr(sink_layer, "_graph_buffer_source", None)
         if not source_label or source_label not in trace._layer_dict_all_keys:
             return claims
         source = trace._layer_dict_all_keys[source_label]
         tail = (qualname or "").rsplit(".", 1)[-1].removesuffix("_")
         mode_argument = "use_input_stats" if tail.endswith("instance_norm") else "training"
-        kwargs = getattr(source.call, "non_tensor_kwargs", None) or {}
+        kwargs = getattr(source, "_call_non_tensor_kwargs", None) or {}
         literal = kwargs.get(mode_argument)
         if not isinstance(literal, bool):
             # The mode flag is the first boolean among the positional non-tensor
@@ -468,7 +468,7 @@ class RefreshProjector:
             literal = next(
                 (
                     value
-                    for value in getattr(source.call, "non_tensor_pos_args", None) or ()
+                    for value in getattr(source, "_call_non_tensor_pos_args", None) or ()
                     if isinstance(value, bool)
                 ),
                 None,
@@ -504,7 +504,7 @@ class RefreshProjector:
             for layer in target_sinks
             if layer.buffer_value_changed is True
             and layer.buffer_write_kind == "inplace"
-            and (getattr(layer.graph, "buffer_source_func_name", None) or "").rsplit(".", 1)[-1]
+            and (getattr(layer, "_graph_buffer_source_func_name", None) or "").rsplit(".", 1)[-1]
             == "add_"
             and self._sink_module_call(layer) in norm_calls
         }
@@ -512,7 +512,7 @@ class RefreshProjector:
     def _sink_module_call(self, sink_layer: Any) -> str | None:
         """Return the innermost module call of a buffer sink's producing op."""
 
-        source_label = getattr(sink_layer.graph, "buffer_source", None)
+        source_label = getattr(sink_layer, "_graph_buffer_source", None)
         layers = self.target._layer_dict_all_keys
         if not source_label or source_label not in layers:
             return None

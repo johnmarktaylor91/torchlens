@@ -565,11 +565,11 @@ class Layer(_SelectionOperand):
         # (end of step 15.5) rebinds these two fields on the OPS after the
         # aggregate Layers are built, and the public Layer contract keeps the
         # pre-rebind values (the dict-era copies never saw the update).
-        self._control_flow_in_conditionals = first_pass.control_flow.in_conditionals
-        self._control_flow_terminal_bool_for = first_pass.control_flow.terminal_bool_for
+        self._control_flow_in_conditionals = first_pass._control_flow_in_conditionals
+        self._control_flow_terminal_bool_for = first_pass._control_flow_terminal_bool_for
         # Cached conditional-body predicate (the ``is_in_conditional_body``
         # property's storage slot; multi-pass merge ORs into it).
-        self._control_flow_is_in_conditional_body = first_pass.control_flow.is_in_conditional_body
+        self._control_flow_is_in_conditional_body = first_pass._control_flow_is_in_conditional_body
         # Raw ``__dict__`` writes by contract: these are BUILD-PHASE staging
         # containers the multi-pass merge mutates in place, so they must
         # never pass through the finished-layer view normalization (a

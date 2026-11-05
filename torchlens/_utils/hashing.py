@@ -344,10 +344,7 @@ def _record_is_buffer(record: Any) -> bool:
     standalone (``test_short_barcode_deterministic_across_processes``).
     """
 
-    return bool(
-        getattr(getattr(record, "graph", None), "is_buffer", None)
-        or getattr(record, "is_buffer", False)
-    )
+    return bool(getattr(record, "_graph_is_buffer", None) or getattr(record, "is_buffer", False))
 
 
 def compute_graph_shape_hash(

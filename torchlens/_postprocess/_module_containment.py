@@ -100,7 +100,7 @@ def _drop_root_call_frames(layer_entry: Op) -> None:
     ]
     layer_entry._module_context_call_stack = [
         call
-        for call in layer_entry.module_context.call_stack
+        for call in layer_entry._module_context_call_stack
         if _module_call_address(call) != "self"
     ]
     if layer_entry.module is not None and _module_call_address(layer_entry.module) == "self":

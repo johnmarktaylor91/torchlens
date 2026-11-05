@@ -480,6 +480,51 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
     True
     """
 
+    cls = type(obj)
+    by_name = _STORED_MEMBER_ATTRS.get(cls)
+    if by_name is None:
+        by_name = _STORED_MEMBER_ATTRS[cls] = {}
+    stored = by_name.get(name, _NO_DEFAULT)
+    if stored is _NO_DEFAULT:
+        stored = by_name[name] = _resolve_stored_member(cls, name)
+    if stored is None:
+        return _record_member_via_view(obj, name, default)
+    try:
+        return getattr(obj, stored)
+    except AttributeError:
+        if default is _NO_DEFAULT:
+            raise
+        return default
+
+
+#: Record class -> ``former name -> attribute read directly`` (``None``: read through the view).
+_STORED_MEMBER_ATTRS: dict[type, dict[str, str | None]] = {}
+
+
+def _resolve_stored_member(cls: type, name: str) -> str | None:
+    """Return the attribute ``record_member`` reads for ``name`` on ``cls``, or ``None``.
+
+    ``None`` keeps the view path: a derived group leaf (computed on read) and an
+    Op-only member read on a Layer (it resolves per instance through the pass).
+    """
+
+    kind = _record_kind(cls)
+    if kind is None:
+        return name
+    path = _SPELLING_PATHS[kind].get(name)
+    if path is None:
+        if kind == "Layer" and name in _SPELLING_PATHS["Op"]:
+            return None
+        storage = OP_STORAGE_ATTRS if kind == "Op" else LAYER_STORAGE_ATTRS
+        return storage.get(name, name)
+    if len(path) == 1:
+        return path[0]
+    return _stored_leaf_attr(cls, path)
+
+
+def _record_member_via_view(obj: Any, name: str, default: Any) -> Any:
+    """``record_member`` for a member that reads through its group view or the Layer's pass."""
+
     kind = _record_kind(type(obj))
     path = None if kind is None else _SPELLING_PATHS[kind].get(name)
     if path is None and kind == "Layer" and name in _SPELLING_PATHS["Op"]:
@@ -500,12 +545,6 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
             # A renamed or removed member keeps its value under its storage
             # attribute; internal readers still need it.
             return getattr(obj, name if kind is None else record_storage_attr(obj, name))
-        stored = _stored_leaf_attr(obj, path)
-        if stored is not None:
-            # The group leaf only returns one storage attribute: read it without
-            # building the public group view (hot postprocess loops call this
-            # per Op; views stay uncached by design).
-            return getattr(obj, stored)
         value = obj
         for part in path:
             value = getattr(value, part)
@@ -516,34 +555,27 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
         return default
 
 
-#: ``(record class, (group, leaf))`` -> storage attribute the leaf returns, or ``None``.
-_STORED_LEAF_ATTRS: dict[tuple[type, tuple[str, ...]], str | None] = {}
 #: Bytecode of a property body that is exactly ``return self._record.<attr>``.
 _PLAIN_READ_OPS = frozenset({"RESUME", "NOP", "CACHE", "LOAD_FAST", "LOAD_ATTR", "RETURN_VALUE"})
 
 
-def _stored_leaf_attr(obj: Any, path: tuple[str, ...]) -> str | None:
+def _stored_leaf_attr(cls: type, path: tuple[str, ...]) -> str | None:
     """Return the storage attribute a ``(group, leaf)`` member plainly reads, else ``None``.
 
-    Resolved once per record class and member, without building a view: the
+    Resolved once per record class and member (``record_member`` caches it),
+    without building a view: the
     group view class is the return annotation of the record's group property,
     and the leaf counts as plain only when its property body loads
     ``self._record.<attr>`` and returns it. Derived leaves (computed on read)
     return ``None`` and keep the view path.
     """
 
-    key = (type(obj), path)
-    try:
-        return _STORED_LEAF_ATTRS[key]
-    except KeyError:
-        pass
     attr = None
-    view_cls = _group_view_class(type(obj), path[0]) if len(path) == 2 else None
+    view_cls = _group_view_class(cls, path[0]) if len(path) == 2 else None
     if view_cls is not None:
         prop = getattr(view_cls, path[1], None)
         if isinstance(prop, property) and prop.fget is not None:
             attr = _plain_record_read(prop.fget)
-    _STORED_LEAF_ATTRS[key] = attr
     return attr
 
 

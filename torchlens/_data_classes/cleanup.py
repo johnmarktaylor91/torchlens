@@ -29,7 +29,12 @@ from .._constants import MODEL_LOG_FIELD_ORDER
 from .._trace_core.groups import GroupRef
 from .._trace_core.op_store import mark_op_row_released
 from .._utils._cuda_probe import _is_cuda_available
-from .._utils._record_group_table import op_attr, record_member, record_storage_attr
+from .._utils._record_group_table import (
+    OP_STORAGE_ATTRS,
+    op_attr,
+    record_member,
+    record_storage_attr,
+)
 from .._utils.collections import remove_entry_from_list
 from .._utils.display import cleanup_trace_visualizer_dir
 from .._utils.tensor_utils import capture_touched_cuda
@@ -860,7 +865,8 @@ def _scrub_op_label_collections(op: "Op", labels_to_remove: set[str]) -> None:
                         [label for label in view if label not in labels_to_remove],
                     )
                 continue
-        value = getattr(op, op_attr(field_name), None)
+        # The storage-map lookup inline (``op_attr`` without its call): this runs per Op per field.
+        value = getattr(op, OP_STORAGE_ATTRS.get(field_name, field_name), None)
         if not value:
             continue
         if isinstance(value, (list, tuple)):

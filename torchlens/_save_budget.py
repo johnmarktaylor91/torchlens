@@ -955,10 +955,10 @@ def retained_activation_bytes(ops: Any) -> int:
     total = 0
     seen: set[tuple[Any, ...]] = set()
     for op in ops:
-        if not getattr(op, "has_saved_activation", False) or getattr(op.graph, "is_orphan", False):
+        if not getattr(op, "has_saved_activation", False) or getattr(op, "_graph_is_orphan", False):
             continue
         counted_payload = False
-        for payload in (getattr(op, "out", None), getattr(op.payload, "transformed_out", None)):
+        for payload in (getattr(op, "out", None), getattr(op, "_payload_transformed_out", None)):
             if not isinstance(payload, torch.Tensor) or payload.is_meta:
                 continue
             counted_payload = True
@@ -968,9 +968,9 @@ def retained_activation_bytes(ops: Any) -> int:
                 seen.add(identity)
                 total += int(num_bytes)
         if not counted_payload:
-            transformed_bytes = getattr(op.cost, "transformed_activation_memory", None)
+            transformed_bytes = getattr(op, "_cost_transformed_activation_memory", None)
             if getattr(op, "out", None) is None and transformed_bytes:
                 total += int(transformed_bytes)
             else:
-                total += int(getattr(op.cost, "activation_memory", 0) or 0)
+                total += int(getattr(op, "_cost_activation_memory", 0) or 0)
     return total

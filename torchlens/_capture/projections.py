@@ -1431,7 +1431,7 @@ def _grad_record_context_from_op_grad_event(
     op = trace._layer_dict_all_keys[event.op_label]
     return GradRecordContext(
         label=event.op_label,
-        grad_fn_class_name=getattr(op.autograd, "grad_fn_class_name", None) or "",
+        grad_fn_class_name=getattr(op, "_autograd_grad_fn_class_name", None) or "",
         kind=record_type(op, None) or "op",
         backward_call_index=event.pass_index,
         grad_kind="grad_output",

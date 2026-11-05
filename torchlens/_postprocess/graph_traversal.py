@@ -406,7 +406,7 @@ def _add_output_layers(
         # parents of the output node at all, and omitted the output node's ONE real
         # parent, which does carry that ancestry.
         new_output_node._graph_internal_source_parents = (
-            [output_node._label_raw] if output_node.graph.has_internal_source_ancestor else []
+            [output_node._label_raw] if output_node._graph_has_internal_source_ancestor else []
         )
         # root_ancestors must be re-derived the same way: the output node is NOT an
         # internal source (set above), so the armed ancestry-closure convention
@@ -416,7 +416,7 @@ def _add_output_layers(
         # (arange/zeros/... returned straight from forward) — the one source-minting
         # convention that leaves root_ancestors empty on the exempt source row.
         new_output_node._graph_root_ancestors = set(output_node.input_ancestors) | set(
-            output_node.graph.internal_source_ancestors
+            output_node._graph_internal_source_ancestors
         )
         new_output_node._edge_uses = []
 
@@ -465,7 +465,7 @@ def _add_output_layers(
             _parent_payload = (
                 output_node.out
                 if output_node.out is not None
-                else output_node.payload.transformed_out
+                else output_node._payload_transformed_out
             )
             _detach_payload = output_copy_detaches(output_tensor, _parent_payload, self)
             if output_rides_parent_payload(output_tensor, output_node.out, self):
@@ -507,7 +507,7 @@ def _add_output_layers(
             )
 
             comparison_output = (
-                output_node.out if raw_retained else output_node.payload.transformed_out
+                output_node.out if raw_retained else output_node._payload_transformed_out
             )
             actual_comparison = actual_output_raw if raw_retained else actual_output_transformed
             if (

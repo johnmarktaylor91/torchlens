@@ -1995,7 +1995,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def _graph_is_compute(self) -> bool:
         """Whether this Op executed a torch function rather than a boundary sentinel."""
 
-        return not (self.is_input or self.is_output or self.graph.is_buffer)
+        return not (self.is_input or self.is_output or self._graph_is_buffer)
 
     @property
     def fx_label(self) -> str | None:
@@ -2110,7 +2110,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         TorchLens GradFn record, while ``grad_fn_label`` is the portable label.
         """
 
-        grad_fn = self.autograd.grad_fn
+        grad_fn = self._autograd_grad_fn
         if grad_fn is None:
             return None
         return cast("str | None", getattr(grad_fn, "label", None))
@@ -2136,7 +2136,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         positional-argument information was captured.
         """
 
-        return _summarize_call_args(self.call.saved_args, self.call.non_tensor_pos_args)
+        return _summarize_call_args(self._call_saved_args, self._call_non_tensor_pos_args)
 
     @property
     def kwargs_summary(self) -> str | None:
@@ -2146,7 +2146,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         keyword-argument information was captured.
         """
 
-        return _summarize_call_kwargs(self.call.saved_kwargs, self.call.non_tensor_kwargs)
+        return _summarize_call_kwargs(self._call_saved_kwargs, self._call_non_tensor_kwargs)
 
     @property
     def multi_output_type(self) -> type | str | None:
@@ -2220,7 +2220,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     @property
     def _graph_has_siblings(self) -> bool:
         """Whether this layer shares parents with other layers."""
-        return len(self.graph.siblings) > 0
+        return len(self._graph_siblings) > 0
 
     @property
     def _graph_co_parents(self) -> list[str]:
@@ -2231,14 +2231,14 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     @property
     def _graph_has_co_parents(self) -> bool:
         """Whether this layer shares children with other layers."""
-        return len(self.graph.co_parents) > 0
+        return len(self._graph_co_parents) > 0
 
     @property
     def _control_flow_is_in_conditional_body(self) -> bool:
         """Whether this op ran inside a conditional arm (the Layer rule; test ops are outside)."""
 
-        return bool(self.control_flow.branch_stack) or any(
-            role.role == "body" for role in self.control_flow.in_conditionals or []
+        return bool(self._control_flow_branch_stack) or any(
+            role.role == "body" for role in self._control_flow_in_conditionals or []
         )
 
     @_control_flow_is_in_conditional_body.setter
@@ -2378,7 +2378,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         Glossary name for the stored ``is_buffer`` flag.
         """
 
-        return bool(self.graph.is_buffer)
+        return bool(self._graph_is_buffer)
 
     @property
     def has_saved_grad(self) -> bool:
@@ -2687,7 +2687,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             return cast(list[str], cached)
         from .._postprocess.ast_branches import resolve_arg_expressions
 
-        resolved = resolve_arg_expressions(self.source.frames, self.func_name)
+        resolved = resolve_arg_expressions(self._source_frames, self.func_name)
         object.__setattr__(self, "_arg_expressions_cache", resolved)
         return resolved
 
@@ -2722,13 +2722,13 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             Alias of ``is_internal_source`` for tabular compatibility.
         """
 
-        return bool(self.graph.is_internal_source)
+        return bool(self._graph_is_internal_source)
 
     @_call_is_internally_initialized.setter
     def _call_is_internally_initialized(self, value: Any) -> None:
         """Accept compatibility writes for the computed internal-source alias."""
 
-        if value is not None and bool(value) != bool(self.graph.is_internal_source):
+        if value is not None and bool(value) != bool(self._graph_is_internal_source):
             raise InvalidArgumentError(
                 "is_internally_initialized is derived from is_internal_source and "
                 f"cannot be set to {value!r}",
@@ -2988,25 +2988,25 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         s += f"\n\tTensor info: shape {self.shape}, dtype {self.dtype}"
         s += f"\n\tComputed from params: {self.has_params}"
         s += f"\n\tComputed in modules: {self.modules}"
-        s += f"\n\tOutput of modules: {self.module_context.output_of_module_calls}"
-        if self.module_context.is_atomic_module:
+        s += f"\n\tOutput of modules: {self._module_context_output_of_module_calls}"
+        if self._module_context_is_atomic_module:
             s += " (bottom-level submodule output)"
         else:
             s += " (not bottom-level submodule output)"
         s += "\n\tFamily info:"
         s += f"\n\t\tParents: {self.parents}"
         s += f"\n\t\tChildren: {self.children}"
-        s += f"\n\t\tSpouses: {self.graph.co_parents}"
-        s += f"\n\t\tSiblings: {self.graph.siblings}"
+        s += f"\n\t\tSpouses: {self._graph_co_parents}"
+        s += f"\n\t\tSiblings: {self._graph_siblings}"
         s += (
-            f"\n\t\tOriginal Ancestors: {self.graph.root_ancestors} "
-            f"(min dist {self.graph.min_distance_from_input} nodes, max dist {self.graph.max_distance_from_input} nodes)"
+            f"\n\t\tOriginal Ancestors: {self._graph_root_ancestors} "
+            f"(min dist {self._graph_min_distance_from_input} nodes, max dist {self._graph_max_distance_from_input} nodes)"
         )
         s += f"\n\t\tInput Ancestors: {self.input_ancestors}"
-        s += f"\n\t\tInternal Ancestors: {self.graph.internal_source_ancestors}"
+        s += f"\n\t\tInternal Ancestors: {self._graph_internal_source_ancestors}"
         s += (
             f"\n\t\tOutput Descendents: {self.output_descendants} "
-            f"(min dist {self.graph.min_distance_to_output} nodes, max dist {self.graph.max_distance_to_output} nodes)"
+            f"(min dist {self._graph_min_distance_to_output} nodes, max dist {self._graph_max_distance_to_output} nodes)"
         )
         if self.out is not None:
             s += f"\n\tTensor contents: \n{print_override(self.out, '__str__')}"

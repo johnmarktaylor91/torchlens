@@ -160,8 +160,8 @@ def finalize_single_pass_trace(
             enrich_op(op_log)
         if attach_op_params is not None:
             attach_op_params(op_log, trace, seen_param_barcodes)
-            if not isinstance(op_log.cost.param_memory, Bytes):
-                op_log._cost_param_memory = Bytes(int(op_log.cost.param_memory))
+            if not isinstance(op_log._cost_param_memory, Bytes):
+                op_log._cost_param_memory = Bytes(int(op_log._cost_param_memory))
         if op_log._param_logs:
             layers_with_params_seen.add(op_log.layer_label)
         if update_param_usage:
@@ -648,9 +648,11 @@ def _apply_recurrence_relabel_epilogue(
 
     equivalent_labels_by_key: dict[str, set[str]] = {}
     for op_log in raw_dict.values():
-        equivalent_labels_by_key.setdefault(op_log.graph.equivalence_class, set()).add(op_log.label)
+        equivalent_labels_by_key.setdefault(op_log._graph_equivalence_class, set()).add(
+            op_log.label
+        )
     for label, op_log in raw_dict.items():
-        op_log._graph_equivalent_ops = equivalent_labels_by_key[op_log.graph.equivalence_class]
+        op_log._graph_equivalent_ops = equivalent_labels_by_key[op_log._graph_equivalence_class]
         recurrent_labels = (
             assignments[label].recurrent_labels if assignments is not None else (label,)
         )

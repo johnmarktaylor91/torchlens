@@ -171,9 +171,9 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
         # Log the module hierarchy information:
         _log_module_hierarchy_info_for_layer(self, layer_entry, _shadow_sets)
-        if layer_entry.module_context.atomic_module_call is not None:
+        if layer_entry._module_context_atomic_module_call is not None:
             submodule_pass_nice_name = ":".join(
-                [str(i) for i in layer_entry.module_context.atomic_module_call]
+                [str(i) for i in layer_entry._module_context_atomic_module_call]
             )
             layer_entry._module_context_atomic_module_call = submodule_pass_nice_name
 
@@ -182,7 +182,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
         # the alias row contributes nothing to the tracked total. Input rows
         # own exactly the external inputs' bytes and stay counted.
         if record_type(layer_entry) != "output":
-            self._cost_total_activation_memory += layer_entry.cost.activation_memory
+            self._cost_total_activation_memory += layer_entry._cost_activation_memory
 
         # Track layers that consume parameters (a per-LAYER fact, kept here):
         if layer_entry.layer_label not in unique_layers_seen and layer_entry.has_params:
@@ -191,7 +191,7 @@ def _log_final_info_for_layers(self: "Trace") -> None:
         unique_layers_seen.add(layer_entry.layer_label)
 
         # Tally elapsed time:
-        self._cost_func_calls_duration += layer_entry.cost.duration
+        self._cost_func_calls_duration += layer_entry._cost_duration
 
     _tally_params_by_identity(self, mbd)
     _compute_fx_qualpaths(self)
@@ -363,7 +363,7 @@ def _compute_fx_qualpaths(self: "Trace") -> None:
         fx_qualpath = f"{module_address}.{op_type_segment}"
         layer_entry._source_fx_path = fx_qualpath
         layer_entry._source_fx_call_index = fx_call_counts.get(fx_qualpath, 0)
-        fx_call_counts[fx_qualpath] = layer_entry.source.fx_call_index + 1
+        fx_call_counts[fx_qualpath] = layer_entry._source_fx_call_index + 1
 
 
 def _finalize_output_compute_indexs(self: "Trace") -> None:
@@ -692,7 +692,7 @@ def _add_lookup_keys_for_layer_entry(
     # ``fc``) resolves to its own output op instead of turning ambiguous. The
     # alias stays reachable through its own labels and its ``output`` role key.
     is_output_alias = bool(layer_entry.is_output)
-    for module_pass in layer_entry.module_context.output_of_module_calls:
+    for module_pass in layer_entry._module_context_output_of_module_calls:
         module_name, _ = module_pass.rsplit(":", 1)
         module_keys = [module_pass]
         if self._module_capture_ws.module_build_data["module_num_calls"][module_name] == 1:
@@ -702,13 +702,13 @@ def _add_lookup_keys_for_layer_entry(
                 continue
             lookup_keys_for_tensor.append(module_key)
 
-    if layer_entry.graph.is_buffer:  # buffer, input and output addresses are keys too
+    if layer_entry._graph_is_buffer:  # buffer, input and output addresses are keys too
         if self._buffer_num_calls.get(layer_entry.buffer_address, 1) == 1:
             lookup_keys_for_tensor.append(layer_entry.buffer_address)
         buffer_pass = layer_entry.buffer_pass  # record-groups: flat
         lookup_keys_for_tensor.append(f"{layer_entry.buffer_address}:{buffer_pass}")
     elif layer_entry.is_input or layer_entry.is_output:
-        lookup_keys_for_tensor.append(layer_entry.graph.io_role)
+        lookup_keys_for_tensor.append(layer_entry._graph_io_role)
 
     if layer_entry.fx_label is not None:
         lookup_keys_for_tensor.append(layer_entry.fx_label)
@@ -750,12 +750,13 @@ def _relabel_module_calls(layer_entry: Op) -> None:
         relabeled in place.
     """
 
-    context = layer_entry.module_context
     layer_entry._module_context_output_of_module_calls = [
-        _module_call_label(module_call) for module_call in context.output_of_module_calls
+        _module_call_label(module_call)
+        for module_call in layer_entry._module_context_output_of_module_calls
     ]
     layer_entry._module_context_input_to_module_calls = [
-        _module_call_label(module_call) for module_call in context.input_to_module_calls
+        _module_call_label(module_call)
+        for module_call in layer_entry._module_context_input_to_module_calls
     ]
     if layer_entry.module is not None:
         layer_entry.module = _module_call_label(layer_entry.module)
@@ -764,7 +765,7 @@ def _relabel_module_calls(layer_entry: Op) -> None:
     # as ``modules`` (seeded from the modules facet at ingest), so it is
     # relabeled to canonical ``address:N`` ModuleCall labels in lockstep.
     layer_entry._module_context_call_stack = [
-        _module_call_label(module_call) for module_call in layer_entry.module_context.call_stack
+        _module_call_label(module_call) for module_call in layer_entry._module_context_call_stack
     ]
     if (layer_entry.module is None) and len(layer_entry.modules) > 0:
         layer_entry.module = layer_entry.modules[-1]

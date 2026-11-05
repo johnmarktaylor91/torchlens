@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any
 
 from .._data_classes.op import Op
 from .._data_classes.trace import ConditionalEvent
-from .._utils._record_group_table import record_member
 from ..backends.torch._completeness_escape_state import (
     host_escape_bool_consumer_locations,
     host_escape_bool_source_labels,
@@ -122,7 +121,7 @@ def _seed_proven_bool_consumers(self: Trace) -> None:
         if label not in proven_labels:
             continue
         layer = self[label]
-        if not layer.control_flow.is_scalar_bool or record_member(layer.graph, "is_orphan", False):
+        if not layer._control_flow_is_scalar_bool or getattr(layer, "_graph_is_orphan", False):
             continue
         if label not in seen_terminated_bool_labels:
             seen_terminated_bool_labels.add(label)
@@ -184,7 +183,7 @@ def _build_file_indexes(
         for filename, _line_number in consumer_locations.get(bool_label, ()):
             if filename not in file_indexes:
                 file_indexes[filename] = ast_branches.get_file_index(filename)
-        for frame in bool_layer.source.frames:
+        for frame in bool_layer._source_frames:
             if frame.file in file_indexes:
                 continue
             file_indexes[frame.file] = ast_branches.get_file_index(frame.file)
@@ -232,7 +231,7 @@ def _classify_bool_layers(
         branch_classifications = _dedup_branch_classifications(observed)
 
         frame_classification: ast_branches.BoolClassification | None = None
-        for frame in reversed(bool_layer.source.frames):
+        for frame in reversed(bool_layer._source_frames):
             frame_candidate = ast_branches.classify_bool(
                 frame.file,
                 frame.line_number,
@@ -478,7 +477,7 @@ def _mark_conditional_branches_if_backward_flood(
         bool_label
         for bool_label in _iter_terminal_scalar_bool_labels(self)
         if bool_classifications[bool_label]
-        and self[bool_label].control_flow.is_terminal_conditional_bool
+        and self[bool_label]._control_flow_is_terminal_conditional_bool
     ]
     # Reset and flood bodies (column view, facade fallback) live in ``_column_passes_graph``.
     _column_passes_graph.reset_and_flood_if_edges(self, branch_bool_labels)
@@ -557,8 +556,8 @@ def _iter_terminal_scalar_bool_labels(self: Trace) -> list[str]:
         layer_label
         for layer_label in self._raw_graph_ws.raw_layer_labels_list
         if layer_label in terminal_bool_labels
-        and self[layer_label].control_flow.is_scalar_bool
-        and not record_member(self[layer_label].graph, "is_orphan", False)
+        and self[layer_label]._control_flow_is_scalar_bool
+        and not getattr(self[layer_label], "_graph_is_orphan", False)
     ]
 
 
@@ -683,19 +682,19 @@ def _fix_buffer_layers(self: Trace) -> None:
 
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
-        if layer.graph.buffer_source is not None:
+        if layer._graph_buffer_source is not None:
             rewired_buffers.append(layer._label_raw)
             _wire_buffer_to_source(self, layer, layer_label)
 
         if layer.buffer_address is None:
-            equivalence_class = str(record_member(layer.graph, "equivalence_class", ""))
+            equivalence_class = str(getattr(layer, "_graph_equivalence_class", ""))
             if equivalence_class.startswith("buffer_"):
                 recovered_address = equivalence_class.removeprefix("buffer_")
                 if recovered_address and recovered_address != "None":
                     layer.buffer_address = recovered_address
         if layer.buffer_address is None:
             layer.buffer_address = f"anonymous_buffer_{layer._label_raw}"
-        buffer_hash = str(layer.modules) + str(layer.graph.buffer_source) + layer.buffer_address
+        buffer_hash = str(layer.modules) + str(layer._graph_buffer_source) + layer.buffer_address
         buffer_hash_groups[buffer_hash].append(layer_label)
 
     deferred_buffer_removals: dict[str, tuple[Op, Op]] = {}
@@ -771,7 +770,7 @@ def _repropagate_ancestry_after_buffer_wiring(self: Trace, rewired: list[str]) -
         input_ancestors: set[str] = {raw_label} if layer.is_input else set()
         for parent in parents:
             input_ancestors.update(parent.input_ancestors)
-        if layer.graph.is_internal_source:
+        if layer._graph_is_internal_source:
             internal_source_ancestors = {raw_label}
         else:
             internal_source_ancestors = set()
@@ -781,7 +780,7 @@ def _repropagate_ancestry_after_buffer_wiring(self: Trace, rewired: list[str]) -
         layer._graph_has_input_ancestor = bool(input_ancestors)
         layer._graph_internal_source_ancestors = internal_source_ancestors
         layer._graph_has_internal_source_ancestor = bool(internal_source_ancestors)
-        if not layer.graph.is_internal_source:
+        if not layer._graph_is_internal_source:
             layer._graph_internal_source_parents = [
                 parent._label_raw for parent in parents if parent.graph.has_internal_source_ancestor
             ]
@@ -899,14 +898,16 @@ def _merge_buffer_entries(
             child_parents.remove(buffer_to_remove._label_raw)
             repointed += 1
         child_parents.extend([source_buffer._label_raw] * max(1, repointed))
-        if buffer_to_remove._label_raw in self[child_layer].graph.internal_source_parents:
-            self[child_layer].graph.internal_source_parents.remove(buffer_to_remove._label_raw)
-            self[child_layer].graph.internal_source_parents.append(source_buffer._label_raw)
+        if buffer_to_remove._label_raw in self[child_layer]._graph_internal_source_parents:
+            self[child_layer]._graph_internal_source_parents.remove(buffer_to_remove._label_raw)
+            self[child_layer]._graph_internal_source_parents.append(source_buffer._label_raw)
 
         for arg_type in ["args", "kwargs"]:
-            for arg_label, arg_val in self[child_layer].call.parent_arg_positions[arg_type].items():
+            for arg_label, arg_val in (
+                self[child_layer]._call_parent_arg_positions[arg_type].items()
+            ):
                 if arg_val == buffer_to_remove._label_raw:
-                    self[child_layer].call.parent_arg_positions[arg_type][arg_label] = (
+                    self[child_layer]._call_parent_arg_positions[arg_type][arg_label] = (
                         source_buffer._label_raw
                     )
 
@@ -970,12 +971,12 @@ def _merge_buffer_entries(
     self._raw_graph_ws.raw_layer_dict.pop(buffer_to_remove._label_raw)
 
     for layer in self:
-        if buffer_to_remove._label_raw in layer.graph.root_ancestors:
-            layer.graph.root_ancestors.remove(buffer_to_remove._label_raw)
-            layer.graph.root_ancestors.add(source_buffer._label_raw)
-        if buffer_to_remove._label_raw in layer.graph.internal_source_ancestors:
-            layer.graph.internal_source_ancestors.remove(buffer_to_remove._label_raw)
-            layer.graph.internal_source_ancestors.add(source_buffer._label_raw)
+        if buffer_to_remove._label_raw in layer._graph_root_ancestors:
+            layer._graph_root_ancestors.remove(buffer_to_remove._label_raw)
+            layer._graph_root_ancestors.add(source_buffer._label_raw)
+        if buffer_to_remove._label_raw in layer._graph_internal_source_ancestors:
+            layer._graph_internal_source_ancestors.remove(buffer_to_remove._label_raw)
+            layer._graph_internal_source_ancestors.add(source_buffer._label_raw)
         # Repoint any op whose scalar ``buffer_source`` still names the removed
         # buffer to the value-identical survivor. Unlike parents/children, the
         # ``buffer_source`` field (and its arg-0 mirror in ``parent_arg_positions``)
@@ -983,9 +984,9 @@ def _merge_buffer_entries(
         # lists, so without this it dangles -- the buffer-merge analogue of the
         # campaign's "scrub removed buffer graph references" fix (e.g. speechbrain
         # CRDNN LiGRU per-forward ``drop_mask_te.to(device)`` reassign buffers).
-        if layer.graph.buffer_source == buffer_to_remove._label_raw:
+        if layer._graph_buffer_source == buffer_to_remove._label_raw:
             layer._graph_buffer_source = source_buffer._label_raw
-            arg_positions = layer.call.parent_arg_positions.get("args")
+            arg_positions = layer._call_parent_arg_positions.get("args")
             if arg_positions is not None and arg_positions.get(0) == buffer_to_remove._label_raw:
                 arg_positions[0] = source_buffer._label_raw
 
@@ -1017,21 +1018,21 @@ def _finish_deferred_buffer_removals(
     }
     removed_labels = set(removals)
     for layer in self:
-        root_hits = layer.graph.root_ancestors & removed_labels
+        root_hits = layer._graph_root_ancestors & removed_labels
         if root_hits:
-            layer.graph.root_ancestors.difference_update(root_hits)
-            layer.graph.root_ancestors.update(replacement_labels[label] for label in root_hits)
-        source_hits = layer.graph.internal_source_ancestors & removed_labels
+            layer._graph_root_ancestors.difference_update(root_hits)
+            layer._graph_root_ancestors.update(replacement_labels[label] for label in root_hits)
+        source_hits = layer._graph_internal_source_ancestors & removed_labels
         if source_hits:
-            layer.graph.internal_source_ancestors.difference_update(source_hits)
-            layer.graph.internal_source_ancestors.update(
+            layer._graph_internal_source_ancestors.difference_update(source_hits)
+            layer._graph_internal_source_ancestors.update(
                 replacement_labels[label] for label in source_hits
             )
-        replacement = replacement_labels.get(layer.graph.buffer_source)
+        replacement = replacement_labels.get(layer._graph_buffer_source)
         if replacement is not None:
-            old_source = layer.graph.buffer_source
+            old_source = layer._graph_buffer_source
             layer._graph_buffer_source = replacement
-            arg_positions = layer.call.parent_arg_positions.get("args")
+            arg_positions = layer._call_parent_arg_positions.get("args")
             if arg_positions is not None and arg_positions.get(0) == old_source:
                 arg_positions[0] = replacement
 

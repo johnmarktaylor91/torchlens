@@ -104,12 +104,12 @@ def _undecorate_all_saved_tensors(self: "Trace") -> None:
         if layer_entry.has_saved_activation and layer_entry.out is not None:
             tensors_to_undecorate.append(layer_entry.out)
         if record_member(layer_entry, "transformed_out", None) is not None:
-            tensors_to_undecorate.append(layer_entry.payload.transformed_out)
+            tensors_to_undecorate.append(layer_entry._payload_transformed_out)
 
-        if layer_entry.call.saved_args:
-            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.call.saved_args))
-        if layer_entry.call.saved_kwargs:
-            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.call.saved_kwargs))
+        if layer_entry._call_saved_args:
+            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry._call_saved_args))
+        if layer_entry._call_saved_kwargs:
+            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry._call_saved_kwargs))
 
     for t in tensors_to_undecorate:
         clear_meta(t)
@@ -659,7 +659,7 @@ def _build_module_logs(self: "Trace") -> None:
     for te in self._layer_list:
         # B3R7-R05-1: iterate the fed-call fact directly; the old
         # ``module_call_stack`` emptiness guard was an enter-lane proxy.
-        for call_label in te.module_context.input_to_module_calls:
+        for call_label in te._module_context_input_to_module_calls:
             _pass_input_layers_by_call[call_label].append(te.layer_label)
 
     # --- Build root Module ("self") ---
@@ -1149,8 +1149,8 @@ def _set_tracing_finished(self: "Trace") -> None:
     for layer_label in self._layer_dict_main_keys:
         tensor = self._layer_dict_main_keys[layer_label]
         tensor._tracing_finished = True
-        bind_template_keys(tensor.call.args_template, self._layer_dict_all_keys)
-        bind_template_keys(tensor.call.kwargs_template, self._layer_dict_all_keys)
+        bind_template_keys(tensor._call_args_template, self._layer_dict_all_keys)
+        bind_template_keys(tensor._call_kwargs_template, self._layer_dict_all_keys)
     self._tracing_finished = True
 
 
