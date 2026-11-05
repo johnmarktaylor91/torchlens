@@ -333,19 +333,33 @@ def _spy_rebind(monkeypatch: pytest.MonkeyPatch) -> list[tuple[dict[str, Any], d
 
 
 def test_a_custom_function_sibling_is_not_moved(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A custom ``Function``'s node is not a view node, so its op never moves."""
+    """A custom ``Function``'s view held across the write: capture runs and nothing moves to it.
+
+    Eager runs this model (the custom view is never read after the write).
+    Hooking the written base's aliases reads the custom view's ``grad_fn``, which
+    torch refuses for a custom-Function view of a written base; the read is
+    guarded, so capture completes under warnings-as-errors. No sibling proof
+    returns a node and every handle the write changes moves only to ``CopySlices``.
+    """
 
     calls = _spy_rebind(monkeypatch)
+    proofs = _user_grad_fn._regenerated_sibling_node
+    proven: list[object] = []
+
+    def _spy_proof(*args: Any) -> Any:
+        node = proofs(*args)
+        proven.append(node)
+        return node
+
+    monkeypatch.setattr(_user_grad_fn, "_regenerated_sibling_node", _spy_proof)
     trace = _strict_trace(_custom_function_sibling)
     _check_backward_graph_invariants(trace)
-    custom = [
-        label
-        for before, _ in calls
-        for label, node in before.items()
-        if type(node).__name__ == "_SliceFnBackward"
-    ]
-    assert custom
-    assert all(after[label] is before[label] for before, after in calls for label in custom)
+    assert len(calls) == 1
+    assert all(node is None for node in proven)
+    before, after = calls[0]
+    moved = [label for label in before if after[label] is not before[label]]
+    assert all(type(after[label]).__name__ == "CopySlices" for label in moved)
+    assert _writer(trace).autograd.grad_fn.class_name == "CopySlices"
 
 
 # --- capability gaps: nothing is proven, so no sibling moves ---
