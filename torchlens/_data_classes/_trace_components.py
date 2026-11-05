@@ -152,7 +152,6 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_options_aten_ops": "capture_config",
     "_device_memory_samples": "capture_config",
     "_autograd_saved_bands": "capture_config",
-    "_foreign_written_slots": "capture_config",
     "_autograd_seen_saved_storages": "capture_config",
     "_nonfinite_frontier_out": "capture_config",
     "_nonfinite_prefix_finalized": "capture_config",

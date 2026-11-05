@@ -124,7 +124,9 @@ def note_storage_export(trace: Any, args: Sequence[Any]) -> None:
     """
 
     materialize_deferred_for_export(args)
-    if not args or getattr(_internal_read_state, "depth", 0):
+    if not args:
+        return
+    if getattr(_internal_read_state, "depth", 0):
         return
     key = _storage_key(args[0])
     if key is not None:
@@ -141,6 +143,11 @@ def note_foreign_written_snapshot(
     live_args: tuple[Sequence[Any], Mapping[str, Any]],
 ) -> None:
     """Mark a parent's version snapshot whose live slot sits on an exported storage.
+
+    The caller passes only snapshots taken because the slot's value differed from the
+    parent's saved out, never ones the child's own write or alias contract asked for:
+    the live slot is read after the call, so it shows the pre-call storage only when
+    the child neither wrote nor rebound it.
 
     Parameters
     ----------

@@ -421,13 +421,15 @@ def _tag_tensor_and_track_variations(
                     detach_grad_policy=fields_dict_onetensor["detach_saved_activations"],
                 )
             )
-            note_foreign_written_snapshot(
-                self,
-                parent_label,
-                new_layer_entry._label_raw,
-                new_layer_entry._call_parent_arg_positions,
-                live_args,
+            positions = new_layer_entry._call_parent_arg_positions
+            contract_positions = (
+                *contract.mutated_input_positions,
+                *contract.aliased_output_inputs,
             )
+            if not parent_label_has_alias_contract(parent_label, positions, contract_positions):
+                note_foreign_written_snapshot(
+                    self, parent_label, new_layer_entry._label_raw, positions, live_args
+                )
 
 
 def _get_parent_output_version_snapshot(
