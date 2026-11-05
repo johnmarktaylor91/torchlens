@@ -25,6 +25,7 @@ tests pin the *shape* of the fix so it cannot silently regress:
 
 from __future__ import annotations
 
+import importlib
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -36,6 +37,11 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._data_classes.layer import Layer
 from torchlens._visualization import _render_leaf
+
+# ``_render_entrypoints`` star-imports the render modules. Loaded for the first time inside a test
+# that has patched one of their names, it copies the patch, and ``monkeypatch`` never restores
+# that copy; so load it before any test here patches.
+importlib.import_module("torchlens._visualization._render_entrypoints")
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
