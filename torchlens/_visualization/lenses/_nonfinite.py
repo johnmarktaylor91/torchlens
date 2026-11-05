@@ -102,6 +102,25 @@ class NonfiniteChannel:
     legend_lines: tuple[str, ...]
 
 
+def _worse_state(current: str | None, new: str) -> str:
+    """Combine two pass states for one rolled node: any nonfinite pass wins.
+
+    Two different nonfinite states combine to ``mixed``; a finite pass next
+    to an unchecked one stays ``not_checked`` (not every pass was seen).
+    """
+
+    if current is None or current == new:
+        return new
+    bad = {"nan", "pos_inf", "neg_inf", "mixed"}
+    if current in bad and new in bad:
+        return "mixed"
+    if new in bad:
+        return new
+    if current in bad:
+        return current
+    return "not_checked" if "not_checked" in (current, new) else new
+
+
 def _classify_tensor_payload(value: Any) -> str | None:
     """Classify one saved payload into a state token, ``None`` = no evidence."""
 
@@ -155,9 +174,15 @@ def derive_nonfinite_channel(trace: Trace) -> NonfiniteChannel:
             checked += 1
         # Key BOTH spellings: the pass-qualified op label and the bare layer
         # label, so the spec fn matches whichever the rendered node carries.
-        for label in (getattr(op, "label", None), op.layer_label):
-            if label:
-                states[label] = state
+        op_label = getattr(op, "label", None)
+        if op_label:
+            states[op_label] = state
+        if op.layer_label and op.layer_label != op_label:
+            # A rolled node stands for every pass: it shows the worst one,
+            # never whichever pass happened to come last.
+            states[op.layer_label] = _worse_state(states.get(op.layer_label), state)
+        elif op.layer_label:
+            states[op.layer_label] = state
     zero_coverage = checked == 0 and total > 0
     legend: tuple[str, ...]
     if zero_coverage:

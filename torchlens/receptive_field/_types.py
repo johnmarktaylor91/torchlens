@@ -846,6 +846,9 @@ class ReceptiveFieldProfile:
     frame: pd.DataFrame
     level: Literal["op", "layer", "call", "module"]
 
+    _PREVIEW_ROWS: ClassVar[int] = 5
+    _PREVIEW_COLUMNS: ClassVar[tuple[str, ...]] = ("name", "input_role", "status", "size", "jump")
+
     def to_pandas(self) -> pd.DataFrame:
         """Return a copy of the underlying dataframe.
 
@@ -856,6 +859,46 @@ class ReceptiveFieldProfile:
         """
 
         return self.frame.copy()
+
+    def _header(self) -> str:
+        """Return the one-line identity: level and row count."""
+
+        return f"ReceptiveFieldProfile(level={self.level!r}, rows={len(self.frame)})"
+
+    def __repr__(self) -> str:
+        """Bounded preview: level, row count and the first rows of the key columns.
+
+        Returns
+        -------
+        str
+            The header line, then up to five rows; ``.to_pandas()`` holds the full table.
+        """
+
+        if self.frame.empty:
+            return self._header()
+        columns = [name for name in self._PREVIEW_COLUMNS if name in self.frame.columns]
+        preview = self.frame.loc[:, columns or list(self.frame.columns)]
+        lines = [self._header(), preview.head(self._PREVIEW_ROWS).to_string()]
+        hidden = len(self.frame) - self._PREVIEW_ROWS
+        more = f"... {hidden} more rows; " if hidden > 0 else ""
+        lines.append(f"{more}.to_pandas() returns every row and column")
+        return "\n".join(lines)
+
+    def _repr_html_(self) -> str | None:
+        """Render the profile in a notebook as the frame's HTML table under its header.
+
+        Returns
+        -------
+        str | None
+            HTML, or ``None`` when pandas' notebook HTML rendering is switched off.
+        """
+
+        from html import escape
+
+        table = self.frame._repr_html_()
+        if table is None:
+            return None
+        return f"<p>{escape(self._header())}</p>{table}"
 
 
 __all__ = [

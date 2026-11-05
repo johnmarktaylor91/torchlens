@@ -175,8 +175,8 @@ def draw_kwargs(panel: Panel) -> dict[str, Any]:
         merged.pop("collapse", None)
         merged.pop("node_label_fields", None)
         merged["direction"] = "leftright"
-    if panel.call == "lens":
-        # A lens chooses its own rows; the deck's two-row convention would override it.
+    if panel.call == "view":
+        # A view chooses its own rows; the deck's two-row convention would override it.
         merged.pop("node_label_fields", None)
     if panel.call in ("surgery_diff",):
         merged = {}
@@ -191,11 +191,11 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
     kwargs["path"] = str(outpath)
     if panel.call == "draw":
         return str(trace.draw(**kwargs))
-    if panel.call == "lens":
-        lens = kwargs.pop("lens")
+    if panel.call == "view":
+        lens = kwargs.pop("view")
         return str(lenses.draw_with_lens(trace, lens, **kwargs))
     if panel.call == "surgery":
-        # The panel's kwargs carry highlight="interventions"; the edit is made here.
+        # The panel's kwargs carry view="interventions"; the edit is made here.
         fork = _fork_edit(trace)
         graph = fork.draw(**kwargs)
         return str(getattr(graph, "source", graph))
