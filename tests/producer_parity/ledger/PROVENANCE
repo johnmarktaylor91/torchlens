@@ -4990,6 +4990,14 @@ recorded: 2026-11-03T02:40:58.089039+00:00
 ---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: hf4-mask-table: new validation/_mask_builder_dependence.py (the declared mask-builder table check, ruling d-aad71aaad45648ba93beaf7e05f2a1bb) reads Op fields through getattr with defaults; validation/exemptions.py only folds two import lines; no other read site moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 738ad42639fcba056070d09f21b1edc948476ce9 (dirty)
+recorded: 2026-11-05T00:46:14.318652+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: column-b2-graph: postprocess step 3 flood and step 5 arm loops moved from graph_traversal.py and control_flow.py to _column_passes_graph.py; their Op field read and write sites moved files
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
