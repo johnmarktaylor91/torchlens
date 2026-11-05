@@ -19,6 +19,7 @@ torch's ``NotImplementedError``: validation then fails loudly, never silently.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -32,6 +33,10 @@ from ..._utils._torch_compat import (
 from ._modes import _TorchLensDispatchMode
 
 _HopRule = Callable[..., Any]
+
+#: ``(operator, mode type)`` rules registered before ``torch._dynamo`` was imported, so
+#: not yet behind ``torch.compiler.disable`` (which imports Dynamo, and FSDP with it).
+_RULES_AWAITING_COMPILE_DISABLE: list[tuple[Any, type[Any]]] = []
 
 _DENSE_UNDER_MODE: tuple[tuple[str, str], ...] = (
     ("while_loop", "while_loop_op"),
@@ -262,8 +267,28 @@ def register_witness_hop_rules(mode_type: type[_TorchLensDispatchMode]) -> tuple
         if mode_type not in witness_rule_table(op):
             # The operator pops the mode before the rule; inside a lifted entry compile
             # Dynamo would otherwise trace the rule's ``with mode:`` (_tracing_pass).
-            op.py_impl(mode_type)(compile_disabled(rule))
+            # Without Dynamo imported nothing can trace it yet: wrap it at the first
+            # entry compile instead (compile_disable_witness_hop_rules).
+            dynamo_loaded = "torch._dynamo" in sys.modules
+            op.py_impl(mode_type)(compile_disabled(rule) if dynamo_loaded else rule)
+            if not dynamo_loaded:
+                _RULES_AWAITING_COMPILE_DISABLE.append((op, mode_type))
         registered.append(str(op.name()))
     unresolved = len(rules) < 2 + len(_DENSE_UNDER_MODE)
     mode_type._hop_rules_pending = register_witness_hop_rules if unresolved else None
     return tuple(registered)
+
+
+def compile_disable_witness_hop_rules() -> None:
+    """Put every rule registered before Dynamo was imported behind ``torch.compiler.disable``.
+
+    Runs before each TorchLens-lifted operator entry compile (``hop_internal_compile_scope``),
+    the first point at which Dynamo can trace a rule; a plain capture never gets here, so it
+    never imports ``torch._dynamo``.
+    """
+
+    while _RULES_AWAITING_COMPILE_DISABLE:
+        op, mode_type = _RULES_AWAITING_COMPILE_DISABLE.pop()
+        rule = witness_rule_table(op).pop(mode_type, None)
+        if rule is not None:
+            op.py_impl(mode_type)(compile_disabled(rule))

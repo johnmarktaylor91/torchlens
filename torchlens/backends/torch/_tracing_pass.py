@@ -51,6 +51,7 @@ from ..._utils._torch_compat import (
     get_higher_order_operator,
     get_tracing_tensor_types,
 )
+from ._completeness_hop import compile_disable_witness_hop_rules
 from ._modes import _TorchLensDispatchMode
 
 __all__ = (
@@ -110,6 +111,7 @@ def hop_internal_compile_scope(cond_branches: bool = False) -> Iterator[None]:
     """
 
     global hop_compile_depth, cond_entry_innermost
+    compile_disable_witness_hop_rules()
     saved_cond = cond_entry_innermost
     hop_compile_depth += 1
     cond_entry_innermost = cond_branches
