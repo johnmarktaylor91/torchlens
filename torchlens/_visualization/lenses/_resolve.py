@@ -621,7 +621,7 @@ def _skin_stage(skin: str | None, build: _LensBuild) -> None:
         build.preset_fns.append(_channel_exclusivity_spec_fn(theme))
     if channel_active and build.effective.get("collapse") not in (None, "none"):
         build.effective["collapsed_node_spec_fn"] = _neutral_collapsed_spec_fn(
-            theme.neutral_aggregate_fill, build.user_kwargs.get("collapsed_node_spec_fn")
+            theme.neutral_aggregate_fill, build.effective.get("collapsed_node_spec_fn")
         )
         build.disclosure.append("collapsed boxes: neutral fill = aggregate, not encoded")
 
@@ -687,8 +687,12 @@ def _surgery_mount(trace: Trace, build: _LensBuild) -> None:
 
     from .. import surgery_visuals as _surgery_visuals
 
-    mark_spec_fn, census_lines = _surgery_visuals.surgery_stage(trace)
+    mark_spec_fn, box_spec_fn, census_lines = _surgery_visuals.surgery_stage(trace)
     build.preset_fns.append(mark_spec_fn)
+    # Collapsed boxes take the marks of the ops inside them; the user's fn last.
+    build.effective["collapsed_node_spec_fn"] = _compose_node_spec_fns(
+        [box_spec_fn], build.effective.get("collapsed_node_spec_fn")
+    )
     build.disclosure.extend(census_lines)
     overrides = dict(build.effective.get("graph_overrides") or {})
     overrides[LENS_BANNER_OMIT_KEY] = _surgery_visuals.EDIT_VIEW_OMITTED_BANNERS

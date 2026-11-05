@@ -24,8 +24,14 @@ import torch
 
 from .._errors import CaptureError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
-from .._vocab.node_spec import NodeSpec, NodeSpecFn
-from ._render_names import _SPEC_SLOT_RENDERED_NODE
+from .._vocab.node_spec import (
+    EDITED_NODE_CLASS,
+    INTERVENTION_SITE_COLOR,
+    CollapsedNodeSpecFn,
+    NodeSpec,
+    NodeSpecFn,
+)
+from ._render_names import _SPEC_SLOT_BOX_OPS, _SPEC_SLOT_RENDERED_NODE
 
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
@@ -38,6 +44,7 @@ __all__ = [
     "change_census_rows",
     "change_key_rows",
     "change_report",
+    "make_change_box_spec_fn",
     "make_change_spec_fn",
 ]
 
@@ -63,11 +70,15 @@ class ChangeReport:
         Aggregate layer label to the largest change over its passes (rolled nodes).
     unavailable:
         Why no clean values could be compared, or ``None`` when they were.
+    edited_ops:
+        Pass-qualified labels of the edit sites, resolved against the trace
+        (a collapsed box holding one carries the edit outline).
     """
 
     by_pass: Mapping[str, float | None] = field(default_factory=dict)
     by_layer: Mapping[str, float | None] = field(default_factory=dict)
     unavailable: str | None = None
+    edited_ops: frozenset[str] = frozenset()
 
     @property
     def changed_count(self) -> int:
@@ -146,27 +157,36 @@ def change_report(
         clean values are unavailable.
     """
 
+    layer_of = {
+        label: str(getattr(trace[label], "layer_label", label)) for label in trace.op_labels
+    }
+    # A layer named only by its bare label counts as edited on every pass;
+    # once any of its passes is named, only the named passes are edit sites.
+    named_passes = {layer_of[label] for label in edited_labels if label in layer_of}
+    edited_ops = frozenset(
+        label
+        for label, layer_label in layer_of.items()
+        if label in edited_labels
+        or (layer_label in edited_labels and layer_label not in named_passes)
+    )
     clean, reason = _clean_reference(trace, is_edited)
     if clean is None:
-        return ChangeReport(unavailable=reason)
+        return ChangeReport(unavailable=reason, edited_ops=edited_ops)
     clean_labels = set(clean.op_labels)
     by_pass: dict[str, float | None] = {}
     by_layer: dict[str, float | None] = {}
-    for label in trace.op_labels:
-        if label not in clean_labels or label in edited_labels:
+    for label, layer_label in layer_of.items():
+        if label not in clean_labels or label in edited_ops:
             continue
         changed, largest = _value_change(_saved_value(trace, label), _saved_value(clean, label))
         if not changed:
-            continue
-        layer_label = str(getattr(trace[label], "layer_label", label))
-        if layer_label in edited_labels:
             continue
         by_pass[label] = largest
         previous = by_layer.get(layer_label, 0.0)
         by_layer[layer_label] = (
             None if largest is None or previous is None else max(previous, largest)
         )
-    return ChangeReport(by_pass=by_pass, by_layer=by_layer)
+    return ChangeReport(by_pass=by_pass, by_layer=by_layer, edited_ops=edited_ops)
 
 
 def _change_row(largest: float | None) -> str:
@@ -198,18 +218,57 @@ def make_change_spec_fn(report: ChangeReport) -> NodeSpecFn | None:
             largest = report.by_layer[layer_label]
         else:
             return default_spec
-        classes = str(default_spec.extra_attrs.get("class", "")).split()
         return default_spec.replace(
             color=CHANGED_INK,
             penwidth=CHANGED_PENWIDTH,
             lines=[*default_spec.lines, _change_row(largest)],
-            extra_attrs={
-                **default_spec.extra_attrs,
-                "class": " ".join([*classes, CHANGED_NODE_CLASS]),
-            },
+            extra_attrs=_with_class(default_spec, CHANGED_NODE_CLASS),
         )
 
     return change_spec_fn
+
+
+def _with_class(spec: NodeSpec, name: str) -> dict[str, str]:
+    """Return ``spec.extra_attrs`` with ``name`` added to its SVG class list."""
+
+    classes = str(spec.extra_attrs.get("class", "")).split()
+    return {**spec.extra_attrs, "class": " ".join([*classes, name])}
+
+
+def make_change_box_spec_fn(report: ChangeReport) -> CollapsedNodeSpecFn | None:
+    """Build the collapsed-box callback: a box takes the marks of the ops inside it.
+
+    A box holding an edit site gets the edit outline and says so; otherwise a
+    box holding any changed op gets the light purple outline and the largest
+    change among its ops. The box's ops arrive through ``_SPEC_SLOT_BOX_OPS``.
+    """
+
+    if not report.by_pass and not report.edited_ops:
+        return None
+
+    def change_box_spec_fn(module: Any, default_spec: NodeSpec) -> NodeSpec:
+        """Mark one collapsed box by the ops it stands for."""
+
+        members = _SPEC_SLOT_BOX_OPS.get() or ()
+        if any(label in report.edited_ops for label in members):
+            return default_spec.replace(
+                color=INTERVENTION_SITE_COLOR,
+                penwidth=3.0,
+                lines=[*default_spec.lines, "holds an edited op"],
+                extra_attrs=_with_class(default_spec, EDITED_NODE_CLASS),
+            )
+        changes = [report.by_pass[label] for label in members if label in report.by_pass]
+        if not changes:
+            return default_spec
+        numeric = [change for change in changes if change is not None]
+        return default_spec.replace(
+            color=CHANGED_INK,
+            penwidth=CHANGED_PENWIDTH,
+            lines=[*default_spec.lines, _change_row(max(numeric) if numeric else None)],
+            extra_attrs=_with_class(default_spec, CHANGED_NODE_CLASS),
+        )
+
+    return change_box_spec_fn
 
 
 def change_key_rows(report: ChangeReport, heuristic_count: int) -> tuple[str, ...]:
