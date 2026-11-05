@@ -25,7 +25,6 @@ from typing import Any
 
 from ..._utils._internal_read import _internal_read_state
 from ..._utils.tensor_utils import _DEFER_PENDING, materialize_deferred_for_call
-from ._function_boundary import inside_function_apply
 
 __all__ = ("STORAGE_EXPORT_FUNC_NAMES", "materialize_deferred_for_export")
 
@@ -51,11 +50,12 @@ def materialize_deferred_for_export(args: Sequence[Any]) -> None:
     ----------
     args:
         Positional arguments of the export call; the receiver is ``args[0]``. The
-        caller has already checked that the owner thread's forward is being logged.
+        caller has already checked that the owner thread's forward is being logged
+        and that no ``Function.apply`` forward is live.
     """
 
-    if not _DEFER_PENDING or not args or getattr(_internal_read_state, "depth", 0):
+    if not _DEFER_PENDING or not args:
         return
-    if inside_function_apply():
+    if getattr(_internal_read_state, "depth", 0):
         return
     materialize_deferred_for_call(args[:1])

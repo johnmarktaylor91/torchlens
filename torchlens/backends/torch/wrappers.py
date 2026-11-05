@@ -92,6 +92,7 @@ from ._function_boundary import (
     _BARCODE_TRANSPARENT_FUNCS,
     BOUNDARY_NOTE_FUNC_NAMES,
     funcs_not_to_log,
+    inside_function_apply,
     note_function_boundary,
     print_funcs,
     unlogged_wrapper_name,
@@ -1252,7 +1253,7 @@ def torch_func_decorator(
             return _call_unlogged_off_owner(func, func_name, wrapped_func, args, kwargs)
 
         trace = cast(Any, active_trace)
-        if exports_storage and _COW_PENDING:
+        if exports_storage and _COW_PENDING and not inside_function_apply():
             _storage_exports.materialize_deferred_for_export(args)
         if has_inplace_signature and not args:
             # ``torch.clamp_(input=p)``: an in-place receiver passed by keyword.
