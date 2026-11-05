@@ -25,6 +25,7 @@ from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils._torch_symbols import tensor_read
 from ..._utils.tensor_utils import safe_copy
 from ._fused_norm_writes import _fused_update_mode, _is_fused_mutator, fused_call_writes
+from ._held_late_index import late_index_model_owned_tensor
 from ._identity_cache import IdentityCache, identity_cached
 from ._state_bytes import _whole_storage_uint8
 from ._storage_overlap import _ranges_overlap, _storage_range
@@ -1738,8 +1739,8 @@ def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> 
     (hoisted from ``wrappers.py`` under the R43 file-size ratchet): the
     session-validated stamp first (r81 -- never trust a raw static stamp),
     the storage-anchored tracker resolution second, the F20 lazy-buffer late-index
-    third (a no-op unless pending lazy buffers were recorded), and an unstamped
-    pre-forward model-owned tensor last (``_held_late_index``).
+    third (a no-op unless lazy buffers are pending), and an unstamped pre-forward
+    model-owned tensor last (``_held_late_index``, stamped here).
 
     Parameters
     ----------
@@ -1755,9 +1756,8 @@ def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> 
     """
 
     if _is_uninitialized_param(tensor):
-        # A pending lazy buffer can reach a wrapped call during torch's OWN
-        # lazy pre-hook (the ``.data`` device read inside
-        # ``UninitializedBuffer.materialize``); it has no storage to read.
+        # A pending lazy buffer can reach a wrapped call during torch's OWN lazy pre-hook
+        # (the ``.data`` read inside ``UninitializedBuffer.materialize``): no storage.
         return None
     address = session_validated_buffer_address(trace, tensor)
     if address is None:
@@ -1765,6 +1765,6 @@ def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> 
     tracker = peek_buffer_write_tracker(trace) if address is None else None
     if tracker is not None:
         address = tracker.index_materialized_buffer(tensor)
-    from ._held_late_index import late_index_model_owned_tensor
-
-    return address if address is not None else late_index_model_owned_tensor(trace, tensor)
+    if address is None and (address := late_index_model_owned_tensor(trace, tensor)):
+        register_session_buffer_stamp(trace, tensor, address)
+    return address

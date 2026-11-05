@@ -15,6 +15,7 @@ import torch
 from torch import nn
 
 from ..._utils._tensor_label import get_tensor_label
+from ._held_late_index import ROOT_MODEL_KEY
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -93,8 +94,6 @@ def pre_forward_snapshot_build_data(model: nn.Module) -> dict[str, Any]:
         ``_held_late_index`` derives held addresses for snapshot tensors the
         preparation scan did not stamp.
     """
-
-    from ._held_late_index import ROOT_MODEL_KEY
 
     owned, callable_only = collect_pre_forward_tensor_ids(model)
     return {
