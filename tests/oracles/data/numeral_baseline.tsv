@@ -5440,6 +5440,7 @@ error-strings	torchlens/_merged/_boundary_rules.py	256
 error-strings	torchlens/_observability/_artifact.py	256
 error-strings	torchlens/_observability/_chassis.py	4.2
 error-strings	torchlens/_observability/_chassis.py	4.7
+error-strings	torchlens/_observability/_collector.py	24
 error-strings	torchlens/_observability/_overhead.py	11
 error-strings	torchlens/_options_validation.py	1.0
 error-strings	torchlens/_snoop/_normalize.py	101
