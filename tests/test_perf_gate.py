@@ -184,12 +184,12 @@ def _interleaved_median_capture_ms(models: list[nn.Module], value: torch.Tensor)
 
 
 def _pinned_small_capture_medians() -> list[float]:
-    """Measure the pinned 1/16/64-op workload with torch pinned to one thread.
+    """Measure the pinned chain workload with torch pinned to one thread.
 
     Returns
     -------
     list[float]
-        Median process-CPU capture milliseconds for the 1-, 16- and 64-op chains.
+        Median process-CPU capture milliseconds for the pinned chain depths, shortest first.
     """
 
     original_threads = torch.get_num_threads()
@@ -229,7 +229,7 @@ def _clean_process_small_capture_medians() -> list[float]:
     Returns
     -------
     list[float]
-        Median process-CPU capture milliseconds for the 1-, 16- and 64-op chains.
+        Median process-CPU capture milliseconds for the pinned chain depths, shortest first.
     """
 
     env = {**os.environ, "OMP_NUM_THREADS": "1"}
@@ -260,12 +260,12 @@ def test_pinned_small_capture_fixed_cost_ratio_gate() -> None:
     The gate measures the capture's fixed cost in a clean process: the pinned
     workload runs in a fresh interpreter, so the ratio does not depend on how
     many modules, loggers or objects the hosting test session has accumulated.
-    Per-capture work that scales with the host process (the belt pre-filter
-    over ``sys.modules``, logger cache clears) inflated the 1-op cost by 1 to
-    6 ms late in a single-process nightly shard and read 0.563 on an unchanged
-    tree whose clean-process ratio is about 0.43.
     """
 
+    # Clean process, not in-session (nfr-perf, 2026-11-05): per-capture work that
+    # scales with the host process (the belt pre-filter over sys.modules, logger
+    # cache clears) raised the 1-op fixed cost by 1-6 ms late in a single-process
+    # nightly shard, which read 0.563 on a tree whose clean-process ratio is ~0.43.
     one_op_ms, sixteen_op_ms, sixty_four_op_ms = _clean_process_small_capture_medians()
 
     fixed_cost_ratio = one_op_ms / sixteen_op_ms
