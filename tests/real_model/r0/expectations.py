@@ -59,8 +59,8 @@ block's output ``linear`` reads the mutated weight through them.
   layers return two outputs, so ``resid_pre`` (and bert layer 1's
   ``resid_post``) settle as typed ambiguous-output absences that the
   adjudicator marks known-false; whisper's decoder layers and t5's
-  decoder-side embeddings are not classified there; vit's layers also
-  classify as ``transformer_residuals`` and ``vit_self_attention``.
+  decoder-side embeddings are not classified there; vit's attention
+  wrappers also classify as ``vit_self_attention``.
 
 Ownership of the known-false rows (for the teaching message):
 ``final_norm_present`` -> lane A02 (semantic RESIDUAL slice, final-norm

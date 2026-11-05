@@ -2245,7 +2245,7 @@
      "recipes": {
       "gqa_attention": 2,
       "layer_norm": 5,
-      "transformer_residuals": 4,
+      "transformer_residuals": 2,
       "vit_self_attention": 2
      },
      "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
@@ -2313,7 +2313,7 @@
      "recipes": {
       "gqa_attention": 2,
       "layer_norm": 5,
-      "transformer_residuals": 4,
+      "transformer_residuals": 2,
       "vit_self_attention": 2
      },
      "recorded_on": "transformers 4.55.4 on torch 2.1.2+cpu and 2.13.0+cpu (python 3.11; the torch floor row), recorded 2026-11-05"
