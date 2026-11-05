@@ -3,7 +3,7 @@
 Summary memo 3.8 + composition rows 11/14/16: the result survives model
 and trace teardown; every numeric field is a plain int or None; renderer
 and projection values agree; HTML is escaped and dependency-free;
-``Trace.provenance._summary()`` (interim private spelling) serves the relocated preamble byte-for-byte.
+``Trace.provenance.summary()`` serves the relocated preamble byte-for-byte.
 """
 
 from __future__ import annotations
