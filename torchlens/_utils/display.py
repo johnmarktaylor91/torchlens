@@ -475,21 +475,102 @@ def progress_bar(
 
     if not enabled or total is None or total <= threshold:
         return iterable
+    bar = _tqdm_bar(iterable, total=total, desc=desc)
+    return iterable if bar is None else cast(Iterable[_T], bar)
+
+
+def delayed_progress_bar(
+    iterable: Iterable[_T],
+    *,
+    total: int,
+    desc: str,
+    delay: float,
+    threshold: int = 10,
+) -> Iterable[_T]:
+    """Wrap an iterable with a progress bar that appears only once the loop runs long.
+
+    Parameters
+    ----------
+    iterable:
+        Iterable to wrap.
+    total:
+        Total iteration count.
+    desc:
+        Progress-bar label.
+    delay:
+        Seconds the loop must run before any bar is built. A loop that ends
+        sooner builds no bar object at all: no terminal bar, no notebook widget.
+    threshold:
+        Minimum total count required before a progress bar is considered.
+
+    Returns
+    -------
+    Iterable[_T]
+        Original iterable, or a generator that starts a bar once ``delay`` has passed.
+    """
+
+    if total <= threshold:
+        return iterable
+    return _delayed_progress(iterable, total=total, desc=desc, delay=delay)
+
+
+def _tqdm_bar(
+    iterable: Iterable[Any] | None, *, total: int, desc: str, initial: int = 0
+) -> Any | None:
+    """Build the tqdm bar for this environment, or None when tqdm is missing."""
+
     try:
         # tqdm's notebook bar needs ipywidgets; without it tqdm.notebook raises mid-construction
         # and the half-built bar prints "Exception ignored in tqdm.__del__" when collected.
         if in_notebook() and importlib.util.find_spec("ipywidgets") is not None:
             from tqdm.notebook import tqdm
 
-            return cast(Iterable[_T], tqdm(iterable, total=total, desc=desc))
+            return tqdm(iterable, total=total, desc=desc, initial=initial)
         from tqdm import tqdm
 
-        return cast(
-            Iterable[_T],
-            tqdm(iterable, total=total, desc=desc, disable=not sys.stderr.isatty()),
+        return tqdm(
+            iterable,
+            total=total,
+            desc=desc,
+            initial=initial,
+            disable=not sys.stderr.isatty(),
         )
     except ImportError:
-        return iterable
+        return None
+
+
+def _delayed_progress(
+    iterable: Iterable[_T], *, total: int, desc: str, delay: float
+) -> Iterator[_T]:
+    """Yield items bare until ``delay`` seconds pass, then continue under a bar.
+
+    tqdm's own ``delay=`` only defers drawing: tqdm.notebook still builds its
+    ipywidgets container at construction, so a sweep of short loops would open
+    one hidden widget per call. Building nothing until the deadline keeps a
+    short loop free of bar objects. The wait costs one clock read per item and
+    none after the bar starts.
+    """
+
+    iterator = iter(iterable)
+    deadline = time.monotonic() + delay
+    done = 0
+    for item in iterator:
+        yield item
+        done += 1
+        if done < total and time.monotonic() >= deadline:
+            break
+    else:
+        return
+    bar = _tqdm_bar(None, total=total, desc=desc, initial=done)
+    if bar is None:
+        yield from iterator
+        return
+    try:
+        for item in iterator:
+            yield item
+            bar.update(1)
+    finally:
+        bar.close()
 
 
 def in_notebook() -> bool:
