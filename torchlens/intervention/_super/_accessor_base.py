@@ -5,10 +5,27 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any, Generic, TypeVar
 
+from ..._errors import AmbiguousOpLookupError
+from ..._utils._display_errors import lookup_message
 from ._base import Super
 
 T = TypeVar("T")
 S = TypeVar("S", bound=Super[Any])
+
+
+def member_lookup(accessor: Any, label: str) -> Any:
+    """Resolve ``label`` through one member's typed door; ``None`` when absent.
+
+    An ambiguity refusal (``AmbiguousOpLookupError``) propagates: the bundle
+    answers with the member's remedy instead of a bare "not found".
+    """
+
+    try:
+        return accessor[label]
+    except AmbiguousOpLookupError:
+        raise
+    except (KeyError, ValueError):
+        return None
 
 
 class SuperAccessor(Generic[T, S]):
@@ -59,8 +76,13 @@ class SuperAccessor(Generic[T, S]):
 
         suggestions = self._suggest(label)
         if suggestions:
-            suggestion_str = ", ".join(repr(item) for item in suggestions)
-            raise KeyError(f"Label {label!r} not found. Did you mean {suggestion_str}?")
+            raise KeyError(
+                lookup_message(
+                    f"Label {label!r} not found.",
+                    suggestions,
+                    "pass a label from this accessor.",
+                )
+            )
         raise KeyError(f"Label {label!r} not found.")
 
     def __contains__(self, label: object) -> bool:

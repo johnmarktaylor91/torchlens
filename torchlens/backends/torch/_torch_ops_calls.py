@@ -43,6 +43,7 @@ import torch
 import torch._ops as _torch_ops
 
 from ... import _state
+from ._foreign_data import FLASH_ATTENTION_2_CUSTOM_OP, recorded_custom_op_name
 from ._tl import get_tensor_label
 
 _CALL_CLASS_NAMES: tuple[str, ...] = ("OpOverloadPacket", "OpOverload")
@@ -311,6 +312,69 @@ def _disclose_unrecorded_mutation(trace: Any, op: Any) -> None:
     )
 
 
+def _zero_fa2_softmax_padding(outputs: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> None:
+    """Zero the cells of FlashAttention 2's ``S_dmask`` that the kernel leaves undefined.
+
+    ``flash_attn::_flash_attn_forward`` returns ``(out, lse, S_dmask, rng_state)``. With
+    ``return_softmax`` the kernel allocates ``S_dmask`` as ``(batch, heads,
+    round128(seqlen_q), round128(seqlen_k))`` with ``torch::empty`` and defines only
+    ``[..., :seqlen_q, :seqlen_k]``: the softmax with dropped entries sign-flipped by the
+    dropout draw. The padding is not a function of the inputs. Measured on an L40S
+    (torch 2.8, flash-attn 2.8.3.post2; jobs mp-fa2drop-diag-3 and -4): replayed under the
+    captured CUDA generator state, ``out``, ``lse``, ``rng_state`` and the defined region
+    of ``S_dmask`` match bit for bit, while the padding differs between two calls on the
+    same inputs; at seqlen 16, head dim 64, 15232 padding cells kept a value planted in
+    the freed allocator block (never written), the rest were written from out-of-bounds
+    shared memory; at seqlens that are multiples of 128 there is no padding and the whole
+    tensor matched. Zeroing the padding where the call returns gives the model, the trace,
+    the saved value and the replay the same bytes, so forward replay compares the whole
+    tensor exactly. The defined region and the other three outputs are never touched.
+
+    Parameters
+    ----------
+    outputs:
+        The operator's return value.
+    args, kwargs:
+        The call's arguments; ``q`` and ``k`` are ``(batch, seqlen, heads, head_dim)``.
+    """
+
+    if not isinstance(outputs, (tuple, list)) or len(outputs) != 4:
+        return
+    s_dmask = outputs[2]
+    q = args[0] if args else kwargs.get("q")
+    k = args[1] if len(args) > 1 else kwargs.get("k")
+    if not (
+        isinstance(s_dmask, torch.Tensor)
+        and isinstance(q, torch.Tensor)
+        and isinstance(k, torch.Tensor)
+    ):
+        return
+    if s_dmask.dim() != 4 or q.dim() != 4 or k.dim() != 4 or s_dmask.numel() == 0:
+        return
+    seqlen_q, seqlen_k = q.shape[1], k.shape[1]
+    with _state.pause_logging(), torch.no_grad():
+        s_dmask[:, :, seqlen_q:, :].zero_()
+        s_dmask[:, :, :seqlen_q, seqlen_k:].zero_()
+
+
+def _zeroing_fa2_softmax_padding(original: Callable[..., Any], op: Any) -> functools.partial[Any]:
+    """Return the FlashAttention 2 replay callable: the operator, then the padding zeroed.
+
+    A ``functools.partial`` bound to ``op`` like every recorded operator's callable, so
+    :func:`~._foreign_data.recorded_custom_op_name` still confirms the operator; capture
+    and validation replay both run it (:func:`_zero_fa2_softmax_padding`).
+    """
+
+    def _call_zeroing_padding(packet: Any, /, *args: Any, **kwargs: Any) -> Any:
+        """Run the FlashAttention 2 operator and zero its undefined ``S_dmask`` padding."""
+        call_operator = functools.partial(original, packet)
+        outputs = call_operator(*args, **kwargs)
+        _zero_fa2_softmax_padding(outputs, args, kwargs)
+        return outputs
+
+    return functools.partial(_call_zeroing_padding, op)
+
+
 def _decorated_for(op: Any, original: Callable[..., Any]) -> tuple[Callable[..., Any], str]:
     """Return the cached logging wrapper for one operator object.
 
@@ -329,7 +393,9 @@ def _decorated_for(op: Any, original: Callable[..., Any]) -> tuple[Callable[...,
         ``functools.partial`` (no TorchLens frame between the wrapper's trampoline and the
         operator), so a failing operator classifies as the user's op, and validation
         replays the op through it. For a receiver-mutating operator it is
-        :func:`_returning_mutated_receiver` around that partial, recorded in place.
+        :func:`_returning_mutated_receiver` around that partial, recorded in place. For
+        FlashAttention 2 it is the partial :func:`_zeroing_fa2_softmax_padding` returns,
+        whose operator call line carries the same user-op marker.
     """
 
     cached = _DECORATED_BY_OP.get(id(op))
@@ -339,6 +405,8 @@ def _decorated_for(op: Any, original: Callable[..., Any]) -> tuple[Callable[...,
 
     name = _recorded_op_name(op)
     call_operator = functools.partial(original, op)
+    if recorded_custom_op_name(call_operator) == FLASH_ATTENTION_2_CUSTOM_OP:
+        call_operator = _zeroing_fa2_softmax_padding(original, op)
     call_operator.__name__ = name  # type: ignore[attr-defined]
     call_operator.__qualname__ = name  # type: ignore[attr-defined]
     mutation = _mutation_kind(op)

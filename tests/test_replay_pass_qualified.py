@@ -156,11 +156,9 @@ def test_differentiable_replay_multipass_frontier_keys_are_per_pass(recurrent):
 
     _model, _x, trace = recurrent
     fork = trace.fork()
-    replayed = fork.push(
-        replay=tl.options.ReplayOptions(
-            differentiable=True,
-            hooks={tl.label("relu_1_2:1"): lambda out, *, ctx: torch.zeros_like(out)},
-        ),
+    replayed = fork.do(
+        {tl.label("relu_1_2:1"): lambda out, *, ctx: torch.zeros_like(out)},
+        intervention=tl.options.InterventionOptions(differentiable=True),
     )
     assert replayed is not fork
     assert bool((replayed._layer_dict_all_keys["relu_1_2:1"].out == 0).all())
@@ -185,7 +183,7 @@ def test_bare_multipass_label_refuses_in_units(recurrent):
     assert excinfo.value.fields["reason"] == "multipass_bare_label"
     message = str(excinfo.value)
     assert "3 passes" in message
-    for spelling in ("'relu_1_2:1'", "'relu_1_2:2'", "'relu_1_2:3'"):
+    for spelling in ("'relu_1:1'", "'relu_1:2'", "'relu_1:3'"):
         assert spelling in message
 
 
@@ -199,7 +197,7 @@ def test_bare_multipass_label_refuses_in_do_and_the_trace_door(recurrent):
     assert excinfo.value.fields["pass_indices"] == (1, 2, 3)
     message = str(excinfo.value)
     assert "3 passes" in message
-    for spelling in ("'relu_1_2:1'", "'relu_1_2:2'", "'relu_1_2:3'"):
+    for spelling in ("'relu_1:1'", "'relu_1:2'", "'relu_1:3'"):
         assert spelling in message
 
     fork = trace.fork()
@@ -248,11 +246,12 @@ def test_single_pass_replay_disclosures_keep_bare_labels(single_pass):
     assert all(":" not in label for label in last_run["origins"])
 
 
-def test_push_from_bare_multipass_string_refuses(recurrent):
-    """push_from with a bare multi-pass string refuses typed (never guesses)."""
+def test_do_value_bare_multipass_string_refuses(recurrent):
+    """do(site, value) with a bare multi-pass string refuses typed (never guesses)."""
 
     _model, _x, trace = recurrent
     fork = trace.fork()
+    value = torch.zeros_like(fork._layer_dict_all_keys["relu_1_2:1"].out)
     with pytest.raises(AmbiguousSiteError) as excinfo:
-        fork.push_from("relu_1_2")
+        fork.do("relu_1_2", value)
     assert excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"

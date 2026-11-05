@@ -69,10 +69,14 @@ def _target(journal: CaptureEvents, position: int = 1) -> Any:
 
 
 @pytest.fixture(scope="module")
-def leg_templates(request: pytest.FixtureRequest) -> dict[str, list[Any]]:
-    monkeypatch = pytest.MonkeyPatch()
-    request.addfinalizer(monkeypatch.undo)
-    return {leg: grab_journal_events(monkeypatch, leg) for leg in _LEGS}
+def leg_templates() -> dict[str, list[Any]]:
+    """Grab each leg's templates under its own patch, undone before any test runs."""
+
+    templates: dict[str, list[Any]] = {}
+    for leg in _LEGS:
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            templates[leg] = grab_journal_events(monkeypatch, leg)
+    return templates
 
 
 @pytest.mark.parametrize("leg", _LEGS)

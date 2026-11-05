@@ -22,7 +22,7 @@ EAGER_LOAD_MAX_BYTES = 256 * 1024 * 1024
 LOAD_MAX_PAYLOAD_ENTRIES = 100_000
 
 #: Structural cache of loaded artifacts, keyed by manifest digest PLUS the
-#: metadata.pkl content witness (:func:`_metadata_witness`).
+#: structural-file witness (:func:`_metadata_witness`: record tables, or 2.x metadata.pkl).
 _TRACE_CACHE: dict[str, tuple[Any, dict[str, Any]]] = {}
 _TRACE_CACHE_MAX = 4
 
@@ -30,7 +30,7 @@ _TRACE_CACHE_MAX = 4
 _DIGEST_HINTS: dict[tuple[str, int, int, int, int], str] = {}
 _DIGEST_HINTS_MAX = 16
 
-#: metadata.pkl stat identity -> sha256 witness (the cache-key join, 3.11c).
+#: structural file stat identity -> sha256 witness (the cache-key join, 3.11c).
 _METADATA_HINTS: dict[tuple[str, int, int, int, int], str] = {}
 
 
@@ -130,17 +130,19 @@ def _sha256_of_file(path: Path) -> str:
 
 
 def _metadata_witness(path: Path) -> str:
-    """Return the content witness of ``metadata.pkl`` for the structural cache.
+    """Return the content witness of the artifact's structural files for the cache.
 
     The manifest digest is the artifact's IDENTITY, but the cache serves the
-    UNPICKLED trace, and two directories can share one manifest while their
-    ``metadata.pkl`` bytes differ (a copy whose metadata was overwritten or
+    LOADED trace, and two directories can share one manifest while the files
+    that carry the structure differ (a copy whose records were overwritten or
     corrupted). Keying the cache on the manifest alone served the healthy
     trace for the corrupted copy (AUD-CODE 3.11c); the witness joins the
-    key so any metadata change is a cache MISS and reloads through the
-    integrity-checked ``tl.load`` door. Hashed once per stat identity
-    (the same verified-hint pattern as :data:`_DIGEST_HINTS`); a single-
-    file artifact is already content-hashed and reads ``""``.
+    key so any structural change is a cache MISS and reloads through the
+    integrity-checked ``tl.load`` door. The structural files are the 3.0
+    ``records/*.json`` tables, or ``metadata.pkl`` of a 2.x artifact. Each is
+    hashed once per stat identity (the same verified-hint pattern as
+    :data:`_DIGEST_HINTS`); a single-file artifact is already content-hashed
+    and reads ``""``.
 
     Parameters
     ----------
@@ -150,18 +152,33 @@ def _metadata_witness(path: Path) -> str:
     Returns
     -------
     str
-        Hex digest of ``metadata.pkl`` (``""`` when the artifact has none).
+        Joined hex digests of the structural files (``""`` when there are none).
     """
 
-    metadata_path = path / "metadata.pkl" if path.is_dir() else None
-    if metadata_path is None or not metadata_path.is_file():
+    if not path.is_dir():
         return ""
-    identity = _stat_identity(metadata_path)
+    return ":".join(_file_witness(target) for target in _structural_files(path))
+
+
+def _structural_files(path: Path) -> list[Path]:
+    """The files whose bytes decide what a load builds: 3.0 record tables or ``metadata.pkl``."""
+
+    records = path / "records"
+    if records.is_dir():
+        return sorted(target for target in records.glob("*.json") if target.is_file())
+    legacy = path / "metadata.pkl"
+    return [legacy] if legacy.is_file() else []
+
+
+def _file_witness(target: Path) -> str:
+    """Hex digest of one structural file, hinted by its stat identity."""
+
+    identity = _stat_identity(target)
     if identity is not None:
         hinted = _METADATA_HINTS.get(identity)
         if hinted is not None:
             return hinted
-    witness = _sha256_of_file(metadata_path)
+    witness = _sha256_of_file(target)
     if identity is not None:
         if len(_METADATA_HINTS) >= _DIGEST_HINTS_MAX:
             _METADATA_HINTS.pop(next(iter(_METADATA_HINTS)))

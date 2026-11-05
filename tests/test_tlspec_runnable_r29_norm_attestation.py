@@ -53,7 +53,7 @@ def test_r29_instance_norm_tracking_does_not_falsely_diverge(tmp_path: Path) -> 
         x = torch.randn(2, 4, 8)
         path = _save(model, x, tmp_path / f"in_{mode}.tlspec")
 
-        result = tl.load(path).run(inputs=x.clone())
+        result = tl.load(path).run_transaction(inputs=x.clone())
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
         assert not result.report.is_poisoned
         # The replayed output is numerically correct (the fix does not mask a real divergence).

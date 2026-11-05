@@ -48,6 +48,7 @@ or mark the cell to make it pass (the validation-integrity rule in
 | `test_matrix.py` | the cell universe, one test per cell (`test_cell`), the smoke hook (`SMOKE_CELLS`), and the four structural pins (the feature axis equals `tests/interaction_matrix.json`'s, the core pairs are admitted by it, the six base oracles, the stochastic tag), plus a pin that a cell's verdict names every unsatisfied oracle |
 | `conftest.py` | the `cell_result` fixture: runs one cell in its own temp directory |
 | `test_cell_tmp.py` | pins that a cell removes its temp directory when it ends |
+| `test_f7_intervention_persistence.py` | the saved intervention recipe (io.1), one cell per promise: a built-in edit recipe reruns to the live activations, loads equal to the live recipe, a user callable saves as a disclosed placeholder, every rerun door refuses it, and both saves and loads run their validators |
 
 ## The cell universe
 

@@ -1,4 +1,4 @@
-"""Helpers behind the ``Op.out`` read path: the mutation-check state and the synthesized-read warning."""
+"""Helpers behind the ``Op.out`` read path: absent-value refusals, the mutation-check state and the synthesized-read warning."""
 
 from __future__ import annotations
 
@@ -9,6 +9,42 @@ import torch
 
 from .._errors import MutatedReferenceError
 from .._utils._torch_compat import tensor_version_or_none
+
+
+def _refuse_read_without_trace(
+    op: Any, *, member: str | None = None, out_trace: Any = None
+) -> None:
+    """Refuse an Op read whose answer needs the owning Trace when that Trace is gone.
+
+    A bound Op whose Trace was garbage-collected lost its saved values (the op
+    store evicts payloads with its last owner) and its graph, so reads that need
+    them would answer ``None`` or an untyped miss that reads as "no such value";
+    a chained temporary such as ``tl.trace(model, x).output_ops[0].out`` loses
+    its Trace at once. The refusal is ``Op.trace``'s own typed
+    ``trace_reference_collected``. An Op never bound to a Trace (standalone
+    pickle) keeps its own ``record_not_bound`` handling.
+
+    Parameters
+    ----------
+    op:
+        The Op being read.
+    member:
+        A public name whose lookup missed (``Op.__getattr__``): refuse only when
+        it names a class member, so a typo keeps its ``AttributeError``.
+    out_trace:
+        The live Trace of an ``Op.out`` read that found no value: a Trace that
+        kept reduced payloads only refuses through ``refuse_reduced_payload_read``.
+    """
+
+    if member is not None and not hasattr(type(op), member):
+        return
+    ref = op._slot("_source_trace_ref")
+    if ref is not None and ref() is None:
+        _ = op.trace
+    if out_trace is not None and op._slot("_tracing_finished"):
+        from ..stats._capture_stats import refuse_reduced_payload_read
+
+        refuse_reduced_payload_read(op._slot, out_trace)
 
 
 def _out_read_state(slot: Callable[..., Any], out: Any) -> dict[str, Any]:

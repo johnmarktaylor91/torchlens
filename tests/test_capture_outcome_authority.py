@@ -10,7 +10,10 @@ classifier.
 from __future__ import annotations
 
 import pytest
+import torch
+from torch import nn
 
+import torchlens as tl
 from torchlens._capture.outcome import (
     CAPTURE_OUTCOME_CAPABILITIES,
     CaptureOutcome,
@@ -190,6 +193,42 @@ def test_origin_interrupt() -> None:
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/outcome.py.
 def test_origin_no_traceback_is_unknown() -> None:
     assert classify_failure_origin(ValueError("bare")) is FailureOrigin.UNKNOWN
+
+
+class _ConvBn(nn.Module):
+    """Conv then BatchNorm: the conv accepts an unbatched image, the norm refuses it."""
+
+    def __init__(self) -> None:
+        """Initialize the two layers."""
+
+        super().__init__()
+        self.conv = nn.Conv2d(3, 4, 3)
+        self.bn = nn.BatchNorm2d(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run conv then batch norm."""
+
+        return self.bn(self.conv(x))
+
+
+def test_missing_batch_dimension_is_the_input_not_a_torchlens_bug() -> None:
+    """A layer raising inside the user's module forward is attributed to the model, with a remedy.
+
+    The module-forward wrapper frame sits between torch's rank check and the
+    model, so it must classify as the user's forward, and the message says the
+    input is missing its batch dimension and how to add one.
+    """
+
+    with pytest.warns(tl.errors.CaptureAttemptFailedWarning):
+        with pytest.raises(tl.errors.TraceCaptureError) as info:
+            tl.trace(_ConvBn(), torch.randn(3, 8, 8))
+
+    message = str(info.value)
+    assert classify_failure_origin(info.value) is FailureOrigin.USER_OP
+    assert info.value.fields["code"] == "forward_raised"
+    assert "TorchLens bug" not in message
+    assert "missing its batch dimension" in message
+    assert "x.unsqueeze(0)" in message
 
 
 # ---------------------------------------------------------------------------

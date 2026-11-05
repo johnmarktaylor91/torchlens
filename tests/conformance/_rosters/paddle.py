@@ -31,8 +31,24 @@ GROUP_ECOSYSTEM = "ecosystem"
 _X24 = np.linspace(-1.0, 1.0, 8, dtype=np.float32).reshape(2, 4)
 _W44 = np.linspace(-0.5, 0.5, 16, dtype=np.float32).reshape(4, 4)
 _B4 = np.array([0.1, -0.2, 0.3, 0.0], dtype=np.float32)
+# loop3's input, weight and bias are multiples of 1/8 or coarser: every product and partial
+# sum of its matmul and bias add is exact in float32, so any summation order (the framework's
+# kernel or NumPy's BLAS, which differ by CPU) gives the oracle's bits.
+_LOOP_X = np.array([[0.5, -1.0, 0.25, 0.75], [-0.5, 0.25, 1.0, -0.25]], dtype=np.float32)
+_LOOP_W = np.array(
+    [
+        [0.5, -0.25, 0.25, 0.0],
+        [0.25, 0.5, -0.5, 0.25],
+        [-0.25, 0.25, 0.5, 0.5],
+        [0.5, 0.0, -0.25, 0.25],
+    ],
+    dtype=np.float32,
+)
+_LOOP_B = np.array([0.25, -0.25, 0.125, 0.5], dtype=np.float32)
 _IMG = np.linspace(-1.0, 1.0, 36, dtype=np.float32).reshape(1, 1, 6, 6)
-_VOL = np.linspace(-1.0, 1.0, 64, dtype=np.float32).reshape(1, 1, 4, 4, 4)
+# mod_conv3d's volume, kernel and bias are multiples of 1/16 or coarser, so all 27-term window
+# sums are exact in float32 and every summation order gives the oracle's bits.
+_VOL = ((np.arange(64) % 9 - 4) / 4).astype(np.float32).reshape(1, 1, 4, 4, 4)
 _SEQ = np.linspace(-1.0, 1.0, 16, dtype=np.float32).reshape(1, 2, 8)
 
 
@@ -150,7 +166,9 @@ def _fn_multi_output() -> tuple[Any, Any]:
 
         return v.sum(), v * 2.0
 
-    return multi, paddle.to_tensor(_X24)
+    # _LOOP_X is float32-exact with a nonzero sum; _X24 is symmetric, so its float32 sum is
+    # 0.0 or a few 1e-8 depending on summation order, against a zero oracle.
+    return multi, paddle.to_tensor(_LOOP_X)
 
 
 def _fn_loop3() -> tuple[Any, Any]:
@@ -158,8 +176,8 @@ def _fn_loop3() -> tuple[Any, Any]:
 
     import paddle
 
-    weight = paddle.to_tensor(_W44)
-    bias = paddle.to_tensor(_B4)
+    weight = paddle.to_tensor(_LOOP_W)
+    bias = paddle.to_tensor(_LOOP_B)
 
     def loop(v: Any) -> Any:
         """Apply the shared affine-relu step three times."""
@@ -168,18 +186,18 @@ def _fn_loop3() -> tuple[Any, Any]:
             v = paddle.nn.functional.relu(paddle.matmul(v, weight) + bias)
         return v
 
-    return loop, paddle.to_tensor(_X24)
+    return loop, paddle.to_tensor(_LOOP_X)
 
 
 def _loop3_intermediates() -> dict[str, list[np.ndarray]]:
     """Expected intermediates of the fn_loop3 row, one list per op kind."""
 
-    value = _X24
+    value = _LOOP_X
     matmuls: list[np.ndarray] = []
     relus: list[np.ndarray] = []
     for _ in range(3):
-        matmuls.append(value @ _W44)
-        value = _relu(matmuls[-1] + _B4)
+        matmuls.append(value @ _LOOP_W)
+        value = _relu(matmuls[-1] + _LOOP_B)
         relus.append(value)
     return {"matmul": matmuls, "functional.relu": relus}
 
@@ -230,8 +248,19 @@ def _fn_constants_planted() -> tuple[Any, Any]:
     return planted, paddle.to_tensor(_X24)
 
 
-_MLP_W1, _MLP_B1 = _param((4, 3)), _param((3,), 0.1)
-_MLP_W2, _MLP_B2 = _param((3, 2), 0.4), _param((2,), 0.05)
+# mod_mlp's input and weights are multiples of 1/32 or coarser: every product and partial sum
+# of both linears is exact in float32, so any summation order (paddle's kernel or NumPy's BLAS,
+# which differ by CPU) gives the oracle's bits. The sin weights left kept relu units of 4.8e-4
+# and 1.7e-3 built from terms near 0.3, where one rounding exceeds the band. Three hidden units
+# are kept and three zeroed.
+_MLP_X = np.array([[-1.0, -0.75, -0.5, -0.25], [0.25, 0.5, 0.75, 1.0]], dtype=np.float32)
+_MLP_W1 = np.array(
+    [[0.25, -0.5, 0.125], [-0.25, 0.25, 0.5], [0.5, -0.25, -0.25], [0.125, 0.5, -0.5]],
+    dtype=np.float32,
+)
+_MLP_B1 = np.array([0.125, -0.25, 0.0625], dtype=np.float32)
+_MLP_W2 = np.array([[0.5, -0.25], [0.25, 0.5], [-0.5, 0.25]], dtype=np.float32)
+_MLP_B2 = np.array([0.0625, -0.125], dtype=np.float32)
 
 
 def _mod_mlp() -> tuple[Any, Any]:
@@ -242,7 +271,7 @@ def _mod_mlp() -> tuple[Any, Any]:
     model = paddle.nn.Sequential(paddle.nn.Linear(4, 3), paddle.nn.ReLU(), paddle.nn.Linear(3, 2))
     _set_linear(model[0], _MLP_W1, _MLP_B1)
     _set_linear(model[2], _MLP_W2, _MLP_B2)
-    return model, paddle.to_tensor(_X24)
+    return model, paddle.to_tensor(_MLP_X)
 
 
 _SHARED_W, _SHARED_B = _param((4, 4)), _param((4,), 0.1)
@@ -350,7 +379,8 @@ def _nested_intermediates() -> dict[str, np.ndarray]:
 
 
 _CONV1_W, _CONV1_B = _param((3, 2, 3)), _param((3,), 0.1)
-_CONV3_W, _CONV3_B = _param((2, 1, 3, 3, 3), 0.2), _param((2,), 0.1)
+_CONV3_W = ((np.arange(54) % 5 - 2) / 8).astype(np.float32).reshape(2, 1, 3, 3, 3)
+_CONV3_B = np.array([0.0625, -0.125], dtype=np.float32)
 
 
 def _conv_layer_model(rank: int) -> tuple[Any, Any]:
@@ -431,7 +461,10 @@ def _fn_specs() -> tuple[_SpecTuple, ...]:
             "fn_multi_output",
             _fn_multi_output,
             ("input", "tensor.sum", "tensor.__mul__"),
-            {"tensor.sum": np.asarray(_X24.sum(), dtype=np.float32), "tensor.__mul__": _X24 * 2},
+            {
+                "tensor.sum": np.asarray(_LOOP_X.sum(), dtype=np.float32),
+                "tensor.__mul__": _LOOP_X * 2,
+            },
             False,
         ),
         (
@@ -490,7 +523,7 @@ def _mod_specs() -> tuple[_SpecTuple, ...]:
             "mod_mlp",
             _mod_mlp,
             ("input", "functional.linear", "functional.relu", "functional.linear"),
-            {"functional.relu": _relu(_X24 @ _MLP_W1 + _MLP_B1)},
+            {"functional.relu": _relu(_MLP_X @ _MLP_W1 + _MLP_B1)},
             False,
         ),
         (

@@ -181,7 +181,7 @@ def test_private_c_captured_operand_consumption_ceilings(
         path = tmp_path / f"{surface}_{thread_mode}.tlspec"
         shutil.rmtree(path, ignore_errors=True)
         trace.save(path, level="runnable", include_weights=True, include_activations=True)
-        result = tl.load(path).run(inputs=(_gate_neg(), data))
+        result = tl.load(path).run_transaction(inputs=(_gate_neg(), data))
         assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     finally:
         runner.stop()

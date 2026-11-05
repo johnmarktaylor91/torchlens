@@ -4,8 +4,8 @@ Pins the normative contract rows: edit-then-scatter on a fresh tensor
 (helpers stay mask-oblivious, the engine owns masking), the whole-site
 short-circuit, the closed ``selection_apply_invalid`` reason set
 (shape | dtype | device | broadcast | not_maskable), site eligibility, the
-audit record, spec-persistence honesty (the mask never enters a KEEP field;
-``selection_recipe`` is DROP-gated), the ``tl.Edit`` public alias, and the
+audit record, spec-persistence honesty (a builtin edit's mask persists only
+as its ``mask``/``mask_sha256`` keywords; ``selection_recipe`` is its own family), the ``tl.Edit`` public alias, and the
 ``tl.patch_from`` helper (identity + discriminating behavior; portability
 ``opaque_audit``).
 """
@@ -20,6 +20,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.errors import SelectionError
+from torchlens.intervention._subspace_projection import _mask_digest
 from torchlens.intervention.types import Edit
 
 _replay_module = importlib.import_module("torchlens.intervention.replay")
@@ -169,11 +170,12 @@ def test_empty_selection_do_is_noop_with_audit(log):
     assert fork.intervention_audit[-1]["sites"] == []
 
 
-def test_mask_never_enters_keep_fields_and_recipe_policy(log):
-    """Persistence honesty: derived specs carry masks only in the DROP factory;
-    the recipe rides the selection_recipe family (BLOB_RECURSIVE as of the
-    tlspec v8 coordinated bump — never smuggled through the KEEP args/kwargs
-    fields). Args/kwargs/metadata stay tensor-free."""
+def test_mask_rides_kwargs_with_its_digest_and_recipe_policy(log):
+    """Persistence honesty: a derived builtin spec stores its dense element mask
+    and the mask's sha256 as the two keywords ``mask``/``mask_sha256`` (so it
+    stays portable); the recipe rides the selection_recipe family
+    (BLOB_RECURSIVE as of the tlspec v8 coordinated bump). Args, metadata and
+    the verb's own kwargs stay tensor-free."""
 
     selection = tl.units("relu_1_2", [(0, 0, 1, 1)])
     fork = log.fork()
@@ -187,7 +189,7 @@ def test_mask_never_enters_keep_fields_and_recipe_policy(log):
     assert derived.name == "zero_ablate"  # helper identity preserved
     assert derived.selection_recipe is not None
     assert derived.selection_recipe["resolve_digest"]
-    # the mask lives only in the runtime factory closure, which never persists
+    # the runtime factory closure never persists; the mask persists in kwargs
     assert Edit._PORTABLE_STATE_SPEC["factory"].name == "DROP"
     assert Edit._PORTABLE_STATE_SPEC["selection_recipe"].name == "BLOB_RECURSIVE"
 
@@ -200,11 +202,16 @@ def test_mask_never_enters_keep_fields_and_recipe_policy(log):
             return all(_no_tensor_leaves(item) for item in value.values())
         return True
 
+    stored = dict(derived.kwargs)
+    expected = torch.zeros_like(log["relu_1_2"].out, dtype=torch.bool)
+    expected[0, 0, 1, 1] = True
+    assert stored["mask"].dtype == torch.bool and torch.equal(stored["mask"], expected)
+    assert stored["mask_sha256"] == _mask_digest(expected)
     assert _no_tensor_leaves(derived.args)
-    assert _no_tensor_leaves(dict(derived.kwargs))
+    assert _no_tensor_leaves({k: v for k, v in stored.items() if k not in ("mask",)})
     assert _no_tensor_leaves(dict(derived.metadata))
-    # element-masked derived specs disclose opaque_audit portability
-    assert derived.portability == "opaque_audit"
+    # element-masked builtin specs stay builtin (portable)
+    assert derived.portability == "builtin"
 
 
 @pytest.mark.smoke

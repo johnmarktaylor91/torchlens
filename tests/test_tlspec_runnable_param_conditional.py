@@ -79,7 +79,7 @@ def test_parameterized_conditional_saves_and_verifies(tmp_path: Path) -> None:
     assert trace.graph.conditionals[0].arms[0]._trace is trace
     assert trace.graph.conditionals[0].arms[0].evaluation_ops
 
-    result = tl.load(path).run(inputs=value, seed=0)
+    result = tl.load(path).run_transaction(inputs=value, seed=0)
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert torch.allclose(result.output, model(value))

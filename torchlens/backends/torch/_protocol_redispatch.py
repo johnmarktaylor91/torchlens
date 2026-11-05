@@ -270,16 +270,23 @@ def _stored_key_count(table: Any) -> int:
 
 
 def _module_tables(name: str, module: Any) -> list[Any]:
-    """Return the module- and class-level ``dict``/``set`` tables of one module."""
+    """Return the module- and class-level ``dict``/``set`` tables of one module.
+
+    Values are classified by their real type (``issubclass(type(value), ...)``),
+    never ``isinstance``: its ``__class__`` fallback runs the value's own
+    ``__getattribute__``, which a module-global stub may make always raise
+    (shap without matplotlib binds ``shap.plots`` to such an object).
+    """
 
     tables: list[Any] = []
     for attr, value in list(vars(module).items()):
         if attr.startswith("__"):
             continue
-        if isinstance(value, (dict, set)):
+        value_type = type(value)
+        if issubclass(value_type, (dict, set)):
             tables.append(value)
-        elif isinstance(value, type) and getattr(value, "__module__", None) == name:
-            tables.extend(v for v in vars(value).values() if isinstance(v, (dict, set)))
+        elif issubclass(value_type, type) and getattr(value, "__module__", None) == name:
+            tables.extend(v for v in vars(value).values() if issubclass(type(v), (dict, set)))
     return tables
 
 

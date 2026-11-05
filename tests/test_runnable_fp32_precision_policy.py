@@ -134,7 +134,7 @@ def test_replay_restores_the_callers_exact_mixed_policy(tmp_path: Path) -> None:
     _set("mkldnn.conv", "tf32")
     caller_policy = tc.snapshot_fp32_precision_controls()
 
-    report = loaded.run(inputs=x.clone(), seed=0).report
+    report = loaded.run_transaction(inputs=x.clone(), seed=0).report
 
     assert report.path_faithfulness is PathFaithfulness.VERIFIED
     assert tc.snapshot_fp32_precision_controls() == caller_policy

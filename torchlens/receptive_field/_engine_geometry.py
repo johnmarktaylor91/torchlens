@@ -8,11 +8,12 @@ from fractions import Fraction
 from math import ceil, floor
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from .._utils._display_bounded import short_dataclass_repr
 from ._errors import ReceptiveFieldConfigurationError
-from ._types import ReceptiveFieldStatus
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
+    from ._types import ReceptiveFieldStatus
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,8 @@ class _AxisState:
 @dataclass(frozen=True)
 class _InputState:
     """Internal per-model-input state at one captured operation."""
+
+    __repr__ = short_dataclass_repr
 
     input_op_label: str
     io_role: str

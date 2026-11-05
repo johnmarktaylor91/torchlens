@@ -111,7 +111,7 @@ def test_save_persists_the_marker_plainly(tmp_path) -> None:
     loaded = tl.load(path)
     assert loaded.options.structure_only is True
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
     assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
 
 

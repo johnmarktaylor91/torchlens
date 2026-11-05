@@ -125,6 +125,8 @@ def test_multipass_one_row_at_module_grain() -> None:
     assert linear_rows[0].passes == 3
     assert len(linear_rows[0].owned_ops) == 3
     _assert_partition(trace, view)
+    legend = next(line for line in str(trace.summary()).splitlines() if line.startswith("Legend"))
+    assert "xN repeated modules, passes or shapes" in legend
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of report/_summary_ladder.py.

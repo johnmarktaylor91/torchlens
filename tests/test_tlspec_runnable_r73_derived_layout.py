@@ -141,9 +141,12 @@ def test_r73_direct_leaf_read_still_diverges(tmp_path: Path) -> None:
     x = _nchw()
     path = _save(LeafLayoutBranch().eval(), x, tmp_path / "leaf.tlspec")
 
-    assert tl.load(path).run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert (
+        tl.load(path).run_transaction(inputs=x.clone()).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=x.clone().to(memory_format=torch.channels_last))
+        tl.load(path).run_transaction(inputs=x.clone().to(memory_format=torch.channels_last))
 
 
 class TwoInputOneRooted(nn.Module):
@@ -188,11 +191,13 @@ def test_r73_fact_scopes_to_the_rooting_input_only(tmp_path: Path) -> None:
     assert "derived_layout_read" in reads_by_position["arg:0"]
     assert "derived_layout_read" not in reads_by_position["arg:1"]
 
-    non_rooting = tl.load(path).run(
+    non_rooting = tl.load(path).run_transaction(
         inputs=(a.clone(), b.clone().to(memory_format=torch.channels_last))
     )
     assert non_rooting.report.path_faithfulness is PathFaithfulness.VERIFIED
 
-    rooting = tl.load(path).run(inputs=(a.clone().to(memory_format=torch.channels_last), b.clone()))
+    rooting = tl.load(path).run_transaction(
+        inputs=(a.clone().to(memory_format=torch.channels_last), b.clone())
+    )
     assert rooting.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert rooting.report.is_poisoned

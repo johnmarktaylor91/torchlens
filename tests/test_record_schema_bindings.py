@@ -85,3 +85,21 @@ def test_primitive_bindings_match_the_promoted_candidate_kinds() -> None:
     # ``out`` (aten_ops="values") is the one payload cell a primitive row carries.
     assert candidate["out"] == "PAYLOAD"
     assert set(candidate.values()) == {"EDGE", "INTERNED", "SCALAR", "PAYLOAD"}
+
+
+def test_transformed_output_classifies_as_stored_behind_its_property(monkeypatch) -> None:
+    """The refusing ``Trace.transformed_output`` property fronts a stored field.
+
+    The generator must keep classifying it SCALAR (the installed binding);
+    without the stored-behind-property entry it would become COMPUTED.
+    """
+
+    from tools import generate_record_schema as generator
+
+    policy = Trace._FIELD_POLICY["transformed_output"]
+    kind, _ = generator._classify("trace", Trace, "transformed_output", policy, {}, frozenset())
+    assert kind == "SCALAR"
+    assert STORAGE_BINDINGS["trace"]["transformed_output"].kind.name == "SCALAR"
+    monkeypatch.setattr(generator, "_STORED_BEHIND_PROPERTY_FIELDS", set())
+    kind, _ = generator._classify("trace", Trace, "transformed_output", policy, {}, frozenset())
+    assert kind == "COMPUTED"

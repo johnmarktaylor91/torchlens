@@ -199,14 +199,14 @@ def occlusion(
     data. To ask "what if this region held another input's value", patch from
     a donor trace instead: ``trace.fork().do(selection, tl.patch_from(donor))``
     with the donor captured on that other input, or the population-based
-    replacements (``tl.mean_ablate(population, dim=None)``,
+    replacements (``tl.mean_ablate(population, dim='members')``,
     ``torchlens.intervention.sample_from``, ``resample_rows_from``). The baseline used is always
     returned in ``extra["baseline"]``; report it with the score.
 
     Parameters
     ----------
     trace
-        Live captured Trace with replayable saved values.
+        Live captured Trace with saved values.
     selection
         Selection query, resolved selection, or region producer to occlude.
     score
@@ -225,7 +225,7 @@ def occlusion(
 
     Examples
     --------
-    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> trace = tl.trace(model, x)
     >>> result = tl.attribution.occlusion(
     ...     trace, trace.input_ops[0], score=lambda t: t.output_ops[0].out.sum()
     ... )

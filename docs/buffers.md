@@ -106,7 +106,7 @@ forward state and downstream readers still validate.
 
 ## Intervention replay
 
-Written-buffer versions THREAD through `do()`/`push_from` replay: when a value
+Written-buffer versions THREAD through `do()` replay: when a value
 edit's cone of effect re-executes a buffer-writing op, the downstream buffer
 version record commits the recomputed post-write state and later consumers
 (including later in-place writes to the same buffer) read the propagated value.

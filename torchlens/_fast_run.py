@@ -1085,9 +1085,8 @@ class _FastLiveSession(_NestedEventTracker):
         routes = direct_forward_routes_installed(self.direct_routes, weakref.ref(self))
         with self._forward_scope(model, routes) as fingerprint:
             try:
-                # Bind positional inputs exactly as capture and the ordinary live
-                # run do (a tuple or list spreads; a one-parameter forward takes a
-                # multi-element sequence whole), so one input tree means one call.
+                # Bind positional inputs as capture and the live run do (a tuple or list
+                # spreads; a one-parameter forward takes a sequence whole): one tree, one call.
                 output = model(*normalize_input_args(input_args, model), **dict(input_kwargs))
             except FastUntilReached:
                 output = None
@@ -1103,11 +1102,12 @@ class _FastLiveSession(_NestedEventTracker):
         else:
             self._check_full_path()
             self._refresh_boundary_payloads(input_args, input_kwargs, output)
+        from ._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
+
+        refresh_decoded_output(self.target)  # decode this run's outputs, not the capture's
         if self.shape_varied and not self.shape_metadata_cleared:
-            # Honesty rule: a native forward refreshes only the saved sites and
-            # the boundary ops. Every other op's shape and size metadata would
-            # otherwise read capture-time numbers as if they were this run's,
-            # so they take the not-available spelling (None) once and for all.
+            # Honesty rule: a native forward refreshes only saved sites and boundary ops; other
+            # ops' shape/size metadata takes None rather than read capture-time numbers as ours.
             clear_unrefreshed_shape_metadata(self.target, self.refreshed_labels)
             self.shape_metadata_cleared = True
         # A cut forward leaves downstream staged hooks unfired by design.

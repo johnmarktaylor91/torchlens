@@ -24,7 +24,10 @@ from __future__ import annotations
 
 import functools
 import inspect
+import json
+import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -88,6 +91,74 @@ def test_census_is_current() -> None:
         "docs/maintainers/docstring_examples_census.md is stale: run "
         "`python tools/docstring_examples.py census` and commit the result"
     )
+
+
+_MEMBERS_AROUND_A_ROUND_TRIP = textwrap.dedent(
+    """
+    import json
+    import pathlib
+    import sys
+
+    import torch
+    from torch import nn
+
+    sys.path.insert(0, sys.argv[1])
+    import docstring_examples
+
+    import torchlens as tl
+
+
+    def member_ids():
+        rows = docstring_examples.public_members()
+        return sorted(row["id"] for row in rows) + sorted(
+            f"reached:{owner}.{row['name']}" for row in rows for owner in row["owner_names"]
+        )
+
+
+    fresh = member_ids()
+    trace = tl.trace(nn.Linear(3, 2), torch.ones(1, 3))
+    out_dir = pathlib.Path(sys.argv[2])
+    trace.save(out_dir / "round_trip.tlspec")
+    tl.load(out_dir / "round_trip.tlspec")
+    tl.io.read_safetensors(tl.export.safetensors(trace, out_dir / "round_trip.safetensors"))
+    print(json.dumps({"fresh": fresh, "after_round_trip": member_ids()}))
+    """
+)
+
+
+def test_public_members_do_not_depend_on_a_prior_save_or_load(tmp_path: Path) -> None:
+    """A fresh interpreter and one that ran a save/load round trip list the same members.
+
+    Saving and loading (the bundle and the safetensors trace export, whose
+    writer contract imports the kernel-telemetry module) import private modules
+    a fresh ``import torchlens`` does not; a public member that appeared only
+    after such an import made ``test_census_is_current`` red or green by test
+    order. The subprocess keeps this test independent of whatever this worker
+    imported before it.
+    """
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            _MEMBERS_AROUND_A_ROUND_TRIP,
+            str(REPO_ROOT / "tools"),
+            str(tmp_path),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr[-4000:]
+    members = json.loads(completed.stdout.strip().splitlines()[-1])
+    fresh, after = set(members["fresh"]), set(members["after_round_trip"])
+    assert fresh == after, (
+        f"members only after a save/load: {sorted(after - fresh)}; "
+        f"members only before: {sorted(fresh - after)}"
+    )
+    assert {"reached:Op.gpu_kernels", "reached:AtenOp.gpu_kernels"} <= fresh
 
 
 #: Package cells whose examples build real small models for most symbols and so run past
@@ -187,7 +258,6 @@ OPTIONAL_EXAMPLE_MODULES: tuple[str, ...] = (
     "brainscore_core",
     "brainscore_vision",
     "captum",
-    "dagua",
     "depyf",
     "dialz",
     "inseq",

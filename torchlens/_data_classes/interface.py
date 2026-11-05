@@ -31,7 +31,10 @@ from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from .._selection.errors import AmbiguousSiteError
 from .._selection.selectors import BaseSelector
 from .._selection.target import FrozenTargetSpec, TargetSpec
+from .._utils._display_errors import ambiguous_substring_message, candidate_keys, lookup_message
+from . import _doors
 from ._lookup_keys import _give_user_feedback_about_lookup_key
+from ._lookup_kinds import named_record
 from .op import Op
 
 
@@ -75,9 +78,12 @@ def _raise_ambiguous_lookup_key(self: "Trace", requested_key: str, stored_key: s
 
     matches = _ambiguous_lookup_match_labels(self, stored_key)
     raise AmbiguousOpLookupError(
-        f"Ambiguous lookup key {requested_key!r} matches {len(matches)} ops: "
-        f"{', '.join(matches[:10])}{'...' if len(matches) > 10 else ''}. "
-        "Use an exact raw/op label or a more specific key."
+        lookup_message(
+            f"Ambiguous lookup key {requested_key!r} matches {len(matches)} ops.",
+            candidate_keys(matches, self._layer_dict_all_keys),
+            "Use an exact op label or a more specific key.",
+            query=requested_key,
+        )
     )
 
 
@@ -176,20 +182,22 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     Lookup cascade:
     1. slice -> list slice of layer_list
     2. int -> Op by 0-based ordinal position
-    3. ``label:last`` / ``label:all`` -> last-pass Op / Selection of every pass
-    4. layer label -> its Op (one pass) or the multi-pass teaching refusal
-    5. accessors, alternate Op lookup keys, case-insensitive, then substring
-    6. fallback: KeyError with contextual help message (never a ``Layer``)
+    3. ``label:N`` / ``label:last`` / ``label:all`` -> that pass's Op / Selection of every pass
+    4. bare layer label -> its Layer, single- or multi-pass
+    5. the kind the key names: module address -> Module, ``addr:N`` -> ModuleCall,
+       parameter address -> Param, buffer address -> Buffer (``addr:N`` -> version Op)
+    6. accessors, alternate Op lookup keys, case-insensitive, then substring
+    7. fallback: KeyError with contextual help message
 
     Args:
         ix: int (ordinal), slice, or str (label/address/substring).
 
     Returns:
-        Op, Selection, Module, ModuleCall, Param, Buffer or GradFn.
+        Op, Layer, Selection, Module, ModuleCall, Param, Buffer or GradFn.
 
     Raises:
         KeyError: No match found.
-        AmbiguousSiteError / AmbiguousOpLookupError: Bare multi-pass label / substring.
+        AmbiguousOpLookupError: A substring matching several layers.
         ValueError: Invalid index.
     """
     from .._selection.selection import Selector
@@ -221,31 +229,28 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         if ix in ambiguous_lookup_keys:
             _raise_ambiguous_lookup_key(self, ix, ix)
 
+        if (record := named_record(self, ix)) is not None:  # the kind the key names
+            return record
+
         if ix in self._layer_dict_all_keys:
             return self._layer_dict_all_keys[ix]
 
-        for accessor in (
+        accessors = (
             self.ops,
-            self.module_calls,
             self.modules,
+            self.module_calls,
             self.params,
             self.buffers,
             self.autograd.grad_fns,
-        ):
+        )
+        for accessor in accessors:
             try:
                 return accessor[ix]
             except (AttributeError, KeyError, ValueError, TypeError):
                 pass
 
         lower_ix = ix.lower()
-        for accessor in (
-            self.ops,
-            self.module_calls,
-            self.modules,
-            self.params,
-            self.buffers,
-            self.autograd.grad_fns,
-        ):
+        for accessor in accessors:
             try:
                 # ``ops.keys()`` lists the counted ops only; a
                 # case-insensitive label still reaches every row.
@@ -276,32 +281,28 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         if len(entries_with_substr) == 1:
             return next(iter(entries_with_substr.values()))
         elif len(entries_with_substr) > 1:
-            matches = [entry.layer_label for entry in entries_with_substr.values()]
-            matches_str = ", ".join(str(k) for k in matches[:10])
-            suffix = (
-                f" (and {len(entries_with_substr) - 10} more)"
-                if len(entries_with_substr) > 10
-                else ""
-            )
-            raise AmbiguousOpLookupError(
-                f"Ambiguous lookup: '{ix}' matches {len(entries_with_substr)} layers: "
-                f"{matches_str}{suffix}. Please use a more specific key."
-            )
+            raise _ambiguous_substring_error(ix, list(entries_with_substr.values()))
 
     # Step 7: nothing matched — give a helpful error
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
     raise KeyError(ix)
 
 
+def _ambiguous_substring_error(ix: Any, records: list[Any]) -> AmbiguousOpLookupError:
+    """The substring refusal card."""
+
+    return AmbiguousOpLookupError(ambiguous_substring_message(str(ix), records))
+
+
 def _layer_label_lookup(self: "Trace", ix: str) -> Any:
     """Resolve a layer label, bare or pass-tokened, to its record; ``None`` when ``ix`` names no layer.
 
-    A bare label of a single-pass layer returns that Op. ``label:last`` returns
-    the final pass and ``label:all`` the Selection of every pass. A bare label of
-    a multi-pass layer goes through the label selector, whose refusal
-    (``multipass_bare_label_ambiguous`` on ``AmbiguousSiteError``, the same one
-    ``tl.label`` raises) teaches ``label:N``, ``label:last``, ``label:all`` and
-    ``trace.layers[label]``; ``trace[...]`` never returns a Layer.
+    A bare layer label names the Layer, whether it ran once or several times;
+    a single-pass Layer passes single-op reads (``.out``, ``.shape``) through to
+    its Op, and a multi-pass one refuses them naming ``label:N`` and
+    ``label:last``. ``label:N`` and ``label:last`` return that pass's Op and
+    ``label:all`` the Selection of every pass. An op key that is not a layer
+    label (a raw or alternate Op spelling) returns its Op.
     """
 
     from .._selection.selectors import LabelSelector
@@ -311,239 +312,27 @@ def _layer_label_lookup(self: "Trace", ix: str) -> Any:
     ops = self.ops.resolve_all(base)
     if not ops:
         return None
-    if token is None and len(ops) == 1:
-        return ops[0]
+    if token is None:
+        named = {op.layer_label for op in ops if ix in {op.layer_label, op.short_layer_label}}
+        if len(named) == 1:
+            layer = self._layer_logs.get(next(iter(named)))
+            if layer is not None:
+                return layer
+        if len(ops) == 1:
+            return ops[0]
     return _getitem_selector(self, LabelSelector(ix))
 
 
-#: Elision rungs for the bounded execution log (F10; lovely matrix row):
-#: the module hierarchy keeps its first rung of lines, the layer roster
-#: keeps a head+tail window; every elision prints an EXACT remainder and
-#: the accessor that serves the full view (never a silent truncation).
-_STR_HIERARCHY_MAX_LINES = 24
-_STR_ROSTER_HEAD = 30
-_STR_ROSTER_TAIL = 5
-
-
-def _honesty_header_lines(self: "Trace") -> list[str]:
-    """Build the honesty header for ``print(trace)`` (F10).
-
-    State precedes detail (voice rule 7): a non-complete outcome and the
-    three-state health verdict print BEFORE structure and tensor counts.
-    Silent when the capture is complete and checked-and-clean -- silence
-    encodes only the package-level boolean defaults (D6).
-    """
-
-    from .._utils.fail_open import fail_open
-
-    lines: list[str] = []
-    outcome = fail_open(lambda: self.outcome, lambda _error: None)
-    status = getattr(getattr(outcome, "status", None), "value", None)
-    if status and status != "complete":
-        lines.append(f"\tCapture outcome: {status.upper()}")
-    verdict = fail_open(lambda: self.nonfinite_verdict, lambda _error: None)
-    if verdict == "found":
-        lines.append("\tHealth: NaN/Inf FOUND (see .nonfinite_ops)")
-    elif verdict == "not_checked":
-        # track_nonfinite stays False by default (no overhead); the
-        # not-checked footer names the option while it is off.
-        hint = (
-            ""
-            if getattr(self, "track_nonfinite", False)
-            else "; capture with CaptureOptions(on_nonfinite='track') to check every op"
-        )
-        lines.append(f"\tHealth: NOT-CHECKED (payloads unexamined{hint})")
-    if (True if self.__dict__.get("_tl_cleaned_up", False) else self._provenance_verified) is False:
-        reason = (
-            None
-            if self.__dict__.get("_tl_cleaned_up", False)
-            else self._provenance_verification_reason
-        )
-        lines.append(f"\tCapture verified: NO ({reason})")
-    return lines
-
-
-def _bounded_hierarchy_str(self: "Trace") -> str:
-    """Module hierarchy bounded by the elision rung with exact remainder."""
-
-    text = _module_hierarchy_str(self)
-    lines = text.split("\n")
-    if len(lines) <= _STR_HIERARCHY_MAX_LINES:
-        return text
-    kept = lines[:_STR_HIERARCHY_MAX_LINES]
-    remainder = len(lines) - _STR_HIERARCHY_MAX_LINES
-    kept.append(f"\t\t... {remainder} more hierarchy lines (see .modules)")
-    return "\n".join(kept)
-
-
 def _str_after_pass(self: "Trace") -> str:
-    """Readable summary of the model history after the pass is finished.
+    """Bounded Trace card; the module tree remains in ``trace.summary()``."""
 
-    F10 bounding (lovely matrix): the execution-log intent stays, but the
-    output is bounded -- honesty header first, buffer rows folded to one
-    line, the module hierarchy and layer roster elided past their rungs
-    with exact remainders. ``print(gpt2_trace)`` stops being 668 lines.
-
-    Returns:
-        String summarizing the model.
-    """
-    s = f"Log of {self._source_class_name} forward pass:"
-
-    for header_line in _honesty_header_lines(self):
-        s += f"\n{header_line}"
-
-    # General info
-
-    s += f"\n\tRandom seed: {self._options_seed}"
-    s += f"\n\tTime elapsed: {self._provenance_duration} ({self.cost.overhead_duration} spent logging)"
-
-    # Overall model structure. An unverified capture (severed
-    # provenance) may have missed ops, so it never claims "purely
-    # feedforward" and its op and parameter counts read as lower bounds.
-    unverified = (
-        True if self.__dict__.get("_tl_cleaned_up", False) else self._provenance_verified
-    ) is False
-    bound = "at least " if unverified else ""
-
-    s += _structure_section(self, unverified)
-
-    # Model tensors:
-
-    s += _tensor_info_section(self, bound, unverified)
-
-    # Model parameters:
-
-    s += (
-        f"\n\tParameters: {bound}{self._num_layers_with_params} parameter operations "
-        f"({bound}{self.num_params} params total; {self._cost_total_param_memory})"
-    )
-    if unverified:
-        s += " (lower bounds: capture unverified)"
-    s += "\n\tFLOP convention: MACs are reported as FLOPs // 2."
-
-    # Print the module hierarchy (bounded, exact remainder).
-    s += "\n\tModule Hierarchy:"
-    s += _bounded_hierarchy_str(self)
-
-    # Now print the layer roster: buffer rows fold to one line, and the
-    # roster elides past its rung with a head+tail window (F10).
-    s += "\n\tLayers"
-    if self._layers_saved:
-        s += " (all have saved outs):"
-    elif len(self.saved_ops) == 0:
-        s += " (no layer outs are saved):"
-    else:
-        s += " (* means layer has saved outs):"
-
-    for row in _bounded_layer_roster(self):
-        s += f"\n{row}"
-
-    return s
-
-
-def _tensor_info_section(self: "Trace", bound: str, unverified: bool) -> str:
-    """The summary's Tensor info block (lower-bound wording for an unverified capture)."""
-
-    s = "\n\tTensor info:"
-    s += (
-        f"\n\t\t- {bound}{len(self)} total tensors ({self._cost_total_activation_memory}) "
-        f"computed in forward pass{' (lower bound: capture unverified)' if unverified else ''}."
-    )
-    s += f"\n\t\t- {len(self.saved_ops)} tensors ({self._cost_saved_activation_memory}) with saved outs."
-    nonfinite = self.first_nonfinite()
-    if not nonfinite.startswith("No non-finite"):
-        s += f"\n\t\t- NaN/Inf: {nonfinite}"
-    return s
-
-
-def _structure_section(self: "Trace", unverified: bool) -> str:
-    """The summary's Structure block (an unverified capture never claims feedforward)."""
-    s = "\n\tStructure:"
-    if self.graph.is_recurrent:
-        s += f"\n\t\t- recurrent (at most {self.graph.max_ops_per_layer} loops)"
-    elif unverified:
-        s += "\n\t\t- structure unverified (capture not verified; see the header)"
-    else:
-        s += "\n\t\t- purely feedforward, no recurrence"
-
-    if self.graph.is_branching:
-        s += "\n\t\t- with branching"
-    else:
-        s += "\n\t\t- no branching"
-
-    if self.graph.has_conditional_branching:
-        s += "\n\t\t- with conditional (if-then) branching"
-    else:
-        s += "\n\t\t- no conditional (if-then) branching"
-
-    if len(self.buffer_layers) > 0:
-        s += f"\n\t\t- contains {len(self.buffer_layers)} buffer layers"
-
-    s += f"\n\t\t- {max(0, len(self.modules) - 1)} total modules"  # -1 to exclude root "self"
-    return s
-
-
-def _bounded_layer_roster(self: "Trace") -> list[str]:
-    """Layer roster rows: buffer rows fold to one line, elision past the rung."""
-
-    roster: list[str] = []
-    num_buffer_rows = 0
-    for layer_ind, layer_entry in enumerate(self._layer_list):
-        if getattr(layer_entry, "is_buffer", False):
-            num_buffer_rows += 1
-            continue
-        layer_barcode = layer_entry.layer_label
-        pass_index = layer_entry.pass_number
-        num_passes = layer_entry.num_passes
-        if num_passes > 1:
-            # One pass/op vocabulary (A10): a multi-pass row is "pass k/N",
-            # never "k/N ops" -- "op" is reserved for the executed-op
-            # denominator (the counted op total, len(trace.ops)).
-            pass_str = f" (pass {pass_index}/{num_passes})"
-        else:
-            pass_str = ""
-        if layer_entry.has_saved_activation and (not self._layers_saved):
-            marker = "* "
-        else:
-            marker = "  "
-        roster.append(f"\t\t{marker}({layer_ind}) {layer_barcode} {pass_str}")
-
-    if num_buffer_rows:
-        roster.insert(0, f"\t\t  [{num_buffer_rows} buffer rows folded; see .buffers]")
-    if len(roster) > _STR_ROSTER_HEAD + _STR_ROSTER_TAIL + 1:
-        elided = len(roster) - _STR_ROSTER_HEAD - _STR_ROSTER_TAIL
-        roster = (
-            roster[:_STR_ROSTER_HEAD]
-            + [f"\t\t  ... {elided} more layers (see .ops)"]
-            + roster[-_STR_ROSTER_TAIL:]
-        )
-    return roster
+    return _doors.report()._trace_summary._trace_text(self)
 
 
 def _str_during_pass(self: "Trace") -> str:
-    """Readable summary of the model history during the pass, as a debugging aid.
+    """The same bounded card while capture is in progress."""
 
-    Returns:
-        String summarizing the model.
-    """
-    s = f"Log of {self._source_class_name} forward pass (pass still ongoing):"
-    s += f"\n\tRandom seed: {self._options_seed}"
-    s += f"\n\tInput tensors: {self.input_layers}"
-    s += f"\n\tOutput tensors: {self.output_layers}"
-    s += f"\n\tInternally initialized tensors: {self.internal_source_ops}"
-    s += f"\n\tInternally terminated tensors: {self.internal_sink_ops}"
-    s += f"\n\tInternally terminated boolean tensors: {self.internally_terminated_bool_ops}"
-    s += f"\n\tBuffer tensors: {self.buffer_layers}"
-    s += "\n\tRaw layer labels:"
-    capture_events = getattr(self, "capture_events", None)
-    labels = (
-        [event.label_raw for event in capture_events.op_events]
-        if capture_events is not None
-        else self._raw_graph_ws.raw_layer_labels_list
-    )
-    for layer in labels:
-        s += f"\n\t\t{layer}"
-    return s
+    return _doors.report()._trace_summary._trace_text(self)
 
 
 def _format_list_with_line_breaks(

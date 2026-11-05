@@ -16,6 +16,8 @@ sections:
     title: Home
   - id: get-started
     title: Get started
+  - id: fields
+    title: Start from your field
   - id: field-guide
     title: Field guide
   - id: gallery
@@ -54,6 +56,9 @@ pages:
     section: project
   - path: activation_transform_persistence.md
     section: concepts
+  - path: also_in_torchlens.md
+    section: get-started
+    note: every feature the README tour does not show, grouped by task; the README's "Also in TorchLens" list links here
   - path: internal/agent-reference/architecture.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here
@@ -70,6 +75,9 @@ pages:
     section: internal
     note: agent and contributor reference; AGENTS.md points here
   - path: internal/agent-reference/current-2-x-surface.md
+    section: internal
+    note: agent and contributor reference; AGENTS.md points here
+  - path: internal/agent-reference/feature-inspection.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here
   - path: internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
@@ -125,6 +133,9 @@ pages:
     section: benchmarks
   - path: benchmarks/summary_performance.md
     section: benchmarks
+  - path: bridges.md
+    section: relation
+    note: connectors page, one entry per external tool a tl.bridge connector hands records to
   - path: buffers.md
     section: concepts
   - path: conditional_attribution.md
@@ -141,20 +152,40 @@ pages:
     section: doors
   - path: facets.md
     section: concepts
+  - path: faq.md
+    section: get-started
+    publish: true
+  - path: fields/debugging_and_training.md
+    section: fields
+    note: landing page for people debugging or training networks; linked from the README
+  - path: fields/mechanistic_interpretability.md
+    section: fields
+    note: landing page for mechanistic interpretability; linked from the README
+  - path: fields/teaching.md
+    section: fields
+    note: landing page for teaching how networks work; linked from the README
   - path: field-guide/acdc_ioi.md
     section: field-guide
     moved_from: [recipes/acdc_ioi.md]
   - path: field-guide/conditional_steering.md
     section: field-guide
     moved_from: [recipes/conditional_steering.md]
+  - path: field-guide/craft_concepts.md
+    section: field-guide
+  - path: field-guide/das_gpt2.md
+    section: field-guide
   - path: field-guide/dissection.md
     section: field-guide
     moved_from: [recipes/dissection.md]
+  - path: field-guide/entropy_steering.md
+    section: field-guide
   - path: field-guide/extract_features.md
     section: field-guide
   - path: field-guide/feature_visualisation.md
     section: field-guide
     moved_from: [recipes/feature_visualisation.md]
+  - path: field-guide/generation_attention.md
+    section: field-guide
   - path: field-guide/generation_step_attribution.md
     section: field-guide
     moved_from: [recipes/generation_step_attribution.md]
@@ -163,6 +194,8 @@ pages:
   - path: field-guide/jacobian_lens.md
     section: field-guide
     moved_from: [recipes/jacobian_lens.md]
+  - path: field-guide/linear_probes.md
+    section: field-guide
   - path: field-guide/lrp_epsilon_litmus.md
     section: field-guide
     moved_from: [recipes/lrp_epsilon_litmus.md]
@@ -198,6 +231,8 @@ pages:
   - path: field-guide/tcav.md
     section: field-guide
     moved_from: [recipes/tcav.md]
+  - path: field-guide/tensor_images.md
+    section: field-guide
   - path: field-guide/torchcam.md
     section: field-guide
     moved_from: [recipes/torchcam.md]
@@ -220,6 +255,16 @@ pages:
     section: gallery
   - path: gallery/basis_grid.md
     section: gallery
+  - path: gallery/causal_tracing.md
+    section: gallery
+  - path: gallery/cnn_fields.md
+    section: gallery
+  - path: gallery/index.md
+    section: gallery
+  - path: gallery/ioi_circuit.md
+    section: gallery
+  - path: gallery/neuro_rdms.md
+    section: gallery
   - path: gradient_contract.md
     section: concepts
   - path: guides/fast_paths.md
@@ -237,6 +282,9 @@ pages:
   - path: maintainers/saved_format_3.md
     section: internal
     note: maintainer page; CONTRIBUTING.md links it
+  - path: maintainers/saved_format_3_design.md
+    section: internal
+    note: maintainer page; saved_format_3.md links it
   - path: maintainers/testing.md
     section: internal
     note: maintainer page; CONTRIBUTING.md links it
@@ -251,12 +299,22 @@ pages:
   - path: guides/kv_cache.md
     section: field-guide
     group: Intervene
+  - path: guides/model_conveniences.md
+    section: concepts
   - path: guides/offline_report.md
     section: field-guide
     group: See and inspect
   - path: guides/treescope_cards.md
     section: field-guide
     group: See and inspect
+  - path: guides/visualization.md
+    section: field-guide
+    group: See and inspect
+    publish: true
+  - path: how-it-works.md
+    section: concepts
+    publish: true
+    note: narrative guide to the internals; maintainers/architecture.md is its maintainer companion
   - path: index.md
     section: home
     publish: true
@@ -284,6 +342,8 @@ pages:
   - path: migration/from_captum.md
     section: relation
     moved_from: [migration/captum.md]
+  - path: migration/from_flax_tabulate.md
+    section: relation
   - path: migration/from_fx.md
     section: relation
   - path: migration/from_hf_kwargs.md
@@ -369,6 +429,12 @@ pages:
     section: field-guide
     group: Neuroscience
   - path: neuroai/netrep.md
+    section: field-guide
+    group: Neuroscience
+  - path: neuroai/protein_language_model.md
+    section: field-guide
+    group: Neuroscience
+  - path: neuroai/task_rnn_circuits.md
     section: field-guide
     group: Neuroscience
   - path: non_goals.md

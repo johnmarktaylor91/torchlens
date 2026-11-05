@@ -51,11 +51,19 @@ from ._exemption_table import (
     skip_perturbation_justifications,
     skip_validation_justifications,
 )
+from ._foreign_kernel_dependence import (  # noqa: F401  (resolved through globals())
+    check_foreign_kernel_dependence_exempt,
+)
 from ._index_domain import (
     _INDEX_DOMAIN_ARG_SPECS,
     _index_domain_size,
     _parent_is_index_domain_arg,
     _saved_integer_index_tensor,
+)
+from ._influence_probes import (
+    _bool_comparison_straddle_probe,
+    _bool_predicate_influence_probe,
+    binary_extrema_crossing_probe,
 )
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
 from ._norm_running_var_proof import batch_norm_input_at_running_mean
@@ -65,7 +73,6 @@ from ._norm_zero_weight_proof import (
 )
 from ._operand_value_proofs import operand_value_proof_decision
 from ._posthoc_decision import PosthocPerturbDecision
-from ._replay_warnings import replay_warnings_ignored
 from ._saved_value_proofs import saved_value_proof_decision
 from ._sdpa_value_proofs import sdpa_value_proof_decision
 from ._structural_slot_checks import (  # noqa: F401  (the table resolves these through globals())
@@ -367,7 +374,7 @@ def _perturbed_parent_is_uninitialized_setitem_dest(
         if perturbed_label not in dest_labels:
             return False
         try:
-            perturbed_op = source_trace[perturbed_label]
+            perturbed_op = source_trace.ops[perturbed_label]
         except Exception:
             return False
         if not _uninitialized_value_origin(perturbed_op, source_trace):
@@ -1057,14 +1064,9 @@ def _check_zipped_sibling_exempt(
 ) -> bool:
     """Custom check: exempt only cross-member zipped-sibling perturbations.
 
-    Parameters
-    ----------
-    source_trace:
-        Trace being validated (unused; custom-check signature).
-    layer:
-        Zipped multi-output operation record.
-    layers_to_perturb:
-        Parent labels selected for perturbation.
+    ``source_trace`` is unused (custom-check signature); ``layer`` is one output's
+    op of a zipped multi-output op and ``layers_to_perturb`` the parent labels
+    selected for perturbation.
 
     Returns
     -------
@@ -1216,6 +1218,31 @@ def _binary_extrema_nonperturbed_arg_dominates(
     return _extrema_operand_dominates(func_name, other, perturbed)
 
 
+def _binary_extrema_dominance_decision(
+    layer: Op, args: tuple[Any, ...], layers_to_perturb: list[str]
+) -> PosthocPerturbDecision | None:
+    """Return the dominated-extrema decision, or ``None`` when no operand dominates.
+
+    Dominance alone would also bless a replay that never reads the perturbed
+    operand, so the crossing probe pushes it past the dominating operand: a
+    moved output keeps the exemption with that evidence, a pinned one is a
+    final no-influence verdict (no later value excuse may pass it), and a
+    probe that cannot run keeps the disclosed exemption.
+    """
+
+    if not _binary_extrema_nonperturbed_arg_dominates(
+        layer.func_name, args, layer, layers_to_perturb
+    ):
+        return None
+    probe = binary_extrema_crossing_probe(layer, layers_to_perturb)
+    if probe is False:
+        return PosthocPerturbDecision(False, "binary_extrema_no_value_influence")
+    detail = "non-perturbed extrema operand dominates every output element"
+    if probe:
+        detail += "; pushing the perturbed operand past it moved the output"
+    return PosthocPerturbDecision(True, "binary_extrema_dominated", detail)
+
+
 # ---------------------------------------------------------------------------
 # Posthoc perturbation check — excuses failures after execution.
 # These handle genuinely dynamic/value-dependent cases that can't be
@@ -1266,245 +1293,6 @@ def posthoc_perturb_check(
 
     del self, layers_to_perturb, verbose
     return PosthocPerturbDecision(False, "no_posthoc_exemption")
-
-
-#: Elementwise comparison spellings whose bool outputs admit the
-#: threshold-straddle probe (R08): substituting the perturbed operand with
-#: the comparand itself and its two adjacent values MUST flip some element
-#: of any genuine two-operand comparison, so an output pinned to the saved
-#: value under all three substitutions proves the recorded parent has no
-#: value influence.
-_ELEMENTWISE_COMPARISON_FUNCS = frozenset(
-    {
-        "gt",
-        "greater",
-        "lt",
-        "less",
-        "ge",
-        "greater_equal",
-        "le",
-        "less_equal",
-        "eq",
-        "ne",
-        "not_equal",
-        "__gt__",
-        "__lt__",
-        "__ge__",
-        "__le__",
-        "__eq__",
-        "__ne__",
-    }
-)
-
-
-def _bool_comparison_straddle_probe(layer: Op, layers_to_perturb: list[str]) -> bool | None:
-    """Probe a bool comparison by straddling its comparand (R08).
-
-    Re-executes the comparison with the perturbed operand replaced by the
-    comparand itself and its two adjacent representable values. For any
-    genuine elementwise comparison these three substitutions produce at
-    least two distinct outputs, so:
-
-    * an output that DIFFERS from the saved output under any substitution
-      proves the recorded edge transmits value (the original perturbation
-      magnitude simply never crossed the threshold);
-    * an output pinned exactly to the saved value under ALL THREE proves the
-      recorded parent has no value influence on this op — the spurious-edge
-      class the blanket bool exemption used to bless.
-
-    Parameters
-    ----------
-    layer:
-        Bool-output comparison op whose unchanged perturbation is being
-        classified.
-    layers_to_perturb:
-        Parent labels currently being perturbed.
-
-    Returns
-    -------
-    bool | None
-        ``True`` (edge transmits value), ``False`` (provably no influence),
-        or ``None`` when the probe cannot run (non-comparison func, kwargs
-        or multi-slot/self-comparison operands, non-finite comparand,
-        execution failure) — the caller then falls back to the disclosed
-        heuristic exemption.
-    """
-
-    func = getattr(layer, "func", None)
-    if func is None or layer.func_name not in _ELEMENTWISE_COMPARISON_FUNCS:
-        return None
-    args: tuple[Any, ...] = tuple(layer.saved_args or ())
-    kwargs = dict(getattr(layer, "saved_kwargs", None) or {})
-    if kwargs or len(args) != 2:
-        return None
-    positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
-    if positions != {0} and positions != {1}:
-        # Multi-slot (self-comparison) or unrecoverable positions: the
-        # straddle would move both operands together and prove nothing.
-        return None
-    parent_index = next(iter(positions))
-    parent_saved = args[parent_index]
-    other = args[1 - parent_index]
-    saved_output = layer.out
-    if not isinstance(parent_saved, torch.Tensor) or not isinstance(saved_output, torch.Tensor):
-        return None
-    try:
-        with torch.no_grad(), replay_warnings_ignored():
-            if isinstance(other, torch.Tensor):
-                base = other.detach().to(dtype=parent_saved.dtype).broadcast_to(parent_saved.shape)
-            elif isinstance(other, (bool, int, float)):
-                base = torch.full_like(parent_saved, other)
-            else:
-                return None
-            if base.dtype == torch.bool or base.is_complex():
-                return None
-            if base.is_floating_point():
-                if not bool(torch.isfinite(base).all()):
-                    return None
-                below = torch.nextafter(base, torch.full_like(base, float("-inf")))
-                above = torch.nextafter(base, torch.full_like(base, float("inf")))
-            else:
-                one = torch.ones_like(base)
-                below = base - one
-                above = base + one
-            from .._utils.tensor_utils import tensor_nanequal
-
-            for substitute in (base, below, above):
-                probe_args = list(args)
-                probe_args[parent_index] = substitute
-                probe_output = func(*probe_args)
-                if not isinstance(probe_output, torch.Tensor):
-                    return None
-                if not tensor_nanequal(probe_output, saved_output, allow_tolerance=False):
-                    return True
-    except Exception:
-        return None
-    return False
-
-
-def _bool_probe_battery(parent_saved: torch.Tensor) -> tuple[torch.Tensor, ...]:
-    """Return dtype-directed substitutes chosen to flip a value-transmitting predicate.
-
-    Sign / zero / extreme / non-finite / inversion coverage: ``isnan``/``isfinite``
-    flip on the non-finite rows, ``logical_*`` and ``any``/``all`` on the
-    all-False/all-True rows, ``signbit``-style predicates on the sign rows, and
-    magnitude thresholds on the extreme rows.
-    """
-
-    if parent_saved.dtype == torch.bool:
-        return (
-            torch.zeros_like(parent_saved),
-            torch.ones_like(parent_saved),
-            ~parent_saved,
-        )
-    if parent_saved.is_complex():
-        return (
-            torch.zeros_like(parent_saved),
-            torch.ones_like(parent_saved),
-            torch.full_like(parent_saved, complex(0.0, 1.0)),
-            torch.full_like(parent_saved, complex(float("nan"), 0.0)),
-        )
-    if parent_saved.is_floating_point():
-        return (
-            torch.zeros_like(parent_saved),
-            torch.ones_like(parent_saved),
-            -torch.ones_like(parent_saved),
-            -parent_saved,
-            torch.full_like(parent_saved, float("nan")),
-            torch.full_like(parent_saved, float("inf")),
-            torch.full_like(parent_saved, float("-inf")),
-            torch.full_like(parent_saved, torch.finfo(parent_saved.dtype).max / 2),
-        )
-    info = torch.iinfo(parent_saved.dtype)
-    substitutes = [
-        torch.zeros_like(parent_saved),
-        torch.ones_like(parent_saved),
-        torch.full_like(parent_saved, info.max),
-        torch.full_like(parent_saved, info.min),
-    ]
-    if info.min < 0:
-        substitutes.append(-torch.ones_like(parent_saved))
-    return tuple(substitutes)
-
-
-def _bool_predicate_influence_probe(layer: Op, layers_to_perturb: list[str]) -> bool | None:
-    """Probe a NON-comparison bool-output op with a substitution battery (R08-2).
-
-    The comparison family gets the threshold-straddle probe; the rest of the
-    bool universe (``logical_*``, ``isnan``/``isfinite``, ``any``/``all``,
-    ``bitwise_*`` masks) used to fall back to the blanket
-    ``discrete_bool_output`` pass with no evidence, so a capture bug that
-    drops or invents a parent edge on a predicate op was unfalsifiable by
-    perturbation (round-6 armed proof: a frozen replay callable settled
-    ``exempted`` while its comparison sibling failed). Re-execute the op with
-    the perturbed slot substituted by :func:`_bool_probe_battery`; any flip
-    proves the recorded edge transmits value, and a battery-wide pin proves
-    the recorded parent has no value influence -- the caller then falls
-    through to the ``perturbation_insensitive`` failure exactly like the
-    comparison family.
-
-    Returns
-    -------
-    bool | None
-        ``True`` (edge transmits value), ``False`` (provably no influence),
-        or ``None`` when the probe cannot run (comparison func -- the
-        straddle owns those -- kwargs, multi-slot operands, non-tensor
-        parent/output, execution failure); the caller then falls back to the
-        disclosed heuristic exemption.
-    """
-
-    func = getattr(layer, "func", None)
-    if func is None or layer.func_name in _ELEMENTWISE_COMPARISON_FUNCS:
-        return None
-    args: tuple[Any, ...] = tuple(layer.saved_args or ())
-    kwargs = dict(getattr(layer, "saved_kwargs", None) or {})
-    if kwargs or not args:
-        return None
-    positions = _perturbed_parent_arg_positions(layer, layers_to_perturb)
-    if len(positions) != 1:
-        return None
-    parent_index = next(iter(positions))
-    if not (0 <= parent_index < len(args)):
-        return None
-    parent_saved = args[parent_index]
-    saved_output = layer.out
-    if not isinstance(parent_saved, torch.Tensor) or not isinstance(saved_output, torch.Tensor):
-        return None
-    try:
-        with torch.no_grad(), replay_warnings_ignored():
-            from .._utils.tensor_utils import tensor_nanequal
-
-            for substitute in _bool_probe_battery(parent_saved):
-                # CLONE every retained operand per battery run (r8 R08, fable
-                # MH): the bool universe includes IN-PLACE ops
-                # (``logical_and_``, ``bitwise_*_`` masks), and executing one
-                # against the record's retained ``saved_args`` MUTATED the
-                # capture evidence itself -- the probe then returned a verdict
-                # computed on the corrupted operand, and every LATER
-                # replay/comparison read poisoned payloads. The substitute is
-                # already a fresh tensor; each raw slot clones fresh per run
-                # so an in-place probe can only ever write scratch.
-                probe_args = [
-                    item.clone() if isinstance(item, torch.Tensor) else item for item in args
-                ]
-                probe_args[parent_index] = substitute
-                probe_output = func(*probe_args)
-                if not isinstance(probe_output, torch.Tensor):
-                    return None
-                if not tensor_nanequal(probe_output, saved_output, allow_tolerance=False):
-                    return True
-    except (TypeError, ValueError, RuntimeError, NotImplementedError):
-        # Typed catch (r8 R08, sol fault-injection): these are the classes a
-        # legitimate op raises when it rejects a battery substitute
-        # (dtype/shape/value refusals, unimplemented substitute dtypes) --
-        # "probe cannot run", which reverts to the DISCLOSED heuristic
-        # exemption (status quo ante). The old blanket ``except Exception``
-        # also swallowed genuine capture-bug crashes (a poisoned replay
-        # callable, a torchlens internal error) into that same evidence-free
-        # pass, disarming exactly the tripwire this probe strengthens; those
-        # now propagate.
-        return None
-    return False
 
 
 def _posthoc_discrete_output_decision(
@@ -1581,18 +1369,16 @@ def _posthoc_discrete_output_decision(
     return PosthocPerturbDecision(False, "not_discrete_output")
 
 
-# In-place RNG fills that overwrite EVERY element of their destination (arg 0)
-# with fresh draws. By their definitions -- ``normal_(mean, std)``,
-# ``uniform_(from, to)``, ``cauchy_(median, sigma)``, ``log_normal_(mean,
-# std)``, ``geometric_(p)``, ``random_([from,] to)`` -- each element of the
-# result is a draw parameterized only by its scalar parameters (and the
-# generator), so the destination contributes shape/dtype/device and nothing
-# of its values. Those scalar parameters may arrive as 0-d tensors (torch's
-# parser accepts ``normal_(torch.tensor(0.0), 1.0)``), and ``bernoulli_``
-# takes a tensor ``p``; such a parent is not at the destination slot, so the
-# decision below exempts ONLY a parent at the destination slot and lets any
-# other parent fall through to the failure path. ``exponential_`` sits in
-# ``SKIP_PERTURBATION_ENTIRELY`` already.
+# In-place RNG fills that overwrite EVERY element of their destination (arg 0) with fresh
+# draws. By their definitions -- ``normal_(mean, std)``, ``uniform_(from, to)``, ``cauchy_``,
+# ``log_normal_``, ``geometric_(p)``, ``random_([from,] to)``, and the counter-based
+# ``_philox_normal_(key, mean, std)`` / ``_philox_uniform_(key, low, high)`` -- each element is a
+# draw parameterized only by its scalar parameters and the generator or key, so the destination
+# contributes shape/dtype/device and nothing of its values. Scalar parameters may arrive as 0-d
+# tensors (``normal_(torch.tensor(0.0), 1.0)``), ``bernoulli_`` takes a tensor ``p`` and a philox
+# fill a ``key`` tensor; such a parent is not at the destination slot, so the decision below
+# exempts ONLY a parent at the destination slot and every other parent stays perturbation-tested.
+# ``exponential_`` sits in ``SKIP_PERTURBATION_ENTIRELY`` already.
 _RNG_FILL_DESTINATION_OPS: frozenset[str] = frozenset(
     {
         "bernoulli_",
@@ -1602,6 +1388,8 @@ _RNG_FILL_DESTINATION_OPS: frozenset[str] = frozenset(
         "log_normal_",
         "geometric_",
         "random_",
+        "_philox_normal_",
+        "_philox_uniform_",
     }
 )
 
@@ -2040,14 +1828,9 @@ def _posthoc_value_proof_decision(
         if decision.exempt:
             return decision
     if layer.func_name in ("max", "min", "maximum", "minimum") and len(args) > 1:
-        if _binary_extrema_nonperturbed_arg_dominates(
-            layer.func_name, args, layer, layers_to_perturb
-        ):
-            return PosthocPerturbDecision(
-                True,
-                "binary_extrema_dominated",
-                "non-perturbed extrema operand dominates every output element",
-            )
+        extrema_decision = _binary_extrema_dominance_decision(layer, args, layers_to_perturb)
+        if extrema_decision is not None:
+            return extrema_decision
     if layer.func_name in ("remainder", "fmod", "__mod__") and len(args) > 1:
         decision = _integer_mod_unit_divisor_decision(layer, layers_to_perturb, args)
         if decision.exempt:

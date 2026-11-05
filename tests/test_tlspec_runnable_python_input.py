@@ -149,10 +149,12 @@ def test_h1_longer_list_diverges_identical_verifies(tmp_path: Path) -> None:
         _ExtraListElementModel(), {"x": x, "tags": []}, tmp_path / "extra_list.tlspec"
     )
 
-    same = tl.load(path).run(inputs={"x": x, "tags": []})
+    same = tl.load(path).run_transaction(inputs={"x": x, "tags": []})
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
 
-    diverged = tl.load(path).run(inputs={"x": x, "tags": ["extra"]}, on_divergence="return")
+    diverged = tl.load(path).run_transaction(
+        inputs={"x": x, "tags": ["extra"]}, on_divergence="return"
+    )
     assert diverged.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert diverged.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
 
@@ -198,9 +200,9 @@ def test_extra_keyword_arg_diverges_never_verified(tmp_path: Path) -> None:
     path = tmp_path / "extra_kw.tlspec"
     trace.save(path, level="runnable", include_activations=True)
     with pytest.raises(PathDivergenceError) as exc:
-        tl.load(path).run(inputs={"args": [x], "kwargs": {"scale": 2, "extra": 0}})
+        tl.load(path).run_transaction(inputs={"args": [x], "kwargs": {"scale": 2, "extra": 0}})
     assert exc.value.fields.get("code") == RunnableErrorCode.INPUT_ARITY_EXTRA.value
-    ok = tl.load(path).run(inputs={"args": [x], "kwargs": {"scale": 2}})
+    ok = tl.load(path).run_transaction(inputs={"args": [x], "kwargs": {"scale": 2}})
     assert ok.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -261,7 +263,7 @@ def test_tensor_only_dataclass_input_verifies_and_attests(tmp_path: Path) -> Non
 
     pair = _TensorPair(torch.randn(2), torch.randn(2))
     path = _save_runnable(_DataclassAddModel(), [pair], tmp_path / "dc_tensor.tlspec")
-    result = tl.load(path).run(inputs=pair)
+    result = tl.load(path).run_transaction(inputs=pair)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
@@ -274,8 +276,8 @@ def test_dataclass_changed_bool_field_diverges(tmp_path: Path) -> None:
     path = _save_runnable(_DataclassFlagModel(), [pair], tmp_path / "dc_flag.tlspec")
     changed = _MixedPair(pair.x, False)
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=changed)
-    ok = tl.load(path).run(inputs=pair)
+        tl.load(path).run_transaction(inputs=changed)
+    ok = tl.load(path).run_transaction(inputs=pair)
     assert ok.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -287,7 +289,7 @@ def test_dataclass_opaque_field_never_verified(tmp_path: Path) -> None:
 
     pair = _OpaqueFieldPair(torch.randn(2), object())
     path = _save_runnable(_DataclassOpaqueModel(), [pair], tmp_path / "dc_opaque.tlspec")
-    result = tl.load(path).run(inputs=pair, on_divergence="return")
+    result = tl.load(path).run_transaction(inputs=pair, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
     assert result.report.is_poisoned

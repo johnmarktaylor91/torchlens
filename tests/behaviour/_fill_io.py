@@ -267,7 +267,9 @@ def _check_2x_refusal(cell: Cell, bundle: Path) -> None:
             exc.fields.get("code") == "artifact_version_below_floor",
             f"2.x refusal code {exc.fields.get('code')!r}",
         )
-        cell.expect("saved by torchlens 2.x" in str(exc), f"2.x refusal message: {exc}")
+        cell.expect(
+            "saved by torchlens 2.37 and earlier" in str(exc), f"pre-2.38 refusal message: {exc}"
+        )
         cell.expect(
             exc.fields.get("observed") == f"tlspec_version={STAMP_2X}",
             f"2.x refusal observed {exc.fields.get('observed')!r}",

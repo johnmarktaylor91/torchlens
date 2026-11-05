@@ -292,17 +292,15 @@ def _iter_surrogates(root: Any) -> Iterator[_SurrogateRecord]:
 def inspect_state_contract(path: Any) -> dict[str, Any]:
     """Inertly inventory a bundle's persisted state against the contract.
 
-    Reads ``metadata.pkl`` with a surrogate unpickler that builds skeleton
-    records only: no torchlens record objects are constructed, no
-    ``__setstate__`` runs, no module outside the pickle protocol is imported,
-    and nothing refuses -- unknown fields are REPORTED with their owning
-    record types (MEMO 3.3: a user can always see everything without loading
-    anything).
+    A 3.0 save's record tables go to :func:`.format3.inventory.inspect_record_tables`; a 2.x
+    ``metadata.pkl`` is read by a surrogate unpickler that builds skeleton records only (no
+    record object, no ``__setstate__``, no import outside the pickle protocol). Nothing
+    refuses: unknown fields are REPORTED with their owning record types (MEMO 3.3).
 
     Parameters
     ----------
     path:
-        Bundle directory containing ``metadata.pkl``.
+        Artifact directory (3.0 record tables, or a 2.x ``metadata.pkl``).
 
     Returns
     -------
@@ -320,6 +318,10 @@ def inspect_state_contract(path: Any) -> dict[str, Any]:
     from .field_registry import RECORD_CONTRACT_CLASSES
 
     metadata_path = Path(path) / "metadata.pkl"
+    if not metadata_path.exists():
+        from .format3.inventory import inspect_record_tables
+
+        return inspect_record_tables(Path(path))
 
     class _InventoryUnpickler(pickle.Unpickler):
         """Unpickler that resolves EVERY global to an inert surrogate class."""
@@ -346,9 +348,9 @@ def inspect_state_contract(path: Any) -> dict[str, Any]:
     # The metadata.pkl ROOT is the Trace's scrubbed state mapping itself (the
     # scrub path serializes the state dict, not a pickled Trace object), so
     # the root keys are attributed to the Trace contract directly.
-    if isinstance(skeleton, dict):
-        from importlib import import_module as _import_module
+    from importlib import import_module as _import_module
 
+    if isinstance(skeleton, dict):
         trace_module, trace_class = RECORD_CONTRACT_CLASSES["trace"]
         trace_cls = getattr(_import_module(trace_module), trace_class)
         root_keys = {
@@ -373,10 +375,8 @@ def inspect_state_contract(path: Any) -> dict[str, Any]:
         if record_key is None:
             continue
         row["ungoverned"] = False
-        from importlib import import_module
-
         module_name, class_name = RECORD_CONTRACT_CLASSES[record_key]
-        cls = getattr(import_module(module_name), class_name)
+        cls = getattr(_import_module(module_name), class_name)
         _, unknown = partition_state_keys(cls, dict.fromkeys(surrogate.state_keys))
         row["unknown_fields"].update(unknown)
 

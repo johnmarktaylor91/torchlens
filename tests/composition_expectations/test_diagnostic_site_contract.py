@@ -137,3 +137,39 @@ def test_ratchet_ledger_is_red_capable() -> None:
     live_keys = {site.site_key for site in _censuses.raise_sites()}
     phantom = "torchlens.phantom:nowhere:PlantedError::1"
     assert phantom not in live_keys, "the planted phantom key collided with a live site"
+
+
+def test_public_builtin_raise_sites_hold_exactly() -> None:
+    """Public entry points raise no plain ``ValueError``/``TypeError``/``RuntimeError``.
+
+    Teaching: a public entry point refuses through a typed, coded refusal (the
+    ``refuse_*`` helpers in ``torchlens/_entry_refusals.py`` and
+    ``torchlens/backends/_entry_refusals.py``) so the caller gets a stable code and a
+    remedy. The count is an exact-equality ratchet; it only ever decreases.
+    """
+
+    live = _censuses.public_builtin_raise_sites()
+    baseline = _ratchets()["public_builtin_raise_sites"]
+    assert len(live) == baseline, (
+        f"public plain builtin raises drifted (baseline {baseline}, live {len(live)}): "
+        f"raise a typed, coded refusal instead. Sites: {list(live)[:10]}"
+    )
+
+
+def test_public_builtin_census_is_red_capable() -> None:
+    """A planted public builtin raise is counted; private scopes and rebinds are not."""
+
+    import ast
+
+    planted = ast.parse(
+        "def entry(x):\n    raise ValueError('bad')\n"
+        "def _helper():\n    raise TypeError('internal')\n"
+        "class Thing:\n    def __call__(self):\n        raise RuntimeError('dunder is public')\n"
+    )
+    shadowed = ast.parse("from .errs import ValueError\ndef entry():\n    raise ValueError('x')\n")
+    trees = {"torchlens.planted": planted, "torchlens._private": planted, "torchlens.s": shadowed}
+    sites = _censuses.public_builtin_raise_sites_in_tree(trees)
+    assert sites == (
+        "torchlens.planted:entry:ValueError:2",
+        "torchlens.planted:Thing.__call__:RuntimeError:7",
+    ), sites

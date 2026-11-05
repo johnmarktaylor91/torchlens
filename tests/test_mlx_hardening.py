@@ -24,7 +24,9 @@ import mlx.nn as nn  # noqa: E402
 import torchlens as tl  # noqa: E402
 import torchlens.backends.mlx.backend as mlx_backend  # noqa: E402
 import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
+from torchlens._io.format3.codec_policy import backend_materializes  # noqa: E402
 from torchlens.backends.mlx import GradOptions  # noqa: E402
+from torchlens.backends.registry import get_backend_spec  # noqa: E402
 from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError  # noqa: E402
 
 pytestmark = [pytest.mark.rare, pytest.mark.backend_mlx]
@@ -164,11 +166,10 @@ def _assert_mlx_materialized_manifest(manifest: dict[str, Any], expected_kinds: 
     """Assert that a public MLX save wrote materialized codec body entries."""
 
     assert manifest["body_format"] == "safetensors"
-    assert manifest["payload_policy"] == {
-        "policy": "array_payloads",
-        "materialization_supported": True,
-        "payload_kinds": sorted(expected_kinds),
-    }
+    # Saved format 3 keeps only the include flags in payload_policy and reads the payload
+    # policy and its materialization from the backend spec; body_index carries the kinds.
+    assert get_backend_spec("mlx").serialization_policy.payload_policy == "array_payloads"
+    assert backend_materializes(manifest["backend"]) is True
     assert manifest["body_index"]
     assert {entry["intended_use"] for entry in manifest["body_index"]} == expected_kinds
     assert all(entry["logical_backend"] == "mlx" for entry in manifest["body_index"])
@@ -233,10 +234,10 @@ def test_mlx_save_grads_raises() -> None:
 
 
 @pytest.mark.optional
-def test_mlx_layers_to_save_raises_typed_error() -> None:
-    """MLX capture rejects the unsupported legacy ``layers_to_save`` selector."""
+def test_mlx_label_list_save_raises_typed_error() -> None:
+    """MLX capture rejects a label-list ``save=``: its capture takes only ``save='all'``."""
 
-    with pytest.raises(BackendUnsupportedError, match="layers_to_save"):
+    with pytest.raises(BackendUnsupportedError, match="save='all'"):
         tl.trace(
             TinyMLP(),
             _tiny_mlp_input(),

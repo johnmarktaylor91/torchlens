@@ -59,30 +59,75 @@ def test_stats_namespace_serves_the_advertised_accumulators() -> None:
         assert hasattr(tl.stats, name), name
 
 
+#: Each unhidden surface's doc of record: (spelling the old README carried, the page
+#: that now carries it, the spelling there, the most README links a reader follows
+#: to reach that page, or None when no README path of two links or fewer exists).
+#: README.md is JMT's text (4 Nov 2026 rewrite); a surface the README no longer
+#: names is pinned on the page that now teaches it.
+_UNHIDDEN_SURFACE_HOMES: tuple[tuple[str, str, str, int | None], ...] = (
+    ("tl.stats.aggregate", "docs/also_in_torchlens.md", "tl.stats.aggregate", 1),
+    ("tl.stats", "docs/also_in_torchlens.md", "tl.stats", 1),
+    (".profile(", "docs/also_in_torchlens.md", ".profile(", 1),
+    ("evidence_labels()", "docs/reference/glossary.md", "ProfileReport.evidence_labels", 1),
+    ("emit_nvtx=True", "docs/reference/glossary.md", "emit_nvtx", 1),
+    ("register_op_rule", "docs/reference/device_attribution.md", "register_op_rule", None),
+    ("Recorder", "docs/reference/glossary.md", "Recorder", 1),
+    ("torchlens.inventory", "docs/neuroai/journey.md", "torchlens.inventory", 1),
+    ("list_sites", "docs/neuroai/journey.md", "list_sites", 1),
+    ("docs/reference/stats.md", "docs/also_in_torchlens.md", "reference/stats.md", 1),
+    ("tl.export.html", "docs/also_in_torchlens.md", "tl.export.html", 1),
+    ("interactive", "README.md", "interactive", 0),
+    (
+        'scope="receptive_field"',
+        "docs/receptive_projective_fields.md",
+        'scope="receptive_field"',
+        2,
+    ),
+)
+_MD_LINK = re.compile(r"\]\(([^)\s]+?\.md)(?:#[^)\s]*)?\)")
+
+
+def _linked_pages(page: str) -> set[str]:
+    """Repo-relative markdown pages one relative link away from ``page``."""
+
+    source = _REPO / page
+    found = set()
+    for target in _MD_LINK.findall(source.read_text(encoding="utf-8")):
+        if "://" in target:
+            continue
+        resolved = (source.parent / target).resolve()
+        if resolved.is_file() and resolved.is_relative_to(_REPO):
+            found.add(resolved.relative_to(_REPO).as_posix())
+    return found
+
+
+def _readme_link_distance(page: str, limit: int) -> int | None:
+    """README links a reader follows to reach ``page`` (0 for the README), or None."""
+
+    frontier, seen = {"README.md"}, {"README.md"}
+    for hops in range(limit + 1):
+        if page in frontier:
+            return hops
+        frontier = {nxt for cur in frontier for nxt in _linked_pages(cur)} - seen
+        seen |= frontier
+    return None
+
+
 def test_readme_keeps_the_unhidden_surfaces_visible() -> None:
-    """The unhide ratchet: README must keep naming each surfaced capability.
+    """The unhide ratchet: each surfaced capability stays named on its doc of record.
 
     Word-presence only (prose stays free to improve); dropping a claim
-    re-hides a shipped surface and needs a deliberate edit here.
+    re-hides a shipped surface and needs a deliberate edit here. Each row also
+    pins how many README links a reader follows to reach that page.
     """
 
-    readme = (_REPO / "README.md").read_text(encoding="utf-8")
-    for claim in (
-        "tl.stats.aggregate",
-        "tl.stats",
-        ".profile(",
-        "evidence_labels()",
-        "emit_nvtx=True",
-        "register_op_rule",
-        "Recorder",
-        "torchlens.inventory",
-        "list_sites",
-        "docs/reference/stats.md",
-        "tl.export.html",
-        "interactive",
-        'scope="receptive_field"',
-    ):
-        assert claim in readme, f"README lost the unhidden-surface claim {claim!r}"
+    for claim, home, spelling, hops in _UNHIDDEN_SURFACE_HOMES:
+        text = (_REPO / home).read_text(encoding="utf-8")
+        assert spelling in text, f"{home} lost the unhidden-surface claim {claim!r} ({spelling!r})"
+        if hops is not None:
+            assert _readme_link_distance(home, hops) is not None, (
+                f"{home} (home of {claim!r}) is no longer within {hops} link(s) of README.md"
+            )
 
 
 class _UnhideEncoder(nn.Module):
@@ -161,7 +206,7 @@ def test_stats_doc_python_fences_execute() -> None:
 def test_stats_doc_is_linked_from_readme_and_glossary() -> None:
     """The doc of record is reachable from both teaching entry points."""
 
-    readme = (_REPO / "README.md").read_text(encoding="utf-8")
     glossary = (_REPO / "docs" / "reference" / "glossary.md").read_text(encoding="utf-8")
-    assert "docs/reference/stats.md" in readme
+    # The README reaches the stats page through "Also in TorchLens" (one page between).
+    assert _readme_link_distance("docs/reference/stats.md", 2) is not None
     assert "stats.md" in glossary

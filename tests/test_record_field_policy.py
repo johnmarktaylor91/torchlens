@@ -281,7 +281,7 @@ def test_trace_runnable_field_order_slots_are_live_and_loaded_values_override(
             assert loaded.readiness.status is ReadinessStatus.READY
             assert loaded._runnable.path_faithfulness is None
             assert loaded._runnable.poisoned is False
-            result = loaded.run(inputs=torch.randn(2, 3), seed=11)
+            result = loaded.run_transaction(inputs=torch.randn(2, 3), seed=11)
             try:
                 assert result.trace._runnable.path_faithfulness is PathFaithfulness.VERIFIED
                 assert result.trace._runnable.poisoned is False
