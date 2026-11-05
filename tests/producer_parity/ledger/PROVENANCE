@@ -5843,3 +5843,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c815376af80561d0930ca77fb575b884c0bf8688 (dirty)
 recorded: 2026-11-05T15:17:12.601010+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: new validation module from binding-swap-tripwire
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3f360aa6f9eb71d4d0493a5af50d92d78162bcf2 (dirty)
+recorded: 2026-11-05T15:48:00.655458+00:00

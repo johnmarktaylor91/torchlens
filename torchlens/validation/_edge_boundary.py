@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._utils._record_group_table import record_member
+from ._snapshot_binding import snapshot_binding_explained
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -267,12 +268,26 @@ def _parent_arg_evidence(
     never validated.
     """
 
-    from ._core import ValidationCheckResult, _saved_out_payload  # deferred: cycle validation
+    from ._core import (  # deferred: cycle validation
+        ValidationCheckResult,
+        _op_for_validation_label,
+        _saved_out_payload,
+    )
 
     target_op_label = getattr(target_layer, "label", target_layer.layer_label)
     versions = parent_layer.out_versions_by_child
     for key in (target_op_label, target_layer.layer_label):
         if key in versions:
+            # A snapshot is the bound slot's content, so it agrees with any binding;
+            # it stands as evidence only when the recorded graph explains it.
+            if not snapshot_binding_explained(
+                target_layer,
+                parent_layer,
+                _saved_out_payload,
+                lambda label: _op_for_validation_label(trace, label),
+                getattr(trace.__dict__.get("_foreign_departures"), "written_slots", None),
+            ):
+                return ValidationCheckResult.failed_result("arg_logging_mismatch")
             return versions[key], None
     capture_digest = _replay_capture_digest_for(trace, parent_layer)
     if capture_digest is None and _is_replay_recomputed(trace, parent_layer):
