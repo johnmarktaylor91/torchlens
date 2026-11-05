@@ -331,7 +331,7 @@ import torch, torchlens as tl
 loaded = tl.load(__PATH__)
 try:
     result = loaded.run_transaction(inputs=torch.arange(3, dtype=torch.float32))
-    print("RAN", result.faithfulness, result.output.tolist())
+    print("RAN", result.report.path_faithfulness, result.output.tolist())
 except Exception as exc:
     print("RAISED", type(exc).__name__, getattr(exc, "fields", {}).get("code"), exc)
 """
@@ -423,40 +423,39 @@ def test_valid_sparse_capture_still_validates() -> None:
     assert not _invariants_on()
 
 
-class _Embed(nn.Module):
-    """An embedding lookup whose op is rewritten into a sparse constructor."""
+class _Scale(nn.Module):
+    """Scales a recorded index buffer by the input; the op is rewritten into a sparse ctor."""
 
     def __init__(self) -> None:
         super().__init__()
         self.register_buffer("idx", torch.tensor([[0, 1, 2], [1, 0, 2]]))
-        self.weight = nn.Parameter(torch.randn(3, 4))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return the looked-up rows scaled by ``x``."""
+        """Return the index buffer times ``x`` (buffer at args 0, input at args 1)."""
 
-        return nn.functional.embedding(self.idx, self.weight) * x
+        return torch.mul(self.idx, x)
 
 
 def test_validate_path_rejects_indices_beyond_the_declared_shape(tmp_path: Path) -> None:
     """A crafted bundle replaying ``sparse_coo_tensor`` out of range fails, never verifies.
 
-    The embedding op is rewritten into ``torch.sparse_coo_tensor(idx, weight, (1, 1, 4))``
-    with indices up to 2; replay must stop at construction with torch's invariant error.
+    The ``mul(idx, x)`` op is rewritten into ``torch.sparse_coo_tensor(idx, x, (1, 1))``,
+    keeping both parents at their argument positions, with indices up to 2; replay must
+    stop at construction with torch's invariant error.
     """
 
     torch.manual_seed(0)
-    model = _Embed().eval()
-    x = torch.randn(2, 3, 4)
+    model = _Scale().eval()
+    x = torch.randn(3)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True, save_rng=True))
-    target = next(op for op in trace._layer_list if op.func_name == "embedding")
-    # The recorded argument order follows whichever spelling ran; pick by dtype.
-    indices = next(a for a in target.saved_args if a.dtype == torch.int64)
-    values = next(a for a in target.saved_args if a.dtype == torch.float32)
+    target = next(op for op in trace._layer_list if op.func_name == "mul")
+    indices, values = target.saved_args[0], target.saved_args[1]
+    assert indices.dtype == torch.int64 and values.dtype == torch.float32
     target.func_name = "sparse_coo_tensor"
     target.func_id = FunctionRegistryKey("torch", "sparse_coo_tensor", "function")
-    target.saved_args = (indices, values, (1, 1, 4))
+    target.saved_args = (indices, values, (1, 1))
     target.saved_kwargs = {}
     path = tmp_path / "crafted.tlz"
     trace.save(path, level="executable_with_callables")
