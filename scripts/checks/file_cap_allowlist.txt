@@ -67,7 +67,7 @@ torchlens/_capture_state_helpers.py::_move_tensors_to_device_inner	227
 torchlens/_capture_state_helpers.py::_plain_attr_values_equal	109
 torchlens/_capture_state_helpers.py::_reject_opaque_wrappers	70
 torchlens/_capture_state_helpers.py::_snapshot_plain_attr_value	200
-torchlens/_constants.py	1437
+torchlens/_constants.py	1435
 torchlens/_constants.py::_get_torch_overridable_functions	104
 torchlens/_data_classes/_compaction.py::compact_op_metadata	61
 torchlens/_data_classes/_lookup_keys.py::_give_user_feedback_about_lookup_key	80
@@ -959,13 +959,13 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2847
+torchlens/backends/torch/wrappers.py	2846
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	119
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	84
 torchlens/backends/torch/wrappers.py::decorate_all_once	68
-torchlens/backends/torch/wrappers.py::torch_func_decorator	798
-torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	644
+torchlens/backends/torch/wrappers.py::torch_func_decorator	796
+torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	642
 torchlens/bridge/_sae_export.py::write_delphi	92
 torchlens/bridge/_sae_export.py::write_sae_dashboard	111
 torchlens/bridge/_sae_latents.py::logged_splice_trace	86

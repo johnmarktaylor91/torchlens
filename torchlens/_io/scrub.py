@@ -1251,9 +1251,9 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_plain_direct_escape_gaps",
         "_foreign_departures",
         "_unrecorded_operator_mutations",
+        "_torch_file_loads",
         "_last_sibling_ordering_decision",
-        # Sibling render diagnostic (same _render_dot write site as the row
-        # above); left unenrolled, ONE draw() poisoned every later Trace.save.
+        # Sibling render diagnostic (same _render_dot write site); unenrolled, one draw() broke saves.
         "_last_encoding_state",
         # Layout-execution geometry record (vizmech D24), same write site class.
         "_last_render_geometry",
