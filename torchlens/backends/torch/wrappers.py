@@ -126,6 +126,7 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
     direct_transform_decorator,
     transform_builder_decorator,
 )
+from ._user_grad_fn import grad_fn_read_refused
 from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
 from ._warm_originals import originals_exposed
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
@@ -703,17 +704,16 @@ def _register_inplace_live_grad_hook(
     """Hook the live in-place result so its gradient is captured under ``raw_label``.
 
     In-place ops log their output against a ``safe_copy`` whose grad_fn is a
-    dead-end ``CloneBackward`` node. When same-object identity is preserved the
-    live tensor (the original, in-place-modified one) is what downstream ops
-    consume, so the real gradient flows through it -- not the logged copy. This
-    registers the standard backward grad hook on the live tensor so the grad is
-    captured. ``_add_tensor_backward_hook`` dedups by ``(label, id(tensor))`` and
-    only hooks autograd-participating tensors, so the call is safe and cheap.
-    ``owning_backward_only`` is for a hook on model state that outlives the pass
-    (see ``_add_tensor_backward_hook``).
+    dead-end ``CloneBackward`` node; the live, in-place-modified tensor is what
+    downstream ops consume, so the real gradient flows through it and this hooks
+    it (``_add_tensor_backward_hook`` dedups by ``(label, id(tensor))`` and only
+    hooks autograd-participating tensors). A tensor whose ``grad_fn`` read raises
+    or warns (``grad_fn_read_refused``: a stale multi-output or custom-Function
+    view of the written base) is skipped: eager raises on any use of it, so it
+    carries no gradient. ``owning_backward_only``: see ``_add_tensor_backward_hook``.
     """
 
-    if not isinstance(tensor, torch.Tensor):
+    if not isinstance(tensor, torch.Tensor) or grad_fn_read_refused(tensor):
         return
 
     # The live tensor is what downstream ops consume, so it takes gradient

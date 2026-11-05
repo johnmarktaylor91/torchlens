@@ -5716,6 +5716,7 @@
         "tests/test_distribution_validation_isolation.py",
         "tests/test_gate_infra_floor_drift.py",
         "tests/test_inplace_view_grad_fn_rebase.py",
+        "tests/test_inplace_view_sibling_rebind_guards.py",
         "tests/test_marker_lint.py"
       ],
       "torchlens/_utils/_byte_format.py": [
@@ -10162,14 +10163,14 @@
         "tests/test_wrap_state_compat.py"
       ],
       "torchlens/backends/torch/_user_grad_fn.py": [
-        "tests/test_adversarial_scaling_gates.py",
-        "tests/test_capture_targets.py",
-        "tests/test_capture_unification_p3a.py",
+        "tests/test_capture_guard_transactionality.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_decoration.py",
         "tests/test_inplace_view_grad_fn_rebase.py",
-        "tests/test_parameter_inplace_mutation.py",
-        "tests/test_r28_validation_identity_witness.py",
-        "tests/test_valmem5_saved_value_aliases.py",
-        "tests/test_w3_capture_hardening.py"
+        "tests/test_inplace_view_sibling_rebind_guards.py",
+        "tests/test_legacy_tensor_constructors.py",
+        "tests/test_scoped_patching_escape_detection.py",
+        "tests/test_wrap_state_compat.py"
       ],
       "torchlens/backends/torch/_view_writeback.py": [
         "tests/test_capture_guard_transactionality.py",
@@ -10405,10 +10406,10 @@
       "torchlens/backends/torch/param_mutation.py": [
         "tests/test_forward_created_parameters.py",
         "tests/test_inplace_view_grad_fn_rebase.py",
+        "tests/test_inplace_view_sibling_rebind_guards.py",
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_parameter_inplace_mutation.py",
         "tests/test_record_to_trace_op_parity.py",
-        "tests/test_scoped_patching_escape_detection.py",
         "tests/test_tlspec_runnable_r79_session_leak.py",
         "tests/test_wrap_state_compat.py"
       ],
@@ -13550,11 +13551,11 @@
       "torchlens/receptive_field/_view.py": [
         "tests/test_field_view_of.py",
         "tests/test_inplace_view_grad_fn_rebase.py",
+        "tests/test_inplace_view_sibling_rebind_guards.py",
         "tests/test_r19f_rf_view_table.py",
         "tests/test_relation_views.py",
         "tests/test_rf_entities.py",
         "tests/test_rf_ext_api.py",
-        "tests/test_rf_ext_types.py",
         "tests/test_rf_viz.py"
       ],
       "torchlens/receptive_field/_viz.py": [
@@ -15154,6 +15155,7 @@
         "tests/test_autograd_grad_boundary.py",
         "tests/test_backward.py",
         "tests/test_inplace_view_grad_fn_rebase.py",
+        "tests/test_inplace_view_sibling_rebind_guards.py",
         "tests/test_validation.py",
         "tests/test_validation_hardening.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
@@ -15172,10 +15174,10 @@
         "tests/test_backward_p2_projections.py",
         "tests/test_backward_p5_modules.py",
         "tests/test_inplace_view_grad_fn_rebase.py",
+        "tests/test_inplace_view_sibling_rebind_guards.py",
         "tests/test_mutation_driver_governance.py",
         "tests/test_r29_capval_hardening.py",
         "tests/test_validation.py",
-        "tests/test_w051_capt2_validate_forward_invariant.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
       "torchlens/validation/_invariants_buffers.py": [
