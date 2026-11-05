@@ -418,6 +418,70 @@ def binary_size(size: float) -> str:
     return f"{text.removesuffix('.0')} {unit}"
 
 
+#: Counts at or above this print compact (``12.3K``); smaller ones print in full.
+COMPACT_COUNT_FROM = 10_000
+_COUNT_UNITS: Final = ((1e9, "B"), (1e6, "M"), (1e3, "K"))
+
+
+def compact_count(count: int) -> str:
+    """Return a count for a drawing: in full below 10,000, else 3 significant figures.
+
+    ``9999`` stays ``"9999"``; ``147968`` is ``"148K"``, ``85798656`` is
+    ``"85.8M"`` and ``1_500_000_000`` is ``"1.5B"``. The exact count stays in
+    the data and the node tooltip.
+    """
+
+    if count < COMPACT_COUNT_FROM:
+        return str(count)
+    for index, (divisor, suffix) in enumerate(_COUNT_UNITS):
+        if count >= divisor or index == len(_COUNT_UNITS) - 1:
+            text = f"{count / divisor:.3g}"
+            if float(text) >= 1000 and index > 0:  # 999.96K rounds up into the next unit
+                divisor, suffix = _COUNT_UNITS[index - 1]
+                text = f"{count / divisor:.3g}"
+            return f"{text}{suffix}"
+    return str(count)
+
+
+def collapsed_param_detail(num_params: int, num_frozen: int) -> str:
+    """Return a collapsed module box's parameter row, for example ``"85.8M params (all trainable)"``."""
+
+    if num_params == 0:
+        return "0 parameters"
+    if num_frozen == 0:
+        return f"{compact_count(num_params)} params (all trainable)"
+    if num_frozen == num_params:
+        return f"{compact_count(num_params)} params (all frozen)"
+    trainable = compact_count(num_params - num_frozen)
+    return f"{compact_count(num_params)} params ({trainable} trainable, {compact_count(num_frozen)} frozen)"
+
+
+def format_collapsed_module_contents(num_layers: int, num_buffer_layers: int) -> str:
+    """Format the operation and buffer counts for a collapsed module.
+
+    Parameters
+    ----------
+    num_layers:
+        Total tensor-layer count already computed for the module.
+    num_buffer_layers:
+        Number of buffer tensor layers within ``num_layers``.
+
+    Returns
+    -------
+    str
+        An honest collapsed-module summary such as ``"2 ops + 6 buffers"``.
+    """
+
+    num_ops = max(0, num_layers - num_buffer_layers)
+    parts: list[str] = []
+    if num_ops:
+        parts.append(f"{compact_count(num_ops)} {'op' if num_ops == 1 else 'ops'}")
+    if num_buffer_layers:
+        noun = "buffer" if num_buffer_layers == 1 else "buffers"
+        parts.append(f"{compact_count(num_buffer_layers)} {noun}")
+    return " + ".join(parts)
+
+
 def format_module_kwargs(module: Any, suppressed_keys: frozenset[str] = frozenset()) -> str | None:
     """Render captured module/function kwargs in Python keyword syntax.
 

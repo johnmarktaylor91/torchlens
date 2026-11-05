@@ -14,7 +14,11 @@ from ._encoding_aggregate import (
     segment_encoding_attrs,
 )
 from ._input_photo import _raw_input_visualizer_dir, input_photo_attrs
-from ._label_format import compute_selected_node_lines as _compute_selected_node_lines, shape_rows
+from ._label_format import (
+    collapsed_param_detail,
+    compute_selected_node_lines as _compute_selected_node_lines,
+    shape_rows,
+)
 from ._node_boxes import image_box_args, list_box_attrs
 from ._pass_marks import pass_mark_suffix
 from ._render_common import *
@@ -1450,18 +1454,7 @@ def _build_collapsed_module_node(
     else:
         line_style = "dashed"
 
-    # Build param detail string for collapsed module
-    if module_nparams == 0:
-        param_detail = "0 parameters"
-    elif module_nparams_frozen == 0:
-        param_detail = f"{module_nparams} params (all trainable)"
-    elif module_nparams_trainable == 0:
-        param_detail = f"{module_nparams} params (all frozen)"
-    else:
-        param_detail = (
-            f"{module_nparams} params ({module_nparams_trainable} trainable, "
-            f"{module_nparams_frozen} frozen)"
-        )
+    param_detail = collapsed_param_detail(module_nparams, module_nparams_frozen)
 
     lines = [
         node_title.replace("<b>", "").replace("</b>", ""),
@@ -1488,6 +1481,7 @@ def _build_collapsed_module_node(
         fontcolor="black",
         color="black",
         style=f"filled,{line_style}",
+        tooltip=f"{module_nparams:,} params ({module_nparams_frozen:,} frozen)",
         extra_attrs={"ordering": "out"},
     )
     if theme is not None:
