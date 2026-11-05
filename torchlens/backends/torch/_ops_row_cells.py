@@ -207,11 +207,15 @@ def _fill_facets(
     row[f["bool_value"]] = bool_value
     row[f["grad_fn_class_qualname"]] = qualname
     row[f["is_edited"]] = is_edited
-    row[f["edits"]] = [
-        result.fire_record
-        for result in fire_results
-        if getattr(result, "fire_record", None) is not None
-    ]
+    row[f["edits"]] = (
+        [
+            result.fire_record
+            for result in fire_results
+            if getattr(result, "fire_record", None) is not None
+        ]
+        if fire_results
+        else []
+    )
     row[f["annotations"]] = annotations
     input_ancestors = fields_dict["input_ancestors"]
     internal_source_ancestors = fields_dict["internal_source_ancestors"]
@@ -309,9 +313,11 @@ def _fill_core_graph(row: Any, f: Any, trace: Trace, fields_dict: Mapping[str, A
         layer_type == "buffer"
     )
     row[f["is_internal_source"]] = layer_type != "input" and not parents
-    row[f["internal_source_parents"]] = [
-        label for label in parents if require_event(label).has_internal_source_ancestor
-    ]
+    internal_source_parents: list[str] = []
+    for label in parents:
+        if require_event(label).has_internal_source_ancestor:
+            internal_source_parents.append(label)
+    row[f["internal_source_parents"]] = internal_source_parents
     row[f["module"]] = modules[-1] if modules else None
     row[f["modules"]] = list(modules)
     row[f["module_call_stack"]] = list(modules)

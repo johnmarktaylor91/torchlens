@@ -107,15 +107,17 @@ def _module_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[ModuleFrame
     """
 
     return tuple(
-        ModuleFrame(
-            address=address,
-            address_normalized=None,
-            module_type="",
-            call_index=pass_index,
-            fx_qualpath=None,
-            entry_argnames=(),
-        )
-        for address, pass_index in fields_dict["modules"]
+        [
+            ModuleFrame(
+                address=address,
+                address_normalized=None,
+                module_type="",
+                call_index=pass_index,
+                fx_qualpath=None,
+                entry_argnames=(),
+            )
+            for address, pass_index in fields_dict["modules"]
+        ]
     )
 
 
