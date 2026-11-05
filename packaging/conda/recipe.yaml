@@ -6,7 +6,7 @@ schema_version: 1
 
 context:
   name: torchlens
-  version: "2.36.3"
+  version: "2.38.1"
 
 package:
   name: ${{ name }}
@@ -14,7 +14,7 @@ package:
 
 source:
   url: https://pypi.org/packages/source/${{ name[:1] }}/${{ name }}/${{ name }}-${{ version }}.tar.gz
-  sha256: d5e3304a078de2afc4d9c93985aeb1cc9986098b8a2a9bd4d1f5bdc418527c28
+  sha256: b955fc057fc4a03f0c1934f25b4d5c26d8d6dde5cb299147ccfc09d13750fabd
 
 build:
   noarch: python
