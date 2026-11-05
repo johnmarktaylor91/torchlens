@@ -166,7 +166,9 @@ def live_label_error_message(label_value: str, selector_kind: str = "label") -> 
         f'selection on a saved trace use tl.where(lambda p: p.layer_label == "{label_value}") '
         "with the push engine; a rerun or a live capture never matches it. For live hooks "
         'and reruns, use a capture-time selector such as tl.func("relu") or '
-        'tl.module("encoder.layer.4").'
+        'tl.module("encoder.layer.4"). To edit one specific op by its final label, capture '
+        f"first, then rerun with the edit: trace.do(tl.label({label_value!r}), hook, "
+        "model=model, inputs=x) (hook signature: def hook(t, *, ctx): return t * 0)."
     )
 
 
