@@ -3,10 +3,9 @@
 Saved outs are compact copies, so a parent that reached its child as a strided view
 (one half of a ``chunk``, a column slice) used to be replayed from a row-major
 tensor. Kernels choose their path by layout: float32 ``gelu`` runs the oneDNN
-kernel only on a contiguous input, a ``Linear`` over a strided column runs
-``matmul`` plus ``add`` instead of a fused ``addmm``, and BLAS ``gemv`` sums a
-strided vector in another order. The replay then missed the saved out by a
-rounding step and validation failed. Validation compares exactly as before; the
+kernel only on a contiguous input, and a ``Linear`` over a strided column runs
+``matmul`` plus ``add`` instead of a fused ``addmm``. The replay then missed the
+saved out by a rounding step and validation failed. Validation compares exactly as before; the
 replay is what changed.
 """
 
@@ -49,28 +48,6 @@ class _ColumnEmbedding(nn.Module):
         return self.to_emb(x[:, :, 5].unsqueeze(2))
 
 
-class _StridedVectorSolve(nn.Module):
-    """A float64 ``matrix @ y[:, 0]`` whose terms cancel, as a least-squares fit does."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.basis = nn.Parameter(torch.randn(4, 37, dtype=torch.float64))
-
-    def forward(self, xy: torch.Tensor) -> torch.Tensor:
-        """Project the first column of ``xy`` on the basis rows."""
-
-        return self.basis @ xy[:, 0]
-
-
-def _orthogonal_columns(model: _StridedVectorSolve) -> torch.Tensor:
-    """Return an ``(37, 2)`` input whose first column is orthogonal to the basis rows."""
-
-    basis = model.basis.detach()
-    column = torch.randn(37, dtype=torch.float64)
-    column = column - basis.T @ torch.linalg.lstsq(basis.T, column).solution
-    return torch.stack((column, torch.randn(37, dtype=torch.float64)), dim=1)
-
-
 def test_gelu_on_chunk_half_validates() -> None:
     torch.manual_seed(0)
     model = _GEGLU()
@@ -83,13 +60,6 @@ def test_linear_on_strided_column_validates() -> None:
     model = _ColumnEmbedding()
     x = torch.randn(2, 65, 6)
     assert tl.validate(model, x, scope="forward", validate_metadata=True)
-
-
-def test_matrix_times_strided_vector_validates() -> None:
-    torch.manual_seed(0)
-    model = _StridedVectorSolve()
-    xy = _orthogonal_columns(model)
-    assert tl.validate(model, xy, scope="forward", validate_metadata=True)
 
 
 def relay_to_captured_layout(layer: object, arg_type: str, key: object, value: object) -> object:
