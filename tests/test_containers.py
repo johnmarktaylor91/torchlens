@@ -405,7 +405,7 @@ def test_reconstruct_output_refuses_after_load_when_output_op_unsaved(tmp_path: 
 
     with pytest.raises(tl.errors.PayloadUnavailableError) as excinfo:
         loaded.reconstruct_output()
-    assert excinfo.value.code == "activation_not_saved"
+    assert excinfo.value.fields["code"] == "activation_not_saved"
     assert loaded.output_layers[0] in str(excinfo.value)
 
 
@@ -430,7 +430,7 @@ def test_reconstruct_output_in_memory_relu_only_refusal_unchanged() -> None:
 
     with pytest.raises(tl.errors.PayloadUnavailableError) as excinfo:
         trace.reconstruct_output()
-    assert excinfo.value.code == "activation_not_saved"
+    assert excinfo.value.fields["code"] == "activation_not_saved"
 
 
 def test_path_only_container_view_degrades_without_reconstruction() -> None:
