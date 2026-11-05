@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1729 modules, 701677 lines, 0 modules without a docstring.
+85 packages, 1729 modules, 701701 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -65,7 +65,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9194 |
-| `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 681 |
+| `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 705 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2035 |
 | `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 28 | 10863 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
@@ -1688,12 +1688,12 @@ Single Bundle type for intervention-ready TorchLens model logs. (27 modules, 919
 
 ### `torchlens.callbacks`
 
-Callback integration namespace with lazy Lightning support. (2 modules, 681 lines)
+Callback integration namespace with lazy Lightning support. (2 modules, 705 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Callback integration namespace with lazy Lightning support. | 66 |
-| `lightning` | Lightning callback integrations. | 615 |
+| `lightning` | Lightning callback integrations. | 639 |
 
 ### `torchlens.compat`
 
