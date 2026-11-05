@@ -93,14 +93,14 @@ torchlens/_data_classes/cleanup.py::cleanup	137
 torchlens/_data_classes/container.py	1176
 torchlens/_data_classes/field_policy.py::build_record_field_policy_table	68
 torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
-torchlens/_data_classes/grad_fn.py	836
+torchlens/_data_classes/grad_fn.py	835
 torchlens/_data_classes/interface.py::_getitem_after_pass	110
 torchlens/_data_classes/layer.py	1762
 torchlens/_data_classes/module.py	2590
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3434
+torchlens/_data_classes/op.py	3374
 torchlens/_data_classes/op.py::Op.__getattribute__	77
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	66
@@ -169,7 +169,7 @@ torchlens/_input_walk.py::walk_input_boundary._descend_container	90
 torchlens/_io/_alloc_belt.py::_alloc_refusal_reason	91
 torchlens/_io/_json.py::_prescan_depth	115
 torchlens/_io/_load_validators.py::_validate_edge_entry	66
-torchlens/_io/_safe_unpickle.py	1404
+torchlens/_io/_safe_unpickle.py	1403
 torchlens/_io/_safe_unpickle.py::_BundleAllowlistPolicy._resolve_global	314
 torchlens/_io/_save_gates.py::_capture_activation_blob_specs	107
 torchlens/_io/_scrub_identities.py::_scrub_nondeterministic_identities	218
@@ -234,7 +234,7 @@ torchlens/_io/runnable.py::assert_sparse_core_has_no_tensor_payload	83
 torchlens/_io/runnable.py::build_sparse_run_descriptor	487
 torchlens/_io/runnable.py::required_witness_family_members	79
 torchlens/_io/runnable_coherence.py::_callable_registry_contradiction	72
-torchlens/_io/runnable_load.py	3712
+torchlens/_io/runnable_load.py	3711
 torchlens/_io/runnable_load.py::_descriptor_version_diagnostics	126
 torchlens/_io/runnable_load.py::_parse_ambient_context	97
 torchlens/_io/runnable_load.py::_parse_call	83
@@ -1143,7 +1143,7 @@ torchlens/intervention/replay.py::_commit_replay_updates	71
 torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
-torchlens/intervention/replay.py::_run_replay	152
+torchlens/intervention/replay.py::_run_replay	150
 torchlens/intervention/rerun.py	1640
 torchlens/intervention/rerun.py::_append_rerun	103
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
