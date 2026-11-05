@@ -245,6 +245,7 @@ def _print_builds(label: str, trace_per_op: float, commit_per_op: float) -> None
     )
 
 
+@pytest.mark.slow
 def test_gpt2_generate_container_builds_per_op() -> None:
     """Container builds by TorchLens code per op, whole trace and commit alone, stay at the pins."""
 
@@ -254,6 +255,7 @@ def test_gpt2_generate_container_builds_per_op() -> None:
     assert commit_per_op <= _MAX_COMMIT_BUILDS_PER_OP
 
 
+@pytest.mark.slow
 def test_gpt2_generate_container_builds_per_op_with_distributed_imported() -> None:
     """With the ``torch.distributed`` namespaces imported, trace builds per op stay at their pin."""
 

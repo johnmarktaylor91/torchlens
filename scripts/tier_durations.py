@@ -21,7 +21,10 @@ Commands::
     python scripts/tier_durations.py files --tier smoke
 
 ``regenerate`` aggregates a pytest junit XML (``--junitxml``), a per-test CSV
-(``test_id,seconds,...``) or a pytest-split ``.test_durations`` JSON.
+(``test_id,seconds,...``) or a pytest-split ``.test_durations`` JSON, drops
+rows of files no longer in the tree, and with ``--carry PREVIOUS.csv`` keeps
+the previous rows of files on disk the measurement never reached (rare-only
+files, modules skipped at collection).
 ``check`` fails when a bounded file's slowest test exceeds its tier budget and
 is the body of the ``tier-durations`` repository check. ``shards`` balances the
 test files on disk over ``--count`` shards by measured seconds (longest
@@ -356,6 +359,23 @@ def shard_seconds(rows: list[FileRow], shard: list[str]) -> float:
 # ----------------------------------------------------------------------- CLI
 
 
+def carried_rows(previous: Path, measured: Iterable[str]) -> list[FileRow]:
+    """Return ``previous`` ledger rows for test files on disk that the measurement never saw.
+
+    A measurement run with ``-m "not rare"`` reaches no test of a rare-only
+    file, and a module skipped at collection yields no testcase; such files
+    keep their previous row, re-tiered from the source on disk. Rows of files
+    no longer in the tree are not carried.
+    """
+
+    seen = set(measured)
+    return [
+        FileRow(row.file, row.tests, row.seconds, row.max_seconds, file_tier(REPO_ROOT / row.file))
+        for row in read_rows(previous)
+        if row.file not in seen and (REPO_ROOT / row.file).is_file()
+    ]
+
+
 def _regenerate(args: argparse.Namespace) -> int:
     records: list[tuple[str, float]] = []
     inputs = []
@@ -371,7 +391,11 @@ def _regenerate(args: argparse.Namespace) -> int:
     if not records:
         print("regenerate: no measurement input given", file=sys.stderr)
         return 2
-    rows = aggregate(records)
+    measured = aggregate(records)
+    rows = [row for row in measured if row.tier != "missing"]
+    pruned = len(measured) - len(rows)
+    carried = carried_rows(args.carry, (row.file for row in rows)) if args.carry else []
+    rows = sorted(rows + carried, key=lambda row: row.file)
     write_rows(rows, args.out)
     meta = {
         "source_commit": args.source_commit,
@@ -380,13 +404,18 @@ def _regenerate(args: argparse.Namespace) -> int:
         "workers": args.workers,
         "instrumented": bool(args.instrumented),
         "note": args.note or "",
-        "tests": len(records),
+        "tests": sum(row.tests for row in rows),
         "files": len(rows),
+        "pruned_missing_files": pruned,
+        "carried_files": len(carried),
         "regenerate": "python scripts/tier_durations.py regenerate --source-commit SHA "
         "--junit <pytest --junitxml output> [--workers N] [--instrumented]",
     }
     args.meta_out.write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"wrote {args.out} ({len(rows)} files, {len(records)} tests) and {args.meta_out}")
+    print(
+        f"wrote {args.out} ({len(rows)} files, {meta['tests']} tests; {pruned} rows of deleted "
+        f"files pruned, {len(carried)} unmeasured files carried) and {args.meta_out}"
+    )
     return 0
 
 
@@ -448,6 +477,11 @@ def build_parser() -> argparse.ArgumentParser:
     regen.add_argument("--workers", type=int, default=1, help="xdist workers of the measurement")
     regen.add_argument("--instrumented", action="store_true", help="coverage tracing was on")
     regen.add_argument("--note", help="one line on the measurement")
+    regen.add_argument(
+        "--carry",
+        type=Path,
+        help="previous ledger whose rows for unmeasured files still on disk are kept",
+    )
     regen.add_argument("--out", type=Path, default=DURATIONS_PATH)
     regen.add_argument("--meta-out", type=Path, default=META_PATH)
     regen.set_defaults(func=_regenerate)

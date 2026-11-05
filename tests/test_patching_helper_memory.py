@@ -263,6 +263,7 @@ _RSS_SCRIPT = textwrap.dedent(
 )
 
 
+@pytest.mark.heavy
 @pytest.mark.skipif(
     sys.platform not in ("darwin", "linux"), reason="needs ru_maxrss and a readable RSS"
 )
