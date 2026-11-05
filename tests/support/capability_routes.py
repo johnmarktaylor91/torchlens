@@ -17,9 +17,11 @@ the floor torch elsewhere (the graceful test the capability already owes).
 
 from __future__ import annotations
 
+import traceback
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import PurePath
 
 from torchlens._utils import _torch_compat
 from torchlens.attribution.onebackward import ReadError
@@ -134,6 +136,45 @@ def unvetted_arm_refusal(exc: BaseException) -> bool:
     )
 
 
+def _cpp_extension_present() -> bool:
+    """Answer ``HAS_TORCH_CPP_EXTENSION`` through its lazy accessor (looked up at call time)."""
+
+    return _torch_compat.get_torch_cpp_extension_support()
+
+
+def _raised_in_cpp_extension(exc: BaseException) -> bool:
+    """Return whether ``exc`` is an import failure raised while ``torch.utils.cpp_extension`` loaded."""
+
+    frames = traceback.extract_tb(exc.__traceback__)
+    return isinstance(exc, ImportError) and any(
+        PurePath(frame.filename).parts[-3:] == ("torch", "utils", "cpp_extension.py")
+        for frame in frames
+    )
+
+
+def failed_cpp_extension_import(exc: BaseException) -> bool:
+    """Match an import failure inside ``torch.utils.cpp_extension`` anywhere in ``exc``'s chain.
+
+    Inductor reports it wrapped (``BackendCompilerFailed`` keeps it as ``inner_exception``
+    and cause; TorchLens' capture error keeps it as cause), so the chain is walked; an
+    import failure from any other module never matches.
+    """
+
+    seen: set[int] = set()
+    pending: list[BaseException | None] = [exc]
+    while pending:
+        current = pending.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        if _raised_in_cpp_extension(current):
+            return True
+        pending.extend(
+            (current.__cause__, current.__context__, getattr(current, "inner_exception", None))
+        )
+    return False
+
+
 #: Every route the doc runners know, keyed by flag name (``is_vetted_build`` is the
 #: distributed census probe, which lives beside its snapshot table, not in ``_torch_compat``).
 ROUTES: dict[str, CapabilityRoute] = {
@@ -146,6 +187,11 @@ ROUTES: dict[str, CapabilityRoute] = {
         flag="HAS_NN_ATTENTION_MODULE",
         present=_nn_attention_present,
         refusal=missing_module("torch.nn.attention"),
+    ),
+    "HAS_TORCH_CPP_EXTENSION": CapabilityRoute(
+        flag="HAS_TORCH_CPP_EXTENSION",
+        present=_cpp_extension_present,
+        refusal=failed_cpp_extension_import,
     ),
     "is_vetted_build": CapabilityRoute(
         flag="is_vetted_build",

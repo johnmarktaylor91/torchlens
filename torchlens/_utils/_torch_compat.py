@@ -69,6 +69,7 @@ __all__ = [
     "HAS_VIEW_FUNC_UNSAFE",
     "HAS_REV_VIEW_FUNC_UNSAFE",
     "HAS_SDPA_GQA",
+    "HAS_TORCH_CPP_EXTENSION",
     "HAS_SDPA_EMPTY_ROW_ZERO",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
@@ -1073,9 +1074,10 @@ def get_sparse_spsolve_cuda_support(*, force_probe: bool = False) -> bool:
 
 
 def _force_real_op_probes() -> None:
-    """Run every lazily latched probe that executes a real tensor op (diagnostics only)."""
+    """Run every lazily latched probe that runs a real tensor op or heavy import (diagnostics)."""
 
     get_reduce_tuple_dim_support(force_probe=True)
+    get_torch_cpp_extension_support(force_probe=True)
     get_cpu_half_kernels_support(force_probe=True)
     get_eval_batch_norm_mean_residual_support(force_probe=True)
     get_cpu_float8_deterministic_fill_support(force_probe=True)
@@ -1105,6 +1107,29 @@ def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
         HAS_META_ITEM_GUARD = _probe_meta_item_guard()
         _META_ITEM_GUARD_PROBED = True
     return HAS_META_ITEM_GUARD
+
+
+def get_torch_cpp_extension_support(*, force_probe: bool = False) -> bool:
+    """Return whether ``torch.utils.cpp_extension`` imports cleanly, lazily (see the leaf).
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even when cached. Diagnostic surfaces set this; nothing imports the
+        extension builder (and setuptools with it) on a plain ``import torchlens``.
+
+    Returns
+    -------
+    bool
+        ``HAS_TORCH_CPP_EXTENSION``, cached after the first call.
+    """
+
+    global HAS_TORCH_CPP_EXTENSION, _TORCH_CPP_EXTENSION_PROBED
+
+    if not _TORCH_CPP_EXTENSION_PROBED or force_probe:
+        HAS_TORCH_CPP_EXTENSION = bool(_real_op_probe_leaf().probe_torch_cpp_extension())
+        _TORCH_CPP_EXTENSION_PROBED = True
+    return HAS_TORCH_CPP_EXTENSION
 
 
 def get_mha_fastpath_switch_support(*, force_probe: bool = False) -> bool:
@@ -1313,6 +1338,8 @@ HAS_SPARSE_SPSOLVE_CUDA: bool = False
 _SPARSE_SPSOLVE_CUDA_PROBED: bool = False
 HAS_META_ITEM_GUARD: bool = False
 _META_ITEM_GUARD_PROBED: bool = False
+HAS_TORCH_CPP_EXTENSION: bool = False
+_TORCH_CPP_EXTENSION_PROBED: bool = False
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 _DYNAMO_ORIG_CALLABLE_MARKER_PROBED: bool = False
@@ -1450,6 +1477,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_VIEW_FUNC_UNSAFE",
     "HAS_REV_VIEW_FUNC_UNSAFE",
     "HAS_SDPA_GQA",
+    "HAS_TORCH_CPP_EXTENSION",
     "HAS_SDPA_EMPTY_ROW_ZERO",
     "HAS_FX_GRAPH_MODULE",
     "HAS_NAMED_TENSOR_API",
@@ -1548,6 +1576,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED": ("HAS_CPU_FLOAT8_DETERMINISTIC_FILL",),
     "_SPARSE_SPSOLVE_CUDA_PROBED": ("HAS_SPARSE_SPSOLVE_CUDA",),
     "_META_ITEM_GUARD_PROBED": ("HAS_META_ITEM_GUARD",),
+    "_TORCH_CPP_EXTENSION_PROBED": ("HAS_TORCH_CPP_EXTENSION",),
     "_MHA_FASTPATH_SWITCH_PROBED": ("HAS_MHA_FASTPATH_SWITCH",),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": ("HAS_FUNCOL_GROUP_RESOLUTION", "_FUNCOL_GROUP_RESOLVERS"),
     "_FUNCOL_WAIT_INTERPOSITION_PROBED": (

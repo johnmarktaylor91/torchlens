@@ -209,6 +209,34 @@ def test_root_agent_receptive_gradient_and_overlay_run() -> None:
     assert overlay.size == (5, 5)
 
 
+def test_cpp_extension_route_accepts_only_that_import_failure() -> None:
+    """Graceful floor test for ``HAS_TORCH_CPP_EXTENSION`` and its docs route.
+
+    Where ``torch.utils.cpp_extension`` cannot import (torch 2.1 with a setuptools that no
+    longer ships ``pkg_resources``) the flag reads False and the route accepts exactly that
+    import failure, also when wrapped as the cause of another error; an import failure
+    from any other module is refused, and where the import works the route accepts
+    nothing.
+    """
+
+    from tests.support.capability_routes import ROUTES
+    from torchlens._utils._torch_compat import get_torch_cpp_extension_support
+
+    route = ROUTES["HAS_TORCH_CPP_EXTENSION"]
+    assert not route.accepts(ModuleNotFoundError("x", name="pkg_resources"))
+    try:
+        importlib.import_module("torch.utils.cpp_extension")
+    except ImportError as exc:
+        assert get_torch_cpp_extension_support(force_probe=True) is False
+        wrapped = RuntimeError("backend compile failed")
+        wrapped.__cause__ = exc
+        assert route.accepts(exc)
+        assert route.accepts(wrapped)
+    else:
+        assert get_torch_cpp_extension_support(force_probe=True) is True
+        assert route.present()
+
+
 def test_nn_attention_route_accepts_only_that_missing_module() -> None:
     """Graceful floor test for the ``HAS_NN_ATTENTION_MODULE`` docs-fence route.
 

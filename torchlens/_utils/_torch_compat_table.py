@@ -246,6 +246,9 @@ _ROWS: tuple[CapabilityRow, ...] = (
     ),
     _row("HAS_TENSORBASE_CLASS"),
     _row("HAS_TENSOR_SEQUENCE_SLOT_FIX"),
+    # Measured with current setuptools installed, as a pip install carries it; with no
+    # setuptools at all the import also fails on 2.2.2 through 2.9.1.
+    _row("HAS_TORCH_CPP_EXTENSION", absent_on=("2.1.2",)),
     _row("HAS_TORCH_FUNC"),
     _row("HAS_TORCH_FUNCTION_STACK_SURGERY"),
     _row("HAS_TORCH_VF"),

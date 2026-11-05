@@ -180,6 +180,27 @@ def probe_reduce_tuple_dim() -> bool:
     return True
 
 
+def probe_torch_cpp_extension() -> bool:
+    """Return whether ``torch.utils.cpp_extension`` imports cleanly.
+
+    Torch 2.1's extension builder imports ``pkg_resources`` when it loads, and current
+    setuptools no longer ships that module, so on such an install inductor's CPU backend and
+    ``torch.utils.benchmark`` fail at import. Later torch dropped the import (torch 2.2
+    through 2.9 still need setuptools itself to be installed).
+
+    Returns
+    -------
+    bool
+        ``True`` when the import succeeds.
+    """
+
+    try:
+        import torch.utils.cpp_extension  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def probe_meta_item_guard() -> bool:
     """Return whether ``Tensor.item()`` raises its own guard on meta tensors.
 

@@ -486,6 +486,7 @@ def test_torch_capability_snapshot_contract() -> None:
         # through to a generic NotImplementedError instead). Build-dependent,
         # so mirror the live post-snapshot capability.
         "HAS_META_ITEM_GUARD": tc.HAS_META_ITEM_GUARD,
+        "HAS_TORCH_CPP_EXTENSION": tc.HAS_TORCH_CPP_EXTENSION,
         # W21 cold-start: FSDP wrapper detection is lazily probed (never imports
         # torch.distributed.fsdp on plain captures); distributed availability is
         # build-dependent, so mirror the live post-snapshot capability.
