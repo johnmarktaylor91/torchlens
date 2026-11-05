@@ -34,6 +34,7 @@ from ...recording._types import CaptureSpec, StorageIntent
 from ._ops_containers import _walk_output_tensors_with_paths, runnable_output_losslessness
 from ._storage_exports import note_alias_rebound_outputs
 from .buffer_writes import reconcile_buffer_writes, session_validated_buffer_address
+from .ops import _VIEW_MUTATION_RELABELS as _RELABELS
 
 if TYPE_CHECKING:
     from torchlens.backends.torch.backend import TorchBackend
@@ -780,7 +781,7 @@ def extract_and_mark_outputs(
                 self_trace.capture_events.append_amendment(amendment)
 
     return note_alias_rebound_outputs(
-        self_trace, attributable_output_tensors, attributable_output_tensor_addresses
+        self_trace, attributable_output_tensors, attributable_output_tensor_addresses, _RELABELS
     )
 
 

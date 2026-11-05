@@ -256,18 +256,19 @@ def note_alias_rebound_snapshot(
 
 
 def note_alias_rebound_outputs(
-    trace: Any, tensors: list[torch.Tensor], addresses: list[str]
+    trace: Any,
+    tensors: list[torch.Tensor],
+    addresses: list[str],
+    relabels: Mapping[Any, tuple[Any, ...]],
 ) -> tuple[list[torch.Tensor], list[str]]:
     """Record the returned tensors a view write of this session relabeled, and pass them through.
 
-    Output nodes are built in postprocess, after capture released the view-write relabels
+    Output nodes are built in postprocess, after capture released ``relabels``
     (``ops._VIEW_MUTATION_RELABELS``), so a returned sibling view bound to the write by
     the propagation would leave its output node's snapshot unmarked. The address of each
     returned tensor whose current label is the one this session's propagation gave it is
     kept in ``alias_outputs``; :func:`mark_alias_rebound_output` turns it into the mark.
     """
-
-    from .ops import _VIEW_MUTATION_RELABELS as relabels  # ops imports this module
 
     token = active_label_session_token()
     for tensor, address in zip(tensors, addresses, strict=True):
