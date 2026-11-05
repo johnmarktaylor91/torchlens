@@ -17,7 +17,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _ecosystem | 1 | 0 |
 | _episode_spec | 1 | 0 |
 | _errors | 23 | 0 |
-| _extraction | 8 | 0 |
+| _extraction | 10 | 0 |
 | _io | 19 | 0 |
 | _ir | 11 | 0 |
 | _json_safe | 1 | 0 |
@@ -42,7 +42,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _user_public_impls | 2 | 0 |
 | _utils | 2 | 0 |
 | _validation_status | 1 | 0 |
-| _visualization | 9 | 0 |
+| _visualization | 8 | 0 |
 | _vocab | 2 | 0 |
 | agent | 10 | 0 |
 | appliances | 2 | 0 |
@@ -54,8 +54,8 @@ and how many lack a runnable `Examples` section. Regenerate with
 | dataset_extraction | 3 | 0 |
 | debug | 63 | 0 |
 | differential | 3 | 0 |
-| distributed | 9 | 0 |
-| errors | 31 | 0 |
+| distributed | 1 | 0 |
+| errors | 32 | 0 |
 | examples | 1 | 0 |
 | experiment | 6 | 0 |
 | experimental | 5 | 0 |
@@ -78,8 +78,8 @@ and how many lack a runnable `Examples` section. Regenerate with
 | trackers | 42 | 0 |
 | transformer | 39 | 0 |
 | transforms | 37 | 0 |
-| validation | 12 | 0 |
-| viz | 14 | 0 |
+| validation | 10 | 0 |
+| viz | 11 | 0 |
 | **total** | **1062** | **0** |
 
 Public callable members of those classes (methods and properties): 1496.
