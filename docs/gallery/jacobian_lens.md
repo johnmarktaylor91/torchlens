@@ -12,8 +12,8 @@ artifacts reload and replay, and the two controls fail their bars as declared.
 | Claim | *Verbalizable Representations Form a Global Workspace in Language Models*, Transformer Circuits, 6 July 2026, arXiv 2607.15495 v1 |
 | Script and run line | `python examples/gallery/jacobian_lens.py --out outputs/jacobian_lens --reference-repo URL` (supply the paper's reference repository URL) |
 | Pinned inputs | GPT-2 small `607a30d783dfa663caf39e06633721c8d4cfcd7e`; Mamba-130m `1e76775f628fbf1350fbe4dbb3d971ba64af25a1`; reference commit `581d398613e5602a5af361e1c34d3a92ea82ba8e`; embedded two-sentence CC0 corpus (SHA-256 `5ddd996b8358a88420bf5076c4166c1beba68c003e68fb42f1c212616923624e`); seed 0 |
-| Verdict | Passed; CPU Linux runner, 3 November 2026, TorchLens 2.36.3, commit `994796df4d098d98b95089539a1ca58393a0a74d` |
-| Cost | 2 CPU cores, 1,777.5 s script wall time (29 min 38 s), 5,175,792 KiB peak process RSS |
+| Verdict | Passed; CPU Linux runner, 5 November 2026, TorchLens 2.38.1, commit `138a568085d7acb4dc485d362462c1cd339fbbd3` |
+| Cost | 2 CPU threads, 1,509.8 s script wall time (25 min 10 s), 6,985,384 KiB peak process RSS |
 
 ## Oracles
 
@@ -67,22 +67,28 @@ SHA-256 and a held-out residual. Replay checks the sidecar hash and recomputes t
 using the same pinned model's final norm and unembedding. It must reproduce the top-ten
 token ids exactly. Model weights are a required replay input. Both replays matched.
 
-The Mamba trace is 415,280,294 bytes with gallery sorted-path/content SHA-256
-`5ff1c7dd6f49185f5d62bbf50525b87bd4736fba70c5ee705f9e9c898ded4cb7`; its matrix sidecar is
-54,271,174 bytes, SHA-256 `bd42f446eefc3c425075fc832462f4ddfcad7b963223d4fb5f4d9802dd7dc870`.
-The GPT-2 trace is 52,548,070 bytes, SHA-256
-`912c70fbd5881c3d4369fb99616ae793bad79c3a93a8b50c5ae3fc80840fb840`; its sidecar is
+Each trace is a directory in the 2.38 saved format: a manifest, one JSON table per record
+kind (one column per key) under `records/`, and the tensors in safetensors files under
+`blobs/`; nothing in it is pickled. The Mamba trace is 13 files, 685,358,014 bytes in all, with
+gallery sorted-path/content SHA-256
+`ace33494aa5af7afc31dbcf7ec36842927417d39f8df3a44425923eb36c48702`; 333,679,536 bytes of it are
+tensors and the rest are the record tables, the largest `records/op.json` (151,682,863 bytes)
+and `records/grad_fn_call.json` (107,458,331 bytes). Its matrix sidecar is 54,271,174 bytes,
+SHA-256 `bd42f446eefc3c425075fc832462f4ddfcad7b963223d4fb5f4d9802dd7dc870`. The GPT-2 trace is
+12 files, 84,346,612 bytes, SHA-256
+`6718e62577e90447d9f3b68093778ee858a7b1d032ecece206da8a2246747e5c`; its sidecar is
 25,956,473 bytes, SHA-256 `ece32eff20c8dcbd9c6fab7f7babeecc445eadfc15fee4f1bed5a933e80e8112`.
 
-An earlier attempt at this entry stopped here: the Mamba trace, with about 24,000 ops each
-holding one gradient record per backward pass of the fit, saved 123 MB of metadata and
-`tl.load` refused it at the loader's 24,000,000-opcode allocation ceiling. The ceiling is
-unchanged. The persisted gradient records and the recorded grad_fn calls are now stored as
-one columnar table per op, so the opcode count grows with the number of ops, not with ops
-times backward passes, and the same trace reloads. A first rerun after that fix exceeded
-its 90-minute budget because backward-pass recording had become about six times slower in
-between (every grad_fn resolved its op by scanning the op list); the lookup now reads the
-label index, and this run's fit took its expected time.
+An earlier attempt at this entry, on TorchLens 2.36, stopped here: that release saved a
+trace's metadata as one pickle, the Mamba trace (about 24,000 ops, each holding one gradient
+record per backward pass of the fit) wrote 123 MB of it, and `tl.load` refused it at the
+loader's 24,000,000-opcode allocation ceiling for pickled metadata. The 2.38 format has no
+pickle to scan: the gradient-function calls of every backward pass are rows of
+`records/grad_fn_call.json`, and `tl.load` reads a 2.38 directory with the format's own JSON
+and safetensors reader, which never reaches the pickle path or its ceiling. The same fit now
+saves and reloads. A rerun in between exceeded its 90-minute budget because backward-pass
+recording had become about six times slower (every grad_fn resolved its op by scanning the
+op list); the lookup now reads the label index, and this run's fit took its expected time.
 
 The script also writes `jacobian_lens.html`, a side-by-side layer-by-position top-token
 grid for the ASCII-face prompt, and one `*_readout_grid.json` per architecture containing
@@ -101,11 +107,11 @@ reference's line count is not measured. Marked source counts are 41 TorchLens li
 ## The stamp
 
 ```text
-{"commit": "994796df4d098d98b95089539a1ca58393a0a74d", "date_utc": "2026-11-03T22:03:52Z",
+{"commit": "138a568085d7acb4dc485d362462c1cd339fbbd3", "date_utc": "2026-11-05T01:39:20Z",
  "device": "cpu", "libraries": {"numpy": "2.2.6", "torchvision": "0.28.0+cpu",
  "transformers": "5.18.0"}, "machine": "x86_64",
- "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31", "python": "3.10.19",
- "torch": "2.13.0+cpu", "torch_threads": 2, "torchlens": "2.36.3", "wall_seconds": 1777.5}
+ "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39", "python": "3.10.18",
+ "torch": "2.13.0+cpu", "torch_threads": 2, "torchlens": "2.38.1", "wall_seconds": 1509.8}
 ```
 
 ## Vary it

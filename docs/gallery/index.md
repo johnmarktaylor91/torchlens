@@ -31,6 +31,6 @@ marked regions. "Shared" is setup used by both implementations.
 | Causal tracing | capture, select, read, do, compare, save | 37 | 30 | 76 | GPT-2 small | 16 min 52 s, 2 CPU cores, 5.4 GiB |
 | CNN fields | capture, select, read, do, compare, save | 233 | 37 | in TorchLens count | ResNet-18 | 21 s, 2 CPU threads, 743 MiB |
 | Neuro RDMs | capture, select, read, compare, save | 252 | 56 | in TorchLens count | ResNet-18, ViT-B/16 | 31 s and 61 s, 2 CPU threads, 1.1 and 2.6 GiB |
-| Jacobian lens | capture, read, save | 41 | 33 | not separated | GPT-2 small, Mamba-130m | 29 min 38 s, 2 CPU cores, 4.9 GiB |
+| Jacobian lens | capture, read, save | 41 | 33 | not separated | GPT-2 small, Mamba-130m | 25 min 10 s, 2 CPU threads, 6.7 GiB |
 | IOI circuit | capture, read, save | 55 | 19 | not separated | GPT-2 small | 1 h 41 min, 2 CPU cores, 6.5 GiB |
-| Bundles harness | capture, select, read, do, compare, save | 40 | 41 | 19 | GPT-2 small, ResNet-18, DistilGPT2 | 2 min 37 s, 1 CPU thread, 3.0 GiB |
+| Bundles harness | capture, select, read, do, compare, save | 40 | 41 | 19 | GPT-2 small, ResNet-18, DistilGPT2 | 2 min 28 s, 1 CPU thread, 2.7 GiB |

@@ -18,8 +18,8 @@ controls refuse as declared.
 | Claim | A bundle compares two runs only when they line up and differ by the stated edit; a steer reaches a second model only through the tokens it reads. |
 | Script and run line | `python examples/gallery/bundles_harness.py --out outputs/bundles_harness` |
 | Pinned inputs | Drafter `openai-community/gpt2` at revision `607a30d7`, critic `distilbert/distilgpt2` at revision `2290a626`, float32, eager attention; torchvision ResNet-18 `IMAGENET1K_V1` on a seed-0 random input; prompt "The Eiffel Tower is in the city of"; greedy decoding, 12 draft tokens, 8 critique tokens; ablations at `transformer.h.6.mlp` and `layer1.0.relu`; steer: a seed-0 unit direction added at `transformer.h.6.mlp`, strength 120 (weak control 0.001). |
-| Verdict | Passed; Linux x86_64 CPU, 5 November 2026, TorchLens 2.38.1, commit `138a5680`. |
-| Cost | 149 s measured analysis; 2 min 37 s process wall time on one CPU thread, 3.0 GiB peak memory. |
+| Verdict | Passed; Linux x86_64 CPU, 5 November 2026, TorchLens 2.38.1, commit `d9f8f53c`. |
+| Cost | 142 s measured analysis; 2 min 28 s process wall time on one CPU thread, 2.7 GiB peak memory. |
 
 ## Oracles
 
@@ -56,8 +56,8 @@ graded.
 ## Artifact and replay
 
 The whole bundle (clean, ablated, draft, critique and the steered alternatives) is saved as a
-portable `bundles_harness.tlspec`: a directory of 59 files, 367,121,339 bytes in all, with
-gallery sorted-path/content sha256 `37ad54b984e5e00775b0c0e37c35ee95271036f1f5c6833395631beae9fd1bc2`.
+portable `bundles_harness.tlspec`: a directory of 59 files, 367,121,025 bytes in all, with
+gallery sorted-path/content sha256 `635d4e6682a89d9df30f55c2d18ff6f3ad701b2f02ee2a330be7c820ec635409`.
 It holds one member directory per run (records as JSON tables, tensors as safetensors) and no
 pickled file. The script reloads it and replays the `fed_by` spans, the prompt divergence and the `lm_head`
 comparison from the reloaded copy: all three match the in-memory values.
@@ -77,8 +77,8 @@ against an original reference implementation was measured.
 
 ```text
 {
-  "commit": "138a568085d7acb4dc485d362462c1cd339fbbd3",
-  "date_utc": "2026-11-05T01:13:58Z",
+  "commit": "d9f8f53c9bce262e0e483e3a835c8e342f9402fa",
+  "date_utc": "2026-11-05T01:30:58Z",
   "device": "cpu",
   "libraries": {
     "numpy": "2.2.6",
@@ -86,12 +86,12 @@ against an original reference implementation was measured.
     "transformers": "5.18.0"
   },
   "machine": "x86_64",
-  "platform": "Linux-5.4.278-1.el7.elrepo.x86_64-x86_64-with-glibc2.36",
+  "platform": "Linux-3.10.0-1160.119.1.el7.x86_64-x86_64-with-glibc2.36",
   "python": "3.10.19",
   "torch": "2.13.0+cpu",
   "torch_threads": 1,
   "torchlens": "2.38.1",
-  "wall_seconds": 149.4
+  "wall_seconds": 141.9
 }
 ```
 
