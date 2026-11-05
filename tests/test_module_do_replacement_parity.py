@@ -135,10 +135,10 @@ def test_forked_module_edit_has_the_capture_time_shape() -> None:
     assert fork.ops[replacement.layer_label] is replacement
     index = [op.label for op in fork._layer_list]
     assert index.index(replacement.label) == index.index(last_op.label) + 1
-    # Consumers of the module's output now read the replacement.
+    # Consumers of the module's output now read the replacement (parents carry layer labels).
     for child_label in replacement.children:
-        assert replacement.label in fork[child_label].parents
-        assert last_op.label not in fork[child_label].parents
+        assert replacement.layer_label in fork[child_label].parents
+        assert last_op.layer_label not in fork[child_label].parents
     # Every other op keeps its capture label: nothing is renumbered post-capture.
     assert [op.label for op in clean._layer_list] == [
         op.label for op in fork._layer_list if op is not replacement
