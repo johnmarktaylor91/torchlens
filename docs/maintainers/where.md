@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1616 modules, 686175 lines, 0 modules without a docstring.
+83 packages, 1616 modules, 686174 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4636 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 56 | 18528 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6360 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 97 | 48302 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 97 | 48301 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2486 |
@@ -957,7 +957,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (97 modules, 48302 lines)
+Computational graph visualization via Graphviz. (97 modules, 48301 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1003,7 +1003,7 @@ Computational graph visualization via Graphviz. (97 modules, 48302 lines)
 | `_intervention_sites` | Intervention-site lookup shared by the draw path and the interventions view. | 97 |
 | `_label_format` | Formatting helpers for TorchLens visualization node labels. | 735 |
 | `_label_width` | Conservative text-width metrics for sizing node labels before Graphviz lays them out. | 114 |
-| `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 379 |
+| `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 378 |
 | `_loop_edges` | Ports that make a rolled recurrence read as a loop. | 139 |
 | `_mutated_params` | Source nodes for in-place-mutated ''nn.Parameter'' objects in the forward render. | 693 |
 | `_node_boxes` | Box layout for nodes that carry a picture or a list of labels. | 110 |
