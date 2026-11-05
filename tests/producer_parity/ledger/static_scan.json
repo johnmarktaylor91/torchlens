@@ -7209,14 +7209,6 @@
  },
  {
   "ambiguous": false,
-  "field": "func_call_id",
-  "file": "torchlens/backends/torch/_ops_row_cells.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
   "field": "grad_fn_class_qualname",
   "file": "torchlens/backends/torch/_ops_row_cells.py",
   "has_default": false,
