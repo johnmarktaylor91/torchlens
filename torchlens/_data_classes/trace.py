@@ -114,7 +114,7 @@ from . import (
     _trace_views,
 )
 from ._accessor_base import Accessor
-from ._conditional_arms import ConditionalOutcome, arm_role_ops, derive_conditional_outcome
+from ._conditional_arms import ArmRef, ConditionalOutcome, arm_role_ops, derive_conditional_outcome
 from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from ._preprocessing_provenance import status_of
 from ._trace_accessors import (
@@ -356,7 +356,7 @@ class ConditionalArm:
     evaluation_entry_edge: tuple[str, str] | None = None
     fired: bool = False
     execution_entry_edge: tuple[str, str] | None = None
-    _trace: Any = field(default=None, repr=False, compare=False)
+    _trace: Any = field(default=ArmRef(), repr=False, compare=False)
     _conditional_id: str | None = field(default=None, repr=False, compare=False)
     _arm_index: int | None = field(default=None, repr=False, compare=False)
 
