@@ -308,14 +308,21 @@ class _SharedWrapperBlock(nn.Module):
 def test_patching_listing_refuses_a_shared_wrapper_instead_of_listing_wrapper_and_core() -> None:
     """A reused wrapper and its reused core never both survive the one-per-layer dedup.
 
-    The sweep yields both Modules; the wrapper's core view refuses (two calls),
-    so the dedup cannot match them, and the patching listing refuses by name
+    Each wrapper call reads q/k/v through its core's call in the same pass. The
+    sweep yields both Modules; the wrapper's core view refuses (two calls), so
+    the dedup cannot match them, and the patching listing refuses by name
     instead of handing two addresses for one layer to a whole-module sweep.
     """
 
     torch.manual_seed(5)
     clean = tl.trace(_SharedWrapperBlock().eval(), torch.randn(2, 5, _HIDDEN), save="all")
 
+    wrapper_calls = list(clean.modules["attn"].calls.values())
+    query_calls = list(clean.modules["attn.self.query"].calls.values())
+    for wrapper_call, query_call in zip(wrapper_calls, query_calls, strict=True):
+        q_value = wrapper_call.facets.q.value
+        assert torch.allclose(q_value.sum(), query_call.out.sum())
+        assert wrapper_call.facets.has("attn_out")
     assert sorted(module.address for module in clean.modules_with_facet("q")) == [
         "attn",
         "attn.self",
