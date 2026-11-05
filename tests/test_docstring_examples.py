@@ -98,6 +98,48 @@ def test_census_is_current() -> None:
     )
 
 
+_CENSUS_WITH_PEERS_BLOCKED = textwrap.dedent(
+    """
+    import pathlib
+    import sys
+
+    sys.path.insert(0, sys.argv[1])
+    import docstring_examples
+
+    for peer in sorted(set(docstring_examples.OPTIONAL_PEER_MODULES.values())):
+        sys.modules[peer] = None
+    sys.modules["pytorch_lightning"] = None
+    text = docstring_examples.render_census(
+        docstring_examples.public_symbols(), docstring_examples.public_members()
+    )
+    pathlib.Path(sys.argv[2]).write_text(text)
+    """
+)
+
+
+def test_census_is_the_same_without_the_optional_peers(tmp_path: Path) -> None:
+    """With every optional peer blocked, the census still matches the committed file.
+
+    The Lightning callbacks subclass Lightning's ``Callback`` on first access, so where
+    ``lightning`` is absent they are read from source; this keeps one committed census
+    true both in an environment with the ``test`` extra and in one without it. The
+    subprocess blocks the peers (a ``None`` entry in ``sys.modules``) before torchlens
+    is imported.
+    """
+
+    out = tmp_path / "census.md"
+    completed = subprocess.run(
+        [sys.executable, "-c", _CENSUS_WITH_PEERS_BLOCKED, str(REPO_ROOT / "tools"), str(out)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr[-4000:]
+    assert out.read_text() == docstring_examples.CENSUS_PATH.read_text()
+
+
 _MEMBERS_AROUND_A_ROUND_TRIP = textwrap.dedent(
     """
     import json
