@@ -18,6 +18,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_pipeline.py` | pipeline | `PIPELINE`: the named step records in run order (name, home module, trace fields read and written, gate, postcondition) and `run_pipeline` |
 | `_executor.py` | executor | `StepContext` and the per-step adapters (`_run_<name>`), gates (`_should_run_<name>`) and postconditions (`_<name>_violation`) the pipeline points at |
 | `_materialize.py` | 0 | Project capture events into raw `Op` state |
+| `_column_passes.py` | 2 | Pass bodies ported to the `OpColumns` view (step 2 `find_output_ancestors`), each with its facade body as the fallback |
 | `_buffer_addresses.py` | 0 support | Resolve each buffer op's registered buffer address and the initial buffer snapshots |
 | `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances; `_orphan_seeds.py` owns flood seeds, call-group closure and pre-removal identity/payload bookkeeping |
 | `ast_branches.py` | 5 support, 11.5 support | Conditional AST indexing and source variable name resolution. Hot/cold FileIndex split: parsed ASTs (`_HeavyAst`) are released at the postprocess epilogue (`release_parsed_asts()`); span data + node-free projected calls persist, and unprojected-scope queries re-parse from RETAINED source (never disk), failing closed on anomaly |
