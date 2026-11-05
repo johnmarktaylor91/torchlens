@@ -484,7 +484,7 @@ torchlens/_trace_selector_helpers.py::_make_layers_to_save_predicate	76
 torchlens/_training_validation.py::validate_training_compatibility	69
 torchlens/_user_funcs.py::trace	222
 torchlens/_user_public_graph_impls.py::show_model_graph	117
-torchlens/_user_public_impls.py	1503
+torchlens/_user_public_impls.py	1501
 torchlens/_user_public_impls.py::_validate_forward_pass_torch	522
 torchlens/_user_public_impls.py::_warn_if_validation_trace_not_reproducible	137
 torchlens/_user_public_impls.py::summary	151
