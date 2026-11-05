@@ -366,6 +366,28 @@ def test_module_context_group_reads_the_nesting() -> None:
         captured.cleanup()
 
 
+def test_layer_module_call_stack_reads_the_op_call_stack() -> None:
+    """Layer.module_call_stack stays (served from its single pass); Op.module_call_stack refuses."""
+
+    torch.manual_seed(0)
+    captured = tl.trace(_Nested(), torch.ones(1, 3))
+    try:
+        op = captured.ops["linear_1_1"]
+        layer = captured.layers["linear_1"]
+        assert layer.num_passes == 1
+        stack = layer.module_call_stack
+        assert isinstance(stack, tuple)
+        assert stack == tuple(op.module_context.call_stack)
+        assert stack == tuple(layer.module_context.call_stack)
+        assert stack[-1] == op.module_context.atomic_module_call
+        assert pickle.loads(pickle.dumps(captured)).layers["linear_1"].module_call_stack == stack
+        with pytest.raises(FacadeTeachingError) as excinfo:
+            _ = op.module_call_stack
+        assert "module_context.call_stack" in str(excinfo.value)
+    finally:
+        captured.cleanup()
+
+
 def test_payload_group_reads_the_transformed_output() -> None:
     """The payload group serves the transformed output on Op and on a single-pass Layer."""
 

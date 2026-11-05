@@ -552,7 +552,7 @@ trace = tl.trace(model, x)
 layer = trace.layers["linear_1_1"]
 print("module", layer.module)
 print("modules", layer.modules)
-print("module_call_stack", layer.module_context.call_stack)
+print("module_call_stack", layer.module_call_stack)
 print("module_call_depth", layer.module_context.call_depth)
 print("in_submodule", layer.in_submodule)
 print("is_atomic_module", layer.module_context.is_atomic_module)

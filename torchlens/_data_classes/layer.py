@@ -201,6 +201,17 @@ def _build_layer_view_types() -> dict[str, type]:
 
 _LAYER_RELATION_VIEW_TYPES: dict[str, type] = _build_layer_view_types()
 
+#: Layer view fields whose Op spelling moved into a concern group
+#: (``module_call_stack`` -> ``module_context.call_stack``): an unstored one
+#: reads its single pass through that Op path instead of the Op refusal.
+_LAYER_VIEW_OP_PATHS: dict[str, tuple[str, str]] = {
+    name: (group, leaf)
+    for name in _LAYER_RELATION_VIEW_TYPES
+    if name not in LAYER_MOVED_MEMBERS
+    for group, _, leaf in [op_spelling(name).partition(".")]
+    if leaf
+}
+
 
 def _layer_relations_finished(layer: "Layer") -> bool:
     """Return whether this Layer's backing capture is finished.
@@ -1376,6 +1387,13 @@ class Layer(_SelectionOperand):
         }:
             raise AttributeError(name)
         ops = self.__dict__.get("ops")
+        path = _LAYER_VIEW_OP_PATHS.get(name)
+        if path is not None and ops:
+            # A Layer view field the Op table moved reads through the Op path,
+            # so the Op-side refusal below never fires on a Layer read.
+            if len(ops) > 1:
+                return self._single_pass_or_error(name)
+            return getattr(getattr(ops[0], path[0]), path[1])
         # A former flat Op spelling refuses here, typed, instead of being lost to
         # the plain miss below when the delegated Op read refuses it.
         refuse_removed_member(type(self).__name__, name, OP_MOVED_MEMBERS)

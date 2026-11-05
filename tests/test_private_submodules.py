@@ -31,6 +31,8 @@ TAUGHT = frozenset(
         "torchlens.intervention.errors",
         "torchlens.intervention.hooks",
         "torchlens.intervention.stochastic",
+        # Taught by the glossary and current-2-x-surface.md (Lead 3 ruling, 4 Nov 2026, item 12).
+        "torchlens.recording.reducers",
     }
 )
 ROOT = Path(torchlens.__file__).parent
