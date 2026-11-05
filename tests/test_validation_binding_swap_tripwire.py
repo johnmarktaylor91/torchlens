@@ -195,3 +195,30 @@ def test_snapshot_that_matches_its_parent_is_not_questioned() -> None:
     parent = _op_for_validation_label(trace, child.call.parent_arg_positions["args"][0])
     parent.out_versions_by_child[child.layer_label] = parent.out.detach().clone()
     assert snapshot_binding_explained(trace, child, parent)
+
+
+class _TwoViewWrites(nn.Module):
+    """Two disjoint views of one base, each written in place, read by one call."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Write ``u`` and ``w`` in place, then subtract them."""
+
+        y = x * 2.0
+        u = y[:, :4]
+        w = y[:, 4:]
+        u.add_(1.0)
+        w.mul_(2.0)
+        return torch.sub(u, w)
+
+
+def test_known_blind_spot_two_same_shape_inplace_parents_swapped() -> None:
+    """KNOWN BLIND SPOT: swapping two same-shape in-place parents still validates.
+
+    A snapshot of an in-place parent may legitimately differ from its saved out (a reader
+    of the base, or of another alias of the view it wrote through, is bound to the write),
+    and the record keeps no storage geometry to tell that alias apart from a swapped
+    operand of the same shape. This pins the gap so a stricter check shows up here.
+    """
+
+    assert _validate(_TwoViewWrites(), None)
+    assert _validate(_TwoViewWrites(), _swap("sub", 0, 1))
