@@ -53,18 +53,19 @@ _BUILD_OPCODES = frozenset(
     if name in dis.opmap
 )
 # Per function-call op on the tiny GPT-2 generate (416 ops), CI's pinned
-# environment (torch 2.13.0+cpu). Trace = capture plus postprocess. The trace
-# builds pin is the higher of the serial (982.50) and xdist (984.04) runs; each
-# pin is the printed two-decimal value plus 0.01 (the print rounds).
-# The container-builds test measures in a fresh interpreter with a fixed hash
-# seed, so earlier tests in the same worker cannot move it: a worker that has
-# imported the tensor-parallel or pipelining namespaces (the capability
+# environment (torch 2.13.0+cpu). Trace = capture plus postprocess. Each pin is
+# the printed two-decimal value plus 0.01 (the print rounds); a pin measured on
+# several workers takes the highest.
+# The container-builds pins are measured in a fresh interpreter with a fixed
+# hash seed, so earlier tests in the same worker cannot move them: a worker that
+# has imported the tensor-parallel or pipelining namespaces (the capability
 # snapshot's forced probes do) runs per-module checks of the capture's
-# distributed guard that an ordinary process skips. A second fresh measurement imports those namespaces first and has its
-# own pin, so a regression in that state still fails.
+# distributed guard that an ordinary process skips. The second pin imports
+# those namespaces first, so a regression in that state still fails. Measured on
+# the train d557ac500c: 967.94 and 967.95 plain, 970.03 with the namespaces.
 _MAX_TRACE_CALLS_PER_OP = 3337.07
-_MAX_TRACE_BUILDS_PER_OP = 984.05
-_MAX_TRACE_BUILDS_PER_OP_DISTRIBUTED = 984.05
+_MAX_TRACE_BUILDS_PER_OP = 967.96
+_MAX_TRACE_BUILDS_PER_OP_DISTRIBUTED = 970.04
 _MAX_COMMIT_CALLS_PER_OP = 35.72
 _MAX_COMMIT_BUILDS_PER_OP = 30.91
 #: The distributed namespaces the capture's distributed guard checks, as a worker
