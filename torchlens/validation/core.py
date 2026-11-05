@@ -50,6 +50,7 @@ from .._utils.tensor_utils import (
     tensor_all_nan,
     tensor_nanequal,
 )
+from ..backends.torch._logged_arguments import logged_receiver_output
 from . import _replay_grad_fidelity as _grad_fidelity
 from ._autograd_grad_replay import execute_replay_func
 from ._destination_coverage import _perturbed_parents_only_occupy_out_kwarg
@@ -2416,12 +2417,11 @@ def _execute_func_with_restored_state(
             )
         return None
 
-    # In-place mutating ops (__setitem__, zero_, __delitem__) return None
-    # from PyTorch but the "output" is the mutated first argument. Property
-    # setters (``t.real = rhs``: ``layer.func`` is the getset descriptor's
-    # ``__set__``, round-31 M6) have the same shape.
-    if layer_func.__name__ in ("__setitem__", "zero_", "__delitem__", "__set__"):
-        recomputed_output = input_args["args"][0]
+    # Mutators (setitem, zero_, delitem, a setter's __set__, void foreach) replay to their receivers.
+    always = layer_func.__name__ in ("__setitem__", "zero_", "__delitem__", "__set__")
+    recomputed_output = logged_receiver_output(
+        recomputed_output, tuple(input_args["args"]), layer_func.__name__, always, False
+    )
 
     # Multi-output functions may return typed containers; select the specific
     # output this layer represents using the captured typed path when available.

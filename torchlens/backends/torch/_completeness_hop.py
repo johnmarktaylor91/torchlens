@@ -19,9 +19,11 @@ torch's ``NotImplementedError``: validation then fails loudly, never silently.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from typing import Any
 
+from ..._utils._hop_entry_compile import compile_disabled
 from ..._utils._torch_compat import (
     get_cond_witness_operator,
     get_higher_order_eager_kernel,
@@ -259,8 +261,35 @@ def register_witness_hop_rules(mode_type: type[_TorchLensDispatchMode]) -> tuple
     rules = _witness_hop_rules()
     for op, rule in rules:
         if mode_type not in witness_rule_table(op):
-            op.py_impl(mode_type)(rule)
+            # The operator pops the mode before the rule; inside a lifted entry compile
+            # Dynamo would otherwise trace the rule's ``with mode:`` (_tracing_pass).
+            # Without Dynamo imported nothing can trace it yet: wrap it at the first
+            # entry compile instead (compile_disable_witness_hop_rules).
+            dynamo_loaded = "torch._dynamo" in sys.modules
+            op.py_impl(mode_type)(compile_disabled(rule) if dynamo_loaded else rule)
         registered.append(str(op.name()))
     unresolved = len(rules) < 2 + len(_DENSE_UNDER_MODE)
     mode_type._hop_rules_pending = register_witness_hop_rules if unresolved else None
     return tuple(registered)
+
+
+def compile_disable_witness_hop_rules() -> None:
+    """Put every rule registered before Dynamo was imported behind ``torch.compiler.disable``.
+
+    Runs before each TorchLens-lifted operator entry compile (``hop_internal_compile_scope``),
+    the first point at which Dynamo can trace a rule; a plain capture never gets here, so it
+    never imports ``torch._dynamo`` (``torch.compiler.disable`` imports it, and FSDP with it).
+    """
+
+    for op, _rule in _witness_hop_rules():
+        table = witness_rule_table(op)
+        for mode_type, rule in list(table.items()):
+            if _is_torchlens_mode(mode_type) and not getattr(rule, "_torchdynamo_disable", False):
+                del table[mode_type]
+                op.py_impl(mode_type)(compile_disabled(rule))
+
+
+def _is_torchlens_mode(key: Any) -> bool:
+    """Return whether rule-table key ``key`` is a TorchLens dispatch-mode class."""
+
+    return isinstance(key, type) and issubclass(key, _TorchLensDispatchMode)

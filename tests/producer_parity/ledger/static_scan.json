@@ -4516,7 +4516,7 @@
   "field": "modules",
   "file": "torchlens/_utils/_torch_compat.py",
   "has_default": false,
-  "sites": 18,
+  "sites": 19,
   "via_getattr": false
  },
  {
@@ -6720,6 +6720,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/_completeness_hop.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "input_ancestors",
   "file": "torchlens/backends/torch/_completeness_metadata.py",
@@ -6772,7 +6780,7 @@
   "field": "func_call_id",
   "file": "torchlens/backends/torch/_function_boundary.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
