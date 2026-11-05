@@ -70,6 +70,7 @@ class ThreeIfsOneBoolElse(nn.Module):
         if ok:
             x = x - 1
         else:
+            x = torch.tanh(x)
             x = x + 1
         return x
 
