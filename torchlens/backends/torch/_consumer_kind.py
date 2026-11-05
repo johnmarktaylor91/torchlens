@@ -33,8 +33,10 @@ def _source_unreadable(filename: str) -> bool:
     """Return whether conditional tracking cannot read ``filename``'s source.
 
     Step 5 ties a bool read to an ``if`` statement through the AST of the
-    file on disk. Code compiled from a string, piped on stdin or run as a
-    notebook cell has no such file, so no branch in it is ever recorded.
+    file on disk, or of the text ``linecache`` holds for a notebook cell.
+    Code compiled from an unregistered string or piped on stdin has neither,
+    and a cell name reused for different text fails closed, so no branch in
+    it is recorded.
 
     Parameters
     ----------

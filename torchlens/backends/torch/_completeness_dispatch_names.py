@@ -501,8 +501,9 @@ def _tally_plain_scalar_escape(state: Any, tensor: torch.Tensor, name: str) -> N
     ``Conditional`` (same receiver rule, ``is_scalar_bool``, and the same AST
     lookup). Every other read counts, including ``if x.sum():`` truthiness,
     ``while`` and ``assert`` tests, and reads the lookup cannot tie to one test.
-    Such a bool read in code with no readable source file (a string passed to
-    ``exec``, stdin, a notebook cell) counts AND is tallied apart: step 5 cannot
+    Such a bool read in code with no readable source (a string passed to
+    ``exec`` and not registered in ``linecache``, stdin, a cell name reused for
+    different text) counts AND is tallied apart: step 5 cannot
     record its branch either, and the advisory names that cause.
 
     Parameters
@@ -558,7 +559,8 @@ def _scalar_escape_advisory_texts(state: Any, location: str) -> tuple[str, str]:
     if state.unreadable_source_count:
         unreadable = (
             f"; {state.unreadable_source_count} of these reads are bool tests in code with no "
-            "readable source file (exec of a string, stdin or a notebook cell), so their "
+            "readable source file (exec of a string not registered in linecache, stdin, "
+            "or a cell name reused for different text), so their "
             "branches could not be recorded; run the code from a .py file to record them"
         )
     row_message = (
