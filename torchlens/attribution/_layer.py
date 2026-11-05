@@ -12,6 +12,7 @@ from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 
 from torchlens._utils._display_errors import lookup_message
+from torchlens.attribution._cam_grid import _layer_tensor
 from torchlens.attribution._core import (
     _DOCS_POINTER as _INTEGER_DOCS_POINTER,
     Attribution,
@@ -64,12 +65,11 @@ class _LayerCapture:
     Attributes
     ----------
     activations
-        Distinct forward activations emitted by the target layer, one entry per
-        distinct output tensor object, in firing order. A module that returns
-        the very tensor object it received (``nn.Identity``) contributes one
-        entry no matter how often it fires: autograd already accumulates every
-        use of that node into one gradient, so a second entry would
-        double-count its contribution.
+        Distinct forward activations emitted by the target layer, one entry per distinct output
+        tensor object, in firing order. A module that returns the very tensor object it received
+        (``nn.Identity``) contributes one entry no matter how often it fires: autograd already
+        accumulates every use of that node into one gradient, so a second entry would double-count
+        its contribution.
     """
 
     activations: list[Tensor] = field(default_factory=list)
@@ -80,7 +80,7 @@ class _LayerCapture:
         Parameters
         ----------
         output
-            Value returned by the target layer for this firing.
+            Target layer output for this firing; a one-element tuple or list records its element.
 
         Raises
         ------
@@ -88,6 +88,7 @@ class _LayerCapture:
             If the layer emitted a non-tensor output.
         """
 
+        output = _layer_tensor(output)
         if not isinstance(output, Tensor):
             raise AttributionError("target layer must return a tensor activation")
         if not any(output is existing for existing in self.activations):
@@ -472,9 +473,8 @@ def _capture_layer_activation_for_leaves(
     Returns
     -------
     tuple[tuple[Tensor, ...], tuple[Tensor, ...] | None, Tensor]
-        Detached per-firing activations, optional aligned per-firing gradients
-        with respect to them, and the detached scalarized target value at this
-        path point.
+        Detached per-firing activations, optional aligned per-firing gradients with respect to
+        them, and the detached scalarized target value at this path point.
 
     Raises
     ------

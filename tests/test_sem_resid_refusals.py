@@ -101,6 +101,78 @@ def test_resid_pre_refuses_when_no_input_matches_by_shape() -> None:
     assert "dataflow + shape" in (item.detail or "")
 
 
+def test_attention_wrapper_with_an_output_projection_is_not_a_block() -> None:
+    """An attention wrapper (``attention`` + ``output`` children) serves no residual facets.
+
+    transformers 4.x ``ViTAttention`` holds the attention core as
+    ``attention`` and its output projection as ``output``; the residual adds
+    live in the enclosing layer. Read as a block, the wrapper served the
+    attention output as ``resid_post``, and the logit lens validated against
+    that instead of the last real block.
+    """
+
+    class _SelfOutput(nn.Module):
+        """The wrapper's output projection (no residual add)."""
+
+        def __init__(self, d: int = 8) -> None:
+            """Hold one projection."""
+            super().__init__()
+            self.dense = nn.Linear(d, d)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Project the attention output."""
+            return self.dense(x)
+
+    class _AttentionWrapper(nn.Module):
+        """``attention`` core plus ``output`` projection, as 4.x ``ViTAttention``."""
+
+        def __init__(self, d: int = 8) -> None:
+            """Hold the core and its projection."""
+            super().__init__()
+            self.attention = nn.Linear(d, d)
+            self.output = _SelfOutput(d)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the core then the projection."""
+            return self.output(self.attention(x))
+
+    class _Layer(nn.Module):
+        """The real block: both residual adds live here."""
+
+        def __init__(self, d: int = 8) -> None:
+            """Hold the attention wrapper and the feed-forward pair."""
+            super().__init__()
+            self.attention = _AttentionWrapper(d)
+            self.intermediate = nn.Linear(d, 2 * d)
+            self.output = nn.Linear(2 * d, d)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Attention residual add, then feed-forward residual add."""
+            x = x + self.attention(x)
+            return x + self.output(self.intermediate(x))
+
+    class _Host(nn.Module):
+        """One-block host so the block has an address."""
+
+        def __init__(self) -> None:
+            """Hold the block."""
+            super().__init__()
+            self.layer = _Layer()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run the block."""
+            return self.layer(x)
+
+    model = _Host().eval()
+    x = torch.randn(2, 3, 8)
+    log = tl.trace(model, x)
+    assert not log.modules["layer.attention"].facets.has("resid_post")
+    assert log.modules["layer"].facets.has("resid_post")
+    with torch.no_grad():
+        direct = model(x)
+    assert torch.equal(log.modules["layer"].facets.resid_post.value, direct)
+
+
 # ---------------------------------------------------------------------------
 # Hop-rule grammar + verification tripwires (final-norm walk)
 # ---------------------------------------------------------------------------
