@@ -179,10 +179,12 @@ def test_feature_map_node_spec_renders_one_image_and_overlay_differs_from_fallba
     # (T9, grind-p3): the mkdtemp root no longer appears in the source AT
     # ALL — it reaches Graphviz as the render subprocess cwd, so user-saved
     # DOT stays renderable after the trace's scratch dir is GC'd.
+    # The picture is the node's top table cell (rounded-box layout, Lead's
+    # 5 Nov input-photo handoff), so the relative path is the IMG source.
     relative_image = image_paths[0].relative_to(trace._visualizer_dir)
-    assert f'image="{relative_image}"' in dot
+    assert f'<IMG SRC="{relative_image}"' in dot
     assert "imagepath" not in dot
-    assert f'image="{image_paths[0]}"' not in dot
+    assert str(image_paths[0]) not in dot
     image = Image.open(image_paths[0])
     assert image.size == (72, 148)
 

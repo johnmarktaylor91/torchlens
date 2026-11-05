@@ -116,16 +116,6 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_opticflow_raftlarge",
-        reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (CorrBlock[0].corr_pyramid), so model-state restoration cannot be proven",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_opticflow_raftsmall",
-        reason="validate_forward_pass fail-closed: deepcopy cannot snapshot non-registered plain attribute(s) (CorrBlock[0].corr_pyramid), so model-state restoration cannot be proven",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
         nodeid="tests/test_real_world_models.py::test_retinanet_resnet50_train",
         reason="assert False: validate_forward_pass(...) returned False",
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
