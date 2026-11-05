@@ -328,7 +328,7 @@
   },
   {
    "section": "rerun_resnet18",
-   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run(model, new_x)` on a finished trace (recaptures) | 684.49 ms (622.50 ms to 693.68 ms) |"
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run(model, new_x)` on a finished trace (earlier build: recaptures) | 684.49 ms (622.50 ms to 693.68 ms) |"
   },
   {
    "section": "rerun_resnet18",
@@ -368,7 +368,7 @@
   },
   {
    "section": "rerun_gpt2-small",
-   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run(model, new_x)` on a finished trace (recaptures) | 4.71 s (4.65 s to 4.77 s) |"
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run(model, new_x)` on a finished trace (earlier build: recaptures) | 4.71 s (4.65 s to 4.77 s) |"
   },
   {
    "section": "rerun_gpt2-small",
@@ -408,7 +408,7 @@
   },
   {
    "section": "rerun_lstm-tagger",
-   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run(model, new_x)` on a finished trace (recaptures) | 66.08 ms (65.84 ms to 66.79 ms) |"
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run(model, new_x)` on a finished trace (earlier build: recaptures) | 66.08 ms (65.84 ms to 66.79 ms) |"
   },
   {
    "section": "rerun_lstm-tagger",
