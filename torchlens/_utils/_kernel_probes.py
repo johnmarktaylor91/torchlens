@@ -68,7 +68,8 @@ def probe_node_sequence_nr() -> bool:
     try:
         with torch.enable_grad():
             node = (torch.ones(1, requires_grad=True) * 2.0).grad_fn
-        return isinstance(node._sequence_nr(), int)
+        read = getattr(node, "_sequence_nr", None)
+        return callable(read) and isinstance(read(), int)
     except (AttributeError, RuntimeError, TypeError):
         return False
 
