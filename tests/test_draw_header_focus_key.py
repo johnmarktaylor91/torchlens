@@ -321,14 +321,14 @@ def _param_trace(total: int, trainable: int) -> SimpleNamespace:
 
 def test_header_params_print_compact_from_one_thousand() -> None:
     assert params_caption_detail(_param_trace(11_689_512, 11_689_512)) == (  # type: ignore[arg-type]
-        "11.7M params (44.6 MB, all trainable)"
+        "11.7M params (46.8 MB, all trainable)"
     )
     assert params_caption_detail(_param_trace(86_567_656, 0)).startswith("86.6M params (")  # type: ignore[arg-type]
     assert params_caption_detail(_param_trace(1_610, 1_610)).startswith("1.61K params (")  # type: ignore[arg-type]
-    assert params_caption_detail(_param_trace(999, 999)) == "999 params (3.9 KB, all trainable)"  # type: ignore[arg-type]
+    assert params_caption_detail(_param_trace(999, 999)) == "999 params (4 KB, all trainable)"  # type: ignore[arg-type]
     mixed = params_caption_detail(_param_trace(2_000_000, 1_500))  # type: ignore[arg-type]
     assert mixed.endswith(", 1.5K/2M trainable)"), mixed
-    assert compact_count(1_610) == "1610"  # node labels keep the full count below 10,000
+    assert compact_count(1_610) == "1,610"  # node labels keep the full count below 10,000
 
 
 @pytest.mark.parametrize("rolled", [False, True])
