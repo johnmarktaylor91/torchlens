@@ -72,7 +72,7 @@ The shape of the node says what kind of record it is. An ellipse is a plain oper
 module that ran as one operation, such as an `nn.Linear` or `nn.Conv2d`, or the one operation
 a module ran itself while the rest ran in its submodules (the residual `add` of a block, in
 the [collapse](#collapsing-large-models) drawings). A double-bordered rectangle
-(`batchnorm_1_3` in the first drawing) is such a module that also uses buffers. A three-dimensional box is a whole module drawn as one node (see
+(`batchnorm_1_3` in the first drawing) is such a module that also uses buffers. A `node_spec_fn` callback can drop that double border by setting `spec.extra_attrs["peripheries"] = "1"`. A three-dimensional box is a whole module drawn as one node (see
 [module depth](#module-depth)), and a cylinder is a buffer (see [buffers](#buffers)).
 
 When the trace was captured from a photo, `tl.trace(model, "cat.jpg")` or a PIL image, the

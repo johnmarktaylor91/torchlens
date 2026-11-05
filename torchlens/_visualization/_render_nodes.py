@@ -621,6 +621,15 @@ def _build_layer_node(
         color=node_color,
         extra_attrs={"ordering": "out"},
     )
+    # The hidden-buffer ring (a double border on a node whose buffers the drawing
+    # hides, such as a batch norm) rides on the DEFAULT spec, so a ``node_spec_fn``
+    # can clear it: ``spec.extra_attrs["peripheries"] = "1"`` draws a plain border.
+    hidden_buffer_addresses = _get_hidden_parent_buffer_addresses(self, node, show_buffer_layers)
+    if hidden_buffer_addresses and not (node.is_input or node.is_output or node.graph.is_buffer):
+        default_spec = default_spec.replace(
+            tooltip=f"Hidden buffers: {', '.join(hidden_buffer_addresses)}",
+            extra_attrs={**default_spec.extra_attrs, "peripheries": "2"},
+        )
     # A picture keeps the node's fill; image_box_args (below) draws it in its own top cell.
     visualizer_path = getattr(node, "visualizer_path", None)
     if isinstance(visualizer_path, str) and visualizer_path.lower().endswith(".png"):
@@ -665,14 +674,6 @@ def _build_layer_node(
     # summary box, so drawing a mapped leaf would orphan it.
     if collapsed_container_nodes is not None and node_args["name"] in collapsed_container_nodes:
         return node_color
-    hidden_buffer_addresses = _get_hidden_parent_buffer_addresses(self, node, show_buffer_layers)
-    if hidden_buffer_addresses and not (node.is_input or node.is_output or node.graph.is_buffer):
-        node_args["peripheries"] = "2"
-        hidden_tooltip = f"Hidden buffers: {', '.join(hidden_buffer_addresses)}"
-        if "tooltip" in node_args:
-            node_args["tooltip"] = f"{node_args['tooltip']}; {hidden_tooltip}"
-        else:
-            node_args["tooltip"] = hidden_tooltip
     # Colon in bg_color means it's a grad fill (e.g.,
     # "#D9D9D9:#B0B0B0" for mixed trainable/frozen params).
     # Graphviz requires gradangle to render grads.
