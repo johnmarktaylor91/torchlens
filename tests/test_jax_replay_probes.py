@@ -43,7 +43,7 @@ def test_children_of_a_multi_output_split_replay_their_own_element() -> None:
     """Each ``reshape`` child of ``split`` replays with its element, metadata invariants included."""
 
     trace = _trace(_halves, jnp.arange(8.0, dtype=jnp.float32).reshape(2, 4))
-    assert any(op.func_name == "split" for op in trace.layer_list)
+    assert any(op.func_name == "split" for op in trace._layer_list)
 
     trace.validate_forward_pass([], validate_metadata=True)
     status = trace.validation_replay_status
@@ -55,7 +55,7 @@ def test_corrupted_multi_output_payload_still_fails() -> None:
     """A saved ``split`` payload whose element drifted fails replay instead of passing."""
 
     trace = _trace(_halves, jnp.arange(8.0, dtype=jnp.float32).reshape(2, 4))
-    split_op = next(op for op in trace.layer_list if op.func_name == "split")
+    split_op = next(op for op in trace._layer_list if op.func_name == "split")
     saved = split_op.out
     assert isinstance(saved, tuple) and len(saved) == 2
     split_op._internal_set("out", (saved[0] + 1.0, saved[1]))
