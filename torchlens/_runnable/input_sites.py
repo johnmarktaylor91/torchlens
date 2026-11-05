@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import torch
 
-from torchlens._runnable import ContractCheck, ReadinessReport
+from torchlens._runnable import ContractCheck, ReadinessReport, decode_input_site_position
 
 from ..errors import (
     ReattachError,
@@ -499,8 +499,6 @@ def _inventory_site_positions(descriptor: SparseRunDescriptor) -> set[Any]:
     (belt against parser regressions), and runtime site selection never re-derives
     arity from surviving witnesses (the secA-F1 self-referential lane).
     """
-
-    from torchlens._runnable import decode_input_site_position
 
     try:
         positions = {

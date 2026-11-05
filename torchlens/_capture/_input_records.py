@@ -6,11 +6,19 @@ Moved verbatim from ``torchlens._capture.trace`` by the capture seam.
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from torchlens._input_walk import (
+    raw_mapping_key_component,
+    snapshot_input_boundary,
+    tagged_mapping_key_component,
+    walk_input_boundary,
+)
+
 from .._ir.container_registry import ModelSite, Phase, Role, walk_container
 from .._runnable.seam import runnable_trace_state
 from ..backends.registry import (
     get_backend_spec,
 )
+from ..recording.exceptions import PredicateError
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -45,8 +53,6 @@ def _select_raw_indexes_by_retention_predicate(
     PredicateError
         If the predicate returns a non-bool (code ``predicate_return_invalid``).
     """
-
-    from ..recording.exceptions import PredicateError
 
     selected_raw_indexes: set[int] = set()
     for layer_entry in self._layer_list:
@@ -264,7 +270,6 @@ def _record_runnable_input_literal_leaves(
     if not bool(getattr(trace, "is_replayable", False)):
         return
 
-    from torchlens._input_walk import tagged_mapping_key_component, walk_input_boundary
     from torchlens._io.runnable import EMPTY_CONTAINER_PATH_MARKER
 
     leaves: list[tuple[object, tuple[str | int, ...], Any]] = []
@@ -332,8 +337,6 @@ def _record_runnable_input_structure(
     if not bool(getattr(trace, "is_replayable", False)):
         return
 
-    from torchlens._input_walk import snapshot_input_boundary
-
     snapshots: list[dict[str, Any]] = []
     for index, arg in enumerate(input_args):
         record = snapshot_input_boundary(arg)
@@ -377,8 +380,6 @@ def _record_runnable_input_tensor_sites(
 
     if not bool(getattr(trace, "is_replayable", False)):
         return
-
-    from torchlens._input_walk import raw_mapping_key_component, walk_input_boundary
 
     sites: dict[int, tuple[object, tuple[str | int, ...]]] = {}
     # (tensor, site) leaves so the completeness witness can additionally index model-input

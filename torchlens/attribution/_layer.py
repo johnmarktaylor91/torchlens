@@ -11,6 +11,7 @@ from torch import Tensor
 from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 
+from torchlens._plots import node_plots
 from torchlens._utils._display_errors import lookup_message
 from torchlens._utils._numpy_bridge import tensor_to_numpy
 from torchlens.attribution._core import (
@@ -44,7 +45,6 @@ from torchlens.attribution._steps import (
     _validate_step_batch_size,
 )
 from torchlens.receptive_field._viz import _blend_heatmap
-from torchlens.viz import node_plots
 
 LayerAttributionMethod: TypeAlias = Literal["activation_x_grad", "grad"]
 

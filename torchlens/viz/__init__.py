@@ -11,6 +11,7 @@ from typing import Any
 import torch
 
 from .._entry_refusals import refuse_viz_shape
+from .._plots.node_plots import heatmap, image_scatter, lineplot
 from .._utils._numpy_bridge import tensor_to_numpy
 from .._visualization.bundle_diff import bundle_diff
 from .._visualization.node_spec import NodeSpec
@@ -19,7 +20,6 @@ from ._drawing import Drawing
 from ._tensor_images import chans, rgb
 from .batch_summary import montage
 from .feature_maps import feature_maps
-from .node_plots import heatmap, image_scatter, lineplot
 
 __all__ = [
     "Drawing",
@@ -143,7 +143,7 @@ def causal_trace_heatmap(
 
     import numpy as np
 
-    from ._tensor_display import _clip_outliers, _prepare_signed_data
+    from ._tensor_display import _clip_outliers, _prepare_signed_data  # deferred: cycle viz
 
     try:
         import matplotlib.pyplot as plt

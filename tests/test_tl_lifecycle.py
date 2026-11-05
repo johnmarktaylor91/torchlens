@@ -10,14 +10,14 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
-from torchlens._utils.introspection import get_vars_of_type_from_obj
-from torchlens.backends.torch._tl import (
+from torchlens._utils._tensor_label import (
     TensorMeta,
     get_buffer_address,
     get_tensor_label,
     set_module_meta,
     set_tensor_label,
 )
+from torchlens._utils.introspection import get_vars_of_type_from_obj
 from torchlens.backends.torch.model_prep import _tag_untagged_buffers
 from torchlens.errors import TraceCaptureError
 from torchlens.intervention.runtime import _copy_tl_replacement_attrs

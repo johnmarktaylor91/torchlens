@@ -20,6 +20,7 @@ from ..._ir.intervention import FireResult, FunctionEventInput
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._utils import _tensor_label as _tl
 from ..._utils._cuda_probe import _is_cuda_available
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.arg_handling import normalize_input_args, safe_copy_input_tree
@@ -27,7 +28,7 @@ from ..._utils.input_leaves import flatten_input_tensor_addresses
 from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
 from ..._utils.tensor_utils import safe_copy
 from ...recording.types import ModuleStackFrame
-from . import _tl
+from . import _ops_capture_records as _ops_capture_records_mod
 from ._completeness_finalize import capture_completeness_witness
 from ._completeness_origins import internal_scalar_read
 from ._completeness_storage import capture_scalar_escape_warning
@@ -462,9 +463,9 @@ class TorchBackend:
             Torch producer policy metadata is updated in place.
         """
 
-        from ._ops_capture_records import set_capture_producer_policy
-
-        set_capture_producer_policy(cast("Trace", session), cast(Any, capture_mode))
+        _ops_capture_records_mod.set_capture_producer_policy(
+            cast("Trace", session), cast(Any, capture_mode)
+        )
 
     def restore_rng(self, session: object, rng_state: object) -> None:
         """Restore a previously captured torch RNG state.

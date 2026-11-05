@@ -481,7 +481,7 @@ def _allclose_sdpa(
         Whether values match within the reconstruction error budget.
     """
 
-    from .tolerances import within_reconstruction_tolerance
+    from .tolerances import within_reconstruction_tolerance  # deferred: cycle _semantic
 
     return within_reconstruction_tolerance(
         reconstructed, target, magnitude=magnitude, reduction_length=reduction_length
@@ -491,7 +491,7 @@ def _allclose_sdpa(
 def _output_projection(module: Any) -> Any | None:
     """Return the attention module's output-projection Module record, or ``None``."""
 
-    from .recipes._helpers import output_projection_child  # lazy: _helpers imports this module
+    from .recipes._helpers import output_projection_child  # deferred: cycle _semantic
 
     return output_projection_child(module)
 

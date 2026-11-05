@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from .. import _state
 from . import _torch_compat
 from ._torch_compat import get_numpy_bridge_support
 from ._torch_symbols import torch_dtype_named
@@ -34,7 +35,6 @@ def _bridge_works() -> bool:
 
     if _torch_compat._NUMPY_BRIDGE_PROBED:
         return _torch_compat.HAS_NUMPY_BRIDGE
-    from .. import _state  # above ``_utils``: never at module top
 
     with _state.pause_logging():
         return get_numpy_bridge_support()

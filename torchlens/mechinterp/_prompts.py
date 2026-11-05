@@ -254,7 +254,7 @@ def inspect_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
 
     contribution_rows = None
     if contributions and answer_ids:
-        from ._dla import direct_logit_contributions
+        from ._dla import direct_logit_contributions  # deferred: cycle mechinterp
 
         dla = direct_logit_contributions(
             trace, answer=answer_ids[0], vs=int(vs) if vs is not None else None, positions=pos
@@ -308,7 +308,7 @@ def test_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
     3
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
     if isinstance(prompt, str):
         if tokenizer is None:
@@ -326,7 +326,7 @@ def test_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
 
     forced = prompt_ids + answer_ids[:-1]
     ids = torch.tensor([forced], dtype=torch.long)
-    trace = tl.trace(model, ids)
+    trace = _capture_trace(model, ids)
     base = inspect_prompt(
         trace,
         answer=answer_ids[0],

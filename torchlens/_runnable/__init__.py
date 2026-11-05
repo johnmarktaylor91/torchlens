@@ -1769,7 +1769,7 @@ def refuse_poisoned_trace(trace: Any, operation: str) -> None:
     PoisonedRunError
         If the Trace carries a monotonic non-faithful sparse-run mark.
     """
-    from ..errors import PoisonedRunError
+    from ..errors import PoisonedRunError  # deferred: torchlens-free facade
 
     if not trace._runnable.poisoned:
         return
@@ -1820,7 +1820,7 @@ def refuse_collective_boundary_trace(trace: Any, operation: str) -> None:
     CollectiveBoundaryReplayError
         If the trace records one or more collective boundaries.
     """
-    from ..errors import CollectiveBoundaryReplayError
+    from ..errors import CollectiveBoundaryReplayError  # deferred: torchlens-free facade
 
     boundaries = collective_boundaries_of(trace)
     if not boundaries:

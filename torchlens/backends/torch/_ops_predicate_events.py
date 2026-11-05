@@ -54,6 +54,13 @@ from ..._ir.refs import ParamRef
 from ..._ir.selector_eval import module_union_matches
 from ..._training_validation import TrainingModeConfigError
 from ..._utils._call_site import call_site_class
+from ..._utils._tensor_label import (
+    get_label_list,
+    get_live_tensor_label,
+    get_param_meta,
+    promote_mutated_parameters,
+    set_tensor_label,
+)
 from ..._utils.display import _timed_phase
 from ..._utils.introspection import (
     _get_tensors_and_params_from_obj,
@@ -62,13 +69,6 @@ from ...recording._halt import StopSignal
 from ...recording.exceptions import PredicateError
 from ...recording.types import (
     CaptureSpec,
-)
-from ._tl import (
-    get_label_list,
-    get_live_tensor_label,
-    get_param_meta,
-    promote_mutated_parameters,
-    set_tensor_label,
 )
 from .tensor_tracking import (
     _get_ancestors_from_parents,

@@ -83,7 +83,7 @@ def _perturbed_parent_is_only_the_input(layer: Any, layers_to_perturb: list[str]
     # The first requires exactly one perturbed label at positional slot 0 and
     # nowhere else among the args; the second (no keyword spellings allowed)
     # rejects any keyword occurrence.
-    from .exemptions import (
+    from .exemptions import (  # deferred: cycle validation
         _perturbed_parent_arg_positions,
         _perturbed_parents_only_occupy_template_slot,
     )

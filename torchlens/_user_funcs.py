@@ -93,7 +93,7 @@ def _facet_snapshot_provider(extra_recipes: Any) -> Any:
     return _facets.snapshot(extra_recipes)
 
 
-register_facet_snapshot_provider(_facet_snapshot_provider)
+register_facet_snapshot_provider(_facet_snapshot_provider, replace=False)
 
 
 def clear_cache(cache_dir: str | Path | None = None) -> int:

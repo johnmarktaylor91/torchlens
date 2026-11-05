@@ -49,6 +49,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from .._utils.tensor_leaves import tensor_payload_bytes
+from ..errors.episode import EpisodeJoinError
 from ._episode_derivation import _declaration_error, _flat_cpu_snapshot
 
 if TYPE_CHECKING:
@@ -212,8 +213,6 @@ def closed_violation_teaching(step: int, *, settled: bool = False) -> str:
 
 def _join_error(message: str, *, code: str, **payload: Any) -> Exception:
     """Build the typed join refusal (import-local to keep the leaf light)."""
-
-    from ..errors.episode import EpisodeJoinError
 
     return EpisodeJoinError(message, code=code, **payload)
 

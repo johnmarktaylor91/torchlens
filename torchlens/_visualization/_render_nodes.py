@@ -7,6 +7,8 @@ import re as _re
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
 from .._utils._numpy_bridge import tensor_to_numpy
+from .._utils.display import ensure_trace_visualizer_dir
+from ..viz import batch_summary
 from ._bool_outcomes import bool_node_fill, bool_value_line
 from ._encoding_aggregate import (
     BoxScopeHelpers,
@@ -26,7 +28,7 @@ from .modes import CollapsedModeScope
 # ratchet ceiling; re-exported here for existing importers. The spec-slot context lives there
 # too, so the intervention callback reads it without importing this module.
 from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
-from .themes import _edge_and_label_inks
+from .themes import THEME_PRESETS, _edge_and_label_inks, collapse_tokens
 
 _TOOLTIP_ADDRESS_PATTERN = _re.compile(r"0x[0-9a-fA-F]+")
 #: Renderer helpers the leaf box-scope rule needs (injected: no import cycle).
@@ -640,7 +642,7 @@ def _build_layer_node(
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     if encoding is not None:
-        from ._encoding import channel_wrapped_node_spec_fn
+        from ._encoding import channel_wrapped_node_spec_fn  # deferred: cycle _visualization
 
         node_spec_fn = channel_wrapped_node_spec_fn(encoding, node, node_spec_fn)
     spec = _apply_node_spec_fn(self, node, default_spec, node_mode, node_spec_fn)
@@ -734,7 +736,6 @@ def _queue_segment_node(
     vis_mode, theme, encoding = (*pres, None, None)[:3]
     # K4 capsule colors derive from the active theme (F11 memo item 10:
     # the hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
-    from .themes import THEME_PRESETS, collapse_tokens
 
     tokens = collapse_tokens(theme if theme is not None else THEME_PRESETS["torchlens"])
     node_args = {
@@ -1003,7 +1004,6 @@ def _render_raw_input_image_batch(
     if more_count > 0:
         label_lines.append(f"+{more_count} more")
     # Lazy for the same package-cycle reason as the text-table branch above.
-    from ..viz import batch_summary
 
     try:
         montage = batch_summary.montage(images, max_items)
@@ -1044,8 +1044,6 @@ def _raw_input_visualizer_dir(trace: "Trace") -> Path:
     Path
         Directory where image artifacts can be written.
     """
-
-    from .._utils.display import ensure_trace_visualizer_dir
 
     input_dir = ensure_trace_visualizer_dir(trace) / "raw_inputs"
     input_dir.mkdir(parents=True, exist_ok=True)

@@ -20,8 +20,9 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._debug_report import Report, at_source
+from .._errors import InvalidArgumentError
 from .._utils._torch_compat import read_legacy_fp32_controls, snapshot_fp32_precision_controls
-from ._common import _compute_ops, _op_label, _safe_out, _source_line
+from ._common import _compute_ops, _nonfinite_kind, _op_label, _safe_out, _source_line
 from ._first_bad import FirstBadThing
 
 if TYPE_CHECKING:
@@ -247,7 +248,7 @@ def _rng_consuming_ops(trace: Trace) -> tuple[tuple[str, ...], str]:
                 consumers.append(_op_label(ops[index]))
         if consumers:
             return tuple(dict.fromkeys(consumers)), "pre_op_rng_snapshots"
-    from ._precision import _STOCHASTIC_FUNC_NAMES
+    from ._precision import _STOCHASTIC_FUNC_NAMES  # deferred: cycle debug
 
     named = tuple(
         _op_label(op)
@@ -280,8 +281,6 @@ def _compare_runs(
     atol: float | None,
 ) -> tuple[list[dict[str, Any]], int, list[str]]:
     """Walk two runs in execution order; return (divergences, unchecked, nonfinite)."""
-
-    from ._common import _nonfinite_kind
 
     reference_ops = {_op_label(op): op for op in _compute_ops(reference)}
     candidate_ops = {_op_label(op): op for op in _compute_ops(candidate)}
@@ -524,8 +523,7 @@ def check_determinism(
     determinism_runs_invalid
     """
 
-    from .._errors import InvalidArgumentError
-    from ._rerun import isolated_capture
+    from ._rerun import isolated_capture  # deferred: cycle debug
 
     if runs < 2:
         raise InvalidArgumentError(

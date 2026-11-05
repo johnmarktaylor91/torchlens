@@ -33,6 +33,7 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .._utils._numpy_bridge import tensor_to_numpy
+from ..stats._per_unit import TopK, UnitTopK
 
 #: delphi's own nonzero test when it caches latents
 #: (``delphi/latents/cache.py``, ``get_nonzeros_batch``: ``batch.abs() > 1e-5``).
@@ -54,8 +55,6 @@ _DOCS = "docs/field-guide/sae_latent_export.md"
 
 def _is_unit_topk(latents: Any) -> bool:
     """Return whether ``latents`` is a ``tl.stats`` per-unit top-k result."""
-
-    from ..stats._per_unit import UnitTopK
 
     return isinstance(latents, UnitTopK)
 
@@ -275,8 +274,6 @@ def write_delphi(  # noqa: PLR0913 -- the two subjects plus the cache's where (s
 def _dashboard_topk(dense: torch.Tensor, k: int) -> Any:
     """Return the per-latent top-``k`` of dense latents, ranked as ``tl.stats.TopK`` ranks."""
 
-    from ..stats._per_unit import TopK
-
     tracker = TopK(k, unit_axis=-1)
     tracker.update(dense)
     return tracker.compute()
@@ -285,7 +282,7 @@ def _dashboard_topk(dense: torch.Tensor, k: int) -> Any:
 def _warn_large_dashboard(latents: int, k: int, sequence: int) -> None:
     """Warn once per session when the dashboard JSON would pass ``_DASHBOARD_WARN_BYTES``."""
 
-    from .sae import _warn_once
+    from .sae import _warn_once  # deferred: cycle bridge
 
     code = "sae_export_dashboard_large"
     estimate = latents * k * sequence * 24

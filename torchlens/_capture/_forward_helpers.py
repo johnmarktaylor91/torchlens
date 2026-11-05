@@ -7,7 +7,7 @@ import contextlib
 import sys
 import time
 import warnings
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any, cast
 
 from torchlens import _state
@@ -22,8 +22,13 @@ from ..backends.registry import (
     CaptureBackend,
     resolve_backend_spec,
 )
+from ..backends.torch.structure_only_belt import structure_only_forward_boundary
 from ..recording._halt import StopSignal
+from ..recording.types import CaptureSpec
+from ._weightsfree_admission import weightsfree_forward_scope
 from .peak_memory import process_rss_bytes, record_forward_peak, reset_peak_rss
+from .predicates import _is_halt_only_capture, _module_capture_spec
+from .projections import _build_record_context, append_projected_event, get_active_recording_state
 from .session import (
     CaptureSession,
 )
@@ -84,9 +89,6 @@ def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
     state restores on any exit path. No-op without a pending admission
     (real-substrate structure-only captures).
     """
-
-    from ..backends.torch.structure_only_belt import structure_only_forward_boundary
-    from ._weightsfree_admission import weightsfree_forward_scope
 
     with weightsfree_forward_scope(trace), structure_only_forward_boundary(trace):
         yield
@@ -392,14 +394,6 @@ def _run_predicate_forward_with_root_frame(
         Raw model output.
     """
 
-    from ..recording.types import CaptureSpec, ModuleStackFrame
-    from .predicates import _is_halt_only_capture, _module_capture_spec
-    from .projections import (
-        _build_record_context,
-        append_projected_event,
-        get_active_recording_state,
-    )
-
     state = get_active_recording_state()
     root_frame = ModuleStackFrame(
         address="",
@@ -635,30 +629,3 @@ def _stamp_host_rng_verdict(self: "Trace", global_advanced: bool, channels: Any)
         self._runnable.host_rng_consumed = global_advanced
         self._runnable.rng_monitor_uncertain = True
         self._runnable.rng_monitor_uncertain_detail = ("monitor_not_armed",)
-
-
-# Module-stack frames for capture-time record contexts (hosted here, inside the
-# capture import cycle, so the layering ratchet does not grow by a module).
-
-
-def _normalize_module_stack(
-    module_stack: Iterable[ModuleStackFrame | Mapping[str, Any]] | None,
-) -> tuple[ModuleStackFrame, ...]:
-    """Normalize module stack input to ModuleStackFrame instances."""
-
-    if module_stack is None:
-        return ()
-    frames: list[ModuleStackFrame] = []
-    for frame in module_stack:
-        if isinstance(frame, ModuleStackFrame):
-            frames.append(frame)
-            continue
-        frames.append(
-            ModuleStackFrame(
-                address=str(frame.get("address", "")),
-                module_type=str(frame.get("module_type", "")),
-                module_id=int(frame.get("module_id", 0)),
-                pass_number=int(frame.get("pass_number", 0)),
-            )
-        )
-    return tuple(frames)

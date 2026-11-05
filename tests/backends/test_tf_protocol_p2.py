@@ -9,6 +9,7 @@ import pytest
 from conftest import tensorflow_backend_modules
 
 import torchlens as tl
+from torchlens._validation_status import ValidationStatus
 from torchlens.backends._backend_protocol import (
     REFUSAL_CODES,
     VALIDATION_REASONS,
@@ -16,7 +17,6 @@ from torchlens.backends._backend_protocol import (
     protocol_problems,
 )
 from torchlens.backends.registry import get_backend_spec
-from torchlens.validation.status import ValidationStatus
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 
