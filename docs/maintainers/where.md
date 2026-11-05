@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1738 modules, 703502 lines, 0 modules without a docstring.
+85 packages, 1738 modules, 703476 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 86 | 35384 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 86 | 35327 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -42,7 +42,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4635 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 73 | 23862 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 104 | 48877 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 104 | 48908 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1151 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 757 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2486 |
@@ -101,7 +101,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35384 lines)
+TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35327 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -148,7 +148,7 @@ TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35384 li
 | `_model_wrappers` | Pre-flight detection of model wrappers TorchLens cannot instrument. | 91 |
 | `_option_receipt` | Option explicitness readers, the frozen option-group kit, and :class:'NarrationOptions'. | 242 |
 | `_options_removed` | Public option members removed with no alias, with the remedy each one names. | 61 |
-| `_options_validation` | Value validators for the grouped option dataclasses in ''options.py''. | 475 |
+| `_options_validation` | Value validators for the grouped option dataclasses in ''options.py''. | 484 |
 | `_output_slot` | The model-output slot behind ''Trace.output'' and ''Recording.output''. | 226 |
 | `_pass_tokens` | Pass tokens: the '':last'' and '':all'' spellings a layer label may end in. | 59 |
 | `_plain_attr_fidelity` | Plain-attribute fidelity facts for the validation deepcopy and fallback paths. | 488 |
@@ -189,7 +189,7 @@ TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35384 li
 | `fingerprint` | Provisional public structural-hash helpers. | 350 |
 | `inventory` | Site inventory: the audience's "what can I extract?" answer (tvscope B6). | 492 |
 | `observers` | User observer helpers for taps, scalar logs, and record spans. | 597 |
-| `options` | Grouped option dataclasses for public TorchLens APIs. | 1744 |
+| `options` | Grouped option dataclasses for public TorchLens APIs. | 1678 |
 | `types` | Public TorchLens type aliases and rarely used data classes. | 199 |
 
 ### `torchlens._autoroute`
@@ -433,13 +433,13 @@ Core data structures for representing a logged forward pass. (122 modules, 42739
 | `grad_fn` | Autograd grad_fn_handle metadata and lookup accessors. | 812 |
 | `grad_fn_call` | Per-pass runtime data for autograd grad_fn_handle nodes. | 395 |
 | `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 451 |
-| `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 57 |
+| `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 60 |
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1693 |
 | `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2587 |
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3334 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1084 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 223 |
-| `trace` | Trace: the top-level container for a fully logged forward pass. | 3418 |
+| `trace` | Trace: the top-level container for a fully logged forward pass. | 3415 |
 
 ### `torchlens._data_substrate`
 
@@ -1042,7 +1042,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (104 modules, 48877 lines)
+Computational graph visualization via Graphviz. (104 modules, 48908 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1065,7 +1065,7 @@ Computational graph visualization via Graphviz. (104 modules, 48877 lines)
 | `_color_sources` | Resolve the non-string ''color_by='' sources of ''Trace.draw''. | 97 |
 | `_condensed_flow` | Child condensed-flow-graph construction for smart module collapse. | 814 |
 | `_container_edges` | Edge labels that name a container slot (dict key, list index, dataclass field). | 148 |
-| `_draw_validation` | Draw-option validation (extracted from ''_render_dot'' per the file-size ratchet). | 158 |
+| `_draw_validation` | Draw-option validation (extracted from ''_render_dot'' per the file-size ratchet). | 186 |
 | `_edge_multiplicity` | Rendered-edge multiplicity disclosure: dedupe registry helpers. | 354 |
 | `_edge_shapes` | Optional producer-shape annotations on resolved forward edges. | 97 |
 | `_edit_change` | Value-change marks for the interventions view: which ops an edit changed. | 305 |
@@ -1105,15 +1105,15 @@ Computational graph visualization via Graphviz. (104 modules, 48877 lines)
 | `_ramps` | Sequential colour-ramp stop lists for the encoding channels. | 62 |
 | `_rank_segments` | Segment boxes for the rank backend (collapse, the ''__segment__'' half). | 166 |
 | `_render_common` | Shared render types, constants, and imports for Graphviz rendering. | 898 |
-| `_render_dot` | DOT orchestration and SVG composition helpers for Graphviz rendering. | 1811 |
-| `_render_edges` | Edge and endpoint helper functions for Graphviz rendering. | 1874 |
-| `_render_entrypoints` | Public backward and combined-graph rendering entrypoints. | 602 |
+| `_render_dot` | DOT orchestration and SVG composition helpers for Graphviz rendering. | 1799 |
+| `_render_edges` | Edge and endpoint helper functions for Graphviz rendering. | 1872 |
+| `_render_entrypoints` | Public backward and combined-graph rendering entrypoints. | 610 |
 | `_render_flow` | Focus, skip, container, and sibling setup helpers for Graphviz rendering. | 2018 |
 | `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2111 |
 | `_render_module_scope` | Module-scope placement for rendered edges and rolled endpoints. | 269 |
 | `_render_names` | Render names shared by the renderer and the lens and surgery layers above it. | 64 |
 | `_render_node_parts` | Label parts for Graphviz nodes: integer ranges, buffer addresses, module-box outputs. | 105 |
-| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2031 |
+| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2026 |
 | `_render_ordering` | Sibling-ordering resolution and verification for the forward DOT pipeline. | 714 |
 | `_render_regions` | Nested module-cluster (region) emission for the forward DOT pipeline. | 517 |
 | `_render_utils` | Internal Graphviz rendering helpers shared across rendering paths. | 675 |
@@ -1123,8 +1123,8 @@ Computational graph visualization via Graphviz. (104 modules, 48877 lines)
 | `_surgery_diff` | Site-key-first surgery diff: two captures, joined on identity. | 490 |
 | `_svg_compose` | SVG post-processing and code-panel composition for rendered graphs. | 445 |
 | `_trace_collapse` | Collapse diagnostics as ''f(trace, ...)'' functions. | 104 |
-| `_trace_draw` | Trace drawing, overlay, animation and preview functions (record rebuild destination). | 381 |
-| `_trace_draw_arguments` | Forward- and backward-graph keyword translation for the Trace drawing door. | 93 |
+| `_trace_draw` | Trace drawing, overlay, animation and preview functions (record rebuild destination). | 368 |
+| `_trace_draw_arguments` | Forward- and backward-graph keyword translation for the Trace drawing door. | 120 |
 | `_typography` | The one typography record for graph rendering (vizmech, wave-2 item 14). | 244 |
 | `_view_door` | ''Trace.draw(view=...)'': the public door to the premade views. | 152 |
 | `auto_collapse` | Smart module-collapse scoring and selection for graph rendering. | 2146 |
