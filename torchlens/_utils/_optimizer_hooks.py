@@ -5,7 +5,7 @@ optimizer boundary through torch's own ``register_step_pre_hook`` and
 ``register_step_post_hook``. Torch runs those hooks from a wrapper on each
 optimizer class; on torch 2.1 the first ``torch.compile`` in a process removes
 that wrapper from every optimizer class, so the hooks never fire again and a
-session saw no optimizer boundary (see ``stripped_step_hook_wrapper``).
+session saw no optimizer boundary (see :func:`stripped_step_hook_wrapper`).
 
 :func:`register_step_hooks` registers through torch's API and, only when the
 class step lost the wrapper, binds torch's own wrapper on the optimizer
@@ -24,10 +24,34 @@ import weakref
 from collections.abc import Callable
 from typing import Any
 
-from ._torch_compat import stripped_step_hook_wrapper
+import torch
 
 #: Optimizer -> [hold count, bound wrapper, instance ``step`` found at bind time or None].
 _BINDINGS: weakref.WeakKeyDictionary[Any, list[Any]] = weakref.WeakKeyDictionary()
+
+
+def stripped_step_hook_wrapper(optimizer: Any) -> Callable[..., Any] | None:
+    """Return torch's step-hook wrapper when ``optimizer``'s class step lost it.
+
+    Torch runs ``register_step_pre_hook``/``register_step_post_hook`` hooks from the
+    ``Optimizer.profile_hook_step`` wrapper it puts on each optimizer class (marked
+    ``step.hooked``). On torch 2.1 the first ``torch.compile`` swaps every optimizer
+    class's step for the unwrapped function, still marked hooked, so those hooks
+    never fire again in the process. Fallback: :func:`register_step_hooks` binds
+    this wrapper on the instance while a TorchLens session holds the optimizer.
+
+    Returns
+    -------
+    Callable[..., Any] | None
+        ``Optimizer.profile_hook_step``, or ``None`` while the class step runs hooks
+        (or was never hooked by torch).
+    """
+
+    wrap = getattr(torch.optim.Optimizer, "profile_hook_step", None)
+    step = getattr(type(optimizer), "step", None)
+    if not callable(wrap) or not getattr(step, "hooked", False):
+        return None
+    return wrap if getattr(step, "__code__", None) is not wrap(len).__code__ else None
 
 
 class _BindingHold:
