@@ -34,14 +34,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._capture_honesty import honesty_banner_lines
-from .._vocab.node_spec import LENS_BANNER_OMIT_KEY, LENS_CAPTION_KEY
+from .._vocab.node_spec import (
+    EDITED_HEADER_OMITTED_BANNERS,
+    LENS_BANNER_OMIT_KEY,
+    LENS_CAPTION_KEY,
+)
 from ._edit_change import CHANGED_INK, CHANGED_PENWIDTH
 from ._edit_highlighter import highlighter_rgba
 from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink, header_edit_line
-from ._focus_scope import scope_caption_head
+from ._endpoint_rings import endpoint_ring_swatch
+from ._focus_scope import focus_address, scope_caption_head
 from ._fonts import _FONT_DIR
 from ._frame_penwidth import MODULE_PENWIDTH
-from ._label_format import format_memory
+from ._label_format import compact_count, format_memory, header_count
 from ._render_common import (
     BOOL_NODE_COLOR,
     BUFFER_NODE_COLOR,
@@ -68,8 +73,8 @@ __all__ = [
     "caption_from_label",
     "drawn_module_marks",
     "render_module_marks",
-    "drawn_count_line",
     "graph_caption_body",
+    "network_count_line",
     "header_block_label",
     "key_swatches",
     "params_caption_detail",
@@ -89,9 +94,6 @@ _KEY_SPACING = 3
 _SWATCHES_PER_ROW = 3
 #: Stroke of the key's module frame, in points: the same stroke as every module frame.
 _MODULE_FRAME_LINE = MODULE_PENWIDTH
-#: Node unit kinds the header counts: each draws one node that shows a tensor size
-#: (a ``module=`` focus stub, kind ``boundary``, shows none).
-_COUNTED_UNIT_KINDS = frozenset({"raw_op", "module_box"})
 
 
 @dataclass(frozen=True)
@@ -122,98 +124,88 @@ class KeySwatch:
 
 
 def params_caption_detail(trace: Trace) -> str:
-    """Return the header's parameter line, for example ``1,024 params (4.0 KB, all trainable)``.
+    """Return the header's parameter line, for example ``11.7M params (44.6 MB, all trainable)``.
 
-    Counts take thousands separators so a large model reads at a glance
-    (``124,439,808 params``), and the memory uses the binary unit its 1024
-    divisor implies.
+    Counts from 1,000 up print compact (``124M params``); the exact count stays
+    on ``trace.num_params``. The memory uses the binary unit of its 1024 divisor.
     """
 
     total = int(trace.num_params)
     if total == 0:
         return "0 params"
     memory = format_memory(trace._cost_total_param_memory)
+    count = compact_count(total, full_below=1000)
     if trace.num_params_frozen == 0:
-        return f"{total:,} params ({memory}, all trainable)"
+        return f"{count} params ({memory}, all trainable)"
     if trace.num_params_trainable == 0:
-        return f"{total:,} params ({memory}, all frozen)"
-    return f"{total:,} params ({memory}, {int(trace.num_params_trainable):,}/{total:,} trainable)"
+        return f"{count} params ({memory}, all frozen)"
+    trainable = compact_count(int(trace.num_params_trainable), full_below=1000)
+    return f"{count} params ({memory}, {trainable}/{count} trainable)"
 
 
-def _unit_memory(trace: Trace, unit: Any) -> int | None:
-    """Return the byte size the unit's node label shows, or ``None`` when unknown."""
+def _all_ops(trace: Trace) -> list[Any]:
+    """Return every recorded op plus the input and output tensors, each once.
 
-    emission = unit.emission
-    node = emission.node if emission.node is not None else next(iter(unit.source_nodes), None)
-    if unit.kind == "module_box" and emission.call is not None:
-        # A collapsed module box shows its module's output tensor
-        # (``_render_nodes`` module box label); fall back to the node as it does.
-        try:
-            module_call = trace.module_calls[emission.call]
-            node = trace.ops[module_call.output_ops[-1]]
-        except (KeyError, IndexError, AttributeError, TypeError):
-            pass
-    return _node_memory(node)
-
-
-def _node_memory(node: Any) -> int | None:
-    """Return the node's activation size in bytes, or ``None`` when unknown."""
-
-    value = getattr(node, "activation_memory", None)
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        return None
-    return int(value)
-
-
-def _unit_passes(trace: Trace, unit: Any) -> tuple[int, int]:
-    """Return ``(op passes, bytes over those passes)`` for one rolled layer node.
-
-    A rolled node is a layer: every pass of one operation. Its passes are the
-    layer's ops; a node without them counts as one pass of its own size.
+    Buffer sources are left out: like parameters, they are model state, not ops.
     """
 
-    emission = unit.emission
-    node = emission.node if emission.node is not None else next(iter(unit.source_nodes), None)
-    values = getattr(getattr(node, "ops", None), "values", None)
-    if not callable(values):
-        return 1, _unit_memory(trace, unit) or 0
-    passes = list(values())
-    return len(passes), sum(_node_memory(op) or 0 for op in passes)
+    ops = [op for op in trace.ops.values() if not getattr(op, "is_buffer", False)]
+    seen = {id(op) for op in ops}
+    for label in (*trace.input_layers, *trace.output_layers):
+        op = trace.ops[label]
+        if id(op) not in seen:
+            seen.add(id(op))
+            ops.append(op)
+    return ops
 
 
-def drawn_count_line(trace: Trace, universe: NodeUniverse, vis_mode: str) -> str:
-    """Return the header's count line, for example ``4 ops (48 B)``.
+def _in_module(op: Any, address: str) -> bool:
+    """Return whether ``op`` ran inside the module at ``address`` (any call)."""
 
-    The count and the size cover the same nodes: every drawn node whose label
-    shows a tensor size (operations, input and output tensors, collapsed
-    module boxes). The input and output stubs of a ``module=`` focus stand
-    for ops outside the drawn module and are not counted (an input stub names
-    the size of the tensor it brings, made outside); nor are repeat-fold
-    ellipses, segment capsules and container summaries. The noun names what is counted: ``ops`` in the
-    unrolled view and ``layers`` in the rolled one when every counted node is
-    an operation, ``nodes`` when collapsed module boxes are among them. A
-    rolled layer stands for every pass of its operation, so the rolled line
-    also counts those passes and sums the size over all of them
-    (``8 layers (11 ops, 149 B)``); the size then equals the unrolled
-    header's for the same trace.
+    return any(str(call).split(":", 1)[0] == address for call in getattr(op, "modules", None) or ())
+
+
+def network_ops(trace: Trace, focus: str | None) -> list[Any]:
+    """Return the ops the header counts: the whole network's, or the focused module's."""
+
+    ops = _all_ops(trace)
+    if focus is None:
+        return ops
+    return [op for op in ops if _in_module(op, focus)]
+
+
+def _memory(ops: Iterable[Any]) -> int:
+    """Return the summed activation size of ``ops`` in bytes (unknown sizes count 0)."""
+
+    total = 0
+    for op in ops:
+        value = getattr(op, "activation_memory", None)
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            total += int(value)
+    return total
+
+
+def network_count_line(trace: Trace, focus: str | None, vis_mode: str) -> str:
+    """Return the header's count line, for example ``372 ops (325.9 MB)``.
+
+    Parameters
+    ----------
+    trace:
+        The trace being drawn.
+    focus:
+        The ``module=`` focus address (``None`` for a whole-model draw).
+    vis_mode:
+        ``"rolled"`` adds the layer count (``8 layers (11 ops, 149 B)``).
     """
 
-    counted = [unit for unit in universe.units if unit.kind in _COUNTED_UNIT_KINDS]
-    count = len(counted)
-    has_module_box = any(unit.kind == "module_box" for unit in counted)
-    if vis_mode == "rolled" and not has_module_box:
-        rolled = [_unit_passes(trace, unit) for unit in counted]
-        ops = sum(passes for passes, _ in rolled)
-        size = format_memory(sum(memory for _, memory in rolled))
-        layer_noun = "layer" if count == 1 else "layers"
-        op_noun = "op" if ops == 1 else "ops"
-        return f"{count:,} {layer_noun} ({ops:,} {op_noun}, {size})"
-    if has_module_box:
-        noun = "node" if count == 1 else "nodes"
-    else:
-        noun = "op" if count == 1 else "ops"
-    total = sum(_unit_memory(trace, unit) or 0 for unit in counted)
-    return f"{count:,} {noun} ({format_memory(total)})"
+    ops = network_ops(trace, focus)
+    size = format_memory(_memory(ops))
+    op_noun = "op" if len(ops) == 1 else "ops"
+    if vis_mode != "rolled":
+        return f"{header_count(len(ops))} {op_noun} ({size})"
+    layers = len({getattr(op, "layer_label", id(op)) for op in ops})
+    layer_noun = "layer" if layers == 1 else "layers"
+    return f"{header_count(layers)} {layer_noun} ({header_count(len(ops))} {op_noun}, {size})"
 
 
 def graph_caption_html(
@@ -221,7 +213,9 @@ def graph_caption_html(
 ) -> str:
     """Return the complete graph caption: the header body in the theme's ink."""
 
-    count_line = drawn_count_line(trace, universe, request.vis_mode)
+    del universe  # the count line reports the traced network, never the drawn boxes
+    focus = focus_address(getattr(request, "module", None))
+    count_line = network_count_line(trace, focus, request.vis_mode)
     body = graph_caption_body(trace, count_line, request)
     return f"<<FONT COLOR='{theme.default_font}'>{body}</FONT>>"
 
@@ -241,7 +235,7 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
         caption_body += f"{edit_line}<br align='left'/>"
     if getattr(trace, "_has_direct_writes", False):
         caption_body += "Direct writes detected - recipe propagation will overlay<br align='left'/>"
-    caption_body += _honesty_banner_rows(trace, request)
+    caption_body += _honesty_banner_rows(trace, request, edited=edit_line is not None)
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
         # Stacking disclosure is part of the contract (memo 4.1): the
@@ -295,17 +289,20 @@ def _caption_head(trace: Trace, count_line: str, module: Any) -> str:
     return scope_caption_head(trace, module, count_line, params_caption_detail(trace))
 
 
-def _honesty_banner_rows(trace: Trace, request: ResolvedRenderRequest) -> str:
+def _honesty_banner_rows(trace: Trace, request: ResolvedRenderRequest, *, edited: bool) -> str:
     """Return the capture-honesty banner rows as caption HTML.
 
     A poisoned/diverged sparse run, an unverified capture, or an episode
     capture must not RENDER clean (WT1 A-V row 23): the graph is a publishable
     artifact, so the caption carries the facts. The picture keeps a cited
     source location's file name and line only. A view may move named lines
-    to its own record (:data:`LENS_BANNER_OMIT_KEY`; the interventions census).
+    to its own record (:data:`LENS_BANNER_OMIT_KEY`; the interventions census);
+    an edited trace's edit line drops :data:`EDITED_HEADER_OMITTED_BANNERS`.
     """
 
     omitted = tuple((request.graph_overrides or {}).get(LENS_BANNER_OMIT_KEY, ()))
+    if edited:
+        omitted += EDITED_HEADER_OMITTED_BANNERS
     rows = ""
     for banner_line in honesty_banner_lines(trace):
         if omitted and banner_line.startswith(omitted):
@@ -430,6 +427,7 @@ def key_swatches(
     has_module: bool,
     mutated_parameter: bool = False,
     module_marks: frozenset[str] = frozenset(),
+    endpoint_rings: bool = False,
 ) -> tuple[KeySwatch, ...]:
     """Return the key entries for the marks this picture draws, in display order.
 
@@ -438,7 +436,9 @@ def key_swatches(
     entry, nor does an oval mark the skin fills like one. Each module mark in ``module_marks`` (``drawn_module_marks``) gets
     an entry drawn like it; ``has_module=True`` alone means a module frame.
     An edited node adds ``edited`` (the ringed oval) and, with the downstream
-    highlighter drawn, ``changed by the edit``.
+    highlighter drawn, ``changed by the edit``. ``endpoint_rings=True`` (a
+    colour scale owns the fills) draws the input and output entries as the
+    rings the picture draws, not as filled ovals.
     """
 
     has_weights = "parameterized" in drawn
@@ -461,6 +461,8 @@ def key_swatches(
         for swatch in (_entry_swatch(theme, *entry[:3]) for entry in entries if entry[3])
         if swatch is not None
     ]
+    if endpoint_rings:
+        swatches = [endpoint_ring_swatch(theme, swatch) for swatch in swatches]
     swatches.extend(_edit_swatches(theme, drawn))
     return tuple(swatches)
 

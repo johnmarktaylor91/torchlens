@@ -15,6 +15,7 @@ from typing import Any
 import torch
 
 from .._data_classes.op import Op
+from ._setitem_index_probe import layer_has_setitem_index_parent, setitem_index_probe_values
 
 # ---------------------------------------------------------------------------
 # Index-domain perturbation standard (F2 tightening).
@@ -128,6 +129,27 @@ def layer_has_index_domain_parent(layer: Op) -> bool:
     return any(
         isinstance(label, str) and _parent_is_index_domain_arg(layer, label) for label in labels
     )
+
+
+def layer_takes_single_entry_probe(layer: Op) -> bool:
+    """Return whether the retry ladder ends with the single-entry index move.
+
+    Parameters
+    ----------
+    layer:
+        Child op being validated.
+
+    Returns
+    -------
+    bool
+        True for an op with a parent in its registered index-domain slot
+        (``layer_has_index_domain_parent``) or a ``__setitem__`` with a parent
+        inside its index (``_setitem_index_probe``). The ``__setitem__`` case
+        only adds a probe; it never registers ``__setitem__`` as an
+        index-domain op, so no exemption reading that table changes.
+    """
+
+    return layer_has_index_domain_parent(layer) or layer_has_setitem_index_parent(layer)
 
 
 def _index_domain_size(layer: Op) -> int | None:
@@ -364,9 +386,13 @@ def index_domain_single_entry_values(
     -------
     torch.Tensor or None
         The single-entry perturbation, or ``None`` when the parent is not an
-        integer index arg of an index-domain op or has no in-domain entry.
+        integer index arg of an index-domain op or has no in-domain entry. A
+        ``__setitem__`` index component takes the write-aware move of
+        ``_setitem_index_probe.setitem_index_probe_values`` instead.
     """
 
+    if getattr(layer, "func_name", None) == "__setitem__":
+        return setitem_index_probe_values(layer, parent_label, parent_values)
     if index_domain_rotation_values(layer, parent_label, parent_values) is None:
         return None
     domain_size = _index_domain_size(layer)
@@ -419,9 +445,12 @@ def _raise_retry_strategies(layer: Op, layers_to_perturb: list[str]) -> tuple[st
     -------
     tuple of str
         ``step_up``/``step_down``; only the in-domain single-entry move for an
-        index-domain parent (see ``core._perturbation_retry_strategies``).
+        index-domain parent (see ``core._perturbation_retry_strategies``); the
+        steps then the in-domain move for a ``__setitem__`` index component.
     """
 
     if any(_parent_is_index_domain_arg(layer, label) for label in layers_to_perturb):
         return (_INDEX_SINGLE_ENTRY_STRATEGY,)
+    if layer_has_setitem_index_parent(layer):
+        return ("step_up", "step_down", _INDEX_SINGLE_ENTRY_STRATEGY)
     return ("step_up", "step_down")

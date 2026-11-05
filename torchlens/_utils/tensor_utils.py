@@ -538,7 +538,9 @@ def tensor_nanequal(
     if tensor_a.is_meta or tensor_b.is_meta:
         return tensor_a.is_meta and tensor_b.is_meta
 
-    with _state_module().pause_logging():
+    # A comparison on a strict subclass reconstructs it like clone() does: same bracket.
+    subclass_side = tensor_b if type(tensor_a) in (torch.Tensor, torch.nn.Parameter) else tensor_a
+    with _state_module().pause_logging(), _pause_dispatch_modes_for_subclass_clone(subclass_side):
         if tensor_a.device != tensor_b.device:
             # Equality is device-independent: an output_device capture keeps
             # saved payloads off the op's device, so compare exact host copies.
@@ -546,11 +548,10 @@ def tensor_nanequal(
         if tensor_a.is_quantized or tensor_b.is_quantized:
             return _quantized_tensor_equal(tensor_a, tensor_b)
 
-        # Sparse layouts have no aten::equal / isinf / nan_to_num kernels: every
-        # comparison below used to escape tl.trace() as a raw torch-internal
-        # NotImplementedError naming the SparseCPU dispatcher (R65; the layout
-        # sibling of the fp8 class documented below). Compare the canonical
-        # structure exactly and recurse on the strided values tensor so
+        # Sparse layouts have no aten::equal / isinf / nan_to_num kernels: every comparison
+        # below used to escape tl.trace() as a raw torch-internal NotImplementedError naming
+        # the SparseCPU dispatcher (R65; the layout sibling of the fp8 class documented below).
+        # Compare the canonical structure exactly and recurse on the strided values tensor so
         # NaN/Inf/tolerance semantics match the dense path.
         if tensor_a.layout != tensor_b.layout:
             return False
@@ -585,10 +586,9 @@ def tensor_nanequal(
                 tensor_a.values(), tensor_b.values(), allow_tolerance=allow_tolerance
             )
 
-        # Validation overwhelmingly compares identical ordinary floating-point
-        # payloads. Avoid constructing the Inf/NaN masks and substituted tensors
-        # in that common case; non-exact comparisons and non-floating dtypes
-        # retain the full comparison below.
+        # Validation overwhelmingly compares identical ordinary floating-point payloads. Avoid
+        # constructing the Inf/NaN masks and substituted tensors in that common case;
+        # non-exact comparisons and non-floating dtypes retain the full comparison below.
         # IEEE equality hides -0.0 vs +0.0; only certify EXACT when zero sign
         # bits agree too (fp8 widens first: no signbit kernel). A flip falls
         # through -- the tolerance band below may still legitimately accept it.

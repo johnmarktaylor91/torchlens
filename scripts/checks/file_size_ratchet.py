@@ -339,7 +339,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # accessors; measured 4398.
     # 4450 -> 4300 (C-245 fixq2): the dispatch-mode and roll real-op probes moved
     # to _utils/_kernel_probes.py; measured 4277.
-    "torchlens/_utils/_torch_compat.py": 4300,
+    # 4300 -> 4272 (floor batch FB1): the floor capability flags merged in and the
+    # causal-bias lookup probe body moved to _utils/_kernel_probes.py; measured 4272.
+    "torchlens/_utils/_torch_compat.py": 4267,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
@@ -465,7 +467,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/_visualization/_render_leaf.py": 2200,
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/_postprocess/ast_branches.py": 2250,
-    "torchlens/_visualization/_render_nodes.py": 2150,
+    # Re-keyed down 2150 -> 2050 (r7 R43-F2 slack rule): the raw-input scratch
+    # folder, input photo and picture-box layout moved to _input_photo.py and
+    # _node_boxes.py; measured 2035.
+    "torchlens/_visualization/_render_nodes.py": 2050,
     "torchlens/_visualization/_render_flow.py": 2100,
 }
 

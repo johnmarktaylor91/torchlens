@@ -68,10 +68,11 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
     lm: dict[str, Any], gallery_registry: Any
 ) -> None:
     """RG03: the committed per-family facet floor holds on the REAL
-    checkpoint; fused-attention absences are disclosed with a remedy, never
-    silent; and the eager arm MAKES the pattern available (the #1-ranked
-    missing class: attention-implementation non-invariance, asserted as an
-    explicit facet DIFF, not both-run)."""
+    checkpoint; any remaining absences are disclosed with a remedy, never
+    silent; and the attention pattern is available on BOTH attention
+    implementations (the #1-ranked missing class: attention-implementation
+    non-invariance): reconstructed from the recorded SDPA inputs on the
+    default fused load, a real captured op on the eager load."""
 
     import torchlens as tl
 
@@ -92,11 +93,11 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
                     f"{row.address}: family-floor facet {facet_name!r} not"
                     f" available (has {row.available})"
                 )
-            # Fused-kernel absences are DISCLOSED with remedies, never bare.
-            missing_names = {entry[0] for entry in row.missing}
-            assert "pattern" in missing_names, (
-                "SDPA arm: 'pattern' should be needs_capture here -- if it"
-                " became available by default, update the eager-diff arm"
+            # The default capture records every SDPA input, so the fused
+            # arm serves the reconstructed pattern without a capture option.
+            assert "pattern" in row.available, (
+                f"{row.address}: SDPA arm: the reconstructed 'pattern' should be"
+                f" available on a default capture (has {row.available})"
             )
             for entry in row.missing:
                 assert entry[1] and entry[2], (
@@ -113,7 +114,7 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
         trace.cleanup()
 
     # The EAGER arm: the same checkpoint loaded eager exposes the pattern
-    # facet the fused arm could only disclose (the facet DIFF is the claim).
+    # as a real captured op.
     from transformers import AutoModelForCausalLM
 
     row = gallery_registry.checkpoint_evidence("r1-distilgpt2")
@@ -130,9 +131,8 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
         eager_coverage = tl.facets.coverage(eager_trace)
         eager_attention = [row for row in eager_coverage.rows if row.class_name == "GPT2Attention"]
         assert eager_attention and all("pattern" in row.available for row in eager_attention), (
-            "eager arm: the attention pattern facet is still unavailable --"
-            " the eager/sdpa facet DIFF collapsed (attention-implementation"
-            " coverage class, rank 1)"
+            "eager arm: the attention pattern facet is unavailable"
+            " (attention-implementation coverage class, rank 1)"
         )
     finally:
         eager_trace.cleanup()

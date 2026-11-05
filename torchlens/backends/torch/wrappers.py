@@ -97,7 +97,7 @@ from ._function_boundary import (
     unlogged_wrapper_name,
 )
 from ._fused_norm_writes import fused_call_writes
-from ._logged_arguments import logged_args
+from ._logged_arguments import logged_args, logged_receiver_output
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
 from ._ops_capture_records import (
@@ -128,7 +128,11 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
 from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
 from ._warm_originals import originals_exposed
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
-from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
+from ._wrappers_refusals import (
+    _constructs_strict_subclass,
+    _pauses_for_subclass_conversion,
+    _raise_if_subclass_ctor_under_dispatch_mode,
+)
 from .aliasing import _tensors_alias
 from .arg_names import get_arg_names
 from .belt import restore_belt_references, sweep_stale_belt_references
@@ -800,30 +804,6 @@ def _propagate_mutation_label_to_storage_aliases(
 _SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {"__new__": 0, "_make_subclass": 0, "as_subclass": 1}
 
 
-def _constructs_strict_subclass(args: tuple[Any, ...], idx: int | None) -> bool:
-    """Return whether ``args[idx]`` is a strict (non-``torch.Tensor``) subclass cls.
-
-    Parameters
-    ----------
-    args:
-        Positional call arguments.
-    idx:
-        Index of the candidate subclass ``cls`` argument, or ``None`` when the
-        caller has none (always ``False``; lets callers pass their own
-        ``... | None`` index constant without narrowing it themselves first).
-
-    Returns
-    -------
-    bool
-        ``True`` when ``args[idx]`` is a type strictly below ``torch.Tensor``.
-    """
-
-    if idx is None or len(args) <= idx:
-        return False
-    cls = args[idx]
-    return isinstance(cls, type) and cls is not torch.Tensor and issubclass(cls, torch.Tensor)
-
-
 _MUTATING_TENSOR_PROPERTY_SETTERS = frozenset({"real", "imag", "data"})
 
 # Setters that rebind the receiver to the RHS's storage instead of writing in
@@ -1434,8 +1414,8 @@ def torch_func_decorator(
             func_call_id=func_call_id,
         )
         expected_token = None
-        pauses_owned_modes = constructs_tensor_subclass and _constructs_strict_subclass(
-            args, _logged_subclass_cls_index
+        pauses_owned_modes = constructs_tensor_subclass and _pauses_for_subclass_conversion(
+            func_name, args, _logged_subclass_cls_index
         )
         # W3 F8: per-op duration must measure the USER op, not TorchLens
         # bookkeeping. The clock starts here -- after RNG/autocast snapshots
@@ -1535,17 +1515,11 @@ def torch_func_decorator(
             # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.
             _adopt_minted_parameter_label(trace, out_orig, args)
 
-        # __setitem__, zero_, __delitem__ modify in-place and return None;
-        # treat the first arg (the modified tensor) as the output. Mutating
-        # property setters (``t.real = rhs`` and friends, round-31 M6) have the
-        # exact same shape: real dataflow, ``None`` return, mutated receiver.
-        if reconstructs_receiver_output or (
-            is_mutating_property_setter
-            and out_orig is None
-            and len(args) > 0
-            and isinstance(args[0], torch.Tensor)
-        ):
-            out_orig = args[0]
+        # A receiver-mutating call that returns ``None`` (or always, for __setitem__,
+        # zero_, __delitem__) logs its mutated receiver(s) as the output.
+        out_orig = logged_receiver_output(
+            out_orig, args, func_name, reconstructs_receiver_output, is_mutating_property_setter
+        )
 
         # ---- In-place detection and safe copy ----
         same_object_returned = len(args) > 0 and id(out_orig) == id(args[0])

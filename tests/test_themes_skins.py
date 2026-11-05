@@ -98,9 +98,14 @@ def test_mixed_if_test_splits_hard_in_pass_order_in_every_skin() -> None:
 
 @pytest.mark.parametrize("skin", sorted(THEME_PRESETS))
 def test_no_skin_draws_blue(skin: str) -> None:
-    """No skin, light or dark, carries a blue in its palette, ramp, inks or collapse tokens."""
+    """No skin, light or dark, carries a blue in its palette, inks or collapse tokens.
 
-    theme = THEME_PRESETS[skin]
+    The data-encoded ramp is exempt (JMT, 4 Nov 2026: blue is allowed in a
+    data scale, so the viridis family stays selectable); the grey weights
+    stay grey in every skin.
+    """
+
+    theme = dataclasses.replace(THEME_PRESETS[skin], ramp=())
     blues = [h for h in _hexes(theme) + _hexes(collapse_tokens(theme)) if _is_blue(h)]
     assert not blues, (skin, blues)
 

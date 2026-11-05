@@ -34,6 +34,7 @@ from torchlens.attribution._cam_grid import (
     _derive_token_grid,
     _grid_to_map,
     _labels,
+    _layer_tensor,
     _module_outputs,
     _target_spelling,
     _TokenGrid,
@@ -142,7 +143,8 @@ def _grid_gradients(
 
     Layers whose module returns a non-tensor value (a model-output container)
     or a value the target is not differentiable through are absent: they are
-    not valid Grad-CAM layers.
+    not valid Grad-CAM layers. A one-element tuple counts as its tensor, as in
+    layer capture.
     """
 
     named = dict(model.named_modules())
@@ -153,9 +155,9 @@ def _grid_gradients(
         """Return a forward hook that keeps ``name``'s output when it is a tensor."""
 
         def _hook(_module: Module, _args: tuple[Any, ...], output: Any) -> None:
-            """Keep the module's tensor output under ``name``."""
+            """Keep the module's tensor output (or sole tuple element) under ``name``."""
 
-            if isinstance(output, Tensor):
+            if isinstance(output := _layer_tensor(output), Tensor):
                 captured[name] = output
 
         return _hook

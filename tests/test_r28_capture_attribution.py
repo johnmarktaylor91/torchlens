@@ -16,6 +16,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._utils._torch_compat import ROLL_TENSOR_SHIFTS_SUPPORTED
+from torchlens.backends.torch._logged_arguments import logged_receiver_output
 
 
 def _ops_by_func(trace: object, func_name: str) -> list:
@@ -262,6 +263,67 @@ def test_h1_foreach_inplace_threads_mutation_to_consumers() -> None:
     assert sum_ops[1].parents == (foreach_ops[1].layer_label,)
     assert all(op.children for op in foreach_ops)
     assert tl.validate(_ForeachInplace().eval(), x, scope="forward")
+
+
+def test_h1_void_inplace_foreach_logs_its_receiver_members() -> None:
+    """An in-place foreach call that returns ``None`` logs its receiver members.
+
+    torch 2.1 binds ``torch._foreach_add_`` and family as returning nothing; later
+    torch returns the receiver list. Capture logs the same list either way, while
+    user code keeps the binding's own return value.
+    """
+
+    first, second = torch.ones(1), torch.ones(1)
+    logged = logged_receiver_output(None, ([first, second], 1.0), "_foreach_add_", False, False)
+    assert isinstance(logged, list)
+    assert logged[0] is first and logged[1] is second
+    returned = [first, second]
+    assert (
+        logged_receiver_output(returned, ([first, second], 1.0), "_foreach_add_", False, False)
+        is returned
+    )
+    assert (
+        logged_receiver_output(None, ([first, second], 1.0), "_foreach_add", False, False) is None
+    )
+    assert logged_receiver_output(None, (first, 1.0), "add_", False, False) is None
+
+
+_FOREACH_RETURN_TYPES: list[type] = []
+"""Types ``torch._foreach_add_`` returned inside ``_ForeachReturn.forward``, in call order."""
+
+
+class _ForeachReturn(nn.Module):
+    """Record the type of what ``torch._foreach_add_`` itself returns."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run one in-place foreach call and record its own return type.
+
+        Parameters
+        ----------
+        x:
+            1-D input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Sum of the two mutated members.
+        """
+
+        members = [x.relu().clone(), x.sigmoid().clone()]
+        _FOREACH_RETURN_TYPES.append(type(torch._foreach_add_(members, 1.0)))
+        return members[0] + members[1]
+
+
+def test_h1_inplace_foreach_return_value_is_untouched_by_capture() -> None:
+    """User code sees the binding's own return value from a captured foreach call."""
+
+    _FOREACH_RETURN_TYPES.clear()
+    model = _ForeachReturn().eval()
+    x = torch.tensor([1.0, 2.0])
+    model(x)
+    tl.trace(model, x)
+    assert len(_FOREACH_RETURN_TYPES) >= 2
+    assert set(_FOREACH_RETURN_TYPES) == {_FOREACH_RETURN_TYPES[0]}
 
 
 def test_m3_foreach_out_of_place_parents_are_zipped_without_duplicates() -> None:

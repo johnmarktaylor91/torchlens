@@ -66,7 +66,8 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # a genuine late-binding hazard; fix it, never raise this.
     "B023": 0,
     "B904": 17,
-    "B018": 14,
+    # 14 -> 13 (2026-11-05 pattern-facet-default fixq1): measured at the merged tree.
+    "B018": 13,
     "B007": 16,
     "B008": 3,
     # 2026-08-16 re-true (ipynb-aware parser): shrunk to the corrected

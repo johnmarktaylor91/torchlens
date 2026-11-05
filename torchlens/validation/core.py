@@ -55,6 +55,7 @@ from .._utils.tensor_utils import (
     tensor_all_nan,
     tensor_nanequal,
 )
+from ..backends.torch._logged_arguments import logged_receiver_output
 from . import _replay_grad_fidelity as _grad_fidelity
 from ._autograd_grad_replay import execute_replay_func
 from ._destination_coverage import _perturbed_parents_only_occupy_out_kwarg
@@ -75,7 +76,7 @@ from ._index_domain import (
     _raise_retry_strategies,
     index_domain_rotation_values,
     index_domain_single_entry_values,
-    layer_has_index_domain_parent,
+    layer_takes_single_entry_probe,
 )
 from ._non_pass_record import record_replay_exception as _record_replay_exception
 from ._perturb import _UNSIGNED_AS_SIGNED, _perturb_layer_outs
@@ -2415,12 +2416,11 @@ def _execute_func_with_restored_state(
             )
         return None
 
-    # In-place mutating ops (__setitem__, zero_, __delitem__) return None
-    # from PyTorch but the "output" is the mutated first argument. Property
-    # setters (``t.real = rhs``: ``layer.func`` is the getset descriptor's
-    # ``__set__``, round-31 M6) have the same shape.
-    if layer_func.__name__ in ("__setitem__", "zero_", "__delitem__", "__set__"):
-        recomputed_output = input_args["args"][0]
+    # Mutators (setitem, zero_, delitem, a setter's __set__, void foreach) replay to their receivers.
+    always = layer_func.__name__ in ("__setitem__", "zero_", "__delitem__", "__set__")
+    recomputed_output = logged_receiver_output(
+        recomputed_output, tuple(input_args["args"]), layer_func.__name__, always, False
+    )
 
     # Multi-output functions may return typed containers; select the specific
     # output this layer represents using the captured typed path when available.
@@ -3486,15 +3486,15 @@ def _perturbation_retry_strategies(
     if any(_parent_is_index_domain_arg(layer, label) for label in layers_to_perturb or ()):
         return [_INDEX_SINGLE_ENTRY_STRATEGY]
     strategies = _value_retry_strategies(layer)
-    if layer_has_index_domain_parent(layer):
+    if layer_takes_single_entry_probe(layer):
         # The default probe rotates EVERY index by one domain position, a
         # permutation that leaves histogram-only outputs (per-relation edge
-        # counts on balanced relations) unchanged, and the uniform steps
-        # leave the domain and raise. The single-entry move changes the
-        # histogram in-domain (``index_domain_single_entry_values``). It runs
-        # LAST: for a non-index parent it yields no perturbation, which ends
-        # the retry loop, so placing it earlier would cut off the bool-output
-        # and magnitude rungs for that parent.
+        # counts on balanced relations) and same-scalar ``__setitem__`` writes
+        # unchanged, and the uniform steps leave the domain and raise. The
+        # single-entry move (``index_domain_single_entry_values``) changes them
+        # in-domain. It runs LAST: for a non-index parent it yields no
+        # perturbation, which ends the retry loop, so placing it earlier would
+        # cut off the bool-output and magnitude rungs for that parent.
         strategies.append(_INDEX_SINGLE_ENTRY_STRATEGY)
     return strategies
 
