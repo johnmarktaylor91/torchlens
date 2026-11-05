@@ -8,9 +8,9 @@ container builds (``BUILD_*`` opcodes executed in TorchLens code plus Python
 ``__init__`` runs TorchLens code starts): once for the whole trace (capture and
 postprocess; dropping the trace is excluded) and once for the commit alone
 (``ExhaustiveOpDraft.freeze``). The pins are the values measured on CI's pinned
-environment after the commit cost cut. The trace pins are below the train's
-eager freeze path on the same measure (3380.13 calls and 1003.71 builds per
-op). The commit pins are above that path's freeze alone (33.79 calls and 28.21
+environment after the commit cost cut. The trace pins are below the eager
+freeze path the series replaced, measured the same way on the same subject.
+The commit pins are above that path's freeze alone (33.79 calls and 28.21
 builds per op) because the commit now writes the op's cells, which the eager
 path wrote at ingest; they are below the row commit before the cut (68.41
 calls and 56.47 builds per op).
