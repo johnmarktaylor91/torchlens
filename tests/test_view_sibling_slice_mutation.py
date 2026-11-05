@@ -32,7 +32,7 @@ class _MattingSlices(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.decoder = nn.Conv2d(3, 9, 3, padding=1)
-        self.head = nn.Conv2d(8, 4, 1)
+        self.head = nn.Conv2d(4, 4, 1)
 
     def forward(self, src: torch.Tensor) -> torch.Tensor:
         """Split, mutate and recombine channel slices like MattingRefine.
@@ -49,11 +49,10 @@ class _MattingSlices(nn.Module):
         """
 
         x = self.decoder(src)
+        hid = x[:, 5:]
         pha = x[:, 0:1].clamp_(0.0, 1.0)
         fgr = x[:, 1:4]
-        err = x[:, 4:5].clamp_(0.0, 1.0)
-        hid = x[:, 5:].relu_()
-        mixed = self.head(torch.cat([hid, pha, fgr], dim=1)) * err
+        mixed = self.head(hid.relu_())
         out = torch.cat([pha, fgr], dim=1) + mixed
         pha = out[:, :1]
         fgr = out[:, 1:]
@@ -109,14 +108,14 @@ def test_matting_slice_writes_keep_sibling_parents() -> None:
     src = torch.rand(2, 3, 6, 8)
     trace = tl.trace(model, src)
     first_clamp = _ops_by_func(trace, "clamp_")[0]
-    fgr_slice = _ops_by_func(trace, "__getitem__")[1]
+    fgr_slice = _ops_by_func(trace, "__getitem__")[2]
     relu = _ops_by_func(trace, "relu_")[0]
-    second_cat = _ops_by_func(trace, "cat")[1]
+    first_cat = _ops_by_func(trace, "cat")[0]
 
-    assert set(second_cat.parents) == {first_clamp.layer_label, fgr_slice.layer_label}
-    assert relu.layer_label not in second_cat.parents
+    assert set(first_cat.parents) == {first_clamp.layer_label, fgr_slice.layer_label}
+    assert relu.layer_label not in first_cat.parents
     add_inplace = _ops_by_func(trace, "add_")[0]
-    late_fgr_slice = _ops_by_func(trace, "__getitem__")[5]
+    late_fgr_slice = _ops_by_func(trace, "__getitem__")[4]
     assert late_fgr_slice.layer_label in add_inplace.parents
     assert _validate(_MattingSlices().eval(), src), last_validation_failure()
 
