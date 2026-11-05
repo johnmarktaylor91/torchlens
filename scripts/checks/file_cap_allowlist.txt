@@ -720,7 +720,6 @@ torchlens/backends/_finalize.py::attach_object_module_logs	65
 torchlens/backends/_finalize.py::finalize_single_pass_trace	150
 torchlens/backends/_finalize.py::new_preview_function_trace	100
 torchlens/backends/_finalize.py::populate_object_module_build_data	72
-torchlens/backends/_finalize_distances.py::compute_preview_input_output_distances	86
 torchlens/backends/jax/backend.py	4351
 torchlens/backends/jax/backend.py::JAXBackend._append_event	173
 torchlens/backends/jax/backend.py::JAXBackend._attach_derived_grads	170

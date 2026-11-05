@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1634 modules, 684048 lines, 0 modules without a docstring.
+83 packages, 1634 modules, 684120 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -52,7 +52,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15132 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2542 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3865 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 19 | 7014 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 19 | 7086 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 11 | 8735 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6980 |
@@ -1245,7 +1245,7 @@ One-backward attribution reads (M(reads) memo). (11 modules, 3865 lines)
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (19 modules, 7014 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (19 modules, 7086 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1259,7 +1259,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (19 modules
 | `_errors` | Backend registry error hierarchy (leaf module: no registry import). | 251 |
 | `_facet_recipes` | Per-trace facet recipes (''trace(facets=...)'') on the preview backends. | 77 |
 | `_finalize` | Shared preview-backend trace finalization helpers. | 1250 |
-| `_finalize_distances` | Input and output hop distances for preview-backend traces. | 122 |
+| `_finalize_distances` | Input and output hop distances for preview-backend traces. | 194 |
 | `_finalize_totals` | Trace-level counters derived from finalized layers and ops. | 55 |
 | `_intervention_evidence` | Which backends write the intervention evidence a Trace's pristine reading uses. | 31 |
 | `_options` | Shared backend trace-option defaulting and rejection helpers. | 791 |

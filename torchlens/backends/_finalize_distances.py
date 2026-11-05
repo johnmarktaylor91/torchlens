@@ -35,20 +35,7 @@ def compute_preview_input_output_distances(trace: Trace) -> None:
     ``input_ancestors=()``).
     """
 
-    ops_by_label: dict[str, Any] = {}
-    for op_log in trace._layer_list:
-        for field_name in ("input_ancestors", "output_descendants"):
-            value = getattr(op_log, field_name, None)
-            if not isinstance(value, set):
-                setattr(op_log, field_name, set(value or ()))
-        for key in (
-            getattr(op_log, "_label_raw", None),
-            getattr(op_log, "label", None),
-            getattr(op_log, "layer_label", None),
-        ):
-            if key is not None:
-                ops_by_label.setdefault(key, op_log)
-
+    ops_by_label = _index_ops_by_label(trace)
     ordered_ops = [
         ops_by_label[label]
         for label in trace._raw_graph_ws.raw_layer_labels_list
@@ -75,27 +62,112 @@ def compute_preview_input_output_distances(trace: Trace) -> None:
         ),
     ):
         traversal = ordered_ops if mode == "input" else list(reversed(ordered_ops))
-        for starting_label in starting_labels:
-            starting_op = ops_by_label.get(starting_label)
-            if starting_op is None:
+        fields = (min_field, max_field, marker_field, lineage_field)
+        _seed_starting_ops(ops_by_label, starting_labels, fields)
+        _flood_edges(traversal, ops_by_label, fields, edge_field)
+
+
+def _index_ops_by_label(trace: Trace) -> dict[str, Any]:
+    """Index a preview trace's ops by every label spelling, normalizing lineage sets.
+
+    Parameters
+    ----------
+    trace:
+        Finalized preview trace.
+
+    Returns
+    -------
+    dict[str, Any]
+        Ops keyed by raw label, label and layer label (first op wins). Each op's
+        ``input_ancestors``/``output_descendants`` is made a mutable set in place.
+    """
+
+    ops_by_label: dict[str, Any] = {}
+    for op_log in trace._layer_list:
+        for field_name in ("input_ancestors", "output_descendants"):
+            value = getattr(op_log, field_name, None)
+            if not isinstance(value, set):
+                setattr(op_log, field_name, set(value or ()))
+        for key in (
+            getattr(op_log, "_label_raw", None),
+            getattr(op_log, "label", None),
+            getattr(op_log, "layer_label", None),
+        ):
+            if key is not None:
+                ops_by_label.setdefault(key, op_log)
+    return ops_by_label
+
+
+def _seed_starting_ops(
+    ops_by_label: dict[str, Any], starting_labels: Any, fields: tuple[str, str, str, str]
+) -> None:
+    """Mark the flood's starting ops at distance zero with themselves as lineage.
+
+    Parameters
+    ----------
+    ops_by_label:
+        Ops keyed by label.
+    starting_labels:
+        Input or output layer labels the flood starts from.
+    fields:
+        ``(min_field, max_field, marker_field, lineage_field)`` of the flood direction.
+
+    Returns
+    -------
+    None
+        Starting ops are updated in place; unknown labels are skipped.
+    """
+
+    min_field, max_field, marker_field, lineage_field = fields
+    for starting_label in starting_labels:
+        starting_op = ops_by_label.get(starting_label)
+        if starting_op is None:
+            continue
+        _update_distance(starting_op, min_field, max_field, 0)
+        setattr(starting_op, marker_field, True)
+        getattr(starting_op, lineage_field).add(starting_label)
+
+
+def _flood_edges(
+    traversal: list[Any],
+    ops_by_label: dict[str, Any],
+    fields: tuple[str, str, str, str],
+    edge_field: str,
+) -> None:
+    """Propagate hop distances and lineage along one direction's edges.
+
+    Parameters
+    ----------
+    traversal:
+        Ops in flood order (forward for input distances, reversed for output).
+    ops_by_label:
+        Ops keyed by label.
+    fields:
+        ``(min_field, max_field, marker_field, lineage_field)`` of the flood direction.
+    edge_field:
+        ``"children"`` or ``"parents"``: the edge list followed from each op.
+
+    Returns
+    -------
+    None
+        Reached ops are updated in place.
+    """
+
+    min_field, max_field, marker_field, lineage_field = fields
+    for op_log in traversal:
+        current_min = getattr(op_log, min_field, None)
+        current_max = getattr(op_log, max_field, None)
+        if current_min is None or current_max is None:
+            continue
+        lineage = getattr(op_log, lineage_field)
+        for next_label in getattr(op_log, edge_field, ()) or ():
+            next_op = ops_by_label.get(next_label)
+            if next_op is None:
                 continue
-            _update_distance(starting_op, min_field, max_field, 0)
-            setattr(starting_op, marker_field, True)
-            getattr(starting_op, lineage_field).add(starting_label)
-        for op_log in traversal:
-            current_min = getattr(op_log, min_field, None)
-            current_max = getattr(op_log, max_field, None)
-            if current_min is None or current_max is None:
-                continue
-            lineage = getattr(op_log, lineage_field)
-            for next_label in getattr(op_log, edge_field, ()) or ():
-                next_op = ops_by_label.get(next_label)
-                if next_op is None:
-                    continue
-                _update_distance(next_op, min_field, max_field, current_min + 1)
-                _update_distance(next_op, min_field, max_field, current_max + 1)
-                setattr(next_op, marker_field, True)
-                getattr(next_op, lineage_field).update(lineage)
+            _update_distance(next_op, min_field, max_field, current_min + 1)
+            _update_distance(next_op, min_field, max_field, current_max + 1)
+            setattr(next_op, marker_field, True)
+            getattr(next_op, lineage_field).update(lineage)
 
 
 def _update_distance(op_log: Any, min_field: str, max_field: str, hops: int) -> None:
