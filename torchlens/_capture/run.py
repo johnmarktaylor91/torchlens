@@ -633,7 +633,9 @@ def _release_instrumentation(run: _RunState) -> None:
                 # generator context manager and leaves those teardown frames
                 # appended to its traceback; they hold ``exc`` again, so a
                 # failed capture's partial trace waited for the cyclic collector.
-                exc.__traceback__ = traceback
+                # ``with_traceback`` puts back the forward's own traceback without
+                # going through the exception's ``__setattr__``.
+                exc.with_traceback(traceback)
 
 
 def _teardown_ladder(self: "Trace", run: _RunState) -> None:
