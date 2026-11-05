@@ -71,15 +71,12 @@ def late_index_model_owned_tensor(trace: Trace, tensor: torch.Tensor) -> str | N
         return None
     if isinstance(tensor, nn.Parameter) or get_tensor_label(tensor) is not None:
         return None
-    if getattr(trace, "_raw_transform_escape_detected", False) or getattr(
-        trace, "_raw_dynamo_region_detected", False
-    ):
+    if trace._raw_transform_escape_detected or trace._raw_dynamo_region_detected:
         return None
     if id(tensor) in (build_data.get("forward_outside_tensor_ids_at_entry") or ()):
         return None
     taken = {
-        str(getattr(stamp, "address", ""))
-        for stamp in (getattr(trace, "_session_buffer_identity", None) or {}).values()
+        str(getattr(stamp, "address", "")) for stamp in trace._session_buffer_identity.values()
     }
     addresses = build_data.get(_ADDRESSES_KEY)
     if addresses is None:
