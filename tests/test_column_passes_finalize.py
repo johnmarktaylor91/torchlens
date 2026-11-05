@@ -23,6 +23,7 @@ import torchlens as tl
 from torchlens._data_classes.op import Op
 from torchlens._postprocess import _column_passes_finalize, finalization
 from torchlens._trace_core.op_store import _MISSING
+from torchlens._utils._record_group_table import record_member
 
 _ADDRESS = re.compile(r"0x[0-9a-fA-F]+")
 
@@ -207,7 +208,7 @@ def test_merge_rules_are_exercised() -> None:
     model, x = _MODELS["loop_branch"]()
     trace = tl.trace(model, x)
     assert any(len(layer.ops) == 3 for layer in trace._layer_logs.values())
-    assert any(layer.conditional_role_stacks != [[]] for layer in trace._layer_logs.values())
+    assert any(layer.control_flow.role_stacks != [[]] for layer in trace._layer_logs.values())
     model, x = _MODELS["tied_shrinking"]()
     trace = tl.trace(model, x)
     assert any("tied_parameter_notation" in op.annotations for op in trace._layer_list)
@@ -234,7 +235,9 @@ def test_column_reader_matches_getattr_semantics() -> None:
         assert read(op, "label") == op.label
         assert read(op, "shape", None) == getattr(op, "shape", None)
         assert read(op, "modules", None) == getattr(op, "modules", None)
-        assert read(op, "transformed_out_shape", None) == getattr(op, "transformed_out_shape", None)
+        assert read(op, "transformed_out_shape", None) == record_member(
+            op, "transformed_out_shape", None
+        )
         assert read(op, "no_such_field", None) is None
         assert read(op, "no_such_field", "fallback") == "fallback"
     for op in unset:

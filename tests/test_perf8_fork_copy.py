@@ -40,6 +40,7 @@ from torchlens._trace_core.op_store import (
 )
 from torchlens._trace_core.record_rows import CORE_KEY, ROW_KEY
 from torchlens._utils import tensor_utils
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions, InterventionOptions
 
 _NO_FLAT_COPY = flat_copy._NO_FLAT_COPY
@@ -167,15 +168,15 @@ def _reference_fill_layer_shells(
                     for call_index, layer_pass in parent_ops.items()
                 )
             )
-        equivalence_class = getattr(shell, "equivalence_class", None)
+        equivalence_class = record_member(shell, "equivalence_class", None)
         if equivalence_class in fork_equivalent_ops:
             view = equivalent_view_memo.get(equivalence_class)
             if view is None:
-                shell.equivalent_ops = fork_equivalent_ops[equivalence_class]
+                shell._graph_equivalent_ops = fork_equivalent_ops[equivalence_class]
                 view = shell.__dict__.get("equivalent_ops", fork_equivalent_ops[equivalence_class])
                 equivalent_view_memo[equivalence_class] = view
             else:
-                shell.equivalent_ops = view
+                shell._graph_equivalent_ops = view
         fork_layer_logs[label] = shell
     fork._layer_logs = fork_layer_logs
 
@@ -277,7 +278,7 @@ def _describe_memo(
 
 
 def _flat_cases() -> Iterator[Any]:
-    yield "atomic_dict", lambda p: {"a": 1, "b": "x", "c": None, "d": 2.5, "e": True, "f": b"z"}
+    yield ("atomic_dict", lambda p: {"a": 1, "b": "x", "c": None, "d": 2.5, "e": True, "f": b"z"})
     yield "atomic_exotic", lambda p: {"n": float("nan"), "c": 1j, True: 0, 0: False}
     yield "ordered_with_record", lambda p: OrderedDict([("a", p), ("b", 3)])
     yield "list_mixed", lambda p: [1, "two", p, None, p]

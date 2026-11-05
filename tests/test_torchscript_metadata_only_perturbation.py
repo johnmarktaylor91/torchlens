@@ -25,12 +25,12 @@ import torchlens as tl
 from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.backends.torch._script_boundary import SCRIPT_FUNCTION_FUNC_NAME
 from torchlens.validation import last_validation_failure
+from torchlens.validation._diagnostics import CHECK_PERTURBATION
 from torchlens.validation._script_metadata_proof import (
     SCRIPT_METADATA_ONLY_REASON,
     metadata_only_arguments,
     script_metadata_only_proof,
 )
-from torchlens.validation.diagnostics import CHECK_PERTURBATION
 
 pytestmark = pytest.mark.skipif(
     not HAS_SCRIPT_FUNCTION_CALL_HOOK, reason="torch build without a ScriptFunction call hook"
@@ -389,10 +389,10 @@ def _slot_label(op, slot: int | str | tuple) -> str:
     """Return the parent label capture recorded at a slot (``(i, j)`` for a container member)."""
 
     head = slot[0] if isinstance(slot, tuple) else slot
-    return op.parent_arg_positions["kwargs" if isinstance(head, str) else "args"][slot]
+    return op.call.parent_arg_positions["kwargs" if isinstance(head, str) else "args"][slot]
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_script_metadata_proof.py, validation/core.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_script_metadata_proof.py, validation/_core.py.
 @pytest.mark.parametrize(
     "call",
     [lambda h, g: size_then_dict_value(h, {"a": h}), lambda h, g: size_then_optional_value(h, h)],

@@ -35,7 +35,7 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ..._validation_argument_references import active_argument_references
-from ...intervention.types import (
+from ...intervention._types import (
     ArgComponent,
     CapturedArgTemplate,
     EdgeUseRecord,
@@ -374,7 +374,7 @@ def _build_edge_use_records(
         Edge provenance records.
     """
 
-    from ...intervention.edge_semantics import classify_view_or_copy
+    from ...intervention._edge_semantics import classify_view_or_copy
 
     _edge_uses: list[EdgeUseRecord] = []
     for location, parent_label in parent_arg_positions["args"].items():
@@ -636,8 +636,13 @@ def _copy_saved_arg_tree(
     if isinstance(arg, torch.Tensor):
         return _parameter_alias(references, arg, retained, receiver_copy=receiver_copy)
     if _is_flat_sequence(arg):
+        # A slice item may hold tensor bounds, which copy_arg_tree snapshots.
         return type(arg)(
-            _parameter_alias(references, item, retained) if isinstance(item, torch.Tensor) else item
+            _parameter_alias(references, item, retained)
+            if isinstance(item, torch.Tensor)
+            else copy_arg_tree(item)
+            if isinstance(item, slice)
+            else item
             for item in arg
         )
     return copy_arg_tree(arg)

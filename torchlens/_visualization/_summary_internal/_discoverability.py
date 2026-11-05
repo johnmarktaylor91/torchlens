@@ -14,6 +14,7 @@ from typing import (
 )
 
 from ..._data_classes._trace_missing_attrs import is_live_trace
+from ..._utils._display_numbers import format_percent
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -178,7 +179,7 @@ def _decoded_output_preview(trace: Trace) -> str | None:
     for batch_item in sorted({int(row.get("batch_item", 0)) for row in rows})[:2]:
         item_rows = [row for row in rows if int(row.get("batch_item", -1)) == batch_item][:3]
         labels = ", ".join(
-            f"{row.get('label')} {float(row.get('prob', 0.0)):.0%}" for row in item_rows
+            f"{row.get('label')} {format_percent(float(row.get('prob', 0.0)))}" for row in item_rows
         )
         parts.append(f"item {batch_item}: {labels}")
     return " | ".join(parts)

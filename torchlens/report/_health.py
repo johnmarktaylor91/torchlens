@@ -31,6 +31,7 @@ from typing import Any
 
 from .._data_classes._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._utils._record_group_table import record_member
 
 #: Annotations key carrying the persisted record (field_intent.tsv row C02).
 HEALTH_FACTS_ANNOTATIONS_KEY = "health_facts"
@@ -144,7 +145,7 @@ def _alias_labels(trace: Any) -> set[str]:
         if (
             getattr(op, "is_input", False)
             or getattr(op, "is_output", False)
-            or getattr(op, "is_buffer", False)
+            or record_member(op, "is_buffer", False)
         ):
             label = getattr(op, "label", None)
             if label is not None:

@@ -11,11 +11,12 @@ from torch import nn
 import torchlens as tl
 from torchlens._captured_run import _ActivationLookup
 from torchlens._record_type import record_type
+from torchlens._utils._record_group_table import record_member
+from torchlens.validation._invariants import check_metadata_invariants
 from torchlens.validation._invariants_topology import (
     _check_special_layer_lists,
     _check_trace_self_consistency,
 )
-from torchlens.validation.invariants import check_metadata_invariants
 
 
 class ConvReluAdd(nn.Module):
@@ -406,7 +407,9 @@ def _buffer_read_addresses(trace: tl.Trace) -> list[str]:
     """
 
     return sorted(
-        trace[label].address for label in trace.buffer_layers if not trace[label].is_internal_sink
+        trace[label].buffer_address
+        for label in trace.buffer_layers
+        if not record_member(trace[label], "is_internal_sink")
     )
 
 
@@ -448,8 +451,10 @@ def test_recording_to_trace_backfills_all_special_layer_lists() -> None:
     # _fix_buffer_layers must have RUN -- proven by a real buffer_pass number.
     assert cooked.buffer_layers, "buffer_layers must be backfilled, not empty"
     for label in cooked.buffer_layers:
-        assert cooked[label].is_buffer
-        assert cooked[label].buffer_pass is not None, "Step 6 must assign buffer_pass"
+        assert cooked[label].graph.is_buffer
+        assert record_member(cooked[label], "buffer_pass") is not None, (
+            "Step 6 must assign buffer_pass"
+        )
 
     # internal_source_ops must be populated (the torch.zeros op has no ancestor).
     assert cooked.internal_source_ops, "internal_source_ops must be backfilled"

@@ -84,7 +84,7 @@ def test_generate_trace_addresses_modules_like_a_plain_trace() -> None:
     # as a module it sits in, as on a plain trace.
     for op in gen.ops:
         assert all(not str(m).startswith("self") for m in op.modules), op.label
-        assert all(not str(m).startswith("self") for m in op.module_call_stack), op.label
+        assert all(not str(m).startswith("self") for m in op.module_context.call_stack), op.label
     assert [str(k) for k in gen.layer_labels if "owner" in str(k)] == []
 
 

@@ -21,7 +21,8 @@ from typing import Any
 
 import torch
 
-from ..intervention.types import CapturedArgTemplate, LiteralTensor, LiteralValue, ParentRef
+from .._utils._record_group_table import record_member
+from ..intervention._types import CapturedArgTemplate, LiteralTensor, LiteralValue, ParentRef
 
 #: Missing-prerequisite text for a capture that recorded neither saved arguments
 #: nor a replay template (``structure_only`` captures).
@@ -52,14 +53,14 @@ def sdpa_call_arguments(op: Any, trace: Any) -> tuple[list[Any], dict[str, Any]]
         description of the first prerequisite the capture did not record.
     """
 
-    saved_args = getattr(op, "saved_args", None)
-    saved_kwargs = getattr(op, "saved_kwargs", None)
+    saved_args = record_member(op, "saved_args", None)
+    saved_kwargs = record_member(op, "saved_kwargs", None)
     if saved_args is not None and saved_kwargs is not None:
         return list(saved_args), dict(saved_kwargs)
-    template = getattr(op, "args_template", None)
+    template = record_member(op, "args_template", None)
     if not isinstance(template, CapturedArgTemplate):
         return NO_ARGUMENT_RECORD
-    positions = getattr(op, "parent_arg_positions", None) or {}
+    positions = record_member(op, "parent_arg_positions", None) or {}
     args: list[Any] = []
     for index, component in enumerate(template.args):
         value = _resolve(component, op, trace, positions.get("args", {}), index)

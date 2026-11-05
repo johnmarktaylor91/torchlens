@@ -41,22 +41,12 @@ from .._output_slot import (
     stopped as output_stopped,
 )
 from .._training_validation import reject_compiled_model
-from ..intervention.predicates import InterventionPredicate
+from ..intervention._predicates import InterventionPredicate
 from ..options import CaptureOptions, StorageOptions
 from ._capture_door import _unfold_capture_options
+from ._exceptions import RecorderStateError
 from ._halt import StopSignal, _mark_recording_halted
-from ._recorder_config import _configure_predicate_capture
-from ._recording_door import _unfold_recording_options
-from ._run_cores import retain_run_core
-from ._storage_resolver import _resolve_train_mode_defaults
-from ._validation import (
-    _unwrap_ddp_for_fastlog,
-    _warn_zero_match_capture_selectors,
-    refuse_episode_on_record,
-    validate_recording_options,
-)
-from .exceptions import RecorderStateError
-from .options import (
+from ._options import (
     GradPredicateFn,
     HaltPredicateFn,
     PredicateFn,
@@ -64,7 +54,17 @@ from .options import (
     _RecordingConfig,
     _resolve_recording_config,
 )
-from .types import CaptureSpec, Recording
+from ._recorder_config import _configure_predicate_capture
+from ._recording_door import _unfold_recording_options
+from ._run_cores import retain_run_core
+from ._storage_resolver import _resolve_train_mode_defaults
+from ._types import CaptureSpec, Recording
+from ._validation import (
+    _unwrap_ddp_for_fastlog,
+    _warn_zero_match_capture_selectors,
+    refuse_episode_on_record,
+    validate_recording_options,
+)
 
 
 def _settle_recording_outcome(recording: Recording, state: RecordingState) -> None:

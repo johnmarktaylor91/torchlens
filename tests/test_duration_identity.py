@@ -89,9 +89,9 @@ def _measured_durations(trace: Any) -> list[Any]:
     """Return the ``func_duration`` objects of the ops that executed a function."""
 
     return [
-        op.func_duration
+        op.cost.duration
         for op in trace.ops
-        if op.func_duration is not None and float(op.func_duration) != 0.0
+        if op.cost.duration is not None and float(op.cost.duration) != 0.0
     ]
 
 
@@ -141,7 +141,7 @@ def _saved_durations(trace: Any, table: dict[str, Any]) -> list[Any]:
 
     cells = dict(zip(table["columns"]["label"], table["columns"]["func_duration"], strict=True))
     measured = {id(d) for d in _measured_durations(trace)}
-    return [cells[op.label] for op in trace.ops if id(op.func_duration) in measured]
+    return [cells[op.label] for op in trace.ops if id(op.cost.duration) in measured]
 
 
 def _timing_normalised_size(target: Path) -> int:
@@ -206,8 +206,8 @@ def test_reload_keeps_each_op_duration(monkeypatch: pytest.MonkeyPatch, tmp_path
         target = tmp_path / f"{name}.tlspec"
         trace.save(str(target))
         loaded = tl.load(str(target))
-        by_label = {op.label: op.func_duration for op in loaded.ops}
-        expected = {op.label: op.func_duration for op in trace.ops}
+        by_label = {op.label: op.cost.duration for op in loaded.ops}
+        expected = {op.label: op.cost.duration for op in trace.ops}
         assert by_label.keys() == expected.keys()
         for label, duration in expected.items():
             assert by_label[label] == duration, f"{label} lost its duration on reload"

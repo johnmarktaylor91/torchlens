@@ -58,7 +58,7 @@ from ...options import (
     _SaveTransforms,
     merge_capture_options,
 )
-from ...recording.options import PredicateFn
+from ...recording._options import PredicateFn
 
 _MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS = frozenset(
     {"label", "func", "module", "contains", "in_module", "and", "or", "not"}

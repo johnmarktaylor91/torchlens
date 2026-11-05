@@ -16,7 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..._visualization._label_format import binary_size
+from ..._utils._record_group_table import record_member
+from ..._visualization._label_format import decimal_size
 from ...errors._base import TorchLensError
 from ._namespace import NamespaceLevel
 
@@ -44,7 +45,7 @@ def accumulate_namespace_stats(
 
     stats: dict[str, _NamespaceStats] = {}
     for entry, namespace, levels in zip(entries, namespaces, levels_per_entry, strict=True):
-        activation_memory = getattr(entry, "activation_memory", None)
+        activation_memory = record_member(entry, "activation_memory", None)
         for level in levels:
             row = stats.setdefault(level.namespace, _NamespaceStats(address=level.address))
             row.descendant_ops += 1
@@ -89,7 +90,7 @@ def _namespace_row(trace: Any, row_stats: _NamespaceStats) -> dict[str, str]:
     if row_stats.call_indices:
         row["calls"] = str(len(row_stats.call_indices))
     if row_stats.has_activation_bytes:
-        row["act_bytes"] = binary_size(row_stats.activation_bytes)
+        row["act_bytes"] = decimal_size(row_stats.activation_bytes)
     duration = _module_duration(trace, row_stats)
     if duration is not None:
         row["time"] = f"{duration * 1000.0:.3g} ms"

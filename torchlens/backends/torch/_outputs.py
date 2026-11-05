@@ -30,7 +30,7 @@ from ..._utils.introspection import (
     nested_assign,
 )
 from ...recording._storage_resolver import _resolve_storage
-from ...recording.types import CaptureSpec, StorageIntent
+from ...recording._types import CaptureSpec, StorageIntent
 from ._ops_containers import _walk_output_tensors_with_paths, runnable_output_losslessness
 from .buffer_writes import reconcile_buffer_writes
 

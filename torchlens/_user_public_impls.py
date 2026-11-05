@@ -37,7 +37,6 @@ from ._literals import (
     OutputDeviceLiteral,
 )
 from ._options_validation import _validate_output_device
-from ._record_type import record_type
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption, resolve_save_budget
 from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
@@ -46,6 +45,7 @@ from ._utils.hashing import compute_graph_shape_hash
 from ._utils.input_leaves import leaf_preserving_input_copies
 from ._utils.introspection import get_vars_of_type_from_obj
 from ._utils.rng import restores_rng_streams, set_random_seed
+from ._validation_divergence import _first_reproducibility_divergence
 from ._validation_state_snapshot import (
     COPY_FAILED_CODE,
     StateSnapshot,
@@ -678,47 +678,6 @@ def _restore_validation_replay_state(
         )
 
 
-def _layer_signature(layer: Any) -> tuple[Any, ...]:
-    """Cheap structural signature of one layer record for divergence hints."""
-
-    return (
-        record_type(layer, None),
-        getattr(layer, "func_name", None),
-        len(getattr(layer, "parents", ()) or ()),
-        bool(getattr(layer, "is_output", False)),
-        bool(getattr(layer, "is_buffer", False)),
-    )
-
-
-def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
-    """Return a concise first-difference hint for two validation traces.
-
-    Parameters
-    ----------
-    left:
-        First validation trace.
-    right:
-        Second validation trace.
-
-    Returns
-    -------
-    str | None
-        Human-readable first divergence hint, or ``None`` when no cheap hint is
-        available.
-    """
-
-    for index, (left_layer, right_layer) in enumerate(zip(left._layer_list, right._layer_list)):
-        if _layer_signature(left_layer) != _layer_signature(right_layer):
-            return (
-                f"first divergence at op index {index}: "
-                f"{getattr(left_layer, 'func_name', None)!r} vs "
-                f"{getattr(right_layer, 'func_name', None)!r}"
-            )
-    if len(left._layer_list) != len(right._layer_list):
-        return f"op count changed: {len(left._layer_list)} vs {len(right._layer_list)}"
-    return None
-
-
 def _warn_if_validation_trace_not_reproducible(
     first_trace: Trace,
     model: nn.Module,
@@ -804,7 +763,7 @@ def _warn_if_validation_trace_not_reproducible(
             "may represent a one-time execution. Re-run from fresh model state or "
             f"make the forward path state-independent{hint_suffix}."
         )
-        from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
+        from .validation._diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
         record_validation_diagnostic(
             first_trace,
@@ -842,7 +801,7 @@ def _warn_if_validation_trace_not_reproducible(
             "TorchLens validation could not run the fresh re-trace reproducibility "
             f"check ({type(exc).__name__}: {exc})."
         )
-        from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
+        from .validation._diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
         record_validation_diagnostic(
             first_trace,
@@ -911,7 +870,7 @@ def _refuse_validation_precondition(
     unreproducible input topology, an unsnapshotable plain attribute, a
     non-pristine ground truth, a dropped-output enumeration defect) that
     return bare ``False`` before Step 2 builds a ``Trace``. A ``Trace``-scoped
-    :class:`~.validation.diagnostics.ValidationFailure` (the mechanism every
+    :class:`~.validation._diagnostics.ValidationFailure` (the mechanism every
     later mismatch uses) has nothing to attach to at these sites, so a caller
     reading only ``get_validation_failure(trace)`` saw nothing and fell back to
     an uninformative ``repr(False)`` (menagerie's ``convit_*`` "replay failed
@@ -940,7 +899,7 @@ def _refuse_validation_precondition(
     """
 
     warnings.warn(message, RuntimeWarning, stacklevel=3)
-    from .validation.diagnostics import (  # deferred: cycle validation
+    from .validation._diagnostics import (  # deferred: cycle validation
         CHECK_PRECONDITION,
         ValidationFailure,
         record_validation_failure,
@@ -1037,7 +996,7 @@ def _validate_forward_pass_torch(
         True if all validation checks pass, False otherwise.
     """
     warn_parallel()
-    from .validation.diagnostics import reset_validation_failure  # deferred: cycle validation
+    from .validation._diagnostics import reset_validation_failure  # deferred: cycle validation
 
     # Clear any stale precondition-refusal failure from a prior call on this
     # process (CHECK_PRECONDITION sites below have no Trace to reset against,
@@ -1152,7 +1111,7 @@ def _validate_forward_pass_torch(
     # of it, but keeping deterministic algorithms is strictly safer and free
     # here.) The thread pin does NOT make deep CPU conv inline-vs-isolated replay
     # bit-exact (that residual is oneDNN kernel selection, not threading) -- that
-    # is what the band-C reduction-depth tolerance in validation/core.py covers;
+    # is what the band-C reduction-depth tolerance in validation/_core.py covers;
     # the changes are complementary.
     prior_deterministic = torch.are_deterministic_algorithms_enabled()
     prior_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
@@ -1380,7 +1339,7 @@ def _validate_forward_pass_torch(
                 seed,
             )
         else:
-            from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
+            from .validation._diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
             record_validation_diagnostic(
                 trace,
@@ -1404,7 +1363,7 @@ def _validate_forward_pass_torch(
         # DIRECT repeat call reports this-run evidence only (B8-43); the
         # retrace diagnostics recorded above belong to THIS flow, so they are
         # snapshotted and re-prepended after the replay run.
-        from .validation.diagnostics import (  # deferred: cycle validation
+        from .validation._diagnostics import (  # deferred: cycle validation
             MAX_VALIDATION_DIAGNOSTICS,
             TRACE_DIAGNOSTICS_ATTR,
             get_validation_diagnostics,
@@ -1420,7 +1379,7 @@ def _validate_forward_pass_torch(
         if retrace_outcome == "mismatch":
             _downgrade_retrace_mismatch_to_unverified(trace)
             outs_are_valid = False
-            from .validation.diagnostics import (  # deferred: cycle validation
+            from .validation._diagnostics import (  # deferred: cycle validation
                 CHECK_RETRACE_MISMATCH,
                 ValidationFailure,
                 record_validation_failure,
@@ -1522,7 +1481,7 @@ def validate_backward_pass(
         false-failed fp16 grads.
     rtol:
         Relative allclose tolerance. ``None`` (default) derives per
-        gradient dtype, matching ``torchlens.validation.backward``.
+        gradient dtype, matching ``torchlens.validation._backward``.
     validate_layer_grads:
         If True (default), also validate captured per-module-output gradients.
         The root module call is never compared, so a model whose forward calls
@@ -1544,7 +1503,7 @@ def validate_backward_pass(
     >>> type(ok).__name__, ok
     ('bool', True)
     """
-    from .validation.backward import validate_backward_pass as _impl  # deferred: cycle validation
+    from .validation._backward import validate_backward_pass as _impl  # deferred: cycle validation
 
     return _impl(
         model,

@@ -119,12 +119,15 @@ def test_guessed_attribute_names_point_at_the_real_field() -> None:
         (layer, "activation", ".out"),
         (op, "activation", ".out"),
         (op, "parent_layers", ".parents"),
-        (op, "containing_module", ".address"),
+        (op, "containing_module", ".module"),
     ):
         with pytest.raises(AttributeError) as exc:
             getattr(subject, name)
         assert field in str(exc.value), (name, str(exc.value))
     assert not hasattr(layer, "tensor_contents")
+    # The Op fields the agent guide teaches resolve on a real op.
+    for name in ("label", "func_name", "module", "out", "parents", "children"):
+        getattr(op, name)
     with pytest.raises(AttributeError) as plain:
         getattr(op, "no_such_field_anywhere")
     assert "no_such_field_anywhere" in str(plain.value)

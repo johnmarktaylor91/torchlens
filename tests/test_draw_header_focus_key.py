@@ -8,8 +8,8 @@
   their summed size, whatever the drawing collapses (a focus's input and output
   stubs are outside the module and not counted). A rolled draw also names the
   layers those ops form, and its size equals the unrolled header's.
-- Parameter counts carry thousands separators; every drawn size divides by
-  1024 and prints the released unit names (B, KB, MB, GB), never KiB or MiB.
+- Counts carry thousands separators; every drawn size divides by 1000, the
+  divisor its unit name (B, KB, MB, GB) means, never 1024 under a decimal name.
 - A focused draw opens with a scope line (model class, then each enclosing
   module, then the focus with its class), labels which line covers the drawn
   view and which the whole model, shows the key by default (the reading key is
@@ -34,6 +34,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._display_numbers import format_percent
 from torchlens._visualization._header_block import (
     KEY_TABLE_ID,
     drawn_module_marks,
@@ -41,9 +42,13 @@ from torchlens._visualization._header_block import (
     network_count_line,
     params_caption_detail,
 )
-from torchlens._visualization._label_format import binary_size, compact_count, format_memory
+from torchlens._visualization._label_format import compact_count, decimal_size, format_memory
+from torchlens._visualization._render_nodes import (
+    _format_batch_topk_output_lines,
+    _format_label_score_row,
+)
 from torchlens._visualization.modes import _compact_size
-from torchlens._visualization.overlays import format_overlay_value
+from torchlens._visualization.overlays import format_overlay_value, legend_domain_text
 from torchlens._visualization.themes import (
     OKABE_ITO_SEMANTIC_PALETTE,
     RELEASED_SEMANTIC_PALETTE,
@@ -185,19 +190,52 @@ def test_a_disagreeing_file_format_refuses_on_both_doors(
 # -- header count and units (AGT-2536) ----------------------------------------
 
 
-def test_drawn_sizes_use_the_released_unit_names() -> None:
-    assert binary_size(0) == "0 B"
-    assert binary_size(1023) == "1023 B"
-    assert binary_size(1024) == "1 KB"
-    assert binary_size(1.5 * 1024**2) == "1.5 MB"
-    assert binary_size(3 * 1024**3) == "3 GB"
-    assert binary_size(1024**2 - 1) == "1024 KB"
-    assert format_memory(61440) == "60 KB"
-    assert _compact_size(61440) == "60KB"
-    assert format_overlay_value("bytes", 61440) == "bytes: 60 KB"
+def test_drawn_sizes_divide_by_the_divisor_their_unit_names_mean() -> None:
+    assert decimal_size(0) == "0 B"
+    assert decimal_size(999) == "999 B"
+    assert decimal_size(1000) == "1 KB"
+    assert decimal_size(1024) == "1 KB"
+    assert decimal_size(802_816) == "802.8 KB"
+    assert decimal_size(1.5e6) == "1.5 MB"
+    assert decimal_size(3e9) == "3 GB"
+    assert decimal_size(999_949) == "999.9 KB"
+    assert decimal_size(999_999) == "1 MB"
+    assert format_memory(60_000) == "60 KB"
+    assert _compact_size(60_000) == "60KB"
+    assert format_overlay_value("bytes", 60_000) == "bytes: 60 KB"
     assert format_memory(True) == "True"
     with pytest.raises(ValueError):
-        binary_size(-1)
+        decimal_size(-1)
+
+
+@pytest.mark.parametrize(
+    ("fraction", "expected"),
+    [(0.0, "0%"), (0.001, "<1%"), (0.0049, "<1%"), (0.42, "42%"), (0.9951, ">99%"), (1.0, "100%")],
+)
+def test_drawn_percents_never_round_to_a_false_bound(fraction: float, expected: str) -> None:
+    assert format_percent(fraction) == expected
+
+
+def test_output_node_topk_labels_print_tiny_probabilities_as_under_one_percent() -> None:
+    rows = [
+        {"batch_item": 0, "rank": 1, "label": "tabby", "prob": 0.9971},
+        {"batch_item": 0, "rank": 2, "label": "tiger cat", "prob": 0.0012},
+        {"batch_item": 0, "rank": 3, "label": "lynx", "prob": 0.0},
+    ]
+    lines = _format_batch_topk_output_lines({"kind": "batch_topk", "rows": rows})
+    assert lines == ["output", "1. tabby >99%", "2. tiger cat <1%", "3. lynx 0%"]
+    assert _format_label_score_row("tabby", 0.001) == "tabby <1%"
+    assert _format_label_score_row("tabby", 1.0) == "tabby 100%"
+
+
+def test_drawn_counts_carry_thousands_separators() -> None:
+    assert compact_count(999) == "999"
+    assert compact_count(9999) == "9,999"
+    assert compact_count(147_968) == "148K"
+    assert compact_count(1024, full_below=1000) == "1.02K"
+    assert legend_domain_text(None, 200_704.0) == "200,704"
+    assert legend_domain_text(None, 42.0) == "42"
+    assert format_overlay_value("numel", 200_704) == "numel: 200,704"
 
 
 def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_path: Path) -> None:
@@ -207,7 +245,9 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     assert noun == "ops"
     assert int(count.replace(",", "")) == len(sized)
     labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
-    assert size == binary_size(sum(int(trace.ops[label].activation_memory) for label in labels))
+    assert size == decimal_size(
+        sum(int(trace.ops[label].cost.activation_memory) for label in labels)
+    )
     assert f"{compact_count(trace.num_params, full_below=1000)} params" in dot
     assert not re.search(r"\d (?:KiB|MiB|GiB)\b", dot)
 
@@ -242,8 +282,8 @@ def test_rolled_count_covers_every_pass_of_its_layers(tmp_path: Path) -> None:
         # and sizes the input and output nodes it draws.
         boundary = [loop.ops[label] for label in (*loop.input_layers, *loop.output_layers)]
         assert len(loop.ops) + len(boundary) == 11
-        total = sum(int(op.activation_memory) for op in (*loop.ops.values(), *boundary))
-        assert binary_size(total) == "149 B"
+        total = sum(int(op.cost.activation_memory) for op in (*loop.ops.values(), *boundary))
+        assert decimal_size(total) == "149 B"
     finally:
         loop.cleanup()
 
@@ -308,14 +348,14 @@ def _param_trace(total: int, trainable: int) -> SimpleNamespace:
 
 def test_header_params_print_compact_from_one_thousand() -> None:
     assert params_caption_detail(_param_trace(11_689_512, 11_689_512)) == (  # type: ignore[arg-type]
-        "11.7M params (44.6 MB, all trainable)"
+        "11.7M params (46.8 MB, all trainable)"
     )
     assert params_caption_detail(_param_trace(86_567_656, 0)).startswith("86.6M params (")  # type: ignore[arg-type]
     assert params_caption_detail(_param_trace(1_610, 1_610)).startswith("1.61K params (")  # type: ignore[arg-type]
-    assert params_caption_detail(_param_trace(999, 999)) == "999 params (3.9 KB, all trainable)"  # type: ignore[arg-type]
+    assert params_caption_detail(_param_trace(999, 999)) == "999 params (4 KB, all trainable)"  # type: ignore[arg-type]
     mixed = params_caption_detail(_param_trace(2_000_000, 1_500))  # type: ignore[arg-type]
     assert mixed.endswith(", 1.5K/2M trainable)"), mixed
-    assert compact_count(1_610) == "1610"  # node labels keep the full count below 10,000
+    assert compact_count(1_610) == "1,610"  # node labels keep the full count below 10,000
 
 
 @pytest.mark.parametrize("rolled", [False, True])
@@ -338,8 +378,8 @@ def test_focus_count_skips_the_boundary_stubs(
     assert "__module_focus_input" in dot and "__module_focus_output" in dot
     if not rolled:
         labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in drawn]
-        expected = sum(int(trace.ops[label].activation_memory) for label in labels)
-        assert f"<br align='left'/>{count} ops ({binary_size(expected)})<br" in header
+        expected = sum(int(trace.ops[label].cost.activation_memory) for label in labels)
+        assert f"<br align='left'/>{count} ops ({decimal_size(expected)})<br" in header
 
 
 # -- focus scope line and reading key (AGT-2538) ------------------------------

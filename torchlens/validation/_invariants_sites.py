@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from .._data_classes._layer_sites import layer_site_key
 from .._data_classes._site_key import ROOT_CALL_INSTANCE, SITE_KEY_PREFIX, parse_site_key
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -38,7 +39,7 @@ def _check_site_key_invariants(ml: Trace) -> None:
 
     name = "site_key_invariants"
     ops = list(ml._layer_list)
-    if not any(getattr(op, "site_key", None) is not None for op in ops):
+    if not any(record_member(op, "site_key", None) is not None for op in ops):
         return  # legacy artifact: out of the invariant's declared domain
     _check_site_key_totality(ops, name)
     _check_site_key_uniqueness(ops, name)
@@ -48,10 +49,10 @@ def _check_site_key_invariants(ml: Trace) -> None:
 def _check_site_key_totality(ops: list, name: str) -> None:
     """I-S1: every retained op carries a non-empty, prefixed, well-formed key."""
 
-    from .invariants import MetadataInvariantError  # deferred: cycle validation
+    from ._invariants import MetadataInvariantError  # deferred: cycle validation
 
     for op in ops:
-        key = getattr(op, "site_key", None)
+        key = record_member(op, "site_key", None)
         if not isinstance(key, str) or not key.startswith(SITE_KEY_PREFIX + "|"):
             raise MetadataInvariantError(
                 name,
@@ -72,7 +73,7 @@ def _check_site_key_totality(ops: list, name: str) -> None:
                 raise MetadataInvariantError(
                     name,
                     f"Raw label {component!r} survived postprocessing inside "
-                    f"{op.label}.site_key ({key!r})",
+                    f"{op.label}.graph.site_key ({key!r})",
                 )
 
 
@@ -103,22 +104,22 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
     fully blind for backends without a module stack.
     """
 
-    from .invariants import MetadataInvariantError  # deferred: cycle validation
+    from ._invariants import MetadataInvariantError  # deferred: cycle validation
 
     equivalence_counts: dict[object, int] = {}
     for op in ops:
-        if not tuple(getattr(op, "module_call_stack", ()) or ()):
-            equivalence_counts[getattr(op, "equivalence_class", None)] = (
-                equivalence_counts.get(getattr(op, "equivalence_class", None), 0) + 1
+        if not tuple(record_member(op, "module_call_stack", ()) or ()):
+            equivalence_counts[record_member(op, "equivalence_class", None)] = (
+                equivalence_counts.get(record_member(op, "equivalence_class", None), 0) + 1
             )
 
     seen: dict[tuple[str, object], str] = {}
     for op in ops:
-        stack = tuple(getattr(op, "module_call_stack", ()) or ())
+        stack = tuple(record_member(op, "module_call_stack", ()) or ())
         if stack:
             call_instance: object = stack[-1]
         else:
-            equivalence_class = getattr(op, "equivalence_class", None)
+            equivalence_class = record_member(op, "equivalence_class", None)
             if equivalence_counts.get(equivalence_class, 0) > 1:
                 # A genuine multi-occurrence group (recurring passes of one
                 # site): differentiate siblings by their unique raw label so
@@ -129,12 +130,12 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
                 # site_key with anything else, so keep the strict coarse
                 # identity that catches a forged collision.
                 call_instance = ROOT_CALL_INSTANCE
-        identity = (str(op.site_key), call_instance)
+        identity = (str(record_member(op, "site_key", None)), call_instance)
         if identity in seen:
             raise MetadataInvariantError(
                 name,
                 f"I-S2: ops '{seen[identity]}' and '{op.label}' share site_key "
-                f"{op.site_key!r} within call instance {call_instance!r}",
+                f"{record_member(op, 'site_key', None)!r} within call instance {call_instance!r}",
             )
         seen[identity] = op.label
 
@@ -146,13 +147,13 @@ def _check_layer_site_coherence(ml: Trace, name: str) -> None:
     tripwire exists to catch.
     """
 
-    from .invariants import MetadataInvariantError  # deferred: cycle validation
+    from ._invariants import MetadataInvariantError  # deferred: cycle validation
 
     for layer_label in getattr(ml, "layer_labels", ()) or ():
         layer = ml._layer_logs.get(layer_label)
         if layer is None:
             continue
-        member_keys = {op.site_key for _, op in layer.ops.items()}
+        member_keys = {record_member(op, "site_key", None) for _, op in layer.ops.items()}
         member_keys.discard(None)
         if len(member_keys) == 1:
             accessor_value = layer_site_key(layer)

@@ -90,6 +90,29 @@ def format_duration(seconds: float) -> str:
     return f"{seconds:.3g} s"
 
 
+def format_percent(fraction: float) -> str:
+    """Format a fraction in ``[0, 1]`` as a whole percent that never rounds to a false bound.
+
+    ``"0%"`` and ``"100%"`` are printed only for exactly 0 and exactly 1. A
+    nonzero value that would round to 0 prints ``"<1%"``, and a value below 1
+    that would round to 100 prints ``">99%"``, so a 0.001 top-k probability
+    never reads as impossible.
+
+    Examples
+    --------
+    >>> from torchlens._utils._display_numbers import format_percent
+    >>> [format_percent(p) for p in (0.0, 0.001, 0.42, 0.996, 1.0)]
+    ['0%', '<1%', '42%', '>99%', '100%']
+    """
+
+    text = f"{fraction:.0%}"
+    if text == "0%" and fraction > 0:
+        return "<1%"
+    if text == "100%" and fraction < 1:
+        return ">99%"
+    return text
+
+
 def plural(count: int, singular: str, plural_form: str | None = None) -> str:
     """``1 call``, ``2 calls``; ``plural_form`` for irregular nouns (``passes``)."""
 

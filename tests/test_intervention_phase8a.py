@@ -12,8 +12,8 @@ import torchlens as tl
 from torchlens._data_classes._trace_intervention_records import STAGED_UNFIRED_KEY
 from torchlens._data_classes.cleanup import _scrub_intervention_fields_after_removal
 from torchlens.intervention._trace_edits import set_site
+from torchlens.intervention._types import FireRecord, TargetSpec
 from torchlens.intervention.errors import SpecMutationError
-from torchlens.intervention.types import FireRecord, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions, InterventionOptions
 
@@ -74,7 +74,7 @@ def _first_internal_label(log: Any) -> str:
     """
 
     for layer in log._layer_list:
-        if not (layer.is_input or layer.is_output or layer.is_buffer):
+        if not (layer.is_input or layer.is_output or layer.graph.is_buffer):
             return layer.layer_label
     raise AssertionError("expected at least one internal layer")
 

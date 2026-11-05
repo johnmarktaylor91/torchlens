@@ -29,7 +29,7 @@ from .._vocab.node_spec import (  # noqa: F401
     NodeSpec,
     NodeSpecFn,
 )
-from ..intervention.replay import cone_of_effect
+from ..intervention._replay import cone_of_effect
 from ._intervention_sites import (  # noqa: F401
     _forward_site,
     _site_sort_key,

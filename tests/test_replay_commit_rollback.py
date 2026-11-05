@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.intervention import replay as replay_module
+from torchlens.intervention import _replay as replay_module
 
 
 class _TwoLinear(nn.Module):
@@ -32,7 +32,7 @@ def _site_state(site: tl.Op) -> dict[str, object]:
         "out": site.out,
         "shape": site.shape,
         "dtype": site.dtype,
-        "activation_memory": site.activation_memory,
+        "activation_memory": site.cost.activation_memory,
         "has_saved_activation": site.has_saved_activation,
         "edits": list(site.edits),
         "is_edited": site.is_edited,

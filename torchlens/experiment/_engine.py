@@ -37,9 +37,8 @@ from .._utils._display_bounded import short_dataclass_repr
 from ..bundle import Bundle
 from ..bundle._bytes import preflight_retention_projection
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
-from ..errors.episode import BundleExperimentError
-from ..intervention._trace_run import rerun_in_place
-from ..intervention.audit import (
+from ..errors._episode import BundleExperimentError
+from ..intervention._audit import (
     append_event_audit_row,
     event_audit_rows,
     fire_records_since,
@@ -47,10 +46,11 @@ from ..intervention.audit import (
     rules_payload,
     site_keys_for_labels,
 )
+from ..intervention._masked_edit import _derive_masked_edit
+from ..intervention._spec import Recipe, when
+from ..intervention._trace_run import rerun_in_place
+from ..intervention._types import Edit
 from ..intervention.errors import SelectorCapabilityError
-from ..intervention.masked_edit import _derive_masked_edit
-from ..intervention.spec import Recipe, when
-from ..intervention.types import Edit
 from ..options import CaptureOptions
 
 if TYPE_CHECKING:
@@ -291,7 +291,7 @@ def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) 
     keys: list[str] = []
     for label in labels:
         op = baseline.ops[label]
-        key = getattr(op, "site_key", None)
+        key = op.graph.site_key
         if not key:
             raise BundleExperimentError(
                 f"candidate {candidate_id!r} site {label!r} carries no "

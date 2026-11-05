@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
 from ..._utils._display_bounded import short_dataclass_repr
+from ..._utils._display_numbers import format_percent
+from ..._utils._record_group_table import record_member
 from ..._vocab.node_spec import (
     EDITED_HEADER_OMITTED_BANNERS,
     LENS_BANNER_OMIT_KEY,
@@ -206,7 +208,7 @@ def _resolve_perf_source(
 
     values: dict[str, float] = {}
     for record in records_for_member(trace, source.member):
-        value = scalar_or_none(getattr(record, source.member, None))
+        value = scalar_or_none(record_member(record, source.member, None))
         if value is not None:
             values[safe_label(record)] = value
     return source, values
@@ -265,7 +267,7 @@ def _speed_callout_spec_fn(values: dict[str, float], unit_wording: str) -> Any:
         for candidate in (safe_label(layer), getattr(layer, "layer_label", None)):
             if candidate in ranks:
                 spec.lines.append(
-                    f"top-{ranks[candidate]} of {len(top)} ({shares[candidate]:.0%} of total)"
+                    f"top-{ranks[candidate]} of {len(top)} ({format_percent(shares[candidate])} of total)"
                 )
                 break
         return spec
@@ -563,7 +565,7 @@ def _secondary_stages(trace: Trace, lens: LensPreset, build: _LensBuild) -> None
     # -- Memory: saved-for-backward SECONDARY degrade. ---------------------
     if lens.name == "memory" and build.effective.get("show_saved_for_backward"):
         has_autograd_evidence = any(
-            scalar_or_none(getattr(op, "autograd_memory", None)) is not None
+            scalar_or_none(record_member(op, "autograd_memory", None)) is not None
             for op in trace._layer_list
         )
         if not has_autograd_evidence:

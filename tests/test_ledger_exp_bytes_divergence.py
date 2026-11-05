@@ -19,8 +19,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.bundle._bytes import bundle_retained_bytes, preflight_retention_projection
-from torchlens.errors.episode import BundleExperimentError
+from torchlens.bundle._bytes import (
+    bundle_retained_bytes,
+    preflight_retention_projection,
+)
+from torchlens.errors._episode import BundleExperimentError
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 

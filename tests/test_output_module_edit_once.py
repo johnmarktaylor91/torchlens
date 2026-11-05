@@ -22,7 +22,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.errors import ControlFlowDivergenceWarning, MultiMatchWarning
+from torchlens.intervention.errors import (
+    ControlFlowDivergenceWarning,
+    MultiMatchWarning,
+)
 
 
 class _MLP(nn.Module):

@@ -47,6 +47,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens._visualization._render_edges import (
     _collapsed_module_should_show_remainder,
     _plan_separately_rendered_op_labels,
@@ -330,7 +331,7 @@ def _occurrence_witness_partition(trace, result):
         # module of an atomic exit op is dropped and the op stays visible.
         original_bases = {call.rsplit(":", 1)[0] for call in modules}
         effective = modules
-        if getattr(op, "is_atomic_module", False) and effective:
+        if record_member(op, "is_atomic_module", False) and effective:
             effective = effective[:-1]
         if (
             any(call in box_calls for call in effective)
@@ -777,7 +778,7 @@ def _effective_stack(op) -> tuple[str, ...]:
     """Independently recompute the renderer's effective cluster stack."""
 
     modules = [str(module) for module in (getattr(op, "modules", ()) or ())]
-    if getattr(op, "is_atomic_module", False) and modules:
+    if record_member(op, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     return tuple(modules)
 
@@ -1133,7 +1134,9 @@ class TestNameConsecutiveTrailingDigitSplit:
     def test_consecutive_and_rejections(self) -> None:
         """Trailing-digit semantics match the old (.*?)(\\d+) fullmatch."""
 
-        from torchlens._visualization._segment_descriptors import _members_are_name_consecutive
+        from torchlens._visualization._segment_descriptors import (
+            _members_are_name_consecutive,
+        )
 
         assert _members_are_name_consecutive(("m.block1", "m.block2", "m.block3"))
         assert not _members_are_name_consecutive(("m.block1", "m.block3"))

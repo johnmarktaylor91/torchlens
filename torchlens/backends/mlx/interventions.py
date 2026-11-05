@@ -30,8 +30,8 @@ from ..._ir.selector_eval import (
 )
 from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ..._selection.selectors import BaseSelector
+from ...intervention._types import Edit, InterventionDecision
 from ...intervention.hooks import make_hook_context, normalize_hook
-from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
 from ._tap_observers import _replace_mlx_array_leaves
 

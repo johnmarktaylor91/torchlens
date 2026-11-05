@@ -38,7 +38,7 @@ import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
-from torchlens.validation.diagnostics import CHECK_ARG_LOGGING, TRACE_FAILURE_ATTR
+from torchlens.validation._diagnostics import CHECK_ARG_LOGGING, TRACE_FAILURE_ATTR
 
 
 class _TwoStage(nn.Module):
@@ -90,8 +90,8 @@ def _drop_edge_symmetrically(log, child_label: str, parent_label: str) -> None:
     # A stealthy corruption conforms the derived flag too, or the cheap
     # graph_topology pair (children vs has_children) catches it before any
     # independence question arises.
-    parent.has_children = len(parent.children) > 0
-    for positions in (child.parent_arg_positions or {}).values():
+    parent._graph_has_children = len(parent.children) > 0
+    for positions in (child.call.parent_arg_positions or {}).values():
         stale = [
             argloc
             for argloc, owner in positions.items()

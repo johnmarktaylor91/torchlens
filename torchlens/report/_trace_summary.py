@@ -17,7 +17,11 @@ from .._data_classes._nonfinite import (
 from .._data_classes._value_state import LAZY_DISK
 from .._data_classes.func_call_location import display_frame
 from .._errors import CaptureNotActiveError, InvalidArgumentError
-from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
+from .._source_links import (
+    file_line_text,
+    terminal_file_line_link,
+    vscode_file_line_link,
+)
 from .._utils._display_card import REPR_COLS, TRACE_CARD_MAX_ROWS, one_line, render_card
 from .._utils._display_numbers import (
     format_count,
@@ -26,6 +30,7 @@ from .._utils._display_numbers import (
     format_iec_bytes,
     plural,
 )
+from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._factcore import _FACTCORE_CACHE, capture_fingerprint
 from ._health import _health_text as _verdict_text, _parse_persisted
@@ -50,7 +55,7 @@ def first_nonfinite(trace: Trace, link_format: Literal["terminal", "html", "text
     # answer below names how many ops could not be examined.
     layer = first_nonfinite_layer(trace, kind="saved")
     if layer is not None:
-        frame = display_frame(getattr(layer, "code_context", None))
+        frame = display_frame(record_member(layer, "code_context", None))
         location = "source unavailable"
         if frame is not None:
             file_path = str(getattr(frame, "file", "unknown"))

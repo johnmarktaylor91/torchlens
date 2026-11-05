@@ -256,7 +256,7 @@ def mlp() -> Iterator[tuple[nn.Module, torch.Tensor, torch.Tensor]]:
 # ---------------------------------------------------------------------------
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun.py, campaign mutant kills.
 def test_chunked_rerun_steers_every_row_once(net) -> None:
     """F1: a chunked rerun's rows all match one fresh steered forward.
 
@@ -281,7 +281,7 @@ def test_chunked_rerun_steers_every_row_once(net) -> None:
     assert _staged(trace) == staged, "a chunked rerun changed the staged spec"
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_content_identity.py, intervention/_helper_fingerprint.py, intervention/binding.py ....
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_content_identity.py, intervention/_helper_fingerprint.py, intervention/_binding.py ....
 def test_bound_executor_repeats_exactly(mlp) -> None:
     """A bound executor gives the hooked answer on every call."""
 
@@ -323,7 +323,7 @@ def test_rerun_engine_do_composes_once_per_call(mlp) -> None:
         )
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/handles.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_handles.py, campaign mutant kills.
 @pytest.mark.parametrize("exit_door", ["context"])
 def test_attach_rerun_then_detach_restores_baseline(net, exit_door: str) -> None:
     """F2 / seat 3 F6: attach, rerun, remove, rerun equals a plain run."""
@@ -406,7 +406,7 @@ def test_failed_rerun_leaves_staged_spec_unchanged(net, failure: type[BaseExcept
     assert _staged(trace) == staged
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_trace_edits.py, intervention/rerun.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_trace_edits.py, intervention/_rerun.py.
 @pytest.mark.parametrize("failure", [KeyboardInterrupt])
 def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseException]) -> None:
     """Seat 3 F5: a failed ``fork().do(engine="rerun")`` leaves nothing; a retry steers once."""
@@ -438,7 +438,7 @@ def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseE
     torch.testing.assert_close(_readout(parent), baseline)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/save.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_save.py, campaign mutant kills.
 def test_portable_spec_saved_after_reruns_carries_no_duplicates(net, tmp_path) -> None:
     """F4: a spec saved after reruns holds exactly the staged entries."""
 
@@ -484,8 +484,11 @@ def test_func_selector_rerun_refuses_a_partially_detached_recipe() -> None:
 def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
     """Same ops, different rule identity: the refusal blames the changed steer, not the labels."""
 
-    from torchlens.intervention._rerun_predicate import RerunSpecPlan, settle_predicate_rerun
-    from torchlens.intervention.types import HookSpec, InterventionSpec, TargetSpec
+    from torchlens.intervention._rerun_predicate import (
+        RerunSpecPlan,
+        settle_predicate_rerun,
+    )
+    from torchlens.intervention._types import HookSpec, InterventionSpec, TargetSpec
 
     def door_hook(rule_id: str) -> HookSpec:
         return HookSpec(
@@ -655,7 +658,7 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
             assert trace.last_run["divergence_count"] == 0
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun.py, campaign mutant kills.
 @pytest.mark.parametrize("staged_edit", [False])
 def test_planted_divergence_still_warns_and_raises_when_strict(staged_edit: bool) -> None:
     """A real control-flow change still discloses, with or without a staged edit."""
@@ -676,7 +679,7 @@ def test_planted_divergence_still_warns_and_raises_when_strict(staged_edit: bool
         strict.run(model, negative, replay=tl.options.ReplayOptions(strict=True))
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun.py.
 def test_loaded_trace_divergence_check_compares_like_with_like(tmp_path) -> None:
     """Seat 3 F3: a loaded trace has no raw-event hash, so its graph is compared graph to graph.
 

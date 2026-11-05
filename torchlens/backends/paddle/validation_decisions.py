@@ -38,7 +38,7 @@ REASON_EFFECTFUL_REGION = "effectful_region"
 #: No perturbation of a value parent changed the op's replayed output.
 REASON_PERTURBATION_INSENSITIVE = "perturbation_insensitive"
 #: The backend-neutral metadata invariants rejected the trace before replay
-#: (a registered status-level reason, ``validation.status.STATUS_REASONS``).
+#: (a registered status-level reason, ``validation._status.STATUS_REASONS``).
 REASON_METADATA_INVARIANT = "metadata_invariant_exception"
 
 PADDLE_VALIDATION_REASONS: frozenset[str] = frozenset(

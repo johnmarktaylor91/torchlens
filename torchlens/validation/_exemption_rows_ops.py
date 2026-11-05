@@ -1,7 +1,7 @@
 """Op-keyed rows of the validation exemption table.
 
 Each row here is derived into a run-time registry in
-:mod:`torchlens.validation.exemptions` (``SKIP_VALIDATION_ENTIRELY``,
+:mod:`torchlens.validation._exemptions` (``SKIP_VALIDATION_ENTIRELY``,
 ``SKIP_PERTURBATION_ENTIRELY``, ``STRUCTURAL_ARG_POSITIONS``,
 ``STRUCTURAL_ARG_KWARG_ALIASES``, ``CUSTOM_EXEMPTION_CHECKS``). The assembled
 table and its views live in :mod:`torchlens.validation._exemption_table`.
@@ -17,8 +17,8 @@ _SLOTS = "tests/test_validation_structural_slots.py::"
 _KERNEL = "tests/test_foreign_kernel_dependence.py::"
 _MASKS = "tests/test_validation_mask_builder_table.py::"
 _TABLE_TESTS = "tests/test_validation_exemption_table.py::"
-_EX = "torchlens.validation.exemptions:"
-_CORE = "torchlens.validation.core:"
+_EX = "torchlens.validation._exemptions:"
+_CORE = "torchlens.validation._core:"
 
 
 def _spell(names: str | tuple[str, ...]) -> tuple[str, ...]:

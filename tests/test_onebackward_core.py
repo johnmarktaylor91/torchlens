@@ -14,8 +14,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens._utils._torch_compat import get_gradient_edge_support
-from torchlens.attribution import onebackward as ob
+from torchlens.attribution import _onebackward as ob
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -41,7 +42,7 @@ def _toy_trace() -> tuple[nn.Module, torch.Tensor, tl.Trace]:
 class TestAccessor:
     """Item 0: the (node, slot) accessor over existing op fields."""
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/onebackward/_accessor.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/_onebackward/_accessor.py.
     @_requires_gradient_edge
     def test_index_caches_and_invalidates_on_cleanup(self) -> None:
         """Same-token reads hit the cache; cleanup refuses typed."""
@@ -56,7 +57,7 @@ class TestAccessor:
         assert excinfo.value.fields["reason"] == "cleaned"
         assert excinfo.value.fields["remedy"]
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/onebackward/_accessor.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/_onebackward/_accessor.py.
     @_requires_gradient_edge
     def test_id_rejoin_after_user_backward(self) -> None:
         """A user backward nulls handles; the rejoin serves bitwise-equal reads."""
@@ -72,7 +73,7 @@ class TestAccessor:
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
         )
         trace.backward(trace["output_1"].out.sum(), retain_graph=True)
-        assert all(getattr(op, "grad_fn_handle", None) is None for op in trace.ops), (
+        assert all(record_member(op, "grad_fn_handle", None) is None for op in trace.ops), (
             "backward is expected to null per-op handles"
         )
         index = ob.read_edge_index(trace)
@@ -88,7 +89,7 @@ class TestAccessor:
 class TestReadCore:
     """Item 2: oracle agreement, statuses, order, and the population law."""
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/onebackward/_read.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/_onebackward/_read.py.
     @_requires_gradient_edge
     def test_implicit_population_cone_rule_with_counts(self) -> None:
         """D10: implicit population excludes non-upstream sites WITH counts."""
@@ -101,7 +102,7 @@ class TestReadCore:
         assert labels == {"linear_1_1:1", "gelu_1_2:1"}
         assert table.provenance.excluded_counts["not_upstream_of_target"] == 2
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/onebackward/_engine.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/_onebackward/_engine.py.
     @_requires_gradient_edge
     def test_batched_equals_sequential_with_exact_call_counts(self) -> None:
         """D12/D13: batched == sequential at 1e-5; autograd_calls == ceil(T/B)."""
@@ -122,7 +123,7 @@ class TestReadCore:
         for key, row in batched.items():
             assert sequential[key].score == pytest.approx(row.score, abs=1e-5)
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/onebackward/_engine.py, attribution/onebackward/_targets.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/_onebackward/_engine.py, attribution/_onebackward/_targets.py.
     @_requires_gradient_edge
     def test_callable_1d_target_is_a_batch_never_summed(self) -> None:
         """A 1-D callable result expands to per-element targets."""
@@ -137,7 +138,7 @@ class TestReadCore:
         table = ob.read(trace, target=logits_row, method="grad", reduce="sum")
         assert table.target_ids() == ("t0[0]", "t0[1]", "t0[2]")
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/onebackward/_read.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/_onebackward/_read.py.
     @_requires_gradient_edge
     def test_reduction_distinctness_d15(self) -> None:
         """sum_of_abs != abs_of_sum on a sign-mixed gradient."""
@@ -165,7 +166,7 @@ class TestReadCore:
 class TestActivationMethods:
     """Item 2 activation paths and retention honesty (D14)."""
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/onebackward/_read.py, attribution/onebackward/_table.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/_onebackward/_read.py, attribution/_onebackward/_table.py.
     @_requires_gradient_edge
     def test_zero_payload_capture_grad_serves_axg_marks_unavailable(self) -> None:
         """Test 10: layers_to_save=[] serves grad; act-x-grad rows disclose."""
@@ -190,7 +191,7 @@ class TestActivationMethods:
         assert statuses == {"unavailable"}
         assert {row.status_reason for row in axg.rows()} == {"payload_unretained"}
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/onebackward/_read.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/_onebackward/_read.py.
     @_requires_gradient_edge
     def test_activation_method_reads_payloads_without_backward(self) -> None:
         """method='activation' takes no target and runs no backward."""
@@ -204,7 +205,7 @@ class TestActivationMethods:
 class TestAliasDiscipline:
     """Item 6 (D11): per-address rows, engine dedup, explicit collapse."""
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/onebackward/_table.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of attribution/_onebackward/_table.py.
     @_requires_gradient_edge
     def test_explicit_collapse_keeps_first_member(self) -> None:
         """collapse_alias_groups is the explicit opt-in, never the default."""

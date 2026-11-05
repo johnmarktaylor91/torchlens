@@ -1,7 +1,7 @@
 """Regression tests for the cert9 (round-9-prep) intervention hardening fix.
 
 MAJOR-1 (cert8 intervention bucket) -- ``helper_from_serialized``
-(``torchlens/intervention/helpers.py``) is exported in ``helpers.__all__`` as the
+(``torchlens/intervention/_helpers.py``) is exported in ``helpers.__all__`` as the
 module's public reconstruction entry point, but its own ``value_decoder`` keyword
 argument DEFAULTED to the narrow ``_decode_jsonish`` decoder (only understands the
 ``__tensor_ref__`` wrapper tag) whenever a caller omitted it. That default
@@ -23,8 +23,8 @@ import inspect
 
 import pytest
 
+from torchlens.intervention._helpers import helper_from_serialized
 from torchlens.intervention._spec_values import _resolve_import_ref
-from torchlens.intervention.helpers import helper_from_serialized
 
 
 def test_value_decoder_has_no_default() -> None:
