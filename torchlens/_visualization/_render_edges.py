@@ -3,6 +3,7 @@
 # ruff: noqa: F403, F405
 
 from .._record_type import record_type
+from ._atomic_scope import _enclosing_module_calls
 from ._buffer_visibility import (
     _buffer_name_segment,
     _is_buffer_visible,
@@ -640,9 +641,9 @@ def _surfaced_own_output_ops(
                 op = trace.ops[label]
         else:
             op = trace.ops[label]
-        if getattr(op, "is_buffer", False):
+        if getattr(op.graph, "is_buffer", False):
             continue
-        if not getattr(op, "is_atomic_module", False):
+        if not getattr(op.module_context, "is_atomic_module", False):
             continue
         modules = list(getattr(op, "modules", ()) or ())
         if not modules:
@@ -762,9 +763,7 @@ def _raw_render_node_owner_key(node: GraphNode, vis_mode: str) -> str | None:
         Innermost owning cluster, or ``None`` for a top-level node.
     """
 
-    modules = [str(module) for module in getattr(node, "modules", ()) or ()]
-    if getattr(node, "is_atomic_module", False) and modules:
-        modules = modules[:-1]
+    modules = [str(module) for module in _enclosing_module_calls(node)]
     if not modules:
         return None
     owner = modules[-1]
@@ -989,7 +988,7 @@ def _add_edges_for_node(
         metadata_child = render_edge.metadata_child
         child_render_name = _render_node_name(child_node, vis_mode)
 
-        if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
+        if child_node.graph.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
             continue
         collapsed_head_name = (
             collapsed_container_nodes.get(child_render_name)
@@ -997,7 +996,7 @@ def _add_edges_for_node(
             else None
         )
 
-        if parent_node.has_input_ancestor:
+        if parent_node.graph.has_input_ancestor:
             edge_style = "solid"
         else:
             edge_style = "dashed"
@@ -1064,9 +1063,9 @@ def _add_edges_for_node(
             child_modules = child_node.modules[:]
             parent_modules = parent_node.modules[:]
             # Adjust for bottom-level submodule outputs (they belong to parent scope).
-            if child_node.is_atomic_module:
+            if child_node.module_context.is_atomic_module:
                 child_modules = child_modules[:-1]
-            if parent_node.is_atomic_module:
+            if parent_node.module_context.is_atomic_module:
                 parent_modules = parent_modules[:-1]
             if child_modules[:vis_call_depth] == parent_modules[:vis_call_depth]:
                 continue
@@ -1402,7 +1401,7 @@ def _add_edges_for_node(
         # inside had ``has_input_ancestor=True``, contradicting the rolled
         # render of the same trace.
         for endpoint_node in (parent_node, child_node):
-            if not endpoint_node.has_input_ancestor:
+            if not endpoint_node.graph.has_input_ancestor:
                 continue
             for containing_module in endpoint_node.modules:
                 containing_key = (
@@ -1486,7 +1485,7 @@ class _RolledEdgeMaps:
 
         found = self._child_ops.get(layer.layer_label)
         if found is None:
-            found = self._child_ops[layer.layer_label] = layer.child_ops_per_layer
+            found = self._child_ops[layer.layer_label] = layer.graph.child_ops_per_layer
         return found
 
     def parent_ops_per_layer(self, layer: "Layer") -> dict[str, list[int]]:
@@ -1494,7 +1493,7 @@ class _RolledEdgeMaps:
 
         found = self._parent_ops.get(layer.layer_label)
         if found is None:
-            found = self._parent_ops[layer.layer_label] = layer.parent_ops_per_layer
+            found = self._parent_ops[layer.layer_label] = layer.graph.parent_ops_per_layer
         return found
 
     def parents_per_pass(self, layer: "Layer") -> dict[int, list[str]]:
@@ -1502,7 +1501,7 @@ class _RolledEdgeMaps:
 
         found = self._parents_per_pass.get(layer.layer_label)
         if found is None:
-            found = self._parents_per_pass[layer.layer_label] = layer.parents_per_pass
+            found = self._parents_per_pass[layer.layer_label] = layer.graph.parents_per_pass
         return found
 
 
@@ -1629,7 +1628,7 @@ def _label_node_arguments_if_needed(
     else:
         arg_labels = []
         for arg_type in ["args", "kwargs"]:
-            for arg_loc, arg_label in child_node.parent_arg_positions[arg_type].items():
+            for arg_loc, arg_label in child_node.call.parent_arg_positions[arg_type].items():
                 if arg_label in (parent_node.layer_label, _relation_label(parent_node)):
                     arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
@@ -1706,7 +1705,7 @@ def _visible_parent_count_unrolled(
     if show_buffer_layers == "always":
         return len(parents)
     return len(parents) - sum(
-        bool(self.layers[parent].is_buffer)
+        bool(self.layers[parent].graph.is_buffer)
         and not _is_buffer_visible(self.layers[parent], show_buffer_layers)
         for parent in parents
     )
@@ -1733,7 +1732,7 @@ def _visible_parent_count_rolled(
             num_parents_shown -= sum(
                 [
                     int(
-                        self._layer_logs[parent].is_buffer
+                        self._layer_logs[parent].graph.is_buffer
                         and not _is_buffer_visible(self._layer_logs[parent], show_buffer_layers)
                     )
                     for parent in pass_parents

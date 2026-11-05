@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._utils.hashing import sha256_canonical_json
 from ..backends.torch.bound_root import ROOT_ADDRESS, TLBoundMethodRoot, module_at_address
-from ..errors.episode import EpisodeCaptureError, EpisodeLedgerError
+from ..errors._episode import EpisodeCaptureError, EpisodeLedgerError
 from ._episode_derivation import (
     _call_returned,
     _declaration_error,

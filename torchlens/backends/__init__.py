@@ -7,7 +7,7 @@ from typing import Any
 from .._utils.facade import resolve_facade_attr
 
 # Import for backend registration side effects.
-from . import default_specs as _default_specs  # noqa: F401
+from . import _default_specs as _default_specs  # noqa: F401
 from ._backend_protocol import (
     REFUSAL_CODES,
     VALIDATION_REASONS,

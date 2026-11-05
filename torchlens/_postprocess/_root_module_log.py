@@ -48,7 +48,7 @@ def _root_call_build_inputs(
     }
     input_layers_by_call: dict[str, list[str]] = defaultdict(list)
     for op in self._layer_list:
-        for call_label in op.input_to_module_calls:
+        for call_label in op.module_context.input_to_module_calls:
             input_layers_by_call[call_label].append(op.layer_label)
     return child_to_parent, input_layers_by_call
 

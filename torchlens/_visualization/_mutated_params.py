@@ -25,6 +25,7 @@ from urllib.parse import quote as _percent_quote
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.op import Op
 
+from .._utils._record_group_table import record_member
 from ._render_common import (
     FROZEN_PARAMS_BG_COLOR,
     TRAINABLE_PARAMS_BG_COLOR,
@@ -128,7 +129,7 @@ def _receiver_param(op: Any) -> Any | None:
     param_logs = tuple((op._param_logs if isinstance(op, (Op, Layer)) else ()) or ())
     if not param_logs:
         return None
-    positions = getattr(op, "parent_arg_positions", None) or {}
+    positions = record_member(op, "parent_arg_positions", None) or {}
     arg_positions = positions.get("args", {}) if isinstance(positions, Mapping) else {}
     if 0 in arg_positions:
         return None
@@ -291,7 +292,7 @@ def _owner_module_path(entry: Any, param: Any, vis_mode: str) -> tuple[str, ...]
     modules = [str(module) for module in (getattr(entry, "modules", ()) or ())]
     if vis_mode == "rolled":
         modules = [module.split(":")[0] for module in modules]
-    rendered_scope = modules[:-1] if getattr(entry, "is_atomic_module", False) else modules
+    rendered_scope = modules[:-1] if record_member(entry, "is_atomic_module", False) else modules
     for depth, module in enumerate(rendered_scope):
         if module.split(":")[0] == owner:
             return tuple(rendered_scope[: depth + 1])

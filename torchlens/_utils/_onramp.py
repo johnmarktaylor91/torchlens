@@ -18,6 +18,7 @@ import torch
 from torch import nn
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 
 
 def list_modules(model: nn.Module) -> list[tuple[str, type[nn.Module]]]:
@@ -435,8 +436,8 @@ def find_executable_save_set(
         entry = trace[layer]
         label = str(getattr(entry, "layer_label", layer))
         memory = int(
-            getattr(entry, "transformed_activation_memory", None)
-            or getattr(entry, "activation_memory", None)
+            record_member(entry, "transformed_activation_memory", None)
+            or record_member(entry, "activation_memory", None)
             or 0
         )
         candidates.append((memory, label))

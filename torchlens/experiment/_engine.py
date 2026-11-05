@@ -34,7 +34,7 @@ from .._utils._display_bounded import short_dataclass_repr
 from ..bundle import Bundle
 from ..bundle._bytes import preflight_retention_projection
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
-from ..errors.episode import BundleExperimentError
+from ..errors._episode import BundleExperimentError
 
 if TYPE_CHECKING:
     from torch import nn
@@ -238,11 +238,11 @@ def _candidate_spec(baseline: Trace, candidate: _Candidate, edit: Any) -> Any:
     fork of the same selection edit.
     """
 
-    from ..intervention.spec import Recipe, when
+    from ..intervention._spec import Recipe, when
 
     if candidate.unit_entries is None:
         return when(candidate.execution_where, edit)
-    from ..intervention.masked_edit import _derive_masked_edit
+    from ..intervention._masked_edit import _derive_masked_edit
 
     rules: list[Any] = []
     for entry in candidate.unit_entries:
@@ -284,7 +284,7 @@ def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) 
     keys: list[str] = []
     for label in labels:
         op = baseline.ops[label]
-        key = getattr(op, "site_key", None)
+        key = op.graph.site_key
         if not key:
             raise BundleExperimentError(
                 f"candidate {candidate_id!r} site {label!r} carries no "
@@ -366,7 +366,7 @@ def _record_run_envelope(member: Any, spec: Any, *, started: float) -> None:
     through the ONE shared writer with the fires this run minted.
     """
 
-    from ..intervention.audit import (
+    from ..intervention._audit import (
         fire_records_since,
         record_intervention_event,
         rules_payload,
@@ -471,7 +471,7 @@ def _declared_multi_ids(pairs: list[tuple[str, Any]], multi_site: Any) -> set[st
 def _edit_identity(edit: Any) -> str:
     """Identity of an edit for duplicate detection (helper edits by content)."""
 
-    from ..intervention.types import Edit
+    from ..intervention._types import Edit
 
     if isinstance(edit, Edit):
         return _digest(("edit", edit.name, repr(edit.args), repr(edit.kwargs)))
@@ -677,7 +677,7 @@ def _execute_and_measure(state: _SweepState, candidate: _Candidate, spec: Any) -
     the member is alive (the measured engine contract).
     """
 
-    from ..intervention.audit import append_event_audit_row, event_audit_rows
+    from ..intervention._audit import append_event_audit_row, event_audit_rows
 
     if state.lane == "live_hook":
         member, actual_lane = _run_live_candidate(

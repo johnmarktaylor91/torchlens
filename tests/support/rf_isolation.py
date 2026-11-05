@@ -49,7 +49,7 @@ def _install_builtin_pack() -> None:
 
     global _BUILTIN_PACK
     if _BUILTIN_PACK is None:
-        module = importlib.import_module("torchlens.receptive_field.rules")
+        module = importlib.import_module("torchlens.receptive_field._builtin_rules")
         if not _rules._RF_RULES:
             for name in module.__all__:
                 importlib.reload(getattr(module, name))

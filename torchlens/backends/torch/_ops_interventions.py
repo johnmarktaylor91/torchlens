@@ -31,13 +31,13 @@ from ..._selection.selectors import (
 from ..._state import pause_logging
 from ..._utils._torch_symbols import tensor_read
 from ...errors._base import CompatibilityError
-from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
-from ...intervention.runtime import active_intervention_context
-from ...intervention.types import (
+from ...intervention._runtime import active_intervention_context
+from ...intervention._types import (
     InterventionDecision,
     TargetSpec,
 )
-from ...recording.types import (
+from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
+from ...recording._types import (
     RecordContext,
 )
 from ._tl import get_label_list
@@ -184,7 +184,7 @@ def _apply_live_hooks_to_outputs_legacy(
             record_is_inplace=record_is_inplace,
         )
 
-    from ...intervention.runtime import _apply_live_hooks
+    from ...intervention._runtime import _apply_live_hooks
 
     shared_fields, _parent_layer_entries, _arg_tensors, _parent_param_ops = (
         _build_shared_fields_dict(
@@ -342,7 +342,7 @@ def _apply_predicate_mode_interventions_to_outputs(
             decision.hook,
             default_site_target=make_label_selector(ctx.raw_label or ctx.label),
         )
-        from ...intervention import _zero_fire, runtime
+        from ...intervention import _runtime as runtime, _zero_fire
 
         with active_intervention_context(
             intervention_spec=getattr(trace, "_intervention_spec", None),
@@ -440,7 +440,7 @@ def _intervene_reaches_op_door(options: Any) -> bool:
     memo = _OP_DOOR_MEMO.get(id(intervene))
     if memo is not None and memo[0]() is intervene:
         return memo[1]
-    from ...intervention.spec import Recipe
+    from ...intervention._spec import Recipe
 
     reaches = not (
         isinstance(intervene, Recipe)
@@ -480,8 +480,8 @@ def _hook_entry_reaches_op_door(entry: Any) -> bool:
 
     # Not memoized: entries are slotted (no weak references), a strong-reference memo would keep a
     # finished capture's hook callables alive, and this walk costs a few calls per op.
+    from ...intervention._runtime import _input_splice_module_scope, _is_plain_module_selector
     from ...intervention.hooks import NormalizedHookEntry
-    from ...intervention.runtime import _input_splice_module_scope, _is_plain_module_selector
 
     if type(entry) is not NormalizedHookEntry:
         return True
@@ -661,7 +661,7 @@ def _apply_predicate_intervention(
     decision = _evaluate_intervene_op(ctx, options)
     if decision is None:
         return out, ()
-    from ...intervention.injection import peek_injection_state
+    from ...intervention._injection import peek_injection_state
 
     injection_state = peek_injection_state(trace)
     if injection_state is not None and injection_state.get("armed", False):
@@ -669,7 +669,7 @@ def _apply_predicate_intervention(
         # rule id when the intervene= operand is the public immutable spec
         # (consolidated session-transient state, read by _execute_hook's
         # recorder).
-        from ...intervention.spec import Recipe as _PublicSpec
+        from ...intervention._spec import Recipe as _PublicSpec
 
         predicate = getattr(options, "intervene", None)
         if isinstance(predicate, _PublicSpec):
@@ -684,7 +684,7 @@ def _apply_predicate_intervention(
         decision.hook,
         default_site_target=make_label_selector(ctx.raw_label or ctx.label),
     )
-    from ...intervention import _zero_fire, runtime
+    from ...intervention import _runtime as runtime, _zero_fire
 
     with active_intervention_context(
         intervention_spec=getattr(trace, "_intervention_spec", None),

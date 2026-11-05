@@ -206,7 +206,9 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     assert noun == "ops"
     assert int(count.replace(",", "")) == len(sized)
     labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
-    assert size == binary_size(sum(int(trace.ops[label].activation_memory) for label in labels))
+    assert size == binary_size(
+        sum(int(trace.ops[label].cost.activation_memory) for label in labels)
+    )
     assert f"{trace.num_params:,} params" in dot
     assert not re.search(r"\d (?:KiB|MiB|GiB)\b", dot)
 
@@ -241,7 +243,7 @@ def test_rolled_count_covers_every_pass_of_its_layers(tmp_path: Path) -> None:
         # and sizes the input and output nodes it draws.
         boundary = [loop.ops[label] for label in (*loop.input_layers, *loop.output_layers)]
         assert len(loop.ops) + len(boundary) == 11
-        total = sum(int(op.activation_memory) for op in (*loop.ops.values(), *boundary))
+        total = sum(int(op.cost.activation_memory) for op in (*loop.ops.values(), *boundary))
         assert binary_size(total) == "149 B"
     finally:
         loop.cleanup()
@@ -254,7 +256,7 @@ def _count_unit(kind: str, node: object) -> SimpleNamespace:
 
 
 def test_rolled_count_line_keeps_singular_forms() -> None:
-    op = SimpleNamespace(activation_memory=16)
+    op = SimpleNamespace(cost=SimpleNamespace(activation_memory=16))
     one = SimpleNamespace(units=(_count_unit("raw_op", SimpleNamespace(ops={"a:1": op})),))
     assert drawn_count_line(None, one, "rolled") == "1 layer (1 op, 16 B)"  # type: ignore[arg-type]
     # In the unrolled view the drawn node is the op itself.
@@ -284,7 +286,7 @@ def test_focus_count_skips_the_boundary_stubs(
     assert "__module_focus_input" in dot and "__module_focus_output" in dot
     if not rolled:
         labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in drawn]
-        expected = sum(int(trace.ops[label].activation_memory) for label in labels)
+        expected = sum(int(trace.ops[label].cost.activation_memory) for label in labels)
         assert f"<br align='left'/>{count} ops ({binary_size(expected)})<br" in header
 
 

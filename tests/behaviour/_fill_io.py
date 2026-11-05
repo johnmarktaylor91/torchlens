@@ -235,7 +235,7 @@ def _check_lazy_load(cell: Cell, bundle: Path) -> None:
     )
     _expect_same_trace(cell, live, lazy, "lazy load")
     first = lazy.saved_ops[0]
-    diff = _leaf_difference(live[first.label].out, first.materialize_out())
+    diff = _leaf_difference(live[first.label].out, first.payload.materialize_out())
     cell.expect(diff is None, f"lazy materialize of {first.label}: {diff}")
     eager = tl.load(copy)
     shutil.rmtree(copy / "blobs", ignore_errors=True)
@@ -243,7 +243,7 @@ def _check_lazy_load(cell: Cell, bundle: Path) -> None:
     if len(lazy.saved_ops) > 1:
         other = lazy.saved_ops[1]
         try:
-            other.materialize_out()
+            other.payload.materialize_out()
         except TorchLensError:
             pass
         else:
@@ -456,7 +456,7 @@ def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
     # forward_match oracle call ``trace.run``, which refuses typed on a streamed trace
     # (``trace_option_unsupported``, IO-8), so the payloads stay the bundle's here too.
     unstreamed = sorted(
-        op.label for op in trace.saved_ops if op.out_ref is None and not _is_output(op)
+        op.label for op in trace.saved_ops if op._out_ref is None and not _is_output(op)
     )
     cell.expect(not unstreamed, f"saved ops without a blob on disk: {unstreamed[:8]}")
     # Reading ``op.out`` on a capture with predicate keywords (save=, stop_after=, intervene=)
@@ -478,13 +478,13 @@ def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
         if reference is None:
             continue
         if frame_only:
-            got = op.materialize_out()
+            got = op.payload.materialize_out()
             cell.expect(
                 _frame_of(got) == _frame_of(reference),
                 f"streamed payload of {op.label}: {_frame_of(got)} vs {_frame_of(reference)}",
             )
             continue
-        diff = _leaf_difference(reference, op.materialize_out())
+        diff = _leaf_difference(reference, op.payload.materialize_out())
         cell.expect(diff is None, f"streamed payload of {op.label}: {diff}")
 
 
@@ -506,7 +506,7 @@ def _expect_streamed_payloads(cell: Cell, trace: Any, plain: Any, got: Any, what
         if reference is None:
             continue
         if own_reference:
-            reference = trace[op.label].materialize_out()
+            reference = trace[op.label].payload.materialize_out()
         diff = _leaf_difference(reference, got[op.label].out)
         cell.expect(diff is None, f"{what}: payload of {op.label}: {diff}")
 

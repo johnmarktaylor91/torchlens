@@ -41,7 +41,7 @@ def _relu_label(trace: Any) -> str:
     """Return the label of the relu op (the first internal layer of ``ReluAdd``)."""
 
     for layer in trace._layer_list:
-        if not (layer.is_input or layer.is_output or layer.is_buffer):
+        if not (layer.is_input or layer.is_output or layer.graph.is_buffer):
             return str(layer.layer_label)
     raise AssertionError("expected an internal layer")
 

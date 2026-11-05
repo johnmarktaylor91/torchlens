@@ -32,8 +32,8 @@ from torchlens._validation_state_snapshot import (
     snapshot_state_for_restore,
 )
 from torchlens.options import CaptureOptions
-from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.diagnostics import get_validation_failure
+from torchlens.validation._core import validate_saved_outs
+from torchlens.validation._diagnostics import get_validation_failure
 
 
 class _SetToSource(nn.Module):
@@ -94,7 +94,7 @@ def test_dead_set_source_edge_still_fails_perturbation() -> None:
     trace, ground_truth = _capture(_SetToSource(), torch.rand(4))
     try:
         set_op = next(op for op in trace._layer_list if op.func_name == "set_")
-        source_label = set_op.parent_arg_positions["args"][1]
+        source_label = set_op.call.parent_arg_positions["args"][1]
         frozen = set_op.out.detach().clone()
 
         def source_blind_set_(receiver: torch.Tensor, *args: object, **kwargs: object):
@@ -329,7 +329,7 @@ def test_storage_argument_is_saved_by_value_at_the_call() -> None:
 
     model, trace, ground_truth, set_op = _storage_view_trace(_SetToStorageViewThenOverwrite)
     try:
-        saved_storage = set_op.saved_args[1]
+        saved_storage = set_op.call.saved_args[1]
         assert isinstance(saved_storage, torch.UntypedStorage)
         assert saved_storage.data_ptr() != model.src.untyped_storage().data_ptr()
         with torch.no_grad():
@@ -361,7 +361,7 @@ def test_wrong_storage_view_still_fails_replay(position: int, wrong_value: objec
 
     _model, trace, ground_truth, set_op = _storage_view_trace()
     try:
-        set_op.saved_args[position] = wrong_value
+        set_op.call.saved_args[position] = wrong_value
         status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
         assert status.state == "failed"
         failure = get_validation_failure(trace)

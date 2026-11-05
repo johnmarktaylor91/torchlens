@@ -27,7 +27,7 @@ from torchlens.backends.torch import _torch_ops_calls
 from torchlens.backends.torch._foreign_data import FLASH_ATTENTION_2_FUNC_NAME
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure, validate_forward_pass
-from torchlens.validation.core import _check_whether_func_on_saved_parents_yields_saved_tensor
+from torchlens.validation._core import _check_whether_func_on_saved_parents_yields_saved_tensor
 
 _SCHEMA = (
     "_flash_attn_forward(Tensor q, Tensor k, Tensor v, float dropout_p, float softmax_scale, "

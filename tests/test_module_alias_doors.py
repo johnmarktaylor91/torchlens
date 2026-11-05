@@ -491,7 +491,7 @@ def test_alias_inside_a_composite_refuses_the_same_way(
 # Sampled by shrink-r4 (class E): rows for every documented edit door (trace, record,
 # post-hoc fork().do, bind); the record and bind rows hold sole coverage of
 # backends/torch/_ops_interventions.py, intervention/_module_boundary.py and
-# intervention/binding.py. test_oracle_distinguishes_every_scope keeps the oracle
+# intervention/_binding.py. test_oracle_distinguishes_every_scope keeps the oracle
 # honest over every model and selector.
 @pytest.mark.parametrize(
     ("door", "model_name", "selector_name"),

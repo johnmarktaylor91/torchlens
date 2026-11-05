@@ -114,7 +114,7 @@ def test_non_module_ops_is_migration_parity(glue_log: Any) -> None:
     expected = sum(
         1
         for op in glue_log.ops
-        if not (op.is_input or op.is_final_output) and not tuple(op.modules or ())
+        if not (op.is_input or op.graph.is_final_output) and not tuple(op.modules or ())
     )
     assert compiled.filtered == expected
 
@@ -131,7 +131,7 @@ def test_selection_operand_hides_the_selected_site(glue_log: Any) -> None:
     """A same-trace Selection operand hides the selected family (never a
     silent no-op: the resolved site labels must reach the match fn)."""
 
-    target = next(op for op in glue_log.ops if not (op.is_input or op.is_final_output))
+    target = next(op for op in glue_log.ops if not (op.is_input or op.graph.is_final_output))
     resolved = glue_log[target.__selection__()]
     compiled = lenses.compile_display_filter(glue_log, lenses.DisplayFilter(exclude=resolved))
     assert compiled.filtered >= 1

@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
 from ..._record_type import record_type
+from ..._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -135,7 +136,7 @@ class CompiledDisplayFilter:
 def _is_boundary(layer: Any) -> bool:
     """Return whether a layer is an input/output boundary (auto-exempt)."""
 
-    return bool(getattr(layer, "is_input", False) or getattr(layer, "is_final_output", False))
+    return bool(getattr(layer, "is_input", False) or record_member(layer, "is_final_output", False))
 
 
 def _token_predicate(token: str) -> Callable[[Any], bool]:
@@ -145,8 +146,8 @@ def _token_predicate(token: str) -> Callable[[Any], bool]:
         return lambda layer: str(record_type(layer, "")) in _RESHAPE_FAMILY
     if token == "constants":
         return lambda layer: (
-            bool(getattr(layer, "is_internally_initialized", False))
-            and not bool(getattr(layer, "has_input_ancestor", True))
+            bool(record_member(layer, "is_internally_initialized", False))
+            and not bool(record_member(layer, "has_input_ancestor", True))
         )
     if token == "non_module_ops":
         return lambda layer: not tuple(getattr(layer, "modules", ()) or ())
@@ -207,7 +208,7 @@ def _structural_join(trace: Trace, structural: set[str], labels: set[str]) -> No
     """Add labels for ops whose L1 site key matches a cross-run aligned entry."""
 
     for op in trace._layer_list:
-        if str(getattr(op, "site_key", "")) in structural:
+        if str(record_member(op, "site_key", "")) in structural:
             labels.add(op.layer_label)
             label = getattr(op, "label", None)
             if label:
@@ -221,7 +222,7 @@ def _selection_labels(trace: Trace, selection: Any) -> frozenset[str]:
     labels: set[str] = set()
     structural: set[str] = set()
     for entry in entries:  # Site rows (family level: zero-mask sites count)
-        site_key = getattr(entry, "site_key", None)
+        site_key = record_member(entry, "site_key", None)
         if isinstance(site_key, tuple) and site_key:
             layer_label = str(site_key[0])
             labels.add(layer_label)

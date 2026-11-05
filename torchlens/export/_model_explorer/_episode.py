@@ -21,6 +21,7 @@ import json
 from dataclasses import dataclass, replace
 from typing import Any
 
+from ..._utils._record_group_table import record_member
 from ._attrs import AttrContext, dtype_string, shape_string
 from ._build import BuildResult, GraphSpec, build_graph
 from ._edges import build_label_map
@@ -190,7 +191,7 @@ def _step_members(
 def _stack_head(entry: Any) -> str | None:
     """Return the first module-call-stack entry (the stack join spelling)."""
 
-    stack = list(getattr(entry, "module_call_stack", ()) or ())
+    stack = list(record_member(entry, "module_call_stack", ()) or ())
     return str(stack[0]) if stack else None
 
 
@@ -215,7 +216,7 @@ def _assign_drivers(
         entry_position = position[id(entry)]
         if entry_position in member_positions:
             continue
-        if getattr(entry, "module_call_stack", ()) or ():
+        if record_member(entry, "module_call_stack", ()) or ():
             continue
         is_boundary = getattr(entry, "is_input", False) or getattr(entry, "is_output", False)
         if not is_boundary:
@@ -420,7 +421,7 @@ def _all_entries(log: Any) -> list[Any]:
 def _entry_parent_refs(entry: Any) -> list[str]:
     """Return one entry's recorded parent refs (positions first)."""
 
-    positions = getattr(entry, "parent_arg_positions", None) or {}
+    positions = record_member(entry, "parent_arg_positions", None) or {}
     refs = [str(ref) for ref in (positions.get("args") or {}).values()]
     refs.extend(str(ref) for ref in (positions.get("kwargs") or {}).values())
     if refs:

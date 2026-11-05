@@ -205,7 +205,7 @@ _REPO = Path(__file__).resolve().parents[1]
 #: Redirect hooks added for removed names; each must be invisible to type
 #: checkers, or mypy would accept every attribute (removed or typo) as Any.
 _GUARDED_HOOKS: list[tuple[str, str | None]] = [
-    ("torchlens/intervention/helpers.py", None),
+    ("torchlens/intervention/_helpers.py", None),
     ("torchlens/validation/__init__.py", None),
     ("torchlens/io/__init__.py", None),
     ("torchlens/observers.py", None),

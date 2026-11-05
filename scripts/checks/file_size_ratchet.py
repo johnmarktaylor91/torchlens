@@ -89,7 +89,7 @@ _NEW_FILE_LINE_CAP = 2000
 #: re-stepped for reviewed L6 selection-algebra / edge-substitution mass
 #: (edge boundary verdict in validation/core, tier-(ii) edge stores on Op,
 #: the v7 save boundary in _io/bundle). PRE-SPRINT BASELINE at 75439a67:
-#:   validation/core.py 5300 | _data_classes/op.py 5200
+#:   validation/_core.py 5300 | _data_classes/op.py 5200
 #:   (_io/bundle.py already listed above at 4450; L6 re-steps 4500 -> 4550)
 #: 2026-08-17 gov-sweep settle: the L6 edge-boundary check family moved out
 #: of validation/core into validation/_edge_boundary.py; core re-keyed
@@ -124,7 +124,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # validation/_replay_live_params.py and cohesive helper groups moved to
     # sibling modules; re-keyed to the next 50-line step above the
     # merged-tree measurement 3795.
-    "torchlens/validation/core.py": 3800,
+    "torchlens/validation/_core.py": 3700,
     # 5250 -> 5100 (2026-08-27 C07 fix cycle): the user-transform apply +
     # validation helpers split to _op_transforms.py under R43 (the v9
     # injection_provenance rows nudged op.py over); re-keyed down to the
@@ -145,7 +145,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # merge): the C-063 stack and C-076 brought op.py to 3549, re-keyed down to
     # the next 50-line step; replay-templates' template gating lands on the
     # same tree (merged measurement 3497) and the row stays at 3550.
-    "torchlens/_data_classes/op.py": 3450,
+    "torchlens/_data_classes/op.py": 3350,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -429,7 +429,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/_visualization/auto_collapse.py": 2150,
     # 2850 -> 2650: the bool influence probes moved to validation/_influence_probes.py
     # (2615 measured); the ceiling follows down.
-    "torchlens/validation/exemptions.py": 2650,
+    "torchlens/validation/_exemptions.py": 2550,
     # 2700 -> 2800 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
     # conditional relabel epilogue plus intervention/halt predicate
@@ -461,7 +461,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # Re-keyed down 2300 -> 2200 (r7 R43-F2 slack rule): the branch-label text
     # helpers moved to _branch_label_text.py; measured 2198.
     "torchlens/_visualization/_render_leaf.py": 2200,
-    "torchlens/debug/_infer_input_shape.py": 2250,
+    "torchlens/debug/_infer_input_shape.py": 2100,
     "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/_visualization/_render_nodes.py": 2150,
     "torchlens/_visualization/_render_flow.py": 2100,
@@ -530,7 +530,7 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/example_models.py": 5500,
     "tests/test_real_world_models.py": 3250,
     "tests/test_toy_models.py": 4400,
-    "tests/test_auto_collapse_metrics.py": 3200,
+    "tests/test_auto_collapse_metrics.py": 3156,
     "tests/test_backward.py": 2550,
     # 2400 -> 2650 (2026-10-01 ci-fix ratchet settle): the M1 raise-arm
     # mutation campaign landed direct arm-specific killers (W3/W4

@@ -97,7 +97,7 @@ def _buffer_layers(trace: Any) -> list[Any]:
 def _compute_ops(trace: Any) -> list[Any]:
     """Ops of the forward's computation: no inputs, outputs or buffer sources."""
 
-    return [op for op in trace.ops if not (op.is_input or op.is_output or op.is_buffer)]
+    return [op for op in trace.ops if not (op.is_input or op.is_output or op.graph.is_buffer)]
 
 
 def _assert_counts_match_census(model: nn.Module, x: torch.Tensor) -> None:

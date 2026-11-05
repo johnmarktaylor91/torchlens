@@ -114,7 +114,7 @@ def test_innermost_frame_is_last_and_call_site_first(toy) -> None:
 def test_default_capture_reads_source_lazily(toy) -> None:
     module, path = toy
     trace = tl.trace(module.Toy(), torch.randn(2, 3))
-    frame = trace["relu_1"].code_context[-1]
+    frame = trace["relu_1"].source.frames[-1]
     assert frame.source_loading_enabled is False
     assert frame._call_line == ""  # nothing stored at capture
     assert frame.call_line == "z = torch.relu(y)  # the relu line"
@@ -214,7 +214,7 @@ def test_default_capture_stores_no_source_text(toy) -> None:
 
     module, _path = toy
     trace = tl.trace(module.Toy(), torch.randn(2, 3))
-    frames = [frame for op in trace.ops for frame in (op.code_context or ())]
+    frames = [frame for op in trace.ops for frame in (op.source.frames or ())]
     assert frames
     assert all(frame._linecache_entry is not None for frame in frames)
     assert all(frame._call_line == "" and frame._code_context is None for frame in frames)
@@ -236,7 +236,7 @@ def test_nested_model_frames(tmp_path: Path) -> None:
             return self.inner(x) + 1
 
     trace = tl.trace(Outer(), torch.randn(2, 3))
-    frames = list(trace["sigmoid_1"].code_context)
+    frames = list(trace["sigmoid_1"].source.frames)
     assert [f.func_name for f in frames][-2:] == ["forward", "forward"]
     assert frames[-1].call_line == "return torch.sigmoid(x)  # inner line"
     assert frames[0].file == __file__

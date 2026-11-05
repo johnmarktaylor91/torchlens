@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
 from ..viz._drawing import resolve_draw_target
 from ._svg_compose import render_detached_dot
 
@@ -50,9 +51,9 @@ def _bundle_node_style(node: Any, theme: VisualizationTheme) -> dict[str, str]:
     layer = next(iter(getattr(node, "layer_refs", {}).values()), None)
     shape, fill = "oval", "white"
     if layer is not None:
-        if getattr(layer, "is_buffer", False):
+        if record_member(layer, "is_buffer", False):
             shape = "cylinder"
-        elif getattr(layer, "is_atomic_module", False) and getattr(layer, "modules", None):
+        elif record_member(layer, "is_atomic_module", False) and getattr(layer, "modules", None):
             shape = "box"
         try:
             fill = _get_node_bg_color(getattr(layer, "trace", None), layer)  # type: ignore[arg-type]

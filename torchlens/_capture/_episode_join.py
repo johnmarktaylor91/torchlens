@@ -212,7 +212,7 @@ def closed_violation_teaching(step: int, *, settled: bool = False) -> str:
 def _join_error(message: str, *, code: str, **payload: Any) -> Exception:
     """Build the typed join refusal (import-local to keep the leaf light)."""
 
-    from ..errors.episode import EpisodeJoinError
+    from ..errors._episode import EpisodeJoinError
 
     return EpisodeJoinError(message, code=code, **payload)
 

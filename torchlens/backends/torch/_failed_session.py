@@ -14,6 +14,8 @@ from torchlens._errors import TraceCaptureError, attach_partial_trace, original_
 from torchlens._utils._exception_notes import annotate_guarded
 from torchlens.backends.torch import _tl
 
+from ..._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
     from torchlens.backends.torch.backend import TorchBackend
@@ -53,7 +55,7 @@ def _stamp_actual_buffer_writes(session: object, exc: Exception) -> None:
         if events is not None:
             with contextlib.suppress(Exception):
                 exc._torchlens_actual_buffer_writes = tuple(  # type: ignore[attr-defined]
-                    str(getattr(event, "address", None) or "?")
+                    str(record_member(event, "address", None) or "?")
                     for event in events
                     if getattr(event, "value_changed", None) is not False
                 )

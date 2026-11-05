@@ -51,7 +51,7 @@ from .errors._base import CaptureError
 
 if TYPE_CHECKING:
     from ._data_classes.trace import Trace
-    from .intervention.types import InterventionSpec
+    from .intervention._types import InterventionSpec
 
 # ---------------------------------------------------------------------------
 # Toggle — the single bool that gates every decorated wrapper

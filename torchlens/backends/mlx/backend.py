@@ -51,8 +51,8 @@ from ...backends.registry import (
     require_capability_implementation,
 )
 from ...recording._halt import StopSignal
-from ...recording.types import CaptureSpec
-from ...validation.status import ValidationReplaySource, ValidationStatus  # noqa: TC001
+from ...recording._types import CaptureSpec
+from ...validation._status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from .._entry_refusals import refuse_if_bad_max_intermediate_grads
 from .._finalize import (
     attach_function_root_module,
@@ -1461,8 +1461,8 @@ class MLXBackend:
         failed_count = 0
         decisions: tuple[dict[str, Any], ...] = ()
         try:
-            from ...validation.invariants import check_metadata_invariants
-            from ...validation.status import count_importer_region_annotations
+            from ...validation._invariants import check_metadata_invariants
+            from ...validation._status import count_importer_region_annotations
             from .validation import MLX_VALIDATION_REASONS, validate_mlx_captures_detailed
 
             exempted: dict[str, int] = {}
@@ -1471,7 +1471,7 @@ class MLXBackend:
                 failed_count = 1
                 decisions = (_mlx_metadata_failed_decision(MLX_VALIDATION_REASONS),)
             else:
-                replayed_count, failed_count, decisions, exempted, unverified_reasons = (
+                (replayed_count, failed_count, decisions, exempted, unverified_reasons) = (
                     _mlx_detailed_counts(trace, validate_mlx_captures_detailed)
                 )
             if failed_count == 0 and replayed_count < 1:
@@ -2126,7 +2126,7 @@ class MLXBackend:
                 if label is not None:
                     kwarg_positions[key] = label
                     _add(label, key, "kwarg")
-        return tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses)
+        return (tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses))
 
     def _mark_outputs(self, trace: Trace, output: object) -> None:
         """Mark final output-parent operations and settle the unwrapped-op gap."""

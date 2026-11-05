@@ -55,15 +55,15 @@ from torchlens.backends.torch._foreign_data import (
 from torchlens.backends.torch._function_boundary import FOREIGN_FUNCTION_FUNC_NAME
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure, validate_forward_pass
+from torchlens.validation._core import (
+    _check_perturbation_exemptions,
+    _check_whether_func_on_saved_parents_yields_saved_tensor,
+)
+from torchlens.validation._exemptions import CUSTOM_EXEMPTION_CHECKS
 from torchlens.validation._foreign_kernel_dependence import (
     check_foreign_kernel_dependence_exempt,
     declared_output_dependence,
 )
-from torchlens.validation.core import (
-    _check_perturbation_exemptions,
-    _check_whether_func_on_saved_parents_yields_saved_tensor,
-)
-from torchlens.validation.exemptions import CUSTOM_EXEMPTION_CHECKS
 
 _EXEMPT = ("exempted", "pre_perturbation_exemption")
 _INSENSITIVE = ("failed", "perturbation_insensitive")
@@ -204,11 +204,11 @@ def _siblings(trace: Any) -> dict[int, Any]:
     """Return the kernel's boundary ops keyed by output index (exactly one call)."""
 
     ops = [op for op in trace._layer_list if op.func_name == FOREIGN_FUNCTION_FUNC_NAME]
-    assert len({op.func_call_id for op in ops}) == 1, [op.label for op in ops]
+    assert len({op.call.call_id for op in ops}) == 1, [op.label for op in ops]
     by_index = {op.multi_output_index: op for op in ops}
     assert set(by_index) == {0, 1}, by_index
     for op in ops:
-        assert op.transform_config["exits"] == [FLASH_ATTENTION_4_EXIT]
+        assert op.call.func_transform_config["exits"] == [FLASH_ATTENTION_4_EXIT]
     return by_index
 
 
@@ -237,7 +237,7 @@ def _freeze_keeping_identity(op: Any) -> None:
 
 
 def _parent_at(op: Any, position: int) -> str:
-    return op.parent_arg_positions["args"][position]
+    return op.call.parent_arg_positions["args"][position]
 
 
 # ------------------------------------------------------------------ the table
@@ -347,7 +347,7 @@ def test_declared_kernel_validates_with_autograd_enabled() -> None:
         siblings = _siblings(trace)
         assert siblings[0].children and not siblings[1].children
         for op in siblings.values():
-            assert sorted(op.parent_arg_positions["args"]) == [0, 1, 2]
+            assert sorted(op.call.parent_arg_positions["args"]) == [0, 1, 2]
             assert len(op.parents) == 3
     finally:
         trace.cleanup()
@@ -431,7 +431,7 @@ def test_undeclared_kernel_unmoved_sibling_output_still_fails() -> None:
     trace = _capture(model, x)
     try:
         lse = _siblings(trace)[1]
-        assert lse.transform_config["function"] == _UndeclaredTwoOutputKernel.__qualname__
+        assert lse.call.func_transform_config["function"] == _UndeclaredTwoOutputKernel.__qualname__
         assert declared_output_dependence(lse) is None
         assert failure.op_label == lse.label, failure
         assert failure.extra["perturbed_parents"] == [_parent_at(lse, 2)], failure
@@ -446,7 +446,7 @@ def test_position_outside_the_row_stays_strict() -> None:
     trace = _capture(_KernelModel(_FourArgDeclaredName, extra=True), torch.randn(3, 4))
     try:
         lse = _siblings(trace)[1]
-        assert sorted(lse.parent_arg_positions["args"]) == [0, 1, 2, 3]
+        assert sorted(lse.call.parent_arg_positions["args"]) == [0, 1, 2, 3]
         assert _check_perturbation_exemptions(trace, lse, [_parent_at(lse, 3)]) is False
         assert _decision(trace, lse, _parent_at(lse, 2)) == _EXEMPT
         _freeze(lse)
@@ -572,12 +572,12 @@ def _fa2_siblings(trace: Any) -> dict[int, Any]:
     """Return the four native sibling ops of the one ``_flash_attn_forward`` call."""
 
     ops = [op for op in trace._layer_list if op.func_name == FLASH_ATTENTION_2_FUNC_NAME]
-    assert len({op.func_call_id for op in ops}) == 1, [op.label for op in ops]
+    assert len({op.call.call_id for op in ops}) == 1, [op.label for op in ops]
     by_index = {op.multi_output_index: op for op in ops}
     assert set(by_index) == {0, 1, 2, 3}, by_index
     for op in ops:
         assert op.func_name != FOREIGN_FUNCTION_FUNC_NAME
-        assert "function_module" not in op.transform_config, op.transform_config
+        assert "function_module" not in op.call.func_transform_config, op.call.func_transform_config
     return by_index
 
 
@@ -679,7 +679,9 @@ def test_undeclared_custom_op_unmoved_sibling_output_still_fails(undeclared_fa2_
         row = known_native_custom_op_output_dependence(
             FLASH_ATTENTION_2_CUSTOM_OP, FLASH_ATTENTION_2_FUNC_NAME, failed.multi_output_index
         )
-        position_of = {label: pos for pos, label in failed.parent_arg_positions["args"].items()}
+        position_of = {
+            label: pos for pos, label in failed.call.parent_arg_positions["args"].items()
+        }
         perturbed = failure.extra["perturbed_parents"]
         assert row is not None and perturbed, failure
         assert all(row.independent_of(position_of[label]) for label in perturbed), failure
@@ -692,7 +694,7 @@ def test_fa2_parent_at_an_undeclared_position_or_keyword_stays_strict(fa2_op: An
 
     for layout, label_of in (
         ("alibi", lambda op: _parent_at(op, 9)),
-        ("kwarg", lambda op: op.parent_arg_positions["kwargs"]["v"]),
+        ("kwarg", lambda op: op.call.parent_arg_positions["kwargs"]["v"]),
     ):
         trace = _fa2_capture(_Fa2Model(fa2_op, layout=layout), torch.randn(3, 4))
         try:

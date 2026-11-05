@@ -27,6 +27,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from .._utils._record_group_table import record_member
 from .auto_collapse import (
     ModuleRepeatFold,
     _readable_band_high,
@@ -62,7 +63,7 @@ def _top_level_fallback_addresses(trace: Trace) -> tuple[str, ...]:
 
     addresses: list[str] = []
     for module in trace.modules:
-        address = str(getattr(module, "address", ""))
+        address = str(record_member(module, "address", ""))
         if address in {"", "self"}:
             continue
         parent = getattr(module, "address_parent", None)
@@ -134,9 +135,9 @@ def _outermost_multi_op_addresses(trace: Trace) -> frozenset[str]:
 
     candidates = sorted(
         (
-            str(getattr(module, "address", ""))
+            str(record_member(module, "address", ""))
             for module in trace.modules
-            if str(getattr(module, "address", "")) not in {"", "self"}
+            if str(record_member(module, "address", "")) not in {"", "self"}
             and len(getattr(module, "layer_labels", ()) or ()) > 1
         ),
         key=lambda address: (address.count("."), address),

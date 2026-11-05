@@ -3,7 +3,7 @@
 Registry law (agent memo 3.1): this module owns every tool's name,
 description, input/output schema, read-only/idempotent annotations, default
 budgets, CLI verb mapping, and handler. Python (:func:`call_tool`), MCP
-(``torchlens.bridge.mcp``), and the CLI (``torchlens.agent.cli``) are thin
+(``torchlens.bridge.mcp``), and the CLI (``torchlens.agent._cli``) are thin
 adapters over it; transports may override DEFAULTS, never semantics. The
 field-level parity test (served ``list_tools`` == registry) is a release
 gate -- the structural fix for declared-vs-served schema drift.

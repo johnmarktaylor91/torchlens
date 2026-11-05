@@ -648,19 +648,19 @@ PHASES: dict[str, tuple[str, str]] = {
     "fork": ("torchlens._data_classes.trace", "Trace.fork"),
     "apply_mutation": ("torchlens._data_classes.trace", "Trace._apply_do_mutation"),
     "record_audit": ("torchlens._data_classes.trace", "Trace._record_do_intervention_event"),
-    "rerun_capture": ("torchlens.intervention.rerun", "_capture_with_active_spec"),
+    "rerun_capture": ("torchlens.intervention._rerun", "_capture_with_active_spec"),
     "rerun_capture_core": ("torchlens._user_funcs", "_run_model_and_save_specified_outs"),
     "rng_monitor_window": ("torchlens._utils.rng", "host_nondeterminism_monitor.__enter__"),
-    "rerun_validate": ("torchlens.intervention.rerun", "_validate_rerun_result"),
-    "rerun_reconcile_fires": ("torchlens.intervention.rerun", "_reconcile_rerun_hook_fires"),
+    "rerun_validate": ("torchlens.intervention._rerun", "_validate_rerun_result"),
+    "rerun_reconcile_fires": ("torchlens.intervention._rerun", "_reconcile_rerun_hook_fires"),
     "rerun_refresh_state": (
         "torchlens._data_classes.trace",
         "Trace._refresh_matching_rerun_state_from",
     ),
     "rerun_replace_state": ("torchlens._data_classes.trace", "Trace.replace_state_from"),
-    "push_replay": ("torchlens.intervention.replay", "_run_replay"),
-    "push_cone": ("torchlens.intervention.replay", "cone_of_effect"),
-    "push_hook_apply": ("torchlens.intervention.replay", "_apply_replay_hooks"),
+    "push_replay": ("torchlens.intervention._replay", "_run_replay"),
+    "push_cone": ("torchlens.intervention._replay", "cone_of_effect"),
+    "push_hook_apply": ("torchlens.intervention._replay", "_apply_replay_hooks"),
 }
 
 #: The host RNG monitor's per-event classifier helpers; a call into one is

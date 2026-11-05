@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._data_classes._op_columns import column_rows_by_label
 from .._quantities import Bytes
+from .._utils._record_group_table import record_member
 from ..backends._constants import is_constant_op
 
 if TYPE_CHECKING:
@@ -88,7 +89,7 @@ def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., N
 def _facade_reader(op: Any, name: str, *default: Any) -> Any:
     """Read field ``name`` of ``op`` through the ``Op`` facade (``getattr`` semantics)."""
 
-    return getattr(op, name, *default)
+    return record_member(op, name, *default)
 
 
 def _column_reader(
@@ -117,7 +118,7 @@ def _column_reader(
                 soft[name] = None
         getter = soft[name]
         if getter is None or default[0] is not None:
-            return getattr(op, name, *default)
+            return record_member(op, name, *default)
         try:
             return getter(row_of[id(op)])
         except AttributeError:
@@ -151,12 +152,14 @@ def _group_passes_facade(ops: list[Any], layer_class: Any) -> OrderedDict[str, A
             layer_log = layer_logs[no_call_label] = layer_class(pass_log)
         else:
             layer_log = layer_logs[no_call_label]
-            if pass_log.has_input_ancestor:
-                layer_log.has_input_ancestor = True
-            if layer_log.io_role is not None and pass_log.io_role is not None:
-                layer_log.io_role = _merge_io_role(layer_log.io_role, pass_log.io_role)
-            if pass_log.is_atomic_module:
-                layer_log.is_atomic_module = True
+            if pass_log.graph.has_input_ancestor:
+                layer_log._graph_has_input_ancestor = True
+            if layer_log.graph.io_role is not None and pass_log.graph.io_role is not None:
+                layer_log._graph_io_role = _merge_io_role(
+                    layer_log.graph.io_role, pass_log.graph.io_role
+                )
+            if pass_log.module_context.is_atomic_module:
+                layer_log._module_context_is_atomic_module = True
         layer_log.ops[pass_log.pass_number] = pass_log
         layer_log.call_labels.append(pass_log.label)
         _merge_layer_log_conditional_fields(layer_log, pass_log)
@@ -187,11 +190,11 @@ def _group_passes_columns(
         else:
             layer_log = layer_logs[no_call_label]
             if get["has_input_ancestor"](row):
-                layer_log.has_input_ancestor = True
-            if layer_log.io_role is not None and io_role(row) is not None:
-                layer_log.io_role = _merge_io_role(layer_log.io_role, io_role(row))
+                layer_log._graph_has_input_ancestor = True
+            if layer_log.graph.io_role is not None and io_role(row) is not None:
+                layer_log._graph_io_role = _merge_io_role(layer_log.graph.io_role, io_role(row))
             if get["is_atomic_module"](row):
-                layer_log.is_atomic_module = True
+                layer_log._module_context_is_atomic_module = True
         number = pass_number(row)
         layer_log.ops[number] = pass_log
         layer_log.call_labels.append(get["label"](row))
@@ -234,7 +237,7 @@ def _sum_autograd(
             if linked_labels:
                 read(pass_log, "annotations")["tied_parameter_notation"] = linked_labels
         if _set_layer_autograd(layer_log, read):
-            autograd_memory += layer_log.autograd_memory
+            autograd_memory += layer_log.cost.autograd_memory
             has_autograd_saved_value = True
         reconcile(layer_log, read)
         _rebuild_layer_log_conditional_views(layer_log, read)
@@ -254,13 +257,13 @@ def _set_layer_autograd(layer_log: Any, read: Callable[[Any, str], Any]) -> bool
         if read(op, "num_autograd_tensors") is not None
     ]
     if pass_autograd_bytes:
-        layer_log.autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
-        layer_log.total_autograd_memory = layer_log.autograd_memory
-        layer_log.num_autograd_tensors = sum(pass_autograd_tensor_counts)
+        layer_log._cost_autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
+        layer_log._cost_total_autograd_memory = layer_log.cost.autograd_memory
+        layer_log._autograd_num_autograd_tensors = sum(pass_autograd_tensor_counts)
         return True
-    layer_log.autograd_memory = None
-    layer_log.total_autograd_memory = None
-    layer_log.num_autograd_tensors = None
+    layer_log._cost_autograd_memory = None
+    layer_log._cost_total_autograd_memory = None
+    layer_log._autograd_num_autograd_tensors = None
     return False
 
 
@@ -315,10 +318,10 @@ def _merge_layer_log_conditional_fields(
     """
     _merge_conditional_values(
         layer_log,
-        pass_log.is_in_conditional_body,
-        pass_log.conditional_branch_stack,
+        pass_log.control_flow.is_in_conditional_body,
+        pass_log.control_flow.branch_stack,
         pass_log.pass_number,
-        pass_log.conditional_arm_children,
+        pass_log.control_flow.arm_children,
     )
 
 
@@ -332,20 +335,20 @@ def _merge_conditional_values(
     """Merge one pass's already-read conditional fields into an aggregate ``Layer``."""
 
     if in_body:
-        layer_log.is_in_conditional_body = True
+        layer_log._control_flow_is_in_conditional_body = True
 
     stack_signature = tuple(branch_stack)
-    if stack_signature not in layer_log.conditional_branch_stack_ops:
-        layer_log.conditional_role_stacks.append(list(branch_stack))
-        layer_log.conditional_branch_stack_ops[stack_signature] = []
+    if stack_signature not in layer_log.control_flow.branch_stack_ops:
+        layer_log.control_flow.role_stacks.append(list(branch_stack))
+        layer_log.control_flow.branch_stack_ops[stack_signature] = []
 
-    signature_ops = layer_log.conditional_branch_stack_ops[stack_signature]
+    signature_ops = layer_log.control_flow.branch_stack_ops[stack_signature]
     if pass_number not in signature_ops:
         signature_ops.append(pass_number)
         signature_ops.sort()
 
     for conditional_id, branch_children in arm_children.items():
-        merged_branch_children = layer_log.conditional_arm_children.setdefault(
+        merged_branch_children = layer_log.control_flow.arm_children.setdefault(
             conditional_id,
             {},
         )
@@ -372,8 +375,8 @@ def _rebuild_layer_log_conditional_views(
     read:
         ``(op, field) -> value`` reader for the passes' entry children.
     """
-    layer_log.is_in_conditional_body = any(
-        len(branch_stack) > 0 for branch_stack in layer_log.conditional_role_stacks
+    layer_log._control_flow_is_in_conditional_body = any(
+        len(branch_stack) > 0 for branch_stack in layer_log.control_flow.role_stacks
     )
 
     conditional_entry_children: list[str] = []
@@ -385,7 +388,7 @@ def _rebuild_layer_log_conditional_views(
                 entry_seen,
                 _strip_pass_suffix(child_label),
             )
-    layer_log.conditional_entry_children = conditional_entry_children
+    layer_log._control_flow_entry_children = conditional_entry_children
 
     conditional_then_children: list[str] = []
     then_seen: set[str] = set()
@@ -393,7 +396,7 @@ def _rebuild_layer_log_conditional_views(
     elif_seen_by_index: dict[int, set[str]] = {}
     conditional_else_children: list[str] = []
     else_seen: set[str] = set()
-    for branch_children in layer_log.conditional_arm_children.values():
+    for branch_children in layer_log.control_flow.arm_children.values():
         for child_label in branch_children.get("then", []):
             _append_unique_child_label(conditional_then_children, then_seen, child_label)
         for branch_kind, child_labels in branch_children.items():
@@ -407,6 +410,6 @@ def _rebuild_layer_log_conditional_views(
         for child_label in branch_children.get("else", []):
             _append_unique_child_label(conditional_else_children, else_seen, child_label)
 
-    layer_log.conditional_then_children = conditional_then_children
-    layer_log.conditional_elif_children = conditional_elif_children
-    layer_log.conditional_else_children = conditional_else_children
+    layer_log._control_flow_then_children = conditional_then_children
+    layer_log._control_flow_elif_children = conditional_elif_children
+    layer_log._control_flow_else_children = conditional_else_children

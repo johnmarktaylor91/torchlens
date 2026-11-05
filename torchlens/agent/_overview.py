@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from torchlens._utils._record_group_table import record_member
+
 from ._fold import FOLD_KEY_VERSION, fold_class_rows, fold_trace
 
 #: Schema ids -- the two overview modes are distinct schemas by contract.
@@ -87,7 +89,9 @@ def _coverage_block(log: Any) -> dict[str, Any]:
 
     states = [_payload_state(op) for op in ops]
     saved_grads = sum(
-        1 for op in ops if getattr(op, "grad", None) is not None or getattr(op, "grad_ref", None)
+        1
+        for op in ops
+        if getattr(op, "grad", None) is not None or record_member(op, "grad_ref", None)
     )
     return {
         "ops_total": len(ops),

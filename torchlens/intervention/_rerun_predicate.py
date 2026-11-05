@@ -30,10 +30,10 @@ from .._io.format3.recipe import (
 )
 from .._io.format_errors import ArtifactError
 from .._ir.selector_eval import normalize_selector_like
+from ._helpers import rebuild_builtin_helper
+from ._spec import Recipe, Rule
+from ._types import Edit, HookSpec, InterventionSpec, TargetSpec, TargetValueSpec, TensorSliceSpec
 from .errors import ControlFlowDivergenceError
-from .helpers import rebuild_builtin_helper
-from .spec import Recipe, Rule
-from .types import Edit, HookSpec, InterventionSpec, TargetSpec, TargetValueSpec, TensorSliceSpec
 
 
 @dataclass(frozen=True)

@@ -77,7 +77,7 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
     # POSITIVE CONTROL that must FAIL to detect: naive key-set membership
     # claims the relu position is preserved (the same rendered key exists on
     # both sides -- but on the inserted side it names the INSERTED op).
-    inserted_keys = {inserted.ops[label].site_key for label in inserted.op_labels}
+    inserted_keys = {inserted.ops[label].graph.site_key for label in inserted.op_labels}
     assert relu_key in inserted_keys, "naive membership passes (that is the trap)"
 
     # POSITIVE CONTROL that must FAIL to detect: payload equality. The
@@ -100,11 +100,11 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
 # ---------------------------------------------------------------------------
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/spec_compat.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_spec_compat.py, campaign mutant kills.
 def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> None:
     import os
 
-    from torchlens.intervention.save import check_spec_compat, load_intervention_spec
+    from torchlens.intervention._save import check_spec_compat, load_intervention_spec
 
     base_model = _Insertable(extra=False)
     inserted_model = _Insertable(extra=True)
@@ -141,7 +141,7 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     assert drifted.diff.new_site_keys or drifted.diff.missing_site_keys
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_trace_hooks.py, intervention/spec.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_trace_hooks.py, intervention/_spec.py, campaign mutant kills.
 def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
     """Leverage B7: a spec staged by the capture-time predicate door persists
     resolved labels only; the reload discloses spec_derived=True. Spec-door
@@ -149,7 +149,7 @@ def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
 
     import os
 
-    from torchlens.intervention.save import load_intervention_spec
+    from torchlens.intervention._save import load_intervention_spec
 
     model = _Insertable(extra=False)
     log = tl.trace(model, torch.randn(2, 4), intervene=tl.when(tl.func("relu"), tl.scale(0.5)))

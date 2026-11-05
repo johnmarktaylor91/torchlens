@@ -37,7 +37,7 @@ from torchlens.options import (
     merge_intervention_options,
 )
 
-replay_module = importlib.import_module("torchlens.intervention.replay")
+replay_module = importlib.import_module("torchlens.intervention._replay")
 
 _CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
 _GRAD_CAPTURE = tl.options.CaptureOptions(save_grads="all", replayable=True, backward_ready=True)

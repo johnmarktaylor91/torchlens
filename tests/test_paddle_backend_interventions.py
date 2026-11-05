@@ -73,7 +73,7 @@ def _mlp(x: Any, w1: Any, b1: Any, w2: Any, b2: Any) -> Any:
 def _output_op(trace: Any) -> Any:
     """Return the output-parent op of a trace."""
 
-    return next(op for op in trace._layer_list if op.is_output_parent)
+    return next(op for op in trace._layer_list if op.graph.is_output_parent)
 
 
 def _relu_op(trace: Any) -> Any:
@@ -360,7 +360,7 @@ def test_paddle_halt_value_dependent_predicate() -> None:
 def test_paddle_halt_non_bool_predicate_refuses_typed() -> None:
     """halt predicates must return bool, mirroring the torch contract."""
 
-    from torchlens.recording.exceptions import PredicateError
+    from torchlens.recording._exceptions import PredicateError
 
     with pytest.raises(PredicateError, match="must return bool"):
         tl.trace(_mlp, _inputs(), backend="paddle", stop_after=lambda ctx: 1)

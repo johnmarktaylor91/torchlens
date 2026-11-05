@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._capture.flops import ATTENTION_FULL_SQUARE_FUNCS, ATTENTION_FULL_SQUARE_NOTE
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -95,7 +96,7 @@ def op_kernel_groups(op: Any) -> tuple[Shape | None, int | None]:
     default ``groups=1``); pooling ops carry a kernel and no groups.
     """
 
-    config = getattr(op, "func_config", None) or {}
+    config = record_member(op, "func_config", None) or {}
     kernel = config.get("kernel_size")
     if isinstance(kernel, int):
         kernel = (kernel,)

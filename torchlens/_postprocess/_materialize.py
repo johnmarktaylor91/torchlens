@@ -21,7 +21,7 @@ from torchlens._ir.events import (
     ModulePrepEvent,
     OpEvent,
 )
-from torchlens.intervention.types import EdgeUseRecord
+from torchlens.intervention._types import EdgeUseRecord
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._data_classes._module_role_hints import (
@@ -417,9 +417,9 @@ def _drop_missing_buffer_sources(local_registrations: dict[str, Any]) -> None:
 
     raw_labels = set(local_registrations)
     for op_log in local_registrations.values():
-        buffer_source = getattr(op_log, "buffer_source", None)
+        buffer_source = getattr(op_log.graph, "buffer_source", None)
         if buffer_source is not None and buffer_source not in raw_labels:
-            op_log.buffer_source = None
+            op_log._graph_buffer_source = None
 
 
 def _output_versions_by_parent(
@@ -762,11 +762,11 @@ def _normalize_edge_use_record(
     parent_label, arg_position, edge_use = record[:3]
     if not isinstance(parent_label, str) or not isinstance(edge_use, str):
         return None
-    parent_event = op_events_by_label.get(parent_label)
+    source_event = op_events_by_label.get(parent_label)
     # F10 (lovely item 8): the storage verdict populates from the closed
     # function-semantics table when this event carries a function name;
     # keyword edges and unknown functions stay the honest "unknown".
-    from ..intervention.edge_semantics import classify_view_or_copy
+    from ..intervention._edge_semantics import classify_view_or_copy
 
     arg_path = _edge_arg_position_to_path(arg_position)
     event_func_name = getattr(getattr(event, "function", None), "func_name", None)
@@ -780,7 +780,7 @@ def _normalize_edge_use_record(
         arg_kind="keyword" if edge_use == "kwarg" else "positional",
         arg_path=cast(Any, arg_path),
         view_or_copy=cast(Any, storage_relation),
-        parent_func_call_id=None if parent_event is None else parent_event.func_call_id,
+        parent_func_call_id=None if source_event is None else source_event.func_call_id,
         child_func_call_id=event.func_call_id or 0,
         edge_use=edge_use,
     )

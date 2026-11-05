@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 from .._user_funcs import trace
-from ..intervention.spec import is_gradient_site
+from ..intervention._spec import is_gradient_site
 from ..options import CaptureOptions
 from ._aggregate import (
     _FAST_LOOP_GEN0_THRESHOLD,

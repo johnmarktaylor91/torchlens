@@ -19,6 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens._utils._record_group_table import record_member
 
 captum_attr = pytest.importorskip("captum.attr")
 torchvision = pytest.importorskip("torchvision")
@@ -36,7 +37,7 @@ def _outermost(op: Any) -> str | None:
     """Return the outermost module address an op's tensor is the output of."""
 
     addresses = []
-    for call in getattr(op, "output_of_module_calls", ()) or ():
+    for call in record_member(op, "output_of_module_calls", ()) or ():
         if isinstance(call, tuple):
             addresses.append(str(call[0]))
         else:
@@ -49,7 +50,7 @@ def _module_calls(op: Any) -> set[str]:
     """Return the pass-qualified module calls whose output an op's tensor is."""
 
     calls = set()
-    for call in getattr(op, "output_of_module_calls", ()) or ():
+    for call in record_member(op, "output_of_module_calls", ()) or ():
         calls.add(f"{call[0]}:{call[1]}" if isinstance(call, tuple) else str(call))
     return calls
 
@@ -158,7 +159,9 @@ def _add_label(log: Any) -> str:
     parents = list(second_relu[0].parents)
     assert len(parents) == 1, parents
     label = str(parents[0])
-    assert log[label].output_of_module_calls in ((), [], None), "the add is not a module output"
+    assert log[label].module_context.output_of_module_calls in ((), [], None), (
+        "the add is not a module output"
+    )
     return label
 
 

@@ -29,7 +29,7 @@ from torchlens._validation_state_snapshot import (
     restore_snapshot_if_changed,
     snapshot_state_for_restore,
 )
-from torchlens.validation.diagnostics import last_validation_failure
+from torchlens.validation._diagnostics import last_validation_failure
 
 _SENTINEL_SHAPE = (89, 97)
 _DEVICES = ["cpu"] + (["cuda"] if torch.cuda.is_available() else [])

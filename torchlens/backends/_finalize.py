@@ -22,8 +22,10 @@ from .._postprocess._recurrence import compute_preview_recurrence_assignments, r
 from .._postprocess.finalization import _build_module_logs, _build_root_module_log
 from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from .._quantities import Bytes
+from .._utils._record_group_table import record_member
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from ._constants import ConstantLedger, apply_constants_rule
+from ._finalize_distances import compute_preview_input_output_distances
 from ._finalize_totals import _count_trace_ops, _update_param_totals_from_layers
 from .registry import BackendName
 
@@ -158,8 +160,8 @@ def finalize_single_pass_trace(
             enrich_op(op_log)
         if attach_op_params is not None:
             attach_op_params(op_log, trace, seen_param_barcodes)
-            if not isinstance(op_log.param_memory, Bytes):
-                op_log.param_memory = Bytes(int(op_log.param_memory))
+            if not isinstance(op_log.cost.param_memory, Bytes):
+                op_log._cost_param_memory = Bytes(int(op_log.cost.param_memory))
         if op_log._param_logs:
             layers_with_params_seen.add(op_log.layer_label)
         if update_param_usage:
@@ -435,118 +437,6 @@ def populate_object_module_build_data(
             parent_call_label = call_label
 
 
-def compute_preview_input_output_distances(trace: Trace) -> None:
-    """Run torch's Step-4 depth flood over a finalized preview graph.
-
-    Parameters
-    ----------
-    trace:
-        Finalized preview trace whose ops carry label-based ``parents``/
-        ``children`` edges and populated ``input_layers``/``output_layers``.
-
-    Returns
-    -------
-    None
-        ``min/max_distance_from_input``, ``min/max_distance_to_output``,
-        ``input_ancestors``, and ``output_descendants`` are populated in place.
-
-    Notes
-    -----
-    This mirrors ``postprocess._layer_depths._mark_layer_depths`` but
-    resolves labels through an explicit op index instead of
-    ``Trace.__getitem__`` (whose finished-mode lookup returns ``Layer``
-    objects, not the ops the flood must mutate). Lineage sets are normalized
-    first because backends may emit immutable placeholders (e.g. TF's
-    ``input_ancestors=()``).
-    """
-
-    ops_by_label: dict[str, Any] = {}
-    for op_log in trace._layer_list:
-        for field_name in ("input_ancestors", "output_descendants"):
-            value = getattr(op_log, field_name, None)
-            if not isinstance(value, set):
-                setattr(op_log, field_name, set(value or ()))
-        for key in (
-            getattr(op_log, "_label_raw", None),
-            getattr(op_log, "label", None),
-            getattr(op_log, "layer_label", None),
-        ):
-            if key is not None:
-                ops_by_label.setdefault(key, op_log)
-
-    ordered_ops = [
-        ops_by_label[label]
-        for label in trace._raw_graph_ws.raw_layer_labels_list
-        if label in ops_by_label
-    ]
-    for mode, starting_labels, min_field, max_field, marker_field, lineage_field, edge_field in (
-        (
-            "input",
-            trace.input_layers,
-            "min_distance_from_input",
-            "max_distance_from_input",
-            "has_input_ancestor",
-            "input_ancestors",
-            "children",
-        ),
-        (
-            "output",
-            trace.output_layers,
-            "min_distance_to_output",
-            "max_distance_to_output",
-            "has_output_descendant",
-            "output_descendants",
-            "parents",
-        ),
-    ):
-        traversal = ordered_ops if mode == "input" else list(reversed(ordered_ops))
-        for starting_label in starting_labels:
-            starting_op = ops_by_label.get(starting_label)
-            if starting_op is None:
-                continue
-            _update_distance(starting_op, min_field, max_field, 0)
-            setattr(starting_op, marker_field, True)
-            getattr(starting_op, lineage_field).add(starting_label)
-        for op_log in traversal:
-            current_min = getattr(op_log, min_field, None)
-            current_max = getattr(op_log, max_field, None)
-            if current_min is None or current_max is None:
-                continue
-            lineage = getattr(op_log, lineage_field)
-            for next_label in getattr(op_log, edge_field, ()) or ():
-                next_op = ops_by_label.get(next_label)
-                if next_op is None:
-                    continue
-                _update_distance(next_op, min_field, max_field, current_min + 1)
-                _update_distance(next_op, min_field, max_field, current_max + 1)
-                setattr(next_op, marker_field, True)
-                getattr(next_op, lineage_field).update(lineage)
-
-
-def _update_distance(op_log: Any, min_field: str, max_field: str, hops: int) -> None:
-    """Fold one candidate hop count into an op's min/max distance fields.
-
-    Parameters
-    ----------
-    op_log:
-        Op receiving the update.
-    min_field, max_field:
-        Distance attribute names for the active flood direction.
-    hops:
-        Candidate hop count from the flood frontier.
-
-    Returns
-    -------
-    None
-        The op's distance fields are widened in place.
-    """
-
-    current_min = getattr(op_log, min_field, None)
-    current_max = getattr(op_log, max_field, None)
-    setattr(op_log, min_field, hops if current_min is None else min(current_min, hops))
-    setattr(op_log, max_field, hops if current_max is None else max(current_max, hops))
-
-
 def _mint_preview_site_keys(trace: Trace) -> None:
     """Mint the policy-independent ``site_key_v1`` on every retained preview op.
 
@@ -565,9 +455,9 @@ def _mint_preview_site_keys(trace: Trace) -> None:
 
     minter = SiteKeyMinter()
     for op_log in trace._raw_graph_ws.raw_layer_dict.values():
-        if getattr(op_log, "is_orphan", False):
+        if record_member(op_log, "is_orphan", False):
             continue
-        op_log.site_key = minter.mint(
+        op_log._graph_site_key = minter.mint(
             getattr(op_log, "modules", None) or (),
             str(getattr(op_log, "type", "") or ""),
             (
@@ -637,7 +527,7 @@ def _finalize_single_op(
     op_log.pass_number = pass_index
     op_log.num_passes = num_passes
     if assignment is not None:
-        op_log.equivalence_class = assignment.equivalence_key
+        op_log._graph_equivalence_class = assignment.equivalence_key
     trace._layer_list.append(op_log)
     # Torch parity: layer_dict_main_keys is ALWAYS keyed by the pass-qualified
     # op.label (_postprocess/labeling.py's
@@ -758,13 +648,13 @@ def _apply_recurrence_relabel_epilogue(
 
     equivalent_labels_by_key: dict[str, set[str]] = {}
     for op_log in raw_dict.values():
-        equivalent_labels_by_key.setdefault(op_log.equivalence_class, set()).add(op_log.label)
+        equivalent_labels_by_key.setdefault(op_log.graph.equivalence_class, set()).add(op_log.label)
     for label, op_log in raw_dict.items():
-        op_log.equivalent_ops = equivalent_labels_by_key[op_log.equivalence_class]
+        op_log._graph_equivalent_ops = equivalent_labels_by_key[op_log.graph.equivalence_class]
         recurrent_labels = (
             assignments[label].recurrent_labels if assignments is not None else (label,)
         )
-        op_log.recurrent_ops = [
+        op_log._graph_recurrent_ops = [
             raw_to_final_op[member] for member in recurrent_labels if member in raw_to_final_op
         ]
     trace._graph_op_equivalence_classes.clear()
@@ -1137,7 +1027,7 @@ def attach_module_owned_op_params(
     op_log.num_params = sum(param.num_params for param in params)
     op_log.num_params_trainable = sum(param.num_params for param in params if param.is_trainable)
     op_log.num_params_frozen = sum(param.num_params for param in params if not param.is_trainable)
-    op_log.param_memory = sum(int(param.param_memory) for param in params)
+    op_log._cost_param_memory = sum(int(param.param_memory) for param in params)
     seen_param_barcodes.update(param.barcode for param in params)
 
 

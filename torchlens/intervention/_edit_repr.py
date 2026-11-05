@@ -18,7 +18,7 @@ from .._utils._display_constructor import clipped, value_text
 from .._utils.fail_open import fail_open
 
 if TYPE_CHECKING:
-    from .types import Edit
+    from ._types import Edit
 
 #: Public namespaces searched for a builtin constructor, in order, with the
 #: prefix each one prints under (``import torchlens as tl``).
@@ -99,7 +99,7 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
 
     if spec.portability != "builtin" or spec.selection_recipe is not None:
         return None
-    from .helpers import builtin_helper_constructor
+    from ._helpers import builtin_helper_constructor
 
     target = builtin_helper_constructor(spec.name)
     if target is None or not _binds(target, spec):

@@ -265,7 +265,7 @@ def _saved_sites(trace: Any, selector: Any = None) -> list[tuple[str, str | None
             continue
         site_key: str | None
         try:
-            site_key = str(op.site_key)
+            site_key = str(op.graph.site_key)
         except Exception:  # noqa: BLE001 - keyless legacy grouping stays plan-comparable by label
             site_key = None
         sites.append((str(op.label), site_key, op.out))

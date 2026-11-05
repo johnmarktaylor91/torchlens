@@ -26,7 +26,7 @@ from .._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from ..intervention.types import FireRecord
+from ..intervention._types import FireRecord
 from ..viz._drawing import Drawing, resolve_draw_target
 from ._color_sources import resolve_color_source
 from ._draw_validation import _validate_draw_flag_options

@@ -46,6 +46,7 @@ from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._partial import PartialTrace
+from .._utils._record_group_table import record_member
 from .._utils.display import atomic_write_text
 from ..errors._base import TorchLensWarning
 from ._common import _static_graph_data
@@ -157,7 +158,7 @@ def _intervention_hop(log: Any, label: str) -> tuple[tuple[str, ...], tuple[str,
     try:
         op = log[label]
         intervened = bool(
-            getattr(op, "is_edited", False) or getattr(op, "edge_substitutions", None)
+            getattr(op, "is_edited", False) or record_member(op, "edge_substitutions", None)
         )
         if not intervened:
             return None
@@ -199,7 +200,7 @@ def _selection_sites(log: Any, selection: Any) -> list[tuple[str, str]]:
         # carry the L1 structural string -- match either spelling.
         base, _, pass_text = label.rpartition(":")
         pair = (base, int(pass_text)) if base and pass_text.isdigit() else None
-        if getattr(op, "site_key", None) in site_keys or pair in site_keys:
+        if record_member(op, "site_key", None) in site_keys or pair in site_keys:
             sites.append((label, "selection"))
     return sites
 
@@ -460,8 +461,8 @@ def _op_table(log: Any) -> str:
             escape(str(tuple(shape)) if shape is not None else "?"),
             escape(str(getattr(op, "dtype", "?"))),
             escape(str(getattr(op, "num_params", "?"))),
-            escape(str(getattr(op, "flops_forward", "?"))),
-            escape(str(getattr(op, "func_duration", "?"))),
+            escape(str(record_member(op, "flops_forward", "?"))),
+            escape(str(record_member(op, "func_duration", "?"))),
         )
         rows.append(
             f'<tr id="{escape(_anchor(label), quote=True)}">'

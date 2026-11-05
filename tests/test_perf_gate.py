@@ -21,7 +21,10 @@ from benchmarks.perf_suite import (
     _validate_baseline_status_args,
 )
 from torchlens._postprocess import ast_branches
-from torchlens._postprocess.loop_grouping_adapter import FrontierNodes, _pop_frontier_node
+from torchlens._postprocess.loop_grouping_adapter import (
+    FrontierNodes,
+    _pop_frontier_node,
+)
 from torchlens.backends.torch.model_prep import _traverse_model_modules
 
 

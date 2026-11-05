@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .._utils._display_numbers import format_count
+from .._utils._record_group_table import record_member
 from .collapse_plan import RenderContext, SegmentDescriptor
 
 if TYPE_CHECKING:
@@ -51,10 +52,10 @@ def _make_child_segment_descriptor(
                     continue
                 seen_bases.add(base)
                 num_layers += 1
-                num_buffers += bool(entry.is_buffer)
+                num_buffers += bool(entry.graph.is_buffer)
         else:
             num_layers = len(covered_entries)
-            num_buffers = sum(bool(entry.is_buffer) for entry in covered_entries)
+            num_buffers = sum(bool(entry.graph.is_buffer) for entry in covered_entries)
     else:
         num_layers = sum(
             len(getattr(trace.modules[address], "layer_labels", ()) or ()) for address in addresses
@@ -157,7 +158,7 @@ def _effective_render_module_stack(op: Op) -> tuple[str, ...]:
     """
 
     modules = [str(module) for module in getattr(op, "modules", ()) or ()]
-    if getattr(op, "is_atomic_module", False) and modules:
+    if record_member(op, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     return tuple(modules)
 

@@ -9,6 +9,10 @@ import torch
 
 from .._utils.tensor_utils import layer_grad_tolerances_for_dtype
 from . import _influence  # noqa: F401  (registers the resolver behind .of())
+
+# Importing the package executes built-in rule decorators once, before any public
+# descriptor, projective, or validation path can reach the geometry engines.
+from ._builtin_rules import __all__ as _builtin_rule_modules  # noqa: F401
 from ._errors import (
     AmbiguousInputError,
     BackendUnsupportedError,
@@ -38,10 +42,6 @@ from ._types import (
 )
 from ._validation import cross_validate
 from ._view import ReceptiveFieldView
-
-# Importing the package executes built-in rule decorators once, before any public
-# descriptor, projective, or validation path can reach the geometry engines.
-from .rules import __all__ as _builtin_rule_modules  # noqa: F401
 
 rules = _registered_rules
 
@@ -215,7 +215,7 @@ def _empirical_adjoint_checks(
     for validation in containment:
         for role, receptive in validation.grad.items():
             far_label = next(
-                (op.label for op in trace._layer_list if str(op.io_role or op.label) == role),
+                (op.label for op in trace._layer_list if str(op.graph.io_role or op.label) == role),
                 "",
             )
             support = torch.nonzero(receptive.support_mask, as_tuple=False)

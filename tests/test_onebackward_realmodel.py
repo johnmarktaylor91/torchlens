@@ -18,7 +18,7 @@ import torch
 from support.r1_venue import IN_OFFLINE_VENUE
 
 import torchlens as tl
-from torchlens.attribution import onebackward as ob
+from torchlens.attribution import _onebackward as ob
 
 pytestmark = [pytest.mark.heavy, pytest.mark.real_model]
 
@@ -122,7 +122,7 @@ class TestRealGPT2:
     def test_frozen_resolver_finds_all_twelve_mlp_homes(self, gpt2_trace: tl.Trace) -> None:
         """Memo test 12: 12/12 GPT2MLP output homes, semantic evidence only."""
 
-        from torchlens.attribution.onebackward._facet_bridge import resolve_frozen_policy
+        from torchlens.attribution._onebackward._facet_bridge import resolve_frozen_policy
 
         index = ob.read_edge_index(gpt2_trace)
         resolution = resolve_frozen_policy(gpt2_trace, index, "mlp_out")

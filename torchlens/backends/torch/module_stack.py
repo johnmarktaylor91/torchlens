@@ -15,7 +15,7 @@ from ..._entry_refusals import (
     refuse_module_stack_underflow,
     refuse_module_unprepared,
 )
-from ...recording.types import ModuleStackFrame
+from ...recording._types import ModuleStackFrame
 from ._tl import get_module_meta
 
 

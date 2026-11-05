@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors.episode import BundleExperimentError
+from torchlens.errors._episode import BundleExperimentError
 from torchlens.experiment import head_ablation_candidates, sweep_sites
 
 pytestmark = pytest.mark.heavy

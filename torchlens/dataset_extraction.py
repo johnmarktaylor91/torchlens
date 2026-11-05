@@ -407,7 +407,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         complete-class refactor, with strict continuity — the id must
         already be recorded in the artifact's prefix.
     intervene:
-        Optional :class:`torchlens.intervention.spec.InterventionSpec`
+        Optional :class:`torchlens.intervention._spec.InterventionSpec`
         (``tl.when(selector, helper)``; DOCUMENTED-UNSTABLE): every
         batch is captured with the spec armed, so stored rows are the
         INTERVENED activations. Batch zero freezes the structural sites the

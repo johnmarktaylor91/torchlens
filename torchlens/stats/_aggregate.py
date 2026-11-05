@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
+from ..intervention._spec import is_gradient_site
 from ..intervention.errors import MultiMatchWarning
-from ..intervention.spec import is_gradient_site
 
 __tl_layer__ = "L5"
 
@@ -261,7 +261,7 @@ def _trace_reference_stream(log: Any) -> tuple[tuple[_StreamEntry, ...], dict[st
         for layer in log._layer_list:
             if layer.is_input:
                 input_labels.add(layer.layer_label)
-            elif layer.is_buffer:
+            elif layer.graph.is_buffer:
                 buffer_labels.add(layer.layer_label)
             elif not layer.is_output:
                 ops.append(layer)

@@ -25,14 +25,15 @@ from .._ir.predicate import EventKind, coerce_deferred_value
 from .._ir.refs import DeviceRef, DtypeRef, ParamRef, TensorRef
 from .._ir.semantics import BackendSemantics, CapturePolicy
 from .._record_type import record_type
+from .._utils._record_group_table import OP_GROUP_VIEWS, OP_STORAGE_ATTRS, record_member
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils._torch_symbols import (
     torch_device_from_string,
     torch_dtype_from_string,
 )
 from .._utils.tensor_utils import get_memory_amount_from_metadata
-from ..recording.exceptions import PredicateError
-from ..recording.types import (
+from ..recording._exceptions import PredicateError
+from ..recording._types import (
     ActivationRecord,
     CaptureSpec,
     GradRecordContext,
@@ -43,6 +44,12 @@ from ..recording.types import (
     StorageIntent,
 )
 from ._forward_helpers import _normalize_module_stack
+from ._live_event_fields import (
+    _grad_fn_handle_from_index,
+    _live_grad_fn_object_id,
+    _live_internal_source_parents,
+    _live_interventions,
+)
 from ._record_stores import _GradFnContextMap, _RetainedRecordKeys, _StorageBackend
 from ._sparse_refs import (
     _module_frames_from_record_context,
@@ -56,7 +63,7 @@ from ._sparse_refs import (
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from .._ir.op_record import OpRecord
-    from ..recording.options import _RecordingConfig
+    from ..recording._options import _RecordingConfig
 
 _active_recording_state: RecordingState | None = None
 
@@ -92,7 +99,7 @@ def _resolve_storage_intent(options: _RecordingConfig) -> StorageIntent:
 def _empty_recording(options: _RecordingConfig) -> Recording:
     """Create an empty lazy Recording for a predicate capture session."""
 
-    from ..recording.types import RecordingSettings
+    from ..recording._types import RecordingSettings
 
     return Recording._build(
         records=[],
@@ -189,11 +196,11 @@ class RecordingState:
 
         self.storage_intent = _resolve_storage_intent(self.options)
         if self.storage_intent.on_disk:
-            from ..recording.storage_disk import DiskStorageBackend
+            from ..recording._storage_disk import DiskStorageBackend
 
             self.storage_backend = DiskStorageBackend(self.options, self.recording)
         else:
-            from ..recording.storage_ram import RamStorageBackend
+            from ..recording._storage_ram import RamStorageBackend
 
             self.storage_backend = RamStorageBackend(self.recording)
 
@@ -897,50 +904,6 @@ _OPLOG_FIELDS_KNOWN_LATE = frozenset(
 )
 
 
-def _grad_fn_handle_from_index(trace: Trace, event: OpEvent) -> Any:
-    """Read the live autograd handle from its single owner, the journal index.
-
-    grad_fn single ownership (producer unification P2): the journal's
-    ``grad_fn_handles_by_label_raw`` side index is the one handle authority.
-    The event-field fallback keeps byte-identity for detached streams until
-    the compat ``OpEvent`` field dies with the legacy producer.
-    """
-
-    events = getattr(trace, "capture_events", None)
-    if events is not None:
-        handle = events.grad_fn_handles_by_label_raw.get(event.label_raw)
-        if handle is not None:
-            return handle
-    # Compat OpEvents still carry the handle field; decomposed OpRecords never
-    # do (single ownership) and read as None here by strict-protocol default.
-    return getattr(event, "grad_fn_handle", None)
-
-
-def _live_grad_fn_object_id(trace: Trace, event: OpEvent) -> Any:
-    """Return the id of the live autograd handle, if one is indexed."""
-
-    handle = _grad_fn_handle_from_index(trace, event)
-    return None if handle is None else id(handle)
-
-
-def _live_internal_source_parents(trace: Trace, event: OpEvent) -> list[str]:
-    """Return parent labels whose events carry an internal-source ancestor."""
-
-    return [
-        edge.parent_label_raw
-        for edge in event.parents
-        if trace.capture_events.live_index.require_event(
-            edge.parent_label_raw
-        ).has_internal_source_ancestor
-    ]
-
-
-def _live_interventions(trace: Trace, event: OpEvent) -> list[Any]:
-    """Return fire records minted for this event's interventions."""
-
-    return [result.fire_record for result in event.fire_results if result.fire_record is not None]
-
-
 # This is the capture-time equivalent of an Op property lookup.  Constructing
 # the complete Op-shaped dictionary made every single attribute read walk every
 # parameter, edge, child, and module field and allocate all mutable projections.
@@ -1099,14 +1062,8 @@ _LIVE_FIELD_GETTER_PAIRS: tuple[tuple[str, Callable[[Trace, OpEvent], Any]], ...
     ("is_output_parent", lambda trace, event: event.is_output_parent),
     ("output_descendants", lambda trace, event: set()),
     ("io_role", lambda trace, event: None),
-    (
-        "is_buffer",
-        lambda trace, event: event.kind == "source" and event.layer_type == "buffer",
-    ),
-    (
-        "is_internal_source",
-        lambda trace, event: event.layer_type != "input" and not event.parents,
-    ),
+    ("is_buffer", lambda trace, event: event.kind == "source" and event.layer_type == "buffer"),
+    ("is_internal_source", lambda trace, event: event.layer_type != "input" and not event.parents),
     ("has_internal_source_ancestor", lambda trace, event: event.has_internal_source_ancestor),
     ("internal_source_parents", _live_internal_source_parents),
     ("internal_source_ancestors", lambda trace, event: set(event.internal_source_ancestors)),
@@ -1216,7 +1173,14 @@ def _reference_annotations(save_mode: str, payload: Any) -> dict[str, Any]:
 
     if save_mode != "reference" or not isinstance(payload, torch.Tensor):
         return {}
-    return {"save_mode": "reference", "saved_out_version": tensor_version_or_none(payload)}
+    return {
+        "save_mode": "reference",
+        "saved_out_version": tensor_version_or_none(payload),
+    }
+
+
+#: Group storage attribute (``_call_call_id``) -> the live event field it reads.
+_LIVE_FIELD_BY_STORAGE: dict[str, str] = {attr: old for old, attr in OP_STORAGE_ATTRS.items()}
 
 
 class LiveOpView:
@@ -1269,8 +1233,11 @@ class LiveOpView:
             Current live field value.
         """
 
+        group = OP_GROUP_VIEWS.get(name)
+        if group is not None:
+            return group(self)
         record = object.__getattribute__(self, "_record")
-        return _event_live_field(self._trace, record, name)
+        return _event_live_field(self._trace, record, _LIVE_FIELD_BY_STORAGE.get(name, name))
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Reject direct mutation of live views.
@@ -1333,7 +1300,7 @@ def sync_recording_grad_records_from_sidecar(state: RecordingState) -> None:
     """
 
     from .._ir.events import GradFnFired, OpGradObserved
-    from ..recording.types import GradRecord
+    from ..recording._types import GradRecord
 
     trace = state.runtime_trace
     if trace is None:
@@ -1387,7 +1354,7 @@ def _maybe_add_grad_fn_metadata_record(
 ) -> None:
     """Append a metadata-only grad-fn record when the active policy selects it."""
 
-    from ..recording.types import GradRecord
+    from ..recording._types import GradRecord
 
     grad_fn = trace._grad_fn_logs.get(event.object_id)
     if grad_fn is None or getattr(grad_fn, "has_op", False):
@@ -1468,7 +1435,7 @@ def _grad_record_context_from_op_grad_event(
     op = trace._layer_dict_all_keys[event.op_label]
     return GradRecordContext(
         label=event.op_label,
-        grad_fn_class_name=getattr(op, "grad_fn_class_name", None) or "",
+        grad_fn_class_name=getattr(op.autograd, "grad_fn_class_name", None) or "",
         kind=record_type(op, None) or "op",
         backward_call_index=event.pass_index,
         grad_kind="grad_output",
@@ -1483,7 +1450,7 @@ def _grad_record_context_from_op_grad_event(
         event_index=ordinal,
         shape=event.shape,
         dtype=torch_dtype_from_string(event.dtype),
-        tensor_device=torch_device_from_string(getattr(op, "output_device", None)),
+        tensor_device=torch_device_from_string(record_member(op, "output_device", None)),
     )
 
 

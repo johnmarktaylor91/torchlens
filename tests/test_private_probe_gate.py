@@ -117,7 +117,7 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
     # moves them the read fails LOUDLY at call time -- there is no
     # silent-degradation path for a capability flag to disclose.
     "torchlens/intervention/_trace_run.py": frozenset({"torch.nn.modules.batchnorm._BatchNorm"}),
-    "torchlens/intervention/rerun.py": frozenset(
+    "torchlens/intervention/_rerun.py": frozenset(
         {
             "torch.nn.modules.batchnorm._BatchNorm",
             "torch.nn.modules.dropout._DropoutNd",

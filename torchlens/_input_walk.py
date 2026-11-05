@@ -102,7 +102,7 @@ Mirrors the artifact-side literal-decode ceiling
 default recursion crash depth (the live walkers burn ~2-3 frames per level, so
 an unbounded walk died with a raw ``RecursionError`` at ~350 user levels).
 Every capture-entry input walker (``walk_input_boundary``,
-``snapshot_input_boundary``, ``backends.default_specs._simple_leaves``,
+``snapshot_input_boundary``, ``backends._default_specs._simple_leaves``,
 ``utils.arg_handling.copy_arg_tree``) enforces this ONE ceiling with a typed
 refusal instead of an untyped stdlib crash.
 """

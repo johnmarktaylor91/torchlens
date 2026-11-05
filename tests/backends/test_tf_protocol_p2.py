@@ -16,7 +16,7 @@ from torchlens.backends._backend_protocol import (
     protocol_problems,
 )
 from torchlens.backends.registry import get_backend_spec
-from torchlens.validation.status import ValidationStatus
+from torchlens.validation._status import ValidationStatus
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 

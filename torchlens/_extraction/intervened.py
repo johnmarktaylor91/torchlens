@@ -68,7 +68,7 @@ class InterventionPlan:
     Attributes
     ----------
     spec:
-        The caller's :class:`~torchlens.intervention.spec.InterventionSpec`.
+        The caller's :class:`~torchlens.intervention._spec.InterventionSpec`.
     address_class:
         The harvest address class (the finest any rule addresses).
     spec_digest:
@@ -107,7 +107,7 @@ def _rule_address_class(rule: Any) -> str:
     Parameters
     ----------
     rule:
-        One :class:`~torchlens.intervention.spec.InterventionRule`.
+        One :class:`~torchlens.intervention._spec.InterventionRule`.
 
     Returns
     -------
@@ -141,7 +141,7 @@ def _rule_helper(rule: Any) -> Any:
         The helper spec carrying the batch-independence declaration.
     """
 
-    from ..intervention.types import Edit, InterventionDecision
+    from ..intervention._types import Edit, InterventionDecision
 
     action = rule.edit
     if isinstance(action, InterventionDecision):
@@ -188,7 +188,7 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
     ----------
     intervene:
         ``None`` (clean extraction) or an
-        :class:`~torchlens.intervention.spec.InterventionSpec` (the
+        :class:`~torchlens.intervention._spec.InterventionSpec` (the
         ``tl.when(...)`` product).
 
     Returns
@@ -206,7 +206,7 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
 
     if intervene is None:
         return None
-    from ..intervention.spec import Recipe
+    from ..intervention._spec import Recipe
 
     if not isinstance(intervene, Recipe) or not intervene.rules:
         raise InvalidArgumentError(
@@ -281,7 +281,7 @@ def batch_receipt(trace: Any) -> dict[str, Any]:
         door's audit digest for this transaction, when recorded).
     """
 
-    from ..intervention.audit import site_keys_for_labels
+    from ..intervention._audit import site_keys_for_labels
 
     fired: list[str] = []
     fire_count = 0

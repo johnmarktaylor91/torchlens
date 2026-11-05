@@ -9,6 +9,7 @@ from typing import Any
 from .._utils._display_card import render_card
 from .._utils._display_keys import display_key
 from .._utils._display_numbers import format_duration, format_exact_count, format_iec_bytes
+from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._value_state import (
     METADATA_ONLY,
@@ -69,10 +70,10 @@ def _function(op: Any, *, duration: bool = True) -> str:
     if getattr(op, "is_input", False):
         return ""
     parts = [getattr(op, "func_name", "") or ""]
-    grad = getattr(op, "grad_fn_class_name", None)
+    grad = record_member(op, "grad_fn_class_name", None)
     if grad and grad != "none":
         parts.append(f"gradient {grad}")
-    elapsed = getattr(op, "func_duration", None)
+    elapsed = record_member(op, "func_duration", None)
     if duration and elapsed is not None:
         parts.append(format_duration(float(elapsed)))
     return ", ".join(part for part in parts if part)
@@ -81,7 +82,7 @@ def _function(op: Any, *, duration: bool = True) -> str:
 def _source(op: Any) -> str:
     """Captured source location; never reads source text (a stale file is flagged by one stat)."""
 
-    frame = display_frame(getattr(op, "code_context", None))
+    frame = display_frame(record_member(op, "code_context", None))
     if frame is None:
         return ""
     location = f"{short_source_path(str(frame.file))}:{frame.line_number} in {frame.func_qualname or frame.func_name}"
@@ -92,7 +93,7 @@ def _source(op: Any) -> str:
 def _module(op: Any) -> str:
     """Stored module address without a redundant single-call suffix."""
 
-    module = getattr(op, "atomic_module_address", None)
+    module = record_member(op, "atomic_module_address", None)
     if module:
         return str(module)
     modules = getattr(op, "modules", ()) or ()
@@ -101,7 +102,7 @@ def _module(op: Any) -> str:
     label = modules[-1] if modules else getattr(op, "module", None)
     trace = trace_of(op)
     call = fail_open(lambda: trace.module_calls[label], lambda _error: None)
-    return str(getattr(call, "address", None) or label or "")
+    return str(record_member(call, "address", None) or label or "")
 
 
 def _output(op: Any) -> str:
@@ -109,7 +110,7 @@ def _output(op: Any) -> str:
 
     shape = getattr(op, "shape", None)
     parts = [_count_words(math.prod(shape), "value")] if shape is not None else []
-    memory = getattr(op, "activation_memory", None)
+    memory = record_member(op, "activation_memory", None)
     if memory is not None:
         parts.append(format_iec_bytes(int(memory)))
     return ", ".join(parts)

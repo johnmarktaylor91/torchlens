@@ -34,8 +34,8 @@ from torch import nn
 from torchlens._io._safe_unpickle import _safe_getattr
 from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.intervention._resolver_registry import resolve_function_registry_key
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(

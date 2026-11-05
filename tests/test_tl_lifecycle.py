@@ -20,7 +20,7 @@ from torchlens.backends.torch._tl import (
 )
 from torchlens.backends.torch.model_prep import _tag_untagged_buffers
 from torchlens.errors import TraceCaptureError
-from torchlens.intervention.runtime import _copy_tl_replacement_attrs
+from torchlens.intervention._runtime_hook_copy import _copy_tl_replacement_attrs
 from torchlens.options import CaptureOptions
 from torchlens.types import PartialTrace
 
@@ -92,7 +92,7 @@ def test_successful_capture_cleans_deeply_nested_saved_args() -> None:
     foreach_ops = [op for op in trace.ops if op.func_name == "_foreach_add"]
     assert foreach_ops
     for op in foreach_ops:
-        _assert_tensor_tree_clean(op.saved_args)
+        _assert_tensor_tree_clean(op.call.saved_args)
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _partial/__init__.py.

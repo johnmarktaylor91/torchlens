@@ -273,7 +273,7 @@ def cone_preflight(trace: Any, origins: Any) -> dict[str, Any]:
         ``notes`` (the engine-assumption disclosures).
     """
 
-    from ..intervention.replay import cone_of_effect
+    from ..intervention._replay import cone_of_effect
 
     cone = cone_of_effect(trace, origins)
     planned = tuple(op.label for op in cone)

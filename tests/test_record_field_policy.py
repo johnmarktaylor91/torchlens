@@ -39,7 +39,11 @@ from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
 from torchlens._data_classes.trace import Trace
 from torchlens._runnable import PathFaithfulness, ReadinessStatus
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
+
+#: Sentinel: a field is live when its current spelling reads without AttributeError.
+_ABSENT = object()
 
 
 @dataclass(frozen=True)
@@ -234,7 +238,7 @@ def test_record_field_order_attributes_are_live(case: RecordCase) -> None:
             missing = [
                 field
                 for field in case.field_order
-                if field not in optional and not hasattr(record, field)
+                if field not in optional and record_member(record, field, _ABSENT) is _ABSENT
             ]
             assert not missing, f"{case.cls.__name__} missing FIELD_ORDER fields: {missing}"
     finally:

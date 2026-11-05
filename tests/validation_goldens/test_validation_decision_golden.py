@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
-from torchlens.validation.status import ValidationStatus
+from torchlens.validation._status import ValidationStatus
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 

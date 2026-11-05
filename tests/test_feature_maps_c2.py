@@ -14,7 +14,7 @@ from PIL import Image, ImageChops, ImageDraw
 from torch import nn
 
 import torchlens as tl
-from torchlens.viz.feature_maps import (
+from torchlens.viz._feature_maps import (
     _feature_map_payload_for_node,
     _render_feature_map_grid,
     feature_map_node_spec,
@@ -220,7 +220,7 @@ def test_import_feature_maps_does_not_import_matplotlib() -> None:
     """Importing feature maps should not import matplotlib."""
 
     code = (
-        "import sys; import torchlens.viz.feature_maps; "
+        "import sys; import torchlens.viz._feature_maps; "
         "raise SystemExit(1 if 'matplotlib' in sys.modules else 0)"
     )
     result = subprocess.run([sys.executable, "-c", code], check=False)

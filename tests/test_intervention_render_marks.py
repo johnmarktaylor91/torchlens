@@ -33,7 +33,7 @@ from torchlens._visualization._edit_marks import (
 )
 from torchlens._visualization.node_spec import intervention_sites_for_log
 from torchlens.errors import TorchLensWarning
-from torchlens.intervention.types import Edit, FireRecord
+from torchlens.intervention._types import Edit, FireRecord
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 

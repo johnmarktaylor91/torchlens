@@ -18,6 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 
 _HIDDEN = 4
 
@@ -352,7 +353,7 @@ def _position_counts(op: object) -> Counter:
     """
 
     counts: Counter = Counter()
-    positions = getattr(op, "parent_arg_positions", None) or {}
+    positions = record_member(op, "parent_arg_positions", None) or {}
     for domain in ("args", "kwargs"):
         counts.update(label for label in (positions.get(domain) or {}).values())
     return counts

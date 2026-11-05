@@ -103,7 +103,7 @@ from .._utils._torch_symbols import (
 )
 from ..backends import TORCH_BACKEND_NAME
 from ..errors._base import TorchLensError
-from ..intervention.types import FunctionRegistryKey
+from ..intervention._types import FunctionRegistryKey
 from ._runnable_synthetic import TORCHLENS_SYNTHETIC_CALLABLES
 from ._torch_symbols import torch_attr
 from .runnable_coherence import _callable_registry_contradiction

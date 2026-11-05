@@ -23,6 +23,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -118,7 +120,7 @@ def bundle_groups(trace: Trace, context: Any) -> dict[str, tuple[BundleGroup, ..
     for label in outputs:
         op = trace.ops[label]
         path = tuple(getattr(op, "container_path", ()) or ())
-        if not path or getattr(op, "is_buffer", False):
+        if not path or record_member(op, "is_buffer", False):
             continue
         producer = _producer_module(trace, op)
         if producer is None:

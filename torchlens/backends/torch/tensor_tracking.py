@@ -7,7 +7,7 @@ tracking, and structural fingerprints used by loop detection.
 import time
 import warnings
 import weakref
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -20,11 +20,13 @@ from ..._data_classes.op import Op
 from ..._ir.events import BackwardPassStart, OpGradObserved
 from ..._selection.selectors import BaseSelector
 from ..._state import pause_logging
+from ..._utils._record_group_table import record_member
 from ..._utils._torch_compat import get_current_graph_task_id_fn
 from ..._utils.display import _record_phase_timing
 from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
 from ..._utils.tensor_utils import SaveMode, safe_copy
-from ...recording.types import CaptureSpec
+from ...recording._types import CaptureSpec
+from ._parent_arg_containers import _is_supported_parent_arg_container, _iter_arg_container_items
 from ._tl import (
     get_param_meta,
     get_tensor_label,
@@ -1056,7 +1058,7 @@ class _GradPayloadContext:
         self.type = op.type
         self.module_stack = tuple(getattr(op, "module_stack", ()) or ())
         self.modules = tuple(getattr(op, "modules", ()) or ())
-        self.output_of_module_calls = tuple(getattr(op, "output_of_module_calls", ()) or ())
+        self.output_of_module_calls = tuple(record_member(op, "output_of_module_calls", ()) or ())
         self.has_forward_op = True
         self.has_op = True
         self.grad_kind = "grad_output"
@@ -1064,7 +1066,7 @@ class _GradPayloadContext:
         self.backward_pass_number = pass_index
         self.shape = op.shape
         self.dtype = op.dtype
-        self.tensor_device = getattr(op, "output_device", None)
+        self.tensor_device = record_member(op, "output_device", None)
 
 
 def _param_log_for_exact_address(trace: "Trace", address: str) -> Any | None:
@@ -1214,7 +1216,7 @@ def _log_tensor_grad(
     layer_log_entry = self._layer_dict_all_keys[tensor_label]
     layers_to_update = [tensor_label]
     # Output layers are identity wrappers; propagate grad to them too.
-    if layer_log_entry.is_output_parent:
+    if layer_log_entry.graph.is_output_parent:
         for child_layer in layer_log_entry.children:
             if self._layer_dict_all_keys[child_layer].is_output:
                 layers_to_update.append(child_layer)
@@ -1306,58 +1308,6 @@ def _locate_parent_tensors_in_args(
     return tensor_all_arg_positions
 
 
-def _is_supported_parent_arg_container(value: object) -> bool:
-    """Return whether ``value`` participates in parent arg-position mapping.
-
-    Parameters
-    ----------
-    value:
-        Candidate nested argument value.
-
-    Returns
-    -------
-    bool
-        True when ``value`` is a supported list/tuple or mapping container.
-    """
-
-    return isinstance(value, (Mapping, tuple, list))
-
-
-def _iter_arg_container_items(
-    container_kind: str | object,
-    container: object,
-) -> Iterable[tuple[Any, Any]]:
-    """Yield items from an args/kwargs structure or nested supported container.
-
-    Parameters
-    ----------
-    container_kind:
-        Either ``"args"``, ``"kwargs"``, or the nested container object itself.
-    container:
-        Args tuple, kwargs mapping, or a nested supported container.
-
-    Returns
-    -------
-    Iterable[tuple[Any, Any]]
-        Position keys paired with container values.
-
-    Raises
-    ------
-    TypeError
-        If ``container`` is not a supported args/kwargs or nested container shape.
-    """
-
-    if container_kind == "args":
-        return enumerate(cast(tuple[Any, ...], container))
-    if container_kind == "kwargs":
-        return cast(dict[Any, Any], container).items()
-    if isinstance(container, Mapping):
-        return container.items()
-    if isinstance(container, (list, tuple)):
-        return enumerate(container)
-    raise TypeError(f"Unsupported parent-arg container: {type(container)!r}")
-
-
 def _get_ancestors_from_parents(
     parent_entries: list[Op],
 ) -> tuple[set[str], set[str]]:
@@ -1374,7 +1324,7 @@ def _get_ancestors_from_parents(
 
     for parent_entry in parent_entries:
         input_ancestors.update(parent_entry.input_ancestors)
-        internal_source_ancestors.update(parent_entry.internal_source_ancestors)
+        internal_source_ancestors.update(parent_entry.graph.internal_source_ancestors)
     return input_ancestors, internal_source_ancestors
 
 

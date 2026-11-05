@@ -26,6 +26,7 @@ from .._capture_honesty import (
 )
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes._value_repr import _payload_state as _payload_state
+from .._utils._record_group_table import record_member
 from ..agent._envelope import json_safe
 from ._explain import _safe_len
 from ._factcore import _memory, factcore
@@ -145,7 +146,7 @@ def _first_op_site_key(log: Any) -> str | None:
     """Return the first op's site key, or ``None`` on keyless artifacts."""
 
     for op in (log._layer_list if is_live_trace(log) else None) or []:
-        return getattr(op, "site_key", None)
+        return record_member(op, "site_key", None)
     return None
 
 
@@ -291,7 +292,7 @@ def _health_summary(log: Any) -> dict[str, Any]:
 def _site_key_or_none(op: Any) -> str | None:
     """Return the op's structural site key, or ``None`` when unavailable.
 
-    ``Op.site_key`` is a plain persisted field (``str | None``); legacy
+    ``Op.graph.site_key`` is a plain persisted field (``str | None``); legacy
     keyless artifacts carry ``None``, which the dump discloses as ``null``.
 
     Parameters
@@ -305,7 +306,7 @@ def _site_key_or_none(op: Any) -> str | None:
         ``site_key_v1`` string, or ``None`` on keyless artifacts.
     """
 
-    key = getattr(op, "site_key", None)
+    key = record_member(op, "site_key", None)
     return str(key) if key is not None else None
 
 
@@ -325,7 +326,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
 
     device_ref = getattr(op, "device_ref", None)
     dtype = getattr(op, "dtype", None)
-    call_stack = [str(m) for m in getattr(op, "module_call_stack", ()) or ()]
+    call_stack = [str(m) for m in record_member(op, "module_call_stack", ()) or ()]
     # FF1 (agent memo 3.5): `module_address` is the ATOMIC-module address and
     # is null on 90-91% of real-transformer rows, so every module-grain
     # rollup collapsed into one None bucket. `module_containment` is the
@@ -345,12 +346,12 @@ def _op_entry(op: Any) -> dict[str, Any]:
         "parents": [str(p) for p in getattr(op, "parents", ()) or ()],
         "children": [str(c) for c in getattr(op, "children", ()) or ()],
         "module_call_stack": call_stack,
-        "module_address": getattr(op, "atomic_module_address", None),
+        "module_address": record_member(op, "atomic_module_address", None),
         "module_containment": containment,
         "saved": bool(getattr(op, "has_saved_activation", False)),
         "site_key": _site_key_or_none(op),
         "num_params": int(getattr(op, "num_params", 0) or 0),
-        "flops_forward": _quantity_int(getattr(op, "flops_forward", None)),
+        "flops_forward": _quantity_int(record_member(op, "flops_forward", None)),
     }
 
 

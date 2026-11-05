@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from .._data_classes.op import Op
     from .._data_classes.trace import Trace
 
 __all__ = ("bind_layer_conditional_roles", "op_space_labels", "uncalled_module_addresses")
@@ -84,4 +85,60 @@ def bind_layer_conditional_roles(trace: Trace, roles_by_label: Mapping[str, Sequ
     """
 
     for layer_label, layer in (trace._layer_logs or {}).items():
-        layer.in_conditionals = list(roles_by_label.get(layer_label, []))
+        layer._control_flow_in_conditionals = list(roles_by_label.get(layer_label, []))
+
+
+def _call_io_layers(
+    self: Trace,
+    call_label: str,
+    pass_layers: list[str],
+    pass_input_layers_by_call: dict[str, list[str]] | None,
+) -> tuple[list[str], list[str], list[str], list[Op]]:
+    """Derive one module call's input and output layers from its Op fields.
+
+    Parameters
+    ----------
+    self:
+        Trace being finalized.
+    call_label:
+        Module call label (``address:call_index``).
+    pass_layers:
+        Op labels executed inside the call.
+    pass_input_layers_by_call:
+        Pre-collected input layers keyed by call label, if any.
+
+    Returns
+    -------
+    tuple[list[str], list[str], list[str], list[Op]]
+        Input layer labels, output layer labels, output op labels and the
+        output Op entries.
+    """
+
+    pass_input_layers = list((pass_input_layers_by_call or {}).get(call_label, []))
+    pass_output_layers = []
+    pass_output_ops = []
+    pass_outputs = []
+    for op_label in pass_layers:
+        try:
+            te = self.ops[op_label]
+        except (KeyError, TypeError):
+            continue
+        # B3R7-R05-1: ``input_to_module_calls`` is the authoritative
+        # fed-call fact. The old ``len(module_call_stack) > 0`` companion
+        # test was a proxy for the same thing only while the enter lane
+        # wrote both together; under containment semantics it would drop
+        # top-level-created inputs (e.g. the model input) from the call's
+        # input roster.
+        if (
+            call_label in te.module_context.input_to_module_calls
+            and te.layer_label not in pass_input_layers
+        ):
+            pass_input_layers.append(te.layer_label)
+        if (
+            te.module_context.is_module_output
+            and call_label in te.module_context.output_of_module_calls
+        ):
+            pass_output_layers.append(te.layer_label)
+            pass_output_ops.append(te.label)
+            pass_outputs.append(te)
+    return pass_input_layers, pass_output_layers, pass_output_ops, pass_outputs

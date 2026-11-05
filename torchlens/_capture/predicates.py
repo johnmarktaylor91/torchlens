@@ -20,13 +20,13 @@ from .._ir.selector_eval import (
     split_followed_by_conjunction,
 )
 from .._selection.selectors import BaseSelector
-from ..intervention.predicates import as_intervention_decision
-from ..intervention.types import InterventionDecision
-from ..recording.exceptions import PredicateError
-from ..recording.types import CaptureSpec, ModuleStackFrame, RecordContext
+from ..intervention._predicates import as_intervention_decision
+from ..intervention._types import InterventionDecision
+from ..recording._exceptions import PredicateError
+from ..recording._types import CaptureSpec, ModuleStackFrame, RecordContext
 
 if TYPE_CHECKING:
-    from ..recording.options import _RecordingConfig
+    from ..recording._options import _RecordingConfig
 
 
 def _coerce_default_capture_spec(default: bool | CaptureSpec) -> CaptureSpec:

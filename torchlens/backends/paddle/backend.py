@@ -45,7 +45,7 @@ from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
-from ...validation.status import ValidationReplaySource, ValidationStatus
+from ...validation._status import ValidationReplaySource, ValidationStatus
 from .._entry_refusals import refuse_if_bad_max_intermediate_grads
 from .._finalize import (
     attach_function_root_module,
@@ -881,7 +881,7 @@ class PaddleBackend:
         source = _validation_source(trace)
         payload_load_status = getattr(trace, "payload_load_status", None)
         try:
-            from ...validation.status import count_importer_region_annotations
+            from ...validation._status import count_importer_region_annotations
 
             outcome = self._paddle_replay_outcome(
                 trace, validate_metadata=bool(kwargs.get("validate_metadata", True))
@@ -943,7 +943,7 @@ class PaddleBackend:
                 (validation_decision(label, OUTCOME_FAILED, reason, detail),)
             )
         if validate_metadata:
-            from ...validation.invariants import check_metadata_invariants
+            from ...validation._invariants import check_metadata_invariants
 
             try:
                 invariants_ok = check_metadata_invariants(trace)
@@ -1697,7 +1697,7 @@ class PaddleBackend:
                     position = (key, *path)
                     kwarg_positions[position] = label
                     _add(label, position, "kwarg")
-        return tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses)
+        return (tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses))
 
     def _build_op_capture(
         self,
@@ -2542,7 +2542,7 @@ def _paddle_trace_intermediate_signatures(
         if require_float and not _is_float_dtype_text(str(getattr(op, "dtype", ""))):
             continue
         signature = PaddleIntermediateSignature(
-            func_call_id=int(getattr(op, "func_call_id", 0)),
+            func_call_id=int(getattr(op.call, "call_id", 0)),
             op_name=str(getattr(op, "func_name", "")),
             parent_labels=tuple(
                 final_to_raw.get(str(parent), str(parent)) for parent in getattr(op, "parents", ())

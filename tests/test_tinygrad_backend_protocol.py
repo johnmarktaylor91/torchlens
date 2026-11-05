@@ -18,7 +18,7 @@ from torchlens.backends.tinygrad._rules import (
     tinygrad_constant_ops,
 )
 from torchlens.errors import BackendUnsupportedError
-from torchlens.validation.status import ValidationStatus
+from torchlens.validation._status import ValidationStatus
 
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor

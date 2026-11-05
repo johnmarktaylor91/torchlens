@@ -23,8 +23,8 @@ from torchlens import _state
 from torchlens._constants import get_orig_torch_funcs
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.options import CaptureOptions
-from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.diagnostics import get_validation_failure
+from torchlens.validation._core import validate_saved_outs
+from torchlens.validation._diagnostics import get_validation_failure
 
 _VIEW_FUNCS = tuple(
     name
@@ -151,7 +151,7 @@ def test_view_func_method_validates_and_replays(method: str, chain: str) -> None
     trace = tl.trace(model, x)
     try:
         op = _view_func_op(trace, method)
-        positions = op.parent_arg_positions["args"]
+        positions = op.call.parent_arg_positions["args"]
         assert 0 in positions and 1 in positions and op.children, (positions, op.children)
     finally:
         trace.cleanup()
@@ -170,7 +170,7 @@ def test_view_func_on_view_made_outside_forward_validates(method: str) -> None:
     trace, ground_truth = _traced_with_args(_OutsideViewModel(method), _input_4x4())
     try:
         op = _view_func_op(trace, method)
-        assert op.saved_args[0]._is_view()
+        assert op.call.saved_args[0]._is_view()
         status = validate_saved_outs(trace, [ground_truth], validate_metadata=True)
         assert status.state == "passed", get_validation_failure(trace)
     finally:
@@ -210,7 +210,7 @@ def test_planted_new_base_blind_replay_fails_perturbation(method: str) -> None:
     trace, ground_truth = _traced_with_args(_ViewFuncModel(method, "transpose"), _input_4x4())
     try:
         op = _view_func_op(trace, method)
-        new_base_label = op.parent_arg_positions["args"][1]
+        new_base_label = op.call.parent_arg_positions["args"][1]
         frozen = op.out.detach().clone()
 
         def new_base_blind(*args: object, **kwargs: object) -> torch.Tensor:
@@ -261,8 +261,8 @@ def test_compact_receiver_is_a_replay_error(method: str) -> None:
     trace, ground_truth = _traced_with_args(_ViewFuncModel(method, "transpose"), _input_4x4())
     try:
         op = _view_func_op(trace, method)
-        assert op.saved_args[0]._is_view()
-        op.saved_args = (op.saved_args[0].detach().clone(), *op.saved_args[1:])
+        assert op.call.saved_args[0]._is_view()
+        op._call_saved_args = (op.call.saved_args[0].detach().clone(), *op.call.saved_args[1:])
         with pytest.warns(UserWarning, match="Validation replay raised an exception"):
             status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
         assert status.state == "failed"
@@ -286,7 +286,7 @@ def test_rev_view_func_new_view_keeps_its_storage() -> None:
 
     trace, ground_truth, op = _rev_view_func_two_step_trace()
     try:
-        new_view = op.saved_args[1]
+        new_view = op.call.saved_args[1]
         assert new_view.numel() == 4
         assert new_view.untyped_storage().nbytes() == 16 * new_view.element_size()
         status = validate_saved_outs(trace, [ground_truth], validate_metadata=True)
@@ -300,7 +300,11 @@ def test_compact_new_view_is_a_replay_error() -> None:
 
     trace, ground_truth, op = _rev_view_func_two_step_trace()
     try:
-        op.saved_args = (op.saved_args[0], op.saved_args[1].detach().clone(), *op.saved_args[2:])
+        op._call_saved_args = (
+            op.call.saved_args[0],
+            op.call.saved_args[1].detach().clone(),
+            *op.call.saved_args[2:],
+        )
         with pytest.warns(UserWarning, match="Validation replay raised an exception"):
             status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
         assert status.state == "failed"

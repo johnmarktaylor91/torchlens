@@ -46,7 +46,7 @@ def _select_raw_indexes_by_retention_predicate(
         If the predicate returns a non-bool (code ``predicate_return_invalid``).
     """
 
-    from ..recording.exceptions import PredicateError
+    from ..recording._exceptions import PredicateError
 
     selected_raw_indexes: set[int] = set()
     for layer_entry in self._layer_list:

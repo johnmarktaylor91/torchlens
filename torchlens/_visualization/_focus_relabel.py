@@ -131,7 +131,7 @@ def _relative_row(row: Any, prefix: str | None) -> Any:
 def shape_size_row(op: Any) -> str:
     """The ``(shape), size`` row of an op's output tensor, as its node label shows it."""
 
-    return f"{format_shape(op.shape)}, {format_memory(op.activation_memory)}"
+    return f"{format_shape(op.shape)}, {format_memory(op.cost.activation_memory)}"
 
 
 def relabel_focus_regions(render_ir: RenderIR, trace: Trace, module: Any) -> RenderIR:

@@ -16,14 +16,16 @@ from .._data_classes.param import ParamAccessor
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
 from .._record_type import record_type
+from .._utils._record_group_table import op_attr
 from ._cook_facts import _cook_facts, _replay_capture_events
 from ._cooked_inventory import install_cooked_inventory, install_run_facts
 from ._multipass_cook import fold_pass_cores
+from ._parent_arg_signature import _format_parent_arg_positions, _normalized_parent_arg_positions
 from ._record_indexes import _RecordIndexes
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
-    from ..recording.types import ActivationRecord
+    from ..recording._types import ActivationRecord
 
 __all__ = (
     "RecordingProjection",
@@ -53,76 +55,6 @@ _GRAPH_CHANGE_MESSAGE = (
     "otherwise the refresh failed. Please "
     "re-run trace with the desired inputs."
 )
-
-
-def _signature_sort_key(value: Any) -> tuple[str, str]:
-    """Return a stable comparable token for graph-signature sort keys.
-
-    Parameters
-    ----------
-    value
-        Parent-position key to normalize for signature comparison.
-
-    Returns
-    -------
-    tuple[str, str]
-        Type-qualified token that keeps incomparable key types sortable.
-    """
-
-    return (f"{type(value).__module__}.{type(value).__qualname__}", repr(value))
-
-
-def _normalized_parent_arg_positions(
-    parent_arg_positions: dict[str, dict[Any, str]] | None,
-) -> tuple[tuple[str, tuple[tuple[Any, str], ...]], ...]:
-    """Return a deterministic signature view of parent argument positions.
-
-    Parameters
-    ----------
-    parent_arg_positions
-        Layer parent routing metadata keyed by argument domain.
-
-    Returns
-    -------
-    tuple[tuple[str, tuple[tuple[Any, str], ...]], ...]
-        Stable, comparable representation of argument and keyword parent routing.
-    """
-
-    positions = parent_arg_positions or {}
-    return tuple(
-        (
-            arg_domain,
-            tuple(
-                sorted(
-                    (positions.get(arg_domain, {}) or {}).items(),
-                    key=lambda item: _signature_sort_key(item[0]),
-                )
-            ),
-        )
-        for arg_domain in ("args", "kwargs")
-    )
-
-
-def _format_parent_arg_positions(
-    parent_arg_positions: tuple[tuple[str, tuple[tuple[Any, str], ...]], ...],
-) -> str:
-    """Format normalized parent routing for graph-drift error details.
-
-    Parameters
-    ----------
-    parent_arg_positions
-        Normalized parent routing metadata from ``_normalized_parent_arg_positions``.
-
-    Returns
-    -------
-    str
-        Compact human-readable routing summary.
-    """
-
-    rendered_parts: list[str] = []
-    for arg_domain, entries in parent_arg_positions:
-        rendered_parts.append(f"{arg_domain}={list(entries)!r}")
-    return ", ".join(rendered_parts)
 
 
 def _cloned_core_events(core: CapturedRunCore) -> tuple[OpEvent, ...]:
@@ -368,7 +300,7 @@ class RefreshProjector:
                     layer._layer_label_raw,
                     layer.type,
                     tuple(layer.parents),
-                    _normalized_parent_arg_positions(layer.parent_arg_positions),
+                    _normalized_parent_arg_positions(layer.call.parent_arg_positions),
                 )
                 for layer in layers
             )
@@ -419,9 +351,9 @@ class RefreshProjector:
                 continue
             if field_name in dynamic or field_name not in held:
                 self._set_refreshed_field(layer, field_name, copy_value(new_state.get(field_name)))
-        for field_name in _RERUN_EXTRA_OP_FIELDS:
-            if hasattr(new_layer, field_name) and (field_name in dynamic or field_name not in held):
-                self._set_refreshed_field(layer, field_name, copy_value(new_state.get(field_name)))
+        for extra in _RERUN_EXTRA_OP_FIELDS:
+            if hasattr(new_layer, op_attr(extra)) and (extra in dynamic or extra not in held):
+                self._set_refreshed_field(layer, extra, copy_value(new_state.get(extra)))
         layer.source_trace = self.target
 
     def _set_refreshed_field(self, layer: Any, field_name: str, value: Any) -> None:
@@ -463,7 +395,7 @@ class RefreshProjector:
 
         from .._partial import PartialTrace
         from .._runnable import RunnableErrorCode
-        from ..errors.runnable import BufferSinkRoutingError
+        from ..errors._runnable import BufferSinkRoutingError
 
         error = BufferSinkRoutingError(
             f"{_GRAPH_CHANGE_MESSAGE} Detail: {detail}. "
@@ -515,16 +447,16 @@ class RefreshProjector:
         from .._runnable import is_mode_sensitive_qualname
 
         claims: list[tuple[str, bool]] = []
-        qualname = getattr(sink_layer, "buffer_source_func_name", None)
+        qualname = getattr(sink_layer.graph, "buffer_source_func_name", None)
         if not is_mode_sensitive_qualname(qualname):
             return claims
-        source_label = getattr(sink_layer, "buffer_source", None)
+        source_label = getattr(sink_layer.graph, "buffer_source", None)
         if not source_label or source_label not in trace._layer_dict_all_keys:
             return claims
         source = trace._layer_dict_all_keys[source_label]
         tail = (qualname or "").rsplit(".", 1)[-1].removesuffix("_")
         mode_argument = "use_input_stats" if tail.endswith("instance_norm") else "training"
-        kwargs = getattr(source, "non_tensor_kwargs", None) or {}
+        kwargs = getattr(source.call, "non_tensor_kwargs", None) or {}
         literal = kwargs.get(mode_argument)
         if not isinstance(literal, bool):
             # The mode flag is the first boolean among the positional non-tensor
@@ -533,7 +465,7 @@ class RefreshProjector:
             literal = next(
                 (
                     value
-                    for value in getattr(source, "non_tensor_pos_args", None) or ()
+                    for value in getattr(source.call, "non_tensor_pos_args", None) or ()
                     if isinstance(value, bool)
                 ),
                 None,
@@ -569,14 +501,15 @@ class RefreshProjector:
             for layer in target_sinks
             if layer.buffer_value_changed is True
             and layer.buffer_write_kind == "inplace"
-            and (getattr(layer, "buffer_source_func_name", None) or "").rsplit(".", 1)[-1] == "add_"
+            and (getattr(layer.graph, "buffer_source_func_name", None) or "").rsplit(".", 1)[-1]
+            == "add_"
             and self._sink_module_call(layer) in norm_calls
         }
 
     def _sink_module_call(self, sink_layer: Any) -> str | None:
         """Return the innermost module call of a buffer sink's producing op."""
 
-        source_label = getattr(sink_layer, "buffer_source", None)
+        source_label = getattr(sink_layer.graph, "buffer_source", None)
         layers = self.target._layer_dict_all_keys
         if not source_label or source_label not in layers:
             return None
@@ -735,9 +668,11 @@ class RefreshProjector:
                 )
             expected_parents = tuple(target_layer.parents)
             actual_parents = tuple(refreshed_layer.parents)
-            expected_positions = _normalized_parent_arg_positions(target_layer.parent_arg_positions)
+            expected_positions = _normalized_parent_arg_positions(
+                target_layer.call.parent_arg_positions
+            )
             actual_positions = _normalized_parent_arg_positions(
-                refreshed_layer.parent_arg_positions
+                refreshed_layer.call.parent_arg_positions
             )
             if expected_parents != actual_parents or expected_positions != actual_positions:
                 changed_fields: list[str] = []
@@ -773,7 +708,7 @@ class RefreshProjector:
         for layer in self.target._layer_list:
             if raw_labels is not None and layer._layer_label_raw not in raw_labels:
                 continue
-            grad_fn_handle = layer.grad_fn_handle
+            grad_fn_handle = layer.autograd.grad_fn_handle
             _register_forward_grad_fn(self.target, grad_fn_handle, layer._layer_label_raw)
             if layer.out is not None:
                 # The logged copy is a graph dead end (for an in-place op the
@@ -824,9 +759,9 @@ class RefreshProjector:
 
         layer._internal_set("out", None)
         layer._internal_set("transformed_out", None)
-        layer.transformed_out_shape = None
-        layer.transformed_out_dtype = None
-        layer.transformed_activation_memory = None
+        layer._payload_transformed_out_shape = None
+        layer._payload_transformed_out_dtype = None
+        layer._cost_transformed_activation_memory = None
         layer.has_saved_activation = False
         layer.has_out_variations = False
         layer.out_versions_by_child = {}
@@ -851,7 +786,7 @@ class RefreshProjector:
                 layer._layer_label_raw,
                 record_type(layer),
                 tuple(layer.parents),
-                _normalized_parent_arg_positions(layer.parent_arg_positions),
+                _normalized_parent_arg_positions(layer.call.parent_arg_positions),
             )
             for layer in trace._layer_list
         )

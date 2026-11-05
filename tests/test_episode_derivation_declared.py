@@ -23,7 +23,7 @@ from torchlens._capture._episode_ledger import (
     EpisodeLedger,
     validate_loaded_episode_annotations,
 )
-from torchlens.errors.episode import EpisodeDeclarationError
+from torchlens.errors._episode import EpisodeDeclarationError
 from torchlens.options import EpisodeOptions
 
 V = 16

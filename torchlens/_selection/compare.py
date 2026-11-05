@@ -268,7 +268,7 @@ def _reference_op_for_entry(node: _CompareTerm, trace: Any, entry: Site, guard: 
         return guard.reference_op(node, trace, entry)
     reference_op = _op_for_entry(node.reference, entry, sample_name="reference")
     subject_key = entry.structural_site_key
-    reference_key = getattr(reference_op, "site_key", None)
+    reference_key = reference_op.graph.site_key
     if subject_key is not None and reference_key is not None and subject_key != reference_key:
         raise _unresolvable(
             "site_not_in_trace",

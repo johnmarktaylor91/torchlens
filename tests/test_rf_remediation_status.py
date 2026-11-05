@@ -94,7 +94,7 @@ class _GroupedQueryAttention(nn.Module):
         return functional.scaled_dot_product_attention(query, key, value, enable_gqa=True)
 
 
-# Kept: sole branch coverage of receptive_field/rules/attention.py.
+# Kept: sole branch coverage of receptive_field/_builtin_rules/attention.py.
 def test_sdpa_grouped_query_attention_widens_key_value_heads() -> None:
     """Contain key/value support under grouped-query attention; value stays feature-pointwise."""
 
@@ -127,7 +127,7 @@ def test_sdpa_grouped_query_attention_widens_key_value_heads() -> None:
     assert all(result.status is ReceptiveFieldValidationStatus.PASS for result in results)
 
 
-# Kept: sole branch coverage of receptive_field/rules/attention.py.
+# Kept: sole branch coverage of receptive_field/_builtin_rules/attention.py.
 def test_sdpa_broadcast_widens_key_value_batch_and_head_axes() -> None:
     """Contain broadcast key/value support; the value feature axis stays pointwise."""
 

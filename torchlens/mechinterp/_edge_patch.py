@@ -135,7 +135,7 @@ def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) ->
     share one path search.
     """
 
-    from ..intervention.edge_substitution import _recompute_with_substitution
+    from ..intervention._edge_substitution import _recompute_with_substitution
 
     groups: dict[tuple[str, str, str], list[int]] = {}
     for index, (receiver, _value) in enumerate(attention):

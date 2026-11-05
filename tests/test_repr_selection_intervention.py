@@ -11,7 +11,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._selection.resolver import _SiteTable
 from torchlens._utils._display_errors import candidate_keys, lookup_message
-from torchlens.intervention.types import CapturedArgTemplate, FrozenInterventionSpec, LiteralTensor
+from torchlens.intervention._types import CapturedArgTemplate, FrozenInterventionSpec, LiteralTensor
 from torchlens.options import (
     CaptureOptions,
     EpisodeOptions,

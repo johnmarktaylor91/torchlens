@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._utils.collections import _path_component_key
 from .._utils.hashing import sha256_canonical_json
-from ..errors.episode import EpisodeDeclarationError
+from ..errors._episode import EpisodeDeclarationError
 
 if TYPE_CHECKING:
     from ._episode_ledger import ResolvedEpisode

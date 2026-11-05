@@ -1,11 +1,11 @@
 """Detachable CUDA kernel telemetry for the gated ATen execution profile.
 
 This module is intentionally not imported by the TorchLens package or capture
-core. ``Op.gpu_kernels`` and ``AtenOp.gpu_kernels`` are declared on their
-classes and resolve this module by name only when read (``_op_gpu_kernels`` and
-``_aten_gpu_kernels`` below), so the documented-unstable views exist whatever
-was imported first, while the private profiling adapter instruments the
-existing ATen observer only for its own scope. Removing this module therefore
+core. The private profiling adapter instruments the existing ATen observer only
+for its own scope and stores its rows in the private kernel annotation that
+artifacts persist. No public read surface exists in this release (``Op`` and
+``AtenOp`` refuse ``gpu_kernels`` typed); ``_aten_gpu_kernels`` and
+``_op_gpu_kernels`` are the private readers. Removing this module therefore
 leaves the ATen profile and every non-telemetry capture path untouched.
 """
 

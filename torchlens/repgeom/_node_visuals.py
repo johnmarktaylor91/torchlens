@@ -15,8 +15,8 @@ from PIL import Image, ImageDraw
 
 from .._utils._multipass_access import get_multipass_attr
 from .._utils.display import ensure_trace_visualizer_dir
-from ..viz import node_plots
-from ..viz.node_plots import image_scatter, lineplot
+from ..viz import _node_plots as node_plots
+from ..viz._node_plots import image_scatter, lineplot
 from ._geometry import (
     _SCATTER_CANVAS_SIZE,
     EffectiveDimensionalityInfo,
