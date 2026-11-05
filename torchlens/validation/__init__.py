@@ -8,12 +8,20 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from torchlens.backends.registry import UnknownBackendError
+
 from .. import _entry_refusals as _refusals
-from .._io import _json
-from .._user_funcs import (
+from .._io import TLSPEC_VERSION, _json, above_ceiling_error
+from .._io.format_contract import _MODELLOG_216_NOTE, below_floor_error
+from .._runnable import (
+    LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
+    RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
+)
+from .._user_public_impls import (
     validate_backward_pass,
     validate_forward_pass,
 )
+from .._utils.facade import resolve_facade_attr
 from ._descriptor_versions import validate_descriptor_versions, validate_format3
 from .diagnostics import (
     get_validation_diagnostics,
@@ -62,7 +70,7 @@ def validate_tlspec(
     None
     """
 
-    from ..io import _pre3_observed, detect_tlspec_format
+    from ..io import _pre3_observed, detect_tlspec_format  # deferred: cycle io
 
     tlspec_path = Path(path)
     if not tlspec_path.exists():
@@ -83,8 +91,6 @@ def validate_tlspec(
 
     tlspec_format = detect_tlspec_format(tlspec_path)
     if tlspec_format == "pre_3":
-        from .._io.format_contract import _MODELLOG_216_NOTE, below_floor_error
-
         observed = _pre3_observed(tlspec_path) or "2.x artifact markers"
         raise below_floor_error(
             observed=observed,
@@ -314,11 +320,6 @@ def _validate_sparse_run_descriptor(
         If required versions, collections, preflight, or payload exclusions
         contradict the Stage-0 runnable schema.
     """
-
-    from .._runnable import (
-        LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
-        RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
-    )
 
     if not isinstance(value, dict):
         raise ValueError("Runnable .tlspec manifests require object run descriptor.")
@@ -655,8 +656,6 @@ def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:
         and surfaced codeless.
     """
 
-    from .._io import TLSPEC_VERSION, above_ceiling_error
-
     if tlspec_version > TLSPEC_VERSION:
         raise above_ceiling_error(
             observed=tlspec_version,
@@ -865,8 +864,6 @@ def _validate_v2_backend_fields(manifest: dict[str, Any]) -> None:
     ValueError
         If backend-aware fields are invalid.
     """
-
-    from torchlens.backends.registry import UnknownBackendError
 
     from ..backends.registry import get_backend_spec
 
@@ -1272,8 +1269,6 @@ if not TYPE_CHECKING:
 
     def __getattr__(name: str) -> Any:
         """Raise the typed teaching error for a removed torchlens.validation name."""
-
-        from .._utils.facade import resolve_facade_attr
 
         return resolve_facade_attr(
             owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS

@@ -32,8 +32,10 @@ from typing import Any
 import torch
 
 from ... import _state
+from ..._errors import TorchLensWarning
 from ..._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from ._function_boundary import BoundarySpec, close_boundary_call, open_boundary_call
+from .wrappers import _set_transform_metadata
 
 SCRIPT_FUNCTION_FUNC_NAME = "jitscript"
 """Op type / func name of the boundary op."""
@@ -163,8 +165,6 @@ def _version_of(tensor: torch.Tensor) -> int | None:
 def _make_replay_callable(function: Any, original_call: Callable[..., Any]) -> Callable[..., Any]:
     """Build the boundary op's callable: the same scripted function, called again."""
 
-    from .wrappers import _set_transform_metadata
-
     def jitscript(*call_args: Any, **call_kwargs: Any) -> Any:
         """Call the scripted function through the unwrapped ``__call__``."""
 
@@ -190,8 +190,6 @@ def _make_replay_callable(function: Any, original_call: Callable[..., Any]) -> C
 
 def _warn_script_boundary(trace: Any, function: Any) -> None:
     """Disclose one recorded scripted function per capture."""
-
-    from ..._errors import TorchLensWarning
 
     name = function.qualified_name
     warned = trace.__dict__.setdefault("_foreign_kernel_warned", set())

@@ -10,14 +10,14 @@ import torch
 from ... import _state as _st
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes.internal_types import FuncExecutionContext
-from ._ops_arg_slots import arg_slot_facts, receiver_data_alias, retire_arg_slots, slot_fact
-from ._tl import (
+from ..._utils._tensor_label import (
     get_tensor_label,
     get_tensor_meta,
     mutated_parameter_label,
     session_label_storage_intact,
     session_meta_is_anchored,
 )
+from ._ops_arg_slots import arg_slot_facts, receiver_data_alias, retire_arg_slots, slot_fact
 from ._view_writeback import data_alias_write_reaches_base
 
 if TYPE_CHECKING:

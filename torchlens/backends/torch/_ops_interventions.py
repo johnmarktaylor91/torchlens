@@ -29,6 +29,7 @@ from ..._selection.selectors import (
     label as make_label_selector,
 )
 from ..._state import pause_logging
+from ..._utils._tensor_label import get_label_list
 from ..._utils._torch_symbols import tensor_read
 from ...errors._base import CompatibilityError
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
@@ -40,7 +41,6 @@ from ...intervention.types import (
 from ...recording.types import (
     RecordContext,
 )
-from ._tl import get_label_list
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

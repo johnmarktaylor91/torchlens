@@ -14,12 +14,12 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._utils._callable_safety import private_c_forward_op_module_names
-from ._completeness_types import _WitnessState
-from ._tl import (
+from ..._utils._tensor_label import (
     get_buffer_address,
     get_tensor_meta,
     session_meta_is_anchored,
 )
+from ._completeness_types import _WitnessState
 
 __all__ = (
     "_nonowner_ptr_is_captured",

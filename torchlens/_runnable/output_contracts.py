@@ -8,8 +8,11 @@ from typing import Any, cast
 
 import torch
 
+from torchlens._input_walk import encode_mapping_key, snapshot_input_boundary
+from torchlens._ir.container import get_registered_container
 from torchlens._runnable import ContractCheck
 
+from .._ir.container import declared_leaf_slots
 from ..errors import (
     RunPreconditionError,
 )
@@ -153,7 +156,6 @@ def _diagnose_live_output(trace: Any) -> LiveOutputDiagnosis:
     # their own helpers (``_op_for_label``) only through the execution module's
     # globals.
     from .._data_classes.container import container_from_op
-    from .._ir.container import declared_leaf_slots
     from .call_outputs import (
         _container_spec_reconstruction_lossy,
         _fresh_bare_tensor_root,
@@ -580,8 +582,6 @@ def _input_structure_witness_check(
     proof: a runtime snapshot refusal can never pass).
     """
 
-    from torchlens._input_walk import snapshot_input_boundary
-
     expected = _decode_literal(witness.observed_value)
     position_raw = expected.get("position")
     position = tuple(position_raw) if isinstance(position_raw, list) else position_raw
@@ -703,8 +703,6 @@ def _raw_runtime_output(
 def _registered_flatten_children(value: Any) -> list[Any] | None:
     """Return a registered container's flatten children, else ``None`` (r67 C2, corr1-3)."""
 
-    from torchlens._ir.container import get_registered_container
-
     if isinstance(value, (torch.Tensor, Mapping, list, tuple, str, bytes)) or value is None:
         return None
     registration = get_registered_container(type(value))
@@ -718,8 +716,6 @@ def _registered_flatten_children(value: Any) -> list[Any] | None:
 
 def _codec_component(key: Any) -> str | int | None:
     """Encode one runtime mapping key through the canonical codec, or ``None`` (r67 C2)."""
-
-    from torchlens._input_walk import encode_mapping_key
 
     try:
         return encode_mapping_key(key)

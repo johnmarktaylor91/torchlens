@@ -33,7 +33,7 @@ def _resolve_relationship_op(*args: Any, **kwargs: Any) -> Op:
     authoritative home. Signature-transparent by design.
     """
 
-    from . import auto_collapse
+    from . import auto_collapse  # deferred: cycle _visualization
 
     return auto_collapse._resolve_relationship_op(*args, **kwargs)
 

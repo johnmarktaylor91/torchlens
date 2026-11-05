@@ -77,7 +77,7 @@ def check_card(
     'unknown'
     """
 
-    from ._authorities import resolve
+    from ._authorities import resolve  # deferred: cycle preprocessing
 
     record = _record_of(trace)
     if authority is not None:

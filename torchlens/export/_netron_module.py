@@ -450,7 +450,7 @@ def project_module(log: Any, show_buffers: str, depth: int) -> NetronProjection:
     call-graph DAG assertion.
     """
 
-    from ._netron_records import project_op
+    from ._netron_records import project_op  # deferred: cycle export
 
     module_calls = getattr(log, "module_calls", None)
     labels = list(module_calls.keys()) if module_calls is not None else []

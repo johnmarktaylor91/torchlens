@@ -153,7 +153,7 @@ class ReceptiveFieldView:
             Projective view targeting all reachable model outputs by default.
         """
 
-        from ._engine_forward import solve_projective
+        from ._engine_forward import solve_projective  # deferred: cycle receptive_field
 
         return cls(
             op,
@@ -171,8 +171,8 @@ class ReceptiveFieldView:
     def _projective_solution(self, target: object | None) -> _ProjectiveFieldSolution:
         """Return a target-anchored solution for a projective query."""
 
-        from ._engine_forward import solve_projective
-        from ._path import resolve_graph_point
+        from ._engine_forward import solve_projective  # deferred: cycle receptive_field
+        from ._path import resolve_graph_point  # deferred: cycle receptive_field
 
         if target is None:
             return (
@@ -416,9 +416,9 @@ class ReceptiveFieldView:
                 raise TypeError("source and target cannot be supplied together.")
             source = target
 
-        from . import _engine
-        from ._path import require_path, resolve_graph_point
-        from ._query import box_for_unit
+        from . import _engine  # deferred: cycle receptive_field
+        from ._path import require_path, resolve_graph_point  # deferred: cycle receptive_field
+        from ._query import box_for_unit  # deferred: cycle receptive_field
 
         source_op: Op | None = None
         solution = self._solution
@@ -587,7 +587,7 @@ class ReceptiveFieldView:
                     self._op, unit, target=target, atol=atol, rtol=rtol, retain_graph=retain_graph
                 ),
             )
-        from ._gradient import gradient_for_unit
+        from ._gradient import gradient_for_unit  # deferred: cycle receptive_field
 
         if target is not None:
             if source is not None:

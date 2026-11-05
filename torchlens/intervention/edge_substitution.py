@@ -59,6 +59,7 @@ from .._selection.selection import (
 )
 from ._replay_values import tensor_content_digest
 from .masked_edit import _validate_edited
+from .predicates import replace_with
 from .types import Edit
 
 if TYPE_CHECKING:
@@ -173,7 +174,6 @@ def _edit_hook(edit: Any, site_label: str) -> tuple[Any, Edit | None, str]:
             code="selection_apply_invalid",
             site=site_label,
         )
-    from .predicates import replace_with
 
     spec = replace_with(edit)
     if spec.factory is None:

@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
+from torchlens._validation_status import ValidationStatus
 from torchlens.backends._backend_protocol import (
     REFUSAL_CODES,
     VALIDATION_REASONS,
@@ -15,7 +16,6 @@ from torchlens.backends._backend_protocol import (
     protocol_problems,
 )
 from torchlens.backends.registry import get_backend_spec
-from torchlens.validation.status import ValidationStatus
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")

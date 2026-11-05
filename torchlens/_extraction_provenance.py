@@ -20,6 +20,7 @@ from typing import Any
 import torch
 
 from torchlens._errors import InvalidArgumentError
+from torchlens.preprocessing import PreprocessingComparison, Resolution, compare as _audit
 
 __tl_layer__ = "L5"
 
@@ -39,7 +40,7 @@ def _preprocessing_versions() -> dict[str, str | None]:
 
     import importlib.metadata as _metadata
 
-    from torchlens import __version__
+    from ._vocab._package_version import __version__
 
     versions: dict[str, str | None] = {"torchlens": __version__}
     for library in ("torch", "torchvision", "timm", "transformers"):
@@ -139,8 +140,6 @@ def coerce_input_preprocessing(
         When a declaration-only resolution (no callable) is passed as
         ``input_transform``.
     """
-
-    from torchlens.preprocessing import PreprocessingComparison, Resolution, compare as _audit
 
     transform_callable: Any = None
     identity: Any = None

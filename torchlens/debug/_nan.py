@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .. import errors as _public_errors
+from .._capture._nonfinite_prefix import canonical_public_label
+from .._data_classes._nonfinite import nonfinite_coverage
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._debug_report import FoundReport, Report, at_source
 from .._io.payload_codec import get_payload_codec
@@ -17,6 +19,7 @@ from .._utils._deferred_warnings import (
     flush_deferred_warnings,
 )
 from ..errors import CaptureError
+from ..options import CaptureOptions
 
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
@@ -73,7 +76,7 @@ class BisectNanReport(FoundReport):
     def first_bad_thing(self) -> Any:
         """Project this result into the shared first-bad-thing vocabulary."""
 
-        from ._first_bad import FirstBadThing
+        from ._first_bad import FirstBadThing  # deferred: cycle debug
 
         return FirstBadThing(
             found=self.found,
@@ -184,7 +187,7 @@ class FindNanReport(FoundReport):
     def first_bad_thing(self) -> Any:
         """Project this result into the shared first-bad-thing vocabulary."""
 
-        from ._first_bad import FirstBadThing
+        from ._first_bad import FirstBadThing  # deferred: cycle debug
 
         return FirstBadThing(
             found=self.found,
@@ -246,8 +249,6 @@ def _op_label(op: Op) -> str:
     str
         Canonical public label, or ``"unknown"`` when none exists.
     """
-
-    from .._capture._nonfinite_prefix import canonical_public_label
 
     label = canonical_public_label(op)
     return label if label else "unknown"
@@ -373,8 +374,7 @@ def find_nan(model: Any, inputs: Any, **trace_kwargs: Any) -> FindNanReport:
     False
     """
 
-    from .._user_funcs import trace
-    from ..options import CaptureOptions
+    from .._user_public_impls import trace
 
     if not _runs_on_torch(model, inputs, trace_kwargs):  # no live stop: scan a full capture
         return find_nan_in_trace(trace(model, inputs, **trace_kwargs))
@@ -772,8 +772,6 @@ def nonfinite_origin(subject: Any, inputs: Any = None, **trace_kwargs: Any) -> N
     >>> nonfinite_origin(tl.trace(model, x)).has_nonfinite
     False
     """
-
-    from .._data_classes._nonfinite import nonfinite_coverage
 
     if is_live_trace(subject) or hasattr(subject, "ops"):
         trace = subject
