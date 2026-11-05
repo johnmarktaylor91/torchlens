@@ -46,16 +46,13 @@ import types
 import warnings
 from collections.abc import Callable, Iterable, Iterator
 from importlib.machinery import PathFinder
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
-
-if TYPE_CHECKING:
-    from ._runnable_torch_aliases import RunnableTorchAlias
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
@@ -68,6 +65,7 @@ __all__ = [
     "HAS_C10D_GROUP_SEQ",
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
+    "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
     "restore_fp32_precision_controls",
@@ -212,7 +210,6 @@ __all__ = [
     "fix_tensor_sequence_slot",
     "mark_torch_capability_missing",
     "is_dynamo_compiled_callable",
-    "resolve_runnable_torch_alias",
     "tensor_has_named_dims",
 ]
 
@@ -255,179 +252,6 @@ class _ParameterAsSubclassProbeMode(TorchDispatchMode):
 
         del types
         return func(*args, **(kwargs or {}))
-
-
-def _runtime_alias_target_exists(target_namespace: str, target_qualname: str) -> bool:
-    """Return whether an alias target resolves in the running torch.
-
-    Capability probe (feature detection, not a ``torch.__version__`` parse): the
-    resolver only offers an alias whose recorded target actually exists in the
-    current runtime, honoring :class:`RunnableTorchAlias`'s target-existence
-    contract. The first hop off the top-level ``torch`` module reads
-    ``torch.__dict__`` via :func:`torch_attr` (an identifier-only read that
-    avoids the PEP-562 lazy-submodule-import hazard); deeper hops are off
-    submodule/class roots that carry no lazy-import hazard, so they use
-    ``getattr``.
-
-    Parameters
-    ----------
-    target_namespace:
-        Public namespace of the alias target (always rooted at ``torch``).
-    target_qualname:
-        Attribute path of the alias target within ``target_namespace``.
-
-    Returns
-    -------
-    bool
-        True only when every path segment resolves to a non-``None`` attribute.
-    """
-
-    parts = f"{target_namespace}.{target_qualname}".split(".")
-    if parts[0] != "torch":
-        return False
-    current: Any = torch
-    for part in parts[1:]:
-        if current is torch:
-            current = torch_attr(part)
-        else:
-            current = getattr(current, part, None)
-        if current is None:
-            return False
-    return True
-
-
-def _runtime_alias_identity_holds(
-    source_qualname: str, target_namespace: str, target_qualname: str
-) -> bool:
-    """Return whether a recorded source path and its alias target are one object now.
-
-    Capability probe (feature detection, not a ``torch.__version__`` parse) for
-    an alias whose recorded upper bound the running torch has passed: the move
-    the alias records is monotonic, so when both paths still resolve and the
-    source *is* the target in the running torch (``torch.nn.functional.linear``
-    is the ``torch._C._nn.linear`` binding on every torch this probe has met),
-    the alias stays valid beyond the version the table last measured. A path
-    that no longer resolves, or two distinct objects, answers ``False`` and the
-    recorded bound stands.
-
-    ``source_qualname`` may omit its ``torch.`` prefix. Identical paths (a drift
-    row such as ``Tensor.add``) prove nothing and answer ``False``.
-    """
-
-    source_path = (
-        source_qualname if source_qualname.startswith("torch.") else f"torch.{source_qualname}"
-    )
-    target_path = f"{target_namespace}.{target_qualname}"
-    if source_path == target_path:
-        return False
-    source = _resolve_runtime_torch_path(source_path)
-    target = _resolve_runtime_torch_path(target_path)
-    return source is not None and source is target
-
-
-def _resolve_runtime_torch_path(dotted: str) -> Any:
-    """Return the object at a ``torch``-rooted dotted path, or ``None`` when any hop is missing."""
-
-    parts = dotted.split(".")
-    if parts[0] != "torch":
-        return None
-    current: Any = torch
-    for part in parts[1:]:
-        current = torch_attr(part) if current is torch else getattr(current, part, None)
-        if current is None:
-            return None
-    return current
-
-
-def _alias_target_qualname(
-    alias: RunnableTorchAlias, source_qualname: str
-) -> tuple[bool, str | None]:
-    """Return ``(matched, target_qualname)`` for one alias row against a recorded path.
-
-    A wildcard row (``source`` ending in ``.*``) matches any path under its prefix
-    and maps the remainder, minus ``strip_target_prefix``; an exact row matches
-    its own path and maps to its recorded target qualname. ``matched`` False
-    means the row does not apply; ``matched`` True with an empty qualname means
-    the path named the namespace itself (no callable to alias).
-    """
-
-    if alias.source.endswith(".*"):
-        prefix = alias.source[:-1]
-        if not source_qualname.startswith(prefix):
-            return False, None
-        target_qualname: str | None = source_qualname[len(prefix) :]
-    elif alias.source == source_qualname:
-        target_qualname = alias.target_qualname
-    else:
-        return False, None
-    if (
-        target_qualname
-        and alias.strip_target_prefix
-        and target_qualname.startswith(alias.strip_target_prefix)
-    ):
-        target_qualname = target_qualname[len(alias.strip_target_prefix) :]
-    return True, target_qualname
-
-
-def resolve_runnable_torch_alias(
-    source_qualname: str,
-    recorded_version: str | None = None,
-) -> tuple[str, str, str] | None:
-    """Return an explicit current-runtime successor for a recorded torch path.
-
-    Parameters
-    ----------
-    source_qualname:
-        Fully qualified recorded callable path.
-    recorded_version:
-        Torch version that produced the registry key. Aliases may be bounded to
-        supported minor releases; monotonic moves with an open upper bound rely on
-        the live target-existence capability probe, and a version past an alias's
-        recorded upper bound is accepted only when the live identity probe
-        (:func:`_runtime_alias_identity_holds`) shows the move still holds. Unknown
-        versions retain compatibility behavior for descriptors that predate this
-        metadata.
-
-    Returns
-    -------
-    tuple[str, str, str] | None
-        Target namespace, target qualname, and stable provenance, or ``None``
-        when the path has no explicit monotonic alias.
-    """
-
-    from ._producer_version import _torch_minor_version
-    from ._runnable_torch_aliases import _RUNNABLE_TORCH_ALIASES
-
-    parsed_version = _torch_minor_version(recorded_version)
-    for alias in _RUNNABLE_TORCH_ALIASES:
-        if parsed_version is not None and parsed_version < alias.recorded_min_version:
-            continue
-        beyond_recorded_max = (
-            parsed_version is not None
-            and alias.recorded_max_version is not None
-            and parsed_version > alias.recorded_max_version
-        )
-        matched, target_qualname = _alias_target_qualname(alias, source_qualname)
-        if not matched:
-            continue
-        if not target_qualname:
-            return None
-        if not _runtime_alias_target_exists(alias.target_namespace, target_qualname):
-            # Capability gate: never manufacture an alias whose recorded target
-            # is absent from the running torch (the RunnableTorchAlias contract).
-            # This also closes the unbounded/legacy-version bypass: even when the
-            # version bounds are skipped, a matched entry can only resolve when
-            # its target genuinely exists. A later entry may still match with a
-            # live target, so keep scanning.
-            continue
-        if beyond_recorded_max and not _runtime_alias_identity_holds(
-            source_qualname, alias.target_namespace, target_qualname
-        ):
-            # Past the measured upper bound the table is silent; only a live
-            # identity (source is target in this torch) extends the alias.
-            continue
-        return alias.target_namespace, target_qualname, alias.provenance
-    return None
 
 
 def _probe_device_type_arg_supported() -> bool:
@@ -519,6 +343,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_ACCUMULATE_GRAD_CLASS": ("torch:_C._functions.AccumulateGrad",),
     "HAS_CURRENT_GRAPH_TASK_ID": ("torch:_C._current_graph_task_id",),
     "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
+    "HAS_ORIGINAL_VIEW_TRACKING": ("torch:autograd._force_original_view_tracking",),
     "HAS_FX_GRAPH_MODULE": ("torch:fx.GraphModule",),
     "HAS_NAMED_TENSOR_API": (
         "torch:Tensor.names",
@@ -1210,9 +1035,7 @@ def _probe_gradient_edge() -> bool:
             # practice None the same as any other probe failure below.
             return False
         torch.autograd.grad(
-            [GradientEdge(h.grad_fn, h.output_nr)],
-            [x],
-            grad_outputs=[torch.ones(1)],
+            [GradientEdge(h.grad_fn, h.output_nr)], [x], grad_outputs=[torch.ones(1)]
         )
     except Exception:
         return False
@@ -1576,6 +1399,7 @@ HAS_DEVICE_CONSTRUCTORS: bool = _probe_attribute_paths("HAS_DEVICE_CONSTRUCTORS"
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_attribute_paths("HAS_ACCUMULATE_GRAD_CLASS")
 HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK_ID")
 HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
+HAS_ORIGINAL_VIEW_TRACKING: bool = _probe_attribute_paths("HAS_ORIGINAL_VIEW_TRACKING")
 HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
 HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
@@ -1773,6 +1597,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
+    "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_FX_GRAPH_MODULE",
     "HAS_NAMED_TENSOR_API",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
@@ -2290,13 +2115,11 @@ def get_optional_torch_namespace(namespace_name: str) -> Any | None:
         return submodule
     if namespace is None and namespace_name == "torch.func":
         mark_torch_capability_missing(
-            "HAS_TORCH_FUNC",
-            "skipping torch.func transform-boundary decoration",
+            "HAS_TORCH_FUNC", "skipping torch.func transform-boundary decoration"
         )
     elif namespace is None and namespace_name == "torch._functorch.apis":
         mark_torch_capability_missing(
-            "HAS_FUNCTORCH_APIS",
-            "skipping torch._functorch.apis transform-boundary decoration",
+            "HAS_FUNCTORCH_APIS", "skipping torch._functorch.apis transform-boundary decoration"
         )
     return namespace
 
@@ -2337,6 +2160,11 @@ def get_current_autograd_node_fn() -> Callable[[], Any] | None:
     return _resolve_or_mark_missing(
         "HAS_CURRENT_AUTOGRAD_NODE", "executed backward FLOPs read unknown, not per node"
     )
+
+
+def get_force_original_view_tracking() -> Callable[[bool], Any] | None:
+    """Return autograd's original-view-tracking context manager, or ``None`` (flag flipped)."""
+    return _resolve_or_mark_missing("HAS_ORIGINAL_VIEW_TRACKING", "view-func replay refuses views")
 
 
 def get_functorch_maybe_current_level() -> Callable[[], Any] | None:
@@ -2454,8 +2282,7 @@ def get_current_function_mode_stack() -> Iterable[Any] | None:
     )
     if stack_getter is None:
         mark_torch_capability_missing(
-            "HAS_DEVICE_CONTEXT_DISPATCH",
-            "torch.device context stack introspection is disabled",
+            "HAS_DEVICE_CONTEXT_DISPATCH", "torch.device context stack introspection is disabled"
         )
         return None
     return stack_getter()
@@ -2562,8 +2389,7 @@ def get_tensorbase_class() -> type[Any] | None:
         _TENSORBASE_CLASS_PROBED = True
     if _TENSORBASE_CLASS is None:
         mark_torch_capability_missing(
-            "HAS_TENSORBASE_CLASS",
-            "C-level tensor-base introspection is unavailable",
+            "HAS_TENSORBASE_CLASS", "C-level tensor-base introspection is unavailable"
         )
     return _TENSORBASE_CLASS
 
@@ -2648,6 +2474,63 @@ def get_fake_tensor_mode_class() -> type[Any] | None:
             "the runnable allocation preflight is disabled (falls back to the recorded bound)",
         )
     return _FAKE_TENSOR_MODE_CLS
+
+
+def get_higher_order_operator(module: str, attribute: str) -> Any | None:
+    """Return a ``torch._higher_order_ops`` operator that has a per-mode rule table.
+
+    Parameters
+    ----------
+    module:
+        ``torch._higher_order_ops`` submodule name (``"cond"``, ``"scan"``, ...).
+    attribute:
+        Operator attribute in that submodule (``"cond_op"``, ...).
+
+    Returns
+    -------
+    Any | None
+        The ``HigherOrderOperator``, or ``None`` when this torch lacks it or it has
+        no ``python_key_table`` to register a dispatch-mode rule in.
+    """
+
+    op = _import_module_attr_or_none(f"torch._higher_order_ops.{module}", attribute)
+    hop_type = _nested_getattr_or_none(torch, ["_ops", "HigherOrderOperator"])
+    if not isinstance(hop_type, type) or not isinstance(op, hop_type):
+        return None
+    return op if isinstance(getattr(op, "python_key_table", None), dict) else None
+
+
+def get_higher_order_eager_kernel(op: Any) -> Callable[..., Any] | None:
+    """Return a ``HigherOrderOperator``'s eager ``CompositeExplicitAutograd`` kernel.
+
+    Parameters
+    ----------
+    op:
+        Operator from :func:`get_higher_order_operator`.
+
+    Returns
+    -------
+    Callable[..., Any] | None
+        The registered Python kernel, or ``None`` when it has none.
+    """
+
+    return op.py_kernels.get(torch._C.DispatchKey.CompositeExplicitAutograd)
+
+
+def get_scan_eager_body() -> Callable[..., Any] | None:
+    """Return ``torch._higher_order_ops.scan.generic_scan``, or ``None`` when absent.
+
+    It is the body of torch's eager ``scan`` kernel without that kernel's
+    no-active-dispatch-mode assertion.
+
+    Returns
+    -------
+    Callable[..., Any] | None
+        The scan loop, or ``None`` when this torch lacks it.
+    """
+
+    body = _import_module_attr_or_none("torch._higher_order_ops.scan", "generic_scan")
+    return body if callable(body) else None
 
 
 def get_dtensor_shard_geometry_fn() -> Callable[..., Any] | None:
@@ -3219,8 +3102,7 @@ def get_fsdp_wrapper_type(*, force_probe: bool = False) -> type[Any] | None:
     fsdp_wrapper_type = _FSDP_WRAPPER_TYPE
     if fsdp_wrapper_type is None:
         mark_torch_capability_missing(
-            "HAS_FSDP_WRAPPER",
-            "FSDP wrapper detection and rejection are disabled",
+            "HAS_FSDP_WRAPPER", "FSDP wrapper detection and rejection are disabled"
         )
         return None
     return fsdp_wrapper_type
@@ -3884,9 +3766,7 @@ def get_dynamo_explain() -> Callable[..., Any] | None:
 
 
 def run_dynamo_explain(
-    model: Callable[..., Any],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
+    model: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]
 ) -> Any:
     """Execute Dynamo explain across old and new invocation conventions.
 

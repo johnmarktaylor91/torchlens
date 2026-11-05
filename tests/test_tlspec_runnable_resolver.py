@@ -28,10 +28,8 @@ from torchlens._runnable import (
     RunnableErrorCode,
     SparseRunDescriptor,
 )
+from torchlens._utils._runnable_alias_resolver import resolve_runnable_torch_alias
 from torchlens._utils._runnable_torch_aliases import _RUNNABLE_TORCH_ALIASES
-from torchlens._utils._torch_compat import (
-    resolve_runnable_torch_alias,
-)
 from torchlens._utils._torch_symbols import getattr_allowlisted
 from torchlens.errors import ReattachError
 from torchlens.intervention.types import FunctionRegistryKey
@@ -535,7 +533,7 @@ def test_alias_beyond_its_recorded_max_resolves_only_on_a_live_identity(
 ) -> None:
     """Past the measured upper bound an alias holds only while source *is* target in this torch."""
 
-    from torchlens._utils import _torch_compat as tc
+    from torchlens._utils import _runnable_alias_resolver as resolver
 
     linear_alias = next(a for a in _RUNNABLE_TORCH_ALIASES if a.source == "torch._C._nn.linear")
     assert linear_alias.recorded_max_version is not None
@@ -556,10 +554,10 @@ def test_alias_beyond_its_recorded_max_resolves_only_on_a_live_identity(
     assert resolve_runnable_torch_alias("torch._C._nn.cross_entropy_loss", "2.99.0") is None
     assert resolve_runnable_torch_alias("torch._C._nn.cross_entropy_loss", "2.10.0") is not None
     # The identity probe is the only thing extending the bound, in both directions.
-    monkeypatch.setattr(tc, "_runtime_alias_identity_holds", lambda *args: False)
+    monkeypatch.setattr(resolver, "_runtime_alias_identity_holds", lambda *args: False)
     assert resolve_runnable_torch_alias("torch._C._nn.linear", beyond) is None
     assert resolve_runnable_torch_alias("torch._C._nn.linear", inside) == expected
-    monkeypatch.setattr(tc, "_runtime_alias_identity_holds", lambda *args: True)
+    monkeypatch.setattr(resolver, "_runtime_alias_identity_holds", lambda *args: True)
     assert resolve_runnable_torch_alias("torch._C._nn.linear", beyond) == expected
     assert resolve_runnable_torch_alias("torch._C._nn.cross_entropy_loss", "2.99.0") == (
         "torch.nn.functional",
@@ -573,7 +571,7 @@ def test_alias_beyond_its_recorded_max_resolves_only_on_a_live_identity(
 def test_runtime_alias_identity_probe_reads_the_running_torch() -> None:
     """The identity probe answers from live objects: same object True, distinct or absent False."""
 
-    from torchlens._utils._torch_compat import _runtime_alias_identity_holds
+    from torchlens._utils._runnable_alias_resolver import _runtime_alias_identity_holds
 
     # Two spellings of one object on every torch: the dtype aliases.
     assert torch.float is torch.float32

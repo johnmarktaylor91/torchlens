@@ -81,7 +81,7 @@ def preserved_rng_state() -> Iterator[None]:
         numpy_state = numpy.random.get_state()
     except ImportError:
         pass
-    torch_cpu_state = torch.get_rng_state()
+    torch_cpu_state = torch.default_generator.get_state()
     cuda_devices = _initialized_cuda_devices()
     cuda_states = [torch.cuda.get_rng_state(device) for device in cuda_devices]
     try:

@@ -30,6 +30,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests.behaviour._hook_passes import restore_pass_doors
 from tests.behaviour.cases import Case
 from tests.behaviour.features import SEED, Feature, NotApplicable
 from torchlens.errors import TorchLensError
@@ -608,9 +609,14 @@ def run_cell(case: Case, features: Sequence[Feature], tmp: Path) -> CellResult:
     """
 
     features = tuple(features)
-    with warnings.catch_warnings():
-        warnings.simplefilter("default")
-        return _run_cell(case, features, tmp)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("default")
+            return _run_cell(case, features, tmp)
+    finally:
+        # A feature that armed the pass recorder (hooks) restores the capture
+        # doors in its after-check, which a cell that stops early never runs.
+        restore_pass_doors()
 
 
 def run_cell_and_clean(

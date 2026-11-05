@@ -94,7 +94,7 @@ from .._utils._callable_safety import (
     unsafe_callable_reason,
 )
 from .._utils._display_bounded import short_dataclass_repr
-from .._utils._torch_compat import resolve_runnable_torch_alias
+from .._utils._runnable_alias_resolver import resolve_runnable_torch_alias
 from .._utils._torch_symbols import (
     ALLOWED_EXACT_ROOTS,
     enumerated_torch_callable,

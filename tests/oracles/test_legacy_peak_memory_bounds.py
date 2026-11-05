@@ -23,12 +23,11 @@ from __future__ import annotations
 
 import os
 import tracemalloc
-from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
-from _fresh_plant import touch_fresh_plant
+from _fresh_plant import needs_vmhwm_reset, touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
@@ -43,10 +42,7 @@ HOST = CaptureOptions(measure_host_peak_memory=True)
 #: module attributes after the forward (pure observer).
 SAMPLES: dict[str, int] = {}
 
-procfs = pytest.mark.skipif(
-    not (Path("/proc/self/statm").exists() and os.access("/proc/self/clear_refs", os.W_OK)),
-    reason="the per-bracket resident high-water needs Linux procfs (skipped by design)",
-)
+
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA device")
 
 
@@ -111,7 +107,7 @@ class PyTransient(nn.Module):
         return self.fc(x)
 
 
-@procfs
+@needs_vmhwm_reset
 def test_cpu_forward_peak_includes_a_buffer_freed_inside_the_forward() -> None:
     torch.manual_seed(0)
     tl.trace(Transient().eval(), torch.randn(2, 4)).cleanup()  # warm the wrappers
@@ -155,7 +151,7 @@ def _backward_hook_trace(device: str, samples: dict[str, list[int]]) -> Any:
     return trace, out
 
 
-@procfs
+@needs_vmhwm_reset
 def test_cpu_backward_peak_is_the_largest_pass_peak() -> None:
     samples: dict[str, list[int]] = {"entry": [], "alive": []}
     trace, out = _backward_hook_trace("cpu", samples)

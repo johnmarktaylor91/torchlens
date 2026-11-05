@@ -38,9 +38,9 @@ from ._param_fingerprint import (
 )
 from ._replay_cone import (
     _disclosure_label,
-    _label_key_map,
     _replay_cone_and_maps,
     _resolve_single_origin,
+    _shared_label_key_map,
     cone_of_effect,
 )
 from ._replay_context import (
@@ -66,6 +66,7 @@ from ._replay_values import (
     _clone_tensors_in,
     _is_inplace_none_return,
     _looks_like_template_dict,
+    refresh_output_derivatives,
     rollback_snapshot,
 )
 from .audit import _hook_name, _replay_fire_record
@@ -666,7 +667,7 @@ def _reconstruct_args_from_template(
     """
 
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     args = tuple(
         _resolve_arg_component(
             component,
@@ -766,7 +767,7 @@ def _boundary_slot_parent_op(
             f"{len(parents)} ({', '.join(repr(parent) for parent in parents)})."
         )
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     parent_label = parents[0]
     candidate_keys = label_keys.get(parent_label, ())
     candidates = [
@@ -855,7 +856,7 @@ def _resolve_arg_component(
     """
 
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     if isinstance(component, ParentRef):
         parent_label = _final_label_for_ref(trace, component.parent_label)
         if parent_label not in trace._layer_dict_all_keys:
@@ -1258,10 +1259,9 @@ def _commit_replay_updates(
     if new_digests:
         # Rebind, never mutate: the run context may be shared with a fork.
         run_ctx[REPLAY_CAPTURE_DIGESTS_KEY] = {**known_digests, **new_digests}
-    # The committed values may include the outputs: re-derive the decoded output from them.
     from .._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
 
-    refresh_decoded_output(log)
+    refresh_output_derivatives(log, snapshots, refresh_decoded_output)  # outputs may have changed
 
 
 def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:

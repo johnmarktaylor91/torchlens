@@ -3162,6 +3162,14 @@
  {
   "ambiguous": false,
   "field": "_edge_uses",
+  "file": "torchlens/_postprocess/_label_rename.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "_edge_uses",
   "file": "torchlens/_postprocess/_materialize.py",
   "has_default": false,
   "sites": 1,
@@ -3672,14 +3680,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "_edge_uses",
-  "file": "torchlens/_postprocess/labeling.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_postprocess/labeling.py",
@@ -4188,7 +4188,7 @@
   "field": "modules",
   "file": "torchlens/_semantic/recipes/_helpers.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -4811,6 +4811,14 @@
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_visualization/_edge_shapes.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_visualization/_edit_marks.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -5620,7 +5628,7 @@
   "field": "modules",
   "file": "torchlens/attribution/graph/_build.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -8377,6 +8385,14 @@
  },
  {
   "ambiguous": false,
+  "field": "is_output_parent",
+  "file": "torchlens/intervention/_replay_values.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "capture_spec",
   "file": "torchlens/intervention/_rerun_predicate.py",
   "has_default": false,
@@ -10338,6 +10354,14 @@
  {
   "ambiguous": false,
   "field": "parent_arg_positions",
+  "file": "torchlens/validation/_crossing_perturbations.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
   "file": "torchlens/validation/_destination_coverage.py",
   "has_default": true,
   "sites": 1,
@@ -10389,6 +10413,14 @@
   "file": "torchlens/validation/_index_domain.py",
   "has_default": true,
   "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_influence_probes.py",
+  "has_default": true,
+  "sites": 1,
   "via_getattr": true
  },
  {
@@ -10781,6 +10813,14 @@
   "file": "torchlens/validation/_layer_grad_report.py",
   "has_default": true,
   "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_membership_perturbation.py",
+  "has_default": true,
+  "sites": 1,
   "via_getattr": true
  },
  {

@@ -4889,7 +4889,7 @@ The sections above describe each surface in depth.
 | `Trace.is_replayable` | Whether the capture ran with `replayable=True` (the runnable apparatus: runnable save, edge provenance). Saved-graph replay (`do()` without `model=`) needs only the per-op argument templates every `tl.trace` capture records (`trace.options.save_arg_templates`), so it does not need this flag |
 | `Trace.is_stopped` | Whether the capture stopped early (`until=`/`stop_after=`); a stopped trace is partial (was `halted`) |
 | `Trace.options.seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
-| `Trace.transformed_output` | Human-readable model output after `output_transform` (was `raw_output`) |
+| `Trace.transformed_output` | Human-readable model output after `output_transform` (was `raw_output`); after a replay rewrites an output op it refuses `output_not_stored` (the rerun engine recomputes it), and a saved such trace stores no transformed output (`None` on load) |
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
 | `ValidationFailure.check_name` | Which validation phase fired (always set) |
@@ -5082,7 +5082,7 @@ alphabetical order.
 | `Trace.model_ops` | Tuple of the trace's ordinary executed op records, excluding any ops injected by intervention hooks |
 | `Trace.model_profile` | The computed `ModelProfile` semantic input/output descriptor for this trace, not persisted |
 | `Trace.module_calls` | Accessor for per-invocation `ModuleCall` records, looked up by call label or index |
-| `Trace.modules_with_facet` | Yield the single-call Modules whose semantic facet view currently has the facet `name` available; a module called more than once is skipped, or refused (`module_call_ambiguous`) when its facet recipe declares `name` |
+| `Trace.modules_with_facet` | Yield the single-call Modules whose semantic facet view currently has the facet `name` available; a module called more than once is skipped, or refused (`module_call_ambiguous`) when its facet recipe declares `name`, with a remedy naming the per-call views `module.calls[N].facets` |
 | `Trace.nonfinite_verdict` | Three-state health verdict: `found`, `checked_and_clean` or `not_checked` |
 | `Trace.num_context_lines` | Number of source lines captured around each call site for `FuncCallLocation` |
 | `Trace.num_edges` | Number of distinct edges in the per-pass Op graph, including boundary edges |

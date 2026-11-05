@@ -334,7 +334,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # capability warning stay here); measured 4968. Debloat target: 3450.
     # 5000 -> 4700 (compat table): the attribute-only capability probes moved
     # to declarative rows in _utils/_torch_compat_table.py; measured 4676.
-    "torchlens/_utils/_torch_compat.py": 4600,
+    # 4600 -> 4450 (cond-validate): the runnable alias resolver moved to its own
+    # module _utils/_runnable_alias_resolver.py, making room for the HOP rule
+    # accessors; measured 4398.
+    "torchlens/_utils/_torch_compat.py": 4450,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
@@ -424,7 +427,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
     "torchlens/_visualization/auto_collapse.py": 2150,
-    "torchlens/validation/exemptions.py": 2850,
+    # 2850 -> 2650: the bool influence probes moved to validation/_influence_probes.py
+    # (2615 measured); the ceiling follows down.
+    "torchlens/validation/exemptions.py": 2650,
     # 2700 -> 2800 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
     # conditional relabel epilogue plus intervention/halt predicate
