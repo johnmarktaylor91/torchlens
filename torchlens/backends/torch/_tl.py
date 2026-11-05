@@ -165,18 +165,13 @@ class TensorMeta(TorchLensMeta):
     def __deepcopy__(self, memo: dict[int, Any]) -> TensorMeta:
         """Copy this metadata for a deep-copied tensor, minus the source's identity.
 
-        ``Tensor.__deepcopy__`` finishes with ``new.__dict__ =
-        deepcopy(self.__dict__, memo)``, so a tensor copied inside a captured
-        forward would inherit its source's current-session anchor; and because
-        the storage was deep-copied through the same ``memo``, even the
-        ``label_storage`` pin would map onto the copy's own storage. The copy
-        would then read as the source itself: the deepcopy call would look like
-        it returned its input, log no op, and wire every consumer to the source
-        node. The anchor, the pin and the alias/handoff flags describe one
-        object, so the copy starts without them; the inert raw history
-        (``label_raw``, ``address``, ``buffer_source``) is kept, which the
-        session gate already ignores during a capture and which reads as before
-        afterwards.
+        ``Tensor.__deepcopy__`` deep-copies ``__dict__`` through the storage's
+        memo, so a copy made in a captured forward would inherit the source's
+        session anchor and a ``label_storage`` pin onto its own storage, read as
+        the source, log no op and wire every consumer to the source node. The
+        anchor, the pin and the alias/handoff flags describe one object, so the
+        copy starts without them; the inert raw history (``label_raw``,
+        ``address``, ``buffer_source``) is kept. Pickling strips the same fields.
 
         Parameters
         ----------
@@ -199,6 +194,10 @@ class TensorMeta(TorchLensMeta):
         )
         memo[id(self)] = copied
         return copied
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Pickle as ``__deepcopy__`` copies: a loaded object is never the labeled source."""
+        return dict(vars(self.__deepcopy__({})))
 
 
 @dataclass
