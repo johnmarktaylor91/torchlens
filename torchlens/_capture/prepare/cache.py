@@ -32,6 +32,7 @@ from ..._trace_selector_helpers import (
     _stable_cache_fragment,
 )
 from ...backends.torch.bound_root import TLBoundMethodRoot
+from ._cache_pickle import capture_cache_dispatch_table
 from .chunked import normalize_chunk_paths
 from .request import _DoorState
 
@@ -355,6 +356,25 @@ def _load_authenticated_capture_cache(cache_path: Path, secret: bytes) -> Any:
     return None
 
 
+def _dump_capture_cache_payload(trace: Trace, file: Any, mac: Any) -> None:
+    """Stream ``trace``'s pickle into ``file`` through the HMAC, storages made loadable.
+
+    Parameters
+    ----------
+    trace
+        The trace to store.
+    file
+        Open binary file positioned after the entry header.
+    mac
+        Running HMAC over the payload bytes.
+    """
+
+    pickler = pickle.Pickler(_TaggingWriter(file, mac, byte_ceiling=_CAPTURE_CACHE_MAX_BYTES))
+    pickler.dispatch_table = capture_cache_dispatch_table()
+    with _state.pause_logging():
+        pickler.dump(trace)
+
+
 def _store_authenticated_capture_cache(trace: Trace, cache_path: Path, secret: bytes) -> bool:
     """Commit a self-authenticating cache entry in ONE atomic step.
 
@@ -399,7 +419,7 @@ def _store_authenticated_capture_cache(trace: Trace, cache_path: Path, secret: b
         # overwritten in place once the streaming MAC settles.
         with os.fdopen(descriptor, "wb+") as file:
             file.write(_CAPTURE_CACHE_MAGIC + b"0" * _CAPTURE_CACHE_TAG_HEX_CHARS + b"\n")
-            pickle.dump(trace, _TaggingWriter(file, mac, byte_ceiling=_CAPTURE_CACHE_MAX_BYTES))
+            _dump_capture_cache_payload(trace, file, mac)
             file.flush()
             file.seek(len(_CAPTURE_CACHE_MAGIC))
             file.write(mac.hexdigest().encode("ascii"))
