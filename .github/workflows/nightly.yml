@@ -305,7 +305,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -391,7 +391,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -459,7 +459,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -589,7 +589,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -670,7 +670,7 @@ jobs:
 
       - name: Upload performance evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-perf-gate
           path: |
@@ -771,7 +771,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-coverage
           path: ${{ runner.temp }}/coverage.xml
@@ -850,7 +850,7 @@ jobs:
 
       - name: Upload the shard's coverage data
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-mid-data-${{ matrix.shard }}
           path: ${{ runner.temp }}/coverage-mid-data/
@@ -933,7 +933,7 @@ jobs:
 
       - name: Upload the combined coverage report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-coverage-mid
           path: ${{ runner.temp }}/coverage-mid.xml
@@ -990,7 +990,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -1188,7 +1188,7 @@ jobs:
 
       - name: Upload the ${{ matrix.backend }} ecosystem scorecard
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ecosystem-scorecard-${{ matrix.backend }}
           path: ${{ runner.temp }}/ecosystem/
@@ -1197,7 +1197,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -1681,7 +1681,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -1767,7 +1767,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -1905,7 +1905,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -2051,7 +2051,7 @@ jobs:
 
       - name: Upload the peer freeze and junit
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-peer-recipes
           path: |
@@ -2061,7 +2061,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -2117,7 +2117,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -2169,7 +2169,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -2224,7 +2224,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -2302,7 +2302,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
@@ -2585,7 +2585,7 @@ jobs:
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/junit/
