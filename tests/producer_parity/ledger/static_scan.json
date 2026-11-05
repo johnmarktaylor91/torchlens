@@ -10186,14 +10186,6 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/validation/__init__.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
   "file": "torchlens/validation/_autograd_grad_replay.py",
   "has_default": false,
   "sites": 3,
