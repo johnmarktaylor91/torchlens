@@ -28,7 +28,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._utils._torch_compat import get_cond_witness_operator, get_higher_order_operator
 from torchlens.backends.torch import rescue
+from torchlens.backends.torch._backward_dispatch import _BackwardCensusMode
+from torchlens.backends.torch._completeness_finalize import _CompletenessDispatchMode
+from torchlens.backends.torch._completeness_hop import witness_rule_table
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
 _Mul = Callable[[torch.Tensor, object], torch.Tensor]
@@ -98,14 +102,12 @@ def _hop_function(module: str, name: str) -> Callable[..., object]:
 
 
 def _torch_cond() -> Callable[..., torch.Tensor]:
-    """Return the user-facing ``cond``, skipping when this torch has no cond operator.
+    """Return the user-facing ``cond`` (on torch 2.1, the bare operator itself).
 
-    The witness keys its cond rule on the ``cond_op`` HigherOrderOperator (the
-    product resolves it through ``get_higher_order_operator("cond", "cond_op")``).
-    A torch whose ``torch._higher_order_ops.cond`` predates that operator holds the
-    bare operator under ``cond`` and has no user-facing ``torch.cond``, so a cond
-    case there is not applicable by capability, through the same probe as an
-    absent ``while_loop``.
+    The witness keys its cond rule on ``cond_op`` where torch has it. Torch 2.1
+    predates ``cond_op`` and ``torch.cond``: ``torch._higher_order_ops.cond.cond``
+    is the operator, and the witness keys its rule on it
+    (``get_cond_witness_operator``), so every cond case runs on every torch.
 
     Returns
     -------
@@ -113,7 +115,6 @@ def _torch_cond() -> Callable[..., torch.Tensor]:
         The user-facing ``cond`` entry point.
     """
 
-    _hop_function("cond", "cond_op")
     return cast(Callable[..., torch.Tensor], _hop_function("cond", "cond"))
 
 
@@ -367,7 +368,10 @@ _HOP_DISPATCHED = sorted(set(_HOP_FORWARDS) - {"associative_scan"})
 
 Generic-mode ``associative_scan`` on CPU runs its combine loop in Python without
 dispatching ``associative_scan_op`` (its capture validates True with no witness
-rule at all), so its planted drop says nothing about the HOP rules.
+rule at all), so its planted drop says nothing about the HOP rules. Its combine
+function runs inside ``torch.vmap``, which TorchLens records as a boundary op
+whose interior is not censused by design; ``tests/test_vmap_boundary_replay.py``
+checks that boundary instead.
 """
 
 
@@ -419,3 +423,22 @@ def test_cond_capture_holds_only_the_taken_branch() -> None:
     assert "__mul__" in true_funcs and "__sub__" not in true_funcs
     assert "__mul__" in false_funcs and "__sub__" not in false_funcs
     assert true_funcs.count("__mul__") == 1 and false_funcs.count("__mul__") == 1
+
+
+def test_cond_witness_rule_is_keyed_on_the_operator_cond_dispatches_through() -> None:
+    """The cond rule sits on ``cond_op`` where torch has it, else on the bare 2.1 operator.
+
+    On current torch the key is the same object as before the bare-operator
+    fallback (``get_higher_order_operator("cond", "cond_op")``); on torch 2.1 it is
+    ``torch._higher_order_ops.cond.cond``, the operator a user's ``cond`` call
+    dispatches through. Both witness dispatch modes carry the rule on it.
+    """
+
+    module = importlib.import_module("torch._higher_order_ops.cond")
+    operator_ = get_cond_witness_operator()
+    if hasattr(module, "cond_op"):
+        assert operator_ is module.cond_op
+        assert operator_ is get_higher_order_operator("cond", "cond_op")
+    else:
+        assert operator_ is module.cond
+    assert {_CompletenessDispatchMode, _BackwardCensusMode} <= set(witness_rule_table(operator_))

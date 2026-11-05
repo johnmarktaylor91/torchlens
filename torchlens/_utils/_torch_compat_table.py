@@ -143,6 +143,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row(
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")
     ),
+    _row("HAS_COND_HIGHER_ORDER_OP"),
     _row("HAS_CPU_HALF_KERNELS", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL"),
     _row("HAS_CUDA_GRAPHS"),

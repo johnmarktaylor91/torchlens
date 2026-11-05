@@ -86,6 +86,7 @@ __all__ = [
     "HAS_DTENSOR_SHARD_GEOMETRY",
     "HAS_DYNAMO_COMPILE_COUNTERS",
     "HAS_DYNAMO_IS_COMPILING",
+    "HAS_COND_HIGHER_ORDER_OP",
     "HAS_FAKE_TENSOR_MODE",
     "HAS_FUNCOL_GROUP_RESOLUTION",
     "HAS_FUNCOL_WAIT_INTERPOSITION",
@@ -1003,13 +1004,7 @@ def _probe_disabled_torch_function_impl() -> bool:
 
 
 def _probe_gradient_edge() -> bool:
-    """Return whether torch's GradientEdge surface works end to end (see the leaf).
-
-    Attribute presence alone is insufficient: torch 2.2-2.3 ships the class but its
-    own ``_make_grads`` raises ``AttributeError`` on a bare ``GradientEdge`` output
-    (fixed upstream by 2.4). Absent or broken is a healthy old install, not a
-    TorchLens degradation: the read refuses typed.
-    """
+    """Return whether GradientEdge works end to end (``False`` on 2.1-2.3; see the leaf)."""
 
     return bool(_real_op_probe_leaf().probe_gradient_edge())
 
@@ -1556,6 +1551,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_DISABLE_TORCH_FUNCTION",
     "HAS_DISABLED_TORCH_FUNCTION_IMPL",
     "HAS_VARIABLE_FUNCTIONS_CLASS",
+    "HAS_COND_HIGHER_ORDER_OP",
     "HAS_FAKE_TENSOR_MODE",
     "HAS_DTENSOR_SHARD_GEOMETRY",
     "HAS_FUNCOL_GROUP_RESOLUTION",
@@ -1953,9 +1949,8 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_dynamo_compile_counters(force_probe=True)
     probe_c10d_capabilities(force_probe=True)
     get_current_dispatch_mode_stack()
-    # r-b4 R26-2 lazily-probed accessors: resolve so the snapshot reports the
-    # real capability, not the pre-probe placeholder. Degradation warnings are
-    # deduped once-per-process and the probes are cached.
+    # r-b4 R26-2 lazily-probed accessors: resolve so the snapshot reports the real
+    # capability, not the placeholder (warnings deduped per process, probes cached).
     get_jit_all_schemas()
     get_tensorbase_class()
     get_disable_torch_function_context()
@@ -2439,7 +2434,9 @@ def get_fake_tensor_mode_class() -> type[Any] | None:
     return _FAKE_TENSOR_MODE_CLS
 
 
-def get_higher_order_operator(module: str, attribute: str) -> Any | None:
+def get_higher_order_operator(
+    module: str, attribute: str, *, table: str = "python_key_table"
+) -> Any | None:
     """Return a ``torch._higher_order_ops`` operator that has a per-mode rule table.
 
     Parameters
@@ -2448,19 +2445,43 @@ def get_higher_order_operator(module: str, attribute: str) -> Any | None:
         ``torch._higher_order_ops`` submodule name (``"cond"``, ``"scan"``, ...).
     attribute:
         Operator attribute in that submodule (``"cond_op"``, ...).
+    table:
+        Rule-table attribute required on the operator (torch 2.1: ``python_key_mode_table``).
 
     Returns
     -------
     Any | None
         The ``HigherOrderOperator``, or ``None`` when this torch lacks it or it has
-        no ``python_key_table`` to register a dispatch-mode rule in.
+        no ``table`` to register a dispatch-mode rule in.
     """
 
     op = _import_module_attr_or_none(f"torch._higher_order_ops.{module}", attribute)
     hop_type = _nested_getattr_or_none(torch, ["_ops", "HigherOrderOperator"])
     if not isinstance(hop_type, type) or not isinstance(op, hop_type):
         return None
-    return op if isinstance(getattr(op, "python_key_table", None), dict) else None
+    return op if isinstance(getattr(op, table, None), dict) else None
+
+
+def get_cond_witness_operator(*, mark_missing: bool = True) -> Any | None:
+    """Return the ``cond`` HigherOrderOperator the completeness witness keys its rule on.
+
+    ``cond.cond_op`` when present; torch 2.1 has no ``cond_op`` and its bare ``cond``
+    is the operator, with its rules in ``python_key_mode_table``. Only the absence
+    of both marks ``HAS_COND_HIGHER_ORDER_OP`` missing (cond is then unwitnessed).
+    """
+
+    op = get_higher_order_operator("cond", "cond_op")
+    if (
+        op is None
+        and _import_module_attr_or_none("torch._higher_order_ops.cond", "cond_op") is None
+    ):
+        op = get_higher_order_operator("cond", "cond", table="python_key_mode_table")
+    if op is None and mark_missing:
+        mark_torch_capability_missing("HAS_COND_HIGHER_ORDER_OP", "cond captures are not witnessed")
+    return op
+
+
+HAS_COND_HIGHER_ORDER_OP: bool = get_cond_witness_operator(mark_missing=False) is not None
 
 
 def get_higher_order_eager_kernel(op: Any) -> Callable[..., Any] | None:
