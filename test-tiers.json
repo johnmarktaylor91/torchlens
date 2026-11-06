@@ -4217,8 +4217,8 @@
         "tests/test_capture_fields_dict_prune.py",
         "tests/test_capture_overhead_counters.py",
         "tests/test_capture_row_ingest.py",
+        "tests/test_executor_cuda_cache_arming.py",
         "tests/test_internal_call_fastpath.py",
-        "tests/test_mutation_driver_governance.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_gc_pause.py",
         "tests/test_postprocess_retention_epilogue.py"
@@ -4256,6 +4256,7 @@
         "tests/test_trace_core_substrate.py"
       ],
       "torchlens/_postprocess/_layer_depths.py": [
+        "tests/test_executor_cuda_cache_arming.py",
         "tests/test_postprocess_executor.py"
       ],
       "torchlens/_postprocess/_lazy_param_geometry.py": [
@@ -4431,7 +4432,7 @@
         "tests/test_conditional_branches.py",
         "tests/test_conditional_scalar_escape_advisory.py",
         "tests/test_conditional_step5.py",
-        "tests/test_perf_bundle.py",
+        "tests/test_executor_cuda_cache_arming.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed_counters.py",
         "tests/test_tlspec_runnable_exception_control_flow.py"
@@ -4469,12 +4470,14 @@
       "torchlens/_postprocess/labeling.py": [
         "tests/test_buffer_datamodel.py",
         "tests/test_conditional_lifecycle.py",
+        "tests/test_executor_cuda_cache_arming.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed2_counters.py"
       ],
       "torchlens/_postprocess/loop_detection.py": [
         "tests/test_arch_spine_relocations.py",
         "tests/test_call_site_contract.py",
+        "tests/test_executor_cuda_cache_arming.py",
         "tests/test_io_determinism_fixes.py",
         "tests/test_loop_recurrence_hardening_2.py",
         "tests/test_postprocess_executor.py"
@@ -4500,6 +4503,7 @@
         "tests/test_selective_save_zero_match_warning.py"
       ],
       "torchlens/_postprocess/source_provenance.py": [
+        "tests/test_executor_cuda_cache_arming.py",
         "tests/test_postprocess_executor.py"
       ],
       "torchlens/_private_submodules.py": [
@@ -5759,10 +5763,10 @@
       ],
       "torchlens/_utils/_cuda_probe.py": [
         "tests/test_capture_failure_reporting.py",
+        "tests/test_executor_cuda_cache_arming.py",
         "tests/test_numpy_bridge_compat.py",
         "tests/test_observe_kit_device_memory.py",
         "tests/test_patching_helper_memory.py",
-        "tests/test_postprocess_speed_counters.py",
         "tests/test_r36_cuda_hygiene.py",
         "tests/test_rng_cuda_isolation.py",
         "tests/test_torch_compat.py"
