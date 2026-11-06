@@ -537,7 +537,7 @@ torchlens/_utils/rng/registry.py::_build_host_nondeterminism_registry	107
 torchlens/_utils/tensor_utils.py	1858
 torchlens/_utils/tensor_utils.py::_clone_tensor_payload	71
 torchlens/_utils/tensor_utils.py::_copy_tensor_payload	102
-torchlens/_utils/tensor_utils.py::tensor_nanequal	179
+torchlens/_utils/tensor_utils.py::tensor_nanequal	176
 torchlens/_validation_status.py::ValidationStatus.from_replay_counts	130
 torchlens/_validation_status.py::ValidationStatus.result	72
 torchlens/_validation_status.py::ValidationStatus.unverified	74
