@@ -227,7 +227,7 @@ def resolve_code_panel_source(
     mode: CodePanelMode
     if code_panel is True:
         mode = "forward"
-    elif code_panel in {"forward", "class", "init+forward"}:
+    elif isinstance(code_panel, str) and code_panel in {"forward", "class", "init+forward"}:
         mode = code_panel
     else:
         raise InvalidArgumentError(
