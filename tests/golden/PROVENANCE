@@ -429,3 +429,8 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: f2a36a1d5fb34db98fd32bda626d984483cc78c4 (dirty)
 recorded: 2026-11-06T06:37:00.687018+00:00
+reason: drawfix2 (wip/drawfix2-1105): long node rows get a cell WIDTH sized for browser text advances (box3d front-face inset), key word cells take whole-point measured widths
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 78dfce8ceefbf8b59fa02af42ad3956988c8f9e5 (dirty)
+recorded: 2026-11-06T09:45:30.608731+00:00

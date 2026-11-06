@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import atexit
 import functools
+import math
 import os
 import shutil
 import tempfile
@@ -45,7 +46,6 @@ from ._edit_highlighter import highlighter_rgba
 from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink, header_edit_line
 from ._endpoint_rings import endpoint_ring_swatch
 from ._focus_scope import focus_address, scope_caption_head
-from ._fonts import _FONT_DIR
 from ._frame_penwidth import MODULE_PENWIDTH
 from ._label_format import format_memory, header_count, param_count
 from ._render_common import (
@@ -58,6 +58,7 @@ from ._render_common import (
     TRAINABLE_PARAMS_BG_COLOR,
 )
 from ._render_utils import html_escape, strip_path_directories
+from ._text_metrics import text_width as _text_width
 from .node_spec import NodeSpec, intervention_sites_for_log
 from .themes import _hex_rgb, _theme_cluster_attrs, apply_theme_to_spec, resolve_theme
 
@@ -671,21 +672,6 @@ def _draw_arrow_swatch(
     )
 
 
-@functools.lru_cache(maxsize=256)
-def _text_width(text: str, size: float, bold: bool = False) -> float:
-    """Return ``text``'s width in points in the bundled face Graphviz draws with."""
-
-    from PIL import ImageFont
-
-    name = "LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"
-    try:
-        font = ImageFont.truetype(str(_FONT_DIR / name), size=max(1, round(size * 10)))
-        return float(font.getlength(text)) / 10.0
-    except OSError:
-        # A stripped install without the bundled face: a generous average width.
-        return 0.62 * size * len(text)
-
-
 def _key_rows_html(swatches: tuple[KeySwatch, ...], theme: VisualizationTheme) -> str:
     """Return the key as one fixed-size HTML table of swatch-and-word pairs.
 
@@ -702,25 +688,29 @@ def _key_rows_html(swatches: tuple[KeySwatch, ...], theme: VisualizationTheme) -
         swatches[start : start + _SWATCHES_PER_ROW]
         for start in range(0, len(swatches), _SWATCHES_PER_ROW)
     ]
-    text_columns = [0.0] * _SWATCHES_PER_ROW
+    text_columns = [0] * _SWATCHES_PER_ROW
     for row in rows:
         for index, swatch in enumerate(row):
             text_columns[index] = max(
-                text_columns[index], _text_width(swatch.text, size, bold) * 1.06 + 2.0
+                text_columns[index], math.ceil(_text_width(swatch.text, size, bold) * 1.06 + 2.0)
             )
-    used = [width for width in text_columns if width > 0.0]
+    used = [width for width in text_columns if width > 0]
     width = sum(used) + _SWATCH_WIDTH * len(used) + _KEY_SPACING * (2 * len(used) + 1)
     row_height = max(float(_SWATCH_HEIGHT), size * 1.25)
     height = row_height * len(rows) + _KEY_SPACING * (len(rows) + 1)
     html_rows = []
     for row in rows:
         cells = []
-        for swatch in row:
+        for index, swatch in enumerate(row):
             source = html_escape(_swatch_image(swatch))
+            # Each word cell holds its column's measured width: Graphviz's own
+            # (hinted, narrower) measure spread the table's slack evenly, and a
+            # browser drew "module run as one op" into the next swatch.
             cells.append(
                 f'<TD FIXEDSIZE="TRUE" WIDTH="{_SWATCH_WIDTH}" HEIGHT="{_SWATCH_HEIGHT}">'
                 f'<IMG SRC="{source}" SCALE="TRUE"/></TD>'
-                f'<TD ALIGN="LEFT"><FONT POINT-SIZE="{theme.typography.secondary_pt}" '
+                f'<TD ALIGN="LEFT" WIDTH="{text_columns[index]}">'
+                f'<FONT POINT-SIZE="{theme.typography.secondary_pt}" '
                 f'COLOR="{font_color}">{html_escape(swatch.text)}</FONT></TD>'
             )
         html_rows.append(f"<TR>{''.join(cells)}</TR>")

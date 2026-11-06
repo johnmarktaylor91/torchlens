@@ -14,9 +14,9 @@
 <text text-anchor="start" x="8" y="-853.57" font-family="Helvetica,sans-Serif" font-size="14.00">1.3K params (5.2 KB, all trainable)</text>
 <g id="clust2" class="cluster">
 <title>cluster_blocks_pass1</title>
-<polygon fill="white" stroke="black" stroke-width="1.5" points="10.5,-246.92 10.5,-497.92 228.5,-497.92 228.5,-246.92 10.5,-246.92"/>
-<text text-anchor="start" x="18.5" y="-483.72" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@blocks</text>
-<text text-anchor="start" x="18.5" y="-469.72" font-family="Helvetica,sans-Serif" font-size="14.00">(Sequential)</text>
+<polygon fill="white" stroke="black" stroke-width="1.5" points="9.5,-246.92 9.5,-497.92 229.5,-497.92 229.5,-246.92 9.5,-246.92"/>
+<text text-anchor="start" x="17.5" y="-483.72" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@blocks</text>
+<text text-anchor="start" x="17.5" y="-469.72" font-family="Helvetica,sans-Serif" font-size="14.00">(Sequential)</text>
 </g>
 <!-- input_1pass1 -->
 <g id="node1" class="node">
@@ -46,10 +46,10 @@
 <g id="node3" class="node">
 <title>blocks.0pass1</title>
 <g id="a_node3"><a xlink:title="156 params (0 frozen)">
-<polygon fill="#d9d9d9" stroke="black" points="206.5,-369.92 36.5,-369.92 32.5,-365.92 32.5,-266.92 202.5,-266.92 206.5,-270.92 206.5,-369.92"/>
-<polyline fill="none" stroke="black" points="202.5,-365.92 32.5,-365.92 "/>
-<polyline fill="none" stroke="black" points="202.5,-365.92 202.5,-266.92 "/>
-<polyline fill="none" stroke="black" points="202.5,-365.92 206.5,-369.92 "/>
+<polygon fill="#d9d9d9" stroke="black" points="209.5,-369.92 33.5,-369.92 29.5,-365.92 29.5,-266.92 205.5,-266.92 209.5,-270.92 209.5,-369.92"/>
+<polyline fill="none" stroke="black" points="205.5,-365.92 29.5,-365.92 "/>
+<polyline fill="none" stroke="black" points="205.5,-365.92 205.5,-266.92 "/>
+<polyline fill="none" stroke="black" points="205.5,-365.92 209.5,-369.92 "/>
 <text text-anchor="start" x="85.5" y="-353.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@blocks.0</text>
 <text text-anchor="start" x="73.5" y="-333.22" font-family="Helvetica,sans-Serif" font-size="14.00">SmallResBlock</text>
 <text text-anchor="start" x="70" y="-314.22" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 4, 8, 8), 1 KB</text>

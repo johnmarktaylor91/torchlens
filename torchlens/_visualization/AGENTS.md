@@ -49,6 +49,9 @@ The `_render_dot.py` entry point is split across sibling helper modules; all are
 | `_render_utils.py` | Internal Graphviz helpers shared across rendering paths (subprocess execution, HTML escaping) |
 | `_render_names.py` | Leaf names the renderer shares with the lens and surgery layers (rendered-node slot, bare-draw stem, optimizer ceiling) |
 | `_label_format.py` | Node label formatting helpers |
+| `_text_metrics.py` | Text widths in the bundled face: drawn (real advances, as browsers draw) and as Graphviz lays out (advances rounded to 96 dpi pixels, about 3 % narrower at 14 pt) |
+| `_label_fit.py` | Minimum cell width for a node label whose long row a browser would draw past the border; `None` (no bytes change) for ordinary labels |
+| `_svg_header_fit.py` | SVG step after `flow_text_runs`: widens the page when a header line drawn at real advances would pass the right margin |
 | `_typography.py` | The one typography record (vizmech D29): pinned font family + semantic size roles consumed by every label builder |
 | `_legend.py` | The one compact HTML-table legend node in a dedicated rank (role legend, channel disclosures, backward key as sections; vizmech D28/D30) |
 | `_geometry_audit.py` | Geometry audit v2 + usability envelopes: widened element classes, grid-indexed pairing, engine-attributed parsing (vizmech wave 3; test-support instrument) |

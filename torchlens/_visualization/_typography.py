@@ -36,6 +36,7 @@ __all__ = [
     "HIGH_CONTRAST_TYPOGRAPHY",
     "TypographyRecord",
     "active_edge_typography",
+    "active_node_font",
     "edge_annotation_pt",
     "edge_emphasis_pt",
     "edge_typography_for_draw",
@@ -159,6 +160,18 @@ _EDGE_TYPOGRAPHY: ContextVar[TypographyRecord | None] = ContextVar(
 )
 
 
+#: The node label font of the forward draw in progress, as ``(size, every row bold)``.
+#: ``None`` outside a draw, where node labels assume Graphviz's 14 pt regular face.
+_NODE_FONT: ContextVar[tuple[float, bool] | None] = ContextVar("torchlens_node_font", default=None)
+
+
+def active_node_font() -> tuple[float, bool]:
+    """Return the node label font of the draw in progress: ``(size in points, all bold)``."""
+
+    font = _NODE_FONT.get()
+    return (DEFAULT_TYPOGRAPHY.base_size, False) if font is None else font
+
+
 def active_edge_typography() -> TypographyRecord:
     """Return the typography the edge-annotation builders size their text with."""
 
@@ -225,10 +238,12 @@ def resolve_edge_typography(
 
 @contextmanager
 def edge_typography_for_draw(theme: Any, request: Any) -> Iterator[TypographyRecord]:
-    """Hold the edge typography of one forward draw for the builders it calls.
+    """Hold the edge typography and node label font of one forward draw for its builders.
 
-    ``theme`` is the resolved theme (``typography`` and ``edge``); ``request`` is
-    the resolved render request (``edge_overrides`` and ``font_size``).
+    ``theme`` is the resolved theme (``typography``, ``node`` and ``edge``); ``request``
+    is the resolved render request (``edge_overrides`` and ``font_size``). The node
+    font is the size and weight Graphviz draws node rows in, which node labels
+    read to fit long rows (:func:`active_node_font`).
     """
 
     record = resolve_edge_typography(
@@ -237,8 +252,17 @@ def edge_typography_for_draw(theme: Any, request: Any) -> Iterator[TypographyRec
         font_size=getattr(request, "font_size", None),
         theme_edge=getattr(theme, "edge", None),
     )
+    node_attrs = getattr(theme, "node", None) or {}
+    node_size = (
+        _static_point_size(getattr(request, "font_size", None))
+        or _static_point_size(node_attrs.get("fontsize"))
+        or DEFAULT_TYPOGRAPHY.base_size
+    )
+    family = str(node_attrs.get("fontname", theme.typography.family))
     token = _EDGE_TYPOGRAPHY.set(record)
+    node_token = _NODE_FONT.set((node_size, "bold" in family.lower()))
     try:
         yield record
     finally:
+        _NODE_FONT.reset(node_token)
         _EDGE_TYPOGRAPHY.reset(token)

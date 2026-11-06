@@ -70,6 +70,14 @@ def test_edit_text_rule() -> None:
     assert short_edit_text(tl.replace_with(named_fn)) == "replace_with(named_fn)"
     assert short_edit_text(tl.replace_with(lambda: torch.zeros(1))) == "replace_with(fn)"
     assert short_edit_text(tl.clip_norm(0.5)) == "clip_norm(0.5)"
+    # A source trace recorded by identity reads like a trace argument: its short label, else
+    # ``trace``; the class and object id stay out of the drawn text (they set a GPT-2
+    # drawing's width at 3x a block).
+    identity = (("source_model_class", "transformers.models.gpt2.Model"), ("source_object_id", "1"))
+    unnamed = Edit("patch_from", kwargs=(*identity, ("source_trace_label", "")))
+    assert short_edit_text(unnamed) == "patch_from(trace)"
+    named = Edit("patch_from", kwargs=(*identity, ("source_trace_label", "france")))
+    assert short_edit_text(named) == "patch_from(france)"
 
 
 def test_node_rows_cap_at_three_then_more() -> None:
@@ -431,6 +439,28 @@ def test_header_edit_line_is_one_svg_text_with_its_pieces_in_order(tmp_path: Pat
     assert "x=" not in "".join(re.findall(r"<tspan[^>]*>", line.group(1)))
 
 
+def test_saved_and_displayed_svg_flow_the_header_edit_line(tmp_path: Path) -> None:
+    """``Drawing.save`` to SVG and the notebook display flow the edit line as ``draw`` does.
+
+    They render from the DOT source on their own path; before, its runs kept
+    Graphviz's x positions and overlapped in Chromium (``source_trace_label=…on)``).
+    """
+
+    trace = _traced()
+    try:
+        drawing = trace.draw(file_format="dot", path=str(tmp_path / "source"))
+        saved = Path(drawing.save(tmp_path / "saved.svg")).read_text(encoding="utf-8")
+        shown = drawing._repr_svg_() or ""
+    finally:
+        trace.cleanup()
+    for svg in (saved, shown):
+        line = re.search(r"<text [^>]*>(<tspan[^>]*>1 edit:.*?)</text>", svg)
+        assert line is not None, "the edit line is not one text element"
+        pieces = re.findall(r"<tspan[^>]*>([^<]*)</tspan>", line.group(1))
+        # Graphviz writes the label's non-breaking spaces as U+00A0 on this path.
+        assert "".join(pieces).replace("\xa0", " ") == "1 edit: Δ zero_ablate on relu_1_1"
+
+
 def test_flow_text_runs_joins_only_same_baseline_runs_of_header_and_edited_nodes() -> None:
     """Runs on one baseline join; a lone run, another baseline and plain nodes keep their bytes."""
 
@@ -466,3 +496,81 @@ def test_flow_text_runs_joins_only_same_baseline_runs_of_header_and_edited_nodes
     )
     pieces = re.findall(r"<tspan[^>]*>([^<]*)</tspan>", flow_text_runs(padded))
     assert pieces == ["1 edit:\u00a0", "Δ zero_ablate\u00a0", "on relu_1_1"]
+
+
+def test_patch_from_draws_short_and_keeps_provenance_in_the_tooltip(tmp_path: Path) -> None:
+    """The header and the edited node read ``patch_from(trace)``; the tooltip keeps the source."""
+
+    from torchlens._visualization._edit_marks import edit_marks_by_site
+
+    torch.manual_seed(0)
+    model, x = TinyReluAdd(), torch.randn(2, 3)
+    source = tl.trace(model, x)
+    patched = tl.trace(
+        model, torch.randn(2, 3), intervene=tl.when(tl.func("relu"), tl.patch_from(source))
+    )
+    try:
+        dot = patched.draw(file_format="dot", path=str(tmp_path / "patched")).dot
+        sites = intervention_sites_for_log(patched)
+        marks = [mark for site in edit_marks_by_site(patched, sites).values() for mark in site]
+    finally:
+        patched.cleanup()
+        source.cleanup()
+    assert [mark.short for mark in marks] == ["patch_from(trace)"]
+    assert "source_object_id=" in marks[0].full and "source_model_class=" in marks[0].full
+    drawn = re.sub(r'tooltip="[^"]*"', "", dot)
+    assert "patch_from(trace)" in drawn  # the header line and the node's edit row
+    assert drawn.count("patch_from(trace)") >= 2
+    assert "source_object_id" not in drawn and "source_model_class" not in drawn
+    assert re.search(r'tooltip="[^"]*source_object_id=', dot)
+
+
+@pytest.mark.parametrize(
+    ("fill", "expected"),
+    [
+        ("#FDE725", PURPLE),  # light: the edit purple reads
+        ("#FFFFFF", PURPLE),
+        ("#440154", "#C084FC"),  # very dark: the dark skin's light edit purple
+        ("#3B528B", "#FFFFFF"),  # mid dark: neither purple reads, the label's plain ink
+        ("#21918C", "#111111"),
+    ],
+)
+def test_edit_row_ink_reads_on_every_fill(fill: str, expected: str) -> None:
+    """The edit row keeps the edit colour where it reads (4.5:1), else the ink that does."""
+
+    from torchlens._visualization._edit_marks import edit_row_ink
+    from torchlens._visualization.themes import _contrast_ratio
+
+    ink = edit_row_ink(PURPLE, fill)
+    assert ink == expected
+    assert (_contrast_ratio(ink, fill) or 0.0) >= 4.5
+    assert edit_row_ink(PURPLE, None) == PURPLE
+    assert edit_row_ink(PURPLE, "lightgray") == PURPLE  # an unparseable fill keeps the colour
+
+
+def test_edit_row_on_a_dark_color_by_box_is_readable(tmp_path: Path) -> None:
+    """A folded box painted dark by ``color_by`` draws its edit row in an ink that reads on it."""
+
+    from torchlens._visualization.themes import _contrast_ratio
+
+    torch.manual_seed(0)
+    trace = tl.trace(
+        _BlockThenHead(), torch.randn(2, 3), intervene=tl.when(tl.func("relu"), tl.zero_ablate())
+    )
+    try:
+        dot = trace.draw(
+            file_format="dot",
+            depth=1,
+            color_by={"block": 1.0, "head": 0.0},
+            path=str(tmp_path / "dark"),
+        ).dot
+    finally:
+        trace.cleanup()
+    (block,) = _box_lines(dot, "block")
+    fill = re.search(r'fillcolor="(#[0-9A-Fa-f]{6})"', block)
+    row = re.search(r'<FONT COLOR="([^"]+)"><B><FONT POINT-SIZE="[^"]+">Δ', block)
+    assert fill is not None and row is not None
+    assert (_contrast_ratio(row.group(1), fill.group(1)) or 0.0) >= 4.5, (
+        row.group(1),
+        fill.group(1),
+    )

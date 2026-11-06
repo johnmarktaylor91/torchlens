@@ -95,8 +95,8 @@ def _relabelled_node(
     lines = [_relative_row(row, prefix) for row in spec.lines]
     if lines == list(spec.lines):
         return node
-    old_label = render_lines_to_html(list(spec.lines))
-    new_label = render_lines_to_html(lines)
+    old_label = render_lines_to_html(list(spec.lines), spec.fillcolor, spec.shape)
+    new_label = render_lines_to_html(lines, spec.fillcolor, spec.shape)
     relabels[old_label] = new_label
     swap = {old_label: new_label}
     return replace(

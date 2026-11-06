@@ -28,6 +28,7 @@ from ._render_common import (
     _SVG_VIEWBOX_RE,
 )
 from ._render_flow import _resolve_svg_image_path
+from ._svg_header_fit import fit_header_width
 from ._svg_text_runs import flow_text_runs
 from .code_panel import compose_graph_with_code_panel
 from .render_execution import surface_layout_stderr
@@ -52,7 +53,7 @@ def _render_graph_only_svg(
         cwd=str(image_root) if image_root else None,
     )
     svg_text = _inline_svg_local_images(completed.stdout.decode("utf-8"), image_root)
-    return flow_text_runs(svg_text)
+    return fit_header_width(flow_text_runs(svg_text))
 
 
 def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None) -> bytes:
@@ -66,7 +67,8 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
     one warning once their trace is collected; Graphviz stderr
     surfaced as the usual layout warning; and an SVG's local image references
     embedded as data URIs, so the picture never links a file under the temp
-    folder. Failures propagate; ``Drawing`` maps them to its typed refusal.
+    folder, its mixed-font lines flowed and its page widened to its header as
+    ``draw`` does. Failures propagate; ``Drawing`` maps them to its typed refusal.
     """
 
     root = Path(image_root) if image_root and Path(image_root).is_dir() else None
@@ -102,7 +104,10 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
     payload = bytes(completed.stdout)
     if fileformat != "svg":
         return payload
-    return _inline_svg_local_images(payload.decode("utf-8"), root).encode("utf-8")
+    # The same SVG steps as ``draw``: a notebook display or ``save`` must not
+    # overlap the header's font runs or cut its edit line off at the page edge.
+    svg = flow_text_runs(_inline_svg_local_images(payload.decode("utf-8"), root))
+    return fit_header_width(svg).encode("utf-8")
 
 
 # A node picture's row in its HTML label (:mod:`._node_boxes`): one cell holding one image.
@@ -163,7 +168,7 @@ def _inline_svg_file_local_images(svg_path: str, image_root: Path | None = None)
 
     with open(svg_path, encoding="utf-8") as svg_file:
         svg_text = svg_file.read()
-    inlined_svg = flow_text_runs(_inline_svg_local_images(svg_text, image_root))
+    inlined_svg = fit_header_width(flow_text_runs(_inline_svg_local_images(svg_text, image_root)))
     if inlined_svg != svg_text:
         atomic_write_text(svg_path, inlined_svg)
 

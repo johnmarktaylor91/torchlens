@@ -35,7 +35,9 @@ from ._intervention_sites import (  # noqa: F401
     _site_sort_key,
     intervention_sites_for_log as _sites_for_log,
 )
+from ._label_fit import Run, fitted_cell_width
 from ._render_names import _SPEC_SLOT_RENDERED_NODE
+from ._typography import active_node_font
 
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
@@ -102,7 +104,9 @@ def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
     return None
 
 
-def render_lines_to_html(lines: list[str]) -> str:
+def render_lines_to_html(
+    lines: list[str], fill: str | None = None, shape: str | None = None
+) -> str:
     """Render plain-text node rows as a Graphviz HTML-like table label.
 
     The first row is bolded as the node title; subsequent rows render plain.
@@ -113,6 +117,10 @@ def render_lines_to_html(lines: list[str]) -> str:
     ----------
     lines:
         Plain-text row contents. Special HTML characters are escaped.
+    fill:
+        The node's fill; edit rows take a colour that reads on it.
+    shape:
+        The node's shape, for the room its border leaves a long row.
 
     Returns
     -------
@@ -120,10 +128,18 @@ def render_lines_to_html(lines: list[str]) -> str:
         A string suitable for Graphviz ``label=<...>`` syntax.
     """
 
-    from ._edit_marks import EDIT_GAP_ROW, EditRow, edit_row_html  # deferred: cycle _visualization
+    from ._edit_marks import (  # deferred: cycle _visualization
+        EDIT_GAP_ROW,
+        EditRow,
+        edit_row_html,
+        edit_row_ink,
+        edit_row_runs,
+    )
 
     rows = []
     gap_drawn = False
+    size, all_bold = active_node_font()
+    runs: list[list[Run]] = []
     for index, line in enumerate(lines):
         if isinstance(line, EditRow):
             # An edit row: a 4 pt gap above the first one (no rule), then the
@@ -131,22 +147,36 @@ def render_lines_to_html(lines: list[str]) -> str:
             if not gap_drawn and index > 0:
                 rows.append(EDIT_GAP_ROW)
                 gap_drawn = True
-            rows.append(
-                f'<TR><TD ALIGN="CENTER">{edit_row_html(line, line.color, line.size)}</TD></TR>'
-            )
+            ink = edit_row_ink(line.color, fill)
+            rows.append(f'<TR><TD ALIGN="CENTER">{edit_row_html(line, ink, line.size)}</TD></TR>')
+            runs.append(edit_row_runs(line))
             continue
         text = escape(str(line), quote=False)
         if index == 0:
             text = f"<B>{text}</B>"
         rows.append(f'<TR><TD ALIGN="CENTER">{text}</TD></TR>')
+        runs.append([(str(line), size, all_bold or index == 0)])
     if not rows:
         # A table with no rows is a Graphviz syntax error; no lines means no label.
         return ""
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">'
-        + "".join(rows)
+        + "".join(_fit_first_row(rows, runs, shape))
         + "</TABLE>>"
     )
+
+
+def _fit_first_row(rows: list[str], runs: list[list[Run]], shape: str | None) -> list[str]:
+    """Return ``rows`` with the first cell held at the drawn width when a row is long.
+
+    Graphviz's pixel-rounded measure lets a browser draw a long row past the
+    border (:mod:`._label_fit`); one cell's width sets the column's.
+    """
+
+    width = fitted_cell_width(runs, shape)
+    if width is None:
+        return rows
+    return [rows[0].replace("<TD ", f'<TD WIDTH="{width}" ', 1), *rows[1:]]
 
 
 def intervention_graph_override(
