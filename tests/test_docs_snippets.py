@@ -263,9 +263,45 @@ _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
 
 #: README fences are advertisements: one fence may mix setups or lean on names it
 #: never defines. The README's setup lives here, in the test, never in README
-#: markers. ``README_PRELUDE`` supplies the imports the loop fence elides; the
-#: ViT fence reads ``cat.jpg``, which the test writes as a plain synthetic image.
-README_PRELUDE = "import torch\nfrom torch import nn\n"
+#: markers. ``README_PRELUDE`` supplies the imports the fences elide (the opening
+#: ViT splash fence runs before any fence imports ``tl`` or the ViT class; the loop
+#: fence uses ``torch`` and ``nn``; the raw-PyTorch comparisons use
+#: ``AutoImageProcessor`` and ``Image``; the GoogLeNet fence uses ``googlenet``).
+#: ``README_FIXTURES`` defines the inputs the fences name but never build: the
+#: raw-PyTorch comparisons' GPT-2 tokenizer ``tok``, preprocessed ResNet input
+#: ``image`` and ImageNet label list ``cats``, and the RDM fence's three photos
+#: ``cat1``, ``cat2`` and ``car``. Every photo (``cat.jpg`` included) is a plain
+#: synthetic image the test writes; the splash's printed labels and probabilities
+#: are gated on the real, checksum-pinned image by tests/test_quickstart_readme_gate.py.
+README_PRELUDE = (
+    "import torch\n"
+    "from torch import nn\n"
+    "import torchlens as tl\n"
+    "from PIL import Image\n"
+    "from torchvision.models import ResNet18_Weights, googlenet\n"
+    "from transformers import AutoImageProcessor, AutoTokenizer, ViTForImageClassification\n"
+)
+README_FIXTURES = (
+    'tok = AutoTokenizer.from_pretrained("gpt2")\n'
+    'image = ResNet18_Weights.IMAGENET1K_V1.transforms()(Image.open("cat.jpg")).unsqueeze(0)\n'
+    'cats = ResNet18_Weights.IMAGENET1K_V1.meta["categories"]\n'
+    "cat1, cat2, car = (\n"
+    '    Image.new("RGB", (224, 224), color) for color in ((140, 110, 80), (90, 90, 90), (200, 30, 30))\n'
+    ")\n"
+)
+#: README comparison fences written for another library. Each leans on that
+#: library's own model wrapper, which the README never builds (``vit.trace(...)``
+#: and ``model.trace(...)`` need nnsight's wrapper, ``model.run_with_cache`` a
+#: TransformerLens HookedTransformer), so, like an ``API sketch`` fence, each is
+#: compiled, not run. A row is (a line unique to the fence, the library it is
+#: written for); ``test_readme_foreign_fences_are_live_and_foreign`` keeps every
+#: row matched to exactly one fence that never calls TorchLens.
+README_FOREIGN_FENCES: tuple[tuple[str, str], ...] = (
+    ('with vit.trace(Image.open("cat.jpg")):', "nnsight"),
+    ("net = NNsight(resnet)", "nnsight"),
+    ("_, france_cache = model.run_with_cache(france)", "transformer_lens"),
+    ('with model.trace("The capital of France is"):', "nnsight"),
+)
 #: README statements that need a model the page's shared namespace does not hold
 #: (the ResNet-18 line in the GPT-2 selection fence). Each is compiled, not run,
 #: and names the test that executes the same API spelling for real:
@@ -384,13 +420,32 @@ def _canonical_ambient() -> dict[str, Any]:
 def _readme_setup(namespace: dict[str, Any], workdir: Path) -> None:
     """Prepare the README's shared namespace and working directory (see README_PRELUDE)."""
 
-    # The ViT fence's image input needs Pillow, the same condition its preprocessing has.
-    if importlib.util.find_spec("PIL") is None:
-        pytest.skip("README.md imports uninstalled optional dependencies: ['PIL']")
+    # The fences need Pillow for their photos, torchvision for the ResNet and GoogLeNet
+    # fences and transformers for the GPT-2 and ViT models, the same conditions the
+    # fences' own imports have.
+    required = ("PIL", "torchvision", "transformers")
+    missing = [name for name in required if importlib.util.find_spec(name) is None]
+    if missing:
+        pytest.skip(f"README.md imports uninstalled optional dependencies: {missing}")
     from PIL import Image
 
     Image.new("RGB", (256, 256), (140, 110, 80)).save(workdir / "cat.jpg")
     exec(compile(README_PRELUDE, "README.md:prelude", "exec"), namespace)
+    exec(compile(README_FIXTURES, "README.md:fixtures", "exec"), namespace)
+
+
+def _is_readme_foreign_fence(page_name: str, code: str) -> bool:
+    """Return whether one README fence is in README_FOREIGN_FENCES."""
+
+    return page_name == "README.md" and any(
+        marker in _code_lines(code) for marker, _ in README_FOREIGN_FENCES
+    )
+
+
+def _code_lines(code: str) -> set[str]:
+    """Return a fence's lines with indentation and trailing comments stripped."""
+
+    return {line.split("#")[0].strip() for line in code.splitlines()}
 
 
 def _is_readme_illustrative(page_name: str, node: ast.stmt) -> bool:
@@ -446,7 +501,9 @@ def test_canonical_page_python_blocks_execute(
     executed_statements = 0
     for block_index, code in enumerate(blocks, start=1):
         source_name = f"{page_name}:python-block-{block_index}"
-        if _SKETCH_MARKER_RE.match(code.splitlines()[0]):
+        if _SKETCH_MARKER_RE.match(code.splitlines()[0]) or _is_readme_foreign_fence(
+            page_name, code
+        ):
             compile(code, source_name, "exec")
             continue
         for node in ast.parse(code, filename=source_name).body:
@@ -471,6 +528,24 @@ def test_canonical_page_python_blocks_execute(
             exec(compile(statement, source_name, "exec"), namespace)
             executed_statements += 1
     assert executed_statements > 0, f"{page_name}: nothing executed"
+
+
+def test_readme_foreign_fences_are_live_and_foreign() -> None:
+    """Every README fence the page test only compiles is still there and never calls TorchLens.
+
+    A row whose marker line left the README is stale; a row matching two fences, or
+    a fence that uses ``tl.``, would hide TorchLens code from the page test.
+    """
+
+    fences = BLOCK_RE.findall((_docs_dir().parent / "README.md").read_text(encoding="utf-8"))
+    for marker, library in README_FOREIGN_FENCES:
+        matched = [code for code in fences if marker in _code_lines(code)]
+        assert len(matched) == 1, (
+            f"README_FOREIGN_FENCES row {marker!r} ({library}) matches {len(matched)} fences, not 1"
+        )
+        assert "tl." not in matched[0] and "torchlens" not in matched[0], (
+            f"the {library} fence marked by {marker!r} calls TorchLens: run it, do not exempt it"
+        )
 
 
 def test_readme_illustrative_statements_are_live_and_covered() -> None:

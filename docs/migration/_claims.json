@@ -354,7 +354,7 @@
       "id": "menagerie-phrasing",
       "competitor": "none (self-claim about the menagerie catalog)",
       "neutral_fact": "The menagerie README's own claim is '11,600+ cataloged, ~89% algorithmically verified'. Some summaries compressed this to 'verified entries' -- an overclaim, since corrected.",
-      "allowed_public_wording": "The approved hedge: 'verified on thousands of models across all major architecture families'; the current menagerie counts may be stated (over 6,400 networks in the Model Menagerie, more than 6,300 of them verified with tl.validate; JMT's current Menagerie counts, recorded 2026-11-04).",
+      "allowed_public_wording": "The approved hedge: 'verified on thousands of models across all major architecture families'; the current menagerie counts may be stated (over 6,600 networks in the Model Menagerie, more than 6,300 of them verified with tl.validate; JMT's current Menagerie counts, recorded 2026-11-04 and 2026-11-05).",
       "narrowed_scope_wording": "none -- the hedge is the ceiling; no percentage paraphrase is approved.",
       "limitation_wording": "State the menagerie catalog counts with their measurement date; never a verification percentage until the campaign closes (the verification ledger is not in the public checkout, so no percentage is reproducible from the tree).",
       "required_credit": null,
@@ -1172,8 +1172,8 @@
     {
       "id": "menagerie-figure-collision",
       "competitor": "none (self-claim about the menagerie catalog; extends menagerie-phrasing)",
-      "neutral_fact": "Current copy states the menagerie as 'over 6,400 networks' in the Model Menagerie, with 'more than 6,300 models' verified with tl.validate (JMT's current Menagerie counts, recorded 2026-11-04); the hedge 'verified on thousands of models across all major architecture families' stays allowed. Older figures collide with them: a 100% or ~89% verification rate, 11,600+ or 11,670 entries, a 9,200-entry catalog, and the retired 2026-08-16 catalog pair (8,533 rows / 3,637 families, '8,500+ across ~3,600 families'). Released CHANGELOG sections keep their historical figures and are out of scope.",
-      "allowed_public_wording": "The hedge, or the current counts: 'over 6,400 networks' in the Model Menagerie and 'more than 6,300 models' verified.",
+      "neutral_fact": "Current copy states the menagerie as 'over 6,600 networks' in the Model Menagerie, with 'more than 6,300 models' verified with tl.validate (JMT's current Menagerie counts: 6,300 recorded 2026-11-04; 6,600 networks recorded 2026-11-05, when the site showed 6,601); the hedge 'verified on thousands of models across all major architecture families' stays allowed. Older figures collide with them: a 100% or ~89% verification rate, 11,600+ or 11,670 entries, a 9,200-entry catalog, and the retired 2026-08-16 catalog pair (8,533 rows / 3,637 families, '8,500+ across ~3,600 families'), and the retired 2026-11-04 network count ('over 6,400 networks'). Released CHANGELOG sections keep their historical figures and are out of scope.",
+      "allowed_public_wording": "The hedge, or the current counts: 'over 6,600 networks' in the Model Menagerie and 'more than 6,300 models' verified.",
       "narrowed_scope_wording": "The hedge alone.",
       "limitation_wording": "No menagerie figures.",
       "required_credit": null,
@@ -1182,7 +1182,7 @@
         "menagerie-phrasing"
       ],
       "tl_side_gates": [],
-      "lint": "FAIL any verification percentage, any 10,000-11,999 figure, or any network, model, row, entry, architecture or family count other than the current pair (6,400 networks, 6,300 verified models), in a menagerie or catalog paragraph of current copy.",
+      "lint": "FAIL any verification percentage, any 10,000-11,999 figure, or any network, model, row, entry, architecture or family count other than the current pair (6,600 networks, 6,300 verified models), in a menagerie or catalog paragraph of current copy.",
       "check": {
         "scope": [
           "README.md",
@@ -1201,11 +1201,11 @@
           },
           {
             "context": "menagerie",
-            "forbid": "(?<![\\d,])(?!6,[34]00\\b)\\d{1,2},\\d{3}\\+?\\s+(cataloged\\s+|catalog\\s+)?(rows|entries|architectures|models|families|networks)\\b"
+            "forbid": "(?<![\\d,])(?!6,[36]00\\b)\\d{1,2},\\d{3}\\+?\\s+(cataloged\\s+|catalog\\s+)?(rows|entries|architectures|models|families|networks)\\b"
           }
         ]
       },
-      "last_verified": "2026-11-04",
+      "last_verified": "2026-11-05",
       "owner": "maintainers"
     },
     {
