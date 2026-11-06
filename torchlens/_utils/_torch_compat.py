@@ -2325,18 +2325,33 @@ def get_higher_order_operator(
     return op if isinstance(getattr(op, table, None), dict) else None
 
 
+#: ``(attribute, rule table)`` spellings of the ``cond`` operator, newest first. A bare
+#: ``cond`` that is a plain function (every torch with ``cond_op``) is not a
+#: HigherOrderOperator, so ``get_higher_order_operator`` passes over it.
+_COND_OPERATOR_SPELLINGS: tuple[tuple[str, str], ...] = (
+    ("cond_op", "python_key_table"),
+    ("cond_op", "python_key_mode_table"),
+    ("cond", "python_key_mode_table"),
+)
+
+
 def get_cond_witness_operator(*, mark_missing: bool = True) -> Any | None:
     """Return the ``cond`` HigherOrderOperator the completeness witness keys its rule on.
 
-    ``cond.cond_op`` when present; torch 2.1 has no ``cond_op`` and its bare ``cond``
-    is the operator, with its rules in ``python_key_mode_table``. Only the absence
-    of both marks ``HAS_COND_HIGHER_ORDER_OP`` missing (cond is then unwitnessed).
+    ``cond.cond_op`` when present. Its per-mode rule table is ``python_key_table``,
+    or ``python_key_mode_table`` on a torch that has ``cond_op`` under the older table
+    name (torch 2.2); torch 2.1 has no ``cond_op`` and its bare ``cond`` is the operator,
+    with its rules in ``python_key_mode_table``. Each spelling is probed by what the
+    module holds, never by version. Only the absence of all of them marks
+    ``HAS_COND_HIGHER_ORDER_OP`` missing (cond is then unwitnessed).
     """
 
     cond_module = sys.modules.get("torch._higher_order_ops.cond")  # never imported here
-    op = get_higher_order_operator("cond", "cond_op")
-    if op is None and getattr(cond_module, "cond_op", None) is None:
-        op = get_higher_order_operator("cond", "cond", table="python_key_mode_table")
+    op = None
+    for attribute, table in _COND_OPERATOR_SPELLINGS:
+        op = get_higher_order_operator("cond", attribute, table=table)
+        if op is not None:
+            break
     if op is None and mark_missing and cond_module is not None:
         mark_torch_capability_missing("HAS_COND_HIGHER_ORDER_OP", "cond captures are not witnessed")
     return op
