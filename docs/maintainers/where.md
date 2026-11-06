@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1739 modules, 703715 lines, 0 modules without a docstring.
+85 packages, 1739 modules, 703722 lines, 0 modules without a docstring.
 
 ## Packages
 
