@@ -122,4 +122,5 @@ subsample size, not the dataset size.
 
 ## Next
 
-[Extract features for a stimulus set](extract_features.md).
+[The `tl.extract_dataset` reference](../reference/api/dataset_extraction.md), for
+every extraction option and for reading the artifact back with `load_extraction`.
