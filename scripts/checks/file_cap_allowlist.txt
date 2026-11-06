@@ -495,9 +495,8 @@ torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
 torchlens/_utils/_tensor_label.py	1748
-torchlens/_utils/_torch_compat.py	4232
-torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
-torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	62
+torchlens/_utils/_torch_compat.py	4229
+torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	79
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
 torchlens/_utils/_torch_compat.py::probe_c10d_capabilities	73
 torchlens/_utils/alias_footprint.py::touched_bytes_relation	106
@@ -955,7 +954,7 @@ torchlens/backends/torch/tensor_tracking.py::_build_grad_payloads	61
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2812
+torchlens/backends/torch/wrappers.py	2811
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	117
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	82

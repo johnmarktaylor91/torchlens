@@ -176,6 +176,7 @@ __all__ = [
     "autocast_is_enabled",
     "get_accumulate_grad_class",
     "get_current_dispatch_mode_stack",
+    "suspend_dispatch_modes",
     "get_current_function_mode_stack",
     "get_disable_torch_function_context",
     "get_dtensor_shard_geometry_fn",
@@ -1645,11 +1646,10 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # torch's own public surface, so there is nothing for TorchLens to
         # degrade on -- named-dim metadata simply cannot exist on such builds.
         "HAS_NAMED_TENSOR_API",
-        # The three ``torch.Generator`` method probes gate
-        # rows of the RNG GENERATOR_METHOD_TABLE (_utils/rng.py); a ``False``
-        # DROPS the row, so there is no method left to monitor and NOTHING
-        # degrades. Absent on the older half of the declared torch>=2.1 matrix
-        # by upstream version, not by breakage.
+        # The three ``torch.Generator`` method probes gate rows of the RNG GENERATOR_METHOD_TABLE
+        # (_utils/rng.py); a ``False`` DROPS the row, so there is no method left to monitor and
+        # NOTHING degrades. Absent on the older half of the declared torch>=2.1 matrix by upstream
+        # version, not by breakage.
         "HAS_GENERATOR_CLONE_STATE",
         "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
         "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
@@ -1657,10 +1657,9 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # torch 2.14): its absence is a healthy older install with no method to
         # drop a row for (same rationale as the three generator flags above).
         "HAS_GENERATOR_PHILOX_STATE",
-        # A working GradientEdge postdates the torch>=2.1 floor (absent or broken
-        # through 2.3; Node.register_prehook is present from 2.1): absence is a
-        # healthy old install with nothing to shim -- the one-backward read
-        # refuses typed instead of degrading.
+        # A working GradientEdge postdates the torch>=2.1 floor (absent or broken through 2.3;
+        # Node.register_prehook is present from 2.1): absence is a healthy old install with nothing
+        # to shim -- the one-backward read refuses typed instead of degrading.
         "HAS_GRADIENT_EDGE",
         "HAS_NODE_PREHOOK",
         # _checkpoint_internal_hook (torch.utils.checkpoint) postdates the torch>=2.1 floor (added
@@ -1686,11 +1685,10 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # degradation; Linux and CUDA installs never use them.
         "HAS_MPS_MEMORY_QUERY",
         "HAS_REDUCE_TUPLE_DIM",
-        # torch.backends.mha (the nn.MultiheadAttention / nn.TransformerEncoderLayer
-        # fused fast-path switch) postdates the torch>=2.1 floor: its absence is a
-        # healthy old install with a real fallback (force_mha_slow_path flips the
-        # affected modules' own training flag instead, since both fast paths check
-        # self.training on every supported torch).
+        # torch.backends.mha (the nn.MultiheadAttention / nn.TransformerEncoderLayer fused fast-path
+        # switch) postdates the torch>=2.1 floor: its absence is a healthy old install with a real
+        # fallback (force_mha_slow_path flips the affected modules' own training flag instead, since
+        # both fast paths check self.training on every supported torch).
         "HAS_MHA_FASTPATH_SWITCH",
         # CPU Half-dtype kernel coverage (addmm/layer_norm/nextafter) and
         # Float8 empty-fill under deterministic mode both postdate the torch
@@ -1698,30 +1696,26 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # degradations -- tests that need them skip on these flags.
         "HAS_CPU_HALF_KERNELS",
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
-        # Whether the CPU eval batch_norm kernel's folded statistics leave a
-        # running_var residual when the input sits exactly at a non-zero
-        # running mean (x86 kernels do, Apple ARM kernels cancel exactly): a
-        # kernel property the running_var value proof's tests read, never a
+        # Whether the CPU eval batch_norm kernel's folded statistics leave a running_var residual
+        # when the input sits exactly at a non-zero running mean (x86 kernels do, Apple ARM kernels
+        # cancel exactly): a kernel property the running_var value proof's tests read, never a
         # TorchLens degradation.
         "HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL",
         # torch.sparse.spsolve has only a CUDA kernel, which needs cuDSS (absent
         # from official wheels): False is the normal CPU or stock-wheel install.
         "HAS_SPARSE_SPSOLVE_CUDA",
-        # torch's own "Tensor.item() cannot be called on meta tensors" guard
-        # postdates the torch 2.1/2.2 floor: its absence means the identical
-        # user situation (a value-dependent branch on a meta tensor) still
-        # refuses typed, just via the sibling meta_kernel_unavailable code
-        # instead of value_dependent_branch_unsupported -- a healthy old
-        # install classified by the honest alternate path, not a degradation.
+        # torch's own "Tensor.item() cannot be called on meta tensors" guard postdates the torch
+        # 2.1/2.2 floor: its absence means the identical user situation (a value-dependent branch on
+        # a meta tensor) still refuses typed, just via the sibling meta_kernel_unavailable code
+        # instead of value_dependent_branch_unsupported -- a healthy old install classified by the
+        # honest alternate path, not a degradation.
         "HAS_META_ITEM_GUARD",
         # torch.distributed._functional_collectives._resolve_group /
-        # torch.distributed.distributed_c10d._resolve_process_group (funcol
-        # group resolution for functional-collective recording) are torch-private
-        # surfaces that read absent on every measured release before 2.13
-        # (``_torch_compat_table``): a healthy install with nothing to shim --
-        # captured funcol calls refuse typed instead of recording correlated
-        # boundary nodes, the same honest degradation every other optional
-        # probe here takes.
+        # torch.distributed.distributed_c10d._resolve_process_group (funcol group resolution for
+        # functional-collective recording) are torch-private surfaces that read absent on every
+        # measured release before 2.13 (``_torch_compat_table``): a healthy install with nothing to
+        # shim -- captured funcol calls refuse typed instead of recording correlated boundary nodes,
+        # the same honest degradation every other optional probe here takes.
         "HAS_FUNCOL_GROUP_RESOLUTION",
         # torch._C._autograd._top_saved_tensors_default_hooks (peeks the
         # innermost installed default saved-tensors pack/unpack hook pair) is
@@ -1799,14 +1793,12 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
         availability.
     """
 
-    # HAS_DYNAMO_OPTIMIZED_MODULE, HAS_FSDP_WRAPPER, HAS_DTENSOR,
-    # HAS_DEVICE_MESH, and HAS_PIPELINING are lazily probed (see
-    # get_dynamo_optimized_module_type / get_fsdp_wrapper_type /
-    # get_dtensor_type / get_device_mesh_type / get_pipelining_module_types) to
-    # avoid unconditional torch._dynamo / torch.distributed imports on the
-    # capture hot path. The diagnostic snapshot consumer (tl.report.doctor()) is
-    # not on that hot path, so force the probes here to report the real
-    # capabilities instead of the pre-probe placeholders.
+    # HAS_DYNAMO_OPTIMIZED_MODULE, HAS_FSDP_WRAPPER, HAS_DTENSOR, HAS_DEVICE_MESH, and
+    # HAS_PIPELINING are lazily probed (see get_dynamo_optimized_module_type / get_fsdp_wrapper_type
+    # / get_dtensor_type / get_device_mesh_type / get_pipelining_module_types) to avoid
+    # unconditional torch._dynamo / torch.distributed imports on the capture hot path. The
+    # diagnostic snapshot consumer (tl.report.doctor()) is not on that hot path, so force the probes
+    # here to report the real capabilities instead of the pre-probe placeholders.
     get_dynamo_optimized_module_type(force_probe=True)
     get_fsdp_wrapper_type(force_probe=True)
     get_dtensor_type(force_probe=True)
@@ -2122,6 +2114,19 @@ def get_current_function_mode_stack() -> Iterable[Any] | None:
     return stack_getter()
 
 
+@contextlib.contextmanager
+def suspend_dispatch_modes() -> Iterator[None]:
+    """Pop dispatch modes and a fake kernel's TLS Meta key (a real copy there stays unfilled)."""
+
+    C = torch._C
+    suspend = _import_module_attr_or_none("torch.utils._python_dispatch", "_disable_current_modes")
+    keep = getattr(C, "_PreserveDispatchKeyGuard", contextlib.nullcontext)
+    with suspend() if callable(suspend) else contextlib.nullcontext(), keep():
+        if getattr(C, "_meta_in_tls_dispatch_include", lambda: False)():
+            C._set_meta_in_tls_dispatch_include(False)
+        yield
+
+
 def get_current_dispatch_mode_stack() -> list[Any] | None:
     """Return the current thread's TorchDispatchMode stack when available.
 
@@ -2129,17 +2134,16 @@ def get_current_dispatch_mode_stack() -> list[Any] | None:
     -------
     list[Any] | None
         Active ``TorchDispatchMode`` instances, or ``None`` when the private
-        ``torch.utils._python_dispatch._get_current_dispatch_mode_stack`` probe
-        is absent or raises. ``None`` means "cannot answer": the host-escape
-        belt census check (its one consumer) must treat that as census-INACTIVE
-        so the belt records the escape (fail closed) rather than silently
-        standing down.
+        ``torch.utils._python_dispatch._get_current_dispatch_mode_stack`` probe is absent or
+        raises. ``None`` means "cannot answer": the host-escape belt census check (its one
+        consumer) must treat that as census-INACTIVE so the belt records the escape (fail
+        closed) rather than silently standing down.
 
     Notes
     -----
-    Probed once and cached as a bound callable because this sits on the
-    host-value escape path (``item()`` / ``__bool__`` during capture). A probe
-    that raises is demoted to permanently-absent so later calls short-circuit.
+    Probed once and cached as a bound callable because this sits on the host-value escape
+    path (``item()`` / ``__bool__`` during capture). A probe that raises is demoted to
+    permanently-absent so later calls short-circuit.
     """
 
     global HAS_DISPATCH_MODE_STACK_QUERY, _DISPATCH_MODE_STACK_FN, _DISPATCH_MODE_STACK_PROBED
@@ -3249,15 +3253,13 @@ def force_eager_stance_scope() -> Iterator[bool]:
     if not HAS_SET_STANCE or "torch._dynamo" not in sys.modules:
         yield False
         return
-    # R07: the stance is APPLIED by ``set_stance(...)`` construction (its
-    # function-call form), so ``__exit__`` ownership must be established in the
-    # same guarded region as the construction -- binding the handle outside the
-    # try left an async-interrupt window between the bind and the try entry
-    # that stranded the process-wide stance. Once ``stance`` is bound, every
-    # exit path (including BaseException) reaches the ``finally``. The one
-    # residual is an interrupt INSIDE ``set_stance`` after it applied but
-    # before it returned: without a public prior-stance getter that window is
-    # unrecoverable and is accepted as atomic-API exposure.
+    # R07: the stance is APPLIED by ``set_stance(...)`` construction (its function-call form), so
+    # ``__exit__`` ownership must be established in the same guarded region as the construction --
+    # binding the handle outside the try left an async-interrupt window between the bind and the try
+    # entry that stranded the process-wide stance. Once ``stance`` is bound, every exit path
+    # (including BaseException) reaches the ``finally``. The one residual is an interrupt INSIDE
+    # ``set_stance`` after it applied but before it returned: without a public prior-stance getter
+    # that window is unrecoverable and is accepted as atomic-API exposure.
     stance = None
     try:
         try:
@@ -3801,17 +3803,14 @@ else:
 
 # --- Ambient execution-context snapshot/restore ------------------
 #
-# Every control below is a PUBLIC torch surface present since before the 2.1
-# support floor, so no HAS_* flag guards them (such a flag's False branch would be
-# unreachable on any supported torch, and the CUDA-named ones would read True even
-# on CUDA-less wheels) -- WITH ONE EXCEPTION:
-# ``torch.utils.deterministic.fill_uninitialized_memory`` (just below)
-# postdates the 2.1 floor -- the ``torch.utils.deterministic`` submodule does
-# not exist at all on torch 2.1.x -- and is feature-detected through
-# ``HAS_DETERMINISTIC_FILL_FLAG``. Snapshots record every control
-# affirmatively; ``None`` survives as the feature-detected absence of the
-# fill flag and, in the APPLY direction, as schema tolerance for artifacts
-# recorded by older producers.
+# Every control below is a PUBLIC torch surface present since before the 2.1 support floor, so no
+# HAS_* flag guards them (such a flag's False branch would be unreachable on any supported torch,
+# and the CUDA-named ones would read True even on CUDA-less wheels) -- WITH ONE EXCEPTION:
+# ``torch.utils.deterministic.fill_uninitialized_memory`` (just below) postdates the 2.1 floor --
+# the ``torch.utils.deterministic`` submodule does not exist at all on torch 2.1.x -- and is
+# feature-detected through ``HAS_DETERMINISTIC_FILL_FLAG``. Snapshots record every control
+# affirmatively; ``None`` survives as the feature-detected absence of the fill flag and, in the
+# APPLY direction, as schema tolerance for artifacts recorded by older producers.
 
 _torch_deterministic_module: types.ModuleType | None
 if HAS_DETERMINISTIC_FILL_FLAG:
@@ -4175,16 +4174,14 @@ def apply_ambient_execution_context(values: dict[str, Any]) -> None:
             raise RuntimeError(f"Recorded default dtype {default_dtype!r} is unavailable.")
         if torch.get_default_dtype() is not dtype:
             torch.set_default_dtype(dtype)
-    # ``default_device`` is deliberately NOT applied here.
-    # ``torch.set_default_device`` mutates the PROCESS-level TorchFunctionMode stack
-    # (installing or replacing a DeviceContext), so setter-based apply/restore leaks
-    # a mode into the caller (measured: a fresh implicit-CPU consumer ended with a
-    # process DeviceContext installed) and corrupts nested caller modes. The recorded
-    # default device is entered as a SCOPED ``with torch.device(recorded)`` context
-    # around the run transaction (see ``_ambient_execution_context_restored``), whose
-    # ``__exit__`` restores the caller's exact mode stack by construction on every
-    # exit path -- no restore logic, no global mutation. The snapshot schema keeps
-    # the ``default_device`` key unchanged.
+    # ``default_device`` is deliberately NOT applied here. ``torch.set_default_device`` mutates the
+    # PROCESS-level TorchFunctionMode stack (installing or replacing a DeviceContext), so
+    # setter-based apply/restore leaks a mode into the caller (measured: a fresh implicit-CPU
+    # consumer ended with a process DeviceContext installed) and corrupts nested caller modes. The
+    # recorded default device is entered as a SCOPED ``with torch.device(recorded)`` context around
+    # the run transaction (see ``_ambient_execution_context_restored``), whose ``__exit__`` restores
+    # the caller's exact mode stack by construction on every exit path -- no restore logic, no
+    # global mutation. The snapshot schema keeps the ``default_device`` key unchanged.
     deterministic = values.get("deterministic_algorithms")
     if deterministic is not None:
         warn_only = bool(values.get("deterministic_algorithms_warn_only") or False)

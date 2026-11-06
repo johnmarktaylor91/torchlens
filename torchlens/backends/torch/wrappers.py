@@ -14,7 +14,7 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable, Iterable, Iterator
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager, nullcontext, suppress
 from functools import wraps
 from typing import TYPE_CHECKING, Any, cast
 
@@ -35,6 +35,8 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._constants import _get_torchvision_funcs, get_orig_torch_funcs
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureNotActiveError
+from ..._utils import _compiled_write_guard
+from ..._utils._compiled_write_guard import materialize_deferred_for_call
 from ..._utils._dispatch_modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ..._utils._hop_entry_compile import compile_disabled
 from ..._utils._tensor_label import (
@@ -73,7 +75,6 @@ from ..._utils.tensor_utils import (
     _DEFER_GATE as _COW_GATE,
     arm_deferred_payload_window,
     disarm_deferred_payload_window,
-    materialize_deferred_for_call,
     print_override,
 )
 from . import _storage_exports, _tracing_pass
@@ -557,12 +558,11 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
     writers, non-copy save modes) keeps the historical eager clone.
     ``inference_only`` (implied by ``no_grad``) only adds ``no_grad``: eligible.
     """
-    try:
+    cached: Any = _COW_UNSET
+    with suppress(TypeError):
         cached = _COW_STATE_PTRS_CACHE.get(trace, _COW_UNSET)
-    except TypeError:
-        cached = _COW_UNSET
     if cached is not _COW_UNSET:
-        return cached
+        return None if _compiled_write_guard.compiled_writes_seen() else cached
     ptrs: Any = None
     if (
         _COW_ENABLED
@@ -573,6 +573,7 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
         and trace._options_mode != "predicate"
         and trace._options_save_mode == "copy"
         and getattr(trace, "_out_writer", None) is None
+        and not _compiled_write_guard.compiled_writes_possible()
     ):
         model_ref = getattr(trace, "_source_model_ref", None)
         model = model_ref() if callable(model_ref) else None
@@ -587,10 +588,8 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
                 ptrs = frozenset(collected)
             except Exception:
                 ptrs = None
-    try:
+    with suppress(TypeError):
         _COW_STATE_PTRS_CACHE[trace] = ptrs
-    except TypeError:
-        pass
     return ptrs
 
 
@@ -2429,7 +2428,7 @@ def _refuse_unwrap_during_active_capture() -> None:
 
 def _unwrap_torch_locked() -> None:
     """Remove torchlens wrappers; caller holds ``_wrapper_install_lock``."""
-
+    _compiled_write_guard.materialize_all_deferred_payloads()  # unwrapped writes go unseen
     _state._logging_enabled = False
     _state._active_trace = None
     reset_detector_tables()

@@ -29,6 +29,9 @@ import torchlens.backends.torch.wrappers as _wrappers
 from torchlens._utils import tensor_utils as _tu
 from torchlens.errors import TraceCaptureError
 
+# These tests assert that payloads defer, which no capture does once Dynamo is loaded.
+pytestmark = pytest.mark.usefixtures("dynamo_free_process")
+
 
 @contextlib.contextmanager
 def _payload_clone_mode(defer: bool, grad_defer: bool = False):
