@@ -366,7 +366,7 @@ def test_repr_stability_pins(log_b):
         "within=saved_sites))"
     )
     assert repr(tl.stable_across_passes(_TANH, atol=0.5, passes=[1, 3])) == (
-        "Selection[ACT](stable_across_passes(tol=0.5, passes=[1, 3], "
+        "Selection[ACT](stable_across_passes(atol=0.5, passes=[1, 3], "
         f"within=Selection[ACT](site({_TANH!r}))))"
     )
 

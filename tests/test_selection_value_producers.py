@@ -358,7 +358,7 @@ def test_repr_stability_pins(log, log_b):
         f"within=Selection[ACT](site({_RELU!r}))))"
     )
     assert repr(tl.dead([log, log_b], atol=0.0)) == (
-        "Selection[ACT](dead(n_samples=2, tol=0.0, within=saved_sites))"
+        "Selection[ACT](dead(n_samples=2, atol=0.0, within=saved_sites))"
     )
 
 

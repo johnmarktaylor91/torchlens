@@ -289,7 +289,7 @@ class _ValueTerm:
         elif self.criterion == "threshold":
             head = f"threshold(above={self.above}, below={self.below}, by={self.by!r}"
         else:
-            head = f"sign({self.which!r}, tol={self.tol}"
+            head = f"sign({self.which!r}, atol={self.tol}"
         return f"{head}, within={population})"
 
 
@@ -394,7 +394,7 @@ def _resolve_elementwise_criterion(node: _ValueTerm, trace: Any) -> Selection:
             else:
                 _refuse_complex(value, "sign", entry.key)
                 dense = value > node.tol if which == "positive" else value < -node.tol
-            source = f"sign({which!r}, tol={node.tol})"
+            source = f"sign({which!r}, atol={node.tol})"
         dense &= entry._mask._dense_ro()
         entries.append(_entry_with_mask(entry, dense, "exact", source))
     return Selection(trace, "ACT", entries)
@@ -557,9 +557,9 @@ def sign(
 ) -> Selector:
     """Select elements by sign class: the negatives, the zeros, the sparsity mask.
 
-    ``which`` is one of ``'positive'`` (value > tol), ``'negative'``
-    (value < -tol), ``'zero'`` (|value| <= tol — the sparsity mask), or
-    ``'nonzero'`` (|value| > tol). ``'zero'``/``'nonzero'`` accept complex
+    ``which`` is one of ``'positive'`` (value > atol), ``'negative'``
+    (value < -atol), ``'zero'`` (|value| <= atol — the sparsity mask), or
+    ``'nonzero'`` (|value| > atol). ``'zero'``/``'nonzero'`` accept complex
     payloads (magnitude); ordered classes refuse them typed. This is also
     the SINGLE-CAPTURE "didn't fire on this input" spelling — the
     multi-sample "never fires" claim is :func:`dead`, deliberately a
@@ -576,9 +576,9 @@ def sign(
 
     if which not in _SIGN_CLASSES:
         raise ValueError(f"sign `which` must be one of {_SIGN_CLASSES}; got {which!r}.")
-    atol = _validate_real_number(atol, "tol", "sign")
+    atol = _validate_real_number(atol, "atol", "sign")
     if atol < 0:
-        raise ValueError(f"sign `tol` must be non-negative; got {atol!r}.")
+        raise ValueError(f"sign `atol` must be non-negative; got {atol!r}.")
     return Selector(
         _ValueTerm(criterion="sign", within=_lift_within(within, "sign"), which=which, tol=atol),
         kind="ACT",
@@ -607,11 +607,11 @@ class _StatTerm:
 
         population = "saved_sites" if self.within is None else repr(self.within)
         if self.stat == "dead":
-            head = f"dead(n_samples={len(self.samples)}, tol={self.tol}"
+            head = f"dead(n_samples={len(self.samples)}, atol={self.tol}"
         elif self.stat == "saturated":
             head = (
                 f"saturated(n_samples={len(self.samples)}, low={self.low}, "
-                f"high={self.high}, tol={self.tol}"
+                f"high={self.high}, atol={self.tol}"
             )
         else:
             head = f"low_variance(n_samples={len(self.samples)}, threshold={self.threshold}"
@@ -645,7 +645,7 @@ def _resolve_stat_term(node: _StatTerm, trace: Any) -> Selection:
             for value in values:
                 dense &= value.abs() <= node.tol
             relation = "upper_bound"
-            source = f"dead(n_samples={len(values)}, tol={node.tol})"
+            source = f"dead(n_samples={len(values)}, atol={node.tol})"
         elif node.stat == "saturated":
             dense = torch.zeros(entry.shape, dtype=torch.bool)
             for bound in (node.low, node.high):
@@ -658,7 +658,7 @@ def _resolve_stat_term(node: _StatTerm, trace: Any) -> Selection:
             relation = "upper_bound"
             source = (
                 f"saturated(n_samples={len(values)}, low={node.low}, "
-                f"high={node.high}, tol={node.tol})"
+                f"high={node.high}, atol={node.tol})"
             )
         else:
             if node.threshold is None:
@@ -704,7 +704,7 @@ def dead(
 ) -> Selector:
     """Select units that never fired across an explicit multi-sample evidence set.
 
-    An element is selected when its magnitude is ``<= tol`` in EVERY sample
+    An element is selected when its magnitude is ``<= atol`` in EVERY sample
     trace. "Dead" is a dispositional claim — silent-on-N-samples is a
     SUPERSET of truly-dead — so entries declare
     ``provenance.relation="upper_bound"`` with the sample count disclosed in
@@ -723,9 +723,9 @@ def dead(
     'upper_bound'
     """
 
-    atol = _validate_real_number(atol, "tol", "dead")
+    atol = _validate_real_number(atol, "atol", "dead")
     if atol < 0:
-        raise ValueError(f"dead `tol` must be non-negative; got {atol!r}.")
+        raise ValueError(f"dead `atol` must be non-negative; got {atol!r}.")
     collected = _validate_samples(
         samples,
         "dead",
@@ -747,7 +747,7 @@ def saturated(
 ) -> Selector:
     """Select units always pinned at a declared bound across the evidence set.
 
-    An element is selected when it sits within ``tol`` of the SAME declared
+    An element is selected when it sits within ``atol`` of the SAME declared
     bound (``low=`` and/or ``high=``; at least one required — saturation is
     relative to the nonlinearity's range, e.g. ``low=0.0, high=1.0`` for a
     sigmoid) in EVERY sample trace. Like :func:`dead`, this is a
@@ -773,9 +773,9 @@ def saturated(
         low = _validate_real_number(low, "low", "saturated")
     if high is not None:
         high = _validate_real_number(high, "high", "saturated")
-    atol = _validate_real_number(atol, "tol", "saturated")
+    atol = _validate_real_number(atol, "atol", "saturated")
     if atol < 0:
-        raise ValueError(f"saturated `tol` must be non-negative; got {atol!r}.")
+        raise ValueError(f"saturated `atol` must be non-negative; got {atol!r}.")
     collected = _validate_samples(
         samples,
         "saturated",
