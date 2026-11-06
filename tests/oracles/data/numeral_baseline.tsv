@@ -3885,7 +3885,7 @@ docs-md	docs/maintainers/where.md	490
 docs-md	docs/maintainers/where.md	491
 docs-md	docs/maintainers/where.md	4919
 docs-md	docs/maintainers/where.md	492
-docs-md	docs/maintainers/where.md	49403
+docs-md	docs/maintainers/where.md	49484
 docs-md	docs/maintainers/where.md	495
 docs-md	docs/maintainers/where.md	496
 docs-md	docs/maintainers/where.md	497
@@ -4023,6 +4023,7 @@ docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	679
 docs-md	docs/maintainers/where.md	68
 docs-md	docs/maintainers/where.md	680
+docs-md	docs/maintainers/where.md	683
 docs-md	docs/maintainers/where.md	687
 docs-md	docs/maintainers/where.md	69
 docs-md	docs/maintainers/where.md	690
@@ -4041,7 +4042,7 @@ docs-md	docs/maintainers/where.md	701
 docs-md	docs/maintainers/where.md	702
 docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
-docs-md	docs/maintainers/where.md	704462
+docs-md	docs/maintainers/where.md	704543
 docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	7066
 docs-md	docs/maintainers/where.md	707
@@ -9126,6 +9127,7 @@ test-docstrings	tests/test_intervention_phase7.py	15
 test-docstrings	tests/test_intervention_phase7.py	21
 test-docstrings	tests/test_intervention_phase7.py	3.3
 test-docstrings	tests/test_intervention_phase7.py	52
+test-docstrings	tests/test_intervention_render_marks.py	1_5
 test-docstrings	tests/test_intervention_replacement_identity.py	2289
 test-docstrings	tests/test_intervention_replacement_identity.py	56
 test-docstrings	tests/test_io_bundle.py	128
