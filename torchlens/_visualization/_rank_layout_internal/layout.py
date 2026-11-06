@@ -79,7 +79,7 @@ RANK_LAYOUT_COST_THRESHOLD = 20_000
 # polished path for no reason.
 RANK_LAYOUT_NOTICE = (
     "TorchLens auto-selected rank layout (estimated layout cost={cost}, "
-    "threshold={threshold}). Reduce graph complexity with vis_call_depth, "
+    "threshold={threshold}). Reduce graph complexity with depth=, "
     "rolled mode, or module= focus; force Graphviz dot with "
     "layout='dot' if you can wait longer (measured: seconds to "
     "a few minutes at this scale)."
@@ -394,11 +394,10 @@ def get_node_placement_engine(vis_node_placement: str, layout_cost: int) -> str:
         return vis_node_placement
     if vis_node_placement != "auto":
         raise InvalidArgumentError(
-            "vis_node_placement must be one of 'auto', 'dot', or 'rank'; "
-            f"received {vis_node_placement!r}",
+            f"layout must be one of 'auto', 'dot', or 'rank'; received {vis_node_placement!r}",
             code="visualization_layout_invalid",
-            remedy="pass vis_node_placement='auto', 'dot', or 'rank'",
-            argument="vis_node_placement",
+            remedy="pass layout='auto', 'dot', or 'rank'",
+            argument="layout",
         )
     if layout_cost > RANK_LAYOUT_COST_THRESHOLD:
         return "rank"
@@ -881,7 +880,7 @@ def render_rank_layout(
     if num_rank_nodes > 25000 and vis_fileformat != "svg":
         warnings.warn(
             f"Graph has {num_rank_nodes} nodes. PDF/PNG rendering may produce "
-            f"empty output at this scale. Consider using vis_fileformat='svg' "
+            f"empty output at this scale. Consider using file_format='svg' "
             f"for large graphs; SVG files are zoomable in any browser.",
             stacklevel=user_stacklevel(),
         )

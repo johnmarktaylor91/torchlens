@@ -1722,5 +1722,5 @@ def raise_encoding_renderer_refusal(renderer: str, channels: tuple[str, ...]) ->
         f"encoding channels ({channel_names}) are not supported by the {renderer} renderer",
         code="encoding_requires_dot_layout",
         remedy=f"use the graphviz renderer, or drop {channel_names}",
-        argument="vis_renderer",
+        argument="renderer",
     )

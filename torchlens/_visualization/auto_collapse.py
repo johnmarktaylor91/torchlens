@@ -17,12 +17,12 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._errors import InvalidArgumentError
 from .._literals import CollapseLiteral, FoldRepeatsLiteral, VisModeLiteral
+from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 
-# Condensed-flow-graph construction: split to _condensed_flow.py under the R43
-# file-size ratchet. The dataclasses and helpers re-export here (historical
-# surface); call sites below that tests monkeypatch on _condensed_flow go
-# through the module attribute so the patch seam has one home.
+# Condensed-flow-graph construction lives in _condensed_flow.py (R43 file-size
+# ratchet); its dataclasses and helpers re-export here (historical surface). Call
+# sites below that tests monkeypatch on _condensed_flow use the module attribute.
 from . import _condensed_flow
 from ._collapse_disclosures import _warn_undisclosed_floor
 from ._collapse_runs import (  # noqa: F401
@@ -705,9 +705,9 @@ def resolve_repeat_folds(
             f"{len(trace._layer_list)} ops, above the collapse engine's compute "
             f"ceiling COLLAPSE_OPTIMIZER_MAX_OPS={COLLAPSE_OPTIMIZER_MAX_OPS}. "
             "The graph renders without folds; reduce the rendered graph "
-            "first with module= focus, vis_call_depth, or rolled mode.",
+            "first with module= focus, depth=, or rolled mode.",
             TorchLensWarning,
-            stacklevel=2,
+            stacklevel=user_stacklevel(),
         )
         return {}
     eligibility_collapse_fn = collapse_fn if collapse_fn is not None else _always_collapse_module

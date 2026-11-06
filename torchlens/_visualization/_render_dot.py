@@ -9,7 +9,6 @@ from dataclasses import dataclass, replace
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from .._utils._display_bounded import short_dataclass_repr
-from .._utils._record_group_table import record_member
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
@@ -399,7 +398,7 @@ def _resolve_collapse_request(
             # chips fail closed rather than crash mid-layout (no
             # rank arm until the fix lands).
             raise InvalidArgumentError(
-                "fold_patterns is not supported under vis_node_placement="
+                "fold_patterns is not supported under layout="
                 "'rank' in v1: the rank backend cannot position "
                 "segment-family chip nodes yet",
                 code="pattern_rank_layout_unsupported",
@@ -1295,7 +1294,7 @@ def draw(
     _validate_draw_flag_options(
         show_containers,
         vis_save_only=vis_save_only,
-        vis_show_cone=vis_show_cone,
+        show_cone=vis_show_cone,
         show_edge_shapes=show_edge_shapes,
         show_legend=show_legend,
         order_siblings=order_siblings,
@@ -1679,95 +1678,9 @@ def _rank_cost_node_name(
     return "pass".join(parts) if vis_mode == "unrolled" else parts[0]
 
 
-def _is_collapsed_module(
-    node: GraphNode,
-    vis_call_depth: int,
-    trace: Optional["Trace"] = None,
-    collapse_fn: CollapseFn | None = None,
-) -> bool:
-    """THE IndexError guard for collapsed module rendering.
-
-    Returns True if the node is nested deep enough to be rendered as a
-    collapsed ``box3d`` module summary node instead of an individual layer.
-
-    This function is the single decision point that determines whether a node
-    gets its own graphviz node or is absorbed into a module box.  Getting this
-    wrong causes IndexError when ``_build_collapsed_module_node`` tries to
-    access ``modules[vis_call_depth - 1]``.
-
-    Special cases:
-    - ``vis_call_depth == 0``: show all layers, never collapse (#94).
-    - ``is_atomic_module``: the node represents the output of
-      its innermost module, so its effective nesting depth is one less (it
-      visually "belongs" to the parent scope).
-
-    Args:
-        node: The Op or Layer node to check.
-        vis_call_depth: Maximum nesting depth before collapsing into a module box.
-    """
-    if trace is not None:
-        return (
-            _collapse_address_for_node(
-                trace,
-                node,
-                vis_mode="unrolled",
-                collapse_fn=collapse_fn,
-                max_module_depth=vis_call_depth,
-            )
-            is not None
-        )
-    if vis_call_depth == 0:
-        return False  # #94: depth 0 means show all layers, never collapse
-
-    node_call_depth = len(node.modules)
-    # Bottom-level submodule outputs are rendered at the parent nesting level,
-    # not their own. Top-level atomic leaves have no module parent to bubble
-    # up to, so they remain eligible for top-level collapse.
-    if record_member(node, "is_atomic_module", False) and node_call_depth > 1:
-        node_call_depth -= 1
-
-    return node_call_depth >= vis_call_depth
-
-
-def _run_fold_for_graph_node_name(
-    graph_node_name: str,
-    repeat_folds: Mapping[str, "ModuleRepeatFold"] | None,
-    vis_mode: str,
-) -> "ModuleRepeatFold | None":
-    """Return the fold represented by ``graph_node_name``.
-
-    Parameters
-    ----------
-    graph_node_name:
-        Rendered Graphviz node identifier.
-    repeat_folds:
-        Fold descriptors keyed by pass-free module address.
-    vis_mode:
-        ``"unrolled"`` or ``"rolled"`` visualization mode.
-
-    Returns
-    -------
-    ModuleRepeatFold | None
-        Matching fold, or ``None`` when ``graph_node_name`` is not a folded representative.
-    """
-
-    if not repeat_folds:
-        return None
-    for fold in _unique_repeat_folds(repeat_folds):
-        representative_name = _run_fold_graph_node_name(
-            f"{fold.representative}:1",
-            vis_mode,
-            {fold.representative: fold},
-        )
-        if representative_name == graph_node_name:
-            return fold
-    return None
-
-
 __all__ = [
     "_inline_svg_file_local_images",
     "_inline_svg_local_images",
-    "_is_collapsed_module",
     "_layout_dot_plain",
     "_normalize_backward_pass_filter",
     "_normalize_svg_root_viewbox",
@@ -1779,7 +1692,6 @@ __all__ = [
     "_rank_layout_cost_inputs",
     "_render_graph_only_svg",
     "_resolve_focus_module",
-    "_run_fold_for_graph_node_name",
     "_setup_combined_special_clusters",
     "_setup_subgraphs",
     "_setup_subgraphs_recurse",

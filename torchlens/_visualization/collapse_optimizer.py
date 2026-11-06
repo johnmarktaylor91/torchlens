@@ -426,7 +426,7 @@ def select_collapse_plan(
                     "draw() renders a bounded top-level module overview "
                     "with an expansion manifest instead (uncollapsed only "
                     "when the root has no child module); reduce the rendered "
-                    "graph first with module= focus, vis_call_depth, or "
+                    "graph first with module= focus, depth=, or "
                     "rolled mode.",
                     code="collapse_pathological_skip",
                 ),
@@ -675,7 +675,7 @@ def _frontier_auto_result(
             g_star=None,
             reason=(
                 f"floor_fallback: {cause}; reduce the rendered graph with "
-                "module= focus, vis_call_depth, or rolled mode"
+                "module= focus, depth=, or rolled mode"
             ),
             planner="floor_fallback",
             k_cap_exhausted=k_cap_exhausted,
@@ -3767,7 +3767,7 @@ def _budget_fallback_result(
             f"linear_fallback ({cause}): estimator predicted "
             f"{budget.predicted_ms:.0f} ms at U={budget.universe_count}, "
             f"W={budget.max_sibling_width}; reduce the rendered graph with "
-            "module= focus, vis_call_depth, or rolled mode"
+            "module= focus, depth=, or rolled mode"
         ),
         planner="linear_fallback",
         k_cap_exhausted=root_own_units > K_CAP,

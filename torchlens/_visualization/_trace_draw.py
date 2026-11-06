@@ -30,7 +30,7 @@ from .._literals import (
 from ..intervention._types import FireRecord
 from ..viz._drawing import Drawing, resolve_draw_target
 from ._color_sources import resolve_color_source
-from ._draw_validation import _validate_draw_flag_options
+from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
 from ._pass_animation import pass_animation_html
 from ._render_dot import draw as _render_draw
 from ._render_entrypoints import render_backward_graph, render_combined_graph
@@ -153,14 +153,29 @@ def _draw_policy(
 
 
 def _require_graph_kind(
-    graph: str, show_containers: ShowContainersLiteral, show_edge_shapes: bool, module: Any
+    graph: str, show_containers: ShowContainersLiteral, module: Any, options: Mapping[str, Any]
 ) -> None:
     """Refuse a ``graph=`` value other than forward, backward or combined.
 
-    Also refuses ``module=`` on a backward or combined graph.
+    Also refuses ``module=`` on a backward or combined graph, a non-bool
+    ``show_edge_shapes`` or ``open_viewer``, and a ``node_style``,
+    ``intervention_mode``, ``collapse`` or ``fold_repeats`` outside its
+    vocabulary (``options`` is the draw call's keyword mapping), so a typo
+    refuses on every graph kind rather than drawing silently on backward or
+    combined.
     """
 
-    _validate_draw_flag_options(show_containers, show_edge_shapes=show_edge_shapes)
+    _validate_draw_flag_options(
+        show_containers,
+        show_edge_shapes=options["show_edge_shapes"],
+        open_viewer=options["open_viewer"],
+    )
+    _validate_draw_options(
+        options["node_style"],
+        options["intervention_mode"],
+        options["collapse"],
+        options["fold_repeats"],
+    )
     if graph not in ("forward", "backward", "combined"):
         raise InvalidArgumentError(
             f"graph must be 'forward', 'backward', or 'combined'; received {graph!r}",
@@ -232,7 +247,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
 
         return draw_view(trace, view, explicit_draw_kwargs(draw, locals()), honesty_banner_lines)
 
-    _require_graph_kind(graph, show_containers, show_edge_shapes, module)
+    _require_graph_kind(graph, show_containers, module, locals())
     num_ops = len(trace) if hasattr(trace, "__len__") else None
     policy = _draw_policy(graph, rolled, theme, collapse, module, depth)
     target = resolve_draw_target(path, file_format, _KNOWN_EXTS)

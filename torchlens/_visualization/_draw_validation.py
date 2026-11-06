@@ -49,11 +49,11 @@ def _validate_draw_options(
         )
     if intervention_mode not in {"node_mark", "as_node"}:
         raise InvalidArgumentError(
-            "vis_intervention_mode must be either 'node_mark' or 'as_node'; "
+            "intervention_mode must be either 'node_mark' or 'as_node'; "
             f"received {intervention_mode!r}",
             code="visualization_intervention_mode_invalid",
-            remedy="pass vis_intervention_mode='node_mark' or 'as_node'",
-            argument="vis_intervention_mode",
+            remedy="pass intervention_mode='node_mark' or 'as_node'",
+            argument="intervention_mode",
         )
     if isinstance(collapse, float):
         if not 0.0 <= collapse <= 1.0:
@@ -172,12 +172,12 @@ def _validate_draw_renderer(vis_renderer: str, encoding: Any) -> None:
 
     if vis_renderer not in renderer_names():
         raise InvalidArgumentError(
-            f"vis_renderer must be one of {sorted(renderer_names())}; received "
+            f"renderer must be one of {sorted(renderer_names())}; received "
             f"{vis_renderer!r}. Out-of-tree renderers register through "
             "torchlens._visualization.renderer_registry.register_renderer.",
             code="visualization_renderer_invalid",
             remedy="pass a registered renderer name",
-            argument="vis_renderer",
+            argument="renderer",
         )
     renderer_capability_rows = renderer_info(vis_renderer).capabilities
     if encoding is not None and not bool(renderer_capability_rows.get("encoding_channels", False)):

@@ -105,34 +105,6 @@ def luminance(color: str) -> float | None:
     return 0.299 * red + 0.587 * green + 0.114 * blue
 
 
-def _relative_luminance(color: str) -> float | None:
-    """WCAG relative luminance in [0, 1] for contrast ratios."""
-
-    rgb = _hex_to_rgb(color)
-    if rgb is None:
-        return None
-
-    def _channel(value: int) -> float:
-        """Linearize one 8-bit sRGB channel (IEC 61966-2-1)."""
-
-        scaled = value / 255.0
-        return scaled / 12.92 if scaled <= 0.04045 else ((scaled + 0.055) / 1.055) ** 2.4
-
-    red, green, blue = (_channel(component) for component in rgb)
-    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
-
-
-def contrast_ratio(color_a: str, color_b: str) -> float | None:
-    """WCAG contrast ratio between two hex colours."""
-
-    lum_a = _relative_luminance(color_a)
-    lum_b = _relative_luminance(color_b)
-    if lum_a is None or lum_b is None:
-        return None
-    lighter, darker = max(lum_a, lum_b), min(lum_a, lum_b)
-    return (lighter + 0.05) / (darker + 0.05)
-
-
 # ---------------------------------------------------------------------------
 # CVD simulation (Vienot/Brettel-style linear approximations) + grayscale.
 # ---------------------------------------------------------------------------

@@ -9,15 +9,19 @@ list (low value first, blended in OKLab; ``_ramps``), and the declared
 NEUTRAL "aggregate, not encoded" fill for collapsed boxes under an
 active channel.
 
-The default ``torchlens`` skin and the ``colorblind`` skin render the
-Okabe-Ito role colours (input green, output vermillion, plain operations the
-page colour) with grey weights (light grey when trainable, dark grey when
-frozen), the set that passes every colour-vision gate. No skin draws blue in
-its palette or inks: weights are grey in every skin. A data-encoded ramp may
-use blue (the selectable viridis family); the shipped default is the warm
-YlOrBr family. The ``paper`` and ``high_contrast`` skins keep the legacy
-TorchLens role colours (input light green, output light red, weights light
-grey when trainable and dark grey when frozen) and ``dark`` its dark remap.
+The default ``torchlens`` skin renders the released role colours
+(:data:`RELEASED_SEMANTIC_PALETTE`: pale green input, salmon output, grey
+weights, one yellow for branch tests, every other node white); it does not
+pass the colour-vision gate. The ``colorblind`` skin renders the Okabe-Ito
+role colours (:data:`OKABE_ITO_SEMANTIC_PALETTE`: input green, output
+vermillion, plain operations the page colour) with grey weights (light grey
+when trainable, dark grey when frozen), the set that passes every
+colour-vision gate. No skin draws blue in its palette or inks: weights are
+grey in every skin. A data-encoded ramp may use blue; the shipped default is
+the viridis family (``_ramps.DEFAULT_RAMP_FAMILY``). The ``paper`` and
+``high_contrast`` skins keep the legacy TorchLens role colours (input light
+green, output light red, weights light grey when trainable and dark grey when
+frozen) and ``dark`` its dark remap.
 """
 
 from __future__ import annotations
