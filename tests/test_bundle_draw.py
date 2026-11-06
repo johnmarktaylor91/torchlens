@@ -13,6 +13,11 @@ Also pinned here (JMT drawing rulings, Sun 1 Nov 2026):
   member's own graph, ``"repr"`` / ``"html"`` stay, any other kind refuses;
 - ``show_bundle_graph`` is gone: importing it fails and the root name teaches
   ``Bundle.draw``.
+
+And ``Bundle.draw(graph="diff", depth=N)`` (JMT, 6 Nov 2026 9:01 AM PT: "okay just
+build it man go go go go go"): the compared member's model graph folded to ``depth``,
+every op and module box filled by its change from the baseline; ``depth`` with any
+other ``graph`` refuses, and without ``depth`` the diff is the two-column picture.
 """
 
 from __future__ import annotations
@@ -235,7 +240,7 @@ def test_draw_graph_rolled_and_direction(bundle: tl.Bundle, tmp_path: Path) -> N
 
 
 @pytest.mark.parametrize(
-    "keyword", ["depth", "collapse", "module", "color_by", "vis_mode", "vis_save_only", "signal"]
+    "keyword", ["collapse", "module", "color_by", "vis_mode", "vis_save_only", "signal"]
 )
 def test_draw_refuses_keywords_it_does_not_take(
     bundle: tl.Bundle, tmp_path: Path, keyword: str
@@ -289,3 +294,118 @@ def test_show_bundle_graph_is_removed() -> None:
     with pytest.raises(AttributeError, match="Bundle.draw"):
         tl.show_bundle_graph  # noqa: B018
     assert not hasattr(tl.Bundle, "show_bundle_graph")
+
+
+class _Block(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.fc(x))
+
+
+class _ThreeBlocks(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.b0 = _Block()
+        self.b1 = _Block()
+        self.b2 = _Block()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.b2(self.b1(self.b0(x)))
+
+
+@pytest.fixture(scope="module")
+def patched_runs() -> Iterator[tl.Bundle]:
+    """A clean run and a fork of it with block 1 patched from another input's run."""
+
+    pytest.importorskip("graphviz")
+    if shutil.which("dot") is None:
+        pytest.skip("graphviz dot not installed")
+    torch.manual_seed(0)
+    model = _ThreeBlocks()
+    source = tl.trace(model, torch.randn(2, 4))
+    clean = tl.trace(model, torch.randn(2, 4))
+    patched = clean.fork().do(tl.module("b1"), tl.patch_from(source))
+    try:
+        yield tl.Bundle({"clean": clean, "patched": patched})
+    finally:
+        for member in (source, clean, patched):
+            member.cleanup()
+
+
+def _folded_values(runs: tl.Bundle, metric: str) -> dict[str, float]:
+    """The folded diff's module values for ``patched`` against ``clean``."""
+
+    from torchlens.bundle._deltas import site_deltas
+    from torchlens.bundle._draw_folded import module_changes
+
+    deltas = site_deltas(runs, metric, "clean", "out", ["clean", "patched"])
+    return module_changes(runs.members["patched"], deltas, "patched")
+
+
+def test_folded_diff_shades_patched_and_downstream_boxes(
+    patched_runs: tl.Bundle, tmp_path: Path
+) -> None:
+    values = _folded_values(patched_runs, "relative_l2")
+    assert values["b0"] == 0.0  # upstream of the patch: unchanged
+    assert values["b1"] > 0.0 and values["b2"] > 0.0  # the patched block and downstream
+    drawing = patched_runs.draw(str(tmp_path / "folded.svg"), graph="diff", depth=1)
+    assert isinstance(drawing, tl.viz.Drawing)
+    assert (tmp_path / "folded.svg").is_file()
+    dot = drawing.dot
+    assert "TorchLens bundle diff" not in dot  # the member's own model graph
+    assert "relative_l2 change from clean" in dot  # the legend names the channel
+    assert "patch_from" in dot  # the edit mark stays on the edited box
+    fills = {
+        line.split("fillcolor=")[1].split()[0]
+        for line in dot.splitlines()
+        if "b1" in line and "fillcolor=" in line
+    }
+    assert fills, dot
+
+
+def test_folded_diff_honours_metric_and_direction(patched_runs: tl.Bundle, tmp_path: Path) -> None:
+    cosine = _folded_values(patched_runs, "cosine")
+    assert cosine["b0"] == 0.0 and cosine["b2"] > 0.0
+    assert cosine != _folded_values(patched_runs, "relative_l2")
+    dot = patched_runs.draw(
+        str(tmp_path / "cos.svg"),
+        graph="diff",
+        depth=1,
+        metric="cosine",
+        members=("clean", "patched"),
+        direction="leftright",
+    ).dot
+    assert "cosine change from clean" in dot
+    assert "rankdir=LR" in dot
+
+
+@pytest.mark.parametrize(
+    ("options", "argument"),
+    [
+        ({"graph": "forward"}, "depth"),
+        ({"graph": "combined"}, "depth"),
+        ({"graph": "diff", "rolled": True}, "rolled"),
+        ({"graph": "diff", "node_overrides": {"linear_1_1": {"color": "red"}}}, "node_overrides"),
+        ({"graph": "diff", "edge_overrides": {("a", "b"): {"color": "red"}}}, "edge_overrides"),
+    ],
+)
+def test_depth_refusals(
+    patched_runs: tl.Bundle, tmp_path: Path, options: dict[str, object], argument: str
+) -> None:
+    with pytest.raises(ArgumentTypeError) as excinfo:
+        patched_runs.draw(str(tmp_path / "refused.svg"), depth=1, **options)  # type: ignore[arg-type]
+    assert excinfo.value.fields["code"] == "bundle_draw_keyword_unsupported"
+    assert excinfo.value.fields["argument"] == argument
+    assert not (tmp_path / "refused.svg").exists()
+
+
+def test_diff_without_depth_stays_the_two_column_picture(
+    patched_runs: tl.Bundle, tmp_path: Path
+) -> None:
+    plain = patched_runs.draw(str(tmp_path / "plain.svg"), graph="diff").dot
+    explicit = patched_runs.draw(str(tmp_path / "explicit.svg"), graph="diff", depth=None).dot
+    assert plain.startswith("// TorchLens bundle diff")
+    assert plain == explicit

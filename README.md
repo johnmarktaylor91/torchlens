@@ -144,7 +144,7 @@ patched = italy.fork().do(site, tl.patch_from(trace))  # patch in the MLP's acti
 ```python
 runs = tl.Bundle({"italy": italy, "patched": patched})  # group two Traces into one Bundle
 runs.rank_changes("italy", k=10)                        # the 10 operations the patch changed most
-runs.draw(graph="diff")                                 # draw the model with those changes highlighted
+runs.draw(graph="diff", depth=2)                        # draw the model with those changes highlighted
 ```
 
 **Debug** models with over 20 convenient functions for finicky tasks like locating the first operation that produces a NaN, finding dead units and exploding gradients, and inferring what input shape a model expects. Every finding gives the operation in question and the line of code that called it.

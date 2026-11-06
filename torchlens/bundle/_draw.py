@@ -30,6 +30,7 @@ BUNDLE_DRAW_KEYWORDS = (
     "members",
     "metric",
     "on",
+    "depth",
 )
 _SHOW_KINDS = (None, "graph", "strip", "repr", "html")
 
@@ -52,8 +53,10 @@ def bundle_draw(
     other keyword, which refuses (``Trace.draw``'s other keywords are added one
     by one as the bundle renderer supports them). ``graph="diff"`` draws two
     members side by side with their aligned sites coloured by ``metric``
-    distance; every other ``graph`` value draws the bundle's union graph, or
-    with ``nodes="members"`` the member relation graph.
+    distance (with ``depth``, the second member's own model graph folded to that
+    depth and shaded by the same distance, :mod:`._draw_folded`); every other
+    ``graph`` value draws the bundle's union graph, or with ``nodes="members"``
+    the member relation graph.
     """
 
     from .._visualization._bundle_graph import resolve_bundle_draw_target
@@ -78,6 +81,10 @@ def bundle_draw(
             remedy="pass graph='forward', 'backward', 'combined' or 'diff'",
             argument="graph",
         )
+    if options["depth"] is not None:
+        from ._draw_folded import draw_folded_diff
+
+        return draw_folded_diff(bundle, path, options)
     default_format = "svg" if graph == "diff" else "pdf"
     target = resolve_bundle_draw_target(path, options["file_format"], _KNOWN_EXTS, default_format)
     outpath = target.path
@@ -140,12 +147,24 @@ def _keyword_refusal(
             f"use the keywords Bundle.draw supports: {', '.join(BUNDLE_DRAW_KEYWORDS)}",
             named[0],
         )
+    if options["depth"] is not None and options["graph"] != "diff":
+        return (
+            f"Bundle.draw(graph={options['graph']!r}) does not take depth: the union graph "
+            "draws every op and has no module folding",
+            "pass graph='diff' with depth to fold the compared member's graph, or draw one "
+            "member folded with members[name].draw(depth=...)",
+            "depth",
+        )
     refused = _diff_refusals(options)
     if not refused:
         return None
+    reason = (
+        "the folded diff draws the compared member's own model graph"
+        if options["depth"] is not None
+        else "the diff draws one node per op for each of two members"
+    )
     return (
-        f"Bundle.draw(graph='diff') does not take {', '.join(refused.values())}: the diff "
-        "draws one node per op for each of two members",
+        f"Bundle.draw(graph='diff') does not take {', '.join(refused.values())}: {reason}",
         "drop it for graph='diff', or draw the union graph (graph='forward') with it",
         next(iter(refused)),
     )
@@ -155,7 +174,9 @@ def _diff_refusals(options: dict[str, Any]) -> dict[str, str]:
     """Return the ``Bundle.draw`` keywords ``graph="diff"`` cannot honour, keyword to spelling.
 
     The diff draws one node per op for each of two members, so ``rolled=True``
-    and ``nodes="members"`` have no diff meaning.
+    and ``nodes="members"`` have no diff meaning; with ``depth`` the picture is
+    the compared member's ``Trace.draw``, so the op-keyed ``node_overrides`` and
+    ``edge_overrides`` of the two-column picture refuse too.
     """
 
     if options["graph"] != "diff":
@@ -165,6 +186,12 @@ def _diff_refusals(options: dict[str, Any]) -> dict[str, str]:
         refused["rolled"] = "rolled=True"
     if options["nodes"] != "ops":
         refused["nodes"] = f"nodes={options['nodes']!r}"
+    if options["depth"] is not None:
+        # The folded diff is one member's Trace.draw: per-op keyed overrides of
+        # the two-column picture have no counterpart there.
+        for keyword in ("node_overrides", "edge_overrides"):
+            if options[keyword] is not None:
+                refused[keyword] = f"{keyword}= (with depth)"
     return refused
 
 

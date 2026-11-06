@@ -985,28 +985,28 @@ class Bundle:
         members: tuple[str | Trace, str | Trace] | None = None,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
         on: Literal["out", "grad"] = "out",
+        depth: int | None = None,
         **unsupported: Any,
     ) -> Drawing:
         """Draw the bundle as one picture and return it as a :class:`Drawing`.
 
-        ``graph`` picks the picture: ``"forward"`` (default), ``"backward"`` or
-        ``"combined"`` draw the bundle's union op graph for that pass, and ``"diff"``
-        draws the ``members`` pair (default: the baseline and the next member) side by
-        side, one node per op (each pass of a repeated layer apart), coloured by
-        ``metric`` distance over ``on`` (``"out"`` or ``"grad"``). ``nodes="members"``
-        draws one node per member and one edge per relation row (``graph`` must stay
-        ``"forward"``); ``rolled`` draws the rolled (per-layer) graph instead of every op.
-
-        ``path`` is the output file, as on ``Trace.draw``: its extension picks the format
-        and ``file_format`` (default ``"pdf"``, ``"svg"`` for diff) applies only to a path
-        without one; a different format than the extension refuses. A bare call
-        displays inline inside a Jupyter kernel and writes nothing; elsewhere it writes
-        a collision-safe ``bundle_modelgraph`` file (``bundle_diff`` for diff) and
-        prints its path. ``theme`` defaults to ``"torchlens"`` (``"paper"`` for diff),
-        ``direction`` to ``"bottomup"``; ``open_viewer=True`` opens the file. The
-        ``*_overrides`` pass Graphviz attributes (nodes keyed by op label, or member
-        name under ``nodes="members"``; edges by ``(source, target)``). Any other keyword,
-        or ``rolled``/``nodes`` on diff, refuses (``bundle_draw_keyword_unsupported``).
+        ``graph`` picks the picture: ``"forward"`` (default), ``"backward"`` or ``"combined"``
+        draw the union op graph for that pass; ``"diff"`` draws the ``members`` pair (default:
+        the baseline and the next member) side by side, one node per op pass, coloured by
+        ``metric`` distance over ``on`` (``"out"`` or ``"grad"``); with ``depth`` it is the
+        second member's ``Trace.draw(depth=depth)`` (its file defaults too), each op and module
+        box filled by its change from the first (a box: its most changed op). ``nodes="members"``
+        draws one node per member, one edge per relation row (``graph="forward"`` only);
+        ``rolled`` draws the per-layer graph. ``path`` is the output file, as on ``Trace.draw``:
+        its extension picks the format and ``file_format`` (default ``"pdf"``, ``"svg"`` for
+        diff) applies only to a path without one; a different format refuses. A bare call
+        displays inline inside a Jupyter kernel and writes nothing; elsewhere it writes a
+        collision-safe ``bundle_modelgraph`` file (``bundle_diff`` for diff) and prints its
+        path. ``theme`` defaults to ``"torchlens"`` (``"paper"`` for diff), ``direction`` to
+        ``"bottomup"``; ``open_viewer=True`` opens the file. ``*_overrides`` pass Graphviz
+        attributes (nodes keyed by op label, or member under ``nodes="members"``; edges by
+        ``(source, target)``). Any other keyword, ``rolled``/``nodes`` on diff, and op-keyed
+        overrides or another ``graph`` with ``depth`` refuse (``bundle_draw_keyword_unsupported``).
         """
         return _forward_bundle_draw(locals())
 
