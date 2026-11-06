@@ -61,6 +61,7 @@ from .._finalize import (
     session_callable_identity as _callable_identity,
     value_nbytes as _nbytes,
 )
+from .._finalize_totals import _stamp_param_totals
 from .._invariants import run_metadata_invariants
 from .._options import (
     TINYGRAD_EXTRA_KWARG_POLICY,
@@ -239,19 +240,11 @@ def _stamp_param_logs(trace: Trace, module_tree: TinygradModuleTree | None) -> N
 
     if module_tree is not None:
         trace._param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
-        trace._num_param_tensors = len(trace._param_logs)
-        trace.num_params = sum(param.num_params for param in trace._param_logs)
-        trace.num_params_trainable = sum(
-            param.num_params for param in trace._param_logs if param.is_trainable
-        )
-        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+        _stamp_param_totals(trace, trace._param_logs)
         trace._provenance_param_source = "native-module"
     else:
         trace._param_logs = ParamAccessor({})
-        trace._num_param_tensors = 0
-        trace.num_params = 0
-        trace.num_params_trainable = 0
-        trace.num_params_frozen = 0
+        _stamp_param_totals(trace, ())
         trace._provenance_param_source = "none"
 
 
