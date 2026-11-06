@@ -12,8 +12,8 @@
 <text text-anchor="start" x="8" y="-1492.73" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">ViTForImageClassification › vit › layers.5 › attention (ViTAttention)</text>
 <text text-anchor="start" x="8" y="-1478.73" font-family="Helvetica,sans-Serif" font-size="14.00">15 ops (9.1 MB)</text>
 <text text-anchor="start" x="8" y="-1464.73" font-family="Helvetica,sans-Serif" font-size="14.00">1 edit: </text>
-<text text-anchor="start" x="49" y="-1464.73" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00" fill="#7b1fa2">Δ zero_ablate</text>
-<text text-anchor="start" x="137" y="-1464.73" font-family="Helvetica,sans-Serif" font-size="14.00"> on linear_31_124</text>
+<text text-anchor="start" x="49" y="-1464.73" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#7b1fa2">Δ zero_ablate  </text>
+<text text-anchor="start" x="140" y="-1464.73" font-family="Helvetica,sans-Serif" font-size="14.00">on linear_31_124</text>
 <g id="clust1" class="cluster">
 <title>cluster_vit.layers.5.attention_pass1</title>
 <polygon fill="white" stroke="black" stroke-width="1.5" points="8,-122.92 8,-1334 846,-1334 846,-122.92 8,-122.92"/>
