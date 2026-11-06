@@ -1428,6 +1428,37 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
 
 
+def test_jax_nested_param_pytree_saves_and_loads(tmp_path: Path) -> None:
+    """Function-root params from a nested pytree save; the address derives from the name.
+
+    Menagerie m19008 (3.0.1): a ``{"head": {"dense": {"bias": ...}}}`` params tree gave
+    each param ``name`` = the last path segment under the root module, so the format3
+    writer refused the address ``head.dense.bias`` as not derived from ``bias``.
+    """
+
+    params = {
+        "body": {"w": jnp.ones((3, 4)), "b": jnp.zeros((4,))},
+        "head": {"dense": {"w": jnp.ones((4, 2)), "b": jnp.zeros((2,))}},
+    }
+
+    def nested(tree: dict[str, Any], x: Any) -> Any:
+        """Return a two-layer output from a nested params tree."""
+
+        hidden = jnp.tanh(x @ tree["body"]["w"] + tree["body"]["b"])
+        return hidden @ tree["head"]["dense"]["w"] + tree["head"]["dense"]["b"]
+
+    trace = _trace_jax(nested, (params, jnp.ones((2, 3))))
+    for param in trace.params:
+        assert param.name == param.address
+
+    path = tmp_path / "jax_nested_params.tlspec"
+    trace.save(path, level="portable")
+    loaded = tl.load(path)
+
+    assert sorted(p.address for p in loaded.params) == sorted(p.address for p in trace.params)
+    assert "head.dense.b" in {p.address for p in loaded.params}
+
+
 def test_jax_capture_index_map_survives_recurrent_relabeling() -> None:
     """JAX capture-index labels should reflect final recurrent pass labels."""
 

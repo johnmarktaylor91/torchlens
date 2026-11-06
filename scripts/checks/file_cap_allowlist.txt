@@ -260,9 +260,8 @@ torchlens/_io/runnable_load.py::attach_sparse_run_readiness	178
 torchlens/_io/runnable_load.py::parse_sparse_run_descriptor	109
 torchlens/_io/runnable_load.py::preflight_sparse_run_descriptor	110
 torchlens/_io/save_policy.py::_resolve_include_flags	100
-torchlens/_io/scrub.py	1595
+torchlens/_io/scrub.py	1544
 torchlens/_io/scrub.py::_effective_policy	79
-torchlens/_io/scrub.py::_is_runtime_only_trace_field	67
 torchlens/_io/scrub.py::_rebuild_tuple_value	67
 torchlens/_io/scrub.py::scrub_for_save	110
 torchlens/_io/sidecar.py::register_sidecar_family	96
@@ -1247,7 +1246,7 @@ torchlens/receptive_field/_gradient.py::_select_inputs	71
 torchlens/receptive_field/_gradient.py::gradient_for_unit	171
 torchlens/receptive_field/_gradient_forward.py::_build_projective_result	72
 torchlens/receptive_field/_gradient_forward.py::projective_gradient_for_unit	89
-torchlens/receptive_field/_query.py	923
+torchlens/receptive_field/_query.py	913
 torchlens/receptive_field/_query.py::_build_box	162
 torchlens/receptive_field/_query.py::_map_passthrough	64
 torchlens/receptive_field/_query.py::box_for_unit	70

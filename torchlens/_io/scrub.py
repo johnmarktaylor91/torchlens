@@ -29,6 +29,7 @@ from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensWarning
 from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
 from ._scrub_identities import _scrub_nondeterministic_identities
+from ._scrub_runtime_fields import RUNTIME_ONLY_TRACE_FIELDS
 from ._scrub_undeclared import _refuse_undeclared_field
 from ._small_raw import _is_safely_picklable, _small_raw_value, _stringify_value
 from ._source_privacy import (
@@ -1170,59 +1171,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         True when the field stores runtime-only interpreter or visualization state.
     """
 
-    return field_name in {
-        "_had_unattributed_tensor_args",
-        "_module_boundary_adoptions",
-        "_module_boundary_outside_sources",
-        "_orphan_unattributed_tensor_args",
-        "_plain_scalar_escape_labels",
-        "_plain_direct_escape_gaps",
-        "_foreign_departures",
-        "_unrecorded_operator_mutations",
-        "_torch_file_loads",
-        "_last_sibling_ordering_decision",
-        # Sibling render diagnostic (same _render_dot write site); unenrolled, one draw() broke saves.
-        "_last_encoding_state",
-        # Layout-execution geometry record (vizmech), same write site class.
-        "_last_render_geometry",
-        "_pending_container_collapse_nodes",
-        "_defer_streaming_bundle_finalization",
-        "_capture_producer_policy",
-        "_capture_config",
-        "_stop_directive",
-        "_keep_outs_in_memory",
-        "_capture_container_structure",
-        "_capture_output_structure",
-        "_out_sink",
-        "_out_writer",
-        "_container_ordinals_by_output_op_label",
-        "_container_ordinals_by_input_func_call_id",
-        "_validation_replay_status",
-        "_capture_parent_edge_truth",
-        "_orphan_pruned_func_call_ids",
-        # `_tl_predicate_intervention_{spec,target}_keys`,
-        # `_source_bundle_{path,manifest_sha256}` and the output-parent retention
-        # flag (now inside `_rerun_save_request`) moved out of this allowance into
-        # declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is consulted
-        # BEFORE the spec, so an entry here makes the declared policy dead code.
-        "jax_equation_captures",
-        "jax_ordered_captures",
-        "jax_region_captures",
-        "_jax_capture_index_to_raw_op_label",
-        "jax_capture_index_to_final_op_label",
-        "jax_outvar_key_to_capture_index",
-        "_selective_save_hidden_payloads",
-        # the four semantic-output scratch names moved OUT of this
-        # allowance and into `Trace._PORTABLE_STATE_SPEC` as declared
-        # `FieldPolicy.DROP` rows. This allowance is consulted BEFORE the spec,
-        # so an entry here makes the declared policy dead code -- a policy
-        # flipped to KEEP would still be silently dropped. Declared rows keep
-        # one authority.
-        "tinygrad_payload_policy",
-        "tinygrad_uop_captures",
-        "_mlx_op_captures",
-        "_mlx_replay_inventory",
-    }
+    return field_name in RUNTIME_ONLY_TRACE_FIELDS
 
 
 def _structure_only_buffer_payload_field(owner: Any, field_name: str) -> bool:

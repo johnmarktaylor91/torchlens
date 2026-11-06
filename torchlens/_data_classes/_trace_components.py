@@ -428,7 +428,10 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "mlx: fired-intervention flag stamped during the live forward, read "
         "back with a getattr default by the mlx validation epilogue"
     ),
-    "_mlx_perturbation_gaps": "mlx: per-op replay perturbation gaps recorded by mlx validation",
+    "_mlx_perturbation_gaps": (
+        "mlx: per-op replay perturbation gaps recorded by mlx validation "
+        "(scrub-declared runtime-only)"
+    ),
     "_mlx_param_ids": (
         "mlx: constants-rule census of the model's parameter identities, taken "
         "before the forward and read back by the mlx constants rule"
@@ -443,8 +446,12 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
     ),
     "_paddle_module_stack": "paddle: module-stack scratch, attached/deleted around the forward",
     "_paddle_intervention_runtime": "paddle: live intervention runtime for the dygraph forward",
-    "_tf_static_region_labels": "tf: FuncGraph static-path region captures",
-    "_tf_static_fallback_error": "tf: FuncGraph static-path fallback diagnostic",
+    "_tf_static_region_labels": (
+        "tf: FuncGraph static-path region captures (scrub-declared runtime-only)"
+    ),
+    "_tf_static_fallback_error": (
+        "tf: FuncGraph static-path fallback diagnostic (scrub-declared runtime-only)"
+    ),
     "_jax_capture_index_to_raw_op_label": (
         "jax: capture-index to raw-label map (scrub-declared runtime-only)"
     ),

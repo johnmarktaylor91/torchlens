@@ -270,5 +270,53 @@ def test_shared_scope_boxes_equal_per_query_boxes(model_name: str) -> None:
         shared_again = _all_boxes(trace)
     assert alone == shared == shared_again
     assert any(not isinstance(box, str) for *_, box in alone)
-    assert not _query._SHARED_QUERY_STATE.graphs and not _query._SHARED_QUERY_STATE.reach
+    state = _query._SHARED_QUERY_STATE
+    assert not state.graphs and not state.reach and not state.walks
     assert check_geometric_metadata_invariants(trace)
+
+
+class _PointwiseTail(nn.Module):
+    """One convolution, then a chain of pointwise ops (a block's norm, activation and dropout)."""
+
+    def __init__(self, depth: int) -> None:
+        super().__init__()
+        self.conv = nn.Conv1d(1, 1, 3, padding=1)
+        self.depth = depth
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv(x)
+        for index in range(self.depth):
+            x = torch.tanh(x) if index % 2 else torch.sigmoid(x)
+        return x
+
+
+def test_invariant_queries_share_walks_behind_pointwise_ops() -> None:
+    """Queries toward one input share their walk memo, so a pointwise tail walks linearly.
+
+    Each per-op box query used to start a fresh memo and re-walk the whole upstream graph,
+    so a tail of ``n`` pointwise ops cost about ``n^2 / 2`` hops; on timm's inception_next
+    and ResNet families, whose every op is now solved, that made ``tl.validate`` 4x to 18x
+    slower than 2.36 (Menagerie m5433, m8822). The boxes themselves are pinned unchanged by
+    ``test_shared_scope_boxes_equal_per_query_boxes``.
+    """
+
+    torch.manual_seed(0)
+    trace = tl.trace(_PointwiseTail(DEPTH), torch.randn(1, 1, 31))
+    _engine.solve(trace)
+    solve_projective(trace, tuple(trace.output_ops))
+    n_ops = len(trace._layer_list)
+    hops = {"count": 0}
+    walk_body = _query._walk_body
+
+    def counted_walk_body(*args: Any, **kwargs: Any) -> Any:
+        hops["count"] += 1
+        return walk_body(*args, **kwargs)
+
+    patch = pytest.MonkeyPatch()
+    patch.setattr(_query, "_walk_body", counted_walk_body)
+    try:
+        assert check_geometric_metadata_invariants(trace)
+    finally:
+        patch.undo()
+    # Base: about n^2 / 2 hops (one fresh walk per query).
+    assert 0 < hops["count"] <= 4 * n_ops, (hops, n_ops)

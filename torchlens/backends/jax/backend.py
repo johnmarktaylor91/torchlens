@@ -1707,7 +1707,7 @@ class JAXBackend:
             address = path
             param = Param(
                 module_address="self",
-                name=path.rsplit(".", 1)[-1],
+                name=path,
                 shape=shape,
                 dtype=cast(Any, dtype),
                 num_params=_numel(shape),

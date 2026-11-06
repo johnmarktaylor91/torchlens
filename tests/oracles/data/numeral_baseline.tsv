@@ -3427,7 +3427,7 @@ docs-md	docs/maintainers/where.md	141
 docs-md	docs/maintainers/where.md	142
 docs-md	docs/maintainers/where.md	1420
 docs-md	docs/maintainers/where.md	1426
-docs-md	docs/maintainers/where.md	14261
+docs-md	docs/maintainers/where.md	14297
 docs-md	docs/maintainers/where.md	143
 docs-md	docs/maintainers/where.md	1433
 docs-md	docs/maintainers/where.md	1438
@@ -3457,6 +3457,7 @@ docs-md	docs/maintainers/where.md	1520
 docs-md	docs/maintainers/where.md	1527
 docs-md	docs/maintainers/where.md	153
 docs-md	docs/maintainers/where.md	154
+docs-md	docs/maintainers/where.md	1544
 docs-md	docs/maintainers/where.md	155
 docs-md	docs/maintainers/where.md	1551
 docs-md	docs/maintainers/where.md	1555
@@ -3468,7 +3469,6 @@ docs-md	docs/maintainers/where.md	158
 docs-md	docs/maintainers/where.md	1585
 docs-md	docs/maintainers/where.md	1589
 docs-md	docs/maintainers/where.md	159
-docs-md	docs/maintainers/where.md	1595
 docs-md	docs/maintainers/where.md	16
 docs-md	docs/maintainers/where.md	160
 docs-md	docs/maintainers/where.md	1601
@@ -3500,8 +3500,8 @@ docs-md	docs/maintainers/where.md	172
 docs-md	docs/maintainers/where.md	1726
 docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	174
-docs-md	docs/maintainers/where.md	1747
 docs-md	docs/maintainers/where.md	1748
+docs-md	docs/maintainers/where.md	1749
 docs-md	docs/maintainers/where.md	175
 docs-md	docs/maintainers/where.md	176
 docs-md	docs/maintainers/where.md	1767
@@ -3766,8 +3766,8 @@ docs-md	docs/maintainers/where.md	3702
 docs-md	docs/maintainers/where.md	371
 docs-md	docs/maintainers/where.md	3710
 docs-md	docs/maintainers/where.md	372
-docs-md	docs/maintainers/where.md	37292
 docs-md	docs/maintainers/where.md	373
+docs-md	docs/maintainers/where.md	37312
 docs-md	docs/maintainers/where.md	374
 docs-md	docs/maintainers/where.md	376
 docs-md	docs/maintainers/where.md	377
@@ -3823,7 +3823,7 @@ docs-md	docs/maintainers/where.md	422
 docs-md	docs/maintainers/where.md	423
 docs-md	docs/maintainers/where.md	4237
 docs-md	docs/maintainers/where.md	424
-docs-md	docs/maintainers/where.md	42754
+docs-md	docs/maintainers/where.md	42761
 docs-md	docs/maintainers/where.md	428
 docs-md	docs/maintainers/where.md	4286
 docs-md	docs/maintainers/where.md	429
@@ -3991,6 +3991,7 @@ docs-md	docs/maintainers/where.md	623
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	628
 docs-md	docs/maintainers/where.md	63
+docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	632
 docs-md	docs/maintainers/where.md	634
 docs-md	docs/maintainers/where.md	635
@@ -4045,7 +4046,7 @@ docs-md	docs/maintainers/where.md	702
 docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
-docs-md	docs/maintainers/where.md	705013
+docs-md	docs/maintainers/where.md	705076
 docs-md	docs/maintainers/where.md	7066
 docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	71
@@ -4154,11 +4155,11 @@ docs-md	docs/maintainers/where.md	90
 docs-md	docs/maintainers/where.md	900
 docs-md	docs/maintainers/where.md	91
 docs-md	docs/maintainers/where.md	910
+docs-md	docs/maintainers/where.md	913
 docs-md	docs/maintainers/where.md	914
 docs-md	docs/maintainers/where.md	917
 docs-md	docs/maintainers/where.md	9171
 docs-md	docs/maintainers/where.md	92
-docs-md	docs/maintainers/where.md	923
 docs-md	docs/maintainers/where.md	9242
 docs-md	docs/maintainers/where.md	925
 docs-md	docs/maintainers/where.md	927
@@ -8317,6 +8318,7 @@ test-docstrings	tests/backend_parity/test_torch_parity_gates.py	10
 test-docstrings	tests/backend_parity/test_torch_parity_gates.py	256
 test-docstrings	tests/backend_parity/test_torch_parity_gates.py	53
 test-docstrings	tests/backend_parity/test_torch_parity_gates.py	78
+test-docstrings	tests/backends/test_tf_capture.py	18845
 test-docstrings	tests/backends/test_tf_derived_grads.py	32
 test-docstrings	tests/backends/test_tf_interventions.py	10
 test-docstrings	tests/backends/test_tf_protocol_p2.py	11
@@ -9200,8 +9202,10 @@ test-docstrings	tests/test_io_runnable_payload_integrity.py	16
 test-docstrings	tests/test_io_runnable_payload_integrity.py	16.
 test-docstrings	tests/test_io_runnable_payload_integrity.py	256
 test-docstrings	tests/test_io_scrub_policy.py	10
+test-docstrings	tests/test_io_scrub_policy.py	18845
 test-docstrings	tests/test_io_scrub_policy.py	20
 test-docstrings	tests/test_io_scrub_policy.py	21
+test-docstrings	tests/test_io_scrub_policy.py	3.0.1
 test-docstrings	tests/test_io_scrub_policy.py	69
 test-docstrings	tests/test_io_secio_hardening.py	0600
 test-docstrings	tests/test_io_secio_hardening.py	0600.
@@ -9216,6 +9220,8 @@ test-docstrings	tests/test_io_streaming.py	10
 test-docstrings	tests/test_io_streaming.py	128
 test-docstrings	tests/test_io_streaming.py	19
 test-docstrings	tests/test_io_streaming.py	62
+test-docstrings	tests/test_jax_backend_capture.py	19008
+test-docstrings	tests/test_jax_backend_capture.py	3.0.1
 test-docstrings	tests/test_jax_backend_hardening.py	32
 test-docstrings	tests/test_jax_protocol_p2.py	11
 test-docstrings	tests/test_jax_protocol_p2.py	32
@@ -9546,7 +9552,11 @@ test-docstrings	tests/test_patching_helper_memory.py	34
 test-docstrings	tests/test_peak_memory_counter_lag.py	44
 test-docstrings	tests/test_peak_memory_counter_lag.py	63
 test-docstrings	tests/test_peak_memory_counter_lag.py	64
+test-docstrings	tests/test_perf5_rf_invariant_cost.py	18
+test-docstrings	tests/test_perf5_rf_invariant_cost.py	2.36
 test-docstrings	tests/test_perf5_rf_invariant_cost.py	40
+test-docstrings	tests/test_perf5_rf_invariant_cost.py	5433,
+test-docstrings	tests/test_perf5_rf_invariant_cost.py	8822
 test-docstrings	tests/test_perf7_eviction_walk.py	512
 test-docstrings	tests/test_perf7_eviction_walk.py	545
 test-docstrings	tests/test_perf8_fork_copy.py	512

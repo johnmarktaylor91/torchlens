@@ -809,3 +809,27 @@ def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     assert rebuilt["relu"] == {"relu_2_1"}
     # The preserved factory still behaves like a defaultdict on a miss.
     assert rebuilt["unseen"] == set()
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["_tf_static_region_labels", "_tf_static_fallback_error", "_mlx_perturbation_gaps"],
+)
+def test_backend_scratch_left_on_trace_does_not_refuse_save(
+    tmp_path: Path, field_name: str
+) -> None:
+    """Backend scratch a capture leaves on the Trace is dropped at save, not refused.
+
+    The TF static FuncGraph path stamps the first two after capture and MLX validation
+    stamps the third, and none of them is ever removed; at 3.0.1 every such trace refused
+    ``Trace.save`` (Menagerie m18845: ``_tf_static_region_labels is missing from
+    _PORTABLE_STATE_SPEC``).
+    """
+
+    log = trace_fn(_TinyIOModel(), torch.randn(2, 4))
+    setattr(log, field_name, ["backend-scratch"])
+    path = tmp_path / "scratch.tlspec"
+    log.save(str(path))
+    loaded = tl.load(str(path))
+
+    assert field_name not in loaded.__dict__
