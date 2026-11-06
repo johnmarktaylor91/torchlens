@@ -217,11 +217,7 @@ _MD_LINK = re.compile(r"\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)|^\[[^\]]+\]:\s*(\S+)",
 #: Links from public pages into internal pages that are still waiting for their
 #: source page to be regenerated: (source page, target page), both docs-relative.
 #: A row that no longer matches a link fails the test until it is removed.
-_PENDING_INTERNAL_LINKS = frozenset(
-    {
-        ("reference/glossary.md", "reference/merged_trace_contract.md"),
-    }
-)
+_PENDING_INTERNAL_LINKS: frozenset[tuple[str, str]] = frozenset()
 
 
 def _links_into_internal_pages(site_map: Any, docs: Path) -> set[tuple[str, str]]:
