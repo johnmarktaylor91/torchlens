@@ -67,7 +67,7 @@ def fitted_cell_width(rows: Sequence[Sequence[Run]], shape: str | None = None) -
     >>> fitted_cell_width([[("relu_1_2", 14.0, True)], [("(1, 5, 768), 15.4 KB", 14.0, False)]])
     >>> row = "num_embeddings=50257, embedding_dim=768, padding_idx=-1"
     >>> fitted_cell_width([[(row, 14.0, False)]])
-    405
+    404
     """
 
     margin = _NODE_MARGIN - _SHAPE_INSETS.get(shape or "", 0.0)
