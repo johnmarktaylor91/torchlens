@@ -82,6 +82,7 @@ from ...recording._types import CaptureSpec
 from .._entry_refusals import refuse_if_bad_jax_control_flow, refuse_if_bad_max_intermediate_grads
 from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._finalize import _attach_param_usage
+from .._finalize_totals import _stamp_param_totals
 from .._invariants import run_metadata_invariants
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
@@ -1724,10 +1725,7 @@ class JAXBackend:
             param.trace = trace
             param_logs[address] = param
         trace._param_logs = ParamAccessor(param_logs)
-        trace._num_param_tensors = len(param_logs)
-        trace.num_params = sum(param.num_params for param in param_logs.values())
-        trace.num_params_trainable = trace.num_params
-        trace.num_params_frozen = 0
+        _stamp_param_totals(trace, param_logs.values())
         trace._num_layers_with_params = 0
         trace._provenance_param_source = "pytree-derived" if param_logs else "none"
 
@@ -1756,12 +1754,7 @@ class JAXBackend:
         else:
             param_logs = nnx_param_logs(tree, trace)
         trace._param_logs = ParamAccessor(param_logs)
-        trace._num_param_tensors = len(param_logs)
-        trace.num_params = sum(param.num_params for param in param_logs.values())
-        trace.num_params_trainable = sum(
-            param.num_params for param in param_logs.values() if param.is_trainable
-        )
-        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+        _stamp_param_totals(trace, param_logs.values())
         trace._num_layers_with_params = 0
         trace._provenance_param_source = "pytree-derived" if param_logs else "none"
 
@@ -2352,12 +2345,7 @@ class JAXBackend:
             # ``trace_self_consistency`` invariant's
             # ``num_param_tensors != len(param_logs)`` check (same fix as
             # ``backends/_finalize.py``'s ``_update_param_totals_from_layers``).
-            trace._num_param_tensors = len(trace._param_logs)
-            trace.num_params = sum(param.num_params for param in trace._param_logs)
-            trace.num_params_trainable = sum(
-                param.num_params for param in trace._param_logs if param.is_trainable
-            )
-            trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+            _stamp_param_totals(trace, trace._param_logs)
 
         def _final_label(label: str) -> str:
             """Resolve one raw label to its final CONDITIONAL label.
@@ -2474,12 +2462,7 @@ class JAXBackend:
         # ``_jax_recurrence_assignments``'s sibling counter block above):
         # a per-layer-label dedup sum still double-counts a param shared
         # across more than one layer.
-        trace._num_param_tensors = len(trace._param_logs)
-        trace.num_params = sum(param.num_params for param in trace._param_logs)
-        trace.num_params_trainable = sum(
-            param.num_params for param in trace._param_logs if param.is_trainable
-        )
-        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+        _stamp_param_totals(trace, trace._param_logs)
 
     def _attach_pytree_module_logs(
         self,

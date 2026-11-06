@@ -26,7 +26,7 @@ from ._focus_scope import (
     module_at,
     relative_address,
 )
-from ._label_format import format_memory, format_shape
+from ._label_format import format_shape, sized_row
 from ._render_utils import make_module_cluster_label
 from .node_spec import render_lines_to_html
 from .render_ir import RenderIRRankGroup
@@ -131,7 +131,7 @@ def _relative_row(row: Any, prefix: str | None) -> Any:
 def shape_size_row(op: Any) -> str:
     """The ``(shape), size`` row of an op's output tensor, as its node label shows it."""
 
-    return f"{format_shape(op.shape)}, {format_memory(op.cost.activation_memory)}"
+    return sized_row(format_shape(op.shape), op.cost.activation_memory)
 
 
 def relabel_focus_regions(render_ir: RenderIR, trace: Trace, module: Any) -> RenderIR:

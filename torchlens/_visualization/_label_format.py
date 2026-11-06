@@ -252,7 +252,8 @@ def shape_rows(layer_log: Any, *, with_memory: bool = False) -> list[str]:
         The drawn Op or rolled Layer.
     with_memory:
         Append the activation memory to the shape row (``scalar, 4 B``), as
-        the default label does.
+        the default label does; an op with no recorded size keeps a bare
+        shape row.
 
     Returns
     -------
@@ -262,7 +263,7 @@ def shape_rows(layer_log: Any, *, with_memory: bool = False) -> list[str]:
 
     shape_row = format_output_shape(layer_log.shape)
     if with_memory:
-        shape_row = f"{shape_row}, {format_memory(layer_log.cost.activation_memory)}"
+        shape_row = sized_row(shape_row, layer_log.cost.activation_memory)
     value_row = scalar_value_line(layer_log)
     return [shape_row] if value_row is None else [shape_row, value_row]
 
@@ -368,6 +369,29 @@ def saved_for_backward_line(layer_log: Any, vis_mode: str) -> str | None:
     if memory is not None:
         return f"saved for backward: {count:,} {noun}, {format_memory(memory)}{suffix}"
     return f"saved for backward: {count:,} {noun}{suffix}"
+
+
+def sized_row(row: str, memory: Any) -> str:
+    """Append a size to a label row (``"(1, 2), 8 B"``), or leave the row bare when unknown.
+
+    Parameters
+    ----------
+    row:
+        The row text, usually a formatted shape.
+    memory:
+        Byte count or byte quantity; ``None`` (or any non-number) means the
+        backend recorded no size, and the row then carries no size at all
+        rather than ``None`` or a made-up ``0 B``.
+
+    Returns
+    -------
+    str
+        ``"<row>, <size>"`` when the size is known, else ``row`` unchanged.
+    """
+
+    if isinstance(memory, bool) or not isinstance(memory, int | float):
+        return row
+    return f"{row}, {format_memory(memory)}"
 
 
 def format_memory(bytes_or_quantity: Any) -> str:

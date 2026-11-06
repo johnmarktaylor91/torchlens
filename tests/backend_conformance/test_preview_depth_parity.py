@@ -108,7 +108,7 @@ def test_paddle_depth_parity() -> None:
     # the stored EFFECTIVE value is True; this model has no recurrence and all
     # layers stay single-pass.
     _assert_depths(trace, expect_recurrence=True, expected_max_depth=3)
-    assert _depth_by_prefix(trace, "functional.relu") == (2, 2)
+    assert _depth_by_prefix(trace, "relu") == (2, 2)
     _assert_alias_matches(
         lambda: tl.trace(
             M(),

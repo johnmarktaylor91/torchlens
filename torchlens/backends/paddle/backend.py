@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 import time
 from collections import defaultdict
@@ -60,6 +61,7 @@ from .._finalize import (
     stable_callable_name as _callable_identity,
     value_nbytes as _nbytes,
 )
+from .._finalize_totals import _stamp_param_totals
 from .._invariants import run_metadata_invariants
 from .._options import (
     PADDLE_EXTRA_KWARG_POLICY,
@@ -77,9 +79,11 @@ from .._protocols.paddle import (
     PADDLE_REFUSAL_SEED,
 )
 from ._capture_helpers import (
+    _alias_to_primary,
     _append_intervention_events,
     _intermediate_grad_record,
     _paddle_facet_snapshot,
+    paddle_layer_type,
 )
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .constants_rule import (
@@ -1116,7 +1120,7 @@ class PaddleBackend:
             events = CaptureEvents()
             trace.capture_events = events
         self._record_closure_constants(trace, events, args, kwargs)
-        reserved = events.reserve_label_block(op_name, len(outputs))
+        reserved = events.reserve_label_block(paddle_layer_type(op_name), len(outputs))
         func_call_id = events.func_call_id_counter + 1
         events.func_call_id_counter = func_call_id
         capture, alias_indices = self._build_op_capture(
@@ -1882,16 +1886,18 @@ class PaddleBackend:
         return str(place) if place is not None else None
 
     def _memory(self, value: object) -> int | None:
-        """Return Paddle tensor memory in bytes when available."""
+        """Return Paddle tensor memory in bytes when available.
 
-        if not self.is_tensor(value):
-            return None
-        numel = getattr(value, "numel", None)
+        The count comes from ``shape``: ``Tensor.numel()`` is a wrapped op whose ``int()``
+        is refused mid-capture, which left every recorded op without a size.
+        """
+
         element_size = getattr(value, "element_size", None)
-        if not callable(numel) or not callable(element_size):
+        if not self.is_tensor(value) or not callable(element_size):
             return None
         try:
-            return int(numel()) * int(element_size())
+            with _state.pause_logging():
+                return math.prod(int(dim) for dim in cast(Any, value).shape) * int(element_size())
         except (AttributeError, TypeError, ValueError):
             return None
 
@@ -1973,19 +1979,11 @@ def _attach_paddle_param_logs(trace: Trace, module_tree: PaddleModuleTree | None
 
     if module_tree is not None:
         trace._param_logs = ParamAccessor(paddle_param_logs(module_tree, trace))
-        trace._num_param_tensors = len(trace._param_logs)
-        trace.num_params = sum(param.num_params for param in trace._param_logs)
-        trace.num_params_trainable = sum(
-            param.num_params for param in trace._param_logs if param.is_trainable
-        )
-        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+        _stamp_param_totals(trace, trace._param_logs)
         trace._provenance_param_source = "native-module"
     else:
         trace._param_logs = ParamAccessor({})
-        trace._num_param_tensors = 0
-        trace.num_params = 0
-        trace.num_params_trainable = 0
-        trace.num_params_frozen = 0
+        _stamp_param_totals(trace, ())
         trace._provenance_param_source = "none"
 
 
@@ -2099,16 +2097,6 @@ def _device_ref_from_paddle_place(place: object) -> DeviceRef | None:
     if not text:
         return None
     return DeviceRef.from_value(text)
-
-
-def _alias_to_primary(tree: PaddleModuleTree) -> dict[str, str]:
-    """Return module alias to primary address mapping."""
-
-    aliases: dict[str, str] = {}
-    for primary, metadata in tree.metadata.items():
-        for alias in metadata.get("all_addresses", [primary]):
-            aliases[str(alias)] = primary
-    return aliases
 
 
 def _constant_capture_decision(label: str | None, op: Any) -> dict[str, Any]:

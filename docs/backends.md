@@ -362,9 +362,9 @@ ablated = tl.trace(
     model,
     x,
     backend="paddle",
-    intervene=tl.when(tl.func("functional.relu"), tl.zero_ablate()),
+    intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
 )
-partial = tl.trace(model, x, backend="paddle", stop_after=tl.func("functional.relu"))
+partial = tl.trace(model, x, backend="paddle", stop_after=tl.func("relu"))
 assert partial.is_stopped
 ```
 

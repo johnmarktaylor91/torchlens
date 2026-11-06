@@ -1449,7 +1449,7 @@ def _build_collapsed_module_node(
     lines = [
         node_title.replace("<b>", "").replace("</b>", ""),
         module_type,
-        f"{shape_str}, {format_memory(module_output_fsize)}",
+        sized_row(shape_str, module_output_fsize),
     ]
     if fold is not None and fold.shape_summary is not None:
         lines.append(f"shapes {fold.shape_summary}")

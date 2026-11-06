@@ -45,7 +45,7 @@ def test_paddle_relu_single_op_smoke() -> None:
     # -- the bare layer_label for this single-pass op, not the internal raw
     # capture identifier (never exposed) nor an unconditionally pass-qualified
     # label.
-    assert trace.output_layers == ["functional.relu_1_2"]
+    assert trace.output_layers == ["relu_1_2"]
     capture = trace._paddle_op_captures[0]
     assert capture.op_name == "functional.relu"
     assert capture.tensor_inputs[0].label == "input.arg_0"
@@ -102,7 +102,7 @@ def test_paddle_source_input_labels_and_function_root() -> None:
 
     assert trace.options.module_identity_mode == "function_root"
     assert {"input.arg_0", "input.arg_1"} <= set(trace.layer_labels)
-    add_label = next(label for label in trace.op_labels if "__add__" in label)
+    add_label = next(label for label in trace.op_labels if label.startswith("add_"))
     input0_label = next(label for label in trace.op_labels if label.startswith("input.arg_0"))
     input1_label = next(label for label in trace.op_labels if label.startswith("input.arg_1"))
     # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
@@ -218,7 +218,7 @@ def test_paddle_same_dtype_astype_preserves_parent_label() -> None:
     trace = tl.trace(model, (x, weight), backend="paddle")
 
     matmul_label = next(label for label in trace.op_labels if "matmul" in label)
-    add_label = next(label for label in trace.op_labels if "__add__" in label)
+    add_label = next(label for label in trace.op_labels if label.startswith("add_"))
     input1_label = next(label for label in trace.op_labels if label.startswith("input.arg_1"))
     # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
     # the bare ``layer_label`` for these single-pass referenced ops, derived
@@ -229,4 +229,44 @@ def test_paddle_same_dtype_astype_preserves_parent_label() -> None:
         trace[input1_label].layer_label,
     )
     assert not any("astype" in label for label in trace.layer_labels)
-    assert trace._paddle_alias_annotations[0]["preserved_label"] == "tensor.__add___1_3_raw"
+    assert trace._paddle_alias_annotations[0]["preserved_label"] == "add_1_3_raw"
+
+
+def test_paddle_layer_types_drop_the_wrap_namespace() -> None:
+    """Op types and labels spell the bare op name, as every other backend does.
+
+    The wrap inventory keys ops as ``functional.relu`` / ``tensor.__add__``; that
+    key stays the op's ``func_name``, but the type and label read ``relu_1_3``,
+    never ``functional.relu_1_3``. Operator dunders take torch's spelling.
+    """
+
+    paddle.seed(0)
+    model = paddle.nn.Sequential(
+        paddle.nn.Conv2D(1, 4, 3),
+        paddle.nn.ReLU(),
+        paddle.nn.Flatten(),
+        paddle.nn.Linear(64, 2),
+    )
+    trace = tl.trace(model, paddle.ones([1, 1, 6, 6]), backend="paddle")
+
+    assert [op.type for op in trace] == ["input", "conv2d", "relu", "flatten", "linear"]
+    assert not any("." in label for label in trace.layer_labels if not label.startswith("input"))
+    relu = next(op for op in trace if op.type == "relu")
+    assert relu.func_name == "functional.relu"
+    assert relu.layer_label == "relu_1_3"
+    partial = tl.trace(
+        model, paddle.ones([1, 1, 6, 6]), backend="paddle", stop_after=tl.func("relu")
+    )
+    assert partial.is_stopped
+
+    def arith(x: object, y: object) -> object:
+        return (2.0 + x) - y + (1.0 - x)
+
+    names = tl.trace(arith, (_input(), _input()), backend="paddle")
+    types = {str(op.func_name): op.type for op in names if op.type != "input"}
+    assert types == {
+        "tensor.__radd__": "add",
+        "tensor.__sub__": "sub",
+        "tensor.__add__": "add",
+        "tensor.__rsub__": "rsub",
+    }

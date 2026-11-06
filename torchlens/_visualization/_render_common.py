@@ -70,12 +70,12 @@ from ..errors._base import CompatibilityError
 from ._focus_stubs import BoundaryNode
 from ._label_format import (
     format_collapsed_module_contents,
-    format_memory,
     format_module_kwargs,
     format_module_path,
     format_param_list,
     format_shape,
     saved_for_backward_line,
+    sized_row,
 )
 from ._render_utils import (
     _open_file_quietly,
@@ -860,7 +860,6 @@ __all__ = [
     "direction_to_rankdir",
     "edge_annotation_pt",
     "field",
-    "format_memory",
     "format_collapsed_module_contents",
     "strict_collapse_checks_enabled",
     "format_module_kwargs",
@@ -868,6 +867,7 @@ __all__ = [
     "format_param_list",
     "format_shape",
     "saved_for_backward_line",
+    "sized_row",
     "graphviz",
     "graphviz_graph_overrides",
     "html",
