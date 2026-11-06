@@ -5761,6 +5761,16 @@
         "tests/test_ssot_drift_gates.py",
         "tests/test_tlspec_unpickler_first_party_rce.py"
       ],
+      "torchlens/_utils/_compiled_write_guard.py": [
+        "tests/test_capture_guard_transactionality.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_decoration.py",
+        "tests/test_legacy_tensor_constructors.py",
+        "tests/test_marker_lint.py",
+        "tests/test_release_model.py",
+        "tests/test_scoped_patching_escape_detection.py",
+        "tests/test_wrap_state_compat.py"
+      ],
       "torchlens/_utils/_cuda_probe.py": [
         "tests/test_capture_failure_reporting.py",
         "tests/test_executor_cuda_cache_arming.py",
