@@ -187,6 +187,26 @@ def test_foreign_function_is_one_boundary_op_and_validates(function) -> None:
     _assert_validates_clean(model, x)
 
 
+def test_foreign_write_reaches_the_boundary_payload_with_eager_clones(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With eager payload clones the boundary op saves the bytes the foreign kernel wrote.
+
+    The interior ``zeros_like`` saved a copy of the same tensor object before the numpy write,
+    which leaves the version counter alone; the boundary op must not reuse that copy.
+    """
+
+    from torchlens.backends.torch import wrappers
+
+    monkeypatch.setattr(wrappers, "_COW_ENABLED", False)
+    model = _ForeignFunctionModel(_WriteThroughDoubleFunction)
+    x = torch.randn(3, 4)
+    with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
+        trace = tl.trace(model, x)
+    expected = _WriteThroughDoubleFunction.apply(model.fc(x))
+    torch.testing.assert_close(_boundary_ops(trace)[0].out, expected)
+
+
 def test_foreign_function_owns_its_interior_dispatches() -> None:
     """With the census armed, every dispatch inside the Function belongs to the boundary."""
 

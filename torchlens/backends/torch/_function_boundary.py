@@ -533,6 +533,18 @@ def _restore_arg_labels(snapshot: list[tuple[Any, str | None]], interior_labels:
             set_tensor_label(tensor, label)
 
 
+def _forget_interior_payloads(trace: Any, interior_labels: set[str]) -> None:
+    """Keep the boundary op from reusing a payload an interior op saved (identity dedup).
+
+    A foreign kernel writes the output it was handed (``zeros_like`` then a numpy write) without
+    bumping its version counter, so the dedup would return the interior op's pre-write copy.
+    """
+
+    cache = getattr(trace, "_out_identity_cache", None)
+    for key in [k for k, entry in (cache or {}).items() if entry[1] in interior_labels]:
+        del cache[key]
+
+
 def _log_boundary_op(trace: Any, call: _BoundaryCall) -> None:
     """Log the returned tensors as the call's one boundary op."""
 
@@ -668,6 +680,7 @@ def close_boundary_call(
         if isinstance(label, str)
     }
     _restore_arg_labels(marks.arg_labels, interior_labels)
+    _forget_interior_payloads(trace, interior_labels)
     _log_boundary_op(trace, call)
     trace.__dict__.setdefault("_foreign_kernel_interior_labels", set()).update(interior_labels)
     if marks.witness_state is not None:
