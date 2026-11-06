@@ -94,25 +94,6 @@ def _resolve_svg_image_path(href: str, image_root: Path | None = None) -> Path:
     return Path.cwd() / candidate
 
 
-def _format_backward_filter_caption(pass_filter: BackwardPassFilter) -> str:
-    """Return a compact caption suffix for a backward-pass filter.
-
-    Parameters
-    ----------
-    pass_filter:
-        Normalized backward-pass filter.
-
-    Returns
-    -------
-    str
-        Human-readable caption suffix.
-    """
-
-    if pass_filter is None:
-        return ""
-    return f" shown: {int_list_to_compact_str(sorted(pass_filter))}"
-
-
 def _build_skip_filtered_edge_map(
     trace: "Trace",
     entries_to_plot: Mapping[str, GraphNode],
@@ -1999,7 +1980,6 @@ __all__ = [
     "_expand_edges_through_skipped",
     "_filter_sibling_chains_to_rendered_nodes",
     "_flow_span",
-    "_format_backward_filter_caption",
     "_get_max_call_depth",
     "_get_or_create_boundary_node",
     "_has_rendered_fanout",

@@ -95,9 +95,10 @@ def test_header_edit_line_forms() -> None:
 
     trace = SimpleNamespace(_intervention_spec=None)
     one = header_edit_line(trace, [_fired_site("linear_1_1", tl.zero_ablate())], PURPLE)
-    assert one == (
-        f'1 edit:&#160;<FONT COLOR="{PURPLE}"><B>Δ zero_ablate</B></FONT>&#160;on linear_1_1'
-    )
+    assert one == f'1 edit:&#160;<FONT COLOR="{PURPLE}">Δ zero_ablate</FONT>&#160;on linear_1_1'
+    # One weight on the line: a bold token let Graphviz place "on" inside the drawn
+    # bold name ("zero_ablateon"), so the token is coloured only.
+    assert "<B>" not in one
     many = [_fired_site(f"linear_{i}_1", tl.zero_ablate()) for i in range(12)]
     assert header_edit_line(trace, many, PURPLE).endswith("&#160;on 12 layers")
     two = header_edit_line(

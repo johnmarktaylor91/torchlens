@@ -466,7 +466,10 @@ def header_edit_line(
     ``1 edit: Δ zero_ablate on linear_1_1``; several edits are comma separated
     up to three, then the line reads ``N edits (marked)``; one edit on several
     sites reads ``Δ zero_ablate on 12 layers``. Non-breaking spaces sit around
-    the coloured token so SVG renderers keep the spacing.
+    the coloured token so SVG renderers keep the spacing. The token is coloured,
+    not bold: Graphviz places the run after a bold run by its own measurement of
+    the bold text, which falls short of the bold face a viewer draws, so the bold
+    name ran into ``on`` (``zero_ablateon``); one weight keeps the space.
     """
 
     if not sites:
@@ -487,7 +490,7 @@ def header_edit_line(
         return html_escape(f"{total} {noun} (marked)")
     items = []
     for short, labels in grouped.items():
-        token = f'<FONT COLOR="{color}"><B>{DELTA} {html_escape(short)}</B></FONT>'
+        token = f'<FONT COLOR="{color}">{DELTA} {html_escape(short)}</FONT>'
         where = html_escape(labels[0]) if len(labels) == 1 else f"{len(labels)} layers"
         items.append(f"{token}&#160;on {where}")
     # Non-breaking: SVG drops a plain space at the edge of a text run.

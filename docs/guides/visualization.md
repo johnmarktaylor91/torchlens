@@ -405,7 +405,9 @@ differentiates, and the `module fc2` and `param fc2.bias` rows come from
 `grad` row gives the shape of the gradient a step passed back when that gradient was saved
 (gradients are saved per forward operation, so `[i]` steps have no `grad` row). A
 dotted **accum** arrow is a gradient being accumulated into a parameter. `show_grad_values=True`
-adds the norm and largest absolute value of each captured gradient.
+adds the norm and largest absolute value of each captured gradient. `show_legend=True` adds a
+key for these marks. A drawing of two or more backward passes puts each pass in its own dashed
+box, and each node names its pass (`bwd 2`).
 
 ## Themes
 

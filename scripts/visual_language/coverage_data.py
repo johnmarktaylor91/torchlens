@@ -584,7 +584,7 @@ LEGEND_ROW_WITNESS: Mapping[str, str] = {
     "[i] = intervening grad_fn (no forward op)": "backward-legend",
     "[custom] = custom autograd function": "backward-legend",
     "accum = gradient accumulation into a leaf": "backward-legend",
-    "bwd N = backward pass N; order N = derivative order": "backward-legend",
+    "bwd N = backward pass N": "backward-legend",
     "order N = derivative order": "backward-legend",
     "size:": "size-by",
     "aligned: same": "stack-by",

@@ -571,9 +571,9 @@ torchlens/_visualization/_render_dot.py::draw	171
 torchlens/_visualization/_render_edges.py	1872
 torchlens/_visualization/_render_edges.py::_add_edges_for_node	531
 torchlens/_visualization/_render_edges.py::_add_intervention_hook_nodes	65
-torchlens/_visualization/_render_entrypoints.py::render_backward_graph	265
+torchlens/_visualization/_render_entrypoints.py::render_backward_graph	264
 torchlens/_visualization/_render_entrypoints.py::render_combined_graph	239
-torchlens/_visualization/_render_flow.py	2018
+torchlens/_visualization/_render_flow.py	1998
 torchlens/_visualization/_render_flow.py::_base_rendered_node_emission	86
 torchlens/_visualization/_render_flow.py::_build_module_focus_entries	105
 torchlens/_visualization/_render_flow.py::_build_skip_filtered_edge_map	75
@@ -587,7 +587,7 @@ torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86
 torchlens/_visualization/_render_module_scope.py::_get_lowest_module_for_two_nodes	77
-torchlens/_visualization/_render_nodes.py	2026
+torchlens/_visualization/_render_nodes.py	2024
 torchlens/_visualization/_render_nodes.py::_add_node_to_graphviz	157
 torchlens/_visualization/_render_nodes.py::_build_collapsed_module_node	217
 torchlens/_visualization/_render_nodes.py::_build_layer_node	149
@@ -638,7 +638,7 @@ torchlens/_visualization/lenses/audit/battery.py::build_packet	96
 torchlens/_visualization/node_spec.py::make_intervention_node_spec_fn	134
 torchlens/_visualization/node_universe.py::_project_endpoint_units	70
 torchlens/_visualization/node_universe.py::build_node_universe	125
-torchlens/_visualization/render_ir.py	1280
+torchlens/_visualization/render_ir.py	1274
 torchlens/_visualization/render_ir.py::_node_from_unit	63
 torchlens/_visualization/render_ir.py::_resolve_node_decision	107
 torchlens/_visualization/render_ir.py::build_render_ir	95

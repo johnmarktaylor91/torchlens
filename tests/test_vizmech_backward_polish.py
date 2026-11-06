@@ -6,8 +6,8 @@ Pins:
   single-pass captures -- ink, not information;
 - a mixed render KEEPS its rows (order rows return the moment a second-order
   node exists);
-- the in-frame backward key renders by default (AUTO), explains only the
-  styles actually painted, and honors ``show_legend=False``;
+- the in-frame backward key is opt-in (``show_legend=True``) as on forward
+  drawings, and explains only the styles actually painted;
 - accumulation edges carry per-target identity in SVG metadata (the
   twelve-identical-``accum``-labels groundwork);
 - single-call grad_fn titles drop the stray ``:1`` display suffix.
@@ -60,7 +60,10 @@ def test_double_backprop_keeps_order_rows_and_key_row(tmp_path: Path) -> None:
     """A second-order node un-suppresses order rows and earns its key row."""
 
     trace = _double_backprop_trace()
-    dot = trace.draw(graph="backward", path=str(tmp_path / "bwd2"), file_format="svg").dot
+    dot = trace.draw(
+        graph="backward", path=str(tmp_path / "bwd2"), file_format="svg", show_legend=True
+    ).dot
     assert "order 2" in dot
     assert "order 1" in dot  # mixed orders: the row is information again
     assert "grad-of-grad" in dot  # the cream=order-2 key row
+    assert "order N = derivative order" in dot  # the order rows are drawn, so explained

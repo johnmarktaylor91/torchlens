@@ -174,7 +174,7 @@ def test_draw_combined_bwd_filter_keeps_selected_grad_fns(tmp_path: Path) -> Non
         bwd=2,
     ).dot
 
-    assert "shown: 2" in dot
+    assert "shown: 2" not in dot  # the header is the title alone
     assert "bwd 2" in dot
     assert "addmm_back" in dot
 

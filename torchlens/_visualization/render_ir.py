@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from .._utils._display_bounded import short_dataclass_repr
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
+from ._backward_inventory import ungroup_single_pass
 from ._encoding_size_layout import layout_encoded_sizes
 from ._render_utils import compute_module_penwidth, make_module_cluster_attrs
 from .request import RenderContext
@@ -454,6 +455,7 @@ def build_backward_render_ir(
 
     nodes, visible_by_pass = _normalize_backward_nodes(trace, vis_mode, pass_filter)
     edges = _normalize_backward_edges(trace, vis_mode, pass_filter, visible_by_pass)
+    nodes, edges, visible_by_pass = ungroup_single_pass(nodes, edges, visible_by_pass)
     regions = _normalize_backward_regions(nodes, visible_by_pass)
     _warn_if_render_exceeds_disclosure_ceiling(len(nodes), len(edges))
     return RenderIR(
@@ -597,15 +599,7 @@ def _normalize_backward_edges(
                 head = trace._grad_fn_logs[next_id]
                 tail_name = _backward_dot_node_name(grad_fn)
                 head_name = _backward_dot_node_name(head)
-                edges.append(
-                    _normalized_grad_edge(
-                        tail_name,
-                        head_name,
-                        grad_fn,
-                        head,
-                        len(edges),
-                    )
-                )
+                edges.append(_normalized_grad_edge(tail_name, head_name, grad_fn, head, len(edges)))
         return tuple(edges)
     for pass_index, calls in visible_by_pass.items():
         calls_by_id: defaultdict[int, list[tuple[Any, Any]]] = defaultdict(list)
