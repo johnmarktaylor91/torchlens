@@ -103,7 +103,7 @@ trace["tanh_6"].grad.shape                               # torch.Size([1, 5, 307
 trace["tanh_6"].grad_fn.calls[0].grad_inputs[0].shape    # torch.Size([1, 5, 3072]): the gradient passed back to tanh_6's input
 ```
 
-**Inspect** every part of a network in exhaustive detail. Every operation, module, parameter, buffer, and `grad_fn` node gets its own data structure, as does the trace itself, with [800+ metadata attributes](docs/reference/glossary.md) in all, covering everything from each operation's output shape and FLOPs to the line of code that ran it, whether it was inside an `if` branch, and the random number state when it ran. You can summarize this metadata in a readable table, or export it to pandas (one row per operation, module, parameter, etc.).
+**Inspect** every part of a network in exhaustive detail. Every operation, module, parameter, buffer, and `grad_fn` node gets its own data structure, as does the trace itself, with 800+ metadata attributes in all, covering everything from each operation's output shape and FLOPs to the line of code that ran it, whether it was inside an `if` branch, and the random number state when it ran. You can summarize this metadata in a readable table, or export it to pandas (one row per operation, module, parameter, etc.).
 
 ```python
 print(trace["tanh_6"])  # everything TorchLens knows about one operation
