@@ -543,7 +543,7 @@ def _header_site_names(trace: Trace, sites: Sequence[Op], vis_mode: str) -> dict
 def _module_target_addresses(trace: Trace) -> dict[str, str]:
     """Return the address of the ``tl.module`` target behind each site it resolves to."""
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     if spec is None:
         return {}
     fanout = max(1, len(trace._layer_list or ()))
