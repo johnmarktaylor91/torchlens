@@ -37,6 +37,7 @@ from typing import Any
 
 import torch
 
+from ..errors._base import transparent_contextmanager
 from ._torch_compat import (
     get_current_dispatch_mode_stack,
     get_tracing_tensor_types,
@@ -52,7 +53,7 @@ _StepsAside = Callable[[Any, Any], tuple[Any, ...]]
 """``(fn, args)`` of one entry compile to the dispatch modes it steps aside, bottom first."""
 
 
-@contextlib.contextmanager
+@transparent_contextmanager
 def hop_compile_stance_lift_scope(
     around: Callable[[bool], contextlib.AbstractContextManager[Any]],
     *,
@@ -165,7 +166,7 @@ def _lifted_entry(
     return _lifted
 
 
-@contextlib.contextmanager
+@transparent_contextmanager
 def _modes_rejoin_compiled_run(
     modes: tuple[Any, ...], aside: list[tuple[Any, ...]]
 ) -> Iterator[None]:
@@ -193,7 +194,7 @@ def _modes_rejoin_compiled_run(
         yield
         return
 
-    @contextlib.contextmanager
+    @transparent_contextmanager
     def _rejoining_environment() -> Iterator[Any]:
         """Enter torch's compile environment and yield its backend, wrapped to rejoin.
 
@@ -366,7 +367,7 @@ def _branch_callback_env(
         The replacement context factory.
     """
 
-    @contextlib.contextmanager
+    @transparent_contextmanager
     def _env(*args: Any, **kwargs: Any) -> Iterator[Any]:
         """Yield torch's backend, wrapped when the innermost lifted entry is a ``cond``.
 
