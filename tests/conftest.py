@@ -58,7 +58,13 @@ def _bind_tests_package() -> None:
         del sys.modules[name]
     spec = importlib.machinery.ModuleSpec("tests", None, is_package=True)
     spec.submodule_search_locations = [tests_dir]
-    sys.modules["tests"] = importlib.util.module_from_spec(spec)
+    package = importlib.util.module_from_spec(spec)
+    # A namespace package's ``__file__`` is None. ``inspect.getmodule`` (torch calls it
+    # while registering ops) skips a module whose ``__file__`` matches the path it cached
+    # for that name, but a foreign ``tests`` dropped above leaves its path cached, and
+    # then None fails ``inspect.getfile``. Without the attribute the module is skipped.
+    package.__dict__.pop("__file__", None)
+    sys.modules["tests"] = package
 
 
 _bind_tests_package()
