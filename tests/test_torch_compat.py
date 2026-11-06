@@ -1206,6 +1206,10 @@ def test_module_existence_probe_imports_no_missing_ancestor(
     assert not tc.torch_module_exists_without_importing("fd_probe_pkg.missing.leaf")
     assert not {name for name in sys.modules if name.startswith("fd_probe_pkg")}
     assert set(sys.modules) - before == set()
+    assert tc.torch_module_exists_without_importing("fd_probe_pkg.sub.leaf", unloaded=True)
+    monkeypatch.setitem(sys.modules, "fd_probe_blocked", None)  # an import block is in sys.modules
+    assert tc.torch_module_exists_without_importing("fd_probe_blocked")
+    assert not tc.torch_module_exists_without_importing("fd_probe_blocked", unloaded=True)
 
 
 def test_module_existence_probe_matches_imported_torch_modules() -> None:
@@ -1213,6 +1217,7 @@ def test_module_existence_probe_matches_imported_torch_modules() -> None:
 
     assert tc.torch_module_exists_without_importing("torch")
     assert tc.torch_module_exists_without_importing("torch.nn.functional")
+    assert not tc.torch_module_exists_without_importing("torch.nn.functional", unloaded=True)
     assert not tc.torch_module_exists_without_importing("torch.nn.functional.no_such_child")
     assert not tc.torch_module_exists_without_importing("torch.no_such_module_fd")
 
