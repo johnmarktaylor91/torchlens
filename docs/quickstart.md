@@ -97,11 +97,11 @@ Two guardrails follow from the record:
 ## The one-call picture: `tl.draw`
 
 ```python
-from torchlens._quickstart import draw   # tl.draw rides the root-surface regeneration
+import torchlens as tl
 
-result = draw(model, x)                            # your real input
-result = draw(model, input_shape=(1, 3, 224, 224))  # declared shape
-result = draw(model)                               # inferred
+result = tl.draw(model, x)                            # your real input
+result = tl.draw(model, input_shape=(1, 3, 224, 224))  # declared shape
+result = tl.draw(model)                               # inferred
 ```
 
 `tl.draw` runs ONE metadata-only capture pinned to eval + no-grad -- training
@@ -154,7 +154,7 @@ materialized parameters, and the trace discloses the creation as a
 
 ## Execution policy per surface
 
-`tl.summary` and `render` pin eval + no-grad and restore everything they
+`tl.summary` and `tl.draw` pin eval + no-grad and restore everything they
 touch (verified, disclosed). `tl.trace` is the power surface: it keeps YOUR
 modes -- a train-mode capture really does update BatchNorm running
 statistics, and TorchLens warns once per process

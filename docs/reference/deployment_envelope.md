@@ -47,7 +47,7 @@ return to meta, so:
 - Default capture forces `requires_grad` for grad_fn metadata, and the
   resulting autograd graph holds every materialized shard alive until the
   trace is cleaned up. For large offloaded models prefer
-  `tl.trace(..., inference_only=True)` (no autograd retention) or a
+  `tl.trace(..., capture=tl.options.CaptureOptions(inference_only=True))` (no autograd retention) or a
   selective `save=` predicate.
 
 ## Disclosed degradations (quantized capture)

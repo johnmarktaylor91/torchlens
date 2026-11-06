@@ -516,7 +516,7 @@ Each step is a recorded intervention. `curve.steps[k].build_interventions` holds
 therefore comes with the exact edit that produced it, and it replays through the intervention
 engine on a replay-ready trace of the original input with `trace.fork().do(selection, edit)`.
 The scores themselves come from direct forward passes, which the replay matches; the first
-access to `intervention` traces the model once to name its input layers.
+access to `build_interventions` traces the model once to name its input layers.
 
 ```python
 import torch
@@ -609,7 +609,7 @@ mean of its 8 neighbours (1/6 for the direct neighbours, 1/12 for the diagonals,
 the border), solved jointly for all removed pixels of a channel, plus Gaussian noise of
 `noise_std` (0.01, the authors' reference value). `ranking="most_relevant_first"` (MoRF) removes
 the most attributed features first, `"least_relevant_first"` (LeRF) the least attributed. The
-result is a `PerturbationCurve` with `metric="road"`; each step's `intervention` holds
+result is a `PerturbationCurve` with `kind="road"`; each step's `build_interventions` holds
 `tl.units(<input layer>, <mask>)` with `tl.replace_with(<that step's imputed values>)`, so every
 point replays like any curve step. The noise of a step comes from a local generator seeded by
 `seed` and the step, so a step recomputes to the same values and the global random state is
@@ -671,7 +671,7 @@ unit: every ablation of a layer claim, and zero ablation of a table. Each row's 
 ablating that unit alone on its own `trace.fork().do(...)`, exactly. Sets, and a table's `"mean"`
 or baseline rows (each site's edit is that site's own value), run one `trace.fork().do(...)`
 each. Each row (`CausalAuditUnit`) and set (`CausalAuditSet`) carries its edit in
-`intervention` as `(tl.units(<site>, <mask>), edit)` pairs, the same form as a curve step, so
+`build_interventions` as `(tl.units(<site>, <mask>), edit)` pairs, the same form as a curve step, so
 any point replays exactly.
 
 ```python
@@ -908,7 +908,7 @@ receiver one head's slice of the projection output).
   so past 1024 rows the audit warns once (`attribution_audit_units_many`) and names `edges=` with
   the largest rows, or `per_unit=False`. `edit=` does not apply: an edge is patched, not
   ablated (`settings["edit"]` is `"edge_patch"`).
-- Each row's and set's `intervention` holds the `(selection, value)` pairs `patch_edges` wrote,
+- Each row's and set's `build_interventions` holds the `(selection, value)` pairs `patch_edges` wrote,
   one per receiver in the order it wrote them, read from the fork that measured the row or set (the
   EDGE selection of the receiver's input edge with the value substituted there, or the ACT
   selection of one head's projection slice). An EDGE selection addresses its edge by the call ids of one
@@ -1053,7 +1053,7 @@ the primary edge-seeded targets (no payload retention needed), and
 
 ## Attribution graphs (`build_graph`, `AttributionGraph`)
 
-`tl.attribution.build_graph(trace, transcoders, *, embedding, target=None, max_num_logits=10,
+`tl.attribution.build_graph(trace, transcoders, *, embedding_module, target=None, max_num_logits=10,
 logit_probability_coverage=0.95, demeaned_logits=True, logits_at=None, frozen)` builds the attribution
 graph of one prompt's capture: the direct linear effects between transcoder features, error
 nodes, token embeddings and target logits, with transcoder features in place of MLP outputs and
@@ -1158,7 +1158,7 @@ print(painted)
 
 ### Exporting to Neuronpedia (`AttributionGraph.to_neuronpedia`)
 
-`graph.to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_influence_coverage=0.8,
+`graph.to_neuronpedia(*, slug, model_id, tokenizer, prompt=None, node_influence_coverage=0.8,
 edge_influence_coverage=0.98, path=None)` returns the graph, pruned, as a JSON-ready dict in
 Neuronpedia's published attribution-graph schema, and writes it to `path` when one is given.
 Experimental. The schema is `apps/webapp/app/api/graph/graph-schema.json` in
@@ -1222,7 +1222,7 @@ standard library only.
   and the server's answer; an answer without its documented fields raises
   `neuronpedia_upload_response_invalid`.
 
-`direction.upload_to_neuronpedia(*, api_key, scan, vector_label, layer=None,
+`direction.upload_to_neuronpedia(*, api_key, model_id, name, layer=None,
 hook_type="resid_post", default_steering_strength=1.0)` publishes a `tl.intervention.Direction` the same
 way through Neuronpedia's "Create Vector" endpoint (`POST /api/vector/new`). `layer` defaults to
 the trailing index of the direction's site label, as `to_repeng` reads it; `hook_type` is
@@ -1331,7 +1331,7 @@ signed per-token scores sum-reduce the embedding width so completeness accountin
 zero all prompt-token embeddings; encoders with a reliable pad token and special-token mask
 pad content tokens while scaffolding specials at their true embeddings
 (`keep_special_tokens=True`); anything unreliable falls back to zeros-all with a NAMED
-disclosure (a missing pad token is never guessed). `n_steps=128` fixed default;
+disclosure (a missing pad token is never guessed). `num_steps=128` fixed default;
 `num_steps="auto"` runs the 64-128-256-512 ladder stopping ONLY on the dual criterion
 (residual AND max successive-grid stability, both <= 1%; rank stability is banned as
 a signal). `converged=False` is a first-class outcome with a footer line the user cannot
@@ -1360,7 +1360,7 @@ not a memory feature; strictly opt-in, default sequential) guarded by the random
 disclosed audit ladder `step_audit=` (`"per_call"` default under batching / `"per_chunk"` /
 explicit `"off"`). The audit is a sampled test, never a proof -- the only proof is sequential
 execution; a fixed-index audit is defeatable by construction, so the audited (chunk, row) is
-randomized (`step_audit_seed=` pins it). Every result disclosed the logical path-evaluation
+randomized (`step_audit_seed=` pins it). Every result discloses the logical path-evaluation
 count, the physical forward-call count, and the audit record. Captum-comparison note: our
 path methods are midpoint Riemann; the reference default Gauss-Legendre differs (measured
 22.5% at n=16), so cross-tool comparisons must request `method="riemann_middle"` there.

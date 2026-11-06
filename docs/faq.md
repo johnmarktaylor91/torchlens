@@ -142,7 +142,7 @@ maps each old name to its replacement (for example, the 1.x capture function and
 returned are now `tl.trace` and `Trace`), and
 [TorchLens 2.0 API changes](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/migration/v2.0_api_changes.md)
 lists where each former top-level name lives now. Files saved by torchlens 2.37 and earlier do
-not load in 2.38; [MIGRATIONS.md](https://github.com/johnmarktaylor91/torchlens/blob/main/MIGRATIONS.md)
+not load in 2.38 or later; [MIGRATIONS.md](https://github.com/johnmarktaylor91/torchlens/blob/main/MIGRATIONS.md)
 gives the remedy for each kind of file.
 
 ## Will the API change again?

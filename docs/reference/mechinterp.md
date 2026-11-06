@@ -79,7 +79,7 @@ refusal (`worst_element`).
 - `retention_plan`: printable, priced, `save=`-composable plans; every kit
   function refuses with the COMPLETE missing-site set when payloads are
   absent -- never a partial table, never a silent widening.
-- `grid` + presets: receipted patching cells over the live-hook rerun route
+- `patch_grid` + presets: receipted patching cells over the live-hook rerun route
   (a hook that did not fire is an exception, never a number), pre-run cost
   disclosure, hard `budget=`, `engine="replay"` reserved typed.
 - `patch_query_heads_grid`: under grouped-query attention a `k`/`v`-site
@@ -87,7 +87,7 @@ refusal (`worst_element`).
   grid patches one query head's own copy instead, at the op that expands the
   group to the query heads (Hugging Face `repeat_kv`, or the registered
   `"torchlens"` attention backend), selected by function, module and capture
-  order and receipted like `grid` (one fire per cell, or a refusal). Head
+  order and receipted like `patch_grid` (one fire per cell, or a refusal). Head
   coordinates are query heads; `receipts["effect_site"]` names the
   interceptor. Torch SDPA with `enable_gqa=True` expands inside the kernel
   and refuses `mi_kv_expansion_unavailable` (load with

@@ -1195,7 +1195,7 @@ Before changing anything it raises one of these codes:
   pass through, while the op-keyed `node_overrides`/`edge_overrides` and `rolled=True` refuse with
   `depth`. `depth` with `graph="forward"`, `"backward"` or `"combined"` refuses (the union graph
   has no module folding). Without `depth` the diff is the two-column picture above
-  (`runs.draw(graph="diff", depth=2)` on GPT-2 draws its 12 blocks; JMT, 6 Nov 2026).
+  (`runs.draw(graph="diff", depth=2)` on GPT-2 draws its 12 blocks).
 - Unsupported keywords: any other keyword (a `Trace.draw` keyword the bundle renderer does not
   support yet, such as `collapse=`) raises `ArgumentTypeError`
   (`bundle_draw_keyword_unsupported`) naming the supported list; each is added when the renderer
@@ -1217,7 +1217,7 @@ structural alignment.
 
 - Arguments: `metric` is a metric name or callable (scalar-like sites always use `relative_l1`);
   `on` reads `"out"` or `"grad"`.
-- Axis: the receiver sets it. `bundle.at(site) .compare()` is the member-by-member matrix at one
+- Axis: the receiver sets it. `bundle.at(site).compare()` is the member-by-member matrix at one
   site.
 - Gate: the pair goes through the comparison gate first and raises a typed error when the members cannot
   be aligned; its grade is `bundle.comparability(a, b)`, a `tl.types.Relationship`.
@@ -1363,8 +1363,7 @@ same parameters executed repeatedly.
   `trace.subgraph` and the `& | - ~` set operations (experimental).
 
 **Encoding channel**: A declarative value source (record field name, scalar builtin, or callable `node -> value`)
-mapped to a visual channel on `draw()` (experimental). v1 ships the color channel; size and rank channels
-follow.
+mapped to a visual channel on `draw()` (experimental). The channels are color (`color_by`), size (`size_by`) and rank (`stack_by`).
 
 - Channels are presentation-only: they never change the Trace or the collapse plan.
 - They require the Graphviz dot layout: `layout="auto"` forces dot when a channel is active,
@@ -2056,7 +2055,7 @@ that is not on the site.
   (`tl.io.JaxPayloadLoadHint` is the JAX-specific form).
 
 **Options**: `tl.options` groups the public option dataclasses. The entry points take only the model and the
-inputs by position; every other setting rides an options object or a entry point keyword.
+inputs by position; every other setting rides an options object or an entry point keyword.
 
 - Dataclasses: `CaptureOptions`, `VisualizationOptions`, `ReplayOptions`,
   `InterventionOptions`, `StorageOptions`, `RecordingOptions`.

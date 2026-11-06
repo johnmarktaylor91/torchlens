@@ -79,7 +79,7 @@ flattering table.
 
 | Name | What it does | Contract highlights |
 |---|---|---|
-| `srp(n_components, seed=0, density="auto", construction=..., mode=..., share=...)` | Sparse random projection | `n_components` REQUIRED; seed + seed_source recorded; two named constructions; binds one extent per (chain, site) and REFUSES drift |
+| `srp(num_components, seed=None, density="auto", construction=..., mode=..., share=...)` | Sparse random projection | `num_components` REQUIRED; seed + seed_source recorded; two named constructions; binds one extent per (chain, site) and REFUSES drift |
 | `pool_tokens(op, assume_no_padding=False)` | Token mean/max/first/last | Three-valued mask policy; `first`/`last` gather VALID indices, never physical endpoints |
 | `cls_token(assume_no_padding=False)` | The CLS gather | DISTINCT semantic name gated on recorded `SpecialTokenFacts` — gpt2 REFUSES a fictional CLS |
 | `pool_spatial(op="mean")`, `channel_mean()` | Spatial/channel reductions | Resolve DECLARED roles or refuse teaching both remedies; rank is never evidence |
@@ -87,7 +87,7 @@ flattering table.
 | `project(basis, center=None)` | Frozen linear projection | Digest-addressed: records carry the digest, never values; unstaged digests refuse with restaging remedies |
 | `pca_apply(fitted)` | Apply a fitted PCA | Consumes `tl.stats.PCA(...).fitted(...)` / `tl.stats.load_fitted(path)`; centered; fit scope recorded. Fit-during-write is REFUSED (early and late shards would get different coordinates) |
 | `srp_dims_for(n, eps)` | Sizing helper | The DENSE-JL L2 heuristic, honestly labeled: a poor guide for corr-RDMs, and it says so |
-| `srp_fidelity_probe(pilot, n_components)` | Fidelity probe | Measures L2-RDM and corr-RDM fidelity per candidate k on YOUR pilot batch; report carries scope |
+| `srp_fidelity_probe(features, candidate_num_components)` | Fidelity probe | Measures L2-RDM and corr-RDM fidelity per candidate k on YOUR pilot batch; report carries scope |
 
 Chains compose left to right (`T.chain(a, b)` or `[a, b]` — one object, one
 record); per-site `Mapping` dispatch (with `T.DEFAULT`) resolves before
