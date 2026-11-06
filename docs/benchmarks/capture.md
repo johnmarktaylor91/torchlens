@@ -7,7 +7,6 @@ is slow. Every number is a median wall time from the harness in `benchmarks/capt
 one comes from a result file in [`data/`](data/capture_2026-11-03.json) (one file per run; see
 [Hosts, versions and method](#hosts-versions-and-method)).
 
-<!-- JMT review: plain factual prose, written for review. -->
 
 The machines were shared and loaded, so absolute times are slower than on an idle machine.
 Compare rows within a workload, not across workloads or hosts.
@@ -238,7 +237,7 @@ installing the torch wrappers).
 
 ### `trace.run` on new inputs with the fast engine (development build)
 
-A development build of TorchLens (2.38.1, not yet released) sends `trace.run(model, new_x)` on an
+A development build of TorchLens leading to 3.0 sends `trace.run(model, new_x)` on an
 unedited trace that saved a selection through the guarded fast engine instead of a full recapture.
 Both builds were timed in two jobs that ran at the same time on the same shared 32-core Intel Xeon
 2.80 GHz Linux CPU worker (one torch thread per process, load average 6 to 15), with the same

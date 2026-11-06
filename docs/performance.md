@@ -22,7 +22,7 @@ dygraph/eager replay and static-inventory audit costs; TensorFlow preview captur
 | --- | --- | --- |
 | Complete graph metadata and a few activations | `tl.trace(model, x, save=predicate)` | Best default for debugging and one-off analysis. |
 | Repeated activation pulls in a loop | `tl.record(model, x, save=predicate)` | Torch-only lower-overhead path; call `Recording.to_trace()` only when you need graph structure, `Trace.draw` options or facets (a `Recording` has neither). |
-| A local window around a later op | `tl.trace(..., save=tl.followed_by(...), lookback=K)` | Retains bounded recent metadata, and optionally bounded recent payloads. |
+| A local window around a later op | `tl.trace(..., save=tl.followed_by(...), capture=CaptureOptions(lookback=K))` | Retains bounded recent metadata, and optionally bounded recent payloads. |
 | Disk-backed selected payloads | `tl.trace(..., storage=tl.to_disk(path))` | Keeps selected payloads portable without retaining them all in RAM. |
 | Intervention during the forward pass | `tl.trace(..., intervene=tl.when(...), save=...)` | Live edits cost more than passive capture; use only when the model must execute edited values. |
 | Steering or patching over many forwards or through `generate()` | `tl.when(site, action).bind(model)` | Capture-free, about 1x a plain forward hook; see [choosing a fast path](guides/fast_paths.md). |
@@ -100,9 +100,9 @@ with the partial capture on `exc.partial_trace`.
 | Retroactive payloads | `lookback_payload_policy="detached_raw"` | Enables payload recovery for recent matched ops at bounded memory cost. |
 | Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure. The model output the forward returns stays in memory (the output op may alias it), and a later `trace.run(...)` re-captures every payload into RAM while the bundle keeps the original capture. Blob writes overlap capture on a bounded async pipeline by default; `max_pending_bytes` (256 MiB default) caps the RAM pending writes may hold, and a disk slower than capture blocks the forward instead of accumulating memory. `async_writes=False` restores synchronous per-blob writes. |
 | Gradients | `capture=CaptureOptions(save_grads=False)` (the default) unless needed | Backward-ready captures preserve more state and hooks. |
-| Forward-only autograd | `inference_only=True`, or capture inside `torch.no_grad()` | Runs forward capture under `torch.no_grad()`; incompatible with backward capture. A capture entered under `torch.no_grad()` or `torch.inference_mode()` implies it unless a backward option is given. |
+| Forward-only autograd | `capture=CaptureOptions(inference_only=True)`, or capture inside `torch.no_grad()` | Runs forward capture under `torch.no_grad()`; incompatible with backward capture. A capture entered under `torch.no_grad()` or `torch.inference_mode()` implies it unless a backward option is given. |
 | Recording gradient hooks | omit `backward_ready` / `save_grads` on `tl.record` | `tl.record` installs gradient hooks (1 to 5% of a record on CPU transformers, measured 2026-10-11) only when a backward is requested; `Recording.backward()` refuses otherwise. |
-| Forward chunking | `chunk_size=N` | Reduces forward-pass peak memory for single-batch tensor inputs; final saved activations are still accumulated in memory. |
+| Forward chunking | `capture=CaptureOptions(chunk_size=N)` | Reduces forward-pass peak memory for single-batch tensor inputs; final saved activations are still accumulated in memory. |
 | Recurrence detection | `capture=CaptureOptions(recurrence_detection=False)` | Measured 39-42% of capture time off models with thousands of repeated ops (hand-rolled top-level loops, unrolled decodes). Repeated ops stay separate layers instead of rolling into one multi-pass layer, so a 6-iteration loop yields `relu_1_2 ... relu_6_7` (each `num_passes=1`) instead of one `relu_1_2` with `num_passes=6`. `is_recurrent` and `max_layer_op_count` are still reported. It is a TIME knob only: retained activation bytes are unchanged. |
 | Visualization | Call `trace.draw()` after capture, not during hot loops | Rendering is separate from activation collection. |
 
@@ -206,7 +206,7 @@ plus diagnostic CALL events. Shadow remains default-off.
 
 The dispatcher witness is likewise default-off. Its diagnostic cost is environment- and workload-
 dependent; use an alternating on/off measurement on the target host rather than relying on a fixed
-cross-hardware percentage. On this worktree's Python 3.11.6/PyTorch 2.8.0 CPU environment, a
+cross-hardware percentage. On a Python 3.11.6 / PyTorch 2.8.0 CPU environment, a
 16-pair `Linear(64, 64)`/`ReLU` MLP at batch size 16 measured **+17.8%** median overhead: 0.374
 s/capture with the witness off and 0.440 s/capture with it on. Ten alternating batches of five
 full `tl.trace` calls per mode followed four two-capture warmup batches; the per-batch ranges were
@@ -271,11 +271,10 @@ trace = tl.trace(model, (tokens, attention_mask), chunk_paths=["0", "1"], captur
 
 Unlisted leaves are passed unchanged to every chunk, which is useful for shared masks or bias
 tables. The memory contract is forward-pass peak only: final saved activations are concatenated
-and retained according to `save=`, and preprocessing still sees the full batch if `transform=`
-materializes it. Disk-backed chunk accumulation is a future item.
+and retained according to `save=`, and preprocessing still sees the full batch if `CaptureOptions(input_transform=...)`
+materializes it.
 
-For activation extraction without a `Trace`, use `tl.extract_dataset(...)` (the old
-former `tl.batched_extract` alias is removed); that path returns
+For activation extraction without a `Trace`, use `tl.extract_dataset(...)` (the former `tl.batched_extract` alias is removed); that path returns
 tensors or `.pt` files rather than accumulated graph metadata. `chunk_size=` covers the remaining
 "dataloader wrapper" case for stacked multi-pass trace capture. Disk mode (`path=`) writes
 atomic shards plus a self-describing `manifest.json` (site identity, stimulus provenance, axis

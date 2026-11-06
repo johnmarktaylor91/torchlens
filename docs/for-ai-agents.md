@@ -7,9 +7,9 @@ patching, gradients, comparing checkpoints) runs as written once your model and 
 The rest of this page is a reference map.
 
 This page is a compact map for agents writing or reviewing TorchLens code. Prefer the current
-v2 spelling: `tl.trace(..., backend=None)`, predicate `save=...`, `intervene=...`,
+spelling: `tl.trace(..., backend=None)`, predicate `save=...`, `intervene=...`,
 `storage=...`, and grouped `capture=tl.options.CaptureOptions(save_grads=...)` (the flat
-flat `save_grads=` kwarg is removed).
+`save_grads=` kwarg is removed).
 
 Speed: to steer or patch over many forwards or through `generate()`, use the capture-free
 `tl.when(site, action).bind(model)` rather than a `tl.trace` per step. The costs of every path
@@ -117,7 +117,7 @@ table is a selection, not the full list — read `torchlens.__all__` for that):
 | Extraction and validation | `pluck`, `extract`, `extract_dataset`, `validate` (the former `peek` and `batched_extract` aliases are removed); disk-mode `extract_dataset` writes a self-describing manifest, resumes with `resume=True`, and loads back via `torchlens.dataset_extraction.load_extraction` (experimental names) |
 | Subpackages | `facets`, `recording` |
 
-Submodules such as `tl.report`, `tl.stats`, `tl.viz`, and `tl.compat` are available as attributes
+Submodules such as `tl.report`, `tl.viz`, and `tl.compat` are available as attributes
 but are deliberately not listed in `__all__`.
 
 ## Predicate language
@@ -229,7 +229,7 @@ assert relu_site.grad is not None
 ```
 
 For forward-only analysis where backward will never be run, use
-`tl.trace(..., inference_only=True)` or `CaptureOptions(inference_only=True)` to capture under
+`tl.trace(..., capture=CaptureOptions(inference_only=True))` to capture under
 `torch.no_grad()`. Do not combine it with `backward_ready=True`, `save_grads=...`, or
 `replayable=True`.
 

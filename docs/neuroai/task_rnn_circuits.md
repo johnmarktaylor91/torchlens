@@ -250,4 +250,4 @@ RESULT = set(final_patterns(moved)) == {(-1, -1)}
   vision model (CORnet-S), and [torchlens.neuro](../reference/neuro.md) the comparison tools.
 
 The Jacobian and fixed-point helpers here are plain `torch.autograd` code in the recipe, so they
-work on any TorchLens version. They may become TorchLens functions after the 3.0 release.
+work on any TorchLens version.

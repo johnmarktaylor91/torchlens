@@ -1,16 +1,12 @@
 # Memory debugging: which question, which tool
 
-<!-- torchnative.10: the defer-by-name recipe page. The snapshot API and
-     pickle format are underscore-private and allocator block reuse breaks
-     per-op causality, so TorchLens NEVER parses snapshots -- it names the
-     authority and hands you the tested recipe. Verified on torch 2.13.0. -->
 
 | Question | Tool |
 |---|---|
 | "Why did I OOM?" (allocator autopsy) | CUDA memory snapshot + memory_viz (recipe below) |
 | "Which tensors do I retain, per op?" | TorchLens's tensor-scope timeline (`tl.export.memory_timeline`) |
 | "Am I leaking tensors through reference cycles?" | `torch.utils.viz._cycles.warn_tensor_cycles()` |
-| "What was device memory doing over time, categorized?" | Torch deprecated its categorized view; TorchLens's rebuilt categorized timeline (in progress) emits torch's category words only where they map 1:1 to observed record facts |
+| "What was device memory doing over time, categorized?" | Torch deprecated its categorized view; TorchLens's categorized timeline emits torch's category words only where they map 1:1 to observed record facts |
 
 ## The snapshot recipe (OOM autopsy)
 
@@ -34,7 +30,7 @@ drop; nothing uploads — it renders locally). The flamegraph view answers
 "what was alive at peak"; the trace view answers "what allocated right
 before the failure".
 
-Notes from the panel's measurements:
+Notes:
 
 - **Bound `max_entries`.** Unbounded history on a long run is its own
   memory problem.

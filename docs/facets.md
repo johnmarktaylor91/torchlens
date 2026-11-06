@@ -123,7 +123,7 @@ q_grad = log.modules["attn"].facets["q"].grad
 
 Parameter facets, such as LayerNorm `gamma` and Embedding `weight`, read the
 parameter value. Their parameter gradients are not exposed through `facet.grad`
-in P1; this path is intentionally read-only.
+in this release; this path is intentionally read-only.
 
 ## Registration
 
@@ -301,7 +301,7 @@ activation_patch_mlp_output       -> [layer]
 ```
 
 Residual patching defaults to `resid_pre` and patches each position along axis
-1. Attention-head patching defaults to the P3 `result` facet, whose shape is
+1. Attention-head patching defaults to the `result` facet, whose shape is
 `[batch, pos, head, d_model]`; `tl.head(i, "result")` selects one head's
 contribution. MLP patching defaults to the `output` facet on modules that expose
 the built-in MLP facet family.
@@ -433,8 +433,8 @@ block's captured `resid_post` must reproduce the model's captured logits, so a
 head the reconstruction cannot represent (nonstandard norm scaling such as a
 `(1 + weight)` RMSNorm, an extra projection, dropout before the head) refuses
 with `LogitLensError` instead of silently mislabeling layers. Pass
-`validate=False` to trust the reconstruction explicitly, `lens=` to supply
-your own callable (or per-address mapping, e.g. a tuned lens), and `layers=` /
+`verify=False` to trust the reconstruction explicitly, `lens=` to supply
+your own callable (or per-address mapping, e.g. a tuned lens), and `modules=` /
 `facet=` to control what is projected. Architecture coverage extends through
 facet recipes producing the same facet names -- the appliance never special
 cases architectures.
@@ -473,7 +473,7 @@ entropy, KL to the final output, cross-entropy and rank along the trajectory in
 one call, see `tl.mechinterp.measure_trajectory` in
 [docs/reference/stats.md](reference/stats.md).
 
-It shares `facet=` / `layers=` / `lens=` / `verify=` semantics (and the
+It shares `facet=` / `modules=` / `lens=` / `verify=` semantics (and the
 fail-closed lens validation) with `logit_lens`. Probabilities always use the
 full-vocabulary softmax denominator. `include_native=True` (the default)
 appends a row served directly from the model's CAPTURED output logits,
@@ -528,7 +528,7 @@ model-identity record an extraction artifact carries
 
 - a measured identity that differs from the traced model (compared against
   the trace's live source model) refuses with `logit_lens_identity_mismatch`;
-  `validate=False` runs the lens anyway;
+  `verify=False` runs the lens anyway;
 - a matching identity runs silently;
 - a lens with no identity, or one that cannot be compared (an asserted
   record, or the source model is gone), gets a last-layer agreement check:
@@ -613,7 +613,7 @@ module_input
 computed_read_only
 ```
 
-Only `op_structural` built-in facets may claim facet-gradient capability in P1.
+Only `op_structural` built-in facets may claim facet-gradient capability.
 
 ## Glossary
 
@@ -645,7 +645,7 @@ Write capability: a facet may be edited only when every primitive in its chain
 is scatter-back capable and the home is an op raw output.
 
 Alias policy: explicit rule required before an `aliasing_selection` facet can be
-written; P2 provides no public policy and refuses these writes by default.
+written; TorchLens provides no public policy and refuses these writes by default.
 
 Conflict policy: same-home facet writes compose in attach order when their write
 masks do not overlap; overlapping writes raise before rerun.
@@ -653,7 +653,7 @@ masks do not overlap; overlapping writes raise before rerun.
 `facets=`: `tl.trace` argument for additive per-trace facet recipes captured in
 that trace's registry snapshot.
 
-`using()`: `tl.facets.adding(...)` context manager for additive context-local
+`adding()`: `tl.facets.adding(...)` context manager for additive context-local
 recipes used only by traces captured inside the context.
 
 `reset()`: `tl.facets.reset()` restores the process registry to built-in recipes.

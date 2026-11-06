@@ -234,8 +234,7 @@ listed in `NOTICE`.
 - **cProfile / perf / py-spy**: the exclusive-vs-inclusive
   (tottime/cumtime) distinction that makes percent columns safe on a nested
   table. **NVIDIA Nsight**, **Perfetto / Chrome tracing / speedscope**: the
-  viewers we emit into. **MLCommons Chakra**: a schema we may later emit,
-  disclosed as not-yet-emitted.
+  viewers we emit into. **MLCommons Chakra**: a related trace schema TorchLens does not emit.
 
 ## NeuroAI and representational analysis
 
