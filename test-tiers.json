@@ -795,11 +795,11 @@
         "tests/test_bundle_compare_fork.py",
         "tests/test_bundle_diff_multipass.py",
         "tests/test_bundle_diff_renderer.py",
+        "tests/test_bundle_draw.py",
         "tests/test_intervention_hardening_cert7.py",
         "tests/test_module_edit_comparison_reads.py",
         "tests/test_nan_debugging.py",
-        "tests/test_report_lane_debug_report.py",
-        "tests/test_zip_truncation_seals.py"
+        "tests/test_report_lane_debug_report.py"
       ],
       "torchlens/_constants.py": [
         "tests/surface_oracle/test_surface_oracle.py",
@@ -1333,12 +1333,6 @@
         "tests/test_removed_member_redirects.py"
       ],
       "torchlens/_data_classes/_repr.py": [
-        "tests/surface_oracle/test_surface_oracle.py",
-        "tests/test_collapse_rolling_suffix_linearity.py",
-        "tests/test_conditional_invariants.py",
-        "tests/test_door_signatures.py",
-        "tests/test_encoding_channels.py",
-        "tests/test_indexing_coherence.py",
         "tests/test_interv_edit_repr.py",
         "tests/test_reprs.py"
       ],
@@ -2104,13 +2098,13 @@
       ],
       "torchlens/_entry_refusals.py": [
         "tests/test_bridge_captum_probe.py",
+        "tests/test_bundle_draw.py",
         "tests/test_bundle_harness.py",
         "tests/test_compare_gate_lattice.py",
         "tests/test_feature_maps_c2.py",
         "tests/test_format3_writer.py",
         "tests/test_public_entry_refusal_codes.py",
-        "tests/test_r18b_bridge_hf.py",
-        "tests/test_validation.py"
+        "tests/test_r18b_bridge_hf.py"
       ],
       "torchlens/_episode_spec.py": [
         "tests/composition_expectations/test_proofnet_episode_options.py",
@@ -7046,6 +7040,15 @@
         "tests/test_surgery_visuals_marks.py",
         "tests/test_surgery_visuals_realism.py"
       ],
+      "torchlens/_visualization/_label_fields.py": [
+        "tests/test_auto_collapse_atomic_spans.py",
+        "tests/test_auto_collapse_metrics.py",
+        "tests/test_draw_header_focus_key.py",
+        "tests/test_focus_stubs_and_depth.py",
+        "tests/test_format_helpers.py",
+        "tests/test_node_label_dtype.py",
+        "tests/test_preview_display_sizes.py"
+      ],
       "torchlens/_visualization/_label_fit.py": [
         "tests/test_combined_visualization.py",
         "tests/test_draw_browser_widths.py",
@@ -10917,7 +10920,7 @@
         "tests/test_bundle_compare_fork.py",
         "tests/test_bundle_diff_multipass.py",
         "tests/test_bundle_diff_renderer.py",
-        "tests/test_bundle_harness.py",
+        "tests/test_bundle_draw.py",
         "tests/test_compare_gate_lattice.py",
         "tests/test_intervention_hardening_cert7.py",
         "tests/test_module_edit_comparison_reads.py",
@@ -10932,6 +10935,9 @@
         "tests/test_draw_header_focus_key.py",
         "tests/test_draw_headless.py",
         "tests/test_intervention_phase9.py"
+      ],
+      "torchlens/bundle/_draw_folded.py": [
+        "tests/test_bundle_draw.py"
       ],
       "torchlens/bundle/_fed_by.py": [
         "tests/test_arch_spine_sidecar.py",
