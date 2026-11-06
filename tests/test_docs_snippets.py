@@ -518,6 +518,14 @@ def test_canonical_page_python_blocks_execute(
     executed_statements = 0
     for block_index, code in enumerate(blocks, start=1):
         source_name = f"{page_name}:python-block-{block_index}"
+        # Register the fence's text as a notebook cell is registered (and as the guide
+        # runner above does), so capture reads its source the way it reads a reader's
+        # file or cell: the README loop fence's ``if`` becomes a recorded conditional.
+        monkeypatch.setitem(
+            linecache.cache,
+            source_name,
+            (len(code), None, [f"{line}\n" for line in code.splitlines()], source_name),
+        )
         if _SKETCH_MARKER_RE.match(code.splitlines()[0]) or _is_readme_foreign_fence(
             page_name, code
         ):
