@@ -26,7 +26,6 @@ from typing import Any, Literal, cast, get_args
 import torch
 
 from .._state import pause_logging
-from ._defer_gate import _DEFER_GATE
 from ._internal_read import internal_scalar_read
 from ._sparse_parts import sparse_component_tensors
 from ._tensor_label import get_tensor_label, set_tensor_label
@@ -857,9 +856,8 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> AbstractContextManager[A
         or type(x) is torch.nn.Parameter
     ):
         return nullcontext()
-    # Deferred: backends.torch is upward of utils in the layer map;
-    # this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
-    # `import torchlens` never pays for it.
+    # Deferred: backends.torch is upward of utils in the layer map; this branch is the floor-only
+    # (torch 2.1/2.2) fallback, so a plain `import torchlens` never pays for it.
     from ._dispatch_modes import pause_own_dispatch_modes
 
     return pause_own_dispatch_modes()
@@ -882,14 +880,12 @@ _PAYLOAD_MEMORY_FORMAT = torch.preserve_format
 # ---------------------------------------------------------------------------
 # Deferred payload clones (clone-on-write)
 # ---------------------------------------------------------------------------
-# Eagerly cloning every captured activation payload is a large slice of plain
-# capture wall time, and most of those clones are never needed: the source
-# storage is never written again. When the wrapper arms the payload window
-# (plain torch exhaustive captures only), ``_clone_tensor_payload`` returns a
-# detached ALIAS of the source instead of a clone and registers it here, keyed
-# by storage identity. The alias stays zero-copy FOREVER unless something is
-# about to write its storage. Byte-identity of the saved value is guaranteed
-# by two cooperating mechanisms:
+# Eagerly cloning every captured activation payload is a large slice of plain capture wall time, and
+# most of those clones are never needed: the source storage is never written again. When the wrapper
+# arms the payload window (plain torch exhaustive captures only), ``_clone_tensor_payload`` returns
+# a detached ALIAS of the source instead of a clone and registers it here, keyed by storage
+# identity. The alias stays zero-copy FOREVER unless something is about to write its storage.
+# Byte-identity of the saved value is guaranteed by two cooperating mechanisms:
 #
 #   1. INTERCEPTION (authoritative, permanent): torch wrappers stay installed
 #      for the process lifetime, so EVERY wrapped call — during the capture
@@ -906,21 +902,19 @@ _PAYLOAD_MEMORY_FORMAT = torch.preserve_format
 #      moved without interception, so an unforeseen torch-side mutation path
 #      becomes a hard error instead of a silently corrupted saved activation.
 #
-# Host-level writes bypass torch dispatch (raw ``data_ptr()``/numpy/DLPack buffer
-# writes, ctypes, foreign kernels) and bump no version, so the wrapper of every
-# zero-copy export made by the logged forward copies out the receiver's pending
-# aliases first (``backends/torch/_storage_exports.py``, residuals listed there).
-# Deferral stays gated to plain captures (no
-# runnable witnesses, backward capture or transforms armed).
+# Host-level writes bypass torch dispatch (raw ``data_ptr()``/numpy/DLPack buffer writes, ctypes,
+# foreign kernels) and bump no version, so the wrapper of every zero-copy export made by the logged
+# forward copies out the receiver's pending aliases first (``backends/torch/_storage_exports.py``,
+# residuals listed there). Deferral stays gated to plain captures (no runnable witnesses, backward
+# capture or transforms armed).
 #
 # GRAPH-CONNECTED PAYLOADS (the default ``tl.trace(model, x)`` regime)
 # --------------------------------------------------------------------
-# ``detach_saved_activations`` defaults to False, so in a plain grad-enabled
-# capture the eager clone is ``x.clone()``: graph-connected, ``requires_grad``
-# True, ``grad_fn`` ``CloneBackward0``. A ``detach()``-flavored alias cannot
-# stand in for that, which is why deferral was originally gated to the
-# detached/no-grad cases. Standing an ALIAS in for such a clone needs three
-# things to hold, each of which is a measured hazard rather than a worry:
+# ``detach_saved_activations`` defaults to False, so in a plain grad-enabled capture the eager clone
+# is ``x.clone()``: graph-connected, ``requires_grad`` True, ``grad_fn`` ``CloneBackward0``. A
+# ``detach()``-flavored alias cannot stand in for that, which is why deferral was originally gated
+# to the detached/no-grad cases. Standing an ALIAS in for such a clone needs three things to hold,
+# each of which is a measured hazard rather than a worry:
 #
 #   H1 The alias must not be an autograd VIEW of the source. ``aten.alias``
 #      keeps ``requires_grad`` but registers a differentiable view, so a later
@@ -967,10 +961,9 @@ _PAYLOAD_MEMORY_FORMAT = torch.preserve_format
 # CaptureOptions knob spans options.py + wrappers.py and ships with their owning lanes.
 _DEFER_ENABLED: bool = not closed_bool_env("TORCHLENS_EAGER_PAYLOAD_CLONE")
 
-# Opt-in: TORCHLENS_DEFER_GRAD_PAYLOADS=1 extends deferral to graph-connected
-# payloads (the default grad-enabled capture regime). OFF by default because of
-# residual H3 above; H1/H2 are closed unconditionally by the mint and rebind.
-# Same import-time latch caveat as above.
+# Opt-in: TORCHLENS_DEFER_GRAD_PAYLOADS=1 extends deferral to graph-connected payloads (the default
+# grad-enabled capture regime). OFF by default because of residual H3 above; H1/H2 are closed
+# unconditionally by the mint and rebind. Same import-time latch caveat as above.
 _DEFER_GRAD_ENABLED: bool = closed_bool_env("TORCHLENS_DEFER_GRAD_PAYLOADS")
 
 # storage key (data_ptr, nbytes, device_str) -> pending aliases; every alias keeps its
@@ -1200,10 +1193,9 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
         and _state._active_owner_thread_id is not None
         and threading.get_ident() != _state._active_owner_thread_id
     ):
-        # Never toggle the global logging pause from a non-owner thread while
-        # a capture is live (it blinds owner op capture). Cross-thread
-        # mutation of a pending storage is outside the single-threaded capture
-        # claim; the version belt still reports it loudly at the next touch.
+        # Never toggle the global logging pause from a non-owner thread while a capture is live (it
+        # blinds owner op capture). Cross-thread mutation of a pending storage is outside the
+        # single-threaded capture claim; the version belt still reports it loudly at the next touch.
         return
     _DEFER_BUSY = True
     try:
@@ -1230,7 +1222,19 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
         _DEFER_BUSY = False
 
 
-_DEFER_GATE.materialize = materialize_deferred_for_call
+class _DeferGate:
+    """The registry state the torch wrappers read, so Dynamo guards a flag, not registry keys.
+
+    ``armed`` is never False while an alias is pending. ``materialize`` turns compile-disabled
+    once Dynamo can inline the wrappers (``wrappers._warm_derived_identity_caches``).
+    """
+
+    def __init__(self) -> None:
+        self.armed = False
+        self.materialize: Callable[[Iterable[Any]], None] = materialize_deferred_for_call
+
+
+_DEFER_GATE = _DeferGate()
 
 
 def _alias_covers_whole_storage(alias: torch.Tensor, storage_nbytes: int) -> bool:
@@ -1258,10 +1262,9 @@ _DEFER_PRUNE_THRESHOLD = 2048
 # live registry at every op arming: measured O(n^2) at 4k ops).
 _defer_prune_watermark = _DEFER_PRUNE_THRESHOLD
 
-# Registered-alias deaths since the last sweep, counted by the weakref
-# callback. The doubling watermark alone never decays, so crossing
-# _DEFER_PRUNE_THRESHOLD deaths forces a sweep regardless of it; the
-# post-sweep reset (2x the live population) then decays back down.
+# Registered-alias deaths since the last sweep, counted by the weakref callback. The doubling
+# watermark alone never decays, so crossing _DEFER_PRUNE_THRESHOLD deaths forces a sweep regardless
+# of it; the post-sweep reset (2x the live population) then decays back down.
 _defer_dead_alias_count = 0
 
 
@@ -1588,10 +1591,9 @@ def _copy_tensor_payload(
         return result
 
     if target_device is not None:
-        # Single-transport clone: ``.to(device, copy=True)`` materializes the
-        # retained payload directly on the retention device (one allocation,
-        # one copy) with the same autograd semantics as clone-then-move (the
-        # move is differentiable when not detached).
+        # Single-transport clone: ``.to(device, copy=True)`` materializes the retained payload
+        # directly on the retention device (one allocation, one copy) with the same autograd
+        # semantics as clone-then-move (the move is differentiable when not detached).
         source = x.detach() if detach_tensor else x
         try:
             return source.to(device=target_device, memory_format=_PAYLOAD_MEMORY_FORMAT, copy=True)
@@ -1617,14 +1619,12 @@ def _copy_tensor_payload(
             try:
                 return x.data.cpu().clone()
             except Exception as exc:
-                # Fail loud rather than fabricate a payload. The former
-                # ``torch.zeros(x.shape, dtype=torch.float32)`` last resort
-                # silently returned a WRONG value AND a WRONG dtype (float32
-                # regardless of the source) with no marker, corrupting the
-                # captured activation invisibly. A tensor that survives none of
-                # the three clone strategies cannot be copied; surfacing that is
-                # the only honest outcome, and it mirrors the non-detached path
-                # above, which already propagates a clone failure.
+                # Fail loud rather than fabricate a payload. The former ``torch.zeros(x.shape,
+                # dtype=torch.float32)`` last resort silently returned a WRONG value AND a WRONG
+                # dtype (float32 regardless of the source) with no marker, corrupting the captured
+                # activation invisibly. A tensor that survives none of the three clone strategies
+                # cannot be copied; surfacing that is the only honest outcome, and it mirrors the
+                # non-detached path above, which already propagates a clone failure.
                 raise RuntimeError(
                     "torchlens could not copy a tensor payload: every clone "
                     "strategy failed. Refusing to fabricate a placeholder tensor "
@@ -1676,10 +1676,9 @@ def _clone_tensor_payload(
             move_target = target_device
         vals_tensor = None
         if _DEFER_WINDOW_DEPTH and save_mode == "copy" and move_target is None:
-            # A plain ``detach()`` alias carries NO autograd state, so it may
-            # only stand in for a clone taken with ``detach_tensor=True``, from
-            # a ``requires_grad=False`` source, or under disabled grad mode
-            # (where ``clone`` outputs are detached too, e.g. the common
+            # A plain ``detach()`` alias carries NO autograd state, so it may only stand in for a
+            # clone taken with ``detach_tensor=True``, from a ``requires_grad=False`` source, or
+            # under disabled grad mode (where ``clone`` outputs are detached too, e.g. the common
             # ``torch.no_grad()`` activation-extraction pattern).
             if detach_tensor or not x.requires_grad or not torch.is_grad_enabled():
                 vals_tensor = _try_defer_payload_alias(x)

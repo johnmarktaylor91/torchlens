@@ -35,7 +35,6 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._constants import _get_torchvision_funcs, get_orig_torch_funcs
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureNotActiveError
-from ..._utils._defer_gate import _DEFER_GATE as _COW_GATE
 from ..._utils._dispatch_modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ..._utils._hop_entry_compile import compile_disabled
 from ..._utils._tensor_label import (
@@ -71,6 +70,7 @@ from ..._utils.introspection import get_vars_of_type_from_obj
 from ..._utils.rng import log_current_autocast_state, log_op_rng_states
 from ..._utils.tensor_utils import (
     _DEFER_ENABLED as _COW_ENABLED,
+    _DEFER_GATE as _COW_GATE,
     arm_deferred_payload_window,
     disarm_deferred_payload_window,
     materialize_deferred_for_call,
@@ -1209,7 +1209,7 @@ def torch_func_decorator(
             # Deferred payload clones: pending aliases stay zero-copy for the process lifetime, so
             # the fast path carries the SAME pre-execution interception as the logging path: any
             # call that can write through a tensor argument first copies out pending aliases on
-            # those storages. Disarmed cost is one flag check (Dynamo-guardable, see _defer_gate).
+            # those storages. Disarmed cost is one flag check (Dynamo-guardable: _DeferGate).
             if _COW_GATE.armed and (
                 writes_args
                 or "out" in kwargs
