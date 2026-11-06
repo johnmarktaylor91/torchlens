@@ -28,6 +28,7 @@ from ._render_common import (
     _SVG_VIEWBOX_RE,
 )
 from ._render_flow import _resolve_svg_image_path
+from ._svg_text_runs import flow_text_runs
 from .code_panel import compose_graph_with_code_panel
 from .render_execution import surface_layout_stderr
 
@@ -50,7 +51,8 @@ def _render_graph_only_svg(
         timeout=timeout,
         cwd=str(image_root) if image_root else None,
     )
-    return _inline_svg_local_images(completed.stdout.decode("utf-8"), image_root)
+    svg_text = _inline_svg_local_images(completed.stdout.decode("utf-8"), image_root)
+    return flow_text_runs(svg_text)
 
 
 def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None) -> bytes:
@@ -145,7 +147,10 @@ def _missing_pictures_note(missing: tuple[str, ...]) -> str:
 
 
 def _inline_svg_file_local_images(svg_path: str, image_root: Path | None = None) -> None:
-    """Inline local image hrefs in a saved SVG file.
+    """Inline local image hrefs in a saved SVG file and flow its mixed-font lines.
+
+    The flow joins a header line's or edit row's font runs into one text
+    (:mod:`._svg_text_runs`) so browsers do not overlap them.
 
     Parameters
     ----------
@@ -158,7 +163,7 @@ def _inline_svg_file_local_images(svg_path: str, image_root: Path | None = None)
 
     with open(svg_path, encoding="utf-8") as svg_file:
         svg_text = svg_file.read()
-    inlined_svg = _inline_svg_local_images(svg_text, image_root)
+    inlined_svg = flow_text_runs(_inline_svg_local_images(svg_text, image_root))
     if inlined_svg != svg_text:
         atomic_write_text(svg_path, inlined_svg)
 

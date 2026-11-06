@@ -1005,8 +1005,8 @@ class Bundle:
         prints its path. ``theme`` defaults to ``"torchlens"`` (``"paper"`` for diff),
         ``direction`` to ``"bottomup"``; ``open_viewer=True`` opens the file. The
         ``*_overrides`` pass Graphviz attributes (nodes keyed by op label, or member
-        name under ``nodes="members"``; edges by ``(source, target)``). Any other
-        keyword refuses (``bundle_draw_keyword_unsupported``, naming the supported list).
+        name under ``nodes="members"``; edges by ``(source, target)``). Any other keyword,
+        or ``rolled``/``nodes`` on diff, refuses (``bundle_draw_keyword_unsupported``).
         """
         return _forward_bundle_draw(locals())
 
@@ -1034,9 +1034,9 @@ class Bundle:
         metric:
             Pairwise tensor metric.
         by:
-            ``"site"`` (default): one row per op. ``"module"``: one row per module address
-            (``transformer.h.9``) scored by its most changed site (ops outside every module
-            keep their site rows); ``k`` caps after the fold.
+            ``"site"`` (default): one row per op. ``"module"``: one row per enclosing module
+            (``transformer.h.9`` and ``transformer.h.9.mlp``) scored by its most changed site
+            (ops outside every module keep their site rows); ``k`` caps after the fold.
 
         Returns
         -------

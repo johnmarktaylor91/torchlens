@@ -201,8 +201,9 @@ def rank_changes(
                 continue
             distances.append(_distance_value(base, out, metric, site=key))
         if distances:
-            row_key = key if by == "site" else _module_row_key(site, key)
-            scored.append((row_key, sum(distances) / len(distances)))
+            score = sum(distances) / len(distances)
+            row_keys = [key] if by == "site" else _module_row_keys(site, key)
+            scored.extend((row_key, score) for row_key in row_keys)
     if by == "module":
         scored = _fold_module_rows(scored)
     scored.sort(key=lambda row: row[1], reverse=True)
@@ -227,11 +228,21 @@ def _check_rank_by(by: str) -> None:
         )
 
 
-def _module_row_key(site: Any, site_key: str) -> str:
-    """Return the module address a site belongs to, or its own key when it has none."""
+def _module_row_keys(site: Any, site_key: str) -> list[str]:
+    """Return every module address a site ran inside, root-first, or its own key when none.
 
-    address = record_member(site, "atomic_module_address", None)
-    return address if address else site_key
+    A site scores each enclosing module (``transformer.h.9`` as well as
+    ``transformer.h.9.mlp``), so folding by maximum gives every module its most
+    changed site. An op outside every module keeps its own site row.
+    """
+
+    addresses: dict[str, None] = {}
+    for call_label in record_member(site, "modules", ()) or ():
+        addresses.setdefault(str(call_label).rsplit(":", 1)[0], None)
+    atomic = record_member(site, "atomic_module_address", None)
+    if atomic:
+        addresses.setdefault(str(atomic), None)
+    return list(addresses) or [site_key]
 
 
 def _fold_module_rows(scored: list[tuple[str, float]]) -> list[tuple[str, float]]:

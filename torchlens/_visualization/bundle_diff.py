@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, Literal
 
 import graphviz
@@ -11,7 +12,25 @@ import torch
 
 from .._errors import InvalidArgumentError
 from ..bundle._deltas import site_deltas
-from ._render_utils import _add_svg_accessibility, render_dot_to_file, strip_known_extension
+from ._bundle_diff_marks import (
+    DiffStyle,
+    _aria_label,
+    _caption,
+    _node_border_color,
+    _node_id,
+    _node_label,
+    _node_penwidth,
+    _node_title,
+    _site_label,
+)
+from ._render_utils import (
+    _add_svg_accessibility,
+    direction_to_rankdir,
+    merge_edge_style,
+    merge_node_style,
+    render_dot_to_file,
+    strip_known_extension,
+)
 from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
 if TYPE_CHECKING:
@@ -22,6 +41,33 @@ if TYPE_CHECKING:
 
 DiffLayout = Literal["paired"]
 DiffTensorField = Literal["out", "grad"]
+
+#: Style ``Bundle.draw(graph="diff")`` sets around its ``bundle_diff`` call.
+_DIFF_STYLE: ContextVar[DiffStyle | None] = ContextVar("tl_bundle_diff_style", default=None)
+
+
+@contextmanager
+def diff_style(options: Mapping[str, Any]) -> Iterator[None]:
+    """Draw the ``bundle_diff`` calls inside with ``Bundle.draw``'s style keywords.
+
+    ``options`` carries ``direction`` (``None`` keeps the two columns),
+    ``graph_overrides``, ``node_overrides``, ``edge_overrides`` and
+    ``show_legend``.
+    """
+
+    direction = options["direction"]
+    style = DiffStyle(
+        rankdir=direction_to_rankdir(direction) if direction is not None else "TB",
+        graph_overrides=options["graph_overrides"] or {},
+        node_overrides=options["node_overrides"],
+        edge_overrides=options["edge_overrides"],
+        show_legend=options["show_legend"],
+    )
+    token = _DIFF_STYLE.set(style)
+    try:
+        yield
+    finally:
+        _DIFF_STYLE.reset(token)
 
 
 def bundle_diff(
@@ -248,40 +294,9 @@ def _build_dot(
         comment="TorchLens bundle diff",
         format="svg",
     )
-    # dpi is raster-only now (vizmech), and this graph renders SVG: the
-    # historical ``dpi=72`` workaround (pinning viewBox units to layout
-    # coords) is the identity value, so passing the format simply drops it.
-    graph_attrs = theme_graph_attrs(theme, font_size=18, dpi=72, fileformat="svg")
-    graph_attrs.update(
-        {
-            "rankdir": "TB",
-            "compound": "true",
-            # One global ranking across clusters. Without it, dot pulls every
-            # node named in a ``rank=same`` pair subgraph (_add_pair_alignment)
-            # OUT of its side cluster ("already in a rankset, deleted from
-            # cluster"), drops both side clusters as empty, and lays the pairs
-            # out as loose node pairs: the column frames and member titles
-            # vanish and the white baseline column reads as an unlabeled
-            # duplicate of the marked one.
-            "newrank": "true",
-            "splines": "ortho",
-            "nodesep": "0.32",
-            "ranksep": "0.34",
-            # Let graphviz auto-size to the natural aspect ratio. A hard
-            # ``size: 12,8!`` combined with ``ratio: fill`` forces a 1.5:1
-            # box; when the natural graph aspect is taller (e.g. 1.69:1 for
-            # the default paired layout) the bottom-positioned caption gets
-            # pushed outside the SVG viewBox and clipped.
-            "label": _caption(left_name, right_name, metric_name, tensor_field),
-            "labelloc": "b",
-            "labeljust": "l",
-            "fontname": "Helvetica",
-            # The caption and the column titles take the page's text ink, so
-            # the dark skin's caption is not drawn black on a dark page.
-            "fontcolor": theme.default_font,
-        }
-    )
-    dot.graph_attr.update(graph_attrs)
+    style = _DIFF_STYLE.get() or DiffStyle()
+    caption = _caption(left_name, right_name, metric_name, tensor_field)
+    dot.graph_attr.update(_diff_graph_attrs(theme, caption, style))
     dot.node_attr.update(theme_node_attrs(theme, font_size=10))
     dot.edge_attr.update(theme_edge_attrs(theme, font_size=8))
 
@@ -304,6 +319,7 @@ def _build_dot(
         deltas=deltas,
         max_delta=max_delta,
         unmatched_layer_ids={id(layer) for layer in left_unmatched},
+        node_overrides=style.node_overrides,
     )
     _add_side_cluster(
         dot,
@@ -314,12 +330,54 @@ def _build_dot(
         deltas=deltas,
         max_delta=max_delta,
         unmatched_layer_ids={id(layer) for layer in right_unmatched},
+        node_overrides=style.node_overrides,
     )
-    _add_side_edges(dot, layers=left_layers, side="clean")
-    _add_side_edges(dot, layers=right_layers, side="intervention")
+    for side, layers in (("clean", left_layers), ("intervention", right_layers)):
+        _add_side_edges(dot, layers=layers, side=side, edge_overrides=style.edge_overrides)
     _add_pair_alignment(dot, pairs)
-    _add_legend(dot)
+    if style.show_legend is not False:
+        _add_legend(dot)
     return dot
+
+
+def _diff_graph_attrs(theme: Any, caption: str, style: DiffStyle) -> dict[str, str]:
+    """Return the diff graph's attributes: theme defaults, layout, caption, then overrides."""
+
+    # dpi is raster-only now (vizmech), and this graph renders SVG: the
+    # historical ``dpi=72`` workaround (pinning viewBox units to layout
+    # coords) is the identity value, so passing the format simply drops it.
+    graph_attrs = theme_graph_attrs(theme, font_size=18, dpi=72, fileformat="svg")
+    graph_attrs.update(
+        {
+            "rankdir": style.rankdir,
+            "compound": "true",
+            # One global ranking across clusters. Without it, dot pulls every
+            # node named in a ``rank=same`` pair subgraph (_add_pair_alignment)
+            # OUT of its side cluster ("already in a rankset, deleted from
+            # cluster"), drops both side clusters as empty, and lays the pairs
+            # out as loose node pairs: the column frames and member titles
+            # vanish and the white baseline column reads as an unlabeled
+            # duplicate of the marked one.
+            "newrank": "true",
+            "splines": "ortho",
+            "nodesep": "0.32",
+            "ranksep": "0.34",
+            # Let graphviz auto-size to the natural aspect ratio. A hard
+            # ``size: 12,8!`` combined with ``ratio: fill`` forces a 1.5:1
+            # box; when the natural graph aspect is taller (e.g. 1.69:1 for
+            # the default paired layout) the bottom-positioned caption gets
+            # pushed outside the SVG viewBox and clipped.
+            "label": caption,
+            "labelloc": "b",
+            "labeljust": "l",
+            "fontname": "Helvetica",
+            # The caption and the column titles take the page's text ink, so
+            # the dark skin's caption is not drawn black on a dark page.
+            "fontcolor": theme.default_font,
+        }
+    )
+    graph_attrs.update({str(key): str(value) for key, value in style.graph_overrides.items()})
+    return graph_attrs
 
 
 def _unmatched_layers(member: Any, paired_ids: set[int], include_unmatched: bool) -> list[Any]:
@@ -347,70 +405,6 @@ def _metric_display_name(metric: str | Callable[[torch.Tensor, torch.Tensor], to
     if isinstance(metric, str):
         return metric
     return getattr(metric, "__name__", metric.__class__.__name__)
-
-
-def _caption(
-    left_name: str,
-    right_name: str,
-    metric_name: str,
-    tensor_field: DiffTensorField,
-) -> str:
-    """Return the graph caption for a paired bundle diff.
-
-    Parameters
-    ----------
-    left_name:
-        Left bundle member name.
-    right_name:
-        Right bundle member name.
-    metric_name:
-        Human-readable metric name.
-    tensor_field:
-        Tensor field used for comparison.
-
-    Returns
-    -------
-    str
-        Graphviz label text.
-    """
-
-    return (
-        f"{left_name} vs {right_name} - columns: {left_name}, {right_name}. "
-        f"Color: per-node {metric_name} delta on {tensor_field}.\\n"
-        "Legend: white to red = increasing delta."
-    )
-
-
-def _aria_label(
-    left_name: str,
-    right_name: str,
-    metric_name: str,
-    tensor_field: DiffTensorField,
-) -> str:
-    """Return the SVG accessibility label for a paired bundle diff.
-
-    Parameters
-    ----------
-    left_name:
-        Left bundle member name.
-    right_name:
-        Right bundle member name.
-    metric_name:
-        Human-readable metric name.
-    tensor_field:
-        Tensor field used for comparison.
-
-    Returns
-    -------
-    str
-        Accessibility label for the SVG root.
-    """
-
-    return (
-        f"TorchLens bundle diff: {left_name} versus {right_name}; "
-        f"{metric_name} delta on {tensor_field}. "
-        "White means zero delta; red intensity scales with delta magnitude."
-    )
 
 
 def _pair_delta_values(
@@ -505,6 +499,7 @@ def _add_side_cluster(
     deltas: SiteDeltas,
     max_delta: float,
     unmatched_layer_ids: set[int],
+    node_overrides: Mapping[str, Any] | None = None,
 ) -> None:
     """Add one clean or intervention cluster to the diff graph.
 
@@ -526,11 +521,8 @@ def _add_side_cluster(
         Maximum delta value used for normalization.
     unmatched_layer_ids:
         ``id(layer)`` values whose aligned counterpart is missing.
-
-    Returns
-    -------
-    None
-        ``dot`` is mutated in place.
+    node_overrides:
+        Node attributes keyed by op label, applied over the defaults.
     """
 
     with dot.subgraph(name=f"cluster_{side}") as subgraph:
@@ -543,20 +535,27 @@ def _add_side_cluster(
         )
         for layer in layers:
             value = deltas.value(layer, compared_member_name)
-            subgraph.node(
-                _node_id(side, layer),
-                label=_node_label(layer, value),
-                tooltip=_node_title(member_name, layer, value),
-                fillcolor=_delta_color(value, max_delta),
-                color=_node_border_color(layer, unmatched_layer_ids),
-                fontcolor="#111111",
-                shape="box",
-                style="filled,rounded",
-                penwidth=_node_penwidth(layer),
-            )
+            base = {
+                "label": _node_label(layer, value),
+                "tooltip": _node_title(member_name, layer, value),
+                "fillcolor": _delta_color(value, max_delta),
+                "color": _node_border_color(layer, unmatched_layer_ids),
+                "fontcolor": "#111111",
+                "shape": "box",
+                "style": "filled,rounded",
+                "penwidth": _node_penwidth(layer),
+            }
+            attrs = merge_node_style(base, node_overrides, _site_label(layer), layer)
+            subgraph.node(_node_id(side, layer), **attrs)
 
 
-def _add_side_edges(dot: graphviz.Digraph, *, layers: list[Any], side: str) -> None:
+def _add_side_edges(
+    dot: graphviz.Digraph,
+    *,
+    layers: list[Any],
+    side: str,
+    edge_overrides: Mapping[tuple[str, str], Any] | None = None,
+) -> None:
     """Add intra-side parent-child edges among displayed nodes.
 
     Parameters
@@ -567,6 +566,8 @@ def _add_side_edges(dot: graphviz.Digraph, *, layers: list[Any], side: str) -> N
         Layers displayed for one side.
     side:
         Stable side key used in Graphviz node IDs.
+    edge_overrides:
+        Edge attributes keyed by ``(source, target)`` op labels.
 
     Returns
     -------
@@ -580,7 +581,10 @@ def _add_side_edges(dot: graphviz.Digraph, *, layers: list[Any], side: str) -> N
         for parent_label in getattr(layer, "parents", []) or []:
             parent = visible.get(str(parent_label))
             if parent is not None:
-                dot.edge(_node_id(side, parent), target_id, color="#707070", arrowsize="0.5")
+                key = (_site_label(parent), _site_label(layer))
+                base = {"color": "#707070", "arrowsize": "0.5"}
+                attrs = merge_edge_style(base, edge_overrides, key, (parent, layer))
+                dot.edge(_node_id(side, parent), target_id, **attrs)
 
 
 def _add_pair_alignment(dot: graphviz.Digraph, pairs: list[tuple[Any, Any]]) -> None:
@@ -651,130 +655,6 @@ def _add_legend(dot: graphviz.Digraph) -> None:
         )
         legend.edge("legend_low", "legend_mid", style="invis")
         legend.edge("legend_mid", "legend_high", style="invis")
-
-
-def _node_id(side: str, layer: Any) -> str:
-    """Return a stable Graphviz node ID for one side/layer pair.
-
-    Parameters
-    ----------
-    side:
-        Side key.
-    layer:
-        Layer-like object.
-
-    Returns
-    -------
-    str
-        Graphviz-safe node ID.
-    """
-
-    safe = re.sub(r"[^0-9A-Za-z_]", "_", _site_label(layer).replace(":", "_p"))
-    return f"{side}_{safe}"
-
-
-def _site_label(layer: Any) -> str:
-    """Return a drawn op's label: ``"<layer>:<k>"`` for pass ``k`` of a multi-pass layer.
-
-    The row key of ``Bundle.compare`` (``bundle._aligned_sites.site_row_key``),
-    spelled here so the renderer adds no import of ``bundle``.
-    """
-
-    if not hasattr(layer, "layer_label"):
-        return "node"
-    if int(getattr(layer, "num_passes", 1) or 1) > 1:
-        return f"{layer.layer_label}:{layer.pass_number}"
-    return str(layer.layer_label)
-
-
-def _node_label(layer: Any, delta: float) -> str:
-    """Return a compact display label for a layer node.
-
-    Parameters
-    ----------
-    layer:
-        Layer-like object.
-    delta:
-        Metric value for the paired node.
-
-    Returns
-    -------
-    str
-        Graphviz node label.
-    """
-
-    label = _site_label(layer)
-    func_name = str(getattr(layer, "func_name", "op"))
-    module = getattr(layer, "module", None)
-    module_line = f"@{module}" if module else ""
-    shape = getattr(layer, "shape", None)
-    shape_line = str(tuple(shape)) if isinstance(shape, (list, tuple)) else str(shape or "")
-    parts = [label, func_name]
-    if module_line:
-        parts.append(module_line)
-    if shape_line:
-        parts.append(shape_line)
-    parts.append(f"delta={delta:.3g}")
-    return "\n".join(parts)
-
-
-def _node_title(member_name: str, layer: Any, delta: float) -> str:
-    """Return an accessible title/tooltip for a layer node.
-
-    Parameters
-    ----------
-    member_name:
-        Bundle member name.
-    layer:
-        Layer-like object.
-    delta:
-        Metric value.
-
-    Returns
-    -------
-    str
-        Node title text.
-    """
-
-    label = _site_label(layer)
-    func_name = str(getattr(layer, "func_name", "op"))
-    return f"{member_name} {label}; operation {func_name}; L2 delta {delta:.6g}"
-
-
-def _node_border_color(layer: Any, unmatched_layer_ids: set[int]) -> str:
-    """Return the node border color, gray for unmatched layers.
-
-    Parameters
-    ----------
-    layer:
-        Layer-like object.
-    unmatched_layer_ids:
-        ``id(layer)`` values whose aligned counterpart is missing.
-
-    Returns
-    -------
-    str
-        Hex color.
-    """
-
-    return "#808080" if id(layer) in unmatched_layer_ids else "#222222"
-
-
-def _node_penwidth(layer: Any) -> str:
-    """Return the node border width.
-
-    Parameters
-    ----------
-    layer:
-        Layer-like object.
-
-    Returns
-    -------
-    str
-        Graphviz penwidth value.
-    """
-
-    return "1.4" if layer is not None else "2.2"
 
 
 def _delta_color(value: float, max_delta: float) -> str:

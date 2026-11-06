@@ -64,12 +64,11 @@ def bundle_draw(
         direction_to_rankdir,
     )
 
-    if unsupported:
+    refusal = _keyword_refusal(unsupported, options)
+    if refusal is not None:
+        message, remedy, argument = refusal
         raise ArgumentTypeError(
-            f"Bundle.draw does not take {', '.join(sorted(unsupported))}",
-            code="bundle_draw_keyword_unsupported",
-            remedy=f"use the keywords Bundle.draw supports: {', '.join(BUNDLE_DRAW_KEYWORDS)}",
-            argument=sorted(unsupported)[0],
+            message, code="bundle_draw_keyword_unsupported", remedy=remedy, argument=argument
         )
     graph = options["graph"]
     if graph not in ("diff", *_PASS_SIGNALS):
@@ -99,24 +98,74 @@ def bundle_draw(
 
 
 def _draw_diff(bundle: Bundle, target: DrawTarget, outpath: str, options: dict[str, Any]) -> str:
-    """The ``graph="diff"`` picture: ``bundle_diff`` over the two ``members``."""
+    """The ``graph="diff"`` picture: ``bundle_diff`` over the two ``members``.
 
-    from .._visualization.bundle_diff import bundle_diff
+    ``direction``, the three ``*_overrides`` and ``show_legend`` shape the diff
+    picture; ``rolled=True`` and ``nodes="members"`` refuse before this runs
+    (:func:`_diff_refusals`).
+    """
+
+    from .._visualization.bundle_diff import bundle_diff, diff_style
 
     members = options["members"]
     left, right = members if members is not None else (None, None)
     theme = options["theme"]
-    return bundle_diff(
-        bundle,
-        metric=options["metric"],
-        left=left,
-        right=right,
-        on=options["on"],
-        path=target.stem or outpath,
-        open_viewer=options["open_viewer"],
-        file_format=target.file_format,
-        theme=theme if theme is not None else "paper",
+    with diff_style(options):
+        return bundle_diff(
+            bundle,
+            metric=options["metric"],
+            left=left,
+            right=right,
+            on=options["on"],
+            path=target.stem or outpath,
+            open_viewer=options["open_viewer"],
+            file_format=target.file_format,
+            theme=theme if theme is not None else "paper",
+        )
+
+
+def _keyword_refusal(
+    unsupported: dict[str, Any], options: dict[str, Any]
+) -> tuple[str, str, str] | None:
+    """Return ``(message, remedy, keyword)`` for a keyword ``Bundle.draw`` refuses, else ``None``.
+
+    A keyword outside ``Bundle.draw``'s list refuses naming the list; a listed
+    keyword the diff picture cannot honour refuses naming that keyword.
+    """
+
+    if unsupported:
+        named = sorted(unsupported)
+        return (
+            f"Bundle.draw does not take {', '.join(named)}",
+            f"use the keywords Bundle.draw supports: {', '.join(BUNDLE_DRAW_KEYWORDS)}",
+            named[0],
+        )
+    refused = _diff_refusals(options)
+    if not refused:
+        return None
+    return (
+        f"Bundle.draw(graph='diff') does not take {', '.join(refused.values())}: the diff "
+        "draws one node per op for each of two members",
+        "drop it for graph='diff', or draw the union graph (graph='forward') with it",
+        next(iter(refused)),
     )
+
+
+def _diff_refusals(options: dict[str, Any]) -> dict[str, str]:
+    """Return the ``Bundle.draw`` keywords ``graph="diff"`` cannot honour, keyword to spelling.
+
+    The diff draws one node per op for each of two members, so ``rolled=True``
+    and ``nodes="members"`` have no diff meaning.
+    """
+
+    if options["graph"] != "diff":
+        return {}
+    refused: dict[str, str] = {}
+    if options["rolled"]:
+        refused["rolled"] = "rolled=True"
+    if options["nodes"] != "ops":
+        refused["nodes"] = f"nodes={options['nodes']!r}"
+    return refused
 
 
 def _draw_graph(

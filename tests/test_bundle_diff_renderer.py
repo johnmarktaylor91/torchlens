@@ -18,7 +18,7 @@ from support.cairosvg_skip import require_cairosvg
 import torchlens as tl
 from torchlens._visualization.bundle_diff import _build_dot, _select_pairs
 from torchlens.bundle._deltas import SiteDeltas
-from torchlens.errors import MultiMatchWarning
+from torchlens.errors import ArgumentTypeError, MultiMatchWarning
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
@@ -402,3 +402,65 @@ def test_bundle_diff_render_draws_two_titled_columns(tmp_path: Path) -> None:
     assert clean_nodes and len(clean_nodes) == len(patched_nodes)
     assert all(clean_lo <= x <= clean_hi for x in clean_nodes.values())
     assert all(patched_lo <= x <= patched_hi for x in patched_nodes.values())
+
+
+def _linear_pair() -> tl.Bundle:
+    """Return a two-member bundle of a small two-op model (the second member forked)."""
+
+    torch.manual_seed(0)
+    model = torch.nn.Sequential(torch.nn.Linear(3, 3), torch.nn.ReLU()).eval()
+    left = tl.trace(model, torch.randn(1, 3))
+    return tl.Bundle({"base": left, "patched": left.fork("patched")}, baseline="base")
+
+
+def test_bundle_diff_honours_direction_overrides_and_legend(tmp_path: Path) -> None:
+    """direction, the overrides and show_legend reach the diff picture (they were dropped)."""
+
+    bundle = _linear_pair()
+    plain = bundle.draw(graph="diff", path=str(tmp_path / "plain")).dot
+    assert "rankdir=TB" in plain and "cluster_delta_legend" in plain
+    op = next(label for label in bundle["base"].layer_labels if "relu" in label)
+    parent = next(label for label in bundle["base"].layer_labels if "linear" in label)
+    styled = bundle.draw(
+        graph="diff",
+        path=str(tmp_path / "styled"),
+        direction="leftright",
+        graph_overrides={"bgcolor": "#FAFAFA"},
+        node_overrides={op: {"fontsize": "21"}},
+        edge_overrides={(parent, op): {"color": "#00AA00"}},
+        show_legend=False,
+    ).dot
+    assert "rankdir=LR" in styled and 'bgcolor="#FAFAFA"' in styled
+    assert "cluster_delta_legend" not in styled
+    assert sum("fontsize=21" in line for line in styled.splitlines()) == 2  # both members
+    assert sum('color="#00AA00"' in line for line in styled.splitlines()) == 2
+    assert (
+        bundle.draw(
+            graph="diff", path=str(tmp_path / "rankdir"), graph_overrides={"rankdir": "LR"}
+        ).dot.count("rankdir=LR")
+        == 1
+    )
+
+
+@pytest.mark.parametrize(("keyword", "value"), [("rolled", True), ("nodes", "members")])
+def test_bundle_diff_refuses_keywords_it_cannot_honour(
+    tmp_path: Path, keyword: str, value: Any
+) -> None:
+    """rolled=True and nodes="members" have no diff meaning: refused naming the keyword."""
+
+    with pytest.raises(ArgumentTypeError) as info:
+        _linear_pair().draw(graph="diff", path=str(tmp_path / "d"), **{keyword: value})
+    assert info.value.fields["code"] == "bundle_draw_keyword_unsupported"
+    assert info.value.fields["argument"] == keyword
+    assert keyword in str(info.value)
+
+
+def test_bundle_diff_caption_lines_are_left_justified(tmp_path: Path) -> None:
+    """Every caption line ends in ``\\l``: no centred line can run off the left edge."""
+
+    dot = _linear_pair().draw(graph="diff", path=str(tmp_path / "c")).dot
+    label = re.search(r'\blabel="(base vs patched[^"]*)"', dot)
+    assert label is not None
+    lines = label.group(1).split("\\l")
+    assert lines[-1] == "" and len(lines) == 4
+    assert "\\n" not in label.group(1)

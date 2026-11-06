@@ -62,15 +62,27 @@ def resolve_color_source(trace: Any, color_by: Any) -> Any:
     return color_by
 
 
-def _overlay_callable(trace: Any, scores: Mapping[str, Any]) -> EncodingChannelRequest:
-    """Build the ``color_by`` callable for a label or module-address mapping."""
+class _AddressOverlay:
+    """The ``color_by`` callable for a label or module-address mapping.
 
-    values = dict(scores)
-    module_keys = set(values) & _module_addresses(trace)
+    Called on a rendered node it returns the mapped value of the node's layer
+    label (or its pass-free base), else of a module address the node is the
+    output of. :meth:`module_value` gives a collapsed module box the value
+    keyed by its own address, so the box is painted from the mapping too.
+    """
 
-    def overlay(node: Any) -> Any:
+    __name__ = "overlay"
+
+    def __init__(self, values: dict[str, Any], module_keys: set[str]) -> None:
+        """Hold the mapping and the keys that name a captured module's output."""
+
+        self._values = values
+        self._module_keys = module_keys
+
+    def __call__(self, node: Any) -> Any:
         """Return the mapped value for one rendered node, else ``None``."""
 
+        values = self._values
         label = getattr(node, "layer_label", None)
         if label in values:
             return values[label]
@@ -78,10 +90,23 @@ def _overlay_callable(trace: Any, scores: Mapping[str, Any]) -> EncodingChannelR
         if base in values:
             return values[base]
         for address in record_member(node, "output_of_modules", ()) or ():
-            if address in module_keys:
+            if address in self._module_keys:
                 return values[address]
         return None
 
+    def module_value(self, address: str, call_index: str | None = None) -> Any:
+        """Return the value keyed by a module box's address (``addr:N`` first), else ``None``."""
+
+        if call_index is not None and f"{address}:{call_index}" in self._values:
+            return self._values[f"{address}:{call_index}"]
+        return self._values.get(address)
+
+
+def _overlay_callable(trace: Any, scores: Mapping[str, Any]) -> EncodingChannelRequest:
+    """Build the ``color_by`` callable for a label or module-address mapping."""
+
+    values = dict(scores)
+    overlay = _AddressOverlay(values, set(values) & _module_addresses(trace))
     return EncodingChannelRequest(source=overlay, display_name="overlay")
 
 

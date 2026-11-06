@@ -26,6 +26,7 @@ from ._edit_highlighter import (
     highlight_svg,
     render_highlighted,
 )
+from ._edit_marks import make_intervention_collapsed_spec_fn
 from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
 from ._endpoint_rings import color_scale_active
 from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
@@ -294,21 +295,20 @@ def _resolve_draw_request(
         Updated request, resolved theme, and intervention site labels.
     """
 
-    show_buffer_layers = _normalize_buffer_visibility(request.show_buffer_layers)
     theme = resolve_theme(request.theme)
     node_overlay = resolve_overlay_request(trace, request.node_overlay)
-    overrides = VisualizationOverrides(
-        graph=graphviz_graph_overrides(cast(Optional[Dict[str, Any]], request.graph_overrides)),
-        edge=cast(Optional[Dict[str, Any]], request.edge_overrides) or {},
-        grad_edge=cast(Optional[Dict[str, Any]], request.grad_edge_overrides) or {},
-        module=cast(Optional[Dict[str, Any]], request.module_overrides) or {},
-        arg_labels=request.show_arg_labels,
-    )
     request = replace(
         request,
-        show_buffer_layers=show_buffer_layers,
+        show_buffer_layers=_normalize_buffer_visibility(request.show_buffer_layers),
         node_overlay=cast("str | OverlayScores | None", node_overlay),
-        overrides=overrides,
+        overrides=VisualizationOverrides(
+            graph=graphviz_graph_overrides(cast(Optional[Dict[str, Any]], request.graph_overrides)),
+            edge=cast(Optional[Dict[str, Any]], request.edge_overrides) or {},
+            grad_edge=cast(Optional[Dict[str, Any]], request.grad_edge_overrides) or {},
+            module=cast(Optional[Dict[str, Any]], request.module_overrides) or {},
+            arg_labels=request.show_arg_labels,
+        ),
+        collapsed_node_spec_fn=make_intervention_collapsed_spec_fn(trace, request, theme),
     )
     site_labels, _ = intervention_site_and_cone_labels(trace, show_cone=request.show_cone)
     intervention_node_spec_fn = make_intervention_node_spec_fn(

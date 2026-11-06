@@ -267,7 +267,8 @@ DOCS: dict[str, str] = {
             name (``"flops_forward"``), a scalar builtin (``"time"``,
             ``"flops"``, ``"bytes"``, ``"magnitude"``, ``"grad_norm"``), a
             callable ``node -> value``, a mapping of layer label or module
-            address to value (an overlay; the legend names it ``overlay``), or
+            address to value (an overlay; the legend names it ``overlay``; a
+            collapsed module box takes the value at its own address), or
             an attribution result or an iterable of them (each layer-scoped
             result paints its layer with the ``abs_sum`` of its values; another
             reduction is a mapping you compute). Encoded nodes are filled from

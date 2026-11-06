@@ -1180,7 +1180,12 @@ Before changing anything it raises one of these codes:
   distance on the `on` field. Each pass of a layer that runs more than once is its own node with
   its own distance (the per-pass rows of `Bundle.compare`). `members=(left, right)` names the two
   (default the baseline and the next member). Its defaults are `theme="paper"`, `"svg"` and a
-  `bundle_diff` file, and it runs the comparison gate on the rendered pair only.
+  `bundle_diff` file, and it runs the comparison gate on the rendered pair only. `direction=`
+  turns the picture (`None` keeps the two members as side-by-side columns), the three
+  `*_overrides` apply as on the union graph (nodes and edges keyed by op label, in both
+  members), and `show_legend=False` drops the colour key; `rolled=True` and `nodes="members"`
+  have no diff meaning and refuse with `ArgumentTypeError` (`bundle_draw_keyword_unsupported`)
+  naming the keyword.
 - Unsupported keywords: any other keyword (a `Trace.draw` keyword the bundle renderer does not
   support yet, such as `depth=`) raises `ArgumentTypeError`
   (`bundle_draw_keyword_unsupported`) naming the supported list; each is added when the renderer
