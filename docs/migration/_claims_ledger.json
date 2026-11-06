@@ -82,7 +82,7 @@
     {
       "id": "readme-menagerie-catalog-count",
       "category": "any-model",
-      "wording": "of over 6,400 networks, spanning over eight decades of neural network history",
+      "wording": "of over 6,600 networks, spanning over eight decades of neural network history",
       "locations": [
         {
           "file": "README.md"
@@ -92,9 +92,9 @@
       "runtime_backend": "PyTorch eager (torch backend)",
       "models": "Model Menagerie (modelmenagerie.ai)",
       "evidence": [],
-      "evidence_note": "JMT's current Model Menagerie count, recorded 2026-11-04 (the Menagerie is its own project; the count is not reproducible from this repo).",
+      "evidence_note": "JMT's current Model Menagerie count, recorded 2026-11-05 (he ruled \"over 6600\" when the site showed 6,601; the Menagerie is its own project; the count is not reproducible from this repo).",
       "exclusions": "Menagerie entries are not all executed checks; the verified subset is readme-menagerie-replay-carriers.",
-      "date": "2026-11-04",
+      "date": "2026-11-05",
       "status": "unmeasured",
       "registry_ids": [
         "menagerie-phrasing",
@@ -104,7 +104,7 @@
     {
       "id": "readme-metadata-field-counts-total",
       "category": "capability",
-      "wording": "with [800+ metadata attributes](docs/reference/glossary.md) in all",
+      "wording": "with 800+ metadata attributes in all",
       "locations": [
         {
           "file": "README.md"
@@ -116,9 +116,9 @@
       "evidence": [
         "docs/reference/glossary.md"
       ],
-      "evidence_note": "The linked glossary lists the public attributes of every record type; no committed count of them is on file.",
+      "evidence_note": "The glossary lists the public attributes of every record type; no committed count of them is on file. The README no longer links the glossary from this sentence.",
       "exclusions": "The figure counts attributes across all record types (operation, module, parameter, buffer, grad_fn node, trace), not per operation.",
-      "date": "2026-11-04",
+      "date": "2026-11-05",
       "status": "unmeasured",
       "registry_ids": []
     },
@@ -257,7 +257,7 @@
     {
       "id": "readme-backends-preview-table",
       "category": "backends",
-      "wording": "it also has backends for JAX, TensorFlow, MLX, PaddlePaddle and tinygrad",
+      "wording": "it also has backends for JAX, MLX, TensorFlow, PaddlePaddle and tinygrad",
       "locations": [
         {
           "file": "README.md"
@@ -269,9 +269,9 @@
       "evidence": [
         "docs/backends.md"
       ],
-      "evidence_note": "docs/backends.md#capability-matrix is the linked feature comparison; every non-PyTorch backend is a preview.",
+      "evidence_note": "docs/backends.md#what-works-on-each-framework is the linked feature comparison; every non-PyTorch backend is a preview.",
       "exclusions": "Preview backends do not cover the full PyTorch feature set; see the capability matrix.",
-      "date": "2026-11-04",
+      "date": "2026-11-05",
       "status": "preview-or-partial",
       "registry_ids": [],
       "say_today": "Stable PyTorch and five named previews",
@@ -721,6 +721,28 @@
       "registry_ids": [
         "attribution-destinations"
       ]
+    },
+    {
+      "id": "readme-select-any-describable-set",
+      "category": "capability",
+      "wording": "Any set of units you can describe by their kind, location and causal links to other units can be picked out with a single selector",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "n/a",
+      "evidence": [
+        "docs/reference/selection_completeness.md",
+        "tests/test_selection_completeness_examples.py"
+      ],
+      "evidence_note": "The linked page proves absolute completeness on one capture and relative completeness for a declared query language of attribute predicates, set operations and dataflow reachability (with two stated caveats); its worked examples run in tests/test_selection_completeness_examples.py.",
+      "exclusions": "Relative completeness holds for the declared query language, with the two caveats the page spells out; completeness is about where, not how much one site influences another.",
+      "date": "2026-11-05",
+      "status": "train-only",
+      "registry_ids": []
     }
   ]
 }
