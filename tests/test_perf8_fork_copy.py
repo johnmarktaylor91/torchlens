@@ -746,6 +746,7 @@ def _pending_keys(alive: bool) -> set[Any]:
     }
 
 
+@pytest.mark.usefixtures("dynamo_free_process")
 def test_fork_stays_cheap_after_a_dropped_deferred_capture() -> None:
     """A dropped capture with deferred payloads leaves no registry entry a later fork pays for.
 
@@ -766,6 +767,7 @@ def test_fork_stays_cheap_after_a_dropped_deferred_capture() -> None:
     assert not minted & set(tensor_utils._DEFER_PENDING), "dead keys stayed registered"
 
 
+@pytest.mark.usefixtures("dynamo_free_process")
 def test_fork_stays_cheap_while_a_deferred_capture_is_alive() -> None:
     """A live capture with deferred payloads adds nothing a later fork pays for.
 

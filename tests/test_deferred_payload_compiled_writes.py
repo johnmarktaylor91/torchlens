@@ -39,7 +39,6 @@ from torchlens._utils import _compiled_write_guard, _torch_compat, tensor_utils
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
 pytestmark = [
-    pytest.mark.heavy,
     pytest.mark.skipif(
         not _torch_compat.get_torch_cpp_extension_support(),
         reason="HAS_TORCH_CPP_EXTENSION is False: inductor's CPU backend cannot import "
@@ -158,6 +157,7 @@ def _assert_payloads_unchanged(trace: tl.Trace, saved: dict[str, torch.Tensor]) 
     assert changed == []
 
 
+@pytest.mark.heavy
 @pytest.mark.parametrize("spelling", sorted(_SPELLINGS))
 def test_write_compiled_after_capture_leaves_saved_payload_intact(spelling: str) -> None:
     """Compiling the write traces it through the wrapper, which copies pending aliases out."""
@@ -175,6 +175,7 @@ def test_write_compiled_after_capture_leaves_saved_payload_intact(spelling: str)
     _assert_payloads_unchanged(trace, saved)
 
 
+@pytest.mark.heavy
 @pytest.mark.parametrize("spelling", sorted(_SPELLINGS))
 def test_write_compiled_before_capture_leaves_saved_payload_intact(spelling: str) -> None:
     """A guard-cache hit runs the kernel with no compile event; the capture must not defer."""
@@ -189,16 +190,17 @@ def test_write_compiled_before_capture_leaves_saved_payload_intact(spelling: str
     _assert_payloads_unchanged(trace, saved)
 
 
-def test_dynamo_loaded_materializes_earlier_pending_payloads() -> None:
-    """The first capture that sees Dynamo copies out what earlier captures left pending."""
+def test_capture_with_dynamo_loaded_materializes_earlier_pending_payloads() -> None:
+    """The first capture that sees Dynamo loaded copies out what earlier captures left pending."""
+
+    import torch._dynamo  # noqa: F401  (already loaded by the compiles above; explicit here)
 
     with _dynamo_not_loaded():
-        _, live, _ = _capture()
-        assert _is_pending(live)
-    import torch._dynamo  # noqa: F401  (loaded in this process already; makes the premise explicit)
-
-    assert _compiled_write_guard.compiled_writes_possible()
+        _, earlier_live, _ = _capture()
+        assert _is_pending(earlier_live)
+    _, live, _ = _capture()
     assert not _is_pending(live)
+    assert not _is_pending(earlier_live)
 
 
 def test_unwrap_torch_materializes_pending_payloads() -> None:

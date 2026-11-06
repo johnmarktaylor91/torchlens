@@ -60,6 +60,21 @@ def root_edits_in_place():
         yield
 
 
+@pytest.fixture
+def dynamo_free_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let captures defer payloads as they do in a process that never imported Dynamo.
+
+    Once ``torch._dynamo`` is loaded every capture keeps eager payload clones
+    (``torchlens._utils._compiled_write_guard``), and an earlier test on the same
+    worker may have loaded it. Tests that need deferral to happen request this.
+    """
+
+    from torchlens._utils import _compiled_write_guard
+
+    monkeypatch.setattr(_compiled_write_guard, "compiled_writes_seen", lambda: False)
+    monkeypatch.setattr(_compiled_write_guard, "compiled_writes_possible", lambda: False)
+
+
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_OUTPUTS_DIR = ""
 REPORTS_DIR = ""
