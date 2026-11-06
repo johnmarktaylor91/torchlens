@@ -26,6 +26,7 @@ from typing import Any, Literal, cast, get_args
 import torch
 
 from .._state import pause_logging
+from ._defer_gate import _DEFER_GATE
 from ._internal_read import internal_scalar_read
 from ._sparse_parts import sparse_component_tensors
 from ._tensor_label import get_tensor_label, set_tensor_label
@@ -960,12 +961,10 @@ _PAYLOAD_MEMORY_FORMAT = torch.preserve_format
 
 # Kill switch: TORCHLENS_EAGER_PAYLOAD_CLONE=1 restores unconditional eager
 # clones (also used by the perf harness for A/B runs).
-# IMPORT-TIME LATCH: read once here and value-copied into
-# ``backends/torch/wrappers.py`` at ITS import; a runtime ``setenv`` is a
-# silent no-op. Set the variable BEFORE the process imports torchlens (user
-# guidance must never recommend the runtime spelling). Promotion to a
-# session-time CaptureOptions knob spans options.py + wrappers.py and ships
-# with their owning lanes.
+# IMPORT-TIME LATCH: read once here and value-copied into ``backends/torch/wrappers.py`` at ITS
+# import; a runtime ``setenv`` is a silent no-op. Set the variable BEFORE the process imports
+# torchlens (user guidance must never recommend the runtime spelling). Promotion to a session-time
+# CaptureOptions knob spans options.py + wrappers.py and ships with their owning lanes.
 _DEFER_ENABLED: bool = not closed_bool_env("TORCHLENS_EAGER_PAYLOAD_CLONE")
 
 # Opt-in: TORCHLENS_DEFER_GRAD_PAYLOADS=1 extends deferral to graph-connected
@@ -974,18 +973,15 @@ _DEFER_ENABLED: bool = not closed_bool_env("TORCHLENS_EAGER_PAYLOAD_CLONE")
 # Same import-time latch caveat as above.
 _DEFER_GRAD_ENABLED: bool = closed_bool_env("TORCHLENS_DEFER_GRAD_PAYLOADS")
 
-# storage key -> list of pending aliases. NEVER rebound (only mutated), so the
-# wrapper can bind the dict object once and use plain truthiness on its hot
-# path. Keys are (storage_data_ptr, storage_nbytes, device_str): unique among
-# live storages, and every pending alias keeps its storage alive. A dead alias's
-# key goes with its last live alias (weakref callback): while the registry holds
-# anything, every mutating wrapped call (``Tensor.__deepcopy__`` runs ``set_``)
-# searches its arguments, so a dropped trace must leave it empty.
+# storage key (data_ptr, nbytes, device_str) -> pending aliases; every alias keeps its
+# storage alive. A dead alias's key goes with its last live alias (weakref callback).
+# The wrappers read ``_DEFER_GATE`` instead (Dynamo guards what they read): while it is
+# armed, every mutating wrapped call (``Tensor.__deepcopy__`` runs ``set_``) searches here.
 _DEFER_PENDING: dict[tuple[int, int, str], list["_PendingPayloadAlias"]] = {}
 
-# Window state, armed by the torch wrapper strictly around the payload-saving
-# call for eligible captures. Single-threaded by design, like all capture
-# state; the arming side stores the excluded state-storage pointers.
+# Window state, armed by the torch wrapper strictly around the payload-saving call for eligible
+# captures. Single-threaded by design, like all capture state; the arming side stores the excluded
+# state-storage pointers.
 _DEFER_WINDOW_DEPTH: int = 0
 _DEFER_STATE_PTRS: frozenset[int] | None = None
 _DEFER_BUSY: bool = False
@@ -1138,6 +1134,7 @@ def _try_defer_payload_alias(
     entries = _DEFER_PENDING.get(key) or []
     entries.append(_PendingPayloadAlias(ref, version))
     _DEFER_PENDING[key] = entries  # stored after the append: a death callback may pop ``key``
+    _DEFER_GATE.armed = True
     return alias
 
 
@@ -1188,13 +1185,13 @@ def _rebind_alias_to_fresh_clone(alias: torch.Tensor) -> None:
 def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
     """Materialize pending payload aliases before a mutating wrapped call.
 
-    Called by the torch wrapper pre-execution — during capture AND on the
-    post-capture fast path — for any call that can write through its tensor
-    arguments. For each argument whose storage has pending aliases, every
-    pending alias is copied out onto exclusive fresh storage BEFORE the
-    mutation runs.
+    Called by the torch wrapper pre-execution — during capture AND on the post-capture fast
+    path — for any call that can write through its tensor arguments. For each argument whose
+    storage has pending aliases, every pending alias is copied out onto exclusive fresh storage
+    BEFORE the mutation runs.
     """
     global _DEFER_BUSY
+    _DEFER_GATE.armed = bool(_DEFER_PENDING)  # an empty registry disarms the wrappers' check
     if not _DEFER_PENDING or _DEFER_BUSY:
         return
     _state = _state_module()
@@ -1231,6 +1228,9 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
                         _rebind_alias_to_fresh_clone(alias)
     finally:
         _DEFER_BUSY = False
+
+
+_DEFER_GATE.materialize = materialize_deferred_for_call
 
 
 def _alias_covers_whole_storage(alias: torch.Tensor, storage_nbytes: int) -> bool:
