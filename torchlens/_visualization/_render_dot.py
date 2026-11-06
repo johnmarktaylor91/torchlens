@@ -399,7 +399,7 @@ def _resolve_collapse_request(
             # chips fail closed rather than crash mid-layout (no
             # rank arm until the fix lands).
             raise InvalidArgumentError(
-                "fold_patterns is not supported under vis_node_placement="
+                "fold_patterns is not supported under layout="
                 "'rank' in v1: the rank backend cannot position "
                 "segment-family chip nodes yet",
                 code="pattern_rank_layout_unsupported",
@@ -1295,7 +1295,7 @@ def draw(
     _validate_draw_flag_options(
         show_containers,
         vis_save_only=vis_save_only,
-        vis_show_cone=vis_show_cone,
+        show_cone=vis_show_cone,
         show_edge_shapes=show_edge_shapes,
         show_legend=show_legend,
         order_siblings=order_siblings,

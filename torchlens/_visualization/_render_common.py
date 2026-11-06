@@ -330,7 +330,7 @@ SIBLING_ORDER_COST_NOTICE = (
     "TorchLens skipped sibling-order verification: its up-to-{budget} extra "
     "layout passes would exceed the layout budget (estimated layout "
     "cost={cost} x {budget} > threshold={threshold}). Siblings render in "
-    "Graphviz's default order. Reduce graph complexity with vis_call_depth, "
+    "Graphviz's default order. Reduce graph complexity with depth=, "
     "rolled mode, or module= focus, or disable this pass explicitly with "
     "order_siblings=False."
 )
@@ -354,8 +354,8 @@ class GraphvizRenderError(_ActionableErrorMixin, CompatibilityError, RuntimeErro
 
     code: str = "graphviz_render_failed"
     default_remedy: str = (
-        "lower dpi, render direct SVG with vis_fileformat='svg', or reduce the "
-        "graph with a node cap such as vis_call_depth"
+        "lower dpi, render direct SVG with file_format='svg', or reduce the "
+        "graph with a node cap such as depth="
     )
 
     def __init__(
@@ -411,8 +411,8 @@ class GraphvizUnavailableError(GraphvizRenderError):
 
 
 _GRAPHVIZ_ESCAPE_HINT = (
-    "Try lowering dpi, rendering direct SVG with vis_fileformat='svg', or reducing the graph "
-    "with a node cap such as vis_call_depth."
+    "Try lowering dpi, rendering direct SVG with file_format='svg', or reducing the graph "
+    "with a node cap such as depth=."
 )
 
 

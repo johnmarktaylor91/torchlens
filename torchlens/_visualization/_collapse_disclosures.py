@@ -56,7 +56,7 @@ def _warn_undisclosed_floor(
                 f"back to the conservative floor plan ({result.visible_count} visible "
                 f"nodes): {detail} "
                 "Remedy: reduce the rendered graph with module= focus, "
-                "vis_call_depth, or rolled mode",
+                "depth=, or rolled mode",
                 code="collapse_floor_fallback",
             ),
             stacklevel=user_stacklevel(),
@@ -77,7 +77,7 @@ def _warn_undisclosed_floor(
                 f"collapse={collapse!r} selected a plan with {result.visible_count} of "
                 f"{total_units} rendered units visible -- nearly the uncollapsed graph. "
                 "Remedy: reduce the rendered graph with module= focus, "
-                "vis_call_depth, or rolled mode",
+                "depth=, or rolled mode",
                 code="collapse_near_uncollapsed",
             ),
             stacklevel=user_stacklevel(),
@@ -118,7 +118,7 @@ def _warn_budget_fallback(trace: Trace, mode: str, result: OptimizerResult) -> N
     fired = diagnostics.budget_fired if diagnostics is not None else None
     remedy = (
         "The render is a coarse-but-legal overview, never an uncollapsed "
-        "wall; reduce the rendered graph with module= focus, vis_call_depth, "
+        "wall; reduce the rendered graph with module= focus, depth=, "
         "or rolled mode to re-admit the quality planner."
     )
     if fired in {"watchdog", "allocation"}:

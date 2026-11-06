@@ -387,7 +387,7 @@ def _add_intervention_hook_nodes(
     graph_overrides: dict[str, Any] | None,
     theme: VisualizationTheme | None = None,
 ) -> None:
-    """Add standalone hook nodes for ``vis_intervention_mode='as_node'``.
+    """Add standalone hook nodes for ``intervention_mode='as_node'``.
 
     Each hook is a small diamond in the edit purple (ring and a bold delta,
     pale purple fill) between the edited node and its consumers; its tooltip

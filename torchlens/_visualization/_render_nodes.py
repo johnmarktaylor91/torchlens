@@ -93,10 +93,9 @@ def _normalize_buffer_visibility(
     if show_buffer_layers in {"never", "meaningful", "always"}:
         return show_buffer_layers
     raise InvalidArgumentError(
-        "show_buffer_layers must be 'never', 'meaningful', or 'always'; "
-        f"received {show_buffer_layers!r}",
+        f"show_buffers must be 'never', 'meaningful', or 'always'; received {show_buffer_layers!r}",
         code="buffer_visibility_invalid",
-        remedy="pass show_buffer_layers='never', 'meaningful', or 'always'",
+        remedy="pass show_buffers='never', 'meaningful', or 'always'",
         argument="show_buffers",
     )
 

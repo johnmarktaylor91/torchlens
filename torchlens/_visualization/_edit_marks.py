@@ -5,7 +5,7 @@ last label row naming the edit (``Δ zero_ablate``, ``Δ scale(0.5)``); the
 header gets one line naming the edits (``1 edit: Δ zero_ablate on
 linear_1_1``). Nodes changed downstream of the edit are tagged with an SVG
 class only; the translucent highlighter under them is drawn after layout
-(:mod:`._edit_highlighter`) and is off unless ``vis_show_cone=True``.
+(:mod:`._edit_highlighter`) and is off unless ``show_cone=True``.
 
 The edit text rule: the helper name alone when the edit takes no arguments,
 short literal arguments written in, and tensors, callables and traces as a

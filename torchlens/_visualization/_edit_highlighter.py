@@ -133,12 +133,12 @@ def highlighter_supported(fileformat: str) -> bool:
     if fileformat in _CAIRO_FORMATS:
         if not get_cairosvg_support():
             _warn_unsupported(
-                f"vis_fileformat={fileformat!r} needs cairosvg (pip install cairosvg): "
+                f"file_format={fileformat!r} needs cairosvg (pip install cairosvg): "
                 f"{cairosvg_unavailable_reason()}"
             )
             return False
         return True
-    _warn_unsupported(f"vis_fileformat={fileformat!r} is not svg, pdf or png")
+    _warn_unsupported(f"file_format={fileformat!r} is not svg, pdf or png")
     return False
 
 
@@ -147,9 +147,9 @@ def _warn_unsupported(reason: str) -> None:
 
     warnings.warn(
         TorchLensWarning(
-            f"The downstream highlighter (vis_show_cone=True) was not drawn: {reason}. "
+            f"The downstream highlighter (show_cone=True) was not drawn: {reason}. "
             "The edited node is still marked. "
-            "Remedy: use vis_fileformat='svg', or install cairosvg for PDF and PNG",
+            "Remedy: use file_format='svg', or install cairosvg for PDF and PNG",
             code="viz_highlighter_not_drawn",
         ),
         stacklevel=user_stacklevel(),

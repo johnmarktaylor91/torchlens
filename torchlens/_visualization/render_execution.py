@@ -189,7 +189,7 @@ def surface_layout_stderr(stderr: str | bytes | None, *, engine: str) -> str:
                 f"Graphviz engine {engine!r} completed but reported: {text} "
                 "Remedy: read trace._last_render_geometry for the structured "
                 "record; if the message names a size clamp, render direct SVG "
-                "or reduce the graph with module= focus or vis_call_depth",
+                "or reduce the graph with module= focus or depth=",
                 code="layout_engine_stderr",
             ),
             stacklevel=user_stacklevel(),
@@ -222,7 +222,7 @@ def warn_oversize_vector(record: RenderGeometryRecord) -> None:
             f"pt, past the {VECTOR_PAGE_CEILING_POINTS:.0f} pt per-side page limit many "
             f"viewers enforce; it was written as requested to {record.output_path}. "
             "Remedy: for a readable picture draw with collapse='auto', focus one "
-            "subtree with module=, or limit vis_call_depth",
+            "subtree with module=, or limit depth=",
             code="render_vector_oversize",
         ),
         stacklevel=user_stacklevel(),

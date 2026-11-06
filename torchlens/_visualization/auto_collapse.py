@@ -705,7 +705,7 @@ def resolve_repeat_folds(
             f"{len(trace._layer_list)} ops, above the collapse engine's compute "
             f"ceiling COLLAPSE_OPTIMIZER_MAX_OPS={COLLAPSE_OPTIMIZER_MAX_OPS}. "
             "The graph renders without folds; reduce the rendered graph "
-            "first with module= focus, vis_call_depth, or rolled mode.",
+            "first with module= focus, depth=, or rolled mode.",
             TorchLensWarning,
             stacklevel=2,
         )
