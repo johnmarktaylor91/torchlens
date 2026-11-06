@@ -465,8 +465,8 @@ class BundlePictureOptions:
 def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str:
     """Build and render the bundle picture behind ``Bundle.draw``.
 
-    Arguments are documented on :meth:`torchlens.Bundle.draw`; :func:`draw_bundle`
-    checks them first.
+    Arguments are documented on :meth:`torchlens.Bundle.draw`;
+    :func:`torchlens.bundle._draw.bundle_draw` checks them first.
 
     Returns
     -------
