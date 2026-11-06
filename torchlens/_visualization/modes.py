@@ -510,6 +510,12 @@ def _attention_projection_role(layer_log: Op | Layer, containing_mha: bool) -> s
     if not containing_mha:
         return None
     config = _get_optional_attr(layer_log, "func_config")
-    if isinstance(config, dict) and config.get("out_features") == config.get("in_features"):
+    if (
+        isinstance(config, dict)
+        and "out_features" in config
+        and config.get("out_features") == config.get("in_features")
+    ):
+        # Both keys must be present: a config missing them compared None == None
+        # and labelled every attention linear ``out``.
         return "out"
     return "qkv"
