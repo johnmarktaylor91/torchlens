@@ -8,7 +8,7 @@
 
 **Inspect, visualize and intervene on any operation in any neural network.**
 
-<p align="center"><a href="#install">Install</a> · <a href="https://johnmarktaylor91.github.io/torchlens/">Docs</a> · <a href="#learning-torchlens">Tutorials</a> · <a href="#visualization-examples">Visualizations</a> · <a href="https://modelmenagerie.ai">Model&nbsp;Menagerie</a> · <a href="#citing-torchlens">Cite</a></p>
+<p align="center"><a href="#install">Install</a> · <a href="#learning-torchlens">Tutorials</a> · <a href="#visualization-examples">Visualizations</a> · <a href="https://modelmenagerie.ai">Model&nbsp;Menagerie</a> · <a href="#citing-torchlens">Cite</a></p>
 
 <p align="center"><img alt="TorchLens drawing of a Hugging Face ViT given a cat photo: the photo in the input box, the ViT folded into one box, and an output box listing tabby cat 42%, Egyptian cat 39%, tiger cat 17%" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/readme_splash.png" width="100%"></p>
 
