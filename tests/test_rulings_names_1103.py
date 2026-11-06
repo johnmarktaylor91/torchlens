@@ -148,6 +148,27 @@ def test_names6_rank_changes_by_module_names_modules() -> None:
     assert {key for key, _ in pair.rank_changes(k=64, by="site")} == {key for key, _ in site_rows}
 
 
+def test_names6_rank_changes_by_module_rows_every_enclosing_module() -> None:
+    """An enclosing module (``dec``, like ``transformer.h.9``) is a row, scored by its sites."""
+
+    trace, pair = _ablated_pair()
+    site_rows = dict(pair.rank_changes(k=64))
+    module_rows = dict(pair.rank_changes(k=64, by="module"))
+    assert {"enc", "enc.0", "dec", "dec.0", "dec.1"} <= set(module_rows)
+    inside_dec = [
+        site_rows[site_row_key(op)]
+        for op in trace.ops
+        if any(str(call).rsplit(":", 1)[0] == "dec" for call in op.modules)
+        and site_row_key(op) in site_rows
+    ]
+    assert inside_dec
+    assert module_rows["dec"] == pytest.approx(max(inside_dec))
+    assert module_rows["dec"] == pytest.approx(max(module_rows["dec.0"], module_rows["dec.1"]))
+    assert module_rows["dec"] > module_rows["enc"]
+    # k caps after the fold: the top row of a k=1 call is the top row of the full ranking.
+    assert pair.rank_changes(k=1, by="module") == pair.rank_changes(k=64, by="module")[:1]
+
+
 def test_names6_rank_changes_by_refuses_other_values() -> None:
     _, pair = _ablated_pair()
     with pytest.raises(InvalidArgumentError) as info:
