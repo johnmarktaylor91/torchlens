@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1742 modules, 704462 lines, 0 modules without a docstring.
+85 packages, 1742 modules, 704543 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -42,7 +42,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4635 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24007 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 106 | 49403 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 106 | 49484 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1151 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 757 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2486 |
@@ -1044,7 +1044,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (106 modules, 49403 lines)
+Computational graph visualization via Graphviz. (106 modules, 49484 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1073,7 +1073,7 @@ Computational graph visualization via Graphviz. (106 modules, 49403 lines)
 | `_edge_shapes` | Optional producer-shape annotations on resolved forward edges. | 97 |
 | `_edit_change` | Value-change marks for the interventions view: which ops an edit changed. | 305 |
 | `_edit_highlighter` | The downstream highlighter: a translucent purple stroke under changed arrows and nodes. | 348 |
-| `_edit_marks` | Edit marks: how a forward picture shows an intervention. | 632 |
+| `_edit_marks` | Edit marks: how a forward picture shows an intervention. | 683 |
 | `_encoding` | Encoding-channel core: declarative value -> visual channels for draw. | 1726 |
 | `_encoding_aggregate` | Exact aggregates for encoding channels on collapsed module boxes and segments. | 468 |
 | `_encoding_key` | The drawn encoding key and the non-drawn record of how values were encoded. | 256 |
@@ -1125,7 +1125,7 @@ Computational graph visualization via Graphviz. (106 modules, 49403 lines)
 | `_stacking` | Rank (stacking) channel: annotation -> same-graphviz-rank groups. | 272 |
 | `_surgery_diff` | Site-key-first surgery diff: two captures, joined on identity. | 490 |
 | `_svg_compose` | SVG post-processing and code-panel composition for rendered graphs. | 450 |
-| `_svg_text_runs` | Flow the mixed-font text runs of a header line or an edit row into one SVG text. | 139 |
+| `_svg_text_runs` | Flow the mixed-font text runs of a header line or an edit row into one SVG text. | 169 |
 | `_trace_collapse` | Collapse diagnostics as ''f(trace, ...)'' functions. | 104 |
 | `_trace_draw` | Trace drawing, overlay, animation and preview functions (record rebuild destination). | 368 |
 | `_trace_draw_arguments` | Forward- and backward-graph keyword translation for the Trace drawing door. | 120 |
