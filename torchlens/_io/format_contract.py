@@ -282,8 +282,8 @@ def below_floor_error(
 
     remedy = f"{_REMEDY} {remedy_note}" if remedy_note else _REMEDY
     return ArtifactTooOldError(
-        f"This artifact was saved by torchlens 2.37 and earlier ({observed}); torchlens 2.38 "
-        f"does not read files saved by torchlens 2.37 and earlier. Remedy: {remedy}",
+        f"This artifact was saved by torchlens 2.37 and earlier ({observed}); this torchlens "
+        f"release does not read files saved by torchlens 2.37 and earlier. Remedy: {remedy}",
         code=code,
         observed=observed,
         floor_tlspec_version=MIN_TLSPEC_VERSION,
