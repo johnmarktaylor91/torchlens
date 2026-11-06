@@ -82,7 +82,7 @@ episode-declared and undeclared runs of the same seeded fixture.
 `nn.Module` whose successive top-level calls define step boundaries. It must
 be a PROPER submodule of the traced episode root. On a BOUND-METHOD root
 (the ruled root contract: `tl.trace(model.generate, ids,
-episode=EpisodeOptions(n_steps=N))` — the owner resolves via
+episode=EpisodeOptions(num_steps=N))` — the owner resolves via
 `method.__self__` and is the root `self` of the TL-authored wrapper root's
 tree; the stepped address recorded is `self`) `stepped_module` DEFAULTS to the owner; on a module root it is
 required, and `None` refuses typed (`episode_declaration_invalid`) — wrap
@@ -259,8 +259,7 @@ the travel policy dropped, below). `trace.episode` is the public step
 access: the parsed ledger with `header`, ordered per-step `rows`,
 `steps_completed`, and `truncated_at_step` — `None` for plain captures and
 quarantined/dropped payloads. Both names are experimental and may change in
-any release. The declaration class is `tl.options.EpisodeOptions` (the
-root `tl.EpisodeOptions` spelling awaits the surface-table amendment).
+any release. The declaration class is `tl.options.EpisodeOptions`.
 
 ## Settlement refusals keep the product
 

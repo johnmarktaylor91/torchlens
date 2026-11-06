@@ -87,7 +87,7 @@ with no per-node facts.
 ## Opening it
 
 - File: open in the Netron desktop app or at `netron.app` — no extra needed.
-- `open=True`: serves through the netron package (loopback, ephemeral port)
+- `serve=True`: serves through the netron package (loopback, ephemeral port)
   and opens a browser tab or notebook widget; needs
   `pip install 'torchlens[netron]'` (refusal code `netron_serve_unavailable`
   teaches this). With `path=None` the artifact serves from memory.

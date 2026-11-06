@@ -1,4 +1,4 @@
-# Train a truncated backbone through `trace.run`
+# Train a truncated backbone through `trace.run_transaction`
 
 Feature-extractor libraries let you cut a pretrained network at a stage and
 fine-tune the prefix. TorchLens does the same from one trace: trace the model

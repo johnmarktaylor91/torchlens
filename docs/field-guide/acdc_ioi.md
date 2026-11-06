@@ -218,8 +218,6 @@ print(len(record), sorted(from_record_kept) == sorted(kept), again == current)
 RESULT = (len(record), sorted(from_record_kept) == sorted(kept), again == current) == (13, True, True)
 ```
 
-Printed output on CPU (float64): filled in from the page's test run.
-
 The page's test (`tests/test_circ3_acdc_recipe.py`) runs these fences in
 order, re-runs the pruning loop independently of the record and checks that
 it prunes the same edges, and checks that every tested edge has exactly one

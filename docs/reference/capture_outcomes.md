@@ -10,7 +10,7 @@ the record or on the stable refusal codes below — never on exception text.
 | status | meaning | `is_partial` |
 |---|---|---|
 | `COMPLETE` | settled complete; attested by the settlement stamp | `False` |
-| `STOPPED` | stopped by `stop=` or imperative `tl.recording.stop()`; an honest prefix | `True` |
+| `STOPPED` | stopped by `stop_after=` or imperative `tl.recording.stop()`; an honest prefix | `True` |
 | `ABORTED_NONFINITE` | stopped by the `on_nonfinite='raise'` policy | `True` |
 | `FAILED` | the capture raised; phase + diagnostic origin attribution | `True` |
 | `UNATTESTED` | structurally finished, but no settlement evidence (legacy artifacts only) | `None` |
@@ -62,7 +62,7 @@ describe the original exception in both cases. Interrupts (`KeyboardInterrupt`,
 - `Bundle.outcome` — the DERIVED worst-of-members fold (declared container
   authority, never a second stored answer, as with
   PartialTrace and Recording). The status is the most severe member status
-  under the fold's total severity order (`complete < unattested < halted <
+  under the fold's total severity order (`complete < unattested < stopped <
   aborted_nonfinite < failed < unknown` — capability-table restrictiveness,
   ties broken by epistemic weakness), so COMPLETE is never blessed above the
   weakest member; a member with no settled outcome folds as UNKNOWN
@@ -76,7 +76,7 @@ describe the original exception in both cases. Interrupts (`KeyboardInterrupt`,
 - `Trace.fork().outcome` — a DERIVED record settled by `stamp_forked`, never
   the parent's attestation by identity: a fork is the sanctioned mutation
   surface, so it settles through the structural lattice (UNATTESTED for a
-  complete parent, HALTED-derived for a halted one), keeps the parent's
+  complete parent, STOPPED-derived for a stopped one), keeps the parent's
   committed-op count, and records `forked_from=<parent status>` in the
   settlement note. Capability parity holds (every UNATTESTED cell is
   allow/allow-scoped), so nothing a fork could do before is newly refused.
@@ -125,7 +125,7 @@ Enforced through the ONE chokepoint
 | live replay: refresh / `save_new_outs` / `do` replay / rerun / live `run()` / `fast=True` | allow | refuse N5 | refuse N3 | allow | refuse N3 |
 | loaded-sparse `run()` | allow | **allow** — executes exactly the recorded prefix DAG | refuse N3 | allow | refuse N3 |
 | `backward` / `capture_backward` | allow | allow — the autograd graph IS the captured prefix | refuse N3 | allow | refuse N3 |
-| draw / `report.explain` / inspection / fork / load | allow | allow | via `PartialTrace` / pickle inspection, as today | allow | allow (analysis-only, coreless staging) |
+| draw / `trace.explain()` / inspection / fork / load | allow | allow | via `PartialTrace` / pickle inspection, as today | allow | allow (analysis-only, coreless staging) |
 
 Row rationales, stated once:
 
@@ -150,7 +150,7 @@ Row rationales, stated once:
 - **`Recording.backward`** refuses a failed partial with the table's N3
   code (`RecorderStateError`, `fields["code"] == "N3"`) and additionally
   refuses STOPPED with `fields["code"] == "recording_backward_halted"` — a
-  deliberate Recording-scoped strictness beyond the table's HALTED-allow
+  deliberate Recording-scoped strictness beyond the table's STOPPED-allow
   cell, which describes Trace-side backward (a halted Trace holds the prefix
   autograd graph; a halted Recording is a sparse event product whose frontier
   pass retained no complete output to root the backward walk, the same
@@ -232,7 +232,7 @@ settlement stamp — consumes the latch, refusing a latched-but-unhalted
 capture with the same typed error and a FAILED settlement instead of the
 COMPLETE arm. A swallowed nonfinite abort is FAILED, never a clean
 ABORTED_NONFINITE (the abort did not actually stop the forward). Imperative
-`halt()` outside any capture propagates to the caller exactly as before.
+`tl.recording.stop()` outside any capture propagates to the caller exactly as before.
 
 ## Settlement totality and productless escapes
 

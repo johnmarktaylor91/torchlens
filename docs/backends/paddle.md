@@ -45,7 +45,7 @@ recorded separately.
 
 Tensors a function or layer reads from outside the traced call (a closure variable, a
 module-level global, a plain tensor attribute of a layer) are recorded as **constants**:
-parentless ops with `layer_type == "constant"` and a saved value, listed as parents of the
+parentless ops with `op.type == "constant"` and a saved value, listed as parents of the
 op that read them. Ops that build a tensor from literals (`paddle.ones`, `paddle.full`,
 ...) stay parentless ops and are replayed by validation.
 

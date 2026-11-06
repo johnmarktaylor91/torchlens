@@ -2,7 +2,7 @@
 
 This page is for people who extract features from a model zoo with thingsvision and want the same
 numbers from a model they load themselves. The examples were written against thingsvision 1.4.x
-APIs (see the environment note below) and the TorchLens version on this branch. Checked 2026-11-03.
+APIs (see the environment note below) and the current TorchLens release. Checked 2026-11-03.
 
 [thingsvision](https://github.com/ViCCo-Group/thingsvision) (ViCCo-Group; Muttenthaler & Hebart)
 made preprocessing correctness a first-class concern in NeuroAI feature extraction, and its
@@ -91,7 +91,7 @@ features = tl.extract_dataset(
 | bundled matched preprocessing | Resolve YOUR loader's own preprocessing and verify it: `torchlens.preprocessing.resolve(...)` / `.audit(...)`. |
 | `extractor.show_model()` | `torchlens.inventory.list_sites(model, x)`: structured rows with copy-paste-safe selectors, shapes, and pass indices. |
 | `extract_features(batches, module_names=[...])` | `tl.extract(model, x, [...])` (one batch) or `tl.extract_dataset(...)` (datasets, disk artifacts, resume). |
-| `save_features(features, out_path, file_format=...)` | disk-mode `tl.extract_dataset(..., output_dir=...)` plus `tl.load(...)`; per-site adapters in `torchlens.bridge`. |
+| `save_features(features, out_path, file_format=...)` | disk-mode `tl.extract_dataset(..., path=...)` plus `tl.load(...)`; per-site adapters in `torchlens.bridge`. |
 | CLIP through the custom source | Load with `transformers`, extract `vision_model.post_layernorm`, apply `visual_projection` yourself (below). |
 
 ### The CLIP image embedding
@@ -137,7 +137,7 @@ dataset = tl_rsa.dataset("resnet50_features", site="avgpool")  # layer-wise RSA
 ```
 
 To keep large layers small during extraction, pass
-`transform={"layer4": tl.transforms.srp(n_components, seed=0)}` to `tl.extract_dataset`: sparse
+`output_transform={"layer4": tl.transforms.srp(n_components, seed=0)}` to `tl.extract_dataset`: sparse
 random projection, the speed trick DeepJuice uses for brain benchmarking (worked example in
 [model zoos](from_model_zoos.md)).
 
@@ -182,8 +182,8 @@ There is no bridge. Export the extracted matrices (`tl.load(...)` artifacts, or 
   `"avgpool"`); TorchLens accepts those same qualified addresses, plus operation labels
   (`"conv2d_2_5"`) and pass-qualified spellings for recurrent sites (`"linear_1_1:2"`). Run
   `torchlens.inventory.list_sites(model, x)` once and copy selectors from the first column.
-- The `transform=` trap. On `tl.trace`, `transform=` preprocesses inputs. On `tl.extract_dataset`,
-  `transform=` transforms outputs before storage (thingsvision's `apply_transforms` habit). For
+- The `output_transform=` trap. On `tl.extract_dataset`, `output_transform=` transforms outputs
+  before storage (thingsvision's `apply_transforms` habit). For
   input preprocessing in `extract_dataset`, use `input_transform=`: carrying the trace habit into
   `extract_dataset(output_transform=...)` would silently z-score your features instead of your
   pixels.

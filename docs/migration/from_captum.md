@@ -3,7 +3,7 @@
 This page is for people who compute attributions or layer activations with Captum and want the
 TorchLens equivalents. Captum ships many attribution methods; TorchLens ships a subset under
 `tl.attribution`. The examples were written against the Captum release installed in the weekly
-bridge environment and the TorchLens version on this branch. Checked 2026-11-03.
+bridge environment and the current TorchLens release. Checked 2026-11-03.
 
 TorchLens's own methods are saliency, input x gradient, integrated gradients, SmoothGrad, noise
 tunnel, gradient SHAP, guided backprop, deconvolution, occlusion, Grad-CAM, layer attribution,

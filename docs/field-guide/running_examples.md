@@ -5,7 +5,6 @@ Every Field guide page starts from one of two small models and the same line,
 (the indirect-object prompt from Wang et al. 2022); the CNN is for vision and NeuroAI work
 (ResNet-18 on one image). Both run on a CPU with nothing downloaded.
 
-<!-- JMT review: plain factual prose, written for review. -->
 
 ## The decoder on the IOI prompt
 

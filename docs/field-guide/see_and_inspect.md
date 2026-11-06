@@ -3,7 +3,6 @@
 **Result in one line:** a picture of every operation the forward ran, and the output,
 module and arguments of any one of them.
 
-<!-- JMT review: plain factual prose, written for review. -->
 
 **Requirements:** `pip install torchlens torchvision`; drawing also needs the Graphviz `dot`
 binary (`apt install graphviz`).

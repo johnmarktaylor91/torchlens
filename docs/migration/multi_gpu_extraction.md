@@ -14,7 +14,7 @@ scale anyway.
 
 To extract over a large dataset on several GPUs, run one independent extraction per GPU,
 each on its own shard of the stimuli, for example one `tl.extract_dataset(...)` call per
-process with its own `output_dir`. TorchLens does not split a batch across devices for
+process with its own `path`. TorchLens does not split a batch across devices for
 you.
 
 The example below wraps a model in `nn.DataParallel` and checks that the extracted

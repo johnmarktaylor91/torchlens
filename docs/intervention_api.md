@@ -151,18 +151,17 @@ tensor.
 
 ## Attribution Patching
 
-Attribution-patching examples in this guide use the `(corrupted_graph - clean) * patched`
+Attribution-patching examples in this guide use the `(corrupt - clean) * patched`
 sign convention so positive scores mean the patched activation moves the run
 toward the corrupt direction under that local linearization. The more common
-TransformerLens presentation is `grad * (clean - corrupted_graph)`. Both are valid as
+TransformerLens presentation is `grad * (clean - corrupt)`. Both are valid as
 long as the sign convention is named and used consistently.
 
 ## Raw PyTorch Forward Hooks
 
 The TorchLens intervention API is the preferred path when you want selectors,
 fire records, replay, rerun, or saved intervention specs. Raw
-`nn.Module.register_forward_hook` also works during `tl.trace()` /
-`tl.trace()` when you need module-local PyTorch behavior:
+`nn.Module.register_forward_hook` also works during `tl.trace()` when you need module-local PyTorch behavior:
 
 ```python
 def halve_relu(module, args, output):

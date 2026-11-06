@@ -71,7 +71,7 @@ print(report)                               # house-style summary (matches Healt
 
 Construction is silent and does no device work: no hooks, no syncs, no stdout.
 `session.estimated_snapshot_bytes` is pure numel x dtype-size metadata, and
-`session.profile()` runs the measured scan on demand. `scaler=None` is a
+`session.overhead()` runs the measured scan on demand. `scaler=None` is a
 first-class DECLARATION that the loop runs no GradScaler -- pass the real
 handle when there is one, so skip accounting can read scale decrements.
 

@@ -1,11 +1,10 @@
 # Semantic I/O Legibility
 
 TorchLens can make model boundaries readable without changing the captured
-graph. The current review-day surface covers decoded classifier outputs,
+graph. The surface covers decoded classifier outputs,
 output provenance, original input display, and preprocessing provenance.
 
-These names are **provisional until review-day signoff**. Do not add them to
-the canonical glossary yet.
+These names are provisional and may change in any release.
 
 ## Output Decode
 
@@ -63,7 +62,7 @@ with `batch_item`, `rank`, `text`, and `token_ids` for a text decode.
 `batch_items=None` returns all captured items, an integer returns the first
 `N` batch items, and a sequence selects explicit batch indices.
 
-`trace.decode_output(top_n)` returns the captured JSON-primitive decoded
+`trace.decode_output(k)` returns the captured JSON-primitive decoded
 representation. It can recompute from retained logits when available; otherwise
 requests above the capture-time bound raise a clear "logits not retained"
 error. When nothing was decoded at capture, it runs the output detectors over
@@ -158,7 +157,7 @@ or pass your own transform through `CaptureOptions(input_transform=)`.
 
 ## Original Input Display
 
-Pass raw user input through `transform=` when the model expects tensors but the
+Pass raw user input through `CaptureOptions(input_transform=)` when the model expects tensors but the
 human-readable input is text, images, or another object. TorchLens stores the
 original value in `trace.input` and can show it on the input node. The
 portable save policy is controlled by `save_raw_input`.
@@ -198,7 +197,7 @@ to the raw-input node. The default render remains unchanged.
 
 Use `trace.annotate(...)` to attach small JSON data, tensor blobs, or an image
 path to selector-matched nodes. Annotation data is user-owned, survives
-`rerun()`/fork/save/load where the payload policy supports it, and does not
+`run()`/fork/save/load where the payload policy supports it, and does not
 change the default graph when no annotation-aware render hook is supplied.
 
 ```python
@@ -403,7 +402,7 @@ template. It demonstrates:
 - original text input display with `show_input_transform_summary=True`;
 - `trace.input` and `trace.provenance.input_preprocessor` provenance.
 
-See `notebooks/semantic_io_keystone_demo.ipynb` for the Sprint B keystone demo.
+See `notebooks/semantic_io_keystone_demo.ipynb` for the image-classifier keystone demo.
 It uses a tiny deterministic image classifier and synthetic PIL stimuli so the
 core flow runs without downloading external model weights.
 

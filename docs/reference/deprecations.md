@@ -131,7 +131,7 @@ unaffected.
 | `dry_run(keep_op=...)` | `dry_run(save=...)` | RENAMED (predicate consolidation; was never deprecation-warned) | removed; raises TypeError |
 | `dry_run(keep_module=...)` | no equivalent; see note below | REMOVED (predicate consolidation) | removed; raises TypeError |
 
-**`keep_module` note (honest capability statement).** Predicate-gated
+**`keep_module` note.** Predicate-gated
 module-event selection was REMOVED, not migrated: `save=` routes to the op
 predicate only, and `default_module=` records ALL module enter/exit boundary
 events uniformly — it is not a per-module predicate. A module predicate passed
@@ -170,8 +170,8 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 
 | Old name | New name | Status |
 | --- | --- | --- |
-| `Op.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
-| `AtenOp.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
+| `Op.gpu_kernels` | none in this release (artifacts keep the kernel annotation) | removed |
+| `AtenOp.gpu_kernels` | none in this release (artifacts keep the kernel annotation) | removed |
 | `Op.activation_memory` | `Op.cost.activation_memory` | removed |
 | `Op.arg_expressions` | `Op.source.arg_expressions` | removed |
 | `Op.arg_names` | `Op.call.arg_names` | removed |
@@ -407,7 +407,7 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 
 ## Module Paths
 
-Surface ruling surface.6 (31 Oct 2026): a submodule is a public import path only when its parent lists it in `__all__` or it is taught (`torchlens.backends.torch`, `torchlens.backends.registry`, `torchlens.intervention.errors`, `torchlens.intervention.hooks`, `torchlens.intervention.stochastic` and the per-framework backend namespaces `torchlens.backends.jax`, `mlx`, `paddle`, `tf` and `tinygrad`). Reading an old spelling as an attribute of its parent (`tl.intervention.types`) raises the typed `facade_redirect` error; an `import` statement of an old path fails with `ModuleNotFoundError`.
+A submodule is a public import path only when its parent lists it in `__all__` or it is taught (`torchlens.backends.torch`, `torchlens.backends.registry`, `torchlens.intervention.errors`, `torchlens.intervention.hooks`, `torchlens.intervention.stochastic` and the per-framework backend namespaces `torchlens.backends.jax`, `mlx`, `paddle`, `tf` and `tinygrad`). Reading an old spelling as an attribute of its parent (`tl.intervention.types`) raises the typed `facade_redirect` error; an `import` statement of an old path fails with `ModuleNotFoundError`.
 
 | Old name | New name | Status |
 | --- | --- | --- |

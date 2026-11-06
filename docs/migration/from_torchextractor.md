@@ -2,7 +2,7 @@
 
 This page is for people who wrap a model in `torchextractor.Extractor` to get named module
 outputs. The examples were written against torchextractor's `Extractor(model, layer_names)` API
-and the TorchLens version on this branch. Checked 2026-11-03.
+and the current TorchLens release. Checked 2026-11-03.
 
 TorchExtractor's module-output dictionary maps to a TorchLens completed trace with layer labels
 and saved activations, or to `tl.extract(model, x, layers)` when you only want the dictionary.

@@ -5,7 +5,6 @@ from the [Model Menagerie](https://modelmenagerie.ai), plus one preview backend.
 runs TorchLens on thousands of models across all major architecture families; the models here
 are small, randomly initialised versions so the page runs on a CPU with nothing downloaded.
 
-<!-- JMT review: plain factual prose, written for review. -->
 
 In every fence the last three lines are the same; only the model, the input and the site differ.
 

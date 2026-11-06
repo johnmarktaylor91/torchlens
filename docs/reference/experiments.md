@@ -104,7 +104,7 @@ integer `tl.positions` against the recorded shapes
 (`site_sweep_duplicate_candidates`, the edit included in the identity), all
 BEFORE any forward; then the cells run through `sweep_sites`' serial loop
 with retention under the same policies. A hole in the grid is a refused cell,
-never a refused grid (ruled 1 Nov 2026): a cell resolving to no site
+never a refused grid: a cell resolving to no site
 (`grid_cell_unresolved`) or to several without a `multi_site` declaration
 (`grid_cell_multi_site`) lands as a refused effect row, NaN in `values`,
 while every other cell runs. Axis-shape mistakes (`grid_axes_invalid`,

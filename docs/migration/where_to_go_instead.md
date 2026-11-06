@@ -4,7 +4,6 @@ Jobs TorchLens does not do, the tool that does each one, and how a result comes 
 TorchLens when you want to check it on an eager model. Tool status is as of 2026-11-03; see
 [the landscape page](landscape.md) for versions and sources.
 
-<!-- JMT review: plain factual prose, written for review. -->
 
 ## Capture at serving scale, on remote GPUs, or across devices
 

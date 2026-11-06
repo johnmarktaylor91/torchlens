@@ -202,7 +202,7 @@ RESULT = (
 A transcoder maps a block's MLP input to its MLP output, so it replaces the
 MLP call as a whole: `tl.splice_module(transcoder, input_route="in")` on the MLP
 module runs the transcoder on the arguments the MLP was called with (here the
-`ln_2` output) and uses its result as the MLP's output. With `input="out"` it
+`ln_2` output) and uses its result as the MLP's output. With `input_route="out"` it
 would read the MLP's own output instead, which is the SAE case. A loaded
 SAELens transcoder goes in the same place; the stand-in below is an SAELens
 `Transcoder` with seeded weights, a map from the MLP's 16-wide input to its

@@ -122,5 +122,4 @@ broken; the denominators differ (N vs N-1).
 Extremes, NaN/Inf counts, zero/true counts: exact at every size. Mean:
 exact on every supported default path. Only sd and histogram may sample
 (above 2^26 / 2^22 elements respectively), from a seeded gathered sample,
-marked `~` with disclosed precision. Gate constants are CPU-derived
-display policy pending the CUDA re-derivation.
+marked `~` with disclosed precision. Gate constants were derived on CPU.

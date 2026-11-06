@@ -6,7 +6,7 @@ to a runtime-only sidecar diary, then projected into `BackwardPass`, `GradFn`, `
 per-op gradient records. Saved `.tlspec` files persist the projections and tensor blobs, not the
 live diary.
 
-Backend status: torch is the only true-backward capture backend in this checkout. MLX and
+Backend status: torch is the only true-backward capture backend in this release. MLX and
 TensorFlow declare backward capture unsupported. JAX, tinygrad, and Paddle expose derived-gradient previews:
 leaf gradients from a second backend AD execution over declared leaves, not
 `GradFn`/`GradFnCall` records or live backward hooks. Real non-torch backward graphs remain

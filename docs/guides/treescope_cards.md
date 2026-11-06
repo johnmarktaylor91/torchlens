@@ -89,8 +89,7 @@ Rules the bridge keeps:
   reason is named, and a `treescope_bridge_degraded` warning fires once.
 - **Top-level display prefers our card** (`_repr_html_` short-circuits
   treescope). `tl_treescope.display(obj)` is the explicit door to the
-  interactive render; `show(method="treescope")` is a candidate method
-  spelling that may replace it.
+  interactive render.
 - **The duplicate box:** treescope appends any object's `_repr_html_` as a
   collapsed "Rich HTML representation" box after our handler renders. The
   cards suppress the duplicate payload with a narrow, fail-safe check (a
@@ -121,20 +120,6 @@ scp cluster:run_report.html .            # open from file://, no Python needed
 ```
 
 See `docs/guides/offline_report.md` for the report's anatomy and options.
-
-## Upstream filings (recorded, not yet filed)
-
-Three goodwill filings for the treescope repository, to be filed by a human
-or with explicit approval (this repo never auto-posts):
-
-1. **Release nudge:** the `Tensor.names` getattr guard is committed upstream
-   but unreleased; every torch>=2.13 user of released 0.1.10 crashes on any
-   tensor render.
-2. **`for_tokenizer` HuggingFace fix:** upstream's helper calls HF tokenizers
-   with integer ids and raises; a duck-typed `int -> str` lookup works.
-3. **Per-type repr-HTML suppression hook (PRIORITY):** a public hook to skip
-   the appended "Rich HTML representation" box per type would retire our
-   stack-based duplicate suppression and its residual collapsed label.
 
 ## Credits
 

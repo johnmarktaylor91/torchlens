@@ -3,7 +3,6 @@
 **Result in one line:** per-layer activations for every stimulus, in stimulus order, written
 as a directory that records which model, which layers and which preprocessing produced them.
 
-<!-- JMT review: plain factual prose, written for review. -->
 
 This is the NeuroAI task guide: the features you would hand to an RSA, encoding-model or
 Brain-Score-style analysis. The analysis itself happens in those tools; TorchLens produces the

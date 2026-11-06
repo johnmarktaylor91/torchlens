@@ -46,7 +46,7 @@ RESULT = (
 
 ## Translation table
 
-| AutoCircuit operation | TorchLens v2 idiom | Parity |
+| AutoCircuit operation | TorchLens idiom | Parity |
 | --- | --- | --- |
 | Identify circuit nodes | `log.find_sites(...)`, graph metadata, and visualization | TorchLens exposes raw graph sites; automated circuit search is separate. |
 | Patch edges/nodes | `.do(site, edit)` on a forked trace (replays the recorded graph from the edited value; `.do(site, edit, model=model, inputs=x)` runs the model again) | Node patching equivalent; edges patch with `torchlens.mechinterp.patch_edges` (one or several receivers per call). |

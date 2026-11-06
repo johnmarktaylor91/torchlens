@@ -21,7 +21,7 @@ rides the frozen `options=tl.options.HtmlReportOptions(...)` bundle.
    disclosure ("array values EMBEDDED" / "no array values embedded" /
    "share_safe: every embedded value stripped").
 2. **Capture honesty** — every disclosure from the shared honesty facts.
-3. **Summary** — the summary lane's typed table, embedded, never rebuilt.
+3. **Summary** — the summary's typed table, embedded, never rebuilt.
 4. **Graph** — the REAL module-collapsed graph SVG with pan/zoom (wheel +
    drag; scrolls natively with JavaScript disabled), collapse depth
    disclosed. If the real layout cannot render, a `report_graph_fallback`

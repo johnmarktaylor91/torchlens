@@ -349,7 +349,7 @@ audits saved activations for numeric-range and precision hazards: non-finite val
 (same classifier as [`find_nan`](#find_nan)), finite magnitudes near the saved dtype's
 finite maximum, subnormal-heavy tensors, and downcasts from recorded wider input dtypes.
 Returns a `DTypeRangeReport` with structured findings and audited/total coverage
-(`n_ops_audited` / `n_ops_total`) — unsaved and non-tensor payloads are never
+(`num_audited_ops` / `num_ops`) — unsaved and non-tensor payloads are never
 inspected, and the coverage says so.
 
 ```python
@@ -488,7 +488,7 @@ Output:
 spatial_rank="auto", seq_len=None, square=True, min_size=1, max_size=512,
 preferred_sizes=(224, 256, 384, 299, 128, 96, 64, 32, 28), max_probes=64, device=None,
 seed=0, on_failure="return", input_specs=None)` probes a module and
-returns an `GuessInputShapeReport` with a verified synthetic shape or a diagnostic failure.
+returns a `GuessInputShapeReport` with a verified synthetic shape or a diagnostic failure.
 
 ```python
 import torch
@@ -594,7 +594,7 @@ finite loss gradient does not prove a clean backward -- so the result carries th
 transition ledger with the earliest provable birth headlined, joined to the paired
 forward op and source line. Multi-backward traces require `bwd=N` (passes never
 collapse); `clean` requires complete checkable coverage; an inf-kind first bad thing
-without a disclosed `scale_grad` carries the AMP/GradScaler hint. Requires
+without a disclosed `grad_scale` carries the AMP/GradScaler hint. Requires
 `CaptureOptions(backward_ready=True, save_grads=...)` plus a logged backward; post-hoc,
 no rerun. `result.first_bad_thing` projects into the shared `FirstBadThing` vocabulary.
 

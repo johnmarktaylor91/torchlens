@@ -183,7 +183,7 @@ cached before, restores each accumulator's saved final state in place and
 returns its results without running the model. The key covers the torchlens
 and torch versions; the model's tensor contents, `requires_grad` and
 `training` flags and its implementation (forward code, plain attributes,
-registered hooks: the same fingerprints as `tl.trace(cache=True)`); every
+registered hooks: the same fingerprints as `tl.trace(..., capture=tl.options.CaptureOptions(cache=True))`); every
 batch the dataloader yields, in order, by value; each metric's name and
 starting state, configuration included; the code and weights of any
 `encoder=`; `target=` and the code of `loss_fn=`. Keying reads the data once
@@ -245,8 +245,8 @@ op whatever the batch size. `tl.stats.site_stats(trace)` returns
 extrema, the sum and the mean equal `RunningStats().update(out)` on the full
 capture's activation exactly. The reducer folds each activation in chunks of 2^16 values,
 so its largest working tensor is 512 KiB whatever the activation's size (where
-`RunningStats.update` holds full-size float64 copies); the sum of squares, the sum
-of absolute values and are therefore bit-equal for activations up to one chunk
+`RunningStats.update` holds full-size float64 copies); the sum of squares and the sum
+of absolute values are therefore bit-equal for activations up to one chunk
 and otherwise equal within float64 reduction-order rounding. A float32 out's sum
 accumulates in float64 without a converted copy, so it can differ from
 `RunningStats.update` in the last bits. The returned spines are live accumulators:
@@ -291,7 +291,7 @@ token (rank 1 is the top token; tied logits share the smallest rank). The
 result is a `tl.mechinterp.TrajectoryStats`: `position_means[statistic]` is a
 float64 `[layers, positions]` tensor of means over every example, and
 `running_stats[statistic][layer]` is a `RunningStats` pooled over examples and positions
-(`summary(statistic)` returns their results). `mask_input=True` bans each
+(`compute_stats(statistic)` returns their results). `mask_input=True` bans each
 row's own input tokens before every reduction, final output included; the
 same knob on `logit_lens_predictions` masks before its top-k and
 `logsumexp`, which cannot be undone afterwards. Refusals carry
@@ -340,7 +340,6 @@ def doc_head(module):
 lm = DocLM().eval()
 ids = torch.randint(0, 20, (4, 6))
 data = [(ids, ids.roll(-1, dims=1))]          # (input_ids, next-token targets)
-import torchlens.mechinterp  # a submodule: import it before use
 
 traj = tl.mechinterp.measure_trajectory(lm, data, mask_input=False)
 print(traj)
@@ -355,7 +354,7 @@ print(traj.compute_stats("target_rank")["blocks.1"].mean)
   each op of a trace).
 - `tl.stats.aggregate` captures with the ordinary verified `tl.trace` engine; for
   tight training loops that only need a few sites, `tl.recording.Recorder`
-  (built once, `.log()` per step) is the cheaper repeated-capture door.
+  (built once, called once per step) is the cheaper repeated-capture door.
 - The observability kernels (`RunningStats`, `Histogram`) have one implementation
   home shared with the `torchlens.trackers.watch` tiers; see
   [docs/reference/observability_substrate.md](observability_substrate.md).
