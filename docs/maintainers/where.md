@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1748 modules, 705040 lines, 0 modules without a docstring.
+85 packages, 1749 modules, 705076 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -84,7 +84,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.neuro` | The seam between a captured network and neuroscience tooling: hands per-site representations to rsatoolbox and Brain-Score with provenanc... | 7 | 4050 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (NeuroAI audience). | 9 | 2811 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 32 | 14261 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 33 | 14297 |
 | `torchlens.receptive_field._builtin_rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 2006 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7708 |
 | `torchlens.repgeom` | Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need only NumPy, Torch and PIL. | 9 | 4057 |
@@ -2074,7 +2074,7 @@ Preprocessing provenance + verification (NeuroAI audience). (9 modules, 2811 lin
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (32 modules, 14261 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (33 modules, 14297 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2098,9 +2098,10 @@ Lazy public namespace for TorchLens receptive-field analysis. (32 modules, 14261
 | `_layer_fields` | Layer receptive-field functions reached from the records through ''_data_classes._doors.receptive_field''. | 46 |
 | `_op_fields` | Receptive and projective field views for ''Op''. | 52 |
 | `_path` | Executed-DAG endpoint resolution and directed path slicing. | 466 |
-| `_query` | Exact per-unit receptive-field queries over the captured operation DAG. | 923 |
+| `_query` | Exact per-unit receptive-field queries over the captured operation DAG. | 913 |
 | `_query_causal` | Per-unit index-set mapping for causal attention windows. | 179 |
 | `_query_maps` | Index-set maps for the geometry-specific window families. | 249 |
+| `_query_walk_memo` | Walk-memo helpers of the per-unit receptive-field queries (''_query''). | 46 |
 | `_reshape_blocks` | Block decomposition of general reshapes for the receptive-field engines. | 233 |
 | `_rules` | Extensible receptive-field operation-rule registry. | 553 |
 | `_set_query` | Index-set seeded geometric queries: one walk for a whole block of units. | 221 |

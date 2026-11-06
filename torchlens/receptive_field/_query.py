@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass
 from fractions import Fraction
@@ -22,6 +22,7 @@ from ._index_set import (
 )
 from ._query_causal import EXTENDED_KINDS, map_extended_to_parent
 from ._query_maps import _call_interval_callback, _coerce_index_set, widen_channel_axis
+from ._query_walk_memo import _distinct_terminals, shared_walk_memo
 from ._reshape_blocks import apply_blocks
 from ._rules import _RuleResult
 from ._types import (
@@ -54,6 +55,7 @@ class _SharedQueryState(threading.local):
         self.depth = 0
         self.graphs: dict[int, tuple[object, object, tuple[Op, ...], dict[str, Op]]] = {}
         self.reach: dict[tuple[str, int, str], tuple[object, frozenset[str]]] = {}
+        self.walks: dict[tuple[int, str], tuple[object, dict[Any, Any]]] = {}
 
 
 _SHARED_QUERY_STATE = _SharedQueryState()
@@ -81,6 +83,7 @@ def _shared_query_scope() -> Iterator[None]:
             if not state.depth:
                 state.graphs.clear()
                 state.reach.clear()
+                state.walks.clear()
 
 
 def _query_graph(trace: Any, solution: Any) -> tuple[tuple[Op, ...], dict[str, Op]]:
@@ -197,7 +200,7 @@ def box_for_unit(
             ancestry,
             by_reference,
             True,
-            {},
+            shared_walk_memo(_SHARED_QUERY_STATE, solution, descriptor.input_op_label),
         )
     if not terminals:
         raise ReceptiveFieldError(
@@ -331,19 +334,6 @@ def _ancestor_labels(
         reachable.update(unseen)
         stack.extend(unseen)
     return frozenset(reachable)
-
-
-def _distinct_terminals(terminals: Iterable[_TerminalState]) -> tuple[_TerminalState, ...]:
-    """Collapse repeated terminal states produced by distinct paths.
-
-    Path enumeration reaches the same terminal state once per path, so a
-    merge-heavy graph grows the terminal tuple exponentially while adding no
-    information. Every consumer -- the emptiness test in the two query entry
-    points and all four aggregations in :func:`_build_box` (two unions, one
-    ``any``, one ``all``) -- is insensitive to both multiplicity and order, and
-    first-occurrence order is preserved here, so the resolved box is unchanged.
-    """
-    return tuple(dict.fromkeys(terminals))
 
 
 _WalkKey: TypeAlias = tuple[str, _AxisSets, bool]
