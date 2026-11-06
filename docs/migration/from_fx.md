@@ -2,7 +2,7 @@
 
 This page is for people who use `torch.fx.symbolic_trace` to get a graph of a model's operations
 and want to know what a TorchLens trace gives instead. The examples were written against the
-PyTorch 2.x `torch.fx` that ships with torch, and the TorchLens version on this branch. Checked
+PyTorch 2.x `torch.fx` that ships with torch, and the current TorchLens release. Checked
 2026-11-03.
 
 FX symbolic tracing produces a static `GraphModule` by running the model on proxy values;

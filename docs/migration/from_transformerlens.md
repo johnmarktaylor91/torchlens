@@ -64,7 +64,7 @@ trace.cleanup()
 | Residual stream steering | `tl.steer(direction, strength=...)` at the discovered site | Equivalent if the relevant residual op is visible. |
 | Attention-head Q/K/V internals under fused SDPA | Attention facets (`scores`/`pattern`/`z`/`result` menus, head-sliceable views) read head-level semantics with provenance disclosed (captured or reconstructed); `torchlens.mechinterp.patch_head` patches one head on a fused model through an implementation-independent lowering | Head-level addressing works on fused models; raw fused-kernel intermediates are still not op-DAG sites, and the facet provenance says which basis you got. |
 | Accumulate many prompt variants | `tl.Bundle({...})` plus `map`, `compare`, `at` | Equivalent comparison container. |
-| Transformer pictures (attention heads, logit lens, token strips) | `torchlens.transformer` (`attention_views`, `render_attention`, `prediction_trajectory`, causal receipt grids) | Native renderers; the module also carries a CircuitsVis hand-off. |
+| Transformer pictures (attention heads, logit lens, token strips) | `torchlens.transformer` (`attention_views`, `prediction_trajectory`, causal receipt grids) | Native renderers; the module also carries a CircuitsVis hand-off. |
 
 Every `torchlens.mechinterp` and facet name above is experimental and may change in any
 release: the workflows are stable, the exact names may be ratified differently.

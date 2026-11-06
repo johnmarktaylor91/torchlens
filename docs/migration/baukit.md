@@ -72,7 +72,7 @@ RESULT = (list(features["out"].shape), torch.equal(features["out"], seen["out"])
 
 ## Translation table
 
-| baukit operation | TorchLens v2 idiom | Parity |
+| baukit operation | TorchLens idiom | Parity |
 | --- | --- | --- |
 | `Trace` a module output | `tl.trace(...); log.find_sites(tl.module("module.path"))` | Similar for module boundaries. |
 | `TraceDict` over many layers | `log.find_sites(tl.in_module(...), max_fanout=...)` and iterate results | Equivalent discovery, different object model. |

@@ -48,7 +48,7 @@ RESULT = (len(result.scores) == len(tokens), torch.isfinite(result.scores).all()
 
 ## Translation table
 
-| Inseq operation | TorchLens v2 idiom | Parity |
+| Inseq operation | TorchLens idiom | Parity |
 | --- | --- | --- |
 | Attribute generation outputs | `tl.attribution.text(model, tokenizer, text, target=...)` attributes one target token to the prompt tokens (integrated gradients over input embeddings); a whole generation run can be captured with episode capture (`episode=tl.options.EpisodeOptions(...)`, experimental) | Partial; per-step attribution across every generated token, with step scores, stays in Inseq. |
 | Step-wise hidden-state access | `log.find_sites(...)` over repeated loop sites | Equivalent when generation loop is visible. |
@@ -57,9 +57,9 @@ RESULT = (len(result.scores) == len(tokens), torch.isfinite(result.scores).all()
 | Intervention during generation | `tl.when(site, action).bind(model).generate(ids, ...)`, or `.bind(model)` alone for many forwards | Equivalent for local PyTorch generation code. |
 | Token-position patching | Tensor-shaped replacements or custom hooks | Equivalent if target tensors expose position dimensions. |
 | Save analysis setup | `.tlspec/` saves intervention recipe; metric code remains external | Partial. |
-| Visual attribution reports | The `tl.attribution.text` result renders per-token scores (`.show()`, `.to_html()`, `.to_text()`) | Per-token report for one target; no per-step generation heatmap. |
+| Visual attribution reports | The `tl.attribution.text` result renders per-token scores (`.show()`, `.to_html()`, `.to_markdown()`) | Per-token report for one target; no per-step generation heatmap. |
 | Fused attention internals | Eager-attention load: the softmax and score ops are captured ops you read directly. Default fused SDPA load: `tl.trace(model, x)` serves read-only reconstructed attention facets (`scores`, `pattern`, `z`, checked against the fused output; see `docs/facets.md`) | Head-level semantics are readable on fused models; the raw kernel intermediates are not captured ops, and editing them needs an eager recapture. |
-| Run inseq itself from a TorchLens session | `tl.bridge.inseq.attribute(model_or_id, text, method=..., generated_texts=...)` (extra `torchlens[inseq]`, tested on inseq 0.7.1) loads inseq's attribution model and returns inseq's own result (its `.show()` renderer works). `method` takes inseq's names or the TorchLens spelling (`input_x_grad`). Forced decoding is checked: a result that attributes any text other than `generated_texts` refuses `bridge_inseq_forced_decoding_ignored` instead of returning free-generation attribution. | Equivalent for one call; the per-step product stays in inseq. |
+| Run inseq itself from a TorchLens session | `tl.bridge.inseq.attribute(model_or_id, text, method=..., generated_texts=...)` (extra `torchlens[inseq]`, tested on inseq 0.7.1) loads inseq's attribution model and returns a payload dict whose `"attributions"` entry is inseq's own result (its `.show()` renderer works). `method` takes inseq's names or the TorchLens spelling (`input_x_grad`). Forced decoding is checked: a result that attributes any text other than `generated_texts` refuses `bridge_inseq_forced_decoding_ignored` instead of returning free-generation attribution. | Equivalent for one call; the per-step product stays in inseq. |
 | HuggingFace convenience wrappers | `torchlens.bridge.transformers.trace_text(model, text)` traces a Hugging Face language model from raw text; `tl.attribution.text` takes the model and its tokenizer | Shipped for capture and single-target token attribution. |
 
 ## What TorchLens adds
@@ -94,8 +94,8 @@ underlying model with `tl.trace`. Inseq's result objects are not TorchLens trace
 ### TorchLens feeds Inseq
 
 `tl.bridge.inseq.attribute(model_or_id, text, method=..., generated_texts=...)` (extra
-`torchlens[inseq]`, tested on inseq 0.7.1) loads Inseq's attribution model and returns Inseq's
-own result, whose `.show()` renderer works. `method` takes Inseq's names or the TorchLens
+`torchlens[inseq]`, tested on inseq 0.7.1) loads Inseq's attribution model and returns a payload dict whose
+`"attributions"` entry is Inseq's own result, whose `.show()` renderer works. `method` takes Inseq's names or the TorchLens
 spelling (`input_x_grad`). Forced decoding is checked: a result that attributes any text other
 than `generated_texts` refuses `bridge_inseq_forced_decoding_ignored` instead of returning
 free-generation attribution.

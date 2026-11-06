@@ -60,7 +60,7 @@ RESULT = (tuple(direction.vector.shape), direction.method, not torch.equal(plain
 
 ## Translation table
 
-| RepE operation | TorchLens v2 idiom | Parity |
+| RepE operation | TorchLens idiom | Parity |
 | --- | --- | --- |
 | Apply a representation direction | `tl.steer(direction, strength=...)` | Equivalent for visible activation sites. |
 | Remove a direction | `tl.project_out(direction)` | Equivalent helper. |

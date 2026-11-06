@@ -2,7 +2,7 @@
 
 This page is for people who used torchsnooper (or pysnooper) to watch a forward pass and see the
 last lines before a crash. The examples were written against torchsnooper's `snoop` decorator and
-the TorchLens version on this branch. Checked 2026-11-03.
+the current TorchLens release. Checked 2026-11-03.
 
 torchsnooper printed one line per executed Python source line with tensors rendered as
 `tensor<(6, 16), float32, cpu>`; its niche was watching a forward pass happen and seeing the last

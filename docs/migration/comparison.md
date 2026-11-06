@@ -4,7 +4,6 @@ What TorchLens and seven other tools do, job by job, including the jobs another 
 TorchLens does not. Checked 2026-11-03 against the versions named in the table header; tool
 status and sources are on [the landscape page](landscape.md).
 
-<!-- JMT review: plain factual prose, written for review. -->
 
 ## When you need TorchLens, and when five lines of hooks are enough
 

@@ -56,7 +56,7 @@ RESULT = (
 
 ## Translation table
 
-| Penzai operation | TorchLens v2 idiom | Parity |
+| Penzai operation | TorchLens idiom | Parity |
 | --- | --- | --- |
 | Name and select model subtrees | `tl.in_module("path")`, `tl.module("path")`, and exact labels after discovery | Similar goal; TorchLens uses PyTorch module addresses and op labels. |
 | Functional model surgery | Capture with `tl.trace(model, x)`; `trace.fork()`, then `.do(site, edit)` (replays the recorded graph from the edited value) or `.do(site, edit, model=model, inputs=x)` (runs the model again) | TorchLens edits a recorded run, not the model definition. |

@@ -4,7 +4,6 @@ The bridges that ship in `torchlens.bridge`, sorted by the direction the data mo
 imported on its own (`from torchlens.bridge import captum`) and needs the other tool installed;
 nothing here is imported by `import torchlens`. Checked 2026-11-03.
 
-<!-- JMT review: plain factual prose, written for review. -->
 
 ## Into TorchLens: another tool's artifact runs inside a trace
 

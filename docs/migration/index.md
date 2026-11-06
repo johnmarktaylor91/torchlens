@@ -2,7 +2,6 @@
 
 How TorchLens relates to the tools people already use. Checked 2026-11-03.
 
-<!-- JMT review: plain factual prose, written for review. -->
 
 - [Which tool for this job?](comparison.md): the dated table, and when five lines of hooks are
   enough.

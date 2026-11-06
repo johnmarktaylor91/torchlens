@@ -63,7 +63,7 @@ RESULT = [
 
 ## Translation table
 
-| SAELens operation | TorchLens v2 idiom | Parity |
+| SAELens operation | TorchLens idiom | Parity |
 | --- | --- | --- |
 | Attach an SAE to a hook point | `torchlens.bridge.sae.splice(model_or_log, inputs, site=..., sae=...)` -- the packaged splice experiment (fork + `tl.splice_module` + replay); reports reconstruction fidelity (MSE, fraction of variance explained pooled over per-dimension variance as SAELens reports it, and per dimension) plus output-level causal effect, and with `tokens=` next-token CE loss recovered and KL divergence. Pretrained SAEs: the [pretrained-SAE recipe](../field-guide/pretrained_saes.md) (SAELens loads, TorchLens runs) | Ships. Duck-typed SAE (`encode`/`decode` pair); no SAE package required. Tutorial: `notebooks/sae_splice_tutorial.ipynb`. |
 | Ablate / edit SAE features | `splice(..., latents_edit=fn)` -- the per-feature causal knob (a callable over the latent tensor) | Ships as part of the splice experiment. |
