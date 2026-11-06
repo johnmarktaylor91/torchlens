@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1747 modules, 705013 lines, 0 modules without a docstring.
+85 packages, 1748 modules, 705040 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,12 +18,12 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26857 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 122 | 42754 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 122 | 42761 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
 | `torchlens._extraction` | Private implementation of dataset extraction. | 20 | 11053 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 66 | 37292 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 67 | 37312 |
 | `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 26 | 9242 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 25 | 12733 |
 | `torchlens._merged` | Cross-rank trace merging. | 15 | 6005 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (122 modules, 42754 lines)
+Core data structures for representing a logged forward pass. (122 modules, 42761 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -387,7 +387,7 @@ Core data structures for representing a logged forward pass. (122 modules, 42754
 | `_trace_accessors` | Trace accessor helpers. | 759 |
 | `_trace_annotations` | Trace annotation family: user notes and tags on a finished trace. | 405 |
 | `_trace_aten` | Public ATen-operation accessors for ''Trace'' (''CaptureOptions(aten_ops=True)''). | 73 |
-| `_trace_components` | Declared Trace field-to-component ownership map. | 623 |
+| `_trace_components` | Declared Trace field-to-component ownership map. | 630 |
 | `_trace_docs` | Bind the full ''Trace'' method docstrings kept in the ''_trace_docs_*'' tables. | 49 |
 | `_trace_docs_intervention` | Full docstrings of the ''Trace'' intervention verbs, hooks and forks methods. | 189 |
 | `_trace_docs_output` | Full docstrings of the ''Trace'' drawing, summaries, export, stacking and narration methods. | 608 |
@@ -502,7 +502,7 @@ Private implementation of dataset extraction. (20 modules, 11053 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (66 modules, 37292 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (67 modules, 37312 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -536,6 +536,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 | `_save_gates` | Save-entry gate helpers for ''torchlens._io.bundle.save''. | 691 |
 | `_save_subject` | Resolve the object handed to ''save'' into the Trace it stands for. | 78 |
 | `_scrub_identities` | Canonical identities and record joins for portable scrub metadata. | 281 |
+| `_scrub_runtime_fields` | Trace fields a portable save omits as runtime-only interpreter or visualization state. | 71 |
 | `_scrub_undeclared` | Refusal diagnostics for live state fields missing from a portable state spec. | 82 |
 | `_skipped_blobs` | Non-strict save: null the refs of blobs the payload codec skipped, and fix the saved counts. | 95 |
 | `_small_raw` | Bounded portable previews of raw inputs and outputs under ''save_raw_input="small"''. | 366 |
@@ -563,7 +564,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 | `runnable_coherence` | Registry-coherence names for sparse runnable readiness. | 169 |
 | `runnable_load` | Safe sparse runnable descriptor loading and torch callable reattachment. | 3710 |
 | `save_policy` | Save-level payload policy: include-flag resolution + write-side coherence. | 197 |
-| `scrub` | Portable state scrubbing for TorchLens model logs. | 1595 |
+| `scrub` | Portable state scrubbing for TorchLens model logs. | 1544 |
 | `sidecar` | Namespaced typed SIDECAR families: out-of-tree persistence at L1. | 454 |
 | `state_contract` | The persisted-state contract service (ecosystem MEMO 3.3, megaplan P05). | 485 |
 | `state_keys` | Narrow class-method shadow filter for portable ''__setstate__'' loads. | 307 |

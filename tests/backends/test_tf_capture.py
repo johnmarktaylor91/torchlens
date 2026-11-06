@@ -343,3 +343,23 @@ def test_tf_keras_draw_keeps_root_scoped_edges(rolled: bool, tmp_path: Any) -> N
     links = {(op.label, child) for op in trace._layer_list for child in op.children}
 
     assert len(drawn) == len(links), (sorted(drawn), sorted(links))
+
+
+def test_tf_static_funcgraph_trace_saves_and_loads(tmp_path: Any) -> None:
+    """A tf.function traced through the static FuncGraph path saves (Menagerie m18845)."""
+
+    @tf.function
+    def compiled(x: Any) -> Any:
+        """Return a compiled add/mul chain."""
+
+        return (x + 1.0) * 2.0
+
+    inputs = tf.ones((2, 4))
+    compiled(inputs)
+    trace = tl.trace(compiled, inputs, backend="tf")
+    path = tmp_path / "static.tlspec"
+    trace.save(str(path))
+    loaded = tl.load(str(path))
+
+    assert loaded.provenance.backend == "tf"
+    assert len(loaded._layer_list) == len(trace._layer_list)
