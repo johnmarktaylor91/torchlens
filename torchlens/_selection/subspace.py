@@ -16,7 +16,7 @@ unchanged. Which verbs have a coordinate meaning, how a non-orthonormal
 basis is orthonormalised, and the refusals are in
 :mod:`torchlens.intervention._subspace_projection`. ``resolve()`` still
 answers a SET question: the basis's SUPPORT SET, the elements whose
-coordinate carries weight ``|w| > tol`` in at least one basis vector, which
+coordinate carries weight ``|w| > atol`` in at least one basis vector, which
 is where the edit can land (a dense direction supports the whole axis). The
 selection stays a (touched-site family, selected-element set) pair, so the
 ``| & - ~`` algebra composes support sets for reading; a subspace combined
@@ -93,7 +93,7 @@ class BasisProvenance:
     the content digest of the canonical float64 basis bytes plus its shape
     header, so an identical claim can be re-checked bit-exactly.
     ``n_vectors`` x ``space_dim`` is the canonical basis geometry; ``dim``
-    and ``tol`` are the axis binding and support threshold the producer was
+    and ``atol`` are the axis binding and support threshold the producer was
     built with. ``source_dtype`` is the dtype the caller's basis had before
     the float64 canonicalisation (a learned rotation's training precision).
 
@@ -121,7 +121,7 @@ class BasisProvenance:
         method_part = "" if self.method is None else f", method={self.method!r}"
         return (
             f"subspace(origin={self.origin!r}{method_part}, k={self.num_vectors}, "
-            f"d={self.space_dim}, dim={self.dim}, tol={self.atol}, "
+            f"d={self.space_dim}, dim={self.dim}, atol={self.atol}, "
             f"basis_sha256={self.sha256})"
         )
 
@@ -268,7 +268,7 @@ def subspace(
     scale, clamp and noise act on the coordinates, and
     ``tl.patch_from(source)`` writes the source run's component (the
     interchange). The resolved mask is the basis's SUPPORT SET (every element
-    whose coordinate on the bound axis carries weight ``|w| > tol`` in at
+    whose coordinate on the bound axis carries weight ``|w| > atol`` in at
     least one basis vector, expanded across the site's other axes): where
     the edit can land, disclosed with the weights' provenance.
 
@@ -285,7 +285,7 @@ def subspace(
     (default ``-1``, the trailing feature axis; conv channel directions are
     ``dim=1``); a site whose extent there differs from ``d`` refuses
     ``selection_unresolvable`` / ``basis_dim_mismatch`` — never a silent
-    broadcast or truncation. A basis row entirely at-or-below ``tol``
+    broadcast or truncation. A basis row entirely at-or-below ``atol``
     refuses at construction (a named direction that contributes no support
     is vacuous). Resolution reads geometry only (unsaved sites resolve);
     ``provenance.relation`` is ``exact``. PARAM/EDGE populations refuse
@@ -317,18 +317,18 @@ def subspace(
         raise ValueError(f"subspace `method` must be None or a non-empty string; got {method!r}.")
     if isinstance(dim, bool) or not isinstance(dim, int):
         raise ValueError(f"subspace `dim` must be an int axis index; got {dim!r}.")
-    atol = _validate_real_number(atol, "tol", "subspace")
+    atol = _validate_real_number(atol, "atol", "subspace")
     if atol < 0:
-        raise ValueError(f"subspace `tol` must be non-negative; got {atol!r}.")
+        raise ValueError(f"subspace `atol` must be non-negative; got {atol!r}.")
     canonical = _canonicalize_basis(basis)
     row_max = canonical.abs().max(dim=1).values
     if (row_max <= atol).any():
         silent = int((row_max <= atol).sum().item())
         raise ValueError(
             f"subspace `basis` has {silent} direction(s) with every weight "
-            f"<= tol ({atol}): a direction that contributes no support is "
-            "vacuous by construction. Drop the zero/sub-tol rows or lower "
-            "`tol`."
+            f"<= atol ({atol}): a direction that contributes no support is "
+            "vacuous by construction. Drop the zero/sub-atol rows or lower "
+            "`atol`."
         )
     record = BasisProvenance(
         origin=origin,

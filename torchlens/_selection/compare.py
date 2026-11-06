@@ -17,7 +17,7 @@ trace:
 
 - CROSS-PASS producers read ONE capture's multi-pass layers, pass-qualified
   throughout: ``stable_across_passes`` (per-element range across the pass
-  window within ``tol``) and ``pass_variance`` (bounds on the per-element
+  window within ``atol``) and ``pass_variance`` (bounds on the per-element
   variance across the window). Evidence windows are explicit (``passes=``);
   a layer contributing fewer than TWO passes refuses typed — a cross-pass
   claim about a single-pass layer is vacuous, and vacuous truths are
@@ -671,7 +671,7 @@ class _PassTerm:
         population = "saved_sites" if self.within is None else repr(self.within)
         window = "all" if self.passes is None else repr(list(self.passes))
         if self.stat == "stable":
-            head = f"stable_across_passes(tol={self.tol}, passes={window}"
+            head = f"stable_across_passes(atol={self.tol}, passes={window}"
         else:
             head = f"pass_variance(above={self.above}, below={self.below}, passes={window}"
         return f"{head}, within={population})"
@@ -836,7 +836,7 @@ def _resolve_pass_term(node: _PassTerm, trace: Any) -> Selection:
         if node.stat == "stable":
             spread = stacked.max(dim=0).values - stacked.min(dim=0).values
             dense = spread <= node.tol
-            source = f"stable_across_passes(n_passes={n_passes}, tol={node.tol})"
+            source = f"stable_across_passes(n_passes={n_passes}, atol={node.tol})"
         else:
             variance = torch.var(stacked, dim=0)
             dense = torch.ones(window_entries[0].shape, dtype=torch.bool)
@@ -874,7 +874,7 @@ def stable_across_passes(
 
     Per element of each multi-pass layer in the population, computes the
     RANGE (max - min, in float64) of the retained activation across the pass
-    window and selects elements whose range is ``<= tol``. ``passes=None``
+    window and selects elements whose range is ``<= atol``. ``passes=None``
     (default) uses every population pass of each layer; an explicit iterable
     of 1-based pass indices restricts the window (every named pass must be in
     the population). Pass indices are per-site OCCURRENCE counters (pass
@@ -908,9 +908,9 @@ def stable_across_passes(
     (2, 8)
     """
 
-    atol = _validate_real_number(atol, "tol", "stable_across_passes")
+    atol = _validate_real_number(atol, "atol", "stable_across_passes")
     if atol < 0:
-        raise ValueError(f"stable_across_passes `tol` must be non-negative; got {atol!r}.")
+        raise ValueError(f"stable_across_passes `atol` must be non-negative; got {atol!r}.")
     return Selector(
         _PassTerm(
             stat="stable",

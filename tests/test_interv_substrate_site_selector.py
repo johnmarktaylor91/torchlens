@@ -86,6 +86,7 @@ def test_site_selector_construction_refusals() -> None:
     with pytest.raises(ArgumentTypeError) as excinfo:
         site("not-a-site-key")
     assert excinfo.value.fields["code"] == "site_selector_key_invalid"
+    assert repr(site(module_path="m", func="relu")) == "tl.site(module_path='m', func='relu')"
 
 
 # ---------------------------------------------------------------------------

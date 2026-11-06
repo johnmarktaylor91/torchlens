@@ -185,11 +185,11 @@ def test_sub_tol_row_refuses_at_construction():
 
 
 def test_bad_parameters_refuse():
-    """dim/tol/method parameter validation refuses early with teaching."""
+    """dim/atol/method parameter validation refuses early with teaching."""
 
     with pytest.raises(ValueError, match="dim"):
         tl.subspace(_RELU, torch.ones(_D), origin="x", dim=True)
-    with pytest.raises(ValueError, match="non-negative"):
+    with pytest.raises(ValueError, match=r"`atol` must be non-negative"):
         tl.subspace(_RELU, torch.ones(_D), origin="x", atol=-1.0)
     with pytest.raises(ValueError, match="method"):
         tl.subspace(_RELU, torch.ones(_D), origin="x", method="")

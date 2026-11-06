@@ -86,7 +86,6 @@ from .._utils.facade import refuse_removed_member
 from .._utils.tensor_utils import (
     concatenate_batch_tensors,
     get_memory_amount_from_metadata,
-    print_override,
 )
 from ..intervention._types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
@@ -2980,37 +2979,6 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         from ._value_repr import op_card
 
         return op_card(self)
-
-    def _str_during_pass(self) -> str:
-        """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""
-        s = f"Tensor {self._label_raw} (layer {self._layer_label_raw}) (PASS NOT FINISHED):"
-        s += f"\n\tPass: {self.pass_number}"
-        s += f"\n\tTensor info: shape {self.shape}, dtype {self.dtype}"
-        s += f"\n\tComputed from params: {self.has_params}"
-        s += f"\n\tComputed in modules: {self.modules}"
-        s += f"\n\tOutput of modules: {self._module_context_output_of_module_calls}"
-        if self._module_context_is_atomic_module:
-            s += " (bottom-level submodule output)"
-        else:
-            s += " (not bottom-level submodule output)"
-        s += "\n\tFamily info:"
-        s += f"\n\t\tParents: {self.parents}"
-        s += f"\n\t\tChildren: {self.children}"
-        s += f"\n\t\tSpouses: {self._graph_co_parents}"
-        s += f"\n\t\tSiblings: {self._graph_siblings}"
-        s += (
-            f"\n\t\tOriginal Ancestors: {self._graph_root_ancestors} "
-            f"(min dist {self._graph_min_distance_from_input} nodes, max dist {self._graph_max_distance_from_input} nodes)"
-        )
-        s += f"\n\t\tInput Ancestors: {self.input_ancestors}"
-        s += f"\n\t\tInternal Ancestors: {self._graph_internal_source_ancestors}"
-        s += (
-            f"\n\t\tOutput Descendents: {self.output_descendants} "
-            f"(min dist {self._graph_min_distance_to_output} nodes, max dist {self._graph_max_distance_to_output} nodes)"
-        )
-        if self.out is not None:
-            s += f"\n\tTensor contents: \n{print_override(self.out, '__str__')}"
-        return s
 
     def __repr__(self) -> str:
         """Render a bounded Op display from captured metadata and cached values."""

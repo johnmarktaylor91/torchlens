@@ -109,6 +109,10 @@ def test_selection_and_site_table_bound_before_rendering() -> None:
     table = _SiteTable(tuple(trace._layer_list))
     assert repr(table) == f"_SiteTable: {len(table)} sites"
     assert "... and" in str(table)
+    hint_line = str(table).splitlines()[-1]
+    for method in (".labels()", ".to_dataframe()"):
+        assert method in hint_line
+        assert callable(getattr(table, method.strip(".()")))
 
 
 def test_candidate_rows_use_five_stored_display_keys() -> None:

@@ -62,7 +62,7 @@ def _split_save_options_and_predicate(
         code="save_predicate_type_invalid",
         remedy=(
             "pass a list of layer names or module addresses such as save=['layer1'], "
-            "a selector such as save=tl.func('relu'), save='all', or a a reduce-only save"
+            "a selector such as save=tl.func('relu'), save='all', or a reduce-only save"
         ),
         argument="save",
         received_type=type(save_value).__name__,

@@ -5,7 +5,7 @@ producers, both returning :class:`~torchlens._selection.selection.Selection` que
 that compose with the full ``| & - ~`` algebra and resolve explicitly
 against one trace:
 
-- ``neighborhood(of, hops, direction)`` — every op within N dataflow hops
+- ``neighborhood(selector, hops, direction)`` — every op within N dataflow hops
   of a seed region: the seed's sites that carry at least one selected
   element, plus everything reachable through at most ``hops`` parent/child
   edges in the requested direction. A seed site whose mask is empty (as
@@ -381,7 +381,7 @@ class _NeighborhoodTerm:
     def __repr__(self) -> str:
         """Return the compact constructor-shaped disclosure."""
 
-        return f"neighborhood(of={self.seed!r}, hops={self.hops}, direction={self.direction!r})"
+        return f"neighborhood({self.seed!r}, hops={self.hops}, direction={self.direction!r})"
 
 
 @dataclass(frozen=True)

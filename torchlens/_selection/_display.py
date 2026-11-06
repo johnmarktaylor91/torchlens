@@ -140,6 +140,6 @@ def site_table_card(table: Any) -> str:
         [
             site_table_repr(table),
             *bounded_lines(table._sites, display_key),
-            more_row((".labels()", ".to_pandas()")),
+            more_row((".labels()", ".to_dataframe()")),
         ]
     )

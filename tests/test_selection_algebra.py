@@ -661,7 +661,10 @@ def test_selection_repr_stability(log):
     unit = tl.units("relu_1_2", [(0, 0, 1, 1)])
     assert repr(unit) == "Selection[ACT](units('relu_1_2', n=1))"
     param = tl.param("c1.weight")
-    assert repr(param) == "Selection[PARAM](params('c1.weight'))"
+    assert repr(param) == "Selection[PARAM](param('c1.weight'))"
+    assert repr(log["relu_1_2"].__selection__()) == "Selection[ACT](site('relu_1_2'))"
+    lifted_op = log.layers["relu_1_2"].ops[0].__selection__()
+    assert repr(lifted_op) == "Selection[ACT](site('relu_1_2:1'))"
     combined = unit | tl.units("conv2d_1_1", [(0, 0, 0, 0)])
     assert repr(combined) == "Selection[ACT]((units('relu_1_2', n=1) | units('conv2d_1_1', n=1)))"
     inverted = ~unit

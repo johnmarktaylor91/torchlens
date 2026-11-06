@@ -49,7 +49,6 @@ SelectorKind: TypeAlias = Literal[
     "regex",
     "followed_by",
     "preceded_by",
-    "site",
     "episode_step",
     "grad",
 ]
@@ -404,7 +403,7 @@ class SiteSelector(BaseSelector):
         ):
             raise ArgumentTypeError(
                 "tl.site() needs a rendered site key or at least one "
-                "component (module_path=, op_type=, slot=, ordinal=)",
+                "component (module_path=, func=, slot=, ordinal=)",
                 code="site_selector_empty",
                 remedy="pass op.graph.site_key, or components such as "
                 "tl.site(module_path='encoder.0', func='linear')",
@@ -488,7 +487,7 @@ class SiteSelector(BaseSelector):
             for name, value in (
                 ("key", self.key),
                 ("module_path", self.module_path),
-                ("op_type", self.op_type),
+                ("func", self.op_type),
                 ("slot", self.slot),
                 ("ordinal", self.ordinal),
             )
