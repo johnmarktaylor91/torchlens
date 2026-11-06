@@ -1,5 +1,5 @@
 {
-  "carried_files": 1851,
+  "carried_files": 1899,
   "files": 1900,
   "inputs": [
     "dur-par.xml",
@@ -10,7 +10,7 @@
   "note": "full suite on the final train (mq-b44 5598d6bfb9 + da7a4cac10), 10 shards + serial, axon and runpod, 2026-11-05; files whose collected count changed since re-measured on axon at the B63 tree, 2026-11-06 (other rows carried)",
   "pruned_missing_files": 0,
   "regenerate": "python scripts/tier_durations.py regenerate --source-commit SHA --junit <pytest --junitxml output> [--workers N] [--instrumented]",
-  "source_commit": "d9f74e6d9b",
-  "tests": 23319,
+  "source_commit": "e3f12caf94",
+  "tests": 23320,
   "workers": 4
 }

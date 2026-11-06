@@ -774,7 +774,7 @@ tests/test_intervention_phase7.py,13,1.78,0.59,smoke
 tests/test_intervention_phase8a.py,8,0.87,0.39,unmarked
 tests/test_intervention_phase8b.py,4,0.83,0.45,unmarked
 tests/test_intervention_phase9.py,8,1.67,0.62,unmarked
-tests/test_intervention_render_marks.py,13,4.88,2.31,smoke
+tests/test_intervention_render_marks.py,14,6.72,2.12,smoke
 tests/test_intervention_replacement_identity.py,5,0.39,0.14,unmarked
 tests/test_intervention_spec_pickle.py,5,0.36,0.25,unmarked
 tests/test_intervention_spec_tensor_dedupe.py,4,0.47,0.24,unmarked
