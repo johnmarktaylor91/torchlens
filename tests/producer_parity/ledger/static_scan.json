@@ -4484,7 +4484,7 @@
   "field": "modules",
   "file": "torchlens/_utils/_torch_compat.py",
   "has_default": false,
-  "sites": 19,
+  "sites": 20,
   "via_getattr": false
  },
  {

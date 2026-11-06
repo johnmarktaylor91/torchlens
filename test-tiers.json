@@ -10196,7 +10196,8 @@
         "tests/test_intervention_phase8a.py",
         "tests/test_persist_honesty_outcome_recording.py",
         "tests/test_repr_fix_contracts.py",
-        "tests/test_stats_save_stats.py"
+        "tests/test_stats_save_stats.py",
+        "tests/test_w051_capt2_validate_forward_invariant.py"
       ],
       "torchlens/backends/torch/_tracing_pass.py": [
         "tests/test_capture_guard_transactionality.py",
@@ -15711,7 +15712,8 @@
         "tests/test_capture_unification_p5.py",
         "tests/test_param_log.py",
         "tests/test_repr_fix_contracts.py",
-        "tests/test_validation_after_load.py"
+        "tests/test_validation_after_load.py",
+        "tests/test_w051_capt2_validate_forward_invariant.py"
       ],
       "torchlens/validation/_unread_value_proofs.py": [
         "tests/test_validation_degenerate_domains.py",
