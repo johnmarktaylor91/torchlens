@@ -1772,6 +1772,8 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/recording/_generation_options.py", "__all__"),
         ("torchlens/recording/_generation_stream.py", "__all__"),
         ("torchlens/recording/reducers.py", "__all__"),
+        ("torchlens/_io/_scrub_runtime_fields.py", "__all__"),
+        ("torchlens/receptive_field/_query_walk_memo.py", "__all__"),
     }
 )
 
