@@ -327,7 +327,7 @@ writes the same file in its own directory: one grammar, two homes.
   by an artifact-supplied import name. A callable predicate refuses
   `intervention_spec_not_portable` at save time.
 - A loaded trace whose recipe holds a placeholder refuses every rerun door
-  (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`) with
+  (`run(model, x)` plain, append or chunked, a fork's `run`, `do(..., intervention=InterventionOptions(engine="rerun"))`) with
   `run_intervention_spec_not_persisted`; the message names the rule position and the callable's
   qualified name, and the remedy is to rebuild that rule with its callable and pass it as
   `intervene=` to a fresh capture, or to re-save with built-in edits. The code keeps its spelling

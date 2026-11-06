@@ -2040,7 +2040,7 @@ that is not on the site.
   `intervention.json` beside the intervened values and their per-op provenance
   (`save_intervention` writes the same recipe as an artifact of its own). A loaded trace whose
   recipe holds only built-in edits reruns it through every legacy rerun entry point (`run(model, x)`
-  plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit staged after
+  plain, append or chunked, a fork's `run`, `do(..., intervention=InterventionOptions(engine="rerun"))`, and an edit staged after
   loading).
 - Custom callables: saved as a callable placeholder (its position and qualified name, never
   its code). A recipe holding one raises `run_intervention_spec_not_persisted`, naming the

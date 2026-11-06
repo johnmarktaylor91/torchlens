@@ -197,10 +197,14 @@ def select_signal_plan_engine(
 
     if engine not in {"auto", "replay", "rerun", "set_only"}:
         raise InvalidArgumentError(
-            "do(..., engine=...) must be 'auto', 'replay', 'rerun', or 'set_only'; "
+            "do(..., intervention=InterventionOptions(engine=...)) must be 'auto', "
+            "'replay', 'rerun', or 'set_only'; "
             f"received {engine!r}",
             code="intervention_engine_invalid",
-            remedy="pass engine='auto', 'replay', 'rerun', or 'set_only'",
+            remedy=(
+                "pass intervention=InterventionOptions(engine=...) with 'auto', 'replay', "
+                "'rerun', or 'set_only'"
+            ),
             argument="engine",
         )
     if engine == "set_only":

@@ -29,7 +29,7 @@ from typing import Any
 
 from ..._io import _json as _bounded_json
 from ..._utils._display_errors import lookup_message
-from ._errors import ReadError
+from ._errors import ReadError, require_pandas
 
 __all__ = ["ReadRow", "ReadTable", "TableProvenance", "load_read_table"]
 
@@ -627,7 +627,7 @@ class ReadTable(Mapping):
                 code="read_table_values_mode_invalid",
                 mode=values,
             )
-        import pandas as pd
+        pd = require_pandas()
 
         records: list[dict[str, Any]] = []
         for row in self._rows.values():

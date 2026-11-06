@@ -3,7 +3,8 @@
 A full capture records every operation of the forward pass, which costs many
 times a plain forward on a small transformer. When each requested name is
 an exact module address, the model is in eval mode and the input is one tensor
-already on the model's device, the same values come from one plain forward with
+already on the model's device (or raw text, which the input door tokenizes
+exactly as ``tl.trace`` does), the same values come from one plain forward with
 forward hooks on those modules. The fast path returns only when the result is
 the one a full capture gives: every requested module ran exactly once and
 returned a single tensor. Anything else (a module called twice or never, a
@@ -21,6 +22,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from ._input_coerce import _coerce_inputs
 from ._state import active_capture
 
 #: A finalized op label (``linear_1_1``, ``relu_3_7:2``); such a name may resolve to an op.
@@ -49,13 +51,47 @@ def _plan(model: nn.Module, layers: Iterable[str] | Mapping[str, str]) -> dict[s
     return plan
 
 
-def _input_on_model_device(model: nn.Module, x: Any) -> bool:
-    """Return whether ``x`` is one plain tensor on the device of the model's parameters."""
+def _is_text(x: Any) -> bool:
+    """Return whether ``x`` is a string or a non-empty list of strings."""
 
-    if type(x) is not torch.Tensor:
-        return False
+    if isinstance(x, str):
+        return True
+    return isinstance(x, list) and bool(x) and all(isinstance(item, str) for item in x)
+
+
+def _forward_call(model: nn.Module, x: Any) -> tuple[tuple[Any, ...], dict[str, Any]] | None:
+    """Return the ``(args, kwargs)`` of the plain forward, or ``None`` for a full capture.
+
+    One plain tensor is the forward's only argument. Raw text goes through the
+    input door every entry shares (:func:`torchlens._input_coerce._coerce_inputs`,
+    the resolution ``tl.trace`` applies), so the forward sees the same token
+    tensors a capture sees; a door that does not yield plain tensors (or
+    refuses) leaves the input to the full capture, which owns every error.
+    """
+
+    if type(x) is torch.Tensor:
+        return (x,), {}
+    if not _is_text(x):
+        return None
+    try:
+        args, kwargs = _coerce_inputs(model, x, None)
+    except Exception:  # noqa: BLE001 -- the full capture re-resolves the input and owns the error
+        return None
+    if kwargs:
+        if args or not all(
+            isinstance(k, str) and type(v) is torch.Tensor for k, v in kwargs.items()
+        ):
+            return None
+        return (), dict(kwargs)
+    return ((args,), {}) if type(args) is torch.Tensor else None
+
+
+def _inputs_on_model_device(model: nn.Module, call: tuple[tuple[Any, ...], dict[str, Any]]) -> bool:
+    """Return whether every forward tensor sits on the device of the model's parameters."""
+
+    tensors = [*call[0], *call[1].values()]
     devices = {p.device for p in model.parameters()} | {b.device for b in model.buffers()}
-    return devices <= {x.device}
+    return all(devices <= {t.device} for t in tensors)
 
 
 def _rng_state() -> tuple[torch.Tensor, list[torch.Tensor] | None]:
@@ -103,7 +139,10 @@ def try_module_output_extract(
     if not detach or model.training or active_capture()[1]:
         return None
     plan = _plan(model, layers)
-    if plan is None or not _input_on_model_device(model, x):
+    if plan is None:
+        return None
+    call = _forward_call(model, x)
+    if call is None or not _inputs_on_model_device(model, call):
         return None
     modules = dict(model.named_modules())
     calls: dict[str, list[Any]] = {name: [] for name in set(plan.values())}
@@ -120,7 +159,7 @@ def try_module_output_extract(
     handles = [modules[name].register_forward_hook(recorder(name)) for name in calls]
     rng = _rng_state()
     try:
-        model(x)
+        model(*call[0], **call[1])
     except Exception:  # the full capture re-runs the forward and owns the error
         _restore_rng(rng)
         return None

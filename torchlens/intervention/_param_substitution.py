@@ -101,7 +101,7 @@ def _engine_refusal(engine: str) -> SelectionError:
         f"written. engine={engine!r} is unsupported (on rerun the capture "
         "pipeline would snapshot the substituted value into captured "
         "consumed-value fields; set_only has no consumption to substitute). "
-        "Use fork.do(tl.param(...), edit) with engine='replay' (the "
+        "Use fork.do(tl.param(...), edit) with the replay engine (the "
         "default when no model/x is passed).",
         code="param_substitution_engine_unsupported",
         engine=engine,
