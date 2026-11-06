@@ -473,7 +473,7 @@ The work of TorchLens stops at the edge of the network: it gets you the activati
 
 Each picture is one `.draw` call on a real model. Click any picture to open it full size.
 
-<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory_lr.svg"><img alt="One projection inside GPT-2 block 5's MLP, drawn left to right: the matrix multiply is dark purple (slow), the two reshapes around it are yellow (fast), and the input reshape is drawn smaller because its output is a quarter the size" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory_lr.png" width="100%"></a><br><sub><b>Time and memory.</b> Color shows how long each operation took and size shows its output's memory: the matrix multiply does the work.</sub></p>
+<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory_lr.svg"><img alt="One projection inside GPT-2 block 5's MLP, drawn left to right: the matrix multiply is dark purple (slow), the two reshapes around it are yellow (fast), and the input reshape is drawn smaller because its output is a quarter the size" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory_lr.png" width="100%"></a><br><sub><b>Time and memory.</b> Color shows how long each operation took and size shows how much memory its output uses. Here, matrix multiplication was the bottleneck.</sub></p>
 
 <details><summary>Code</summary>
 
@@ -485,7 +485,7 @@ trace.draw(module="transformer.h.5.mlp.c_fc", color_by="time", size_by="bytes", 
 
 </details>
 
-<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/resnet_rdm.svg"><img alt="ResNet-18's last block drawn left to right on three photos, two cats and a car: every convolution, batch norm, ReLU and the residual add holds a small 3 by 3 dissimilarity matrix with the three photos along its edges, including the downsample branch" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/resnet_rdm_hires.png" width="100%"></a><br><sub><b>Similarity inside every node.</b> ResNet-18's last block on two cats and a car: each operation shows how far apart the three photos' activations are.</sub></p>
+<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/resnet_rdm.svg"><img alt="ResNet-18's last block drawn left to right on three photos, two cats and a car: every convolution, batch norm, ReLU and the residual add holds a small 3 by 3 dissimilarity matrix with the three photos along its edges, including the downsample branch" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/resnet_rdm_hires.png" width="100%"></a><br><sub><b>Showing stimulus similarity.</b> ResNet-18's last block on two cats and a car: each colored matrix shows the pairwise similarity between stimulus representations for that layer.</sub></p>
 
 <details><summary>Code</summary>
 
@@ -500,9 +500,14 @@ trace.draw(module="layer4.0", direction="leftright", show_arg_labels=False,
 
 </details>
 
-<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/vit_head_edit.svg"><img alt="ViT block 5's attention after zeroing head 3 of the query projection only: the query projection box is marked purple, the operations on the query path and after the attention step are outlined as changed, and the key and value paths are unmarked" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/vit_head_edit_hires.png" width="700"></a><br><sub><b>One head, edited.</b> Zeroing head 3 of ViT's query projection: purple traces everything the edit changed, while the key and value paths stay untouched.</sub></p>
+<table>
+<tr>
+<td width="47%" align="center" valign="top"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/vit_head_edit.svg"><img alt="ViT block 5's attention after zeroing head 3 of the query projection only: the query projection box is marked purple, the operations on the query path and after the attention step are outlined as changed, and the key and value paths are unmarked" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/vit_head_edit_hires.png" width="100%"></a><br><sub><b>Interventions.</b> Zeroing head 3 of ViT's query projection: a thick purple outline marks the edited layer, and thin purple outlines mark the layers it changed downstream.</sub></td>
+<td width="53%" align="center" valign="top"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/backward_pass.svg"><img alt="The backward pass of a small residual block: gradient functions from the summed output down through the add, the two linear layers and the ReLU, with dotted edges where gradients accumulate into the weights and biases" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/backward_pass.png" width="100%"></a><br><sub><b>The backward pass.</b> The gradient graph from the loss down to every weight and bias that receives a gradient.</sub></td>
+</tr>
+</table>
 
-<details><summary>Code</summary>
+<details><summary>Code for the ViT picture</summary>
 
 ```python
 model = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224").eval()
@@ -513,10 +518,7 @@ ablated.draw(module="vit.layers.5.attention", view="interventions", show_legend=
 ```
 
 </details>
-
-<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/backward_pass.svg"><img alt="The backward pass of a small residual block: gradient functions from the summed output down through the add, the two linear layers and the ReLU, with dotted edges where gradients accumulate into the weights and biases" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/backward_pass.png" width="760"></a><br><sub><b>The backward pass.</b> The gradient graph from the loss down to every weight and bias that receives a gradient.</sub></p>
-
-<details><summary>Code</summary>
+<details><summary>Code for the backward-pass picture</summary>
 
 ```python
 class Block(nn.Module):
