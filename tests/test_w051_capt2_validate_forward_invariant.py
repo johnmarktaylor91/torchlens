@@ -16,7 +16,14 @@ from torch import nn
 import torchlens as tl
 from torchlens._user_funcs import validate_forward_pass
 from torchlens.errors import TorchLensWarning
-from torchlens.validation import _invariants as _invariants
+
+# _trace_checks is imported before any test patches the invariant: it binds
+# check_metadata_invariants at import, so a first import inside the patched
+# window would keep the forced failure for every later test in the process.
+from torchlens.validation import (
+    _invariants as _invariants,
+    _trace_checks,  # noqa: F401
+)
 from torchlens.validation._diagnostics import CHECK_METADATA_INVARIANT, last_validation_failure
 from torchlens.validation._invariants import MetadataInvariantError
 
