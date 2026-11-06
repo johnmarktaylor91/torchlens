@@ -49,7 +49,6 @@ SelectorKind: TypeAlias = Literal[
     "regex",
     "followed_by",
     "preceded_by",
-    "site",
     "episode_step",
     "grad",
 ]
