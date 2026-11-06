@@ -223,7 +223,12 @@ def _warm_pretrained_weights_cache(block: str) -> None:
     can announce itself on stdout. That reflects the cache's state, not the
     screen's output, so the gate fills the cache in-process first; both compared
     runs stay cold subprocesses. Hugging Face ``from_pretrained`` loads and
-    torchvision ``weights=`` builders are both warmed.
+    torchvision ``weights=`` builders are both warmed. For a Hugging Face image
+    model, ``tl.trace`` on a PIL image also resolves the model's own image
+    processor (``preprocessor_config.json``), so that file is cached here too:
+    the compared runs inherit this environment, and test modules that set
+    ``HF_HUB_OFFLINE`` at import time can leave them offline, where a file the
+    warm-up skipped is a hard failure rather than a download.
 
     Parameters
     ----------
@@ -235,7 +240,9 @@ def _warm_pretrained_weights_cache(block: str) -> None:
     if hf_loads:
         transformers = pytest.importorskip("transformers")
         for cls_name, repo_id in hf_loads:
-            getattr(transformers, cls_name).from_pretrained(repo_id)
+            model = getattr(transformers, cls_name).from_pretrained(repo_id)
+            if getattr(model, "main_input_name", None) == "pixel_values":
+                transformers.AutoImageProcessor.from_pretrained(repo_id)
     tv_loads = re.findall(r"models\.(\w+)\(weights=\"(\w+)\"\)", block)
     if tv_loads:
         models = pytest.importorskip("torchvision.models")
