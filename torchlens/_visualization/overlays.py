@@ -103,7 +103,8 @@ def resolve_overlay_request(trace: Any, overlay: Any) -> Any:
             remedy="key the overlay table by this trace's layer labels",
         )
     if len(realized) < len(overlay):
-        missing = [key for key in overlay if key not in set(realized)]
+        realized_keys = set(realized)
+        missing = [key for key in overlay if key not in realized_keys]
         warnings.warn(
             TorchLensWarning(
                 f"node_overlay matched {len(realized)} of {len(overlay)} "
@@ -300,6 +301,23 @@ def legend_domain_text(spec: Any, value: float) -> str:
     return f"{value:.4g}"
 
 
+def format_duration_ms(milliseconds: float) -> str:
+    """Return a duration for a label, in the unit that keeps it in fixed notation.
+
+    Three significant figures: ``2.0`` is ``"2 ms"``, ``0.0`` is ``"0 ms"``.
+    Below 0.001 ms the value prints in microseconds (``"5 us"``, never
+    ``"5e-06 ms"``) and from 1,000 ms in seconds (``"1.2 s"``, never
+    ``"1.2e+03 ms"``).
+    """
+
+    magnitude = abs(milliseconds)
+    if magnitude >= 1000:
+        return f"{milliseconds / 1000:.3g} s"
+    if 0 < magnitude < 0.001:
+        return f"{milliseconds * 1000:.3g} us"
+    return f"{milliseconds:.3g} ms"
+
+
 def format_overlay_value(name: str, value: Any) -> str:
     """Format one overlay value for a node label.
 
@@ -324,7 +342,7 @@ def format_overlay_value(name: str, value: Any) -> str:
     if display_name == "flops":
         return f"flops: {format_flops(int(value or 0))}"
     if display_name == "time":
-        return f"time: {float(value or 0.0) * 1000:.3g} ms"
+        return f"time: {format_duration_ms(float(value or 0.0) * 1000)}"
     if display_name == "bytes":
         return f"bytes: {decimal_size(int(value or 0))}"
     if isinstance(value, float):
