@@ -748,20 +748,21 @@ def _probe_attention_causal_bias() -> bool:
     return bool(_real_op_probe_leaf().probe_attention_causal_bias())
 
 
-def torch_module_exists_without_importing(module_path: str) -> bool:
+def torch_module_exists_without_importing(module_path: str, *, unloaded: bool = False) -> bool:
     """Return whether ``module_path`` exists without importing it or any missing ancestor.
 
     Parameters
     ----------
     module_path:
         Dotted module path, e.g. ``"torch.distributed.pipeline.sync"``.
+    unloaded:
+        Also require that ``module_path`` is not imported yet (not in ``sys.modules``).
 
     Returns
     -------
     bool
         ``True`` when the module is imported or resolvable on disk.
     """
-
     parts = module_path.split(".")
     depth = next((d for d in range(len(parts), 0, -1) if ".".join(parts[:d]) in sys.modules), 0)
     search = getattr(sys.modules[".".join(parts[:depth])], "__path__", None) if depth else sys.path
@@ -770,7 +771,7 @@ def torch_module_exists_without_importing(module_path: str) -> bool:
         if spec is None:
             return False
         search = spec.submodule_search_locations
-    return True
+    return not (unloaded and depth == len(parts))
 
 
 def _probe_expanded_weights_conv_picker() -> bool:
@@ -2340,8 +2341,7 @@ def get_cond_witness_operator(*, mark_missing: bool = True) -> Any | None:
 
 
 HAS_COND_HIGHER_ORDER_OP: bool = get_cond_witness_operator(mark_missing=False) is not None or (
-    "torch._higher_order_ops.cond" not in sys.modules
-    and torch_module_exists_without_importing("torch._higher_order_ops.cond")
+    torch_module_exists_without_importing("torch._higher_order_ops.cond", unloaded=True)
 )
 
 

@@ -5891,11 +5891,3 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: b481e82cd5204df69743fc14e7825f0f0307a8be
 recorded: 2026-11-05T21:07:04+00:00
----
-generator: scripts/regen_ledgers.py (producer static half)
-flag: none (deterministic ledger step)
-reason: B61 batch merge settle
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
-source: a9d4d8a5234da1811ed78bc3ee7cbab14bf5d0ed
-recorded: 2026-11-06T03:32:24+00:00
