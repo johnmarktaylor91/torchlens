@@ -414,7 +414,8 @@ def test_saved_and_displayed_svg_flow_the_header_edit_line(tmp_path: Path) -> No
         line = re.search(r"<text [^>]*>(<tspan[^>]*>1 edit:.*?)</text>", svg)
         assert line is not None, "the edit line is not one text element"
         pieces = re.findall(r"<tspan[^>]*>([^<]*)</tspan>", line.group(1))
-        assert "".join(pieces) == "1 edit: Δ zero_ablate on relu_1_1"
+        # Graphviz writes the label's non-breaking spaces as U+00A0 on this path.
+        assert "".join(pieces).replace("\xa0", " ") == "1 edit: Δ zero_ablate on relu_1_1"
 
 
 def test_flow_text_runs_joins_only_same_baseline_runs_of_header_and_edited_nodes() -> None:
