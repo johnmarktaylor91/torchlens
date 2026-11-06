@@ -21,7 +21,7 @@ Refused typed in this release, with `fields["code"] = "merge_scope_unsupported"`
 - boundaries carrying DTensor dual geometry — sharded-topology capture stays
   refused until the capture-fidelity census is green (relaxation follows
   fidelity, never the other way around);
-- functional-collective boundaries (the documented-unstable
+- functional-collective boundaries (the experimental
   `functional_collective_boundary_v0` payload recorded by the recording
   slice) — merging joins the frozen `collective_boundary_v1` payload only; funcol
   boundary joining is later merged-side scope behind its own authorizing

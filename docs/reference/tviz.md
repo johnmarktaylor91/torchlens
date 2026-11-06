@@ -7,7 +7,7 @@ term-complete score decomposition -- plus the one picture the dormant
 incumbents (CircuitsVis, BertViz, Ecco, inspectus) never shipped: attention
 annotated with **measured** ablation effects.
 
-Every spelling is DOCUMENTED-UNSTABLE pending the naming session. Import as
+Every name is experimental and may change in any release. Import as
 `import torchlens.transformer` (the root-name budget is frozen; a root spelling
 awaits the registration sweep). Display records are session-only values and
 are never persisted into `.tlspec` artifacts.

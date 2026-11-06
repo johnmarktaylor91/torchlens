@@ -302,8 +302,8 @@ EXACT
   the save-level table in
   [intervention_explainers.md](intervention_explainers.md).
 - **Spelling stability.** `op.graph.site_key`, `tl.site(...)`, and the
-  compatibility checker's field spellings are DOCUMENTED-UNSTABLE pending
-  naming-session ratification; the workflow itself is the supported path.
+  compatibility checker's field names are experimental and may
+  change; the workflow itself is the supported path.
 - **This page is executable.** The realism test
   `tests/test_skeleton_recipe_docs.py` runs every code block above, in order,
   against the real `transformers` GPT-2 classes on every test run, and

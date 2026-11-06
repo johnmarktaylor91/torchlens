@@ -4,8 +4,8 @@ This page is for people who look at attention with BertViz's views, or at salien
 lens and neuron factors with Ecco, and want the TorchLens equivalents. Neither BertViz nor
 Ecco is installed in TorchLens's test environment (Ecco targets transformers 4), so their calls
 are shown as text and the inputs they consume are produced by an executed example. The pictures
-live in `torchlens.transformer` (`import torchlens.transformer as tviz`); their spellings are
-documented-unstable. Saving a picture needs matplotlib (`pip install "torchlens[viz]"`).
+live in `torchlens.transformer` (`import torchlens.transformer as tviz`); their names are
+experimental. Saving a picture needs matplotlib (`pip install "torchlens[viz]"`).
 Checked 2026-11-03.
 
 ## The same task in both
@@ -150,5 +150,5 @@ not a supported bridge. Ecco has no such route.
   every TorchLens attention picture says so.
 - **Saliency method.** `tl.attribution.text` is integrated gradients for one target token,
   with a convergence report; Ecco's saliency offers several gradient variants.
-- **Documented-unstable spellings.** The `torchlens.transformer` picture functions may be
+- **Experimental names.** The `torchlens.transformer` picture functions may be
   renamed.

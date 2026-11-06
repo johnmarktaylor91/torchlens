@@ -14,8 +14,8 @@ lens_l(h) = unembed( final_norm( J_l @ h ) ),    J_l = E[ d h_final / d h_l ]
 The logit lens is the special case `J_l = I`. TorchLens ships no fitted lenses
 and no Jacobian-lens API; this page fits one with public TorchLens primitives:
 a trace that keeps the live residual stream, `torch.autograd.grad`, and the
-model's own final norm and unembedding. Every spelling here is
-DOCUMENTED-UNSTABLE.
+model's own final norm and unembedding. Every name here is
+experimental.
 
 The page runs on a small randomly initialized GPT-2 built from a config, with
 no download. `examples/jacobian_lens_demo.py` runs the same recipe on the

@@ -4,8 +4,8 @@ TransformerLens's daily-driver analysis tools rebuilt on torchlens: residual
 decomposition, direct logit contributions (DLA), per-head results, the
 component edge graph, patching grids, head-taxonomy scores, prompt
 utilities, an alias layer, and retention plans -- derived from the captured
-graph (no architecture registry), with verification IN the API, not only in CI. Every spelling is
-DOCUMENTED-UNSTABLE pending the naming sprint; the facade name is a
+graph (no architecture registry), with verification IN the API, not only in CI. Every name is
+experimental and may change in any release; the facade name is a
 placeholder.
 
 Axis disambiguation: `torchlens.attribution` attributes model OUTPUTS to

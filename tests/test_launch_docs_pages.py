@@ -210,7 +210,7 @@ def test_doors_are_equal_on_the_docs_landing() -> None:
     sections = None
     for door in DOORS:
         text = _text(f"doors/{door}.md")
-        assert "<!-- JMT writes this: the door intro. -->" in text, door
+        assert "<!--" not in text, f"{door} carries a placeholder comment"
         headings = [line for line in text.splitlines() if line.startswith("## ")]
         sections = sections or headings
         assert headings == sections, door

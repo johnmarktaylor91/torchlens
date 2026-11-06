@@ -187,8 +187,8 @@ more     result.details() | view='compute' for per-row MACs | docs/reference/sum
   forward through the TorchLens capture machinery, so it costs more than shape arithmetic.
 - torchinfo's printed-table muscle memory (`verbose=1` printing as a side effect, `col_names`
   tuples) maps onto different spellings: TorchLens returns a report object instead of printing,
-  and columns use the `columns=[...]` grammar above. These spellings are documented-unstable
-  pending the naming session.
+  and columns use the `columns=[...]` grammar above. These names are experimental
+  and may change in any release.
 - For profilers and per-kernel timing that neither summary tool provides, see
   [profilers_alongside.md](profilers_alongside.md) and [landscape.md](landscape.md).
 

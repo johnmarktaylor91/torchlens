@@ -5,7 +5,7 @@ from, or averaged over, other inputs. TorchLens builds them from one population 
 sampling plan, records every draw, and makes each draw reproducible from its seed. Every name on
 this page lives in `torchlens.intervention` (not at the `tl.` root), except `tl.mean_ablate` (the root
 helper); `SamplingRecord` is exported there beside `FireRecord`. All are
-DOCUMENTED-UNSTABLE: the spellings may change without a deprecation shim.
+experimental: the names may change in any release.
 
 ## The pieces
 

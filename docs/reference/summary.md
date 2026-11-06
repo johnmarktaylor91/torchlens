@@ -7,8 +7,8 @@ a summary result. It never auto-prints; the result displays itself in a
 REPL or notebook. `trace.summary()` renders the same report from an
 existing capture without re-running anything.
 
-All spellings on this page are DOCUMENTED-UNSTABLE pending the naming
-session; the accounting laws (identity partition, raw-numbers pin, ASCII
+All names on this page are experimental and may change in any
+release; the accounting laws (identity partition, raw-numbers pin, ASCII
 contract) are stable.
 
 ## The sixty-second tour

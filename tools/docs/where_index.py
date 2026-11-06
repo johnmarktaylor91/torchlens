@@ -32,6 +32,9 @@ from id_lint import FAMILIES  # noqa: E402
 _ID_TOKENS = re.compile("|".join(f"(?:{pattern})" for pattern in FAMILIES.values()))
 _EMPTY_BRACKETS = re.compile(r"\s*[(\[]\s*[;,:]*\s*[)\]]")
 _LOOSE_SEPARATORS = re.compile(r"\s*([;,])(?:\s*[;,])+")
+# Internal status tags and plan-step references read as bookkeeping on a public page.
+_UNSTABLE_TAG = re.compile(r"\((?:spellings?\s+)?DOCUMENTED-UNSTABLE(?:\s+spellings?)?\)", re.I)
+_STEP_REF = re.compile(r"\s*\(step \d+\)")
 _ORPHAN_LABEL = re.compile(
     r"([(\[])(?:lane|workstream|row|round|memo item|memo items)\s*(?:[;,:]\s*)?(?=[;,:)\]]|$)"
 )
@@ -78,9 +81,14 @@ def first_docstring_line(path: Path) -> str:
 
 
 def without_internal_ids(text: str) -> str:
-    """Drop private planning ids from ``text`` and tidy the punctuation they leave."""
+    """Drop private planning ids from ``text`` and tidy the punctuation they leave.
 
-    cleaned = _ID_TOKENS.sub("", text)
+    Internal status tags read as "experimental" and plan-step references are dropped.
+    """
+
+    cleaned = _UNSTABLE_TAG.sub("(experimental)", text)
+    cleaned = _STEP_REF.sub("", cleaned)
+    cleaned = _ID_TOKENS.sub("", cleaned)
     cleaned = _ORPHAN_LABEL.sub(r"\1", cleaned)
     cleaned = _LOOSE_SEPARATORS.sub(r"\1", cleaned)
     cleaned = re.sub(r"([(\[])\s*[;,:]\s*", r"\1", cleaned)

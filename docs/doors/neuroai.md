@@ -1,7 +1,5 @@
 # Door: NeuroAI
 
-<!-- JMT writes this: the door intro. -->
-
 ## Start here
 
 - [The ResNet-18 running example](../field-guide/running_examples.md#resnet-18-on-one-image)

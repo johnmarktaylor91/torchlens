@@ -1,6 +1,6 @@
 # Composition matrix
 
-<!-- Generated from tests/composition_expectations/ledger.py by
+<!-- This page is generated from tests/composition_expectations/ledger.py by
 render_public_matrix(); do not edit by hand. The lockstep test
 (tests/composition_expectations/test_contract_lockstep.py) fails on drift. -->
 

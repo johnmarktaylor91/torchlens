@@ -1,6 +1,6 @@
 # Harness bundles
 
-*Spellings documented-unstable, like the episode surface.*
+*These names are experimental and may change in any release, like the episode surface.*
 
 A harness runs several model calls where a later prompt contains an earlier output: a draft
 and its critique, a judge reading candidates, a router picking a tool, two agents debating.

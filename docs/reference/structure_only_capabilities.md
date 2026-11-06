@@ -11,9 +11,8 @@ named flip_event (with evidence). No amendment may widen a CLAIM beyond its
 conditional wording; a wave that wants a bigger claim writes a NEW row
 through. This file never promises for a wave it hasn't shipped.
 
-NAMING: every spelling below is DOCUMENTED-UNSTABLE pending naming-session
-ratification, and every refusal code is additionally gated on that ratification (no
-deprecation shim owed on rename). The decision point (meta-tensor
+NAMING: every name below is experimental and may change in any release,
+and so is every refusal code. The decision point (meta-tensor
 admission scoped to structure-only captures) is QUEUED; every cell below is
 the default state — the entry-gate refusal stands until an explicit
 decision.

@@ -171,8 +171,7 @@ skipped, and uncheckable dtypes warn once per capture.
 
 ## The queryable nonfinite record
 
-*(Every spelling here is DOCUMENTED-UNSTABLE pending naming-session
-ratification; no deprecation shim owed on rename.)*
+*(Every name here is experimental and may change in any release.)*
 
 `on_nonfinite='raise'` is a stop-and-throw; the queryable form is separate and never
 changes control flow. `Trace.nonfinite_ops` returns the pass-qualified labels

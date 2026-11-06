@@ -2,8 +2,8 @@
 
 Watch how the distribution at every site of your model drifts over training,
 and find where it broke -- as a portable, exactly-mergeable history artifact
-first, and paper-ready static figures second. (Spellings on this page are
-DOCUMENTED-UNSTABLE pending the naming session.)
+first, and paper-ready static figures second. (The names on this page are
+experimental and may change in any release.)
 
 The design credits [torchexplorer](https://github.com/spfrommer/torchexplorer)
 (Samuel Pfrommer, Apache-2.0) for the question and the instrument-once

@@ -3,8 +3,8 @@
 TorchLens exports captured graphs into [Google Model Explorer](https://github.com/google-ai-edge/model-explorer)'s
 file-ingest contract: their hierarchy-first viewer becomes a TorchLens
 frontend, showing the graph your code ACTUALLY RAN with TorchLens' measured
-facts on it. Every spelling on this page is DOCUMENTED-UNSTABLE pending the
-naming session. The vendor schema of record is
+facts on it. Every name on this page is experimental and may change in
+any release. The vendor schema of record is
 `model_explorer.graph_builder` / `node_data_builder` from
 `ai-edge-model-explorer` 0.1.33; the executed contract oracle is the pinned
 `dist/worker.js` from npm `ai-edge-model-explorer-visualizer` 0.1.2

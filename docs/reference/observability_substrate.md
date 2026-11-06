@@ -1,8 +1,8 @@
 # Observability substrates
 
 `torchlens._observability` is the shared substrate the observe / checks /
-trackers / explorer / snoop / torchnative surfaces build on. Every spelling in
-it is DOCUMENTED-UNSTABLE pending naming-session ratification; access is
+trackers / explorer / snoop / torchnative surfaces build on. Every name in
+it is experimental and may change in any release; access is
 `import torchlens._observability` (root-facade routing is a later registration).
 
 ## The per-step history schema

@@ -119,7 +119,7 @@ TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35350 li
 | `_chunking` | Input chunking helpers for forward-only chunked capture. | 24 |
 | `_comparison_tensor` | Host tensor conversion for saved-payload comparisons without artifact imports. | 48 |
 | `_constants` | Shared constants: field-order tuples and function discovery for TorchLens. | 1426 |
-| `_debug_report` | The one typed ''tl.debug'' report object (spelling DOCUMENTED-UNSTABLE). | 489 |
+| `_debug_report` | The one typed ''tl.debug'' report object (experimental). | 489 |
 | `_deploy_env` | Deployment-envelope detection helpers. | 192 |
 | `_deprecations` | The MISSING kwarg-omission sentinel. | 35 |
 | `_doctor_types` | Doctor report types: the compatibility truth-table row and the report that holds them. | 347 |
@@ -489,15 +489,15 @@ Private implementation of dataset extraction. (20 modules, 11053 lines)
 | `envelope` | The typed batch envelope and the collate door. | 687 |
 | `export` | Read-only streaming exporters + the self-contained contract. | 771 |
 | `harvest_schema` | Counterfactual-harvest schema (leverage B17 /): fields land NOW. | 216 |
-| `intervened` | Intervened dataset extraction (spellings DOCUMENTED-UNSTABLE). | 410 |
+| `intervened` | Intervened dataset extraction (experimental). | 410 |
 | `pool` | Pool presets: axis-explicit, mask-aware, refuse ambiguity. | 397 |
 | `ragged` | D-RAGGED: refuse by default; trimmed is the only ragged carrier. | 421 |
 | `reader` | The lazy extraction reader: the documented read path. | 1392 |
 | `resume` | Resume machinery + the signature for extraction v2. | 1135 |
 | `selector_plan` | Selector-valued ''layers='': resolve on batch zero, freeze, attest. | 510 |
 | `shards` | Shard codecs: safetensors default behind the manifest field (item 11). | 290 |
-| `token_store` | The token SAE store (spellings DOCUMENTED-UNSTABLE). | 377 |
-| `trace_safetensors` | Safetensors export of a Trace (spellings DOCUMENTED-UNSTABLE). | 598 |
+| `token_store` | The token SAE store (experimental). | 377 |
+| `trace_safetensors` | Safetensors export of a Trace (experimental). | 598 |
 | `views` | Thin views over the lazy reader (the views layer). | 234 |
 
 ### `torchlens._io`
@@ -748,7 +748,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (4
 | `_materialize` | Step 0 of postprocess: materialize raw Trace state from capture events. | 1710 |
 | `_module_census` | Module-build helpers for the root call's labels, uncalled modules and Layer roles. | 144 |
 | `_module_containment` | Op containment facts: tally each op's module calls into the module build data. | 107 |
-| `_multipass_params` | Parameter fields of a layer whose passes consume different parameters (step 14). | 48 |
+| `_multipass_params` | Parameter fields of a layer whose passes consume different parameters. | 48 |
 | `_orphan_predicates` | Predicates deciding whether a pruned orphan op's nondeterministic value mattered. | 132 |
 | `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 163 |
 | `_output_payload` | Whether a model-output row rides its producer's retained payload (HONESTY 13-R1). | 153 |
@@ -1617,7 +1617,7 @@ External-tool bridge namespace. (28 modules, 8876 lines)
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | External-tool bridge namespace. | 112 |
-| `_hf_attention` | TorchLens as a registered Hugging Face attention backend (DOCUMENTED-UNSTABLE). | 544 |
+| `_hf_attention` | TorchLens as a registered Hugging Face attention backend (experimental). | 544 |
 | `_hf_processor` | ''AutoProcessor'' resolution for the multimodal bridge (the one network seam). | 102 |
 | `_hf_refusals` | Typed preprocessing refusals shared by the Hugging Face auto-routes. | 51 |
 | `_image_preprocessing` | Accept or refuse the preprocessing resolved for a PIL input on the image bridge. | 53 |
@@ -1954,7 +1954,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_trace_run` | Trace run functions reached from the records through ''_data_classes._doors.intervention''. | 800 |
 | `_trace_selection_edits` | Selection-kind ''do'' bodies of ''Trace'' (record rebuild destination). | 653 |
 | `_types` | Shared dataclass ownership for TorchLens intervention schemas. | 855 |
-| `_zero_fire` | One zero-fire policy for every intervention door (spelling DOCUMENTED-UNSTABLE). | 515 |
+| `_zero_fire` | One zero-fire policy for every intervention door (experimental). | 515 |
 | `_zero_fire_doors` | Door-specific zero-fire disclosure: the bound-model and rerun doors. | 138 |
 | `errors` | Error ownership for TorchLens intervention APIs. | 756 |
 | `hooks` | Hook parsing and hook-spec ownership for TorchLens interventions. | 1717 |
@@ -2060,7 +2060,7 @@ Preprocessing provenance + verification (NeuroAI audience). (9 modules, 2811 lin
 | `_card` | The on-request preprocessing card check. | 174 |
 | `_declared_transform` | Executable pipeline for a field-level preprocessing declaration. | 175 |
 | `_diagnostics` | Opt-in input tensor diagnostics (the demoted arm). | 334 |
-| `_imagenet_default` | The explicit ImageNet-default opt-in (spelling DOCUMENTED-UNSTABLE). | 137 |
+| `_imagenet_default` | The explicit ImageNet-default opt-in (experimental). | 137 |
 | `_records` | Neutral preprocessing declaration + resolution records. | 262 |
 
 ### `torchlens.receptive_field`
@@ -2133,7 +2133,7 @@ Lightweight predicate-recording namespace for TorchLens. (28 modules, 7708 lines
 | `_dry_run_door` | Dry-run tracing API for fastlog predicates. | 83 |
 | `_exceptions` | Exception types for fastlog predicate recording. | 164 |
 | `_generation` | Record chosen sites across one real Hugging Face ''generate'' call. | 671 |
-| `_generation_options` | Grouped options of the streaming generation recorder (DOCUMENTED-UNSTABLE spellings). | 121 |
+| `_generation_options` | Grouped options of the streaming generation recorder (experimental). | 121 |
 | `_generation_stream` | Per-token series, ring buffer, disk spill and cost guard of the generation recorder. | 487 |
 | `_halt` | Fastlog early-abort control signal and the halted-state writer for a frozen Recording. | 106 |
 | `_indexes` | Index file writers for fastlog directory bundles. | 81 |
@@ -2152,7 +2152,7 @@ Lightweight predicate-recording namespace for TorchLens. (28 modules, 7708 lines
 | `_types` | Core dataclasses for fastlog predicate recording. | 1252 |
 | `_types_ancestry` | Ancestry backfill for cook-owned recording replay projections. | 103 |
 | `_validation` | Validation and entry helpers for public fastlog APIs. | 223 |
-| `reducers` | Per-token reducers for the generation recorder (DOCUMENTED-UNSTABLE spellings). | 260 |
+| `reducers` | Per-token reducers for the generation recorder (experimental). | 260 |
 
 ### `torchlens.repgeom`
 
@@ -2206,7 +2206,7 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 | `_summary_columns` | Per-row facts behind the optional summary columns (walk batch 1). | 246 |
 | `_summary_config` | The summary configuration grammar. | 402 |
 | `_summary_html` | Dependency-free summary HTML renderer. | 99 |
-| `_summary_hub` | Hub-name input form for ''tl.summary'' (spelling DOCUMENTED-UNSTABLE). | 78 |
+| `_summary_hub` | Hub-name input form for ''tl.summary'' (experimental). | 78 |
 | `_summary_ladder` | The summary auto ladder. | 1283 |
 | `_summary_op_metadata` | Metadata-only join keys for the summary's executed operation rows. | 27 |
 | `_summary_render` | The rebuilt summary renderer. | 565 |
@@ -2241,16 +2241,16 @@ Streaming statistics for aggregating outputs over a dataloader: stat kernels, pe
 | --- | --- | ---: |
 | `__init__` | Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... | 99 |
 | `_aggregate` | Dataloader aggregation over streaming statistics. | 660 |
-| `_aggregate_cache` | ''tl.stats.aggregate(..., cache=True)'': skip the dataset loop on a rerun (DOCUMENTED-UNSTABLE). | 477 |
+| `_aggregate_cache` | ''tl.stats.aggregate(..., cache=True)'': skip the dataset loop on a rerun (experimental). | 477 |
 | `_aggregate_loop` | The dataset loops behind :func:'torchlens.stats.aggregate'. | 300 |
 | `_capture_stats` | Reduce-and-discard capture: ''tl.trace(model, x, save="stats")''. | 264 |
 | `_envelope` | The envelope grammar and card assembly. | 188 |
 | `_fitted` | Fitted-PCA payload + digest-checked persisted sidecar. | 359 |
 | `_glance` | glance: the stats line as a function on arbitrary tensors. | 78 |
-| `_per_unit` | Quantile and top-k accumulators, pooled or per unit (DOCUMENTED-UNSTABLE). | 712 |
+| `_per_unit` | Quantile and top-k accumulators, pooled or per unit (experimental). | 712 |
 | `_record_values` | Word-based value summaries for implicit record displays. | 116 |
 | `_seams` | Seam adapters: cell density + echo observer. | 230 |
-| `_state_io` | Save and reload streaming-accumulator state (DOCUMENTED-UNSTABLE). | 489 |
+| `_state_io` | Save and reload streaming-accumulator state (experimental). | 489 |
 | `_stats_kernel` | The sound tensor-stats kernel. | 609 |
 | `_stats_render` | Stats-line renderers: the core grammar over TensorStats. | 248 |
 | `_streaming` | Streaming statistic kernels. | 834 |

@@ -136,7 +136,7 @@ quality planner is admitted when `U <= 2000` AND the predicted cost fits the bud
   the root has no child module), a forward drawing's `Drawing.collapse_plan` refuses typed
   (`collapse_plan_unavailable`, reason `collapse_ops_ceiling`), and its `Drawing.collapse_schedule`
   degrades to a single full-graph step.
-- Over-ceiling residuals (DOCUMENTED-UNSTABLE): when the served
+- Over-ceiling residuals (experimental): when the served
   overview is still above the readable band -- a floor-fallback plan, or the
   pathological top-level overview -- `draw` writes `<outpath>.expansion.json` beside
   the picture (schema `torchlens_expansion_manifest_v1`: one entry per collapsed unit

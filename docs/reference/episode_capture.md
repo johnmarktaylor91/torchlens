@@ -31,9 +31,8 @@ log = tl.trace(
 ledger_payload = log.annotations["episode"]     # header + per-step rows
 ```
 
-Every spelling on this surface is DOCUMENTED-UNSTABLE (no deprecation shim
-owed) pending the rolling naming session; the semantics below are the
-ratified contract.
+Every name on this surface is experimental and may change in any release;
+the semantics below are the settled contract.
 
 ## Cost: a diagnostic-tier product, for tens of steps
 
@@ -207,7 +206,7 @@ complements.
 
 The combination runs COUPLED (the foldA flip — the historical
 pre-execution refusal retired when the verdict's evidence bar was met, and
-every spelling here is DOCUMENTED-UNSTABLE pending the naming session):
+every name here is experimental):
 
 - **Product binding.** The ledger's `capture_digest` binds it to the exact
   product (above); `trace.episode_coupling` recomputes and compares — the
@@ -259,8 +258,8 @@ every spelling here is DOCUMENTED-UNSTABLE pending the naming session):
 the travel policy dropped, below). `trace.episode` is the public step
 access: the parsed ledger with `header`, ordered per-step `rows`,
 `steps_completed`, and `truncated_at_step` — `None` for plain captures and
-quarantined/dropped payloads. Both spellings are DOCUMENTED-UNSTABLE pending
-the naming session. The declaration class is `tl.options.EpisodeOptions` (the
+quarantined/dropped payloads. Both names are experimental and may change in
+any release. The declaration class is `tl.options.EpisodeOptions` (the
 root `tl.EpisodeOptions` spelling awaits the surface-table amendment).
 
 ## Settlement refusals keep the product

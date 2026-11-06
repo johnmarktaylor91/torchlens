@@ -66,8 +66,8 @@ trace.cleanup()
 | Accumulate many prompt variants | `tl.Bundle({...})` plus `map`, `compare`, `at` | Equivalent comparison container. |
 | Transformer pictures (attention heads, logit lens, token strips) | `torchlens.transformer` (`attention_views`, `render_attention`, `prediction_trajectory`, causal receipt grids) | Native renderers; the module also carries a CircuitsVis hand-off. |
 
-Every `torchlens.mechinterp` and facet spelling above is documented-unstable pending the naming
-session: the workflows are stable, the exact names may be ratified differently.
+Every `torchlens.mechinterp` and facet name above is experimental and may change in any
+release: the workflows are stable, the exact names may be ratified differently.
 
 ## What TorchLens adds
 

@@ -1,7 +1,7 @@
 # Training sanity checks (the checks kit)
 
-> Every spelling on this page is DOCUMENTED-UNSTABLE pending naming-session
-> ratification. The public names live on `tl.debug` (`tl.debug.ChecksSession`, `tl.debug.RangeProbe`, and so on); the one-shot
+> Every name on this page is experimental and may change in any release.
+> The public names live on `tl.debug` (`tl.debug.ChecksSession`, `tl.debug.RangeProbe`, and so on); the one-shot
 > parameter audit is also served as `tl.debug.param_health`. The kit is
 > STANDALONE and CAPTURE-FREE: it constructs and runs with TorchLens capture
 > entirely off, and the step-check family runs on `torch.compile`'d models.

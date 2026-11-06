@@ -116,7 +116,7 @@ Editing pass 1 of a `self.b.add_(1.0)` loop captured as `0,1,2,3` to `7` yields
 writing op's captured output. A version that cannot be certified (fused native
 mutators, slice writes whose op output is only the slice) keeps its captured
 value and discloses the gap with `BufferThreadGapWarning`
-(documented-unstable spelling; raises under `strict=True`) — the edit does not
+(experimental name; raises under `strict=True`) — the edit does not
 propagate through that write, and TorchLens says so rather than guessing.
 Replay never mutates capture truth: in-place ops re-execute on defensive
 clones, so captured payloads, copy-on-write fork sources, and the user's edit

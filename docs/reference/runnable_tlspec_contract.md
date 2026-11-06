@@ -1190,8 +1190,8 @@ diagnostic names every replaced op label. An armed selector that fired on zero s
 the capture unreplaced and runnable; analysis-level saves of intervened captures remain
 allowed, and the intervention spec itself stays separately saveable.
 
-`buffer_sink_routing_unsupported` (PROVISIONAL SPELLING, documented-unstable pending
-naming ratification) is the LIVE refresh projector's mode-aware buffer-sink routing
+`buffer_sink_routing_unsupported` (experimental name, may
+change) is the LIVE refresh projector's mode-aware buffer-sink routing
 refusal (`BufferSinkRoutingError`, stage `refresh_buffer_sink_routing`), raised on the
 default `run()` / `save_new_outs` path by all four typed arms of one closed rule --
 refuse iff any buffer sink carries `buffer_value_changed is not False`: (1) a
@@ -1536,7 +1536,7 @@ truncated: bool = False
 stopped_at: str | None = None
 ```
 
-`truncation` / `truncated` / `stopped_at` (L4 `until=`; spellings documented-unstable;
+`truncation` / `truncated` / `stopped_at` (L4 `until=`; names experimental;
 `truncated` and `stopped_at` are the ratified flat reading surface) disclose a truncated run.
 Truncation is a RUN-RESULT term, NEVER a capture outcome: `CaptureStatus` keeps its six members,
 the source trace's outcome is untouched by any run, and no N-gate row branches on `until=`.
@@ -1563,7 +1563,7 @@ requested call, labeled `closure` only when that prefix IS the widened dependenc
 the certified-fresh vocabulary is not yet shipped, so any candidate skip discloses the
 `sequential_prefix` regime with `unprovable_independence`).
 
-`state_carried` (PROVISIONAL spelling, documented-unstable pending naming ratification) is
+`state_carried` (experimental name, may change) is
 `True` only when a LIVE run was invoked with `carry_state=True`, deliberately leaving
 declared-state mutations on the live model. The DEFAULT live run brackets execution with a
 declared-state snapshot-restore (named parameters plus every registered buffer, one clone and
