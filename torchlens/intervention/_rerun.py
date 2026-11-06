@@ -157,9 +157,9 @@ def run(
         new_log, hook_plan, source_log=trace
     )
     divergence_count = _validate_rerun_result(new_log, trace, strict=replay_options.strict)
-    fast_refresh = False
-    if divergence_count == 0:
-        fast_refresh = trace._refresh_matching_rerun_state_from(new_log)
+    fast_refresh = divergence_count == 0 and trace._refresh_matching_rerun_state_from(
+        new_log, moved=True
+    )
     if fast_refresh:
         _merge_rerun_host_rng_verdict(trace, new_log)
         _release_discarded_capture(new_log)
@@ -275,7 +275,7 @@ def _adopt_rerun_backward_graph(trace: Trace, new_log: Trace) -> None:
 def _release_discarded_capture(new_log: Trace) -> None:
     """Release the payload pin of a rerun capture a fast refresh discarded.
 
-    The fast refresh copies the rerun's values into the fork, so the rerun's
+    The fast refresh moves the rerun's values into the fork, so the rerun's
     own capture is garbage afterwards; it sits in reference cycles, and the
     last-owner payload eviction of its op store (a walk over every cell)
     otherwise runs whenever the cyclic collector frees it, inside whatever
