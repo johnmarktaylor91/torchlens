@@ -155,7 +155,7 @@ RESULT = (
 - `tuned-lens` 0.2.0 recognizes a fixed set of Hugging Face architectures
   (GPT-2, GPT-Neo, GPT-J, GPT-NeoX, OPT, BLOOM, Llama) when it locates the
   final norm and unembedding.
-- With `validate=False`, nothing checks that the lens belongs to the traced
+- With `verify=False`, nothing checks that the lens belongs to the traced
   model. A lens may carry a `model_identity` record; see the `lens=` entry of
   `logit_lens` for how `verify=True` uses it.
 - `logit_lens` keeps every per-layer projection in memory; for long sequences

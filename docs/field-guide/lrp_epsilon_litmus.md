@@ -1,7 +1,7 @@
 # The epsilon-LRP litmus recipe
 
 TorchLens deliberately ships **no LRP rule registry, no composites, no
-canonizers, and no architecture support table** (ruled twice). Layer-wise
+canonizers, and no architecture support table**. Layer-wise
 Relevance Propagation is a family of research rules whose maintained catalogs
 belong to the LRP ecosystem; what TorchLens supplies is the **mechanism** —
 the internal forward/backward pairing store `SiteStash` (in `torchlens.attribution._stash`, not a public export) — and this

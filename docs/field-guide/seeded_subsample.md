@@ -22,7 +22,7 @@ seed it cannot see.
 ## Minimal example on the running model
 
 This page uses [ResNet-18 on one
-image](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/running_examples.md#resnet-18-on-one-image). A subsample is a seeded
+image](running_examples.md#resnet-18-on-one-image). A subsample is a seeded
 choice of stimuli handed to `tl.extract_dataset`; here four of eight images go through the
 running CNN. The recipe below builds its own model for the method.
 

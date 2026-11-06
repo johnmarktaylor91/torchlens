@@ -3,7 +3,6 @@
 **Result in one line:** the model's output with one site edited, next to the clean output,
 and a live version of the same edit that runs at the cost of a forward hook.
 
-<!-- JMT review: plain factual prose, written for review. -->
 
 **Requirements:** `pip install torchlens transformers`.
 
