@@ -1179,7 +1179,6 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
     BEFORE the mutation runs.
     """
     global _DEFER_BUSY
-    _DEFER_GATE.settle()  # an empty registry disarms the wrappers' check
     if not _DEFER_PENDING or _DEFER_BUSY:
         return
     _state = _state_module()
@@ -1215,14 +1214,15 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
                         _rebind_alias_to_fresh_clone(alias)
     finally:
         _DEFER_BUSY = False
-        _DEFER_GATE.settle()
+        if not _DEFER_PENDING:  # this call's copy-outs emptied the registry
+            _DEFER_GATE.settle()
 
 
 class _DeferGate:
     """The registry state the torch wrappers read, so Dynamo guards a flag, not registry keys.
 
-    ``armed`` is never False while an alias is pending, and every path that empties the registry
-    settles it back to False. ``materialize`` turns compile-disabled once Dynamo can inline the
+    ``armed`` is never False while an alias is pending; a path settles it only after emptying the
+    registry (no call per op). ``materialize`` turns compile-disabled once Dynamo can inline the
     wrappers (``wrappers._warm_derived_identity_caches``).
     """
 
@@ -1231,10 +1231,9 @@ class _DeferGate:
         self.materialize: Callable[[Iterable[Any]], None] = materialize_deferred_for_call
 
     def settle(self) -> None:
-        """Disarm on an empty registry; the re-read re-arms for a registration that raced in."""
-        if not _DEFER_PENDING:
-            self.armed = False
-            self.armed = bool(_DEFER_PENDING)
+        """Disarm an emptied registry; the re-read re-arms for a registration that raced in."""
+        self.armed = False
+        self.armed = bool(_DEFER_PENDING)
 
 
 _DEFER_GATE = _DeferGate()
@@ -1280,7 +1279,8 @@ def _drop_dead_deferred_alias(key: tuple[int, int, str], _ref: Any) -> None:
         live = entries if len(entries) < 2 else [e for e in entries if e.ref() is not None]
         if not live or live[0].ref() is None:  # a lone entry is tested in place, no list built
             _DEFER_PENDING.pop(key, None)
-            _DEFER_GATE.settle()  # the last death empties the registry without any write
+            if not _DEFER_PENDING:  # the last death empties the registry without any write
+                _DEFER_GATE.settle()
         elif len(live) != len(entries):
             _DEFER_PENDING[key] = live
 
@@ -1304,7 +1304,8 @@ def prune_dead_deferred_entries() -> None:
                 _DEFER_PENDING[key] = live
             else:
                 _DEFER_PENDING.pop(key, None)
-    _DEFER_GATE.settle()
+    if not _DEFER_PENDING:
+        _DEFER_GATE.settle()
 
 
 def arm_deferred_payload_window(state_storage_ptrs: frozenset[int]) -> None:
@@ -1761,8 +1762,7 @@ def copy_tensor_payload(
             target_device=target_device,
         )
     else:
-        # Non-tensor: shallow copy is sufficient and avoids deepcopy's
-        # circular-reference pitfalls.
+        # Non-tensor: shallow copy is sufficient and avoids deepcopy's circular-reference pitfalls.
         return copy.copy(x)
 
 
