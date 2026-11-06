@@ -286,7 +286,7 @@ def render_backward_graph(
         save_only=vis_save_only,
         viewer=not vis_save_only,
         graph_name=f"{self._source_class_name}_backward",
-        graph_comment="Backward grad_fn_handle graph",
+        graph_comment="Backward graph",
         timeout=_RENDER_TIMEOUT,
     )
     source_path = f"{vis_outpath}"

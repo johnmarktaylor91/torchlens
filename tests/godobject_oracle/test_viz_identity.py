@@ -264,11 +264,11 @@ def test_backward_dot_in_process_stable(tmp_path: Path) -> None:
 
     node_count = sum(1 for line in first.splitlines() if " [" in line and "->" not in line)
     edge_count = sum(1 for line in first.splitlines() if "->" in line)
-    # 17 nodes: 16 graph nodes + the one in-frame backward-key table node
-    # (vizmech item 17; AUTO renders the key, one row per painted style).
     # (17, 12) -> (16, 11) with the W051-CAPT3 redundant-output-copy removal:
     # the capture-side clone of the model output contributed one grad_fn node
     # and its edge; the retained op payload is now the single copy.
-    assert (node_count, edge_count) == (16, 11), (
+    # (16, 11) -> (15, 11): the backward key is opt-in (show_legend=True), as on
+    # forward drawings, so the default drawing has no key table node.
+    assert (node_count, edge_count) == (15, 11), (
         f"backward graph structure changed: {node_count} nodes, {edge_count} edges"
     )
