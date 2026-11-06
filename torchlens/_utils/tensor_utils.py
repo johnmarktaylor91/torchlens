@@ -1279,8 +1279,9 @@ def _drop_dead_deferred_alias(key: tuple[int, int, str], _ref: Any) -> None:
         live = entries if len(entries) < 2 else [e for e in entries if e.ref() is not None]
         if not live or live[0].ref() is None:  # a lone entry is tested in place, no list built
             _DEFER_PENDING.pop(key, None)
-            if not _DEFER_PENDING:  # the last death empties the registry without any write
-                _DEFER_GATE.settle()
+            if not _DEFER_PENDING:  # the last death empties the registry: ``settle()``, inlined
+                _DEFER_GATE.armed = False  # (no call: this callback runs per dying alias)
+                _DEFER_GATE.armed = bool(_DEFER_PENDING)
         elif len(live) != len(entries):
             _DEFER_PENDING[key] = live
 
@@ -1836,11 +1837,10 @@ def print_override(t: torch.Tensor, func_name: str) -> str:
             # numpy() doesn't support bfloat16 — upcast first.
             if cpu_data.dtype == torch.bfloat16:
                 cpu_data = cpu_data.to(torch.float32)
-            # ``.detach()`` is a decorated torch method like any other; calling
-            # it outside pause_logging (while a trace is actively logging)
-            # would log a real "detach" op and consume a raw-op-counter slot,
-            # leaving a graph orphan and staling any raw labels recorded just
-            # before this repr fired. Keep it inside the paused block.
+            # ``.detach()`` is a decorated torch method like any other; calling it outside
+            # pause_logging (while a trace is actively logging) would log a real "detach" op and
+            # consume a raw-op-counter slot, leaving a graph orphan and staling any raw labels
+            # recorded just before this repr fired. Keep it inside the paused block.
             n = cpu_data.detach().numpy()
         np_str = getattr(n, func_name)()
         # Cosmetic: replace "array" with "tensor" to match PyTorch style.
