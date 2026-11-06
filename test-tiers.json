@@ -5844,8 +5844,8 @@
         "tests/test_display_helpers.py",
         "tests/test_layer_log.py",
         "tests/test_mi_kv_heads.py",
+        "tests/test_op_label_resolution.py",
         "tests/test_owned_record_displays.py",
-        "tests/test_repr_fix_contracts.py",
         "tests/test_summary_rebuild_ladder.py",
         "tests/test_value_record_display.py"
       ],
