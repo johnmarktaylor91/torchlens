@@ -22,6 +22,7 @@ from ._trace_accessors import (
     _invalidate_trace_module_call_accessor_cache,
     _invalidate_trace_op_layer_accessor_caches,
 )
+from .func_call_location import FuncCallLocation
 
 if TYPE_CHECKING:
     from .trace import Trace
@@ -89,10 +90,7 @@ _ATOMIC_RERUN_VALUE_TYPES: frozenset[type] = frozenset(
 
 #: Member types that make a tuple or frozenset immutable all the way down, so a refresh
 #: hands it over whole: the atomic kinds plus plain tensors (handed over by identity anyway).
-_IMMUTABLE_MEMBER_TYPES: frozenset[type] = _ATOMIC_RERUN_VALUE_TYPES | {
-    torch.Tensor,
-    torch.nn.Parameter,
-}
+_IMMUTABLE_MEMBER_TYPES = _ATOMIC_RERUN_VALUE_TYPES | {torch.Tensor, torch.nn.Parameter}
 
 
 def replace_state_from(target: Trace, trace: Trace) -> None:
@@ -516,9 +514,10 @@ def copy_rerun_value(trace: Trace, value: Any, *, moved: bool = False) -> Any:
     moved:
         True when the rerun trace that holds ``value`` is discarded after the
         refresh (the rerun engine's own capture). Its flat atomic lists, dicts
-        and sets then move over instead of being rebuilt (``_moves_whole``).
-        Record objects bound to the discarded capture (source locations,
-        parameter records) are still deep-copied, which detaches them.
+        and sets then move over instead of being rebuilt (``_moves_whole``), and
+        so do its source locations (``FuncCallLocation``, built per capture and
+        shared with nothing else). Parameter records are still deep-copied, which
+        drops their live parameter and owning-trace references.
 
     Returns
     -------
@@ -546,6 +545,8 @@ def copy_rerun_value(trace: Trace, value: Any, *, moved: bool = False) -> Any:
         names = [field.name for field in dataclasses.fields(value)]
         fields = {n: copy_rerun_value(trace, getattr(value, n), moved=moved) for n in names}
         return type(value)(**fields)
+    if moved and type(value) is FuncCallLocation:
+        return value
     if isinstance(value, torch.autograd.graph.Node):
         return value  # a live autograd node cannot be deep-copied; the fallback kept it too
     return fail_open(lambda: copy.deepcopy(value), lambda _error: value)

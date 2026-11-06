@@ -5,11 +5,11 @@ capture and discards it. The refresh hands over immutable values and, because
 the capture is discarded, its flat atomic lists, dicts and sets; it still
 rebuilds every container that holds a tensor (the discarded capture's payload
 eviction nulls tensors inside lists and dicts in place) and still deep-copies
-record objects bound to the discarded capture. Pinned here: the result and
+parameter records bound to the discarded capture. Pinned here: the result and
 its source share no mutable container or record object in any refreshed field,
 in-place mutation of either side leaves the other unchanged, the result's
 payloads survive the discarded capture's eviction and match a fresh trace,
-both sides save and load, and nothing but record objects reaches
+both sides save and load, and nothing but parameter records reaches
 ``copy.deepcopy`` during a run.
 """
 
@@ -28,7 +28,6 @@ import torchlens as tl
 from torchlens._capture.projectors import _RERUN_KEPT_OP_FIELDS
 from torchlens._data_classes import _trace_rerun_state
 from torchlens._data_classes._state_adapter import state_items
-from torchlens._data_classes.func_call_location import FuncCallLocation
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
@@ -177,9 +176,9 @@ def test_moved_payloads_survive_the_discarded_capture_and_match_a_fresh_trace() 
         if isinstance(fresh_op.out, torch.Tensor):
             assert torch.equal(op.out, fresh_op.out), op.layer_label
             compared += 1
-        fresh_args = fresh_op.saved_args
+        fresh_args = fresh_op.call.saved_args
         if fresh_args:
-            for arg, fresh_arg in zip(op.saved_args, fresh_args, strict=True):
+            for arg, fresh_arg in zip(op.call.saved_args, fresh_args, strict=True):
                 if isinstance(fresh_arg, torch.Tensor):
                     assert isinstance(arg, torch.Tensor), op.layer_label
                     assert torch.equal(arg, fresh_arg), op.layer_label
@@ -202,8 +201,10 @@ def test_source_and_result_both_save_and_load(tmp_path: Any) -> None:
             assert op.func_name == expected_op.func_name
 
 
-def test_only_record_objects_reach_deepcopy_during_a_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A run deep-copies source locations and parameter records, nothing else."""
+def test_only_parameter_records_reach_deepcopy_during_a_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run deep-copies parameter records (detaching them), nothing else."""
 
     model = _Net().eval()
     source = tl.trace(model, _x(0), capture=tl.options.CaptureOptions(save_args=True))
@@ -226,7 +227,7 @@ def test_only_record_objects_reach_deepcopy_during_a_run(monkeypatch: pytest.Mon
     result = source.run(model, _x(1))
     assert result.last_run["fast_refresh"] is True
     assert top_level, "the run never reached the refresh copier"
-    assert set(top_level) <= {FuncCallLocation, Param}
+    assert set(top_level) == {Param}
 
 
 class _CopyModule:
