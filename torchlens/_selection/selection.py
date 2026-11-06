@@ -12,7 +12,7 @@ TWO-LEVEL DENOTATION (normative): a selection denotes the pair
 (TOUCHED-SITE FAMILY, SELECTED-ELEMENT SET). Zero-mask entries are retained,
 first-class, by every operator and by ``resolve()`` — an element-empty site
 stays touched (this is what makes ``~`` an involution). Equality and the
-resolve digest compare BOTH levels; ``.empty`` / ``__bool__`` report the
+resolve digest compare BOTH levels; ``.is_empty`` / ``__bool__`` report the
 ELEMENT level only.
 
 Operator set: ``|  &  -  ~`` plus reflected ``__ror__/__rand__/__rsub__``.
@@ -173,7 +173,7 @@ class Selection:
     """Frozen, concrete, trace-bound selection: an ordered tuple of Site.
 
     Zero-mask (element-empty) entries are retained first-class — the family
-    level of the two-level denotation. ``.empty`` and ``__bool__`` report the
+    level of the two-level denotation. ``.is_empty`` and ``__bool__`` report the
     ELEMENT level only; read the family via iteration / ``len()``.
     Session-time only; never persisted.
 
@@ -484,7 +484,7 @@ class _ParamTerm:
 
     def __repr__(self) -> str:
         suffix = "" if self.mask is None else ", mask=<bool tensor>"
-        return f"params({self.name!r}{suffix})"
+        return f"param({self.name!r}{suffix})"
 
 
 @dataclass(frozen=True)
@@ -513,7 +513,7 @@ class _WholeSiteTerm:
     def __repr__(self) -> str:
         if self.pass_index is None:
             return f"site({self.site_label!r})"
-        return f"site({self.site_label!r}:{self.pass_index})"
+        return f"site({f'{self.site_label}:{self.pass_index}'!r})"
 
 
 @dataclass(frozen=True)
@@ -525,7 +525,7 @@ class _RandomTerm:
     seed: int
 
     def __repr__(self) -> str:
-        return f"random_selection(like={self.like!r}, within={self.within!r}, seed={self.seed})"
+        return f"random_like(like={self.like!r}, within={self.within!r}, seed={self.seed})"
 
 
 @dataclass(frozen=True)
@@ -1195,7 +1195,7 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
     entry = Site(
         kind="PARAM",
         key=(address,),
-        provenance=SelectionProvenance(relation="exact", source=f"params({node.name!r})"),
+        provenance=SelectionProvenance(relation="exact", source=f"param({node.name!r})"),
         _mask=mask,
     )
     return Selection(trace, "PARAM", [entry])
@@ -1304,7 +1304,7 @@ def _resolve_random_term(node: _RandomTerm, trace: Any) -> Selection:
     if len(population) < requested:
         raise _unresolvable(
             "population_too_small",
-            f"random_selection needs {requested} elements but the `within` "
+            f"random_like needs {requested} elements but the `within` "
             f"population has only {len(population)}.",
             requested=requested,
             available=len(population),
@@ -1325,7 +1325,7 @@ def _resolve_random_term(node: _RandomTerm, trace: Any) -> Selection:
             kind=entry.kind,
             key=entry.key,
             provenance=SelectionProvenance(
-                relation="exact", source=f"random_selection(seed={node.seed})"
+                relation="exact", source=f"random_like(seed={node.seed})"
             ),
             _mask=_mask_from_dense(entry.shape, dense),
             structural_site_key=entry.structural_site_key,
@@ -1336,17 +1336,17 @@ def _resolve_random_term(node: _RandomTerm, trace: Any) -> Selection:
 
 
 def _resolve_operand_for_random(operand: Any, trace: Any) -> Selection:
-    """Resolve one random_selection operand, honoring trace binding."""
+    """Resolve one random_like operand, honoring trace binding."""
 
     if isinstance(operand, Selection):
         if operand._trace is not trace:
             raise SelectionError(
-                "random_selection operand is bound to a different trace.",
+                "random_like operand is bound to a different trace.",
                 code="selection_trace_mismatch",
             )
         return operand
     if not isinstance(operand, Selector):
-        raise RuntimeError("random_selection operand must lift to a Selection")
+        raise RuntimeError("random_like operand must lift to a Selection")
     return operand._resolve(trace)
 
 
@@ -1416,10 +1416,10 @@ def param(name: str, mask: torch.Tensor | None = None) -> Selector:
     """
 
     if not isinstance(name, str) or not name:
-        raise ValueError("params(name, ...) requires a non-empty parameter name string.")
+        raise ValueError("param(name, ...) requires a non-empty parameter name string.")
     if mask is not None:
         if not isinstance(mask, torch.Tensor) or mask.dtype != torch.bool:
-            raise ValueError("params mask must be a bool tensor over the parameter shape.")
+            raise ValueError("param mask must be a bool tensor over the parameter shape.")
         mask = mask.clone()
     return Selector(_ParamTerm(name=name, mask=mask), kind="PARAM")
 
@@ -1448,12 +1448,12 @@ def random_like(
     """
 
     if not isinstance(seed, int) or isinstance(seed, bool) or seed < 0:
-        raise ValueError("random_selection seed must be a non-negative int.")
+        raise ValueError("random_like seed must be a non-negative int.")
     like_lifted = _lift(like)
     within_lifted = _lift(within)
     if like_lifted is None or within_lifted is None:
         raise ValueError(
-            "random_selection operands must be selections or region-shaped "
+            "random_like operands must be selections or region-shaped "
             "producers implementing __selection__."
         )
     kind = within_lifted._kind if isinstance(within_lifted, Selector) else within_lifted._kind
