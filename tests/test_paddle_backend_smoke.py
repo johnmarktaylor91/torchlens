@@ -102,7 +102,7 @@ def test_paddle_source_input_labels_and_function_root() -> None:
 
     assert trace.options.module_identity_mode == "function_root"
     assert {"input.arg_0", "input.arg_1"} <= set(trace.layer_labels)
-    add_label = next(label for label in trace.op_labels if "__add__" in label)
+    add_label = next(label for label in trace.op_labels if label.startswith("add_"))
     input0_label = next(label for label in trace.op_labels if label.startswith("input.arg_0"))
     input1_label = next(label for label in trace.op_labels if label.startswith("input.arg_1"))
     # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
@@ -218,7 +218,7 @@ def test_paddle_same_dtype_astype_preserves_parent_label() -> None:
     trace = tl.trace(model, (x, weight), backend="paddle")
 
     matmul_label = next(label for label in trace.op_labels if "matmul" in label)
-    add_label = next(label for label in trace.op_labels if "__add__" in label)
+    add_label = next(label for label in trace.op_labels if label.startswith("add_"))
     input1_label = next(label for label in trace.op_labels if label.startswith("input.arg_1"))
     # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
     # the bare ``layer_label`` for these single-pass referenced ops, derived
@@ -262,7 +262,7 @@ def test_paddle_layer_types_drop_the_wrap_namespace() -> None:
     def arith(x: object, y: object) -> object:
         return (2.0 + x) - y + (1.0 - x)
 
-    names = tl.trace(arith, _input(), _input(), backend="paddle")
+    names = tl.trace(arith, (_input(), _input()), backend="paddle")
     types = {str(op.func_name): op.type for op in names if op.type != "input"}
     assert types == {
         "tensor.__radd__": "add",

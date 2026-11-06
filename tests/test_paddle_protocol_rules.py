@@ -89,7 +89,7 @@ def test_conv_layers_are_layer_level_ops_with_parents(rank: int) -> None:
     convs = _ops(trace, f"conv{rank}d")
     assert len(convs) == 1
     assert _parent_types(trace, convs[0]) == ["input"]
-    relu = _ops(trace, "functional.relu")[0]
+    relu = _ops(trace, "relu")[0]
     assert _parent_types(trace, relu) == [f"conv{rank}d"]
     assert not [op for op in trace._layer_list if "_conv_nd" in op.type]
     assert PaddleBackend().validate_trace(trace) is True
@@ -102,7 +102,7 @@ def test_conv_layer_reflect_padding_replays() -> None:
     trace = tl.trace(_ConvNet(2, padding_mode="reflect"), _conv_input(2), backend="paddle")
 
     assert len(_ops(trace, "conv2d")) == 1
-    assert not _ops(trace, "functional.pad")
+    assert not _ops(trace, "pad")
     assert PaddleBackend().validate_trace(trace) is True
 
 
@@ -197,7 +197,7 @@ def test_untraced_intermediate_fails_naming_consumer_and_reason() -> None:
 
     assert not _ops(trace, "constant")
     status = _protocol().validate(trace, None)
-    relu = _ops(trace, "functional.relu")[0]
+    relu = _ops(trace, "relu")[0]
     assert status.state == "failed"
     assert status.decisions[0]["op_label"] == relu.layer_label
     assert status.decisions[0]["reason"] == "parent_payload_missing"
