@@ -162,6 +162,7 @@ tests/test_arg_positions.py,1,0.00,0.00,unmarked
 tests/test_arg_spec_coverage.py,50,0.37,0.13,unmarked
 tests/test_arg_suppression.py,1,0.05,0.05,unmarked
 tests/test_argpos_hardening.py,10,2.36,0.51,unmarked
+tests/test_as_strided_storage_replay.py,3,1.02,0.37,unmarked
 tests/test_ast_branches.py,5,0.09,0.06,unmarked
 tests/test_aten_profile.py,11,1.45,0.57,unmarked
 tests/test_aten_public.py,4,0.91,0.55,rare
@@ -197,6 +198,7 @@ tests/test_auto_collapse_atomic_spans.py,1,0.38,0.38,unmarked
 tests/test_auto_collapse_hardening.py,30,26.04,10.90,heavy
 tests/test_auto_collapse_metrics.py,65,106.75,12.83,slow
 tests/test_autograd_backward_boundary.py,4,1.28,0.40,smoke
+tests/test_autograd_function_saved_output_census.py,6,1.03,0.34,unmarked
 tests/test_autograd_grad_boundary.py,11,3.96,0.83,unmarked
 tests/test_autograd_grad_replay_order.py,5,1.63,0.54,unmarked
 tests/test_autograd_grad_view_write_replay.py,28,9.56,0.88,unmarked
@@ -211,8 +213,10 @@ tests/test_b2_extract_token_store.py,8,1.89,0.48,unmarked
 tests/test_b2_extract_trace_safetensors.py,2,0.18,0.18,unmarked
 tests/test_b2_sel_refusals.py,9,4.49,4.06,heavy
 tests/test_b2_sel_selector_doors.py,3,0.51,0.38,unmarked
+tests/test_b2_sel_timm_stage_names.py,4,31.37,14.77,heavy
 tests/test_backend_constants_rule.py,11,0.07,0.04,smoke
 tests/test_backend_docs_lockstep.py,6,0.76,0.73,unmarked
+tests/test_backend_feature_table.py,53,1.96,0.69,rare
 tests/test_backend_finalize_labels.py,2,0.06,0.06,unmarked
 tests/test_backend_framework_pins.py,49,2.33,0.17,unmarked
 tests/test_backend_graduation.py,6,0.09,0.06,unmarked
@@ -266,6 +270,7 @@ tests/test_bridges_stretch.py,8,0.36,0.07,unmarked
 tests/test_browser_packets_fixd03_f12.py,11,0.69,0.35,unmarked
 tests/test_buffer_datamodel.py,25,6.75,0.54,unmarked
 tests/test_buffer_provenance_entry_state.py,13,2.84,0.39,unmarked
+tests/test_buffer_ring_callback.py,2,0.33,0.21,unmarked
 tests/test_buffer_sole_output.py,10,1.82,0.38,unmarked
 tests/test_buffer_storage_key_id_reuse.py,1,0.67,0.67,unmarked
 tests/test_buffer_visibility.py,9,2.49,0.44,unmarked
@@ -289,6 +294,7 @@ tests/test_call_fingerprint.py,2,0.15,0.09,unmarked
 tests/test_call_site_contract.py,4,0.37,0.29,unmarked
 tests/test_callable_safety_inference_mode_import.py,3,4.41,4.33,heavy
 tests/test_callable_safety_unwrap_fast_path.py,2,0.12,0.12,unmarked
+tests/test_callbacks_lightning.py,13,0.63,0.15,heavy
 tests/test_capability_probe_lifecycle.py,4,0.06,0.05,unmarked
 tests/test_capopts_truth_amp_grads.py,6,0.36,0.11,unmarked
 tests/test_capopts_truth_batchnorm_warn.py,7,0.44,0.11,unmarked
@@ -440,14 +446,17 @@ tests/test_debug_report_missing_text_cells.py,1,0.19,0.19,unmarked
 tests/test_debug_truths.py,25,1.97,0.35,unmarked
 tests/test_debug_utils.py,5,0.27,0.12,unmarked
 tests/test_decode_output_after_do.py,4,0.47,0.19,unmarked
+tests/test_decorated_helper_sources.py,8,3.21,0.47,unmarked
 tests/test_decoration.py,8,1.09,0.40,unmarked
 tests/test_deepcopy_capture_identity.py,3,0.39,0.29,unmarked
 tests/test_default_buffer_fill.py,5,3.02,1.55,unmarked
 tests/test_defaults.py,3,0.08,0.07,unmarked
 tests/test_deferred_payload_clone.py,25,8.88,5.34,heavy
+tests/test_deferred_payload_compiled_writes.py,11,22.81,13.08,slow
 tests/test_deferred_payload_isolation.py,5,11.64,9.29,heavy
 tests/test_deploy_env_device_map.py,4,0.78,0.27,heavy
 tests/test_deploy_env_grad_fn_walk.py,4,0.21,0.14,heavy
+tests/test_deploy_env_offload.py,8,4.95,2.45,heavy
 tests/test_detached_reference_capture_outcomes.py,4,1.92,0.75,unmarked
 tests/test_device_context_logging.py,8,0.29,0.17,unmarked
 tests/test_differential_capture.py,13,14.64,5.48,heavy
@@ -480,6 +489,9 @@ tests/test_docstring_examples.py,107,196.05,48.03,slow
 tests/test_doctor.py,7,1.63,0.97,unmarked
 tests/test_doctor_backend_rows.py,6,0.10,0.05,unmarked
 tests/test_door_signatures.py,15,0.17,0.05,unmarked
+tests/test_draw_arg_labels.py,5,1.26,0.38,unmarked
+tests/test_draw_backward_key_and_rows.py,5,1.00,0.28,unmarked
+tests/test_draw_browser_widths.py,7,1.03,0.50,unmarked
 tests/test_draw_collapse_container_addresses.py,49,9.17,0.71,unmarked
 tests/test_draw_default_outpath_repo_root_guard.py,1,0.46,0.46,unmarked
 tests/test_draw_format_and_inline.py,15,2.91,0.40,unmarked
@@ -531,6 +543,7 @@ tests/test_examples.py,19,3.38,2.42,unmarked
 tests/test_examples_load.py,2,0.18,0.10,unmarked
 tests/test_exception_taxonomy.py,20,3.21,2.92,heavy
 tests/test_exception_taxonomy_records.py,28,0.13,0.04,unmarked
+tests/test_executor_cuda_cache_arming.py,4,0.06,0.05,unmarked
 tests/test_explorer_watch_gates.py,5,6.47,6.36,rare
 tests/test_explorer_watch_op_tier.py,4,0.17,0.11,unmarked
 tests/test_explorer_watch_p1_summary_role.py,11,0.30,0.14,unmarked
@@ -539,6 +552,7 @@ tests/test_explorer_watch_renderers.py,26,0.53,0.10,unmarked
 tests/test_explorer_watch_riders.py,18,0.49,0.17,unmarked
 tests/test_export_behaviors.py,14,0.84,0.21,unmarked
 tests/test_exports.py,16,2.04,0.49,unmarked
+tests/test_extension_op_undeclared_write.py,3,1.14,0.67,unmarked
 tests/test_extract_dataset_device.py,4,0.10,0.04,unmarked
 tests/test_extract_fast_path.py,10,0.35,0.09,unmarked
 tests/test_extract_fixes_extraction.py,9,0.54,0.33,heavy
@@ -566,6 +580,7 @@ tests/test_factcore_tensor_stats.py,25,0.32,0.09,smoke
 tests/test_failed_capture_transients.py,6,0.31,0.13,unmarked
 tests/test_fast_rerun_intervene.py,5,1.27,0.35,unmarked
 tests/test_fast_rerun_target_contract.py,3,0.54,0.24,unmarked
+tests/test_fast_rerun_unedited.py,9,1.24,0.27,unmarked
 tests/test_fast_run_direct_forward.py,5,3.56,2.17,unmarked
 tests/test_fast_run_faithfulness.py,12,1.12,0.33,unmarked
 tests/test_fast_run_live_sites.py,3,0.27,0.13,unmarked
@@ -600,6 +615,7 @@ tests/test_fastlog_train_mode_grad.py,1,0.11,0.11,unmarked
 tests/test_feature_maps_c2.py,9,2.52,1.67,unmarked
 tests/test_field_order_contract.py,4,0.12,0.11,unmarked
 tests/test_field_view_of.py,15,0.41,0.13,unmarked
+tests/test_field_view_of_convnext.py,1,2.11,2.11,unmarked
 tests/test_field_view_of_resnet.py,2,0.75,0.62,unmarked
 tests/test_findfix_input_ops_dump.py,2,0.38,0.31,unmarked
 tests/test_first_page_allowlist.py,10,0.12,0.09,unmarked
@@ -691,8 +707,10 @@ tests/test_hash_public_api.py,6,2.56,2.27,unmarked
 tests/test_head_sweep_resource_row.py,1,88.36,88.36,slow
 tests/test_header_reuse_note.py,1,0.71,0.71,unmarked
 tests/test_held_late_index.py,8,3.00,0.59,unmarked
+tests/test_helper_reached_sources.py,5,2.35,0.50,unmarked
 tests/test_helper_tensor_fingerprint.py,13,0.68,0.15,unmarked
 tests/test_hf_attention_backend.py,10,0.30,0.17,unmarked
+tests/test_hf_attention_backend_deploy.py,5,0.59,0.26,unmarked
 tests/test_hf_pickled_weights_route.py,1,0.14,0.14,unmarked
 tests/test_hf_structure_only_text.py,3,0.92,0.73,unmarked
 tests/test_hon2_host_tensor_source.py,1,0.09,0.09,unmarked
@@ -774,7 +792,7 @@ tests/test_intervention_phase7.py,13,1.78,0.59,smoke
 tests/test_intervention_phase8a.py,8,0.87,0.39,unmarked
 tests/test_intervention_phase8b.py,4,0.83,0.45,unmarked
 tests/test_intervention_phase9.py,8,1.67,0.62,unmarked
-tests/test_intervention_render_marks.py,14,6.72,2.12,smoke
+tests/test_intervention_render_marks.py,22,5.01,2.12,smoke
 tests/test_intervention_replacement_identity.py,5,0.39,0.14,unmarked
 tests/test_intervention_spec_pickle.py,5,0.36,0.25,unmarked
 tests/test_intervention_spec_tensor_dedupe.py,4,0.47,0.24,unmarked
@@ -817,6 +835,7 @@ tests/test_jax_backend_validation.py,3,3.56,3.55,rare
 tests/test_jit_compat.py,5,0.36,0.24,unmarked
 tests/test_keep_grad_replay_frontier.py,2,0.14,0.08,unmarked
 tests/test_kernel_telemetry.py,7,10.87,10.51,heavy
+tests/test_label_geometry.py,20,30.55,4.83,unmarked
 tests/test_label_names_resolve.py,1,0.14,0.14,unmarked
 tests/test_label_rename_reference.py,18,0.17,0.10,unmarked
 tests/test_labels_vocabulary.py,5,0.08,0.06,unmarked
@@ -946,9 +965,11 @@ tests/test_native_index_perturbation.py,8,2.62,0.52,unmarked
 tests/test_nb_quantized_stats_line.py,2,0.09,0.08,unmarked
 tests/test_netron_export_attachment.py,7,0.21,0.12,unmarked
 tests/test_netron_export_compositions.py,3,0.08,0.04,unmarked
+tests/test_netron_export_contract.py,15,0.89,0.26,unmarked
 tests/test_netron_export_density.py,4,0.37,0.14,unmarked
 tests/test_netron_export_module.py,4,0.60,0.20,unmarked
 tests/test_netron_export_packet.py,2,0.27,0.21,heavy
+tests/test_netron_export_rolled.py,4,26.29,26.23,slow
 tests/test_netron_node_doc.py,2,0.17,0.16,unmarked
 tests/test_neuro_compare.py,6,0.23,0.07,unmarked
 tests/test_neuro_dependency_conflict.py,14,2.57,2.47,heavy
@@ -1053,6 +1074,7 @@ tests/test_perf7_fork_reads.py,2,0.24,0.18,unmarked
 tests/test_perf8_fork_copy.py,48,10.81,7.25,heavy
 tests/test_perf_ab.py,10,0.15,0.12,unmarked
 tests/test_perf_bundle.py,13,1.31,0.95,slow
+tests/test_perf_capture_ab.py,3,32.51,32.42,rare
 tests/test_perf_gate.py,14,1.34,1.07,heavy
 tests/test_perf_gate_wiring.py,6,0.18,0.11,unmarked
 tests/test_perf_method.py,21,1.34,0.26,heavy
@@ -1078,6 +1100,8 @@ tests/test_predicate_training_error_codes.py,10,0.32,0.17,unmarked
 tests/test_prehook_provenance.py,17,0.57,0.11,unmarked
 tests/test_preprocessing_declared_transform.py,4,0.18,0.11,unmarked
 tests/test_prerelease_registrar.py,7,0.41,0.20,smoke
+tests/test_preview_compare.py,8,0.20,0.17,rare
+tests/test_preview_display_sizes.py,7,0.17,0.11,rare
 tests/test_preview_grad_tolerance_tripwires.py,41,0.43,0.18,unmarked
 tests/test_preview_oracle_compare.py,4,0.15,0.13,unmarked
 tests/test_preview_replay_tolerance_tripwires.py,15,0.21,0.12,unmarked
@@ -1093,6 +1117,7 @@ tests/test_proofnet_gate_witness.py,7,9.48,8.45,heavy
 tests/test_proofnet_realism_registry.py,4,0.07,0.06,unmarked
 tests/test_proofnet_version_policy.py,6,0.17,0.14,unmarked
 tests/test_protocol_redispatch.py,14,1.79,0.95,unmarked
+tests/test_public_docs_bookkeeping.py,2,0.23,0.19,unmarked
 tests/test_public_entry_refusal_codes.py,69,0.55,0.17,unmarked
 tests/test_public_impls_late_binding.py,1,0.52,0.52,unmarked
 tests/test_public_rolled_spelling.py,1,1.16,1.16,unmarked
@@ -1224,6 +1249,7 @@ tests/test_renderer_protocol.py,2,0.26,0.16,unmarked
 tests/test_renderer_skins_backward_bundle.py,3,0.87,0.52,unmarked
 tests/test_repgeom.py,20,6.99,2.54,unmarked
 tests/test_repgeom_disagreement.py,9,0.05,0.03,unmarked
+tests/test_repgeom_node_keys.py,6,2.20,1.22,unmarked
 tests/test_repgeom_uncertainty.py,6,0.18,0.08,unmarked
 tests/test_repgeom_validation_edges.py,6,0.06,0.04,unmarked
 tests/test_replay1_bn_running_var_proof.py,12,0.63,0.20,unmarked
@@ -1317,6 +1343,7 @@ tests/test_rf_transformer_rules.py,27,2.43,0.36,heavy
 tests/test_rf_transposed_conv_channels.py,7,1.12,0.60,unmarked
 tests/test_rf_types.py,4,0.20,0.18,unmarked
 tests/test_rf_viz.py,15,1.85,0.90,unmarked
+tests/test_rf_zero_extent_window.py,2,0.54,0.47,unmarked
 tests/test_rng_cuda_isolation.py,9,8.01,3.94,heavy
 tests/test_rng_inert_reachability.py,1,0.16,0.16,unmarked
 tests/test_rng_monitor_lazy_import_window.py,1,4.96,4.96,heavy
@@ -1509,6 +1536,7 @@ tests/test_tap_record_span.py,4,0.26,0.16,unmarked
 tests/test_task_card_schema.py,17,0.11,0.06,unmarked
 tests/test_teaching_pages_executed.py,19,2.37,1.09,smoke
 tests/test_tensor_slice_bound_setitem.py,1,0.31,0.31,unmarked
+tests/test_tests_package_shadow.py,4,8.66,4.34,heavy
 tests/test_tf_compat.py,3,0.03,0.03,unmarked
 tests/test_themes.py,3,1.33,0.60,unmarked
 tests/test_themes_battery.py,8,0.17,0.13,smoke
@@ -1660,6 +1688,7 @@ tests/test_track_collector_embedding_budget.py,4,0.54,0.23,unmarked
 tests/test_track_explorer_gate_rows.py,2,0.19,0.15,rare
 tests/test_track_export_parity_real.py,4,0.19,0.09,heavy
 tests/test_track_history_trace_ref.py,2,0.11,0.10,unmarked
+tests/test_track_lightning_profiler.py,4,0.29,0.12,unmarked
 tests/test_track_sinks_fakes.py,9,0.22,0.15,unmarked
 tests/test_track_sinks_mlflow_comet_real.py,3,0.12,0.11,heavy
 tests/test_track_watch_op_grain.py,8,0.90,0.25,unmarked
@@ -1716,10 +1745,12 @@ tests/test_validate_consolidated.py,7,3.10,0.93,unmarked
 tests/test_validate_deep_chain.py,4,0.87,0.52,unmarked
 tests/test_validate_isin_membership.py,13,78.13,50.59,slow
 tests/test_validate_leaves_model_untouched.py,12,4.39,0.56,unmarked
+tests/test_validate_observer.py,14,2.48,0.70,unmarked
 tests/test_validate_save_options.py,26,3.24,0.70,unmarked
 tests/test_validation.py,288,58.26,2.26,smoke
 tests/test_validation_after_load.py,5,1.05,0.56,unmarked
 tests/test_validation_binding_swap_tripwire.py,22,1.30,0.10,unmarked
+tests/test_validation_bool_check_records.py,12,4.35,0.90,unmarked
 tests/test_validation_bool_exemption.py,22,2.61,0.92,unmarked
 tests/test_validation_clamp_bound_crossing.py,15,4.20,0.42,unmarked
 tests/test_validation_comparator_selftest.py,10,0.46,0.19,unmarked
@@ -1730,6 +1761,7 @@ tests/test_validation_ctc_lengths.py,3,0.58,0.45,unmarked
 tests/test_validation_deepcopy_fidelity.py,24,2.58,0.33,unmarked
 tests/test_validation_default_dtype_and_parameter_output.py,5,0.40,0.20,unmarked
 tests/test_validation_deform_conv_slots.py,5,1.60,1.22,unmarked
+tests/test_validation_degenerate_domains.py,17,2.55,1.92,smoke
 tests/test_validation_degenerate_forward.py,12,4.68,0.79,unmarked
 tests/test_validation_diagnostics.py,9,0.28,0.10,unmarked
 tests/test_validation_exemption_ledger.py,125,4.43,3.74,unmarked
@@ -1756,15 +1788,19 @@ tests/test_validation_registry_ledger.py,92,0.49,0.07,unmarked
 tests/test_validation_replay_layout.py,5,1.01,0.56,unmarked
 tests/test_validation_replay_node_count.py,3,0.25,0.24,unmarked
 tests/test_validation_resize_as_template.py,8,0.73,0.23,unmarked
+tests/test_validation_retrace_saves.py,13,2.74,0.41,unmarked
 tests/test_validation_rung1_class3.py,51,5.40,0.49,unmarked
 tests/test_validation_saturated_activation_crossing.py,8,2.42,0.45,unmarked
 tests/test_validation_saved_value_proofs.py,36,10.63,0.66,unmarked
+tests/test_validation_script_threshold_ladder.py,4,0.67,0.39,unmarked
 tests/test_validation_sdpa_mask_crossing.py,8,2.58,0.48,unmarked
 tests/test_validation_set_receiver.py,27,4.35,0.44,unmarked
 tests/test_validation_setitem_index_probe.py,12,1.50,0.49,unmarked
 tests/test_validation_sparse_step_retry.py,11,1.04,0.50,unmarked
+tests/test_validation_structural_domains.py,11,2.48,0.51,unmarked
 tests/test_validation_structural_slots.py,8,1.74,0.47,unmarked
 tests/test_validation_uninitialized_dest.py,7,0.98,0.34,unmarked
+tests/test_validation_unread_value_proofs.py,16,3.00,0.99,smoke
 tests/test_validation_unused_multi_output_sibling.py,3,0.55,0.26,unmarked
 tests/test_validation_zero_source_add.py,2,1.48,1.29,unmarked
 tests/test_valmem2_parameter_references.py,6,8.14,3.92,unmarked
@@ -1775,6 +1811,7 @@ tests/test_valmem_validation_memory.py,8,4.07,1.52,unmarked
 tests/test_value_record_display.py,16,0.43,0.14,unmarked
 tests/test_version_coherence.py,2,0.18,0.17,unmarked
 tests/test_view_func_replay.py,36,3.96,0.52,unmarked
+tests/test_view_sibling_slice_mutation.py,4,1.23,0.69,unmarked
 tests/test_view_write_base_and_view_one_call.py,18,5.87,0.52,unmarked
 tests/test_view_write_call_alias_edges.py,9,0.52,0.16,unmarked
 tests/test_vision_logit_lens.py,13,2.01,0.57,unmarked
@@ -1866,6 +1903,7 @@ tests/test_w3_capture_hardening.py,9,2.50,0.54,heavy
 tests/test_w3_structural_hardening.py,6,0.40,0.15,unmarked
 tests/test_w5_replications.py,8,914.82,700.67,slow
 tests/test_walk_rulings_viz.py,19,1.86,0.63,unmarked
+tests/test_weightsfree_accelerate.py,1,0.16,0.16,unmarked
 tests/test_weightsfree_admission.py,7,0.28,0.14,unmarked
 tests/test_weightsfree_autocast.py,2,0.07,0.05,unmarked
 tests/test_weightsfree_default_path.py,4,0.29,0.12,unmarked
