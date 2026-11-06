@@ -10,6 +10,7 @@ from typing import Any
 from .._finalize import (
     join_module_address as _join_module_address,
     module_source_metadata as _module_source_metadata,
+    nearest_metadata_parent,
 )
 
 
@@ -392,37 +393,10 @@ def _direct_children(parent: str, metadata: dict[str, dict[str, Any]]) -> list[s
     for address in sorted(metadata, key=_address_sort_key):
         if address == parent:
             continue
-        nearest = _nearest_existing_parent(address, metadata)
+        nearest = nearest_metadata_parent(address, metadata)
         if nearest == parent:
             children.append(address)
     return children
-
-
-def _nearest_existing_parent(address: str, metadata: dict[str, dict[str, Any]]) -> str | None:
-    """Return the closest existing parent address for ``address``.
-
-    Parameters
-    ----------
-    address
-        Child address.
-    metadata
-        Module metadata keyed by primary address.
-
-    Returns
-    -------
-    str | None
-        Parent address, or ``None`` for root.
-    """
-
-    if address == "self":
-        return None
-    parts = address.split(".")
-    while len(parts) > 1:
-        parts.pop()
-        candidate = ".".join(parts)
-        if candidate in metadata:
-            return candidate
-    return "self" if "self" in metadata else None
 
 
 def _iter_mlx_parameter_tree(model: object) -> Iterator[tuple[str, object]]:
