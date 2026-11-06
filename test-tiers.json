@@ -152,6 +152,7 @@
         "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/_capture/_cook_facts.py": [
+        "tests/test_rerun_refresh_moves_values.py",
         "tests/test_run_until_projection_cost.py"
       ],
       "torchlens/_capture/_cooked_inventory.py": [
@@ -161,6 +162,7 @@
         "tests/test_leverage_div_honesty.py",
         "tests/test_module_save_live_retention.py",
         "tests/test_record_to_trace_loop_grouping.py",
+        "tests/test_rerun_refresh_moves_values.py",
         "tests/test_run_until_projection_cost.py"
       ],
       "torchlens/_capture/_episode_coupling.py": [
@@ -295,6 +297,7 @@
       ],
       "torchlens/_capture/_multipass_cook.py": [
         "tests/test_gen1_generation_record.py",
+        "tests/test_rerun_refresh_moves_values.py",
         "tests/test_run_until_projection_cost.py"
       ],
       "torchlens/_capture/_nonfinite_prefix.py": [
@@ -328,6 +331,7 @@
         "tests/test_persist_honesty_outcome_recording.py"
       ],
       "torchlens/_capture/_parent_arg_signature.py": [
+        "tests/test_rerun_refresh_moves_values.py",
         "tests/test_run_until_projection_cost.py"
       ],
       "torchlens/_capture/_plan_check.py": [
@@ -335,6 +339,7 @@
         "tests/test_weightsfree_plan_check.py"
       ],
       "torchlens/_capture/_record_indexes.py": [
+        "tests/test_rerun_refresh_moves_values.py",
         "tests/test_run_until_projection_cost.py"
       ],
       "torchlens/_capture/_record_stores.py": [
@@ -1630,9 +1635,9 @@
       "torchlens/_data_classes/_trace_rerun_state.py": [
         "tests/test_conditional_branches.py",
         "tests/test_encoding_channels.py",
-        "tests/test_encoding_size.py",
         "tests/test_fast_rerun_unedited.py",
         "tests/test_indexing_coherence.py",
+        "tests/test_rerun_refresh_moves_values.py",
         "tests/test_run_until_projection_cost.py",
         "tests/test_validation.py",
         "tests/test_vizx_netron_baseline_diff.py"
