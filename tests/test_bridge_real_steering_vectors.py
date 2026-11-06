@@ -77,6 +77,13 @@ _SITE = "model.layers.1"
 _MULTIPLIER = 4.0
 
 
+def _output_layer(trace: Any, name: str) -> Any:
+    """The Layer of the one op a module name's module outputs."""
+
+    (label,) = trace[name].calls[0].output_ops
+    return trace.layers[trace.ops[label].layer_label]
+
+
 def _direct(stack: dict[str, Any], **kwargs: Any) -> Any:
     """Train with the package directly, at the traced batch shape.
 
@@ -160,7 +167,7 @@ def test_planted_wrong_site_fails_the_exact_comparison(stack: dict[str, Any]) ->
 def test_layer_object_site_resolves_in_each_trace(stack: dict[str, Any]) -> None:
     """A Layer-object site is re-resolved by label in the negative trace."""
 
-    site = stack["log_pos"][_SITE]
+    site = _output_layer(stack["log_pos"], _SITE)
     assert hasattr(site, "out") and hasattr(site, "layer_label")
     direct = _direct(stack).layer_activations[1]
     direction = fit_direction(stack["log_pos"], stack["log_neg"], site)
