@@ -5901,11 +5901,14 @@
         "tests/test_foreign_kernel_dependence.py"
       ],
       "torchlens/_utils/_hop_entry_compile.py": [
-        "tests/test_completeness_hop_rules.py",
-        "tests/test_hop_cond_closure_params.py",
+        "tests/test_capture_guard_transactionality.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_decoration.py",
         "tests/test_hop_grad_trace.py",
-        "tests/test_lazy_torch_module_reads.py",
-        "tests/test_vmap_boundary_replay.py"
+        "tests/test_legacy_tensor_constructors.py",
+        "tests/test_release_model.py",
+        "tests/test_scoped_patching_escape_detection.py",
+        "tests/test_wrap_state_compat.py"
       ],
       "torchlens/_utils/_input_tree.py": [
         "tests/test_backward_validation_walker_guards.py",
