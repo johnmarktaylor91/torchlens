@@ -17,8 +17,11 @@ Duration budgets are a repository check over ``tests/tiers/durations.csv``
 
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
 import os
 import re
+import sys
 from os.path import join as opj
 from pathlib import Path
 
@@ -31,6 +34,34 @@ import torch
 from support import r1_venue  # noqa: F401
 
 from torchlens import _state
+
+
+def _bind_tests_package() -> None:
+    """Bind the top-level name ``tests`` to this directory.
+
+    The repository's ``tests`` is a namespace package (no ``__init__.py``), which
+    keeps pytest's basename module names and this directory's ``sys.path`` entry.
+    A namespace package loses to a regular ``tests`` package anywhere on
+    ``sys.path``, and some installed peers ship one into site-packages
+    (brainscore_vision 2.4.4 does), which breaks every ``from tests.support ...``
+    import. So ``sys.modules["tests"]`` is set to a namespace module over this
+    directory before any test module is imported; a foreign ``tests`` that was
+    already imported is dropped together with its submodules.
+    """
+
+    tests_dir = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
+    current = sys.modules.get("tests")
+    current_path = getattr(current, "__path__", ())
+    if any(os.path.realpath(entry) == tests_dir for entry in current_path):
+        return
+    for name in [name for name in sys.modules if name == "tests" or name.startswith("tests.")]:
+        del sys.modules[name]
+    spec = importlib.machinery.ModuleSpec("tests", None, is_package=True)
+    spec.submodule_search_locations = [tests_dir]
+    sys.modules["tests"] = importlib.util.module_from_spec(spec)
+
+
+_bind_tests_package()
 
 pytest_plugins = [
     "_tiers_plugin",
