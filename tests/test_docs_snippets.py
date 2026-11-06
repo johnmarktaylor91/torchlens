@@ -313,6 +313,12 @@ README_ILLUSTRATIVE_STATEMENTS: tuple[tuple[str, str, str], ...] = (
         'trace["conv1"].projective_field.of(',
     ),
 )
+#: README statements the page test runs right after a fixed torch seed:
+#: (statement as written, seed). The loop fence's pass lookup and branch outcome
+#: (``trace["relu_1_5:2"]``, ``conditionals[0].outcome``) exist only when its random
+#: input takes the branch; seed 2 before ``loop = Loop()`` is the run the README's
+#: loop pictures and comments come from (``x.sum() < 0``, branch taken).
+README_SEEDED_STATEMENTS: tuple[tuple[str, int], ...] = (("loop = Loop()", 2),)
 _OPTIONAL_AMBIENT_NAMES = frozenset({"tf_model", "tf_x"})
 
 
@@ -457,6 +463,17 @@ def _is_readme_illustrative(page_name: str, node: ast.stmt) -> bool:
     )
 
 
+def _readme_seed(page_name: str, node: ast.stmt) -> int | None:
+    """Return the torch seed README_SEEDED_STATEMENTS sets before one README statement."""
+
+    if page_name != "README.md":
+        return None
+    for statement, seed in README_SEEDED_STATEMENTS:
+        if ast.unparse(node) == ast.unparse(ast.parse(statement).body[0]):
+            return seed
+    return None
+
+
 @pytest.mark.heavy
 @pytest.mark.parametrize(
     "page_name",
@@ -509,6 +526,9 @@ def test_canonical_page_python_blocks_execute(
         for node in ast.parse(code, filename=source_name).body:
             if _is_readme_illustrative(page_name, node):
                 continue
+            seed = _readme_seed(page_name, node)
+            if seed is not None:
+                torch.manual_seed(seed)
             loads = {
                 name.id
                 for name in ast.walk(node)
@@ -545,6 +565,21 @@ def test_readme_foreign_fences_are_live_and_foreign() -> None:
         )
         assert "tl." not in matched[0] and "torchlens" not in matched[0], (
             f"the {library} fence marked by {marker!r} calls TorchLens: run it, do not exempt it"
+        )
+
+
+def test_readme_seeded_statements_are_live() -> None:
+    """Every README_SEEDED_STATEMENTS row still names exactly one README statement."""
+
+    statements = [
+        ast.unparse(node)
+        for code in BLOCK_RE.findall((_docs_dir().parent / "README.md").read_text(encoding="utf-8"))
+        for node in ast.parse(code).body
+    ]
+    for statement, _seed in README_SEEDED_STATEMENTS:
+        wanted = ast.unparse(ast.parse(statement).body[0])
+        assert statements.count(wanted) == 1, (
+            f"README_SEEDED_STATEMENTS row {statement!r} matches {statements.count(wanted)} statements"
         )
 
 
