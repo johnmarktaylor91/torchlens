@@ -79,9 +79,11 @@ from .._protocols.paddle import (
     PADDLE_REFUSAL_SEED,
 )
 from ._capture_helpers import (
+    _alias_to_primary,
     _append_intervention_events,
     _intermediate_grad_record,
     _paddle_facet_snapshot,
+    paddle_layer_type,
 )
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .constants_rule import (
@@ -1118,7 +1120,7 @@ class PaddleBackend:
             events = CaptureEvents()
             trace.capture_events = events
         self._record_closure_constants(trace, events, args, kwargs)
-        reserved = events.reserve_label_block(op_name, len(outputs))
+        reserved = events.reserve_label_block(paddle_layer_type(op_name), len(outputs))
         func_call_id = events.func_call_id_counter + 1
         events.func_call_id_counter = func_call_id
         capture, alias_indices = self._build_op_capture(
@@ -2095,16 +2097,6 @@ def _device_ref_from_paddle_place(place: object) -> DeviceRef | None:
     if not text:
         return None
     return DeviceRef.from_value(text)
-
-
-def _alias_to_primary(tree: PaddleModuleTree) -> dict[str, str]:
-    """Return module alias to primary address mapping."""
-
-    aliases: dict[str, str] = {}
-    for primary, metadata in tree.metadata.items():
-        for alias in metadata.get("all_addresses", [primary]):
-            aliases[str(alias)] = primary
-    return aliases
 
 
 def _constant_capture_decision(label: str | None, op: Any) -> dict[str, Any]:

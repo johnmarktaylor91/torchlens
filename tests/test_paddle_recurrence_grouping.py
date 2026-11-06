@@ -164,12 +164,10 @@ def test_paddle_tamper_dangling_sidecar_label_fails_validation() -> None:
     trace = _repeated_trace()
     captures = trace._paddle_op_captures
     target_index = next(
-        index
-        for index, capture in enumerate(captures)
-        if capture.label_raw.startswith("functional.linear")
+        index for index, capture in enumerate(captures) if capture.label_raw.startswith("linear_")
     )
     captures[target_index] = dataclasses.replace(
-        captures[target_index], label_raw="functional.linear_9_99_raw"
+        captures[target_index], label_raw="linear_9_99_raw"
     )
 
     assert PaddleBackend().validate_trace(trace) is False
@@ -188,9 +186,7 @@ def test_paddle_tamper_swapped_sidecar_labels_fail_validation() -> None:
     trace = _repeated_trace()
     captures = trace._paddle_op_captures
     linear_indices = [
-        index
-        for index, capture in enumerate(captures)
-        if capture.label_raw.startswith("functional.linear")
+        index for index, capture in enumerate(captures) if capture.label_raw.startswith("linear_")
     ]
     assert len(linear_indices) == 2
     first, second = linear_indices
@@ -208,14 +204,12 @@ def test_paddle_tamper_stale_producer_label_fails_validation() -> None:
     trace = _repeated_trace()
     captures = trace._paddle_op_captures
     relu_indices = [
-        index
-        for index, capture in enumerate(captures)
-        if capture.label_raw.startswith("functional.relu")
+        index for index, capture in enumerate(captures) if capture.label_raw.startswith("relu_")
     ]
     pass2_index = relu_indices[1]
     tampered = dataclasses.replace(
         captures[pass2_index],
-        producer_labels=frozenset({"functional.linear_9_99_raw"}),
+        producer_labels=frozenset({"linear_9_99_raw"}),
     )
     captures[pass2_index] = tampered
 

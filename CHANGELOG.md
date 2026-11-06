@@ -64,6 +64,13 @@
 
 ### Fixed
 
+- **paddle**: op types and labels drop the wrap namespace, as on every other backend: a Paddle
+  `relu` is `relu_1_3` with type `relu`, not `functional.relu_1_3`, and operator dunders take
+  torch's spelling (`x + y` and `2.0 + x` give `add`, `1.0 - x` gives `rsub`). `func_name` keeps
+  the wrap name (`functional.relu`, `tensor.__add__`), so `tl.func("functional.relu")` still
+  selects, and `tl.func("relu")` now does too. Behavior change for code that matched Paddle
+  labels or `op.type` by the old prefix.
+
 - **intervention**: an element-masked builtin edit (`fork.do(tl.units(site, mask), verb)`, the
   head edits from `tl.experiment.head_ablation_candidates`) now saves at the default
   `level="portable"`: the edit keeps its name and stores the dense bool `mask` and its
