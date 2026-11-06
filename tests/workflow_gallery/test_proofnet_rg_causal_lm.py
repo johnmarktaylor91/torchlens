@@ -202,9 +202,11 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
         for layer in range(len(blocks)):
             module = module_of(layer)
             stored: list[torch.Tensor] = []
-            handle = module.register_forward_hook(
-                lambda _m, _i, out: stored.append(first(out).detach().clone())
-            )
+
+            def read(_m: Any, _i: Any, out: Any, sink: list[torch.Tensor] = stored) -> None:
+                sink.append(first(out).detach().clone())
+
+            handle = module.register_forward_hook(read)
             with torch.no_grad():
                 model(clean)
             handle.remove()
