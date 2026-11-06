@@ -618,22 +618,20 @@ def tensor_nanequal(
         if not torch.equal(tensor_a.isinf(), tensor_b.isinf()):
             return False
 
-        # NaN positions must match exactly BEFORE the sentinel substitution
-        # below.  ``nan_to_num`` rewrites every NaN to the finite sentinel
-        # 0.7234691827346; without this mask check a real finite value that
-        # happens to equal the sentinel would read EQUAL to a NaN (in either
-        # direction), silently defeating the validation tripwire.  ``isnan`` on
-        # a complex tensor is True whenever either component is NaN, matching the
-        # ``view_as_real`` substitution used for the complex branch below.
+        # NaN positions must match exactly BEFORE the sentinel substitution below.  ``nan_to_num``
+        # rewrites every NaN to the finite sentinel 0.7234691827346; without this mask check a real
+        # finite value that happens to equal the sentinel would read EQUAL to a NaN (in either
+        # direction), silently defeating the validation tripwire.  ``isnan`` on a complex tensor is
+        # True whenever either component is NaN, matching the ``view_as_real`` substitution used for
+        # the complex branch below.
         if not torch.equal(tensor_a.isnan(), tensor_b.isnan()):
             return False
 
-        # Replace NaNs with a sentinel value so torch.equal treats NaN positions
-        # as equal.  The NaN masks are already confirmed identical above, so the
-        # sentinel (0.7234691827346) never collides with a real finite value on
-        # one side against a NaN on the other.  Complex tensors need
-        # view_as_real/view_as_complex because torch.nan_to_num doesn't support
-        # complex dtypes directly.
+        # Replace NaNs with a sentinel value so torch.equal treats NaN positions as equal.  The NaN
+        # masks are already confirmed identical above, so the sentinel (0.7234691827346) never
+        # collides with a real finite value on one side against a NaN on the other.  Complex tensors
+        # need view_as_real/view_as_complex because torch.nan_to_num doesn't support complex dtypes
+        # directly.
         if tensor_a.is_complex():
             tensor_a_nonan = torch.view_as_complex(
                 torch.nan_to_num(torch.view_as_real(tensor_a.resolve_conj()), 0.7234691827346)
@@ -654,14 +652,13 @@ def tensor_nanequal(
             # Signed-zero flip: not EXACT; the tolerance band below may
             # still accept it when the caller allows tolerance.
 
-        # Tolerance path: allow small floating-point differences (e.g. from
-        # convolution replay order, non-deterministic GPU reductions, or
-        # mixed-precision rounding).  It applies ONLY to inexact (floating-point
-        # / complex) dtypes.  Integer and boolean tensors are exact and are
-        # handled entirely by the torch.equal check above; applying a float
-        # allclose tolerance to integers would let genuinely different values
-        # (e.g. 1_000_000 vs 1_000_001) read EQUAL, defeating the tripwire.
-        # (dtypes are already confirmed identical above, so one side suffices.)
+        # Tolerance path: allow small floating-point differences (e.g. from convolution replay
+        # order, non-deterministic GPU reductions, or mixed-precision rounding).  It applies ONLY to
+        # inexact (floating-point / complex) dtypes.  Integer and boolean tensors are exact and are
+        # handled entirely by the torch.equal check above; applying a float allclose tolerance to
+        # integers would let genuinely different values (e.g. 1_000_000 vs 1_000_001) read EQUAL,
+        # defeating the tripwire. (dtypes are already confirmed identical above, so one side
+        # suffices.)
         payload_dtype = tensor_a_nonan.dtype
         if allow_tolerance and (payload_dtype.is_floating_point or payload_dtype.is_complex):
             rtol, atol = _tolerances_for_dtype(payload_dtype)
@@ -863,17 +860,15 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> AbstractContextManager[A
     return pause_own_dispatch_modes()
 
 
-# Memory format for every payload copy. ``preserve_format`` gives a
-# non-overlapping-and-dense source its EXACT strides (``empty_strided``),
-# size-1 dims included, and any other source torch's own suggested layout. A
-# named format is never more faithful: ``contiguous_format``/``channels_last``
-# re-stride size-1 dims, and ATen's layout heuristic (``suggest_memory_format``)
-# reads those strides, so a re-strided copy can select a different kernel on
-# replay. xcit's LPI conv input ``(1, C, H, W)`` with batch stride ``C`` is NCHW
-# to ATen (the conv's output is contiguous) yet ``is_contiguous(channels_last)``
-# holds; a channels_last copy replayed on the channels-last kernel and missed
-# the saved output by 4.8e-7. An NCHW ``C=1`` tensor (the BC-ResNet case) keeps
-# its standard strides exactly.
+# Memory format for every payload copy. ``preserve_format`` gives a non-overlapping-and-dense source
+# its EXACT strides (``empty_strided``), size-1 dims included, and any other source torch's own
+# suggested layout. A named format is never more faithful: ``contiguous_format``/``channels_last``
+# re-stride size-1 dims, and ATen's layout heuristic (``suggest_memory_format``) reads those
+# strides, so a re-strided copy can select a different kernel on replay. xcit's LPI conv input ``(1,
+# C, H, W)`` with batch stride ``C`` is NCHW to ATen (the conv's output is contiguous) yet
+# ``is_contiguous(channels_last)`` holds; a channels_last copy replayed on the channels-last kernel
+# and missed the saved output by 4.8e-7. An NCHW ``C=1`` tensor (the BC-ResNet case) keeps its
+# standard strides exactly.
 _PAYLOAD_MEMORY_FORMAT = torch.preserve_format
 
 
@@ -1184,7 +1179,7 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
     BEFORE the mutation runs.
     """
     global _DEFER_BUSY
-    _DEFER_GATE.armed = bool(_DEFER_PENDING)  # an empty registry disarms the wrappers' check
+    _DEFER_GATE.settle()  # an empty registry disarms the wrappers' check
     if not _DEFER_PENDING or _DEFER_BUSY:
         return
     _state = _state_module()
@@ -1220,18 +1215,26 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
                         _rebind_alias_to_fresh_clone(alias)
     finally:
         _DEFER_BUSY = False
+        _DEFER_GATE.settle()
 
 
 class _DeferGate:
     """The registry state the torch wrappers read, so Dynamo guards a flag, not registry keys.
 
-    ``armed`` is never False while an alias is pending. ``materialize`` turns compile-disabled
-    once Dynamo can inline the wrappers (``wrappers._warm_derived_identity_caches``).
+    ``armed`` is never False while an alias is pending, and every path that empties the registry
+    settles it back to False. ``materialize`` turns compile-disabled once Dynamo can inline the
+    wrappers (``wrappers._warm_derived_identity_caches``).
     """
 
     def __init__(self) -> None:
         self.armed = False
         self.materialize: Callable[[Iterable[Any]], None] = materialize_deferred_for_call
+
+    def settle(self) -> None:
+        """Disarm on an empty registry; the re-read re-arms for a registration that raced in."""
+        if not _DEFER_PENDING:
+            self.armed = False
+            self.armed = bool(_DEFER_PENDING)
 
 
 _DEFER_GATE = _DeferGate()
@@ -1277,6 +1280,7 @@ def _drop_dead_deferred_alias(key: tuple[int, int, str], _ref: Any) -> None:
         live = entries if len(entries) < 2 else [e for e in entries if e.ref() is not None]
         if not live or live[0].ref() is None:  # a lone entry is tested in place, no list built
             _DEFER_PENDING.pop(key, None)
+            _DEFER_GATE.settle()  # the last death empties the registry without any write
         elif len(live) != len(entries):
             _DEFER_PENDING[key] = live
 
@@ -1284,9 +1288,8 @@ def _drop_dead_deferred_alias(key: tuple[int, int, str], _ref: Any) -> None:
 def prune_dead_deferred_entries() -> None:
     """Drop registry entries whose aliases were garbage-collected.
 
-    Discarded payload copies and dropped traces leave dead weakrefs behind;
-    this bounded sweep keeps the registry sized to the live pending
-    population.
+    Discarded payload copies and dropped traces leave dead weakrefs behind; this bounded sweep
+    keeps the registry sized to the live pending population.
     """
     global _defer_dead_alias_count
     _defer_dead_alias_count = 0
@@ -1301,6 +1304,7 @@ def prune_dead_deferred_entries() -> None:
                 _DEFER_PENDING[key] = live
             else:
                 _DEFER_PENDING.pop(key, None)
+    _DEFER_GATE.settle()
 
 
 def arm_deferred_payload_window(state_storage_ptrs: frozenset[int]) -> None:
@@ -1394,25 +1398,22 @@ def synchronize_pending_cpu_async_copies() -> None:
                         try:
                             sync(entry)
                         except TypeError:
-                            # torch.mps.synchronize() (and kin) take no device
-                            # argument. The unguarded call raised TypeError from
-                            # the drain — on the failure-scrub arms that masked
-                            # the ORIGINAL capture exception with a drain
+                            # torch.mps.synchronize() (and kin) take no device argument. The
+                            # unguarded call raised TypeError from the drain — on the failure-scrub
+                            # arms that masked the ORIGINAL capture exception with a drain
                             # traceback.
                             sync()
-                    # Marked fenced only AFTER the synchronize succeeded, so a
-                    # failed device sync is retried for the device's later
-                    # entries on the retry drain.
+                    # Marked fenced only AFTER the synchronize succeeded, so a failed device sync is
+                    # retried for the device's later entries on the retry drain.
                     synced_devices.add(key)
             else:
                 entry.synchronize()
             index += 1
     finally:
         if index < len(pending):
-            # A failed fence must not lose the copies behind it: restore the
-            # unfenced tail (failing entry included) so a later drain retries
-            # instead of returning at the empty-list guard while
-            # ``non_blocking=True`` copies are still in flight.
+            # A failed fence must not lose the copies behind it: restore the unfenced tail (failing
+            # entry included) so a later drain retries instead of returning at the empty-list guard
+            # while ``non_blocking=True`` copies are still in flight.
             _CPU_ASYNC_PENDING_EVENTS[:0] = pending[index:]
 
 
@@ -1476,9 +1477,8 @@ def _capture_observed_cuda_device(trace: Any) -> bool | None:
                 if verdict:
                     return True
         except Exception:
-            # An interrupted scan is NO evidence: partial negative facts must
-            # not settle "provably non-CUDA" (the scan only ever ADDS
-            # flushes, never removes one).
+            # An interrupted scan is NO evidence: partial negative facts must not settle "provably
+            # non-CUDA" (the scan only ever ADDS flushes, never removes one).
             continue
         saw_device_fact = saw_device_fact or source_saw_fact
     return False if saw_device_fact else None
