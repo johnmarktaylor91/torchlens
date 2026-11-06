@@ -17,7 +17,8 @@ saved payload silently takes the written bytes. Two rules keep the premise true:
    ``FunctionalTensor``), and an in-place call reaches its TorchLens wrapper on
    one before any compiled kernel exists. Such an argument has no real storage
    to look up, so every pending alias is copied out instead, outside the
-   tracer's dispatch modes.
+   tracer's dispatch modes and outside a fake kernel's Meta dispatch (Dynamo
+   reaches the wrappers from inside one, where a real copy is left unfilled).
 
 Dynamo's compile-start callback is not used: registering it imports Dynamo,
 which a plain import or capture must not do, so it could not be in place for
@@ -76,10 +77,11 @@ def compiled_writes_possible() -> bool:
 def materialize_all_deferred_payloads() -> None:
     """Copy every pending payload alias onto exclusive fresh storage.
 
-    Runs with every active dispatch mode popped, so a flush requested from
-    inside a tracer (fake or functional mode) copies real bytes, not tracing
-    tensors. The version belt still refuses an alias whose storage was already
-    written without interception.
+    Runs with every active dispatch mode popped and Meta dropped from the
+    thread's dispatch keys, so a flush requested from inside a tracer (fake or
+    functional mode, or a fake kernel) copies real bytes. The version belt
+    still refuses an alias whose storage was already written without
+    interception.
     """
 
     live = [

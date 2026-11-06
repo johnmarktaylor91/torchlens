@@ -1793,14 +1793,12 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
         availability.
     """
 
-    # HAS_DYNAMO_OPTIMIZED_MODULE, HAS_FSDP_WRAPPER, HAS_DTENSOR,
-    # HAS_DEVICE_MESH, and HAS_PIPELINING are lazily probed (see
-    # get_dynamo_optimized_module_type / get_fsdp_wrapper_type /
-    # get_dtensor_type / get_device_mesh_type / get_pipelining_module_types) to
-    # avoid unconditional torch._dynamo / torch.distributed imports on the
-    # capture hot path. The diagnostic snapshot consumer (tl.report.doctor()) is
-    # not on that hot path, so force the probes here to report the real
-    # capabilities instead of the pre-probe placeholders.
+    # HAS_DYNAMO_OPTIMIZED_MODULE, HAS_FSDP_WRAPPER, HAS_DTENSOR, HAS_DEVICE_MESH, and
+    # HAS_PIPELINING are lazily probed (see get_dynamo_optimized_module_type / get_fsdp_wrapper_type
+    # / get_dtensor_type / get_device_mesh_type / get_pipelining_module_types) to avoid
+    # unconditional torch._dynamo / torch.distributed imports on the capture hot path. The
+    # diagnostic snapshot consumer (tl.report.doctor()) is not on that hot path, so force the probes
+    # here to report the real capabilities instead of the pre-probe placeholders.
     get_dynamo_optimized_module_type(force_probe=True)
     get_fsdp_wrapper_type(force_probe=True)
     get_dtensor_type(force_probe=True)
@@ -2116,11 +2114,17 @@ def get_current_function_mode_stack() -> Iterable[Any] | None:
     return stack_getter()
 
 
-def suspend_dispatch_modes() -> contextlib.AbstractContextManager[Any]:
-    """Return a context that pops every active dispatch mode (no-op where torch lacks it)."""
+@contextlib.contextmanager
+def suspend_dispatch_modes() -> Iterator[None]:
+    """Pop dispatch modes and a fake kernel's TLS Meta key (a real copy there stays unfilled)."""
 
+    C = torch._C
     suspend = _import_module_attr_or_none("torch.utils._python_dispatch", "_disable_current_modes")
-    return suspend() if callable(suspend) else contextlib.nullcontext()
+    keep = getattr(C, "_PreserveDispatchKeyGuard", contextlib.nullcontext)
+    with suspend() if callable(suspend) else contextlib.nullcontext(), keep():
+        if getattr(C, "_meta_in_tls_dispatch_include", lambda: False)():
+            C._set_meta_in_tls_dispatch_include(False)
+        yield
 
 
 def get_current_dispatch_mode_stack() -> list[Any] | None:
@@ -3249,15 +3253,13 @@ def force_eager_stance_scope() -> Iterator[bool]:
     if not HAS_SET_STANCE or "torch._dynamo" not in sys.modules:
         yield False
         return
-    # R07: the stance is APPLIED by ``set_stance(...)`` construction (its
-    # function-call form), so ``__exit__`` ownership must be established in the
-    # same guarded region as the construction -- binding the handle outside the
-    # try left an async-interrupt window between the bind and the try entry
-    # that stranded the process-wide stance. Once ``stance`` is bound, every
-    # exit path (including BaseException) reaches the ``finally``. The one
-    # residual is an interrupt INSIDE ``set_stance`` after it applied but
-    # before it returned: without a public prior-stance getter that window is
-    # unrecoverable and is accepted as atomic-API exposure.
+    # R07: the stance is APPLIED by ``set_stance(...)`` construction (its function-call form), so
+    # ``__exit__`` ownership must be established in the same guarded region as the construction --
+    # binding the handle outside the try left an async-interrupt window between the bind and the try
+    # entry that stranded the process-wide stance. Once ``stance`` is bound, every exit path
+    # (including BaseException) reaches the ``finally``. The one residual is an interrupt INSIDE
+    # ``set_stance`` after it applied but before it returned: without a public prior-stance getter
+    # that window is unrecoverable and is accepted as atomic-API exposure.
     stance = None
     try:
         try:
@@ -3801,17 +3803,14 @@ else:
 
 # --- Ambient execution-context snapshot/restore ------------------
 #
-# Every control below is a PUBLIC torch surface present since before the 2.1
-# support floor, so no HAS_* flag guards them (such a flag's False branch would be
-# unreachable on any supported torch, and the CUDA-named ones would read True even
-# on CUDA-less wheels) -- WITH ONE EXCEPTION:
-# ``torch.utils.deterministic.fill_uninitialized_memory`` (just below)
-# postdates the 2.1 floor -- the ``torch.utils.deterministic`` submodule does
-# not exist at all on torch 2.1.x -- and is feature-detected through
-# ``HAS_DETERMINISTIC_FILL_FLAG``. Snapshots record every control
-# affirmatively; ``None`` survives as the feature-detected absence of the
-# fill flag and, in the APPLY direction, as schema tolerance for artifacts
-# recorded by older producers.
+# Every control below is a PUBLIC torch surface present since before the 2.1 support floor, so no
+# HAS_* flag guards them (such a flag's False branch would be unreachable on any supported torch,
+# and the CUDA-named ones would read True even on CUDA-less wheels) -- WITH ONE EXCEPTION:
+# ``torch.utils.deterministic.fill_uninitialized_memory`` (just below) postdates the 2.1 floor --
+# the ``torch.utils.deterministic`` submodule does not exist at all on torch 2.1.x -- and is
+# feature-detected through ``HAS_DETERMINISTIC_FILL_FLAG``. Snapshots record every control
+# affirmatively; ``None`` survives as the feature-detected absence of the fill flag and, in the
+# APPLY direction, as schema tolerance for artifacts recorded by older producers.
 
 _torch_deterministic_module: types.ModuleType | None
 if HAS_DETERMINISTIC_FILL_FLAG:
@@ -4175,16 +4174,14 @@ def apply_ambient_execution_context(values: dict[str, Any]) -> None:
             raise RuntimeError(f"Recorded default dtype {default_dtype!r} is unavailable.")
         if torch.get_default_dtype() is not dtype:
             torch.set_default_dtype(dtype)
-    # ``default_device`` is deliberately NOT applied here.
-    # ``torch.set_default_device`` mutates the PROCESS-level TorchFunctionMode stack
-    # (installing or replacing a DeviceContext), so setter-based apply/restore leaks
-    # a mode into the caller (measured: a fresh implicit-CPU consumer ended with a
-    # process DeviceContext installed) and corrupts nested caller modes. The recorded
-    # default device is entered as a SCOPED ``with torch.device(recorded)`` context
-    # around the run transaction (see ``_ambient_execution_context_restored``), whose
-    # ``__exit__`` restores the caller's exact mode stack by construction on every
-    # exit path -- no restore logic, no global mutation. The snapshot schema keeps
-    # the ``default_device`` key unchanged.
+    # ``default_device`` is deliberately NOT applied here. ``torch.set_default_device`` mutates the
+    # PROCESS-level TorchFunctionMode stack (installing or replacing a DeviceContext), so
+    # setter-based apply/restore leaks a mode into the caller (measured: a fresh implicit-CPU
+    # consumer ended with a process DeviceContext installed) and corrupts nested caller modes. The
+    # recorded default device is entered as a SCOPED ``with torch.device(recorded)`` context around
+    # the run transaction (see ``_ambient_execution_context_restored``), whose ``__exit__`` restores
+    # the caller's exact mode stack by construction on every exit path -- no restore logic, no
+    # global mutation. The snapshot schema keeps the ``default_device`` key unchanged.
     deterministic = values.get("deterministic_algorithms")
     if deterministic is not None:
         warn_only = bool(values.get("deterministic_algorithms_warn_only") or False)
