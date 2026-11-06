@@ -262,9 +262,18 @@ _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
 
 #: README fences are advertisements: one fence may mix setups or lean on names it
 #: never defines. The README's setup lives here, in the test, never in README
-#: markers. ``README_PRELUDE`` supplies the imports the loop fence elides; the
-#: ViT fence reads ``cat.jpg``, which the test writes as a plain synthetic image.
-README_PRELUDE = "import torch\nfrom torch import nn\n"
+#: markers. ``README_PRELUDE`` supplies the imports the fences elide (the opening
+#: ViT splash fence runs before any fence imports ``tl`` or the ViT class; the loop
+#: fence uses ``torch`` and ``nn``); the ViT fences read ``cat.jpg``, which the
+#: test writes as a plain synthetic image. The splash's printed labels and
+#: probabilities are gated on the real, checksum-pinned image by
+#: tests/test_quickstart_readme_gate.py.
+README_PRELUDE = (
+    "import torch\n"
+    "from torch import nn\n"
+    "import torchlens as tl\n"
+    "from transformers import ViTForImageClassification\n"
+)
 #: README statements that need a model the page's shared namespace does not hold
 #: (the ResNet-18 line in the GPT-2 selection fence). Each is compiled, not run,
 #: and names the test that executes the same API spelling for real:
@@ -383,9 +392,11 @@ def _canonical_ambient() -> dict[str, Any]:
 def _readme_setup(namespace: dict[str, Any], workdir: Path) -> None:
     """Prepare the README's shared namespace and working directory (see README_PRELUDE)."""
 
-    # The ViT fence's image input needs Pillow, the same condition its preprocessing has.
-    if importlib.util.find_spec("PIL") is None:
-        pytest.skip("README.md imports uninstalled optional dependencies: ['PIL']")
+    # The ViT fences need Pillow for their image input and transformers for the model,
+    # the same conditions the fences' own imports have.
+    missing = [name for name in ("PIL", "transformers") if importlib.util.find_spec(name) is None]
+    if missing:
+        pytest.skip(f"README.md imports uninstalled optional dependencies: {missing}")
     from PIL import Image
 
     Image.new("RGB", (256, 256), (140, 110, 80)).save(workdir / "cat.jpg")

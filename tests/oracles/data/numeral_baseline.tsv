@@ -1826,7 +1826,7 @@ docs-md	docs/fields/mechanistic_interpretability.md	91
 docs-md	docs/fields/teaching.md	10
 docs-md	docs/fields/teaching.md	10_
 docs-md	docs/fields/teaching.md	1943
-docs-md	docs/fields/teaching.md	6,400
+docs-md	docs/fields/teaching.md	6,600
 docs-md	docs/fields/teaching.md	91
 docs-md	docs/for-ai-agents.md	10
 docs-md	docs/for-ai-agents.md	12
@@ -9504,6 +9504,7 @@ test-docstrings	tests/test_quickstart_lazy_acceptance.py	20
 test-docstrings	tests/test_quickstart_lazy_acceptance.py	4.2
 test-docstrings	tests/test_quickstart_lazy_acceptance.py	4.5
 test-docstrings	tests/test_quickstart_readme_gate.py	15
+test-docstrings	tests/test_quickstart_readme_gate.py	256
 test-docstrings	tests/test_quickstart_realmodel.py	18,
 test-docstrings	tests/test_quickstart_realmodel.py	64
 test-docstrings	tests/test_quickstart_resolver_matrix.py	12
