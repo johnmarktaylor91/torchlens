@@ -34,6 +34,7 @@ from torchlens._visualization._edit_marks import (
 from torchlens._visualization.node_spec import intervention_sites_for_log
 from torchlens.errors import TorchLensWarning
 from torchlens.intervention._types import Edit, FireRecord
+from torchlens.options import CaptureOptions
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
@@ -359,6 +360,42 @@ def test_folded_box_holding_an_edit_carries_the_edit_mark(tmp_path: Path, rolled
     assert "Δ" in block
     assert PURPLE in seen  # the user callback runs after the mark and sees it
     assert _box_lines(user, "block") == [block]
+
+
+def _header(trace: tl.Trace) -> str:
+    """Return the header edit line of ``trace``'s drawing."""
+
+    line = header_edit_line(trace, intervention_sites_for_log(trace), PURPLE)
+    assert line is not None
+    return line
+
+
+def test_header_names_the_edited_site_not_the_replacement_op() -> None:
+    """A module edit's header names the module address; an op edit names its op.
+
+    The module edit's value sits in its own ``interventionreplacement`` op, and
+    the header used to name that op (``on interventionreplacement_1_5``).
+    """
+
+    torch.manual_seed(0)
+    x = torch.randn(2, 3)
+    captured = tl.trace(
+        _BlockThenHead(), x, intervene=tl.when(tl.module("block"), tl.zero_ablate())
+    )
+    clean = tl.trace(_BlockThenHead(), x, save="all", capture=CaptureOptions(replayable=True))
+    fork = clean.fork("edited")
+    try:
+        assert _header(captured).endswith("</FONT>on block")
+        fork.do(tl.module("block"), tl.zero_ablate())
+        assert _header(fork).endswith("</FONT>on block")
+        relu = next(op.layer_label for op in fork._layer_list if op.func_name == "relu")
+        fork.do(tl.label(relu), tl.scale(0.5))
+        both = _header(fork)
+    finally:
+        for trace in (captured, clean, fork):
+            trace.cleanup()
+    assert "</FONT>on block" in both and f"</FONT>on {relu}" in both
+    assert "interventionreplacement" not in both
 
 
 def test_folded_box_without_an_edit_is_unchanged(tmp_path: Path) -> None:

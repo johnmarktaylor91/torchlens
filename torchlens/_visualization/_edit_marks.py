@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._data_classes._module_edit_sites import REPLACEMENT_FUNC_NAME, replaced_site
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._selection.resolver import _resolve_sites
 from .._utils._multipass_access import get_multipass_attr
@@ -473,7 +474,9 @@ def header_edit_line(
 
     ``1 edit: Δ zero_ablate on linear_1_1``; several edits are comma separated
     up to three, then the line reads ``N edits (marked)``; one edit on several
-    sites reads ``Δ zero_ablate on 12 layers``.
+    sites reads ``Δ zero_ablate on 12 layers``. A module edit is drawn at its
+    own ``interventionreplacement`` op; the line names the site the user
+    edited instead (:func:`_header_site_names`).
 
     Graphviz writes the coloured token as its own SVG text run and places the
     next run by its own estimate of the token's width, which falls short of the
@@ -490,11 +493,11 @@ def header_edit_line(
     if not sites:
         return None
     marks = edit_marks_by_site(trace, sites)
-    edited_passes = Counter(str(getattr(site, "layer_label", "") or "") for site in sites)
+    site_names = _header_site_names(trace, sites, vis_mode)
     grouped: dict[str, list[str]] = {}
     total = 0
     for site in sites:
-        site_label = _site_display_label(site, vis_mode, edited_passes)
+        site_label = site_names[_op_key(site)]
         for mark in _unique(marks.get(_op_key(site), ())):
             total += 1
             labels = grouped.setdefault(mark.short, [])
@@ -510,6 +513,51 @@ def header_edit_line(
         items.append(f"{token}on {where}")
     # Non-breaking: SVG drops a plain space at the edge of a text run.
     return f"{total} {noun}:&#160;" + ",&#160;".join(items)
+
+
+def _header_site_names(trace: Trace, sites: Sequence[Op], vis_mode: str) -> dict[str, str]:
+    """Return the name the header gives each site, keyed by pass-qualified label.
+
+    A module edit's value sits in its own ``interventionreplacement`` op, the
+    site the trace resolves. The header names the module address the user
+    wrote for a ``tl.module`` target (``transformer.h.5.mlp``), and the op the
+    replacement stands in for otherwise; any other site keeps its own label.
+    """
+
+    addresses = _module_target_addresses(trace)
+    shown = {
+        _op_key(site): (
+            replaced_site(site, trace)
+            if getattr(site, "func_name", None) == REPLACEMENT_FUNC_NAME
+            else site
+        )
+        for site in sites
+    }
+    edited_passes = Counter(str(getattr(op, "layer_label", "") or "") for op in shown.values())
+    return {
+        key: addresses.get(key) or _site_display_label(op, vis_mode, edited_passes)
+        for key, op in shown.items()
+    }
+
+
+def _module_target_addresses(trace: Trace) -> dict[str, str]:
+    """Return the address of the ``tl.module`` target behind each site it resolves to."""
+
+    spec = getattr(trace, "_intervention_spec", None)
+    if spec is None:
+        return {}
+    fanout = max(1, len(trace._layer_list or ()))
+    addresses: dict[str, str] = {}
+    for target, _ in _staged_entries(spec):
+        if getattr(target, "selector_kind", None) != "module":
+            continue
+        try:
+            table = _resolve_sites(trace, target, max_fanout=fanout)
+        except (LookupError, ValueError, TypeError):
+            continue
+        for site in table:
+            addresses.setdefault(_op_key(_forward_site(site)), str(target.selector_value))
+    return addresses
 
 
 def _site_display_label(site: Any, vis_mode: str, edited_passes: Mapping[str, int]) -> str:
