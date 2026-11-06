@@ -6,8 +6,8 @@
 # Measured live on transformers 5.18.0 (this venue), 2026-10-04 (re-measured
 # from 5.14.1 by FK-transformers: the full offline R1 + RG gallery re-ran
 # clean under 5.18.0 -- same 3 rows, same failure signatures, same
-# exact-passed-ID floor, zero new or stale reds).
+# exact-passed-ID floor, zero new or stale reds). RED-RG05-RESID and
+# RED-RG05-MLP went stale on transformers 5.18.0 (both helpers now equal the
+# single-hook oracle exactly) and were deleted with RG05's parity restored.
 row_id	scenario	failure_signature	owner	issue
-RED-RG05-RESID	RG05 numeric residual-stream single-hook parity arm	AmbiguousSiteError: bare label 'add_*' ambiguous (2-pass residual adds on the 5.x graph shape) inside activation_patch_residual_stream	A03	helper must stage pass-qualified residual sites on 5.x captures; the gallery pin test_rg05_* holds the typed settlement meanwhile
-RED-RG05-MLP	RG05 numeric mlp/attention-output parity arms	PatchApplicationError: every fire refused replaced=False (facet lands on in-place dropout op)	A03	scatter hook must target the pre-dropout site or copy-safe storage
 RED-RG06-GRADFACET	RG06 numeric attribution parity arm	bare RuntimeError: facet 'result' not grad-capable under fused attention (teaching prose, untyped)	A03	type the refusal + wire the backward_ready recapture path; gallery pin test_rg06_* holds settlement

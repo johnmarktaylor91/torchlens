@@ -528,8 +528,10 @@ class TraceOpAccessor(Accessor[Op]):
         spelling can equal another Op's final label. Before the tiers, list
         order decided that tie, so a final label referenced by the graph could
         resolve to a different, earlier Op whose raw spelling happened to match
-        it. A raw spelling shadowed that way stays reachable through its
-        suffixed form or :meth:`by_raw_index`.
+        it. The bare label of a multi-pass layer outranks the raw tier as well:
+        it refuses as ambiguous rather than answering with the Op whose raw
+        spelling it equals. A raw spelling shadowed that way stays reachable
+        through its suffixed form or :meth:`by_raw_index`.
 
         A final-tier alias claimed by two different Ops is corrupt labeling and
         is kept in a collision table so the lookup refuses with
@@ -593,13 +595,15 @@ class TraceOpAccessor(Accessor[Op]):
         _refuse_colliding_label(key, final_matches if len(final_matches) > 1 else None)
         if final_matches:
             return final_matches[0]
+        parent_matches = [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
+        resolved = self._resolve_parent_matches(parent_matches)
+        if resolved is not None:
+            return resolved
         for op in self._list:
             if key == op.raw_label:
                 return op
-        parent_matches = [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
-        resolved = self._resolve_parent_matches(parent_matches)
         # A module, module-call or buffer key names its output Op here.
-        return resolved if resolved is not None else converted(self, key, output_op)
+        return converted(self, key, output_op)
 
     @staticmethod
     def _resolve_parent_matches(parent_matches: Sequence[Op]) -> Op | None:
@@ -627,12 +631,15 @@ class TraceOpAccessor(Accessor[Op]):
             return self._resolve_substring_by_scan(key)
         _refuse_colliding_label(key, indexes.collisions.get(key))
         direct = indexes.final.get(key)
-        if direct is None:
-            direct = indexes.raw.get(key)
         if direct is not None:
             return direct
+        # A multi-pass layer's bare label is final naming too: it refuses as
+        # ambiguous before another Op's raw spelling can answer for it.
         resolved = self._resolve_parent_matches(indexes.layer.get(key, ()))
-        return resolved if resolved is not None else converted(self, key, output_op)
+        if resolved is not None:
+            return resolved
+        direct = indexes.raw.get(key)
+        return direct if direct is not None else converted(self, key, output_op)
 
     def _resolved_op(self, key: str) -> Op:
         """Return ``self[key]``, memoized per lookup key.

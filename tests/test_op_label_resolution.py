@@ -211,3 +211,26 @@ def test_reused_module_raw_spelling_does_not_shadow_a_final_label() -> None:
     finally:
         tl.release_model(model)
         trace.cleanup()
+
+
+def test_multi_pass_layer_label_refuses_before_another_ops_raw_spelling() -> None:
+    """A two-pass layer's bare label refuses typed, never answering with a raw-spelling owner.
+
+    The resnet18 shape: ``layer2.1.relu``'s second pass (final ``relu_5_27:2``) is the
+    ninth relu call, so its raw spelling is ``relu_9_55``, the bare label of the two-pass
+    ``layer4.1.relu`` layer.
+    """
+
+    shadow = _Row("relu_5_27:2", "relu_5:2", "relu_9_55_raw", "relu_5_27", "relu_5", 55)
+    first = _Row("relu_9_55:1", "relu_9:1", "relu_16_100_raw", "relu_9_55", "relu_9", 100)
+    second = _Row("relu_9_55:2", "relu_9:2", "relu_17_104_raw", "relu_9_55", "relu_9", 104)
+    calls = {"relu_5_27": 2, "relu_9_55": 2}
+    accessor = TraceOpAccessor([shadow, first, second], calls)  # type: ignore[arg-type]
+    with pytest.raises(AmbiguousOpLookupError, match="has 2 ops"):
+        accessor["relu_9_55"]
+    with pytest.raises(AmbiguousOpLookupError, match="has 2 ops"):
+        accessor._resolve_substring_by_scan("relu_9_55")
+    assert accessor["relu_9_55:2"] is second
+    # The shadowed raw spelling stays reachable through its unambiguous forms.
+    assert accessor["relu_9_55_raw"] is shadow
+    assert accessor.by_raw_index(55) is shadow

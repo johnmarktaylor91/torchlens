@@ -1840,8 +1840,9 @@ jobs:
             extras: "dev,gradcam,shap,captum"
             pkgs: "torchvision"
             files: "tests/test_bridge_real_gradcam.py tests/test_bridge_real_captum.py tests/test_bridge_real_shap.py tests/test_bridge_real_profiler.py tests/test_docstring_examples.py::test_optional_examples_run"
-            # +2: the captum and pytorch_grad_cam docstring-example cells.
-            floor: "17"
+            # 14 test-file ids +2: the captum and pytorch_grad_cam
+            # docstring-example cells.
+            floor: "16"
           - leg: steer
             extras: "dev,steering,dialz"
             pkgs: "transformers"
@@ -1899,6 +1900,7 @@ jobs:
           - leg: brainscore
             extras: "dev,brainscore"
             pkgs: ""
+            constraints: .github/workflows/brainscore-constraints.txt
             files: "tests/test_docstring_examples.py::test_optional_examples_run"
             # brainscore_vision and brainscore_core (which bundles brainio).
             floor: "2"
@@ -1920,10 +1922,14 @@ jobs:
         env:
           EXTRAS: ${{ matrix.extras }}
           PKGS: ${{ matrix.pkgs }}
+          CONSTRAINTS: ${{ matrix.constraints }}
         run: |
+          # A row whose resolution needs a reviewed constraint names its file.
+          constraint_args=()
+          if [ -n "${CONSTRAINTS}" ]; then constraint_args=(-c "${CONSTRAINTS}"); fi
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
           # shellcheck disable=SC2086
-          uv pip install --system \
+          uv pip install --system "${constraint_args[@]}" \
             --index-url https://download.pytorch.org/whl/cpu \
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \

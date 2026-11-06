@@ -17,7 +17,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._errors import InvalidArgumentError
+from torchlens._errors import AmbiguousOpLookupError, InvalidArgumentError
 from torchlens._utils._record_group_table import record_member
 
 pytorch_grad_cam = pytest.importorskip("pytorch_grad_cam")
@@ -76,7 +76,7 @@ def _targets() -> list[Any]:
 def _layer4_label(log: Any) -> str:
     """Return the label of the last op whose outermost module is ``layer4``."""
 
-    labels = [layer.layer_label for layer in log._layer_list if _outermost(layer) == "layer4"]
+    labels = [op.label for op in log._layer_list if _outermost(op) == "layer4"]
     assert labels, "resnet18 trace has no op that is layer4's output"
     return labels[-1]
 
@@ -135,12 +135,14 @@ def test_label_of_a_module_that_runs_twice_is_refused(resnet) -> None:
     """A basic block's relu runs twice; a label naming one of its calls refuses typed."""
 
     _model, _x, log = resnet
-    labels = [
-        layer.layer_label for layer in log._layer_list if _outermost(layer) == "layer4.1.relu"
-    ]
-    assert labels, "expected an op whose outermost module is layer4.1.relu"
+    ops = [op for op in log._layer_list if _outermost(op) == "layer4.1.relu"]
+    assert ops, "expected an op whose outermost module is layer4.1.relu"
+    # The bare label names the two-pass relu layer, not one op: it refuses typed
+    # rather than resolving to another op whose raw spelling it equals.
+    with pytest.raises(AmbiguousOpLookupError):
+        tl.bridge.pytorch_grad_cam.layer(log, ops[0].layer_label)
     with pytest.raises(InvalidArgumentError) as info:
-        tl.bridge.pytorch_grad_cam.layer(log, labels[0])
+        tl.bridge.pytorch_grad_cam.layer(log, ops[0].label)
     assert info.value.fields["code"] == "bridge_module_site_multi_call"
     # The remedy points at the enclosing single-call block, never at the
     # multi-call module whose hook would mix both calls.
