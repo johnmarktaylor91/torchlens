@@ -40,7 +40,10 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 import docstring_examples  # noqa: E402
 
-from tests.support.capability_routes import accepts_capability_refusal  # noqa: E402
+# ``support`` (tests/ on sys.path), not ``tests.support``: the brainscore leg's
+# brainscore_vision 2.4.4 installs a top-level ``tests`` package that shadows
+# this repo's ``tests`` namespace package.
+from support.capability_routes import accepts_capability_refusal  # noqa: E402
 
 pytestmark = pytest.mark.heavy
 
@@ -433,7 +436,8 @@ def test_unvetted_collective_build_route_accepts_only_the_arm_refusal() -> None:
     vetted torch the route accepts nothing, so an example there must run to the end.
     """
 
-    from tests.support.capability_routes import ROUTES
+    from support.capability_routes import ROUTES
+
     from torchlens import distributed
 
     route = ROUTES["is_vetted_build"]
