@@ -255,6 +255,7 @@ def test_doc_python_blocks_run_reference_views(
 #: docstring); these two pages carry the content "AGENTS.md" used to name here.
 CANONICAL_PAGES = (
     "README.md",
+    "docs/index.md",
     "docs/internal/agent-reference/common-patterns.md",
     "docs/internal/agent-reference/architecture.md",
 )
@@ -404,8 +405,12 @@ def _is_readme_illustrative(page_name: str, node: ast.stmt) -> bool:
 @pytest.mark.heavy
 @pytest.mark.parametrize(
     "page_name",
-    # The README runs real pretrained GPT-2 and ViT fences (a 144-run patching sweep included).
-    [pytest.param(p, marks=pytest.mark.slow) if p == "README.md" else p for p in CANONICAL_PAGES],
+    # The README runs real pretrained GPT-2 and ViT fences (a 144-run patching sweep included);
+    # the docs home page runs the README's pretrained GPT-2 fence.
+    [
+        pytest.param(p, marks=pytest.mark.slow) if p in {"README.md", "docs/index.md"} else p
+        for p in CANONICAL_PAGES
+    ],
 )
 def test_canonical_page_python_blocks_execute(
     page_name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -903,6 +908,10 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "the conditional indexer needs the model's source on disk; the same "
         "early-return shape and its fired_arm_kind and outcome asserts are "
         "pinned in tests/test_conditional_fallthrough_outcome.py"
+    ),
+    "index.md": (
+        "executed end-to-end by test_canonical_page_python_blocks_execute[docs/index.md] "
+        "(slow: the README's pretrained GPT-2 fence)"
     ),
 }
 
