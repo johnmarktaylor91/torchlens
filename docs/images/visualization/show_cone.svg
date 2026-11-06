@@ -12,9 +12,7 @@
 <text xml:space="preserve" text-anchor="start" x="8" y="-798.82" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">TinyMLP</text>
 <text xml:space="preserve" text-anchor="start" x="8" y="-784.82" font-family="Helvetica,sans-Serif" font-size="14.00">6 ops (512 B)</text>
 <text xml:space="preserve" text-anchor="start" x="8" y="-770.82" font-family="Helvetica,sans-Serif" font-size="14.00">212 params (848 B, all trainable)</text>
-<text xml:space="preserve" text-anchor="start" x="8" y="-756.82" font-family="Helvetica,sans-Serif" font-size="14.00">1 edit: </text>
-<text xml:space="preserve" text-anchor="start" x="48.5" y="-756.82" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#7b1fa2">Δ zero_ablate  </text>
-<text xml:space="preserve" text-anchor="start" x="140" y="-756.82" font-family="Helvetica,sans-Serif" font-size="14.00">on interventionreplacement_1_6</text>
+<text text-anchor="start" x="8" y="-756.82"><tspan xml:space="preserve" font-family="Helvetica,sans-Serif" font-size="14.00">1 edit: </tspan><tspan xml:space="preserve" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#7b1fa2">Δ zero_ablate  </tspan><tspan xml:space="preserve" font-family="Helvetica,sans-Serif" font-size="14.00">on interventionreplacement_1_6</tspan></text>
 <g id="clust2" class="cluster">
 <title>cluster_fc1_pass1</title>
 <polygon fill="white" stroke="black" stroke-width="1.5" points="8,-107.92 8,-430.14 342,-430.14 342,-107.92 8,-107.92"/>
@@ -53,8 +51,7 @@
 <text xml:space="preserve" text-anchor="start" x="134.12" y="-319.41" font-family="Helvetica,sans-Serif" font-size="14.00">(2, 16), 128 B</text>
 <text xml:space="preserve" text-anchor="start" x="80.88" y="-300.41" font-family="Helvetica,sans-Serif" font-size="14.00">out_features=16, in_features=8</text>
 <text xml:space="preserve" text-anchor="start" x="174.62" y="-290.91" font-family="Helvetica,sans-Serif" font-size="4.00"> </text>
-<text xml:space="preserve" text-anchor="start" x="135.62" y="-275.11" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00" fill="#7b1fa2">Δ</text>
-<text xml:space="preserve" text-anchor="start" x="145.38" y="-275.11" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="12.00" fill="#7b1fa2"> zero_ablate</text>
+<text text-anchor="start" x="135.62" y="-275.11"><tspan xml:space="preserve" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00" fill="#7b1fa2">Δ</tspan><tspan xml:space="preserve" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="12.00" fill="#7b1fa2"> zero_ablate</tspan></text>
 </a>
 </g>
 </g>
