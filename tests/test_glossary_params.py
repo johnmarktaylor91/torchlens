@@ -19,7 +19,14 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from name_lockstep import glossary_backfill, glossary_params, records  # noqa: E402
 
-GLOSSARY = REPO_ROOT / "docs" / "reference" / "glossary.md"
+GLOSSARY_PAGES = tuple(REPO_ROOT / page for page in glossary_params.NAME_INDEX_PAGES)
+
+
+def _glossary_text() -> str:
+    """Return the keyword-row pages of the name index, joined."""
+
+    return "\n".join(page.read_text(encoding="utf-8") for page in GLOSSARY_PAGES)
+
 
 #: Public parameters allowed to stay unnamed, each with its reason. Keep it empty: a
 #: parameter that needs no row is not public (give it a leading underscore instead).
@@ -150,7 +157,7 @@ def test_every_public_parameter_has_a_glossary_row() -> None:
     assert len(rows) > 1000, "the public walk reached too little of the package"
     gaps = [
         f"{gap['callable']}({gap['param']}=)"
-        for gap in glossary_params.missing(rows, GLOSSARY.read_text(encoding="utf-8"))
+        for gap in glossary_params.missing(rows, _glossary_text())
         if (gap["callable"], gap["param"]) not in ALLOWED_UNNAMED
     ]
     assert not gaps, (
@@ -302,7 +309,7 @@ def test_no_glossary_keyword_row_names_a_parameter_the_code_lacks() -> None:
     """
 
     rows = glossary_params.public_parameters(meanings=False)
-    wrong = glossary_params.stale(rows, GLOSSARY.read_text(encoding="utf-8"))
+    wrong = glossary_params.stale(rows, _glossary_text())
     assert not wrong, f"glossary keyword rows name parameters the code lacks: {wrong[:20]}"
 
 

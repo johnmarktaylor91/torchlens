@@ -178,7 +178,7 @@ def _armed_trace(*, backward_ready: bool = False) -> tl.Trace:
 def test_documented_unstable_aten_surface_matches_glossary_index() -> None:
     """Every introduced public spelling has the required unstable marker."""
 
-    glossary = (Path(__file__).parents[1] / "docs/reference/glossary.md").read_text()
+    glossary = (Path(__file__).parents[1] / "docs/internal/reference/name_index.md").read_text()
     indexed = glossary.split("<!-- ATEN-UNSTABLE-INDEX:START -->", 1)[1].split(
         "<!-- ATEN-UNSTABLE-INDEX:END -->", 1
     )[0]

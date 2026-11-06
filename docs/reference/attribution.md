@@ -7,10 +7,9 @@ PyTorch modules. Each call returns `Attribution(method, values, target_repr, ext
 module from `dict(model.named_modules())` and also accept [integer inputs](#integer-inputs-token-ids)
 such as token ids.
 
-The stage-4b compute-kit spellings (Integrated Gradients completeness fields,
-`occlusion`, and Grad-CAM overlay fields) are **DOCUMENTED-UNSTABLE**: they are
-provisional pending the naming session and may change without a deprecation shim. The exact
-inventory is locked in the [glossary](glossary.md#documented-unstable-attribution-kit-index).
+The compute-kit spellings (Integrated Gradients completeness fields, `occlusion`, and
+Grad-CAM overlay fields) are **experimental**: their names may change in any release. The
+exact inventory is in the [glossary](glossary.md#experimental-parts).
 
 The examples use a deterministic small classifier. Input methods return a tensor shaped like
 the attributed input; layer methods return the named layer's activation shape. For convolutional
@@ -1049,8 +1048,7 @@ over every addressable site, returning an immutable
 the primary edge-seeded targets (no payload retention needed), and
 `tl.attribution.load_read_table(path)` loads a persisted scalar
 `read_table_v1` artifact back (fail-closed; loaded tables are
-`rescorable=False`). Every spelling is DOCUMENTED-UNSTABLE pending the
-naming sprint; the doc of record is
+`rescorable=False`). Every spelling is experimental; the full reference is
 [`onebackward_reads.md`](onebackward_reads.md).
 
 ## Attribution graphs (`build_graph`, `AttributionGraph`)
@@ -1059,7 +1057,7 @@ naming sprint; the doc of record is
 logit_probability_coverage=0.95, demeaned_logits=True, logits_at=None, frozen)` builds the attribution
 graph of one prompt's capture: the direct linear effects between transcoder features, error
 nodes, token embeddings and target logits, with transcoder features in place of MLP outputs and
-attention patterns and normalisation scales held at their captured values. Documented-unstable.
+attention patterns and normalisation scales held at their captured values. Experimental.
 
 - `transcoders` maps each MLP module name to a transcoder: an object with `encode(x)`, `W_enc`
   `(d_in, num_features)`, `b_enc`, `W_dec` `(num_features, d_out)` and `b_dec`, the object
@@ -1163,7 +1161,7 @@ print(painted)
 `graph.to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_influence_coverage=0.8,
 edge_influence_coverage=0.98, path=None)` returns the graph, pruned, as a JSON-ready dict in
 Neuronpedia's published attribution-graph schema, and writes it to `path` when one is given.
-Documented-unstable. The schema is `apps/webapp/app/api/graph/graph-schema.json` in
+Experimental. The schema is `apps/webapp/app/api/graph/graph-schema.json` in
 [Neuronpedia's repository](https://github.com/hijohnnylin/neuronpedia) at commit
 `2f0bb10893b9c63c409dbc49db61f557883e0a2c` (JSON Schema draft-07, "Anthropic Attribution
 Graph" 1.0.0), the same schema as Neuronpedia's [graph validator](https://www.neuronpedia.org/graph/validator).
@@ -1191,7 +1189,7 @@ opens in Neuronpedia's graph viewer the way a circuit-tracer graph does.
 ### Drawing a graph on its trace
 
 `trace.draw(color_by=graph)` paints an attribution graph onto the trace it was built from.
-Documented-unstable. Each site holding feature or error nodes (the MLP a feature's transcoder
+Experimental. Each site holding feature or error nodes (the MLP a feature's transcoder
 reads, the MLP output an error node completes) gets the `abs_sum` of its nodes' influence on
 the logits over every position (the quantity `to_neuronpedia` prunes by), on that module's
 output nodes; every other node stays unencoded. Token and logit nodes paint nothing. To paint
@@ -1206,7 +1204,7 @@ renders it.
 
 `tl.attribution.upload_to_neuronpedia(exported, *, api_key)` publishes an exported graph
 on neuronpedia.org under the account that owns `api_key`, and returns the URL of its page.
-Documented-unstable. `exported` is the dict `to_neuronpedia` returned or the path of the file
+Experimental. `exported` is the dict `to_neuronpedia` returned or the path of the file
 it wrote. It follows Neuronpedia's documented two-step upload
 ([API reference](https://www.neuronpedia.org/api-doc), "Upload Graph 1/2" and "Upload Graph
 2/2"): `POST /api/graph/signed-put` returns a signed upload address, the JSON is sent there,
@@ -1229,7 +1227,7 @@ hook_type="resid_post", default_steering_strength=1.0)` publishes a `tl.interven
 way through Neuronpedia's "Create Vector" endpoint (`POST /api/vector/new`). `layer` defaults to
 the trailing index of the direction's site label, as `to_repeng` reads it; `hook_type` is
 `"resid_post"` (a decoder block's output) or `"resid_pre"` (its input); `default_steering_strength` is the
-default steering strength Neuronpedia offers, from -100 to 100. Documented-unstable.
+default steering strength Neuronpedia offers, from -100 to 100. Experimental.
 
 ```text
 # Publishes the graph on neuronpedia.org under your account; continues the example above.
@@ -1239,11 +1237,10 @@ url = tl.attribution.upload_to_neuronpedia(path, api_key=os.environ["NEURONPEDIA
 print(url)
 ```
 
-## The attribution kit (DOCUMENTED-UNSTABLE)
+## The attribution kit (experimental)
 
-The nine-method completion of the kit (attrib panel memo, 2026-08-26). Every spelling below is
-documented-unstable pending the naming session; the inventory is locked in the
-[glossary index](glossary.md#documented-unstable-attribution-kit-index). Disclosure is the
+The nine-method completion of the kit. Every spelling below is experimental; the inventory
+is in the [glossary index](glossary.md#experimental-parts). Disclosure is the
 product: every path-method result carries `attribution_sum`, `target_delta`,
 `completeness_residual`, `residual_rel`, and `target_delta_abs` (a relative certificate over a
 near-zero output change certifies nothing, so the denominator always rides beside the ratio).

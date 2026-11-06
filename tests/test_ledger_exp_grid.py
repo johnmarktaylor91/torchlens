@@ -543,7 +543,14 @@ def test_public_surface_and_docs_lockstep() -> None:
 
     assert {"sweep_grid", "SweepGrid", "GridCell"} <= set(experiment.__all__)
     assert not hasattr(tl, "sweep_grid") and "sweep_grid" not in tl.__all__
-    glossary = (_REPO_ROOT / "docs" / "reference" / "glossary.md").read_text()
+    glossary = "".join(
+        (_REPO_ROOT / "docs" / page).read_text()
+        for page in (
+            "reference/glossary.md",
+            "internal/reference/name_index.md",
+            "internal/reference/name_index_keywords.md",
+        )
+    )
     for name in (
         "`tl.experiment.sweep_grid`",
         "`tl.experiment.SweepGrid`",

@@ -32,7 +32,12 @@ from name_lockstep.codecontext import CodeContext
 from name_lockstep.diff import SurfaceDiff
 from name_lockstep.records import is_record, record_classes
 
-DEFAULT_GLOSSARY = ("docs/reference/glossary.md",)
+#: The public glossary (definitions) and the maintainer name index (one line per public name).
+DEFAULT_GLOSSARY = (
+    "docs/reference/glossary.md",
+    "docs/internal/reference/name_index.md",
+    "docs/internal/reference/name_index_keywords.md",
+)
 #: Lockstep places, as (label, directory, suffixes).
 PLACES = (
     ("agent-reference", "docs/internal/agent-reference", (".md",)),

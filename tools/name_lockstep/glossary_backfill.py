@@ -418,7 +418,9 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("dump", type=Path, nargs="?")
-    parser.add_argument("--glossary", type=Path, default=Path("docs/reference/glossary.md"))
+    parser.add_argument(
+        "--glossary", type=Path, default=Path("docs/internal/reference/name_index_keywords.md")
+    )
     parser.add_argument(
         "--prune-records", action="store_true", help="drop record classes from keyword rows"
     )

@@ -302,7 +302,14 @@ def check_documented_dotted_spellings_resolve() -> None:
 
     import warnings
 
-    text = (_repo_root() / "docs" / "reference" / "glossary.md").read_text(encoding="utf-8")
+    text = "\n".join(
+        (_repo_root() / "docs" / page).read_text(encoding="utf-8")
+        for page in (
+            "reference/glossary.md",
+            "internal/reference/name_index.md",
+            "internal/reference/name_index_keywords.md",
+        )
+    )
     unresolved: list[str] = []
     for token in sorted({match.group(1) for match in DOTTED_SPELLING_RE.finditer(text)}):
         if token in GLOSSARY_FUTURE_SPELLINGS:
