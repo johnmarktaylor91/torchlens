@@ -6070,14 +6070,14 @@
         "tests/validation_goldens/test_arm_campaign_killers_mutants3.py"
       ],
       "torchlens/_utils/_render_slots.py": [
+        "tests/test_intervention_render_marks.py",
         "tests/test_interventions_view_changes.py",
         "tests/test_render_bugs.py",
         "tests/test_rolled_draw_sibling_counts.py",
         "tests/test_semantic_io_a3.py",
         "tests/test_summary_walk_columns.py",
         "tests/test_surgery_visuals_marks.py",
-        "tests/test_surgery_visuals_realism.py",
-        "tests/test_themes_nonfinite.py"
+        "tests/test_surgery_visuals_realism.py"
       ],
       "torchlens/_utils/_runnable_alias_resolver.py": [
         "tests/test_intervention_phase10.py",
@@ -6683,14 +6683,14 @@
         "tests/visualization/test_sibling_order_clusters.py"
       ],
       "torchlens/_visualization/_backward_inventory.py": [
-        "tests/test_auto_collapse_hardening.py",
         "tests/test_backward_visualization.py",
         "tests/test_collapse_rolling_suffix_linearity.py",
         "tests/test_combined_visualization.py",
-        "tests/test_r18j_recurrent_render.py",
+        "tests/test_render_bugs.py",
         "tests/test_render_ir_region_scan_linearity.py",
         "tests/test_renderer_protocol.py",
-        "tests/test_walk_rulings_viz.py"
+        "tests/test_rolled_draw_sibling_counts.py",
+        "tests/test_semantic_io_a3.py"
       ],
       "torchlens/_visualization/_backward_rows.py": [
         "tests/test_collapse_rolling_suffix_linearity.py",
@@ -6744,6 +6744,10 @@
         "tests/test_collapse_power_ceiling.py",
         "tests/test_collapse_segment_prefix.py",
         "tests/test_scaling_ladder.py"
+      ],
+      "torchlens/_visualization/_bundle_diff_marks.py": [
+        "tests/test_bundle_diff_renderer.py",
+        "tests/test_encoding_channels.py"
       ],
       "torchlens/_visualization/_bundle_graph.py": [
         "tests/test_bundle_harness_spans.py",
@@ -7249,9 +7253,9 @@
       "torchlens/_visualization/_render_names.py": [
         "tests/test_auto_collapse_atomic_spans.py",
         "tests/test_auto_collapse_hardening.py",
-        "tests/test_collapse_auto_evenness.py",
         "tests/test_collapse_optimizer.py",
         "tests/test_collapse_segment_prefix.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_render_bugs.py",
         "tests/test_surgery_visuals_marks.py",
         "tests/test_themes_families_budget.py"
@@ -7379,6 +7383,9 @@
         "tests/test_output_aesthetics.py",
         "tests/test_viz_render_identity_oracle.py",
         "tests/visualization/test_sibling_order_clusters.py"
+      ],
+      "torchlens/_visualization/_svg_text_runs.py": [
+        "tests/test_intervention_render_marks.py"
       ],
       "torchlens/_visualization/_trace_collapse.py": [
         "tests/oracles/test_legacy_collapse_priority.py",
