@@ -30,6 +30,7 @@ import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._selection.resolver import _resolve_sites
+from .._utils._display_constructor import value_text
 from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import EDITED_NODE_CLASS, INTERVENTION_SITE_COLOR
 from ..intervention._edit_repr import _is_signature_default, render_edit_repr
@@ -43,7 +44,7 @@ from .node_spec import (
     intervention_graph_override,
     intervention_sites_for_log,
 )
-from .themes import _relative_luminance
+from .themes import _MIN_TEXT_CONTRAST, _relative_luminance, _worst_contrast, ink_on_fill
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -64,6 +65,8 @@ __all__ = [
     "edit_marks_by_site",
     "edit_marks_for_node",
     "edit_row_html",
+    "edit_row_ink",
+    "edit_row_runs",
     "edit_rows",
     "edit_tooltip",
     "header_edit_line",
@@ -91,6 +94,17 @@ _MAX_HEADER_EDITS = 3
 _MAX_LITERAL_CHARS = 16
 #: Keyword arguments that never appear in the edit text.
 _SILENT_KWARGS = frozenset({"allow_shape_change"})
+#: Provenance a helper records instead of its source object: the edit record and the
+#: tooltip keep it, the drawn edit text does not (it set a picture's width at 3x a block).
+_PROVENANCE_KWARGS = frozenset(
+    {
+        "source_trace_label",
+        "source_model_class",
+        "source_object_id",
+        "population_identity",
+        "direction_digest",
+    }
+)
 #: Hook names the value-replacement door gives its generated hooks.
 _SET_HOOK_MARKERS = ("_set_value_hook", "_value_hook")
 
@@ -154,6 +168,32 @@ def edit_ink(theme: VisualizationTheme | None) -> str:
     return INTERVENTION_SITE_COLOR
 
 
+def edit_row_ink(color: str, fill: str | None) -> str:
+    """Return an edit row's text colour on a node's fill, readable on every fill.
+
+    The edit colour stays where it reads (4.5:1, the floor the node's own
+    label keeps), then the dark skin's light edit purple, then the plain ink
+    the node's label falls back to: purple text on a dark ``color_by`` fill
+    was unreadable.
+
+    Examples
+    --------
+    >>> from torchlens._visualization._edit_marks import edit_row_ink
+    >>> edit_row_ink("#7B1FA2", "#FDE725"), edit_row_ink("#7B1FA2", "#440154")
+    ('#7B1FA2', '#C084FC')
+    """
+
+    if fill is None:
+        return color
+    for candidate in (color, _DARK_EDIT_INK):
+        ratio = _worst_contrast(candidate, str(fill))
+        if ratio is None:
+            return color
+        if ratio >= _MIN_TEXT_CONTRAST:
+            return candidate
+    return ink_on_fill(str(fill), color) or color
+
+
 def _literal(value: Any) -> str | None:
     """Return a short literal's text, or ``None`` when the value needs a stand-in."""
 
@@ -211,7 +251,9 @@ def _shown_kwargs(edit: Edit, constructor: Callable[..., Any] | None) -> list[st
     order = _parameter_order(constructor)
     parts: list[str] = []
     for key, value in sorted(edit.kwargs, key=lambda item: order.get(item[0], len(order))):
-        if key in _SILENT_KWARGS or value is None or not _takes_keyword(constructor, key):
+        if key in _SILENT_KWARGS or key in _PROVENANCE_KWARGS or value is None:
+            continue
+        if not _takes_keyword(constructor, key):
             continue
         if constructor is not None and _is_signature_default(constructor, key, value):
             continue
@@ -244,11 +286,29 @@ def _parameter_order(constructor: Callable[..., Any] | None) -> dict[str, int]:
     return {name: index for index, name in enumerate(names)}
 
 
+def _source_stand_in(edit: Edit) -> list[str]:
+    """Return the stand-in for a source trace an edit records by identity, if it has one.
+
+    ``patch_from`` keeps the source trace's label, class and object id rather
+    than the trace, so the picture shows what a trace argument shows: the
+    label when it is short, else ``trace``.
+    """
+
+    recorded = dict(edit.kwargs)
+    if "source_object_id" not in recorded:
+        return []
+    label = recorded.get("source_trace_label")
+    if isinstance(label, str) and label and len(label) <= _MAX_LITERAL_CHARS:
+        return [label]
+    return ["trace"]
+
+
 def short_edit_text(edit: Edit) -> str:
     """Return the edit text after the delta, for example ``zero_ablate`` or ``scale(0.5)``."""
 
     constructor = builtin_helper_constructor(edit.name)
-    parts = [_stand_in(value) for value in edit.args]
+    parts = _source_stand_in(edit)
+    parts.extend(_stand_in(value) for value in edit.args)
     parts.extend(_shown_kwargs(edit, constructor))
     if not parts:
         return edit.name
@@ -268,7 +328,21 @@ def _hook_mark(hook: Any, *, full: str | None, detail: str) -> EditMark:
 def _helper_mark(edit: Edit, *, detail: str) -> EditMark:
     """Return the mark for a helper-built edit."""
 
-    return EditMark(short=short_edit_text(edit), full=render_edit_repr(edit), detail=detail)
+    return EditMark(short=short_edit_text(edit), full=_full_edit_text(edit), detail=detail)
+
+
+def _full_edit_text(edit: Edit) -> str:
+    """Return the tooltip spelling: the public repr, or every argument when it holds provenance.
+
+    The one-line public repr is clipped, which cut a ``patch_from`` source's
+    class and object id; such an edit lists each argument in full instead.
+    """
+
+    if not any(key in _PROVENANCE_KWARGS for key, _value in edit.kwargs):
+        return render_edit_repr(edit)
+    parts = [value_text(value) for value in edit.args]
+    parts.extend(f"{key}={value_text(value)}" for key, value in edit.kwargs)
+    return f"{edit.name}({', '.join(parts)})"
 
 
 def _value_mark(value: Any, *, detail: str) -> EditMark:
@@ -454,6 +528,17 @@ def edit_row_html(row: str, color: str, size: float = _OP_LABEL_SIZE) -> str:
     else:
         inner = f'<FONT POINT-SIZE="{text_pt}">{html_escape(text)}</FONT>'
     return f'<FONT COLOR="{color}"><B>{inner}</B></FONT>'
+
+
+def edit_row_runs(row: EditRow) -> list[tuple[str, float, bool]]:
+    """Return the runs :func:`edit_row_html` draws for ``row``: ``(text, size, bold)``."""
+
+    text = str(row)
+    text_size = round(row.size * _TEXT_TO_DELTA, 1)
+    if text.startswith(f"{DELTA} "):
+        delta_size = round(row.size, 1)
+        return [(DELTA, delta_size, True), ("\u00a0" + text[len(DELTA) + 1 :], text_size, True)]
+    return [(text, text_size, True)]
 
 
 #: The 4 pt blank row above a node's first edit row (no rule).
