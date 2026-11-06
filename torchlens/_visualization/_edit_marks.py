@@ -481,7 +481,10 @@ def header_edit_line(
     INSIDE the coloured run as two non-breaking spaces: the gap becomes part of
     the next run's position, which survives rasterizers that strip a run's edge
     spaces, and the second space absorbs the estimate's shortfall. A leading
-    space on the next run, or a bold token, drew ``zero_ablateon``.
+    space on the next run, or a bold token, drew ``zero_ablateon``. The SVG
+    output joins the line's runs into one text, which a browser lays out in
+    order, and there the gap collapses to one space (:mod:`._svg_text_runs`);
+    PNG and PDF keep Graphviz's run positions and the padding.
     """
 
     if not sites:

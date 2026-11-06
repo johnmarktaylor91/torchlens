@@ -8,6 +8,11 @@ Graphviz measured covers the start of the next run (the header's
 one line's runs into a single ``<text>`` of ``<tspan>`` pieces lets the
 browser place each piece after the last, whatever font it resolves.
 
+Graphviz-side padding at a run's edge (the header's two non-breaking spaces
+after the coloured edit token, there to absorb Graphviz's short width
+estimate) would read as a double gap once the browser lays the pieces out in
+order, so the whitespace where two pieces meet collapses to one character.
+
 Only the root graph label (the header block) and edited nodes (``tl_edited``)
 are rewritten; every other line keeps Graphviz's bytes. Raster output comes
 from Graphviz itself and is unaffected.
@@ -28,6 +33,8 @@ _GRAPH_OPEN_RE = re.compile(r'<g id="graph0" class="graph"[^>]*>\n')
 _EDITED_NODE_RE = re.compile(r'<g id="[^"]+" class="node[^"]*\btl_edited\b[^"]*">\n')
 #: Attributes that place a run; the rest style it and move onto its tspan.
 _PLACEMENT = ("text-anchor", "x", "y")
+#: Whitespace Graphviz writes at a run's edge: a space or a non-breaking space.
+_EDGE_SPACE = " \u00a0"
 
 
 def flow_text_runs(svg: str) -> str:
@@ -125,8 +132,31 @@ def _emit(group: list[dict[str, str]]) -> str:
     if len(group) == 1:
         return group[0]["__raw__"]
     first = group[0]
-    spans = "".join(f"<tspan{_style_attrs(run)}>{run['__body__']}</tspan>" for run in group)
+    bodies = _collapse_edge_gaps([run["__body__"] for run in group])
+    spans = "".join(f"<tspan{_style_attrs(run)}>{body}</tspan>" for run, body in zip(group, bodies))
     return f'<text text-anchor="start" x="{first["x"]}" y="{first["y"]}">{spans}</text>\n'
+
+
+def _collapse_edge_gaps(bodies: list[str]) -> list[str]:
+    """Return ``bodies`` with the whitespace where two pieces meet cut to one character.
+
+    Graphviz places each run at its own ``x``, so padding at a run's edge only
+    moves the next run; in one flowed text every character is drawn, so the
+    gap keeps its first whitespace character (a non-breaking space survives
+    SVG whitespace handling) and drops the rest.
+    """
+
+    out = list(bodies)
+    for index in range(len(out) - 1):
+        left, right = out[index], out[index + 1]
+        left_core, right_core = left.rstrip(_EDGE_SPACE), right.lstrip(_EDGE_SPACE)
+        gap = left[len(left_core) :] + right[: len(right) - len(right_core)]
+        if len(gap) > 1:
+            if len(left_core) < len(left):
+                out[index], out[index + 1] = left_core + gap[0], right_core
+            else:
+                out[index + 1] = gap[0] + right_core
+    return out
 
 
 def _style_attrs(run: dict[str, str]) -> str:

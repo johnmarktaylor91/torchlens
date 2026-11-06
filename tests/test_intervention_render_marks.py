@@ -100,7 +100,8 @@ def test_header_edit_line_forms() -> None:
     )
     # The gap after the token is inside the coloured run, so it is part of where
     # Graphviz places "on"; a leading space on the next run or a bold token let the
-    # drawn name run into "on" ("zero_ablateon").
+    # drawn name run into "on" ("zero_ablateon"). The SVG output collapses the gap
+    # to one space where it joins the runs (test_header_edit_line_is_one_svg_text...).
     assert "<B>" not in one
     many = [_fired_site(f"linear_{i}_1", tl.zero_ablate()) for i in range(12)]
     assert header_edit_line(trace, many, PURPLE).endswith("&#160;&#160;</FONT>on 12 layers")
@@ -376,7 +377,8 @@ def test_header_edit_line_is_one_svg_text_with_its_pieces_in_order(tmp_path: Pat
     """The header's edit line is one ``<text>``: browsers lay its pieces out one after another.
 
     Graphviz places each font run at its own x; a browser's wider bold run then
-    covered the space before ``on`` (``zero_ablateon``).
+    covered the space before ``on`` (``zero_ablateon``). The label pads that gap
+    with two spaces for Graphviz's own layout (PNG, PDF); the browser shows one.
     """
 
     trace = _traced()
@@ -417,3 +419,13 @@ def test_flow_text_runs_joins_only_same_baseline_runs_of_header_and_edited_nodes
     assert flowed.count("<tspan") == 4  # header edit line + the edited node's row
     assert run.format(x=1, y=5, t="Δ") in flowed  # an unedited node is untouched
     assert flow_text_runs(flowed) == flowed
+    # Padding at a run's edge moves only Graphviz's next run; flowed, the gap is one space.
+    padded = (
+        '<g id="graph0" class="graph">\n'
+        + run.format(x=8, y=-10, t="1 edit:\u00a0")
+        + run.format(x=50, y=-10, t="Δ zero_ablate\u00a0\u00a0")
+        + run.format(x=150, y=-10, t="on relu_1_1")
+        + "<!-- a -->\n"
+    )
+    pieces = re.findall(r"<tspan[^>]*>([^<]*)</tspan>", flow_text_runs(padded))
+    assert pieces == ["1 edit:\u00a0", "Δ zero_ablate\u00a0", "on relu_1_1"]
