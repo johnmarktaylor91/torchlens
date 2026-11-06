@@ -10,7 +10,7 @@ truth -- the per-class ``_FIELD_POLICY`` tables (built from ``*_FIELD_ORDER``
 nested value classes -- so the registry can never drift from the code that
 actually serializes state. It declares NO new fields and moves NONE: field-set
 changes land only at the coordinated schema write, through the
-the field-intent ledger intake.
+ field-intent ledger intake.
 
 Tier partition (WALKTHROUGH section 3 field triage; DIGEST-AUDIT 4b):
 
