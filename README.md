@@ -474,7 +474,7 @@ The work of TorchLens stops at the edge of the network: it gets you the activati
 Each picture is one `.draw` call on a real model. Click any picture to open it full size.
 
 <p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory_lr.svg"><img alt="One projection inside GPT-2 block 5's MLP, drawn left to right: the matrix multiply is dark purple (slow), the two reshapes around it are yellow (fast), and the input reshape is drawn smaller because its output is a quarter the size" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory_lr.png" width="100%"></a></p>
-<p><sub><b>Time and memory.</b> Color shows how long each operation took and size shows how much memory its output uses. Here, matrix multiplication was the bottleneck.</sub></p>
+<p><sub><b>Time and memory.</b> Color shows execution time for each operation, node size shows memory usage. Here, matrix multiplication was the bottleneck.</sub></p>
 
 <details><summary>Code</summary>
 
