@@ -1056,8 +1056,8 @@
         "tests/test_bundle_diff_multipass.py",
         "tests/test_bundle_diff_renderer.py",
         "tests/test_intervention_hardening_cert7.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_module_edit_comparison_reads.py",
-        "tests/test_nan_debugging.py",
         "tests/test_report_lane_debug_report.py",
         "tests/test_rulings_names_1103.py"
       ],
