@@ -8241,6 +8241,7 @@ test-docstrings	tests/conformance/_rosters/torch.py	18_
 test-docstrings	tests/conformance/_scorecard.py	256
 test-docstrings	tests/conformance/_scorecard.py	4.5
 test-docstrings	tests/conftest.py	12
+test-docstrings	tests/conftest.py	2.4.4
 test-docstrings	tests/example_models.py	0.499,
 test-docstrings	tests/example_models.py	0.501
 test-docstrings	tests/example_models.py	1,4,1

@@ -2070,11 +2070,11 @@
         "tests/test_capture_guard_transactionality.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_distributed_funcol_boundaries.py",
-        "tests/test_distributed_honesty.py",
         "tests/test_docs_executable_contracts.py",
         "tests/test_fastlog/test_ddp_unwrap.py",
         "tests/test_nightly_peer_recipe_leg.py",
-        "tests/test_onebackward_refusals.py"
+        "tests/test_onebackward_refusals.py",
+        "tests/test_tests_package_shadow.py"
       ],
       "torchlens/_doctor_types.py": [
         "tests/test_compat_report.py",
