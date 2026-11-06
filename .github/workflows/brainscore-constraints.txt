@@ -1,7 +1,7 @@
 # Constraints for the nightly bridges-real brainscore leg (`uv pip install -c`).
 # python-dateutil 3.0.0 (2026-10-21) and 4.0.0 are outside botocore's
-# python-dateutil<3 range, so the resolver falls back to ancient botocore 0.76,
+# python-dateutil<5 range, so the resolver falls back to ancient botocore 0.76,
 # whose vendored requests imports MutableMapping from `collections` and fails
 # on Python 3.10+. Same cap as numpy1-constraints.txt, which this leg does not
 # use (it runs NumPy 2). Remove it when botocore allows python-dateutil 3.
-python-dateutil<3
+python-dateutil<5
