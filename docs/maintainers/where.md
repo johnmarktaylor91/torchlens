@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1742 modules, 704543 lines, 0 modules without a docstring.
+85 packages, 1745 modules, 705027 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -42,7 +42,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4635 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24007 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 106 | 49484 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 109 | 49968 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1151 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 757 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2486 |
@@ -1044,7 +1044,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (106 modules, 49484 lines)
+Computational graph visualization via Graphviz. (109 modules, 49968 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1073,7 +1073,7 @@ Computational graph visualization via Graphviz. (106 modules, 49484 lines)
 | `_edge_shapes` | Optional producer-shape annotations on resolved forward edges. | 97 |
 | `_edit_change` | Value-change marks for the interventions view: which ops an edit changed. | 305 |
 | `_edit_highlighter` | The downstream highlighter: a translucent purple stroke under changed arrows and nodes. | 348 |
-| `_edit_marks` | Edit marks: how a forward picture shows an intervention. | 683 |
+| `_edit_marks` | Edit marks: how a forward picture shows an intervention. | 768 |
 | `_encoding` | Encoding-channel core: declarative value -> visual channels for draw. | 1726 |
 | `_encoding_aggregate` | Exact aggregates for encoding channels on collapsed module boxes and segments. | 468 |
 | `_encoding_key` | The drawn encoding key and the non-drawn record of how values were encoded. | 256 |
@@ -1090,9 +1090,10 @@ Computational graph visualization via Graphviz. (106 modules, 49484 lines)
 | `_frame_penwidth` | Module frame border width, shared by the Trace and bundle renderers. | 30 |
 | `_geometry_audit` | Geometry audit v2: the vizmech wave-3 oracle set (items 18-20). | 973 |
 | `_graph_shell` | The Graphviz graph shell of a forward draw: caption, graph, node and edge defaults. | 92 |
-| `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 795 |
+| `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 785 |
 | `_input_photo` | The input photo: an image a trace was captured from, drawn on its input node. | 98 |
 | `_intervention_sites` | Intervention-site lookup shared by the draw path and the interventions view. | 96 |
+| `_label_fit` | Keep a long node row inside its box where a browser draws it wider than Graphviz measured. | 89 |
 | `_label_format` | Formatting helpers for TorchLens visualization node labels. | 776 |
 | `_label_geometry` | Plane geometry of a laid-out Graphviz drawing (points, y up), for label placement. | 220 |
 | `_label_width` | Conservative text-width metrics for sizing node labels before Graphviz lays them out. | 114 |
@@ -1124,12 +1125,14 @@ Computational graph visualization via Graphviz. (106 modules, 49484 lines)
 | `_segment_descriptors` | Segment descriptor construction and label derivation for collapse plans. | 449 |
 | `_stacking` | Rank (stacking) channel: annotation -> same-graphviz-rank groups. | 272 |
 | `_surgery_diff` | Site-key-first surgery diff: two captures, joined on identity. | 490 |
-| `_svg_compose` | SVG post-processing and code-panel composition for rendered graphs. | 450 |
+| `_svg_compose` | SVG post-processing and code-panel composition for rendered graphs. | 455 |
+| `_svg_header_fit` | Keep an SVG's header inside the page when a browser draws it wider than Graphviz measured. | 141 |
 | `_svg_text_runs` | Flow the mixed-font text runs of a header line or an edit row into one SVG text. | 169 |
+| `_text_metrics` | Text widths in the bundled face: as a browser draws them, and as Graphviz measures them. | 120 |
 | `_trace_collapse` | Collapse diagnostics as ''f(trace, ...)'' functions. | 104 |
 | `_trace_draw` | Trace drawing, overlay, animation and preview functions (record rebuild destination). | 368 |
 | `_trace_draw_arguments` | Forward- and backward-graph keyword translation for the Trace drawing door. | 120 |
-| `_typography` | The one typography record for graph rendering (vizmech, wave-2 item 14). | 244 |
+| `_typography` | The one typography record for graph rendering (vizmech, wave-2 item 14). | 268 |
 | `_view_door` | ''Trace.draw(view=...)'': the public door to the premade views. | 152 |
 | `auto_collapse` | Smart module-collapse scoring and selection for graph rendering. | 2146 |
 | `bundle_diff` | Bundle diff renderer for paired TorchLens traces. | 695 |
@@ -1143,7 +1146,7 @@ Computational graph visualization via Graphviz. (106 modules, 49484 lines)
 | `fastlog_live` | Live visualization helpers for fastlog dry-run traces. | 311 |
 | `fastlog_preview` | Preview fastlog predicate decisions on a full Trace graph. | 356 |
 | `modes` | Node-mode presets for TorchLens graph visualization. | 515 |
-| `node_spec` | NodeSpec helpers for TorchLens graph visualization labels. | 423 |
+| `node_spec` | NodeSpec helpers for TorchLens graph visualization labels. | 453 |
 | `node_universe` | Presentation-free visible node universe for forward visualization. | 360 |
 | `overlays` | Per-node overlay helpers for TorchLens graph rendering. | 473 |
 | `render_execution` | Shared Graphviz layout-execution honesty seam (vizmech wave 1). | 351 |
