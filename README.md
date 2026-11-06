@@ -13,7 +13,7 @@
 <p align="center"><img alt="TorchLens drawing of a Hugging Face ViT given a cat photo: the photo in the input box, the ViT folded into one box, and an output box listing tabby cat 42%, Egyptian cat 39%, tiger cat 17%" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/readme_splash.png" width="100%"></p>
 
 ```python
-vit = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224")
+vit = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224").eval()
 cat = tl.trace(vit, "cat.jpg")
 cat["vit.layers.5.attention"].facets.pattern.shape  # torch.Size([1, 12, 197, 197])
 cat.draw(direction="leftright", depth=1)
@@ -473,30 +473,28 @@ The work of TorchLens stops at the edge of the network: it gets you the activati
 
 Each picture is one `.draw` call on a real model. Click any picture to open it full size.
 
-<table>
-<tr>
-<td width="58%" align="center" valign="top"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory.svg"><img alt="One projection inside GPT-2 block 5's MLP, drawn bottom to top: the matrix multiply is dark purple (slow), the two reshapes around it are yellow (fast), and the input reshape is drawn smaller because its output is a quarter the size" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory.png" width="100%"></a><br><sub><b>Time and memory.</b> Color shows how long each operation took and size shows its output's memory: the matrix multiply does the work.</sub></td>
-<td width="42%" align="center" valign="top"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/resnet_rdm_bu.svg"><img alt="ResNet-18's last block drawn bottom to top on three photos, two cats and a car: every convolution, batch norm, ReLU and the residual add holds a small 3 by 3 dissimilarity matrix with the three photos along its edges, including the downsample branch" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/resnet_rdm_bu.png" width="100%"></a><br><sub><b>Similarity inside every node.</b> ResNet-18's last block on two cats and a car: each operation shows how far apart the three photos' activations are.</sub></td>
-</tr>
-</table>
+<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory_lr.svg"><img alt="One projection inside GPT-2 block 5's MLP, drawn left to right: the matrix multiply is dark purple (slow), the two reshapes around it are yellow (fast), and the input reshape is drawn smaller because its output is a quarter the size" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory_lr.png" width="100%"></a><br><sub><b>Time and memory.</b> Color shows how long each operation took and size shows its output's memory: the matrix multiply does the work.</sub></p>
 
-<details><summary>Code for the GPT-2 picture</summary>
+<details><summary>Code</summary>
 
 ```python
 model = GPT2LMHeadModel.from_pretrained("gpt2").eval()
 trace = tl.trace(model, "The capital of France is")
-trace.draw(module="transformer.h.5.mlp.c_fc", color_by="time", size_by="bytes")
+trace.draw(module="transformer.h.5.mlp.c_fc", color_by="time", size_by="bytes", direction="leftright")
 ```
 
 </details>
-<details><summary>Code for the ResNet picture</summary>
+
+<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/resnet_rdm.svg"><img alt="ResNet-18's last block drawn left to right on three photos, two cats and a car: every convolution, batch norm, ReLU and the residual add holds a small 3 by 3 dissimilarity matrix with the three photos along its edges, including the downsample branch" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/resnet_rdm_hires.png" width="100%"></a><br><sub><b>Similarity inside every node.</b> ResNet-18's last block on two cats and a car: each operation shows how far apart the three photos' activations are.</sub></p>
+
+<details><summary>Code</summary>
 
 ```python
 model = resnet18(weights="IMAGENET1K_V1").eval()
 block = tl.in_module("layer4.0") - tl.label_contains("buffer")
 trace = tl.trace(model, [cat1, cat2, car], save=block)  # the three photos go through as one batch
 tl.repgeom.rdm_evolution(trace)                         # a 3 x 3 dissimilarity matrix at every saved op
-trace.draw(module="layer4.0", show_arg_labels=False,
+trace.draw(module="layer4.0", direction="leftright", show_arg_labels=False,
            node_spec_fn=tl.viz.nodes.rdm(canvas_size=150, thumbnail_size=36, display="percentile"))
 ```
 
@@ -560,7 +558,7 @@ trace.draw(node_spec_fn=dot, layout="dot", direction="leftright", show_arg_label
 
 </details>
 
-Every drawing option, each with a real picture: [the drawing guide](docs/guides/visualization.md).
+The [visualization guide](docs/guides/visualization.md) covers the rest of the drawing options.
 
 ## Install
 
