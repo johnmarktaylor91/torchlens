@@ -2143,7 +2143,7 @@
         "tests/behaviour/test_hooks_oracle.py",
         "tests/test_b2_sel_selector_doors.py",
         "tests/test_extract_fast_path.py",
-        "tests/test_extract_unknown_layer_refusal.py",
+        "tests/test_extract_text_fast_path.py",
         "tests/test_tvscope_clip_roundtrip.py"
       ],
       "torchlens/_extract_refusals.py": [
@@ -2153,7 +2153,7 @@
         "tests/behaviour/test_hooks_oracle.py",
         "tests/test_b2_sel_selector_doors.py",
         "tests/test_extract_fast_path.py",
-        "tests/test_extract_unknown_layer_refusal.py",
+        "tests/test_extract_text_fast_path.py",
         "tests/test_tvscope_clip_roundtrip.py"
       ],
       "torchlens/_extraction/__init__.py": [
@@ -2176,7 +2176,7 @@
         "tests/behaviour/test_hooks_oracle.py",
         "tests/test_b2_sel_selector_doors.py",
         "tests/test_extract_fast_path.py",
-        "tests/test_extract_unknown_layer_refusal.py",
+        "tests/test_extract_text_fast_path.py",
         "tests/test_tvscope_clip_roundtrip.py"
       ],
       "torchlens/_extraction/callable_identity.py": [
@@ -2708,6 +2708,15 @@
         "tests/test_tlspec_runnable_r69_input_contract.py"
       ],
       "torchlens/_io/_scrub_identities.py": [
+        "tests/test_grind_b4_lane_p.py",
+        "tests/test_io_pickle.py",
+        "tests/test_io_reconstructible_predicate_r10.py",
+        "tests/test_io_scrub_policy.py",
+        "tests/test_owned_record_displays.py",
+        "tests/test_prebump_roundtrip_acceptance.py",
+        "tests/test_state_adapter.py"
+      ],
+      "torchlens/_io/_scrub_runtime_fields.py": [
         "tests/test_grind_b4_lane_p.py",
         "tests/test_io_pickle.py",
         "tests/test_io_reconstructible_predicate_r10.py",
@@ -8350,13 +8359,13 @@
       ],
       "torchlens/attribution/_onebackward/_read.py": [
         "tests/test_ag3a_read_sites.py",
-        "tests/test_attribution_eval_causal_audit_edges.py",
         "tests/test_onebackward_bydoor.py",
         "tests/test_onebackward_core.py",
         "tests/test_onebackward_edgeplumbing.py",
         "tests/test_onebackward_frozen.py",
         "tests/test_onebackward_realmodel.py",
-        "tests/test_onebackward_refusals.py"
+        "tests/test_onebackward_refusals.py",
+        "tests/test_read_table_pandas_extra.py"
       ],
       "torchlens/attribution/_onebackward/_suppress.py": [
         "tests/test_docs_executable_contracts.py",
@@ -8374,8 +8383,8 @@
         "tests/test_onebackward_core.py",
         "tests/test_onebackward_edgeplumbing.py",
         "tests/test_onebackward_frozen.py",
-        "tests/test_onebackward_realmodel.py",
         "tests/test_onebackward_refusals.py",
+        "tests/test_read_table_pandas_extra.py",
         "tests/test_selection_value_producers.py"
       ],
       "torchlens/attribution/_onebackward/_targets.py": [
@@ -13611,6 +13620,16 @@
         "tests/test_rf_zero_extent_window.py"
       ],
       "torchlens/receptive_field/_query_maps.py": [
+        "tests/test_perf5_rf_invariant_cost.py",
+        "tests/test_rf_at.py",
+        "tests/test_rf_ext_forward_walk.py",
+        "tests/test_rf_ext_integration.py",
+        "tests/test_rf_geometry_hardening.py",
+        "tests/test_rf_getitem_fullaxis_check.py",
+        "tests/test_rf_transposed_conv_channels.py",
+        "tests/test_rf_zero_extent_window.py"
+      ],
+      "torchlens/receptive_field/_query_walk_memo.py": [
         "tests/test_perf5_rf_invariant_cost.py",
         "tests/test_rf_at.py",
         "tests/test_rf_ext_forward_walk.py",
