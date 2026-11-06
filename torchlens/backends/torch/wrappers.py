@@ -36,6 +36,7 @@ from ..._constants import _get_torchvision_funcs, get_orig_torch_funcs
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureNotActiveError
 from ..._utils._dispatch_modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
+from ..._utils._hop_entry_compile import compile_disabled
 from ..._utils._tensor_label import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
     DescriptorCompatProperty,
@@ -69,7 +70,7 @@ from ..._utils.introspection import get_vars_of_type_from_obj
 from ..._utils.rng import log_current_autocast_state, log_op_rng_states
 from ..._utils.tensor_utils import (
     _DEFER_ENABLED as _COW_ENABLED,
-    _DEFER_PENDING as _COW_PENDING,
+    _DEFER_GATE as _COW_GATE,
     arm_deferred_payload_window,
     disarm_deferred_payload_window,
     materialize_deferred_for_call,
@@ -1205,18 +1206,17 @@ def torch_func_decorator(
         # torch.device('meta') contexts). Op-logging is OWNER-thread-scoped, so a
         # NON-owner thread's ops are never logged; its host escapes still meet the method belt.
         if not _state._logging_enabled:
-            # Deferred payload clones: pending aliases stay zero-copy for the process lifetime,
-            # so the fast path carries the SAME pre-execution interception as the logging path:
-            # any wrapped call that can write through a tensor argument first copies out pending
-            # aliases sharing those storages. Disarmed cost is one dict-truthiness check; with
-            # pending aliases, only mutation-signature calls pay the storage lookups.
-            if _COW_PENDING and (
+            # Deferred payload clones: pending aliases stay zero-copy for the process lifetime, so
+            # the fast path carries the SAME pre-execution interception as the logging path: any
+            # call that can write through a tensor argument first copies out pending aliases on
+            # those storages. Disarmed cost is one flag check (Dynamo-guardable: _DeferGate).
+            if _COW_GATE.armed and (
                 writes_args
                 or "out" in kwargs
                 or _call_requests_inplace(inplace_param_index, args, kwargs)
                 or fused_call_writes(func_name, args, kwargs)
             ):
-                materialize_deferred_for_call(_collect_tensor_args(args, kwargs))
+                _COW_GATE.materialize(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
             # Opened before the call: the fast collector mirrors capture's nesting barcode.
@@ -1380,13 +1380,13 @@ def torch_func_decorator(
         # behind a same-object return. Storage-rebinding ``.data=`` writes no bytes but rides along
         # via its property-setter signature — a spurious materialization is merely a wasted clone,
         # never a correctness risk.
-        if _COW_PENDING and (
+        if _COW_GATE.armed and (
             writes_args
             or "out" in kwargs
             or _call_requests_inplace(inplace_param_index, args, kwargs)
             or fused_call_writes(func_name, args, kwargs)
         ):
-            materialize_deferred_for_call(arg_tensorlike)
+            _COW_GATE.materialize(arg_tensorlike)
 
         # ---- Execute the original function ----
         # Write a unique barcode BEFORE the call. If any inner wrapped functions
@@ -2066,20 +2066,19 @@ _DYNAMO_IDENTITY_RULE_CACHE_NAMES = ("get_torch_obj_rule_map", "get_tensor_metho
 def _warm_derived_identity_caches() -> None:
     """Warm torch's identity-keyed DERIVED caches while the namespace holds originals.
 
-    Invariant: no torchlens path may FIRST-call a cached torch
-    introspection table while wrappers are installed. Both install paths call
-    this before their setattr loop; ``originals_exposed`` also shows originals
-    on slots a failed decoration pass left wrapped (the #138 retry). Covered:
+    Invariant: no torchlens path may FIRST-call a cached torch introspection table while
+    wrappers are installed. Both install paths call this before their setattr loop;
+    ``originals_exposed`` also shows originals on slots a failed decoration pass left
+    wrapped (the #138 retry). Covered:
 
     - the two ``torch.overrides`` tables;
-    - torch's ``_device_constructors()`` set -- ``DeviceContext.__torch_function__``
-      always receives the ORIGINAL C function, so a wrapper-keyed set silently
-      skips device injection for stale pre-wrap factory references; the
-      warm also collects ``_DEVICE_CONSTRUCTOR_NAMES`` for the wrapper-side
-      injection path;
-    - dynamo's identity-keyed rule tables, when dynamo is already imported
-      (never force-imported -- tables a user materializes mid-epoch are
-      dropped at ``unwrap_torch()`` instead).
+    - torch's ``_device_constructors()`` set -- ``DeviceContext.__torch_function__`` always
+      receives the ORIGINAL C function, so a wrapper-keyed set silently skips device injection
+      for stale pre-wrap factory references; the warm also collects
+      ``_DEVICE_CONSTRUCTOR_NAMES`` for the wrapper-side injection path;
+    - dynamo's identity-keyed rule tables, when dynamo is already imported (never
+      force-imported -- tables a user materializes mid-epoch are dropped at ``unwrap_torch()``
+      instead); Dynamo then inlines the wrappers, so their payload copy-out runs compile-disabled.
     """
 
     from torch.overrides import get_overridable_functions, get_testing_overrides
@@ -2114,20 +2113,21 @@ def _warm_derived_identity_caches() -> None:
                 TorchLensWarning,
                 stacklevel=2,
             )
+    if _dynamo_identity_rule_caches():
+        _COW_GATE.materialize = compile_disabled(materialize_deferred_for_call)
 
 
 def _dynamo_identity_rule_caches() -> list[Any]:
     """Return dynamo's identity-keyed rule caches, without importing dynamo.
 
-    ``torch._dynamo.trace_rules`` memoizes rule tables keyed by the live
-    callable objects resolved from the torch namespace at materialization
-    time. Like the ``torch.overrides`` tables these are DERIVED caches:
-    the attribute-identity restore census cannot see them, so a table built
-    while torchlens wrappers are installed silently poisons ``torch.compile``
-    for the rest of the process (``lookup(torch.cos)`` degrades to
-    ``SkipFunctionVariable`` after ``unwrap_torch()``). Feature-detected via
-    ``sys.modules`` + ``getattr`` -- never force-imports dynamo, and degrades
-    to an empty list on any future torch that renames the getters.
+    ``torch._dynamo.trace_rules`` memoizes rule tables keyed by the live callable objects
+    resolved from the torch namespace at materialization time. Like the ``torch.overrides``
+    tables these are DERIVED caches: the attribute-identity restore census cannot see them, so
+    a table built while torchlens wrappers are installed silently poisons ``torch.compile`` for
+    the rest of the process (``lookup(torch.cos)`` degrades to ``SkipFunctionVariable`` after
+    ``unwrap_torch()``). Feature-detected via ``sys.modules`` + ``getattr`` -- never
+    force-imports dynamo, and degrades to an empty list on any future torch that renames the
+    getters.
     """
 
     trace_rules = sys.modules.get("torch._dynamo.trace_rules")

@@ -534,9 +534,9 @@ torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._snapshot_numpy_fra
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._teardown	77
 torchlens/_utils/rng/numpy_frames.py::_numpy_frame_candidate_children	165
 torchlens/_utils/rng/registry.py::_build_host_nondeterminism_registry	107
-torchlens/_utils/tensor_utils.py	1859
-torchlens/_utils/tensor_utils.py::_clone_tensor_payload	72
-torchlens/_utils/tensor_utils.py::_copy_tensor_payload	105
+torchlens/_utils/tensor_utils.py	1858
+torchlens/_utils/tensor_utils.py::_clone_tensor_payload	71
+torchlens/_utils/tensor_utils.py::_copy_tensor_payload	102
 torchlens/_utils/tensor_utils.py::tensor_nanequal	179
 torchlens/_validation_status.py::ValidationStatus.from_replay_counts	130
 torchlens/_validation_status.py::ValidationStatus.result	72
@@ -961,8 +961,8 @@ torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	117
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	82
 torchlens/backends/torch/wrappers.py::decorate_all_once	67
-torchlens/backends/torch/wrappers.py::torch_func_decorator	785
-torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	629
+torchlens/backends/torch/wrappers.py::torch_func_decorator	784
+torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	628
 torchlens/bridge/_sae_export.py::write_delphi	92
 torchlens/bridge/_sae_export.py::write_sae_dashboard	111
 torchlens/bridge/_sae_latents.py::logged_splice_trace	84
