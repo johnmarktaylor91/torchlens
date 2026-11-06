@@ -1836,8 +1836,9 @@ jobs:
             extras: "dev,gradcam,shap,captum"
             pkgs: "torchvision"
             files: "tests/test_bridge_real_gradcam.py tests/test_bridge_real_captum.py tests/test_bridge_real_shap.py tests/test_bridge_real_profiler.py tests/test_docstring_examples.py::test_optional_examples_run"
-            # +2: the captum and pytorch_grad_cam docstring-example cells.
-            floor: "17"
+            # 14 test-file ids +2: the captum and pytorch_grad_cam
+            # docstring-example cells.
+            floor: "16"
           - leg: steer
             extras: "dev,steering,dialz"
             pkgs: "transformers"
