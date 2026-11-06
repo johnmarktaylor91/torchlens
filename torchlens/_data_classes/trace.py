@@ -1839,22 +1839,22 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         """
         return _trace_rerun_state.replace_state_from(self, trace=trace)
 
-    def _refresh_matching_rerun_state_from(self, new_log: "Trace") -> bool:
+    def _refresh_matching_rerun_state_from(self, new_log: "Trace", *, moved: bool = False) -> bool:
         """Refresh payload-bearing fields from a same-shape rerun.
 
         Parameters
         ----------
         new_log:
             Fully captured and postprocessed rerun candidate.
+        moved:
+            True when the caller discards ``new_log`` afterwards, so values move.
 
         Returns
         -------
         bool
-            True when the existing graph containers were refreshed in place.
-            False means labels did not match closely enough and callers should
-            use ``replace_state_from``.
+            True when refreshed in place; False when labels differ (``replace_state_from``).
         """
-        return _trace_rerun_state.refresh_matching_rerun_state_from(self, new_log=new_log)
+        return _trace_rerun_state.refresh_matching_rerun_state_from(self, new_log, moved=moved)
 
     def _copy_user_annotations(self, annotations: Any) -> dict[str, Any] | None:
         """Copy the reserved user annotation namespace from a mapping.

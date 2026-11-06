@@ -7,6 +7,7 @@ import dataclasses
 import enum
 import types
 import weakref
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -78,11 +79,20 @@ _ATOMIC_RERUN_VALUE_TYPES: frozenset[type] = frozenset(
         type(NotImplemented),
         types.FunctionType,
         types.BuiltinFunctionType,
+        types.MethodDescriptorType,
+        types.WrapperDescriptorType,
         weakref.ref,
         torch.dtype,
         torch.device,
     }
 )
+
+#: Member types that make a tuple or frozenset immutable all the way down, so a refresh
+#: hands it over whole: the atomic kinds plus plain tensors (handed over by identity anyway).
+_IMMUTABLE_MEMBER_TYPES: frozenset[type] = _ATOMIC_RERUN_VALUE_TYPES | {
+    torch.Tensor,
+    torch.nn.Parameter,
+}
 
 
 def replace_state_from(target: Trace, trace: Trace) -> None:
@@ -158,7 +168,7 @@ def replace_state_from(target: Trace, trace: Trace) -> None:
     target._rebind_fork_owner_refs()
 
 
-def refresh_matching_rerun_state_from(trace: Trace, new_log: Trace) -> bool:
+def refresh_matching_rerun_state_from(trace: Trace, new_log: Trace, *, moved: bool = False) -> bool:
     """Refresh payload-bearing fields from a same-shape rerun.
 
     Parameters
@@ -167,6 +177,10 @@ def refresh_matching_rerun_state_from(trace: Trace, new_log: Trace) -> bool:
         The owning trace.
     new_log:
         Fully captured and postprocessed rerun candidate.
+    moved:
+        True when the caller discards ``new_log`` after the refresh (the rerun
+        engine), so its values move to ``trace`` instead of being copied; see
+        ``copy_rerun_value``.
 
     Returns
     -------
@@ -192,9 +206,9 @@ def refresh_matching_rerun_state_from(trace: Trace, new_log: Trace) -> bool:
     # just above is exactly the precondition that makes index i of one list the
     # same op as index i of the other.
     for layer, new_layer in zip(trace._layer_list, new_log._layer_list):
-        refresh_rerun_op_from(trace, layer, new_layer)
-    refresh_rerun_layer_logs_from(trace, new_log)
-    refresh_rerun_trace_fields_from(trace, new_log)
+        refresh_rerun_op_from(trace, layer, new_layer, moved=moved)
+    refresh_rerun_layer_logs_from(trace, new_log, moved=moved)
+    refresh_rerun_trace_fields_from(trace, new_log, moved=moved)
     refresh_rerun_primitive_profile_from(trace, new_log)
     # The rerun settled its own outcome; adopt it as ``replace_state_from`` does, so a
     # run's result fork reports the run, not the fork stamp it was created with.
@@ -235,7 +249,7 @@ def refresh_rerun_primitive_profile_from(trace: Trace, new_log: Trace) -> None:
         core.kind_rows["primitive_op"] = store
 
 
-def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:
+def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any, *, moved: bool = False) -> None:
     """Copy rerun fields into one existing ``Op``.
 
     Parameters
@@ -246,6 +260,8 @@ def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:
         Existing operation record retained by the fast path.
     new_layer:
         Fresh rerun record supplying current payloads and per-call metadata.
+    moved:
+        True when ``new_layer``'s trace is discarded after the refresh.
     """
 
     preserved_fields = {
@@ -262,10 +278,11 @@ def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:
     new_layer_state = dict(state_items(new_layer))
     preserved_user_annotations = copy_user_annotations(trace, getattr(layer, "annotations", None))
     copies: dict[str, Any] = {}  # fields both loops below write are copied once
+    copy_fresh = partial(copy_rerun_value, trace, moved=moved)
     for field_name in LAYER_PASS_LOG_FIELD_ORDER:
         if field_name in preserved_fields:
             continue
-        value = copies[field_name] = copy_rerun_value(trace, new_layer_state.get(field_name))
+        value = copies[field_name] = copy_fresh(new_layer_state.get(field_name))
         if field_name == "annotations":
             value = merge_user_annotations(trace, value, preserved_user_annotations)
         layer._internal_set(field_name, value)
@@ -285,18 +302,15 @@ def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:
     ):
         if hasattr(new_layer, op_attr(field_name)):
             if field_name not in copies:
-                copies[field_name] = copy_rerun_value(trace, new_layer_state.get(field_name))
+                copies[field_name] = copy_fresh(new_layer_state.get(field_name))
             value = copies[field_name]
             if field_name == "annotations":
                 value = merge_user_annotations(trace, value, preserved_user_annotations)
-            layer._internal_set(
-                field_name,
-                value,
-            )
+            layer._internal_set(field_name, value)
     layer.source_trace = trace
 
 
-def refresh_rerun_layer_logs_from(trace: Trace, new_log: Trace) -> None:
+def refresh_rerun_layer_logs_from(trace: Trace, new_log: Trace, *, moved: bool = False) -> None:
     """Refresh aggregate ``Layer`` records from a same-shape rerun.
 
     Parameters
@@ -305,6 +319,8 @@ def refresh_rerun_layer_logs_from(trace: Trace, new_log: Trace) -> None:
         The owning trace.
     new_log:
         Fresh rerun trace with layer aggregates already postprocessed.
+    moved:
+        True when ``new_log`` is discarded after the refresh.
     """
 
     new_layer_logs = new_log._layer_logs or {}
@@ -318,7 +334,7 @@ def refresh_rerun_layer_logs_from(trace: Trace, new_log: Trace) -> None:
         for field_name, value in state_items(new_layer_log):
             if field_name in {"_source_trace_ref", "ops"}:
                 continue
-            copied_value = copy_rerun_value(trace, value)
+            copied_value = copy_rerun_value(trace, value, moved=moved)
             if field_name == "annotations":
                 copied_value = merge_user_annotations(
                     trace,
@@ -375,13 +391,14 @@ def merge_user_annotations(
         Fresh annotations plus the preserved user namespace.
     """
 
-    merged = fresh_annotations if isinstance(fresh_annotations, dict) else {}
+    # A new outer mapping: the fresh one may be the discarded capture's own (``moved``).
+    merged = dict(fresh_annotations) if isinstance(fresh_annotations, dict) else {}
     if preserved_user_annotations is not None:
         merged["user"] = copy_rerun_value(trace, preserved_user_annotations)
     return merged
 
 
-def refresh_rerun_trace_fields_from(trace: Trace, new_log: Trace) -> None:
+def refresh_rerun_trace_fields_from(trace: Trace, new_log: Trace, *, moved: bool = False) -> None:
     """Refresh trace-level run fields without replacing graph containers.
 
     Parameters
@@ -390,6 +407,8 @@ def refresh_rerun_trace_fields_from(trace: Trace, new_log: Trace) -> None:
         The owning trace.
     new_log:
         Fresh rerun trace supplying current run metadata.
+    moved:
+        True when ``new_log`` is discarded after the refresh.
     """
 
     # Share the fresh return itself; the metadata copier rebuilds containers.
@@ -429,7 +448,8 @@ def refresh_rerun_trace_fields_from(trace: Trace, new_log: Trace) -> None:
     )
     for field_name in field_names:
         if hasattr(new_log, field_name):
-            setattr(trace, field_name, copy_rerun_value(trace, getattr(new_log, field_name)))
+            value = copy_rerun_value(trace, getattr(new_log, field_name), moved=moved)
+            setattr(trace, field_name, value)
     # DERIVED annotation blobs (feature-map/RDM/MDS/scree namespaces) were
     # computed from the replaced activations and are invalidated; USER
     # ``annotate(data=...)`` blobs survive the same-shape refresh.
@@ -459,7 +479,32 @@ def _hands_over(value: Any) -> bool:
     )
 
 
-def copy_rerun_value(trace: Trace, value: Any) -> Any:
+def _moves_whole(value: Any, moved: bool) -> bool:
+    """Return whether a refresh may keep the container ``value`` itself.
+
+    A tuple or frozenset of atomic values and plain tensors is immutable all the
+    way down, so keeping it is indistinguishable from rebuilding it. A list,
+    dict or set of atomic values is kept only when its trace is discarded
+    (``moved``): then nothing else can mutate it, and with no tensor inside,
+    the discarded capture's payload eviction (which nulls tensors in lists and
+    dicts in place) never writes to it. A container holding a tensor, another
+    container or any other object is rebuilt member by member.
+    """
+
+    cls = type(value)
+    if cls is tuple or cls is frozenset:
+        return set(map(type, value)) <= _IMMUTABLE_MEMBER_TYPES
+    if not moved:
+        return False
+    if cls is dict:
+        return (
+            set(map(type, value)) <= _ATOMIC_RERUN_VALUE_TYPES
+            and set(map(type, value.values())) <= _ATOMIC_RERUN_VALUE_TYPES
+        )
+    return (cls is list or cls is set) and set(map(type, value)) <= _ATOMIC_RERUN_VALUE_TYPES
+
+
+def copy_rerun_value(trace: Trace, value: Any, *, moved: bool = False) -> Any:
     """Copy rerun metadata while keeping tensor payload identities.
 
     Parameters
@@ -468,6 +513,12 @@ def copy_rerun_value(trace: Trace, value: Any) -> Any:
         The owning trace.
     value:
         Value copied from the fresh rerun trace.
+    moved:
+        True when the rerun trace that holds ``value`` is discarded after the
+        refresh (the rerun engine's own capture). Its flat atomic lists, dicts
+        and sets then move over instead of being rebuilt (``_moves_whole``).
+        Record objects bound to the discarded capture (source locations,
+        parameter records) are still deep-copied, which detaches them.
 
     Returns
     -------
@@ -476,16 +527,16 @@ def copy_rerun_value(trace: Trace, value: Any) -> Any:
         copying would be incorrect or unnecessary.
     """
 
-    if _hands_over(value):
+    if _hands_over(value) or _moves_whole(value, moved):
         return value
     if isinstance(value, (list, tuple)):
-        items = [copy_rerun_value(trace, item) for item in value]
+        items = [copy_rerun_value(trace, item, moved=moved) for item in value]
         return items if isinstance(value, list) else tuple(items)
     if isinstance(value, (set, frozenset)):
-        return type(value)(copy_rerun_value(trace, item) for item in value)
+        return type(value)(copy_rerun_value(trace, item, moved=moved) for item in value)
     if isinstance(value, dict):
         return {
-            copy_rerun_value(trace, key): copy_rerun_value(trace, item)
+            copy_rerun_value(trace, key, moved=moved): copy_rerun_value(trace, item, moved=moved)
             for key, item in value.items()
         }
     from ..intervention._types import REPLAY_TEMPLATE_TYPES
@@ -493,7 +544,10 @@ def copy_rerun_value(trace: Trace, value: Any) -> Any:
     if type(value) in REPLAY_TEMPLATE_TYPES:
         # Field by field, so a parameter literal keeps its identity (a deep copy cloned it).
         names = [field.name for field in dataclasses.fields(value)]
-        return type(value)(**{n: copy_rerun_value(trace, getattr(value, n)) for n in names})
+        fields = {n: copy_rerun_value(trace, getattr(value, n), moved=moved) for n in names}
+        return type(value)(**fields)
+    if isinstance(value, torch.autograd.graph.Node):
+        return value  # a live autograd node cannot be deep-copied; the fallback kept it too
     return fail_open(lambda: copy.deepcopy(value), lambda _error: value)
 
 
