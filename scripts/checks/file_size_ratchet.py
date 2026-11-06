@@ -387,7 +387,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 3250 -> 2600 (2026-11-01 preview-protocol union): the intermediate-tap
     # observers moved to _tap_observers.py and the derived-gradient oracle
     # helpers to _grad_oracle.py (measured 2573); next 50-line step above it.
-    "torchlens/backends/mlx/backend.py": 2600,
+    # 2600 -> 2500 (2026-11-06 B63 merge): preview param-byte and Paddle op-size
+    # fixes shrank it (measured 2496).
+    "torchlens/backends/mlx/backend.py": 2500,
     # A07 (2026-08-26): +9 lines -- the step-1 contract gains the
     # flops_forward/flops_backward boundary-reset writes and their pinned-pair
     # carrier rows (alias rows own no compute); conscious raise, not growth debt.
@@ -471,7 +473,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # folder, input photo and picture-box layout moved to _input_photo.py and
     # _node_boxes.py; measured 2035.
     "torchlens/_visualization/_render_nodes.py": 2050,
-    "torchlens/_visualization/_render_flow.py": 2100,
 }
 
 
