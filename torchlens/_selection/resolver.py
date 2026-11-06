@@ -269,7 +269,7 @@ def _resolve_sites(
     strict:
         Whether to reject non-portable query forms.
     max_fanout:
-        Maximum number of sites allowed. ``None`` is rejected in this MVP.
+        Maximum number of sites allowed. ``None`` is rejected.
 
     Returns
     -------

@@ -66,7 +66,7 @@ class BindingPreflightError(ConfigurationError, ValueError):
 
 
 class SiteResolutionError(ConfigurationError, ValueError):
-    """Raised when future selector resolution cannot identify requested sites.
+    """Raised when selector resolution cannot identify requested sites.
 
     Examples
     --------
