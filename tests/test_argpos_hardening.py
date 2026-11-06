@@ -273,25 +273,27 @@ def test_one_tensor_in_two_slots_traces_and_validates_from_cold_cache(func_name:
     in a process took the deduping crawl and recorded parents ``(relu, input)``
     while the validation re-trace recorded ``(relu, input, input)``: validation
     raised TraceNotReproducibleWarning. The static-spec ops are pinned alongside.
+
+    The cache is left as the validation's own cold-cache trace left it, the entry any
+    process learns on its first call. Popping it afterwards left this test's counted
+    calls with no spec, which ``test_arg_positions.py::test_lookup_table_coverage``
+    reports as uncovered when it runs later in the same process.
     """
 
     cache_key = _normalize_func_name(func_name)
     model = _OneTensorTwice(_ONE_TENSOR_TWICE[func_name])
     torch.manual_seed(0)
     x = torch.randn(4, 4)
-    try:
-        _pop_dynamic(cache_key)
-        cold = tl.trace(model, x)
-        warm = tl.trace(model, x)
-        assert [(op.type, tuple(op.parents)) for op in cold.ops] == [
-            (op.type, tuple(op.parents)) for op in warm.ops
-        ]
-        _pop_dynamic(cache_key)
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            assert tl.validate(model, x, scope="forward", validate_metadata=True)
-    finally:
-        _pop_dynamic(cache_key)
+    _pop_dynamic(cache_key)
+    cold = tl.trace(model, x)
+    warm = tl.trace(model, x)
+    assert [(op.type, tuple(op.parents)) for op in cold.ops] == [
+        (op.type, tuple(op.parents)) for op in warm.ops
+    ]
+    _pop_dynamic(cache_key)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert tl.validate(model, x, scope="forward", validate_metadata=True)
 
 
 # ---------------------------------------------------------------------------

@@ -447,6 +447,12 @@ class _TransparentGeneratorContext(Generic[_Yield]):
             if exc is not value:
                 raise
             return False
+        finally:
+            # The throw put this frame on the in-flight exception's traceback: keeping
+            # the exception and its traceback as locals here would make a reference
+            # cycle, so the exception (and whatever it carries) would wait for the
+            # cyclic collector instead of being freed when the caller drops it.
+            del value, tb
         raise RuntimeError("generator didn't stop after throw()")
 
 

@@ -37,7 +37,6 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from types import FrameType
 from typing import Any
 
@@ -53,6 +52,7 @@ from ..._utils._torch_compat import (
     get_higher_order_operator,
     get_tracing_tensor_types,
 )
+from ...errors._base import transparent_contextmanager
 from ._completeness_hop import hide_witness_hop_rules_from_dynamo
 from ._modes import _TorchLensDispatchMode
 
@@ -103,7 +103,7 @@ def _fake_tensor_mode_active(stack: list[Any]) -> bool:
     return any(isinstance(mode, fake_mode_cls) for mode in stack)
 
 
-@contextmanager
+@transparent_contextmanager
 def hop_internal_compile_scope(cond_branches: bool = False) -> Iterator[None]:
     """Mark one higher-order-operator entry compile that TorchLens let run.
 
@@ -164,7 +164,7 @@ def inside_lifted_cond_compile() -> bool:
     return cond_entry_innermost and inside_hop_internal_compile()
 
 
-@contextmanager
+@transparent_contextmanager
 def lift_hop_entry_compiles() -> Iterator[bool]:
     """Let torch's operator entry compiles run inside the capture's forced-eager scope.
 
