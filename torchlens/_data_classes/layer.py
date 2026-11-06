@@ -100,7 +100,6 @@ from ._record_groups_graph import LayerGraph
 from ._record_groups_module_context import LayerModuleContext
 from ._record_groups_payload import LayerPayload
 from ._record_groups_source import LayerSource
-from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items
 from ._value_repr import layer_card, layer_repr_line
 from .field_policy import (
@@ -1526,35 +1525,6 @@ class Layer(_SelectionOperand):
         """Render a bounded Layer display from captured metadata and cached values."""
 
         return layer_card(self)
-
-    def _describe_bound(self) -> str:
-        """Build the full summary; relation reads require a live Trace."""
-
-        s = f"Layer {self.layer_label}:"
-        if self.num_passes > 1:
-            # One pass/op vocabulary: an aggregate multi-pass layer is
-            # "xN passes", never "N ops".
-            s += f" (x{self.num_passes} passes)"
-        s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.cost.activation_memory}"
-        if not self.is_input:
-            s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.autograd.grad_fn_class_name})"
-            if self.call.config:
-                config_str = format_config_items(self.call.config)
-                s += f"\n\tConfig: {config_str}"
-        if self.module is not None:
-            s += f"\n\tComputed inside module: {self.module}"
-        if len(self.param_shapes) > 0:
-            params_shapes_str = format_shape_list(self.param_shapes)
-            s += (
-                f"\n\tParams: {params_shapes_str}; "
-                f"{self.num_params} total ({self.cost.total_param_memory})"
-            )
-        s += "\n\tRelated Layers:"
-        s += f"\n\t\t- parents: {', '.join(self.parents) or 'none'}"
-        s += f"\n\t\t- children: {', '.join(self.children) or 'none'}"
-        if self.num_passes > 1:
-            s += f"\n\tPasses: {', '.join(self.call_labels)}"
-        return s
 
     def __repr__(self) -> str:
         """Render a bounded Layer display from captured metadata and cached values."""
