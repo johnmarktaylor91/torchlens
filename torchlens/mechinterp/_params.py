@@ -147,7 +147,7 @@ def _facet(view: Any, name: str) -> Any:
             code="mi_head_geometry_unavailable",
             message=f"The attention module exposes no {name!r} facet.",
             remedy="capture with the builtin attention recipes active (import torchlens."
-            "semantic) or register a recipe producing the attention facet names",
+            "_semantic) or register a recipe producing the attention facet names",
             facet=name,
         )
 
