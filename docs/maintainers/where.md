@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1740 modules, 703851 lines, 0 modules without a docstring.
+85 packages, 1740 modules, 703864 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26857 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 122 | 42792 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 122 | 42815 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6499 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8510 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4489 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59391 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59381 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9194 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (122 modules, 42792 lines)
+Core data structures for representing a logged forward pass. (122 modules, 42815 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -358,7 +358,7 @@ Core data structures for representing a logged forward pass. (122 modules, 42792
 | `_op_columns` | Private row-indexed column view over the ''Op'' row store. | 298 |
 | `_op_container_census` | Alias census for container-cell pooling (the single scan over swept cells). | 158 |
 | `_op_cost` | Cost derivations for ''Op'': compute record, MACs, FLOPs, arithmetic intensity. | 124 |
-| `_op_dedup` | Saved-activation dedup helpers for retained payload copies. | 301 |
+| `_op_dedup` | Saved-activation dedup helpers for retained payload copies. | 324 |
 | `_op_grad_stream` | Grad-blob streaming for ''Op._log_tensor_grad''. | 41 |
 | `_op_out_read` | Helpers behind the ''Op.out'' read path: absent-value refusals, the mutation-check state and the synthesized-read warning. | 103 |
 | `_op_relations` | Relation views for ''Op'': parents, children, siblings, containers, modules. | 267 |
@@ -1468,7 +1468,7 @@ tinygrad backend preview. (10 modules, 4489 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (138 modules, 59391 lines)
+Torch backend implementation package for TorchLens capture. (138 modules, 59381 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1502,7 +1502,7 @@ Torch backend implementation package for TorchLens capture. (138 modules, 59391 
 | `_fire_timing` | Per-fire backward timing helpers. | 143 |
 | `_foreign_data` | Foreign data round trips in plain forward code: departures, re-entries, replay. | 798 |
 | `_foreign_wrappers` | Foreign wrappers over torchlens wrappers: detection, rebasing, reporting. | 173 |
-| `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 800 |
+| `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 790 |
 | `_function_epilogue` | Credit the alias autograd takes of a custom ''Function'''s output after its forward. | 167 |
 | `_function_input_views` | Record the view torch makes when an ''autograd.Function'' forward returns an input. | 130 |
 | `_fused_norm_writes` | Which fused normalization calls write the running statistics they are handed. | 102 |
