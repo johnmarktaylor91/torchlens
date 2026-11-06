@@ -1566,9 +1566,9 @@
       "torchlens/_data_classes/_trace_missing_attrs.py": [
         "tests/test_exports.py",
         "tests/test_indexing_coherence.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_io_bundle.py",
         "tests/test_io_policy_lookup_counters.py",
-        "tests/test_merged_derive_steps.py",
         "tests/test_merged_engine_hardening.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_treescope_cards_bridge.py"
@@ -4881,12 +4881,12 @@
       ],
       "torchlens/_selection/__init__.py": [
         "tests/test_combined_visualization.py",
+        "tests/test_draw_browser_widths.py",
         "tests/test_fastlog/test_preview_fidelity.py",
         "tests/test_grad_site_selector.py",
         "tests/test_intervention_render_marks.py",
         "tests/test_perf6_label_index.py",
         "tests/test_r18j_recurrent_render.py",
-        "tests/test_repgeom.py",
         "tests/test_repr_fix_contracts.py"
       ],
       "torchlens/_selection/_display.py": [
@@ -5832,8 +5832,8 @@
       "torchlens/_utils/_display_constructor.py": [
         "tests/test_backward_validation_failure_record.py",
         "tests/test_backward_validation_module_keys.py",
-        "tests/test_foreign_kernel_dependence.py",
         "tests/test_forward_created_parameters.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_validation.py",
         "tests/test_validation_degenerate_forward.py",
         "tests/test_validation_diagnostics.py",
@@ -6853,7 +6853,7 @@
       ],
       "torchlens/_visualization/_edit_change.py": [
         "tests/test_auto_collapse_atomic_spans.py",
-        "tests/test_default_buffer_fill.py",
+        "tests/test_draw_browser_widths.py",
         "tests/test_draw_header_focus_key.py",
         "tests/test_endpoint_rings.py",
         "tests/test_interventions_view_changes.py",
@@ -6873,12 +6873,12 @@
       ],
       "torchlens/_visualization/_edit_marks.py": [
         "tests/test_auto_collapse_hardening.py",
+        "tests/test_draw_browser_widths.py",
         "tests/test_draw_header_focus_key.py",
         "tests/test_endpoint_rings.py",
         "tests/test_intervention_render_marks.py",
         "tests/test_r18j_recurrent_render.py",
         "tests/test_rank_layout_omissions.py",
-        "tests/test_render_bugs.py",
         "tests/test_vizfix_skin_ink_and_legend.py"
       ],
       "torchlens/_visualization/_encoding.py": [
@@ -6961,7 +6961,7 @@
         "tests/test_collapse_optimizer.py",
         "tests/test_collapse_segment_prefix.py",
         "tests/test_default_buffer_fill.py",
-        "tests/test_draw_backward_key_and_rows.py",
+        "tests/test_draw_browser_widths.py",
         "tests/test_draw_header_focus_key.py",
         "tests/test_endpoint_rings.py",
         "tests/test_vizfix_skin_ink_and_legend.py"
@@ -6977,13 +6977,13 @@
         "tests/visualization/test_sibling_order_clusters.py"
       ],
       "torchlens/_visualization/_fonts.py": [
-        "tests/test_draw_header_focus_key.py",
+        "tests/test_draw_browser_widths.py",
         "tests/test_label_geometry.py",
         "tests/test_render_bugs.py",
         "tests/test_rolled_pass_label_placement.py",
         "tests/test_themes_stage0.py",
-        "tests/test_vizfix_skin_ink_and_legend.py",
         "tests/test_vizmech_audit.py",
+        "tests/test_vizmech_fanin_labels.py",
         "tests/test_vizr_render_leans.py"
       ],
       "torchlens/_visualization/_forward_op_module.py": [
@@ -7038,13 +7038,23 @@
       ],
       "torchlens/_visualization/_intervention_sites.py": [
         "tests/test_combined_visualization.py",
+        "tests/test_draw_browser_widths.py",
+        "tests/test_fastlog/test_preview_fidelity.py",
+        "tests/test_intervention_render_marks.py",
+        "tests/test_r18j_recurrent_render.py",
+        "tests/test_repgeom.py",
+        "tests/test_surgery_visuals_marks.py",
+        "tests/test_surgery_visuals_realism.py"
+      ],
+      "torchlens/_visualization/_label_fit.py": [
+        "tests/test_combined_visualization.py",
+        "tests/test_draw_browser_widths.py",
         "tests/test_fastlog/test_preview_fidelity.py",
         "tests/test_intervention_render_marks.py",
         "tests/test_r18j_recurrent_render.py",
         "tests/test_repgeom.py",
         "tests/test_repgeom_node_keys.py",
-        "tests/test_surgery_visuals_marks.py",
-        "tests/test_surgery_visuals_realism.py"
+        "tests/test_themes_nonfinite.py"
       ],
       "torchlens/_visualization/_label_format.py": [
         "tests/test_auto_collapse_atomic_spans.py",
@@ -7384,8 +7394,28 @@
         "tests/test_viz_render_identity_oracle.py",
         "tests/visualization/test_sibling_order_clusters.py"
       ],
+      "torchlens/_visualization/_svg_header_fit.py": [
+        "tests/test_defaults.py",
+        "tests/test_render_bugs.py",
+        "tests/test_robustness_pr4.py",
+        "tests/test_scaling_ladder.py",
+        "tests/test_surgery_visuals_marks.py",
+        "tests/test_themes_families_budget.py",
+        "tests/test_vizr_render_leans.py",
+        "tests/visualization/test_sibling_order_clusters.py"
+      ],
       "torchlens/_visualization/_svg_text_runs.py": [
         "tests/test_intervention_render_marks.py"
+      ],
+      "torchlens/_visualization/_text_metrics.py": [
+        "tests/test_auto_collapse_atomic_spans.py",
+        "tests/test_default_buffer_fill.py",
+        "tests/test_draw_backward_key_and_rows.py",
+        "tests/test_draw_browser_widths.py",
+        "tests/test_draw_header_focus_key.py",
+        "tests/test_endpoint_rings.py",
+        "tests/test_transformer_lens_focus.py",
+        "tests/test_vizfix_skin_ink_and_legend.py"
       ],
       "torchlens/_visualization/_trace_collapse.py": [
         "tests/oracles/test_legacy_collapse_priority.py",
@@ -7672,12 +7702,12 @@
       ],
       "torchlens/_visualization/node_spec.py": [
         "tests/test_combined_visualization.py",
+        "tests/test_draw_browser_widths.py",
         "tests/test_encoding_channels.py",
         "tests/test_fastlog/test_preview_fidelity.py",
         "tests/test_intervention_render_marks.py",
         "tests/test_r18j_recurrent_render.py",
         "tests/test_repgeom.py",
-        "tests/test_repgeom_node_keys.py",
         "tests/test_surgery_visuals_marks.py"
       ],
       "torchlens/_visualization/node_universe.py": [
@@ -12010,7 +12040,7 @@
         "tests/test_intervention_phase10.py",
         "tests/test_intervention_phase3.py",
         "tests/test_intervention_phase4c.py",
-        "tests/test_intervention_phase7.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_intervention_spec_pickle.py"
       ],
       "torchlens/intervention/_affine_source.py": [
@@ -12069,7 +12099,7 @@
         "tests/test_intervention_phase10.py",
         "tests/test_intervention_phase3.py",
         "tests/test_intervention_phase4c.py",
-        "tests/test_intervention_phase7.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_intervention_spec_pickle.py"
       ],
       "torchlens/intervention/_compose.py": [
@@ -12319,7 +12349,7 @@
         "tests/test_intervention_phase10.py",
         "tests/test_intervention_phase3.py",
         "tests/test_intervention_phase4c.py",
-        "tests/test_intervention_phase7.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_intervention_spec_pickle.py"
       ],
       "torchlens/intervention/_op_edits.py": [
@@ -12341,8 +12371,8 @@
       "torchlens/intervention/_patch_mapping.py": [
         "tests/test_facet_union_do.py",
         "tests/test_grad_site_doors.py",
-        "tests/test_grad_site_records.py",
         "tests/test_intervention_phase3.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_ledger_exp_grid.py",
         "tests/test_stoch_edits_compose.py",
         "tests/test_subspace_projection_edits.py",
@@ -12521,7 +12551,7 @@
         "tests/test_intervention_phase10.py",
         "tests/test_intervention_phase3.py",
         "tests/test_intervention_phase4c.py",
-        "tests/test_intervention_phase7.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_intervention_spec_pickle.py"
       ],
       "torchlens/intervention/_runtime.py": [
@@ -12663,11 +12693,11 @@
         "tests/test_facet_union_do.py",
         "tests/test_grad_site_doors.py",
         "tests/test_intervention_phase3.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_ledger_exp_grid.py",
         "tests/test_stoch_edits_compose.py",
         "tests/test_subspace_projection_edits.py",
-        "tests/test_subspace_spec_portable.py",
-        "tests/test_surgery_live_bind.py"
+        "tests/test_subspace_spec_portable.py"
       ],
       "torchlens/intervention/_super/__init__.py": [
         "tests/test_backward_intervention.py",
@@ -12676,7 +12706,7 @@
         "tests/test_intervention_phase10.py",
         "tests/test_intervention_phase3.py",
         "tests/test_intervention_phase4c.py",
-        "tests/test_intervention_phase7.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_intervention_spec_pickle.py"
       ],
       "torchlens/intervention/_super/_accessor_base.py": [
@@ -12723,7 +12753,7 @@
         "tests/test_intervention_phase10.py",
         "tests/test_intervention_phase3.py",
         "tests/test_intervention_phase4c.py",
-        "tests/test_intervention_phase7.py",
+        "tests/test_intervention_render_marks.py",
         "tests/test_intervention_spec_pickle.py"
       ],
       "torchlens/intervention/_topology/topology.py": [
