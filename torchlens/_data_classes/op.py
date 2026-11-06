@@ -2419,7 +2419,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             raise RecordBindingError(
                 "Trace has been garbage-collected; an Op does not keep its Trace alive",
                 code="trace_reference_collected",
-                remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
+                remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
             )
         return cast("Trace", obj)
 
