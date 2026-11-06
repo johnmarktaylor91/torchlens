@@ -175,6 +175,8 @@ class Loop(nn.Module):
 loop = Loop()
 x = torch.randn(1, 4)
 trace = tl.trace(loop, x)
+trace.graph.conditionals[0].outcome             # 'then'
+trace["relu_1_5:2"].out                         # tensor([[0.3012, 0.0626, 0.0921, 0.0196]])
 trace.draw(rolled=True, direction="leftright")  # rolled (first picture)
 trace.draw(direction="leftright")               # unrolled (second picture)
 ```
