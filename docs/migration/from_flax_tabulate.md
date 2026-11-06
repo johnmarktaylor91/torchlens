@@ -119,7 +119,7 @@ counted once.
 
 The table above is for ordinary floating-point models. For a quantized model TorchLens
 reports what the capture recorded, and quantized activation metadata is best-effort today
-(see the quantized-module rows in [limitations](../reference/limitations.md)). There is no
+(the `quantized_tensor` row of the capability table in the repository's top-level `LIMITATIONS.md`). There is no
 bits-per-weight line in the footer: that line needs quantized capture TorchLens does not yet provide.
 
 ## Using both
