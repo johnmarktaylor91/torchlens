@@ -303,3 +303,113 @@ def test_highlighter_pdf_and_png_from_processed_svg(tmp_path: Path) -> None:
         # The translucent purple over white is a pale violet no other mark uses.
         assert any(r > g + 20 and b > g + 20 and r > 180 and b > 180 for r, g, b in pixels)
     assert not list(tmp_path.glob("*.highlight.svg"))
+
+
+class _BlockThenHead(nn.Module):
+    """A block (``block``: linear, relu, linear) then a linear head, for folded boxes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.block = nn.Sequential(nn.Linear(3, 3), nn.ReLU(), nn.Linear(3, 3))
+        self.head = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block, then the head."""
+
+        return self.head(self.block(x))
+
+
+def _box_lines(dot: str, address: str) -> list[str]:
+    """Return the DOT node lines of the folded box for ``address``."""
+
+    return [line for line in dot.splitlines() if f"@{address}" in line and "box3d" in line]
+
+
+@pytest.mark.parametrize("rolled", [False, True])
+def test_folded_box_holding_an_edit_carries_the_edit_mark(tmp_path: Path, rolled: bool) -> None:
+    """A collapsed module box containing an edited op gets the ring, the edit row and the class."""
+
+    torch.manual_seed(0)
+    trace = tl.trace(
+        _BlockThenHead(),
+        torch.randn(2, 3),
+        intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
+    )
+    try:
+        dot = trace.draw(file_format="dot", depth=1, rolled=rolled, path=str(tmp_path / "box")).dot
+        seen: list[str] = []
+        user = trace.draw(
+            file_format="dot",
+            depth=1,
+            rolled=rolled,
+            path=str(tmp_path / "user"),
+            collapsed_node_spec_fn=lambda module, spec: seen.append(spec.color) or None,
+        ).dot
+    finally:
+        trace.cleanup()
+    (block,) = _box_lines(dot, "block")
+    assert "tl_edited" in block and "zero_ablate" in block
+    assert "penwidth=2.5" in block and PURPLE.lower() in block.lower()
+    assert all("tl_edited" not in line for line in _box_lines(dot, "head"))
+    assert "Δ" in block
+    assert PURPLE in seen  # the user callback runs after the mark and sees it
+    assert _box_lines(user, "block") == [block]
+
+
+def test_folded_box_without_an_edit_is_unchanged(tmp_path: Path) -> None:
+    """An unedited trace draws its boxes with no edit mark."""
+
+    torch.manual_seed(0)
+    trace = tl.trace(_BlockThenHead(), torch.randn(2, 3))
+    try:
+        dot = trace.draw(file_format="dot", depth=1, path=str(tmp_path / "plain")).dot
+    finally:
+        trace.cleanup()
+    assert _box_lines(dot, "block") and "tl_edited" not in dot
+
+
+def test_header_edit_line_is_one_svg_text_with_its_pieces_in_order(tmp_path: Path) -> None:
+    """The header's edit line is one ``<text>``: browsers lay its pieces out one after another.
+
+    Graphviz places each font run at its own x; a browser's wider bold run then
+    covered the space before ``on`` (``zero_ablateon``).
+    """
+
+    trace = _traced()
+    try:
+        path = trace.draw(file_format="svg", path=str(tmp_path / "header")).path
+    finally:
+        trace.cleanup()
+    svg = Path(path).read_text(encoding="utf-8")
+    line = re.search(r"<text [^>]*>(<tspan[^>]*>1 edit:.*?)</text>", svg)
+    assert line is not None, "the edit line is not one text element"
+    pieces = re.findall(r"<tspan[^>]*>([^<]*)</tspan>", line.group(1))
+    assert "".join(pieces) == "1 edit: Δ zero_ablate on relu_1_1"
+    assert "x=" not in "".join(re.findall(r"<tspan[^>]*>", line.group(1)))
+
+
+def test_flow_text_runs_joins_only_same_baseline_runs_of_header_and_edited_nodes() -> None:
+    """Runs on one baseline join; a lone run, another baseline and plain nodes keep their bytes."""
+
+    from torchlens._visualization._svg_text_runs import flow_text_runs
+
+    run = '<text text-anchor="start" x="{x}" y="{y}" font-size="14.00">{t}</text>\n'
+    svg = (
+        '<g id="graph0" class="graph">\n<title>G</title>\n'
+        + run.format(x=8, y=-30, t="Model")
+        + run.format(x=8, y=-10, t="2 edits: ")
+        + run.format(x=56, y=-10, t="Δ zero_ablate")
+        + '<!-- a -->\n<g id="node1" class="node">\n<title>a</title>\n'
+        + run.format(x=1, y=5, t="Δ")
+        + run.format(x=9, y=5, t=" scale")
+        + '</g>\n<!-- b -->\n<g id="node2" class="node tl_edited">\n<title>b</title>\n'
+        + '<g id="a_node2"><a xlink:title="t">\n'
+        + run.format(x=1, y=7, t="Δ")
+        + run.format(x=9, y=7, t=" scale")
+        + "</a>\n</g>\n</g>\n"
+    )
+    flowed = flow_text_runs(svg)
+    assert run.format(x=8, y=-30, t="Model") in flowed
+    assert flowed.count("<tspan") == 4  # header edit line + the edited node's row
+    assert run.format(x=1, y=5, t="Δ") in flowed  # an unedited node is untouched
+    assert flow_text_runs(flowed) == flowed

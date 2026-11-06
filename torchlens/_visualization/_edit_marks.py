@@ -34,14 +34,21 @@ from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import EDITED_NODE_CLASS, INTERVENTION_SITE_COLOR
 from ..intervention._edit_repr import _is_signature_default, render_edit_repr
 from ..intervention._helpers import builtin_helper_constructor
+from ._render_names import _SPEC_SLOT_BOX_OPS
 from ._render_utils import html_escape
 from ._typography import EDIT_GAP_SIZE, format_pt
-from .node_spec import _forward_site
+from .node_spec import (
+    _forward_site,
+    _with_svg_class,
+    intervention_graph_override,
+    intervention_sites_for_log,
+)
 from .themes import _relative_luminance
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
+    from .._vocab.node_spec import CollapsedNodeSpecFn, NodeSpec
     from ..intervention._types import Edit, FireRecord
     from .themes import VisualizationTheme
 
@@ -60,6 +67,7 @@ __all__ = [
     "edit_rows",
     "edit_tooltip",
     "header_edit_line",
+    "make_intervention_collapsed_spec_fn",
     "short_edit_text",
 ]
 
@@ -527,3 +535,91 @@ def edit_marks_for_node(
     for site_key in site_keys_by_layer.get(layer, ()):
         collected.extend(marks.get(site_key, ()))
     return tuple(collected)
+
+
+def make_intervention_collapsed_spec_fn(
+    trace: Trace, request: Any, theme: VisualizationTheme | None = None
+) -> CollapsedNodeSpecFn | None:
+    """Build a collapsed-box callback that marks a box holding an edited op.
+
+    A folded module box that contains an intervention site gets the same mark
+    as the edited op node would: the edit purple ring, the edit rows
+    (``Δ zero_ablate``, one per distinct edit) as its last label rows, the
+    edits' full spellings in its tooltip and the ``tl_edited`` SVG class. The
+    box's member ops come from the box-ops slot the renderer sets around the
+    call. ``request`` supplies ``graph_overrides`` (the intervention style keys)
+    and the user's ``collapsed_node_spec_fn``, which runs after the mark.
+
+    Returns
+    -------
+    CollapsedNodeSpecFn | None
+        Combined callback, or the user's callback when nothing is edited.
+    """
+
+    user_collapsed_spec_fn = request.collapsed_node_spec_fn
+    site_ops = intervention_sites_for_log(trace)
+    marks = edit_marks_by_site(trace, site_ops) if site_ops else {}
+    if not marks:
+        return user_collapsed_spec_fn
+    style = _site_style(request.graph_overrides, theme)
+    aliases = _site_aliases(site_ops)
+
+    def intervention_collapsed_spec_fn(module: Any, default_spec: NodeSpec) -> NodeSpec:
+        """Mark a box holding an edited op, then run any user callback."""
+
+        found = {aliases[label] for label in _SPEC_SLOT_BOX_OPS.get() or () if label in aliases}
+        box_marks = [mark for key, site in marks.items() if key in found for mark in site]
+        spec = _marked_spec(default_spec, box_marks, style) if box_marks else default_spec
+        if user_collapsed_spec_fn is None:
+            return spec
+        user_result = user_collapsed_spec_fn(module, spec)
+        return spec if user_result is None else user_result
+
+    return intervention_collapsed_spec_fn
+
+
+def _site_style(
+    graph_overrides: dict[str, Any] | None, theme: VisualizationTheme | None
+) -> tuple[str, float, float]:
+    """Return the edit mark's ``(colour, ring width, label size)`` for a draw."""
+
+    color = intervention_graph_override(graph_overrides, "intervention_site_color", edit_ink(theme))
+    width = intervention_graph_override(
+        graph_overrides, "intervention_site_penwidth", EDIT_RING_PENWIDTH
+    )
+    size = theme.typography.base_size if theme is not None else _OP_LABEL_SIZE
+    return str(color), float(width), float(size)
+
+
+def _marked_spec(
+    spec: NodeSpec, marks: Sequence[EditMark], style: tuple[str, float, float]
+) -> NodeSpec:
+    """Return ``spec`` with the edit ring, edit rows, tooltip and ``tl_edited`` class."""
+
+    color, width, size = style
+    tooltip = edit_tooltip(marks)
+    return spec.replace(
+        color=color,
+        penwidth=width,
+        lines=[*spec.lines, *edit_rows(marks, color, size)],
+        tooltip=f"{spec.tooltip}; {tooltip}" if spec.tooltip else tooltip,
+        extra_attrs=_with_svg_class(spec.extra_attrs, EDITED_NODE_CLASS),
+    )
+
+
+def _site_aliases(site_ops: list[Op]) -> dict[str, str]:
+    """Map each spelling a box member list may use for a site to its pass-qualified key.
+
+    A site is keyed ``relu_3:1`` (its pass label); a single-pass site may also
+    be listed by its bare layer label.
+    """
+
+    aliases: dict[str, str] = {}
+    for site in site_ops:
+        layer_label = str(getattr(site, "layer_label", "") or "")
+        pass_label = get_multipass_attr(site, "label", None, multipass=None)
+        key = pass_label if isinstance(pass_label, str) else layer_label
+        aliases[key] = key
+        if layer_label and getattr(site, "num_passes", 1) == 1:
+            aliases.setdefault(layer_label, key)
+    return aliases
