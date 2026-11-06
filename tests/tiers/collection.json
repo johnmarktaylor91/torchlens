@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source_commit": "fa2c6b816",
+  "source_commit": "d9f74e6d9",
   "environment": "pinned smoke row: python 3.10, torch 2.13.0+cpu",
   "durations_source": "tests/tiers/durations.csv",
   "estimate_workers": 4,
@@ -14,8 +14,8 @@
         "method": "per_file_mean",
         "tests_with_duration": 392,
         "tests_without_duration": 3,
-        "serial_seconds": 328.1,
-        "n4_seconds": 82.0
+        "serial_seconds": 328.2,
+        "n4_seconds": 82.1
       }
     },
     "mid": {
@@ -27,8 +27,8 @@
         "method": "per_file_mean",
         "tests_with_duration": 19488,
         "tests_without_duration": 220,
-        "serial_seconds": 6385.2,
-        "n4_seconds": 1596.3
+        "serial_seconds": 8283.5,
+        "n4_seconds": 2070.9
       }
     },
     "not_slow": {
@@ -40,8 +40,8 @@
         "method": "per_file_mean",
         "tests_with_duration": 20734,
         "tests_without_duration": 241,
-        "serial_seconds": 8302.2,
-        "n4_seconds": 2075.5
+        "serial_seconds": 10437.6,
+        "n4_seconds": 2609.4
       }
     },
     "all": {
@@ -53,8 +53,8 @@
         "method": "per_file_mean",
         "tests_with_duration": 23319,
         "tests_without_duration": 312,
-        "serial_seconds": 27281.5,
-        "n4_seconds": 6820.4
+        "serial_seconds": 29935.3,
+        "n4_seconds": 7483.8
       }
     },
     "unmarked": {
@@ -66,8 +66,8 @@
         "method": "per_file_mean",
         "tests_with_duration": 19096,
         "tests_without_duration": 217,
-        "serial_seconds": 6057.0,
-        "n4_seconds": 1514.3
+        "serial_seconds": 7955.3,
+        "n4_seconds": 1988.8
       }
     }
   }
