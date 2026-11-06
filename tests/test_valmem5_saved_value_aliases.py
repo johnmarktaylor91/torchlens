@@ -47,6 +47,9 @@ from torchlens import _state, _user_public_impls, _validation_argument_reference
 from torchlens.backends.torch import _ops_saved_arg_copies as saved_arg_copies
 from torchlens.validation._diagnostics import get_validation_diagnostics
 
+# These tests assert that payloads defer, which no capture does once Dynamo is loaded.
+pytestmark = pytest.mark.usefixtures("dynamo_free_process")
+
 
 def _validate(
     model: nn.Module, x: torch.Tensor, observe: Callable[[Any], None], *, copy_only: bool = False

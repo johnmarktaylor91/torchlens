@@ -165,6 +165,7 @@ def _no_grad_capture() -> tl.Trace:
     return trace
 
 
+@pytest.mark.usefixtures("dynamo_free_process")  # these captures must defer
 def test_compile_survives_a_trace_collected_mid_compile() -> None:
     """A trace whose pending aliases die between tracing and guard building breaks no compile."""
 
@@ -186,6 +187,7 @@ def test_compile_survives_a_trace_collected_mid_compile() -> None:
     torch.compiler.reset()
 
 
+@pytest.mark.usefixtures("dynamo_free_process")  # these captures must defer
 @pytest.mark.parametrize("backend", ["eager", "aot_eager"])
 def test_compiled_inplace_write_copies_out_pending_payloads(backend: str) -> None:
     """A compiled in-place torch function on a saved payload's storage keeps the trace intact."""

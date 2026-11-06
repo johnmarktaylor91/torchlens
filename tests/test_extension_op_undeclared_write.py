@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 from collections.abc import Iterator
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -22,6 +23,9 @@ import torchlens.backends.torch._torch_ops_calls as _ops_calls
 import torchlens.backends.torch.wrappers as _wrappers
 from torchlens._utils import tensor_utils as _tu
 from torchlens.validation import last_validation_failure, validate_forward_pass
+
+# These tests assert that payloads defer, which no capture does once Dynamo is loaded.
+pytestmark = pytest.mark.usefixtures("dynamo_free_process")
 
 _LIB = torch.library.Library("torchlens_test_rtl4", "DEF")  # noqa: TOR901
 _LIB.define("fill_out(Tensor src, Tensor? out) -> Tensor")

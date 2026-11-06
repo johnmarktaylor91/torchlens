@@ -38,6 +38,7 @@ from typing import Any
 import torch
 
 from ... import _state
+from ..._data_classes._op_dedup import forget_identity_payloads
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import TorchLensWarning
 from ..._utils import _torch_compat
@@ -668,6 +669,8 @@ def close_boundary_call(
         if isinstance(label, str)
     }
     _restore_arg_labels(marks.arg_labels, interior_labels)
+    # A foreign kernel writes its output without bumping the version counter.
+    forget_identity_payloads(trace, interior_labels)
     _log_boundary_op(trace, call)
     trace.__dict__.setdefault("_foreign_kernel_interior_labels", set()).update(interior_labels)
     if marks.witness_state is not None:
