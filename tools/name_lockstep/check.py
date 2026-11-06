@@ -163,7 +163,8 @@ class Corpus:
         root
             Repository root.
         glossaries
-            Glossary files (absolute, or relative to ``root``).
+            Glossary files (absolute, or relative to ``root``). Missing files are skipped (a
+            tree may hold only the public glossary); at least one must exist.
         snippets
             Also read the snippet places into a ``snippets`` entry.
 
@@ -174,8 +175,11 @@ class Corpus:
         """
 
         files: dict[str, list[tuple[str, str]]] = {"glossary": []}
-        for glossary in glossaries:
-            path = glossary if glossary.is_absolute() else root / glossary
+        paths = [g if g.is_absolute() else root / g for g in glossaries]
+        present = [path for path in paths if path.is_file()]
+        if paths and not present:
+            raise FileNotFoundError(f"no glossary file exists: {[str(p) for p in paths]}")
+        for path in present:
             files["glossary"].append((_label(path, root), path.read_text(encoding="utf-8")))
         for label, directory, suffixes in PLACES:
             base = root / directory
