@@ -1,4 +1,4 @@
-# <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/logo.png" alt="" width=8% align="absmiddle"> TorchLens
+# <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/logo.png" alt="" width=8% align="absmiddle"> TorchLens
 
 [![PyPI version](https://img.shields.io/pypi/v/torchlens.svg)](https://pypi.org/project/torchlens/)
 [![Python versions](https://img.shields.io/pypi/pyversions/torchlens.svg)](https://pypi.org/project/torchlens/)
@@ -10,7 +10,7 @@
 
 <p align="center"><a href="#install">Install</a> · <a href="#learning-torchlens">Tutorials</a> · <a href="#visualization-examples">Visualizations</a> · <a href="https://modelmenagerie.ai">Model&nbsp;Menagerie</a> · <a href="#citing-torchlens">Cite</a></p>
 
-<p align="center"><img alt="TorchLens drawing of a Hugging Face ViT given a cat photo: the photo in the input box, the ViT folded into one box, and an output box listing tabby cat 42%, Egyptian cat 39%, tiger cat 17%" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/readme_splash.png" width="100%"></p>
+<p align="center"><img alt="TorchLens drawing of a Hugging Face ViT given a cat photo: the photo in the input box, the ViT folded into one box, and an output box listing tabby cat 42%, Egyptian cat 39%, tiger cat 17%" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/readme_splash.png" width="100%"></p>
 
 ```python
 vit = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224").eval()
@@ -57,7 +57,7 @@ trace.draw(module="transformer.h.5.mlp.act")  # draw the graph of the MLP's GELU
 ```
 
 <picture>
-  <img alt="TorchLens drawing of every operation inside the GELU module of GPT-2 block 5's MLP" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/readme_gelu_v3.svg" width="400">
+  <img alt="TorchLens drawing of every operation inside the GELU module of GPT-2 block 5's MLP" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/readme_gelu_v3.svg" width="400">
 </picture>
 
 This figure zooms in on the MLP's GELU module; here is [the whole GPT-2 graph](https://modelmenagerie.ai/models/gpt2-huggingface/). Each node is one tensor operation. For instance, `tanh_6_266` is the 6th `tanh` operation and the 266th operation overall. The function name and call number are enough on their own, so `trace["tanh_6"]` and `trace["tanh_6_266"]` return the same operation. A trace can also be indexed by a module's address (`trace["transformer.h.5.mlp"]`) or by a selector (below).
@@ -180,9 +180,9 @@ trace.draw(direction="leftright")               # unrolled (second picture)
 ```
 
 <p align="center">
-<img alt="The loop model drawn rolled, left to right: the input splits to a sum test, labelled IF, that lands on a yellow IF: TRUE node, and to a negation, labelled THEN, that feeds a row of first Linear, ReLU and second Linear drawn once each and marked x2; a short arc under the row returns from the second Linear to the first, labelled with the passes it carries, and the second Linear's last pass leaves to the output on the right." src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/readme_loop_v6.png" width="100%">
+<img alt="The loop model drawn rolled, left to right: the input splits to a sum test, labelled IF, that lands on a yellow IF: TRUE node, and to a negation, labelled THEN, that feeds a row of first Linear, ReLU and second Linear drawn once each and marked x2; a short arc under the row returns from the second Linear to the first, labelled with the passes it carries, and the second Linear's last pass leaves to the output on the right." src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/readme_loop_v6.png" width="100%">
 <br><br>
-<img alt="The same loop model unrolled, left to right: after the IF test and the THEN negation, the two passes of first Linear, ReLU and second Linear are laid out as six separate nodes in one row, each named with its pass number, ending at the output." src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/readme_loop_v6_unrolled.png" width="100%">
+<img alt="The same loop model unrolled, left to right: after the IF test and the THEN negation, the two passes of first Linear, ReLU and second Linear are laid out as six separate nodes in one row, each named with its pass number, ending at the output." src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/readme_loop_v6_unrolled.png" width="100%">
 </p>
 
 TorchLens works at every scale, from single ATen calls up to agent harnesses that call the model many times. For autoregressive language models, TorchLens can trace the whole generation loop. Give it `gpt2.generate`, and each new token gets its own pass through the model, so you can pull out the activations for any token ([guide](docs/guides/kv_cache.md#trace-a-generation-loop)):
@@ -275,7 +275,7 @@ blind.output_table(k=3)                         # red wolf 0.34, coyote 0.16, dh
 cat["layer2"].receptive_field.show(unit)        # draws the patch on the photo (below)
 ```
 
-<img alt="The cat photo with a red box over its face: the patch of the image one layer2 unit sees, drawn by receptive_field.show()" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/readme_receptive_field.png" width="320">
+<img alt="The cat photo with a red box over its face: the patch of the image one layer2 unit sees, drawn by receptive_field.show()" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/readme_receptive_field.png" width="320">
 
 <details><summary>Same experiment in raw PyTorch (33 lines) and nnsight (25 lines)</summary>
 
@@ -473,7 +473,7 @@ The work of TorchLens stops at the edge of the network: it gets you the activati
 
 Each picture is one `.draw` call on a real model. Click any picture to open it full size.
 
-<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory_lr.svg"><img alt="One projection inside GPT-2 block 5's MLP, drawn left to right: the matrix multiply is dark purple (slow), the two reshapes around it are yellow (fast), and the input reshape is drawn smaller because its output is a quarter the size" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/gpt2_time_memory_lr.png" width="100%"></a></p>
+<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gallery/gpt2_time_memory_lr.svg"><img alt="One projection inside GPT-2 block 5's MLP, drawn left to right: the matrix multiply is dark purple (slow), the two reshapes around it are yellow (fast), and the input reshape is drawn smaller because its output is a quarter the size" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gallery/gpt2_time_memory_lr.png" width="100%"></a></p>
 <p><sub><b>Time and memory.</b> Color shows execution time for each operation, node size shows memory usage. Here, matrix multiplication was the bottleneck.</sub></p>
 
 <details><summary>Code</summary>
@@ -487,7 +487,7 @@ trace.draw(module="transformer.h.5.mlp.c_fc", color_by="time", size_by="bytes", 
 </details>
 <br>
 
-<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/resnet_rdm.svg"><img alt="ResNet-18's last block drawn left to right on three photos, two cats and a car: every convolution, batch norm, ReLU and the residual add holds a small 3 by 3 dissimilarity matrix with the three photos along its edges, including the downsample branch" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/resnet_rdm_hires.png" width="100%"></a></p>
+<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gallery/resnet_rdm.svg"><img alt="ResNet-18's last block drawn left to right on three photos, two cats and a car: every convolution, batch norm, ReLU and the residual add holds a small 3 by 3 dissimilarity matrix with the three photos along its edges, including the downsample branch" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gallery/resnet_rdm_hires.png" width="100%"></a></p>
 <p><sub><b>Showing stimulus similarity.</b> ResNet-18's last block on two cats and a car: each colored matrix shows the pairwise similarity between stimulus representations for that layer.</sub></p>
 
 <details><summary>Code</summary>
@@ -506,8 +506,8 @@ trace.draw(module="layer4.0", direction="leftright", show_arg_labels=False,
 
 <table>
 <tr>
-<td width="47%" align="center" valign="top"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/vit_head_edit.svg"><img alt="ViT block 5's attention after zeroing head 3 of the query projection only: the query projection box is marked purple, the operations on the query path and after the attention step are outlined as changed, and the key and value paths are unmarked" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/vit_head_edit_hires.png" width="100%"></a><p align="left"><sub><b>Interventions.</b> Zeroing head 3 of ViT's query projection: a thick purple outline marks the edited layer, and thin purple outlines mark the layers it changed downstream.</sub></p></td>
-<td width="53%" align="center" valign="top"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/backward_pass.svg"><img alt="The backward pass of a small residual block: gradient functions from the summed output down through the add, the two linear layers and the ReLU, with dotted edges where gradients accumulate into the weights and biases" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/backward_pass.png" width="100%"></a><p align="left"><sub><b>The backward pass.</b> The gradient graph from the loss down to every weight and bias that receives a gradient.</sub></p></td>
+<td width="47%" align="center" valign="top"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gallery/vit_head_edit.svg"><img alt="ViT block 5's attention after zeroing head 3 of the query projection only: the query projection box is marked purple, the operations on the query path and after the attention step are outlined as changed, and the key and value paths are unmarked" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gallery/vit_head_edit_hires.png" width="100%"></a><p align="left"><sub><b>Interventions.</b> Zeroing head 3 of ViT's query projection: a thick purple outline marks the edited layer, and thin purple outlines mark the layers it changed downstream.</sub></p></td>
+<td width="53%" align="center" valign="top"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gallery/backward_pass.svg"><img alt="The backward pass of a small residual block: gradient functions from the summed output down through the add, the two linear layers and the ReLU, with dotted edges where gradients accumulate into the weights and biases" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gallery/backward_pass.png" width="100%"></a><p align="left"><sub><b>The backward pass.</b> The gradient graph from the loss down to every weight and bias that receives a gradient.</sub></p></td>
 </tr>
 </table>
 
@@ -542,7 +542,7 @@ trace.draw(graph="backward")
 
 Any metadata about an operation can be linked to any visual property of its corresponding node. For instance, here is a pointillist portrait of [GoogLeNet](https://arxiv.org/abs/1409.4842), with each operation colored by its type (convolution, ReLU, etc.):
 
-<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/googlenet_dots.svg"><img alt="GoogLeNet's 212 operations drawn as dots in a left-to-right layout, each colored by its type: blue convolutions, orange batch norms, green ReLUs, light-blue pools, pink concatenations where the inception branches join, grey everything else, linked by thin grey edges" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/wip/readme-3.0/images/gallery/googlenet_dots.png" width="100%"></a></p>
+<p align="center"><a href="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gallery/googlenet_dots.svg"><img alt="GoogLeNet's 212 operations drawn as dots in a left-to-right layout, each colored by its type: blue convolutions, orange batch norms, green ReLUs, light-blue pools, pink concatenations where the inception branches join, grey everything else, linked by thin grey edges" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gallery/googlenet_dots.png" width="100%"></a></p>
 
 <details><summary>Code</summary>
 
