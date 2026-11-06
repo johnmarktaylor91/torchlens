@@ -1,6 +1,6 @@
 ## Keep the glossary + docs in lockstep with code (LOCKED)
 
-The glossary is the **canonical** API spec (maintained privately; `docs/reference/glossary.md` is the public copy); code conforms to it (spec-drives-code). A rename is not *done* until the docs match too:
+The glossary is the **canonical** API spec (maintained privately; `docs/reference/glossary.md` is the public copy of its definitions; `docs/internal/reference/name_index.md` and `name_index_keywords.md` beside it hold the one-line name tables, keyword rows and experimental name lists the name checks read); code conforms to it (spec-drives-code). A rename is not *done* until the docs match too:
 
 - **Rename / add / remove any PUBLIC name** (dataclass field, `@property`, method, top-level `tl.*` name, kwarg) → in the SAME change, update: (1) the **glossary** entry (canonical), (2) the agent-reference examples (`docs/agent-reference/`, moved out of `AGENTS.md`), (3) the audit notebooks (`notebooks/audit/`) and `examples/` that use it.
 - A change that touches code but leaves the glossary/docs stale is **INCOMPLETE.** This is exactly how the v7 `memory → activation_memory` gap and the stale `log_forward_pass`/`vis_opt` examples slipped through.

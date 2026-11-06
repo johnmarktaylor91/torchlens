@@ -11,8 +11,8 @@ image or modality dict, resolved as the trace resolves it.
 
 ## The report object (`Report`)
 
-Every report-shaped `tl.debug` result is a `tl.report.Report` (DOCUMENTED-UNSTABLE
-spelling): `report_type`, `subject` and `status` name what was examined and the verdict,
+Every report-shaped `tl.debug` result is a `tl.report.Report` (experimental):
+`report_type`, `subject` and `status` name what was examined and the verdict,
 `to_dict()` returns a plain JSON-friendly payload, `to_pandas()` returns the table, and
 `print(report)` shows a bounded card (a lead line, at most five findings, the exact
 remainder, and the exits). The typed results (`HealthReport`, `DeterminismReport`,
@@ -89,7 +89,7 @@ imply a failure.
 `tl.debug.param_health(target, *, include_buffers=True, within=None,
 bounds=None, max_fraction=0.9, subnormal_fraction_threshold=0.1)` is the
 one-shot parameter/buffer-space scan (the checks-kit door; canonical home
-`torchlens.debug.param_health`, spelling DOCUMENTED-UNSTABLE). `target` is an
+`torchlens.debug.param_health`, experimental). `target` is an
 `nn.Module` or ANY name->tensor `Mapping` — a `state_dict`, flattened
 optimizer state, EMA shadow weights, a loaded checkpoint: same door, same
 batched scan kernel. Returns a `ParamHealthReport` (findings / rows / checks_run /
@@ -162,7 +162,7 @@ True nan
 
 ## `bisect_precision`
 
-`tl.debug.bisect_precision(model, inputs)` (DOCUMENTED-UNSTABLE spelling) runs the
+`tl.debug.bisect_precision(model, inputs)` (experimental) runs the
 same seeded forward twice -- once at native precision, once with floating state and
 inputs cast to `reference_dtype` (fp64 by default) -- and returns a
 `BisectPrecisionReport` naming the first op whose native output separates from the
@@ -233,7 +233,7 @@ Output:
 ## `compare_params`
 
 `tl.debug.compare_params(model_a, model_b, *, rtol=1e-5, atol=1e-8, include_buffers=False)`
-(DOCUMENTED-UNSTABLE spelling) is the weight-space counterpart of `compare`: it aligns two
+(experimental) is the weight-space counterpart of `compare`: it aligns two
 models' parameters on their qualified names and returns a tabular `Report` whose
 `.to_pandas()` DataFrame has one row per name and aggregate counts in `attrs`. Tensors on different devices are compared on CPU;
 shape/dtype mismatches and meta tensors skip the value comparison with the reason recorded.
@@ -459,7 +459,7 @@ Output:
 
 ## Pandas-free row core (`hot_path_rows`)
 
-`tl.debug.hot_path_rows(trace, by="flops")` (DOCUMENTED-UNSTABLE spelling) is the
+`tl.debug.hot_path_rows(trace, by="flops")` (experimental) is the
 pandas-free core of [`hot_path`](#hot_path). It returns `(rows, attrs)`: a list of plain
 per-row dicts plus the same `attrs` mapping the report's `.to_pandas()` frame carries
 (excluded count, metric, capture-honesty facts), importable and runnable without
@@ -586,8 +586,8 @@ True nan
 
 ## `bisect_nan_backward`
 
-`tl.debug.bisect_nan_backward(trace, *, bwd=None, grad_scale=None)` (DOCUMENTED-UNSTABLE
-spelling) walks one captured backward pass's grad-fn fires in MEASURED fire order and
+`tl.debug.bisect_nan_backward(trace, *, bwd=None, grad_scale=None)` (experimental)
+walks one captured backward pass's grad-fn fires in MEASURED fire order and
 classifies every transition: `clean` / `birth` / `propagated` / `healed` / `root_seed`
 (plus `unchecked` for fires `save_grads` did not cover). Healing is measured fact -- a
 finite loss gradient does not prove a clean backward -- so the result carries the FULL
@@ -601,7 +601,7 @@ no rerun. `result.first_bad_thing` projects into the shared `FirstBadThing` voca
 ## `check_determinism`
 
 `tl.debug.check_determinism(model, inputs, *, runs=2, seed=0, rtol=None, atol=None,
-seed_sensitivity=False)` (DOCUMENTED-UNSTABLE spelling) answers ONE controlled question:
+seed_sensitivity=False)` (experimental) answers ONE controlled question:
 do N isolated same-seed runs agree? Every run executes on a fresh released deep copy
 with cloned inputs under preserved, identically-seeded RNG. The verdict is three-state
 (`repeatable_under_test` / `nondeterminism_observed` / `inconclusive`) and never
@@ -621,7 +621,7 @@ whose rows follow execution order -- never alphabetical.
 
 ## `isolated_capture` / `preserved_rng_state` / `clone_input_tree`
 
-The shared isolated-rerun harness (DOCUMENTED-UNSTABLE spellings) behind
+The shared isolated-rerun harness (experimental) behind
 `bisect_precision` and `check_determinism`: `isolated_capture(model, inputs, *,
 seed, prepare=None, **trace_kwargs)` runs one seeded capture of a fresh deep copy
 that is RELEASED from inherited TorchLens preparation first (the deepcopy-after-trace
@@ -631,7 +631,7 @@ input-cloning primitive. The caller's model, inputs, and RNG streams are untouch
 
 ## `walk_grad_fn` / `sketch_grad_fn`
 
-The post-hoc autograd-graph walker (DOCUMENTED-UNSTABLE spellings): draw the
+The post-hoc autograd-graph walker (experimental): draw the
 `grad_fn` graph of a tensor you ALREADY HAVE — computed in an earlier notebook cell or
 inside someone else's training loop — with no re-execution and no capture context (the
 `make_dot(y)`-class torchviz capability). Both are explicitly STRUCTURE-ONLY: the walk

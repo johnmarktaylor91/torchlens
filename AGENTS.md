@@ -89,7 +89,8 @@ capture is a capture gap to fix, never to exempt.
 ## Keep the glossary + docs in lockstep with code (LOCKED)
 
 The glossary is the canonical API spec (maintained privately; `docs/reference/glossary.md` is
-the public copy); code conforms to it. Renaming, adding or removing any
+the public copy of its definitions; the name tables and keyword rows the name checks read live in
+`docs/internal/reference/name_index.md` and `name_index_keywords.md`); code conforms to it. Renaming, adding or removing any
 PUBLIC name (dataclass field, `@property`, method, top-level `tl.*` name, kwarg) updates, in the
 SAME change, the glossary entry, the examples in `docs/internal/agent-reference/`, and the audit notebooks
 (`notebooks/audit/`) and `examples/` that use it. A change that leaves them stale is INCOMPLETE.

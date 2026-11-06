@@ -546,6 +546,15 @@ def test_reference_takes_definition_text_and_skips_spelling_index_rows(tmp_path:
         "The fresh one.",
         "glossary:docs/reference/glossary.md:4",
     )
+    inline = _lockstep_repo(
+        tmp_path / "d",
+        glossary="**tl.io.dump** (experimental): Writes a trace to disk,\none file per trace.\n\n- Format: one file.\n",
+        example="\n",
+    )
+    assert gate_input._reference(dump, inline) == (
+        "Writes a trace to disk, one file per trace.",
+        "glossary:docs/reference/glossary.md:1",
+    )
 
 
 def test_snippet_prefers_a_hit_near_the_owner() -> None:

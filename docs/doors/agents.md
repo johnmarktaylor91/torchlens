@@ -1,7 +1,5 @@
 # Door: agent builders
 
-<!-- JMT writes this: the door intro. -->
-
 ## Start here
 
 - [TorchLens for AI coding agents](../for-ai-agents.md): the compact map of current spellings.

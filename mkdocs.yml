@@ -92,6 +92,8 @@ exclude_docs: |
   /internal/agent-reference/package/architecture-overview.md
   /internal/agent-reference/package/files-in-this-directory.md
   /internal/agent-reference/package/key-concepts.md
+  /internal/reference/name_index.md
+  /internal/reference/name_index_keywords.md
   /internal/agent-reference/package/newer-2-x-subsystems.md
   /internal/agent-reference/package/public-surface.md
   /internal/agent-reference/package/subpackages.md

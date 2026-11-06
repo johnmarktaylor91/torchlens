@@ -75,9 +75,9 @@ class _Triple(nn.Module):
 
 
 def _glossary_row(name: str) -> str:
-    """Return the glossary table row whose first cell is ``name``."""
+    """Return the name-index table row whose first cell is ``name``."""
 
-    glossary = Path(__file__).resolve().parents[1] / "docs/reference/glossary.md"
+    glossary = Path(__file__).resolve().parents[1] / "docs/internal/reference/name_index.md"
     prefix = f"| `{name}` |"
     return next(line for line in glossary.read_text().splitlines() if line.startswith(prefix))
 

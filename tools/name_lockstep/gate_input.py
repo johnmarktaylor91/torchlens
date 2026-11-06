@@ -258,8 +258,19 @@ _KIND_ORDER = ("id", "term", "prose", "index")
 _TICKED_LIST = re.compile(r"`[^`]+`\s*,\s*`[^`]+`")
 
 
+#: A one-line glossary entry: ``**Term**: definition`` (the public glossary's layout), the term
+#: optionally followed by ``/ **Other**`` or ``and **Other**`` terms and a parenthesized
+#: note before the colon.
+_TERM = r"\*\*(?:[^*]|\*(?!\*))+\*\*"
+_INLINE_TERM = re.compile(rf"^{_TERM}(?: (?:/|and) {_TERM})*(?: \([^)]*\))?: (?P<text>\S.*)$")
+
+
 def _definition(lines: list[str], index: int) -> str:
-    """Return the ``: definition`` paragraph that follows a ``**Term**`` line, or ``""``.
+    """Return the definition paragraph of a ``**Term**`` entry, or ``""``.
+
+    Two layouts are read: ``**Term**: definition`` with unindented continuation lines up to a
+    blank line or a list (the public glossary), and ``**Term**`` followed by a ``: definition``
+    line with indented continuation lines (the maintainer name index).
 
     Parameters
     ----------
@@ -271,9 +282,17 @@ def _definition(lines: list[str], index: int) -> str:
     Returns
     -------
     str
-        The definition text, whitespace joined, without its leading ``: ``.
+        The definition text, whitespace joined, without the term or its leading ``: ``.
     """
 
+    inline = _INLINE_TERM.match(lines[index].strip())
+    if inline:
+        body = [inline.group("text").strip()]
+        for line in lines[index + 1 :]:
+            if not line.strip() or line.lstrip().startswith(("- ", "* ", "|", "**")):
+                break
+            body.append(line.strip())
+        return " ".join(body)
     following = [i for i in range(index + 1, min(len(lines), index + 4)) if lines[i].strip()]
     if not following or not lines[following[0]].startswith(": "):
         return ""

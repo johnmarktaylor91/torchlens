@@ -1,7 +1,5 @@
 # Door: mechanistic interpretability
 
-<!-- JMT writes this: the door intro. -->
-
 ## Start here
 
 - [The decoder running example](../field-guide/running_examples.md#the-decoder-on-the-ioi-prompt)

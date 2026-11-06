@@ -1,8 +1,8 @@
 # Built-in activation transforms (`tl.transforms`)
 
-Every spelling on this page is DOCUMENTED-UNSTABLE pending the naming
-sprint; `tl.transforms` is the placeholder home (its collision with the
-input-side `transform=` slot is a named naming-sprint item).
+Every name on this page is experimental and may change in any
+release; `tl.transforms` is a provisional home (it may be renamed because it
+collides with the input-side `transform=` slot).
 
 TorchLens ships a curated library of declared transforms for the common
 activation reductions — pooling, flatten, cast, normalize, sparse random

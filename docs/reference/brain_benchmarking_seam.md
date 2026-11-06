@@ -6,7 +6,7 @@ Net2Brain's nine evaluation methods, TorchLens supplies every geometric
 prerequisite -- features, RDMs, alignment, interchange -- and refuses every
 inferential step with a typed error naming the tool that owns it. This page
 is the ledger of that boundary (brainpipe). Every TorchLens
-spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
+name here is experimental and may change in any release.
 
 The working surfaces behind the "we supply" column:
 
@@ -89,7 +89,7 @@ result's provenance where the result has any: `rdm_evolution(...)
 Identifiers were taken from the repository at commit `035b3be` and checked
 numerically against its implementations; a dash means the catalogue has no
 exact match, and no near match is substituted. The attribute and
-descriptor spellings are DOCUMENTED-UNSTABLE.
+descriptor names are experimental.
 
 | TorchLens measure | Similarity-repository identifier |
 |---|---|

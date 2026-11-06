@@ -1,6 +1,6 @@
 # Notebook cards and the treescope bridge
 
-*(Every spelling on this page is DOCUMENTED-UNSTABLE: it may change in
+*(Every name on this page is experimental: it may change in
 a later release.)*
 
 TorchLens objects carry dependency-free rich HTML cards as their primary

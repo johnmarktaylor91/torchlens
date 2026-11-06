@@ -1,7 +1,7 @@
 # One record, one line, one voice: TorchLens value displays
 
-Every user-facing object answers a REPL in one voice (spellings are
-DOCUMENTED-UNSTABLE pending the naming session):
+Every user-facing object answers a REPL in one voice (the names are
+experimental and may change in any release):
 
 - Value-record `repr(x)` is one nestable line, up to 100 columns: kind,
   stored short key, dtype, shape, device, and available value words.

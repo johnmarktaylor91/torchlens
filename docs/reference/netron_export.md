@@ -6,7 +6,7 @@ typed shapes on every edge (Netron's oldest open ask, #71), the module
 hierarchy as one-click drill-down boxes, a curated properties panel, and a
 metrics companion (written by default) rendered in Netron's own sidebar
 sections. Every
-keyword spelling below is DOCUMENTED-UNSTABLE pending the naming sprint.
+keyword name below is experimental and may change in any release.
 
 ```python
 import torchlens as tl

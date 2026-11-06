@@ -393,8 +393,8 @@ the captured output-projection tensor.
 
 ## Unembedding Head and Logit Lens
 
-Every spelling in this section is DOCUMENTED-UNSTABLE pending the naming
-session.
+Every name in this section is experimental and may change in any
+release.
 
 The `language_model_head` recipe matches a module with a conventional
 unembedding child (`lm_head`, `embed_out`, or `output_projection`) and anchors
@@ -482,7 +482,7 @@ through final norm/head"`. On a `logits_to_keep`-sliced capture the native
 row covers only the positions the capture kept, and requested positions
 outside a row's covered range are dropped from that row rather than invented.
 
-### Vision heads (DOCUMENTED-UNSTABLE)
+### Vision heads (experimental)
 
 A vision model has no language-model head. When a trace has none, the
 default lens falls back to a vision head recipe, and it is validated the same
@@ -518,7 +518,7 @@ Only a single-token read is reconstructed. A head that mean-pools, uses an
 attention pooler, or runs a pooler MLP leaves the final norm unanchored, and
 the lens refuses `logit_lens_head_unavailable` instead of guessing.
 
-### User lens identity (DOCUMENTED-UNSTABLE)
+### User lens identity (experimental)
 
 A user lens may record which model it was built for: set `model_identity` on
 the callable (or on the mapping, or on each per-layer callable) to the
@@ -580,7 +580,7 @@ nnsight module.path.output       -> log.modules["module.path"].facets["out"]
 
 ## Coverage and Recipe Maintenance
 
-`torchlens.facets.coverage(log)` (DOCUMENTED-UNSTABLE spelling) reports
+`torchlens.facets.coverage(log)` (experimental) reports
 per-module recipe coverage for a completed trace: which recipes matched, which
 declared facets are readable, typed absence reasons, an inventory of
 structural-only module classes (recipe candidates), and disclosed rows for

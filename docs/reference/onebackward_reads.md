@@ -3,8 +3,8 @@
 One backward pass, a table of "how much does each site matter" -- batched
 over targets, with arbitrary targets, an inspectable linearization policy, a
 common result carrier, and a `by=` door so "select the k most important
-sites" is one line. Every SPELLING on this page is DOCUMENTED-UNSTABLE
-pending the naming sprint; the semantics and the stable error codes
+sites" is one line. Every NAME on this page is experimental
+and may change; the semantics and the stable error codes
 (`docs/reference/error_refusal_contract.md`) are the contract. Design of
 record: the M(reads) design memo.
 

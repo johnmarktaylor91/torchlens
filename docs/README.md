@@ -1,7 +1,5 @@
 # TorchLens documentation
 
-<!-- JMT writes this: the pitch and story for the docs landing. -->
-
 ## Start
 
 - [The two running examples](field-guide/running_examples.md): a small decoder on the IOI

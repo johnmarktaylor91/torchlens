@@ -3,8 +3,8 @@
 torchlens owns everything that touches the network; rsatoolbox and Brain-Score
 own everything that touches the brain or the hypothesis. `torchlens.neuro`
 hands representations across that seam with provenance that cannot lie, and
-teaches where everything else lives. Every spelling on this page is
-DOCUMENTED-UNSTABLE pending the naming sprint.
+teaches where everything else lives. Every name on this page is
+experimental and may change in any release.
 
 Install: `pip install "torchlens[neuro]"` (rsatoolbox and xarray, every supported
 Python). The Brain-Score seam is a separate extra:
@@ -120,7 +120,7 @@ tested; their `calc_rdm(method="cosine")` raises `NotImplementedError`, and
 a pinned test fails loudly if that ever changes). Source mode also records
 `similarity_repository_id`, the RDM variant's identifier in the
 similarity-repository catalogue (for example `rdm/*/correlation`; absent for
-a metric the catalogue does not list; DOCUMENTED-UNSTABLE spelling). A `chunked=` execution
+a metric the catalogue does not list). A `chunked=` execution
 seam is reserved for streaming-scale RDMs; launch is eager and any value
 refuses typed.
 

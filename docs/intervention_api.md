@@ -109,7 +109,7 @@ set-only engine), or live capture `hooks=...`.
 | `tl.splice_module` | `splice_module(module, *, input_route="in", output_route="out", allow_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
 
 The packaged SAE splice experiment, `torchlens.bridge.sae.splice(...)`
-(documented-unstable), composes `splice_module` with fork + `do`: it swaps a
+(experimental), composes `splice_module` with fork + `do`: it swaps a
 duck-typed SAE's reconstruction (`encode`/`decode` pair; no SAE package
 required) back into the model at one site, replays downstream, and reports
 reconstruction fidelity plus output-level causal effect. The optional
@@ -260,7 +260,7 @@ intervene on a FRESH execution (`do(..., model=..., inputs=..., intervention=Int
 or a new capture with `intervene=...`). A new-input `run_transaction(inputs=...)` on a
 trace carrying path-1 value-edits is a fresh execution — the edits do NOT
 apply to it, and TorchLens discloses that at the run door with
-`PendingValueEditsWarning` (documented-unstable spelling) rather than
+`PendingValueEditsWarning` (experimental name) rather than
 silently returning an un-edited verified run. The run itself proceeds:
 this is a disclosure, never a refusal.
 

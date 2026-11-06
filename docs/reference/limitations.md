@@ -89,7 +89,7 @@ A tensor argument with no recorded graph or source provenance fails forward vali
 
 ## Structure-only capture
 
-`structure_only=True` (DOCUMENTED-UNSTABLE surface, default)
+`structure_only=True` (experimental surface, default)
 records the op graph, module hierarchy, parameter geometry, and per-op
 shape/dtype as HYPOTHESES, never tensor values. The capability contract lives
 in [structure_only_capabilities.md](structure_only_capabilities.md).

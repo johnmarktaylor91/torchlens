@@ -1,7 +1,7 @@
 # Experiments remember: lineage, vary, site sweeps and grids
 
-**Doc of record for the surface. Every spelling DOCUMENTED-UNSTABLE
-pending naming-session ratification.** The design law: *the Bundle is the
+**Doc of record for the surface. Every name is experimental and may
+change in any release.** The design law: *the Bundle is the
 record* — the material record of an experiment, always on, travelling with
 the artifact: lineage, the operation chronology, and the complete
 per-candidate effect table. The semantic layer (hypothesis, metric choice,

@@ -219,7 +219,9 @@ def test_grad_health_default_basis_announces_no_deprecation_window() -> None:
     trace.backward(trace[trace.output_layers[0]].out.sum())
 
     attrs = tl.debug.grad_health(trace).to_pandas().attrs
-    glossary = (Path(__file__).resolve().parents[1] / "docs/reference/glossary.md").read_text()
+    glossary = (
+        Path(__file__).resolve().parents[1] / "docs/internal/reference/name_index_keywords.md"
+    ).read_text()
     basis_rows = [line for line in glossary.splitlines() if line.startswith("| `basis=` |")]
 
     assert signature(tl.debug.grad_health).parameters["basis"].default == "total_norm"

@@ -281,7 +281,7 @@ tensors or `.pt` files rather than accumulated graph metadata. `chunk_size=` cov
 atomic shards plus a self-describing `manifest.json` (site identity, stimulus provenance, axis
 semantics, dtypes); an interrupted long extraction continues from its last completed shard with
 `resume=True`, and `torchlens.load(path)` reads the artifact back
-with its metadata (both spellings DOCUMENTED-UNSTABLE).
+with its metadata (both names are experimental).
 
 ## Windowed and disk-backed capture
 

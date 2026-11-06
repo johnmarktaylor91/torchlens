@@ -47,7 +47,8 @@ RESULT = tuple(features["avgpool"].shape) == (4, 512, 1, 1)
 
 ## Requirements
 
-<!-- Page contract: what to install and what the model needs (step 9). -->
+TorchLens, PyTorch and NumPy (for the seeded draw). Any model `tl.extract_dataset`
+accepts works. `stimulus_ids=` needs disk mode, so pass `path=`.
 
 ## Example
 
@@ -83,7 +84,8 @@ RESULT = reader.stimulus_ids() == [image_ids[i] for i in chosen]
 
 ## Output
 
-<!-- Page contract: the output with its validation stamp (step 9). -->
+The artifact on disk holds one row per chosen stimulus, in the order of `chosen`,
+and `reader.stimulus_ids()` returns their original ids.
 
 ## Check
 
@@ -103,11 +105,13 @@ RESULT = torch.allclose(loaded.activations[key], direct)
 
 ## Vary it
 
-<!-- Page contract: what to change and what happens (step 9). -->
+Change `size=` to draw more or fewer items, or change the seed to draw a different
+subsample. The stored ids follow the draw.
 
 ## Performance
 
-<!-- Page contract: the cost and the faster path, if any (step 9). -->
+Only the chosen stimuli run through the model, so the cost scales with the
+subsample size, not the dataset size.
 
 ## Limits
 
@@ -118,4 +122,4 @@ RESULT = torch.allclose(loaded.activations[key], direct)
 
 ## Next
 
-<!-- Page contract: the next task (step 9). -->
+[Extract features for a stimulus set](extract_features.md).

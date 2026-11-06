@@ -114,7 +114,7 @@ table is a selection, not the full list — read `torchlens.__all__` for that):
 | Predicate composition | `followed_by`, `preceded_by`, `without_op`, `when` (the former `intervening` alias is removed) |
 | Activation helpers | `zero_ablate`, `mean_ablate`, `torchlens.intervention.scramble_elements` (elementwise iid scramble), `replace_with`, `swap_with`, `steer`, `scale`, `clamp`, `add_noise`, `project_onto`, `project_out`, `splice_module` |
 | Gradient sites | `grad` (`tl.grad(site)` addresses a gradient; the activation helpers above and `clip_norm` edit it; there are no gradient-only helpers) |
-| Extraction and validation | `pluck`, `extract`, `extract_dataset`, `validate` (the former `peek` and `batched_extract` aliases are removed); disk-mode `extract_dataset` writes a self-describing manifest, resumes with `resume=True`, and loads back via `torchlens.dataset_extraction.load_extraction` (DOCUMENTED-UNSTABLE spellings) |
+| Extraction and validation | `pluck`, `extract`, `extract_dataset`, `validate` (the former `peek` and `batched_extract` aliases are removed); disk-mode `extract_dataset` writes a self-describing manifest, resumes with `resume=True`, and loads back via `torchlens.dataset_extraction.load_extraction` (experimental names) |
 | Subpackages | `facets`, `recording` |
 
 Submodules such as `tl.report`, `tl.stats`, `tl.viz`, and `tl.compat` are available as attributes
@@ -257,8 +257,8 @@ assert graph is not None
 
 ## Machine-readable trace dump and budgeted reports
 
-Two agent-facing spellings (both DOCUMENTED-UNSTABLE pending the naming ratification
-sprint) describe the same surface the rest of this page drives:
+Two agent-facing names (both experimental and subject to change)
+describe the same surface the rest of this page drives:
 
 - `trace.to_agent_json()` returns a JSON-serializable, self-describing dump under the
   `torchlens.agent_trace.v1` schema: capture outcome/verification honesty facts, counts,
@@ -302,7 +302,7 @@ assert "Truncation" in budgeted  # drops are disclosed, never silent
 ## The agent surface (`torchlens.agent`) and its three transports
 
 One inspection core, one tool registry, three thin transports (all
-DOCUMENTED-UNSTABLE): Python (`torchlens.agent.call_tool`), the MCP stdio server
+experimental): Python (`torchlens.agent.call_tool`), the MCP stdio server
 (`python -m torchlens.bridge.mcp`; extra `pip install torchlens[mcp]`, `mcp>=2.0`), and
 the CLI (`python -m torchlens --help`). Every tool is read-only and idempotent; nothing
 executes user code, writes files, or mutates artifacts — unconditionally. (`torchlens agent

@@ -274,7 +274,7 @@ conflict-matrix row, and consumers bind totality tests to the CODE list, not a c
 stable typed minimum: its existing four parameters (`inputs`, `seed`, `fast`,
 `on_divergence`) never change, reorder, or disappear. New keywords land as additive
 keyword-only parameters with defaults on the concrete `Trace.run_transaction` while they are
-documented-unstable; a ratified spelling joins the protocol as an additive
+experimental; a settled spelling joins the protocol as an additive
 keyword-only-with-default revision in the same change as its documentation.
 
 **Invariants consumers may rely on (and may not weaken).**

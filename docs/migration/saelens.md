@@ -77,8 +77,8 @@ RESULT = [
 | Execute opaque SAE module recipe elsewhere | `executable_with_callables` in same code environment | Not portable. |
 | Fused attention internals | Attention facets (`pattern`/`scores`/`z`/`result`) with disclosed provenance; `torchlens.mechinterp.patch_head` for head-level patching on fused models | Head-level semantics are addressable; raw fused kernel intermediates are still not op-DAG sites. |
 
-`bridge.sae.splice` and the facet spellings are DOCUMENTED-UNSTABLE pending
-the naming session. The boundary statement, kept honest: TorchLens measures
+`bridge.sae.splice` and the facet names are experimental and may change in
+any release. The boundary statement, kept honest: TorchLens measures
 and intervenes on SAEs (reconstruction fidelity, causal effect, feature-level
 edits) but ships no SAE training, storage, or dashboard machinery -- that
 remains SAELens's home turf, credited in `docs/acknowledgments.md`.
@@ -133,8 +133,8 @@ dashboard code. There is no TorchLens-to-SAELens object conversion beyond that.
   the [pretrained-SAE recipe](../field-guide/pretrained_saes.md).
 - **Latents are kept.** `SpliceResult.latents` and `SpliceResult.edited_latents` are kept by
   default and can be large; see the "Read feature activations" row.
-- **Stable-spelling status.** `bridge.sae.splice` and the facet spellings are
-  documented-unstable.
+- **Name stability.** `bridge.sae.splice` and the facet names are
+  experimental.
 - **Discovery versus monitoring.** SAEs are now used mainly as a discovery tool (finding
   candidate features), while monitoring a deployed model is done with trained linear
   probes on captured activations. TorchLens serves both by extracting activations

@@ -4,7 +4,7 @@
 settings plus evidence checks and a caption, and each view answers one question about the
 model. Leaving `view=` unset draws the plain graph, which already shows every op.
 
-**The view names and their captions are DOCUMENTED-UNSTABLE**: they may still change before
+**The view names and their captions are experimental**: they may still change before
 they are frozen.
 
 ```python

@@ -187,7 +187,7 @@ generated at step `k`, shown in `token`.
 
 ## 3. Read the audit
 
-Every row is one prompt and one generated token. On the prompt itself (step 0),
+Every row is one prompt and one generated token. At step 0, the prompt itself,
 the condition passes exactly for the prompts that end in the trigger:
 
 ```python

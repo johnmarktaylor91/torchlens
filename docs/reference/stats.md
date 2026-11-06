@@ -5,8 +5,8 @@ constant memory: each accumulator folds one batch at a time and never retains
 per-batch tensors. `tl.stats.aggregate` is the one-call door that drives those
 accumulators across a whole dataloader. Both are shipped, tested surface --
 promoted into `torchlens.__all__` by the completeness work (they were
-previously reachable but undeclared). Spellings are DOCUMENTED-UNSTABLE
-pending naming-session ratification.
+previously reachable but undeclared). The names are experimental
+and may change in any release.
 
 ## The accumulators
 

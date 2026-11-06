@@ -1,7 +1,7 @@
 # Weights-free capture (structure-only on the meta device)
 
-*Every spelling on this page is DOCUMENTED-UNSTABLE pending the naming
-sprint; the semantics are the contract.*
+*Every name on this page is experimental and may change in any
+release; the semantics are the contract.*
 
 TorchLens admits meta-device models under the structure-only contract
 (decision point, granted 2026-08-26): an 855-byte config file plus a

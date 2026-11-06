@@ -5,8 +5,8 @@ TorchLens's target population loads large language models three ways --
 usually with a PEFT/LoRA adapter on top. This page is the honest ledger of
 what eager capture supports on those paths, what evidence backs each claim,
 and exactly what remains unverified. **No scale claim on this page exceeds
-its evidence.** Spellings referenced here are DOCUMENTED-UNSTABLE pending the
-naming session.
+its evidence.** Names referenced here are experimental and may change in any
+release.
 
 ## Verified today (CPU, small scale)
 
@@ -68,7 +68,7 @@ uint8 payloads) outside the registered parameter/buffer contract:
 
 Three deployment paths have no verified capture on any venue. `tl.report.doctor(model, x)`
 names each one when it detects it, so a capture on these paths is never silently
-presented as verified. The row keys are DOCUMENTED-UNSTABLE.
+presented as verified. The row keys are experimental.
 
 | Row key | Fires when | Status | What it means |
 | --- | --- | --- | --- |

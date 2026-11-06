@@ -99,7 +99,8 @@ def _user_prose() -> list[tuple[str, str]]:
     pages += [
         page
         for page in sorted((REPO_ROOT / "docs").rglob("*.md"))
-        if "agent-reference" not in page.parts and page.name != "glossary.md"
+        if "agent-reference" not in page.parts
+        and page.name not in {"glossary.md", "name_index.md", "name_index_keywords.md"}
     ]
     out = [
         (

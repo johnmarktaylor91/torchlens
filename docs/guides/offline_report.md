@@ -1,7 +1,6 @@
 # The single-file offline HTML report
 
-*(treescope memo decision 4. Option spellings are [UI-SPRINT] /
-DOCUMENTED-UNSTABLE.)*
+*(The option names are experimental and may change in any release.)*
 
 ```python
 tl.export.html(log, "report.html")

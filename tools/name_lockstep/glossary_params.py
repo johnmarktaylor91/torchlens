@@ -1,6 +1,7 @@
 """Check that the glossary names every public parameter of every public callable.
 
-The glossary (``docs/reference/glossary.md``) is the canonical API spec, so a caller must be
+The glossary is the canonical API spec; its keyword tables live in the maintainer name index
+(``NAME_INDEX_PAGES``), so a caller must be
 able to read there which keyword a callable takes (``Bundle.rank_changes(..., k=10)``, not
 ``top_k=``). This module lists every parameter a caller can pass by name and reports the ones
 whose keyword row does not name the callable.
@@ -40,6 +41,11 @@ from name_lockstep.records import is_record, record_classes
 _NAMED_KINDS = frozenset({inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY})
 _SKIPPED = frozenset({"self", "cls"})
 #: A keyword row: first cell is exactly one backticked ``name=``.
+#: The maintainer pages whose keyword tables the check reads, together.
+NAME_INDEX_PAGES = (
+    Path("docs/internal/reference/name_index.md"),
+    Path("docs/internal/reference/name_index_keywords.md"),
+)
 _KEYWORD_ROW = re.compile(r"^\|\s*`([A-Za-z_][A-Za-z0-9_]*)=`\s*\|(.*)\|\s*$")
 _SPAN = re.compile(r"`([^`]+)`")
 #: The run of backticked owners right after ``keyword of`` (``A``, ``B`` and ``C``).
@@ -406,7 +412,12 @@ def main(argv: list[str] | None = None) -> int:
     """Dump public parameters and report glossary coverage; exit 1 when any is missing."""
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--glossary", type=Path, default=Path("docs/reference/glossary.md"))
+    parser.add_argument(
+        "--glossary",
+        type=Path,
+        action="append",
+        help="a page holding keyword rows (repeatable; default: NAME_INDEX_PAGES)",
+    )
     parser.add_argument("--dump", type=Path, help="write every public parameter row as JSON")
     parser.add_argument("--load", type=Path, help="read rows from a --dump file, skip import")
     args = parser.parse_args(argv)
@@ -416,10 +427,11 @@ def main(argv: list[str] | None = None) -> int:
         rows = public_parameters(meanings=args.dump is not None)
     if args.dump:
         args.dump.write_text(json.dumps(rows, indent=1) + "\n", encoding="utf-8")
-    gaps = missing(rows, args.glossary.read_text(encoding="utf-8"))
+    text = "\n".join(page.read_text(encoding="utf-8") for page in args.glossary or NAME_INDEX_PAGES)
+    gaps = missing(rows, text)
     for line in _iter_report(rows, gaps):
         print(line)
-    wrong = stale(rows, args.glossary.read_text(encoding="utf-8"))
+    wrong = stale(rows, text)
     for callable_, name in wrong:
         print(f"glossary names {name}= on {callable_}, which takes no such parameter")
     return 1 if gaps or wrong else 0

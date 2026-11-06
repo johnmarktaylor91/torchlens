@@ -65,7 +65,7 @@ def test_factory_that_recorded_no_aten_rows_refuses_typed() -> None:
 def test_documented_unstable_kernel_surface_matches_glossary_index() -> None:
     """Every telemetry spelling has the exact no-shim unstable marker."""
 
-    glossary = (_REPO_ROOT / "docs/reference/glossary.md").read_text(encoding="utf-8")
+    glossary = (_REPO_ROOT / "docs/internal/reference/name_index.md").read_text(encoding="utf-8")
     indexed = glossary.split("<!-- KERNEL-TELEMETRY-UNSTABLE-INDEX:START -->", 1)[1].split(
         "<!-- KERNEL-TELEMETRY-UNSTABLE-INDEX:END -->", 1
     )[0]

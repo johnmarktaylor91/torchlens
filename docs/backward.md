@@ -166,7 +166,7 @@ node carry no module membership. `module_membership_source` is `"paired"`, `"inf
 ## Checkpoint Invocation Witness
 
 Non-reentrant `torch.utils.checkpoint` invocations are witnessed by capture-time TOKENS
-(DOCUMENTED-UNSTABLE surface): the patched `saved_tensors_hooks.__enter__` mints one per-trace
+(experimental surface): the patched `saved_tensors_hooks.__enter__` mints one per-trace
 ordinal token per classified `_checkpoint_hook` enter on the armed owner thread outside any
 engine invocation, and installs per-instance token-bearing pack/unpack wrappers. Pack evidence
 is count-only — the forward-side slot-to-op binding is deliberately NOT claimed (pack hooks run
@@ -199,7 +199,7 @@ A captured backward records every ATen call it dispatches (`BackwardPass.aten_op
 `tl.report.backward_status(trace)` counts them exactly for the matmul and convolution families
 (fma2, FlopCounterMode's convention). `BackwardPass.flops_attribution` charges each counted call
 to the GradFn call it ran under and to the forward op that node differentiates
-(DOCUMENTED-UNSTABLE): one `BackwardFlopsRow` per GradFn call (`grad_fn_label`, `call_index`,
+(experimental): one `BackwardFlopsRow` per GradFn call (`grad_fn_label`, `call_index`,
 `op_label`, `flops`, `recompute_flops`). Calls that ran under no recorded node (the engine's seed
 gradient, nodes no capture walked) go to the `unattributed` bucket, which names every call
 (`unattributed_ops`); the rows plus `unattributed_flops` equal the pass's `executed_flops`
@@ -317,7 +317,7 @@ Paddle, and TensorFlow traces.
 
 Real per-fire timing is measured on every hooked node (universal path): a lightweight timing
 prehook and the hook entry stamp pair one `time.perf_counter()` span per fire, served LIVE by
-`trace.autograd.grad_fn_fire_timings` (DOCUMENTED-UNSTABLE spelling; keys match `trace.autograd.grad_fn_calls`,
+`trace.autograd.grad_fn_fire_timings` (experimental name; keys match `trace.autograd.grad_fn_calls`,
 untimed fires read `None`, and loaded traces refuse typed with
 `grad_fn_fire_timing_unavailable` because the runtime event stream never persists). The
 persisted `GradFnCall` timing fields keep their shipped single wall-stamp values until the
@@ -332,7 +332,7 @@ split with the finalize guard IN-ROUTINE: the D2H fence and the full projection 
 inside an engine invocation; a deferred finalize runs at the next qualifying sync point or
 non-engine read, and a read from inside an engine invocation journals without materializing.
 The `BackwardPassEnd` sidecar event discloses which close path fired (`engine_drain` /
-`sync_point`, DOCUMENTED-UNSTABLE values, runtime-only in wave 2; the projected `BackwardPass`
+`sync_point`, experimental values, runtime-only in wave 2; the projected `BackwardPass`
 field was deliberately deferred at the tlspec v8 bump and waits for a future one). The engine's final-callback handle resolves through the
 compat chokepoint behind the named `HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK` capability flag
 (visible in `tl.report.doctor()`); without it every implicit close takes

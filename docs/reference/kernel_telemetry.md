@@ -1,6 +1,6 @@
 # CUDA kernel telemetry
 
-Status: documented unstable -- no deprecation shim owed.
+Status: experimental; names may change in any release.
 
 Kernel telemetry is an optional, detachable extension of the gated ATen execution profile. It
 measures CUDA kernels and memory copies from one concrete `torch.profiler`/Kineto session and
@@ -24,7 +24,8 @@ The public record facade is `KernelLaunch`. Its measured fields are `launch_name
 relation to primitive calls persist in the artifact's kernel annotation. This release has no public
 reader for them: the former `AtenOp.gpu_kernels` and `Op.gpu_kernels` views were removed and refuse
 with the typed `facade_redirect` error; a public kernel-recording switch is planned for a later
-release. All names and status tokens are listed in the glossary's documented-unstable index.
+release. The glossary lists this surface under
+[Experimental parts](glossary.md#experimental-parts).
 
 ## Availability and lower bounds
 

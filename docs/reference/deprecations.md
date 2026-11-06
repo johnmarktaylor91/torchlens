@@ -2,8 +2,8 @@
 <!-- # record-groups: keep-flat (this page lists the former flat spellings) -->
 
 Every warning-producing compatibility shim listed below was REMOVED outright in
-the 2026-08 shim-removal pass (interim-phase ruling: deprecation shims are not
-justified before launch; policy is remove-and-rename, not shim). The old
+the 2026-08 shim-removal pass (before launch the policy is to remove and
+rename, not to keep compatibility shims). The old
 spelling now raises (``AttributeError``/``TypeError``); the "New name" column
 is the spelling to use. Torch-version compatibility and artifact-format
 compatibility (tlspec floors, legacy-save loading) are NOT shims and are

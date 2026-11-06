@@ -95,6 +95,12 @@ pages:
   - path: internal/agent-reference/package/key-concepts.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here
+  - path: internal/reference/name_index.md
+    section: internal
+    note: maintainer name index read by the name checks
+  - path: internal/reference/name_index_keywords.md
+    section: internal
+    note: maintainer name index, records and keyword rows
   - path: internal/agent-reference/package/newer-2-x-subsystems.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here

@@ -10,7 +10,7 @@ or two fields; TorchLens generates the wrapper for any torch model exposing
 **any traced site**, with no `output_hidden_states` plumbing and no model-code
 changes.
 
-Every spelling on this page is DOCUMENTED-UNSTABLE pending the naming sprint.
+Every name on this page is experimental and may change in any release.
 
 ```python
 import torchlens as tl

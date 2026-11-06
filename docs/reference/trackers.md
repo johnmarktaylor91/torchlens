@@ -1,7 +1,7 @@
 # Trackers: feeding TensorBoard and wandb honestly
 
-> Every spelling on this page is DOCUMENTED-UNSTABLE pending the naming
-> sprint. Access is `import torchlens.trackers` for now.
+> Every name on this page is experimental and may change in any
+> release. Access is `import torchlens.trackers` for now.
 
 TorchLens never builds dashboards. It computes more and better statistics
 than the trackers' built-in watchers and feeds their dashboards: one
