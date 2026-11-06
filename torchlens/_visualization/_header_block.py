@@ -128,20 +128,25 @@ def params_caption_detail(trace: Trace) -> str:
     """Return the header's parameter line, for example ``11.7M params (44.6 MB, all trainable)``.
 
     Counts from 1,000 up print compact (``124M params``); the exact count stays
-    on ``trace.num_params``. The memory is decimal (KB, MB; divisor 1000).
+    on ``trace.num_params``. The memory is decimal (KB, MB; divisor 1000). A
+    nonzero count whose byte total is not a positive number has no recorded
+    size, so the line leaves the size out (``170 params (all trainable)``)
+    rather than print ``0 B``.
     """
 
     total = int(trace.num_params)
     if total == 0:
         return "0 params"
-    memory = format_memory(trace._cost_total_param_memory)
+    raw_memory = trace._cost_total_param_memory
+    known = isinstance(raw_memory, int | float) and not isinstance(raw_memory, bool)
+    memory = f"{format_memory(raw_memory)}, " if known and raw_memory > 0 else ""
     count = param_count(total)
     if trace.num_params_frozen == 0:
-        return f"{count} params ({memory}, all trainable)"
+        return f"{count} params ({memory}all trainable)"
     if trace.num_params_trainable == 0:
-        return f"{count} params ({memory}, all frozen)"
+        return f"{count} params ({memory}all frozen)"
     trainable = param_count(int(trace.num_params_trainable))
-    return f"{count} params ({memory}, {trainable}/{count} trainable)"
+    return f"{count} params ({memory}{trainable}/{count} trainable)"
 
 
 def _all_ops(trace: Trace) -> list[Any]:
@@ -175,14 +180,19 @@ def network_ops(trace: Trace, focus: str | None) -> list[Any]:
     return [op for op in ops if _in_module(op, focus)]
 
 
-def _memory(ops: Iterable[Any]) -> int:
-    """Return the summed activation size of ``ops`` in bytes (unknown sizes count 0)."""
+def _memory(ops: Iterable[Any]) -> int | None:
+    """Return the summed activation size of ``ops`` in bytes, or ``None`` if any is unknown.
+
+    A partial sum would print as the network's size while leaving ops out, so
+    one op without a recorded size makes the whole total unknown.
+    """
 
     total = 0
     for op in ops:
         value = record_member(op, "activation_memory", None)
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            total += int(value)
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            return None
+        total += int(value)
     return total
 
 
@@ -197,16 +207,23 @@ def network_count_line(trace: Trace, focus: str | None, vis_mode: str) -> str:
         The ``module=`` focus address (``None`` for a whole-model draw).
     vis_mode:
         ``"rolled"`` adds the layer count (``8 layers (11 ops, 149 B)``).
+
+    Notes
+    -----
+    When any counted op has no recorded size the size is left out
+    (``5 ops``; rolled ``8 layers (11 ops)``) rather than print a partial sum.
     """
 
     ops = network_ops(trace, focus)
-    size = format_memory(_memory(ops))
+    memory = _memory(ops)
     op_noun = "op" if len(ops) == 1 else "ops"
+    ops_text = f"{header_count(len(ops))} {op_noun}"
     if vis_mode != "rolled":
-        return f"{header_count(len(ops))} {op_noun} ({size})"
+        return ops_text if memory is None else f"{ops_text} ({format_memory(memory)})"
     layers = len({getattr(op, "layer_label", id(op)) for op in ops})
     layer_noun = "layer" if layers == 1 else "layers"
-    return f"{header_count(layers)} {layer_noun} ({header_count(len(ops))} {op_noun}, {size})"
+    inner = ops_text if memory is None else f"{ops_text}, {format_memory(memory)}"
+    return f"{header_count(layers)} {layer_noun} ({inner})"
 
 
 def graph_caption_html(

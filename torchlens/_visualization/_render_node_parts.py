@@ -60,7 +60,8 @@ def _module_output_summary(trace: Trace, address_w_pass: str, node: GraphNode) -
     Returns
     -------
     tuple[Any, Any]
-        Output shape (``()`` when unknown) and activation memory (``"0 B"`` when unknown).
+        Output shape (``()`` when unknown) and activation memory (``None`` when
+        unknown, so the box shows no size rather than a made-up ``0 B``).
     """
 
     try:
@@ -73,8 +74,6 @@ def _module_output_summary(trace: Trace, address_w_pass: str, node: GraphNode) -
         module_output_shape = getattr(module_output_layer, "out_shape", None)
     module_output_shape = module_output_shape or ()
     module_output_fsize = record_member(module_output_layer, "activation_memory", None)
-    if module_output_fsize is None:
-        module_output_fsize = "0 B"
     return module_output_shape, module_output_fsize
 
 
