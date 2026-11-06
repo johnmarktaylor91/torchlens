@@ -197,11 +197,13 @@ def test_capture_with_dynamo_loaded_materializes_earlier_pending_payloads() -> N
     import torch._dynamo  # noqa: F401  (already loaded by the compiles above; explicit here)
 
     with _dynamo_not_loaded():
-        _, earlier_live, _ = _capture()
+        earlier_trace, earlier_live, earlier_saved = _capture()
         assert _is_pending(earlier_live)
-    _, live, _ = _capture()
+    trace, live, _ = _capture()
     assert not _is_pending(live)
     assert not _is_pending(earlier_live)
+    _assert_payloads_unchanged(earlier_trace, earlier_saved)
+    assert trace.layer_labels == earlier_trace.layer_labels
 
 
 def test_unwrap_torch_materializes_pending_payloads() -> None:
