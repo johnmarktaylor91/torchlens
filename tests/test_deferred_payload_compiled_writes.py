@@ -31,6 +31,7 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn.functional as F
+from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
@@ -131,7 +132,7 @@ def _capture() -> tuple[tl.Trace, torch.Tensor, dict[str, torch.Tensor]]:
     model = _Stash()
     with torch.no_grad():
         trace = tl.trace(model, torch.randn(2, 4))
-    live = model.stash
+    live = stashed(trace, "stash")
     saved = {
         label: trace[label].out.clone()
         for label in trace.layer_labels
@@ -255,7 +256,8 @@ _FRESH_PROCESS_SCRIPT = textwrap.dedent(
             trace = tl.trace(model, torch.randn(2, 4))
         saved = {k: trace[k].out.clone() for k in trace.layer_labels
                  if isinstance(trace[k].out, torch.Tensor)}
-        captures.append((name, trace, model.stash, saved))
+        live = trace.modules["self"].attribute_writes["stash"].value
+        captures.append((name, trace, live, saved))
     assert "torch._dynamo" not in sys.modules, "the capture must run before Dynamo loads"
     assert len(tensor_utils._DEFER_PENDING) >= len(spellings), "the captures must defer"
     for name, trace, live, saved in captures:
