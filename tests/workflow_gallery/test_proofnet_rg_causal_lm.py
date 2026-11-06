@@ -165,16 +165,12 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
     lm: dict[str, Any],
 ) -> None:
     """RG05, as it settles on the ACTUALLY merged transformers-5.x venue:
-    every flagship activation-patching helper arm refuses TYPED with a
-    teaching message on the real checkpoint -- never the 2026-08 silent
-    flat table. The numeric single-hook parity arm is enumerated red for
-    the HF_5_CANDIDATE leg (rg_enumerated_red_hf5.tsv, owner A03): the
-    residual arm hits the pass-ambiguity guard on the 5.x graph shape, the
-    mlp/attention-output arms land on in-place dropout ops, and the head
-    arm resolves only read-only reconstructed facets under fused attention.
-    When a fix lands, the manifest row goes stale-red and THIS pin flips
-    deliberately. The live numeric intervention parity for this venue rides
-    RG07's frozen-complement oracle."""
+    the residual-stream and MLP-output patching helpers equal a hand-coded
+    single-hook patch (clean activation written into the corrupted run, one
+    block at a time) on the real checkpoint, so a flat table must be the
+    oracle's own (a full resid_post write carries the whole clean state, never
+    the 2026-08 silent no-op), and the head arm, which resolves only read-only reconstructed
+    facets under fused attention, refuses TYPED with its eager remedy."""
 
     import torchlens._semantic.patching as patching
 
@@ -183,8 +179,14 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
     clean = tokenizer(pair["clean"], return_tensors="pt")["input_ids"]
     corrupted = tokenizer(pair["corrupt"], return_tensors="pt")["input_ids"]
     assert clean.shape == corrupted.shape, "the committed pair must be length-matched"
+    blocks = model.transformer.h
     with torch.no_grad():
         answer_id = int(model(clean).logits[0, -1].argmax())
+        clean_metric = model(clean).logits[0, -1, answer_id]
+        corrupted_metric = model(corrupted).logits[0, -1, answer_id]
+    assert not torch.isclose(clean_metric, corrupted_metric), (
+        "the committed pair must move the metric, or parity proves nothing"
+    )
 
     def metric(log: Any) -> torch.Tensor:
         for op in log.output_ops:
@@ -192,46 +194,64 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
                 return op.out[0, -1, answer_id]
         raise AssertionError("no 3D logits op on the capture")
 
-    arms = {
+    def first(output: Any) -> torch.Tensor:
+        return output[0] if isinstance(output, tuple) else output
+
+    def single_hook_oracle(module_of: Any) -> torch.Tensor:
+        values = []
+        for layer in range(len(blocks)):
+            module = module_of(layer)
+            stored: list[torch.Tensor] = []
+            handle = module.register_forward_hook(
+                lambda _m, _i, out: stored.append(first(out).detach().clone())
+            )
+            with torch.no_grad():
+                model(clean)
+            handle.remove()
+
+            def write(_m: Any, _i: Any, out: Any, value: torch.Tensor = stored[0]) -> Any:
+                return (value, *out[1:]) if isinstance(out, tuple) else value
+
+            handle = module.register_forward_hook(write)
+            with torch.no_grad():
+                values.append(model(corrupted).logits[0, -1, answer_id])
+            handle.remove()
+        return torch.stack(values)
+
+    numeric_arms = {
         "residual_stream": (
             lambda: patching.activation_patch_residual_stream(
                 model, clean, corrupted, metric, facet_name="resid_post", patch_positions=False
             ),
-            "pass",  # AmbiguousSiteError teaches pass-qualified spellings
+            lambda layer: blocks[layer],
         ),
         "mlp_output": (
             lambda: patching.activation_patch_mlp_output(model, clean, corrupted, metric),
-            "replaced=False",  # PatchApplicationError disclosing refused fires
-        ),
-        "attention_heads": (
-            lambda: patching.activation_patch_attention_heads(model, clean, corrupted, metric),
-            "read-only",  # SiteResolutionError teaching the eager/capture remedy
+            lambda layer: blocks[layer].mlp,
         ),
     }
+    for arm_name, (invoke, module_of) in numeric_arms.items():
+        got = invoke().detach().reshape(-1)
+        want = single_hook_oracle(module_of)
+        assert got.shape == want.shape, f"RG05 arm {arm_name}: {got.shape} != {want.shape}"
+        torch.testing.assert_close(got, want, msg=lambda m, a=arm_name: f"RG05 arm {a}: {m}")
+
     import warnings as warnings_module
 
-    for arm_name, (invoke, reason_needle) in arms.items():
-        # The repo promotes TorchLens warnings to errors; the per-fire
-        # refusal DISCLOSURE (replaced=False) precedes the typed settlement,
-        # so measure the settlement with disclosures recorded, not fatal.
-        with warnings_module.catch_warnings():
-            warnings_module.simplefilter("always")
-            with pytest.raises(Exception) as excinfo:
-                invoke()
-        exc = excinfo.value
-        assert type(exc).__name__ in {
-            "AmbiguousSiteError",
-            "PatchApplicationError",
-            "SiteResolutionError",
-        }, (
-            f"RG05 arm {arm_name}: settled with {type(exc).__name__} -- if the"
-            " helper now SUCCEEDS, restore the numeric single-hook parity"
-            " oracle here and delete the enumerated-red row"
-        )
-        assert reason_needle.lower() in str(exc).lower(), (
-            f"RG05 arm {arm_name}: refusal no longer teaches its predicate"
-            f" ({reason_needle!r}): {str(exc)[:180]}"
-        )
+    # The repo promotes TorchLens warnings to errors; measure the head arm's
+    # typed settlement with any disclosure recorded, not fatal.
+    with warnings_module.catch_warnings():
+        warnings_module.simplefilter("always")
+        with pytest.raises(Exception) as excinfo:
+            patching.activation_patch_attention_heads(model, clean, corrupted, metric)
+    exc = excinfo.value
+    assert type(exc).__name__ == "SiteResolutionError", (
+        f"RG05 head arm: settled with {type(exc).__name__} -- if the helper now"
+        " SUCCEEDS, give it a single-hook parity oracle here"
+    )
+    assert "read-only" in str(exc).lower(), (
+        f"RG05 head arm: refusal no longer teaches its predicate: {str(exc)[:180]}"
+    )
 
 
 def test_rg07_replay_edit_through_cache_graph_matches_manual_ablation(
