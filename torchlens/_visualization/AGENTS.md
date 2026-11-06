@@ -97,7 +97,6 @@ Renders `GradFn` nodes and grad edges captured by `backends/torch/backward.py`.
   the `draw` result); change policy
   THERE. `_should_collapse_module()` (`_render_leaf.py`) is only the legacy
   per-leaf decision path.
-- `_is_collapsed_module()` protects indexing into `modules`; keep its guard strict.
 - `_build_module_focus_entries()` inserts boundary nodes for module-scoped renders.
 - Focus runs before skip/collapse.
 

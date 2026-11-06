@@ -1329,8 +1329,8 @@ def _build_collapsed_module_node(
         (collapse_address, repeat_folds, collapse_fn),
         BOX_SCOPE_HELPERS,
     )
-    # Access the module at the collapse threshold depth.  This index is safe
-    # because _is_collapsed_module already verified the node is deep enough.
+    # Access the module at the collapse threshold depth. The index is safe:
+    # the collapse plan only sends nodes nested at least this deep here.
     address_w_pass = (
         collapse_address if collapse_address is not None else node.modules[vis_call_depth - 1]
     )

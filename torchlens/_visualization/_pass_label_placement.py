@@ -212,19 +212,6 @@ def forward_sources(
     return source, placed
 
 
-def pass_label_layout(
-    source: str, *, engine: str, timeout: float, cwd: str | None = None
-) -> str | None:
-    """Return ``engine -Tjson`` output for ``source``, or ``None`` when the layout fails.
-
-    A missing Graphviz executable is ``None`` too: DOT source is still written
-    without one, and a real render reports the missing binary itself.
-    """
-
-    completed = _layout_run(source, engine=engine, timeout=timeout, cwd=cwd)
-    return None if completed is None else _stdout_text(completed)
-
-
 def _layout_run(
     source: str, *, engine: str, timeout: float, cwd: str | None
 ) -> subprocess.CompletedProcess[Any] | None:
