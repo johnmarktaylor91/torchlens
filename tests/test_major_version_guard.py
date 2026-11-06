@@ -10,10 +10,11 @@ need no maintainer action to stay armed:
   ``type!:`` subjects and breaking-change footers unless the approval file
   exists.
 
-The approval file ``.github/MAJOR_RELEASE_APPROVED`` must never exist in the
-tree outside a test's temporary directory. This file is not smoke-marked (the
-smoke tier sits at its size ceiling); the smoke job of ``.github/workflows/pr.yml``
-runs it by name, so every pull request and every release tag (the release
+The approval file ``.github/MAJOR_RELEASE_APPROVED`` exists in the tree only on
+the commit that cuts the first release of a new major, naming exactly that
+version (X.0.0, or X.0.Z when PyPI refused the earlier X.0 numbers). This
+file is not smoke-marked (the smoke tier sits at its size ceiling); the smoke
+job of ``.github/workflows/pr.yml`` runs it by name, so every pull request and every release tag (the release
 workflow re-runs ``pr.yml``) runs it, and the wiring test pins that line. The
 end-to-end test runs the workflow step's own shell text against a scratch
 repository with a
@@ -52,6 +53,48 @@ def _guard_step(steps: list[dict]) -> tuple[int, dict]:
     return next((i, s) for i, s in enumerate(steps) if s.get("name") == _STEP_NAME)
 
 
+def _approval_problem(approval_text: str, project_version: str | None) -> str | None:
+    """Return why a tracked approval file is not allowed here, or None when it is.
+
+    The maintainer's command creates the file on the commit that cuts the first release of a
+    new major, naming exactly that version; the release tag's gates rerun this test there. The
+    version is X.0.0, or X.0.Z when PyPI already held the earlier X.0 numbers (PyPI never
+    reuses a version, even a yanked one). Any other content, a minor release, or the file left
+    behind once the version moves on still fails.
+    """
+
+    approved = approval_text.removesuffix("\n")
+    if project_version is None or approved != project_version:
+        return (
+            f"{_APPROVAL_REL} names {approved!r} but pyproject.toml is at {project_version!r}; "
+            "it is created only on the maintainer's command and removed after the cut"
+        )
+    if not re.fullmatch(r"\d+\.0\.\d+", approved):
+        return (
+            f"{_APPROVAL_REL} names {approved!r}, which is not the first release of a major "
+            "(X.0.0, or X.0.Z after PyPI refused the earlier X.0 numbers)"
+        )
+    return None
+
+
+def test_approval_file_rule_accepts_only_the_first_release_of_a_major() -> None:
+    """The in-tree approval check: exact match with pyproject, and an X.0.Z version only."""
+
+    assert _approval_problem("3.0.0\n", "3.0.0") is None
+    assert _approval_problem("3.0.0", "3.0.0") is None
+    assert _approval_problem("3.0.1\n", "3.0.1") is None  # 3.0.0 was already spent on PyPI
+    # A stale or mismatched file still fails.
+    assert _approval_problem("3.0.0\n", "3.0.1") is not None
+    assert _approval_problem("3.0.1\n", "3.0.0") is not None
+    assert _approval_problem("3.0.1\n", "3.0.2") is not None
+    assert _approval_problem("3.0.1\n", None) is not None
+    # Not the first release of a major, or not a plain version: still fails.
+    assert _approval_problem("3.1.0\n", "3.1.0") is not None
+    assert _approval_problem("3.0.1rc1\n", "3.0.1rc1") is not None
+    assert _approval_problem("3.0.1\n\n", "3.0.1") is not None
+    assert _approval_problem(" 3.0.1\n", " 3.0.1") is not None
+
+
 def test_release_guard_is_wired_and_cannot_be_skipped() -> None:
     """The guard runs unconditionally before the build; publish needs that job; hooks install."""
 
@@ -75,17 +118,13 @@ def test_release_guard_is_wired_and_cannot_be_skipped() -> None:
 
     approval = _ROOT / _APPROVAL_REL
     if approval.exists():
-        # The maintainer's command creates the file on the commit that cuts a major release,
-        # naming exactly that X.0.0 version; the release tag's gates rerun this test there.
-        # Any other content, or the file left behind once the version moves on, still fails.
-        approved = approval.read_text(encoding="utf-8").removesuffix("\n")
         project = re.search(
             r'^version\s*=\s*"([^"]+)"', (_ROOT / "pyproject.toml").read_text(), re.MULTILINE
         )
-        assert project and approved == project.group(1) and re.fullmatch(r"\d+\.0\.0", approved), (
-            f"{_APPROVAL_REL} exists but does not approve exactly the X.0.0 version being "
-            "released; it is created only on the maintainer's command and removed after the cut"
+        problem = _approval_problem(
+            approval.read_text(encoding="utf-8"), project.group(1) if project else None
         )
+        assert problem is None, problem
 
     config = yaml.safe_load((_ROOT / ".pre-commit-config.yaml").read_text())
     assert {"commit-msg", "pre-push"} <= set(config["default_install_hook_types"])
@@ -229,6 +268,8 @@ def test_release_step_stops_a_breaking_range_and_passes_minor_and_patch(tmp_path
     approval = repo.root / _APPROVAL_REL
     approval.parent.mkdir()
     approval.write_text("3.1.0\n", encoding="utf-8")
+    assert repo.run_step(run, "tag", "v3.0.1").returncode == 1
+    approval.write_text("3.0.0\n", encoding="utf-8")  # left over from the refused 3.0.0 cut
     assert repo.run_step(run, "tag", "v3.0.1").returncode == 1
     approval.write_text("3.0.1\n", encoding="utf-8")
     assert repo.run_step(run, "tag", "v3.0.1").returncode == 0

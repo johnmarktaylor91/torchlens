@@ -5,6 +5,12 @@
 
 <!-- version list -->
 
+## v3.0.1 (2026-11-06)
+
+3.0.0 could not be published because PyPI already holds a yanked 3.0.0 from 1 May 2026, and
+PyPI never reuses a version. 3.0.1 is the first 3.0 release on PyPI and carries everything listed
+under v3.0.0 below.
+
 ## v3.0.0 (2026-11-06)
 
 ### Security
