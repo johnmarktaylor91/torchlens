@@ -1,7 +1,8 @@
 """The drawing's sizes on preview backends: real bytes, never ``None`` or a made-up ``0 B``.
 
 The launch pictures showed ``170 params (0 B, all trainable)`` on JAX, MLX and
-Paddle (the backends counted parameters but never stamped their byte total)
+Paddle (the backends counted parameters but never stamped their byte total;
+TensorFlow also sized Keras 3 variables at 0, their dtype being a string)
 and ``(1, 4, 4, 4), None`` on every Paddle op (its byte probe called the wrapped
 ``Tensor.numel`` mid-capture, whose ``int()`` the scalar-escape guard refuses).
 The framework tests capture the same tiny CNN in each backend and read the
@@ -26,15 +27,18 @@ _PARAM_BYTES = 4 * _NUM_PARAMS
 
 
 def _assert_param_bytes(trace: Any) -> None:
-    """Assert the trace stamps its parameter bytes and the header prints them."""
+    """Assert the trace stamps its parameter bytes and the header prints them.
+
+    Only the size is pinned: the trainable split is each framework's own flag
+    (tinygrad leaves ``requires_grad`` unset until an optimizer claims a tensor).
+    """
 
     assert trace.num_params == _NUM_PARAMS
     recorded = sum(int(param.param_memory) for param in trace.params.values())
     assert recorded == _PARAM_BYTES
     assert int(trace.cost.total_param_memory) == _PARAM_BYTES
-    assert params_caption_detail(trace) == (
-        f"{_NUM_PARAMS} params ({format_memory(_PARAM_BYTES)}, all trainable)"
-    )
+    header = params_caption_detail(trace)
+    assert header.startswith(f"{_NUM_PARAMS} params ({format_memory(_PARAM_BYTES)}, "), header
 
 
 def _assert_op_bytes(trace: Any) -> None:
@@ -124,7 +128,7 @@ def test_paddle_trace_reports_param_and_op_bytes() -> None:
 @pytest.mark.tf_backend
 @pytest.mark.rare
 def test_tf_keras_trace_reports_param_bytes() -> None:
-    """A Keras trace stamps its parameter bytes (the same shared totals helper)."""
+    """A Keras trace sizes its variables (Keras 3 spells their dtype as a string)."""
 
     tf = pytest.importorskip("tensorflow")
     keras = tf.keras

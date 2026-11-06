@@ -164,6 +164,25 @@ def patched_tf_module_stack(
         _restore_installed()
 
 
+def _variable_nbytes(variable: Any, shape: tuple[int, ...]) -> int:
+    """Return a TensorFlow variable's size in bytes from its shape and dtype.
+
+    Keras 3 variables spell ``dtype`` as a string (``"float32"``), which the
+    shared ``value_nbytes`` ladder cannot size, so the element size then comes
+    from ``tf.as_dtype``; the variable's value is never read.
+    """
+
+    nbytes = _nbytes(variable)
+    if nbytes:
+        return nbytes
+    import tensorflow as tf
+
+    try:
+        return _numel(shape) * int(tf.as_dtype(getattr(variable, "dtype", None)).size)
+    except (TypeError, ValueError):
+        return 0
+
+
 def tf_param_logs(tree: TFModuleTree, trace: Any) -> dict[str, Param]:
     """Build TorchLens parameter logs from warmed TensorFlow variables.
 
@@ -194,7 +213,7 @@ def tf_param_logs(tree: TFModuleTree, trace: Any) -> dict[str, Param]:
             shape=shape,
             dtype=dtype,  # type: ignore[arg-type]
             num_params=_numel(shape),
-            param_memory=_nbytes(variable) or 0,
+            param_memory=_variable_nbytes(variable, shape),
             trainable=bool(getattr(variable, "trainable", False)),
             address=address,
             barcode=f"tf:{address}",
