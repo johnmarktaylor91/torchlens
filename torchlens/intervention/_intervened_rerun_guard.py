@@ -8,9 +8,10 @@ its recorded intervention. A user callable is never saved; it becomes a
 and the loaded spec records each one in ``metadata["recipe_placeholders"]``.
 Rerunning such a trace would re-execute without that callable (an edit staged
 after loading would run alone), so every legacy door (plain, append, chunked,
-fork, and ``do(engine="rerun")``) refuses ``run_intervention_spec_not_persisted``
-naming the rule position and the callable. A loaded trace whose values were
-intervened but which carries no recipe at all refuses the same way.
+fork, and ``do(..., intervention=InterventionOptions(engine="rerun"))``) refuses
+``run_intervention_spec_not_persisted`` naming the rule position and the callable.
+A loaded trace whose values were intervened but which carries no recipe at all
+refuses the same way.
 """
 
 from __future__ import annotations

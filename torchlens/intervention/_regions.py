@@ -772,7 +772,7 @@ def _refuse_inadmissible_region_do(
             f"engine={engine!r} cannot express (live lanes run the model for "
             "real -- use intervene= or spec.bind there)",
             code="region_engine_unsupported",
-            remedy="call do(region, edit) with engine='replay' (the default on a fork)",
+            remedy="call do(region, edit) with intervention=InterventionOptions(engine='replay') (the default on a fork)",
         )
     if region_target.trace is not trace:
         raise RegionError(

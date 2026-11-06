@@ -143,13 +143,15 @@ def select_do_engine(trace: Trace, engine: str, *, model: nn.Module | None, x: A
     if engine != "auto":
         if engine == "rerun" and (model is None or x is None):
             raise EngineDispatchError(
-                "do(..., engine='rerun') requires both model= and inputs=. "
-                "Pass both, or use engine='replay' if full rerun is not intended."
+                "do(..., intervention=InterventionOptions(engine='rerun')) requires both "
+                "model= and inputs=. Pass both, or use InterventionOptions(engine='replay') "
+                "if full rerun is not intended."
             )
         return engine
     if (model is None) != (x is None):
         raise EngineDispatchError(
-            "do(engine='auto') needs both model= and inputs= for rerun, or neither for "
-            "replay. Pass both, or use engine='replay' if rerun is not intended."
+            "do() with the default engine ('auto') needs both model= and inputs= for rerun, "
+            "or neither for replay. Pass both, or pass "
+            "intervention=InterventionOptions(engine='replay') if rerun is not intended."
         )
     return "rerun" if model is not None else "replay"

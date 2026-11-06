@@ -390,17 +390,17 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
 
     if engine_value not in {"auto", "replay", "rerun", "set_only"}:
         raise InvalidArgumentError(
-            "do(..., engine=...) must be 'auto', 'replay', 'rerun', or 'set_only'; "
+            "do(..., intervention=InterventionOptions(engine=...)) must be 'auto', 'replay', 'rerun', or 'set_only'; "
             f"received {engine_value!r}",
             code="intervention_engine_invalid",
-            remedy="pass engine='auto', 'replay', 'rerun', or 'set_only'",
+            remedy="pass intervention=InterventionOptions(engine=...) with 'auto', 'replay', 'rerun', or 'set_only'",
             argument="engine",
         )
 
     selected_engine = select_do_engine(trace, engine_value, model=model, x=x)
     if selected_engine == "rerun":
         if model is None:
-            raise EngineDispatchError("do(..., engine='rerun') requires model= and inputs=.")
+            raise EngineDispatchError("the rerun engine requires do(..., model=, inputs=).")
         validate_supplied_model_matches_capture(trace, model)
     elif selected_engine == "replay":
         # Capture gates (N3, N5, structure-only, stats) run before any site resolves.
