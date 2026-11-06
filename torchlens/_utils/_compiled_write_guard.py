@@ -32,6 +32,7 @@ from typing import Any
 from torch.utils._python_dispatch import _disable_current_modes
 
 from . import tensor_utils
+from ._defer_gate import _DEFER_GATE
 from ._torch_compat import (
     get_dynamo_compile_counters,
     get_tracing_tensor_types,
@@ -114,3 +115,7 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
         materialize_all_deferred_payloads()
         return
     tensor_utils.materialize_deferred_for_call(tensors)
+
+
+# The wrappers call the copy-out through the gate; bind this one so tracing tensors reach rule 2.
+_DEFER_GATE.materialize = materialize_deferred_for_call
