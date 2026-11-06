@@ -8,6 +8,8 @@ DOCUMENTED-UNSTABLE pending the naming sprint; the codes are the contract
 
 from __future__ import annotations
 
+from typing import Any
+
 from ...errors._base import TorchLensError
 
 __all__ = ["ReadError", "ReadInternalError"]
@@ -42,3 +44,26 @@ class ReadInternalError(TorchLensError, RuntimeError):
     >>> issubclass(tl.errors.ReadInternalError, RuntimeError)
     True
     """
+
+
+def require_pandas() -> Any:
+    """Import pandas, refusing with the TorchLens tabular-extra message when it is absent.
+
+    Returns
+    -------
+    Any
+        The imported pandas module.
+
+    Raises
+    ------
+    ImportError
+        Naming ``pip install torchlens[tabular]`` when pandas is not installed.
+    """
+
+    try:
+        import pandas as pd
+    except ImportError as exc:
+        raise ImportError(
+            "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+        ) from exc
+    return pd
