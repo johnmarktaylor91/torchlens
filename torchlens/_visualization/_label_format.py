@@ -9,11 +9,11 @@ from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.op import Op
 
 from .._capture.flops import append_attention_note
-from .._errors import InvalidArgumentError
 from .._quantities import Duration
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._utils._record_group_table import record_member
+from ._label_fields import require_node_label_field
 from ._pass_marks import pass_rows
 
 PARAM_SEPARATOR: Final[str] = " · "
@@ -446,7 +446,7 @@ def decimal_size(size: float) -> str:
 
 #: Counts at or above this print compact (``12.3K``); smaller ones print in full.
 COMPACT_COUNT_FROM = 10_000
-_COUNT_UNITS: Final = ((1e9, "B"), (1e6, "M"), (1e3, "K"))
+_COUNT_UNITS: Final = ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K"))
 
 
 def compact_count(count: int, full_below: int = COMPACT_COUNT_FROM) -> str:
@@ -496,12 +496,19 @@ def collapsed_param_detail(num_params: int, num_frozen: int) -> str:
 
     if num_params == 0:
         return "0 parameters"
+    noun = params_noun(num_params)
     if num_frozen == 0:
-        return f"{param_count(num_params)} params (all trainable)"
+        return f"{param_count(num_params)} {noun} (all trainable)"
     if num_frozen == num_params:
-        return f"{param_count(num_params)} params (all frozen)"
+        return f"{param_count(num_params)} {noun} (all frozen)"
     trainable = param_count(num_params - num_frozen)
-    return f"{param_count(num_params)} params ({trainable} trainable, {param_count(num_frozen)} frozen)"
+    return f"{param_count(num_params)} {noun} ({trainable} trainable, {param_count(num_frozen)} frozen)"
+
+
+def params_noun(count: int) -> str:
+    """Return ``"param"`` for a count of one and ``"params"`` otherwise."""
+
+    return "param" if count == 1 else "params"
 
 
 def format_collapsed_module_contents(num_layers: int, num_buffer_layers: int) -> str:
@@ -716,6 +723,7 @@ def compute_selected_node_lines(
 
     rows: list[str] = []
     for field_name in node_label_fields:
+        require_node_label_field(field_name)
         if field_name in {"label", "name"}:
             rows.append(f"{getattr(layer_log, 'layer_label', '')}{pass_mark}")
         elif field_name in {"type", "op", "operation"}:
@@ -735,7 +743,10 @@ def compute_selected_node_lines(
             if dtype_text is not None:
                 rows.append(dtype_text)
         elif field_name in {"memory", "bytes"}:
-            rows.append(str(record_member(layer_log, "activation_memory", "")))
+            # The shape row's decimal units; no row when no size was recorded.
+            memory = record_member(layer_log, "activation_memory", None)
+            if isinstance(memory, int | float) and not isinstance(memory, bool):
+                rows.append(format_memory(memory))
         elif field_name == "module":
             rows.append(format_module_path(node_address) or "@root")
         elif field_name == "params":
@@ -759,13 +770,6 @@ def compute_selected_node_lines(
             else:
                 duration = float(get_multipass_attr(layer_log, "func_duration", 0.0) or 0.0)
             rows.append(str(Duration(duration)))
-        else:
-            raise InvalidArgumentError(
-                f"Unsupported node label field: {field_name!r}",
-                code="node_label_field_invalid",
-                remedy="pass documented node label field names",
-                field=str(field_name),
-            )
     if rows:
         return rows
     # Empty selection (every requested row skipped) falls back to the

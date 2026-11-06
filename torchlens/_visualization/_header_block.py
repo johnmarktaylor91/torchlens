@@ -47,7 +47,7 @@ from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink, header_edit_line
 from ._endpoint_rings import endpoint_ring_swatch
 from ._focus_scope import focus_address, scope_caption_head
 from ._frame_penwidth import MODULE_PENWIDTH
-from ._label_format import format_memory, header_count, param_count
+from ._label_format import format_memory, header_count, param_count, params_noun
 from ._render_common import (
     BOOL_NODE_COLOR,
     BUFFER_NODE_COLOR,
@@ -107,8 +107,9 @@ class KeySwatch:
     text:
         Plain words for the mark (escaped at build time).
     shape:
-        ``"oval"``, ``"box"`` or ``"cylinder"``; ``"frame"`` for a module box
-        and ``"arrow"`` for an arrow with the downstream highlighter under it.
+        ``"oval"``, ``"box"``, ``"box3d"``, ``"double"`` (a double-bordered box)
+        or ``"cylinder"``; ``"frame"`` for a module box and ``"arrow"`` for an
+        arrow with the downstream highlighter under it.
     fill:
         Fill colour as the picture paints it under the active skin (for
         ``"arrow"``, the highlighter colour with its opacity, ``#RRGGBBAA``).
@@ -142,12 +143,13 @@ def params_caption_detail(trace: Trace) -> str:
     known = isinstance(raw_memory, int | float) and not isinstance(raw_memory, bool)
     memory = f"{format_memory(raw_memory)}, " if known and raw_memory > 0 else ""
     count = param_count(total)
+    noun = params_noun(total)
     if trace.num_params_frozen == 0:
-        return f"{count} params ({memory}all trainable)"
+        return f"{count} {noun} ({memory}all trainable)"
     if trace.num_params_trainable == 0:
-        return f"{count} params ({memory}all frozen)"
+        return f"{count} {noun} ({memory}all frozen)"
     trainable = param_count(int(trace.num_params_trainable))
-    return f"{count} params ({memory}{trainable}/{count} trainable)"
+    return f"{count} {noun} ({memory}{trainable}/{count} trainable)"
 
 
 def _all_ops(trace: Trace) -> list[Any]:
@@ -253,7 +255,10 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
     if edit_line is not None:
         caption_body += f"{edit_line}<br align='left'/>"
     if getattr(trace, "_has_direct_writes", False):
-        caption_body += "Direct writes detected - recipe propagation will overlay<br align='left'/>"
+        caption_body += (
+            "Direct writes detected - replay and rerun propagation will overlay them"
+            "<br align='left'/>"
+        )
     caption_body += _honesty_banner_rows(trace, request, edited=edit_line is not None)
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
