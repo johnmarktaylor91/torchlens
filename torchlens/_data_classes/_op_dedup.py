@@ -172,6 +172,29 @@ def _dedup_cached_identity_out(
     return None
 
 
+def forget_identity_payloads(trace: "Trace", labels: set[str]) -> None:
+    """Drop the identity-dedup entries saved under ``labels``.
+
+    A foreign-kernel boundary op owns the output its interior allocated (``zeros_like``) and
+    then wrote outside torch, which leaves the version counter alone; without this the
+    boundary op would reuse the interior op's pre-write copy.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the per-pass dedup caches.
+    labels:
+        Raw layer labels whose saved payloads may no longer be reused.
+    """
+
+    try:
+        identity_cache = trace._out_identity_cache
+    except AttributeError:
+        return
+    for key in [k for k, entry in identity_cache.items() if entry[1] in labels]:
+        del identity_cache[key]
+
+
 def _ordinal_identity_cache(trace: "Trace") -> _IdentityDedupCache:
     """Return ``trace``'s identity dedup cache, adopting a plain dict on first use.
 
