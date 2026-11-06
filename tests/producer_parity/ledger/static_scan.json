@@ -1376,14 +1376,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/_data_classes/layer.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "source_trace",
   "file": "torchlens/_data_classes/layer.py",
@@ -1408,27 +1400,11 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "input_ancestors",
-  "file": "torchlens/_data_classes/op.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_data_classes/op.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/_data_classes/op.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -5005,14 +4981,6 @@
   "file": "torchlens/_visualization/_rank_layout_internal/layout.py",
   "has_default": false,
   "sites": 5,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_visualization/_render_dot.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {

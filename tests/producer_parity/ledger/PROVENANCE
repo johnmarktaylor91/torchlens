@@ -5899,3 +5899,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: aeb02f56464f9c8b82b0c3a769c514d9cbd2b8e0
 recorded: 2026-11-06T08:56:20+00:00
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: polish train 1106: lane message, docstring and dead-code edits
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6cb0ff40fcb91411c1532475c1dc9be83047c146
+recorded: 2026-11-06T20:28:11+00:00
