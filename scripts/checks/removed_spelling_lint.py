@@ -431,6 +431,11 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         "docstring of the typed removed-keyword redirect names the "
         "CaptureOptions(output_style=...) spelling it refuses",
     ),
+    "docs/internal/reference/name_index.md": (
+        frozenset({"options_flat"}),
+        "removal-record prose: the name index names the removed CaptureOptions "
+        "fields beside their facade_redirect replacements",
+    ),
 }
 
 
