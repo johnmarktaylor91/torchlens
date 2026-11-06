@@ -16,6 +16,7 @@ delegated to the registries in ``exemptions.py``.
 
 import functools
 import math
+import warnings
 from collections import Counter, defaultdict, deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 from .._utils._record_group_table import record_member
+from .._utils.display import user_stacklevel
 from .._utils.tensor_utils import (
     _ACCUMULATING_REPLAY_ULP_HEADROOM,
     derive_float_tolerances,
@@ -2629,17 +2631,12 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if recomputed_output is None:
         if not perturb:
             # Non-perturbed replay failure is a real validation failure.
-            import warnings
-
             warnings.warn(
                 f"Validation replay raised an exception for layer "
-                f"{layer_to_validate_parents_for_label}; treating as failed validation."
+                f"{layer_to_validate_parents_for_label}; treating as failed validation.",
+                stacklevel=user_stacklevel(),
             )
-            from ._diagnostics import (
-                CHECK_REPLAY,
-                ValidationFailure,
-                record_validation_failure,
-            )
+            from ._diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
 
             record_validation_failure(
                 self,
