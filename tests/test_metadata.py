@@ -457,6 +457,7 @@ def test_refresh_shape_change_emits_single_aggregated_warning() -> None:
 
     shape_warnings = [w for w in caught if "Tensor shape changed" in str(w.message)]
     assert len(shape_warnings) == 1
+    assert shape_warnings[0].filename == __file__
     message = str(shape_warnings[0].message)
     match = re.search(r"Tensor shape changed for (\d+) layer", message)
     assert match is not None
