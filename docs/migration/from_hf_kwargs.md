@@ -15,7 +15,7 @@ eager attention so transformers can return the probabilities.
 ### In transformers
 
 ```python
-# migration-test: tool=torchlens expected=((1, 4, 32), (1, 2, 4, 4), 3)
+# migration-test: tool=torchlens requires=transformers expected=((1, 4, 32), (1, 2, 4, 4), 3)
 import torch
 import transformers
 
@@ -36,7 +36,7 @@ RESULT = (
 ### In TorchLens
 
 ```python
-# migration-test: tool=torchlens expected=(True, True, True)
+# migration-test: tool=torchlens requires=transformers expected=(True, True, True)
 import torch
 import transformers
 import torchlens as tl
@@ -87,7 +87,7 @@ Two traps these keyword arguments set:
 The TorchLens attention backend, on a model with a padded batch:
 
 ```python
-# migration-test: tool=torchlens expected=((2, 2, 4, 4), True)
+# migration-test: tool=torchlens requires=transformers expected=((2, 2, 4, 4), True)
 import torch
 import transformers
 import torchlens as tl

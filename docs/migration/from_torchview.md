@@ -107,7 +107,7 @@ the same model.
   two-block GPT-2 from a config (no download) and counts both views:
 
 ```python
-# migration-test: tool=torchlens expected=(True, True)
+# migration-test: tool=torchlens requires=transformers expected=(True, True)
 import os
 import tempfile
 

@@ -26,7 +26,7 @@ gradients over the input embeddings. The example builds a tiny GPT-2 and a six-w
 locally; without `target=` it explains the model's own argmax prediction and says so.
 
 ```python
-# migration-test: tool=torchlens expected=(True, True)
+# migration-test: tool=torchlens requires=transformers expected=(True, True)
 import torch
 import transformers
 from tokenizers import Tokenizer, models, pre_tokenizers

@@ -25,7 +25,7 @@ head_view(attention, tokens)   # attention = model(ids, output_attentions=True).
 The executed part is the input BertViz consumes, built with transformers alone:
 
 ```python
-# migration-test: tool=torchlens expected=(2, (1, 2, 4, 4))
+# migration-test: tool=torchlens requires=transformers expected=(2, (1, 2, 4, 4))
 import torch
 import transformers
 
@@ -45,7 +45,7 @@ The TorchLens side of both tables, on the same model: BertViz's head view, then 
 predictions as a logit-lens ribbon.
 
 ```python
-# migration-test: tool=torchlens expected=(2, (2, 4, 4), True, True)
+# migration-test: tool=torchlens requires=transformers expected=(2, (2, 4, 4), True, True)
 import os
 import tempfile
 

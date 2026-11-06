@@ -2,8 +2,11 @@
 
 Each fence on these pages starts with ``# migration-test: tool=<tool> expected=<literal>``
 and assigns ``RESULT``; the test runs the fence in a fresh namespace and compares
-``RESULT`` with the declared literal. A ``torchlens`` fence never skips: it needs only
-the core test environment (torch, torchvision, transformers). A fence for another tool
+``RESULT`` with the declared literal. A ``torchlens`` fence needs only torch and
+TorchLens unless its header declares more with ``requires=<module>[,<module>...]``
+before ``expected=`` (``transformers``, which the torch-floor and forward smoke rows do
+not install); it skips only where a declared module is absent, and the lint below
+holds that every declared module is one the fence imports. A fence for another tool
 skips when that tool is not installed, so the third-party side of a page runs wherever
 the tool is present. A fence without a header fails the lint below, so no example on
 these pages can go unexecuted.
@@ -60,7 +63,11 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "flax": ("flax", "jax"),
 }
 
-HEADER_RE = re.compile(r"# migration-test: tool=(?P<tool>[a-z0-9_]+) expected=(?P<expected>.+)")
+HEADER_RE = re.compile(
+    r"# migration-test: tool=(?P<tool>[a-z0-9_]+)"
+    r"(?: requires=(?P<requires>[a-z0-9_]+(?:,[a-z0-9_]+)*))? expected=(?P<expected>.+)"
+)
+IMPORT_RE = re.compile(r"^\s*(?:import|from)\s+(?P<module>[A-Za-z_]\w*)", re.MULTILINE)
 BLOCK_RE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)
 DOCS = Path(__file__).resolve().parents[1] / "docs"
 
@@ -88,7 +95,7 @@ def _examples() -> list[Any]:
     Returns
     -------
     list[Any]
-        ``pytest.param(page, index, tool, expected, code)`` entries.
+        ``pytest.param(page, index, tool, requires, expected, code)`` entries.
     """
 
     params: list[Any] = []
@@ -98,22 +105,31 @@ def _examples() -> list[Any]:
             if header is None:
                 continue
             expected = ast.literal_eval(header.group("expected"))
+            requires = (
+                tuple(header.group("requires").split(",")) if header.group("requires") else ()
+            )
             params.append(
                 pytest.param(
-                    page, index, header.group("tool"), expected, code, id=f"{page}:{index}"
+                    page,
+                    index,
+                    header.group("tool"),
+                    requires,
+                    expected,
+                    code,
+                    id=f"{page}:{index}",
                 )
             )
     return params
 
 
 @pytest.mark.smoke_cells("test_migration_page_example_runs[migration/from_torchview.md:3]")
-@pytest.mark.parametrize(("page", "index", "tool", "expected", "code"), _examples())
+@pytest.mark.parametrize(("page", "index", "tool", "requires", "expected", "code"), _examples())
 def test_migration_page_example_runs(
-    page: str, index: int, tool: str, expected: Any, code: str
+    page: str, index: int, tool: str, requires: tuple[str, ...], expected: Any, code: str
 ) -> None:
     """Run one fence and compare its ``RESULT`` with the declared value."""
 
-    for module in TOOL_MODULES[tool]:
+    for module in TOOL_MODULES[tool] + requires:
         if importlib.util.find_spec(module) is None:
             pytest.skip(f"{page} fence {index} needs {module!r}")
     filename = f"{page}:python-block-{index}"
@@ -138,6 +154,9 @@ def test_every_fence_is_headed_with_a_known_tool(page: str) -> None:
         header = HEADER_RE.match(code.splitlines()[0])
         assert header is not None, f"{page} fence {index} has no migration-test header"
         assert header.group("tool") in PAGES[page], (page, index, header.group("tool"))
+        declared = set((header.group("requires") or "").split(",")) - {""}
+        imported = {m.group("module") for m in IMPORT_RE.finditer(code)}
+        assert declared <= imported, f"{page} fence {index} requires what it never imports"
     tools = {HEADER_RE.match(code.splitlines()[0]).group("tool") for code in fences}  # type: ignore[union-attr]
     assert tools & {"torchlens", "timm_torchlens"}, f"{page} has no TorchLens example"
 

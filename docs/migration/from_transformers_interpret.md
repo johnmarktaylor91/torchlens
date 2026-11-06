@@ -46,7 +46,7 @@ RESULT = all(isinstance(score, float) for _, score in attributions)
 ### In TorchLens
 
 ```python
-# migration-test: tool=torchlens expected=(True, True)
+# migration-test: tool=torchlens requires=transformers expected=(True, True)
 import os
 import tempfile
 

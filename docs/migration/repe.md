@@ -26,7 +26,7 @@ fits the direction (`"mean_diff"`, `"pca"` or `"logistic"`); `direction.steer(st
 edit, placed with `tl.when(tl.module(site), ...)`.
 
 ```python
-# migration-test: tool=torchlens expected=((32,), 'mean_diff', True)
+# migration-test: tool=torchlens requires=transformers expected=((32,), 'mean_diff', True)
 import torch
 import torchlens as tl
 from torchlens.intervention import fit_direction
