@@ -8,7 +8,7 @@ width, which the 10 pt of side padding absorbs for ordinary rows but not for a
 long one (GPT-2's ``num_embeddings=50257, embedding_dim=768, padding_idx=-1``
 ran 10.5 pt past its centre line and touched the border).
 
-:func:`fitted_cell_width` returns ``None`` when every row keeps at least 1 pt
+:func:`fitted_cell_width` returns ``None`` when every row keeps at least 2 pt
 from the border at Graphviz's own width, so ordinary labels keep their bytes;
 otherwise the cell width that keeps every row :data:`ROW_CLEARANCE` points inside.
 """
@@ -30,17 +30,19 @@ _NODE_MARGIN = 0.11 * 72
 #: The cell padding node labels give every row, in points per side.
 _CELL_PADDING = 2.0
 #: A row whose drawn right end would come closer than this to the border (points)
-#: touches it: the cell is widened. Rows with more room keep Graphviz's width.
-_TOUCH_CLEARANCE = 1.0
+#: touches it once the border's stroke is drawn: the cell is widened. Rows with
+#: more room keep Graphviz's width.
+_TOUCH_CLEARANCE = 2.0
 #: Points a widened cell leaves between its rows' drawn right ends and the border.
 ROW_CLEARANCE = 4.0
-#: Rows shorter than this cannot touch the border: rounding moves each glyph at most
-#: half a 96 dpi pixel (0.375 pt), and a row must run past the side padding less the
-#: touch clearance (8.92 pt), so a node with only short rows is not measured.
-_MIN_CHARS = math.ceil((_CELL_PADDING + _NODE_MARGIN - _TOUCH_CLEARANCE) / (0.5 * 72 / 96))
+#: How far a shape's right border sits inside its node box, in points: a ``box3d``
+#: front face ends at its 4 pt depth, so its rows have 4 pt less room on the right.
+_SHAPE_INSETS = {"box3d": 4.0}
+#: Most a glyph's advance moves when rounded to a 96 dpi pixel, in points.
+_MAX_ROUNDING = 0.5 * 72 / 96
 
 
-def fitted_cell_width(rows: Sequence[Sequence[Run]]) -> int | None:
+def fitted_cell_width(rows: Sequence[Sequence[Run]], shape: str | None = None) -> int | None:
     """Return a cell width for a label whose row would touch its border, else ``None``.
 
     A row is laid out from Graphviz's width ``g`` and drawn ``t`` wide, starting
@@ -51,6 +53,8 @@ def fitted_cell_width(rows: Sequence[Sequence[Run]]) -> int | None:
     ----------
     rows:
         Each row's runs (text, point size, bold).
+    shape:
+        The node's Graphviz shape; a ``box3d`` front face ends 4 pt in.
 
     Returns
     -------
@@ -66,7 +70,10 @@ def fitted_cell_width(rows: Sequence[Sequence[Run]]) -> int | None:
     405
     """
 
-    if all(sum(len(text) for text, _size, _bold in row) < _MIN_CHARS for row in rows):
+    margin = _NODE_MARGIN - _SHAPE_INSETS.get(shape or "", 0.0)
+    # A row shorter than this cannot reach the touch clearance, so short labels are not measured.
+    min_chars = math.ceil((_CELL_PADDING + margin - _TOUCH_CLEARANCE) / _MAX_ROUNDING)
+    if all(sum(len(text) for text, _size, _bold in row) < min_chars for row in rows):
         return None
     default = 0.0
     touching = 0.0
@@ -75,8 +82,8 @@ def fitted_cell_width(rows: Sequence[Sequence[Run]]) -> int | None:
         laid_out = sum(graphviz_text_width(text, size, bold) for text, size, bold in row)
         drawn = sum(text_width(text, size, bold) for text, size, bold in row)
         default = max(default, laid_out + 2 * _CELL_PADDING)
-        touching = max(touching, 2 * (drawn + _TOUCH_CLEARANCE - _NODE_MARGIN) - laid_out)
-        needed = max(needed, 2 * (drawn + ROW_CLEARANCE - _NODE_MARGIN) - laid_out)
+        touching = max(touching, 2 * (drawn + _TOUCH_CLEARANCE - margin) - laid_out)
+        needed = max(needed, 2 * (drawn + ROW_CLEARANCE - margin) - laid_out)
     if touching <= default:
         return None
     return math.ceil(needed)

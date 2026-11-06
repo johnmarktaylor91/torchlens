@@ -1495,7 +1495,7 @@ def _node_spec_to_graphviz_args(spec: NodeSpec) -> dict[str, str]:
     """
 
     node_args: dict[str, str] = {
-        "label": render_lines_to_html(spec.lines, spec.fillcolor),
+        "label": render_lines_to_html(spec.lines, spec.fillcolor, spec.shape),
         "shape": spec.shape,
         "style": spec.style,
     }

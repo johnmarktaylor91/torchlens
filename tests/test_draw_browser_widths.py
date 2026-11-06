@@ -65,6 +65,11 @@ def test_only_a_long_row_widens_its_cell() -> None:
     width = fitted_cell_width([[(_LONG_ROW, 14.0, False)]])
     assert width is not None and width >= text_width(_LONG_ROW, 14.0)
     assert f'<TR><TD WIDTH="{width}" ALIGN="CENTER"><B>embedding_1_2</B>' in long
+    # A folded module's box3d front face ends 4 pt inside the node: its params row touched it.
+    block = ["@transformer.h.4", "GPT2Block", "(1, 5, 768), 15.4 KB", "40 ops"]
+    block.append("7.09M params (all trainable)")
+    assert "WIDTH=" not in render_lines_to_html(block, shape="box")
+    assert "WIDTH=" in render_lines_to_html(block, shape="box3d")
 
 
 def test_long_row_draws_inside_its_box(tmp_path: Path) -> None:
@@ -198,3 +203,35 @@ def test_key_words_end_before_the_next_swatch(tmp_path: Path) -> None:
             assert right <= min(nearby) - 2.0, (body, right, min(nearby))
             checked += 1
     assert checked >= 2
+
+
+class _Folded(nn.Module):
+    """A block with a few thousand parameters, drawn folded at depth 1."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.block = nn.Sequential(nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, 64))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the block."""
+
+        return self.block(x)
+
+
+def test_folded_box_rows_stop_short_of_its_front_face(tmp_path: Path) -> None:
+    """A folded box's params row ends inside the box3d front face, not on it."""
+
+    trace = tl.trace(_Folded(), torch.randn(1, 64))
+    try:
+        path = trace.draw(file_format="svg", depth=1, path=str(tmp_path / "folded")).path
+    finally:
+        trace.cleanup()
+    svg = Path(path).read_text(encoding="utf-8")
+    group = re.search(r"<title>block[^<]*</title>(.*?)</g>", svg, flags=re.S)
+    assert group is not None
+    points = re.search(r'<polygon [^>]*points="([^"]*)"', group.group(1)).group(1).split()
+    assert len(points) == 7  # the box3d outline: the front face ends at its 4 pt depth
+    face = max(float(point.split(",")[0]) for point in points) - 4.0
+    row = re.search(r"(<text [^>]*>)([^<]*params \(all trainable\))</text>", group.group(1))
+    assert row is not None
+    assert _drawn_right(row.group(1), row.group(2)) <= face - 2.0

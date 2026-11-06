@@ -104,7 +104,9 @@ def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
     return None
 
 
-def render_lines_to_html(lines: list[str], fill: str | None = None) -> str:
+def render_lines_to_html(
+    lines: list[str], fill: str | None = None, shape: str | None = None
+) -> str:
     """Render plain-text node rows as a Graphviz HTML-like table label.
 
     The first row is bolded as the node title; subsequent rows render plain.
@@ -117,6 +119,8 @@ def render_lines_to_html(lines: list[str], fill: str | None = None) -> str:
         Plain-text row contents. Special HTML characters are escaped.
     fill:
         The node's fill; edit rows take a colour that reads on it.
+    shape:
+        The node's shape, for the room its border leaves a long row.
 
     Returns
     -------
@@ -157,19 +161,19 @@ def render_lines_to_html(lines: list[str], fill: str | None = None) -> str:
         return ""
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">'
-        + "".join(_fit_first_row(rows, runs))
+        + "".join(_fit_first_row(rows, runs, shape))
         + "</TABLE>>"
     )
 
 
-def _fit_first_row(rows: list[str], runs: list[list[Run]]) -> list[str]:
+def _fit_first_row(rows: list[str], runs: list[list[Run]], shape: str | None) -> list[str]:
     """Return ``rows`` with the first cell held at the drawn width when a row is long.
 
     Graphviz's pixel-rounded measure lets a browser draw a long row past the
     border (:mod:`._label_fit`); one cell's width sets the column's.
     """
 
-    width = fitted_cell_width(runs)
+    width = fitted_cell_width(runs, shape)
     if width is None:
         return rows
     return [rows[0].replace("<TD ", f'<TD WIDTH="{width}" ', 1), *rows[1:]]
