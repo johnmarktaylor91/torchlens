@@ -496,9 +496,13 @@ jobs:
             --junitxml="${{ runner.temp }}/junit/stress-subset.xml"
 
       - name: Declare the executed-test floor
-        # About half of the 941 tests the subset executed on the pinned
-        # environment at the push's head (1,202 collected, 261 not applicable).
-        run: echo "stress-subset.xml 470" >> "${{ runner.temp }}/junit/legs.floor"
+        # Every test this leg collects: the 300 subset.json cells (one test per
+        # cell) plus the two matrix-shape tests, 302 executed and 0 skipped on
+        # the pinned environment. A cell whose oracles all answer not
+        # applicable is a skip, so a lost or skipped cell turns this red. The
+        # earlier 470 was half of 941, counted before each cell's six oracle
+        # tests were folded into one test per cell.
+        run: echo "stress-subset.xml 302" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
