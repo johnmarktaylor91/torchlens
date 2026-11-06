@@ -248,6 +248,11 @@ SUITE = [
     # every file below (r7 R74; no suite file streamed to disk). Removing
     # this file resurrects a PROVEN survivor.
     "tests/test_streaming_finalization_arming.py",
+    # CUDA-cache step killer: on a CPU runner no capture touches CUDA, so
+    # _run_clear_cuda_cache neutered to return None survived every file here;
+    # this file pins its flush gate with recorders. Removing it resurrects
+    # that survivor.
+    "tests/test_executor_cuda_cache_arming.py",
     "tests/test_replay_corruption_battery.py",
     "tests/test_internals.py",
     "tests/test_ancestry_closure_invariant.py",
