@@ -35,9 +35,9 @@ _ATTR = re.compile(r'([a-zA-Z_:][-a-zA-Z0-9_:.]*)="([^"]*)"')
 
 
 def _attrs(tag: str) -> dict[str, str]:
-    """Return the attributes of one SVG tag."""
+    """Return the attributes of one SVG tag, with ``px`` and ``pt`` units dropped."""
 
-    return dict(_ATTR.findall(tag))
+    return {key: re.sub(r"(?<=\d)(?:px|pt)$", "", value) for key, value in _ATTR.findall(tag)}
 
 
 def _drawn_right(text_tag: str, body: str) -> float:
@@ -132,7 +132,7 @@ def test_header_line_fits_the_page(tmp_path: Path) -> None:
 def test_key_word_cells_hold_their_measured_width() -> None:
     """Each key word cell holds its column's measured width, so no word reaches the next swatch."""
 
-    theme = resolve_theme(None)
+    theme = resolve_theme("torchlens")
     swatches = tuple(
         KeySwatch(text=text, shape="box", fill="#FFFFFF", border="#000000")
         for text in ("input", "output", "module", "module run as one op", "collapsed module")

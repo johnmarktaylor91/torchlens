@@ -28,7 +28,7 @@ __all__ = ("fit_header_width",)
 #: Space kept between the widest header line and the page edge, in points
 #: (Graphviz's own page margin).
 _PAGE_MARGIN = 4.0
-#: The root graph group and the page fill Graphviz draws first inside it.
+#: The root graph group, and the page fill Graphviz draws inside it after the graph's title.
 _GRAPH_OPEN_RE = re.compile(r'<g id="graph0" class="graph" transform="[^"]*">\n')
 _PAGE_FILL_RE = re.compile(r'<polygon fill="[^"]*" stroke="transparent" points="([^"]*)"/>\n')
 #: The first node, cluster or edge group: the header block ends before it.
@@ -99,6 +99,7 @@ def fit_header_width(svg: str) -> str:
     >>> from torchlens._visualization._svg_header_fit import fit_header_width
     >>> svg = ('<svg width="60pt" height="20pt"\\n viewBox="0.00 0.00 60.00 20.00">\\n'
     ...        '<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 16)">\\n'
+    ...        '<title>G</title>\\n'
     ...        '<polygon fill="white" stroke="transparent" points="-4,4 -4,-16 56,-16 56,4 -4,4"/>\\n'
     ...        '<text text-anchor="start" x="0" y="-5" font-size="14.00">a long header line</text>\\n'
     ...        '</g>\\n</svg>\\n')
@@ -114,7 +115,8 @@ def fit_header_width(svg: str) -> str:
     block = svg[graph_open.end() : first.start() if first else len(svg)]
     rights = [_line_right(m.group("attrs"), m.group("body")) for m in _TEXT_RE.finditer(block)]
     known = [right for right in rights if right is not None]
-    fill = _PAGE_FILL_RE.match(svg, graph_open.end())
+    # Graphviz writes the graph's <title> first, then the page fill.
+    fill = _PAGE_FILL_RE.search(svg, graph_open.end(), graph_open.end() + len(block))
     if not known or fill is None:
         return svg
     try:
