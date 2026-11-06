@@ -94,12 +94,12 @@ torchlens/_data_classes/field_policy.py::build_record_field_policy_table	68
 torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
 torchlens/_data_classes/grad_fn.py	803
 torchlens/_data_classes/interface.py::_getitem_after_pass	110
-torchlens/_data_classes/layer.py	1683
+torchlens/_data_classes/layer.py	1653
 torchlens/_data_classes/module.py	2569
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3324
+torchlens/_data_classes/op.py	3292
 torchlens/_data_classes/op.py::Op.__getattribute__	77
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	66
@@ -447,7 +447,7 @@ torchlens/_selection/do_plan.py::_build_selection_do_plan	87
 torchlens/_selection/resolver.py	992
 torchlens/_selection/selection.py	1609
 torchlens/_selection/selection.py::_resolve_facet_term	64
-torchlens/_selection/selectors.py	1644
+torchlens/_selection/selectors.py	1643
 torchlens/_selection/selectors.py::SiteSelector.__init__	77
 torchlens/_selection/subspace.py::subspace	91
 torchlens/_selection/values.py	1171
