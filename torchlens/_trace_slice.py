@@ -395,7 +395,7 @@ def build_slice_from_selection(trace: Any, selection_like: Any) -> TraceSlice:
         else:
             raise ValueError(
                 "trace.subgraph(...) takes a selection-shaped region (a "
-                "Selection, ResolvedSelection, Op/Layer, receptive-field "
+                "Selector, Selection, Op/Layer, receptive-field "
                 f"region, or site label string); got {type(selection_like).__name__}."
             )
     if lifted.kind != "ACT":

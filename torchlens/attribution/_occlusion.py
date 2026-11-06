@@ -154,7 +154,7 @@ def _resolve_selection(trace: Any, selection: Any) -> Selection:
 
     Returns
     -------
-    ResolvedSelection
+    Selection
         Session-bound concrete selection.
 
     Raises

@@ -502,7 +502,7 @@ DOCS: dict[str, str] = {
         Parameters
         ----------
         selection:
-            A selection-shaped ACT region (Selection, ResolvedSelection,
+            A selection-shaped ACT region (Selector, Selection,
             Op/Layer, receptive-field region, or site label string).
             PARAM/EDGE selections refuse ``selection_kind_incompatible``.
         

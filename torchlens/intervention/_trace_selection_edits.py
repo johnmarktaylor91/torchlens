@@ -72,7 +72,7 @@ def is_selection_batch(value: Any) -> bool:
     """Whether a ``do`` input is a selection-batch pair list.
 
     A non-empty list/tuple of 2-item pairs with at least one explicit
-    ``Selection``/``ResolvedSelection``/``TraceSlice`` in a pair's first
+    ``Selector``/``Selection``/``TraceSlice`` in a pair's first
     slot. Legacy ``(site, hook)`` pair lists (selector sites) keep the
     shipped door untouched.
     """
