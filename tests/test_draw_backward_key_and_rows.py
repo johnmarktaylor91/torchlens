@@ -76,7 +76,9 @@ def test_backward_key_cells_carry_a_margin_over_the_measured_text(tmp_path: Path
 
     trace = _backward_trace()
     try:
-        drawing = trace.draw(path=str(tmp_path / "bwd"), graph="backward", file_format="svg")
+        drawing = trace.draw(
+            path=str(tmp_path / "bwd"), graph="backward", file_format="svg", show_legend=True
+        )
     finally:
         trace.cleanup()
     legend_line = next(line for line in drawing.dot.splitlines() if "backward key" in line)
@@ -94,6 +96,29 @@ def test_backward_key_cells_carry_a_margin_over_the_measured_text(tmp_path: Path
         assert int(width) >= _text_width(text, size, bold) + 8.0, (text, width)
     svg = (tmp_path / "bwd.svg").read_text(encoding="utf-8")
     assert "accum = gradient accumulation into a leaf (dotted edge)" in svg
+
+
+def test_default_backward_drawing_is_title_and_graph_only(tmp_path: Path) -> None:
+    """One pass: the title alone, no pass box, no key; the key opts in and lists drawn rows only."""
+
+    trace = _backward_trace()
+    try:
+        default = trace.draw(path=str(tmp_path / "bwd"), graph="backward", file_format="svg").dot
+        keyed = trace.draw(
+            path=str(tmp_path / "keyed"), graph="backward", file_format="svg", show_legend=True
+        ).dot
+    finally:
+        trace.cleanup()
+    assert "_ResidualBlock backward graph" in default
+    for absent in ("grad_fn_handle", "pass(es)", "mode:", "unrolled", "backward pass 1"):
+        assert absent not in default, absent
+    assert "cluster_backward_pass" not in default
+    assert "backward key" not in default
+    assert "backward key" in keyed
+    assert "[i] = intervening grad_fn (no forward op)" in keyed
+    # No node prints an ``order N`` or ``bwd N`` row, so the key explains neither.
+    assert "order N" not in keyed
+    assert "bwd N" not in keyed
 
 
 @pytest.mark.parametrize("graph", ["backward", "combined"])

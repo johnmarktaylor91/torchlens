@@ -131,9 +131,27 @@ def test_backward_graph_bwd_filter_limits_visible_passes(tmp_path: Path) -> None
         bwd=2,
     ).dot
 
-    assert "cluster_backward_pass_2" in dot
-    assert "cluster_backward_pass_1" not in dot
+    # One drawn pass: no pass cluster; the nodes still name their pass.
+    assert "cluster_backward_pass" not in dot
     assert "bwd 2" in dot
+    assert "addmm_back" in dot
+
+
+def test_backward_graph_groups_two_drawn_passes_in_clusters(tmp_path: Path) -> None:
+    """Two or more drawn passes each get a dashed ``backward pass N`` cluster."""
+    trace = _log_two_backward_passes(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+
+    dot = trace.draw(
+        graph="backward",
+        path=str(tmp_path / "both"),
+        file_format="svg",
+        rolled=False,
+        show_legend=True,
+    ).dot
+
+    assert "cluster_backward_pass_1" in dot
+    assert "cluster_backward_pass_2" in dot
+    assert "bwd N = backward pass N" in dot
 
 
 def test_draw_backward_errors_without_backward() -> None:

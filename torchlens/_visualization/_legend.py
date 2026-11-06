@@ -276,10 +276,13 @@ def backward_key_sections(
                 hint="dotted edge",
             )
         )
-    if num_backward_passes > 1:
-        rows.append(LegendRow(text="bwd N = backward pass N; order N = derivative order"))
-    else:
+    # Node rows ``order N`` and ``bwd N`` are drawn only when they vary
+    # (BackwardStyleInventory.suppress_order_row / suppress_bwd_row), so each
+    # key row appears only with the node row it explains.
+    if has_higher_order:
         rows.append(LegendRow(text="order N = derivative order"))
+    if num_backward_passes > 1:
+        rows.append(LegendRow(text="bwd N = backward pass N"))
     return (LegendSection(title="backward key", rows=tuple(rows)),)
 
 

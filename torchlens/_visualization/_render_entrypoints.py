@@ -44,11 +44,13 @@ def _emit_backward_key(
     """Emit the in-frame backward key (vizmech item 17) into a builder.
 
     One table (item 13's form), one row per style the render actually
-    painted -- shared by the backward and combined entrypoints. Tri-state
-    ``show_legend``: only explicit ``False`` suppresses the key.
+    painted -- shared by the backward and combined entrypoints. The key is
+    opt-in, as on forward drawings: only ``show_legend=True`` draws it
+    (``None``, AUTO, draws none because gradient graphs have no encoding
+    channel).
     """
 
-    if show_legend is False:
+    if show_legend is not True:
         return
     add_legend_table_to_graphviz(
         cast(graphviz.Digraph, ir_builder),
@@ -121,15 +123,16 @@ def render_backward_graph(
         Optional source-code panel mode.
     vis_mode:
         ``"rolled"`` renders one node per GradFn. ``"unrolled"`` renders one
-        node per GradFnCall, grouped into backward-pass clusters.
+        node per GradFnCall; when the drawing holds two or more backward
+        passes, each pass is grouped in its own dashed cluster.
     bwd:
         Optional one-based backward pass number or numbers to render.
     show_legend:
-        Tri-state. ``None`` (AUTO) and ``True`` render the in-frame backward
-        key -- one row per style ACTUALLY painted (cream = order 2, ``[i]``,
-        ``accum``, ...; the WGAN-GP acceptance
-        contract's "every active style has an automatic legend row").
-        ``False`` suppresses it.
+        Tri-state, as on forward drawings. ``True`` renders the in-frame
+        backward key -- one row per style ACTUALLY painted (cream = order 2,
+        ``[i]``, ``accum``, ...; the WGAN-GP acceptance contract's "every
+        active style has a legend row"). ``None`` (AUTO) and ``False`` draw
+        no key.
     theme:
         Skin preset, the names forward ``draw`` takes. It sets the page colour, the
         text ink, the typography and the key's ink; backward node fills and
@@ -176,13 +179,11 @@ def render_backward_graph(
 
     vis_outpath = _strip_render_extension(vis_outpath)
 
+    # The header is the title alone: a drawing carries no explanation lines
+    # (node counts, pass counts, the rolled/unrolled mode), as forward drawings do.
     graph_caption = (
         f"<<FONT COLOR='{skin.default_font}'>"
-        f"<B>{html_escape(self._source_class_name)} backward graph</B><br align='left'/>"
-        f"{len(self.autograd.grad_fns)} grad_fn_handle nodes"
-        f"<br align='left'/>{self._num_backward_passes} backward pass(es)"
-        f"{_format_backward_filter_caption(pass_filter)}"
-        f"<br align='left'/>mode: {vis_mode}<br align='left'/></FONT>>"
+        f"<B>{html_escape(self._source_class_name)} backward graph</B><br align='left'/></FONT>>"
     )
     graph_args = {
         "rankdir": rankdir,
@@ -285,7 +286,7 @@ def render_backward_graph(
         save_only=vis_save_only,
         viewer=not vis_save_only,
         graph_name=f"{self._source_class_name}_backward",
-        graph_comment="Backward grad_fn_handle graph",
+        graph_comment="Backward graph",
         timeout=_RENDER_TIMEOUT,
     )
     source_path = f"{vis_outpath}"
@@ -339,15 +340,16 @@ if TYPE_CHECKING:
 
 
 def _combined_graph_args(
-    self: "Trace", rankdir: str, pass_filter: Any, overrides: VisualizationOverrides
+    self: "Trace", rankdir: str, overrides: VisualizationOverrides
 ) -> dict[str, str]:
-    """Return the combined graph's Graphviz attributes: caption and layout, then user overrides."""
+    """Return the combined graph's Graphviz attributes: caption and layout, then user overrides.
+
+    The caption is the title alone: no count or pass lines, as forward drawings do.
+    """
 
     graph_caption = (
-        f"<<B>{html_escape(self._source_class_name)} combined forward/backward graph</B><br align='left'/>"
-        f"{len(self)} forward nodes, {len(self.autograd.grad_fns)} grad_fn_handle nodes"
-        f"<br align='left'/>{self._num_backward_passes} backward pass(es)"
-        f"{_format_backward_filter_caption(pass_filter)}<br align='left'/>>"
+        f"<<B>{html_escape(self._source_class_name)} combined forward/backward graph</B>"
+        "<br align='left'/>>"
     )
     graph_args = {
         "rankdir": rankdir,
@@ -412,7 +414,7 @@ def render_combined_graph(
     bwd:
         Optional one-based backward pass number or numbers to render.
     show_legend:
-        ``False`` suppresses the key; ``None`` and ``True`` show painted styles.
+        ``True`` shows the backward key of painted styles; ``None`` and ``False`` draw none.
 
     Returns
     -------
@@ -467,7 +469,7 @@ def render_combined_graph(
     )
 
     ir_builder = _RenderIRDecisionBuilder()
-    ir_builder.attr("graph", **_combined_graph_args(self, rankdir, pass_filter, overrides))
+    ir_builder.attr("graph", **_combined_graph_args(self, rankdir, overrides))
     ir_builder.attr("node", ordering="out", fontname=_DEFAULT_FONT_FAMILY)
     ir_builder.attr("edge", ordering="out", fontname=_DEFAULT_FONT_FAMILY)
 

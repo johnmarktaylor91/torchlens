@@ -13,8 +13,8 @@
 <text xml:space="preserve" text-anchor="start" x="8" y="-784.82" font-family="Helvetica,sans-Serif" font-size="14.00">6 ops (512 B)</text>
 <text xml:space="preserve" text-anchor="start" x="8" y="-770.82" font-family="Helvetica,sans-Serif" font-size="14.00">212 params (848 B, all trainable)</text>
 <text xml:space="preserve" text-anchor="start" x="8" y="-756.82" font-family="Helvetica,sans-Serif" font-size="14.00">1 edit: </text>
-<text xml:space="preserve" text-anchor="start" x="48.5" y="-756.82" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00" fill="#7b1fa2">Δ zero_ablate</text>
-<text xml:space="preserve" text-anchor="start" x="136.25" y="-756.82" font-family="Helvetica,sans-Serif" font-size="14.00"> on interventionreplacement_1_6</text>
+<text xml:space="preserve" text-anchor="start" x="48.5" y="-756.82" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#7b1fa2">Δ zero_ablate  </text>
+<text xml:space="preserve" text-anchor="start" x="140" y="-756.82" font-family="Helvetica,sans-Serif" font-size="14.00">on interventionreplacement_1_6</text>
 <g id="clust2" class="cluster">
 <title>cluster_fc1_pass1</title>
 <polygon fill="white" stroke="black" stroke-width="1.5" points="8,-107.92 8,-430.14 342,-430.14 342,-107.92 8,-107.92"/>

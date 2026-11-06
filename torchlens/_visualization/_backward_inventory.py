@@ -8,12 +8,16 @@ label line under that suppression.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from .._utils.display import int_list_to_compact_str
 
 if TYPE_CHECKING:
+    import graphviz
+
     from .._data_classes.grad_fn import GradFn
     from .._data_classes.trace import Trace
     from ._render_common import BackwardPassFilter
@@ -23,8 +27,13 @@ __all__ = [
     "_backward_dot_call_node_name",
     "_backward_dot_node_name",
     "_backward_pass_row",
+    "backward_pass_cluster",
     "compute_backward_style_inventory",
+    "ungroup_single_pass",
 ]
+
+_IRNodes = TypeVar("_IRNodes", bound=tuple[Any, ...])
+_IREdges = TypeVar("_IREdges", bound=tuple[Any, ...])
 
 
 @dataclass(frozen=True)
@@ -159,3 +168,43 @@ def _backward_dot_call_node_name(grad_fn_handle: GradFn, call: Any) -> str:
         f"grad_fn_{grad_fn_handle.grad_fn_object_id}_"
         f"bwd{getattr(call, 'backward_pass_number', 0)}_call{getattr(call, 'call_index', 0)}"
     )
+
+
+@contextmanager
+def backward_pass_cluster(
+    graph: graphviz.Digraph, pass_index: int, *, grouped: bool, color: str
+) -> Iterator[graphviz.Digraph]:
+    """Yield where one backward pass's nodes go: its dashed cluster, or the graph itself.
+
+    A drawing of two or more passes boxes each pass as ``backward pass N`` in
+    ``color``; a drawing of one pass needs no box or label (``grouped=False``).
+    """
+
+    if not grouped:
+        yield graph
+        return
+    with graph.subgraph(name=f"cluster_backward_pass_{pass_index}") as subgraph:
+        subgraph.attr(
+            label=f"backward pass {pass_index}",
+            color=color,
+            fontcolor="black",
+            style="rounded,dashed",
+        )
+        yield subgraph
+
+
+def ungroup_single_pass(
+    nodes: _IRNodes, edges: _IREdges, visible_by_pass: dict[int, list[tuple[Any, Any]]]
+) -> tuple[_IRNodes, _IREdges, dict[int, list[tuple[Any, Any]]]]:
+    """Return backward IR nodes and edges with no pass grouping when one pass is drawn.
+
+    Mirrors :func:`backward_pass_cluster`: with fewer than two drawn passes there
+    is no ``backward_pass_N`` cluster, so no node or edge names one and no region
+    is built (the returned pass map is empty).
+    """
+
+    if len(visible_by_pass) > 1:
+        return nodes, edges, visible_by_pass
+    ungrouped_nodes = tuple(replace(node, owner_cluster=None, region_path=()) for node in nodes)
+    ungrouped_edges = tuple(replace(edge, owner_cluster=None) for edge in edges)
+    return cast(_IRNodes, ungrouped_nodes), cast(_IREdges, ungrouped_edges), {}

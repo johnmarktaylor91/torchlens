@@ -11,6 +11,7 @@ from .._utils._display_numbers import format_percent
 from .._utils._numpy_bridge import tensor_to_numpy
 from .._utils._record_group_table import record_member
 from ..viz import _batch_summary as batch_summary
+from ._backward_inventory import backward_pass_cluster
 from ._bool_outcomes import bool_node_fill, bool_value_line
 from ._encoding_aggregate import (
     BoxScopeHelpers,
@@ -158,7 +159,7 @@ def _add_unrolled_backward_pass_clusters(
     node_spec_fn: BackwardNodeSpecFn | None,
     pass_filter: BackwardPassFilter,
 ) -> None:
-    """Render GradFnCall nodes grouped by backward pass.
+    """Render GradFnCall nodes, boxed by backward pass when two or more are drawn.
 
     Parameters
     ----------
@@ -174,19 +175,16 @@ def _add_unrolled_backward_pass_clusters(
 
     calls_by_pass = _visible_backward_calls_by_pass(trace, pass_filter)
     inventory = compute_backward_style_inventory(trace, pass_filter)
+    grouped = len(calls_by_pass) > 1
     for pass_index, grad_fn_calls in calls_by_pass.items():
-        with graphviz_graph.subgraph(name=f"cluster_backward_pass_{pass_index}") as subgraph:
-            subgraph.attr(
-                label=f"backward pass {pass_index}",
-                color=GRADIENT_ARROW_COLOR,
-                fontcolor="black",
-                style="rounded,dashed",
-            )
+        with backward_pass_cluster(
+            graphviz_graph, pass_index, grouped=grouped, color=GRADIENT_ARROW_COLOR
+        ) as target:
             for grad_fn_handle, call in grad_fn_calls:
                 node_args = _backward_node_graphviz_args(
                     grad_fn_handle, node_spec_fn, call=call, inventory=inventory
                 )
-                subgraph.node(**node_args)
+                target.node(**node_args)
 
     for pass_index, grad_fn_calls in calls_by_pass.items():
         calls_for_grad_fn: dict[int, list[tuple[GradFn, Any]]] = defaultdict(list)
