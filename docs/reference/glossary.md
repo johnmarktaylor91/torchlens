@@ -2320,7 +2320,7 @@ conflicts.
 
 **Merge vocabularies**: `MergeAlignment` and `MergeValueStatus` are frozen vocabularies in `tl.types`,
 release-gated against
-[merged traces](merged_trace_contract.md).
+[merged traces](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/merged_trace_contract.md).
 
 **Trace.provenance.distributed_scope** (experimental): The shard-local capture marker, saved with the trace: `None` for ordinary captures,
 `"rank_local_shard"` when any parameter or input the capture saw was one rank's local shard.
