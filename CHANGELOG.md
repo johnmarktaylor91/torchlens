@@ -3,6 +3,10 @@
 
 ## Unreleased
 
+<!-- version list -->
+
+## v3.0.0 (2026-11-06)
+
 ### Security
 
 - **runnable replay**: a crafted bundle could make `trace.run()` or
@@ -131,8 +135,6 @@
   recorded as a closure constant with source provenance instead of being reported as a foreign tensor.
   State stored deeper than three helper calls still warns, and a cache refilled during the forward still
   fails validation.
-
-<!-- version list -->
 
 ## v2.38.1 (2026-11-04)
 

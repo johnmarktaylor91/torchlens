@@ -24,6 +24,7 @@ explicit published version), well under 5 s.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -72,9 +73,19 @@ def test_release_guard_is_wired_and_cannot_be_skipped() -> None:
     assert checkout["fetch-depth"] == 0 and checkout["fetch-tags"] is True
     assert "build" in jobs["publish"]["needs"]
 
-    assert not (_ROOT / _APPROVAL_REL).exists(), (
-        f"{_APPROVAL_REL} exists; it is created only on the maintainer's command"
-    )
+    approval = _ROOT / _APPROVAL_REL
+    if approval.exists():
+        # The maintainer's command creates the file on the commit that cuts a major release,
+        # naming exactly that X.0.0 version; the release tag's gates rerun this test there.
+        # Any other content, or the file left behind once the version moves on, still fails.
+        approved = approval.read_text(encoding="utf-8").removesuffix("\n")
+        project = re.search(
+            r'^version\s*=\s*"([^"]+)"', (_ROOT / "pyproject.toml").read_text(), re.MULTILINE
+        )
+        assert project and approved == project.group(1) and re.fullmatch(r"\d+\.0\.0", approved), (
+            f"{_APPROVAL_REL} exists but does not approve exactly the X.0.0 version being "
+            "released; it is created only on the maintainer's command and removed after the cut"
+        )
 
     config = yaml.safe_load((_ROOT / ".pre-commit-config.yaml").read_text())
     assert {"commit-msg", "pre-push"} <= set(config["default_install_hook_types"])
