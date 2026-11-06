@@ -270,8 +270,10 @@ def test_compact_receiver_is_a_replay_error(method: str) -> None:
         op = _view_func_op(trace, method)
         assert op.call.saved_args[0]._is_view()
         op._call_saved_args = (op.call.saved_args[0].detach().clone(), *op.call.saved_args[1:])
-        with pytest.warns(UserWarning, match="Validation replay raised an exception"):
+        with pytest.warns(UserWarning, match="Validation replay raised an exception") as caught:
             status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
+        replay_warnings = [w for w in caught if "Validation replay raised" in str(w.message)]
+        assert replay_warnings[0].filename == __file__
         assert status.state == "failed"
         failure = get_validation_failure(trace)
         assert failure is not None and failure.op_label.split(":")[0] == op.layer_label
@@ -314,8 +316,10 @@ def test_compact_new_view_is_a_replay_error() -> None:
             op.call.saved_args[1].detach().clone(),
             *op.call.saved_args[2:],
         )
-        with pytest.warns(UserWarning, match="Validation replay raised an exception"):
+        with pytest.warns(UserWarning, match="Validation replay raised an exception") as caught:
             status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
+        replay_warnings = [w for w in caught if "Validation replay raised" in str(w.message)]
+        assert replay_warnings[0].filename == __file__
         assert status.state == "failed"
         failure = get_validation_failure(trace)
         assert failure is not None and failure.op_label.split(":")[0] == op.layer_label

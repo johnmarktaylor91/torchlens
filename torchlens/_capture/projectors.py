@@ -19,6 +19,7 @@ from .._ir.events import OpEvent
 from .._record_type import record_type
 from .._utils._record_group_table import op_attr
 from .._utils._tensor_label import get_tensor_label, set_tensor_label
+from .._utils.display import user_stacklevel
 from .._utils.tensor_utils import safe_copy
 from ..backends.torch.backward import _register_forward_grad_fn
 from ..backends.torch.tensor_tracking import _add_rebound_gradient_hook
@@ -230,19 +231,18 @@ class RefreshProjector:
         for layer, refreshed_layer in zip(
             self.target._layer_list, refreshed._layer_list, strict=True
         ):
-            new_shape = refreshed_layer.shape
-            if layer.shape is not None and new_shape != layer.shape:
+            if layer.shape is not None and refreshed_layer.shape != layer.shape:
                 shape_changed.append(
-                    f"'{layer.layer_label}' (expected {layer.shape}, got {new_shape})"
+                    f"'{layer.layer_label}' (expected {layer.shape}, got {refreshed_layer.shape})"
                 )
         if shape_changed:
             preview = "; ".join(shape_changed[:3])
             remainder = len(shape_changed) - 3
             suffix = f"; and {remainder} more layer(s)" if remainder > 0 else ""
             warnings.warn(
-                f"Tensor shape changed for {len(shape_changed)} layer(s): "
-                f"{preview}{suffix}. "
-                "The computational graph may have changed between ops."
+                f"Tensor shape changed for {len(shape_changed)} layer(s): {preview}{suffix}. "
+                "The computational graph may have changed between ops.",
+                stacklevel=user_stacklevel(),
             )
 
         preserved_states = [dict(state_items(layer)) for layer in self.target._layer_list]

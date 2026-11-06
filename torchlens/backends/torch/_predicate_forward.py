@@ -45,6 +45,7 @@ from ._ops_containers import _walk_output_tensors_with_paths
 from ._predicate_boundary_replacements import log_predicate_boundary_replacements
 from .escape_detection import expected_original_call
 from .prehook_provenance import bind_invocation
+from .sources import _predicate_event_was_appended
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -436,27 +437,3 @@ def _lazy_module_exit(
         history.defer_module_boundary("module_exit", frame, label)
     finally:
         _mstack.pop_frame(state.module_stack, frame)
-
-
-def _predicate_event_was_appended(trace: Trace, label_raw: str) -> bool:
-    """Return whether predicate capture already appended ``label_raw``.
-
-    Parameters
-    ----------
-    trace:
-        Active trace whose predicate event buffer may already contain the
-        projected event.
-    label_raw:
-        Raw label used when appending the projected event.
-
-    Returns
-    -------
-    bool
-        True when ``trace.capture_events.op_event_by_label_raw`` already owns
-        ``label_raw``.
-    """
-
-    capture_events = getattr(trace, "capture_events", None)
-    if capture_events is None:
-        return False
-    return label_raw in capture_events.op_event_by_label_raw

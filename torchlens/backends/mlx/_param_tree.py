@@ -5,12 +5,9 @@ Extracted from ``backend`` so that module stays under its size ceiling.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any
 
-from .._finalize import join_module_address as _join_module_address
-from ._tap_observers import _is_mlx_array
-from .model_prep import MLXModuleTree
+from .model_prep import MLXModuleTree, _flatten_parameter_tree
 
 
 def _iter_trainable_parameter_tree(model: object) -> list[tuple[str, Any]]:
@@ -51,36 +48,6 @@ def _iter_parameter_tree(model: object) -> list[tuple[str, Any]]:
     if not callable(parameters):
         return []
     return list(_flatten_parameter_tree(parameters(), ""))
-
-
-def _flatten_parameter_tree(value: object, prefix: str) -> Iterator[tuple[str, Any]]:
-    """Yield array leaves from an MLX parameter tree.
-
-    Parameters
-    ----------
-    value
-        Parameter tree value.
-    prefix
-        Dotted address prefix.
-
-    Yields
-    ------
-    tuple[str, Any]
-        Parameter address and array.
-    """
-
-    if _is_mlx_array(value):
-        yield prefix, value
-        return
-    if isinstance(value, dict):
-        for key, item in value.items():
-            child_prefix = _join_module_address(prefix, str(key)) if prefix else str(key)
-            yield from _flatten_parameter_tree(item, child_prefix)
-        return
-    if isinstance(value, (list, tuple)):
-        for index, item in enumerate(value):
-            child_prefix = _join_module_address(prefix, str(index)) if prefix else str(index)
-            yield from _flatten_parameter_tree(item, child_prefix)
 
 
 def _alias_to_primary(tree: MLXModuleTree) -> dict[str, str]:
