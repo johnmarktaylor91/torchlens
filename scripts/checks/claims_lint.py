@@ -224,9 +224,10 @@ PLANTED: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "The menagerie catalog holds 9,200 entries.",
             "The menagerie catalog holds 8,500+ rows across ~3,600 families.",
             "The Model Menagerie holds over 7,100 networks.",
+            "The Model Menagerie holds over 6,400 networks.",
         ),
         (
-            "TorchLens is tested on a growing Model Menagerie of over 6,400 networks. "
+            "TorchLens is tested on a growing Model Menagerie of over 6,600 networks. "
             "More than 6,300 models have been verified in this way so far.",
         ),
     ),

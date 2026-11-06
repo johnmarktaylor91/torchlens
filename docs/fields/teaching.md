@@ -40,7 +40,7 @@ The lists below start with drawing and inspecting, then move to the tutorial not
 
 ## The Model Menagerie
 
-- [The Model Menagerie](https://modelmenagerie.ai): a browsable gallery of over 6,400 neural network architectures, from McCulloch and Pitts's 1943 network of threshold neurons to current models, each with its full computational graph drawn by TorchLens. For a course it is a ready-made source of worked drawings: show the same operation vocabulary across eight decades of designs.
+- [The Model Menagerie](https://modelmenagerie.ai): a browsable gallery of over 6,600 neural network architectures, from McCulloch and Pitts's 1943 network of threshold neurons to current models, each with its full computational graph drawn by TorchLens. For a course it is a ready-made source of worked drawings: show the same operation vocabulary across eight decades of designs.
 - [The same three lines on any architecture](../gallery/any_architecture.md): the trace, draw and edit calls on six architecture families from the Menagerie, the shortest proof that the tool works on whatever a student brings.
 - [Model summaries](../reference/summary.md): a one-call table of every layer with shapes and parameter counts, for the first lecture before the graph.
 
