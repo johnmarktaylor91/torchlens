@@ -196,7 +196,9 @@ def test_file_saved_by_torchlens_2_refuses_at_load(tmp_path: Path) -> None:
     assert "saved by torchlens 2.37 and earlier" in message
     assert "load it with torchlens 2.36.x" in message
     assert "capture the model again" in message
-    assert "torchlens 2.38 does not read files saved by torchlens 2.37 and earlier" in message
+    assert (
+        "this torchlens release does not read files saved by torchlens 2.37 and earlier" in message
+    )
     assert "torchlens 3" not in message
     _assert_below_floor(excinfo.value, "2.36.3", path)
 
