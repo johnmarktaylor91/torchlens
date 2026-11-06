@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from .._utils._record_group_table import record_member
+from ._deltas import _resolve_member_name, site_deltas
 
 if TYPE_CHECKING:
     import torch
@@ -88,7 +89,6 @@ def draw_folded_diff(bundle: Bundle, path: str | None, options: dict[str, Any]) 
     """
 
     from .._visualization._encoding_request import EncodingChannelRequest
-    from ._deltas import site_deltas
 
     baseline_name, member_name = _diff_pair(bundle, options["members"])
     bundle._require_comparable("delta_map", pairs=[(baseline_name, member_name)])
@@ -113,8 +113,6 @@ def draw_folded_diff(bundle: Bundle, path: str | None, options: dict[str, Any]) 
 
 def _diff_pair(bundle: Bundle, members: tuple[str | Trace, str | Trace] | None) -> tuple[str, str]:
     """Resolve ``(baseline, compared)`` member names; the default is the first two members."""
-
-    from ._deltas import _resolve_member_name
 
     names = bundle.names
     if members is None and len(names) < 2:

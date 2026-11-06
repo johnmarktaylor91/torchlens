@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
+from ._draw_folded import draw_folded_diff
 
 if TYPE_CHECKING:
     from ..viz._drawing import Drawing, DrawTarget
@@ -82,8 +83,6 @@ def bundle_draw(
             argument="graph",
         )
     if options["depth"] is not None:
-        from ._draw_folded import draw_folded_diff
-
         return draw_folded_diff(bundle, path, options)
     default_format = "svg" if graph == "diff" else "pdf"
     target = resolve_bundle_draw_target(path, options["file_format"], _KNOWN_EXTS, default_format)

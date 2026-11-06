@@ -440,7 +440,10 @@ scatter, an RDM) ends up inside its node. Models TorchLens recognizes
 A `tl.Bundle` of traces draws as one picture with the same path and format rules as `Trace.draw`.
 `bundle.draw(graph="diff")` draws the model once with each operation colored by how much its
 output changed between the members (`metric="relative_l2"` by default, measured `on="out"`);
-`members=` restricts the comparison to some of the traces. `graph="forward"`, `"backward"` and
+`members=` restricts the comparison to some of the traces. On a large model,
+`bundle.draw(graph="diff", depth=2)` instead draws the compared member's own graph folded to that
+depth, as `Trace.draw(depth=2)` folds it, with each module box colored by its most changed
+operation. `graph="forward"`, `"backward"` and
 `"combined"` draw the members' union graph for that pass, marking which members ran each node.
 The [Compare runs tutorial](../../notebooks/learn/07_compare_runs.ipynb) walks through it, and the
 glossary's `Bundle.draw` entry lists every keyword.

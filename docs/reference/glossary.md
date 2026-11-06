@@ -1156,7 +1156,7 @@ Before changing anything it raises one of these codes:
 `drawing.path` the written file). It follows `Trace.draw`'s rules.
 
 - Signature:
-  `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction=None, theme=None, show_legend=None, file_format=None, open_viewer=False, graph_overrides=None, node_overrides=None, edge_overrides=None, members=None, metric="relative_l2", on="out")`
+  `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction=None, theme=None, show_legend=None, file_format=None, open_viewer=False, graph_overrides=None, node_overrides=None, edge_overrides=None, members=None, metric="relative_l2", on="out", depth=None)`
 - Path and format: the path comes first and its extension picks the format (`b.draw("diff.svg")`
   writes SVG). `file_format=` applies only to a path with no extension (`<path>.<file_format>`,
   `"pdf"` by default); a `file_format` that disagrees with the extension raises
@@ -1186,8 +1186,18 @@ Before changing anything it raises one of these codes:
   members), and `show_legend=False` drops the colour key; `rolled=True` and `nodes="members"`
   have no diff meaning and refuse with `ArgumentTypeError` (`bundle_draw_keyword_unsupported`)
   naming the keyword.
+- Folded diff: `graph="diff", depth=N` draws the compared member (the second of `members`; the
+  first is the baseline) as its own model graph, exactly as `Trace.draw(depth=N)` folds it, with
+  every op and every folded module box filled by its `metric` change on `on` from the baseline. A
+  box takes its most changed op (the fold `rank_changes(by="module")` uses), and every op and box
+  the drawing shows gets its value (no top-k cap). Edit marks stay on the edited op or box. Path,
+  format, theme (`"torchlens"`), legend and `direction` follow `Trace.draw`; `graph_overrides`
+  pass through, while the op-keyed `node_overrides`/`edge_overrides` and `rolled=True` refuse with
+  `depth`. `depth` with `graph="forward"`, `"backward"` or `"combined"` refuses (the union graph
+  has no module folding). Without `depth` the diff is the two-column picture above
+  (`runs.draw(graph="diff", depth=2)` on GPT-2 draws its 12 blocks; JMT, 6 Nov 2026).
 - Unsupported keywords: any other keyword (a `Trace.draw` keyword the bundle renderer does not
-  support yet, such as `depth=`) raises `ArgumentTypeError`
+  support yet, such as `collapse=`) raises `ArgumentTypeError`
   (`bundle_draw_keyword_unsupported`) naming the supported list; each is added when the renderer
   supports it.
 - Replaces the removed `show_bundle_graph` and its `signal=` keyword (now `graph=`; no alias).

@@ -432,7 +432,9 @@ expert contributions from routing indices alone.
   `b.to_agent_json()` (`torchlens.agent_bundle.v1`, members keyed by name) read the bundle whole.
   `b.draw("bundle.svg", graph="forward", node_overrides={"relu_1_1": {"fillcolor": "#ffeeaa"}})`
   draws the merged bundle graph (one picture; `Trace.draw` spellings, `combined` for both passes,
-  `nodes="members"` for the member relation graph) and returns a `tl.viz.Drawing` (`str()` is the
+  `nodes="members"` for the member relation graph; `graph="diff", depth=2` draws the compared
+  member's own graph folded to depth 2, each op and module box shaded by its change from the
+  baseline) and returns a `tl.viz.Drawing` (`str()` is the
   DOT source). Both draw doors take the format from the path's extension (`file_format=` only for a
   path without one; a disagreement refuses `draw_format_mismatch`), and a bare `trace.draw()` or
   `b.draw()` in a Jupyter kernel displays inline and writes no file (JMT, Sun 1 Nov 2026).
