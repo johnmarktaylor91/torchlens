@@ -21,7 +21,9 @@ from torch import nn
 import torchlens as tl
 from torchlens._visualization._encoding import resolve_color_by, resolve_size_by
 from torchlens._visualization._encoding_aggregate import (
+    LINE_ADDRESS,
     LINE_SUM,
+    NOTE_ADDRESS_MISSING,
     NOTE_INCOMPLETE,
     AggregateTarget,
     aggregate_field,
@@ -171,6 +173,37 @@ def test_unaggregatable_source_leaves_boxes_unencoded_with_note(
         assert target.key not in state.values
         assert target.key not in state.colors
     assert unaggregatable_note(spec) in state.notes
+
+
+@pytest.mark.parametrize("rolled", [False, True])
+def test_address_mapping_paints_module_boxes(
+    nested_log: tl.Trace, tmp_path: Path, rolled: bool
+) -> None:
+    """A ``color_by`` mapping keyed by module address paints that module's folded box."""
+
+    mapping = {"blocks": 2.0, "head": 8.0}
+    _draw(nested_log, tmp_path, depth=1, rolled=rolled, color_by=mapping)
+    state = nested_log._last_encoding_state
+    boxes = {target.address: target for target in _box_targets(nested_log).values()}
+    assert {"blocks", "head"} <= set(boxes)
+    for address, value in mapping.items():
+        assert state.values[boxes[address].key] == pytest.approx(value)
+        assert boxes[address].key in state.colors
+    assert state.colors[boxes["blocks"].key] != state.colors[boxes["head"].key]
+    assert LINE_ADDRESS in state.aggregation_lines
+
+
+def test_address_mapping_leaves_unkeyed_boxes_unencoded_with_note(
+    nested_log: tl.Trace, tmp_path: Path
+) -> None:
+    """A box whose address is not a key stays unencoded, and the legend says why."""
+
+    _draw(nested_log, tmp_path, depth=1, color_by={"blocks": 2.0, "stem": 1.0})
+    state = nested_log._last_encoding_state
+    boxes = {target.address: target for target in _box_targets(nested_log).values()}
+    assert boxes["blocks"].key in state.colors
+    assert boxes["head"].key not in state.values
+    assert NOTE_ADDRESS_MISSING in state.notes
 
 
 def test_aggregate_field_allowlist() -> None:

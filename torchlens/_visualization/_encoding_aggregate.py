@@ -59,6 +59,8 @@ DEVICE_TIME_TOKEN = "device_time"
 LINE_SUM = "module boxes: sum over member ops"
 LINE_SUM_ALL_CALLS = "module boxes: sum over member ops across all calls"
 LINE_SEGMENT_SUM = "segments: sum over member ops"
+LINE_ADDRESS = "module boxes: mapped value at the module address"
+NOTE_ADDRESS_MISSING = "module boxes whose address is not a mapping key -- unencoded"
 NOTE_FOLD_REPRESENTATIVE = "repeat-fold boxes: representative module only"
 NOTE_INCOMPLETE = "aggregate nodes with a member op lacking a value -- unencoded"
 
@@ -81,6 +83,10 @@ class AggregateTarget:
         Whether the scope spans every call of a module (rolled boxes).
     fold_representative:
         Whether the box is a repeat-fold representative.
+    address:
+        Module address of a module box (``""`` for a segment).
+    call_index:
+        The box's call number when it stands for one call (unrolled), else ``None``.
     """
 
     name: str
@@ -89,6 +95,8 @@ class AggregateTarget:
     label_lines: tuple[str, ...] = ()
     all_calls: bool = False
     fold_representative: bool = False
+    address: str = ""
+    call_index: str | None = None
 
     @property
     def key(self) -> str:
@@ -205,6 +213,9 @@ def target_value(
     """
 
     field_name = aggregate_field(spec)
+    module_value = getattr(spec.source, "module_value", None)
+    if field_name is None and spec.source_kind == "callable" and callable(module_value):
+        return _address_value(target, module_value, record)
     if field_name is None:
         record(unaggregatable_note(spec), False)
         return None
@@ -222,6 +233,48 @@ def target_value(
     if target.fold_representative:
         record(NOTE_FOLD_REPRESENTATIVE, False)
     return value
+
+
+def _address_value(
+    target: AggregateTarget,
+    module_value: Callable[[str, str | None], Any],
+    record: Callable[[str, bool], None],
+) -> float | None:
+    """Resolve a module box from a module-address mapping (no aggregate over its ops).
+
+    A ``color_by`` mapping keyed by module address names the box's value
+    outright, so the box takes the value at its own address (``addr:N`` for one
+    call first). A box whose address is not a key, a segment, and a non-finite
+    or non-numeric value stay unencoded and are disclosed.
+    """
+
+    raw = module_value(target.address, target.call_index) if target.kind == "module_box" else None
+    value = _finite_scalar(raw)
+    if value is None:
+        record(NOTE_ADDRESS_MISSING if target.kind == "module_box" else NOTE_INCOMPLETE, False)
+        return None
+    record(LINE_ADDRESS, True)
+    if target.fold_representative:
+        record(NOTE_FOLD_REPRESENTATIVE, False)
+    return value
+
+
+def _finite_scalar(raw: Any) -> float | None:
+    """Return ``raw`` as a finite float (a number or one-element tensor), else ``None``."""
+
+    if raw is None or isinstance(raw, bool):
+        return None
+    if not isinstance(raw, (int, float)):
+        numel = getattr(raw, "numel", None)
+        size = numel() if callable(numel) else getattr(raw, "size", None)
+        item = getattr(raw, "item", None)
+        if size != 1 or not callable(item):
+            return None
+        raw = item()
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            return None
+    as_float = float(raw)
+    return as_float if math.isfinite(as_float) else None
 
 
 def segment_encoding_attrs(state: Any, name: str, ink: str | None = None) -> dict[str, str]:
@@ -334,6 +387,8 @@ def collapsed_box_scope(
         op_labels=labels,
         all_calls=rolled,
         fold_representative=fold is not None,
+        address=address,
+        call_index=None if rolled else call_index,
     )
 
 
