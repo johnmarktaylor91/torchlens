@@ -234,6 +234,14 @@ group = "extended"
 extras = ["test"]
 group = "extended"
 
+# compat-shims admits sentence-transformers 5.x (band <6), whose transformers
+# requirement includes 5.x, so the pair installs: transformer-lens 3.8.0 needs
+# transformers>=5.9, and under the former <5 band every admitted
+# sentence-transformers release capped transformers below 5.
+[sets.tlens-oracle-compat-shims]
+extras = ["tlens-oracle", "compat-shims"]
+group = "extended"
+
 # Intentionally incompatible combinations. Found by resolving every pair of
 # the user-facing and heavy extras with `uv pip compile` on python 3.10 and
 # 3.11 (Linux x86_64); every pair below failed on both interpreters except
@@ -268,9 +276,9 @@ extras = ["all", "sae"]
 expect = "install_fails"
 group = "pr"
 
-# tlens-oracle is a test-only extra (transformer-lens==3.8.0); its conflicts
-# are with the extras whose transformers or sentence-transformers bands
-# exclude transformers 5.x.
+# tlens-oracle is a test-only extra (transformer-lens==3.8.0, which needs
+# transformers>=5.9); its conflicts are with the extras whose transformers or
+# sentence-transformers bands exclude transformers 5.x.
 [sets.all-tlens-oracle]
 extras = ["all", "tlens-oracle"]
 expect = "install_fails"
@@ -288,10 +296,5 @@ group = "extended"
 
 [sets.tlens-oracle-steering]
 extras = ["tlens-oracle", "steering"]
-expect = "install_fails"
-group = "extended"
-
-[sets.tlens-oracle-compat-shims]
-extras = ["tlens-oracle", "compat-shims"]
 expect = "install_fails"
 group = "extended"
