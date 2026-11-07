@@ -87,8 +87,9 @@ before scripting or exporting it. Details are in the
 Yes. Capture runs on whatever device the model and inputs are on, and saved activations stay on
 that device by default, so a CUDA capture spends GPU memory;
 `capture=tl.options.CaptureOptions(output_device="cpu")` keeps them in host memory instead.
-Continuous integration runs on CPU only, so CUDA and MPS behavior is checked by local testing,
-not in CI ([tested platforms](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/limitations.md#ci-attested-platforms)).
+Continuous integration runs the test suite on CPU only. A nightly canary captures a small model
+on Apple-silicon MPS and saves and reloads it; CUDA, and device-specific behavior beyond that
+canary, is checked by local testing, not in CI ([tested platforms](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/limitations.md#ci-attested-platforms)).
 
 ## Can I trace large models or models spread over several GPUs?
 

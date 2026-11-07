@@ -58,6 +58,7 @@ function bypassed its wrapper.
 | `torch.autograd.grad` is called inside forward to take a second-order gradient (a gradient of a gradient) or a gradient with respect to inputs where one input depends on another. | The call is captured as an `autogradgrad` boundary op (`transform_kind="autograd.grad"`) and its forward replay checks pass, but `tl.validate` still returns False: the backward-graph metadata check for the gradient pass rejects the higher-order `grad_fn` ordering. A first-order call on independent inputs (a MAML-style inner step) validates. | Treat the trace as captured but unvalidated, or validate a first-order variant of the model. |
 | A C++ extension function is bound only through pybind (no `TORCH_LIBRARY` registration) and called inside forward. | TorchLens cannot intercept the call, so it records no op for it; a capture through it fails validation (`bfs_completeness` or `source_provenance`, see the paragraph below the table). | Register the extension's functions with `TORCH_LIBRARY` and call them through `torch.ops`, or validate the extension's computation separately. |
 | A tensor is converted to Python with `item`, `bool`, `int`, `float`, `complex`, or `operator.index`. | `ScalarEscapeWarning` records the count and first user callsite. The scalar dependence is not a graph edge; runnable proof may be incomplete/unverifiable. | Keep the value as a tensor, or pass the Python value as an explicit model input. |
+| A tensor value decides an `if` in code with no readable source: code read from stdin, a string passed to `exec` that its caller did not register in `linecache`, or one cell or `exec` filename compiled with two different texts. IPython and Jupyter cells are readable, because IPython registers each cell's text in `linecache`. | The branch is not recorded in `trace.graph.conditionals`; TorchLens records no branch rather than guess which source line ran. `ScalarEscapeWarning` counts these bool tests as reads in code with no readable source. A filename reused for a second text also warns once that branches under that name are not recorded for the rest of the process. | Run the code from a `.py` file, or give each cell or `exec`'d string its own filename and register its text in `linecache`. |
 | A user hook mutates through `.data`, raw storage, a NumPy alias, a custom kernel, or an exotic subclass where version evidence is unavailable. | Hook attribution is marked incomplete rather than falsely unchanged. Private hook-registry bypass makes the affected scope sticky-incomplete. | Use public hook registration and ordinary tensor operations; make control inputs explicit. |
 | A deliberately adversarial `__torch_dispatch__` body disables dispatch around a hidden mutation. | No dispatch-based tracer can observe the nested operation. This is outside the cooperative-model threat model. | Do not suppress dispatch around model computation you expect TorchLens to certify. |
 
@@ -182,11 +183,14 @@ HYPOTHESIS until discharged against a real capture.
 Continuous integration executes the full tiered suite on Linux/CPU only
 (Python 3.10–3.13, torch floor through newest-admitted, plus a gating torch
 2.15.0 row on Python 3.11). macOS and Windows
-run a nightly import + capture + save/load canary, not the suite. CUDA and
-MPS behavior — device peak memory reporting, `save_budget="auto"` device
-measurement, `map_location` transport, and the CUDA-artifact-on-CPU-host
-refusal — is implemented and documented but has **no CI execution**; treat
-device-specific claims as attested by local testing only.
+run a nightly import + capture + save/load canary, not the suite. On the
+Apple-silicon macOS runner that canary also captures a small model on the
+`mps` device and round-trips the trace through save/load, so basic MPS capture
+runs in CI every night. CUDA has **no CI execution**, and neither does the rest
+of the device-specific behavior: device peak memory reporting,
+`save_budget="auto"` device measurement, `map_location` transport, and the
+CUDA-artifact-on-CPU-host refusal are implemented and documented, but treat
+those claims as attested by local testing only.
 
 ## Related contracts
 
