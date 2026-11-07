@@ -457,7 +457,8 @@ def _restore_inheriting_subclasses(cls: type, original_tp_new: int) -> None:
     descendants.
     """
 
-    for sub in cls.__subclasses__():
+    subclasses: list[type] = cls.__subclasses__()
+    for sub in subclasses:
         if "__new__" in sub.__dict__ or not has_python_new_trampoline(sub):
             continue
         _type_view(sub).tp_new = original_tp_new

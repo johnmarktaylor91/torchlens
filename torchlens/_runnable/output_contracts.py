@@ -331,7 +331,7 @@ def _call_witness_checks(
     """
 
     checks: list[ContractCheck] = []
-    witnesses_by_identity = {
+    witnesses_by_identity: dict[tuple[str | None, ControlWitnessKind, str], ControlWitness] = {
         (witness.call_id, witness.kind, witness.site_label): witness
         for witness in descriptor.control_witnesses
         if witness.kind in {ControlWitnessKind.SCALAR_BOOL, ControlWitnessKind.LOOP_PREDICATE}
