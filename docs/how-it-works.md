@@ -29,7 +29,7 @@ torch function (the `torch.*` namespace, `torch.nn.functional`, tensor methods a
 replaced with a thin wrapper around the original. Nothing is wrapped when you import `torchlens`:
 most of the package loads only when you first use one of its public names, and torch itself is
 first wrapped at the start of the first capture. From then on the wrappers stay installed. When no
-capture is running, a wrapper makes a few cheap checks (the module-level logging flag, plus flags
+capture is running, a wrapper makes a handful of cheap flag checks (the module-level logging flag, plus flags
 that stay off unless an opt-in feature is armed) and then calls the original function, so ordinary
 torch code pays a small fixed cost per call. The
 [plain-forward benchmark](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/benchmarks/capture.md#a-plain-forward-after-a-trace)
