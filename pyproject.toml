@@ -562,6 +562,14 @@ warn_unused_ignores = true
 [tool.ruff]
 line-length = 100
 
+# JUDGED FILE TYPES: ruff's default include minus "*.md". Ruff 0.16 added
+# Markdown to its defaults and formats Python blocks inside .md files; the
+# repo's Markdown holds generated output (torchlens/_docs/AGENT_INDEX.md,
+# checked by tools/docs/build_agent_index.py --check), verbatim third-party
+# snapshots (tools/agent_evals/bench/oracles/_material/), and hand-aligned
+# doc snippets. Markdown is judged by its own generators and doc tests.
+include = ["*.py", "*.pyi", "*.ipynb", "**/pyproject.toml", "**/ruff.toml", "**/.ruff.toml"]
+
 # EXCLUDE AUTHORITY: the judged file set lives here, not in CLI flags, so that
 # pre-commit (which passes explicit staged filenames) and CI (which passes
 # directories) reach the SAME verdict. `extend-exclude` participates in

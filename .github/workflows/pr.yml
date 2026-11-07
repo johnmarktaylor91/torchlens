@@ -42,7 +42,7 @@ jobs:
 
       # Exact pin: must equal the ruff-pre-commit `# vX.Y.Z` trailer and the
       # dev extra (tests/test_packaging_diet.py checks the three sites).
-      - run: uv pip install --system ruff==0.15.4 "pre-commit==4.6.2"
+      - run: uv pip install --system ruff==0.16.3 "pre-commit==4.6.2"
 
       # CHECK-ONLY: CI never rewrites, commits or pushes.
       - name: Ruff format check

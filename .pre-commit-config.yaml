@@ -25,7 +25,7 @@ repos:
         entry: gitleaks dir . --redact --verbose
         stages: [manual]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: a27a2e47c7751b639d2b5badf0ef6ff11fee893f  # v0.15.4 (git sha, not a secret)  # pragma: allowlist secret
+    rev: 65dbdb59d2f2d9c3bdc343c566821ad3319ddaa3  # v0.16.3 (git sha, not a secret)  # pragma: allowlist secret
     hooks:
       # Lint fixes first, formatter last, so the formatter has the final word.
       - id: ruff
