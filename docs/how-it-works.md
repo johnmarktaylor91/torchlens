@@ -28,15 +28,45 @@ TorchLens sees a model by watching the functions it calls, not by reading its so
 torch function (the `torch.*` namespace, `torch.nn.functional`, tensor methods and operators) is
 replaced with a thin wrapper around the original. Nothing is wrapped when you import `torchlens`:
 most of the package loads only when you first use one of its public names, and torch itself is
-first wrapped at the start of the first capture. From then on the wrappers stay installed. Each one checks a single module-level
-flag; when no capture is running, the check fails and the wrapper calls the original function
-straight away, so ordinary torch code pays one boolean test per call.
+first wrapped at the start of the first capture. From then on the wrappers stay installed. When no
+capture is running, a wrapper makes a few cheap checks (the module-level logging flag, plus flags
+that stay off unless an opt-in feature is armed) and then calls the original function, so ordinary
+torch code pays a small fixed cost per call. The
+[plain-forward benchmark](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/benchmarks/capture.md#a-plain-forward-after-a-trace)
+measures that cost on real models.
 
 Installation happens once per process. The first capture decorates every function TorchLens knows
 about, registers the wrappers with the TorchScript builtin table so scripted code still resolves,
 and sweeps for references to torch functions that were bound by name before the wrap. Later
 captures only revalidate: they re-install the cached wrappers if something removed them and decorate
 any custom operators registered since.
+
+If you want torch left unwrapped after a capture, there are two ways to remove the wrappers again.
+`tl.trace(model, x, capture=tl.options.CaptureOptions(unwrap_when_done=True))` restores the
+original torch functions when that capture finishes. The context manager
+`torchlens.backends.torch.wrappers.wrapped()` wraps torch on entry and unwraps it on exit, so
+every capture inside one `with wrapped():` block shares one installation:
+
+```python
+import torch
+import torchlens as tl
+from torch import nn
+from torchlens.backends.torch.wrappers import wrapped
+
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+x = torch.randn(2, 4)
+
+with wrapped():
+    first = tl.trace(model, x)
+    second = tl.trace(model, x)
+# torch is unwrapped again here
+```
+
+The next capture after an unwrap wraps torch again and pays the revalidation described above. A
+reference to a torch function taken while the wrappers are installed (`held = F.relu`) still points
+at the wrapper after an unwrap; the
+[detached-reference page](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/migration/scoped_detached_patching.md)
+covers that case and its remedies.
 
 Watching function calls has one blind spot: code that reaches torch through a path the wrappers do
 not cover. Two opt-in diagnostics check for that. The escape detector reports calls that bypassed a
