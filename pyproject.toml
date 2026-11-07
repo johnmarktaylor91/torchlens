@@ -265,7 +265,7 @@ dev = [
     # ledger). Always pass an explicit -n matching the declared cores and set
     # OMP_NUM_THREADS=1 per worker; never -n auto.
     "pytest-xdist>=3.6,<4",
-    "mypy==2.1.0",
+    "mypy==2.4.1",
     "pip-audit==2.10.1",
     "pre-commit>=4,<5",
     # The packaging gates (test_built_wheel_manifest_is_diet,
