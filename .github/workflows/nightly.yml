@@ -1489,7 +1489,7 @@ jobs:
         # keeps third-party stub noise inside torchlens out of the verdict.
         working-directory: ${{ runner.temp }}
         run: |
-          wheel-venv/bin/python -m pip install "mypy==2.1.0"
+          wheel-venv/bin/python -m pip install "mypy==2.4.1"
           printf 'import torchlens as tl\nx: str = tl.__version__\n' > consumer_good.py
           printf 'import torchlens as tl\ny: int = tl.__version__\n' > consumer_bad.py
           wheel-venv/bin/python -m mypy --follow-imports=silent consumer_good.py
