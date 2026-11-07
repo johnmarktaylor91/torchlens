@@ -5,6 +5,30 @@
 
 <!-- version list -->
 
+## v3.0.2 (2026-11-06)
+
+### Fixed
+
+- **JAX**: parameters of a function-root model with a nested params tree are named by their
+  whole pytree path; before, `save` refused every such model.
+- **saving**: TensorFlow and MLX traces whose runtime-only fields made `save` refuse now save,
+  with those fields dropped; the below-floor load refusal names this release as the reader.
+- **messages**: refusals and warnings name the spellings that exist (`InterventionOptions`
+  for the engine, `func=`, `atol`, `to_dataframe()`, the public draw keywords, the fork in the
+  collected-trace remedy), and warnings point at the caller's line.
+- **attribution**: `ReadTable.to_pandas()` without pandas names the `tabular` extra.
+- **drawing**: every closed-vocabulary draw option is validated on every graph kind; label
+  texts, the time overlay and attention labels are corrected; an unhashable `code_panel` value
+  gets the typed error.
+
+### Performance
+
+- **trace.run**: the rerun hands the discarded capture's values to the result instead of
+  deep-copying them (GPT-2 run from 2.0x to 1.6x the time of a fresh trace).
+- **extract**: `tl.extract` given raw text takes the hooked fast path, as token ids already did
+  (GPT-2 text from about 35x to 1.0x a plain forward).
+- **receptive fields**: the invariant check shares one walk memo per input.
+
 ## v3.0.1 (2026-11-06)
 
 3.0.0 could not be published because PyPI already holds a yanked 3.0.0 from 1 May 2026, and
