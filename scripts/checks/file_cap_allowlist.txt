@@ -1112,7 +1112,7 @@ torchlens/intervention/_rerun.py::run	136
 torchlens/intervention/_rerun_ledger.py::_build_ledger_record	66
 torchlens/intervention/_resolver_registry.py::resolve_function_registry_key	367
 torchlens/intervention/_resolver_registry.py::resolve_function_registry_key._enforce_foreign_trust	69
-torchlens/intervention/_runtime.py	1585
+torchlens/intervention/_runtime.py	1563
 torchlens/intervention/_runtime.py::_apply_live_backward_hooks	75
 torchlens/intervention/_runtime.py::_apply_live_backward_prehooks	72
 torchlens/intervention/_runtime.py::_apply_live_hooks	155

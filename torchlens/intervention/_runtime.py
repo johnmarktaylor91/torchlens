@@ -1550,27 +1550,6 @@ def _append_active_spec_records(records: list[FireRecord]) -> None:
         spec.records.extend(records)
 
 
-def do(trace: Any, *args: Any, **kwargs: Any) -> Any:
-    """Apply a one-shot intervention operation to a model log.
-
-    Parameters
-    ----------
-    trace:
-        Trace-like object that will eventually receive the operation.
-    *args:
-        Positional arguments forwarded to ``log.do``.
-    **kwargs:
-        Keyword arguments forwarded to ``log.do``.
-
-    Returns
-    -------
-    Any
-        Operation result from ``log.do``.
-    """
-
-    return trace.do(*args, **kwargs)
-
-
 __all__ = [
     "HOOK_REENTRANCY_GUARD",
     "_HookReentrancyGuard",
@@ -1580,6 +1559,5 @@ __all__ = [
     "_execute_hook",
     "apply_live_gradient_hooks",
     "active_intervention_context",
-    "do",
     "validate_hook_output",
 ]

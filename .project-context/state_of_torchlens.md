@@ -37,7 +37,7 @@ validation, and core data-class names for the current 2.x surface.
 ### Intervention Containers and Execution
 - `Bundle` - named collection of logs/specs with multi-trace helpers; `torchlens.intervention._bundle.Bundle`.
 - `bundle` - convenience constructor for `Bundle`; `torchlens.__init__.bundle`.
-- `do` - runtime intervention execution helper; `torchlens.intervention._runtime.do`.
+- `do` - Trace method that applies an intervention; `torchlens._data_classes.trace.Trace.do` (body in `torchlens.intervention._trace_edits.do`).
 - `push` - push an intervention/log/spec; `torchlens.intervention._replay.push` (the removed `replay` raises a teaching redirect).
 - `push_from` - push from a source object; `torchlens.intervention._replay.push_from` (the removed `replay_from` raises a teaching redirect).
 - `run` - run a model with interventions; `torchlens.intervention._rerun.run` (the removed `rerun` raises a teaching redirect).
