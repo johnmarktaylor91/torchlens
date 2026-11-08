@@ -7112,6 +7112,26 @@
         "tests/visualization/test_rolled_loop_edges.py",
         "tests/visualization/test_rolled_loop_route_fallback.py"
       ],
+      "torchlens/_visualization/_module_children.py": [
+        "tests/test_auto_collapse_atomic_spans.py",
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_collapse_auto_evenness.py",
+        "tests/test_collapse_optimizer.py",
+        "tests/test_collapse_power_ceiling.py",
+        "tests/test_collapse_segment_prefix.py",
+        "tests/test_render_substrate_collapse_parity.py",
+        "tests/test_render_substrate_themes.py"
+      ],
+      "torchlens/_visualization/_module_reuse.py": [
+        "tests/test_auto_collapse_atomic_spans.py",
+        "tests/test_default_buffer_fill.py",
+        "tests/test_draw_backward_key_and_rows.py",
+        "tests/test_draw_browser_widths.py",
+        "tests/test_draw_header_focus_key.py",
+        "tests/test_endpoint_rings.py",
+        "tests/test_transformer_lens_focus.py",
+        "tests/test_vizfix_skin_ink_and_legend.py"
+      ],
       "torchlens/_visualization/_mutated_params.py": [
         "tests/test_draw_headless.py",
         "tests/test_output_aesthetics.py",
@@ -9842,6 +9862,9 @@
         "tests/test_tl_lifecycle.py",
         "tests/test_validation_hardening.py",
         "tests/test_wrong_trace_cache_cluster.py"
+      ],
+      "torchlens/backends/torch/_module_state.py": [
+        "tests/test_grouping_call_sites.py"
       ],
       "torchlens/backends/torch/_op_markers.py": [
         "tests/test_capture_guard_transactionality.py",
@@ -14422,6 +14445,16 @@
       "torchlens/report/_summary_result.py": [
         "tests/test_factcore_report_layer.py",
         "tests/test_summary_rebuild_result.py"
+      ],
+      "torchlens/report/_topology_text.py": [
+        "tests/test_compat_report.py",
+        "tests/test_factcore_report_layer.py",
+        "tests/test_r18a_compat_report.py",
+        "tests/test_report_family_cost.py",
+        "tests/test_report_family_perf.py",
+        "tests/test_report_honesty_wave0.py",
+        "tests/test_report_profile_behaviors.py",
+        "tests/test_w051_mechinterp_flops_report.py"
       ],
       "torchlens/report/_trace_facts.py": [
         "tests/test_auto_collapse_atomic_spans.py",
