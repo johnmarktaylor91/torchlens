@@ -1,4 +1,4 @@
-"""Fast path for :func:`torchlens.extract` when every request is a module's output.
+"""Fast path for :func:`torchlens.extract` and :func:`torchlens.pluck` on module outputs.
 
 A full capture records every operation of the forward pass, which costs many
 times a plain forward on a small transformer. When each requested name is
@@ -10,7 +10,9 @@ the one a full capture gives: every requested module ran exactly once and
 returned a single tensor. Anything else (a module called twice or never, a
 tuple or dict output, an exception) restores the random-number state and
 returns ``None`` so :func:`torchlens.extract` runs the full capture, which also
-owns every refusal and error message.
+owns every refusal and error message. :func:`torchlens.pluck` takes the same
+path for its one module, and a ``stop_after=`` module address ends the forward
+from a hook after that module's first call, as the capture halts.
 """
 
 from __future__ import annotations
