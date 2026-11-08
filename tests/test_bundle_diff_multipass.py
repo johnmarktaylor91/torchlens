@@ -1,7 +1,7 @@
 """Bundle comparisons and the diff picture on a layer that runs more than once.
 
-A module called twice (one ReLU shared by two linears) is one logical layer
-with two passes; ``Layer.out`` refuses on it. The diff picture draws one node
+A ReLU module called twice from one loop line (after each of two linears) is
+one logical layer with two passes; ``Layer.out`` refuses on it. The diff picture draws one node
 per pass, each coloured by its own pass's distance (the per-pass rows of
 ``Bundle.compare``); a layer-level value (a stored comparison) joins the
 passes in pass order.
@@ -25,7 +25,11 @@ from torchlens.intervention._metrics import relative_l2
 
 
 class _SharedRelu(nn.Module):
-    """``fc1 -> relu -> fc2 -> relu``: the one ReLU module runs twice."""
+    """``fc1 -> relu -> fc2 -> relu``: the one ReLU module runs twice from one loop line.
+
+    A stateless module's calls are passes of one layer only when one line makes them;
+    called from two lines, the two calls are two layers (``docs/guides/grouping.md``).
+    """
 
     def __init__(self) -> None:
         super().__init__()
@@ -34,7 +38,9 @@ class _SharedRelu(nn.Module):
         self.fc2 = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.relu(self.fc2(self.relu(self.fc1(x))))
+        for fc in (self.fc1, self.fc2):
+            x = self.relu(fc(x))
+        return x
 
 
 def _clean_trace() -> tl.Trace:

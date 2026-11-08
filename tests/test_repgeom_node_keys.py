@@ -18,7 +18,11 @@ _WIDTH = 6
 
 
 class _Block(nn.Module):
-    """Residual block that reuses one ReLU module, as torchvision's BasicBlock does."""
+    """Residual block whose one ReLU module runs twice from one loop line.
+
+    The ReLU's two calls are two passes of one layer, so the block output is the later
+    pass. (torchvision's BasicBlock calls its ReLU from two lines: two layers.)
+    """
 
     def __init__(self) -> None:
         """Initialize the two linear layers and the shared activation."""
@@ -31,8 +35,11 @@ class _Block(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return the block output: the shared ReLU's second pass."""
 
-        out = self.relu(self.fc1(x))
-        return self.relu(self.fc2(out) + x)
+        out = x
+        for fc, skip in ((self.fc1, None), (self.fc2, x)):
+            out = fc(out) if skip is None else fc(out) + skip
+            out = self.relu(out)
+        return out
 
 
 class _TwoStages(nn.Module):
