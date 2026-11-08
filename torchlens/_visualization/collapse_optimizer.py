@@ -48,6 +48,7 @@ from ._collapse_frontier import (
 )
 from ._collapse_runs import FlowAdjacency, _flow_adjacency, longest_uniform_legal_run
 from ._collapse_signatures import fingerprints_for
+from ._module_children import recorded_child_addresses
 from ._render_common import BoundaryNode
 from ._render_edges import _is_buffer_visible
 from ._render_flow import _entries_to_plot_for_context
@@ -3789,12 +3790,7 @@ def _child_address_map(trace: Trace) -> dict[str, tuple[str, ...]]:
     """Return optimizer child addresses for every recorded module."""
 
     children_by_parent: dict[str, list[str]] = {
-        module.address: [
-            str(child)
-            for child in getattr(module, "address_children", ()) or ()
-            if child in trace.modules
-        ]
-        for module in trace.modules
+        module.address: list(recorded_child_addresses(trace, module)) for module in trace.modules
     }
     for candidate in trace.modules:
         candidate_address = str(candidate.address)
