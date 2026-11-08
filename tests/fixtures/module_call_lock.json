@@ -1,0 +1,4337 @@
+{
+ "resnet18": {
+  "drawing": {
+   "module_call_boxes": [
+    "layer1.0:1",
+    "layer1.1:1",
+    "layer1:1",
+    "layer2.0.downsample:1",
+    "layer2.0:1",
+    "layer2.1:1",
+    "layer2:1",
+    "layer3.0.downsample:1",
+    "layer3.0:1",
+    "layer3.1:1",
+    "layer3:1",
+    "layer4.0.downsample:1",
+    "layer4.0:1",
+    "layer4.1:1",
+    "layer4:1"
+   ],
+   "module_marks": [
+    "avgpool",
+    "bn1",
+    "conv1",
+    "fc",
+    "input.x",
+    "layer1",
+    "layer1.0",
+    "layer1.0.bn1",
+    "layer1.0.bn2",
+    "layer1.0.conv1",
+    "layer1.0.conv2",
+    "layer1.0.relu:1",
+    "layer1.0.relu:2",
+    "layer1.1",
+    "layer1.1.bn1",
+    "layer1.1.bn2",
+    "layer1.1.conv1",
+    "layer1.1.conv2",
+    "layer1.1.relu:1",
+    "layer1.1.relu:2",
+    "layer2",
+    "layer2.0",
+    "layer2.0.bn1",
+    "layer2.0.bn2",
+    "layer2.0.conv1",
+    "layer2.0.conv2",
+    "layer2.0.downsample",
+    "layer2.0.downsample.0",
+    "layer2.0.downsample.1",
+    "layer2.0.relu:1",
+    "layer2.0.relu:2",
+    "layer2.1",
+    "layer2.1.bn1",
+    "layer2.1.bn2",
+    "layer2.1.conv1",
+    "layer2.1.conv2",
+    "layer2.1.relu:1",
+    "layer2.1.relu:2",
+    "layer3",
+    "layer3.0",
+    "layer3.0.bn1",
+    "layer3.0.bn2",
+    "layer3.0.conv1",
+    "layer3.0.conv2",
+    "layer3.0.downsample",
+    "layer3.0.downsample.0",
+    "layer3.0.downsample.1",
+    "layer3.0.relu:1",
+    "layer3.0.relu:2",
+    "layer3.1",
+    "layer3.1.bn1",
+    "layer3.1.bn2",
+    "layer3.1.conv1",
+    "layer3.1.conv2",
+    "layer3.1.relu:1",
+    "layer3.1.relu:2",
+    "layer4",
+    "layer4.0",
+    "layer4.0.bn1",
+    "layer4.0.bn2",
+    "layer4.0.conv1",
+    "layer4.0.conv2",
+    "layer4.0.downsample",
+    "layer4.0.downsample.0",
+    "layer4.0.downsample.1",
+    "layer4.0.relu:1",
+    "layer4.0.relu:2",
+    "layer4.1",
+    "layer4.1.bn1",
+    "layer4.1.bn2",
+    "layer4.1.conv1",
+    "layer4.1.conv2",
+    "layer4.1.relu:1",
+    "layer4.1.relu:2",
+    "maxpool",
+    "output",
+    "relu"
+   ]
+  },
+  "modules": {
+   "avgpool": {
+    "call_labels": [
+     "avgpool:1"
+    ],
+    "calls": [
+     {
+      "label": "avgpool:1",
+      "lookup_is_call": true,
+      "ops": [
+       "108:adaptive_avg_pool2d"
+      ],
+      "output_ops": [
+       "108:adaptive_avg_pool2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "bn1": {
+    "call_labels": [
+     "bn1:1"
+    ],
+    "calls": [
+     {
+      "label": "bn1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "3:none",
+       "4:none",
+       "5:batch_norm"
+      ],
+      "output_ops": [
+       "5:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "conv1": {
+    "call_labels": [
+     "conv1:1"
+    ],
+    "calls": [
+     {
+      "label": "conv1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "2:conv2d"
+      ],
+      "output_ops": [
+       "2:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "fc": {
+    "call_labels": [
+     "fc:1"
+    ],
+    "calls": [
+     {
+      "label": "fc:1",
+      "lookup_is_call": true,
+      "ops": [
+       "110:linear"
+      ],
+      "output_ops": [
+       "110:linear"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1": {
+    "call_labels": [
+     "layer1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "8:conv2d",
+       "9:none",
+       "10:none",
+       "11:batch_norm",
+       "12:relu_",
+       "13:conv2d",
+       "14:none",
+       "15:none",
+       "16:batch_norm",
+       "17:__iadd__",
+       "18:relu_",
+       "19:conv2d",
+       "20:none",
+       "21:none",
+       "22:batch_norm",
+       "23:relu_",
+       "24:conv2d",
+       "25:none",
+       "26:none",
+       "27:batch_norm",
+       "28:__iadd__",
+       "29:relu_"
+      ],
+      "output_ops": [
+       "29:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.0": {
+    "call_labels": [
+     "layer1.0:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1.0:1",
+      "lookup_is_call": true,
+      "ops": [
+       "8:conv2d",
+       "9:none",
+       "10:none",
+       "11:batch_norm",
+       "12:relu_",
+       "13:conv2d",
+       "14:none",
+       "15:none",
+       "16:batch_norm",
+       "17:__iadd__",
+       "18:relu_"
+      ],
+      "output_ops": [
+       "18:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.0.bn1": {
+    "call_labels": [
+     "layer1.0.bn1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1.0.bn1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "9:none",
+       "10:none",
+       "11:batch_norm"
+      ],
+      "output_ops": [
+       "11:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.0.bn2": {
+    "call_labels": [
+     "layer1.0.bn2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1.0.bn2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "14:none",
+       "15:none",
+       "16:batch_norm"
+      ],
+      "output_ops": [
+       "16:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.0.conv1": {
+    "call_labels": [
+     "layer1.0.conv1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1.0.conv1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "8:conv2d"
+      ],
+      "output_ops": [
+       "8:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.0.conv2": {
+    "call_labels": [
+     "layer1.0.conv2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1.0.conv2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "13:conv2d"
+      ],
+      "output_ops": [
+       "13:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.0.relu": {
+    "call_labels": [
+     "layer1.0.relu:1",
+     "layer1.0.relu:2"
+    ],
+    "calls": [
+     {
+      "label": "layer1.0.relu:1",
+      "lookup_is_call": true,
+      "ops": [
+       "12:relu_"
+      ],
+      "output_ops": [
+       "12:relu_"
+      ]
+     },
+     {
+      "label": "layer1.0.relu:2",
+      "lookup_is_call": true,
+      "ops": [
+       "18:relu_"
+      ],
+      "output_ops": [
+       "18:relu_"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "layer1.1": {
+    "call_labels": [
+     "layer1.1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1.1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "19:conv2d",
+       "20:none",
+       "21:none",
+       "22:batch_norm",
+       "23:relu_",
+       "24:conv2d",
+       "25:none",
+       "26:none",
+       "27:batch_norm",
+       "28:__iadd__",
+       "29:relu_"
+      ],
+      "output_ops": [
+       "29:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.1.bn1": {
+    "call_labels": [
+     "layer1.1.bn1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1.1.bn1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "20:none",
+       "21:none",
+       "22:batch_norm"
+      ],
+      "output_ops": [
+       "22:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.1.bn2": {
+    "call_labels": [
+     "layer1.1.bn2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1.1.bn2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "25:none",
+       "26:none",
+       "27:batch_norm"
+      ],
+      "output_ops": [
+       "27:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.1.conv1": {
+    "call_labels": [
+     "layer1.1.conv1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1.1.conv1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "19:conv2d"
+      ],
+      "output_ops": [
+       "19:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.1.conv2": {
+    "call_labels": [
+     "layer1.1.conv2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer1.1.conv2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "24:conv2d"
+      ],
+      "output_ops": [
+       "24:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer1.1.relu": {
+    "call_labels": [
+     "layer1.1.relu:1",
+     "layer1.1.relu:2"
+    ],
+    "calls": [
+     {
+      "label": "layer1.1.relu:1",
+      "lookup_is_call": true,
+      "ops": [
+       "23:relu_"
+      ],
+      "output_ops": [
+       "23:relu_"
+      ]
+     },
+     {
+      "label": "layer1.1.relu:2",
+      "lookup_is_call": true,
+      "ops": [
+       "29:relu_"
+      ],
+      "output_ops": [
+       "29:relu_"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "layer2": {
+    "call_labels": [
+     "layer2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "30:conv2d",
+       "31:none",
+       "32:none",
+       "33:batch_norm",
+       "34:relu_",
+       "35:conv2d",
+       "36:none",
+       "37:none",
+       "38:batch_norm",
+       "39:conv2d",
+       "40:none",
+       "41:none",
+       "42:batch_norm",
+       "43:__iadd__",
+       "44:relu_",
+       "45:conv2d",
+       "46:none",
+       "47:none",
+       "48:batch_norm",
+       "49:relu_",
+       "50:conv2d",
+       "51:none",
+       "52:none",
+       "53:batch_norm",
+       "54:__iadd__",
+       "55:relu_"
+      ],
+      "output_ops": [
+       "55:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.0": {
+    "call_labels": [
+     "layer2.0:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.0:1",
+      "lookup_is_call": true,
+      "ops": [
+       "30:conv2d",
+       "31:none",
+       "32:none",
+       "33:batch_norm",
+       "34:relu_",
+       "35:conv2d",
+       "36:none",
+       "37:none",
+       "38:batch_norm",
+       "39:conv2d",
+       "40:none",
+       "41:none",
+       "42:batch_norm",
+       "43:__iadd__",
+       "44:relu_"
+      ],
+      "output_ops": [
+       "44:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.0.bn1": {
+    "call_labels": [
+     "layer2.0.bn1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.0.bn1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "31:none",
+       "32:none",
+       "33:batch_norm"
+      ],
+      "output_ops": [
+       "33:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.0.bn2": {
+    "call_labels": [
+     "layer2.0.bn2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.0.bn2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "36:none",
+       "37:none",
+       "38:batch_norm"
+      ],
+      "output_ops": [
+       "38:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.0.conv1": {
+    "call_labels": [
+     "layer2.0.conv1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.0.conv1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "30:conv2d"
+      ],
+      "output_ops": [
+       "30:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.0.conv2": {
+    "call_labels": [
+     "layer2.0.conv2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.0.conv2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "35:conv2d"
+      ],
+      "output_ops": [
+       "35:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.0.downsample": {
+    "call_labels": [
+     "layer2.0.downsample:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.0.downsample:1",
+      "lookup_is_call": true,
+      "ops": [
+       "39:conv2d",
+       "40:none",
+       "41:none",
+       "42:batch_norm"
+      ],
+      "output_ops": [
+       "42:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.0.downsample.0": {
+    "call_labels": [
+     "layer2.0.downsample.0:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.0.downsample.0:1",
+      "lookup_is_call": true,
+      "ops": [
+       "39:conv2d"
+      ],
+      "output_ops": [
+       "39:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.0.downsample.1": {
+    "call_labels": [
+     "layer2.0.downsample.1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.0.downsample.1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "40:none",
+       "41:none",
+       "42:batch_norm"
+      ],
+      "output_ops": [
+       "42:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.0.relu": {
+    "call_labels": [
+     "layer2.0.relu:1",
+     "layer2.0.relu:2"
+    ],
+    "calls": [
+     {
+      "label": "layer2.0.relu:1",
+      "lookup_is_call": true,
+      "ops": [
+       "34:relu_"
+      ],
+      "output_ops": [
+       "34:relu_"
+      ]
+     },
+     {
+      "label": "layer2.0.relu:2",
+      "lookup_is_call": true,
+      "ops": [
+       "44:relu_"
+      ],
+      "output_ops": [
+       "44:relu_"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "layer2.1": {
+    "call_labels": [
+     "layer2.1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "45:conv2d",
+       "46:none",
+       "47:none",
+       "48:batch_norm",
+       "49:relu_",
+       "50:conv2d",
+       "51:none",
+       "52:none",
+       "53:batch_norm",
+       "54:__iadd__",
+       "55:relu_"
+      ],
+      "output_ops": [
+       "55:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.1.bn1": {
+    "call_labels": [
+     "layer2.1.bn1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.1.bn1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "46:none",
+       "47:none",
+       "48:batch_norm"
+      ],
+      "output_ops": [
+       "48:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.1.bn2": {
+    "call_labels": [
+     "layer2.1.bn2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.1.bn2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "51:none",
+       "52:none",
+       "53:batch_norm"
+      ],
+      "output_ops": [
+       "53:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.1.conv1": {
+    "call_labels": [
+     "layer2.1.conv1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.1.conv1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "45:conv2d"
+      ],
+      "output_ops": [
+       "45:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.1.conv2": {
+    "call_labels": [
+     "layer2.1.conv2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer2.1.conv2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "50:conv2d"
+      ],
+      "output_ops": [
+       "50:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer2.1.relu": {
+    "call_labels": [
+     "layer2.1.relu:1",
+     "layer2.1.relu:2"
+    ],
+    "calls": [
+     {
+      "label": "layer2.1.relu:1",
+      "lookup_is_call": true,
+      "ops": [
+       "49:relu_"
+      ],
+      "output_ops": [
+       "49:relu_"
+      ]
+     },
+     {
+      "label": "layer2.1.relu:2",
+      "lookup_is_call": true,
+      "ops": [
+       "55:relu_"
+      ],
+      "output_ops": [
+       "55:relu_"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "layer3": {
+    "call_labels": [
+     "layer3:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3:1",
+      "lookup_is_call": true,
+      "ops": [
+       "56:conv2d",
+       "57:none",
+       "58:none",
+       "59:batch_norm",
+       "60:relu_",
+       "61:conv2d",
+       "62:none",
+       "63:none",
+       "64:batch_norm",
+       "65:conv2d",
+       "66:none",
+       "67:none",
+       "68:batch_norm",
+       "69:__iadd__",
+       "70:relu_",
+       "71:conv2d",
+       "72:none",
+       "73:none",
+       "74:batch_norm",
+       "75:relu_",
+       "76:conv2d",
+       "77:none",
+       "78:none",
+       "79:batch_norm",
+       "80:__iadd__",
+       "81:relu_"
+      ],
+      "output_ops": [
+       "81:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.0": {
+    "call_labels": [
+     "layer3.0:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.0:1",
+      "lookup_is_call": true,
+      "ops": [
+       "56:conv2d",
+       "57:none",
+       "58:none",
+       "59:batch_norm",
+       "60:relu_",
+       "61:conv2d",
+       "62:none",
+       "63:none",
+       "64:batch_norm",
+       "65:conv2d",
+       "66:none",
+       "67:none",
+       "68:batch_norm",
+       "69:__iadd__",
+       "70:relu_"
+      ],
+      "output_ops": [
+       "70:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.0.bn1": {
+    "call_labels": [
+     "layer3.0.bn1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.0.bn1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "57:none",
+       "58:none",
+       "59:batch_norm"
+      ],
+      "output_ops": [
+       "59:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.0.bn2": {
+    "call_labels": [
+     "layer3.0.bn2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.0.bn2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "62:none",
+       "63:none",
+       "64:batch_norm"
+      ],
+      "output_ops": [
+       "64:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.0.conv1": {
+    "call_labels": [
+     "layer3.0.conv1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.0.conv1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "56:conv2d"
+      ],
+      "output_ops": [
+       "56:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.0.conv2": {
+    "call_labels": [
+     "layer3.0.conv2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.0.conv2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "61:conv2d"
+      ],
+      "output_ops": [
+       "61:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.0.downsample": {
+    "call_labels": [
+     "layer3.0.downsample:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.0.downsample:1",
+      "lookup_is_call": true,
+      "ops": [
+       "65:conv2d",
+       "66:none",
+       "67:none",
+       "68:batch_norm"
+      ],
+      "output_ops": [
+       "68:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.0.downsample.0": {
+    "call_labels": [
+     "layer3.0.downsample.0:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.0.downsample.0:1",
+      "lookup_is_call": true,
+      "ops": [
+       "65:conv2d"
+      ],
+      "output_ops": [
+       "65:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.0.downsample.1": {
+    "call_labels": [
+     "layer3.0.downsample.1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.0.downsample.1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "66:none",
+       "67:none",
+       "68:batch_norm"
+      ],
+      "output_ops": [
+       "68:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.0.relu": {
+    "call_labels": [
+     "layer3.0.relu:1",
+     "layer3.0.relu:2"
+    ],
+    "calls": [
+     {
+      "label": "layer3.0.relu:1",
+      "lookup_is_call": true,
+      "ops": [
+       "60:relu_"
+      ],
+      "output_ops": [
+       "60:relu_"
+      ]
+     },
+     {
+      "label": "layer3.0.relu:2",
+      "lookup_is_call": true,
+      "ops": [
+       "70:relu_"
+      ],
+      "output_ops": [
+       "70:relu_"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "layer3.1": {
+    "call_labels": [
+     "layer3.1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "71:conv2d",
+       "72:none",
+       "73:none",
+       "74:batch_norm",
+       "75:relu_",
+       "76:conv2d",
+       "77:none",
+       "78:none",
+       "79:batch_norm",
+       "80:__iadd__",
+       "81:relu_"
+      ],
+      "output_ops": [
+       "81:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.1.bn1": {
+    "call_labels": [
+     "layer3.1.bn1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.1.bn1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "72:none",
+       "73:none",
+       "74:batch_norm"
+      ],
+      "output_ops": [
+       "74:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.1.bn2": {
+    "call_labels": [
+     "layer3.1.bn2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.1.bn2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "77:none",
+       "78:none",
+       "79:batch_norm"
+      ],
+      "output_ops": [
+       "79:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.1.conv1": {
+    "call_labels": [
+     "layer3.1.conv1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.1.conv1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "71:conv2d"
+      ],
+      "output_ops": [
+       "71:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.1.conv2": {
+    "call_labels": [
+     "layer3.1.conv2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer3.1.conv2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "76:conv2d"
+      ],
+      "output_ops": [
+       "76:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer3.1.relu": {
+    "call_labels": [
+     "layer3.1.relu:1",
+     "layer3.1.relu:2"
+    ],
+    "calls": [
+     {
+      "label": "layer3.1.relu:1",
+      "lookup_is_call": true,
+      "ops": [
+       "75:relu_"
+      ],
+      "output_ops": [
+       "75:relu_"
+      ]
+     },
+     {
+      "label": "layer3.1.relu:2",
+      "lookup_is_call": true,
+      "ops": [
+       "81:relu_"
+      ],
+      "output_ops": [
+       "81:relu_"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "layer4": {
+    "call_labels": [
+     "layer4:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4:1",
+      "lookup_is_call": true,
+      "ops": [
+       "82:conv2d",
+       "83:none",
+       "84:none",
+       "85:batch_norm",
+       "86:relu_",
+       "87:conv2d",
+       "88:none",
+       "89:none",
+       "90:batch_norm",
+       "91:conv2d",
+       "92:none",
+       "93:none",
+       "94:batch_norm",
+       "95:__iadd__",
+       "96:relu_",
+       "97:conv2d",
+       "98:none",
+       "99:none",
+       "100:batch_norm",
+       "101:relu_",
+       "102:conv2d",
+       "103:none",
+       "104:none",
+       "105:batch_norm",
+       "106:__iadd__",
+       "107:relu_"
+      ],
+      "output_ops": [
+       "107:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.0": {
+    "call_labels": [
+     "layer4.0:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.0:1",
+      "lookup_is_call": true,
+      "ops": [
+       "82:conv2d",
+       "83:none",
+       "84:none",
+       "85:batch_norm",
+       "86:relu_",
+       "87:conv2d",
+       "88:none",
+       "89:none",
+       "90:batch_norm",
+       "91:conv2d",
+       "92:none",
+       "93:none",
+       "94:batch_norm",
+       "95:__iadd__",
+       "96:relu_"
+      ],
+      "output_ops": [
+       "96:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.0.bn1": {
+    "call_labels": [
+     "layer4.0.bn1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.0.bn1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "83:none",
+       "84:none",
+       "85:batch_norm"
+      ],
+      "output_ops": [
+       "85:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.0.bn2": {
+    "call_labels": [
+     "layer4.0.bn2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.0.bn2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "88:none",
+       "89:none",
+       "90:batch_norm"
+      ],
+      "output_ops": [
+       "90:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.0.conv1": {
+    "call_labels": [
+     "layer4.0.conv1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.0.conv1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "82:conv2d"
+      ],
+      "output_ops": [
+       "82:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.0.conv2": {
+    "call_labels": [
+     "layer4.0.conv2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.0.conv2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "87:conv2d"
+      ],
+      "output_ops": [
+       "87:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.0.downsample": {
+    "call_labels": [
+     "layer4.0.downsample:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.0.downsample:1",
+      "lookup_is_call": true,
+      "ops": [
+       "91:conv2d",
+       "92:none",
+       "93:none",
+       "94:batch_norm"
+      ],
+      "output_ops": [
+       "94:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.0.downsample.0": {
+    "call_labels": [
+     "layer4.0.downsample.0:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.0.downsample.0:1",
+      "lookup_is_call": true,
+      "ops": [
+       "91:conv2d"
+      ],
+      "output_ops": [
+       "91:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.0.downsample.1": {
+    "call_labels": [
+     "layer4.0.downsample.1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.0.downsample.1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "92:none",
+       "93:none",
+       "94:batch_norm"
+      ],
+      "output_ops": [
+       "94:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.0.relu": {
+    "call_labels": [
+     "layer4.0.relu:1",
+     "layer4.0.relu:2"
+    ],
+    "calls": [
+     {
+      "label": "layer4.0.relu:1",
+      "lookup_is_call": true,
+      "ops": [
+       "86:relu_"
+      ],
+      "output_ops": [
+       "86:relu_"
+      ]
+     },
+     {
+      "label": "layer4.0.relu:2",
+      "lookup_is_call": true,
+      "ops": [
+       "96:relu_"
+      ],
+      "output_ops": [
+       "96:relu_"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "layer4.1": {
+    "call_labels": [
+     "layer4.1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "97:conv2d",
+       "98:none",
+       "99:none",
+       "100:batch_norm",
+       "101:relu_",
+       "102:conv2d",
+       "103:none",
+       "104:none",
+       "105:batch_norm",
+       "106:__iadd__",
+       "107:relu_"
+      ],
+      "output_ops": [
+       "107:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.1.bn1": {
+    "call_labels": [
+     "layer4.1.bn1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.1.bn1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "98:none",
+       "99:none",
+       "100:batch_norm"
+      ],
+      "output_ops": [
+       "100:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.1.bn2": {
+    "call_labels": [
+     "layer4.1.bn2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.1.bn2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "103:none",
+       "104:none",
+       "105:batch_norm"
+      ],
+      "output_ops": [
+       "105:batch_norm"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.1.conv1": {
+    "call_labels": [
+     "layer4.1.conv1:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.1.conv1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "97:conv2d"
+      ],
+      "output_ops": [
+       "97:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.1.conv2": {
+    "call_labels": [
+     "layer4.1.conv2:1"
+    ],
+    "calls": [
+     {
+      "label": "layer4.1.conv2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "102:conv2d"
+      ],
+      "output_ops": [
+       "102:conv2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "layer4.1.relu": {
+    "call_labels": [
+     "layer4.1.relu:1",
+     "layer4.1.relu:2"
+    ],
+    "calls": [
+     {
+      "label": "layer4.1.relu:1",
+      "lookup_is_call": true,
+      "ops": [
+       "101:relu_"
+      ],
+      "output_ops": [
+       "101:relu_"
+      ]
+     },
+     {
+      "label": "layer4.1.relu:2",
+      "lookup_is_call": true,
+      "ops": [
+       "107:relu_"
+      ],
+      "output_ops": [
+       "107:relu_"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "maxpool": {
+    "call_labels": [
+     "maxpool:1"
+    ],
+    "calls": [
+     {
+      "label": "maxpool:1",
+      "lookup_is_call": true,
+      "ops": [
+       "7:max_pool2d"
+      ],
+      "output_ops": [
+       "7:max_pool2d"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "relu": {
+    "call_labels": [
+     "relu:1"
+    ],
+    "calls": [
+     {
+      "label": "relu:1",
+      "lookup_is_call": true,
+      "ops": [
+       "6:relu_"
+      ],
+      "output_ops": [
+       "6:relu_"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "self": {
+    "call_labels": [
+     "self:1"
+    ],
+    "calls": [
+     {
+      "label": "self:1",
+      "ops": [
+       "1:none",
+       "2:conv2d",
+       "3:none",
+       "4:none",
+       "5:batch_norm",
+       "6:relu_",
+       "7:max_pool2d",
+       "8:conv2d",
+       "9:none",
+       "10:none",
+       "11:batch_norm",
+       "12:relu_",
+       "13:conv2d",
+       "14:none",
+       "15:none",
+       "16:batch_norm",
+       "17:__iadd__",
+       "18:relu_",
+       "19:conv2d",
+       "20:none",
+       "21:none",
+       "22:batch_norm",
+       "23:relu_",
+       "24:conv2d",
+       "25:none",
+       "26:none",
+       "27:batch_norm",
+       "28:__iadd__",
+       "29:relu_",
+       "30:conv2d",
+       "31:none",
+       "32:none",
+       "33:batch_norm",
+       "34:relu_",
+       "35:conv2d",
+       "36:none",
+       "37:none",
+       "38:batch_norm",
+       "39:conv2d",
+       "40:none",
+       "41:none",
+       "42:batch_norm",
+       "43:__iadd__",
+       "44:relu_",
+       "45:conv2d",
+       "46:none",
+       "47:none",
+       "48:batch_norm",
+       "49:relu_",
+       "50:conv2d",
+       "51:none",
+       "52:none",
+       "53:batch_norm",
+       "54:__iadd__",
+       "55:relu_",
+       "56:conv2d",
+       "57:none",
+       "58:none",
+       "59:batch_norm",
+       "60:relu_",
+       "61:conv2d",
+       "62:none",
+       "63:none",
+       "64:batch_norm",
+       "65:conv2d",
+       "66:none",
+       "67:none",
+       "68:batch_norm",
+       "69:__iadd__",
+       "70:relu_",
+       "71:conv2d",
+       "72:none",
+       "73:none",
+       "74:batch_norm",
+       "75:relu_",
+       "76:conv2d",
+       "77:none",
+       "78:none",
+       "79:batch_norm",
+       "80:__iadd__",
+       "81:relu_",
+       "82:conv2d",
+       "83:none",
+       "84:none",
+       "85:batch_norm",
+       "86:relu_",
+       "87:conv2d",
+       "88:none",
+       "89:none",
+       "90:batch_norm",
+       "91:conv2d",
+       "92:none",
+       "93:none",
+       "94:batch_norm",
+       "95:__iadd__",
+       "96:relu_",
+       "97:conv2d",
+       "98:none",
+       "99:none",
+       "100:batch_norm",
+       "101:relu_",
+       "102:conv2d",
+       "103:none",
+       "104:none",
+       "105:batch_norm",
+       "106:__iadd__",
+       "107:relu_",
+       "108:adaptive_avg_pool2d",
+       "109:flatten",
+       "110:linear",
+       "111:none"
+      ],
+      "output_ops": [
+       "111:none"
+      ]
+     }
+    ],
+    "num_calls": 1
+   }
+  },
+  "ops": {
+   "100:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1",
+     "layer4.1.bn1:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.1.relu:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer4.1.bn1:1"
+    ]
+   },
+   "101:relu_": {
+    "atomic_module_call": "layer4.1.relu:1",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1",
+     "layer4.1.relu:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.1.conv2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer4.1.relu:1"
+    ]
+   },
+   "102:conv2d": {
+    "atomic_module_call": "layer4.1.conv2:1",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1",
+     "layer4.1.conv2:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.1.bn2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer4.1.conv2:1"
+    ]
+   },
+   "103:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1",
+     "layer4.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "104:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1",
+     "layer4.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "105:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1",
+     "layer4.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer4.1.bn2:1"
+    ]
+   },
+   "106:__iadd__": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.1.relu:2"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "107:relu_": {
+    "atomic_module_call": "layer4.1.relu:2",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1",
+     "layer4.1.relu:2"
+    ],
+    "input_to_module_calls": [
+     "avgpool:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer4.1.relu:2",
+     "layer4.1:1",
+     "layer4:1"
+    ]
+   },
+   "108:adaptive_avg_pool2d": {
+    "atomic_module_call": "avgpool:1",
+    "call_stack": [
+     "avgpool:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "avgpool:1"
+    ]
+   },
+   "109:flatten": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "fc:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "10:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "110:linear": {
+    "atomic_module_call": "fc:1",
+    "call_stack": [
+     "fc:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "fc:1"
+    ]
+   },
+   "111:none": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "fc:1"
+    ]
+   },
+   "11:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.bn1:1"
+    ],
+    "input_to_module_calls": [
+     "layer1.0.relu:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer1.0.bn1:1"
+    ]
+   },
+   "12:relu_": {
+    "atomic_module_call": "layer1.0.relu:1",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.relu:1"
+    ],
+    "input_to_module_calls": [
+     "layer1.0.conv2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer1.0.relu:1"
+    ]
+   },
+   "13:conv2d": {
+    "atomic_module_call": "layer1.0.conv2:1",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.conv2:1"
+    ],
+    "input_to_module_calls": [
+     "layer1.0.bn2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer1.0.conv2:1"
+    ]
+   },
+   "14:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "15:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "16:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer1.0.bn2:1"
+    ]
+   },
+   "17:__iadd__": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1"
+    ],
+    "input_to_module_calls": [
+     "layer1.0.relu:2"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "18:relu_": {
+    "atomic_module_call": "layer1.0.relu:2",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.relu:2"
+    ],
+    "input_to_module_calls": [
+     "layer1.1:1",
+     "layer1.1.conv1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer1.0.relu:2",
+     "layer1.0:1"
+    ]
+   },
+   "19:conv2d": {
+    "atomic_module_call": "layer1.1.conv1:1",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1",
+     "layer1.1.conv1:1"
+    ],
+    "input_to_module_calls": [
+     "layer1.1.bn1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer1.1.conv1:1"
+    ]
+   },
+   "1:none": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "conv1:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "20:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1",
+     "layer1.1.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "21:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1",
+     "layer1.1.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "22:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1",
+     "layer1.1.bn1:1"
+    ],
+    "input_to_module_calls": [
+     "layer1.1.relu:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer1.1.bn1:1"
+    ]
+   },
+   "23:relu_": {
+    "atomic_module_call": "layer1.1.relu:1",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1",
+     "layer1.1.relu:1"
+    ],
+    "input_to_module_calls": [
+     "layer1.1.conv2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer1.1.relu:1"
+    ]
+   },
+   "24:conv2d": {
+    "atomic_module_call": "layer1.1.conv2:1",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1",
+     "layer1.1.conv2:1"
+    ],
+    "input_to_module_calls": [
+     "layer1.1.bn2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer1.1.conv2:1"
+    ]
+   },
+   "25:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1",
+     "layer1.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "26:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1",
+     "layer1.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "27:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1",
+     "layer1.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer1.1.bn2:1"
+    ]
+   },
+   "28:__iadd__": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1"
+    ],
+    "input_to_module_calls": [
+     "layer1.1.relu:2"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "29:relu_": {
+    "atomic_module_call": "layer1.1.relu:2",
+    "call_stack": [
+     "layer1:1",
+     "layer1.1:1",
+     "layer1.1.relu:2"
+    ],
+    "input_to_module_calls": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.conv1:1",
+     "layer2.0.downsample:1",
+     "layer2.0.downsample.0:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer1.1.relu:2",
+     "layer1.1:1",
+     "layer1:1"
+    ]
+   },
+   "2:conv2d": {
+    "atomic_module_call": "conv1:1",
+    "call_stack": [
+     "conv1:1"
+    ],
+    "input_to_module_calls": [
+     "bn1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "conv1:1"
+    ]
+   },
+   "30:conv2d": {
+    "atomic_module_call": "layer2.0.conv1:1",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.conv1:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.0.bn1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer2.0.conv1:1"
+    ]
+   },
+   "31:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "32:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "33:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.bn1:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.0.relu:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer2.0.bn1:1"
+    ]
+   },
+   "34:relu_": {
+    "atomic_module_call": "layer2.0.relu:1",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.relu:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.0.conv2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer2.0.relu:1"
+    ]
+   },
+   "35:conv2d": {
+    "atomic_module_call": "layer2.0.conv2:1",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.conv2:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.0.bn2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer2.0.conv2:1"
+    ]
+   },
+   "36:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "37:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "38:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer2.0.bn2:1"
+    ]
+   },
+   "39:conv2d": {
+    "atomic_module_call": "layer2.0.downsample.0:1",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.downsample:1",
+     "layer2.0.downsample.0:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.0.downsample.1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer2.0.downsample.0:1"
+    ]
+   },
+   "3:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "40:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.downsample:1",
+     "layer2.0.downsample.1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "41:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.downsample:1",
+     "layer2.0.downsample.1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "42:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.downsample:1",
+     "layer2.0.downsample.1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer2.0.downsample.1:1",
+     "layer2.0.downsample:1"
+    ]
+   },
+   "43:__iadd__": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.0.relu:2"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "44:relu_": {
+    "atomic_module_call": "layer2.0.relu:2",
+    "call_stack": [
+     "layer2:1",
+     "layer2.0:1",
+     "layer2.0.relu:2"
+    ],
+    "input_to_module_calls": [
+     "layer2.1:1",
+     "layer2.1.conv1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer2.0.relu:2",
+     "layer2.0:1"
+    ]
+   },
+   "45:conv2d": {
+    "atomic_module_call": "layer2.1.conv1:1",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1",
+     "layer2.1.conv1:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.1.bn1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer2.1.conv1:1"
+    ]
+   },
+   "46:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1",
+     "layer2.1.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "47:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1",
+     "layer2.1.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "48:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1",
+     "layer2.1.bn1:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.1.relu:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer2.1.bn1:1"
+    ]
+   },
+   "49:relu_": {
+    "atomic_module_call": "layer2.1.relu:1",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1",
+     "layer2.1.relu:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.1.conv2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer2.1.relu:1"
+    ]
+   },
+   "4:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "50:conv2d": {
+    "atomic_module_call": "layer2.1.conv2:1",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1",
+     "layer2.1.conv2:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.1.bn2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer2.1.conv2:1"
+    ]
+   },
+   "51:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1",
+     "layer2.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "52:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1",
+     "layer2.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "53:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1",
+     "layer2.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer2.1.bn2:1"
+    ]
+   },
+   "54:__iadd__": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1"
+    ],
+    "input_to_module_calls": [
+     "layer2.1.relu:2"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "55:relu_": {
+    "atomic_module_call": "layer2.1.relu:2",
+    "call_stack": [
+     "layer2:1",
+     "layer2.1:1",
+     "layer2.1.relu:2"
+    ],
+    "input_to_module_calls": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.conv1:1",
+     "layer3.0.downsample:1",
+     "layer3.0.downsample.0:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer2.1.relu:2",
+     "layer2.1:1",
+     "layer2:1"
+    ]
+   },
+   "56:conv2d": {
+    "atomic_module_call": "layer3.0.conv1:1",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.conv1:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.0.bn1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer3.0.conv1:1"
+    ]
+   },
+   "57:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "58:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "59:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.bn1:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.0.relu:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer3.0.bn1:1"
+    ]
+   },
+   "5:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "bn1:1"
+    ],
+    "input_to_module_calls": [
+     "relu:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "bn1:1"
+    ]
+   },
+   "60:relu_": {
+    "atomic_module_call": "layer3.0.relu:1",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.relu:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.0.conv2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer3.0.relu:1"
+    ]
+   },
+   "61:conv2d": {
+    "atomic_module_call": "layer3.0.conv2:1",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.conv2:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.0.bn2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer3.0.conv2:1"
+    ]
+   },
+   "62:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "63:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "64:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer3.0.bn2:1"
+    ]
+   },
+   "65:conv2d": {
+    "atomic_module_call": "layer3.0.downsample.0:1",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.downsample:1",
+     "layer3.0.downsample.0:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.0.downsample.1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer3.0.downsample.0:1"
+    ]
+   },
+   "66:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.downsample:1",
+     "layer3.0.downsample.1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "67:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.downsample:1",
+     "layer3.0.downsample.1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "68:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.downsample:1",
+     "layer3.0.downsample.1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer3.0.downsample.1:1",
+     "layer3.0.downsample:1"
+    ]
+   },
+   "69:__iadd__": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.0.relu:2"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "6:relu_": {
+    "atomic_module_call": "relu:1",
+    "call_stack": [
+     "relu:1"
+    ],
+    "input_to_module_calls": [
+     "maxpool:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "relu:1"
+    ]
+   },
+   "70:relu_": {
+    "atomic_module_call": "layer3.0.relu:2",
+    "call_stack": [
+     "layer3:1",
+     "layer3.0:1",
+     "layer3.0.relu:2"
+    ],
+    "input_to_module_calls": [
+     "layer3.1:1",
+     "layer3.1.conv1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer3.0.relu:2",
+     "layer3.0:1"
+    ]
+   },
+   "71:conv2d": {
+    "atomic_module_call": "layer3.1.conv1:1",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1",
+     "layer3.1.conv1:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.1.bn1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer3.1.conv1:1"
+    ]
+   },
+   "72:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1",
+     "layer3.1.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "73:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1",
+     "layer3.1.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "74:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1",
+     "layer3.1.bn1:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.1.relu:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer3.1.bn1:1"
+    ]
+   },
+   "75:relu_": {
+    "atomic_module_call": "layer3.1.relu:1",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1",
+     "layer3.1.relu:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.1.conv2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer3.1.relu:1"
+    ]
+   },
+   "76:conv2d": {
+    "atomic_module_call": "layer3.1.conv2:1",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1",
+     "layer3.1.conv2:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.1.bn2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer3.1.conv2:1"
+    ]
+   },
+   "77:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1",
+     "layer3.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "78:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1",
+     "layer3.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "79:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1",
+     "layer3.1.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer3.1.bn2:1"
+    ]
+   },
+   "7:max_pool2d": {
+    "atomic_module_call": "maxpool:1",
+    "call_stack": [
+     "maxpool:1"
+    ],
+    "input_to_module_calls": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.conv1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "maxpool:1"
+    ]
+   },
+   "80:__iadd__": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1"
+    ],
+    "input_to_module_calls": [
+     "layer3.1.relu:2"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "81:relu_": {
+    "atomic_module_call": "layer3.1.relu:2",
+    "call_stack": [
+     "layer3:1",
+     "layer3.1:1",
+     "layer3.1.relu:2"
+    ],
+    "input_to_module_calls": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.conv1:1",
+     "layer4.0.downsample:1",
+     "layer4.0.downsample.0:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer3.1.relu:2",
+     "layer3.1:1",
+     "layer3:1"
+    ]
+   },
+   "82:conv2d": {
+    "atomic_module_call": "layer4.0.conv1:1",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.conv1:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.0.bn1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer4.0.conv1:1"
+    ]
+   },
+   "83:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "84:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "85:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.bn1:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.0.relu:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer4.0.bn1:1"
+    ]
+   },
+   "86:relu_": {
+    "atomic_module_call": "layer4.0.relu:1",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.relu:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.0.conv2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer4.0.relu:1"
+    ]
+   },
+   "87:conv2d": {
+    "atomic_module_call": "layer4.0.conv2:1",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.conv2:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.0.bn2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer4.0.conv2:1"
+    ]
+   },
+   "88:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "89:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "8:conv2d": {
+    "atomic_module_call": "layer1.0.conv1:1",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.conv1:1"
+    ],
+    "input_to_module_calls": [
+     "layer1.0.bn1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer1.0.conv1:1"
+    ]
+   },
+   "90:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.bn2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer4.0.bn2:1"
+    ]
+   },
+   "91:conv2d": {
+    "atomic_module_call": "layer4.0.downsample.0:1",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.downsample:1",
+     "layer4.0.downsample.0:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.0.downsample.1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer4.0.downsample.0:1"
+    ]
+   },
+   "92:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.downsample:1",
+     "layer4.0.downsample.1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "93:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.downsample:1",
+     "layer4.0.downsample.1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "94:batch_norm": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.downsample:1",
+     "layer4.0.downsample.1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "layer4.0.downsample.1:1",
+     "layer4.0.downsample:1"
+    ]
+   },
+   "95:__iadd__": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.0.relu:2"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "96:relu_": {
+    "atomic_module_call": "layer4.0.relu:2",
+    "call_stack": [
+     "layer4:1",
+     "layer4.0:1",
+     "layer4.0.relu:2"
+    ],
+    "input_to_module_calls": [
+     "layer4.1:1",
+     "layer4.1.conv1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer4.0.relu:2",
+     "layer4.0:1"
+    ]
+   },
+   "97:conv2d": {
+    "atomic_module_call": "layer4.1.conv1:1",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1",
+     "layer4.1.conv1:1"
+    ],
+    "input_to_module_calls": [
+     "layer4.1.bn1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "layer4.1.conv1:1"
+    ]
+   },
+   "98:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1",
+     "layer4.1.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "99:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer4:1",
+     "layer4.1:1",
+     "layer4.1.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "9:none": {
+    "atomic_module_call": "None",
+    "call_stack": [
+     "layer1:1",
+     "layer1.0:1",
+     "layer1.0.bn1:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   }
+  }
+ },
+ "shared_relu": {
+  "drawing": {
+   "module_call_boxes": [
+    "blocks.0:1",
+    "blocks.1:1",
+    "blocks.2:1"
+   ],
+   "module_marks": [
+    "act:1",
+    "act:2",
+    "act:3",
+    "act:4",
+    "act:5",
+    "act:6",
+    "blocks.0",
+    "blocks.0.lin1",
+    "blocks.0.lin2",
+    "blocks.1",
+    "blocks.1.lin1",
+    "blocks.1.lin2",
+    "blocks.2",
+    "blocks.2.lin1",
+    "blocks.2.lin2",
+    "input.x",
+    "output"
+   ]
+  },
+  "modules": {
+   "act": {
+    "call_labels": [
+     "act:1",
+     "act:2",
+     "act:3",
+     "act:4",
+     "act:5",
+     "act:6"
+    ],
+    "calls": [
+     {
+      "label": "act:1",
+      "lookup_is_call": true,
+      "ops": [
+       "3:relu"
+      ],
+      "output_ops": [
+       "3:relu"
+      ]
+     },
+     {
+      "label": "act:2",
+      "lookup_is_call": true,
+      "ops": [
+       "5:relu"
+      ],
+      "output_ops": [
+       "5:relu"
+      ]
+     },
+     {
+      "label": "act:3",
+      "lookup_is_call": true,
+      "ops": [
+       "8:relu"
+      ],
+      "output_ops": [
+       "8:relu"
+      ]
+     },
+     {
+      "label": "act:4",
+      "lookup_is_call": true,
+      "ops": [
+       "10:relu"
+      ],
+      "output_ops": [
+       "10:relu"
+      ]
+     },
+     {
+      "label": "act:5",
+      "lookup_is_call": true,
+      "ops": [
+       "13:relu"
+      ],
+      "output_ops": [
+       "13:relu"
+      ]
+     },
+     {
+      "label": "act:6",
+      "lookup_is_call": true,
+      "ops": [
+       "15:relu"
+      ],
+      "output_ops": [
+       "15:relu"
+      ]
+     }
+    ],
+    "num_calls": 6
+   },
+   "blocks.0": {
+    "call_labels": [
+     "blocks.0:1"
+    ],
+    "calls": [
+     {
+      "label": "blocks.0:1",
+      "lookup_is_call": true,
+      "ops": [
+       "2:linear",
+       "3:relu",
+       "4:linear",
+       "5:relu",
+       "6:__add__"
+      ],
+      "output_ops": [
+       "6:__add__"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "blocks.0.lin1": {
+    "call_labels": [
+     "blocks.0.lin1:1"
+    ],
+    "calls": [
+     {
+      "label": "blocks.0.lin1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "2:linear"
+      ],
+      "output_ops": [
+       "2:linear"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "blocks.0.lin2": {
+    "call_labels": [
+     "blocks.0.lin2:1"
+    ],
+    "calls": [
+     {
+      "label": "blocks.0.lin2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "4:linear"
+      ],
+      "output_ops": [
+       "4:linear"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "blocks.1": {
+    "call_labels": [
+     "blocks.1:1"
+    ],
+    "calls": [
+     {
+      "label": "blocks.1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "7:linear",
+       "8:relu",
+       "9:linear",
+       "10:relu",
+       "11:__add__"
+      ],
+      "output_ops": [
+       "11:__add__"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "blocks.1.lin1": {
+    "call_labels": [
+     "blocks.1.lin1:1"
+    ],
+    "calls": [
+     {
+      "label": "blocks.1.lin1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "7:linear"
+      ],
+      "output_ops": [
+       "7:linear"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "blocks.1.lin2": {
+    "call_labels": [
+     "blocks.1.lin2:1"
+    ],
+    "calls": [
+     {
+      "label": "blocks.1.lin2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "9:linear"
+      ],
+      "output_ops": [
+       "9:linear"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "blocks.2": {
+    "call_labels": [
+     "blocks.2:1"
+    ],
+    "calls": [
+     {
+      "label": "blocks.2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "12:linear",
+       "13:relu",
+       "14:linear",
+       "15:relu",
+       "16:__add__"
+      ],
+      "output_ops": [
+       "16:__add__"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "blocks.2.lin1": {
+    "call_labels": [
+     "blocks.2.lin1:1"
+    ],
+    "calls": [
+     {
+      "label": "blocks.2.lin1:1",
+      "lookup_is_call": true,
+      "ops": [
+       "12:linear"
+      ],
+      "output_ops": [
+       "12:linear"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "blocks.2.lin2": {
+    "call_labels": [
+     "blocks.2.lin2:1"
+    ],
+    "calls": [
+     {
+      "label": "blocks.2.lin2:1",
+      "lookup_is_call": true,
+      "ops": [
+       "14:linear"
+      ],
+      "output_ops": [
+       "14:linear"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "self": {
+    "call_labels": [
+     "self:1"
+    ],
+    "calls": [
+     {
+      "label": "self:1",
+      "ops": [
+       "1:none",
+       "2:linear",
+       "3:relu",
+       "4:linear",
+       "5:relu",
+       "6:__add__",
+       "7:linear",
+       "8:relu",
+       "9:linear",
+       "10:relu",
+       "11:__add__",
+       "12:linear",
+       "13:relu",
+       "14:linear",
+       "15:relu",
+       "16:__add__",
+       "17:none"
+      ],
+      "output_ops": [
+       "17:none"
+      ]
+     }
+    ],
+    "num_calls": 1
+   }
+  },
+  "ops": {
+   "10:relu": {
+    "atomic_module_call": "act:4",
+    "call_stack": [
+     "blocks.1:1",
+     "act:4"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "act:4"
+    ]
+   },
+   "11:__add__": {
+    "atomic_module_call": "blocks.1:1",
+    "call_stack": [
+     "blocks.1:1"
+    ],
+    "input_to_module_calls": [
+     "blocks.2:1",
+     "blocks.2.lin1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "blocks.1:1"
+    ]
+   },
+   "12:linear": {
+    "atomic_module_call": "blocks.2.lin1:1",
+    "call_stack": [
+     "blocks.2:1",
+     "blocks.2.lin1:1"
+    ],
+    "input_to_module_calls": [
+     "act:5"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "blocks.2.lin1:1"
+    ]
+   },
+   "13:relu": {
+    "atomic_module_call": "act:5",
+    "call_stack": [
+     "blocks.2:1",
+     "act:5"
+    ],
+    "input_to_module_calls": [
+     "blocks.2.lin2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "act:5"
+    ]
+   },
+   "14:linear": {
+    "atomic_module_call": "blocks.2.lin2:1",
+    "call_stack": [
+     "blocks.2:1",
+     "blocks.2.lin2:1"
+    ],
+    "input_to_module_calls": [
+     "act:6"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "blocks.2.lin2:1"
+    ]
+   },
+   "15:relu": {
+    "atomic_module_call": "act:6",
+    "call_stack": [
+     "blocks.2:1",
+     "act:6"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "act:6"
+    ]
+   },
+   "16:__add__": {
+    "atomic_module_call": "blocks.2:1",
+    "call_stack": [
+     "blocks.2:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "blocks.2:1"
+    ]
+   },
+   "17:none": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "blocks.2:1"
+    ]
+   },
+   "1:none": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "blocks.0:1",
+     "blocks.0.lin1:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "2:linear": {
+    "atomic_module_call": "blocks.0.lin1:1",
+    "call_stack": [
+     "blocks.0:1",
+     "blocks.0.lin1:1"
+    ],
+    "input_to_module_calls": [
+     "act:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "blocks.0.lin1:1"
+    ]
+   },
+   "3:relu": {
+    "atomic_module_call": "act:1",
+    "call_stack": [
+     "blocks.0:1",
+     "act:1"
+    ],
+    "input_to_module_calls": [
+     "blocks.0.lin2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "act:1"
+    ]
+   },
+   "4:linear": {
+    "atomic_module_call": "blocks.0.lin2:1",
+    "call_stack": [
+     "blocks.0:1",
+     "blocks.0.lin2:1"
+    ],
+    "input_to_module_calls": [
+     "act:2"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "blocks.0.lin2:1"
+    ]
+   },
+   "5:relu": {
+    "atomic_module_call": "act:2",
+    "call_stack": [
+     "blocks.0:1",
+     "act:2"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "act:2"
+    ]
+   },
+   "6:__add__": {
+    "atomic_module_call": "blocks.0:1",
+    "call_stack": [
+     "blocks.0:1"
+    ],
+    "input_to_module_calls": [
+     "blocks.1:1",
+     "blocks.1.lin1:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "blocks.0:1"
+    ]
+   },
+   "7:linear": {
+    "atomic_module_call": "blocks.1.lin1:1",
+    "call_stack": [
+     "blocks.1:1",
+     "blocks.1.lin1:1"
+    ],
+    "input_to_module_calls": [
+     "act:3"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "blocks.1.lin1:1"
+    ]
+   },
+   "8:relu": {
+    "atomic_module_call": "act:3",
+    "call_stack": [
+     "blocks.1:1",
+     "act:3"
+    ],
+    "input_to_module_calls": [
+     "blocks.1.lin2:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "act:3"
+    ]
+   },
+   "9:linear": {
+    "atomic_module_call": "blocks.1.lin2:1",
+    "call_stack": [
+     "blocks.1:1",
+     "blocks.1.lin2:1"
+    ],
+    "input_to_module_calls": [
+     "act:4"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "blocks.1.lin2:1"
+    ]
+   }
+  }
+ },
+ "siamese": {
+  "drawing": {
+   "module_call_boxes": [
+    "enc:1",
+    "enc:2"
+   ],
+   "module_marks": [
+    "enc.act:1",
+    "enc.act:2",
+    "enc.lin:1",
+    "enc.lin:2",
+    "enc:1",
+    "enc:2",
+    "head",
+    "input.x",
+    "output"
+   ]
+  },
+  "modules": {
+   "enc": {
+    "call_labels": [
+     "enc:1",
+     "enc:2"
+    ],
+    "calls": [
+     {
+      "label": "enc:1",
+      "lookup_is_call": true,
+      "ops": [
+       "2:linear",
+       "3:relu"
+      ],
+      "output_ops": [
+       "3:relu"
+      ]
+     },
+     {
+      "label": "enc:2",
+      "lookup_is_call": true,
+      "ops": [
+       "5:linear",
+       "6:relu"
+      ],
+      "output_ops": [
+       "6:relu"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "enc.act": {
+    "call_labels": [
+     "enc.act:1",
+     "enc.act:2"
+    ],
+    "calls": [
+     {
+      "label": "enc.act:1",
+      "lookup_is_call": true,
+      "ops": [
+       "3:relu"
+      ],
+      "output_ops": [
+       "3:relu"
+      ]
+     },
+     {
+      "label": "enc.act:2",
+      "lookup_is_call": true,
+      "ops": [
+       "6:relu"
+      ],
+      "output_ops": [
+       "6:relu"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "enc.lin": {
+    "call_labels": [
+     "enc.lin:1",
+     "enc.lin:2"
+    ],
+    "calls": [
+     {
+      "label": "enc.lin:1",
+      "lookup_is_call": true,
+      "ops": [
+       "2:linear"
+      ],
+      "output_ops": [
+       "2:linear"
+      ]
+     },
+     {
+      "label": "enc.lin:2",
+      "lookup_is_call": true,
+      "ops": [
+       "5:linear"
+      ],
+      "output_ops": [
+       "5:linear"
+      ]
+     }
+    ],
+    "num_calls": 2
+   },
+   "head": {
+    "call_labels": [
+     "head:1"
+    ],
+    "calls": [
+     {
+      "label": "head:1",
+      "lookup_is_call": true,
+      "ops": [
+       "8:linear"
+      ],
+      "output_ops": [
+       "8:linear"
+      ]
+     }
+    ],
+    "num_calls": 1
+   },
+   "self": {
+    "call_labels": [
+     "self:1"
+    ],
+    "calls": [
+     {
+      "label": "self:1",
+      "ops": [
+       "1:none",
+       "2:linear",
+       "3:relu",
+       "4:__mul__",
+       "5:linear",
+       "6:relu",
+       "7:__sub__",
+       "8:linear",
+       "9:none"
+      ],
+      "output_ops": [
+       "9:none"
+      ]
+     }
+    ],
+    "num_calls": 1
+   }
+  },
+  "ops": {
+   "1:none": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "enc:1",
+     "enc.lin:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "2:linear": {
+    "atomic_module_call": "enc.lin:1",
+    "call_stack": [
+     "enc:1",
+     "enc.lin:1"
+    ],
+    "input_to_module_calls": [
+     "enc.act:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "enc.lin:1"
+    ]
+   },
+   "3:relu": {
+    "atomic_module_call": "enc.act:1",
+    "call_stack": [
+     "enc:1",
+     "enc.act:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "enc.act:1",
+     "enc:1"
+    ]
+   },
+   "4:__mul__": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "enc:2",
+     "enc.lin:2"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "5:linear": {
+    "atomic_module_call": "enc.lin:2",
+    "call_stack": [
+     "enc:2",
+     "enc.lin:2"
+    ],
+    "input_to_module_calls": [
+     "enc.act:2"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "enc.lin:2"
+    ]
+   },
+   "6:relu": {
+    "atomic_module_call": "enc.act:2",
+    "call_stack": [
+     "enc:2",
+     "enc.act:2"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "enc.act:2",
+     "enc:2"
+    ]
+   },
+   "7:__sub__": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "head:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "8:linear": {
+    "atomic_module_call": "head:1",
+    "call_stack": [
+     "head:1"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "head:1"
+    ]
+   },
+   "9:none": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "head:1"
+    ]
+   }
+  }
+ },
+ "step_rnn": {
+  "drawing": {
+   "module_call_boxes": [],
+   "module_marks": [
+    "act:1",
+    "act:2",
+    "act:3",
+    "act:4",
+    "cell:1",
+    "cell:2",
+    "cell:3",
+    "cell:4",
+    "input.x",
+    "output"
+   ]
+  },
+  "modules": {
+   "act": {
+    "call_labels": [
+     "act:1",
+     "act:2",
+     "act:3",
+     "act:4"
+    ],
+    "calls": [
+     {
+      "label": "act:1",
+      "lookup_is_call": true,
+      "ops": [
+       "5:relu"
+      ],
+      "output_ops": [
+       "5:relu"
+      ]
+     },
+     {
+      "label": "act:2",
+      "lookup_is_call": true,
+      "ops": [
+       "8:relu"
+      ],
+      "output_ops": [
+       "8:relu"
+      ]
+     },
+     {
+      "label": "act:3",
+      "lookup_is_call": true,
+      "ops": [
+       "11:relu"
+      ],
+      "output_ops": [
+       "11:relu"
+      ]
+     },
+     {
+      "label": "act:4",
+      "lookup_is_call": true,
+      "ops": [
+       "14:relu"
+      ],
+      "output_ops": [
+       "14:relu"
+      ]
+     }
+    ],
+    "num_calls": 4
+   },
+   "cell": {
+    "call_labels": [
+     "cell:1",
+     "cell:2",
+     "cell:3",
+     "cell:4"
+    ],
+    "calls": [
+     {
+      "label": "cell:1",
+      "lookup_is_call": true,
+      "ops": [
+       "4:rnn_tanh_cell"
+      ],
+      "output_ops": [
+       "4:rnn_tanh_cell"
+      ]
+     },
+     {
+      "label": "cell:2",
+      "lookup_is_call": true,
+      "ops": [
+       "7:rnn_tanh_cell"
+      ],
+      "output_ops": [
+       "7:rnn_tanh_cell"
+      ]
+     },
+     {
+      "label": "cell:3",
+      "lookup_is_call": true,
+      "ops": [
+       "10:rnn_tanh_cell"
+      ],
+      "output_ops": [
+       "10:rnn_tanh_cell"
+      ]
+     },
+     {
+      "label": "cell:4",
+      "lookup_is_call": true,
+      "ops": [
+       "13:rnn_tanh_cell"
+      ],
+      "output_ops": [
+       "13:rnn_tanh_cell"
+      ]
+     }
+    ],
+    "num_calls": 4
+   },
+   "self": {
+    "call_labels": [
+     "self:1"
+    ],
+    "calls": [
+     {
+      "label": "self:1",
+      "ops": [
+       "1:none",
+       "2:zeros",
+       "3:__getitem__",
+       "4:rnn_tanh_cell",
+       "5:relu",
+       "6:__getitem__",
+       "7:rnn_tanh_cell",
+       "8:relu",
+       "9:__getitem__",
+       "10:rnn_tanh_cell",
+       "11:relu",
+       "12:__getitem__",
+       "13:rnn_tanh_cell",
+       "14:relu",
+       "15:none"
+      ],
+      "output_ops": [
+       "15:none"
+      ]
+     }
+    ],
+    "num_calls": 1
+   }
+  },
+  "ops": {
+   "10:rnn_tanh_cell": {
+    "atomic_module_call": "cell:3",
+    "call_stack": [
+     "cell:3"
+    ],
+    "input_to_module_calls": [
+     "act:3"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "cell:3"
+    ]
+   },
+   "11:relu": {
+    "atomic_module_call": "act:3",
+    "call_stack": [
+     "act:3"
+    ],
+    "input_to_module_calls": [
+     "cell:4"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "act:3"
+    ]
+   },
+   "12:__getitem__": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "cell:4"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "13:rnn_tanh_cell": {
+    "atomic_module_call": "cell:4",
+    "call_stack": [
+     "cell:4"
+    ],
+    "input_to_module_calls": [
+     "act:4"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "cell:4"
+    ]
+   },
+   "14:relu": {
+    "atomic_module_call": "act:4",
+    "call_stack": [
+     "act:4"
+    ],
+    "input_to_module_calls": [],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "act:4"
+    ]
+   },
+   "15:none": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": [
+     "act:4"
+    ]
+   },
+   "1:none": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "2:zeros": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "cell:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "3:__getitem__": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "cell:1"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "4:rnn_tanh_cell": {
+    "atomic_module_call": "cell:1",
+    "call_stack": [
+     "cell:1"
+    ],
+    "input_to_module_calls": [
+     "act:1"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "cell:1"
+    ]
+   },
+   "5:relu": {
+    "atomic_module_call": "act:1",
+    "call_stack": [
+     "act:1"
+    ],
+    "input_to_module_calls": [
+     "cell:2"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "act:1"
+    ]
+   },
+   "6:__getitem__": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "cell:2"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   },
+   "7:rnn_tanh_cell": {
+    "atomic_module_call": "cell:2",
+    "call_stack": [
+     "cell:2"
+    ],
+    "input_to_module_calls": [
+     "act:2"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "cell:2"
+    ]
+   },
+   "8:relu": {
+    "atomic_module_call": "act:2",
+    "call_stack": [
+     "act:2"
+    ],
+    "input_to_module_calls": [
+     "cell:3"
+    ],
+    "is_atomic_module": true,
+    "output_of_module_calls": [
+     "act:2"
+    ]
+   },
+   "9:__getitem__": {
+    "atomic_module_call": "None",
+    "call_stack": [],
+    "input_to_module_calls": [
+     "cell:3"
+    ],
+    "is_atomic_module": false,
+    "output_of_module_calls": []
+   }
+  }
+ }
+}
