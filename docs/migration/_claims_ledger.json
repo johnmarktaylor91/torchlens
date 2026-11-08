@@ -743,6 +743,28 @@
       "date": "2026-11-05",
       "status": "train-only",
       "registry_ids": []
+    },
+    {
+      "id": "readme-extract-faster-options",
+      "category": "speed",
+      "wording": "Faster options reuse that graph or skip it",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "LSTM tagger, ResNet-18 and GPT-2 small in the capture benchmarks",
+      "evidence": [
+        "docs/benchmarks/capture.md",
+        "docs/guides/fast_paths.md"
+      ],
+      "evidence_note": "trace.run, tl.record and tl.extract each measured below a first full trace on the same workload; tl.extract takes one plain forward with hooks when every requested module returns one tensor (1.10x a plain forward on ResNet-18 CPU, 8 Nov 2026).",
+      "exclusions": "A module that returns a tuple or dict (the LSTM tagger) makes tl.extract fall back to a full capture; trace.run falls back to a full capture when the call structure changes.",
+      "date": "2026-11-08",
+      "status": "train-only",
+      "registry_ids": []
     }
   ]
 }
