@@ -1933,14 +1933,8 @@ in place until `torchlens.backends.torch.wrappers.unwrap_torch()` is called; the
 installs them again.
 
 **torchlens.backends.torch.wrappers.wrapped()**: A context manager that installs TorchLens's torch function wrappers on entry and
-removes them on exit, so torch is clean again after the block:
-
-```python
-from torchlens.backends.torch.wrappers import wrapped
-
-with wrapped():
-    trace = tl.trace(model, x)
-```
+removes them on exit, so torch is clean again after the block: `with wrapped(): trace =
+tl.trace(model, x)` leaves `torch.cos` and the rest as PyTorch's originals once the block ends.
 
 - `escape_detector=` (`"off"` or the diagnostic `"shadow"`) and `completeness_witness=` (a
   bool, `"off"` or `"shadow"`) are passed to `wrap_torch()`.
