@@ -9,6 +9,7 @@ which path ran; every other request keeps the traced path.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import Any
 
@@ -18,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._extraction import _front_door
-from torchlens.errors import InvalidArgumentError
+from torchlens.errors import InvalidArgumentError, TorchLensWarning
 
 #: Module names whose forward ran, in order (module level: a capture restores model attributes).
 _RAN: list[str] = []
@@ -208,11 +209,15 @@ def test_ineligible_requests_keep_the_traced_path(
         stop_after = lambda ctx: False  # noqa: E731
     else:
         inputs = [x]
-    torch.manual_seed(1)
-    want = _traced(monkeypatch, model, inputs, layer, stop_after=stop_after)
+    # A callable that never fires: the capture warns, on both paths alike.
+    warns = case == "callable_stop"
+    with pytest.warns(TorchLensWarning, match="never fired") if warns else nullcontext():
+        torch.manual_seed(1)
+        want = _traced(monkeypatch, model, inputs, layer, stop_after=stop_after)
     ran = _spy(monkeypatch)
-    torch.manual_seed(1)
-    got = tl.pluck(model, inputs, layer, stop_after=stop_after)
+    with pytest.warns(TorchLensWarning, match="never fired") if warns else nullcontext():
+        torch.manual_seed(1)
+        got = tl.pluck(model, inputs, layer, stop_after=stop_after)
     assert ran == [1]
     _same(got, want)
 
