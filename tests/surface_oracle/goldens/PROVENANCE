@@ -2248,3 +2248,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 2268a75b526582c1d616838b2900c89454e96edf (dirty)
 recorded: 2026-11-05T08:37:39.356636+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: callsite_v2: stateless modules group by their calling line inside the innermost stateful module; detector stamp callsite_v1 -> callsite_v2 and per-line layer labels
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 48fd01e1898cf7537a305d6338c628bf4b266c59 (dirty)
+recorded: 2026-11-08T23:39:00.615515+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: callsite_v2: stateless modules group by their calling line inside the innermost stateful module; detector stamp callsite_v1 -> callsite_v2 and per-line layer labels
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 48fd01e1898cf7537a305d6338c628bf4b266c59 (dirty)
+recorded: 2026-11-08T23:39:00.659182+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: callsite_v2: stateless modules group by their calling line inside the innermost stateful module; detector stamp callsite_v1 -> callsite_v2 and per-line layer labels
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 48fd01e1898cf7537a305d6338c628bf4b266c59 (dirty)
+recorded: 2026-11-08T23:39:00.707082+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: callsite_v2: stateless modules group by their calling line inside the innermost stateful module; detector stamp callsite_v1 -> callsite_v2 and per-line layer labels
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 48fd01e1898cf7537a305d6338c628bf4b266c59 (dirty)
+recorded: 2026-11-08T23:39:00.754431+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: callsite_v2: stateless modules group by their calling line inside the innermost stateful module; detector stamp callsite_v1 -> callsite_v2 and per-line layer labels
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 48fd01e1898cf7537a305d6338c628bf4b266c59 (dirty)
+recorded: 2026-11-08T23:39:00.813463+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: callsite_v2: stateless modules group by their calling line inside the innermost stateful module; detector stamp callsite_v1 -> callsite_v2 and per-line layer labels
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 48fd01e1898cf7537a305d6338c628bf4b266c59 (dirty)
+recorded: 2026-11-08T23:39:00.885768+00:00
