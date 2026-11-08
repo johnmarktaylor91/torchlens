@@ -600,7 +600,7 @@ TorchLens runs on Python 3.10 to 3.13 with PyTorch 2.1 or later. Features that r
 
 ## Learning TorchLens
 
-- **[Tutorial notebooks](notebooks/learn/):** eleven short notebooks that build up TorchLens step by step, from a first trace to running full experiments at scale. Each runs on a laptop CPU in about a minute, or in your browser on Colab.
+- **[Tutorial notebooks](notebooks/learn/):** twelve short notebooks that build up TorchLens step by step, from a first trace to running full experiments at scale. Each runs on a laptop CPU in about a minute, or in your browser on Colab.
 - **Guides by field:** where to start, depending on your work:
   - **[Mechanistic interpretability](docs/fields/mechanistic_interpretability.md)**
   - **[NeuroAI and computational neuroscience](docs/neuroai/journey.md)**
