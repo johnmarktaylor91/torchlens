@@ -11,7 +11,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._utils import _call_site
 from torchlens._visualization._pass_label_placement import place_pass_labels
 from torchlens._visualization._render_nodes import compute_default_node_lines
 
@@ -750,9 +749,7 @@ def test_inside_outside_relu_continuous_chain_is_one_atomic_rectangle(tmp_path: 
     assert "@relu:" not in dot
 
 
-def test_separable_atomic_module_marks_distinct_calls(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_separable_atomic_module_marks_distinct_calls(tmp_path: Path) -> None:
     """An atomic module reused at separable outside+inside sites labels its calls.
 
     Unlike the continuous chain, ``InsideOutsideReluSeparable`` uses the relu at an
@@ -762,10 +759,8 @@ def test_separable_atomic_module_marks_distinct_calls(
     already maximally collapsed.
     """
 
-    # Separable calls of one module instance are distinct layers only under pure
-    # call-site grouping; with MODULE_CALL_IS_PASS (the default) the reused relu
-    # is one 4-pass layer, the case test_grouping_call_sites row 28 pins.
-    monkeypatch.setattr(_call_site, "MODULE_CALL_IS_PASS", False)
+    # ``nn.ReLU`` owns no state, so its calls group by call site (``callsite_v2``):
+    # the outside line is one layer and the loop line a 3-pass layer.
     trace = _trace(InsideOutsideReluSeparable())
     shallow_dot = _render_dot(trace, tmp_path, "relu_sep_shallow", depth=1)
     deep_dot = _render_dot(trace, tmp_path, "relu_sep_deep", depth=1000)

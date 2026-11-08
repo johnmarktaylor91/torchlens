@@ -31,6 +31,7 @@ from ..._utils._tensor_label import (
     mark_forward_call_decorated,
 )
 from . import _tracing_pass
+from ._module_state import stateful_scope_facts
 from .bound_root import instrumented_modules
 
 if TYPE_CHECKING:
@@ -246,7 +247,9 @@ def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
     from .model_prep import module_forward_decorator
 
     register_module_boundary_wrapper(module_forward_decorator, "decorated_forward")
-    installed = trace._module_capture_ws.session_forward_wrappers
+    workspace = trace._module_capture_ws
+    workspace.stateful_module_ids, workspace.stateful_module_addresses = stateful_scope_facts(model)
+    installed = workspace.session_forward_wrappers
     for module in instrumented_modules(model):
         # Heal a decoration a cut-short cleanup or a mid-session shallow copy left.
         restore_undecorated_forward(module)

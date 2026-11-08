@@ -194,7 +194,7 @@ class RecordingState:
     # ``Recording.to_trace()`` groups recurrent layers the way ``tl.trace`` does.
     prepared_param_refs: dict[int, ParamRef] = field(default_factory=dict)
     prepared_param_logs: dict[str, Any] = field(default_factory=dict)
-    # Call-site grouping evidence (``callsite_v1``) for predicate records: the
+    # Call-site grouping evidence (``callsite_v2``) for predicate records: the
     # per-capture key table and ``raw label -> call-site class`` side table,
     # the recording's counterpart of ``RawGraphWorkspace._call_site_index`` and
     # ``_call_site_classes``. The key table holds code objects and never leaves

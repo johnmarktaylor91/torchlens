@@ -10,6 +10,7 @@ from .._postprocess._call_site_contract import (
     call_site_classes_for,
     call_site_contract_violation,
 )
+from .._postprocess._grouping_stamp import CALL_SITE_DETECTORS
 from .._record_type import record_type
 from .._utils._record_group_table import record_member
 from ._invariants_equivalence_index import (
@@ -222,7 +223,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
             frozenset(record_member(op, "equivalent_ops", set())) for op in pass_ops
         }
         if len(pass_equivalent_ops) > 1:
-            # Under callsite_v1 the passes of one layer may sit in different
+            # Under call-site grouping the passes of one layer may sit in different
             # equivalence sets exactly when their classes differ only in what
             # the grouping rule says is not evidence (argument/shape hash rows
             # 49 and 50, parameter identity row 51, module path rows 30 and 31);
@@ -378,7 +379,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     - Equivalence group consistency: all members of a recurrent_ops
       group belong to the same Trace.graph.op_equivalence_classes set.
 
-    Call-site grouping (``callsite_v1``, grouping rule section 3) replaces two
+    Call-site grouping (``callsite_v1``/``callsite_v2``, grouping rule section 3) replaces two
     of these, and only for traces stamped with that detector:
 
     - Old: layers sharing (func_name, param barcodes, equivalence_class) are
@@ -521,7 +522,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
                     f"(no_pass='{member.layer_label}') differ",
                 )
 
-        # All members share equivalence_class (per component under callsite_v1)
+        # All members share equivalence_class (per component under call-site grouping)
         for member_label, member in members:
             if not _equivalence_classes_agree(
                 lpl,
@@ -582,7 +583,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # same output-specific equivalence class must share layer_label. The
     # equivalence class keeps distinct outputs of a multi-output parameterized op
     # from being collapsed into one logical layer.
-    # Under callsite_v1 call-site contract (ii) replaces it (shared weights are
+    # Under call-site grouping, contract (ii) replaces it (shared weights are
     # not evidence, rows 18, 19, 25, 59); see the docstring.
     param_groups = _param_barcode_groups(ml, call_site_grouped)
 
@@ -637,11 +638,17 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
 _OUTINDEX_TOKEN = re.compile(r"_outindex(\d+)")
 
 
+def _call_site_detector(trace: Trace) -> object:
+    """The stamp's ``detector`` value (``callsite_v1`` or ``callsite_v2`` when call-site grouped)."""
+
+    stamp = trace._options_grouping_policy
+    return stamp.get("detector") if isinstance(stamp, dict) else None
+
+
 def _is_call_site_grouped(trace: Trace) -> bool:
     """Whether step 7 grouped this trace by call site (stamp ``detector``)."""
 
-    stamp = trace._options_grouping_policy
-    return isinstance(stamp, dict) and stamp.get("detector") == "callsite_v1"
+    return _call_site_detector(trace) in CALL_SITE_DETECTORS
 
 
 def _equivalence_class_components(op: Op, equivalence_class: object) -> tuple[object, ...]:
@@ -667,7 +674,7 @@ def _equivalence_classes_agree(
 ) -> bool:
     """Whether two passes' equivalence classes agree under the trace's grouper.
 
-    Exact equality under ``grouper_v1``. Under ``callsite_v1`` equal classes
+    Exact equality under ``grouper_v1``. Under call-site grouping equal classes
     agree, and different classes agree only when they differ in nothing but
     the argument/shape hash, parameter identity and module path: layer type,
     in-place marker and output index must match, and each class must carry
@@ -713,7 +720,7 @@ def _check_call_site_contract_post_hoc(
                     "carries no call-site side table (the key is never persisted; step 7 "
                     "checked it at capture)."
                 ),
-                extra={"detector": "callsite_v1"},
+                extra={"detector": _call_site_detector(trace)},
             ),
         )
         return

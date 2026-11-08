@@ -6,7 +6,6 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._ir.intervention import FunctionEventInput
-from torchlens._utils import _call_site
 from torchlens.backends.torch.aliasing import detect_torch_alias_contract
 from torchlens.errors import TorchLensWarning
 
@@ -264,9 +263,9 @@ def test_two_pass_succeeds_with_resnet50_inplace_relu_modules() -> None:
     model = torchvision.models.resnet50(weights=None).eval()
     x = torch.randn(2, 3, 224, 224)
 
-    # The final linear's label counts layers before it: each Bottleneck's reused
-    # relu module is one 3-pass layer when a module call is a pass, else 3 layers.
-    final_linear = "linear_1_143" if _call_site.MODULE_CALL_IS_PASS else "linear_1_175"
+    # The final linear's label counts layers before it: each Bottleneck calls its
+    # stateless relu module on three lines, three single-pass layers (``callsite_v2``).
+    final_linear = "linear_1_175"
     for selector, detached_spills in ((["conv2d_1_1"], 1), ([final_linear], 0), ([-1], 0)):
         if detached_spills:
             with pytest.warns(TorchLensWarning) as caught:

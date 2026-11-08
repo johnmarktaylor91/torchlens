@@ -40,8 +40,16 @@ POLICY_VALUES = frozenset({"structural", "strict_shapes", "fold_sites", "params_
 #: Closed requested-knob vocabulary ("unknown" is the degraded value).
 REQUESTED_VALUES = frozenset({"structural", "strict_shapes", "fold_sites", "unknown"})
 
-#: Closed detector vocabulary (versioned algorithm names).
-DETECTOR_VALUES = frozenset({"callsite_v1", "grouper_v1", "unknown"})
+#: Closed detector vocabulary (versioned algorithm names). ``callsite_v1`` scoped
+#: every module call; ``callsite_v2`` scopes only stateful modules (traces saved under
+#: v1 keep their labels and stamp).
+DETECTOR_VALUES = frozenset({"callsite_v1", "callsite_v2", "grouper_v1", "unknown"})
+
+#: The call-site detector a live torch capture runs.
+CALL_SITE_DETECTOR = "callsite_v2"
+
+#: Detectors that grouped by call site (the call-site contract applies to both).
+CALL_SITE_DETECTORS = frozenset({"callsite_v1", "callsite_v2"})
 
 #: The exact writer key set: loads refuse any other shape (tamper check).
 _STAMP_KEYS = frozenset(
@@ -110,8 +118,8 @@ def build_grouping_policy_stamp(
     ``policy`` records what step 7 actually ran: ``"structural"`` when
     grouping ran, ``"params_only"`` (the vocabulary spelling of the
     ``recurrence_detection=False`` path) otherwise. ``detector`` names the
-    grouper that ran: ``"callsite_v1"`` (call-site grouping, torch captures,
-    cooked recordings included) or ``"grouper_v1"`` (the structural grouper,
+    grouper that ran: ``"callsite_v2"`` (call-site grouping, torch captures,
+    cooked recordings included; ``"callsite_v1"`` on traces saved before it) or ``"grouper_v1"`` (the structural grouper,
     for captures without call-site evidence); ``"unknown"`` when grouping did
     not run. Every live writer
     writes ``settlement_note=None`` so the loader's writer-derived exact
