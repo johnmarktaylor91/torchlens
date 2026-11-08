@@ -38,6 +38,7 @@ from ._notebook._axis_labels import sdpa_attention_hint
 from ._notebook.cards import trace_repr_html
 from ._summary_config import resolve_config
 from ._summary_result import build_rebuilt_summary
+from ._topology_text import topology_text
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -418,15 +419,10 @@ def _captured_text(duration: float, compute: float) -> str:
 
 
 def _graph_text(trace: Any) -> str:
-    """Graph topology in words: recurrence and its pass count, branching, conditional branching."""
+    """Graph topology in words: recurrence or shared modules, tied weights, branching."""
 
     graph = trace.graph
-    topology = "feedforward"
-    if graph.is_recurrent:
-        passes = fail_open(lambda: int(graph.max_ops_per_layer), lambda _error: 0)
-        topology = (
-            f"recurrent (up to {format_exact_count(passes)} passes)" if passes > 1 else "recurrent"
-        )
+    topology = topology_text(trace)
     if trace._provenance_verified is False:
         topology = "structure unverified"
     branching = "with branching" if graph.is_branching else "no branching"
