@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 import torch
 from torch import nn
@@ -37,6 +39,23 @@ class _PlaceholderLM(nn.Module):
         return {"logits": logits + x.sum() * 0}
 
 
+def _next_token_rows(last: list[float], *, text: bool, k: int = 5) -> list[dict[str, Any]]:
+    """Expected text-decode rows: the top ``k`` next tokens of the last position's logits."""
+
+    probs = torch.softmax(torch.tensor(last), dim=-1)
+    values, indices = torch.topk(probs, k=min(k, len(last)))
+    return [
+        {
+            "batch_item": 0,
+            "rank": rank + 1,
+            "token_id": int(index),
+            "text": f"tok{int(index)}" if text else None,
+            "prob": pytest.approx(float(value)),
+        }
+        for rank, (value, index) in enumerate(zip(values, indices, strict=True))
+    ]
+
+
 def test_placeholder_labels_do_not_claim_vocabulary_logits() -> None:
     """With a tokenizer attached, the text detector wins over the placeholder labels."""
 
@@ -46,12 +65,10 @@ def test_placeholder_labels_do_not_claim_vocabulary_logits() -> None:
 
     assert trace.provenance.output_postprocessor is not None
     assert trace.provenance.output_postprocessor.style == "hf_text"
-    assert trace.decode_output() == [
-        {"batch_item": 0, "rank": 1, "text": "tok2 tok0", "token_ids": [2, 0]}
-    ]
+    assert trace.decode_output() == _next_token_rows([6.0, 0.0, 1.0, 2.0], text=True)
     table = trace.output_table()
-    assert list(table.columns) == ["batch_item", "rank", "text", "token_ids"]
-    assert table.iloc[0]["text"] == "tok2 tok0"
+    assert list(table.columns) == ["batch_item", "rank", "token_id", "text", "prob"]
+    assert table["text"].tolist() == ["tok0", "tok3", "tok2", "tok1"]
 
 
 def test_placeholder_labels_without_a_tokenizer_decode_nothing() -> None:

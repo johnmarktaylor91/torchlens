@@ -12,8 +12,8 @@ the edited values.
 The refresh re-decodes the retained output tensors under the capture's own
 resolved postprocessor (same style, head, label bank and ``top_n``), so an
 unchanged output yields identical rows. Text rows need the session tokenizer,
-which settlement drops: a batch item whose argmax token ids are unchanged keeps
-its captured text, one whose ids changed gets ``text=None`` (the ids are the
+which settlement drops: a row whose token id the captured rows already decoded
+keeps that text, a token id new to the rows gets ``text=None`` (the id is the
 decode; ``decode_output(style="hf_text", tokenizer=...)`` re-renders text).
 When the current output cannot be decoded the stale rows are dropped, never
 kept, so the read doors recompute or refuse typed.
@@ -70,19 +70,20 @@ def _redecode_current_output(trace: Any, resolved: Any, previous: Any) -> Any | 
 
 
 def _carry_unchanged_text(rows: list[dict[str, Any]], previous: Any) -> list[dict[str, Any]]:
-    """Keep the captured text of every batch item whose token ids did not change."""
+    """Keep the captured text of every token id the captured rows already decoded.
+
+    A row's text is the decode of its one token id, so it depends on the id
+    alone, never on the row's rank or batch item.
+    """
 
     if not isinstance(previous, list):
         return rows
     captured = {
-        (row.get("batch_item"), tuple(row.get("token_ids") or ())): row.get("text")
+        row.get("token_id"): row.get("text")
         for row in previous
-        if isinstance(row, dict)
+        if isinstance(row, dict) and row.get("text") is not None
     }
-    return [
-        {**row, "text": captured.get((row["batch_item"], tuple(row["token_ids"])), row["text"])}
-        for row in rows
-    ]
+    return [{**row, "text": captured.get(row["token_id"], row["text"])} for row in rows]
 
 
 __all__ = ("refresh_decoded_output",)

@@ -98,23 +98,52 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
-def _decode_hf_text(logits: torch.Tensor, meta: dict[str, Any]) -> list[dict[str, Any]] | None:
-    """Decode Hugging Face text logits: argmax token ids, plus text when a tokenizer is present.
+def _softmax_topk(logits: torch.Tensor, top_n: int) -> tuple[torch.Tensor, torch.Tensor, int]:
+    """Return the top-``top_n`` softmax probabilities of rank-2 logits, by row.
 
     Parameters
     ----------
     logits:
-        Live logits tensor.
+        Rank-2 ``[batch, width]`` logits, already detached.
+    top_n:
+        Maximum entries per row; clamped to the width.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor, int]
+        The probabilities and indices, each ``[batch, k]``, and ``k``.
+    """
+
+    probs = torch.softmax(logits.float(), dim=-1)
+    k = min(top_n, int(probs.shape[-1]))
+    values, indices = torch.topk(probs, k=k, dim=-1)
+    return values, indices, k
+
+
+def _decode_hf_text(
+    logits: torch.Tensor, meta: dict[str, Any], *, top_n: int
+) -> list[dict[str, Any]] | None:
+    """Decode Hugging Face text logits: the top next tokens at the last position.
+
+    Parameters
+    ----------
+    logits:
+        Live logits tensor, ``[seq_len, vocab]`` or ``[batch, seq_len, vocab]``.
     meta:
         Detector metadata. Without a usable ``tokenizer`` (one with a
         ``decode`` method) the rows carry the token ids and ``text`` is
         ``None``: the trace was captured without a tokenizer and none was
         passed at read time.
+    top_n:
+        Maximum rows per batch item, clamped to the vocabulary width.
 
     Returns
     -------
     list[dict[str, Any]] | None
-        JSON-primitive rows; ``None`` when the logits are not rank-2 or rank-3.
+        JSON-primitive rows, ``top_n`` per batch item: ``batch_item``, ``rank``,
+        ``token_id``, ``text`` and ``prob`` (softmax over the vocabulary at the
+        last position). ``None`` when the logits are not rank-2 or rank-3 or
+        have no position.
     """
 
     tokenizer = meta.get("tokenizer")
@@ -126,20 +155,24 @@ def _decode_hf_text(logits: torch.Tensor, meta: dict[str, Any]) -> list[dict[str
         logits_copy = logits_copy.unsqueeze(0)
     elif logits_copy.ndim != 3:
         return None
-    # `[batch, seq_len, vocab]`: decode each batch item's own token sequence
-    # independently, never flattening across the batch dimension.
-    token_ids_per_item = torch.argmax(logits_copy, dim=-1).tolist()
+    if logits_copy.shape[1] == 0 or logits_copy.shape[2] == 0:
+        return None
+    # `[batch, seq_len, vocab]`: each batch item's own next-token distribution,
+    # read at its last position, never flattened across the batch dimension.
+    values, indices, k = _softmax_topk(logits_copy[:, -1, :], top_n)
     rows: list[dict[str, Any]] = []
-    for batch_index, token_ids in enumerate(token_ids_per_item):
-        text = None if tokenizer is None else str(tokenizer.decode(token_ids))
-        rows.append(
-            {
-                "batch_item": int(batch_index),
-                "rank": 1,
-                "text": text,
-                "token_ids": [int(i) for i in token_ids],
-            }
-        )
+    for batch_index in range(indices.shape[0]):
+        for rank in range(k):
+            token_id = int(indices[batch_index, rank].item())
+            rows.append(
+                {
+                    "batch_item": int(batch_index),
+                    "rank": int(rank + 1),
+                    "token_id": token_id,
+                    "text": None if tokenizer is None else str(tokenizer.decode([token_id])),
+                    "prob": float(values[batch_index, rank].item()),
+                }
+            )
     return rows
 
 

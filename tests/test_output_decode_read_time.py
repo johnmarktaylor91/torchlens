@@ -57,6 +57,23 @@ class _Tokenizer:
         return " ".join(f"tok{int(index)}" for index in token_ids)
 
 
+def _next_token_rows(last: list[float], *, text: bool, k: int = 5) -> list[dict[str, Any]]:
+    """Expected text-decode rows: the top ``k`` next tokens of the last position's logits."""
+
+    probs = torch.softmax(torch.tensor(last), dim=-1)
+    values, indices = torch.topk(probs, k=min(k, len(last)))
+    return [
+        {
+            "batch_item": 0,
+            "rank": rank + 1,
+            "token_id": int(index),
+            "text": f"tok{int(index)}" if text else None,
+            "prob": pytest.approx(float(value)),
+        }
+        for rank, (value, index) in enumerate(zip(values, indices, strict=True))
+    ]
+
+
 def test_capture_options_have_no_decode_fields() -> None:
     """The two removed fields are unknown to ``CaptureOptions`` (no alias)."""
 
@@ -157,12 +174,13 @@ def test_hf_text_style_decodes_with_the_passed_tokenizer() -> None:
 
     assert trace._decoded_output is None  # no tokenizer attached: no automatic text decode
     decoded = trace.decode_output(style="hf_text", tokenizer=_Tokenizer())
-    assert decoded == [{"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}]
+    assert decoded == _next_token_rows([6.0, 1.0], text=True)
     # Captured without a tokenizer and none passed: the ids are the decode, and the
     # row says so with ``text`` None.
-    assert trace.decode_output(style="hf_text") == [
-        {"batch_item": 0, "rank": 1, "text": None, "token_ids": [1, 0]}
-    ]
+    assert trace.decode_output(style="hf_text") == _next_token_rows([6.0, 1.0], text=False)
+    assert trace.decode_output(style="hf_text", tokenizer=_Tokenizer(), k=1) == (
+        _next_token_rows([6.0, 1.0], text=True, k=1)
+    )
 
 
 def test_hf_text_style_refuses_when_no_logits_shape_qualifies() -> None:
@@ -203,9 +221,7 @@ def test_attached_tokenizer_decodes_text_automatically_only_from_a_logits_head()
     assert trace.provenance.output_postprocessor is not None
     assert trace.provenance.output_postprocessor.style == "hf_text"
     assert trace.provenance.output_postprocessor.selected_output_head == "logits"
-    assert trace._decoded_output == [
-        {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}
-    ]
+    assert trace._decoded_output == _next_token_rows([6.0, 1.0], text=True)
 
 
 def test_custom_detector_serves_the_read_time_style() -> None:

@@ -94,8 +94,12 @@ def _decoded_batch_topk_rows(value: Any) -> list[dict[str, Any]] | None:
     return None
 
 
+#: ``output_table`` columns of a text decode: the top next tokens at the last position.
+_TEXT_TABLE_COLUMNS: tuple[str, ...] = ("batch_item", "rank", "token_id", "text", "prob")
+
+
 def _decoded_text_rows(value: Any) -> list[dict[str, Any]] | None:
-    """Return decoded text rows (``batch_item, rank, text, token_ids``), or ``None``.
+    """Return decoded text rows (``batch_item, rank, token_id, text, prob``), or ``None``.
 
     Parameters
     ----------
@@ -110,10 +114,7 @@ def _decoded_text_rows(value: Any) -> list[dict[str, Any]] | None:
 
     if not isinstance(value, list) or not value:
         return None
-    if all(
-        isinstance(row, dict) and {"batch_item", "rank", "text", "token_ids"} <= set(row)
-        for row in value
-    ):
+    if all(isinstance(row, dict) and set(_TEXT_TABLE_COLUMNS) <= set(row) for row in value):
         return cast(list[dict[str, Any]], value)
     return None
 
@@ -557,8 +558,12 @@ def output_table(
     text_rows = _decoded_text_rows(decoded)
     if text_rows is not None:
         wanted = _normalize_batch_items(batch_items, text_rows)
-        kept = [row for row in text_rows if wanted is None or row["batch_item"] in wanted]
-        return pd.DataFrame(kept, columns=["batch_item", "rank", "text", "token_ids"])
+        kept = [
+            row
+            for row in text_rows
+            if int(row["rank"]) <= k and (wanted is None or row["batch_item"] in wanted)
+        ]
+        return pd.DataFrame(kept, columns=list(_TEXT_TABLE_COLUMNS))
     rows = _decoded_batch_topk_rows(decoded)
     if rows is None:
         raise PayloadUnavailableError(
@@ -594,7 +599,7 @@ def _recompute_decoded_output(trace: "Trace", top_n: int | None) -> Any | None:
     if postprocessor is None:
         return None
     if getattr(postprocessor, "style", None) == "hf_text":
-        return _recompute_text_output(trace, postprocessor)
+        return _recompute_text_output(trace, postprocessor, top_n)
     logits = _retained_output_logits(trace)
     if logits is None:
         return None
@@ -625,7 +630,7 @@ def _session_output_tokenizer(trace: "Trace") -> Any | None:
     return trace.__dict__.get(field)
 
 
-def _recompute_text_output(trace: "Trace", postprocessor: Any) -> Any | None:
+def _recompute_text_output(trace: "Trace", postprocessor: Any, top_n: int | None) -> Any | None:
     """Re-decode a text-style output with the session tokenizer, or ``None``.
 
     The tokenizer lives on the trace only for the capturing session (it is
@@ -642,7 +647,7 @@ def _recompute_text_output(trace: "Trace", postprocessor: Any) -> Any | None:
             style="hf_text",
             head=getattr(postprocessor, "selected_output_head", None),
             tokenizer=None,
-            top_n=door._TOP_N_CAPTURED,
+            top_n=top_n or door._TOP_N_CAPTURED,
         )
     except (PayloadUnavailableError, InvalidArgumentError):
         return None
