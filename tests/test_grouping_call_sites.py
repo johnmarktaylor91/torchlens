@@ -750,19 +750,26 @@ class NoPythonFrame(Holder):
         return self.total([x, x, x])
 
 
-def _no_python_frame() -> nn.Module:
+def _no_python_frame(stateful: bool = True) -> nn.Module:
     act, total = nn.Module(), nn.Module()
     act.forward = torch.relu  # type: ignore[method-assign]
     total.forward = functools.partial(functools.reduce, torch.add)  # type: ignore[method-assign]
+    if stateful:  # a registered buffer makes each module a grouping scope
+        act.register_buffer("state", torch.zeros(1))
+        total.register_buffer("state", torch.zeros(1))
     return NoPythonFrame(act=act, total=total)
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of backends/torch/_session_cleanup.py, backends/torch/_session_forwards.py and more and a sole campaign mutation kill.
 def test_row64_no_python_frame_inside_module_call() -> None:
-    """Row 64: no Python frame inside a module call falls back to position: a builtin
-    forward called twice is one layer 2p; two adds in one C-level call stay two layers."""
+    """Row 64: no Python frame inside a stateful module call falls back to position: a
+    builtin forward called twice is one layer 2p; two adds in one C-level call stay two
+    layers. Without state the modules read as the functions they are, so the C-level
+    ``reduce`` is one instruction making two same-function calls: one layer 2p (Limits)."""
     wrap_torch()  # the builtin forwards must hold the wrapped torch functions
     assert _shape(_no_python_frame) == _expect("__mul__:1 relu:2 add:1x2")
+    stateless = _shape(lambda: _no_python_frame(stateful=False))
+    assert stateless == _expect("__mul__:1 relu:2 add:2")
 
 
 class MapAndSum(nn.Module):
@@ -943,6 +950,8 @@ class ReadmeLoop(nn.Module):
         self.fc1, self.fc2 = _lin(), _lin()
 
     def forward(self, x: Tensor) -> Tensor:
+        if x.sum() < 0:
+            x = -x
         for _ in range(2):
             x = self.fc2(torch.relu(self.fc1(x)))
         return x
@@ -1040,7 +1049,7 @@ def test_stateless_loop_inside_reused_block_numbers_flat() -> None:
 def test_readme_loop_model_keeps_its_two_pass_relu() -> None:
     """The README loop model's relu is a loop and stays ``relu_1_5:2``."""
 
-    trace = _capture(ReadmeLoop, _x())
+    trace = _capture(ReadmeLoop, -_x(1, 4))
     relu = next(op for op in trace._layer_list if op.func_name == "relu")
     assert relu.layer_label == "relu_1_5"
     assert int(relu.num_passes) == 2
