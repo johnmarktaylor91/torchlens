@@ -6,7 +6,7 @@ The lists below are in the order most people want them: see one site, edit it, t
 
 ## Start here
 
-- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): eleven short notebooks on laptop-sized models. Notebook 05 is the first intervention, 07 compares runs in a bundle, 08 is the semantic shortcuts ("head 3's query") and 10 has a mechanistic-interpretability branch.
+- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): twelve short notebooks on laptop-sized models. Notebook 05 is the first intervention, 07 compares runs in a bundle, 08 is the semantic shortcuts ("head 3's query") and 10 has a mechanistic-interpretability branch.
 - [The decoder running example](../field-guide/running_examples.md#the-decoder-on-the-ioi-prompt): the small decoder on the IOI prompt that every Field guide page starts from.
 - [See the graph and inspect any operation](../field-guide/see_and_inspect.md): a picture of every operation the forward ran, and the output, module and arguments of any one of them.
 - [Intervene on a site and measure the effect](../field-guide/intervene.md): ablation, the hook check, and the same edit bound live for sweeps and `generate()`.

@@ -176,7 +176,7 @@ class TinyMoE(nn.Module):
 class EarlyExit(nn.Module):
     """Three blocks, each with an exit head; the forward returns at the first confident head."""
 
-    def __init__(self, width: int = 8, num_classes: int = 4, threshold: float = 0.9) -> None:
+    def __init__(self, width: int = 8, num_classes: int = 4, threshold: float = 0.5) -> None:
         super().__init__()
         self.blocks = nn.ModuleList([nn.Linear(width, width) for _ in range(3)])
         self.exits = nn.ModuleList([nn.Linear(width, num_classes) for _ in range(3)])
