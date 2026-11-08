@@ -139,6 +139,9 @@ class _SessionForward:
         """Hold the delegate and what a copy or pickle reduces to."""
 
         functools.update_wrapper(self, original)
+        # update_wrapper copied the original's __dict__, TorchLens tag included; a shared
+        # tag would mark the user's callable (``torch.relu``) as a decorated forward too.
+        self.__dict__.pop("_tl", None)
         self._delegate = wrapper
         self._original = original
         self._module = module
