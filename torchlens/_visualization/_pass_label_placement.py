@@ -177,18 +177,22 @@ def _routed_layout(
 
     When the installed Graphviz reports a spline-router failure for ``source`` (2.43 on
     the README loop's corner ports, :mod:`._loop_edges`), the text without edge compass
-    ports is laid out instead and used only if that layout routes cleanly.
+    ports is laid out instead and used only if that layout routes cleanly. When Graphviz
+    aborted on the ported text, any portless layout it completes is used, since the
+    ported text draws nothing; ``None`` when neither lays out.
     """
 
     completed = _layout_run(source, engine=engine, timeout=timeout, cwd=cwd)
     if completed is None:
         return None
+    aborted = completed.returncode != 0
     if reports_route_failure(completed.stderr):
         portless = without_compass_ports(source)
         retry = _layout_run(portless, engine=engine, timeout=timeout, cwd=cwd)
-        if portless != source and retry is not None and not reports_route_failure(retry.stderr):
-            return portless, _stdout_text(retry)
-    return source, _stdout_text(completed)
+        if retry is not None and retry.returncode == 0 and portless != source:
+            if aborted or not reports_route_failure(retry.stderr):
+                return portless, _stdout_text(retry)
+    return None if aborted else (source, _stdout_text(completed))
 
 
 def forward_sources(
@@ -215,13 +219,22 @@ def forward_sources(
 def _layout_run(
     source: str, *, engine: str, timeout: float, cwd: str | None
 ) -> subprocess.CompletedProcess[Any] | None:
-    """Run ``engine -Tjson`` on ``source``; ``None`` when Graphviz fails or is missing."""
+    """Run ``engine -Tjson`` on ``source``; ``None`` when Graphviz fails or is missing.
+
+    A run Graphviz aborts on a spline-router failure (2.43 can exit 1 with ``lost ...
+    edge`` after ``Pshortestpath failed``) comes back failed (nonzero ``returncode``, no
+    layout) so the caller can lay the text out again without compass ports.
+    """
 
     try:
         return _render_utils.run_bounded_subprocess(
             [engine, "-Tjson"], input=source.encode("utf-8"), timeout=timeout, cwd=cwd
         )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, GraphvizUnavailableError):
+    except subprocess.CalledProcessError as error:
+        if not reports_route_failure(error.stderr):
+            return None
+        return subprocess.CompletedProcess(error.cmd, error.returncode, b"", error.stderr)
+    except (subprocess.TimeoutExpired, GraphvizUnavailableError):
         return None
 
 
