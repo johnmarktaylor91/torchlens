@@ -14,7 +14,7 @@ For the general speed knobs and benchmark tables, see the [performance guide](..
 | Steer or patch the model over many forwards, including generation | `tl.when(site, action).bind(model)`, and `.bind(model).generate(...)` for HF `generate()` | 1.0 to 1.2x a plain forward hook, exact |
 | Steer and also keep a few activations as evidence, every step | `tl.record(model, x, save=..., intervene=spec)`, output in `recording.output` | about 1 ms per op (CPU decoders); 9 s per step on Qwen3.5-9B |
 | Steer and refresh a trace's saved activations on each new input, including generation | trace once with `intervene=`, then `trace = trace.run(model, x)` per input (each run returns a new Trace) | about 1.5 to 2x a plain forward hook per step, exact; see [Fast steered rerun](#fast-steered-rerun) |
-| Read one module's output, or a few | `tl.pluck(model, x, "block.3")` for one, `tl.extract(model, x, [...])` for several; `stop_after="block.3"` on `pluck` also skips the rest of the model | one plain forward with a hook per module, when every name is an exact module address, the model is in eval mode and the input is one tensor or text on the model's device; otherwise a full trace. See [One module's output](#one-modules-output-tlpluck) |
+| Read one module's output, or a few | `tl.pluck(model, x, "block.3")` for one, `tl.extract(model, x, [...])` for several; `stop_after="block.3"` on `pluck` also skips the rest of the model | 0.98x a plain forward, and 0.18x with `stop_after=` at the third of GPT-2's twelve blocks, when every name is an exact module address, the model is in eval mode and the input is one tensor or text on the model's device; otherwise a full trace (11.5x). See [One module's output](#one-modules-output-tlpluck) |
 | Inspect the full graph, metadata and activations of one forward | `tl.trace(model, x, save=...)` | about 3 ms per op; 47 s for one Qwen3.5-9B trace |
 | Make one trace cheaper | a `tl.func(...)` save selector, `CaptureOptions(inference_only=True)`, and for Qwen3.5-class models flash-linear-attention | see [Cut the cost of a trace](#cut-the-cost-of-a-trace) |
 | Final outputs only | the plain model call | no TorchLens cost |
@@ -198,6 +198,18 @@ module returns the same tensor a trace would. With `stop_after=` set to an exact
 as well, a hook ends the forward right after that module's first call, so the layers after it
 never run and the call can cost less than a plain forward. `tl.extract` takes the same hooked
 path for several module addresses at once.
+
+| `tl.pluck(model, ids, "transformer.h.2")` on GPT-2 small | Median, CPU | vs plain forward |
+| --- | ---: | ---: |
+| plain forward | 151.5 ms | 1.00x |
+| `pluck` | 148.2 ms | 0.98x |
+| `pluck` with `stop_after="transformer.h.2"` | 27.6 ms | 0.18x |
+| the same request through a full capture | 1,739.9 ms | 11.5x |
+| the same request through a full capture, with `stop_after=` | 515.0 ms | 3.4x |
+
+Measured 8 Nov 2026 on pretrained GPT-2 small, 4 sequences of 32 tokens, CPU with 4 threads,
+grad mode on, median of 7 calls (3 for the capture rows); the fast results equal the captured
+ones bit for bit. Under `torch.no_grad()` the ratios were 0.98x, 0.20x, 12.7x and 3.8x.
 
 ```python
 import torch
