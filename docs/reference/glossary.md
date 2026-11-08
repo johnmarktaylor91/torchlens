@@ -373,14 +373,19 @@ of tens of steps (cost grows faster than the step count). All episode names may 
 **Op**: One executed callable invocation. Ops are the dataflow graph's nodes and have unique full labels
 such as `relu_1_2`.
 
-**Layer**: The user-facing grouping of Ops that run one place in a module's code. Running that place
+**Layer**: The user-facing grouping of Ops that run one place in the code. Running that place
 again (a loop, a recursion, a comprehension) is another pass, addressed with a one-based
 suffix such as `linear_1:2`.
 
-- Passes: `op.pass_number` is the pass and `num_passes` the count.
+- Passes: `op.pass_number` is the pass and `num_passes` the count. `graph.is_recurrent` is
+  true when some layer runs more than one pass.
 - Module calls: a module object called again is another module call (`m:1`, `m:2`), a
-  separate concept. Each op inside it runs once per module call, so its passes match the
-  module's calls.
+  separate concept, recorded for every module. For a module that owns state (a parameter or
+  buffer, its own or a descendant's) each op inside it runs once per module call, so its
+  passes match the module's calls. A module with no state (`nn.ReLU`, `nn.Dropout`) is read
+  as the function it is: its ops group by where the stateful code around it called it, so
+  one `nn.ReLU` called on two lines is two layers and one called from a loop line is one
+  layer with a pass per iteration.
 - Two different places are two layers even with the same weights, so a loop written out by
   hand is N layers.
 - Related: the exact rule (scope, call site, operation, output slot) and the case table are in
