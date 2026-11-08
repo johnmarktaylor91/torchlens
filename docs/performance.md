@@ -26,6 +26,7 @@ dygraph/eager replay and static-inventory audit costs; TensorFlow preview captur
 | Disk-backed selected payloads | `tl.trace(..., storage=tl.to_disk(path))` | Keeps selected payloads portable without retaining them all in RAM. |
 | Intervention during the forward pass | `tl.trace(..., intervene=tl.when(...), save=...)` | Live edits cost more than passive capture; use only when the model must execute edited values. |
 | Steering or patching over many forwards or through `generate()` | `tl.when(site, action).bind(model)` | Capture-free, about 1x a plain forward hook; see [choosing a fast path](guides/fast_paths.md). |
+| One module's output | `tl.pluck(model, x, "module.address")`, with `stop_after="module.address"` to skip the layers after it | One plain forward with a hook, no capture, when the name is an exact module address, the model is in eval mode and the input is one tensor or text on the model's device; see [one module's output](guides/fast_paths.md#one-modules-output-tlpluck). Otherwise a full capture. |
 | Final logits only | plain `model(x)` | TorchLens adds wrapper dispatch and metadata work; skip it when no intermediate data is needed. |
 
 ## Fast activation pull

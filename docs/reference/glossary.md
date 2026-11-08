@@ -131,6 +131,19 @@ output object, distribution); for a multi-pass `Recorder`, the last pass's.
   - `output_forward_failed`: a failed partial recording (`on_forward_error="return_partial"`).
   - `output_capture_stopped`: a capture that `stop_after=` ended before the model returned.
 
+**Trace.decode_output / Trace.output_table**: The model's output read as predictions. `trace.decode_output(k)` returns
+decoded rows, up to `k` per batch item; `trace.output_table(k=5)` returns them as a pandas
+dataframe, `k` rows per batch item.
+
+- Classifier (a classification decode): the top `k` classes, with columns `batch_item`, `rank`,
+  `label` and `prob`; `decode_output` rows also carry `class_index`.
+- Language model (an `hf_text` decode): the top `k` next tokens at the last position, with columns
+  `batch_item`, `rank`, `token_id`, `text` and `prob`. `token_id` is the vocabulary index of the
+  token, `text` its decoded string (`None` when no tokenizer was available) and `prob` its
+  probability under the softmax over the vocabulary at the last position.
+- `style=`, `head=` and `tokenizer=` decode again at read time from the retained output tensors
+  (see [Semantic I/O](../semantic_io.md)).
+
 **Recording.options / RecordingSettings**: `Recording.options` returns a `tl.types.RecordingSettings`, the read-only record of the settings
 the recording was made with, from every argument that configured it. Values are the live objects
 the recorder used, never repr strings; there is no public constructor.
@@ -1898,6 +1911,11 @@ former `peek` and `batched_extract` aliases are removed.)
 
 - `tl.pluck` returns the saved out for one layer, `tl.extract` for many layers (detached by
   default; `detach_saved_activations=False` returns graph-connected outs).
+- Both skip the capture when every requested name is an exact module address, the model is in
+  eval mode and the input is one tensor or text on the model's device: one plain forward with a
+  hook on each module returns the same tensors. A `tl.pluck` `stop_after=` that is also an exact
+  module address ends that forward right after the module's first call. Any other request
+  runs the full capture (see [Fast paths](../guides/fast_paths.md)).
 - `tl.extract_dataset` extracts outs from an iterable dataset in batches.
 - Disk-mode `extract_dataset`
   (``path=``) writes a SELF-DESCRIBING artifact: atomic ``batch_XXXXX.pt`` shards plus a
@@ -1907,6 +1925,25 @@ former `peek` and `batched_extract` aliases are removed.)
 - ``resume=True`` (experimental, like ``stimulus_ids=`` and the loader) continues an
   interrupted disk run from its last completed shard after a signature check.
   `torchlens.load(path)` reads the artifact back with its metadata as a `LoadedExtraction`.
+
+**unwrap_when_done (CaptureOptions)**: `CaptureOptions(unwrap_when_done=True)` (default `False`) removes TorchLens's torch
+function wrappers when the `tl.trace` call returns, so `torch.cos`, `torch.Tensor.__add__` and the
+rest are PyTorch's originals again. By default the wrappers that the first capture installs stay
+in place until `torchlens.backends.torch.wrappers.unwrap_torch()` is called; the next capture
+installs them again.
+
+**torchlens.backends.torch.wrappers.wrapped()**: A context manager that installs TorchLens's torch function wrappers on entry and
+removes them on exit, so torch is clean again after the block:
+
+```python
+from torchlens.backends.torch.wrappers import wrapped
+
+with wrapped():
+    trace = tl.trace(model, x)
+```
+
+- `escape_detector=` (`"off"` or the diagnostic `"shadow"`) and `completeness_witness=` (a
+  bool, `"off"` or `"shadow"`) are passed to `wrap_torch()`.
 
 **Module and stage names** (experimental): A module name resolves to that module's output at every selector entry point: `tl.extract`,
 `tl.pluck`, `tl.trace(save=[...])`, `trace.run_transaction(inputs=..., until=...)` and the
