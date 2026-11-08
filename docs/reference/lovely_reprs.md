@@ -87,7 +87,7 @@ First non-finite saved out is in layer truediv_1_4 (op __truediv__, ...), shape=
 dtype=torch.float32, parents=relu_1_2, sub_1_3, source=<file>:14.
 >>> _ = log.health_facts
 >>> log
-Trace _poisoned_1: _Poisoned, 7 layers, 5 ops, NaN/Inf found (see .nonfinite_ops)
+Trace _poisoned_1: _Poisoned, 5 ops in 5 layers, NaN/Inf found (see .nonfinite_ops)
 ```
 
 The flag says there was a crime; TorchLens hands you the crime scene --
