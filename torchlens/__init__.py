@@ -19,7 +19,7 @@ if _typing.TYPE_CHECKING:
     from ._data_classes.trace import Trace
 
 #: Released together with the io copy in _vocab/_package_version.py (test_version_coherence).
-__version__ = "3.0.2"
+__version__ = "3.0.3"
 
 _LAZY_ATTRS = {
     # Import cold-start laziness (rebaselined 2026-08-19): the former
