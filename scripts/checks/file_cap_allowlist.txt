@@ -511,7 +511,7 @@ torchlens/_utils/display.py::warn_parallel	101
 torchlens/_utils/facade.py::resolve_facade_attr	118
 torchlens/_utils/hashing.py::compute_graph_shape_hash	105
 torchlens/_utils/hashing.py::compute_raw_event_shape_hash	73
-torchlens/_utils/introspection.py	1096
+torchlens/_utils/introspection.py	1085
 torchlens/_utils/introspection.py::_extend_search_stack_from_item	89
 torchlens/_utils/introspection.py::_get_code_context	182
 torchlens/_utils/introspection.py::_search_stack_for_vars_of_type	70
@@ -541,8 +541,8 @@ torchlens/_validation_status.py::ValidationStatus.result	72
 torchlens/_validation_status.py::ValidationStatus.unverified	74
 torchlens/_visualization/_bundle_graph.py::_add_bundle_forward_nodes	71
 torchlens/_visualization/_bundle_graph.py::render_bundle_graph	62
-torchlens/_visualization/_condensed_flow.py	814
-torchlens/_visualization/_condensed_flow.py::_compute_child_condensed_flow_graphs	77
+torchlens/_visualization/_condensed_flow.py	811
+torchlens/_visualization/_condensed_flow.py::_compute_child_condensed_flow_graphs	73
 torchlens/_visualization/_condensed_flow.py::_condensed_edges	65
 torchlens/_visualization/_encoding.py	1719
 torchlens/_visualization/_encoding.py::_coerce_scalar	69
@@ -610,7 +610,7 @@ torchlens/_visualization/bundle_diff.py::_build_dot	91
 torchlens/_visualization/bundle_diff.py::bundle_diff	97
 torchlens/_visualization/code_panel.py::resolve_code_panel_source	80
 torchlens/_visualization/collapse_ladder.py::collapse_schedule	124
-torchlens/_visualization/collapse_optimizer.py	4084
+torchlens/_visualization/collapse_optimizer.py	4080
 torchlens/_visualization/collapse_optimizer.py::_condense_plan_with_child_segments	110
 torchlens/_visualization/collapse_optimizer.py::_frontier_auto_result	180
 torchlens/_visualization/collapse_optimizer.py::_frontier_can_reach_band	90

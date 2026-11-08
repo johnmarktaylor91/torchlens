@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1753 modules, 705760 lines, 0 modules without a docstring.
+85 packages, 1753 modules, 705776 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -42,7 +42,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4635 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24053 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50010 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 757 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2486 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 139 | 59437 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 139 | 59440 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1045,7 +1045,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (112 modules, 50010 lines)
+Computational graph visualization via Graphviz. (112 modules, 50023 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1108,7 +1108,7 @@ Computational graph visualization via Graphviz. (112 modules, 50010 lines)
 | `_oklab` | sRGB hex <-> OKLab conversion for the colour ramps (Ottosson 2020). | 136 |
 | `_orphan_islands` | Orphan-island selection and render-omission warnings for Graphviz renders. | 56 |
 | `_pass_animation` | The ''trace.animate(site)'' picture: an HTML animation of the repeated ops at one site. | 71 |
-| `_pass_label_placement` | Place rolled ''In''/''Out'' pass labels beside their nodes, clear of everything else. | 636 |
+| `_pass_label_placement` | Place rolled ''In''/''Out'' pass labels beside their nodes, clear of everything else. | 649 |
 | `_pass_marks` | Pass marks: how a drawn node or edge says which passes of a recurrent layer it shows. | 79 |
 | `_ramps` | Sequential colour-ramp stop lists for the encoding channels. | 62 |
 | `_rank_segments` | Segment boxes for the rank backend (collapse, the ''__segment__'' half). | 166 |
@@ -1477,7 +1477,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (139 modules, 59437 lines)
+Torch backend implementation package for TorchLens capture. (139 modules, 59440 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1577,7 +1577,7 @@ Torch backend implementation package for TorchLens capture. (139 modules, 59437 
 | `_same_object_handoff` | Transient handoffs from the op wrapper to activation logging for same-object returns. | 137 |
 | `_script_boundary` | TorchScript call boundary: a ''torch.jit.ScriptFunction'' called from an eager forward. | 253 |
 | `_session_cleanup` | Session-end tensor metadata cleanup for torch capture. | 759 |
-| `_session_forwards` | Session-scoped ''forward'' wrappers for non-root submodules. | 296 |
+| `_session_forwards` | Session-scoped ''forward'' wrappers for non-root submodules. | 299 |
 | `_sources_lazy` | Lazy source-tensor logging for a lean plain ''tl.module'' read. | 69 |
 | `_state_bytes` | Byte views of tensor state: the whole-storage snapshot and the byte-exact state compare. | 102 |
 | `_storage_exports` | Copy out pending payload aliases before a tensor's storage is handed to the host zero-copy. | 291 |
