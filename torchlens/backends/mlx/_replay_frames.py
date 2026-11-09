@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .._root_frames import strip_root_frames
+
 
 class _MLXReplayModuleFrames:
     """Mirror capture's module-call frames during an MLX AD replay.
@@ -46,6 +48,6 @@ class _MLXReplayModuleFrames:
         self.stack.pop()
 
     def current(self) -> tuple[str, ...]:
-        """Return the active frames, outermost first."""
+        """Return the active frames, outermost first, without the root call's frame."""
 
-        return tuple(self.stack)
+        return strip_root_frames(self.stack)

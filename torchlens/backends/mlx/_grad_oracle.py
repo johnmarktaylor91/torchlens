@@ -16,6 +16,7 @@ import numpy as np
 from ..._data_classes.derived_grad import DerivedGradRecord
 from ..._ir.refs import DtypeRef
 from .._finalize import join_module_address as _join_module_address
+from .._root_frames import strip_root_frames
 from .._validation_shared import float_replay_tolerances
 from ._tap_observers import (
     _is_mlx_array,
@@ -184,7 +185,7 @@ def _mlx_trace_intermediate_signatures(
             ),
             shape=tuple(getattr(op, "shape", ()) or ()),
             dtype=str(getattr(op, "dtype", "")),
-            module_calls=tuple(str(module) for module in getattr(op, "modules", ())),
+            module_calls=strip_root_frames(getattr(op, "modules", ())),
         )
         grouped[signature].append(op)
     return grouped

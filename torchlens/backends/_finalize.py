@@ -27,6 +27,7 @@ from ._finalize_labels import apply_final_label, torch_rule_final_labels
 from ._finalize_site_keys import _mint_preview_site_keys
 from ._finalize_totals import _count_trace_ops, _update_param_totals_from_layers
 from ._module_returns import ModuleReturnLedger, attach_output_paths, flag_returned_ops
+from ._root_frames import refuse_rootless_stack, strip_op_root_frames
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -321,12 +322,9 @@ def attach_object_module_logs(
     op_top_level:
         Predicate for top-level modules observed in finalized op call stacks.
     training_mode:
-        Resolver for backend-specific module training metadata.
-
-    Returns
-    -------
-    None
-        ``trace.modules`` and transient module build-data are populated.
+        Resolver for backend-specific module training metadata. Module logs are
+        built from raw op stacks (root frame included), then the root frame
+        leaves the public op fields, as on torch.
     """
 
     trace._module_capture_ws.module_build_data = _init_module_hierarchy_data()
@@ -361,6 +359,7 @@ def attach_object_module_logs(
         op_top_level=op_top_level,
     )
     _build_module_logs(trace)
+    strip_op_root_frames(trace._layer_list)
 
 
 def attach_object_module_logs_with_returns(
@@ -424,7 +423,7 @@ def populate_object_module_build_data(
     seen_pass_children: dict[str, set[str]] = defaultdict(set)
     seen_addresses = set(mbd["addresses"])
     for op_log in trace._layer_list:
-        normalized_calls = normalize_module_calls(op_log.modules)
+        normalized_calls = refuse_rootless_stack(op_log, normalize_module_calls(op_log.modules))
         op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
         op_log.module = op_log.modules[-1] if op_log.modules else None
         parent_call_label: str | None = None

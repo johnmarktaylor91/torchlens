@@ -191,7 +191,7 @@ def test_tf_capture_raw_tf_module_class_level_stack() -> None:
 
     assert {"ReadVariableOp", "MatMul", "AddV2", "Relu"} <= op_types
     assert trace.options.module_identity_mode == "object_module"
-    assert matmul.modules == ("self:1",)
+    assert tuple(matmul.modules) == ()
     assert getattr(trace, "_tf_init_op_labels", ()) == ()
     assert np.allclose(trace[matmul.label].out, np.array([[5.0]], dtype=np.float32))
 

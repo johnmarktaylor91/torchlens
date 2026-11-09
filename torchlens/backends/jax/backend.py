@@ -93,6 +93,7 @@ from .._options import (
     reject_unsupported_trace_options,
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
+from .._root_frames import refuse_rootless_stack, strip_op_root_frames
 from .._validation_shared import float_replay_tolerances
 from . import _module_return_probe as return_probe
 from ._closure_consts import _readable_closure_consts
@@ -2472,12 +2473,9 @@ class JAXBackend:
         trace
             Trace receiving module accessors.
         tree
-            Discovered Equinox or Flax NNX module tree.
-
-        Returns
-        -------
-        None
-            ``trace.modules`` is populated by the shared module-log builder.
+            Discovered Equinox or Flax NNX module tree. Module logs are built
+            from the decoded op stacks, then the root frame of root-only ops
+            leaves the public op fields, as on torch.
         """
 
         mbd = trace._module_capture_ws.module_build_data = _init_module_hierarchy_data()
@@ -2505,6 +2503,7 @@ class JAXBackend:
 
         self._populate_pytree_module_build_data(trace)
         return_probe.build_module_logs_with_returns(trace, tree, _build_module_logs)
+        strip_op_root_frames(trace._layer_list)
 
     def _populate_pytree_module_build_data(self, trace: Trace) -> None:
         """Populate module hierarchy side channels from attributed JAX ops.
@@ -2530,17 +2529,14 @@ class JAXBackend:
 
         for op_log in trace._layer_list:
             normalized_calls = normalize_op_module_calls(op_log.modules)
+            refuse_rootless_stack(op_log, normalized_calls, nested_root_dropped=True)
             op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
             op_log.module = op_log.modules[-1] if op_log.modules else None
-            # ``module_call_stack`` carries the same containment fact as
-            # ``modules`` and must get the identical raw-tuple -> "address:N"
-            # string normalization (torch does this in
-            # ``postprocess/labeling.py``'s ``_replace_layer_names_for_layer_entry``).
-            # Left as raw ``(address, call_index)`` tuples, ``str(item)``
-            # calls elsewhere (e.g. the ``module_attribution`` metadata
-            # invariant's claim collection) stringified them as literal
-            # ``"('fc1', 1)"`` tuple reprs instead of a parseable module
-            # address, so a JAX compute op's attribution never resolved.
+            # ``module_call_stack`` carries the same containment fact as ``modules`` and
+            # gets the same raw-tuple -> "address:N" normalization (torch: ``postprocess/
+            # labeling.py``); raw tuples would stringify as ``"('fc1', 1)"`` reprs the
+            # ``module_attribution`` invariant cannot resolve. An op decoded with no scope
+            # at all is refused (the decoder drops the root only before a submodule).
             module_call_stack_calls = normalize_op_module_calls(op_log.module_context.call_stack)
             op_log._module_context_call_stack = [
                 f"{address}:{call_index}" for address, call_index in module_call_stack_calls

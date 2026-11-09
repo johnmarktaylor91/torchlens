@@ -34,6 +34,7 @@ from .._entry_refusals import (
     refuse_tf_replay_diverged,
 )
 from .._finalize import mirror_param_derived_grads, stable_callable_name as _callable_identity
+from .._root_frames import strip_root_frames
 from .._validation_shared import float_replay_tolerances
 from ..registry import BackendUnsupportedError
 from .modules import TFModuleTree
@@ -363,7 +364,7 @@ def _records_for_intermediate_tf_grads(
             func_call_id=_capture_raw_index(capture.label_raw),
             op_name=capture.op_type,
             parent_labels=_capture_parent_labels(capture),
-            module_stack=module_stack,
+            module_stack=strip_root_frames(module_stack),
         )
         replay_groups[signature].append(
             TFIntermediateCandidate(
@@ -468,7 +469,7 @@ def _tf_trace_intermediate_signatures(
                     for parent in getattr(op, "parents", ())
                 )
             ),
-            module_stack=tuple(str(module) for module in getattr(op, "modules", ())),
+            module_stack=strip_root_frames(getattr(op, "modules", ())),
         )
         groups[signature].append(op)
     return groups
@@ -488,8 +489,7 @@ def _capture_raw_index(label_raw: str) -> int:
         Raw stream index, or ``0`` when unparseable.
     """
 
-    stem = label_raw[: -len("_raw")] if label_raw.endswith("_raw") else label_raw
-    _prefix, _sep, index_text = stem.rpartition("_")
+    _prefix, _sep, index_text = label_raw.removesuffix("_raw").rpartition("_")
     return int(index_text) if index_text.isdigit() else 0
 
 

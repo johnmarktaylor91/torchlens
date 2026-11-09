@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+from torchlens._data_classes._site_key import ROOT_MODULE_ADDRESS
 from torchlens.backends.registry import UnknownBackendError
 
 from ._status import has_importer_region_provenance, is_region_replay_annotation
@@ -232,12 +233,25 @@ def _check_compute_op_module_attribution(trace: Trace) -> None:
     MetadataInvariantError
         If a compute op has no module/module-call attribution, or the
         attribution does not resolve to a module that lists the op.
+
+    Notes
+    -----
+    Torch's top-level ops carry no module claim, and preview backends drop the
+    root call's frame from op fields to match. An unclaimed op passes only when
+    the root call itself lists it and no other module does: the finalizer built
+    those lists from raw stacks it refuses when they lack the root frame, so the
+    op's raw stack was the root frame alone. Every other unclaimed op fails.
     """
 
     name = "module_attribution"
+    nested_labels: set[str] | None = None
     for layer in _compute_ops(trace):
         claims = _module_claims(layer)
         if not claims:
+            if nested_labels is None:
+                nested_labels = _nested_layer_labels(trace)
+            if _is_root_call_op(trace, layer, nested_labels):
+                continue
             raise MetadataInvariantError(
                 name,
                 f"Compute op '{layer.layer_label}' has no module/module-call attribution",
@@ -262,6 +276,45 @@ def _check_compute_op_module_attribution(trace: Trace) -> None:
                 f"Compute op '{layer.layer_label}' attribution {claims} does not resolve "
                 "to a Module that lists it",
             )
+
+
+def _nested_layer_labels(trace: Trace) -> set[str]:
+    """Return the layer labels some module other than the root lists."""
+
+    return {
+        label
+        for module in trace.modules
+        if module.address != ROOT_MODULE_ADDRESS
+        for label in module.layer_labels
+    }
+
+
+def _is_root_call_op(trace: Trace, layer: Op, nested_labels: set[str]) -> bool:
+    """Return whether only the root call lists ``layer`` (its raw stack was the root frame).
+
+    Parameters
+    ----------
+    trace:
+        Trace whose module logs are read.
+    layer:
+        Unclaimed compute op.
+    nested_labels:
+        Layer labels listed by a non-root module (see ``_nested_layer_labels``).
+
+    Returns
+    -------
+    bool
+        ``True`` when a recorded root call lists the op and no other module does.
+    """
+
+    if layer.layer_label in nested_labels:
+        return False
+    try:
+        root = trace.modules[ROOT_MODULE_ADDRESS]
+    except (KeyError, IndexError):
+        return False
+    calls = (root.calls.get(index) for index in root.calls)
+    return any(call is not None and layer.label in call.ops for call in calls)
 
 
 def _compute_ops(trace: Trace) -> list[Op]:

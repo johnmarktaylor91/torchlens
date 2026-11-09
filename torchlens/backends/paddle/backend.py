@@ -78,6 +78,7 @@ from .._protocols.paddle import (
     PADDLE_REFUSAL_RUNTIME_MODE,
     PADDLE_REFUSAL_SEED,
 )
+from .._root_frames import strip_root_frames
 from ._capture_helpers import (
     _alias_to_primary,
     _append_intervention_events,
@@ -2534,7 +2535,7 @@ def _paddle_trace_intermediate_signatures(
             parent_labels=tuple(
                 final_to_raw.get(str(parent), str(parent)) for parent in getattr(op, "parents", ())
             ),
-            module_stack=tuple(str(module) for module in getattr(op, "modules", ())),
+            module_stack=strip_root_frames(getattr(op, "modules", ())),
         )
         groups[signature].append(op)
     return groups
@@ -2627,18 +2628,17 @@ def _paddle_replay_module_stack(value: object) -> tuple[str, ...]:
     Returns
     -------
     tuple[str, ...]
-        Module-call labels in ``address:call_index`` form.
+        Module-call labels in ``address:call_index`` form, without the root call's
+        frame (dropped from finalized op fields too).
     """
 
     labels: list[str] = []
     for item in value if isinstance(value, Sequence) else ():
         address = getattr(item, "address", None)
         call_index = getattr(item, "call_index", None)
-        if address is not None and call_index is not None:
-            labels.append(f"{address}:{int(call_index)}")
-        else:
-            labels.append(str(item))
-    return tuple(labels)
+        known = address is not None and call_index is not None
+        labels.append(f"{address}:{int(call_index)}" if known else str(item))
+    return strip_root_frames(labels)
 
 
 def _is_scalar_paddle_tensor(value: Any) -> bool:
