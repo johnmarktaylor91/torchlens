@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1768 modules, 708397 lines, 0 modules without a docstring.
+85 packages, 1769 modules, 708524 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -54,10 +54,10 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 23 | 7477 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7552 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
-| `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9649 |
-| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6948 |
+| `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9645 |
+| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8577 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 11 | 4583 |
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 87 | 34283 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 87 | 34336 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
 
 ## Modules by package
@@ -1332,7 +1332,7 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (23 modules, 7477 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7552 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1345,7 +1345,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (23 modules
 | `_entry_refusals` | Typed, coded refusals raised by the framework backends' public entry points. | 197 |
 | `_errors` | Backend registry error hierarchy (leaf module: no registry import). | 251 |
 | `_facet_recipes` | Per-trace facet recipes (''trace(facets=...)'') on the preview backends. | 77 |
-| `_finalize` | Shared preview-backend trace finalization helpers. | 1240 |
+| `_finalize` | Shared preview-backend trace finalization helpers. | 1239 |
 | `_finalize_distances` | Input and output hop distances for preview-backend traces. | 194 |
 | `_finalize_labels` | Torch's final-label rule for preview-backend ops. | 145 |
 | `_finalize_site_keys` | Policy-independent site keys for preview-backend ops, minted before grouping. | 42 |
@@ -1355,6 +1355,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (23 modules
 | `_module_returns` | Recorded module returns: how a preview backend hands module-call outputs to the finalizer. | 234 |
 | `_options` | Shared backend trace-option defaulting and rejection helpers. | 790 |
 | `_protocol` | Backend Protocol for unified TorchLens capture. | 354 |
+| `_root_frames` | The root call's frame in preview op module stacks. | 76 |
 | `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 206 |
 | `_trace_options` | Per-backend trace-option vocabularies (leaf module: no registry import). | 191 |
 | `_validation_shared` | Backend-neutral helpers shared by the preview backends' validation modules. | 171 |
@@ -1377,7 +1378,7 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 
 ### `torchlens.backends.jax`
 
-JAX backend preview exports. (17 modules, 9649 lines)
+JAX backend preview exports. (17 modules, 9645 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1394,24 +1395,24 @@ JAX backend preview exports. (17 modules, 9649 lines)
 | `_trace_graph_helpers` | Trace-graph helpers for the JAX preview backend's validation oracles. | 535 |
 | `_validation_log` | Per-run validation decision log for the JAX backend. | 153 |
 | `_zero_annihilator` | Zero-annihilator value proof for the JAX preview backend's perturbation oracle. | 88 |
-| `backend` | Jaxpr-first JAX backend preview. | 4328 |
+| `backend` | Jaxpr-first JAX backend preview. | 4324 |
 | `capabilities` | Registry-backed capability exports for the JAX backend preview. | 38 |
 | `jaxpr` | Closed-jaxpr derivation and interpretation for the JAX backend. | 2491 |
 | `modules` | JAX module helpers for Equinox and Flax NNX roots. | 932 |
 
 ### `torchlens.backends.mlx`
 
-Technical-preview MLX backend for TorchLens. (17 modules, 6948 lines)
+Technical-preview MLX backend for TorchLens. (17 modules, 6951 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Technical-preview MLX backend for TorchLens. | 31 |
 | `_capture_disclosures` | Capture-time honesty disclosures for the MLX preview backend. | 87 |
 | `_capture_records` | Capture records and payload helpers for MLX replay validation. | 235 |
-| `_grad_oracle` | MLX derived-gradient oracle helpers. | 437 |
+| `_grad_oracle` | MLX derived-gradient oracle helpers. | 438 |
 | `_param_tree` | Flattened MLX parameter-tree walkers for the backend's parameter logs. | 71 |
 | `_replay_args` | Saved-payload lookup and replay-argument reconstruction for MLX validation. | 216 |
-| `_replay_frames` | Module-call frames for the MLX AD replay observers. | 51 |
+| `_replay_frames` | Module-call frames for the MLX AD replay observers. | 53 |
 | `_tap_observers` | MLX intermediate-gradient tap observers and the array helpers they share. | 552 |
 | `backend` | Technical-preview MLX implementation of the capture backend Protocol. | 2496 |
 | `capabilities` | Registry-backed capability exports for the technical-preview MLX backend. | 38 |
@@ -2353,7 +2354,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (87 modules, 34283 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (87 modules, 34336 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2398,7 +2399,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_invariants_conditionals` | Conditional labels, events, and branch-edge invariants. | 670 |
 | `_invariants_connectivity` | Distance, connectivity, lookup, and contract helpers. | 841 |
 | `_invariants_distance_messages` | Min/max order failure message for the distance invariants. | 36 |
-| `_invariants_entry` | Invariant dispatch and backend-neutral identity checks. | 589 |
+| `_invariants_entry` | Invariant dispatch and backend-neutral identity checks. | 642 |
 | `_invariants_equivalence` | Equivalence, ordering, and loop-detection invariants. | 750 |
 | `_invariants_equivalence_index` | Index builders for the equivalence and loop-detection invariants. | 97 |
 | `_invariants_modules_params` | Module-call and parameter cross-reference invariants. | 601 |

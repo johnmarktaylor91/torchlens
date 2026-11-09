@@ -717,14 +717,14 @@ torchlens/backends/_default_specs.py	1291
 torchlens/backends/_default_specs.py::_simple_leaves	72
 torchlens/backends/_default_specs.py::_tf_can_handle	79
 torchlens/backends/_default_specs.py::register_default_backend_specs	191
-torchlens/backends/_finalize.py	1240
+torchlens/backends/_finalize.py	1239
 torchlens/backends/_finalize.py::_apply_recurrence_relabel_epilogue	106
 torchlens/backends/_finalize.py::_finalize_single_op	77
-torchlens/backends/_finalize.py::attach_object_module_logs	65
+torchlens/backends/_finalize.py::attach_object_module_logs	63
 torchlens/backends/_finalize.py::finalize_single_pass_trace	150
 torchlens/backends/_finalize.py::new_preview_function_trace	100
 torchlens/backends/_finalize.py::populate_object_module_build_data	72
-torchlens/backends/jax/backend.py	4328
+torchlens/backends/jax/backend.py	4324
 torchlens/backends/jax/backend.py::JAXBackend._append_event	173
 torchlens/backends/jax/backend.py::JAXBackend._attach_derived_grads	170
 torchlens/backends/jax/backend.py::JAXBackend._build_jax_recurrence_grouping_graph	71
@@ -733,7 +733,7 @@ torchlens/backends/jax/backend.py::JAXBackend._derive_intermediate_grads_zero_ta
 torchlens/backends/jax/backend.py::JAXBackend._emit_equations	87
 torchlens/backends/jax/backend.py::JAXBackend._emit_region_capture	122
 torchlens/backends/jax/backend.py::JAXBackend._finish_trace	294
-torchlens/backends/jax/backend.py::JAXBackend._populate_pytree_module_build_data	82
+torchlens/backends/jax/backend.py::JAXBackend._populate_pytree_module_build_data	79
 torchlens/backends/jax/backend.py::JAXBackend._validate_jax_regions	70
 torchlens/backends/jax/backend.py::JAXBackend.capture_trace	331
 torchlens/backends/jax/backend.py::_experimental_per_op_boundary_vjp_oracle	79
