@@ -423,3 +423,16 @@ def test_saved_pair_gives_the_same_finding(port: Port, tmp_path: Path) -> None:
         loaded_a = _reload(torch_trace, tmp_path / f"torch_{bug_block}.tlspec")
         loaded_b = _reload(port_trace, tmp_path / f"port_{bug_block}.tlspec")
         assert _finding(loaded_a, loaded_b) == live, _frame_text(loaded_a, loaded_b)
+
+
+@pytest.mark.parametrize("port", PORTS)
+def test_root_call_inputs_are_the_model_inputs(port: Port) -> None:
+    """The root call reads the trace's input ops as its inputs on every backend."""
+
+    from torchlens.debug._common import _op_from_label, _op_label
+    from torchlens.debug._xb_calls import read_calls
+
+    for trace in _pair(port):
+        root = next(info for info in read_calls(trace) if info.parent is None)
+        ops = (_op_from_label(trace, str(label)) for label in trace.input_layers)
+        assert root.inputs == tuple(dict.fromkeys(_op_label(op) for op in ops if op is not None))
