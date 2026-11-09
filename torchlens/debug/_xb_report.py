@@ -15,6 +15,7 @@ from .._capture_honesty import capture_honesty_facts
 from .._debug_report import Report, table_report, trace_subject
 from ._common import _op_label, _ordered_ops, _require_pandas
 from ._cross_backend import MODULE_COLUMNS, coverage_counts, module_rows
+from ._xb_op_place import placement_reason
 from ._xb_pairing import ASSERTED, SUPPORTED, CallPair
 from ._xb_refusals import refuse_inconclusive
 from ._xb_values import DIFFERENT, EQUAL, SHAPE_INCOMPATIBLE
@@ -192,7 +193,9 @@ def module_first_divergence(
     _refuse_unanswerable(rows, pairs, facts)
     for row, pair in zip(rows, pairs, strict=True):
         if row["outcome"] == DIFFERENT:
-            return _worded(row, pair, trace_a, (rows, pairs), facts["randomness"])
+            worded = _worded(row, pair, trace_a, (rows, pairs), facts["randomness"])
+            placed = placement_reason(pair, (rows, pairs), facts, (trace_a, trace_b), (rtol, atol))
+            return {**worded, "reason": f"{worded['reason']}; {placed}"}
     paired = [row for row in rows if row["alignment"] in (SUPPORTED, ASSERTED)]
     if not any(row["outcome"] == EQUAL for row in paired):
         refuse_inconclusive(
