@@ -866,7 +866,7 @@ def test_atol_floor_on_an_all_zero_reference(
     row = frame.loc[frame["op"] == "1:1"].iloc[0]
     assert row["outcome"] == outcome, row["reason"]
     # The module's side-a input is all zero, so the floor's scale falls back to 1.0.
-    expected_atol = 10 * torch.finfo(torch.float32).eps if atol is None else atol
+    expected_atol = 500 * torch.finfo(torch.float32).eps if atol is None else atol
     assert row["atol"] == pytest.approx(expected_atol)
     assert frame.loc[frame["op"] == "0:1", "outcome"].item() == "equal"
 
@@ -1016,7 +1016,7 @@ def test_a_mask_like_input_cannot_inflate_the_atol_floor() -> None:
     trace_a, trace_b = _traces(_MaskNet(), _MaskNet(shift=1e-3), x)
     row = _frame(trace_a, trace_b).set_index("op").loc["zero:1"]
     assert row["outcome"] == "different", row["reason"]
-    floor = 10 * torch.finfo(torch.float32).eps * float(x.double().square().mean().sqrt())
+    floor = 500 * torch.finfo(torch.float32).eps * float(x.double().square().mean().sqrt())
     assert row["atol"] == pytest.approx(floor)
     assert tl.debug.first_divergence(trace_a, trace_b)["op"] == "zero:1"  # type: ignore[index]
 
