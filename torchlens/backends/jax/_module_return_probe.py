@@ -28,18 +28,21 @@ cycle.
 Honesty rule: a call is recorded only when every array leaf it returned is a tracer of the
 top-level trace. A module called under ``jax.vmap`` returns tracers of the batching trace:
 one trace-time call stands for every batch member, so no single op is its output. Such calls
-are left unrecorded (their ``output_ops`` stay empty and ``Module.out`` raises), never filled
-with a guessed op. A module call inside a ``jax.lax.scan``, ``cond`` or ``while_loop`` body
-never gets here: the root is itself the attributed module ``self``, and the strict module
-surface refuses control flow inside any attributed module.
+are left unrecorded (their ``output_ops`` stay empty and ``Module.out`` raises) and disclosed
+with a ``CaptureGapWarning``, never filled with a guessed op. A module call inside a
+``jax.lax.scan``, ``cond`` or ``while_loop`` body never gets here: the root is itself the
+attributed module ``self``, and the strict module surface refuses control flow inside any
+attributed module.
 """
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import Any
 
+from ..._errors import CaptureGapWarning
 from .._module_returns import attach_output_paths, flag_returned_ops, iter_returned_leaves
 from ._return_ledger import JaxReturnLedger
 
@@ -175,6 +178,14 @@ def _record_pending(trace: Any, ledger: JaxReturnLedger) -> None:
         tracers = [leaf for leaf in _array_leaves(value) if _is_tracer(leaf)]
         if all(id(leaf) in allowed for leaf in tracers):
             ledger.record(address, call_index, value, is_leaf=_is_array, label_of=label_of)
+        else:
+            warnings.warn(
+                f"JAX module call '{address}:{call_index}' returned arrays of an inner trace "
+                "(e.g. jax.vmap: one trace-time call stands for every batch member), so no op "
+                "is its output; its return is not recorded.",
+                CaptureGapWarning,
+                stacklevel=2,
+            )
     ledger.release()
 
 

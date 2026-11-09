@@ -5,7 +5,8 @@ actual return on Equinox and NNX. This file pins the JAX-only rules of
 ``torchlens/backends/jax/_module_return_probe.py``:
 
 - a module called under ``jax.vmap`` returns tracers of an inner trace; the call stays
-  unrecorded (no output op, no output path) instead of being paired with a guessed op;
+  unrecorded (no output op, no output path) and is disclosed with a ``CaptureGapWarning``
+  instead of being paired with a guessed op;
 - a module called inside a ``jax.lax.scan``, ``cond`` or ``while_loop`` body refuses (the
   strict module surface), so no such return is ever recorded;
 - the extra jaxpr outputs that carry module returns never become trace outputs and are not
@@ -22,6 +23,7 @@ import pytest
 
 import torchlens as tl
 from torchlens.backends._module_returns import ModuleReturnLedger, returned_op_labels
+from torchlens.errors import CaptureGapWarning
 from torchlens.intervention.errors import MultiOutputModuleError
 from torchlens.validation import check_metadata_invariants
 
@@ -141,10 +143,11 @@ def test_module_inside_root_control_flow_refuses(kind: str) -> None:
 
 
 def test_vmapped_child_is_unrecorded_and_parent_recorded() -> None:
-    """A child under ``jax.vmap`` is unrecorded; its parent's return is recorded."""
+    """A child under ``jax.vmap`` is unrecorded and disclosed; its parent's return is recorded."""
 
     model = _VmapRoot(_VmapBlock(eqx.nn.Linear(_WIDTH, _WIDTH, key=jax.random.PRNGKey(4))))
-    trace = tl.trace(model, _input(), backend="jax")
+    with pytest.warns(CaptureGapWarning, match=r"'block\.lin:1' returned arrays of an inner trace"):
+        trace = tl.trace(model, _input(), backend="jax")
     _assert_unrecorded(trace, "block.lin:1")
     block_call = trace.module_calls["block:1"]
     assert len(block_call.output_ops) == 1
@@ -166,7 +169,8 @@ def test_recording_leaves_trace_outputs_and_jaxpr_unchanged(
             monkeypatch.setattr(ModuleReturnLedger, "record", lambda *args, **kwargs: None)
         else:
             monkeypatch.undo()
-        trace = tl.trace(model, _input(), backend="jax")
+        with pytest.warns(CaptureGapWarning, match=r"'block\.lin:1'"):
+            trace = tl.trace(model, _input(), backend="jax")
         seen[arm] = (
             tuple(op.label for op in trace._layer_list),
             tuple(trace.output_layers),
