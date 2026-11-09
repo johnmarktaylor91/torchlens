@@ -7,8 +7,8 @@ reconvergence walk along a single-consumer chain, or one agreeing candidate amon
 tied ones) can only pair ops that agree. A difference is read only at a structural
 exit: the next reference op whose parents are paired or open, against the
 other-side op consuming the partners and the open region (spelling family breaks a
-tie, disclosed; an exit with no paired parent has no structural evidence and is
-not taken), or the call's recorded outputs. The open ops behind a differing
+tie, disclosed; both open regions must be fed by the same paired ops), or the
+call's recorded outputs. The open ops behind a differing
 exit are the placement (one op per side is an op-level placement).
 """
 
@@ -154,24 +154,38 @@ def _take(walk: Walk, ref: str, cand: str) -> None:
 
 
 def _exit_candidates(walk: Walk, ref: str) -> list[str]:
-    """Side-b ops consuming the partners of ``ref``'s paired parents plus open ops.
+    """Side-b ops bracketing the same open computation as ``ref``.
 
-    An exit needs an anchor: with no paired parent there is no structural evidence
-    for any candidate, so none is offered and the open region runs on to a later
-    anchored exit or the call's recorded outputs.
+    A candidate consumes the partners of ``ref``'s paired parents plus open ops, and
+    the region behind its open parents is fed by the partners of the paired ops that
+    feed ``ref``'s open region. That shared entry is the structural anchor; with no
+    paired op on either boundary nothing is offered.
     """
 
+    open_a = [p for p in walk.a.parents[ref] if p not in walk.pa]
     partners = {walk.pa[p] for p in walk.a.parents[ref] if p in walk.pa}
-    if not partners:
+    entry = {walk.pa[p] for p in _entry(walk.a, open_a, walk.pa)}
+    if not partners and not entry:
         return []
     found = []
     for label in walk.b.walk:
         if label in walk.pb:
             continue
         ups = walk.b.parents[label]
-        paired_ups = {p for p in ups if p in walk.pb}
-        if paired_ups == partners and len(ups) > len(paired_ups):
-            found.append(label)
+        open_b = [p for p in ups if p not in walk.pb]
+        if open_b and set(ups) - set(open_b) == partners:
+            if _entry(walk.b, open_b, walk.pb) == entry:
+                found.append(label)
+    return found
+
+
+def _entry(graph: SideGraph, opens: list[str], paired: dict[str, str]) -> set[str]:
+    """The paired ops feeding the open region behind ``opens``."""
+
+    found: set[str] = set()
+    for label in opens:
+        for op in region(graph, label, paired):
+            found.update(p for p in graph.parents[op] if p in paired)
     return found
 
 

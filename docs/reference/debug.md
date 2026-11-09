@@ -705,8 +705,8 @@ that consumes exactly the partners of those inputs, chosen without reading its v
 modules that already agree count as paired boundaries. Values only confirm agreement, or close a
 decomposition gap (one fused operation on one side, several on the other, such as `linear`
 against `matmul` and `add`) when a later operation agrees. A difference is read only where both
-sides' structure meets again: the next operation that consumes the open ones together with at
-least one paired input, or the module's recorded outputs. The per-backend spelling lists (MLX `subtract` is `sub`, Paddle
+sides' structure meets again: the next operation that consumes the open ones, when both sides'
+open operations are fed by the same paired operations, or the module's recorded outputs. The per-backend spelling lists (MLX `subtract` is `sub`, Paddle
 `functional.layer_norm` is `layernorm`) only break a tie between structurally valid candidates,
 and the row says so. The reason gains one phrase: `op: a <op> against b <op>` for one operation
 per side, or `op group: a [...] against b [...]` when one side spells the computation in several
