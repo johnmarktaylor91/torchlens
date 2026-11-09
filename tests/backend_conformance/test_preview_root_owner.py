@@ -12,6 +12,7 @@ root frame alone); every other unclaimed op still fails.
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable
 from typing import Any
 
@@ -194,7 +195,7 @@ def _root_call_ops(trace: Any) -> set[str]:
     """Pass labels every recorded root call lists."""
 
     root = trace.modules["self"]
-    return {label for index in root.calls for label in root.calls[index].ops}
+    return {label for index in root.calls for label in root.calls.get(index).ops}
 
 
 def test_torch_top_level_ops_carry_no_owner() -> None:
@@ -268,7 +269,7 @@ def test_unclaimed_op_the_root_call_does_not_list_still_fails(backend: str) -> N
     _unclaim(target)
     root = trace.modules["self"]
     for index in root.calls:
-        call = root.calls[index]
+        call = root.calls.get(index)
         call.ops = [label for label in call.ops if label != target.label]
     with pytest.raises(MetadataInvariantError, match="module/module-call attribution"):
         _check_compute_op_module_attribution(trace)
@@ -286,7 +287,7 @@ def test_raw_stack_without_the_root_frame_is_refused(
     left with no frame at all). Both are capture gaps the carve-out must not mask.
     """
 
-    module = pytest.importorskip(f"torchlens.backends.{backend}.backend")
+    module = importlib.import_module(f"torchlens.backends.{backend}.backend")
     original = module.normalize_op_module_calls
 
     def lose_root_frame(value: Any) -> tuple[tuple[str, int], ...]:
