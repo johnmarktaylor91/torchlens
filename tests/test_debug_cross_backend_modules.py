@@ -21,7 +21,7 @@ import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import _xb_calls
+from torchlens.debug import _cross_backend, _xb_calls
 from torchlens.errors import InvalidArgumentError
 
 pytest.importorskip("pandas")
@@ -886,3 +886,96 @@ def test_module_frames_name_the_pairing_mode_and_backends() -> None:
     assert (structure["align"], structure["backends"]) == ("structure", ("torch", "torch"))
     for align in ("auto", "label"):
         assert not {"align", "backends"} & set(_frame(same_a, same_b, align=align).attrs)
+
+
+class _EagerAttention(nn.Module):
+    """Returns ``(output, weights)`` but creates the weights first (HF eager attention)."""
+
+    def __init__(self, proj: nn.Linear, shift: float = 0.0) -> None:
+        """Share ``proj``; ``shift`` injects a bug into the output."""
+
+        super().__init__()
+        self.proj, self.shift = proj, shift
+
+    def forward(self, x: torch.Tensor) -> Any:
+        """Weights (batch by batch) first, then the projected output."""
+
+        weights = torch.softmax(x @ x.transpose(0, 1), dim=-1)
+        return self.proj(x) + self.shift, weights
+
+
+class _SdpaAttention(_EagerAttention):
+    """The same module returning only its output (an MLX-style attention)."""
+
+    def forward(self, x: torch.Tensor) -> Any:
+        """The projected output alone."""
+
+        return self.proj(x) + self.shift
+
+
+class _AttentionNet(nn.Module):
+    """``head(attn(x)[0])``, reading the first returned value when there are two."""
+
+    def __init__(self, attn: nn.Module, head: nn.Linear) -> None:
+        """Hold the attention and the head."""
+
+        super().__init__()
+        self.attn, self.head = attn, head
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run attention, keep its output, project."""
+
+        out = self.attn(x)
+        return self.head(out[0] if isinstance(out, tuple) else out)
+
+
+def _attention_pair(shift: float = 0.0) -> tuple[tl.Trace, tl.Trace]:
+    """Eager two-output attention on side a, a single-output port (``shift`` bug) on side b."""
+
+    torch.manual_seed(0)
+    proj, head = nn.Linear(6, 6), nn.Linear(6, 2)
+    eager = _AttentionNet(_EagerAttention(proj), head)
+    port = _AttentionNet(_SdpaAttention(copy.deepcopy(proj), shift), copy.deepcopy(head))
+    return _traces(eager, port, torch.randn(3, 6))
+
+
+def test_two_returned_values_pair_by_return_position_not_op_order() -> None:
+    """The eager output (returned first, created second) meets the port's single output."""
+
+    trace_a, trace_b = _attention_pair()
+    assert tl.debug.first_divergence(trace_a, trace_b) is None
+    row = _frame(trace_a, trace_b).set_index("op").loc["attn:1"]
+    assert (row["alignment"], row["outcome"]) == ("supported", "equal")
+    assert "1 more on side a not compared" in row["reason"]
+
+
+def test_a_bug_behind_two_returned_values_is_named_at_its_module() -> None:
+    """A bug in the port's attention output reads different at ``attn``, not shape-incompatible."""
+
+    row = tl.debug.first_divergence(*_attention_pair(shift=0.5))
+    assert row is not None
+    assert (row["op"], row["outcome"]) == ("attn:1", "different")
+
+
+@pytest.mark.parametrize(
+    ("counts", "ordered", "expected"),
+    [
+        ((2, 2), (True, True), (2, "")),
+        (
+            (2, 1),
+            (True, True),
+            (1, "compared the first returned value; 1 more on side a not compared"),
+        ),
+        ((2, 1), (False, True), "return order of 2 values not recorded (a)"),
+        ((3, 2), (True, True), "return trees differ (3 vs 2 values)"),
+    ],
+    ids=["equal", "one-against-two", "order-unknown", "trees-differ"],
+)
+def test_leaf_plan(counts: tuple[int, int], ordered: tuple[bool, bool], expected: Any) -> None:
+    """Leaves pair by return position; unknown order or unequal trees refuse the row."""
+
+    plan = _cross_backend._leaf_plan(*counts, ordered)
+    if isinstance(expected, str):
+        assert plan.outcome == "unavailable" and plan.reason == expected  # type: ignore[union-attr]
+    else:
+        assert plan == expected
