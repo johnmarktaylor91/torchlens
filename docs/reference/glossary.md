@@ -2286,6 +2286,22 @@ record takes a direct role in, as listed in `in_conditionals`. Nesting depth is
 - `tl.stats.relative_l2(a, b)`: `norm(a - b) / max(norm(a), eps)`.
 - `tl.stats.relative_l1(a, b)`: `|a - b| / max(|a|, eps)`, the scalar fallback.
 
+**Run pairing (`align=`, `module_map=`)**: How `tl.debug.compare` and `tl.debug.first_divergence`
+pair the two runs they compare. A value is called different only for a pair made without
+looking at its values; a module or op with no partner is a coverage gap, never a divergence.
+
+- `align="auto"` (default): `"label"` for two traces from one backend, `"structure"` for two
+  traces from different backends or when `module_map=` is given.
+- `align="label"`: joins ops by their labels. Two traces from different backends refuse with
+  `backend_unsupported`, because labels do not correspond across backends.
+- `align="structure"`: pairs module calls by address and call order (a never-called container
+  such as an MLX list `layers.0` meets a torch `Sequential` child `0`; repeated calls pair in
+  order; an extra call is unpaired) and compares their recorded outputs. Across backends the
+  default tolerance is relative RMS error, `rms(a - b) <= atol + rtol * rms(a)`, with constants
+  from the narrower dtype of each pair (float32 `1e-4`, float16 `5e-2`, bfloat16 `0.75`).
+- `module_map=`: side-a to side-b module address prefixes for a port that renamed modules
+  (`{"blocks": "layers"}`); pairs made through it are `"asserted"`.
+
 ## Distributed capture and cross-rank merging
 
 **Distributed arming**: `tl.distributed.arm()` opts a process into first-class capture of explicit

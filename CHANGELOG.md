@@ -5,6 +5,16 @@
 
 <!-- version list -->
 
+### Added
+
+- **debug**: `tl.debug.compare` and `tl.debug.first_divergence` take `align=` (`"auto"`,
+  `"label"`, `"structure"`) and `module_map=`. Across backends (or with `align="structure"`) they
+  pair module calls by address and call order and compare recorded module outputs: each row says
+  how its pair was made (`alignment`) apart from what the values showed (`outcome`), a call with no
+  partner is a coverage gap, and the default tolerance comes from the narrower dtype (relative RMS
+  error; float32 `1e-4`, float16 `5e-2`, bfloat16 `0.75`). `rtol=` and `atol=` now default to
+  `None`, which on one backend means `1e-5` and `1e-8` as before.
+
 ### Fixed
 
 - **debug**: `tl.debug.compare` and `tl.debug.first_divergence` refuse two traces from
