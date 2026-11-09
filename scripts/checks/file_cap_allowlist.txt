@@ -749,7 +749,7 @@ torchlens/backends/jax/jaxpr.py::_region_metadata	100
 torchlens/backends/jax/jaxpr.py::_replay_while_decision	63
 torchlens/backends/jax/jaxpr.py::interpret_closed_jaxpr_with_inlining	339
 torchlens/backends/jax/jaxpr.py::interpret_closed_jaxpr_with_inlining.interpret_inner	252
-torchlens/backends/jax/modules.py	954
+torchlens/backends/jax/modules.py	932
 torchlens/backends/jax/modules.py::_walk_equinox_modules	79
 torchlens/backends/jax/modules.py::_walk_nnx_modules	76
 torchlens/backends/jax/modules.py::equinox_param_logs	74

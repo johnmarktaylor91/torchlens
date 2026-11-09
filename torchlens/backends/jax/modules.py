@@ -6,7 +6,7 @@ import base64
 from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field as dataclass_field, fields, is_dataclass
+from dataclasses import dataclass, field as dataclass_field
 from typing import Any
 
 from ..._data_classes.param import Param
@@ -16,6 +16,11 @@ from ...backends._finalize import (
     module_source_metadata as _module_source_metadata,
     numel_from_shape as _numel,
     value_nbytes as _nbytes,
+)
+from ._equinox_children import (
+    is_equinox_module,
+    iter_equinox_module_fields,
+    with_sequence_containers,
 )
 from ._return_ledger import JaxReturnLedger, note_return
 
@@ -97,27 +102,6 @@ class NnxModuleTree:
     module_returns: JaxReturnLedger = dataclass_field(default_factory=JaxReturnLedger)
 
 
-def is_equinox_module(value: object) -> bool:
-    """Return whether ``value`` is an Equinox module instance.
-
-    Parameters
-    ----------
-    value
-        Candidate root callable.
-
-    Returns
-    -------
-    bool
-        True when Equinox is importable and ``value`` is an ``eqx.Module``.
-    """
-
-    try:
-        import equinox as eqx
-    except ImportError:
-        return False
-    return isinstance(value, eqx.Module)
-
-
 def is_nnx_module(value: object) -> bool:
     """Return whether ``value`` is a Flax NNX module instance.
 
@@ -165,6 +149,7 @@ def discover_equinox_module_tree(model: Any) -> EquinoxModuleTree | None:
         address_by_id=address_by_id,
         modules_by_class=modules_by_class,
     )
+    metadata = with_sequence_containers(model, metadata)
     module_addresses = {
         alias for module_metadata in metadata.values() for alias in module_metadata["all_addresses"]
     }
@@ -709,7 +694,7 @@ def _walk_nnx_modules(
 
 
 def _iter_equinox_module_children(module: Any, address: str) -> Iterator[tuple[str, Any]]:
-    """Yield direct Equinox module children from dataclass fields and list or tuple fields.
+    """Yield direct Equinox module children (module, list and tuple fields) with addresses.
 
     Parameters
     ----------
@@ -724,15 +709,8 @@ def _iter_equinox_module_children(module: Any, address: str) -> Iterator[tuple[s
         Child address and child module.
     """
 
-    if not is_dataclass(module):
-        return
-    for field in fields(module):
-        child = getattr(module, field.name, None)
-        items = enumerate(child) if isinstance(child, (list, tuple)) else ((None, child),)
-        for index, item in items:
-            if is_equinox_module(item):
-                name = field.name if index is None else f"{field.name}.{index}"
-                yield _join_module_address(address, name), item
+    for name, child in iter_equinox_module_fields(module):
+        yield _join_module_address(address, name), child
 
 
 def _iter_nnx_module_children(module: Any, address: str) -> Iterator[tuple[str, Any]]:
