@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1769 modules, 708524 lines, 0 modules without a docstring.
+85 packages, 1769 modules, 708519 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 87 | 34336 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 87 | 34331 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
 
 ## Modules by package
@@ -2354,7 +2354,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (87 modules, 34336 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (87 modules, 34331 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2399,7 +2399,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_invariants_conditionals` | Conditional labels, events, and branch-edge invariants. | 670 |
 | `_invariants_connectivity` | Distance, connectivity, lookup, and contract helpers. | 841 |
 | `_invariants_distance_messages` | Min/max order failure message for the distance invariants. | 36 |
-| `_invariants_entry` | Invariant dispatch and backend-neutral identity checks. | 642 |
+| `_invariants_entry` | Invariant dispatch and backend-neutral identity checks. | 637 |
 | `_invariants_equivalence` | Equivalence, ordering, and loop-detection invariants. | 750 |
 | `_invariants_equivalence_index` | Index builders for the equivalence and loop-detection invariants. | 97 |
 | `_invariants_modules_params` | Module-call and parameter cross-reference invariants. | 601 |
