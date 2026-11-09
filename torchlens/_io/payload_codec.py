@@ -559,7 +559,7 @@ class MlxPayloadCodec:
             mx.eval(value)
         except (TypeError, ValueError, RuntimeError) as exc:
             raise TypeError(f"MLX array could not be realized before host copy: {exc}") from exc
-        array = np.asarray(value)
+        array = np.asarray(value.astype(mx.float32) if value.dtype == mx.bfloat16 else value)
         _raise_for_unsupported_array_dtype(array, backend_name=self.backend_name)
         return EncodedArray(
             array=np.ascontiguousarray(array),
