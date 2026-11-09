@@ -125,7 +125,7 @@ def test_paddle_recursion_guard_records_one_composite_op() -> None:
         backend="paddle",
     )
 
-    op_labels = [label for label in trace.op_labels if not label.startswith("input.")]
+    op_labels = [label for label in trace.op_labels if not trace[label].is_input]
     assert len(op_labels) == 1
     assert "linear" in op_labels[0]
 

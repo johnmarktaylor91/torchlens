@@ -246,6 +246,9 @@ def test_paddle_duplicate_trace_signature_group_is_ambiguous() -> None:
     # first. The expected signature here must go through the same
     # resolution, or it never matches the production grouping.
     label_to_raw = {op.label: op._label_raw for op in trace._layer_list}
+    label_to_raw.update(
+        {op.layer_label: op._label_raw for op in trace._layer_list if op.num_passes == 1}
+    )
     signature = PaddleIntermediateSignature(
         func_call_id=relu_ops[0].call.call_id,
         op_name=relu_ops[0].func_name,
