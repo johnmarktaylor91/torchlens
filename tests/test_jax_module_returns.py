@@ -146,8 +146,12 @@ def test_vmapped_child_is_unrecorded_and_parent_recorded() -> None:
     """A child under ``jax.vmap`` is unrecorded and disclosed; its parent's return is recorded."""
 
     model = _VmapRoot(_VmapBlock(eqx.nn.Linear(_WIDTH, _WIDTH, key=jax.random.PRNGKey(4))))
-    with pytest.warns(CaptureGapWarning, match=r"'block\.lin:1' returned arrays of an inner trace"):
+    with pytest.warns(
+        CaptureGapWarning, match=r"'block\.lin:1' returned arrays of an inner trace"
+    ) as caught:
         trace = tl.trace(model, _input(), backend="jax")
+    gaps = [w.message for w in caught if isinstance(w.message, CaptureGapWarning)]
+    assert [gap.fields["code"] for gap in gaps] == ["module_return_unrecorded"]
     _assert_unrecorded(trace, "block.lin:1")
     block_call = trace.module_calls["block:1"]
     assert len(block_call.output_ops) == 1

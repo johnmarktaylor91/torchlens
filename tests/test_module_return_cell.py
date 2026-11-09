@@ -724,8 +724,11 @@ def _trace_case(kit: Any, model: Any, case: str) -> Any:
         return kit.trace(model, kit.input())
     with pytest.warns(
         CaptureGapWarning, match=r"'block:1' returned 1 tensor\(s\) with no recorded op"
-    ):
-        return kit.trace(model, kit.input())
+    ) as caught:
+        trace = kit.trace(model, kit.input())
+    gaps = [w.message for w in caught if isinstance(w.message, CaptureGapWarning)]
+    assert [gap.fields["code"] for gap in gaps] == ["module_return_unrecorded"]
+    return trace
 
 
 def _check_trace(kit: Any, trace: Any, model: Any, seen: dict[str, list[Any]], case: str) -> None:

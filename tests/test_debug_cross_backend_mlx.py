@@ -163,6 +163,11 @@ def test_label_join_across_real_backends_refuses() -> None:
 def test_bfloat16_twin_compares_at_the_bfloat16_tolerance() -> None:
     """MLX bfloat16 values read without crashing and keep their dtype for the tolerance."""
 
+    ones = mx.ones((4, 4), dtype=mx.bfloat16)
+    try:
+        mx.eval(mx.addmm(ones, ones, ones))
+    except (RuntimeError, ValueError) as exc:  # Linux CPU AddMM supports float32 only
+        pytest.skip(f"this MLX device refuses a bfloat16 matmul: {exc}")
     torch_trace, mlx_trace = _pair(dtype="bfloat16")
     assert tl.debug.first_divergence(torch_trace, mlx_trace) is None
     paired = tl.debug.compare(torch_trace, mlx_trace).to_pandas()
