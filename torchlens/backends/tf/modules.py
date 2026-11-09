@@ -11,11 +11,10 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 from ..._data_classes.param import Param
-from ..._data_classes.trace import Trace
 from ..._ir.events import ModuleFrame
 from ..._ir.refs import DeviceRef, DtypeRef
 from .._finalize import numel_from_shape as _numel, value_nbytes as _nbytes
-from .._module_returns import ModuleReturnLedger, attach_object_module_logs_with_returns
+from .._module_returns import ModuleReturnLedger
 from ._tensor_leaves import _is_tf_tensor_like
 from ._tensor_probe import _tensor_ref_key
 
@@ -44,7 +43,7 @@ class TFModuleTree:
         Per-module call counts observed during capture.
     forward_args_by_call
         Forward call args keyed by ``(address, call_index)``.
-    returns
+    module_returns
         Tensors each module call returned, recorded at module exit.
     """
 
@@ -57,7 +56,7 @@ class TFModuleTree:
     variables_by_id: dict[int, Any]
     call_counts: dict[str, int]
     forward_args_by_call: dict[tuple[str, int], tuple[tuple[Any, ...], dict[str, Any]]]
-    returns: ModuleReturnLedger = field(default_factory=ModuleReturnLedger)
+    module_returns: ModuleReturnLedger = field(default_factory=ModuleReturnLedger)
 
 
 def discover_tf_module_tree(model: Any, tf: Any) -> TFModuleTree | None:
@@ -212,28 +211,12 @@ def returns_hook(session: Any) -> Callable[..., Any] | None:
 
         if user_hook is not None:
             output = user_hook(frame, module_type, output, module_stack)
-        tree.returns.record(
+        tree.module_returns.record(
             frame.address, frame.call_index, output, is_leaf=is_leaf, label_of=label_of
         )
         return output
 
     return hook
-
-
-def attach_tf_module_logs(trace: Trace, tree: TFModuleTree, **shared_options: Any) -> None:
-    """Build TensorFlow object-module logs with module outputs from the recorded returns.
-
-    Parameters
-    ----------
-    trace
-        Trace whose ops are finalized and whose module logs are not yet built.
-    tree
-        Discovered module tree carrying the capture's ledger.
-    **shared_options
-        Keyword options of ``_finalize.attach_object_module_logs``.
-    """
-
-    attach_object_module_logs_with_returns(trace, tree, returns=tree.returns, **shared_options)
 
 
 def _variable_nbytes(variable: Any, shape: tuple[int, ...]) -> int:

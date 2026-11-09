@@ -51,6 +51,7 @@ from .._entry_refusals import refuse_if_bad_max_intermediate_grads
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
+    attach_object_module_logs_with_returns,
     finalize_single_pass_trace,
     mark_output_label,
     mirror_param_derived_grads,
@@ -105,7 +106,6 @@ from .derived_grads import (
 from .interventions import PaddleInterventionCapture, PaddleInterventionRuntime
 from .model_prep import (
     PaddleModuleTree,
-    attach_paddle_module_logs,
     cleanup_model_session,
     discover_paddle_module_tree,
     prepare_model_once,
@@ -1837,7 +1837,7 @@ class PaddleBackend:
     def _attach_object_module_logs(self, trace: Trace, tree: PaddleModuleTree) -> None:
         """Build public module logs for a Paddle object-module trace."""
 
-        attach_paddle_module_logs(
+        attach_object_module_logs_with_returns(
             trace,
             tree,
             normalize_module_calls=normalize_op_module_calls,

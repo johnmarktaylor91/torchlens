@@ -45,9 +45,9 @@ Paddle preview backend: eager dygraph wrapper capture. It fills the backend prot
   `prepare_model_session()` installs layer pre/post hooks,
   `cleanup_model_session()` removes them.
 - The post-hook records each layer call's returned tensors (after any module-exit
-  intervention) into `PaddleModuleTree.returns` through `record_layer_return()`, labels read
-  at exit from the wrapper-bound backend (`wrappers.bound_paddle_backend()`);
-  `attach_paddle_module_logs()` builds module logs from it, so `Module.out` works
+  intervention) into `PaddleModuleTree.module_returns` through `record_layer_return()`, labels
+  read at exit from the wrapper-bound backend (`wrappers.bound_paddle_backend()`); the shared
+  `attach_object_module_logs_with_returns()` builds module logs from it, so `Module.out` works
   (contract: `../_module_returns.py`).
 
 ## tensor_store.py

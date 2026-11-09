@@ -32,6 +32,7 @@ from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
+    attach_object_module_logs_with_returns,
     finalize_single_pass_trace,
     mark_output_label,
     normalize_op_module_calls,
@@ -49,7 +50,7 @@ from .._options import (
 )
 from ..registry import BackendUnsupportedError, get_backend_spec
 from .funcgraph import capture_static_funcgraph
-from .modules import TFModuleTree, attach_tf_module_logs, discover_tf_module_tree, tf_param_logs
+from .modules import TFModuleTree, discover_tf_module_tree, tf_param_logs
 from .op_callback_capture import TFEagerCaptureSession, warm_up_tf_callable
 
 TFExecutionMode = Literal["eager", "graph_only"]
@@ -1228,7 +1229,7 @@ def _attach_object_module_logs(trace: Trace, tree: TFModuleTree) -> None:
         Populates module hierarchy logs.
     """
 
-    attach_tf_module_logs(
+    attach_object_module_logs_with_returns(
         trace,
         tree,
         normalize_module_calls=normalize_op_module_calls,

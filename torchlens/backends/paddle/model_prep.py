@@ -1,10 +1,10 @@
 """Paddle model preparation helpers for technical-preview capture.
 
 Besides discovering the layer tree and installing per-session forward hooks, the post-hook
-records each layer call's returned leaves into the tree's ``ModuleReturnLedger`` (labels read
-at exit from the label store of the backend the wrappers are bound to), and
-:func:`attach_paddle_module_logs` builds module logs from that ledger, so ``Module.out`` works
-on Paddle; the contract is in ``torchlens/backends/_module_returns.py``.
+records each layer call's returned leaves into the tree's ``module_returns`` ledger (labels read
+at exit from the label store of the backend the wrappers are bound to), from which the shared
+builder takes module outputs, so ``Module.out`` works on Paddle; the contract is in
+``torchlens/backends/_module_returns.py``.
 """
 
 from __future__ import annotations
@@ -14,10 +14,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ... import _state
-from ..._data_classes.trace import Trace
 from ..._ir.events import ModuleFrame
 from .._finalize import join_module_address as _join_module_address, nearest_metadata_parent
-from .._module_returns import ModuleReturnLedger, attach_object_module_logs_with_returns
+from .._module_returns import ModuleReturnLedger
 from .interventions import _apply_module_exit
 from .wrappers import bound_paddle_backend
 
@@ -44,7 +43,7 @@ class PaddleModuleTree:
         Forward args keyed by ``(primary_address, call_index)``.
     hook_handles
         Paddle hook handles installed for this capture session.
-    returns
+    module_returns
         Leaves each layer call returned, recorded at module exit.
     """
 
@@ -58,7 +57,7 @@ class PaddleModuleTree:
         default_factory=dict
     )
     hook_handles: list[Any] = field(default_factory=list)
-    returns: ModuleReturnLedger = field(default_factory=ModuleReturnLedger)
+    module_returns: ModuleReturnLedger = field(default_factory=ModuleReturnLedger)
 
 
 def discover_paddle_module_tree(model: object) -> PaddleModuleTree | None:
@@ -300,7 +299,9 @@ def _make_post_hook(tree: PaddleModuleTree) -> Any:
             frame = trace._paddle_module_stack[-1]
             try:
                 returned = _apply_module_exit(trace, frame, output)
-                record_layer_return(tree.returns, frame, output if returned is None else returned)
+                record_layer_return(
+                    tree.module_returns, frame, output if returned is None else returned
+                )
                 return returned
             finally:
                 trace._paddle_module_stack.pop()
@@ -328,22 +329,6 @@ def record_layer_return(ledger: ModuleReturnLedger, frame: ModuleFrame, value: o
     is_tensor = getattr(backend, "is_tensor")
     get_label = getattr(backend, "tensor_store").get_label
     ledger.record(frame.address, frame.call_index, value, is_leaf=is_tensor, label_of=get_label)
-
-
-def attach_paddle_module_logs(trace: Trace, tree: PaddleModuleTree, **shared_options: Any) -> None:
-    """Build Paddle object-module logs with module outputs from the recorded returns.
-
-    Parameters
-    ----------
-    trace
-        Trace whose ops are finalized and whose module logs are not yet built.
-    tree
-        Discovered Paddle module tree carrying the capture's ledger.
-    **shared_options
-        Keyword options of ``_finalize.attach_object_module_logs``.
-    """
-
-    attach_object_module_logs_with_returns(trace, tree, returns=tree.returns, **shared_options)
 
 
 def _is_paddle_layer(value: object) -> bool:
