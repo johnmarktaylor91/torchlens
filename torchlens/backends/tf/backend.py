@@ -32,7 +32,7 @@ from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
-    attach_object_module_logs,
+    attach_object_module_logs_with_returns,
     finalize_single_pass_trace,
     mark_output_label,
     normalize_op_module_calls,
@@ -1229,7 +1229,7 @@ def _attach_object_module_logs(trace: Trace, tree: TFModuleTree) -> None:
         Populates module hierarchy logs.
     """
 
-    attach_object_module_logs(
+    attach_object_module_logs_with_returns(
         trace,
         tree,
         normalize_module_calls=normalize_op_module_calls,
