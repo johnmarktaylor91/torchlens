@@ -106,8 +106,11 @@ def test_silu_spelled_by_hand_agrees() -> None:
 
 
 def test_gelu_for_silu_is_placed_on_the_activation_op() -> None:
+    # The first differing call is ``mlp.down_proj`` (its input already differs); the
+    # difference is localized inside ``mlp``, whose inputs agree, and placed there.
     row = tl.debug.first_divergence(*_pair("gelu"))
-    assert row is not None and str(row["op"]).startswith("mlp:")
+    assert row is not None and str(row["op"]).startswith("mlp.down_proj:")
+    assert "op placement inside mlp:" in str(row["reason"]), row["reason"]
     match = _SINGLE.search(str(row["reason"]))
     assert match is not None, row["reason"]
     assert match["a"].startswith("silu_") and match["b"].startswith("gelu_"), row["reason"]
