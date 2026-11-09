@@ -58,7 +58,7 @@ from .._entry_refusals import refuse_if_bad_max_intermediate_grads
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
-    attach_object_module_logs,
+    attach_object_module_logs_with_returns,
     finalize_single_pass_trace,
     join_module_address as _join_module_address,
     mark_output_label,
@@ -2224,7 +2224,7 @@ class MLXBackend:
             ``trace.modules`` is populated by the shared module-log builder.
         """
 
-        attach_object_module_logs(
+        attach_object_module_logs_with_returns(
             trace,
             tree,
             normalize_module_calls=normalize_op_module_calls,

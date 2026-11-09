@@ -12,6 +12,7 @@ from .._finalize import (
     module_source_metadata as _module_source_metadata,
     nearest_metadata_parent,
 )
+from .._module_returns import ModuleReturnLedger
 
 
 @dataclass
@@ -36,6 +37,8 @@ class MLXModuleTree:
         Per-primary-address call counts recorded during capture.
     forward_args_by_call
         Forward args keyed by ``(primary_address, call_index)``.
+    module_returns
+        Leaves each module call returned, recorded at module exit.
     """
 
     root: object
@@ -48,6 +51,7 @@ class MLXModuleTree:
     forward_args_by_call: dict[tuple[str, int], tuple[tuple[Any, ...], dict[str, Any]]] = field(
         default_factory=dict
     )
+    module_returns: ModuleReturnLedger = field(default_factory=ModuleReturnLedger)
 
 
 def iter_named_modules(model: object) -> Iterator[tuple[str, object]]:
