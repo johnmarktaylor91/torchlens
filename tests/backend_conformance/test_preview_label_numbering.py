@@ -226,11 +226,7 @@ def test_preview_labels_follow_torch_rule(backend: str) -> None:
         assert inputs and inputs[0].label == "input_1:1"
         assert all(op.step_index == 0 for op in inputs)
         steps = [op.step_index for op in trace._layer_list if not op.is_input]
-        first_pass = [
-            op.step_index for op in trace._layer_list if not op.is_input and op.pass_number == 1
-        ]
-        assert first_pass == list(range(1, len(first_pass) + 1))
-        assert min(steps) == 1
+        assert steps == list(range(1, len(steps) + 1))
         for op in trace._layer_list:
             assert op.short_label == f"{op.type}_{op.type_index}:{op.pass_number}"
             assert trace[op.label] is op

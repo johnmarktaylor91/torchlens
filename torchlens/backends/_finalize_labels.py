@@ -10,8 +10,11 @@ preview finalizers follow it so the labels of matching ops agree across backends
   order; later passes of a recurrent layer inherit them;
 - input and buffer ops take step 0 and no step in their label (``input_1``), output
   ops have no step in their label (``output_1``);
-- every other op takes the next step number from 1 (``linear_1_1``);
-- the short label drops the step (``linear_1``).
+- every other layer takes the next step number from 1 (``linear_1_1``);
+- the short label drops the step (``linear_1``);
+- the ``step_index`` field is set afterwards per op, like torch's
+  ``_log_final_info_for_layers``: 0 for inputs and buffers, else a count from 1 over every
+  other op, so later passes of a recurrent layer get their own (unique) step.
 
 The raw label stays a lookup key, so an address-named input (``input.arg_0``)
 still resolves.
@@ -21,7 +24,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from .._record_type import record_type
@@ -46,7 +49,9 @@ class PreviewFinalLabel:
     type_index:
         1-based count of this op type's layers so far.
     step_index:
-        1-based step over layers that are not inputs or buffers; 0 for those.
+        The op's own ``step_index``: 1-based over ops that are not inputs or buffers,
+        0 for those. Equal to the label's step for an op at its layer's first pass
+        when no recurrent pass came before it.
     """
 
     layer_label: str
@@ -71,12 +76,13 @@ def torch_rule_final_labels(
     Returns
     -------
     dict[str, PreviewFinalLabel]
-        The final numbering of every raw op; passes of one layer share one entry.
+        The final numbering of every raw op; passes of one layer share their labels.
     """
 
     by_layer: dict[str, PreviewFinalLabel] = {}
     type_counts: defaultdict[str, int] = defaultdict(int)
     step = 0
+    op_step = 0
     finals: dict[str, PreviewFinalLabel] = {}
     for raw_label, op_log in raw_ops.items():
         assignment = assignments.get(raw_label) if assignments is not None else None
@@ -94,7 +100,11 @@ def torch_rule_final_labels(
             layer_label = short if op_type in _STEPLESS_LABEL_TYPES else f"{short}_{step_index}"
             final = PreviewFinalLabel(layer_label, short, type_index, step_index)
             by_layer[layer_key] = final
-        finals[raw_label] = final
+        op_step_index = 0
+        if str(record_type(op_log)) not in _UNSTEPPED_TYPES:
+            op_step += 1
+            op_step_index = op_step
+        finals[raw_label] = replace(final, step_index=op_step_index)
     return finals
 
 
