@@ -1,0 +1,115 @@
+"""JAX's op spelling list (see :mod:`torchlens.backends._op_spelling`).
+
+The JAX backend records each jaxpr equation under its primitive name, with no
+fixed wrapper inventory, so the list covers the primitives its conformance
+roster records plus the common ``jax.lax`` primitives; an unlisted primitive
+falls back to its own name with family ``other``. Used only for candidate
+preference and drawing labels; never for pairing.
+"""
+
+from __future__ import annotations
+
+_SAME = [
+    "add",
+    "sub",
+    "mul",
+    "div",
+    "neg",
+    "abs",
+    "sign",
+    "floor",
+    "ceil",
+    "round",
+    "exp",
+    "exp2",
+    "log",
+    "log1p",
+    "expm1",
+    "tanh",
+    "sin",
+    "cos",
+    "tan",
+    "sqrt",
+    "rsqrt",
+    "pow",
+    "square",
+    "erf",
+    "erfc",
+    "argmax",
+    "argmin",
+    "cumsum",
+    "cumprod",
+    "eq",
+    "ne",
+    "lt",
+    "le",
+    "gt",
+    "ge",
+    "and",
+    "or",
+    "xor",
+    "clamp",
+    "reshape",
+    "squeeze",
+    "pad",
+    "scatter",
+    "sort",
+    "split",
+]
+
+#: Primitive name to the canonical torch spelling.
+SPELLINGS: dict[str, str] = {name: name for name in _SAME} | {
+    "rem": "remainder",
+    "max": "maximum",
+    "min": "minimum",
+    "integer_pow": "pow",
+    "logistic": "sigmoid",
+    "erf_inv": "erfinv",
+    "dot_general": "matmul",
+    "conv_general_dilated": "convolution",
+    "reduce_sum": "sum",
+    "reduce_max": "amax",
+    "reduce_min": "amin",
+    "reduce_prod": "prod",
+    "not": "logicalnot",
+    "select_n": "where",
+    "broadcast_in_dim": "expand",
+    # lax.transpose takes a full permutation (torch.permute).
+    "transpose": "permute",
+    "expand_dims": "unsqueeze",
+    "concatenate": "cat",
+    "slice": "getitem",
+    "dynamic_slice": "getitem",
+    "gather": "getitem",
+    "dynamic_update_slice": "setitem",
+    "scatter-add": "scatteradd",
+    "convert_element_type": "to",
+    "iota": "arange",
+    "rev": "flip",
+    "copy": "clone",
+    "copy_p": "clone",
+    "stop_gradient": "detach",
+    "top_k": "topk",
+}
+
+#: Primitives with no canonical torch spelling, and their families.
+UNMAPPED: dict[str, str] = {
+    "reduce_window_max": "pool",
+    "reduce_window_sum": "pool",
+    "reduce_window": "pool",
+    "reduce_and": "reduce",
+    "reduce_or": "reduce",
+    "reduce_precision": "cast",
+    "is_finite": "compare",
+    "pjit": "region",
+    "jit": "region",
+    "closed_call": "region",
+    "custom_jvp_call": "region",
+    "custom_vjp_call": "region",
+    "custom_vjp_call_jaxpr": "region",
+    "remat": "region",
+    "checkpoint": "region",
+    "cond": "region",
+    "while": "region",
+    "scan": "region",
+}
