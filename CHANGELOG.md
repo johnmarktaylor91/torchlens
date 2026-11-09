@@ -17,6 +17,11 @@
   `df.attrs["backends"]`. PyTorch and MLX are admitted; a
   module that returns its input unchanged compares through the returned value. `rtol=` and
   `atol=` now default to `None`, which on one backend means `1e-5` and `1e-8` as before.
+- **debug**: across backends, `tl.debug.first_divergence` places the first difference on an
+  operation or operation group inside the module that localizes it (`op: a silu_... against b
+  gelu_...` in the row's `reason`). Graph structure pairs the operations, values only confirm
+  agreement, and a fused operation against a decomposed one is named as a group. Each backend keeps
+  a private list of its op spellings for labels and tie-breaks only.
 
 ### Fixed
 

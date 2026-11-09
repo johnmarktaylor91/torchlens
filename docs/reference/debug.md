@@ -695,6 +695,23 @@ decided. `compare` returns every row; its coverage line counts module calls on b
 (paired, unpaired, boundary unrecorded, unresolved) and says when either run trained or a random
 producer ran. A saved and reloaded pair gives the same answer with no live model.
 
+**Inside the module.** When modules are paired, `first_divergence` also places the difference
+on an operation, or a small operation group, inside the module that localizes it: the first
+differing module when its inputs agree, else the nearest enclosing differing module whose inputs
+agree (the computation between matched boundaries lives there). Graph structure pairs the
+operations: for an operation whose inputs are paired, the partner is the other side's operation
+that consumes exactly the partners of those inputs, chosen without reading its value. Child
+modules that already agree count as paired boundaries. Values only confirm agreement, or close a
+decomposition gap (one fused operation on one side, several on the other, such as `linear`
+against `matmul` and `add`) when a later operation agrees. A difference is read only where both
+sides' structure meets again: the next operation that consumes the open ones, or the module's
+recorded outputs. The per-backend spelling lists (MLX `subtract` is `sub`, Paddle
+`functional.layer_norm` is `layernorm`) only break a tie between structurally valid candidates,
+and the row says so. The reason gains one phrase: `op: a <op> against b <op>` for one operation
+per side, or `op group: a [...] against b [...]` when one side spells the computation in several
+operations; TorchLens names the group and does not guess which operation inside it is wrong.
+Gaps that agreed, spelling tie-breaks and ambiguous candidates are listed after it.
+
 ```text
 >>> row = tl.debug.first_divergence(torch_trace, mlx_trace)
 >>> row["op"], row["module_b"], row["alignment"], row["outcome"]
