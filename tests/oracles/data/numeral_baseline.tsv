@@ -3394,6 +3394,7 @@ docs-md	docs/maintainers/where.md	1274
 docs-md	docs/maintainers/where.md	1278
 docs-md	docs/maintainers/where.md	1279
 docs-md	docs/maintainers/where.md	128
+docs-md	docs/maintainers/where.md	12828
 docs-md	docs/maintainers/where.md	1283
 docs-md	docs/maintainers/where.md	1284
 docs-md	docs/maintainers/where.md	129
@@ -4049,6 +4050,7 @@ docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	709271
+docs-md	docs/maintainers/where.md	707553
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	711
 docs-md	docs/maintainers/where.md	712
@@ -5043,9 +5045,11 @@ docs-md	docs/reference/debug.md	128
 docs-md	docs/reference/debug.md	128,
 docs-md	docs/reference/debug.md	15
 docs-md	docs/reference/debug.md	16
+docs-md	docs/reference/debug.md	163
 docs-md	docs/reference/debug.md	18
 docs-md	docs/reference/debug.md	2.0
 docs-md	docs/reference/debug.md	2.6
+docs-md	docs/reference/debug.md	20
 docs-md	docs/reference/debug.md	20,000
 docs-md	docs/reference/debug.md	224,
 docs-md	docs/reference/debug.md	256,
@@ -5057,6 +5061,7 @@ docs-md	docs/reference/debug.md	32
 docs-md	docs/reference/debug.md	32,
 docs-md	docs/reference/debug.md	384,
 docs-md	docs/reference/debug.md	4.0
+docs-md	docs/reference/debug.md	500
 docs-md	docs/reference/debug.md	512,
 docs-md	docs/reference/debug.md	6.5
 docs-md	docs/reference/debug.md	64
@@ -5196,6 +5201,7 @@ docs-md	docs/reference/glossary.md	32
 docs-md	docs/reference/glossary.md	36
 docs-md	docs/reference/glossary.md	4.0
 docs-md	docs/reference/glossary.md	4096
+docs-md	docs/reference/glossary.md	500
 docs-md	docs/reference/glossary.md	512
 docs-md	docs/reference/glossary.md	60
 docs-md	docs/reference/glossary.md	64
@@ -7547,7 +7553,6 @@ package-docstrings	torchlens/debug/_gradients.py	11
 package-docstrings	torchlens/debug/_gradients.py	128
 package-docstrings	torchlens/debug/_gradients.py	16
 package-docstrings	torchlens/debug/_graph.py	0.75
-package-docstrings	torchlens/debug/_graph.py	10
 package-docstrings	torchlens/debug/_graph.py	16
 package-docstrings	torchlens/debug/_graph.py	1_1
 package-docstrings	torchlens/debug/_graph.py	2_3
@@ -7575,8 +7580,9 @@ package-docstrings	torchlens/debug/_rerun.py	64
 package-docstrings	torchlens/debug/_xb_op_place.py	2.2
 package-docstrings	torchlens/debug/_xb_op_walk.py	2.1
 package-docstrings	torchlens/debug/_xb_tolerance.py	1.0
-package-docstrings	torchlens/debug/_xb_tolerance.py	10
 package-docstrings	torchlens/debug/_xb_tolerance.py	135
+package-docstrings	torchlens/debug/_xb_tolerance.py	16
+package-docstrings	torchlens/debug/_xb_tolerance.py	163
 package-docstrings	torchlens/debug/_xb_tolerance.py	19
 package-docstrings	torchlens/debug/_xb_tolerance.py	2.3
 package-docstrings	torchlens/debug/_xb_tolerance.py	22
@@ -10577,6 +10583,7 @@ test-names	tests/test_conditional_invariants.py	14_
 test-names	tests/test_conditional_invariants.py	15_
 test-names	tests/test_dataclass_defaults_collect.py	311_
 test-names	tests/test_debug_cross_backend_mlx.py	16_
+test-names	tests/test_debug_cross_backend_modules.py	32_
 test-names	tests/test_distributed_c0_core.py	10
 test-names	tests/test_distributed_census_topologies.py	10
 test-names	tests/test_dtype_range_audit.py	16_

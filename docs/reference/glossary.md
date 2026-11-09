@@ -2301,7 +2301,8 @@ looking at its values; a module or op with no partner is a coverage gap, never a
   order; an extra call is unpaired) and compares their recorded outputs. Across backends the
   default tolerance is relative RMS error, `rms(a - b) <= atol + rtol * rms(a)`, with constants
   from the narrower dtype of each pair (float32 `1e-4`, float16 `5e-2`, bfloat16 `0.75`) and
-  `atol` 0, except `10 * eps` times the smallest side-a input rms when the reference is all zero. Module frames add
+  `atol` 0, except `c * eps` times the smallest side-a input rms when the reference is all zero
+  (`c` by the narrower dtype: float32 `500`, float16 `10`, bfloat16 `20`). Module frames add
   `df.attrs["coverage"]`, `df.attrs["align"]` (the pairing mode that ran) and
   `df.attrs["backends"]` (for example `("torch", "mlx")`).
 - `module_map=`: side-a to side-b module address prefixes for a port that renamed modules
