@@ -9,7 +9,7 @@ from typing import Any
 
 from ... import _state
 from ..._ir.events import ModuleFrame
-from .interventions import _apply_module_exit, _module_capture_op
+from .interventions import _module_capture_op, apply_module_exit_and_record
 from .model_prep import MLXModuleTree
 
 _ACTIVE_TAP_OBSERVER: object | None = None
@@ -508,7 +508,7 @@ class _MLXWrapperRegistry:
                     output = _call_and_emit_guarded(
                         trace, backend, capture_op, original, args, kwargs
                     )
-                return _apply_module_exit(trace, backend, frame, output)
+                return apply_module_exit_and_record(trace, backend, frame, output, module_tree)
             finally:
                 if frame is not None:
                     getattr(trace, "_mlx_module_stack").pop()

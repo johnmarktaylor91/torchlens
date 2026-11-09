@@ -62,6 +62,7 @@ from ._lookup_kinds import converted, module_call_owning_op, module_for_key, mod
 from ._module_accessor_filters import ModuleAccessorFilters
 from ._module_call_rows import _module_call_log_to_row
 from ._module_facade_fields import _MODULE_CALL_STORED_FIELDS, _MODULE_STORED_FIELDS
+from ._module_passthrough import single_output_refusal
 from ._moe_views import _ModuleRouting
 from ._runtime_handles import runtime_handle_from_trace
 from .attribute_write import AttributeWrite
@@ -883,13 +884,11 @@ class ModuleCall:
         """Return one output field, requiring exactly one output."""
 
         values = self._output_values(field_name)
-        if len(values) != 1:
+        refusal = single_output_refusal(self, _live_call_trace(self), len(values))
+        if refusal is not None:
             from ..intervention.errors import MultiOutputModuleError
 
-            raise MultiOutputModuleError(
-                f"ModuleCall '{self.label}' has {len(values)} outputs; "
-                "use .outs[i] or resolve .output_ops[i]."
-            )
+            raise MultiOutputModuleError(refusal)
         return values[0]
 
     @property

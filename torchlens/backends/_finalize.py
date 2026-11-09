@@ -10,7 +10,6 @@ from typing import Any, Literal, TypeAlias, cast
 
 from .._capture._nonfinite_prefix import strip_raw_label_suffix
 from .._data_classes._compaction import compact_op_metadata
-from .._data_classes._site_key import SiteKeyMinter
 from .._data_classes._trace_state_io import fill_unset_declared_fields
 from .._data_classes.layer import Layer
 from .._data_classes.module import ModuleAccessor
@@ -22,11 +21,12 @@ from .._postprocess._recurrence import compute_preview_recurrence_assignments, r
 from .._postprocess.finalization import _build_module_logs, _build_root_module_log
 from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from .._quantities import Bytes
-from .._utils._record_group_table import record_member
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from ._constants import ConstantLedger, apply_constants_rule
 from ._finalize_distances import compute_preview_input_output_distances
+from ._finalize_site_keys import _mint_preview_site_keys
 from ._finalize_totals import _count_trace_ops, _update_param_totals_from_layers
+from ._module_returns import ModuleReturnLedger, attach_output_paths, flag_returned_ops
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -363,6 +363,36 @@ def attach_object_module_logs(
     _build_module_logs(trace)
 
 
+def attach_object_module_logs_with_returns(
+    trace: Trace,
+    tree: Any,
+    *,
+    returns: ModuleReturnLedger | None = None,
+    **shared_options: Any,
+) -> None:
+    """Build object-module logs with module outputs taken from recorded module returns.
+
+    The contract a backend follows is in :mod:`torchlens.backends._module_returns`.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose ops are finalized and whose module logs are not yet built.
+    tree:
+        Backend module tree, passed through to :func:`attach_object_module_logs`.
+    returns:
+        The capture's ledger; ``None`` reads ``tree.module_returns`` (absent means no
+        recorded returns).
+    **shared_options:
+        Keyword options of :func:`attach_object_module_logs`.
+    """
+
+    ledger = returns if returns is not None else getattr(tree, "module_returns", None)
+    flag_returned_ops(trace, ledger)
+    attach_object_module_logs(trace, tree, **shared_options)
+    attach_output_paths(trace, ledger)
+
+
 def populate_object_module_build_data(
     trace: Trace,
     *,
@@ -435,37 +465,6 @@ def populate_object_module_build_data(
                 seen_pass_children[parent_call_label].add(call_label)
                 mbd["module_pass_children"][parent_call_label].append(call_label)
             parent_call_label = call_label
-
-
-def _mint_preview_site_keys(trace: Trace) -> None:
-    """Mint the policy-independent ``site_key_v1`` on every retained preview op.
-
-    Runs before recurrence assignments are computed (site keys are structural
-    facts from raw records, identical whether grouping runs or not -- P4), so
-    the preview node builder copies the minted key into its
-    ``RecurrenceNode`` and the ungrouped path carries keys all the same.
-    Orphan ops consume no ordinals and keep ``site_key=None``.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ``_raw_graph_ws.raw_layer_dict`` holds materialized
-        preview ops in execution order.
-    """
-
-    minter = SiteKeyMinter()
-    for op_log in trace._raw_graph_ws.raw_layer_dict.values():
-        if record_member(op_log, "is_orphan", False):
-            continue
-        op_log._graph_site_key = minter.mint(
-            getattr(op_log, "modules", None) or (),
-            str(getattr(op_log, "type", "") or ""),
-            (
-                getattr(op_log, "multi_output_index", None)
-                if getattr(op_log, "in_multi_output", False)
-                else None
-            ),
-        )
 
 
 def _finalize_single_op(
