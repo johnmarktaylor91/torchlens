@@ -339,19 +339,11 @@ def test_module_outputs_match_actual_returns(
     _check_trace(kit, tl.load(path), model, seen, case)
 
 
-def _saved_bytes(path: Path) -> int:
-    """Return the total size of a saved artifact (file or directory)."""
-
-    if path.is_file():
-        return path.stat().st_size
-    return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
-
-
 @pytest.mark.parametrize("kit_class", KITS)
 def test_return_recording_adds_no_ops(
-    kit_class: type[TorchKit], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    kit_class: type[TorchKit], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Recording module returns adds no ops; the saved-bytes delta is reported."""
+    """Recording module returns adds no ops and no saved activation bytes."""
 
     kit = kit_class()
     kit.load()
@@ -363,13 +355,11 @@ def test_return_recording_adds_no_ops(
             monkeypatch.undo()
         model, _seen = _build(kit, "nested")
         trace = kit.trace(model, kit.input())
-        path = tmp_path / f"{kit.name}_{arm}.tlspec"
-        trace.save(path)
-        counts[arm] = (len(trace.ops), _saved_bytes(path))
-    assert counts["on"][0] == counts["off"][0]
+        counts[arm] = (len(trace.ops), int(trace._cost_total_activation_memory))
+    assert counts["on"] == counts["off"]
     line = (
-        f"{kit.name}: ops {counts['off'][0]} -> {counts['on'][0]}, "
-        f"saved bytes {counts['off'][1]} -> {counts['on'][1]}\n"
+        f"{kit.name}: ops recorded {counts['off'][0]} -> {counts['on'][0]}, "
+        f"activation bytes saved {counts['off'][1]} -> {counts['on'][1]}\n"
     )
     report = os.environ.get("TL_RETURN_CELL_REPORT")
     if report:

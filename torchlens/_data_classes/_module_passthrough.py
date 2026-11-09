@@ -28,7 +28,9 @@ def passthrough_op_labels(call: Any, trace: Any) -> list[str]:
     Returns
     -------
     list[str]
-        Op labels in execution order; empty when the call returned none.
+        Op labels in execution order; empty when the call returned none. Torch's
+        trace-output pseudo-op copies its producer's module calls without the
+        ``is_module_output`` flag, so it never counts.
     """
 
     if trace is None:
@@ -37,7 +39,8 @@ def passthrough_op_labels(call: Any, trace: Any) -> list[str]:
     return [
         op.label
         for op in trace._layer_list
-        if call.label in (op._module_context_output_of_module_calls or ())
+        if op._module_context_is_module_output
+        and call.label in (op._module_context_output_of_module_calls or ())
         and op.label not in inside
     ]
 

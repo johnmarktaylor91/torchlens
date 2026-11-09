@@ -176,13 +176,15 @@ def returned_op_labels(trace: Trace, call_label: str) -> list[str]:
     -------
     list[str]
         Final op labels in execution order, each once. Unlike ``ModuleCall.output_ops``
-        this includes returned inputs.
+        this includes returned inputs. Ops not flagged ``is_module_output`` (torch's
+        trace-output pseudo-op, which copies its producer's module calls) are excluded.
     """
 
     return [
         op.label
         for op in trace._layer_list
-        if call_label in (op._module_context_output_of_module_calls or ())
+        if op._module_context_is_module_output
+        and call_label in (op._module_context_output_of_module_calls or ())
     ]
 
 
