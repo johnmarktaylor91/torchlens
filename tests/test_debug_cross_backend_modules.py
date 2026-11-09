@@ -794,16 +794,16 @@ def _returning(label: str, *calls: str) -> SimpleNamespace:
 @pytest.mark.parametrize(
     ("own", "returned", "expected"),
     [
-        ((), ("linear_1_1:1",), ("linear_1_1:1",)),
-        (("relu_1_2:1",), ("linear_1_1:1",), ("relu_1_2:1", "linear_1_1:1")),
-        ((), ("linear_1_1:1", "linear_2_2:1"), ()),
+        ((), ("linear_1_1:1",), (("linear_1_1:1",), True)),
+        (("relu_1_2:1",), ("linear_1_1:1",), (("relu_1_2:1", "linear_1_1:1"), False)),
+        ((), ("linear_1_1:1", "linear_2_2:1"), ((), True)),
     ],
     ids=["passthrough", "own-then-returned", "two-returned-unresolved"],
 )
 def test_recorded_passthrough_is_read_as_the_call_output(
-    own: tuple[str, ...], returned: tuple[str, ...], expected: tuple[str, ...]
+    own: tuple[str, ...], returned: tuple[str, ...], expected: tuple[tuple[str, ...], bool]
 ) -> None:
-    """A returned input reads as the call's output after its own outputs; two refuse to order."""
+    """A returned input reads as the call's output; beside its own output the order is unknown."""
 
     call = SimpleNamespace(address="drop", label="drop:1", ops=list(own), output_ops=list(own))
     trace = SimpleNamespace(
