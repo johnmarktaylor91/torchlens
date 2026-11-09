@@ -97,17 +97,14 @@ def collapsed_pairs(
     return sorted(equal, key=lambda pair: pair.a.depth if pair.a is not None else 0)
 
 
-def seeds(root_a: CallInfo, root_b: CallInfo, collapsed: list[CallPair]) -> list[tuple[str, str]]:
-    """Seed pairs: the root's inputs, then each collapsed child's outputs, by position.
+def seeds(inputs: list[tuple[str, str]], collapsed: list[CallPair]) -> list[tuple[str, str]]:
+    """Seed pairs: the root's inputs that met at module level, then each collapsed child's outputs.
 
-    When the two sides record different numbers of inputs (torch attention also takes
-    ``cos``, ``sin`` and a mask), only the first pair seeds, the one the module level
-    compared ("compared the first of n vs m").
+    ``inputs`` are the root's recorded input pairs chosen by
+    :func:`~torchlens.debug._xb_values.input_plan`, the same ones the module row compared.
     """
 
-    found = _positional(root_a.inputs, root_b.inputs) or _positional(
-        root_a.inputs[:1], root_b.inputs[:1]
-    )
+    found = list(inputs)
     for pair in collapsed:
         if pair.a is not None and pair.b is not None:
             found += _positional(pair.a.outputs, pair.b.outputs)

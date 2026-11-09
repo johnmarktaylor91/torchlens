@@ -16,7 +16,15 @@ from ._common import _op_from_label, _op_label
 from ._xb_op_scope import SideGraph, collapsed_pairs, seeds, side_graph
 from ._xb_op_walk import Placement, Walk, place
 from ._xb_pairing import CallPair
-from ._xb_values import EQUAL, ValueOptions, compare_leaf, input_scale, read_values
+from ._xb_values import (
+    EQUAL,
+    ValueOptions,
+    compare_leaf,
+    input_plan,
+    input_scale,
+    read_values,
+    value_shape,
+)
 
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
@@ -68,6 +76,20 @@ def _canonical(traces: tuple[Trace, Trace], pairs: list[tuple[str, str]]) -> lis
         if op_a is not None and op_b is not None:
             found.append((_op_label(op_a), _op_label(op_b)))
     return found
+
+
+def _met_inputs(pair: CallPair, traces: tuple[Trace, Trace]) -> list[tuple[str, str]]:
+    """The call's input label pairs the module row compared (:func:`input_plan`)."""
+
+    if pair.a is None or pair.b is None:
+        return []
+    labels_a, labels_b = pair.a.inputs, pair.b.inputs
+    shapes_a = [value_shape(value) for value, _ in read_values(traces[0], labels_a)]
+    shapes_b = [value_shape(value) for value, _ in read_values(traces[1], labels_b)]
+    if len(shapes_a) != len(labels_a) or len(shapes_b) != len(labels_b):
+        return []
+    plan, _disclosure = input_plan(shapes_a, shapes_b)
+    return [(labels_a[i], labels_b[j]) for i, j in plan]
 
 
 def _listed(labels: Any) -> str:
@@ -201,7 +223,7 @@ def _placed_in(
     rows, pairs = table
     calls_a, calls_b = facts["calls"]
     collapsed = collapsed_pairs(pair.a, pairs, rows, calls_a)
-    seeded = _canonical(traces, seeds(pair.a, pair.b, collapsed))
+    seeded = _canonical(traces, seeds(_met_inputs(pair, traces), collapsed))
     graphs = (
         side_graph(
             traces[0],

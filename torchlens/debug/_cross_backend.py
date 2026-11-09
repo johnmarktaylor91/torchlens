@@ -33,9 +33,11 @@ from ._xb_values import (
     combine,
     compare_leaf,
     drew_random,
+    input_plan,
     input_scale,
     layout_justified,
     read_values,
+    value_shape,
 )
 
 if TYPE_CHECKING:
@@ -99,8 +101,7 @@ def _boundary(
     """Compare the recorded values at one paired boundary (outputs or inputs).
 
     Outputs pass ``ordered`` (whether each side's leaves are in return order) and pair
-    leaves by return position (:func:`_leaf_plan`); inputs compare the first of
-    differing counts.
+    leaves by return position (:func:`_leaf_plan`); inputs meet by :func:`input_plan`.
     """
 
     values_a, values_b = read_values(traces[0], labels[0]), read_values(traces[1], labels[1])
@@ -114,9 +115,11 @@ def _boundary(
             return plan
         count, disclosure = plan
         values_a, values_b = values_a[:count], values_b[:count]
-    elif len(values_a) != len(values_b):
-        disclosure = f"compared the first of {len(values_a)} vs {len(values_b)} inputs"
-        values_a, values_b = values_a[:1], values_b[:1]
+    else:
+        plan, disclosure = input_plan(
+            [value_shape(v) for v, _ in values_a], [value_shape(v) for v, _ in values_b]
+        )
+        values_a, values_b = [values_a[i] for i, _ in plan], [values_b[j] for _, j in plan]
     results = []
     for (value_a, why_a), (value_b, why_b) in zip(values_a, values_b, strict=True):
         if value_a is None or value_b is None:

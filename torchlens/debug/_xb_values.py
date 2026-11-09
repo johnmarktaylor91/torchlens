@@ -235,6 +235,35 @@ def layout_justified(class_a: str, class_b: str) -> bool:
 _SEVERITY = (DIFFERENT, SHAPE_INCOMPATIBLE, NOT_EVALUATED, UNAVAILABLE, EQUAL)
 
 
+def input_plan(shapes_a: list[Any], shapes_b: list[Any]) -> tuple[list[tuple[int, int]], str]:
+    """Which recorded inputs of a paired call meet, by index, and the row's disclosure.
+
+    Equal counts pair position by position. Otherwise the backends pass different
+    argument lists (torch attention also takes cos, sin, a mask and positions, recorded
+    in the order they were made), so position says nothing: the inputs whose shape
+    occurs exactly once on each side meet. Shapes are recorded metadata, so no value
+    chooses the pair. With no such input the first of each meet.
+    """
+
+    if len(shapes_a) == len(shapes_b) or not shapes_a or not shapes_b:
+        return [(index, index) for index in range(min(len(shapes_a), len(shapes_b)))], ""
+    counts = f"{len(shapes_a)} vs {len(shapes_b)} inputs"
+    pairs = [
+        (index, shapes_b.index(shape))
+        for index, shape in enumerate(shapes_a)
+        if shape is not None and shapes_a.count(shape) == 1 and shapes_b.count(shape) == 1
+    ]
+    if pairs:
+        return pairs, f"compared the inputs of matching shape ({len(pairs)} of {counts})"
+    return [(0, 0)], f"compared the first of {counts}"
+
+
+def value_shape(value: Any) -> tuple[int, ...] | None:
+    """A recorded value's shape, ``None`` for a non-tensor."""
+
+    return tuple(value.shape) if isinstance(value, torch.Tensor) else None
+
+
 def combine(results: list[ValueResult], disclosure: str) -> ValueResult:
     """Fold per-leaf results into one row result: the most severe outcome wins.
 
