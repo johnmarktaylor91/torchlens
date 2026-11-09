@@ -113,7 +113,7 @@ def test_inserted_op_is_reported_and_every_other_op_compared() -> None:
     assert list(paired["op"]) == list(_compared_site_ops(a))
     assert paired["allclose"].all()
     assert frame.attrs["matched"] == len(paired)
-    (mul,) = _labels(b, lambda op: op.func_name == "mul")
+    (mul,) = _labels(b, lambda op: "mul" in str(op.func_name))
     assert list(frame.loc[frame["status"] == "only-b", "op"]) == [mul]
     row = tl.debug.first_divergence(a, b)
     assert row is not None and (row["op"], row["status"]) == (mul, "only-b")
