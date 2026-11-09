@@ -570,9 +570,9 @@ def _predicate_call_site_chain(trace: "Trace") -> tuple[Any, ...]:
     (``_ops_shared_fields``), asked only for the chain: no source lines, no
     column offsets, and the per-capture anchor in ``trace._code_context_cache``
     stops the walk at the capture call. Empty when no Python frame lies
-    inside the innermost module call. The key and class string it feeds are
-    the ones exhaustive capture mints (``_ops_activations``), so the cooked
-    Trace groups by call site (``callsite_v1``) with the same result.
+    inside the innermost stateful module call. The key and class string it
+    feeds are the ones exhaustive capture mints (``_ops_activations``), so the
+    cooked Trace groups by call site (``callsite_v2``) with the same result.
     """
 
     context_cache = trace._code_context_cache

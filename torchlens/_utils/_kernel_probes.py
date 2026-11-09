@@ -9,6 +9,7 @@ missing, so any other failure still surfaces.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import inspect
 import sys
@@ -24,6 +25,13 @@ from ._cuda_probe import _is_cuda_available
 #: sparse direct solver (``_apply_sparse_csr_linear_solve`` in
 #: ``aten/src/ATen/native/sparse/cuda/SparseCsrTensorMath.cu``).
 _NO_CUDSS_MARKER = "cuDSS"
+
+#: Substrings of torch's refusal when an active ``sdpa_kernel`` restriction leaves
+#: no SDPA backend for a call (``select_sdp_backend`` / ``_fused_sdp_choice``).
+_SDPA_NO_BACKEND_MARKERS = (
+    "No viable backend for scaled_dot_product_attention",
+    "No available kernel",
+)
 
 
 def probe_cached_untyped_storage_wrapper() -> bool:
@@ -494,11 +502,48 @@ def probe_roll_tensor_shifts() -> bool:
     return True
 
 
+def _sdpa_math_backend() -> contextlib.AbstractContextManager[Any]:
+    """Pin SDPA to its math backend for one probe call, whatever backend the caller forced.
+
+    The SDPA probes run lazily, inside the first capture, so they can run under a
+    user's ``sdpa_kernel([...])`` restriction; a restriction to a backend with no CPU
+    kernel (memory-efficient, cuDNN) would refuse the probe's CPU call. Torch before
+    ``torch.nn.attention.sdpa_kernel`` (2.1-2.2) gets no pin; its refusal is handled
+    by ``_is_sdpa_backend_refusal`` at the call site.
+
+    Returns
+    -------
+    contextlib.AbstractContextManager[Any]
+        ``sdpa_kernel([SDPBackend.MATH])`` when available, else a null context.
+    """
+
+    try:
+        from torch.nn.attention import SDPBackend, sdpa_kernel
+    except ImportError:
+        return contextlib.nullcontext()
+    return sdpa_kernel([SDPBackend.MATH])
+
+
+def _is_sdpa_backend_refusal(error: RuntimeError) -> bool:
+    """Return whether ``error`` is torch refusing SDPA because no backend is enabled."""
+
+    return any(marker in str(error) for marker in _SDPA_NO_BACKEND_MARKERS)
+
+
+def _sdpa_signature_names_enable_gqa() -> bool:
+    """Feature-detect ``enable_gqa`` from SDPA's documented signature (no call)."""
+
+    doc = getattr(torch.nn.functional.scaled_dot_product_attention, "__doc__", None) or ""
+    return "enable_gqa" in doc.split("->", 1)[0]
+
+
 def probe_sdpa_gqa() -> bool:
     """Return whether ``scaled_dot_product_attention`` accepts ``enable_gqa`` (torch 2.5+).
 
     Older torch rejects the keyword with ``TypeError``; the probe runs one call with
-    two query heads over one key/value head.
+    two query heads over one key/value head, pinned to the math backend so a
+    caller's ``sdpa_kernel`` restriction cannot refuse it. If torch still refuses
+    for want of a backend, the answer comes from SDPA's documented signature.
 
     Returns
     -------
@@ -509,9 +554,14 @@ def probe_sdpa_gqa() -> bool:
     query, key_value = torch.ones(1, 2, 1, 1), torch.ones(1, 1, 1, 1)
     sdpa: Any = torch.nn.functional.scaled_dot_product_attention
     try:
-        sdpa(query, key_value, key_value, enable_gqa=True)
+        with _sdpa_math_backend():
+            sdpa(query, key_value, key_value, enable_gqa=True)
     except TypeError:
         return False
+    except RuntimeError as error:
+        if not _is_sdpa_backend_refusal(error):
+            raise
+        return _sdpa_signature_names_enable_gqa()
     return True
 
 
@@ -520,7 +570,10 @@ def probe_sdpa_empty_row_zero() -> bool:
 
     Torch 2.5+ softmax leaves such a row all zero, so the output row is zero; older
     torch returns NaN. Both spellings of an empty row are probed: a fully masked row
-    and a row whose only key scores ``-inf``.
+    and a row whose only key scores ``-inf``. The calls are pinned to the math
+    backend so a caller's ``sdpa_kernel`` restriction cannot refuse them; if torch
+    still refuses for want of a backend, the capability is unknown and reported
+    absent (the NaN-writing older behaviour is the conservative assumption).
 
     Returns
     -------
@@ -530,8 +583,14 @@ def probe_sdpa_empty_row_zero() -> bool:
 
     sdpa = torch.nn.functional.scaled_dot_product_attention
     query, value = torch.ones(1, 1, 1, 1), torch.zeros(1, 1, 1, 1)
-    masked = sdpa(query, query, value, attn_mask=torch.zeros(1, 1, dtype=torch.bool))
-    non_finite = sdpa(query, torch.full((1, 1, 1, 1), float("-inf")), value)
+    try:
+        with _sdpa_math_backend():
+            masked = sdpa(query, query, value, attn_mask=torch.zeros(1, 1, dtype=torch.bool))
+            non_finite = sdpa(query, torch.full((1, 1, 1, 1), float("-inf")), value)
+    except RuntimeError as error:
+        if not _is_sdpa_backend_refusal(error):
+            raise
+        return False
     return bool((masked == 0).all()) and bool((non_finite == 0).all())
 
 

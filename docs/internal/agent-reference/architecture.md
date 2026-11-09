@@ -29,7 +29,7 @@ Key entry points:
   `Layer.graph.site_peers` / `Layer.shape_summary` are the Layer surface (typed
   refusal `site_key_unavailable`; per-pass keys read as `layer.ops[k].graph.site_key`); `grouping=` is the closed-vocabulary knob
   ("structural" default, which on torch is call-site grouping,
-  `detector="callsite_v1"`, rule in `docs/guides/grouping.md`; others
+  `detector="callsite_v2"`: only stateful modules are scopes, rule in `docs/guides/grouping.md`; others
   refuse typed) mirrored on
   `trace.options.grouping`, with the load-validated `grouping_policy_v1` stamp on
   `trace.options.grouping_policy` (C1-C8 coherence; degrade-settlement monotonic).

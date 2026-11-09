@@ -58,6 +58,36 @@ run the forward a second time to recover a stale reference to a torch function, 
 marked unverified and names the re-run as the reason
 ([capture completeness](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/limitations.md#capture-completeness-and-python-call-routes)).
 
+## Does tracing change fused attention (SDPA, FlashAttention)?
+
+No. `torch.nn.functional.scaled_dot_product_attention` is wrapped like every other torch
+function: the wrapper calls the original with your arguments, so whichever kernel PyTorch picks
+(flash, memory-efficient or math) runs unchanged, and the trace records one SDPA op with its
+output. TorchLens never selects an SDPA backend for your model's calls, sets
+`attn_implementation`, or installs a dispatch mode by default. Forcing each backend with
+`torch.nn.attention.sdpa_kernel` around a plain forward and a `tl.trace` forward gives
+`torch.equal` outputs (maximum difference 0) for a toy SDPA module and for GPT-2 with
+`attn_implementation="sdpa"`, and the profiler shows the same kernel in both runs. On CPU that
+was measured for flash and math (the memory-efficient kernel refuses on CPU); on an RTX 2080 Ti
+GPU, for memory-efficient and math. Flash has not been measured on a GPU: PyTorch's flash kernel
+needs a GPU of compute capability 8.0 or later and refuses on the 2080 Ti (7.5). For scale,
+PyTorch's own difference between two of its kernels on the GPT-2 logits is about 1e-4 (flash
+versus math on CPU, memory-efficient versus math on the GPU); tracing adds nothing to it.
+
+Attention weights are still readable. `trace.modules["transformer.h.0.attn"].facets.pattern`
+recomputes softmax(QK^T / sqrt(d)) after the capture from the Q, K and V the kernel actually
+received, serves it only if the recomputed `pattern @ V` matches the kernel's saved output, and
+is read-only; on GPT-2 it equals the eager `output_attentions` weights exactly. See
+[Reconstruction](facets.md#reconstruction). To edit attention weights, load the model with
+`attn_implementation="eager"`.
+
+One exception, unrelated to SDPA: for eval-mode `nn.MultiheadAttention` and
+`nn.TransformerEncoderLayer`, capture holds torch's MHA fast path off so the unfused program
+(linear, then one SDPA call) is recorded; see
+[limitations](reference/limitations.md). The notebook
+[sdpa_fused_attention_check.ipynb](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/sdpa_fused_attention_check.ipynb)
+runs the comparison per backend on CPU or GPU.
+
 ## How much slower is tracing, and how much memory does it use?
 
 A full trace keeps the output of every operation and costs about 14 times a plain forward on CPU

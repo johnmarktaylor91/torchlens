@@ -107,11 +107,11 @@ def test_resnet18_eval_ids_unique_and_edges_resolve(
     assert sum(len(node.get("incomingEdges", [])) for node in graph["nodes"]) == 118
     report = tl.export.validate_model_explorer_payload(resnet18_eval_payload)
     assert report.ok, report.failures
-    # grouping rule row 28: each BasicBlock's one ReLU module called twice is
-    # one Layer with 2 passes, so resnet18 now has multi-pass layers and the
-    # export adds the rolled projection beside the unrolled graph.
+    # Each BasicBlock calls its one ReLU module from two lines: two layers
+    # (docs/guides/grouping.md), so resnet18 has no multi-pass layer and the
+    # export carries the unrolled graph alone, with no rolled projection.
     graphs = resnet18_eval_payload["graphs"]
-    assert len(graphs) == 2
+    assert len(graphs) == 1
     # Exactly ONE root-level non-boundary op per graph: torch.flatten in
     # ResNet.forward -- a real root-module op, disclosed, never an anomaly
     # bucket (memo D19's counter stays a re-open tripwire). The validator

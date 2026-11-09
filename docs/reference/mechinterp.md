@@ -110,10 +110,12 @@ refusal (`worst_element`).
   equals the token at `i - n`, so a token that repeats inside the sequence
   adds nothing (measured on GPT-2 small in the circuit section below).
 
-Fused attention (torch SDPA) needs
-`capture=CaptureOptions(save_args=True)` for reconstructed
-pattern/z/result reads; the facets stay READ-only -- edits are the lowered
-counterfactual's job, or an eager recapture.
+Fused attention (torch SDPA) serves reconstructed pattern/z/result reads
+from a default capture (the SDPA call's replay argument template and its
+parents' saved outputs hold every input); only a selective or structure-only
+capture needs `capture=CaptureOptions(reconstruction_ready=True)`. The facets
+stay READ-only -- edits are the lowered counterfactual's job, or an eager
+recapture.
 
 ## The component graph
 

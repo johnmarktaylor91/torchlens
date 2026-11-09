@@ -1670,8 +1670,8 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # Deterministic uninit-memory fill, device-agnostic GradScaler, torch.nn.attention,
         # torch.nn.RMSNorm, and tuple-dim any()/all() all postdate the torch>=2.1 floor: their
         # absence is a healthy old install with a real fallback (fill flag) or nothing to shim
-        # (TorchLens product code never constructs a GradScaler/RMSNorm or calls sdpa_kernel itself;
-        # the tuple-dim reduction falls back to sequential single-axis reduction).
+        # (product code never constructs a GradScaler/RMSNorm; sdpa_kernel only pins its own SDPA
+        # probes, which absorb a refusal without it; tuple-dim falls back to single-axis reduction).
         "HAS_DETERMINISTIC_FILL_FLAG",
         # fp32_precision controls (torch >= 2.9): absent means no second precision representation
         # exists to snapshot, not a degradation.

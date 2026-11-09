@@ -393,7 +393,8 @@ carries the same tag at its definition.
     `fold_sites`), `requested` (the knob mirror), `folded_sites` and `site_join` (two
     distinct site-granular axes: grouping folds vs product-layer joins), `detector`,
     `effective`, and `note`.
-  - `detector`: `callsite_v1` for call-site grouping, `grouper_v1` for the structural grouper
+  - `detector`: `callsite_v2` for call-site grouping (`callsite_v1` on traces saved before
+    stateless modules grouped by call site), `grouper_v1` for the structural grouper
     that serves captures without call-site evidence, `unknown` when grouping did not run.
   - Loading: loads validate against the exact writer key set, closed vocabularies, and
     coherence rules. A parse failure or incoherence warns once and settles to the one
