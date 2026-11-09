@@ -205,9 +205,20 @@ True __sub__
 
 ## `compare`
 
-`tl.debug.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares saved
-activations with matching operation labels and returns a tabular `Report` whose
-`.to_pandas()` DataFrame carries aggregate counts in `attrs`. Runs on different devices
+`tl.debug.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares the saved
+activations of paired operations and returns a tabular `Report` whose
+`.to_pandas()` DataFrame carries aggregate counts in `attrs`.
+
+How operations pair: when the two traces have the same graph fingerprint
+(`trace.provenance.fingerprint`), operations pair by label. When the graphs differ, for
+example one run has an extra `x * 1.0`, every later label shifts, so operations pair by
+graph structure instead: same module, same function, already-paired inputs, in execution
+order, and never by value. An operation with no structural partner is an `only-a` or
+`only-b` row, so an inserted operation is reported as itself and every other operation is
+still compared. When operations with the same structure differ in number between the two
+runs (two identical `relu` calls on one input against one), TorchLens cannot tell which
+correspond, so none of them pairs and their rows say `ambiguous`. A row paired by
+structure under a different label notes `paired by graph structure` in `reason`. Runs on different devices
 are compared on the CPU and different dtypes in the wider dtype; each row's `reason`
 and the card's coverage line name the alignment. Integer and boolean activations
 (indices, masks) must match exactly.
@@ -617,7 +628,10 @@ Deepcopy-refusing models return `inconclusive` with a `model_factory` remedy.
 `tl.debug.first_divergence(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` returns the first
 EXECUTION-ORDER row where two traces separate (value, shape, or structural), or `None`.
 It is the direct spelling of the first-diverging-op recipe over [`compare`](#compare),
-whose rows follow execution order -- never alphabetical.
+whose rows follow execution order -- never alphabetical -- and pairs operations the same
+way. Operations found only in `trace_b` come after every paired row, so with one inserted
+operation and a real value change later, the changed operation is returned; with the
+inserted operation alone, the inserted operation is.
 
 ## Comparing runs from different backends
 

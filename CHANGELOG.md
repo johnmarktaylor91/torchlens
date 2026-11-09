@@ -12,6 +12,13 @@
   before reading any value. Their labels and op order do not correspond, so the label join
   reported the first op as a divergence even for a correct port. Two runs on the same backend
   compare as before; module-level comparison across backends is planned.
+- **debug**: on one backend, `tl.debug.compare` and `tl.debug.first_divergence` pair
+  operations by graph structure when the two graph fingerprints differ. Before, one inserted
+  operation (`x * 1.0`) shifted every later label, so `first_divergence` named the first
+  operation as only in one run and `compare` compared almost nothing. Now the inserted
+  operation is an `only-b` row and every other operation is compared; operations with the same
+  structure but a different count in each run stay unpaired and say `ambiguous`. Traces with
+  equal fingerprints pair by label, row for row as before.
 
 ## v3.0.2 (2026-11-06)
 
