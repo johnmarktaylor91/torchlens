@@ -668,10 +668,11 @@ module whose output agrees again later never hides an earlier difference.
 **Tolerance.** Values compare at the wider dtype. Across backends a module output agrees when its
 relative RMS error is within tolerance: `rms(a - b) <= atol + rtol * rms(a)`, with `trace_a` as the
 reference. The default comes from the narrower dtype of each pair: float32 `1e-4`, float16
-`5e-2`, bfloat16 `0.75`. `atol` is a floor, so a module whose reference output is all zero is not
-judged at an exact-zero bound: `10 * eps(narrower dtype)` times the rms of that module's recorded
-input on side a (1.0 when the input is unavailable or all zero), never the output being judged;
-the 10 is provisional until the calibration port confirms it. These were measured on SmolLM2 (mlx-lm against the Hugging Face
+`5e-2`, bfloat16 `0.75`, and `atol` is 0. Only when a module's reference output is all zero, where
+the relative bound would demand exact zeros, `atol` becomes `10 * eps(narrower dtype)` times the
+smallest rms among that module's finite, non-zero floating inputs on side a (1.0 when there is
+none), never the output being judged; taking the smallest keeps a causal mask from widening it.
+The 10 is provisional until the calibration port confirms it. These were measured on SmolLM2 (mlx-lm against the Hugging Face
 PyTorch model): in float32 they catch one-percent-sized bugs (an attention scale, a RoPE base, a
 swapped activation) at their own module. Half precision catches only gross bugs; rows in float16
 or bfloat16 say so, and the advice is to compare float32 runs of both sides. Passing `rtol=` or

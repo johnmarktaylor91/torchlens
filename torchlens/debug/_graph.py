@@ -334,8 +334,8 @@ def compare(
     rtol, atol:
         Tolerance overrides. One backend: ``torch.allclose``, default ``1e-5`` / ``1e-8``.
         Across backends: ``rms(a - b) <= atol + rtol * rms(a)`` per module output, default
-        from the narrower dtype (float32 ``1e-4``, float16 ``5e-2``, bfloat16 ``0.75``; atol
-        ``10 * eps`` times the rms of the module's side-a input); an override replaces it.
+        from the narrower dtype (float32 ``1e-4``, float16 ``5e-2``, bfloat16 ``0.75``; atol 0,
+        or ``10 * eps`` times the smallest input rms on an all-zero reference); overridable.
     align:
         ``"auto"`` on one backend pairs ops by label when the graph fingerprints
         (``trace.provenance.fingerprint``) are equal, else by graph structure, never by value
@@ -428,8 +428,8 @@ def first_divergence(
     rtol, atol:
         Tolerance overrides. One backend: ``torch.allclose``, default ``1e-5`` / ``1e-8``.
         Across backends: ``rms(a - b) <= atol + rtol * rms(a)`` per module output, default
-        from the narrower dtype (float32 ``1e-4``, float16 ``5e-2``, bfloat16 ``0.75``; atol
-        ``10 * eps`` times the rms of the module's side-a input); an override replaces it.
+        from the narrower dtype (float32 ``1e-4``, float16 ``5e-2``, bfloat16 ``0.75``; atol 0,
+        or ``10 * eps`` times the smallest input rms on an all-zero reference); overridable.
     align:
         ``"auto"`` on one backend pairs ops by label when the graph fingerprints
         (``trace.provenance.fingerprint``) are equal, else by graph structure, never by value
