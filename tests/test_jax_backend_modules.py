@@ -761,3 +761,46 @@ def test_jax_nnx_pytree_public_surface_matrix(
     """Assert executable public surfaces on a real Flax NNX pytree trace."""
 
     surface_assertion(_nnx_surface_trace(), tmp_path)
+
+
+class _EquinoxListBlock(eqx.Module):
+    """One linear child, held by its owner in a list field."""
+
+    fc: eqx.nn.Linear
+
+    def __call__(self, x: Any) -> Any:
+        """Return ``relu(fc(x))``."""
+
+        return jax.nn.relu(self.fc(x))
+
+
+class _EquinoxListOwner(eqx.Module):
+    """Equinox module whose blocks live in a list field, the way ModuleList holds them."""
+
+    blocks: list
+
+    def __call__(self, x: Any) -> Any:
+        """Run every block in order."""
+
+        for block in self.blocks:
+            x = block(x)
+        return x
+
+
+def test_jax_equinox_modules_in_a_list_field_are_discovered() -> None:
+    """Modules in a list field get ``field.index`` addresses, calls and their own params."""
+
+    keys = jax.random.split(jax.random.PRNGKey(3), 2)
+    model = _EquinoxListOwner([_EquinoxListBlock(eqx.nn.Linear(3, 3, key=key)) for key in keys])
+    trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+    addresses = {module.address for module in trace.modules}
+    assert {"blocks.0", "blocks.0.fc", "blocks.1", "blocks.1.fc"} <= addresses
+    assert trace.modules["self"].address_children == ["blocks.0", "blocks.1"]
+    assert trace.modules["blocks.1"].address_parent == "self"
+    assert {param.module_address for param in trace.modules["blocks.1.fc"].params} == {
+        "blocks.1.fc"
+    }
+    assert trace.modules["blocks.1"].num_calls == 1
+    check_metadata_invariants(trace)
+    assert trace.validate_forward_pass([]) is True
