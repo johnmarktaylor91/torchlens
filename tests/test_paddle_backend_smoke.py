@@ -45,7 +45,7 @@ def test_paddle_relu_single_op_smoke() -> None:
     # -- the bare layer_label for this single-pass op, not the internal raw
     # capture identifier (never exposed) nor an unconditionally pass-qualified
     # label.
-    assert trace.output_layers == ["relu_1_2"]
+    assert trace.output_layers == ["relu_1_1"]
     capture = trace._paddle_op_captures[0]
     assert capture.op_name == "functional.relu"
     assert capture.tensor_inputs[0].label == "input.arg_0"
@@ -74,7 +74,7 @@ def test_paddle_two_layer_mlp_parents_and_labels() -> None:
     trace = tl.trace(MLP(), _input(), backend="paddle")
 
     assert trace.provenance.backend == "paddle"
-    assert "input.arg_0" in trace.layer_labels
+    assert "input_1" in trace.layer_labels
     linear1_label = next(label for label in trace.op_labels if "linear_1_" in label)
     relu_label = next(label for label in trace.op_labels if "relu" in label)
     # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
@@ -101,13 +101,13 @@ def test_paddle_source_input_labels_and_function_root() -> None:
     trace = tl.trace(raw_callable, (_input(), _input()), backend="paddle")
 
     assert trace.options.module_identity_mode == "function_root"
-    assert {"input.arg_0", "input.arg_1"} <= set(trace.layer_labels)
+    assert {"input_1", "input_2"} <= set(trace.layer_labels)
     add_label = next(label for label in trace.op_labels if label.startswith("add_"))
-    input0_label = next(label for label in trace.op_labels if label.startswith("input.arg_0"))
-    input1_label = next(label for label in trace.op_labels if label.startswith("input.arg_1"))
+    input0_label = next(label for label in trace.op_labels if label == "input_1:1")
+    input1_label = next(label for label in trace.op_labels if label == "input_2:1")
     # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
     # the bare ``layer_label`` for these single-pass inputs (e.g.
-    # ``"input.arg_0"``, not ``"input.arg_0:1"``), derived here from each
+    # ``"input_1"``, not ``"input_1:1"``), derived here from each
     # op's own ``layer_label`` rather than hardcoded or op-label strings.
     assert trace[add_label].parents == (
         trace[input0_label].layer_label,
@@ -219,7 +219,7 @@ def test_paddle_same_dtype_astype_preserves_parent_label() -> None:
 
     matmul_label = next(label for label in trace.op_labels if "matmul" in label)
     add_label = next(label for label in trace.op_labels if label.startswith("add_"))
-    input1_label = next(label for label in trace.op_labels if label.startswith("input.arg_1"))
+    input1_label = next(label for label in trace.op_labels if label == "input_2:1")
     # Torch parity: ``parents`` resolves through the CONDITIONAL label map --
     # the bare ``layer_label`` for these single-pass referenced ops, derived
     # here from each op's own ``layer_label`` rather than hardcoded or
@@ -253,7 +253,7 @@ def test_paddle_layer_types_drop_the_wrap_namespace() -> None:
     assert not any("." in label for label in trace.layer_labels if not label.startswith("input"))
     relu = next(op for op in trace if op.type == "relu")
     assert relu.func_name == "functional.relu"
-    assert relu.layer_label == "relu_1_3"
+    assert relu.layer_label == "relu_1_2"
     partial = tl.trace(
         model, paddle.ones([1, 1, 6, 6]), backend="paddle", stop_after=tl.func("relu")
     )
