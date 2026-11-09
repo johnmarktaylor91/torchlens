@@ -162,21 +162,32 @@ def _exit_candidates(walk: Walk, ref: str) -> list[str]:
     paired op on either boundary nothing is offered.
     """
 
-    open_a = [p for p in walk.a.parents[ref] if p not in walk.pa]
-    partners = {walk.pa[p] for p in walk.a.parents[ref] if p in walk.pa}
-    entry = {walk.pa[p] for p in _entry(walk.a, open_a, walk.pa)}
+    partners, entry = _anchor(walk, ref)
     if not partners and not entry:
         return []
-    found = []
-    for label in walk.b.walk:
-        if label in walk.pb:
-            continue
-        ups = walk.b.parents[label]
-        open_b = [p for p in ups if p not in walk.pb]
-        if open_b and set(ups) - set(open_b) == partners:
-            if _entry(walk.b, open_b, walk.pb) == entry:
-                found.append(label)
-    return found
+    return [
+        label
+        for label in walk.b.walk
+        if label not in walk.pb and _brackets(walk, label, partners, entry)
+    ]
+
+
+def _anchor(walk: Walk, ref: str) -> tuple[set[str], set[str]]:
+    """Side-b partners of ``ref``'s paired parents and of the paired ops feeding its open region."""
+
+    open_a = [p for p in walk.a.parents[ref] if p not in walk.pa]
+    partners = {walk.pa[p] for p in walk.a.parents[ref] if p in walk.pa}
+    return partners, {walk.pa[p] for p in _entry(walk.a, open_a, walk.pa)}
+
+
+def _brackets(walk: Walk, label: str, partners: set[str], entry: set[str]) -> bool:
+    """Whether side-b ``label`` consumes ``partners`` plus open ops fed by exactly ``entry``."""
+
+    ups = walk.b.parents[label]
+    open_b = [p for p in ups if p not in walk.pb]
+    if not open_b or set(ups) - set(open_b) != partners:
+        return False
+    return _entry(walk.b, open_b, walk.pb) == entry
 
 
 def _entry(graph: SideGraph, opens: list[str], paired: dict[str, str]) -> set[str]:
