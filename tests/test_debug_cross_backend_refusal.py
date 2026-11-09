@@ -94,7 +94,9 @@ def test_unadmitted_backend_refuses_module_pairing(tool: str, order: str) -> Non
     torch_trace, other = _pair()
     _as_backend(other, "tinygrad")
     first, second = (torch_trace, other) if order == "torch-first" else (other, torch_trace)
-    with pytest.raises(BackendUnsupportedError, match="admitted today: mlx, torch") as caught:
+    with pytest.raises(
+        BackendUnsupportedError, match="admitted today: jax, mlx, paddle, tf, torch"
+    ) as caught:
         _TOOLS[tool](first, second)
     assert caught.value.fields["code"] == "backend_unsupported"
 

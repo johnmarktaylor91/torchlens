@@ -190,7 +190,7 @@ def _tf_port(weights: dict[str, Any], bug_block: int | None, x: np.ndarray) -> t
     for name, (weight, bias) in weights.items():
         layer = model
         for part in name.split("."):
-            layer = layer.blocks[int(part)] if part.isdigit() else getattr(layer, part)
+            layer = layer[int(part)] if part.isdigit() else getattr(layer, part)
         layer.kernel.assign(weight.T)  # Keras kernels are in x out
         layer.bias.assign(bias)
     return tl.trace(model, inputs, backend="tf")
@@ -322,7 +322,7 @@ def _nnx_port(weights: dict[str, Any], bug_block: int | None, x: np.ndarray) -> 
     for name, (weight, bias) in weights.items():
         layer: Any = model
         for part in name.split("."):
-            layer = layer.blocks[int(part)] if part.isdigit() else getattr(layer, part)
+            layer = layer[int(part)] if part.isdigit() else getattr(layer, part)
         layer.kernel.value = jnp.asarray(weight.T)  # NNX kernels are in x out
         layer.bias.value = jnp.asarray(bias)
     return tl.trace(model, jnp.asarray(x), backend="jax")
