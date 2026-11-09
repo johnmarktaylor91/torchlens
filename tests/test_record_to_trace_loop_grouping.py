@@ -105,7 +105,7 @@ def test_cooked_recording_groups_loops_like_trace(
     assert len(cooked.layers) == len(exhaustive.layers)
     assert [op.has_params for op in cooked.ops] == [op.has_params for op in exhaustive.ops]
     assert all(op.graph.equivalence_class for op in cooked.ops)
-    assert cooked.options.grouping_policy["detector"] == "callsite_v1"
+    assert cooked.options.grouping_policy["detector"] == "callsite_v2"
     assert (
         cooked.options.grouping_policy["detector"] == exhaustive.options.grouping_policy["detector"]
     )

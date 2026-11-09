@@ -18,7 +18,7 @@ from ._call_site_contract import (
     call_site_contract_violation,
     remember_call_site_classes,
 )
-from ._grouping_stamp import build_grouping_policy_stamp
+from ._grouping_stamp import CALL_SITE_DETECTOR, build_grouping_policy_stamp
 from .loop_grouping_adapter import (
     RecurrenceAssignment,
     RecurrenceGroupingGraph,
@@ -357,7 +357,7 @@ def _detect_and_label_loops(self: "Trace") -> None:
     A capture whose ops carry call-site classes (the torch backend's
     exhaustive capture and cooked predicate recordings,
     ``RawGraphWorkspace._call_site_classes``) groups by call site
-    (``callsite_v1``, :func:`_group_by_call_sites`). Captures without that
+    (``callsite_v2``, :func:`_group_by_call_sites`). Captures without that
     evidence (other backends) keep the backend-neutral structural grouper
     (``grouper_v1``).
 
@@ -370,7 +370,7 @@ def _detect_and_label_loops(self: "Trace") -> None:
     _mint_site_keys(self)
     if _has_call_site_evidence(self):
         _group_by_call_sites(self)
-        detector = "callsite_v1"
+        detector = CALL_SITE_DETECTOR
     else:
         grouping_graph = _build_recurrence_grouping_graph(self)
         assignments = group_recurrent_nodes(grouping_graph)
@@ -458,7 +458,7 @@ def _buffer_group_keys(
 
 
 def _group_by_call_sites(self: "Trace") -> None:
-    """Partition retained ops into layers by call-site key (``callsite_v1``).
+    """Partition retained ops into layers by call-site key (``callsite_v2``).
 
     Two ops are passes of one layer exactly when their keys are equal
     (:func:`_call_site_group_key`). Passes are numbered in capture order by

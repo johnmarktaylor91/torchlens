@@ -38,6 +38,7 @@ from ._notebook._axis_labels import sdpa_attention_hint
 from ._notebook.cards import trace_repr_html
 from ._summary_config import resolve_config
 from ._summary_result import build_rebuilt_summary
+from ._topology_text import topology_text
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -236,14 +237,62 @@ def _coverage_text(trace: Any) -> str:
     return f"{examined} {note}"
 
 
-def _saved_text(trace: Any) -> str:
-    """Saved outputs and their bytes; disk-backed payloads keep the record cards' token."""
+def _record_kind(op: Any) -> str:
+    """Which population of the card an op record counts in."""
 
-    saved = sum(bool(getattr(op, "has_saved_activation", False)) for op in trace._layer_list)
+    if op.is_input:
+        return "inputs"
+    if op.is_output:
+        return "outputs"
+    return "buffers" if op.graph.is_buffer else "ops"
+
+
+def _population(trace: Any) -> dict[str, int]:
+    """One count per kind of record: ops, the layers they group into, buffers, inputs, outputs.
+
+    ``ops`` are the computing ops (inputs, outputs and buffer reads excluded), ``layers``
+    the layers those ops form, ``passes`` the most passes of any of them and ``saved`` how
+    many of their outputs are saved.
+    """
+
+    counts = dict.fromkeys(("ops", "passes", "saved", "buffers", "inputs", "outputs"), 0)
+    layers: set[str] = set()
+    for op in trace._layer_list:
+        kind = _record_kind(op)
+        counts[kind] += 1
+        if kind == "ops":
+            layers.add(str(op.layer_label))
+            counts["passes"] = max(counts["passes"], int(op.num_passes or 1))
+            counts["saved"] += bool(getattr(op, "has_saved_activation", False))
+    counts["layers"] = len(layers)
+    return counts
+
+
+def _ops_in_layers_text(counts: dict[str, int], *, compact: bool) -> str:
+    """``69 ops in 61 layers (up to 2 passes)``: the layer/op split in one clause."""
+
     text = (
-        f"{format_exact_count(saved)} of {format_exact_count(len(trace._layer_list))} layer outputs, "
+        f"{_count_text(counts['ops'], 'op', compact=compact)} in "
+        f"{_count_text(counts['layers'], 'layer', compact=compact)}"
+    )
+    if counts["passes"] > 1:
+        text += f" (up to {format_exact_count(counts['passes'])} passes)"
+    return text
+
+
+def _saved_text(trace: Any) -> str:
+    """Saved op outputs and their bytes, then the other records; disk payloads keep their token."""
+
+    counts = _population(trace)
+    others = ", ".join(
+        _count_text(counts[key], noun) for key, noun in _OTHER_RECORDS if counts[key]
+    )
+    text = (
+        f"{format_exact_count(counts['saved'])} of {format_exact_count(counts['ops'])} op outputs, "
         f"{format_iec_bytes(trace._cost_saved_activation_memory)}"
     )
+    if others:
+        text += f"; {others}"
     disk = fail_open(
         lambda: _unmaterialized_disk_payload_count(trace, kind="saved"), lambda _error: 0
     )
@@ -318,14 +367,15 @@ def _identity(trace: Any) -> str:
 
 
 def _count_facts(trace: Any) -> list[str]:
-    """Layer and op counts for a finished trace, or the op event count while capture runs."""
+    """Op and layer counts for a finished trace, or the op event count while capture runs."""
 
     if not trace._tracing_finished:
         return [plural(len(trace.event_stream.op_events), "op event")]
-    return [
-        _count_text(len(trace._layer_logs), "layer", compact=True),
-        _count_text(trace._num_ops, "op", compact=True),
-    ]
+    return [_ops_in_layers_text(_population(trace), compact=True)]
+
+
+#: The records the saved row counts after the op outputs, in order.
+_OTHER_RECORDS = (("buffers", "buffer"), ("inputs", "input"), ("outputs", "output"))
 
 
 def _count_text(count: int, noun: str, *, compact: bool = False) -> str:
@@ -418,15 +468,10 @@ def _captured_text(duration: float, compute: float) -> str:
 
 
 def _graph_text(trace: Any) -> str:
-    """Graph topology in words: recurrence and its pass count, branching, conditional branching."""
+    """Graph topology in words: recurrence or shared modules, tied weights, branching."""
 
     graph = trace.graph
-    topology = "feedforward"
-    if graph.is_recurrent:
-        passes = fail_open(lambda: int(graph.max_ops_per_layer), lambda _error: 0)
-        topology = (
-            f"recurrent (up to {format_exact_count(passes)} passes)" if passes > 1 else "recurrent"
-        )
+    topology = topology_text(trace)
     if trace._provenance_verified is False:
         topology = "structure unverified"
     branching = "with branching" if graph.is_branching else "no branching"

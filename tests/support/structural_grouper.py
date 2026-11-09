@@ -1,6 +1,6 @@
 """Run torch captures through the structural grouper (``grouper_v1``).
 
-Torch exhaustive captures group layers by call site (``callsite_v1``). The
+Torch exhaustive captures group layers by call site (``callsite_v2``). The
 backend-neutral structural grouper still serves every capture without call-site
 evidence (other backends, predicate-mode recordings), and its own hardening
 suites drive it through torch models. This fixture makes the capture skip the

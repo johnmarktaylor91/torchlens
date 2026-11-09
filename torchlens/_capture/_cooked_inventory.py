@@ -5,7 +5,7 @@ keyed by address) and a ``raw label -> call-site class`` table for every
 recorded op whose call site the capture walk saw. Both are snapshotted into
 the run core's projection facts when the pass ends and installed on the fresh
 Trace shell before postprocessing, so a cooked recording resolves parameters
-and groups by call site (``callsite_v1``) exactly as an exhaustive capture.
+and groups by call site (``callsite_v2``) exactly as an exhaustive capture.
 """
 
 from __future__ import annotations

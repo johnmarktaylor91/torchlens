@@ -861,22 +861,6 @@ def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
             delattr(obj, field)
 
 
-def _call_site_boundary(
-    inner_boundary_pos: int, outer_boundary_pos: int, last_forward_pos: int
-) -> int:
-    """How many survivors (innermost first) belong to the op's call-site chain.
-
-    Under ``MODULE_CALL_IS_PASS`` the chain stops at the innermost module
-    forward wrapper; otherwise it runs up to the root model's forward (the
-    outermost wrapper or ``forward`` survivor), keeping every caller frame.
-    Without any wrapper frame it runs up to the outermost ``forward`` survivor.
-    """
-
-    if _call_site.MODULE_CALL_IS_PASS and inner_boundary_pos >= 0:
-        return inner_boundary_pos
-    return max(outer_boundary_pos, last_forward_pos + 1)
-
-
 def _call_site_chain(
     survivors: list[tuple[FrameType, CodeType, int, int]],
     boundary: int,
@@ -885,9 +869,9 @@ def _call_site_chain(
 ) -> tuple[Any, ...]:
     """Return the call-site chain of the first ``boundary`` survivors.
 
-    ``survivors`` runs innermost first (see :func:`_call_site_boundary`). Each
-    ``hook_scopes`` entry (a module whose hook the op runs in) becomes a module
-    token at its place in the chain.
+    ``survivors`` runs innermost first (see :func:`_call_site.chain_boundary`). Each
+    ``hook_scopes`` entry (a module whose hook the op runs in, or a stateless
+    module the op runs inside) becomes a module token at its place in the chain.
     """
 
     if boundary <= 0:
@@ -900,6 +884,11 @@ def _call_site_chain(
             raw_frames.append(_call_site.module_scope_entry(scope[1]))
             scope = next(scopes, None)
         raw_frames.append((code, lasti))
+    # A module crossed just inside the boundary (no survivor between it and the
+    # scope's frames, e.g. under a root whose entry is not named ``forward``).
+    while scope is not None and scope[0] <= boundary:
+        raw_frames.append(_call_site.module_scope_entry(scope[1]))
+        scope = next(scopes, None)
     raw = tuple(raw_frames)
     cache_key = ("__torchlens_call_site__", raw)
     if context_cache is not None:
@@ -964,8 +953,8 @@ def _get_code_context(
             stack reuse the lightweight location objects.
         call_site_out: When supplied, the same walk also appends the op's
             call-site chain (:func:`torchlens._utils._call_site.canonical_chain`
-            of the frames inside the innermost module call), or ``()`` when no
-            Python frame lies inside it. Grouping (step 7) keys layers on it.
+            of the frames inside the innermost stateful module call), or ``()``
+            when no Python frame lies inside it. Grouping (step 7) keys layers on it.
 
     Returns:
         List[FuncCallLocation] ordered outermost to innermost; the last entry
@@ -1001,8 +990,8 @@ def _get_code_context(
     while frame is not None:
         code = frame.f_code
         if call_site_out is not None and code in _BOUNDARY_CODES:
-            if inner_boundary_pos < 0:
-                inner_boundary_pos = len(survivors)
+            if inner_boundary_pos < 0:  # a stateless module's wrapper is crossed
+                inner_boundary_pos = _call_site.stop_or_cross(frame, len(survivors), hook_scopes)
             outer_boundary_pos = len(survivors)
         if (
             anchor is not None
@@ -1029,7 +1018,7 @@ def _get_code_context(
         call_site_out.append(
             _call_site_chain(
                 survivors,
-                _call_site_boundary(inner_boundary_pos, outer_boundary_pos, last_forward_pos),
+                _call_site.chain_boundary(inner_boundary_pos, outer_boundary_pos, last_forward_pos),
                 context_cache,
                 hook_scopes,
             )
