@@ -4,7 +4,7 @@
 
 Comparing a model with brain or behaviour data needs per-layer features for a fixed stimulus set, extracted with the model's own preprocessing, in stimulus order, at a scale of thousands of images, and then handed to the analysis package (RSA, encoding models, shape metrics) that owns the brain side. TorchLens does the network side of that: it loads with your ecosystem's loader, verifies the input pipeline, addresses any layer precisely, extracts in batches to a self-describing artifact and connects to rsatoolbox, Brain-Score, himalaya and netrep. The links here are the shortest routes in; the numbered sections below walk the whole path once.
 
-- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): eleven short notebooks on laptop-sized models. Notebook 02 reads an activation out, 04 keeps memory in check, 09 extracts over thousands of batches and 10 has a neuroscience branch.
+- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): twelve short notebooks on laptop-sized models. Notebook 02 reads an activation out, 04 keeps memory in check, 09 extracts over thousands of batches and 10 has a neuroscience branch.
 - [Model RDM notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/quick/cog_neuro_rdm.ipynb): a compact representational dissimilarity matrix from one model in a few lines.
 - [Extract features for a stimulus set](../field-guide/extract_features.md): per-layer activations for every stimulus, written with the model's identity and preprocessing.
 - [Loading models for feature extraction](loaders.md): two lines per ecosystem (torchvision, timm, Hugging Face, CLIP and others), each with its matched preprocessing.

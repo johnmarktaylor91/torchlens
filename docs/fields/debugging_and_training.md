@@ -6,7 +6,7 @@ The lists below start with the one-off questions and move to monitoring a whole 
 
 ## Start here
 
-- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): eleven short notebooks on laptop-sized models. Notebook 01 captures a forward, 02 reads a number out, 03 draws the graph, 04 keeps memory in check and 06 reads gradients.
+- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): twelve short notebooks on laptop-sized models. Notebook 01 captures a forward, 02 reads a number out, 03 draws the graph, 04 keeps memory in check and 06 reads gradients.
 - [Find the first NaN notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/quick/find_first_nan.ipynb): the first NaN- or Inf-producing operation, in two lines.
 - [See the graph and inspect any operation](../field-guide/see_and_inspect.md): a picture of every operation the forward ran, and the output, module and arguments of any one of them, including operations no module returns.
 - [Model summaries](../reference/summary.md): a one-call, metadata-only pass that lists every layer with shapes, parameter counts and cost.
