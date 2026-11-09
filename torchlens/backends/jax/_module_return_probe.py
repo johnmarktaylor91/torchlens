@@ -247,6 +247,7 @@ def _strip_outvars(closed: Any, kept: int) -> Any:
     changes: dict[str, Any] = {"outvars": list(jaxpr.outvars[:kept])}
     debug_info = getattr(jaxpr, "debug_info", None)
     result_paths = getattr(debug_info, "result_paths", None)
-    if isinstance(result_paths, tuple) and hasattr(debug_info, "_replace"):
-        changes["debug_info"] = debug_info._replace(result_paths=result_paths[:kept])
+    replace_info = getattr(debug_info, "_replace", None)
+    if isinstance(result_paths, tuple) and callable(replace_info):
+        changes["debug_info"] = replace_info(result_paths=result_paths[:kept])
     return closed.replace(jaxpr=jaxpr.replace(**changes))
