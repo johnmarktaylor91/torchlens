@@ -424,11 +424,13 @@ What it does:
   `"pytree-derived"` when tensor leaves are present and `"none"` otherwise. Raw callables use
   `module_identity_mode="function_root"` and expose only the root `"self"` module.
 - Equinox `eqx.Module` and Flax NNX `nnx.Module` roots default to `module_identity_mode="pytree_module"`:
-  TorchLens walks the module tree, attributes equations through `jax.named_scope`, builds
-  `Trace.modules` entries with `training=False` and derives parameter owners from path-keyed
-  leaves. Inside attributed modules it rejects `jax.jit`, `pjit`, `shard_map`, `lax.cond`,
-  `lax.scan`, `lax.while_loop`, remat and custom-VJP, callback effects and NNX state rebinding;
-  move those outside the module or trace a raw `function_root` callable.
+  TorchLens walks the module tree (an Equinox list or tuple field of modules becomes a `field`
+  container with `field.0`, `field.1` children, like torch's `ModuleList`), attributes equations
+  through `jax.named_scope`, builds `Trace.modules` entries with `training=False` and derives
+  parameter owners from path-keyed leaves. Inside attributed modules it rejects `jax.jit`,
+  `pjit`, `shard_map`, `lax.cond`, `lax.scan`, `lax.while_loop`, remat and custom-VJP, callback
+  effects and NNX state rebinding; move those outside the module or trace a raw `function_root`
+  callable.
 - Control flow in raw captures: pure nested `jax.jit` calls are inlined; `lax.scan`, `lax.cond`
   and capped `lax.while_loop` unroll by default (`jax_control_flow="unroll"`, guarded by
   `jax_max_control_flow_unroll`). Over-cap `scan` and `while_loop`, and forward `custom_vjp_call`,

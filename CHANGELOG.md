@@ -21,6 +21,10 @@
 
 ### Fixed
 
+- **jax**: Equinox modules held in a list or tuple field (including `eqx.nn.Sequential`'s
+  layers) are now recorded. They get `field.index` addresses under a `field` container, the way
+  torch's `ModuleList` and Flax NNX's `nnx.List` hold them, so their calls, outputs and
+  parameters belong to them instead of to the enclosing module.
 - **debug**: `tl.debug.compare` and `tl.debug.first_divergence` no longer join two traces from
   different backends by op label. Their labels and op order do not correspond, so the label join
   reported the first op as a divergence even for a correct port. They now pair module calls
