@@ -14,10 +14,12 @@ never computed, has no op, and is not represented (the seam's rule for unlabeled
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+from ..._errors import CaptureGapWarning
 from .._module_returns import ModuleReturnLedger, iter_returned_leaves
 
 
@@ -115,7 +117,27 @@ def record_returns(tree: Any, uop_labels: Mapping[int, str]) -> None:
             return None if uop is None else uop_labels.get(id(uop))
 
         ledger.record(address, call_index, value, is_leaf=_is_tensor, label_of=label_of)
+        tensors = [leaf for _path, leaf in iter_returned_leaves(value, _is_tensor)]
+        _disclose_unrecorded(f"{address}:{call_index}", sum(label_of(t) is None for t in tensors))
     ledger.pending = []
+
+
+def _disclose_unrecorded(call_label: str, missing: int) -> None:
+    """Warn that a call returned ``missing`` tensors no recorded op produced (never fabricated).
+
+    tinygrad is lazy: a returned tensor nothing reads is never computed, so it has no op.
+    TorchLens does not force the computation (that would change the user's execution); the
+    tensor is left out of the call's ``output_ops`` and ``output_paths`` and disclosed here.
+    """
+
+    if missing:
+        warnings.warn(
+            f"tinygrad module call '{call_label}' returned {missing} tensor(s) with no recorded "
+            "op (a lazy tensor nothing reads is never computed); they are not recorded as "
+            "outputs of this call.",
+            CaptureGapWarning,
+            stacklevel=2,
+        )
 
 
 def _is_tensor(value: object) -> bool:
