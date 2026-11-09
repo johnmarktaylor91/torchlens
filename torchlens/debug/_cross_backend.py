@@ -116,10 +116,7 @@ def _boundary(
         count, disclosure = plan
         values_a, values_b = values_a[:count], values_b[:count]
     else:
-        plan, disclosure = input_plan(
-            [value_shape(v) for v, _ in values_a], [value_shape(v) for v, _ in values_b]
-        )
-        values_a, values_b = [values_a[i] for i, _ in plan], [values_b[j] for _, j in plan]
+        values_a, values_b, disclosure = _met(values_a, values_b)
     results = []
     for (value_a, why_a), (value_b, why_b) in zip(values_a, values_b, strict=True):
         if value_a is None or value_b is None:
@@ -127,6 +124,15 @@ def _boundary(
             continue
         results.append(compare_leaf(value_a, value_b, justified=justified, options=options))
     return combine(results, disclosure)
+
+
+def _met(values_a: list[Any], values_b: list[Any]) -> tuple[list[Any], list[Any], str]:
+    """The recorded inputs that meet (:func:`input_plan`), each side's in plan order, and the disclosure."""
+
+    plan, disclosure = input_plan(
+        [value_shape(value) for value, _ in values_a], [value_shape(value) for value, _ in values_b]
+    )
+    return [values_a[i] for i, _ in plan], [values_b[j] for _, j in plan], disclosure
 
 
 def _leaf_plan(
