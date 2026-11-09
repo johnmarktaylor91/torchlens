@@ -50,7 +50,7 @@ def refuse_inconclusive(problem: str, remedy: str) -> NoReturn:
     Raises
     ------
     InvalidArgumentError
-        Code ``cross_backend_inconclusive``.
+        Code ``module_comparison_inconclusive``.
     """
 
-    raise InvalidArgumentError(problem, code="cross_backend_inconclusive", remedy=remedy)
+    raise InvalidArgumentError(problem, code="module_comparison_inconclusive", remedy=remedy)

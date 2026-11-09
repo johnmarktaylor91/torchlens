@@ -296,7 +296,7 @@ def test_equal_channel_and_spatial_sizes_are_layout_unresolved() -> None:
     assert "layout_unresolved" in conv["reason"]
     with pytest.raises(InvalidArgumentError) as caught:
         tl.debug.first_divergence(trace_a, trace_b)
-    assert caught.value.fields["code"] == "cross_backend_inconclusive"
+    assert caught.value.fields["code"] == "module_comparison_inconclusive"
 
 
 # --- attention -----------------------------------------------------------------------------
@@ -618,7 +618,7 @@ def test_batch_one_against_sequence_one_refuses_at_the_input(tool: Callable[...,
     trace_a, trace_b = _traces(model_a, model_b, x, x.transpose(0, 1).contiguous())
     with pytest.raises(InvalidArgumentError) as caught:
         tool(trace_a, trace_b)
-    assert caught.value.fields["code"] == "cross_backend_inconclusive"
+    assert caught.value.fields["code"] == "module_comparison_inconclusive"
     assert "leading size-one axis" in str(caught.value)
 
 

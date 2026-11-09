@@ -668,7 +668,7 @@ channel and spatial sizes make more than one fit, the row is `not-evaluated` wit
 "localized inside this module" when the module's inputs agree, or "first observed differing
 module output" when they already differ, followed by the computation skipped since the last
 agreeing module. It returns `None` only when every paired module agrees, and refuses with
-`InvalidArgumentError` (code `cross_backend_inconclusive`) when a side records no module
+`InvalidArgumentError` (code `module_comparison_inconclusive`) when a side records no module
 boundaries, the model inputs differ, nothing could be compared, or a paired module could not be
 decided. `compare` returns every row; its coverage line counts module calls on both sides
 (paired, unpaired, boundary unrecorded, unresolved) and says when either run trained or a random

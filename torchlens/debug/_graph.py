@@ -420,7 +420,7 @@ def first_divergence(
     "localized inside this module" when the module's inputs agree, else "first observed
     differing module output" with the computation skipped since the last agreeing module.
     ``None`` only when every paired module agrees. Refuses with
-    :class:`~torchlens.errors.InvalidArgumentError` (code ``cross_backend_inconclusive``)
+    :class:`~torchlens.errors.InvalidArgumentError` (code ``module_comparison_inconclusive``)
     when a side has no module boundaries, the model inputs differ, nothing could be
     compared, or a paired module could not be decided.
 
