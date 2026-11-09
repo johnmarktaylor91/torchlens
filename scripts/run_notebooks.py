@@ -15,8 +15,8 @@ locally it needs the ``test`` extra (nbclient, ipykernel)::
 Only the notebooks in ``STORED_OUTPUT_NOTEBOOKS`` keep outputs in git (the ten-minute
 tutorial, the learning path, the multi-call bundle and activation patching notebooks the
 README links, the Jacobian lens recipe, whose GPT-2 small fit takes minutes to rerun, the
-logit lens recipe the README links, and the J++ lens notebook, whose results come from a GPU fit
-(regenerate it on a GPU);
+logit lens recipe the README links, and the two J++ notebooks (the J++ lens notebook and the J++
+architectures Colab), whose results come from GPU fits (regenerate them on a GPU);
 GitHub renders them as the first impression).
 ``--write-outputs`` executes them and writes their outputs back in place with machine paths, timings,
 widget state and other run-to-run noise scrubbed (``_scrub_outputs``); every other notebook is
@@ -67,6 +67,7 @@ STORED_OUTPUT_NOTEBOOKS = (
     "examples/methods/jacobian_lens_recipe.ipynb",
     "examples/methods/logit_lens_recipe.ipynb",
     "notebooks/jfilter_lens.ipynb",
+    "examples/methods/jpp_lens_architectures_colab.ipynb",
 )
 # Run alone, after the parallel pool: each runs for minutes, and sharing a 4-CPU runner with
 # another of them pushed each past the 600 s cell timeout (the LEACE recipe also took about
@@ -76,6 +77,7 @@ HEAVY_NOTEBOOKS = frozenset(
         "examples/methods/attribution_graph_transcoders_recipe.ipynb",
         "examples/methods/eap_ig_circuit_recipe.ipynb",
         "examples/methods/jacobian_lens_recipe.ipynb",
+        "examples/methods/jpp_lens_architectures_colab.ipynb",
         "examples/methods/leace_concept_erasure_recipe.ipynb",
     }
 )
