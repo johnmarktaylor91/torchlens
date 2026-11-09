@@ -7992,6 +7992,14 @@
   "via_getattr": true
  },
  {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/debug/_compare_pairing.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": false,
   "field": "step_index",
   "file": "torchlens/debug/_cost.py",

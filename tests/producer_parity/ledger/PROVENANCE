@@ -5907,3 +5907,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 6cb0ff40fcb91411c1532475c1dc9be83047c146
 recorded: 2026-11-06T20:28:11+00:00
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: J8: tl.debug compare/first_divergence pair ops by graph structure (debug/_compare_pairing.py reads op fields)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3570dd548603a8434698a8b9a5a92627af34eae5
+recorded: 2026-11-09T00:44:54+00:00
