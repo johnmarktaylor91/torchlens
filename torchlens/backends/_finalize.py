@@ -8,7 +8,6 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any, Literal, TypeAlias, cast
 
-from .._capture._nonfinite_prefix import strip_raw_label_suffix
 from .._data_classes._compaction import compact_op_metadata
 from .._data_classes._trace_state_io import fill_unset_declared_fields
 from .._data_classes.layer import Layer
@@ -517,9 +516,7 @@ def _finalize_single_op(
     pass_label = apply_final_label(op_log, final, pass_index)
     layer_label = final.layer_label
     op_log._label_raw = label
-    op_log._layer_label_raw = strip_raw_label_suffix(
-        assignment.layer_label if assignment is not None else label
-    )
+    op_log._layer_label_raw = assignment.layer_label if assignment is not None else label
     op_log.lookup_keys = [label, pass_label]
     op_log.pass_number = pass_index
     op_log.num_passes = num_passes
