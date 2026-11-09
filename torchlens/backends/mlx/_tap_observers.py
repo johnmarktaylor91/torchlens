@@ -541,11 +541,11 @@ def _max_mlx_input_raw_index(trace: Trace) -> int:
     Returns
     -------
     int
-        Maximum source-op step index, or zero when no source input exists.
+        Maximum source-op raw index, or zero when no source input exists.
     """
 
     indexes = [
-        int(getattr(op, "step_index", 0) or 0)
+        int(getattr(op, "raw_index", 0) or 0)
         for op in trace._layer_list
         if getattr(op, "is_input", False)
     ]
