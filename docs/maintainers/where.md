@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1750 modules, 705436 lines, 0 modules without a docstring.
+85 packages, 1750 modules, 705580 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -58,8 +58,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 13 | 9171 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6902 |
-| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
-| `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
+| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6610 |
+| `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8593 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59358 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
@@ -1418,7 +1418,7 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6902 lines)
 
 ### `torchlens.backends.paddle`
 
-Paddle backend preview. (14 modules, 6537 lines)
+Paddle backend preview. (14 modules, 6610 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1431,15 +1431,15 @@ Paddle backend preview. (14 modules, 6537 lines)
 | `conv_layers` | Layer-level capture of Paddle ''Conv1D'', ''Conv2D'' and ''Conv3D''. | 154 |
 | `derived_grads` | Derived-gradient leaf helpers for the technical-preview Paddle backend. | 302 |
 | `interventions` | Live intervention runtime for the technical-preview Paddle backend. | 569 |
-| `model_prep` | Paddle model preparation helpers for technical-preview capture. | 369 |
+| `model_prep` | Paddle model preparation helpers for technical-preview capture. | 427 |
 | `tensor_store` | External metadata store for Paddle tensors. | 114 |
 | `validation` | Replay-validation helpers for the technical-preview Paddle backend. | 698 |
 | `validation_decisions` | Per-op validation decisions for the Paddle preview backend. | 280 |
-| `wrappers` | Paddle function-call interception for technical-preview capture. | 781 |
+| `wrappers` | Paddle function-call interception for technical-preview capture. | 796 |
 
 ### `torchlens.backends.tf`
 
-TensorFlow backend preview exports. (13 modules, 8522 lines)
+TensorFlow backend preview exports. (13 modules, 8593 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1448,12 +1448,12 @@ TensorFlow backend preview exports. (13 modules, 8522 lines)
 | `_tensor_leaves` | Tensor-leaf helpers shared by the TensorFlow intervention engine (file cap split). | 62 |
 | `_tensor_probe` | TensorFlow tensor probes for the eager op-callback capture (file cap split). | 232 |
 | `_tf_compat` | TensorFlow compatibility probes for private eager-capture APIs. | 164 |
-| `backend` | TensorFlow backend preview with eager op-callback capture. | 1360 |
+| `backend` | TensorFlow backend preview with eager op-callback capture. | 1359 |
 | `capabilities` | Registry-backed capability exports for the TensorFlow backend preview. | 38 |
 | `derived_grads` | TensorFlow derived-gradient replay (leaf + exact op-level intermediates). | 900 |
 | `funcgraph` | TensorFlow static FuncGraph capture engine. | 1624 |
 | `interventions` | TensorFlow static-label intervention layer. | 786 |
-| `modules` | TensorFlow module discovery, call-stack patching, and parameter logs. | 718 |
+| `modules` | TensorFlow module discovery, call-stack patching, and parameter logs. | 790 |
 | `op_callback_capture` | TensorFlow eager op-callback capture engine. | 1097 |
 | `validation` | Non-vacuous replay validation for the TensorFlow eager backend. | 1076 |
 

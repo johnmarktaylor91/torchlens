@@ -5745,6 +5745,14 @@
  },
  {
   "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/_module_returns.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/backends/_protocols/torch.py",
   "has_default": false,
