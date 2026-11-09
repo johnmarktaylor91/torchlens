@@ -1,7 +1,7 @@
 """Module-level comparison of a real torch model against its real MLX twin (same weights).
 
-The twin has an eval-mode dropout (a pass-through call: torch logs an op inside it, MLX
-records the returned input), a never-called container (``blocks``: a torch ``ModuleList``
+The twin has an identity module (a pass-through call: torch inserts an identity op inside
+it, MLX records the returned input), an eval-mode dropout, a never-called container (``blocks``: a torch ``ModuleList``
 and a plain MLX list) and two blocks. The correct twin must agree everywhere, the
 pass-through call included; a twin with one injected bug must be named at the module the
 bug is in, localized there because that module's inputs agree.
@@ -39,16 +39,16 @@ class _TorchBlock(nn.Module):
 
 
 class _TorchTwin(nn.Module):
-    """``head(blocks(drop(fc_in(x))))`` with an eval-mode dropout."""
+    """``head(blocks(drop(skip(fc_in(x)))))`` with an identity and an eval-mode dropout."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.fc_in, self.drop = nn.Linear(4, _WIDTH), nn.Dropout(0.1)
+        self.fc_in, self.skip, self.drop = nn.Linear(4, _WIDTH), nn.Identity(), nn.Dropout(0.1)
         self.blocks = nn.ModuleList([_TorchBlock(), _TorchBlock()])
         self.head = nn.Linear(_WIDTH, 2)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.drop(self.fc_in(x))
+        h = self.drop(self.skip(self.fc_in(x)))
         for block in self.blocks:
             h = block(h)
         return self.head(h)
@@ -67,17 +67,24 @@ class _MLXBlock(mnn.Module):
         return out + 0.1 if self.bug else out
 
 
+class _MLXIdentity(mnn.Module):
+    """Returns its input unchanged."""
+
+    def __call__(self, x: Any) -> Any:
+        return x
+
+
 class _MLXTwin(mnn.Module):
     """The MLX port of :class:`_TorchTwin`; ``bug_block`` injects the bug in one block."""
 
     def __init__(self, bug_block: int | None = None) -> None:
         super().__init__()
-        self.fc_in, self.drop = mnn.Linear(4, _WIDTH), mnn.Dropout(0.1)
+        self.fc_in, self.skip, self.drop = mnn.Linear(4, _WIDTH), _MLXIdentity(), mnn.Dropout(0.1)
         self.blocks = [_MLXBlock(bug=index == bug_block) for index in range(2)]
         self.head = mnn.Linear(_WIDTH, 2)
 
     def __call__(self, x: Any) -> Any:
-        h = self.drop(self.fc_in(x))
+        h = self.drop(self.skip(self.fc_in(x)))
         for block in self.blocks:
             h = block(h)
         return self.head(h)
@@ -109,18 +116,21 @@ def _pair(bug_block: int | None = None) -> tuple[tl.Trace, tl.Trace]:
 
 
 def test_correct_twin_agrees_at_every_paired_module() -> None:
-    """Every module pairs by address and agrees, the pass-through dropout included."""
+    """Every module pairs by address and agrees, the pass-through identity included."""
 
     torch_trace, mlx_trace = _pair()
     assert tl.debug.first_divergence(torch_trace, mlx_trace) is None
     frame = tl.debug.compare(torch_trace, mlx_trace).to_pandas()
     rows = frame.set_index("op")
-    for label in ("fc_in:1", "drop:1", "blocks.0:1", "blocks.1.fc:1", "blocks.1:1", "head:1"):
+    labels = ("self:1", "fc_in:1", "skip:1", "drop:1", "blocks.0:1", "blocks.1.fc:1", "head:1")
+    for label in labels:
         assert rows.loc[label, "module_b"] == label
         assert rows.loc[label, "alignment"] == "supported"
         assert rows.loc[label, "outcome"] == "equal", rows.loc[label, "reason"]
+    assert str(rows.loc["blocks.1:1", "inputs_agree"]) == "True"
     coverage = frame.attrs["coverage"]
-    assert coverage["b"]["boundary_unrecorded"] == 0
+    assert coverage["a"]["boundary_unrecorded"] == coverage["b"]["boundary_unrecorded"] == 0
+    assert not frame["reason"].fillna("").str.contains("randomness").any()
 
 
 @pytest.mark.parametrize("bug_block", [0, 1])
@@ -135,7 +145,7 @@ def test_injected_bug_is_named_at_its_module(bug_block: int) -> None:
     assert row["reason"].startswith("localized inside this module")
     frame = tl.debug.compare(torch_trace, mlx_trace).to_pandas().set_index("op")
     assert frame.loc[f"blocks.{bug_block}.fc:1", "outcome"] == "equal"
-    assert frame.loc["drop:1", "outcome"] == "equal"
+    assert frame.loc["skip:1", "outcome"] == frame.loc["drop:1", "outcome"] == "equal"
 
 
 def test_label_join_across_real_backends_refuses() -> None:

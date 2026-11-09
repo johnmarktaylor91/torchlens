@@ -12,7 +12,10 @@ op inside the call on torch, which inserts an identity op at module exit, but a 
 passthrough on the preview backends: the returned input's op is flagged as the call's
 output and stays out of ``output_ops``. The reader appends those passthrough ops after
 the call's own outputs, the order torch's exit-time identity ops take, so both spellings
-give the same output roster.
+give the same output roster. Two more reads fill what preview backends do not record:
+the root call's outputs are the trace's outputs (on every backend, in the trace's output
+order), and a call with no recorded ``input_ops`` takes as inputs the ops outside it
+that feed its own ops, the producers torch records as ``input_ops``.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._data_classes._module_passthrough import passthrough_op_labels
-from ._common import _op_label, _ordered_ops
+from ._common import _op_from_label, _op_label, _ordered_ops
 
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
@@ -100,10 +103,29 @@ def _outputs(call: Any, trace: Trace) -> tuple[str, ...]:
     their producers' execution order need not be the order the call returned them in.
     """
 
+    if call.address == ROOT_ADDRESS and trace.output_layers:
+        resolved = (_op_from_label(trace, str(label)) for label in trace.output_layers)
+        return tuple(dict.fromkeys(_op_label(op) for op in resolved if op is not None))
     passthrough = passthrough_op_labels(call, trace)
     if len(passthrough) > 1:
         return ()
     return tuple(str(label) for label in (*(call.output_ops or ()), *passthrough))
+
+
+def _inputs(call: Any, trace: Trace, order: dict[str, int]) -> tuple[str, ...]:
+    """The call's recorded input ops, else the ops outside it that feed its own ops."""
+
+    if call.input_ops:
+        return tuple(str(label) for label in call.input_ops)
+    inside = {str(label) for label in (call.ops or ())}
+    feeders: set[str] = set()
+    for label in inside:
+        op = _op_from_label(trace, label)
+        for parent in getattr(op, "parents", None) or ():
+            producer = _op_from_label(trace, str(parent))
+            if producer is not None and _op_label(producer) not in inside:
+                feeders.add(_op_label(producer))
+    return tuple(sorted(feeders, key=lambda label: order.get(label, -1)))
 
 
 def _span(call: Any, outputs: tuple[str, ...], order: dict[str, int]) -> tuple[int, int]:
@@ -165,7 +187,7 @@ def read_calls(trace: Trace) -> list[CallInfo]:
                 exit=exit_,
                 depth=depth(str(call.label)),
                 outputs=outputs,
-                inputs=tuple(str(label) for label in (call.input_ops or ())),
+                inputs=_inputs(call, trace, order),
                 training=None if training is None else bool(training),
             )
         )

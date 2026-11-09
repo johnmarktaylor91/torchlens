@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 
 from torchlens._runnable import refuse_poisoned_trace
 
-from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
 from ._common import _op_from_label, _op_label, _ordered_ops, _source_line
 from ._xb_calls import CallInfo, read_calls
 from ._xb_pairing import ABSENT, ASSERTED, SUPPORTED, CallPair, pair_calls
@@ -33,6 +32,7 @@ from ._xb_values import (
     ValueResult,
     combine,
     compare_leaf,
+    drew_random,
     layout_justified,
     read_values,
 )
@@ -195,7 +195,7 @@ def randomness_note(trace_a: Trace, trace_b: Trace, calls: list[CallInfo]) -> st
         _op_label(op)
         for trace in (trace_a, trace_b)
         for op in _ordered_ops(trace)
-        if str(getattr(op, "func_name", "")).rstrip("_") in _STOCHASTIC_FUNC_NAMES
+        if drew_random(trace, op)
     ]
     parts = []
     if training:

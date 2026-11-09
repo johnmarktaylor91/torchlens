@@ -22,7 +22,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._io.payload_codec import get_payload_codec
-from ._common import _op_from_label, _safe_out
+from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
+from ._common import _op_from_label, _op_label, _safe_out
 from ._compare_values import _align_for_compare, _compare_unavailable_reason
 from ._xb_tolerance import Tolerance, judge, tolerance_for
 
@@ -103,6 +104,25 @@ def read_values(trace: Trace, labels: tuple[str, ...]) -> list[tuple[Any, str | 
         reason = reason or _compare_unavailable_reason(value)
         values.append((value if reason is None else None, reason))
     return values
+
+
+def drew_random(trace: Trace, op: Any) -> bool:
+    """Whether ``op`` is a random producer whose output depended on a draw.
+
+    A dropout-family op that returned its input unchanged (eval mode, or ``p=0``) drew
+    nothing; every other random producer counts.
+    """
+
+    name = str(getattr(op, "func_name", "") or "").rstrip("_")
+    if name not in _STOCHASTIC_FUNC_NAMES:
+        return False
+    parents = list(getattr(op, "parents", None) or ())
+    if "dropout" not in name or not parents:
+        return True
+    (out, _why_out), (source, _why_source) = read_values(trace, (_op_label(op), str(parents[0])))
+    if not isinstance(out, torch.Tensor) or not isinstance(source, torch.Tensor):
+        return True
+    return out.shape != source.shape or not torch.equal(out, source)
 
 
 def _squeeze_leading(a: torch.Tensor, b: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, str]:
