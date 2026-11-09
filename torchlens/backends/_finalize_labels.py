@@ -9,7 +9,10 @@ preview finalizers follow it so the labels of matching ops agree across backends
 - type and step numbers are assigned once per layer, at its first pass, in execution
   order; later passes of a recurrent layer inherit them;
 - input and buffer ops take step 0 and no step in their label (``input_1``), output
-  ops have no step in their label (``output_1``);
+  ops have no step in their label (``output_1``). Torch decides this by op type, where
+  type ``input`` or ``buffer`` always means that role; here the role flags decide
+  (``is_input``, ``graph.is_buffer``), because a preview op type can be spelled
+  ``buffer`` without the role (a tinygrad ``BUFFER`` source);
 - every other layer takes the next step number from 1 (``linear_1_1``);
 - the short label drops the step (``linear_1``);
 - the ``step_index`` field is set afterwards per op, like torch's
@@ -28,11 +31,6 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from .._record_type import record_type
-
-#: Op types that take step 0 (torch: ``input`` and ``buffer``).
-_UNSTEPPED_TYPES = frozenset({"input", "buffer"})
-#: Op types whose label carries no step number.
-_STEPLESS_LABEL_TYPES = frozenset({"input", "buffer", "output"})
 
 
 @dataclass(frozen=True)
@@ -58,6 +56,12 @@ class PreviewFinalLabel:
     short_layer_label: str
     type_index: int
     step_index: int
+
+
+def _is_unstepped(op_log: Any) -> bool:
+    """Whether an op takes step 0: an input or buffer op by role."""
+
+    return bool(op_log.is_input or op_log.graph.is_buffer)
 
 
 def torch_rule_final_labels(
@@ -88,20 +92,22 @@ def torch_rule_final_labels(
         assignment = assignments.get(raw_label) if assignments is not None else None
         layer_key = assignment.layer_label if assignment is not None else raw_label
         final = by_layer.get(layer_key)
+        unstepped = _is_unstepped(op_log)
         if final is None:
             op_type = str(record_type(op_log))
             type_counts[op_type] += 1
             type_index = type_counts[op_type]
             step_index = 0
-            if op_type not in _UNSTEPPED_TYPES:
+            if not unstepped:
                 step += 1
                 step_index = step
             short = f"{op_type}_{type_index}"
-            layer_label = short if op_type in _STEPLESS_LABEL_TYPES else f"{short}_{step_index}"
+            stepless = unstepped or op_type == "output"
+            layer_label = short if stepless else f"{short}_{step_index}"
             final = PreviewFinalLabel(layer_label, short, type_index, step_index)
             by_layer[layer_key] = final
         op_step_index = 0
-        if str(record_type(op_log)) not in _UNSTEPPED_TYPES:
+        if not unstepped:
             op_step += 1
             op_step_index = op_step
         finals[raw_label] = replace(final, step_index=op_step_index)

@@ -200,7 +200,7 @@ def _torch_rule_labels(trace: Any) -> list[str]:
         if op.pass_number == 1:
             type_counts[op.type] += 1
             short = f"{op.type}_{type_counts[op.type]}"
-            if op.type in {"input", "buffer", "output"}:
+            if op.is_input or op.graph.is_buffer or op.type == "output":
                 by_layer[op.layer_label] = short
             else:
                 step += 1
@@ -222,6 +222,7 @@ def test_preview_labels_follow_torch_rule(backend: str) -> None:
     for trace in _BUILDERS[backend]():
         labels = [op.label for op in trace._layer_list]
         assert labels == _torch_rule_labels(trace)
+        assert all(op.is_input for op in trace._layer_list if op.type == "input")
         inputs = [op for op in trace._layer_list if op.is_input]
         assert inputs and inputs[0].label == "input_1:1"
         assert all(op.step_index == 0 for op in inputs)
