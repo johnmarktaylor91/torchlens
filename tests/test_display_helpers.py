@@ -96,12 +96,12 @@ def test_tensor_text_reads_metadata_only() -> None:
 def test_card_layout_and_cut() -> None:
     card = render_card(
         "Op tanh_6: float32 [1, 5, 3072] on cpu",
-        [("position", "operation 266 of 541"), ("values", "")],
+        [("position", "operation 270 of 545"), ("values", "")],
         [".out", ".parents"],
     )
     assert card.splitlines() == [
         "Op tanh_6: float32 [1, 5, 3072] on cpu",
-        "  position  operation 266 of 541",
+        "  position  operation 270 of 545",
         "  more      .out  .parents",
     ]
     many = render_card("X", [(f"r{i}", "v") for i in range(20)], [".a"], max_rows=4)
@@ -133,7 +133,7 @@ def test_display_key_uses_stored_short_label() -> None:
         short_layer_label = "tanh_6"
         num_passes = 1
         pass_number = 1
-        label = "tanh_6_266:1"
+        label = "tanh_6_270:1"
 
     class Multi(Single):
         short_layer_label = "tanh_1"

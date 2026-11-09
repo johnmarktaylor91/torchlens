@@ -29,7 +29,7 @@ lists them.
 | The fast recorder, `tl.record(model, x, save=...)`: selected sites, no graph | not measured | 11x (150.06 ms) | 43x (98.55 ms) | 1.34x (39.17 s) | 50x (8.35 s) |
 | A trace saving selected sites, `tl.trace(model, x, save=...)`: the full graph, few tensors kept | 55x (77.96 ms) | 37x (505.21 ms) | 169x (389.71 ms) | 3.4x (99.88 s) | 296x (49.67 s) |
 | A trace saving every activation, `tl.trace(model, x)` | 55x (81.38 ms) | 47x (710.60 ms) | 186x (427.04 ms) | not measured | not measured |
-| One module's output by name, `tl.extract` (remeasured on 2026-11-08 with its hooked fast path; see [its section](#one-modules-output-by-name-tlextract)) | 35x (37.57 ms): the LSTM returns a tuple, so a full capture | 1.10x (14.18 ms) | not remeasured since the fast path | not measured | not measured |
+| One module's output by name, `tl.extract` (remeasured on 2026-11-08 with its hooked fast path; see [its section](#one-modules-output-by-name-tlextract)) | 35x (37.57 ms): the LSTM returns a tuple, so a full capture | 1.10x (14.18 ms) | 1.21x (2.70 ms), second GPU machine | not measured | not measured |
 | A sweep of edits, one recording per edit, `tl.record(..., intervene=...)` | not measured | 12x (1.79 s) | 70x (1.06 s) | 1.20x (32.32 s) | 53x (6.30 s) |
 | A sweep of edits, one trace per edit, `tl.trace(..., intervene=...)` | 52x (640.23 ms) | 35x (5.26 s) | 238x (3.61 s) | 1.85x (49.97 s) | 199x (23.84 s) |
 | Features over a stimulus set, `tl.extract_dataset` | 37x (356.00 ms) | 21x (2.69 s) | 241x (1.99 s), second GPU machine | not measured | not measured |
@@ -160,8 +160,10 @@ When to use it: reading a few module outputs by name, without writing hooks.
 Numbers (remeasured on 2026-11-08 on the CPU worker, after the hooked fast path landed): 1.10x a
 plain forward on ResNet-18 (14.18 ms against 12.90 ms), with outputs bit-identical to the forward
 hook's. The LSTM tagger's module returns a tuple (its output and its hidden state), so it takes the
-full capture: 35x (37.57 ms against 1.06 ms). The ResNet-18 GPU cell has not been remeasured since
-the fast path; the 3 Nov figure there (376.36 ms, 164x) is a full capture and stays in [All
+full capture: 35x (37.57 ms against 1.06 ms). On ResNet-18 on GPU (remeasured on 2026-11-08 on the
+second RTX 2080 Ti machine) it is 1.21x a plain forward (2.70 ms against 2.24 ms; the forward hook
+took 2.30 ms), again bit-identical to the hook's output. The 3 Nov GPU figure (376.36 ms, 164x) was
+a full capture and stays in [All
 measurements](#resnet-18-on-gpu-second-run-rtx-2080-ti-workstation) as history.
 
 | Workload (model, device, repeats) | Tool | Median (lowest to highest process median) |
@@ -169,6 +171,9 @@ measurements](#resnet-18-on-gpu-second-run-rtx-2080-ti-workstation) as history.
 | ResNet-18, CPU, one module's output (`layer2`), 8 Nov, n=3 processes | plain forward, nothing attached | 12.90 ms (12.78 ms to 13.74 ms) |
 | ResNet-18, CPU, one module's output (`layer2`), 8 Nov, n=3 processes | forward hook | 12.96 ms (12.79 ms to 13.02 ms) |
 | ResNet-18, CPU, one module's output (`layer2`), 8 Nov, n=3 processes | `tl.extract` | 14.18 ms (13.95 ms to 14.18 ms) |
+| ResNet-18, GPU (second RTX 2080 Ti machine), one module's output (`layer2`), 8 Nov, n=3 processes | plain forward, nothing attached | 2.24 ms (2.24 ms to 2.83 ms) |
+| ResNet-18, GPU (second RTX 2080 Ti machine), one module's output (`layer2`), 8 Nov, n=3 processes | forward hook | 2.30 ms (2.29 ms to 2.33 ms) |
+| ResNet-18, GPU (second RTX 2080 Ti machine), one module's output (`layer2`), 8 Nov, n=3 processes | `tl.extract` | 2.70 ms (2.70 ms to 2.71 ms) |
 | LSTM tagger, CPU, one module's output (`lstm`), 8 Nov, n=3 processes | plain forward, nothing attached | 1.06 ms (1.06 ms to 1.06 ms) |
 | LSTM tagger, CPU, one module's output (`lstm`), 8 Nov, n=3 processes | forward hook | 1.07 ms (1.06 ms to 1.07 ms) |
 | LSTM tagger, CPU, one module's output (`lstm`), 8 Nov, n=3 processes | `tl.extract` (a full capture: the module returns a tuple) | 37.57 ms (37.16 ms to 38.96 ms) |
@@ -476,7 +481,7 @@ that reads one tensor. On a small model the capture's fixed cost dominates. The 
 What this means in practice:
 
 - To read one module's output, `tl.extract` costs about a forward hook when the module returns
-  one tensor (1.10x a plain forward on ResNet-18 on CPU, 8 Nov). A module that returns a tuple,
+  one tensor (1.10x a plain forward on ResNet-18 on CPU and 1.21x on GPU, 8 Nov). A module that returns a tuple,
   like the LSTM, takes a full capture, and a forward hook is the faster tool there. A capture is
   worth its cost when you need operations no module returns, do not yet know the site, or want
   the recording checked against the forward.
@@ -495,8 +500,6 @@ What this means in practice:
 
 ## Not measured yet
 
-- `tl.extract` on ResNet-18 on GPU since its hooked fast path (the 3 Nov figure is a full
-  capture).
 - Stopping a fresh capture early with `stop_after=` (stopping a fast rerun early is in
   [Stopping a rerun early](#stopping-a-rerun-early)).
 - A fast rerun of a trace on new inputs on the 3 Nov workloads (the 5 Nov reruns are in
@@ -535,6 +538,9 @@ Each run's result file names its host and versions; the page's tables quote the 
   Python 3.10, torch 2.13.0 (CPU build), torchvision 0.28.0 and a development build of TorchLens
   from that day, with the hooked fast path. Raw data:
   [`data/capture_2026-11-08-extract.json`](data/capture_2026-11-08-extract.json).
+- `tl.extract` on GPU remeasured (2026-11-08): a 48-core Intel Xeon Gold 6126 2.60 GHz Linux GPU node with an NVIDIA GeForce RTX 2080 Ti (11 GiB), the third run's `tl.extract_dataset` machine, one torch thread per process, load average about 4.
+  Python 3.11, torch 2.14.1 and torchvision 0.29.1 built for CUDA 12.6, TorchLens 3.0.3. Raw data:
+  [`data/capture_2026-11-08-extract-gpu.json`](data/capture_2026-11-08-extract-gpu.json).
 - Recording a generation: see [its section](#recording-a-generation).
 
 Method. Each LSTM tagger and ResNet-18 row is three separate processes (two for some first-run
