@@ -7,7 +7,8 @@ reconvergence walk along a single-consumer chain, or one agreeing candidate amon
 tied ones) can only pair ops that agree. A difference is read only at a structural
 exit: the next reference op whose parents are paired or open, against the
 other-side op consuming the partners and the open region (spelling family breaks a
-tie, disclosed), or the call's recorded outputs. The open ops behind a differing
+tie, disclosed; an exit with no paired parent has no structural evidence and is
+not taken), or the call's recorded outputs. The open ops behind a differing
 exit are the placement (one op per side is an op-level placement).
 """
 
@@ -74,20 +75,29 @@ def _choose(walk: Walk, ref: str, candidates: list[str]) -> str | None:
 
     if len(candidates) <= 1:
         return candidates[0] if candidates else None
+    chosen, pool = _by_spelling(walk, ref, candidates)
+    if chosen is not None:
+        return chosen
+    agreeing = [label for label in pool if walk.judge(ref, label)]
+    if len(agreeing) == 1:
+        walk.pair(ref, agreeing[0], by_value=True)
+    else:
+        walk.ambiguous.append(ref)
+    return None
+
+
+def _by_spelling(walk: Walk, ref: str, candidates: list[str]) -> tuple[str | None, list[str]]:
+    """The one candidate sharing ``ref``'s canonical spelling, else its family; else the narrowed pool."""
+
     pool = candidates
     for attribute in ("canonical", "family"):
         wanted = getattr(walk.a.spelling[ref], attribute)
         same = [label for label in pool if getattr(walk.b.spelling[label], attribute) == wanted]
         if len(same) == 1:
             walk.spelled.append(f"{ref} -> {same[0]}")
-            return same[0]
+            return same[0], pool
         pool = same or pool
-    agreeing = [label for label in pool if walk.judge(ref, label)]
-    if len(agreeing) == 1:
-        walk.pair(ref, agreeing[0], by_value=True)
-        return None
-    walk.ambiguous.append(ref)
-    return None
+    return None, pool
 
 
 def _chain(graph: SideGraph, start: str, paired: dict[str, str]) -> list[str]:
@@ -130,8 +140,13 @@ def _step_paired(walk: Walk, ref: str) -> None:
         if label not in walk.pb and set(walk.b.parents[label]) == partners
     ]
     cand = _choose(walk, ref, candidates)
-    if cand is None:
-        return
+    if cand is not None:
+        _take(walk, ref, cand)
+
+
+def _take(walk: Walk, ref: str, cand: str) -> None:
+    """Pair a structural candidate that agrees; otherwise try to close a decomposition gap."""
+
     if walk.judge(ref, cand):
         walk.pair(ref, cand)
     else:
@@ -139,9 +154,16 @@ def _step_paired(walk: Walk, ref: str) -> None:
 
 
 def _exit_candidates(walk: Walk, ref: str) -> list[str]:
-    """Side-b ops consuming the partners of ``ref``'s paired parents plus open ops."""
+    """Side-b ops consuming the partners of ``ref``'s paired parents plus open ops.
+
+    An exit needs an anchor: with no paired parent there is no structural evidence
+    for any candidate, so none is offered and the open region runs on to a later
+    anchored exit or the call's recorded outputs.
+    """
 
     partners = {walk.pa[p] for p in walk.a.parents[ref] if p in walk.pa}
+    if not partners:
+        return []
     found = []
     for label in walk.b.walk:
         if label in walk.pb:
@@ -167,8 +189,8 @@ def region(graph: SideGraph, start: str, paired: dict[str, str]) -> tuple[str, .
     return tuple(sorted(seen, key=graph.order.__getitem__))
 
 
-def _step_exit(walk: Walk, ref: str, open_a: list[str]) -> Placement | None:
-    """``ref`` consumes open ops: find its exit pair and read the bracket outputs."""
+def _exit_pair(walk: Walk, ref: str, open_a: list[str]) -> tuple[str, list[str]] | None:
+    """``ref``'s exit candidate and its open parents, when they bracket ``open_a`` one to one."""
 
     cand = _choose(walk, ref, _exit_candidates(walk, ref))
     if cand is None:
@@ -177,19 +199,32 @@ def _step_exit(walk: Walk, ref: str, open_a: list[str]) -> Placement | None:
     same_spelling = walk.a.spelling[ref].canonical == walk.b.spelling[cand].canonical
     if len(open_a) != len(open_b) or (len(open_a) > 1 and not same_spelling):
         return None
+    return cand, open_b
+
+
+def _close_bracket(walk: Walk, open_a: list[str], open_b: list[str]) -> None:
+    """Pair agreeing bracket outputs; the ops behind them become disclosed decomposition gaps."""
+
+    for out_a, out_b in zip(open_a, open_b, strict=True):
+        walk.gaps += [label for label in region(walk.a, out_a, walk.pa) if label != out_a]
+        walk.gaps += [label for label in region(walk.b, out_b, walk.pb) if label != out_b]
+        walk.pair(out_a, out_b)
+
+
+def _step_exit(walk: Walk, ref: str, open_a: list[str]) -> Placement | None:
+    """``ref`` consumes open ops: find its exit pair and read the bracket outputs."""
+
+    found = _exit_pair(walk, ref, open_a)
+    if found is None:
+        return None
+    cand, open_b = found
     for out_a, out_b in zip(open_a, open_b, strict=True):
         if not walk.judge(out_a, out_b):
             return Placement(
                 region(walk.a, out_a, walk.pa), region(walk.b, out_b, walk.pb), f"{ref} / {cand}"
             )
-    for out_a, out_b in zip(open_a, open_b, strict=True):
-        walk.gaps += [label for label in region(walk.a, out_a, walk.pa) if label != out_a]
-        walk.gaps += [label for label in region(walk.b, out_b, walk.pb) if label != out_b]
-        walk.pair(out_a, out_b)
-    if walk.judge(ref, cand):
-        walk.pair(ref, cand)
-    else:
-        _reconverge(walk, ref, cand)
+    _close_bracket(walk, open_a, open_b)
+    _take(walk, ref, cand)
     return None
 
 
@@ -224,10 +259,15 @@ def place(walk: Walk, seeds: list[tuple[str, str]], outputs: list[tuple[str, str
         found = _step_exit(walk, ref, open_a)
         if found is not None:
             return found
+    return _output_placement(walk, outputs)
+
+
+def _output_placement(walk: Walk, outputs: list[tuple[str, str]]) -> Placement:
+    """The last exit: the first recorded output pair that differs, else no placement."""
+
     for out_a, out_b in outputs:
-        if walk.pa.get(out_a) == out_b or walk.judge(out_a, out_b):
-            continue
-        return Placement(
-            region(walk.a, out_a, walk.pa), region(walk.b, out_b, walk.pb), "module outputs"
-        )
+        if walk.pa.get(out_a) != out_b and not walk.judge(out_a, out_b):
+            return Placement(
+                region(walk.a, out_a, walk.pa), region(walk.b, out_b, walk.pb), "module outputs"
+            )
     return Placement((), (), "none")
