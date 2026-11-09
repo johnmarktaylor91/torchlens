@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1749 modules, 705202 lines, 0 modules without a docstring.
+85 packages, 1750 modules, 705436 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4635 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24007 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24008 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 110 | 49959 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
@@ -54,7 +54,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 20 | 7066 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 21 | 7321 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 13 | 9171 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6902 |
@@ -76,7 +76,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 372 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5549 |
 | `torchlens.export._model_explorer` | Google Model Explorer export: a writer for Model Explorer's file-ingest schema with module-hierarchy namespaces, op-type labels, ported e... | 16 | 3039 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 86 | 38200 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 86 | 38178 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -938,7 +938,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (16 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (75 modules, 24007 lines)
+Shared helpers used by two or more TorchLens packages. (75 modules, 24008 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -998,7 +998,7 @@ Shared helpers used by two or more TorchLens packages. (75 modules, 24007 lines)
 | `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 279 |
 | `_torch_structseq` | Repr-independent discovery of ''torch.return_types'' structseq field names. | 74 |
 | `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 455 |
-| `_type_new_slot` | CPython ''tp_new'' patching for torch's immutable legacy tensor-constructor types. | 465 |
+| `_type_new_slot` | CPython ''tp_new'' patching for torch's immutable legacy tensor-constructor types. | 466 |
 | `_type_sequence_slot` | CPython ''sq_item'' slot repair for ''torch.Tensor'' (a stdlib-only ctypes leaf). | 94 |
 | `_unchecked_kernel_denial` | Structural denial of torch kernels that skip their own memory bounds checks. | 120 |
 | `_uninit_alloc` | Uninitialized-memory value-source family: ONE closed table. | 226 |
@@ -1331,7 +1331,7 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (20 modules, 7066 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (21 modules, 7321 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1349,6 +1349,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (20 modules
 | `_finalize_totals` | Trace-level counters derived from finalized layers and ops. | 86 |
 | `_intervention_evidence` | Which backends write the intervention evidence a Trace's pristine reading uses. | 31 |
 | `_invariants` | Run the metadata-invariant tripwire from a backend's validate path. | 23 |
+| `_module_returns` | Recorded module returns: how a preview backend hands module-call outputs to the finalizer. | 255 |
 | `_options` | Shared backend trace-option defaulting and rejection helpers. | 790 |
 | `_protocol` | Backend Protocol for unified TorchLens capture. | 354 |
 | `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 206 |
@@ -1878,7 +1879,7 @@ Google Model Explorer export: a writer for Model Explorer's file-ingest schema w
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (86 modules, 38200 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (86 modules, 38178 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1941,7 +1942,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_resolver_registry` | Function registry keys and their trust-gated resolution at the execution boundary. | 738 |
 | `_rule_match` | The overlap-law rule matcher shared by every intervention door. | 96 |
 | `_run_staged` | Apply a trace's staged intervention spec on a ''run_transaction(inputs=)'' live forward. | 222 |
-| `_runtime` | Runtime context ownership for TorchLens intervention execution. | 1585 |
+| `_runtime` | Runtime context ownership for TorchLens intervention execution. | 1563 |
 | `_runtime_gradient` | Backward-pass and hook-identity helpers for live intervention hooks. | 300 |
 | `_runtime_hook_copy` | Copy helpers for a validated live hook result: reused tensors and replacement attributes. | 64 |
 | `_runtime_probes` | Storage-mutation probes for live intervention hook outputs. | 199 |
