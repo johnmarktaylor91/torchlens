@@ -183,9 +183,10 @@ def _record_pending(trace: Any, ledger: JaxReturnLedger) -> None:
                 CaptureGapWarning(
                     f"JAX module call '{address}:{call_index}' returned arrays of an inner trace "
                     "(e.g. jax.vmap: one trace-time call stands for every batch member), so no "
-                    "op is its output; its return is not recorded. Remedy: read the values "
-                    "through the enclosing module's output",
-                    code="jax_inner_trace_module_return",
+                    "op is its output; its return is not recorded, so this call has no "
+                    "output_ops, output_paths or Module.out. Remedy: read the values through "
+                    "the enclosing module's output",
+                    code="module_return_unrecorded",
                 ),
                 stacklevel=2,
             )

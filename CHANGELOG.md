@@ -7,6 +7,11 @@
 
 ### Added
 
+- **backends**: Paddle, TensorFlow, JAX and tinygrad record what each module call returned, so
+  `Module.out`, `output_ops` and `output_paths` work there, live and after loading. A returned value
+  that no recorded op produced (a tinygrad tensor nothing read, a JAX return under `jax.vmap`) is
+  left out at capture time and disclosed with a `CaptureGapWarning`, code
+  `module_return_unrecorded`.
 - **debug**: `tl.debug.compare` and `tl.debug.first_divergence` take `align=` (`"auto"`,
   `"label"`, `"structure"`) and `module_map=`. Across backends (or with `align="structure"`) they
   pair module calls by address and call order and compare recorded module outputs: each row says
