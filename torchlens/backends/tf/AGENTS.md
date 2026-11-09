@@ -53,6 +53,10 @@ TensorFlow preview backend. It fills the backend protocol (`maturity="preview"`,
 - `discover_tf_module_tree()` + `patched_tf_module_stack()` capture Keras /
   `tf.Module` module stacks via class-`__call__` patching; `tf_param_logs()`
   builds Param records from module variables.
+- `returns_hook()` extends the session's module-exit hook to record each call's returned
+  tensors (after any module-boundary intervention) into `TFModuleTree.returns`, labels from
+  the session's `producer_by_ref`; `attach_tf_module_logs()` builds module logs from it, so
+  `Module.out` works (contract: `../_module_returns.py`).
 
 ## validation.py
 - `validate_tf_trace()` / `validate_tf_trace_detailed()` replay and perturb ops

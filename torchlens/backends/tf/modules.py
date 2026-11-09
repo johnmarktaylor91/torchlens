@@ -5,15 +5,19 @@ from __future__ import annotations
 import inspect
 import time
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, cast
 
 from ..._data_classes.param import Param
+from ..._data_classes.trace import Trace
 from ..._ir.events import ModuleFrame
 from ..._ir.refs import DeviceRef, DtypeRef
 from .._finalize import numel_from_shape as _numel, value_nbytes as _nbytes
+from .._module_returns import ModuleReturnLedger, attach_object_module_logs_with_returns
+from ._tensor_leaves import _is_tf_tensor_like
+from ._tensor_probe import _tensor_ref_key
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,8 @@ class TFModuleTree:
         Per-module call counts observed during capture.
     forward_args_by_call
         Forward call args keyed by ``(address, call_index)``.
+    returns
+        Tensors each module call returned, recorded at module exit.
     """
 
     root: Any
@@ -51,6 +57,7 @@ class TFModuleTree:
     variables_by_id: dict[int, Any]
     call_counts: dict[str, int]
     forward_args_by_call: dict[tuple[str, int], tuple[tuple[Any, ...], dict[str, Any]]]
+    returns: ModuleReturnLedger = field(default_factory=ModuleReturnLedger)
 
 
 def discover_tf_module_tree(model: Any, tf: Any) -> TFModuleTree | None:
@@ -162,6 +169,71 @@ def patched_tf_module_stack(
         yield
     finally:
         _restore_installed()
+
+
+def returns_hook(session: Any) -> Callable[..., Any] | None:
+    """Return a session's module-exit hook extended to record each call's returned tensors.
+
+    The returned hook first applies the session's own hook (a module-boundary intervention,
+    when one is planned), then records the value the call returns to its caller into the
+    module tree's ledger, with labels read at exit from the session's producer map. The
+    contract is in ``torchlens/backends/_module_returns.py``.
+
+    Parameters
+    ----------
+    session
+        TensorFlow eager capture session about to run.
+
+    Returns
+    -------
+    Callable[..., Any] | None
+        Hook called as ``(frame, module_type, output, module_stack)``, or the session's own
+        hook unchanged when no module tree is attributed.
+    """
+
+    tree = session.module_tree
+    user_hook = session.module_exit_hook
+    if tree is None:
+        return cast("Callable[..., Any] | None", user_hook)
+    tf = session.tf
+
+    def is_leaf(value: object) -> bool:
+        """Return whether ``value`` is a TensorFlow tensor or variable."""
+
+        return _is_tf_tensor_like(value, tf)
+
+    def label_of(tensor: object) -> str | None:
+        """Return the raw label of the op that produced ``tensor``, if recorded."""
+
+        return cast("str | None", session.producer_by_ref.get(_tensor_ref_key(tensor)))
+
+    def hook(frame: ModuleFrame, module_type: str, output: Any, module_stack: Any) -> Any:
+        """Apply the session's hook, then record the call's returned tensors."""
+
+        if user_hook is not None:
+            output = user_hook(frame, module_type, output, module_stack)
+        tree.returns.record(
+            frame.address, frame.call_index, output, is_leaf=is_leaf, label_of=label_of
+        )
+        return output
+
+    return hook
+
+
+def attach_tf_module_logs(trace: Trace, tree: TFModuleTree, **shared_options: Any) -> None:
+    """Build TensorFlow object-module logs with module outputs from the recorded returns.
+
+    Parameters
+    ----------
+    trace
+        Trace whose ops are finalized and whose module logs are not yet built.
+    tree
+        Discovered module tree carrying the capture's ledger.
+    **shared_options
+        Keyword options of ``_finalize.attach_object_module_logs``.
+    """
+
+    attach_object_module_logs_with_returns(trace, tree, returns=tree.returns, **shared_options)
 
 
 def _variable_nbytes(variable: Any, shape: tuple[int, ...]) -> int:
