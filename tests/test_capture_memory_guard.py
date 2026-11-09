@@ -27,10 +27,11 @@ def _codes(caught: list[warnings.WarningMessage]) -> list[object]:
     ]
 
 
-def _capture(save: object = "all") -> list[warnings.WarningMessage]:
+def _capture(save: object = "all", **capture: object) -> list[warnings.WarningMessage]:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.trace(nn.Linear(4, 4), torch.randn(2, 4), save=save)
+        options = tl.options.CaptureOptions(**capture) if capture else None
+        tl.trace(nn.Linear(4, 4), torch.randn(2, 4), save=save, capture=options)
     return caught
 
 
@@ -68,3 +69,15 @@ def test_quiet_silences_the_guard_by_code(monkeypatch: pytest.MonkeyPatch) -> No
         with tl.errors.quiet(CODE):
             tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
     assert CODE not in _codes(caught)
+
+
+@pytest.mark.parametrize("save_mode", ["view", "copy"])
+def test_guard_is_quiet_when_the_budget_is_switched_off(
+    monkeypatch: pytest.MonkeyPatch, save_mode: str
+) -> None:
+    """``save_budget=None`` turns budgeting off on purpose: no warning, and the once is not spent."""
+
+    monkeypatch.setattr(epilogue, "_CAPTURE_MEMORY_THRESHOLD", 0)
+    monkeypatch.setattr(epilogue, "_CAPTURE_MEMORY_WARNED", False)
+    assert CODE not in _codes(_capture(save_mode=save_mode, save_budget=None))
+    assert _codes(_capture(save_mode=save_mode)).count(CODE) == 1

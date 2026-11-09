@@ -525,7 +525,8 @@ class CaptureOptions(_OptionsDisplay):
             enforced per device. ``"auto"`` (the default)
             allows half of each device's *available* memory measured at that device's
             first save; a float in ``(0, 1]`` sets a different fraction; an int sets
-            an absolute per-device byte cap; ``None`` disables budgeting. Crossing the
+            an absolute per-device byte cap; ``None`` disables budgeting (and the
+            once-per-session 1 GiB capture-size warning). Crossing the
             budget stops capture with
             :class:`torchlens.errors.SaveBudgetExceededError`. The primary retained copy
             is admitted before allocation from source-tensor bytes and retained storage

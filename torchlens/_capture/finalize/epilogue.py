@@ -248,9 +248,16 @@ _CAPTURE_MEMORY_WARNED = False
 
 
 def _warn_once_capture_memory_threshold(trace: Trace) -> None:
-    """Warn once per session when a capture's saved activations pass the size threshold."""
+    """Warn once per session when a capture's saved activations pass the size threshold.
+
+    ``save_budget=None`` is the caller switching memory budgeting off on purpose (for
+    example a ``save_mode="view"`` capture that keeps live activations for autograd), so
+    the guard stays quiet for that capture and does not spend its once-per-session warning.
+    """
 
     global _CAPTURE_MEMORY_WARNED
+    if trace.save_budget is None:
+        return
     saved = trace._cost_saved_activation_memory
     if _CAPTURE_MEMORY_WARNED or int(saved) <= _CAPTURE_MEMORY_THRESHOLD:
         return

@@ -203,8 +203,8 @@ expert contributions from routing indices alone.
   `fields["code"]` is listed; a bare call lasts for the session and `with tl.errors.quiet(...):`
   restores the prior state at the end of the block. A capture that keeps more than 1 GiB of saved
   activations warns once per session with code `capture_memory_threshold_exceeded`, naming
-  `save=` selectors and `save='stats'` as the remedy; `tl.errors.quiet("capture_memory_threshold_exceeded")`
-  hides it.
+  `save=` selectors and `save='stats'` as the remedy (a capture with `save_budget=None` never warns);
+  `tl.errors.quiet("capture_memory_threshold_exceeded")` hides it.
 - **A default `tl.trace` is a pure observer** (`carry_state`,
   `Module.attribute_writes` and `torchlens.types.AttributeWrite` DOCUMENTED-UNSTABLE): buffers
   (persistent and non-persistent), every module's `training` flag, the global random states and
