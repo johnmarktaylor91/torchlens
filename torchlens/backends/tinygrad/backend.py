@@ -50,7 +50,7 @@ from ...recording._types import CaptureSpec
 from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._finalize import (
     attach_function_root_module,
-    attach_object_module_logs,
+    attach_object_module_logs_with_returns,
     finalize_single_pass_trace,
     join_module_address as _join_module_address,
     mirror_param_derived_grads,
@@ -84,6 +84,7 @@ from ._derived_grads import (
     _tree_leaves_with_paths,
 )
 from ._execution_guard import _reject_mid_capture_execution
+from ._module_tree import TinygradModuleFrame, TinygradModuleTree, note_return, record_returns
 from ._raw_labels import _final_to_raw_labels
 from ._realize_once import RealizedCapture, live_tensor_uops, realize_capture, recorded_values
 from ._rules import (
@@ -147,59 +148,6 @@ class GradOptions:
         normalized = None if input_grad_argnums is None else tuple(input_grad_argnums)
         object.__setattr__(self, "input_grad_argnums", normalized)
         object.__setattr__(self, "intermediate_grads", bool(intermediate_grads))
-
-
-@dataclass(frozen=True)
-class TinygradModuleFrame:
-    """One observed tinygrad object-module stack frame.
-
-    Parameters
-    ----------
-    address
-        Primary TorchLens module address.
-    call_index
-        One-based call index for the primary address.
-    module_type
-        Runtime class name for the module object.
-    """
-
-    address: str
-    call_index: int
-    module_type: str
-
-
-@dataclass(frozen=True)
-class TinygradModuleTree:
-    """Discovered tinygrad object-module tree.
-
-    Parameters
-    ----------
-    root
-        Root callable object.
-    metadata
-        TorchLens module metadata keyed by primary address.
-    address_by_id
-        Primary module address keyed by object identity.
-    modules_by_class
-        Module instance addresses grouped by class for scoped ``__call__`` patching.
-    param_owner_by_address
-        Owning module address keyed by parameter address.
-    param_address_by_uop_id
-        Parameter address keyed by exact tensor UOp object identity.
-    call_counts
-        Per-primary-address call counts recorded during capture.
-    forward_args_by_call
-        Forward args keyed by ``(primary_address, call_index)``.
-    """
-
-    root: Any
-    metadata: dict[str, dict[str, Any]]
-    address_by_id: dict[int, str]
-    modules_by_class: dict[type[Any], dict[int, str]]
-    param_owner_by_address: dict[str, str]
-    param_address_by_uop_id: dict[int, str]
-    call_counts: dict[str, int]
-    forward_args_by_call: dict[tuple[str, int], tuple[tuple[Any, ...], dict[str, Any]]]
 
 
 def _uop_annotations(
@@ -829,10 +777,12 @@ class TinygradBackend:
             Captures used by live validation.
         """
 
-        return tuple(
+        captures = tuple(
             self._emit_uop(trace, (uop, tensor, model_uop, owned), uop_labels, observed)
             for uop, tensor, model_uop, owned in recorded_values(capture)
         )
+        record_returns(observed[2], uop_labels)
+        return captures
 
     def _emit_uop(
         self,
@@ -1265,7 +1215,7 @@ class TinygradBackend:
             ``trace.modules`` is populated by the shared module-log builder.
         """
 
-        attach_object_module_logs(
+        attach_object_module_logs_with_returns(
             trace,
             tree,
             normalize_module_calls=normalize_op_module_calls,
@@ -1895,7 +1845,7 @@ def scoped_tinygrad_module_calls(
                     )
                 )
                 try:
-                    return __original(self, *args, **kwargs)
+                    return note_return(tree, address, call_index, __original(self, *args, **kwargs))
                 finally:
                     _ACTIVE_TINYGRAD_MODULE_STACK.pop()
 

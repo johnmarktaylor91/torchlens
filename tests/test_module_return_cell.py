@@ -335,13 +335,92 @@ class NnxKit(EquinoxKit):
         return self.nnx.Linear(_WIDTH, _WIDTH, rngs=self.nnx.Rngs(next(self.keys)))
 
 
+class TinygradKit(TorchKit):
+    """Kit for the tinygrad preview backend (plain Python objects are its modules)."""
+
+    name = "tinygrad"
+    inserts_identity = False
+
+    def load(self) -> None:
+        """Import tinygrad or skip."""
+
+        self.Tensor = pytest.importorskip("tinygrad").Tensor
+        self.gnn = pytest.importorskip("tinygrad.nn")
+        self.Tensor.manual_seed(0)
+
+    def build_module(self, call: Callable[..., Any], **children: Any) -> Any:
+        """Wrap ``call(self, *args)`` as a plain object holding ``children``."""
+
+        class _Cell:
+            """Cell module whose ``__call__`` is the case callable."""
+
+            def __init__(self) -> None:
+                """Register the children."""
+
+                for name, child in children.items():
+                    setattr(self, name, child)
+
+            def __call__(self, *args: Any) -> Any:
+                """Run the case callable."""
+
+                return call(self, *args)
+
+        return _Cell()
+
+    def linear(self) -> Any:
+        """Return a square linear layer."""
+
+        return self.gnn.Linear(_WIDTH, _WIDTH)
+
+    def relu(self, value: Any) -> Any:
+        """Return the rectified value."""
+
+        return value.relu()
+
+    def add(self, left: Any, right: Any) -> Any:
+        """Return the elementwise sum."""
+
+        return left + right
+
+    def input(self) -> Any:
+        """Return a deterministic model input."""
+
+        values = np.linspace(-1.0, 1.0, 2 * _WIDTH, dtype=np.float32).reshape(2, _WIDTH)
+        return self.Tensor(values)
+
+    def is_leaf(self, value: object) -> bool:
+        """Return whether ``value`` is a native array."""
+
+        return isinstance(value, self.Tensor)
+
+    def to_numpy(self, value: Any) -> np.ndarray:
+        """Convert a native array to numpy."""
+
+        return np.asarray(value.numpy())
+
+    def set_training(self, model: Any, training: bool) -> None:
+        """tinygrad modules carry no train/eval flag: nothing to set."""
+
+    def training(self, module: Any) -> bool:
+        """tinygrad modules carry no train/eval flag; the backend records ``False``."""
+
+        return False
+
+    def trace(self, model: Any, value: Any) -> Any:
+        """Capture ``model(value)`` on the tinygrad backend."""
+
+        return tl.trace(model, value, backend="tinygrad")
+
+
 _MLX_MARKS = (pytest.mark.backend_mlx, pytest.mark.optional, pytest.mark.rare)
 _JAX_MARKS = (pytest.mark.backend_jax, pytest.mark.optional, pytest.mark.rare)
+_TINYGRAD_MARKS = (pytest.mark.backend_tinygrad, pytest.mark.optional, pytest.mark.rare)
 KITS = (
     pytest.param(TorchKit, id="torch"),
     pytest.param(MLXKit, id="mlx", marks=_MLX_MARKS),
     pytest.param(EquinoxKit, id="equinox", marks=_JAX_MARKS),
     pytest.param(NnxKit, id="nnx", marks=_JAX_MARKS),
+    pytest.param(TinygradKit, id="tinygrad", marks=_TINYGRAD_MARKS),
 )
 
 

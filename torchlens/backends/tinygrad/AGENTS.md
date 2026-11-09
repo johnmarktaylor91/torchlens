@@ -54,7 +54,8 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
   including intermediates (`TinygradIntermediateCandidate`,
   `intermediate_derived_grads=True`).
 - Module identity: `discover_tinygrad_module_tree()` builds
-  `TinygradModuleTree` / `TinygradModuleFrame`; `scoped_tinygrad_module_calls`
+  `TinygradModuleTree` / `TinygradModuleFrame` (defined in `_module_tree.py`,
+  re-imported here); `scoped_tinygrad_module_calls`
   scopes call frames, `_module_stack_for_uop` attributes UOps to modules, and
   `tinygrad_param_logs()` builds Param records from module tensor attrs.
 - Recurrence grouping runs through the shared
@@ -79,3 +80,11 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
 - Capture correctness depends on unrealized UOp lineage: anything that forces
   realization mid-capture must stay a typed refusal.
 - `capabilities.py` only re-exports registry truth; never hardcode flags here.
+
+## _module_tree.py
+- Module tree dataclasses plus recorded module returns (the shared seam in
+  `../_module_returns.py`): the call wrapper's `note_return` keeps each returned
+  value and its tensors' UOps at exit; `record_returns` (end of `_emit_uop_graph`)
+  resolves them through `uop_labels`; module logs build through
+  `attach_object_module_logs_with_returns`. Lazy gotcha: a returned tensor nothing
+  reads is never computed, has no op, and is not represented.
