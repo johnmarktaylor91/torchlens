@@ -597,8 +597,6 @@ def _walk_equinox_modules(
     seen_child_ids: set[int] = set()
     child_addresses = []
     for child_address, child_module in _iter_equinox_module_children(module, address):
-        if not is_equinox_module(child_module):
-            continue
         child_id = id(child_module)
         if child_id in seen_child_ids:
             continue
@@ -711,7 +709,7 @@ def _walk_nnx_modules(
 
 
 def _iter_equinox_module_children(module: Any, address: str) -> Iterator[tuple[str, Any]]:
-    """Yield direct Equinox module children from dataclass fields.
+    """Yield direct Equinox module children from dataclass fields and list or tuple fields.
 
     Parameters
     ----------
@@ -729,11 +727,12 @@ def _iter_equinox_module_children(module: Any, address: str) -> Iterator[tuple[s
     if not is_dataclass(module):
         return
     for field in fields(module):
-        if not hasattr(module, field.name):
-            continue
-        child = getattr(module, field.name)
-        if is_equinox_module(child):
-            yield _join_module_address(address, field.name), child
+        child = getattr(module, field.name, None)
+        items = enumerate(child) if isinstance(child, (list, tuple)) else ((None, child),)
+        for index, item in items:
+            if is_equinox_module(item):
+                name = field.name if index is None else f"{field.name}.{index}"
+                yield _join_module_address(address, name), item
 
 
 def _iter_nnx_module_children(module: Any, address: str) -> Iterator[tuple[str, Any]]:

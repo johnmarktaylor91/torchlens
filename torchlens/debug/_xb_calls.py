@@ -14,8 +14,9 @@ output and stays out of ``output_ops``. The reader appends those passthrough ops
 the call's own outputs, the order torch's exit-time identity ops take, so both spellings
 give the same output roster. Two more reads fill what preview backends do not record:
 the root call's outputs are the trace's outputs (on every backend, in the trace's output
-order), and a call with no recorded ``input_ops`` takes as inputs the ops outside it
-that feed its own ops, the producers torch records as ``input_ops``.
+order), its inputs without recorded input ops are the trace's inputs, and a call with no
+recorded ``input_ops`` takes as inputs the ops outside it that feed its own ops, the
+producers torch records as ``input_ops``.
 """
 
 from __future__ import annotations
@@ -181,12 +182,16 @@ def _inputs(
 ) -> tuple[str, ...]:
     """The call's recorded input ops, else the ops outside it that feed its own ops.
 
-    A call with no ops of its own (a recorded pass-through) returned its input, so
+    A root call without recorded input ops reads the trace's input ops (JAX records
+    neither root inputs nor nested ops on the root). A call with no ops of its own (a recorded pass-through) returned its input, so
     its outputs are its inputs.
     """
 
     if call.input_ops:
         return tuple(str(label) for label in call.input_ops)
+    if call.address == ROOT_ADDRESS and trace.input_layers:
+        resolved = (_op_from_label(trace, str(label)) for label in trace.input_layers)
+        return tuple(dict.fromkeys(_op_label(op) for op in resolved if op is not None))
     inside = {str(label) for label in (call.ops or ())}
     if not inside:
         return outputs
