@@ -1019,3 +1019,36 @@ def test_a_mask_like_input_cannot_inflate_the_atol_floor() -> None:
     floor = 10 * torch.finfo(torch.float32).eps * float(x.double().square().mean().sqrt())
     assert row["atol"] == pytest.approx(floor)
     assert tl.debug.first_divergence(trace_a, trace_b)["op"] == "zero:1"  # type: ignore[index]
+
+
+class _ResidueLayerNorm(nn.LayerNorm):
+    """LayerNorm plus a constant: the port's rounding residue (or a bias bug) on zero rows."""
+
+    def __init__(self, width: int, residue: float) -> None:
+        """Hold the residue added to the normalized output."""
+
+        super().__init__(width)
+        self.residue = residue
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalize, then add the residue."""
+
+        return super().forward(x) + self.residue
+
+
+@pytest.mark.parametrize(
+    ("residue", "outcome"),
+    [(1e-6, "equal"), (1e-4, "different")],
+    ids=["rounding-residue-equal", "bias-bug-different"],
+)
+def test_float32_layernorm_over_constant_rows(residue: float, outcome: str) -> None:
+    """Side a normalizes constant rows to exact zeros; a 1e-6 residue is rounding, 1e-4 a bug."""
+
+    x = torch.full((2, 4), 0.5)
+    trace_a, trace_b = _traces(
+        nn.Sequential(nn.LayerNorm(4)), nn.Sequential(_ResidueLayerNorm(4, residue)), x
+    )
+    row = _frame(trace_a, trace_b).set_index("op").loc["0:1"]
+    assert row["outcome"] == outcome, (row["atol"], row["max_abs"])
+    floor = 500 * torch.finfo(torch.float32).eps * 0.5
+    assert row["atol"] == pytest.approx(floor)
