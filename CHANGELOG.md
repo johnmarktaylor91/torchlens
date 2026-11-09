@@ -35,6 +35,12 @@
   on. Preview artifacts saved before this change still load and keep the labels they were saved
   with (loading does not renumber), so a label read from an old artifact can be one step higher
   than the same op's label in a new capture.
+- **backends**: preview ops computed directly in the root module now carry no module owner, as on
+  PyTorch: `op.module` is `None` and `op.modules` no longer starts with `"self:1"` (an op inside a
+  submodule reads `("lin:1",)`, not `("self:1", "lin:1")`). The root module still lists every
+  op. A capture refuses an op recorded outside the root call, and validation
+  still fails an op with no module claim unless the root call alone lists it. Preview artifacts
+  saved before this change still load and keep their saved `"self:1"` frames.
 
 ### Fixed
 
