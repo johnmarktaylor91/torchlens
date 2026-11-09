@@ -39,6 +39,22 @@ Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="previ
   `decode_module_scope()` / `decode_module_call_scope()` decode the `tlm_` /
   `tlc_` scope-label prefixes that thread module identity through the jaxpr.
 
+## _return_ledger.py, _module_return_probe.py
+- Recorded module returns (the shared seam in `../_module_returns.py`). Module calls
+  run under `jax.make_jaxpr`, so returns are tracers: `extend` traces the model plus
+  every top-level tracer leaf a module call returned as extra jaxpr outputs, `strip`
+  gives the backend the same jaxpr without them (stamped; same equations, no op
+  added), `split_outputs` moves the extra outputs off the interpreter result, and
+  `note_return_labels` / `build_module_logs_with_returns` resolve them to op labels.
+  A call under `jax.vmap` (inner-trace tracers) stays unrecorded, never guessed;
+  control flow refuses earlier (strict surface, the root is module `self`). The probe
+  must not import import-cycle members (`jaxpr.py`, `_postprocess.finalization`):
+  backend.py passes them in, which keeps `largest_scc` at its baseline.
+
+## _pytree_param_barcodes.py
+- Stamps param barcodes on raw pytree ops before recurrence grouping (the full
+  attachment runs after it), so distinct same-shape modules stay separate layers.
+
 ## capabilities.py
 - Registry-backed re-exports only. Per the registry: `can_intervene=False`,
   `intermediate_derived_grads=True`, backward capture / fastlog / rng replay /
