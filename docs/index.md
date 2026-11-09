@@ -41,7 +41,7 @@ trace.draw(module="transformer.h.5.mlp.act")  # draw the graph of the MLP's GELU
 
 ![TorchLens drawing of every operation inside the GELU module of GPT-2 block 5's MLP](images/home/readme_gelu_v3.svg){ width="400" }
 
-This figure zooms in on the MLP's GELU module; here is [the whole GPT-2 graph](https://modelmenagerie.ai/models/gpt2-huggingface/). Each node is one tensor operation. For instance, `tanh_6_266` is the 6th `tanh` operation and the 266th operation overall. The function name and call number are enough on their own, so `trace["tanh_6"]` and `trace["tanh_6_266"]` return the same operation. A trace can also be indexed by a module's address (`trace["transformer.h.5.mlp"]`) or by a selector (below).
+This figure zooms in on the MLP's GELU module; here is [the whole GPT-2 graph](https://modelmenagerie.ai/models/gpt2-huggingface/). Each node is one tensor operation. For instance, `tanh_6_270` is the 6th `tanh` operation and the 270th operation overall. The function name and call number are enough on their own, so `trace["tanh_6"]` and `trace["tanh_6_270"]` return the same operation. A trace can also be indexed by a module's address (`trace["transformer.h.5.mlp"]`) or by a selector (below).
 
 Since the trace holds everything, TorchLens doesn't need a separate tool for every question. A small "basis set" of composable tools covers just about anything you'd want to do when inspecting or intervening on a network:
 
@@ -57,7 +57,6 @@ Since the trace holds everything, TorchLens doesn't need a separate tool for eve
 
 ```bash
 pip install torchlens                       # with pip
-conda install -c conda-forge torchlens      # or with conda
 
 # Install Graphviz to draw a model's computational graph (https://graphviz.org/download/):
 sudo apt install graphviz    # Debian/Ubuntu

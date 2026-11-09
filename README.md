@@ -60,7 +60,7 @@ trace.draw(module="transformer.h.5.mlp.act")  # draw the graph of the MLP's GELU
   <img alt="TorchLens drawing of every operation inside the GELU module of GPT-2 block 5's MLP" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/readme_gelu_v3.svg" width="400">
 </picture>
 
-This figure zooms in on the MLP's GELU module; here is [the whole GPT-2 graph](https://modelmenagerie.ai/models/gpt2-huggingface/). Each node is one tensor operation. For instance, `tanh_6_266` is the 6th `tanh` operation and the 266th operation overall. The function name and call number are enough on their own, so `trace["tanh_6"]` and `trace["tanh_6_266"]` return the same operation. A trace can also be indexed by a module's address (`trace["transformer.h.5.mlp"]`) or by a selector (below).
+This figure zooms in on the MLP's GELU module; here is [the whole GPT-2 graph](https://modelmenagerie.ai/models/gpt2-huggingface/). Each node is one tensor operation. For instance, `tanh_6_270` is the 6th `tanh` operation and the 270th operation overall. The function name and call number are enough on their own, so `trace["tanh_6"]` and `trace["tanh_6_270"]` return the same operation. A trace can also be indexed by a module's address (`trace["transformer.h.5.mlp"]`) or by a selector (below).
 
 That one `tl.trace` call runs your model as usual and logs the result of every operation it executes, not just module outputs. Because the `Trace` object returned by this function holds every step of the forward pass, it can answer questions that require the whole computational graph: which units influence which other units (receptive and projective fields), whether replaying each step reproduces its saved result (`tl.validate`), or how results change downstream when you edit one activation. A trace with gaps (e.g., module outputs only) cannot fully answer such questions.
 
@@ -124,7 +124,7 @@ trace["tanh_6"].autograd.grad_fn.calls[0].grad_inputs[0].shape  # torch.Size([1,
 ```python
 print(trace["tanh_6"])  # everything TorchLens knows about one operation
 # Layer tanh_6: float32 [1, 5, 3072] on cpu, min -1.000 max 0.9937 mean -0.4892 sd 0.4728
-#   position  operation 266 of 541
+#   position  operation 270 of 545
 #   module    transformer.h.5.mlp.act
 #   output    15,360 values, 60.0 KiB
 #   values    min -1.000  max 0.9937  mean -0.4892  sd 0.4728
@@ -588,7 +588,6 @@ The [visualization guide](docs/guides/visualization.md) covers the rest of the d
 
 ```bash
 pip install torchlens                       # with pip
-conda install -c conda-forge torchlens      # or with conda
 pip install "torchlens[hf,tabular]"         # what the examples in this README use
 
 # Install Graphviz to draw a model's computational graph (https://graphviz.org/download/):
