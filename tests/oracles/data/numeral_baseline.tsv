@@ -3388,9 +3388,9 @@ docs-md	docs/maintainers/where.md	1253
 docs-md	docs/maintainers/where.md	1257
 docs-md	docs/maintainers/where.md	126
 docs-md	docs/maintainers/where.md	1263
-docs-md	docs/maintainers/where.md	12686
 docs-md	docs/maintainers/where.md	127
 docs-md	docs/maintainers/where.md	12733
+docs-md	docs/maintainers/where.md	12735
 docs-md	docs/maintainers/where.md	1274
 docs-md	docs/maintainers/where.md	1278
 docs-md	docs/maintainers/where.md	1279
@@ -3519,6 +3519,7 @@ docs-md	docs/maintainers/where.md	184
 docs-md	docs/maintainers/where.md	185
 docs-md	docs/maintainers/where.md	1858
 docs-md	docs/maintainers/where.md	186
+docs-md	docs/maintainers/where.md	187
 docs-md	docs/maintainers/where.md	1872
 docs-md	docs/maintainers/where.md	188
 docs-md	docs/maintainers/where.md	1887
@@ -4048,7 +4049,7 @@ docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	707
-docs-md	docs/maintainers/where.md	707406
+docs-md	docs/maintainers/where.md	707455
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	711
 docs-md	docs/maintainers/where.md	712
@@ -7546,6 +7547,7 @@ package-docstrings	torchlens/debug/_gradients.py	11
 package-docstrings	torchlens/debug/_gradients.py	128
 package-docstrings	torchlens/debug/_gradients.py	16
 package-docstrings	torchlens/debug/_graph.py	0.75
+package-docstrings	torchlens/debug/_graph.py	10
 package-docstrings	torchlens/debug/_graph.py	16
 package-docstrings	torchlens/debug/_graph.py	1_1
 package-docstrings	torchlens/debug/_graph.py	2_3
@@ -7570,6 +7572,8 @@ package-docstrings	torchlens/debug/_rerun.py	1_2
 package-docstrings	torchlens/debug/_rerun.py	2.0
 package-docstrings	torchlens/debug/_rerun.py	57
 package-docstrings	torchlens/debug/_rerun.py	64
+package-docstrings	torchlens/debug/_xb_tolerance.py	1.0
+package-docstrings	torchlens/debug/_xb_tolerance.py	10
 package-docstrings	torchlens/debug/_xb_tolerance.py	135
 package-docstrings	torchlens/debug/_xb_tolerance.py	19
 package-docstrings	torchlens/debug/_xb_tolerance.py	2.3
@@ -7577,6 +7581,7 @@ package-docstrings	torchlens/debug/_xb_tolerance.py	22
 package-docstrings	torchlens/debug/_xb_tolerance.py	32
 package-docstrings	torchlens/debug/_xb_tolerance.py	360
 package-docstrings	torchlens/debug/_xb_tolerance.py	64
+package-docstrings	torchlens/debug/_xb_values.py	1.0
 package-docstrings	torchlens/differential.py	1.0
 package-docstrings	torchlens/differential.py	15
 package-docstrings	torchlens/distributed/_audit.py	1.3
@@ -8871,6 +8876,7 @@ test-docstrings	tests/test_data_substrate_extraction_v2.py	14
 test-docstrings	tests/test_data_substrate_extraction_v2.py	16
 test-docstrings	tests/test_data_substrate_transforms.py	13
 test-docstrings	tests/test_dead_config_debloat.py	47
+test-docstrings	tests/test_debug_cross_backend_modules.py	12
 test-docstrings	tests/test_debug_cross_backend_modules.py	16
 test-docstrings	tests/test_debug_cross_backend_modules.py	16,
 test-docstrings	tests/test_debug_cross_backend_modules.py	2.1
