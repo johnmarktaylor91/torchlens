@@ -205,20 +205,24 @@ True __sub__
 
 ## `compare`
 
-`tl.debug.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares the saved
-activations of paired operations and returns a tabular `Report` whose
-`.to_pandas()` DataFrame carries aggregate counts in `attrs`.
+`tl.debug.compare(trace_a, trace_b, *, rtol=None, atol=None, align="auto", module_map=None)`
+compares the saved activations of paired operations and returns a tabular `Report` whose
+`.to_pandas()` DataFrame carries aggregate counts in `attrs`. On one backend it pairs
+operations (default tolerance `rtol=1e-5, atol=1e-8`); across backends, or with
+`align="structure"`, it pairs module calls (see
+[Comparing runs from different backends](#comparing-runs-from-different-backends)).
 
-How operations pair: when the two traces have the same graph fingerprint
-(`trace.provenance.fingerprint`), operations pair by label. When the graphs differ, for
-example one run has an extra `x * 1.0`, every later label shifts, so operations pair by
-graph structure instead: same module, same function, already-paired inputs, in execution
-order, and never by value. An operation with no structural partner is an `only-a` or
-`only-b` row, so an inserted operation is reported as itself and every other operation is
+How operations pair under `align="auto"` on one backend: when the two traces have the same
+graph fingerprint (`trace.provenance.fingerprint`), operations pair by label. When the graphs
+differ, for example one run has an extra `x * 1.0`, every later label shifts, so operations
+pair by graph structure instead: same module, same function, already-paired inputs, in
+execution order, and never by value. An operation with no structural partner is an `only-a`
+or `only-b` row, so an inserted operation is reported as itself and every other operation is
 still compared. When operations with the same structure differ in number between the two
 runs (two identical `relu` calls on one input against one), TorchLens cannot tell which
 correspond, so none of them pairs and their rows say `ambiguous`. A row paired by
-structure under a different label notes `paired by graph structure` in `reason`. Runs on different devices
+structure under a different label notes `paired by graph structure` in `reason`.
+`align="label"` always pairs by label, even when the fingerprints differ. Runs on different devices
 are compared on the CPU and different dtypes in the wider dtype; each row's `reason`
 and the card's coverage line name the alignment. Integer and boolean activations
 (indices, masks) must match exactly.
@@ -625,8 +629,8 @@ Deepcopy-refusing models return `inconclusive` with a `model_factory` remedy.
 
 ## `first_divergence`
 
-`tl.debug.first_divergence(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` returns the first
-EXECUTION-ORDER row where two traces separate (value, shape, or structural), or `None`.
+`tl.debug.first_divergence(trace_a, trace_b, *, rtol=None, atol=None, align="auto", module_map=None)`
+returns the first EXECUTION-ORDER row where two traces separate (value, shape, or structural), or `None`.
 It is the direct spelling of the first-diverging-op recipe over [`compare`](#compare),
 whose rows follow execution order -- never alphabetical -- and pairs operations the same
 way. Operations found only in `trace_b` come after every paired row, so with one inserted
@@ -635,27 +639,69 @@ inserted operation alone, the inserted operation is.
 
 ## Comparing runs from different backends
 
-[`compare`](#compare) and [`first_divergence`](#first_divergence) pair the operations of two
-traces by label. That works for two runs captured on the same backend: two inputs, two
-devices, two dtypes or two versions of a model, all on PyTorch (or all on one preview backend).
+[`compare`](#compare) and [`first_divergence`](#first_divergence) choose how to pair two runs with
+`align=`. On one backend the default (`align="auto"`) pairs operations by label or graph structure, as above. Across
+backends (`trace.provenance.backend` differs, for example a PyTorch trace and an MLX trace of the
+same model) operation labels and order do not correspond, so `"auto"` pairs **module calls**
+instead (`align="structure"` asks for the same on any pair). `align="label"` across backends is
+refused with `tl.errors.BackendUnsupportedError` (code `backend_unsupported`) before any value is
+read.
 
-Two traces from different backends (`trace.provenance.backend` differs, for example a PyTorch
-trace and an MLX trace of the same model) are refused with
-`tl.errors.BackendUnsupportedError` (code `backend_unsupported`) before any value is read.
-Operation labels and operation order do not correspond across backends: each backend numbers
-and spells its operations its own way, so joining the runs by label would name the first
-operation as a divergence even for a correct port, or compare two unrelated operations whose
-labels happen to match. The refusal holds for saved and reloaded traces too.
+**How module calls pair.** By address and call index, never by value: the same address on both
+sides; the same address after dropping a container that is never called (an MLX list `layers.0`
+meets a torch `Sequential` child `0`, a torch `ModuleList` `model.layers.0` meets MLX
+`model.layers.0`); repeated calls in observed order under the same parent call. A port that
+renamed modules passes `module_map={"blocks": "layers"}` (side-a prefix to side-b prefix); those
+pairs are marked `asserted`. A call with no partner (a torch-only `lm_head` whose MLX twin is
+computed inside the root, an MLX-only `rope`) is a coverage gap, never a divergence.
+
+**What each row says.** Module rows add `module_b` (the partner call), `alignment` (`supported`,
+`asserted`, `ambiguous`, `absent`), `outcome` (`equal`, `different`, `shape-incompatible`,
+`unavailable`, `not-evaluated`), the effective `rtol` and `atol`, any `transform` applied, and
+`inputs_agree`. `different` appears only on a `supported` or `asserted` row. Rows follow side a's
+module-exit order, so an inner module comes before the module that returns its value, and a
+module whose output agrees again later never hides an earlier difference.
+
+**Tolerance.** Values compare at the wider dtype. Across backends a module output agrees when its
+relative RMS error is within tolerance: `rms(a - b) <= atol + rtol * rms(a)`, with `trace_a` as the
+reference. The default comes from the narrower dtype of each pair: float32 `1e-4`, float16
+`5e-2`, bfloat16 `0.75`, `atol=0`. These were measured on SmolLM2 (mlx-lm against the Hugging Face
+PyTorch model): in float32 they catch one-percent-sized bugs (an attention scale, a RoPE base, a
+swapped activation) at their own module. Half precision catches only gross bugs; rows in float16
+or bfloat16 say so, and the advice is to compare float32 runs of both sides. Passing `rtol=` or
+`atol=` replaces the constant in the same form. Two runs on one backend keep `torch.allclose` with
+`rtol=1e-5, atol=1e-8`.
+
+**Shapes.** A leading size-one axis present on one side only (a batch of one against no batch
+axis) is dropped and shown in `transform`; any other difference in the model inputs' shapes
+refuses. Convolution, pooling and channel-normalization modules may be channels-last on one side;
+that transform applies only when it is the one listed transform that fits the shapes. When equal
+channel and spatial sizes make more than one fit, the row is `not-evaluated` with
+`layout_unresolved`, never resolved by picking whichever transform makes the values agree.
+
+**The answer.** `first_divergence` returns the first `different` row. Its `reason` starts with
+"localized inside this module" when the module's inputs agree, or "first observed differing
+module output" when they already differ, followed by the computation skipped since the last
+agreeing module. It returns `None` only when every paired module agrees, and refuses with
+`InvalidArgumentError` (code `module_comparison_inconclusive`) when a side records no module
+boundaries, the model inputs differ, nothing could be compared, or a paired module could not be
+decided. `compare` returns every row; its coverage line counts module calls on both sides
+(paired, unpaired, boundary unrecorded, unresolved) and says when either run trained or a random
+producer ran. A saved and reloaded pair gives the same answer with no live model.
 
 ```text
->>> tl.debug.first_divergence(torch_trace, mlx_trace)
-BackendUnsupportedError: cannot compare a 'torch' trace with a 'mlx' trace op by op: ...
->>> tl.debug.compare(torch_trace, mlx_trace)
-BackendUnsupportedError: cannot compare a 'torch' trace with a 'mlx' trace op by op: ...
+>>> row = tl.debug.first_divergence(torch_trace, mlx_trace)
+>>> row["op"], row["module_b"], row["alignment"], row["outcome"]
+('model.layers.12.self_attn:1', 'model.layers.12.self_attn:1', 'supported', 'different')
+>>> row["reason"]
+'localized inside this module (inputs agree, output differs)'
+>>> print(tl.debug.compare(torch_trace, mlx_trace, module_map={"blocks": "layers"}))
 ```
 
-Module-level comparison across backends (pairing module calls by name and comparing their
-recorded outputs) is planned. Until then, compare two runs captured on the same backend.
+**Which backends.** A backend joins module pairing once its recorded module outputs pass
+TorchLens's conformance checks. Any other backend is refused with `backend_unsupported`, and the
+message names the admitted backends. Comparing works on the machine that captured both traces;
+nothing here promises reading one backend's saved trace on a machine without that backend.
 
 ## `isolated_capture` / `preserved_rng_state` / `clone_input_tree`
 

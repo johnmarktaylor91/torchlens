@@ -209,12 +209,16 @@ def structural_pairs(
 
 
 def _pairing(
-    trace_a: Trace, trace_b: Trace, ops_a: dict[str, Any], ops_b: dict[str, Any]
+    trace_a: Trace,
+    trace_b: Trace,
+    ops_a: dict[str, Any],
+    ops_b: dict[str, Any],
+    by_label: bool,
 ) -> tuple[dict[str, str], _Pair]:
-    """Label pairs for equal graph fingerprints, else :func:`structural_pairs`."""
+    """Label pairs when forced or for equal graph fingerprints, else :func:`structural_pairs`."""
 
     fingerprint = trace_a._provenance_fingerprint
-    if fingerprint is not None and fingerprint == trace_b._provenance_fingerprint:
+    if by_label or (fingerprint is not None and fingerprint == trace_b._provenance_fingerprint):
         return {label: label for label in ops_a if label in ops_b}, (set(), set())
     return structural_pairs(trace_a, trace_b, ops_a, ops_b)
 
@@ -226,7 +230,12 @@ def _gap_note(label: str, ambiguous: set[str], side: str) -> str:
 
 
 def paired_rows(
-    trace_a: Trace, trace_b: Trace, ops_a: dict[str, Any], ops_b: dict[str, Any]
+    trace_a: Trace,
+    trace_b: Trace,
+    ops_a: dict[str, Any],
+    ops_b: dict[str, Any],
+    *,
+    by_label: bool = False,
 ) -> Iterator[tuple[str, str, Any, Any, str]]:
     """Yield ``(row label, status, op in a or None, op in b or None, note)`` in row order.
 
@@ -235,9 +244,10 @@ def paired_rows(
     is ``only-a`` / ``only-b``, of a pair ``""``); different fingerprints pair by graph
     structure (:func:`structural_pairs`), noting :data:`STRUCTURE_NOTE` on a pair whose
     labels differ and :data:`AMBIGUOUS_NOTE` on an op left unpaired as ambiguous.
+    ``by_label=True`` (``align="label"``) pairs by label whatever the fingerprints.
     """
 
-    pairs, ambiguous = _pairing(trace_a, trace_b, ops_a, ops_b)
+    pairs, ambiguous = _pairing(trace_a, trace_b, ops_a, ops_b, by_label)
     for label, op_a in ops_a.items():
         if label not in pairs:
             yield label, "only-a", op_a, None, _gap_note(label, ambiguous[0], "only-a")

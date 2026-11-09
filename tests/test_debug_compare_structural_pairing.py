@@ -242,3 +242,20 @@ def test_structural_pairing_survives_save_and_load(tmp_path: Any) -> None:
     loaded = _compare_rows(tl.load(str(tmp_path / "a.tlspec")), tl.load(str(tmp_path / "b.tlspec")))
     strip = lambda rows: [{k: v for k, v in r.items() if k != "source_line"} for r in rows]  # noqa: E731
     assert strip(loaded[0]) == strip(live)
+
+
+def test_align_label_forces_the_label_join_on_different_fingerprints() -> None:
+    """``align="label"`` joins by label where ``"auto"`` pairs the inserted-op graphs by structure."""
+
+    reference = _build(_MLP)
+    a, b = tl.trace(reference, _X), tl.trace(_build(_Inserted, reference), _X)
+    assert a.provenance.fingerprint != b.provenance.fingerprint
+    auto = tl.debug.compare(a, b).to_pandas()
+    label = tl.debug.compare(a, b, align="label").to_pandas()
+    shared = set(_compared_site_ops(a)) & set(_compared_site_ops(b))
+    assert set(label.loc[label["status"] == "present-in-both", "op"]) == shared
+    assert not label["reason"].fillna("").str.contains(STRUCTURE_NOTE, regex=False).any()
+    assert auto["reason"].fillna("").str.contains(STRUCTURE_NOTE, regex=False).any()
+    forced = tl.debug.first_divergence(a, b, align="label")
+    assert forced is not None and forced["status"] == "only-a"
+    assert forced != tl.debug.first_divergence(a, b)

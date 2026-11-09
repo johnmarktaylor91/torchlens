@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -32,7 +32,17 @@ from ._common import (
 )
 from ._compare_guard import refuse_uncomparable_pair
 from ._compare_pairing import paired_rows, row_source
+from ._compare_values import (
+    _activation_row,
+    _align_for_compare,
+    _compare_coverage,
+    _compare_unavailable_reason,
+    _value_delta,
+)
+from ._cross_backend import resolve_align
 from ._unit_axis import unit_axis
+from ._xb_report import LABEL_COLUMNS, module_compare, module_first_divergence
+from ._xb_tolerance import SAME_BACKEND_ATOL, SAME_BACKEND_RTOL
 
 LineageDirection = Literal["ancestors", "descendants", "both"]
 
@@ -187,142 +197,13 @@ def lineage(
     )
 
 
-def _activation_row(
-    label: str, status: str, reason: str, source_line: str | None = None
-) -> dict[str, Any]:
-    """Build a minimal activation-unavailable comparison row.
-
-    Parameters
-    ----------
-    label:
-        Op label.
-    status:
-        Presence status.
-    reason:
-        Unavailable reason.
-    source_line:
-        ``"file:line"`` of the user code that ran the op, when known.
-
-    Returns
-    -------
-    dict[str, Any]
-        Row dictionary.
-    """
-
-    return {
-        "op": label,
-        "status": status,
-        "shape_match": None,
-        "dtype_match": None,
-        "max_abs": None,
-        "mean_abs": None,
-        "allclose": None,
-        "reason": reason,
-        "source_line": source_line,
-    }
-
-
-def _align_for_compare(
-    out_a: torch.Tensor, out_b: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor, str] | None:
-    """Bring two activations onto one device and dtype so they can be compared.
-
-    A CPU run against a GPU run, or a float32 run against a float64 run, is
-    exactly the comparison a user wants to see; the values are moved to the
-    CPU and compared in the wider dtype (``torch.promote_types``). Only a
-    shape mismatch truly cannot be compared.
-
-    Returns
-    -------
-    tuple[torch.Tensor, torch.Tensor, str] | None
-        The aligned pair and a note saying what was aligned (``""`` when
-        nothing was), or ``None`` when the shapes differ.
-    """
-
-    if out_a.shape != out_b.shape:
-        return None
-    notes = []
-    a, b = out_a.detach(), out_b.detach()
-    if a.device != b.device:
-        notes.append(f"devices differ ({a.device} vs {b.device}): compared on cpu")
-        a, b = a.cpu(), b.cpu()
-    if a.dtype != b.dtype:
-        common = torch.promote_types(a.dtype, b.dtype)
-        notes.append(
-            f"dtypes differ ({str(a.dtype).removeprefix('torch.')} vs "
-            f"{str(b.dtype).removeprefix('torch.')}): compared in "
-            f"{str(common).removeprefix('torch.')}"
-        )
-        a, b = a.to(common), b.to(common)
-    return a, b, "; ".join(notes)
-
-
-def _compare_unavailable_reason(value: Any) -> str | None:
-    """Return why a payload cannot be value-compared, or ``None``.
-
-    Wider than :func:`_tensor_unavailable_reason`: integer, boolean and complex
-    tensors compare too (integers and booleans exactly), so an index or mask op
-    where two runs part ways is reported instead of skipped.
-    """
-
-    reason = _tensor_unavailable_reason(value)
-    if reason in ("non-floating", "complex"):
-        return None
-    return reason
-
-
-def _value_delta(
-    cmp_a: torch.Tensor, cmp_b: torch.Tensor, *, rtol: float, atol: float
-) -> tuple[float, float, bool]:
-    """Return ``(max_abs, mean_abs, allclose)`` for an aligned pair.
-
-    Floating and complex payloads use ``torch.allclose``; integer and boolean
-    payloads must match exactly (a tolerance on an index is meaningless).
-    """
-
-    exact = not (torch.is_floating_point(cmp_a) or torch.is_complex(cmp_a))
-    wide = torch.complex128 if torch.is_complex(cmp_a) else torch.float64
-    delta = torch.abs(cmp_a.to(wide) - cmp_b.to(wide)) if exact else torch.abs(cmp_a - cmp_b)
-    max_abs = float(delta.max().item()) if delta.numel() else 0.0
-    mean_abs = float(delta.mean().item()) if delta.numel() else 0.0
-    if exact:
-        return max_abs, mean_abs, bool(torch.equal(cmp_a, cmp_b))
-    return max_abs, mean_abs, bool(torch.allclose(cmp_a, cmp_b, rtol=rtol, atol=atol))
-
-
-def _compare_coverage(rows: list[dict[str, Any]]) -> str:
-    """Return the compare card's coverage line: compared vs skipped, and why."""
-
-    compared = sum(1 for row in rows if row["allclose"] is not None)
-    aligned = sum(1 for row in rows if row["allclose"] is not None and row["reason"])
-    skipped: dict[str, int] = {}
-    for row in rows:
-        if row["allclose"] is None:
-            reason = str(row["reason"] or row["status"])
-            skipped[reason] = skipped.get(reason, 0) + 1
-    text = f"{compared} of {len(rows)} ops compared"
-    if aligned:
-        notes = sorted(
-            {
-                str(note)
-                for row in rows
-                if row["allclose"] is not None and row["reason"]
-                for note in str(row["reason"]).split("; ")
-            }
-        )
-        text += f" ({aligned} after alignment: {'; '.join(notes)})"
-    if skipped:
-        detail = ", ".join(f"{reason}: {count}" for reason, count in skipped.items())
-        text += f"; {sum(skipped.values())} not compared ({detail})"
-    return text
-
-
 def _compare_rows(
     trace_a: Trace,
     trace_b: Trace,
     *,
     rtol: float = 1e-5,
     atol: float = 1e-8,
+    by_label: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Pandas-free core of :func:`compare` (agent stage-0 item 4).
 
@@ -340,6 +221,8 @@ def _compare_rows(
         Relative tolerance for ``torch.allclose``.
     atol:
         Absolute tolerance for ``torch.allclose``.
+    by_label:
+        Pair ops by label even when the graph fingerprints differ (``align="label"``).
 
     Returns
     -------
@@ -355,11 +238,7 @@ def _compare_rows(
     refuse_uncomparable_pair(trace_a, trace_b)
     ops_a = _compared_site_ops(trace_a)
     ops_b = _compared_site_ops(trace_b)
-    # EXECUTION order, never alphabetical (observe memo item 2): the published
-    # first-diverging-op recipe reads the first row, and a sorted() walk named
-    # whichever op sorts first (op 67 of 70 on resnet18). Rows follow trace_a's
-    # execution order; ops only present in trace_b append afterwards in
-    # trace_b's execution order (disclosed by their "only-b" status).
+    # EXECUTION order, never sorted: first_divergence reads the first row (see Returns).
     rows: list[dict[str, Any]] = []
     summary = {
         "matched": 0,
@@ -370,7 +249,8 @@ def _compare_rows(
         "activation_unavailable": 0,
     }
 
-    for label, status, op_a, op_b, note in paired_rows(trace_a, trace_b, ops_a, ops_b):
+    pairs = paired_rows(trace_a, trace_b, ops_a, ops_b, by_label=by_label)
+    for label, status, op_a, op_b, note in pairs:
         if status != "present-in-both":
             summary[status.replace("-", "_")] += 1
             rows.append(_activation_row(label, status, note, _source_line(row_source(op_a, op_b))))
@@ -440,37 +320,46 @@ def compare(
     trace_a: Trace,
     trace_b: Trace,
     *,
-    rtol: float = 1e-5,
-    atol: float = 1e-8,
+    rtol: float | None = None,
+    atol: float | None = None,
+    align: str = "auto",
+    module_map: Mapping[str, str] | None = None,
 ) -> Report:
-    """Compare saved tensor activations across two traces, op by op.
+    """Compare saved activations across two traces, op by op or module by module.
 
     Parameters
     ----------
-    trace_a:
-        First completed TorchLens trace.
-    trace_b:
-        Second completed TorchLens trace.
-    rtol:
-        Relative tolerance for ``torch.allclose``.
-    atol:
-        Absolute tolerance for ``torch.allclose``.
+    trace_a, trace_b:
+        Completed traces; ``trace_a`` is the reference run.
+    rtol, atol:
+        Tolerance overrides. One backend: ``torch.allclose``, default ``1e-5`` / ``1e-8``.
+        Across backends: ``rms(a - b) <= atol + rtol * rms(a)`` per module output, default
+        from the narrower dtype (float32 ``1e-4``, float16 ``5e-2``, bfloat16 ``0.75``,
+        ``atol=0``); an override replaces a constant in the same form.
+    align:
+        ``"auto"`` on one backend pairs ops by label when the graph fingerprints
+        (``trace.provenance.fingerprint``) are equal, else by graph structure, never by value
+        (an inserted op is unpaired instead of shifting every later pair); across backends it
+        is ``"structure"``. ``"label"`` always joins ops by label (one backend);
+        ``"structure"`` pairs module calls by address and call order.
+    module_map:
+        Side-a to side-b module address prefixes for renamed ports; mapped pairs are
+        ``"asserted"``.
 
     Returns
     -------
     Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the DataFrame described here.
-        One row per pass-qualified op with summary counts in ``df.attrs``; ``source_line`` is
-        the ``"file:line"`` of the user code that ran the op. Activations on different devices
-        are compared on the CPU, and different dtypes in the wider dtype (the row's ``reason``
-        says so, and the card's coverage line names every alignment); integer and boolean
-        activations must match exactly. The coverage line also counts the ops that could not be
-        compared and why. Ops pair by label when the graph fingerprints
-        (``trace.provenance.fingerprint``) are equal, else by graph structure, never by value: an
-        inserted or deleted op is an ``only-a``/``only-b`` row instead of shifting every later pair,
-        and ops whose structural twins differ in number stay unpaired (``ambiguous``). Traces from
-        different backends raise :class:`~torchlens.errors.BackendUnsupportedError` before any value
-        is read. The optional view over :func:`_compare_rows` (the pandas-free core).
+        Op pairing: one row per pass-qualified op with summary counts in ``df.attrs``;
+        ``source_line`` is the ``"file:line"`` of the user code that ran the op. Activations on
+        different devices compare on the CPU, different dtypes in the wider dtype (``reason``
+        and the coverage line say so); integer and boolean activations must match exactly. The
+        coverage line counts the ops that could not be compared and why; ops whose structural
+        twins differ in number stay unpaired (``ambiguous``). Module pairing adds per-row
+        ``module_b``, ``alignment``, ``outcome``, ``rtol``, ``atol``, ``transform`` and
+        ``inputs_agree``, ``df.attrs["coverage"]`` and a coverage line for both sides. A label
+        join across backends, or a backend whose module recording is not admitted, raises
+        :class:`~torchlens.errors.BackendUnsupportedError` (code ``backend_unsupported``).
 
     Examples
     --------
@@ -481,22 +370,13 @@ def compare(
     (True, 0)
     """
 
-    rows, attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
-    pd = _require_pandas()
-    frame = pd.DataFrame(
-        rows,
-        columns=[
-            "op",
-            "status",
-            "shape_match",
-            "dtype_match",
-            "max_abs",
-            "mean_abs",
-            "allclose",
-            "reason",
-            "source_line",
-        ],
+    if resolve_align(trace_a, trace_b, align, module_map) == "structure":
+        return module_compare(trace_a, trace_b, rtol=rtol, atol=atol, module_map=module_map)
+    rows, attrs = _compare_rows(
+        trace_a, trace_b, by_label=align == "label", **_label_tolerance(rtol, atol)
     )
+    pd = _require_pandas()
+    frame = pd.DataFrame(rows, columns=list(LABEL_COLUMNS))
     frame.attrs.update(attrs)
     return table_report(
         "compare",
@@ -507,45 +387,63 @@ def compare(
     )
 
 
+def _label_tolerance(rtol: float | None, atol: float | None) -> dict[str, float]:
+    """The label join's ``torch.allclose`` tolerances, defaults filled in."""
+
+    return {
+        "rtol": SAME_BACKEND_RTOL if rtol is None else rtol,
+        "atol": SAME_BACKEND_ATOL if atol is None else atol,
+    }
+
+
 def first_divergence(
     trace_a: Trace,
     trace_b: Trace,
     *,
-    rtol: float = 1e-5,
-    atol: float = 1e-8,
+    rtol: float | None = None,
+    atol: float | None = None,
+    align: str = "auto",
+    module_map: Mapping[str, str] | None = None,
 ) -> dict[str, Any] | None:
-    """Return the first EXECUTION-ORDER row where the two traces separate.
+    """Return the first row where the two traces separate, or ``None``.
 
-    A divergence row is one whose compared payloads crossed tolerance (``allclose=False``),
-    mismatched shape, or exists in only one trace. Payloads on different devices (a CPU run
-    against a GPU run) are compared on the CPU, and different dtypes in the wider dtype, so
-    those runs diverge where their values really separate; integer and boolean payloads
-    (indices, masks) must match exactly. Rows whose payloads could not be compared at all
-    (unsaved, non-tensor, sparse, meta, quantized) are NOT divergences;
-    ``print(tl.debug.compare(trace_a, trace_b))`` counts them on its coverage line, and a
-    divergence inside such a region cannot be excluded. The row's ``source_line`` is the
-    ``"file:line"`` of the user code that ran the op. Ops pair as in :func:`compare`: by
-    label for equal graph fingerprints, else by graph structure, so an inserted op is
-    reported as itself (an ``only-b`` row, after every paired row) and a later value change
-    is still placed on the changed op. Two traces from different backends
-    (``trace.provenance.backend``) raise :class:`~torchlens.errors.BackendUnsupportedError`.
+    Op pairing (one backend): the first EXECUTION-ORDER row whose payloads crossed tolerance
+    (``allclose=False``), mismatched shape, or exist in only one trace (an inserted op is
+    reported as itself). Rows whose payloads could not be compared (unsaved, non-tensor,
+    sparse, meta, quantized) are not divergences.
+
+    Module pairing: the first row in module-exit order whose ``outcome`` is ``"different"`` on a ``"supported"`` or ``"asserted"`` pair; a
+    module with no partner is a coverage gap, never a divergence. Its ``reason`` says
+    "localized inside this module" when the module's inputs agree, else "first observed
+    differing module output" with the computation skipped since the last agreeing module.
+    ``None`` only when every paired module agrees. Refuses with
+    :class:`~torchlens.errors.InvalidArgumentError` (code ``module_comparison_inconclusive``)
+    when a side has no module boundaries, the model inputs differ, nothing could be
+    compared, or a paired module could not be decided.
 
     Parameters
     ----------
-    trace_a:
-        First completed TorchLens trace.
-    trace_b:
-        Second completed TorchLens trace.
-    rtol:
-        Relative tolerance for ``torch.allclose``.
-    atol:
-        Absolute tolerance for ``torch.allclose``.
+    trace_a, trace_b:
+        Completed traces; ``trace_a`` is the reference run.
+    rtol, atol:
+        Tolerance overrides. One backend: ``torch.allclose``, default ``1e-5`` / ``1e-8``.
+        Across backends: ``rms(a - b) <= atol + rtol * rms(a)`` per module output, default
+        from the narrower dtype (float32 ``1e-4``, float16 ``5e-2``, bfloat16 ``0.75``,
+        ``atol=0``); an override replaces a constant in the same form.
+    align:
+        ``"auto"`` on one backend pairs ops by label when the graph fingerprints
+        (``trace.provenance.fingerprint``) are equal, else by graph structure, never by value
+        (an inserted op is unpaired instead of shifting every later pair); across backends it
+        is ``"structure"``. ``"label"`` always joins ops by label (one backend);
+        ``"structure"`` pairs module calls by address and call order.
+    module_map:
+        Side-a to side-b module address prefixes for renamed ports; mapped pairs are
+        ``"asserted"``.
 
     Returns
     -------
     dict[str, Any] | None
-        The first diverging row in execution order, or ``None`` when no
-        compared row diverged.
+        The first diverging row, or ``None``.
 
     Examples
     --------
@@ -556,13 +454,15 @@ def first_divergence(
     True
     """
 
-    rows, _attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
+    if resolve_align(trace_a, trace_b, align, module_map) == "structure":
+        return module_first_divergence(
+            trace_a, trace_b, rtol=rtol, atol=atol, module_map=module_map
+        )
+    rows, _attrs = _compare_rows(
+        trace_a, trace_b, by_label=align == "label", **_label_tolerance(rtol, atol)
+    )
     for row in rows:
-        if row["status"] in ("only-a", "only-b"):
-            return row
-        if row["shape_match"] is False:
-            return row
-        if row["allclose"] is False:
+        if row["status"] in ("only-a", "only-b") or False in (row["shape_match"], row["allclose"]):
             return row
     return None
 

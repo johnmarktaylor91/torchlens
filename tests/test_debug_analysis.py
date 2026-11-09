@@ -158,12 +158,19 @@ def test_compare_matches_diverges_and_skips_unsaved() -> None:
 
 # Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_compare_defaults_are_locked() -> None:
-    """compare exposes the specified tolerance defaults."""
+    """compare's tolerance defaults: ``None``, which one backend resolves to 1e-5 / 1e-8.
 
-    params = signature(tl.debug.compare).parameters
+    ``None`` lets a cross-backend pair derive its tolerance from the narrower dtype while
+    an explicit value still overrides; the same-backend label join keeps 1e-5 / 1e-8.
+    """
 
-    assert params["rtol"].default == 1e-5
-    assert params["atol"].default == 1e-8
+    for tool in (tl.debug.compare, tl.debug.first_divergence):
+        params = signature(tool).parameters
+        assert params["rtol"].default is None
+        assert params["atol"].default is None
+    trace = tl.trace(torch.nn.Linear(2, 2), torch.ones(1, 2))
+    attrs = tl.debug.compare(trace, trace).to_pandas().attrs
+    assert (attrs["rtol"], attrs["atol"]) == (1e-5, 1e-8)
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_graph.py.
