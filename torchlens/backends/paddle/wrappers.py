@@ -251,6 +251,7 @@ class _PaddleWrapperRegistry:
         self._wrapper_by_original: dict[int, tuple[object, object]] = {}
         self._wrapped = False
         self._inventory = PaddleInventory((), ())
+        self.backend: object | None = None
 
     def wrap(self, backend: object) -> None:
         """Install wrappers bound to ``backend``.
@@ -288,6 +289,7 @@ class _PaddleWrapperRegistry:
             raise
         self._inventory = PaddleInventory(tuple(sorted(wrapped)), tuple(sorted(denied)))
         self._wrapped = True
+        self.backend = backend
 
     def unwrap(self) -> None:
         """Restore all original Paddle callables.
@@ -314,6 +316,7 @@ class _PaddleWrapperRegistry:
         self._wrapper_by_original.clear()
         self._wrapped = False
         self._inventory = PaddleInventory((), ())
+        self.backend = None
 
     def _wrap_layer_module_aliases(self, paddle: object) -> None:
         """Point Paddle's own Layer modules' import-time aliases at the wrappers.
@@ -563,6 +566,18 @@ def unwrap_paddle() -> None:
     """Restore original Paddle callables."""
 
     _REGISTRY.unwrap()
+
+
+def bound_paddle_backend() -> object | None:
+    """Return the backend the installed wrappers report to.
+
+    Returns
+    -------
+    object | None
+        Active Paddle backend, or ``None`` when the wrappers are not installed.
+    """
+
+    return _REGISTRY.backend
 
 
 def is_paddle_wrapped() -> bool:

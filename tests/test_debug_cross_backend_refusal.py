@@ -92,9 +92,11 @@ def test_unadmitted_backend_refuses_module_pairing(tool: str, order: str) -> Non
     """The default align="auto" pairs modules, and refuses a backend not yet admitted."""
 
     torch_trace, other = _pair()
-    _as_backend(other, "paddle")
+    _as_backend(other, "tinygrad")
     first, second = (torch_trace, other) if order == "torch-first" else (other, torch_trace)
-    with pytest.raises(BackendUnsupportedError, match="admitted today: mlx, torch") as caught:
+    with pytest.raises(
+        BackendUnsupportedError, match="admitted today: jax, mlx, paddle, tf, torch"
+    ) as caught:
         _TOOLS[tool](first, second)
     assert caught.value.fields["code"] == "backend_unsupported"
 
@@ -114,7 +116,7 @@ def test_refusal_happens_before_any_value_is_read(
     monkeypatch.setattr(_xb_values, "read_values", _must_not_run)
     torch_trace, other = _pair()
     with pytest.raises(BackendUnsupportedError):
-        _TOOLS[tool](torch_trace, _as_backend(other, "paddle"))
+        _TOOLS[tool](torch_trace, _as_backend(other, "tinygrad"))
 
 
 def test_same_backend_behaviour_is_unchanged() -> None:
@@ -152,7 +154,7 @@ def test_refusal_holds_after_save_and_load(tmp_path: Path) -> None:
     assert tl.debug.first_divergence(loaded_a, loaded_b) is None
     assert tl.debug.compare(loaded_a, loaded_b).to_pandas().attrs["value_diverged"] == 0
 
-    _as_backend(loaded_b, "paddle")
+    _as_backend(loaded_b, "tinygrad")
     for tool in _TOOLS.values():
         for pair in ((loaded_a, loaded_b), (loaded_b, loaded_a), (first, loaded_b)):
             with pytest.raises(BackendUnsupportedError, match="same backend"):

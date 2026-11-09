@@ -14,7 +14,8 @@
   partner is a coverage gap, and the default tolerance comes from the narrower dtype (relative RMS
   error; float32 `1e-4`, float16 `5e-2`, bfloat16 `0.75`; `atol` 0 except on an all-zero
   reference output). Module frames name the pairing mode and backends in `df.attrs["align"]` and
-  `df.attrs["backends"]`. Returned values pair by return position. PyTorch and MLX are admitted; a
+  `df.attrs["backends"]`. Returned values pair by return position. PyTorch, MLX, Paddle,
+  TensorFlow and JAX (Equinox and Flax NNX) are admitted, tinygrad is not; a
   module that returns its input unchanged compares through the returned value. `rtol=` and
   `atol=` now default to `None`, which on one backend means `1e-5` and `1e-8` as before.
 
@@ -32,6 +33,10 @@
 
 ### Fixed
 
+- **jax**: Equinox modules held in a list or tuple field (including `eqx.nn.Sequential`'s
+  layers) are now recorded. They get `field.index` addresses under a `field` container, the way
+  torch's `ModuleList` and Flax NNX's `nnx.List` hold them, so their calls, outputs and
+  parameters belong to them instead of to the enclosing module.
 - **debug**: `tl.debug.compare` and `tl.debug.first_divergence` no longer join two traces from
   different backends by op label. Their labels and op order do not correspond, so the label join
   reported the first op as a divergence even for a correct port. They now pair module calls

@@ -14,8 +14,9 @@ output and stays out of ``output_ops``. The reader appends those passthrough ops
 the call's own outputs, the order torch's exit-time identity ops take, so both spellings
 give the same output roster. Two more reads fill what preview backends do not record:
 the root call's outputs are the trace's outputs (on every backend, in the trace's output
-order), and a call with no recorded ``input_ops`` takes as inputs the ops outside it
-that feed its own ops, the producers torch records as ``input_ops``.
+order), its inputs without recorded input ops are the trace's inputs, and a call with no
+recorded ``input_ops`` takes as inputs the ops outside it that feed its own ops, the
+producers torch records as ``input_ops``.
 """
 
 from __future__ import annotations
@@ -153,6 +154,13 @@ def _return_ordered(call: Any, trace: Trace, own: tuple[str, ...]) -> tuple[str,
     )
 
 
+def _resolved_labels(trace: Trace, labels: Any) -> tuple[str, ...]:
+    """Return the pass-qualified op labels of ``labels`` in order, once each."""
+
+    resolved = (_op_from_label(trace, str(label)) for label in labels)
+    return tuple(dict.fromkeys(_op_label(op) for op in resolved if op is not None))
+
+
 def _outputs(call: Any, trace: Trace) -> tuple[tuple[str, ...], bool]:
     """The call's recorded outputs and whether they are in return order.
 
@@ -163,8 +171,7 @@ def _outputs(call: Any, trace: Trace) -> tuple[tuple[str, ...], bool]:
     """
 
     if call.address == ROOT_ADDRESS and trace.output_layers:
-        resolved = (_op_from_label(trace, str(label)) for label in trace.output_layers)
-        return tuple(dict.fromkeys(_op_label(op) for op in resolved if op is not None)), True
+        return _resolved_labels(trace, trace.output_layers), True
     passthrough = passthrough_op_labels(call, trace)
     if len(passthrough) > 1:
         return (), True
@@ -181,15 +188,24 @@ def _inputs(
 ) -> tuple[str, ...]:
     """The call's recorded input ops, else the ops outside it that feed its own ops.
 
-    A call with no ops of its own (a recorded pass-through) returned its input, so
+    A root call without recorded input ops reads the trace's input ops (JAX records
+    neither root inputs nor nested ops on the root). A call with no ops of its own (a recorded pass-through) returned its input, so
     its outputs are its inputs.
     """
 
     if call.input_ops:
         return tuple(str(label) for label in call.input_ops)
+    if call.address == ROOT_ADDRESS and trace.input_layers:
+        return _resolved_labels(trace, trace.input_layers)
     inside = {str(label) for label in (call.ops or ())}
     if not inside:
         return outputs
+    return tuple(sorted(_feeders(trace, inside), key=lambda label: order.get(label, -1)))
+
+
+def _feeders(trace: Trace, inside: set[str]) -> set[str]:
+    """Return the labels of ops outside ``inside`` that are parents of ops in it."""
+
     feeders: set[str] = set()
     for label in inside:
         op = _op_from_label(trace, label)
@@ -197,7 +213,7 @@ def _inputs(
             producer = _op_from_label(trace, str(parent))
             if producer is not None and _op_label(producer) not in inside:
                 feeders.add(_op_label(producer))
-    return tuple(sorted(feeders, key=lambda label: order.get(label, -1)))
+    return feeders
 
 
 def _span(call: Any, outputs: tuple[str, ...], order: dict[str, int]) -> tuple[int, int]:

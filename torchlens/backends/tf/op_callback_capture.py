@@ -33,7 +33,7 @@ from ._tensor_probe import (
     _tensor_ref_key,
 )
 from ._tf_compat import get_op_callbacks_module
-from .modules import TFModuleTree, device_ref_from_tf_device, patched_tf_module_stack
+from .modules import TFModuleTree, device_ref_from_tf_device, patched_tf_module_stack, returns_hook
 
 _INIT_OP_TYPES = frozenset(
     {
@@ -288,7 +288,7 @@ class TFEagerCaptureSession:
         callback_module.add_op_callback(callback)
         try:
             with patched_tf_module_stack(
-                self.module_tree, self.tf, self.module_stack, self.module_exit_hook
+                self.module_tree, self.tf, self.module_stack, returns_hook(self)
             ):
                 output = self.callable_obj(*self.args, **self.kwargs)
         finally:

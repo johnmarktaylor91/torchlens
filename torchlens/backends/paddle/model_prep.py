@@ -1,4 +1,11 @@
-"""Paddle model preparation helpers for technical-preview capture."""
+"""Paddle model preparation helpers for technical-preview capture.
+
+Besides discovering the layer tree and installing per-session forward hooks, the post-hook
+records each layer call's returned leaves into the tree's ``module_returns`` ledger (labels read
+at exit from the label store of the backend the wrappers are bound to), from which the shared
+builder takes module outputs, so ``Module.out`` works on Paddle; the contract is in
+``torchlens/backends/_module_returns.py``.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +16,9 @@ from typing import Any
 from ... import _state
 from ..._ir.events import ModuleFrame
 from .._finalize import join_module_address as _join_module_address, nearest_metadata_parent
+from .._module_returns import ModuleReturnLedger
 from .interventions import _apply_module_exit
+from .wrappers import bound_paddle_backend
 
 
 @dataclass
@@ -34,6 +43,8 @@ class PaddleModuleTree:
         Forward args keyed by ``(primary_address, call_index)``.
     hook_handles
         Paddle hook handles installed for this capture session.
+    module_returns
+        Leaves each layer call returned, recorded at module exit.
     """
 
     root: object
@@ -46,6 +57,7 @@ class PaddleModuleTree:
         default_factory=dict
     )
     hook_handles: list[Any] = field(default_factory=list)
+    module_returns: ModuleReturnLedger = field(default_factory=ModuleReturnLedger)
 
 
 def discover_paddle_module_tree(model: object) -> PaddleModuleTree | None:
@@ -175,7 +187,7 @@ def prepare_model_session(session: object, model: object, tree: PaddleModuleTree
         if id(module) != module_id:
             continue
         pre_hook = _make_pre_hook(tree, address)
-        post_hook = _make_post_hook()
+        post_hook = _make_post_hook(tree)
         tree.hook_handles.append(module.register_forward_pre_hook(pre_hook, with_kwargs=True))
         tree.hook_handles.append(module.register_forward_post_hook(post_hook, with_kwargs=True))
     return model
@@ -259,8 +271,13 @@ def _make_pre_hook(tree: PaddleModuleTree, address: str) -> Any:
     return hook
 
 
-def _make_post_hook() -> Any:
-    """Build a Paddle forward post-hook that pops the active module stack.
+def _make_post_hook(tree: PaddleModuleTree) -> Any:
+    """Build a Paddle forward post-hook that records the call's return and pops the stack.
+
+    Parameters
+    ----------
+    tree
+        Discovered module tree whose ledger receives the returned leaves.
 
     Returns
     -------
@@ -274,18 +291,44 @@ def _make_post_hook() -> Any:
         kwargs: dict[str, Any],
         output: object,
     ) -> Any:
-        """Pop module frame metadata after one Paddle forward call."""
+        """Record the returned value, then pop module frame metadata, for one forward call."""
 
         del layer, args, kwargs
         trace = _state._active_trace
         if trace is not None and getattr(trace, "_paddle_module_stack", None):
+            frame = trace._paddle_module_stack[-1]
             try:
-                return _apply_module_exit(trace, trace._paddle_module_stack[-1], output)
+                returned = _apply_module_exit(trace, frame, output)
+                record_layer_return(
+                    tree.module_returns, frame, output if returned is None else returned
+                )
+                return returned
             finally:
                 trace._paddle_module_stack.pop()
         return None
 
     return hook
+
+
+def record_layer_return(ledger: ModuleReturnLedger, frame: ModuleFrame, value: object) -> None:
+    """Record the Paddle tensors one layer call returned.
+
+    Parameters
+    ----------
+    ledger
+        The capture's module-return ledger.
+    frame
+        Module frame of the call that is exiting.
+    value
+        The value the call returns to its caller.
+    """
+
+    backend = bound_paddle_backend()
+    if backend is None:
+        return
+    is_tensor = getattr(backend, "is_tensor")
+    get_label = getattr(backend, "tensor_store").get_label
+    ledger.record(frame.address, frame.call_index, value, is_leaf=is_tensor, label_of=get_label)
 
 
 def _is_paddle_layer(value: object) -> bool:

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1763 modules, 707680 lines, 0 modules without a docstring.
+85 packages, 1767 modules, 708251 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -54,20 +54,20 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 23 | 7477 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 22 | 7341 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
-| `torchlens.backends.jax` | JAX backend preview exports. | 13 | 9171 |
+| `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9648 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6948 |
-| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
-| `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
-| `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
+| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
+| `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8577 |
+| `torchlens.backends.tinygrad` | tinygrad backend preview. | 11 | 4583 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59358 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 705 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2035 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 38 | 12819 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 38 | 12835 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 423 |
 | `torchlens.errors` | Public TorchLens exception classes. | 6 | 1589 |
@@ -1332,7 +1332,7 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (23 modules, 7477 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (22 modules, 7341 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1345,9 +1345,8 @@ Backend Protocol and public registry exports for TorchLens adapters. (23 modules
 | `_entry_refusals` | Typed, coded refusals raised by the framework backends' public entry points. | 197 |
 | `_errors` | Backend registry error hierarchy (leaf module: no registry import). | 251 |
 | `_facet_recipes` | Per-trace facet recipes (''trace(facets=...)'') on the preview backends. | 77 |
-| `_finalize` | Shared preview-backend trace finalization helpers. | 1240 |
+| `_finalize` | Shared preview-backend trace finalization helpers. | 1249 |
 | `_finalize_distances` | Input and output hop distances for preview-backend traces. | 194 |
-| `_finalize_labels` | Torch's final-label rule for preview-backend ops. | 145 |
 | `_finalize_site_keys` | Policy-independent site keys for preview-backend ops, minted before grouping. | 42 |
 | `_finalize_totals` | Trace-level counters derived from finalized layers and ops. | 86 |
 | `_intervention_evidence` | Which backends write the intervention evidence a Trace's pristine reading uses. | 31 |
@@ -1377,23 +1376,27 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 
 ### `torchlens.backends.jax`
 
-JAX backend preview exports. (13 modules, 9171 lines)
+JAX backend preview exports. (17 modules, 9648 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | JAX backend preview exports. | 7 |
 | `_closure_consts` | Closure-constant readability check for a JAX function-root capture. | 49 |
+| `_equinox_children` | Equinox child discovery: module fields, list and tuple fields, and their containers. | 153 |
+| `_module_return_probe` | Recorded module returns for JAX pytree modules (Equinox and Flax NNX). | 267 |
 | `_perturbation_probes` | Perturbation candidates for the JAX preview backend's parent-influence oracle. | 299 |
+| `_pytree_param_barcodes` | Param barcodes on JAX pytree-module ops, stamped before recurrence grouping. | 43 |
 | `_raw_relabel` | Raw-label helpers for finishing a JAX trace: lineage relabel, equivalence members, sources. | 79 |
+| `_return_ledger` | Trace-time ledger for JAX module returns (the leaf half of ''_module_return_probe''). | 69 |
 | `_site_dialect` | THE JAX SITE DIALECT for ''site_key_v1'' minting. | 73 |
 | `_source_path_components` | Source-path component normalization for JAX equation captures. | 44 |
 | `_trace_graph_helpers` | Trace-graph helpers for the JAX preview backend's validation oracles. | 535 |
 | `_validation_log` | Per-run validation decision log for the JAX backend. | 153 |
 | `_zero_annihilator` | Zero-annihilator value proof for the JAX preview backend's perturbation oracle. | 88 |
-| `backend` | Jaxpr-first JAX backend preview. | 4329 |
+| `backend` | Jaxpr-first JAX backend preview. | 4328 |
 | `capabilities` | Registry-backed capability exports for the JAX backend preview. | 38 |
 | `jaxpr` | Closed-jaxpr derivation and interpretation for the JAX backend. | 2491 |
-| `modules` | JAX module helpers for Equinox and Flax NNX roots. | 986 |
+| `modules` | JAX module helpers for Equinox and Flax NNX roots. | 932 |
 
 ### `torchlens.backends.mlx`
 
@@ -1421,7 +1424,7 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6948 lines)
 
 ### `torchlens.backends.paddle`
 
-Paddle backend preview. (14 modules, 6537 lines)
+Paddle backend preview. (14 modules, 6595 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1434,15 +1437,15 @@ Paddle backend preview. (14 modules, 6537 lines)
 | `conv_layers` | Layer-level capture of Paddle ''Conv1D'', ''Conv2D'' and ''Conv3D''. | 154 |
 | `derived_grads` | Derived-gradient leaf helpers for the technical-preview Paddle backend. | 302 |
 | `interventions` | Live intervention runtime for the technical-preview Paddle backend. | 569 |
-| `model_prep` | Paddle model preparation helpers for technical-preview capture. | 369 |
+| `model_prep` | Paddle model preparation helpers for technical-preview capture. | 412 |
 | `tensor_store` | External metadata store for Paddle tensors. | 114 |
 | `validation` | Replay-validation helpers for the technical-preview Paddle backend. | 698 |
 | `validation_decisions` | Per-op validation decisions for the Paddle preview backend. | 280 |
-| `wrappers` | Paddle function-call interception for technical-preview capture. | 781 |
+| `wrappers` | Paddle function-call interception for technical-preview capture. | 796 |
 
 ### `torchlens.backends.tf`
 
-TensorFlow backend preview exports. (13 modules, 8522 lines)
+TensorFlow backend preview exports. (13 modules, 8577 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1456,13 +1459,13 @@ TensorFlow backend preview exports. (13 modules, 8522 lines)
 | `derived_grads` | TensorFlow derived-gradient replay (leaf + exact op-level intermediates). | 900 |
 | `funcgraph` | TensorFlow static FuncGraph capture engine. | 1624 |
 | `interventions` | TensorFlow static-label intervention layer. | 786 |
-| `modules` | TensorFlow module discovery, call-stack patching, and parameter logs. | 718 |
+| `modules` | TensorFlow module discovery, call-stack patching, and parameter logs. | 773 |
 | `op_callback_capture` | TensorFlow eager op-callback capture engine. | 1097 |
 | `validation` | Non-vacuous replay validation for the TensorFlow eager backend. | 1076 |
 
 ### `torchlens.backends.tinygrad`
 
-tinygrad backend preview. (10 modules, 4482 lines)
+tinygrad backend preview. (11 modules, 4583 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1470,11 +1473,12 @@ tinygrad backend preview. (10 modules, 4482 lines)
 | `_captures` | Capture records the tinygrad backend keeps for validation and derived gradients. | 61 |
 | `_derived_grads` | Derived-gradient helpers for the tinygrad preview backend. | 268 |
 | `_execution_guard` | Execution guard for tinygrad preview capture. | 78 |
+| `_module_tree` | tinygrad object-module tree, call frames, and the module returns each call records. | 151 |
 | `_raw_labels` | Resolve materialized tinygrad op labels back to their raw capture labels. | 37 |
 | `_realize_once` | Realize-once capture: every recorded tinygrad value comes from one evaluation. | 379 |
 | `_rules` | tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants. | 323 |
 | `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 171 |
-| `backend` | UOp-snapshot tinygrad backend preview. | 3120 |
+| `backend` | UOp-snapshot tinygrad backend preview. | 3070 |
 | `capabilities` | Registry-backed capability exports for the tinygrad backend preview. | 38 |
 
 ### `torchlens.backends.torch`
@@ -1728,7 +1732,7 @@ Compatibility adapters for TorchLens 2.37 and earlier. (5 modules, 2035 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (38 modules, 12819 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (38 modules, 12835 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1764,7 +1768,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_recompute` | Activation recomputation candidate ranking helpers. | 125 |
 | `_rerun` | Isolated reruns: run the same forward more than once under controlled state. | 225 |
 | `_unit_axis` | Pick the unit (feature) axis of an op's activation for ''dead_neurons''. | 105 |
-| `_xb_calls` | Read a trace's recorded module calls into a backend-neutral form for pairing. | 299 |
+| `_xb_calls` | Read a trace's recorded module calls into a backend-neutral form for pairing. | 315 |
 | `_xb_pairing` | Pair the module calls of two traces without looking at any value. | 241 |
 | `_xb_refusals` | Typed refusals of the module-level comparison in ''tl.debug''. | 56 |
 | `_xb_report` | The two public answers of the module-level comparison: a Report and a first row. | 233 |

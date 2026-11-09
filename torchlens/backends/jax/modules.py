@@ -6,7 +6,7 @@ import base64
 from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, field as dataclass_field
 from typing import Any
 
 from ..._data_classes.param import Param
@@ -17,6 +17,12 @@ from ...backends._finalize import (
     numel_from_shape as _numel,
     value_nbytes as _nbytes,
 )
+from ._equinox_children import (
+    is_equinox_module,
+    iter_equinox_module_fields,
+    with_sequence_containers,
+)
+from ._return_ledger import JaxReturnLedger, note_return
 
 MODULE_SCOPE_PREFIX = "tlm_"
 MODULE_CALL_SCOPE_PREFIX = "tlc_"
@@ -44,6 +50,8 @@ class EquinoxModuleTree:
         Per-primary-address module call counts recorded during JAX tracing.
     forward_args_by_call
         Live module forward args keyed by ``(primary_address, call_index)``.
+    module_returns
+        Leaves each module call returned (the shared module-return seam).
     """
 
     root: Any
@@ -54,6 +62,7 @@ class EquinoxModuleTree:
     param_address_by_value_id: dict[int, str]
     call_counts: dict[str, int]
     forward_args_by_call: dict[tuple[str, int], tuple[tuple[Any, ...], dict[str, Any]]]
+    module_returns: JaxReturnLedger = dataclass_field(default_factory=JaxReturnLedger)
 
 
 @dataclass(frozen=True)
@@ -78,6 +87,8 @@ class NnxModuleTree:
         Per-primary-address module call counts recorded during JAX tracing.
     forward_args_by_call
         Live module forward args keyed by ``(primary_address, call_index)``.
+    module_returns
+        Leaves each module call returned (the shared module-return seam).
     """
 
     root: Any
@@ -88,27 +99,7 @@ class NnxModuleTree:
     param_address_by_value_id: dict[int, str]
     call_counts: dict[str, int]
     forward_args_by_call: dict[tuple[str, int], tuple[tuple[Any, ...], dict[str, Any]]]
-
-
-def is_equinox_module(value: object) -> bool:
-    """Return whether ``value`` is an Equinox module instance.
-
-    Parameters
-    ----------
-    value
-        Candidate root callable.
-
-    Returns
-    -------
-    bool
-        True when Equinox is importable and ``value`` is an ``eqx.Module``.
-    """
-
-    try:
-        import equinox as eqx
-    except ImportError:
-        return False
-    return isinstance(value, eqx.Module)
+    module_returns: JaxReturnLedger = dataclass_field(default_factory=JaxReturnLedger)
 
 
 def is_nnx_module(value: object) -> bool:
@@ -158,6 +149,7 @@ def discover_equinox_module_tree(model: Any) -> EquinoxModuleTree | None:
         address_by_id=address_by_id,
         modules_by_class=modules_by_class,
     )
+    metadata = with_sequence_containers(model, metadata)
     module_addresses = {
         alias for module_metadata in metadata.values() for alias in module_metadata["all_addresses"]
     }
@@ -220,13 +212,13 @@ def discover_nnx_module_tree(model: Any) -> NnxModuleTree | None:
 
 
 @contextmanager
-def scoped_equinox_module_calls(tree: EquinoxModuleTree) -> Iterator[None]:
-    """Temporarily wrap Equinox module ``__call__`` methods with named scopes.
+def scoped_equinox_module_calls(tree: EquinoxModuleTree | NnxModuleTree) -> Iterator[None]:
+    """Temporarily wrap Equinox (or NNX) module ``__call__`` methods; note each return.
 
     Parameters
     ----------
     tree
-        Discovered Equinox module tree.
+        Discovered Equinox or NNX module tree.
 
     Yields
     ------
@@ -269,7 +261,8 @@ def scoped_equinox_module_calls(tree: EquinoxModuleTree) -> Iterator[None]:
                 tree.forward_args_by_call[(address, call_index)] = (args, kwargs)
                 with jax.named_scope(encode_module_scope(address)):
                     with jax.named_scope(encode_module_call_scope(address, call_index)):
-                        return __original(self, *args, **kwargs)
+                        result = __original(self, *args, **kwargs)
+                return note_return(tree, address, call_index, result)
 
             setattr(module_class, "__call__", wrapper)
     except BaseException:
@@ -285,6 +278,9 @@ def scoped_equinox_module_calls(tree: EquinoxModuleTree) -> Iterator[None]:
 def scoped_nnx_module_calls(tree: NnxModuleTree) -> Iterator[None]:
     """Temporarily wrap Flax NNX module ``__call__`` methods with named scopes.
 
+    The wrapper is the one :func:`scoped_equinox_module_calls` installs: both trees carry the
+    same class map, call counters and module-return ledger.
+
     Parameters
     ----------
     tree
@@ -296,50 +292,8 @@ def scoped_nnx_module_calls(tree: NnxModuleTree) -> Iterator[None]:
         Control while class-level wrappers are installed.
     """
 
-    import jax
-
-    originals: dict[type[Any], Any] = {}
-
-    def _restore_installed() -> None:
-        """Restore every class ``__call__`` patch that actually landed."""
-
-        for module_class, original_call in originals.items():
-            setattr(module_class, "__call__", original_call)
-
-    # R07 (the L4 unwind standard): same install fence as
-    # :func:`scoped_equinox_module_calls`.
-    try:
-        for module_class, address_by_instance_id in tree.modules_by_class.items():
-            original_call = getattr(module_class, "__call__")  # noqa: B004 - fetches the __call__ object, not a callability test
-            originals[module_class] = original_call
-
-            def wrapper(
-                self: Any,
-                *args: Any,
-                __address_by_id: dict[int, str] = address_by_instance_id,
-                __original: Any = original_call,
-                **kwargs: Any,
-            ) -> Any:
-                """Call the original NNX module under a TorchLens named scope when known."""
-
-                address = __address_by_id.get(id(self))
-                if address is None:
-                    return __original(self, *args, **kwargs)
-                call_index = tree.call_counts.get(address, 0) + 1
-                tree.call_counts[address] = call_index
-                tree.forward_args_by_call[(address, call_index)] = (args, kwargs)
-                with jax.named_scope(encode_module_scope(address)):
-                    with jax.named_scope(encode_module_call_scope(address, call_index)):
-                        return __original(self, *args, **kwargs)
-
-            setattr(module_class, "__call__", wrapper)
-    except BaseException:
-        _restore_installed()
-        raise
-    try:
+    with scoped_equinox_module_calls(tree):
         yield
-    finally:
-        _restore_installed()
 
 
 def encode_module_scope(address: str) -> str:
@@ -628,8 +582,6 @@ def _walk_equinox_modules(
     seen_child_ids: set[int] = set()
     child_addresses = []
     for child_address, child_module in _iter_equinox_module_children(module, address):
-        if not is_equinox_module(child_module):
-            continue
         child_id = id(child_module)
         if child_id in seen_child_ids:
             continue
@@ -742,7 +694,7 @@ def _walk_nnx_modules(
 
 
 def _iter_equinox_module_children(module: Any, address: str) -> Iterator[tuple[str, Any]]:
-    """Yield direct Equinox module children from dataclass fields.
+    """Yield direct Equinox module children (module, list and tuple fields) with addresses.
 
     Parameters
     ----------
@@ -757,14 +709,8 @@ def _iter_equinox_module_children(module: Any, address: str) -> Iterator[tuple[s
         Child address and child module.
     """
 
-    if not is_dataclass(module):
-        return
-    for field in fields(module):
-        if not hasattr(module, field.name):
-            continue
-        child = getattr(module, field.name)
-        if is_equinox_module(child):
-            yield _join_module_address(address, field.name), child
+    for name, child in iter_equinox_module_fields(module):
+        yield _join_module_address(address, name), child
 
 
 def _iter_nnx_module_children(module: Any, address: str) -> Iterator[tuple[str, Any]]:
