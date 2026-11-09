@@ -94,16 +94,28 @@ def _boundary(
     *,
     justified: bool,
     options: ValueOptions,
+    ordered: tuple[bool, bool] | None = None,
 ) -> ValueResult:
-    """Compare the recorded values at one paired boundary (outputs or inputs)."""
+    """Compare the recorded values at one paired boundary (outputs or inputs).
+
+    Outputs pass ``ordered`` (whether each side's leaves are in return order) and pair
+    leaves by return position (:func:`_leaf_plan`); inputs compare the first of
+    differing counts.
+    """
 
     values_a, values_b = read_values(traces[0], labels[0]), read_values(traces[1], labels[1])
     if not values_a or not values_b:
         side = "a" if not values_a else "b"
         return ValueResult(UNAVAILABLE, reason=f"boundary unrecorded ({side})")
     disclosure = ""
-    if len(values_a) != len(values_b):
-        disclosure = f"compared the first of {len(values_a)} vs {len(values_b)} returned values"
+    if ordered is not None:
+        plan = _leaf_plan(len(values_a), len(values_b), ordered)
+        if isinstance(plan, ValueResult):
+            return plan
+        count, disclosure = plan
+        values_a, values_b = values_a[:count], values_b[:count]
+    elif len(values_a) != len(values_b):
+        disclosure = f"compared the first of {len(values_a)} vs {len(values_b)} inputs"
         values_a, values_b = values_a[:1], values_b[:1]
     results = []
     for (value_a, why_a), (value_b, why_b) in zip(values_a, values_b, strict=True):
@@ -112,6 +124,33 @@ def _boundary(
             continue
         results.append(compare_leaf(value_a, value_b, justified=justified, options=options))
     return combine(results, disclosure)
+
+
+def _leaf_plan(
+    count_a: int, count_b: int, ordered: tuple[bool, bool]
+) -> tuple[int, str] | ValueResult:
+    """How many returned leaves to pair by return position, and the row's disclosure.
+
+    Equal counts pair leaf by leaf. One leaf against several meets the other side's first
+    returned value (the primary output, e.g. HF eager attention's ``attn_output`` against
+    an MLX attention that returns only its output); the extra leaves are a coverage gap.
+    Leaves whose return order is not recorded, or two return trees of different sizes,
+    leave the row unavailable rather than pairing values that may not correspond.
+    """
+
+    for side, count, is_ordered in (("a", count_a, ordered[0]), ("b", count_b, ordered[1])):
+        if count > 1 and not is_ordered:
+            return ValueResult(
+                UNAVAILABLE, reason=f"return order of {count} values not recorded ({side})"
+            )
+    if count_a == count_b:
+        return count_a, ""
+    if min(count_a, count_b) > 1:
+        return ValueResult(
+            UNAVAILABLE, reason=f"return trees differ ({count_a} vs {count_b} values)"
+        )
+    side, extra = ("a", count_a - 1) if count_a > 1 else ("b", count_b - 1)
+    return 1, f"compared the first returned value; {extra} more on side {side} not compared"
 
 
 def _base_row(pair: CallPair, trace_a: Trace) -> dict[str, Any]:
@@ -159,7 +198,13 @@ def _row(
         return row, None
     justified = layout_justified(pair.a.class_name, pair.b.class_name)
     options = ValueOptions(cross_backend, tol[0], tol[1], input_scale(traces[0], pair.a.inputs))
-    out = _boundary(traces, (pair.a.outputs, pair.b.outputs), justified=justified, options=options)
+    out = _boundary(
+        traces,
+        (pair.a.outputs, pair.b.outputs),
+        justified=justified,
+        options=options,
+        ordered=(pair.a.ordered, pair.b.ordered),
+    )
     inputs = _boundary(traces, (pair.a.inputs, pair.b.inputs), justified=justified, options=options)
     row.update(
         {

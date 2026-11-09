@@ -16,11 +16,12 @@ module. Half precision separates only gross bugs; that is the precision floor, n
 a tuning gap, so half-precision rows say to compare float32 runs. float64 has no
 measured port; it uses the float32 constant (a looser bound than float64 needs).
 
-The cross-backend ``atol`` is a floor, so an output that is zero on the reference run
-(``rms(a) = 0``) is not judged at an exact-zero bound: ``atol = c * eps(narrower dtype)
-* s``, where ``s`` is the rms of the module's recorded input on side a (1.0 when that
-input is unavailable or all zero), never the output being judged. ``c`` is provisional
-at 10 until the calibration port confirms it.
+The cross-backend ``atol`` is 0, except when the reference value is all zero (its rms is
+0, so the relative bound would demand exact zeros): then ``atol = c * eps(narrower dtype)
+* s``, where ``s`` is the smallest rms among the module's finite, non-zero floating inputs
+on side a (1.0 when there is none), never the output being judged. Taking the smallest
+input keeps a causal-mask-like input (huge or infinite values) from widening the bound.
+``c`` is provisional at 10 until the calibration port confirms it.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ CROSS_BACKEND_RTOL: dict[str, float] = {
     "float32": 1e-4,
     "float64": 1e-4,
 }
-#: Provisional multiplier of the cross-backend absolute floor ``c * eps * input rms``.
+#: Provisional multiplier of the all-zero-reference floor ``c * eps * input rms``.
 CROSS_BACKEND_ATOL_FLOOR = 10.0
 
 #: Mantissa width orders floating dtypes from narrowest to widest precision.
@@ -109,7 +110,7 @@ def tolerance_for(
     cross_backend: bool,
     rtol: float | None,
     atol: float | None,
-    scale: float = 1.0,
+    zero_scale: float | None = None,
 ) -> Tolerance:
     """Return the tolerance for one paired value.
 
@@ -122,9 +123,10 @@ def tolerance_for(
     rtol, atol:
         User overrides, or ``None`` for the default. Across backends an override
         replaces the constant inside the same relative-RMS form.
-    scale:
-        Reference scale of the absolute floor across backends: the rms of the module's
-        side-a input (1.0 when unavailable or zero). A user ``atol`` replaces the floor.
+    zero_scale:
+        ``None`` when the reference value has a non-zero element (``atol`` stays 0 across
+        backends); otherwise the scale of the floor (the module's smallest finite, non-zero
+        side-a input rms, or 1.0). A user ``atol`` replaces either.
 
     Returns
     -------
@@ -149,7 +151,9 @@ def tolerance_for(
     return Tolerance(
         "relative_rms",
         default_rtol if rtol is None else rtol,
-        _atol_floor(narrower, scale) if atol is None else atol,
+        (0.0 if zero_scale is None else _atol_floor(narrower, zero_scale))
+        if atol is None
+        else atol,
         narrower,
         note,
     )

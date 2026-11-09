@@ -2300,8 +2300,8 @@ looking at its values; a module or op with no partner is a coverage gap, never a
   such as an MLX list `layers.0` meets a torch `Sequential` child `0`; repeated calls pair in
   order; an extra call is unpaired) and compares their recorded outputs. Across backends the
   default tolerance is relative RMS error, `rms(a - b) <= atol + rtol * rms(a)`, with constants
-  from the narrower dtype of each pair (float32 `1e-4`, float16 `5e-2`, bfloat16 `0.75`) and an
-  `atol` floor of `10 * eps` times the rms of the module's side-a input. Module frames add
+  from the narrower dtype of each pair (float32 `1e-4`, float16 `5e-2`, bfloat16 `0.75`) and
+  `atol` 0, except `10 * eps` times the smallest side-a input rms when the reference is all zero. Module frames add
   `df.attrs["coverage"]`, `df.attrs["align"]` (the pairing mode that ran) and
   `df.attrs["backends"]` (for example `("torch", "mlx")`).
 - `module_map=`: side-a to side-b module address prefixes for a port that renamed modules

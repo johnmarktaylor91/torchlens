@@ -90,27 +90,28 @@ class _MLXTwin(mnn.Module):
         return self.head(h)
 
 
-def _copy_linear(source: nn.Linear, target: Any) -> None:
-    """Copy a torch linear layer's weights into an MLX linear layer (same layout)."""
+def _copy_linear(source: nn.Linear, target: Any, dtype: str = "float32") -> None:
+    """Copy a torch linear layer's float32 weights into an MLX linear layer in ``dtype``."""
 
-    target.weight = mx.array(source.weight.detach().numpy())
-    target.bias = mx.array(source.bias.detach().numpy())
+    target.weight = mx.array(source.weight.detach().numpy()).astype(getattr(mx, dtype))
+    target.bias = mx.array(source.bias.detach().numpy()).astype(getattr(mx, dtype))
 
 
-def _pair(bug_block: int | None = None) -> tuple[tl.Trace, tl.Trace]:
-    """Trace the torch model and its MLX twin on one input, weights copied across."""
+def _pair(bug_block: int | None = None, dtype: str = "float32") -> tuple[tl.Trace, tl.Trace]:
+    """Trace the torch model and its MLX twin on one input in ``dtype``, weights copied."""
 
     torch.manual_seed(0)
     reference = _TorchTwin().eval()
     twin = _MLXTwin(bug_block)
-    _copy_linear(reference.fc_in, twin.fc_in)
-    _copy_linear(reference.head, twin.head)
+    _copy_linear(reference.fc_in, twin.fc_in, dtype)
+    _copy_linear(reference.head, twin.head, dtype)
     for source, target in zip(reference.blocks, twin.blocks, strict=True):
-        _copy_linear(source.fc, target.fc)
+        _copy_linear(source.fc, target.fc, dtype)
     twin.eval()
+    reference = reference.to(getattr(torch, dtype))
     x = np.linspace(-1.0, 1.0, 8, dtype=np.float32).reshape(2, 4)
-    torch_trace = tl.trace(reference, torch.from_numpy(x))
-    mlx_trace = tl.trace(twin, mx.array(x), backend="mlx")
+    torch_trace = tl.trace(reference, torch.from_numpy(x).to(getattr(torch, dtype)))
+    mlx_trace = tl.trace(twin, mx.array(x).astype(getattr(mx, dtype)), backend="mlx")
     assert str(mlx_trace.provenance.backend) == "mlx"
     return torch_trace, mlx_trace
 
@@ -157,3 +158,91 @@ def test_label_join_across_real_backends_refuses() -> None:
     torch_trace, mlx_trace = _pair()
     with pytest.raises(tl.errors.BackendUnsupportedError):
         tl.debug.compare(torch_trace, mlx_trace, align="label")
+
+
+def test_bfloat16_twin_compares_at_the_bfloat16_tolerance() -> None:
+    """MLX bfloat16 values read without crashing and keep their dtype for the tolerance."""
+
+    torch_trace, mlx_trace = _pair(dtype="bfloat16")
+    assert tl.debug.first_divergence(torch_trace, mlx_trace) is None
+    paired = tl.debug.compare(torch_trace, mlx_trace).to_pandas()
+    paired = paired[paired["alignment"] == "supported"]
+    assert set(paired["outcome"]) == {"equal"}
+    assert set(paired["rtol"]) == {0.75}
+    assert paired["reason"].str.contains("half precision").all()
+
+
+class _TorchEagerAttention(nn.Module):
+    """Returns ``(output, weights)``, creating the weights first (HF eager attention)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj = nn.Linear(_WIDTH, _WIDTH)
+
+    def forward(self, x: torch.Tensor) -> Any:
+        weights = torch.softmax(x @ x.transpose(0, 1), dim=-1)
+        return self.proj(x), weights
+
+
+class _TorchAttentionNet(nn.Module):
+    """``head(attn(fc_in(x))[0])``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc_in, self.attn = nn.Linear(4, _WIDTH), _TorchEagerAttention()
+        self.head = nn.Linear(_WIDTH, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out, _weights = self.attn(self.fc_in(x))
+        return self.head(out)
+
+
+class _MLXAttention(mnn.Module):
+    """Returns only its output, plus ``0.1`` when ``bug`` is set."""
+
+    def __init__(self, bug: bool = False) -> None:
+        super().__init__()
+        self.proj, self.bug = mnn.Linear(_WIDTH, _WIDTH), bug
+
+    def __call__(self, x: Any) -> Any:
+        out = self.proj(x)
+        return out + 0.1 if self.bug else out
+
+
+class _MLXAttentionNet(mnn.Module):
+    """The MLX port of :class:`_TorchAttentionNet`."""
+
+    def __init__(self, bug: bool = False) -> None:
+        super().__init__()
+        self.fc_in, self.attn = mnn.Linear(4, _WIDTH), _MLXAttention(bug)
+        self.head = mnn.Linear(_WIDTH, 2)
+
+    def __call__(self, x: Any) -> Any:
+        return self.head(self.attn(self.fc_in(x)))
+
+
+def _attention_pair(bug: bool = False) -> tuple[tl.Trace, tl.Trace]:
+    """Trace the eager two-output torch model and its single-output MLX port."""
+
+    torch.manual_seed(0)
+    reference, twin = _TorchAttentionNet().eval(), _MLXAttentionNet(bug)
+    for source, target in ((reference.fc_in, twin.fc_in), (reference.head, twin.head)):
+        _copy_linear(source, target)
+    _copy_linear(reference.attn.proj, twin.attn.proj)
+    x = np.linspace(-1.0, 1.0, 12, dtype=np.float32).reshape(3, 4)
+    return tl.trace(reference, torch.from_numpy(x)), tl.trace(twin, mx.array(x), backend="mlx")
+
+
+@pytest.mark.parametrize("bug", [False, True], ids=["correct", "bug"])
+def test_eager_two_output_attention_pairs_its_output(bug: bool) -> None:
+    """The torch output (returned first, created second) meets MLX's single output."""
+
+    torch_trace, mlx_trace = _attention_pair(bug)
+    row = tl.debug.first_divergence(torch_trace, mlx_trace)
+    if not bug:
+        assert row is None
+        frame = tl.debug.compare(torch_trace, mlx_trace).to_pandas().set_index("op")
+        assert frame.loc["attn:1", "outcome"] == "equal"
+        assert "1 more on side a not compared" in frame.loc["attn:1", "reason"]
+    else:
+        assert row is not None and (row["op"], row["outcome"]) == ("attn:1", "different")

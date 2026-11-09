@@ -21,7 +21,7 @@ import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import _xb_calls
+from torchlens.debug import _cross_backend, _xb_calls
 from torchlens.errors import InvalidArgumentError
 
 pytest.importorskip("pandas")
@@ -185,9 +185,7 @@ def test_correct_decomposed_port_agrees_with_normalized_addresses() -> None:
     _assert_evidence_rule(frame)
     paired = frame[frame["alignment"] == "supported"]
     assert set(paired["outcome"]) == {"equal"}
-    assert (paired["rtol"] == 1e-4).all() and (paired["atol"] > 0.0).all()
-    floor = 10 * torch.finfo(torch.float32).eps * float(x.double().square().mean().sqrt())
-    assert frame.loc[frame["op"] == "self:1", "atol"].item() == pytest.approx(floor)
+    assert (paired["rtol"] == 1e-4).all() and (paired["atol"] == 0.0).all()
     assert frame.attrs["value_diverged"] == 0
     assert frame.loc[frame["op"] == "1.fc:1", "module_b"].item() == "layers.1.fc:1"
     assert frame.attrs["coverage"]["a"]["unpaired"] == 0
@@ -796,16 +794,16 @@ def _returning(label: str, *calls: str) -> SimpleNamespace:
 @pytest.mark.parametrize(
     ("own", "returned", "expected"),
     [
-        ((), ("linear_1_1:1",), ("linear_1_1:1",)),
-        (("relu_1_2:1",), ("linear_1_1:1",), ("relu_1_2:1", "linear_1_1:1")),
-        ((), ("linear_1_1:1", "linear_2_2:1"), ()),
+        ((), ("linear_1_1:1",), (("linear_1_1:1",), True)),
+        (("relu_1_2:1",), ("linear_1_1:1",), (("relu_1_2:1", "linear_1_1:1"), False)),
+        ((), ("linear_1_1:1", "linear_2_2:1"), ((), True)),
     ],
     ids=["passthrough", "own-then-returned", "two-returned-unresolved"],
 )
 def test_recorded_passthrough_is_read_as_the_call_output(
-    own: tuple[str, ...], returned: tuple[str, ...], expected: tuple[str, ...]
+    own: tuple[str, ...], returned: tuple[str, ...], expected: tuple[tuple[str, ...], bool]
 ) -> None:
-    """A returned input reads as the call's output after its own outputs; two refuse to order."""
+    """A returned input reads as the call's output; beside its own output the order is unknown."""
 
     call = SimpleNamespace(address="drop", label="drop:1", ops=list(own), output_ops=list(own))
     trace = SimpleNamespace(
@@ -886,3 +884,138 @@ def test_module_frames_name_the_pairing_mode_and_backends() -> None:
     assert (structure["align"], structure["backends"]) == ("structure", ("torch", "torch"))
     for align in ("auto", "label"):
         assert not {"align", "backends"} & set(_frame(same_a, same_b, align=align).attrs)
+
+
+class _EagerAttention(nn.Module):
+    """Returns ``(output, weights)`` but creates the weights first (HF eager attention)."""
+
+    def __init__(self, proj: nn.Linear, shift: float = 0.0) -> None:
+        """Share ``proj``; ``shift`` injects a bug into the output."""
+
+        super().__init__()
+        self.proj, self.shift = proj, shift
+
+    def forward(self, x: torch.Tensor) -> Any:
+        """Weights (batch by batch) first, then the projected output."""
+
+        weights = torch.softmax(x @ x.transpose(0, 1), dim=-1)
+        return self.proj(x) + self.shift, weights
+
+
+class _SdpaAttention(_EagerAttention):
+    """The same module returning only its output (an MLX-style attention)."""
+
+    def forward(self, x: torch.Tensor) -> Any:
+        """The projected output alone."""
+
+        return self.proj(x) + self.shift
+
+
+class _AttentionNet(nn.Module):
+    """``head(attn(x)[0])``, reading the first returned value when there are two."""
+
+    def __init__(self, attn: nn.Module, head: nn.Linear) -> None:
+        """Hold the attention and the head."""
+
+        super().__init__()
+        self.attn, self.head = attn, head
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run attention, keep its output, project."""
+
+        out = self.attn(x)
+        return self.head(out[0] if isinstance(out, tuple) else out)
+
+
+def _attention_pair(shift: float = 0.0) -> tuple[tl.Trace, tl.Trace]:
+    """Eager two-output attention on side a, a single-output port (``shift`` bug) on side b."""
+
+    torch.manual_seed(0)
+    proj, head = nn.Linear(6, 6), nn.Linear(6, 2)
+    eager = _AttentionNet(_EagerAttention(proj), head)
+    port = _AttentionNet(_SdpaAttention(copy.deepcopy(proj), shift), copy.deepcopy(head))
+    return _traces(eager, port, torch.randn(3, 6))
+
+
+def test_two_returned_values_pair_by_return_position_not_op_order() -> None:
+    """The eager output (returned first, created second) meets the port's single output."""
+
+    trace_a, trace_b = _attention_pair()
+    assert tl.debug.first_divergence(trace_a, trace_b) is None
+    row = _frame(trace_a, trace_b).set_index("op").loc["attn:1"]
+    assert (row["alignment"], row["outcome"]) == ("supported", "equal")
+    assert "1 more on side a not compared" in row["reason"]
+
+
+def test_a_bug_behind_two_returned_values_is_named_at_its_module() -> None:
+    """A bug in the port's attention output reads different at ``attn``, not shape-incompatible."""
+
+    row = tl.debug.first_divergence(*_attention_pair(shift=0.5))
+    assert row is not None
+    assert (row["op"], row["outcome"]) == ("attn:1", "different")
+
+
+@pytest.mark.parametrize(
+    ("counts", "ordered", "expected"),
+    [
+        ((2, 2), (True, True), (2, "")),
+        (
+            (2, 1),
+            (True, True),
+            (1, "compared the first returned value; 1 more on side a not compared"),
+        ),
+        ((2, 1), (False, True), "return order of 2 values not recorded (a)"),
+        ((3, 2), (True, True), "return trees differ (3 vs 2 values)"),
+    ],
+    ids=["equal", "one-against-two", "order-unknown", "trees-differ"],
+)
+def test_leaf_plan(counts: tuple[int, int], ordered: tuple[bool, bool], expected: Any) -> None:
+    """Leaves pair by return position; unknown order or unequal trees refuse the row."""
+
+    plan = _cross_backend._leaf_plan(*counts, ordered)
+    if isinstance(expected, str):
+        assert plan.outcome == "unavailable" and plan.reason == expected  # type: ignore[union-attr]
+    else:
+        assert plan == expected
+
+
+class _ZeroWithMask(nn.Module):
+    """Returns zeros shaped like ``x`` plus ``shift``, reading a mask-like second input."""
+
+    def __init__(self, shift: float = 0.0) -> None:
+        """Hold the bug shift."""
+
+        super().__init__()
+        self.shift = shift
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """``x * 0 + (mask * 0).sum() + shift``: all zero on the reference."""
+
+        return x * 0.0 + (mask * 0.0).sum() + self.shift
+
+
+class _MaskNet(nn.Module):
+    """Builds a causal-mask-like tensor of huge finite values and feeds it beside ``x``."""
+
+    def __init__(self, shift: float = 0.0) -> None:
+        """Hold the zero module."""
+
+        super().__init__()
+        self.zero = _ZeroWithMask(shift)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """``zero(x, mask)`` with ``mask`` full of ``-3e38``."""
+
+        return self.zero(x, torch.full_like(x, -3e38))
+
+
+def test_a_mask_like_input_cannot_inflate_the_atol_floor() -> None:
+    """On an all-zero output the floor scales by the smallest input rms, never the mask's."""
+
+    x = torch.randn(2, 4)
+    trace_a, trace_b = _traces(_MaskNet(), _MaskNet(shift=1e-3), x)
+    row = _frame(trace_a, trace_b).set_index("op").loc["zero:1"]
+    assert row["outcome"] == "different", row["reason"]
+    floor = 10 * torch.finfo(torch.float32).eps * float(x.double().square().mean().sqrt())
+    assert row["atol"] == pytest.approx(floor)
+    assert tl.debug.first_divergence(trace_a, trace_b)["op"] == "zero:1"  # type: ignore[index]

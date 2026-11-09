@@ -43,6 +43,11 @@ def _comparison_tensor(value: Any, codec: Any) -> torch.Tensor | None:
             if str(array.dtype) == "bfloat16":
                 array = array.astype(np.float32)
             tensor = tensor_from_numpy(np.array(array, copy=True, order="C"))
+            # NumPy has no bfloat16, so the MLX codec copies bfloat16 through float32
+            # (exact) and keeps the logical dtype; restore it. Saving still refuses MLX
+            # bfloat16 in the codec's ``_unsupported_reason``, so no saved payload changes.
+            if str(encoded.logical_dtype) == "mlx.core.bfloat16":
+                tensor = tensor.to(torch.bfloat16)
         return tensor
     except (TypeError, ValueError):
         return None

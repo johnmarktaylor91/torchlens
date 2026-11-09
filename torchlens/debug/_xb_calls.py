@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._data_classes._module_passthrough import passthrough_op_labels
+from .._fast_live_plans import _module_output_paths
 from ._common import _op_from_label, _op_label, _ordered_ops
 
 if TYPE_CHECKING:
@@ -71,6 +72,7 @@ class CallInfo:
     outputs: tuple[str, ...]
     inputs: tuple[str, ...]
     training: bool | None
+    ordered: bool = True
 
 
 def _raw_calls(trace: Trace) -> list[tuple[Any, Any]]:
@@ -127,20 +129,51 @@ def _parent_label(call: Any, roots: list[Any]) -> str | None:
     return str(parent)
 
 
-def _outputs(call: Any, trace: Trace) -> tuple[str, ...]:
-    """The call's recorded outputs: its own output ops, then any returned inputs.
+def _return_ordered(call: Any, trace: Trace, own: tuple[str, ...]) -> tuple[str, ...] | None:
+    """The call's own output ops in RETURN order, or ``None`` when that order is unknown.
 
-    Two or more returned inputs give no outputs (the boundary reads as unrecorded):
-    their producers' execution order need not be the order the call returned them in.
+    ``output_ops`` is in op-creation order (HF eager attention creates its weights
+    before its output, then returns ``(output, weights)``). Each op's
+    ``multi_output_name``, minted from its return path at capture, ties it to its
+    position in ``output_paths`` (the return traversal order).
+    """
+
+    ops = [_op_from_label(trace, label) for label in own]
+    if any(op is None for op in ops):
+        return None
+    paths = _module_output_paths(trace, call, str(call.address), ops)
+    if paths is None:
+        return None
+    position = {tuple(path): index for index, path in enumerate(call.output_paths or ())}
+    return tuple(
+        label
+        for _path, label in sorted(
+            zip(paths, own, strict=True), key=lambda pl: position[tuple(pl[0])]
+        )
+    )
+
+
+def _outputs(call: Any, trace: Trace) -> tuple[tuple[str, ...], bool]:
+    """The call's recorded outputs and whether they are in return order.
+
+    Own output ops come first, then a returned input (the order torch's exit-time
+    identity op takes). Two or more returned inputs give no outputs (the boundary reads
+    as unrecorded): their producers' execution order need not be the return order. More
+    than one leaf is in return order only when the return paths resolve it.
     """
 
     if call.address == ROOT_ADDRESS and trace.output_layers:
         resolved = (_op_from_label(trace, str(label)) for label in trace.output_layers)
-        return tuple(dict.fromkeys(_op_label(op) for op in resolved if op is not None))
+        return tuple(dict.fromkeys(_op_label(op) for op in resolved if op is not None)), True
     passthrough = passthrough_op_labels(call, trace)
     if len(passthrough) > 1:
-        return ()
-    return tuple(str(label) for label in (*(call.output_ops or ()), *passthrough))
+        return (), True
+    own = tuple(str(label) for label in (call.output_ops or ()))
+    leaves = (*own, *passthrough)
+    if len(leaves) <= 1:
+        return leaves, True
+    ordered = None if passthrough else _return_ordered(call, trace, own)
+    return (leaves, False) if ordered is None else (ordered, True)
 
 
 def _inputs(
@@ -211,7 +244,7 @@ def read_calls(trace: Trace) -> list[CallInfo]:
 
     infos = []
     for module, call in raw:
-        outputs = _outputs(call, trace)
+        outputs, ordered = _outputs(call, trace)
         enter, exit_ = _span(call, outputs, order)
         training = getattr(module, "training", None)
         infos.append(
@@ -229,6 +262,7 @@ def read_calls(trace: Trace) -> list[CallInfo]:
                 outputs=outputs,
                 inputs=_inputs(call, trace, outputs, order),
                 training=None if training is None else bool(training),
+                ordered=ordered,
             )
         )
     return sorted(infos, key=lambda info: (info.exit, -info.depth, info.enter))

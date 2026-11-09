@@ -53,7 +53,7 @@ class ValueOptions:
     rtol, atol:
         User tolerance overrides, or ``None`` for the policy default.
     scale:
-        Reference scale of the cross-backend absolute floor (see :func:`input_scale`).
+        Scale of the all-zero-reference ``atol`` floor (see :func:`input_scale`).
     """
 
     cross_backend: bool
@@ -110,17 +110,18 @@ def read_values(trace: Trace, labels: tuple[str, ...]) -> list[tuple[Any, str | 
 
 
 def input_scale(trace: Trace, labels: tuple[str, ...]) -> float:
-    """The rms of a call's recorded floating inputs, or 1.0 when none is available or all zero."""
+    """The smallest finite, non-zero rms among a call's floating inputs, else 1.0.
 
-    tensors = [
-        value.detach().reshape(-1).to("cpu", torch.float64)
+    The smallest, so a causal-mask-like input (huge or infinite values) never sets it.
+    """
+
+    scales = [
+        float(value.detach().to("cpu", torch.float64).square().mean().sqrt())
         for value, _why in read_values(trace, labels)
         if isinstance(value, torch.Tensor) and value.is_floating_point() and value.numel()
     ]
-    if not tensors:
-        return 1.0
-    rms = float(torch.cat(tensors).square().mean().sqrt())
-    return rms if rms > 0.0 and rms == rms and rms != float("inf") else 1.0
+    finite = [scale for scale in scales if 0.0 < scale < float("inf")]
+    return min(finite, default=1.0)
 
 
 def drew_random(trace: Trace, op: Any) -> bool:
@@ -205,7 +206,7 @@ def compare_leaf(
         cross_backend=options.cross_backend,
         rtol=options.rtol,
         atol=options.atol,
-        scale=options.scale,
+        zero_scale=None if bool(a.ne(0).any()) else options.scale,
     )
     aligned = _align_for_compare(a_s, b_s)
     if aligned is None:  # pragma: no cover - shapes were made equal above
