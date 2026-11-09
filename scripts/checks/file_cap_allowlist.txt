@@ -732,10 +732,10 @@ torchlens/backends/jax/backend.py::JAXBackend._builtin_container_spec	63
 torchlens/backends/jax/backend.py::JAXBackend._derive_intermediate_grads_zero_tap	177
 torchlens/backends/jax/backend.py::JAXBackend._emit_equations	87
 torchlens/backends/jax/backend.py::JAXBackend._emit_region_capture	122
-torchlens/backends/jax/backend.py::JAXBackend._finish_trace	296
+torchlens/backends/jax/backend.py::JAXBackend._finish_trace	294
 torchlens/backends/jax/backend.py::JAXBackend._populate_pytree_module_build_data	82
 torchlens/backends/jax/backend.py::JAXBackend._validate_jax_regions	70
-torchlens/backends/jax/backend.py::JAXBackend.capture_trace	330
+torchlens/backends/jax/backend.py::JAXBackend.capture_trace	331
 torchlens/backends/jax/backend.py::_experimental_per_op_boundary_vjp_oracle	79
 torchlens/backends/jax/backend.py::_finite_difference_directional_check	83
 torchlens/backends/jax/backend.py::_jax_intermediate_oracle_passes	62

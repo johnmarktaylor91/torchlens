@@ -97,6 +97,7 @@ from .._validation_shared import float_replay_tolerances
 from . import _module_return_probe as return_probe
 from ._closure_consts import _readable_closure_consts
 from ._perturbation_probes import _perturb_candidates
+from ._pytree_param_barcodes import stamp_pytree_param_barcodes
 from ._raw_relabel import (
     _is_jax_recurrence_source,
     _jax_equivalent_labels_by_key,
@@ -740,6 +741,7 @@ class JAXBackend:
         delattr(trace, "capture_events")
         if tree is not None:
             self._attach_pytree_params(trace, tree)
+            stamp_pytree_param_barcodes(trace, tree, result.captures)
         else:
             self._attach_params(trace, args[0] if args else None)
         self._finish_trace(trace, tree, result.equations)
@@ -2290,8 +2292,6 @@ class JAXBackend:
                     param_log_by_source_label[op_log.layer_label] = trace._param_logs[param_address]
 
             if param_log_by_source_label:
-                from .._finalize import _attach_param_usage
-
                 usage_membership: dict[int, tuple[set[str], set[str], set[str]]] = {}
                 for op_log in trace._layer_list:
                     seen_barcodes: set[str] = set()
