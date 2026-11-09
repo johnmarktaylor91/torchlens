@@ -5923,3 +5923,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 211d33885ed7f8d36486cd52eb5cbbd3bcd16480
 recorded: 2026-11-09T03:41:06+00:00
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: j7: preview op labels follow torch numbering (backends/_finalize_labels.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 187856f558b5b1e04b786f44512152318dfa083a
+recorded: 2026-11-09T05:33:56+00:00

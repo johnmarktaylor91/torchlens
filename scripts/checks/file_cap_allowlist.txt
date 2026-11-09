@@ -717,9 +717,9 @@ torchlens/backends/_default_specs.py	1291
 torchlens/backends/_default_specs.py::_simple_leaves	72
 torchlens/backends/_default_specs.py::_tf_can_handle	79
 torchlens/backends/_default_specs.py::register_default_backend_specs	191
-torchlens/backends/_finalize.py	1249
+torchlens/backends/_finalize.py	1240
 torchlens/backends/_finalize.py::_apply_recurrence_relabel_epilogue	106
-torchlens/backends/_finalize.py::_finalize_single_op	86
+torchlens/backends/_finalize.py::_finalize_single_op	77
 torchlens/backends/_finalize.py::attach_object_module_logs	65
 torchlens/backends/_finalize.py::finalize_single_pass_trace	150
 torchlens/backends/_finalize.py::new_preview_function_trace	100

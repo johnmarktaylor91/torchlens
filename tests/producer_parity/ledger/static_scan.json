@@ -5744,6 +5744,30 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/backends/_finalize_labels.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "step_index",
+  "file": "torchlens/backends/_finalize_labels.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "type_index",
+  "file": "torchlens/backends/_finalize_labels.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/backends/_finalize_site_keys.py",
@@ -5892,7 +5916,7 @@
   "field": "pass_index",
   "file": "torchlens/backends/jax/backend.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -5977,7 +6001,7 @@
  },
  {
   "ambiguous": false,
-  "field": "step_index",
+  "field": "raw_index",
   "file": "torchlens/backends/mlx/_tap_observers.py",
   "has_default": true,
   "sites": 1,
