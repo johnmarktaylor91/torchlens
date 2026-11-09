@@ -143,7 +143,7 @@ def placement_reason(
     if target is None:
         row = rows[pairs.index(pair)]
         state = "inputs already differ" if row["inputs_agree"] is False else "inputs not compared"
-        return f"op placement: none ({state}, and no enclosing call has agreeing inputs)"
+        return f"op placement: none ({state}, and no enclosing differing call has agreeing inputs)"
     prefix = "" if target is pair else f"op placement inside {_label(target)} (inputs agree): "
     return prefix + _placed_in(target, table, facts, traces, tol)
 
@@ -162,7 +162,9 @@ def _localized(
     When the first differing call's inputs already differ, the difference arose earlier,
     in code between matched boundaries; inside the nearest enclosing call whose inputs
     agree and whose output differs it is "localized inside that module" (AGREED 2.2
-    item 3), so the walk runs there. The module row itself is unchanged.
+    item 3), so the walk runs there. The climb stops at an enclosing call whose output
+    agrees: a difference found above it would be a different one. The module row
+    itself is unchanged.
     """
 
     by_label = {p.a.label: (p, r) for p, r in zip(pairs, rows, strict=True) if p.a is not None}
@@ -172,6 +174,8 @@ def _localized(
         found = by_label.get(label)
         if found is not None and _placeable(*found):
             return found[0]
+        if found is not None and found[1]["outcome"] != "different":
+            return None  # an enclosing call that agrees: a higher difference is another one
         label = parent.get(label)
     return None
 

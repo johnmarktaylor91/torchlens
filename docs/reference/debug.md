@@ -698,14 +698,15 @@ producer ran. A saved and reloaded pair gives the same answer with no live model
 **Inside the module.** When modules are paired, `first_divergence` also places the difference
 on an operation, or a small operation group, inside the module that localizes it: the first
 differing module when its inputs agree, else the nearest enclosing differing module whose inputs
-agree (the computation between matched boundaries lives there). Graph structure pairs the
+agree (the computation between matched boundaries lives there; the search stops at an enclosing
+module whose output agrees). Graph structure pairs the
 operations: for an operation whose inputs are paired, the partner is the other side's operation
 that consumes exactly the partners of those inputs, chosen without reading its value. Child
 modules that already agree count as paired boundaries. Values only confirm agreement, or close a
 decomposition gap (one fused operation on one side, several on the other, such as `linear`
 against `matmul` and `add`) when a later operation agrees. A difference is read only where both
-sides' structure meets again: the next operation that consumes the open ones, or the module's
-recorded outputs. The per-backend spelling lists (MLX `subtract` is `sub`, Paddle
+sides' structure meets again: the next operation that consumes the open ones together with at
+least one paired input, or the module's recorded outputs. The per-backend spelling lists (MLX `subtract` is `sub`, Paddle
 `functional.layer_norm` is `layernorm`) only break a tie between structurally valid candidates,
 and the row says so. The reason gains one phrase: `op: a <op> against b <op>` for one operation
 per side, or `op group: a [...] against b [...]` when one side spells the computation in several

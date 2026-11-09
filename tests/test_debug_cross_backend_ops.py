@@ -351,6 +351,37 @@ def test_glue_op_bug_between_child_modules_is_placed_in_the_parent() -> None:
     assert match is not None and (_kinds(match["a"]), _kinds(match["b"])) == (["relu"], ["sigmoid"])
 
 
+def test_climb_stops_at_an_enclosing_call_that_agrees() -> None:
+    class Masked(nn.Module):
+        """``x + 0 * unit(x * k)``: the child's difference never reaches the output."""
+
+        def __init__(self, k: float) -> None:
+            super().__init__()
+            self.unit, self.k = Fn(torch.tanh), k
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x + 0.0 * self.unit(x * self.k)
+
+    class Top(nn.Module):
+        """``masked(x) * s``: a second, unrelated difference at the top."""
+
+        def __init__(self, k: float, s: float) -> None:
+            super().__init__()
+            self.masked, self.s = Masked(k), s
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.masked(x) * self.s
+
+    trace_a = tl.trace(Top(2.0, 1.5).eval(), _x(2, _WIDTH))
+    trace_b = tl.trace(Top(3.0, 2.0).eval(), _x(2, _WIDTH))
+    trace_b._provenance_backend = "mlx"  # type: ignore[assignment]
+    row = tl.debug.first_divergence(trace_a, trace_b)
+    assert row is not None and str(row["op"]).startswith("masked.unit:")
+    reason = str(row["reason"])
+    assert "op placement inside" not in reason, reason
+    assert "no enclosing differing call has agreeing inputs" in reason, reason
+
+
 def test_saved_and_reloaded_pair_gives_the_same_placement(tmp_path: Path) -> None:
     biased = _B + 0.4
     unit_a, unit_b = Fn(_linear, w=_W, b=_B), Fn(_matmul_add(0.0), w=_W, b=biased)
