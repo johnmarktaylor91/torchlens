@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from .._module_returns import ModuleReturnLedger, iter_returned_leaves
 
@@ -95,7 +95,7 @@ def note_return(tree: Any, address: str, call_index: int, value: Any) -> Any:
 
     ledger = getattr(tree, "module_returns", None)
     if isinstance(ledger, TinygradReturnLedger):
-        uops = {id(leaf): leaf.uop for _path, leaf in iter_returned_leaves(value, _is_tensor)}
+        uops = {id(t): cast(Any, t).uop for _p, t in iter_returned_leaves(value, _is_tensor)}
         ledger.pending.append((address, call_index, value, uops))
     return value
 
