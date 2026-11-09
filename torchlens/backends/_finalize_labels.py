@@ -46,6 +46,8 @@ class PreviewFinalLabel:
         ``{type}_{type_index}``.
     type_index:
         1-based count of this op type's layers so far.
+    pass_index:
+        The op's pass within its layer (1 for a single-pass layer).
     step_index:
         The op's own ``step_index``: 1-based over ops that are not inputs or buffers,
         0 for those. Equal to the label's step for an op at its layer's first pass
@@ -56,6 +58,7 @@ class PreviewFinalLabel:
     short_layer_label: str
     type_index: int
     step_index: int
+    pass_index: int = 1
 
 
 def _is_unstepped(op_log: Any) -> bool:
@@ -110,11 +113,12 @@ def torch_rule_final_labels(
         if not unstepped:
             op_step += 1
             op_step_index = op_step
-        finals[raw_label] = replace(final, step_index=op_step_index)
+        pass_index = assignment.pass_index if assignment is not None else 1
+        finals[raw_label] = replace(final, step_index=op_step_index, pass_index=pass_index)
     return finals
 
 
-def apply_final_label(op_log: Any, final: PreviewFinalLabel, pass_index: int) -> str:
+def apply_final_label(op_log: Any, final: PreviewFinalLabel) -> str:
     """Write one op's final labels and numbers; return its pass-qualified label.
 
     Parameters
@@ -122,9 +126,7 @@ def apply_final_label(op_log: Any, final: PreviewFinalLabel, pass_index: int) ->
     op_log:
         The preview op being finalized.
     final:
-        Its layer's numbering from :func:`torch_rule_final_labels`.
-    pass_index:
-        The op's pass within its layer (1 for a single-pass layer).
+        Its numbering from :func:`torch_rule_final_labels`.
 
     Returns
     -------
@@ -132,6 +134,7 @@ def apply_final_label(op_log: Any, final: PreviewFinalLabel, pass_index: int) ->
         ``{layer_label}:{pass_index}``, the op's ``label``.
     """
 
+    pass_index = final.pass_index
     pass_label = f"{final.layer_label}:{pass_index}"
     op_log.label = pass_label
     op_log.layer_label = final.layer_label

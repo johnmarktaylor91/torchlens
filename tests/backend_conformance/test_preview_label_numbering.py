@@ -34,7 +34,8 @@ _GRAPH_MATCHES_TORCH = frozenset({"mlx"})
 def _torch_traces() -> tuple[Any, Any]:
     """Torch traces of the chain (linear, tanh, exp) and the three-pass loop."""
 
-    torch = pytest.importorskip("torch")
+    import torch
+
     import torchlens as tl
 
     class Chain(torch.nn.Module):
@@ -261,7 +262,10 @@ def _old_rule(raw_ops: Any, assignments: Any = None) -> dict[str, Any]:
     for raw_label, op_log in raw_ops.items():
         assignment = assignments.get(raw_label) if assignments is not None else None
         layer = strip_raw_label_suffix(assignment.layer_label if assignment else raw_label)
-        finals[raw_label] = PreviewFinalLabel(layer, layer, op_log.type_index, op_log.step_index)
+        pass_index = assignment.pass_index if assignment else 1
+        finals[raw_label] = PreviewFinalLabel(
+            layer, layer, op_log.type_index, op_log.step_index, pass_index
+        )
     return finals
 
 

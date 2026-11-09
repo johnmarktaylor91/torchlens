@@ -2173,7 +2173,7 @@ class JAXBackend:
                     equivalence_key=op_log.graph.equivalence_class or label,
                 ),
             )
-            pass_label = apply_final_label(op_log, finals[label], assignment.pass_index)
+            pass_label = apply_final_label(op_log, finals[label])
             layer_label = op_log.layer_label
             op_log._label_raw = label
             op_log._layer_label_raw = assignment.layer_label

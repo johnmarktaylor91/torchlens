@@ -23,7 +23,7 @@ from .._quantities import Bytes
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from ._constants import ConstantLedger, apply_constants_rule
 from ._finalize_distances import compute_preview_input_output_distances
-from ._finalize_labels import PreviewFinalLabel, apply_final_label, torch_rule_final_labels
+from ._finalize_labels import apply_final_label, torch_rule_final_labels
 from ._finalize_site_keys import _mint_preview_site_keys
 from ._finalize_totals import _count_trace_ops, _update_param_totals_from_layers
 from ._module_returns import ModuleReturnLedger, attach_output_paths, flag_returned_ops
@@ -128,11 +128,10 @@ def finalize_single_pass_trace(
         differs from its final label now, not only multi-pass group members),
         not only when ``recurrence_detection`` is on.
     constants:
-        The capture's :class:`~torchlens.backends._constants.ConstantLedger`
-        when the backend keeps one. The shared constants rule audits the raw
-        graph against it first (closure constants are parentless source ops
-        with payload evidence, literal producers stay parentless); the rule
-        runs with or without a ledger.
+        The capture's :class:`~torchlens.backends._constants.ConstantLedger`, if any.
+        The shared constants rule audits the raw graph against it first (closure
+        constants are parentless source ops with payload evidence, literal
+        producers stay parentless), with or without a ledger.
 
     Returns
     -------
@@ -155,7 +154,8 @@ def finalize_single_pass_trace(
     finals = torch_rule_final_labels(trace._raw_graph_ws.raw_layer_dict, assignments)
     for raw_index, (label, op_log) in enumerate(trace._raw_graph_ws.raw_layer_dict.items()):
         assignment = assignments.get(label) if assignments is not None else None
-        _finalize_single_op(trace, op_log, label, raw_index, finals[label], assignment)
+        apply_final_label(op_log, finals[label])
+        _finalize_single_op(trace, op_log, label, raw_index, assignment)
         if enrich_op is not None:
             enrich_op(op_log)
         if attach_op_params is not None:
@@ -472,10 +472,9 @@ def _finalize_single_op(
     op_log: Any,
     label: str,
     raw_index: int,
-    final: PreviewFinalLabel,
     assignment: RecurrenceAssignment | None = None,
 ) -> None:
-    """Attach final labels and lookup keys to one op log.
+    """Attach lookup keys to one op log whose final labels are already applied.
 
     Parameters
     ----------
@@ -487,8 +486,6 @@ def _finalize_single_op(
         Raw backend label.
     raw_index:
         Zero-based raw op index.
-    final:
-        The op's layer numbering under torch's rule (``_finalize_labels``).
     assignment:
         Recurrence assignment for this op when grouping ran. ``None`` (and any
         singleton assignment) is the single-pass layout; the RAW label
@@ -513,8 +510,7 @@ def _finalize_single_op(
 
     pass_index = assignment.pass_index if assignment is not None else 1
     num_passes = assignment.num_passes if assignment is not None else 1
-    pass_label = apply_final_label(op_log, final, pass_index)
-    layer_label = final.layer_label
+    pass_label, layer_label = op_log.label, op_log.layer_label
     op_log._label_raw = label
     op_log._layer_label_raw = assignment.layer_label if assignment is not None else label
     op_log.lookup_keys = [label, pass_label]
