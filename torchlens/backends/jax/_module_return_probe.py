@@ -180,10 +180,13 @@ def _record_pending(trace: Any, ledger: JaxReturnLedger) -> None:
             ledger.record(address, call_index, value, is_leaf=_is_array, label_of=label_of)
         else:
             warnings.warn(
-                f"JAX module call '{address}:{call_index}' returned arrays of an inner trace "
-                "(e.g. jax.vmap: one trace-time call stands for every batch member), so no op "
-                "is its output; its return is not recorded.",
-                CaptureGapWarning,
+                CaptureGapWarning(
+                    f"JAX module call '{address}:{call_index}' returned arrays of an inner trace "
+                    "(e.g. jax.vmap: one trace-time call stands for every batch member), so no "
+                    "op is its output; its return is not recorded. Remedy: read the values "
+                    "through the enclosing module's output",
+                    code="jax_inner_trace_module_return",
+                ),
                 stacklevel=2,
             )
     ledger.release()

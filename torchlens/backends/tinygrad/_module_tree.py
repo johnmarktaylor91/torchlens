@@ -132,10 +132,13 @@ def _disclose_unrecorded(call_label: str, missing: int) -> None:
 
     if missing:
         warnings.warn(
-            f"tinygrad module call '{call_label}' returned {missing} tensor(s) with no recorded "
-            "op (a lazy tensor nothing reads is never computed); they are not recorded as "
-            "outputs of this call.",
-            CaptureGapWarning,
+            CaptureGapWarning(
+                f"tinygrad module call '{call_label}' returned {missing} tensor(s) with no "
+                "recorded op (a lazy tensor nothing reads is never computed); they are not "
+                "recorded as outputs of this call. Remedy: read the returned tensor downstream "
+                "if it should be recorded",
+                code="tinygrad_unread_module_return",
+            ),
             stacklevel=2,
         )
 
