@@ -3,7 +3,7 @@
 Records print by the key a user types: the stored ``short_layer_label``
 (``tanh_6``) for a single-pass record and ``short_layer_label:pass``
 (``tanh_1:2``) when the layer ran more than once. The positional suffix of
-the full label (``tanh_6_266``) never prints. Keys come from stored fields,
+the full label (``tanh_6_270``) never prints. Keys come from stored fields,
 never from parsing a label.
 """
 

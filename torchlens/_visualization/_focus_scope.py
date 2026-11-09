@@ -47,7 +47,7 @@ __all__ = [
     "scope_caption_head",
 ]
 
-#: An op name's counters: ``tanh_6_266`` is the 6th ``tanh`` call and op 266
+#: An op name's counters: ``tanh_6_270`` is the 6th ``tanh`` call and op 270
 #: of the whole forward pass; ``:2`` marks a later pass of a repeated op. A
 #: DOT node name spells the pass ``pass2``; the drawn label keeps the colon.
 _OP_NAME = re.compile(r"^(?P<kind>.+?)_(?P<nth>\d+)_(?P<op>\d+)(?:(?::|pass)(?P<pass>\d+))?$")

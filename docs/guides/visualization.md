@@ -50,7 +50,7 @@ Each node is one operation, or a model input or output. Its rows, top to bottom:
 - **Name** (bold), for example `linear_1_1` or `relu_1_2`. The name is
   `<operation>_<n>_<step>`: `relu_1_2` is the first `relu` in the model and the second
   operation it ran. Counting is by layer, in the order layers first ran, so in a large model
-  `tanh_6_266` is the sixth distinct `tanh` and the 266th layer. Inputs and outputs are
+  `tanh_6_270` is the sixth distinct `tanh` and the 270th layer. Inputs and outputs are
   numbered on their own (`input_1`, `output_1`). The name is the key you use to read that
   operation back: `trace["relu_1_2"]`.
 - **Output shape and size**: `(2, 16), 128 B` means the output tensor has shape `(2, 16)` and
