@@ -12,7 +12,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import Any, Final, NamedTuple, cast
 
-from ..._capture._nonfinite_prefix import strip_raw_label_suffix
 from ..._capture.outcome import stamp_backend_finalized
 from ..._data_classes._compaction import compact_op_metadata
 from ..._data_classes.derived_grad import (
@@ -82,6 +81,7 @@ from ...recording._types import CaptureSpec
 from .._entry_refusals import refuse_if_bad_jax_control_flow, refuse_if_bad_max_intermediate_grads
 from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._finalize import _attach_param_usage
+from .._finalize_labels import apply_final_label, torch_rule_final_labels
 from .._finalize_totals import _stamp_param_totals
 from .._invariants import run_metadata_invariants
 from .._options import (
@@ -2136,6 +2136,10 @@ class JAXBackend:
             requested=trace._options_grouping,
         )
         raw_labels = tuple(trace._raw_graph_ws.raw_layer_labels_list)
+        raw_ops = trace._raw_graph_ws.raw_layer_dict
+        finals = torch_rule_final_labels(
+            {label: raw_ops[label] for label in raw_labels}, assignments
+        )
         raw_to_final_op_label: dict[str, str] = {}
         # TORCH PARITY: torch (``postprocess/labeling.py``) relabels graph-edge
         # fields (``parents``/``children``/the lineage sets) through a
@@ -2169,14 +2173,10 @@ class JAXBackend:
                     equivalence_key=op_log.graph.equivalence_class or label,
                 ),
             )
-            layer_label = strip_raw_label_suffix(assignment.layer_label)
-            pass_label = f"{layer_label}:{assignment.pass_index}"
+            pass_label = apply_final_label(op_log, finals[label], assignment.pass_index)
+            layer_label = op_log.layer_label
             op_log._label_raw = label
             op_log._layer_label_raw = assignment.layer_label
-            op_log.label = pass_label
-            op_log.short_label = pass_label
-            op_log.layer_label = layer_label
-            op_log.short_layer_label = layer_label
             op_log.pass_number = assignment.pass_index
             op_log.num_passes = assignment.num_passes
             op_log._graph_equivalence_class = assignment.equivalence_key

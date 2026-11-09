@@ -24,6 +24,7 @@ from .._quantities import Bytes
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from ._constants import ConstantLedger, apply_constants_rule
 from ._finalize_distances import compute_preview_input_output_distances
+from ._finalize_labels import PreviewFinalLabel, apply_final_label, torch_rule_final_labels
 from ._finalize_site_keys import _mint_preview_site_keys
 from ._finalize_totals import _count_trace_ops, _update_param_totals_from_layers
 from ._module_returns import ModuleReturnLedger, attach_output_paths, flag_returned_ops
@@ -118,8 +119,7 @@ def finalize_single_pass_trace(
     recurrence_detection:
         Whether to run the neutral recurrence grouper over the raw graph and
         apply its assignments (multi-pass layers, pass-qualified op labels,
-        relabeled edges). ``False`` preserves the historical ungrouped
-        single-pass layout.
+        relabeled edges). ``False`` keeps every op single-pass.
     relabel_sidecar_labels:
         Backend hook receiving the COMPLETE ``{raw_label: final_op_label}``
         mapping after per-op final labels are assigned. Backends holding
@@ -153,9 +153,10 @@ def finalize_single_pass_trace(
     seen_param_barcodes: set[str] = set()
     layers_with_params_seen: set[str] = set()
     param_usage_membership: dict[int, tuple[set[str], set[str], set[str]]] = {}
+    finals = torch_rule_final_labels(trace._raw_graph_ws.raw_layer_dict, assignments)
     for raw_index, (label, op_log) in enumerate(trace._raw_graph_ws.raw_layer_dict.items()):
         assignment = assignments.get(label) if assignments is not None else None
-        _finalize_single_op(trace, op_log, label, raw_index, assignment)
+        _finalize_single_op(trace, op_log, label, raw_index, finals[label], assignment)
         if enrich_op is not None:
             enrich_op(op_log)
         if attach_op_params is not None:
@@ -472,6 +473,7 @@ def _finalize_single_op(
     op_log: Any,
     label: str,
     raw_index: int,
+    final: PreviewFinalLabel,
     assignment: RecurrenceAssignment | None = None,
 ) -> None:
     """Attach final labels and lookup keys to one op log.
@@ -486,12 +488,12 @@ def _finalize_single_op(
         Raw backend label.
     raw_index:
         Zero-based raw op index.
+    final:
+        The op's layer numbering under torch's rule (``_finalize_labels``).
     assignment:
         Recurrence assignment for this op when grouping ran. ``None`` (and any
-        singleton assignment) reproduces the historical single-pass layout:
-        the raw label, with its internal ``_raw`` capture sentinel stripped
-        (``strip_raw_label_suffix``), becomes the layer label; the RAW label
-        (``_raw`` suffix intact) stays the main lookup key. Multi-pass
+        singleton assignment) is the single-pass layout; the RAW label
+        (``_raw`` suffix intact) stays a lookup key. Multi-pass
         members become pass-qualified: ``label`` is ``layer_label:pass_index``,
         and the main key is the pass label. The bare shared layer label is
         ALWAYS registered in ``layer_dict_all_keys`` too (torch parity:
@@ -510,18 +512,14 @@ def _finalize_single_op(
         ``op_log`` and trace lookup dictionaries are mutated in place.
     """
 
-    layer_label = strip_raw_label_suffix(
-        assignment.layer_label if assignment is not None else label
-    )
     pass_index = assignment.pass_index if assignment is not None else 1
     num_passes = assignment.num_passes if assignment is not None else 1
-    pass_label = f"{layer_label}:{pass_index}"
+    pass_label = apply_final_label(op_log, final, pass_index)
+    layer_label = final.layer_label
     op_log._label_raw = label
-    op_log._layer_label_raw = layer_label
-    op_log.label = pass_label
-    op_log.short_label = pass_label
-    op_log.layer_label = layer_label
-    op_log.short_layer_label = layer_label
+    op_log._layer_label_raw = strip_raw_label_suffix(
+        assignment.layer_label if assignment is not None else label
+    )
     op_log.lookup_keys = [label, pass_label]
     op_log.pass_number = pass_index
     op_log.num_passes = num_passes
