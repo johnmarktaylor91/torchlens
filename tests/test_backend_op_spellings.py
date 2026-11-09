@@ -21,8 +21,8 @@ from tests.conformance._rosters import (
     mlx as mlx_roster,
     paddle as paddle_roster,
     tf as tf_roster,
-    tinygrad as tinygrad_roster,
 )
+from tests.conformance._rosters._tinygrad_inventories import _PYTHON_INVENTORIES
 from torchlens._capture.arg_positions import _normalize_func_name
 from torchlens._constants import get_orig_torch_funcs
 from torchlens.backends import _op_spelling
@@ -111,7 +111,6 @@ def test_paddle_static_inventory_is_listed() -> None:
     [
         ("jax", jax_roster.roster),
         ("tf", tf_roster.roster),
-        ("tinygrad", tinygrad_roster.all_rows),
         ("mlx", mlx_roster.roster),
         ("paddle", paddle_roster.roster),
     ],
@@ -120,6 +119,14 @@ def test_roster_op_kinds_are_listed(backend: str, rows: Callable[[], Iterable[An
     recorded = {kind for row in rows() for kind in (row.expected_op_kinds or ())}
     assert recorded, f"{backend} roster declares no op kinds"
     assert _unlisted(backend, recorded) == []
+
+
+def test_tinygrad_recorded_inventories_are_listed() -> None:
+    # The tinygrad roster declares its op kinds per device; the PYTHON device's
+    # recorded inventories are the ones checked against each model definition.
+    recorded = {kind for kinds in _PYTHON_INVENTORIES.values() for kind in (kinds or ())}
+    assert recorded, "tinygrad declares no recorded inventories"
+    assert _unlisted("tinygrad", recorded) == []
 
 
 def test_canonical_spellings_are_torch_spellings() -> None:

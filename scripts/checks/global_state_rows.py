@@ -806,6 +806,9 @@ they carry an epoch/version counter where downstream caches must invalidate.
 
 _PROCESS_CACHES = frozenset(
     {
+        # Cross-backend op spelling lists: each backend's list loaded once on first
+        # lookup from its constant module; process-stable, no epoch.
+        ("torchlens/backends/_op_spelling.py", "_TABLES"),
         # Code objects of the unwrapped Function.apply frame (one per apply slot
         # shape), registered at install so the census can tell a dispatch made by the
         # C++ apply epilogue from one inside the user's forward; process-stable.
