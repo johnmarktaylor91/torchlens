@@ -78,24 +78,28 @@ def _listed(labels: Any) -> str:
     return ", ".join(labels[:_SHOWN]) + more
 
 
-def _phrase(found: Placement, walk: Walk) -> str:
-    """The reason phrase for a placement and its disclosures."""
+def _lead(found: Placement) -> str:
+    """The placement itself: none, one op per side, or the operation group."""
 
     a, b = found.ops_a, found.ops_b
     if found.exit == "none":
-        lead = "op placement: none (the recorded outputs agree op by op)"
-    elif not a and not b:
-        lead = "op placement: none (no op inside the call is reachable from its paired inputs)"
-    elif len(a) <= 1 and len(b) <= 1:
+        return "op placement: none (the recorded outputs agree op by op)"
+    if not a and not b:
+        return "op placement: none (no op inside the call is reachable from its paired inputs)"
+    if len(a) <= 1 and len(b) <= 1:
         side_a = f"a {a[0]}" if a else "a (no op)"
         side_b = f"b {b[0]}" if b else "b (no op)"
-        lead = f"op: {side_a} against {side_b}; exit differs ({found.exit})"
-    else:
-        lead = (
-            f"op group: a [{_listed(a)}] against b [{_listed(b)}]; entry agrees, exit differs "
-            f"({found.exit})"
-        )
-    parts = [lead]
+        return f"op: {side_a} against {side_b}; exit differs ({found.exit})"
+    return (
+        f"op group: a [{_listed(a)}] against b [{_listed(b)}]; entry agrees, exit differs "
+        f"({found.exit})"
+    )
+
+
+def _phrase(found: Placement, walk: Walk) -> str:
+    """The reason phrase for a placement and its disclosures."""
+
+    parts = [_lead(found)]
     if walk.gaps:
         parts.append(f"decomposition gaps (agree at their exit): {_listed(walk.gaps)}")
     if walk.spelled:
@@ -163,18 +167,20 @@ def _localized(
 
     by_label = {p.a.label: (p, r) for p, r in zip(pairs, rows, strict=True) if p.a is not None}
     parent = {call.label: call.parent for call in calls_a}
-    label: str | None = _label(pair)
-    for _ in range(len(parent) + 1):
-        found = by_label.get(label or "")
-        if found is not None:
-            candidate, row = found
-            paired = row["alignment"] in ("supported", "asserted") and candidate.b is not None
-            if paired and row["outcome"] == "different" and row["inputs_agree"] is True:
-                return candidate
-        label = parent.get(label or "")
-        if label is None:
-            return None
+    label = pair.a.label if pair.a is not None else None
+    while label is not None:
+        found = by_label.get(label)
+        if found is not None and _placeable(*found):
+            return found[0]
+        label = parent.get(label)
     return None
+
+
+def _placeable(candidate: CallPair, row: dict[str, Any]) -> bool:
+    """A paired call whose output differs while its inputs agree (the walk can run inside it)."""
+
+    paired = row["alignment"] in ("supported", "asserted") and candidate.b is not None
+    return paired and row["outcome"] == "different" and row["inputs_agree"] is True
 
 
 def _placed_in(

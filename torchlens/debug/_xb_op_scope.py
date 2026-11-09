@@ -170,28 +170,42 @@ def side_graph(
     ordered = _ordered_ops(trace)
     order = {_op_label(op): index for index, op in enumerate(ordered)}
     backend = spelling_backend(trace)
+    parents = _anchored(trace, ordered, scope, seeded)
+    walk = tuple(sorted(parents, key=order.__getitem__))
+    spelling = {
+        label: op_spelling(backend, str(getattr(_op_from_label(trace, label), "func_name", "")))
+        for label in walk
+    }
+    return SideGraph(trace, walk, parents, _children(walk, parents), order, spelling)
+
+
+def _anchored(
+    trace: Trace, ordered: list[Any], scope: set[str], seeded: set[str]
+) -> dict[str, tuple[str, ...]]:
+    """In-scope ops reachable from the seeds, each with its anchored parents."""
+
     anchored, parents = set(seeded), {}
     for op in ordered:
         label = _op_label(op)
         if label not in scope:
             continue
-        ups = tuple(_resolved(trace, op))
-        kept = tuple(p for p in ups if p in anchored)
+        kept = tuple(p for p in _resolved(trace, op) if p in anchored)
         if kept:
             anchored.add(label)
             parents[label] = kept
-    walk = tuple(label for label in sorted(parents, key=order.__getitem__))
+    return parents
+
+
+def _children(
+    walk: tuple[str, ...], parents: dict[str, tuple[str, ...]]
+) -> dict[str, tuple[str, ...]]:
+    """Invert ``parents`` over ``walk`` (children in execution order)."""
+
     children: dict[str, list[str]] = {}
     for label in walk:
         for parent in parents[label]:
             children.setdefault(parent, []).append(label)
-    spelling = {
-        label: op_spelling(backend, str(getattr(_op_from_label(trace, label), "func_name", "")))
-        for label in walk
-    }
-    return SideGraph(
-        trace, walk, parents, {k: tuple(v) for k, v in children.items()}, order, spelling
-    )
+    return {key: tuple(value) for key, value in children.items()}
 
 
 def _resolved(trace: Trace, op: Any) -> list[str]:
