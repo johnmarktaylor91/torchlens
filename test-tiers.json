@@ -6173,10 +6173,10 @@
         "tests/test_draw_headless.py",
         "tests/test_r18i3_utils_residue.py",
         "tests/test_render_bugs.py",
-        "tests/test_render_substrate_vizfix.py",
         "tests/test_subprocess_grandchild_reaper.py",
         "tests/test_tlspec_unpickler_first_party_rce.py",
-        "tests/test_vizfix_skin_ink_and_legend.py"
+        "tests/test_vizfix_skin_ink_and_legend.py",
+        "tests/visualization/test_rolled_loop_route_fallback.py"
       ],
       "torchlens/_utils/_tensor_label.py": [
         "tests/test_capture_instrument.py",
@@ -7353,9 +7353,9 @@
         "tests/test_multi_trace_followons.py",
         "tests/test_render_bugs.py",
         "tests/test_render_substrate_vizfix.py",
-        "tests/test_rolled_pass_label_placement.py",
         "tests/test_vizfix_skin_ink_and_legend.py",
-        "tests/test_vizr_layout_and_outpath.py"
+        "tests/test_vizr_layout_and_outpath.py",
+        "tests/visualization/test_rolled_loop_route_fallback.py"
       ],
       "torchlens/_visualization/_rolled_edges.py": [
         "tests/test_auto_collapse_atomic_spans.py",
