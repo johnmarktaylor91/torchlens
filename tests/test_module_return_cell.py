@@ -211,10 +211,187 @@ class MLXKit(TorchKit):
         return tl.trace(model, value, backend="mlx")
 
 
+class PaddleKit(TorchKit):
+    """Kit for the Paddle preview backend."""
+
+    name = "paddle"
+    inserts_identity = False
+
+    def load(self) -> None:
+        """Import Paddle or skip."""
+
+        self.paddle = pytest.importorskip("paddle")
+        self.paddle.seed(0)
+
+    def build_module(self, call: Callable[..., Any], **children: Any) -> Any:
+        """Wrap ``call(self, *args)`` as a Paddle layer holding ``children``."""
+
+        nn = self.paddle.nn
+
+        class _Cell(nn.Layer):
+            """Cell layer whose forward is the case callable."""
+
+            def __init__(self) -> None:
+                """Register the children."""
+
+                super().__init__()
+                for name, child in children.items():
+                    setattr(self, name, child)
+
+            def forward(self, *args: Any) -> Any:
+                """Run the case callable."""
+
+                return call(self, *args)
+
+        return _Cell()
+
+    def linear(self) -> Any:
+        """Return a square linear layer."""
+
+        return self.paddle.nn.Linear(_WIDTH, _WIDTH)
+
+    def relu(self, value: Any) -> Any:
+        """Return the rectified value."""
+
+        return self.paddle.nn.functional.relu(value)
+
+    def add(self, left: Any, right: Any) -> Any:
+        """Return the elementwise sum."""
+
+        return self.paddle.add(left, right)
+
+    def input(self) -> Any:
+        """Return a deterministic model input."""
+
+        return self.paddle.linspace(-1.0, 1.0, 2 * _WIDTH, dtype="float32").reshape([2, _WIDTH])
+
+    def is_leaf(self, value: object) -> bool:
+        """Return whether ``value`` is a native array."""
+
+        return isinstance(value, self.paddle.Tensor)
+
+    def to_numpy(self, value: Any) -> np.ndarray:
+        """Convert a native array (or a loaded payload) to numpy."""
+
+        return value.numpy() if hasattr(value, "numpy") else np.asarray(value)
+
+    def set_training(self, model: Any, training: bool) -> None:
+        """Put ``model`` in train or eval mode."""
+
+        if training:
+            model.train()
+        else:
+            model.eval()
+
+    def trace(self, model: Any, value: Any) -> Any:
+        """Capture ``model(value)`` on the Paddle backend."""
+
+        return tl.trace(model, value, backend="paddle")
+
+
+class TFKit(TorchKit):
+    """Kit for the TensorFlow preview backend (Keras layers)."""
+
+    name = "tf"
+    inserts_identity = False
+
+    def load(self) -> None:
+        """Import TensorFlow and Keras or skip."""
+
+        self.tf = pytest.importorskip("tensorflow")
+        self.keras = pytest.importorskip("keras")
+        self.tf.random.set_seed(0)
+
+    def build_module(self, call: Callable[..., Any], **children: Any) -> Any:
+        """Wrap ``call(self, inputs)`` as a Keras layer holding ``children``.
+
+        TensorFlow addresses a Keras child by its layer name, so each child is renamed to its
+        attribute name.
+        """
+
+        keras = self.keras
+
+        class _Cell(keras.layers.Layer):
+            """Cell layer whose ``call`` is the case callable."""
+
+            def __init__(self) -> None:
+                """Register the children under their attribute names."""
+
+                super().__init__()
+                for name, child in children.items():
+                    _rename_keras_layer(child, name)
+                    setattr(self, name, child)
+
+            def call(self, inputs: Any) -> Any:
+                """Run the case callable."""
+
+                return call(self, inputs)
+
+        return _Cell()
+
+    def linear(self) -> Any:
+        """Return a square dense layer."""
+
+        return self.keras.layers.Dense(_WIDTH)
+
+    def relu(self, value: Any) -> Any:
+        """Return the rectified value."""
+
+        return self.tf.nn.relu(value)
+
+    def add(self, left: Any, right: Any) -> Any:
+        """Return the elementwise sum."""
+
+        return self.tf.add(left, right)
+
+    def input(self) -> Any:
+        """Return a deterministic model input."""
+
+        return self.tf.reshape(self.tf.linspace(-1.0, 1.0, 2 * _WIDTH), (2, _WIDTH))
+
+    def is_leaf(self, value: object) -> bool:
+        """Return whether ``value`` is a native tensor."""
+
+        return isinstance(value, self.tf.Tensor)
+
+    def to_numpy(self, value: Any) -> np.ndarray:
+        """Convert a native tensor (or a loaded payload) to numpy."""
+
+        return value.numpy() if hasattr(value, "numpy") else np.asarray(value)
+
+    def set_training(self, model: Any, training: bool) -> None:
+        """Keras keeps no persistent training mode (it is a call argument); nothing to set."""
+
+        del model, training
+
+    def training(self, module: Any) -> bool:
+        """Return the module's training attribute as the TF backend reads it."""
+
+        return bool(getattr(module, "training", False))
+
+    def trace(self, model: Any, value: Any) -> Any:
+        """Capture ``model(value)`` on the TensorFlow backend."""
+
+        return tl.trace(model, value, backend="tf")
+
+
+def _rename_keras_layer(layer: Any, name: str) -> None:
+    """Give a Keras layer the name TensorFlow will address it by."""
+
+    try:
+        layer.name = name
+    except AttributeError:
+        layer._name = name
+
+
 _MLX_MARKS = (pytest.mark.backend_mlx, pytest.mark.optional, pytest.mark.rare)
+_PADDLE_MARKS = (pytest.mark.backend_paddle, pytest.mark.optional, pytest.mark.rare)
+_TF_MARKS = (pytest.mark.tf_backend, pytest.mark.optional, pytest.mark.rare)
 KITS = (
     pytest.param(TorchKit, id="torch"),
     pytest.param(MLXKit, id="mlx", marks=_MLX_MARKS),
+    pytest.param(PaddleKit, id="paddle", marks=_PADDLE_MARKS),
+    pytest.param(TFKit, id="tf", marks=_TF_MARKS),
 )
 
 
