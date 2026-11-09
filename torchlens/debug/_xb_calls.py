@@ -1,11 +1,11 @@
 """Read a trace's recorded module calls into a backend-neutral form for pairing.
 
 Every backend records module calls as ``ModuleCall`` records (address, call index,
-parent call, op labels, recorded output ops). Backends differ in two spellings
-that this reader absorbs, without changing capture: the root's own children carry
-``call_parent=None`` on torch and ``"self:1"`` on the preview backends, and
-container segments that are never called (a torch ``ModuleList``, a plain MLX
-list) appear in addresses as ``layers.0`` on one side and ``0`` on the other.
+parent call, op labels, recorded output ops). Backends differ in two spellings that this
+reader absorbs, without changing capture: a top-level call's ``call_parent`` is the root
+call (``"self:1"``: torch for calls it lists as top level, preview backends for all) or
+unset, read alike as the root; and never-called container segments (a torch ``ModuleList``,
+a plain MLX list) appear in addresses as ``layers.0`` on one side and ``0`` on the other.
 
 A call that returns its input unchanged (an identity module, dropout in eval mode) is an
 op inside the call on torch, which inserts an identity op at module exit, but a recorded
