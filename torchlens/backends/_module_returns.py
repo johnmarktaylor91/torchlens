@@ -7,7 +7,8 @@ module is the one backend-agnostic seam that closes the gap; torch never calls i
 
 Contract (what a backend does)
 ------------------------------
-1. Keep one :class:`ModuleReturnLedger` per capture, beside the backend's module tree.
+1. Give the backend's module tree a ``module_returns`` attribute holding one
+   :class:`ModuleReturnLedger` per capture (a dataclass field with a default factory).
 2. At every module exit, while the call's frame is still known, call
    ``ledger.record(address, call_index, returned_value, is_leaf=..., label_of=...)``.
    ``address`` and ``call_index`` are the exact pair the backend writes into each op's
@@ -16,8 +17,9 @@ Contract (what a backend does)
    ``label_of(leaf)`` returns the RAW op label that produced it, or ``None``.
    Record the value the module actually returns to its caller (after any intervention
    replacement), so the recorded leaves are the values downstream code consumes.
-3. Build module logs through :func:`attach_object_module_logs_with_returns` instead of
-   ``_finalize.attach_object_module_logs``, passing the ledger as ``returns=``.
+3. Build module logs through ``_finalize.attach_object_module_logs_with_returns`` instead of
+   ``_finalize.attach_object_module_logs`` (same arguments). It reads ``tree.module_returns``;
+   an explicit ``returns=`` overrides it.
 
 How returns are represented after finalize (and after save and load)
 --------------------------------------------------------------------
@@ -52,12 +54,13 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .._data_classes.trace import Trace
 from .._ir.container import OutputPathComponent
 from .._ir.container_registry import OUTPUT_TREE_MAX_DEPTH, _iter_container_children
-from ._finalize import attach_object_module_logs
+
+if TYPE_CHECKING:
+    from .._data_classes.trace import Trace
 
 ReturnPath = tuple[OutputPathComponent, ...]
 
@@ -159,32 +162,6 @@ def iter_returned_leaves(
         yield from iter_returned_leaves(child, is_leaf, (*path, component), depth + 1)
 
 
-def attach_object_module_logs_with_returns(
-    trace: Trace,
-    tree: Any,
-    *,
-    returns: ModuleReturnLedger | None,
-    **shared_options: Any,
-) -> None:
-    """Build object-module logs with module outputs taken from recorded returns.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ops are finalized and whose module logs are not yet built.
-    tree:
-        Backend module tree, passed through to the shared builder.
-    returns:
-        The capture's ledger, or ``None`` when the backend recorded no returns.
-    **shared_options:
-        Keyword options of ``_finalize.attach_object_module_logs``.
-    """
-
-    _flag_returned_ops(trace, returns)
-    attach_object_module_logs(trace, tree, **shared_options)
-    _attach_output_paths(trace, returns)
-
-
 def returned_op_labels(trace: Trace, call_label: str) -> list[str]:
     """Return every op one module call returned, inside or outside the call.
 
@@ -209,7 +186,7 @@ def returned_op_labels(trace: Trace, call_label: str) -> list[str]:
     ]
 
 
-def _flag_returned_ops(trace: Trace, returns: ModuleReturnLedger | None) -> None:
+def flag_returned_ops(trace: Trace, returns: ModuleReturnLedger | None) -> None:
     """Flag each recorded leaf's op as an output of the call that returned it."""
 
     if returns is None:
@@ -231,7 +208,7 @@ def _flag_returned_ops(trace: Trace, returns: ModuleReturnLedger | None) -> None
             ]
 
 
-def _attach_output_paths(trace: Trace, returns: ModuleReturnLedger | None) -> None:
+def attach_output_paths(trace: Trace, returns: ModuleReturnLedger | None) -> None:
     """Write each recorded call's leaf paths onto its built ModuleCall."""
 
     if returns is None:
