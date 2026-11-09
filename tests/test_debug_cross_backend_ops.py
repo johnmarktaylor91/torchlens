@@ -382,6 +382,53 @@ def test_climb_stops_at_an_enclosing_call_that_agrees() -> None:
     assert "no enclosing differing call has agreeing inputs" in reason, reason
 
 
+class _Extra(nn.Module):
+    """``tanh(h) * k``, optionally also taking an earlier-made extra input (like HF's cos/sin)."""
+
+    def __init__(self, k: float) -> None:
+        super().__init__()
+        self.k = k
+
+    def forward(self, h: torch.Tensor, extra: torch.Tensor | None = None) -> torch.Tensor:
+        out = torch.tanh(h) * self.k
+        return out if extra is None else out + 0.0 * extra.sum()
+
+
+class _ExtraTop(nn.Module):
+    """Makes ``extra`` before the data input, so torch records it first among ``unit``'s inputs."""
+
+    def __init__(self, k: float, with_extra: bool) -> None:
+        super().__init__()
+        self.unit, self.with_extra = _Extra(k), with_extra
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        extra = torch.arange(_WIDTH, dtype=x.dtype) if self.with_extra else None
+        return self.unit(x * 1.0, extra)
+
+
+def _extra_pair(k_b: float) -> tuple[tl.Trace, tl.Trace]:
+    """Side a's ``unit`` takes ``(h, extra)`` with ``extra`` made first; side b's takes ``h``."""
+
+    trace_a = tl.trace(_ExtraTop(1.5, True).eval(), _x(2, _WIDTH))
+    trace_b = tl.trace(_ExtraTop(k_b, False).eval(), _x(2, _WIDTH))
+    trace_b._provenance_backend = "mlx"  # type: ignore[assignment]
+    return trace_a, trace_b
+
+
+def test_differing_input_counts_compare_the_one_same_shaped_input() -> None:
+    frame = tl.debug.compare(*_extra_pair(1.5)).to_pandas()
+    row = frame[frame["op"].astype(str).str.startswith("unit:")].iloc[0]
+    assert row["inputs_agree"] in (True,), row.to_dict()
+
+
+def test_differing_input_counts_still_place_inside_the_call() -> None:
+    row = tl.debug.first_divergence(*_extra_pair(1.6))
+    reason = str(None if row is None else row["reason"])
+    assert "op placement inside" not in reason, reason
+    kinds_a, kinds_b = _placed(row)
+    assert "mul" in kinds_a and kinds_b == ["mul"], reason
+
+
 def test_saved_and_reloaded_pair_gives_the_same_placement(tmp_path: Path) -> None:
     biased = _B + 0.4
     unit_a, unit_b = Fn(_linear, w=_W, b=_B), Fn(_matmul_add(0.0), w=_W, b=biased)
