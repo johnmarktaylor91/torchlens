@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1767 modules, 708251 lines, 0 modules without a docstring.
+85 packages, 1767 modules, 708261 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -56,7 +56,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 22 | 7341 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
-| `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9648 |
+| `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9649 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6948 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8577 |
@@ -67,7 +67,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 705 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2035 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 38 | 12835 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 38 | 12844 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 423 |
 | `torchlens.errors` | Public TorchLens exception classes. | 6 | 1589 |
@@ -1376,14 +1376,14 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 
 ### `torchlens.backends.jax`
 
-JAX backend preview exports. (17 modules, 9648 lines)
+JAX backend preview exports. (17 modules, 9649 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | JAX backend preview exports. | 7 |
 | `_closure_consts` | Closure-constant readability check for a JAX function-root capture. | 49 |
 | `_equinox_children` | Equinox child discovery: module fields, list and tuple fields, and their containers. | 153 |
-| `_module_return_probe` | Recorded module returns for JAX pytree modules (Equinox and Flax NNX). | 267 |
+| `_module_return_probe` | Recorded module returns for JAX pytree modules (Equinox and Flax NNX). | 268 |
 | `_perturbation_probes` | Perturbation candidates for the JAX preview backend's parent-influence oracle. | 299 |
 | `_pytree_param_barcodes` | Param barcodes on JAX pytree-module ops, stamped before recurrence grouping. | 43 |
 | `_raw_relabel` | Raw-label helpers for finishing a JAX trace: lineage relabel, equivalence members, sources. | 79 |
@@ -1732,7 +1732,7 @@ Compatibility adapters for TorchLens 2.37 and earlier. (5 modules, 2035 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (38 modules, 12835 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (38 modules, 12844 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1772,7 +1772,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_xb_pairing` | Pair the module calls of two traces without looking at any value. | 241 |
 | `_xb_refusals` | Typed refusals of the module-level comparison in ''tl.debug''. | 56 |
 | `_xb_report` | The two public answers of the module-level comparison: a Report and a first row. | 233 |
-| `_xb_tolerance` | Tolerance policy for comparing two recorded values in ''tl.debug'' comparisons. | 191 |
+| `_xb_tolerance` | Tolerance policy for comparing two recorded values in ''tl.debug'' comparisons. | 200 |
 | `_xb_values` | Compare the recorded values of one paired module call. | 251 |
 
 ### `torchlens.debug._checks`
