@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1754 modules, 705872 lines, 0 modules without a docstring.
+85 packages, 1756 modules, 705992 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -56,11 +56,11 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 22 | 7341 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
-| `torchlens.backends.jax` | JAX backend preview exports. | 15 | 9460 |
+| `torchlens.backends.jax` | JAX backend preview exports. | 16 | 9504 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6948 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
-| `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
+| `torchlens.backends.tinygrad` | tinygrad backend preview. | 11 | 4558 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59358 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
@@ -1376,14 +1376,15 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 
 ### `torchlens.backends.jax`
 
-JAX backend preview exports. (15 modules, 9460 lines)
+JAX backend preview exports. (16 modules, 9504 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | JAX backend preview exports. | 7 |
 | `_closure_consts` | Closure-constant readability check for a JAX function-root capture. | 49 |
-| `_module_return_probe` | Recorded module returns for JAX pytree modules (Equinox and Flax NNX). | 252 |
+| `_module_return_probe` | Recorded module returns for JAX pytree modules (Equinox and Flax NNX). | 253 |
 | `_perturbation_probes` | Perturbation candidates for the JAX preview backend's parent-influence oracle. | 299 |
+| `_pytree_param_barcodes` | Param barcodes on JAX pytree-module ops, stamped before recurrence grouping. | 43 |
 | `_raw_relabel` | Raw-label helpers for finishing a JAX trace: lineage relabel, equivalence members, sources. | 79 |
 | `_return_ledger` | Trace-time ledger for JAX module returns (the leaf half of ''_module_return_probe''). | 69 |
 | `_site_dialect` | THE JAX SITE DIALECT for ''site_key_v1'' minting. | 73 |
@@ -1463,7 +1464,7 @@ TensorFlow backend preview exports. (13 modules, 8522 lines)
 
 ### `torchlens.backends.tinygrad`
 
-tinygrad backend preview. (10 modules, 4482 lines)
+tinygrad backend preview. (11 modules, 4558 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1471,11 +1472,12 @@ tinygrad backend preview. (10 modules, 4482 lines)
 | `_captures` | Capture records the tinygrad backend keeps for validation and derived gradients. | 61 |
 | `_derived_grads` | Derived-gradient helpers for the tinygrad preview backend. | 268 |
 | `_execution_guard` | Execution guard for tinygrad preview capture. | 78 |
+| `_module_tree` | tinygrad object-module tree, call frames, and the module returns each call records. | 126 |
 | `_raw_labels` | Resolve materialized tinygrad op labels back to their raw capture labels. | 37 |
 | `_realize_once` | Realize-once capture: every recorded tinygrad value comes from one evaluation. | 379 |
 | `_rules` | tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants. | 323 |
 | `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 171 |
-| `backend` | UOp-snapshot tinygrad backend preview. | 3120 |
+| `backend` | UOp-snapshot tinygrad backend preview. | 3070 |
 | `capabilities` | Registry-backed capability exports for the tinygrad backend preview. | 38 |
 
 ### `torchlens.backends.torch`
