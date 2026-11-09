@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 #: Families whose op outputs may legitimately differ by a channels-last layout.
 _LAYOUT_FAMILIES = frozenset({"conv", "pool", "norm"})
-_SHOWN = 6
+_SHOWN = 12
 
 
 def _judge(graphs: tuple[SideGraph, SideGraph], options: ValueOptions) -> Any:
