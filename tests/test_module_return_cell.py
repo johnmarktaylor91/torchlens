@@ -315,8 +315,12 @@ def _check_trace(kit: Any, trace: Any, model: Any, seen: dict[str, list[Any]], c
         _check_call(kit, trace, f"block:{call_index}", returned, case)
     block = trace.modules["block"]
     assert block.training == kit.training(model.block)
-    if num_calls == 1 and len(trace.module_calls["block:1"].output_ops) == 1:
-        _match_by_value(kit, trace, list(block.calls[0].output_ops), [block.out])
+    first_ops = list(trace.module_calls["block:1"].output_ops)
+    if num_calls == 1 and len(first_ops) == 1 and returned_op_labels(trace, "block:1") == first_ops:
+        _match_by_value(kit, trace, first_ops, [block.out])
+    elif num_calls == 1:
+        with pytest.raises(MultiOutputModuleError):
+            _ = block.out
     if case == "unused" and "spare" in trace.modules:
         with pytest.raises((MultiOutputModuleError, InvalidArgumentError, KeyError)):
             _ = trace.modules["spare"].out
@@ -355,7 +359,8 @@ def test_return_recording_adds_no_ops(
             monkeypatch.undo()
         model, _seen = _build(kit, "nested")
         trace = kit.trace(model, kit.input())
-        counts[arm] = (len(trace.ops), int(trace._cost_total_activation_memory))
+        saved = [op.out for op in trace._layer_list if op.has_saved_activation]
+        counts[arm] = (len(trace.ops), sum(kit.to_numpy(value).nbytes for value in saved))
     assert counts["on"] == counts["off"]
     line = (
         f"{kit.name}: ops recorded {counts['off'][0]} -> {counts['on'][0]}, "
