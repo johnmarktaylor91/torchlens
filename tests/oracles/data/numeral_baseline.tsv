@@ -3351,7 +3351,6 @@ docs-md	docs/maintainers/where.md	1076
 docs-md	docs/maintainers/where.md	1078
 docs-md	docs/maintainers/where.md	108
 docs-md	docs/maintainers/where.md	1084
-docs-md	docs/maintainers/where.md	10863
 docs-md	docs/maintainers/where.md	109
 docs-md	docs/maintainers/where.md	1091
 docs-md	docs/maintainers/where.md	1096
@@ -3382,8 +3381,8 @@ docs-md	docs/maintainers/where.md	1224
 docs-md	docs/maintainers/where.md	123
 docs-md	docs/maintainers/where.md	1230
 docs-md	docs/maintainers/where.md	124
+docs-md	docs/maintainers/where.md	1249
 docs-md	docs/maintainers/where.md	125
-docs-md	docs/maintainers/where.md	1250
 docs-md	docs/maintainers/where.md	1252
 docs-md	docs/maintainers/where.md	1253
 docs-md	docs/maintainers/where.md	1257
@@ -3391,6 +3390,7 @@ docs-md	docs/maintainers/where.md	126
 docs-md	docs/maintainers/where.md	1263
 docs-md	docs/maintainers/where.md	127
 docs-md	docs/maintainers/where.md	12733
+docs-md	docs/maintainers/where.md	12735
 docs-md	docs/maintainers/where.md	1274
 docs-md	docs/maintainers/where.md	1278
 docs-md	docs/maintainers/where.md	1279
@@ -3504,6 +3504,7 @@ docs-md	docs/maintainers/where.md	1748
 docs-md	docs/maintainers/where.md	175
 docs-md	docs/maintainers/where.md	1756
 docs-md	docs/maintainers/where.md	176
+docs-md	docs/maintainers/where.md	1762
 docs-md	docs/maintainers/where.md	1767
 docs-md	docs/maintainers/where.md	177
 docs-md	docs/maintainers/where.md	178
@@ -3519,6 +3520,7 @@ docs-md	docs/maintainers/where.md	184
 docs-md	docs/maintainers/where.md	185
 docs-md	docs/maintainers/where.md	1858
 docs-md	docs/maintainers/where.md	186
+docs-md	docs/maintainers/where.md	187
 docs-md	docs/maintainers/where.md	1872
 docs-md	docs/maintainers/where.md	188
 docs-md	docs/maintainers/where.md	1887
@@ -3632,7 +3634,7 @@ docs-md	docs/maintainers/where.md	2550
 docs-md	docs/maintainers/where.md	256
 docs-md	docs/maintainers/where.md	257
 docs-md	docs/maintainers/where.md	258
-docs-md	docs/maintainers/where.md	2587
+docs-md	docs/maintainers/where.md	2586
 docs-md	docs/maintainers/where.md	259
 docs-md	docs/maintainers/where.md	2590
 docs-md	docs/maintainers/where.md	26
@@ -3824,9 +3826,9 @@ docs-md	docs/maintainers/where.md	423
 docs-md	docs/maintainers/where.md	4237
 docs-md	docs/maintainers/where.md	424
 docs-md	docs/maintainers/where.md	428
-docs-md	docs/maintainers/where.md	42820
 docs-md	docs/maintainers/where.md	4286
 docs-md	docs/maintainers/where.md	429
+docs-md	docs/maintainers/where.md	42901
 docs-md	docs/maintainers/where.md	43
 docs-md	docs/maintainers/where.md	430
 docs-md	docs/maintainers/where.md	431
@@ -3866,6 +3868,7 @@ docs-md	docs/maintainers/where.md	468
 docs-md	docs/maintainers/where.md	469
 docs-md	docs/maintainers/where.md	47
 docs-md	docs/maintainers/where.md	470
+docs-md	docs/maintainers/where.md	473
 docs-md	docs/maintainers/where.md	475
 docs-md	docs/maintainers/where.md	477
 docs-md	docs/maintainers/where.md	4777
@@ -3908,6 +3911,7 @@ docs-md	docs/maintainers/where.md	521
 docs-md	docs/maintainers/where.md	523
 docs-md	docs/maintainers/where.md	5231
 docs-md	docs/maintainers/where.md	524
+docs-md	docs/maintainers/where.md	525
 docs-md	docs/maintainers/where.md	526
 docs-md	docs/maintainers/where.md	527
 docs-md	docs/maintainers/where.md	528
@@ -4032,6 +4036,7 @@ docs-md	docs/maintainers/where.md	691
 docs-md	docs/maintainers/where.md	692
 docs-md	docs/maintainers/where.md	693
 docs-md	docs/maintainers/where.md	694
+docs-md	docs/maintainers/where.md	6948
 docs-md	docs/maintainers/where.md	695
 docs-md	docs/maintainers/where.md	696
 docs-md	docs/maintainers/where.md	697
@@ -4047,6 +4052,7 @@ docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	706109
 docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	7085
+docs-md	docs/maintainers/where.md	707455
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	711
 docs-md	docs/maintainers/where.md	712
@@ -4063,6 +4069,7 @@ docs-md	docs/maintainers/where.md	7287
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
 docs-md	docs/maintainers/where.md	731
+docs-md	docs/maintainers/where.md	7341
 docs-md	docs/maintainers/where.md	735
 docs-md	docs/maintainers/where.md	736
 docs-md	docs/maintainers/where.md	738
@@ -5030,10 +5037,12 @@ docs-md	docs/reference/compat_matrix.md	86_64
 docs-md	docs/reference/compat_matrix.md	86_64,
 docs-md	docs/reference/composition_matrix.md	10.
 docs-md	docs/reference/composition_matrix.md	14
+docs-md	docs/reference/debug.md	0.75
 docs-md	docs/reference/debug.md	1.0
 docs-md	docs/reference/debug.md	1.0,
 docs-md	docs/reference/debug.md	1.0.
 docs-md	docs/reference/debug.md	10
+docs-md	docs/reference/debug.md	12.
 docs-md	docs/reference/debug.md	128
 docs-md	docs/reference/debug.md	128,
 docs-md	docs/reference/debug.md	15
@@ -5171,6 +5180,7 @@ docs-md	docs/reference/export.md	0.1.32
 docs-md	docs/reference/export.md	10
 docs-md	docs/reference/export.md	5000
 docs-md	docs/reference/export.md	9.2.2
+docs-md	docs/reference/glossary.md	0.75
 docs-md	docs/reference/glossary.md	1.0
 docs-md	docs/reference/glossary.md	10
 docs-md	docs/reference/glossary.md	100
@@ -5186,6 +5196,7 @@ docs-md	docs/reference/glossary.md	2.38
 docs-md	docs/reference/glossary.md	20
 docs-md	docs/reference/glossary.md	2000
 docs-md	docs/reference/glossary.md	256
+docs-md	docs/reference/glossary.md	32
 docs-md	docs/reference/glossary.md	36
 docs-md	docs/reference/glossary.md	4.0
 docs-md	docs/reference/glossary.md	4096
@@ -7516,6 +7527,8 @@ package-docstrings	torchlens/debug/_checks/_session.py	32
 package-docstrings	torchlens/debug/_checks/_session.py	38
 package-docstrings	torchlens/debug/_checks/_session.py	64
 package-docstrings	torchlens/debug/_checks/_sinks.py	2026
+package-docstrings	torchlens/debug/_compare_values.py	32
+package-docstrings	torchlens/debug/_compare_values.py	64
 package-docstrings	torchlens/debug/_compile_counter.py	12
 package-docstrings	torchlens/debug/_compile_counter.py	18
 package-docstrings	torchlens/debug/_compile_counter.py	2026
@@ -7537,10 +7550,12 @@ package-docstrings	torchlens/debug/_gradients.py	1.0.
 package-docstrings	torchlens/debug/_gradients.py	11
 package-docstrings	torchlens/debug/_gradients.py	128
 package-docstrings	torchlens/debug/_gradients.py	16
+package-docstrings	torchlens/debug/_graph.py	0.75
+package-docstrings	torchlens/debug/_graph.py	10
+package-docstrings	torchlens/debug/_graph.py	16
 package-docstrings	torchlens/debug/_graph.py	1_1
 package-docstrings	torchlens/debug/_graph.py	2_3
 package-docstrings	torchlens/debug/_graph.py	32
-package-docstrings	torchlens/debug/_graph.py	64
 package-docstrings	torchlens/debug/_graph_breaks.py	64
 package-docstrings	torchlens/debug/_infer_report.py	224
 package-docstrings	torchlens/debug/_infer_report.py	224,
@@ -7561,6 +7576,16 @@ package-docstrings	torchlens/debug/_rerun.py	1_2
 package-docstrings	torchlens/debug/_rerun.py	2.0
 package-docstrings	torchlens/debug/_rerun.py	57
 package-docstrings	torchlens/debug/_rerun.py	64
+package-docstrings	torchlens/debug/_xb_tolerance.py	1.0
+package-docstrings	torchlens/debug/_xb_tolerance.py	10
+package-docstrings	torchlens/debug/_xb_tolerance.py	135
+package-docstrings	torchlens/debug/_xb_tolerance.py	19
+package-docstrings	torchlens/debug/_xb_tolerance.py	2.3
+package-docstrings	torchlens/debug/_xb_tolerance.py	22
+package-docstrings	torchlens/debug/_xb_tolerance.py	32
+package-docstrings	torchlens/debug/_xb_tolerance.py	360
+package-docstrings	torchlens/debug/_xb_tolerance.py	64
+package-docstrings	torchlens/debug/_xb_values.py	1.0
 package-docstrings	torchlens/differential.py	1.0
 package-docstrings	torchlens/differential.py	15
 package-docstrings	torchlens/distributed/_audit.py	1.3
@@ -8855,6 +8880,11 @@ test-docstrings	tests/test_data_substrate_extraction_v2.py	14
 test-docstrings	tests/test_data_substrate_extraction_v2.py	16
 test-docstrings	tests/test_data_substrate_transforms.py	13
 test-docstrings	tests/test_dead_config_debloat.py	47
+test-docstrings	tests/test_debug_cross_backend_modules.py	12
+test-docstrings	tests/test_debug_cross_backend_modules.py	16
+test-docstrings	tests/test_debug_cross_backend_modules.py	16,
+test-docstrings	tests/test_debug_cross_backend_modules.py	2.1
+test-docstrings	tests/test_debug_cross_backend_modules.py	32
 test-docstrings	tests/test_debug_findings_source_lines.py	1.0
 test-docstrings	tests/test_debug_findings_source_lines.py	32
 test-docstrings	tests/test_debug_findings_source_lines.py	64

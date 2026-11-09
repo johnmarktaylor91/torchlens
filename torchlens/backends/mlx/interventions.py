@@ -403,6 +403,48 @@ def _apply_module_exit(trace: Any, backend: Any, frame: Any, output: Any) -> Any
     return _replace_mlx_array_leaves(backend, output, replacements)
 
 
+def apply_module_exit_and_record(
+    trace: Any,
+    backend: Any,
+    frame: Any,
+    output: Any,
+    module_tree: Any,
+) -> Any:
+    """Apply any module-exit intervention, then record what the module call returns.
+
+    Parameters
+    ----------
+    trace:
+        Active TorchLens trace.
+    backend:
+        MLX backend receiving wrapper events.
+    frame:
+        The call's module frame, or ``None`` when the call is not a discovered module.
+    output:
+        The module's raw return value.
+    module_tree:
+        Discovered ``MLXModuleTree`` holding the capture's ``module_returns`` ledger.
+
+    Returns
+    -------
+    Any
+        The value the caller receives (``output``, or the tree with intervention-replaced
+        leaves). That value is the one recorded, so recorded leaves are the values
+        downstream code consumes; intervention behaviour is unchanged.
+    """
+
+    returned = _apply_module_exit(trace, backend, frame, output)
+    if frame is not None and module_tree is not None:
+        module_tree.module_returns.record(
+            frame.address,
+            frame.call_index,
+            returned,
+            is_leaf=backend.is_tensor,
+            label_of=backend.tensor_store.get_label,
+        )
+    return returned
+
+
 def _module_capture_op(trace: Any, frame: Any, op_name: str | None) -> str | None:
     """Expose selected descendants instead of capturing their parent as one opaque op."""
 

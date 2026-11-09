@@ -341,7 +341,10 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # d-90086c50): measured 459 at the merged tree = the train's 458 plus one
     # new signature, site lists diffed per file: the growth fold's
     # _grad_fn_record_from_discovery (backends/torch/_grad_fn_growth.py).
-    "PLR0913": 459,
+    # 461 (2026-11-08 cross-backend slice 1): tl.debug.compare and
+    # tl.debug.first_divergence gained the ruled align= and module_map= keywords
+    # (6 parameters each, public signatures); private helpers take option objects.
+    "PLR0913": 461,
     # 152->155 (same L8 settle): wrapped_funcol + the criterion-3 census body
     # + capture_completeness_witness gained reviewed statements with plane-P.
     # +3 2026-08-28 F06 (see the C901 note above). 2026-08-29 F10 T67f

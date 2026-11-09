@@ -5,6 +5,35 @@
 
 <!-- version list -->
 
+### Added
+
+- **debug**: `tl.debug.compare` and `tl.debug.first_divergence` take `align=` (`"auto"`,
+  `"label"`, `"structure"`) and `module_map=`. Across backends (or with `align="structure"`) they
+  pair module calls by address and call order and compare recorded module outputs: each row says
+  how its pair was made (`alignment`) apart from what the values showed (`outcome`), a call with no
+  partner is a coverage gap, and the default tolerance comes from the narrower dtype (relative RMS
+  error; float32 `1e-4`, float16 `5e-2`, bfloat16 `0.75`, with an `atol` floor scaled by the
+  module's input). Module frames name the pairing mode and backends in `df.attrs["align"]` and
+  `df.attrs["backends"]`. PyTorch and MLX are admitted; a
+  module that returns its input unchanged compares through the returned value. `rtol=` and
+  `atol=` now default to `None`, which on one backend means `1e-5` and `1e-8` as before.
+
+### Fixed
+
+- **debug**: `tl.debug.compare` and `tl.debug.first_divergence` no longer join two traces from
+  different backends by op label. Their labels and op order do not correspond, so the label join
+  reported the first op as a divergence even for a correct port. They now pair module calls
+  across backends (above); `align="label"` on such a pair, or a backend whose module recording
+  is not admitted, refuses with `tl.errors.BackendUnsupportedError` (code `backend_unsupported`)
+  before reading any value.
+- **debug**: on one backend, `tl.debug.compare` and `tl.debug.first_divergence` pair
+  operations by graph structure when the two graph fingerprints differ. Before, one inserted
+  operation (`x * 1.0`) shifted every later label, so `first_divergence` named the first
+  operation as only in one run and `compare` compared almost nothing. Now the inserted
+  operation is an `only-b` row and every other operation is compared; operations with the same
+  structure but a different count in each run stay unpaired and say `ambiguous`. Traces with
+  equal fingerprints pair by label, row for row as before, and `align="label"` always does.
+
 ## v3.0.2 (2026-11-06)
 
 ### Fixed
