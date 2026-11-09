@@ -91,20 +91,9 @@ def with_sequence_containers(
     entries = {address: dict(entry) for address, entry in metadata.items()}
     containers: dict[str, dict[str, Any]] = {}
     for address, entry in metadata.items():
-        prefix = "" if address == "self" else f"{address}."
-        children: list[str] = []
-        for child in entry["address_children"]:
-            field_name, _, index = child[len(prefix) :].partition(".")
-            if not index:
-                children.append(child)
-                continue
-            container = prefix + field_name
-            if container not in containers:
-                containers[container] = _container_entry(container, _resolve(model, container))
-            containers[container]["address_children"].append(child)
-            if container not in children:
-                children.append(container)
-        entries[address]["address_children"] = children
+        entries[address]["address_children"] = _grouped_children(
+            model, address, entry["address_children"], containers
+        )
     before = {entry["address_children"][0]: name for name, entry in containers.items()}
     result: dict[str, dict[str, Any]] = {}
     for address, entry in entries.items():
@@ -112,6 +101,29 @@ def with_sequence_containers(
             result[before[address]] = containers[before[address]]
         result[address] = entry
     return result
+
+
+def _grouped_children(
+    model: Any, address: str, children: list[str], containers: dict[str, dict[str, Any]]
+) -> list[str]:
+    """Return a parent's children with each ``field.index`` child moved under its container.
+
+    Containers are created in ``containers`` on first sight and collect their children.
+    """
+
+    prefix = "" if address == "self" else f"{address}."
+    grouped: list[str] = []
+    for child in children:
+        field_name, _, index = child[len(prefix) :].partition(".")
+        if not index:
+            grouped.append(child)
+            continue
+        container = prefix + field_name
+        if container not in containers:
+            containers[container] = _container_entry(container, _resolve(model, container))
+            grouped.append(container)
+        containers[container]["address_children"].append(child)
+    return grouped
 
 
 def _resolve(model: Any, address: str) -> Any:
