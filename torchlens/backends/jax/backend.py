@@ -2492,7 +2492,7 @@ class JAXBackend:
             for child_address in metadata.get("address_children", []):
                 if child_address not in mbd["module_children"][address]:
                     mbd["module_children"][address].append(child_address)
-            if address in tree.metadata.get("self", {}).get("address_children", ()):
+            if address != "self" and "." not in address:
                 mbd["top_level_modules"].append(address)
 
         for param in trace._param_logs:
