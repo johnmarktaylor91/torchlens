@@ -23,6 +23,7 @@ examples/workflows/multi_call_bundle.ipynb -filter
 examples/workflows/paired_prompt_patching.ipynb -filter
 examples/methods/jacobian_lens_recipe.ipynb -filter
 examples/methods/logit_lens_recipe.ipynb -filter
+notebooks/jfilter_lens.ipynb -filter
 
 # Append-only multi-writer ledgers: union merge keeps both branches' appended rows.
 # Union also keeps both rows when two branches change one row or neighbouring rows,

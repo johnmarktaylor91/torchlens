@@ -14,8 +14,9 @@ locally it needs the ``test`` extra (nbclient, ipykernel)::
 
 Only the notebooks in ``STORED_OUTPUT_NOTEBOOKS`` keep outputs in git (the ten-minute
 tutorial, the learning path, the multi-call bundle and activation patching notebooks the
-README links, the Jacobian lens recipe, whose GPT-2 small fit takes minutes to rerun, and the
-logit lens recipe the README links;
+README links, the Jacobian lens recipe, whose GPT-2 small fit takes minutes to rerun, the
+logit lens recipe the README links, and the J++ lens notebook, whose results come from a GPU fit
+(regenerate it on a GPU);
 GitHub renders them as the first impression).
 ``--write-outputs`` executes them and writes their outputs back in place with machine paths, timings,
 widget state and other run-to-run noise scrubbed (``_scrub_outputs``); every other notebook is
@@ -65,6 +66,7 @@ STORED_OUTPUT_NOTEBOOKS = (
     "examples/workflows/paired_prompt_patching.ipynb",
     "examples/methods/jacobian_lens_recipe.ipynb",
     "examples/methods/logit_lens_recipe.ipynb",
+    "notebooks/jfilter_lens.ipynb",
 )
 # Run alone, after the parallel pool: each runs for minutes, and sharing a 4-CPU runner with
 # another of them pushed each past the 600 s cell timeout (the LEACE recipe also took about
