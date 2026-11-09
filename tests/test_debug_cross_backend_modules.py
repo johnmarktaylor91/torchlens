@@ -178,13 +178,16 @@ def test_correct_decomposed_port_agrees_with_normalized_addresses() -> None:
     """Sequential child ``0`` pairs with list ``layers.0``; a correct port returns None."""
 
     model_a, model_b = _decomposed_pair()
-    trace_a, trace_b = _traces(model_a, model_b, torch.randn(2, 6))
+    x = torch.randn(2, 6)
+    trace_a, trace_b = _traces(model_a, model_b, x)
     assert tl.debug.first_divergence(trace_a, trace_b) is None
     frame = _frame(trace_a, trace_b)
     _assert_evidence_rule(frame)
     paired = frame[frame["alignment"] == "supported"]
     assert set(paired["outcome"]) == {"equal"}
-    assert (paired["rtol"] == 1e-4).all() and (paired["atol"] == 0.0).all()
+    assert (paired["rtol"] == 1e-4).all() and (paired["atol"] > 0.0).all()
+    floor = 10 * torch.finfo(torch.float32).eps * float(x.double().square().mean().sqrt())
+    assert frame.loc[frame["op"] == "self:1", "atol"].item() == pytest.approx(floor)
     assert frame.attrs["value_diverged"] == 0
     assert frame.loc[frame["op"] == "1.fc:1", "module_b"].item() == "layers.1.fc:1"
     assert frame.attrs["coverage"]["a"]["unpaired"] == 0
@@ -824,3 +827,62 @@ def test_plain_container_calls_are_dropped_and_their_children_lifted() -> None:
     kept, lifted = _xb_calls._drop_containers(raw, parents)
     assert [call.label for _module, call in kept] == ["self:1", "blocks.0:1"]
     assert lifted == {"self:1": None, "blocks.0:1": "self:1"}
+
+
+class _AddConst(nn.Module):
+    """``x + value``."""
+
+    def __init__(self, value: float) -> None:
+        """Hold the constant."""
+
+        super().__init__()
+        self.value = value
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add the constant."""
+
+        return x + self.value
+
+
+def _zero_then_add(value: float) -> nn.Module:
+    """A zero linear layer (all-zero output) followed by ``+ value``."""
+
+    zero = nn.Linear(4, 4)
+    nn.init.zeros_(zero.weight)
+    nn.init.zeros_(zero.bias)
+    return nn.Sequential(zero, _AddConst(value))
+
+
+@pytest.mark.parametrize(
+    ("shift", "atol", "outcome"),
+    [(1e-12, None, "equal"), (1e-3, None, "different"), (1e-12, 0.0, "different")],
+    ids=["tiny-partner-equal", "near-zero-bug-different", "user-atol-replaces-floor"],
+)
+def test_atol_floor_on_an_all_zero_reference(
+    shift: float, atol: float | None, outcome: str
+) -> None:
+    """An all-zero reference meets a 1e-12 partner under the floor; a real bug still differs."""
+
+    trace_a, trace_b = _traces(_zero_then_add(0.0), _zero_then_add(shift), torch.randn(2, 4))
+    frame = _frame(trace_a, trace_b, atol=atol)
+    row = frame.loc[frame["op"] == "1:1"].iloc[0]
+    assert row["outcome"] == outcome, row["reason"]
+    # The module's side-a input is all zero, so the floor's scale falls back to 1.0.
+    expected_atol = 10 * torch.finfo(torch.float32).eps if atol is None else atol
+    assert row["atol"] == pytest.approx(expected_atol)
+    assert frame.loc[frame["op"] == "0:1", "outcome"].item() == "equal"
+
+
+def test_module_frames_name_the_pairing_mode_and_backends() -> None:
+    """Module frames carry ``align`` and ``backends``; op-pairing frames do not change."""
+
+    model_a, model_b = _decomposed_pair()
+    x = torch.randn(2, 6)
+    trace_a, trace_b = _traces(model_a, model_b, x)
+    attrs = _frame(trace_a, trace_b).attrs
+    assert (attrs["align"], attrs["backends"]) == ("structure", ("torch", "mlx"))
+    same_a, same_b = tl.trace(model_a, x), tl.trace(model_a, x)
+    structure = _frame(same_a, same_b, align="structure").attrs
+    assert (structure["align"], structure["backends"]) == ("structure", ("torch", "torch"))
+    for align in ("auto", "label"):
+        assert not {"align", "backends"} & set(_frame(same_a, same_b, align=align).attrs)

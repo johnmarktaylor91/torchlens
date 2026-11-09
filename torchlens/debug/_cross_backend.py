@@ -33,6 +33,7 @@ from ._xb_values import (
     combine,
     compare_leaf,
     drew_random,
+    input_scale,
     layout_justified,
     read_values,
 )
@@ -157,7 +158,7 @@ def _row(
     if pair.alignment not in _PAIRED or pair.a is None or pair.b is None:
         return row, None
     justified = layout_justified(pair.a.class_name, pair.b.class_name)
-    options = ValueOptions(cross_backend, tol[0], tol[1])
+    options = ValueOptions(cross_backend, tol[0], tol[1], input_scale(traces[0], pair.a.inputs))
     out = _boundary(traces, (pair.a.outputs, pair.b.outputs), justified=justified, options=options)
     inputs = _boundary(traces, (pair.a.inputs, pair.b.inputs), justified=justified, options=options)
     row.update(
@@ -220,13 +221,14 @@ def module_rows(
     Returns
     -------
     tuple[list[dict[str, Any]], list[CallPair], dict[str, Any]]
-        Rows in order, the matching pairs, and facts (``cross_backend``,
+        Rows in order, the matching pairs, and facts (``cross_backend``, ``backends``,
         ``randomness``, per-row input results, the calls of each side).
     """
 
     refuse_poisoned_trace(trace_a, "faithful comparison")
     refuse_poisoned_trace(trace_b, "faithful comparison")
-    cross = str(trace_a._provenance_backend) != str(trace_b._provenance_backend)
+    backends = (str(trace_a._provenance_backend), str(trace_b._provenance_backend))
+    cross = backends[0] != backends[1]
     calls_a, calls_b = read_calls(trace_a), read_calls(trace_b)
     pairs = sorted(pair_calls(calls_a, calls_b, module_map), key=_order_key)
     built = [_row(pair, (trace_a, trace_b), cross, (rtol, atol)) for pair in pairs]
@@ -236,6 +238,7 @@ def module_rows(
         "cross_backend": cross,
         "randomness": randomness_note(trace_a, trace_b, calls_a + calls_b),
         "calls": (calls_a, calls_b),
+        "backends": backends,
     }
     return rows, pairs, facts
 

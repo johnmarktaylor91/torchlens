@@ -52,11 +52,14 @@ class ValueOptions:
         Whether the two runs come from different backends.
     rtol, atol:
         User tolerance overrides, or ``None`` for the policy default.
+    scale:
+        Reference scale of the cross-backend absolute floor (see :func:`input_scale`).
     """
 
     cross_backend: bool
     rtol: float | None
     atol: float | None
+    scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -104,6 +107,20 @@ def read_values(trace: Trace, labels: tuple[str, ...]) -> list[tuple[Any, str | 
         reason = reason or _compare_unavailable_reason(value)
         values.append((value if reason is None else None, reason))
     return values
+
+
+def input_scale(trace: Trace, labels: tuple[str, ...]) -> float:
+    """The rms of a call's recorded floating inputs, or 1.0 when none is available or all zero."""
+
+    tensors = [
+        value.detach().reshape(-1).to("cpu", torch.float64)
+        for value, _why in read_values(trace, labels)
+        if isinstance(value, torch.Tensor) and value.is_floating_point() and value.numel()
+    ]
+    if not tensors:
+        return 1.0
+    rms = float(torch.cat(tensors).square().mean().sqrt())
+    return rms if rms > 0.0 and rms == rms and rms != float("inf") else 1.0
 
 
 def drew_random(trace: Trace, op: Any) -> bool:
@@ -183,7 +200,12 @@ def compare_leaf(
         return ValueResult(**{**shaped.__dict__, "dtype_match": dtype_match})
     a_s, b_s, transform = shaped
     tol: Tolerance = tolerance_for(
-        a.dtype, b.dtype, cross_backend=options.cross_backend, rtol=options.rtol, atol=options.atol
+        a.dtype,
+        b.dtype,
+        cross_backend=options.cross_backend,
+        rtol=options.rtol,
+        atol=options.atol,
+        scale=options.scale,
     )
     aligned = _align_for_compare(a_s, b_s)
     if aligned is None:  # pragma: no cover - shapes were made equal above

@@ -15,6 +15,12 @@ and in float32 19 of 22 injected one-percent-sized bugs are caught at their own
 module. Half precision separates only gross bugs; that is the precision floor, not
 a tuning gap, so half-precision rows say to compare float32 runs. float64 has no
 measured port; it uses the float32 constant (a looser bound than float64 needs).
+
+The cross-backend ``atol`` is a floor, so an output that is zero on the reference run
+(``rms(a) = 0``) is not judged at an exact-zero bound: ``atol = c * eps(narrower dtype)
+* s``, where ``s`` is the rms of the module's recorded input on side a (1.0 when that
+input is unavailable or all zero), never the output being judged. ``c`` is provisional
+at 10 until the calibration port confirms it.
 """
 
 from __future__ import annotations
@@ -35,7 +41,8 @@ CROSS_BACKEND_RTOL: dict[str, float] = {
     "float32": 1e-4,
     "float64": 1e-4,
 }
-CROSS_BACKEND_ATOL = 0.0
+#: Provisional multiplier of the cross-backend absolute floor ``c * eps * input rms``.
+CROSS_BACKEND_ATOL_FLOOR = 10.0
 
 #: Mantissa width orders floating dtypes from narrowest to widest precision.
 _PRECISION_BITS: dict[str, int] = {"bfloat16": 8, "float16": 11, "float32": 24, "float64": 53}
@@ -88,6 +95,13 @@ def _narrower_float(dtype_a: torch.dtype, dtype_b: torch.dtype) -> str | None:
     return min(known, key=_PRECISION_BITS.__getitem__)
 
 
+def _atol_floor(narrower: str | None, scale: float) -> float:
+    """``CROSS_BACKEND_ATOL_FLOOR * eps(narrower dtype) * scale``."""
+
+    eps = torch.finfo(getattr(torch, narrower or "float32")).eps
+    return CROSS_BACKEND_ATOL_FLOOR * eps * scale
+
+
 def tolerance_for(
     dtype_a: torch.dtype,
     dtype_b: torch.dtype,
@@ -95,6 +109,7 @@ def tolerance_for(
     cross_backend: bool,
     rtol: float | None,
     atol: float | None,
+    scale: float = 1.0,
 ) -> Tolerance:
     """Return the tolerance for one paired value.
 
@@ -107,6 +122,9 @@ def tolerance_for(
     rtol, atol:
         User overrides, or ``None`` for the default. Across backends an override
         replaces the constant inside the same relative-RMS form.
+    scale:
+        Reference scale of the absolute floor across backends: the rms of the module's
+        side-a input (1.0 when unavailable or zero). A user ``atol`` replaces the floor.
 
     Returns
     -------
@@ -131,7 +149,7 @@ def tolerance_for(
     return Tolerance(
         "relative_rms",
         default_rtol if rtol is None else rtol,
-        CROSS_BACKEND_ATOL if atol is None else atol,
+        _atol_floor(narrower, scale) if atol is None else atol,
         narrower,
         note,
     )

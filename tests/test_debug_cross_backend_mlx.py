@@ -128,6 +128,7 @@ def test_correct_twin_agrees_at_every_paired_module() -> None:
         assert rows.loc[label, "alignment"] == "supported"
         assert rows.loc[label, "outcome"] == "equal", rows.loc[label, "reason"]
     assert str(rows.loc["blocks.1:1", "inputs_agree"]) == "True"
+    assert (frame.attrs["align"], frame.attrs["backends"]) == ("structure", ("torch", "mlx"))
     coverage = frame.attrs["coverage"]
     assert coverage["a"]["boundary_unrecorded"] == coverage["b"]["boundary_unrecorded"] == 0
     assert coverage["a"]["unpaired"] == coverage["b"]["unpaired"] == 0

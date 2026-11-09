@@ -256,6 +256,7 @@ def test_align_label_forces_the_label_join_on_different_fingerprints() -> None:
     assert set(label.loc[label["status"] == "present-in-both", "op"]) == shared
     assert not label["reason"].fillna("").str.contains(STRUCTURE_NOTE, regex=False).any()
     assert auto["reason"].fillna("").str.contains(STRUCTURE_NOTE, regex=False).any()
+    assert not {"align", "backends"} & (set(auto.attrs) | set(label.attrs))
     forced = tl.debug.first_divergence(a, b, align="label")
     assert forced is not None and forced["status"] == "only-a"
     assert forced != tl.debug.first_divergence(a, b)

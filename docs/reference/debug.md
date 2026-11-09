@@ -658,14 +658,20 @@ computed inside the root, an MLX-only `rope`) is a coverage gap, never a diverge
 **What each row says.** Module rows add `module_b` (the partner call), `alignment` (`supported`,
 `asserted`, `ambiguous`, `absent`), `outcome` (`equal`, `different`, `shape-incompatible`,
 `unavailable`, `not-evaluated`), the effective `rtol` and `atol`, any `transform` applied, and
-`inputs_agree`. `different` appears only on a `supported` or `asserted` row. Rows follow side a's
+`inputs_agree`. `different` appears only on a `supported` or `asserted` row. The frame's `attrs`
+add `coverage` (per side: `paired`, `unpaired`, `boundary_unrecorded`, `unresolved`), `align`
+(the pairing mode that ran, `"structure"`) and `backends` (for example `("torch", "mlx")`);
+op-pairing frames on one backend carry neither `align` nor `backends`. Rows follow side a's
 module-exit order, so an inner module comes before the module that returns its value, and a
 module whose output agrees again later never hides an earlier difference.
 
 **Tolerance.** Values compare at the wider dtype. Across backends a module output agrees when its
 relative RMS error is within tolerance: `rms(a - b) <= atol + rtol * rms(a)`, with `trace_a` as the
 reference. The default comes from the narrower dtype of each pair: float32 `1e-4`, float16
-`5e-2`, bfloat16 `0.75`, `atol=0`. These were measured on SmolLM2 (mlx-lm against the Hugging Face
+`5e-2`, bfloat16 `0.75`. `atol` is a floor, so a module whose reference output is all zero is not
+judged at an exact-zero bound: `10 * eps(narrower dtype)` times the rms of that module's recorded
+input on side a (1.0 when the input is unavailable or all zero), never the output being judged;
+the 10 is provisional until the calibration port confirms it. These were measured on SmolLM2 (mlx-lm against the Hugging Face
 PyTorch model): in float32 they catch one-percent-sized bugs (an attention scale, a RoPE base, a
 swapped activation) at their own module. Half precision catches only gross bugs; rows in float16
 or bfloat16 say so, and the advice is to compare float32 runs of both sides. Passing `rtol=` or

@@ -57,7 +57,11 @@ def _coverage_line(counts: dict[str, dict[str, int]], randomness: str) -> str:
 def _attrs(
     rows: list[dict[str, Any]], pairs: list[CallPair], facts: dict[str, Any], tol: tuple[Any, Any]
 ) -> dict[str, Any]:
-    """Summary attrs: the label path's counts read at module resolution, plus coverage."""
+    """Summary attrs: the label path's counts at module resolution, plus module-level keys.
+
+    ``coverage``, the pairing mode that ran (``align``, always ``"structure"`` here) and
+    each side's backend (``backends``).
+    """
 
     def count(key: str, value: Any) -> int:
         """Rows whose ``key`` equals ``value``."""
@@ -74,6 +78,8 @@ def _attrs(
         "rtol": tol[0],
         "atol": tol[1],
         "coverage": coverage_counts(rows, pairs),
+        "align": "structure",
+        "backends": facts["backends"],
     }
 
 
