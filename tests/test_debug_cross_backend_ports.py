@@ -433,6 +433,10 @@ def test_root_call_inputs_are_the_model_inputs(port: Port) -> None:
     from torchlens.debug._xb_calls import read_calls
 
     for trace in _pair(port):
+
+        def resolved(labels: Any, trace: tl.Trace = trace) -> tuple[str, ...]:
+            ops = (_op_from_label(trace, str(label)) for label in labels)
+            return tuple(dict.fromkeys(_op_label(op) for op in ops if op is not None))
+
         root = next(info for info in read_calls(trace) if info.parent is None)
-        ops = (_op_from_label(trace, str(label)) for label in trace.input_layers)
-        assert root.inputs == tuple(dict.fromkeys(_op_label(op) for op in ops if op is not None))
+        assert resolved(root.inputs) == resolved(trace.input_layers)
