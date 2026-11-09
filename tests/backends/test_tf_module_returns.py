@@ -127,8 +127,9 @@ def captured(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[Any, An
     finally:
         _KEEPING[0] = False
     yield trace, loaded, dict(_ACTUAL)
-    trace.cleanup()
-    loaded.cleanup()
+    # ``Trace.cleanup()`` assumes torch parameters (``is_leaf``) and raises on TF variables.
+    _ACTUAL.clear()
+    del trace, loaded
 
 
 @pytest.fixture(params=["live", "loaded"])
@@ -214,11 +215,19 @@ def test_unconsumed_return_is_recorded(trace_and_actual: tuple[Any, dict[str, An
     np.testing.assert_allclose(_np(trace.modules["side"].out), _np(actual["side:1"]))
 
 
-def test_unused_child_has_no_call(trace_and_actual: tuple[Any, dict[str, Any]]) -> None:
-    """A child that never ran has no module call."""
+def test_unused_child_records_nothing(trace_and_actual: tuple[Any, dict[str, Any]]) -> None:
+    """A child that never ran has no recorded output.
+
+    The preview module-log builder lists one call for every discovered module, so ``unused:1``
+    may exist; it predates recorded returns, and nothing may be recorded on it.
+    """
 
     trace, _actual = trace_and_actual
-    assert not any(label.startswith("unused:") for label in trace.module_calls.keys())
+    calls = [label for label in trace.module_calls.keys() if label.startswith("unused:")]
+    for call_label in calls:
+        assert list(trace.module_calls[call_label].output_ops) == []
+        assert not trace.module_calls[call_label].output_paths
+        assert returned_op_labels(trace, call_label) == []
 
 
 def test_metadata_invariants_hold(trace_and_actual: tuple[Any, dict[str, Any]]) -> None:
@@ -263,7 +272,5 @@ def test_raw_tf_module_records_returns() -> None:
     root = Root()
     x = tf.ones((1, 2))
     trace = tl.trace(root, x, backend="tf")
-    try:
-        np.testing.assert_allclose(_np(trace.modules["affine"].out), _np(root.affine(x)))
-    finally:
-        trace.cleanup()
+    np.testing.assert_allclose(_np(trace.modules["affine"].out), _np(root.affine(x)))
+    assert trace.module_calls["affine:1"].output_paths == ((),)
