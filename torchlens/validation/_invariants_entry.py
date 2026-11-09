@@ -244,13 +244,13 @@ def _check_compute_op_module_attribution(trace: Trace) -> None:
     """
 
     name = "module_attribution"
-    nested_labels: set[str] | None = None
+    root_only: frozenset[str] | None = None
     for layer in _compute_ops(trace):
         claims = _module_claims(layer)
         if not claims:
-            if nested_labels is None:
-                nested_labels = _nested_layer_labels(trace)
-            if _is_root_call_op(trace, layer, nested_labels):
+            if root_only is None:
+                root_only = _root_call_only_ops(trace)
+            if layer.label in root_only:
                 continue
             raise MetadataInvariantError(
                 name,
@@ -278,43 +278,38 @@ def _check_compute_op_module_attribution(trace: Trace) -> None:
             )
 
 
-def _nested_layer_labels(trace: Trace) -> set[str]:
-    """Return the layer labels some module other than the root lists."""
-
-    return {
-        label
-        for module in trace.modules
-        if module.address != ROOT_MODULE_ADDRESS
-        for label in module.layer_labels
-    }
-
-
-def _is_root_call_op(trace: Trace, layer: Op, nested_labels: set[str]) -> bool:
-    """Return whether only the root call lists ``layer`` (its raw stack was the root frame).
+def _root_call_only_ops(trace: Trace) -> frozenset[str]:
+    """Return the ops only the root call lists (their raw stacks were the root frame alone).
 
     Parameters
     ----------
     trace:
         Trace whose module logs are read.
-    layer:
-        Unclaimed compute op.
-    nested_labels:
-        Layer labels listed by a non-root module (see ``_nested_layer_labels``).
 
     Returns
     -------
-    bool
-        ``True`` when a recorded root call lists the op and no other module does.
+    frozenset[str]
+        Pass labels of ops a recorded root call lists and no other module lists;
+        empty when the trace records no root module.
     """
 
-    if layer.layer_label in nested_labels:
-        return False
     try:
         root = trace.modules[ROOT_MODULE_ADDRESS]
     except (KeyError, IndexError):
-        return False
-    calls = (root.calls.get(index) for index in root.calls)
-    return any(call is not None and layer.label in call.ops for call in calls)
+        return frozenset()
+    calls = [root.calls.get(index) for index in root.calls]
+    root_ops = {label for call in calls if call is not None for label in call.ops}
+    nested = {
+        label
+        for module in trace.modules
+        if module.address != ROOT_MODULE_ADDRESS
+        for label in module.layer_labels
+    }
+    return frozenset(
+        op.label
+        for op in trace._layer_list
+        if op.label in root_ops and op.layer_label not in nested
+    )
 
 
 def _compute_ops(trace: Trace) -> list[Op]:
