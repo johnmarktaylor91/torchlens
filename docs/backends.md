@@ -41,6 +41,13 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 9. Gradients of a loss with respect to inputs, weights and each operation work when the model
    is a plain function of its weights. Flax modules refuse them for now.
 
+Compare means comparing two runs on the same framework, for example two inputs through one
+model. Comparing a run from one framework with a run from another (a PyTorch trace against an
+MLX trace of the same model) refuses with a typed error: operation labels and order do not
+correspond across frameworks, so pairing the runs by label would report differences that are
+not there. Module-level comparison across frameworks is planned; see
+[Comparing runs from different backends](reference/debug.md#comparing-runs-from-different-backends).
+
 Checked with PyTorch 2.13, JAX 0.10.2 (Flax 0.12.8), TensorFlow 2.21 (Keras 3.15), MLX 0.26.3,
 PaddlePaddle 3.3.1 and tinygrad 0.13.0, the versions the preview test jobs pin.
 
