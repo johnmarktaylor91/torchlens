@@ -26,12 +26,12 @@ cycle.
    final op labels, then runs the backend's builder between the seam's flag and path steps.
 
 Honesty rule: a call is recorded only when every array leaf it returned is a tracer of the
-top-level trace. A module called inside a ``jax.lax.scan``, ``cond`` or ``while_loop`` body
-or under ``jax.vmap`` returns tracers of an inner trace: one trace-time call stands for
-several executed values (unrolled iterations, branches, batch members), so no single op is
-its output. Such calls are left unrecorded (their ``output_ops`` stay empty and
-``Module.out`` raises), never filled with a guessed op. Control flow inside an attributed
-module is already refused by the strict module surface.
+top-level trace. A module called under ``jax.vmap`` returns tracers of the batching trace:
+one trace-time call stands for every batch member, so no single op is its output. Such calls
+are left unrecorded (their ``output_ops`` stay empty and ``Module.out`` raises), never filled
+with a guessed op. A module call inside a ``jax.lax.scan``, ``cond`` or ``while_loop`` body
+never gets here: the root is itself the attributed module ``self``, and the strict module
+surface refuses control flow inside any attributed module.
 """
 
 from __future__ import annotations

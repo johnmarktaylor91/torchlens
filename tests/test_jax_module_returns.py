@@ -4,9 +4,10 @@ The cell (``tests/test_module_return_cell.py``) checks recorded returns against 
 actual return on Equinox and NNX. This file pins the JAX-only rules of
 ``torchlens/backends/jax/_module_return_probe.py``:
 
-- a module called inside a root-level ``jax.lax.scan`` or ``cond`` body, or under
-  ``jax.vmap``, returns tracers of an inner trace; the call stays unrecorded (no output op,
-  no output path) instead of being paired with a guessed op;
+- a module called under ``jax.vmap`` returns tracers of an inner trace; the call stays
+  unrecorded (no output op, no output path) instead of being paired with a guessed op;
+- a module called inside a ``jax.lax.scan``, ``cond`` or ``while_loop`` body refuses (the
+  strict module surface), so no such return is ever recorded;
 - the extra jaxpr outputs that carry module returns never become trace outputs and are not
   in the stamped jaxpr;
 - the trace still validates.
@@ -51,33 +52,27 @@ class _Linear(eqx.Module):
         return jnp.matmul(value, self.weight.T) + self.bias
 
 
-class _ScanRoot(eqx.Module):
-    """Root that calls ``block`` inside a ``lax.scan`` body."""
+class _ControlFlowRoot(eqx.Module):
+    """Root that calls ``block`` inside a ``lax.scan``, ``cond`` or ``while_loop`` body."""
 
     block: _Linear
+    kind: str = eqx.field(static=True)
 
     def __call__(self, value: Any) -> Any:
-        """Apply ``block`` three times through ``lax.scan``."""
+        """Route ``block`` through the chosen control-flow primitive."""
 
-        def step(carry: Any, _unused: Any) -> tuple[Any, None]:
-            """One scan step."""
-
-            return self.block(carry), None
-
-        out, _ = jax.lax.scan(step, value, None, length=3)
-        return out
-
-
-class _CondRoot(eqx.Module):
-    """Root that calls ``left`` or ``right`` through ``lax.cond``."""
-
-    left: _Linear
-    right: _Linear
-
-    def __call__(self, value: Any) -> Any:
-        """Pick a branch from the input's sign."""
-
-        return jax.lax.cond(jnp.sum(value) > 0, self.left, self.right, value) * 2.0
+        if self.kind == "scan":
+            out, _ = jax.lax.scan(
+                lambda carry, _x: (self.block(carry), None), value, None, length=3
+            )
+            return out
+        if self.kind == "cond":
+            return jax.lax.cond(jnp.sum(value) > 0, lambda v: self.block(v), lambda v: v, value)
+        return jax.lax.while_loop(
+            lambda state: state[0] < 3,
+            lambda state: (state[0] + 1, self.block(state[1])),
+            (0, value),
+        )[1]
 
 
 class _VmapBlock(eqx.Module):
@@ -131,23 +126,18 @@ def _assert_trace_sound(trace: Any, model: Any) -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("model", "inner_calls"),
-    [
-        pytest.param(_ScanRoot(_Linear(1)), ("block:1",), id="scan"),
-        pytest.param(_CondRoot(_Linear(2), _Linear(3)), ("left:1", "right:1"), id="cond"),
-    ],
-)
-def test_module_inside_root_control_flow_is_unrecorded(
-    model: Any, inner_calls: tuple[str, ...]
-) -> None:
-    """A call inside a root-level scan or cond body is left unrecorded, not guessed."""
+@pytest.mark.parametrize("kind", ["scan", "cond", "while"])
+def test_module_inside_root_control_flow_refuses(kind: str) -> None:
+    """A module call inside a control-flow body refuses instead of being recorded.
 
-    trace = tl.trace(model, _input(), backend="jax")
-    for call_label in inner_calls:
-        if call_label in trace.module_calls:
-            _assert_unrecorded(trace, call_label)
-    _assert_trace_sound(trace, model)
+    The root module is itself the attributed module ``self``, so its control flow falls
+    under the strict module surface: module mode never reaches a call whose return is an
+    inner-trace tracer of a scan, cond or while body.
+    """
+
+    model = _ControlFlowRoot(_Linear(1), kind)
+    with pytest.raises(ValueError, match="strict mode does not support"):
+        tl.trace(model, _input(), backend="jax")
 
 
 def test_vmapped_child_is_unrecorded_and_parent_recorded() -> None:
