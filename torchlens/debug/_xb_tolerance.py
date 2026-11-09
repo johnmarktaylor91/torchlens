@@ -21,7 +21,10 @@ The cross-backend ``atol`` is 0, except when the reference value is all zero (it
 * s``, where ``s`` is the smallest rms among the module's finite, non-zero floating inputs
 on side a (1.0 when there is none), never the output being judged. Taking the smallest
 input keeps a causal-mask-like input (huge or infinite values) from widening the bound.
-``c`` is provisional at 10 until the calibration port confirms it.
+``c`` comes from :data:`CROSS_BACKEND_ATOL_FLOOR` by the narrower dtype, measured on
+one small model with three seeds (a correct float32 LayerNorm over constant rows needs
+``c >= 163``); a smaller LayerNorm eps would need a larger float32 ``c``, and in
+bfloat16 no ``c`` separates small bugs on all-zero outputs from rounding.
 """
 
 from __future__ import annotations
@@ -42,8 +45,14 @@ CROSS_BACKEND_RTOL: dict[str, float] = {
     "float32": 1e-4,
     "float64": 1e-4,
 }
-#: Provisional multiplier of the all-zero-reference floor ``c * eps * input rms``.
-CROSS_BACKEND_ATOL_FLOOR = 10.0
+#: Multiplier ``c`` of the all-zero-reference floor ``c * eps * input rms``, keyed by the
+#: narrower dtype of a pair. float64 has no measured port (uncalibrated, as for rtol).
+CROSS_BACKEND_ATOL_FLOOR: dict[str, float] = {
+    "bfloat16": 20.0,
+    "float16": 10.0,
+    "float32": 500.0,
+    "float64": 500.0,
+}
 
 #: Mantissa width orders floating dtypes from narrowest to widest precision.
 _PRECISION_BITS: dict[str, int] = {"bfloat16": 8, "float16": 11, "float32": 24, "float64": 53}
@@ -97,10 +106,10 @@ def _narrower_float(dtype_a: torch.dtype, dtype_b: torch.dtype) -> str | None:
 
 
 def _atol_floor(narrower: str | None, scale: float) -> float:
-    """``CROSS_BACKEND_ATOL_FLOOR * eps(narrower dtype) * scale``."""
+    """``CROSS_BACKEND_ATOL_FLOOR[narrower] * eps(narrower dtype) * scale``."""
 
     eps = torch.finfo(getattr(torch, narrower or "float32")).eps
-    return CROSS_BACKEND_ATOL_FLOOR * eps * scale
+    return CROSS_BACKEND_ATOL_FLOOR[narrower or "float32"] * eps * scale
 
 
 def tolerance_for(
