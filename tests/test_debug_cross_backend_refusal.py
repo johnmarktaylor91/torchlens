@@ -3,8 +3,9 @@
 Both tools pair ops by literal label, and labels and op order do not correspond across
 backends, so a label join between, say, a PyTorch trace and an MLX trace reports a false
 divergence (the first torch op as ``only-a``) or value-compares two unrelated ops whose
-labels coincide. Until module-level pairing exists both tools raise a typed refusal before
-any value is read. The other backend is faked by setting the private provenance field on
+labels coincide. A label join across backends (``align="label"``) raises a typed refusal
+before any value is read; the default ``align="auto"`` pairs module calls instead, and refuses a
+backend whose module recording is not admitted. The other backend is faked by setting the private provenance field on
 a torch trace, so these tests run on Linux without MLX.
 """
 
@@ -19,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import _graph
+from torchlens.debug import _graph, _xb_values
 from torchlens.debug._compare_guard import refuse_uncomparable_pair
 from torchlens.errors import BackendUnsupportedError
 
@@ -54,16 +55,24 @@ def _as_backend(trace: tl.Trace, backend: str) -> tl.Trace:
     return trace
 
 
+def _label_join(tool: str) -> Callable[..., Any]:
+    """The tool with the label join forced (the pandas-free core always joins by label)."""
+
+    if tool == "compare_rows":
+        return _TOOLS[tool]
+    return lambda first, second: _TOOLS[tool](first, second, align="label")
+
+
 @pytest.mark.parametrize("tool", sorted(_TOOLS))
 @pytest.mark.parametrize("order", ["torch-first", "other-first"])
-def test_cross_backend_pair_refuses_in_both_orders(tool: str, order: str) -> None:
-    """Both tools (and the pandas-free core) refuse, whichever trace comes first."""
+def test_cross_backend_label_join_refuses_in_both_orders(tool: str, order: str) -> None:
+    """A label join refuses across backends, whichever trace comes first."""
 
     torch_trace, other = _pair()
     _as_backend(other, "mlx")
     first, second = (torch_trace, other) if order == "torch-first" else (other, torch_trace)
     with pytest.raises(BackendUnsupportedError) as caught:
-        _TOOLS[tool](first, second)
+        _label_join(tool)(first, second)
     error = caught.value
     assert error.code == "backend_unsupported"
     assert error.fields["code"] == "backend_unsupported"
@@ -74,7 +83,20 @@ def test_cross_backend_pair_refuses_in_both_orders(tool: str, order: str) -> Non
     message = str(error)
     assert "do not correspond across backends" in message
     assert "same backend" in message
-    assert "module-level comparison across backends is planned" in message
+    assert "pair module calls" in message
+
+
+@pytest.mark.parametrize("tool", ["compare", "first_divergence"])
+@pytest.mark.parametrize("order", ["torch-first", "other-first"])
+def test_unadmitted_backend_refuses_module_pairing(tool: str, order: str) -> None:
+    """The default align="auto" pairs modules, and refuses a backend not yet admitted."""
+
+    torch_trace, other = _pair()
+    _as_backend(other, "mlx")
+    first, second = (torch_trace, other) if order == "torch-first" else (other, torch_trace)
+    with pytest.raises(BackendUnsupportedError, match="admitted today: torch") as caught:
+        _TOOLS[tool](first, second)
+    assert caught.value.fields["code"] == "backend_unsupported"
 
 
 @pytest.mark.parametrize("tool", sorted(_TOOLS))
@@ -89,6 +111,7 @@ def test_refusal_happens_before_any_value_is_read(
     monkeypatch.setattr(_graph, "_compared_site_ops", _must_not_run)
     monkeypatch.setattr(_graph, "_safe_out", _must_not_run)
     monkeypatch.setattr(_graph, "get_payload_codec", _must_not_run)
+    monkeypatch.setattr(_xb_values, "read_values", _must_not_run)
     torch_trace, other = _pair()
     with pytest.raises(BackendUnsupportedError):
         _TOOLS[tool](torch_trace, _as_backend(other, "paddle"))
