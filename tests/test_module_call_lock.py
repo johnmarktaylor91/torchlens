@@ -207,6 +207,12 @@ def _record(name: str, tmp_path: Path) -> dict[str, Any]:
 def test_module_call_records_are_unchanged(name: str, tmp_path: Path) -> None:
     """Module-call records equal the pinned record; only layer grouping may differ."""
 
+    if REGEN:
+        # Generation is in-process: refuse to generate the pinned record on a torch
+        # already wrapped by earlier tests (SF-53).
+        from _oracle_env import guard_wrap_state_for_golden_update
+
+        guard_wrap_state_for_golden_update("TORCHLENS_REGEN_MODULE_CALL_LOCK")
     record = _record(name, tmp_path)
     golden = json.loads(GOLDEN.read_text()) if GOLDEN.exists() else {}
     if REGEN:

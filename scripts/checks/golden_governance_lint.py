@@ -617,6 +617,7 @@ def check_emitter_packages_match_declared_env_markers() -> None:
 _GENERATION_WRAP_GUARD_CENSUS: dict[str, tuple[str, str]] = {
     "TORCHLENS_REGEN_EXPORT_GOLDENS": ("test_exports.py", "in-process"),
     "TORCHLENS_REGEN_LAYER_BASELINE": ("../scripts/checks/arch_spine_layer_lint.py", "in-process"),
+    "TORCHLENS_REGEN_MODULE_CALL_LOCK": ("test_module_call_lock.py", "in-process"),
     "TORCHLENS_UPDATE_BACKEND_PARITY": (
         "backend_parity/test_torch_parity_gates.py",
         "in-process",
