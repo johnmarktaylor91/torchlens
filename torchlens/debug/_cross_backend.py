@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 #: Backends whose module recording passed the conformance cell. A backend joins
 #: when its recorded module outputs pass the same checks (identity, tuple and nested
 #: returns, duplicate leaves, returned inputs, repeated calls, save and load).
-ADMITTED_BACKENDS: frozenset[str] = frozenset({"torch"})
+ADMITTED_BACKENDS: frozenset[str] = frozenset({"torch", "mlx"})
 ALIGN_MODES = ("auto", "label", "structure")
 MODULE_COLUMNS = ("module_b", "alignment", "outcome", "rtol", "atol", "transform", "inputs_agree")
 _PAIRED = (SUPPORTED, ASSERTED)

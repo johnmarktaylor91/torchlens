@@ -1,8 +1,8 @@
 """Module-level comparison across backends: ``align=``, ``module_map=`` and the evidence rule.
 
 The other backend is faked: two torch traces, the second stamped with the provenance backend
-``"mlx"`` and built with MLX-style container names (``layers.0``), and ``"mlx"`` admitted for
-the test. Each fixture from the acceptance list is a hand-built twin, with and without an
+``"mlx"`` and built with MLX-style container names (``layers.0``). Real MLX twins live in
+``tests/test_debug_cross_backend_mlx.py``. Each fixture from the acceptance list is a hand-built twin, with and without an
 injected bug, and must be named at the right module or refused, never misplaced.
 """
 
@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import copy
 import math
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -20,20 +21,12 @@ import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import _cross_backend
+from torchlens.debug import _xb_calls
 from torchlens.errors import InvalidArgumentError
 
 pytest.importorskip("pandas")
 
 _PAIRED = {"supported", "asserted"}
-
-
-@pytest.fixture(autouse=True)
-def admit_mlx(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Admit the faked ``"mlx"`` backend for module pairing in this module's tests."""
-
-    monkeypatch.setattr(_cross_backend, "ADMITTED_BACKENDS", frozenset({"torch", "mlx"}))
-    yield
 
 
 def _traces(
@@ -785,3 +778,34 @@ def test_saved_and_reloaded_pair_gives_the_same_finding(tmp_path: Path) -> None:
         live["module_b"],
         live["outcome"],
     )
+
+
+def _returning(label: str, *calls: str) -> SimpleNamespace:
+    """A stub op flagged as an output of ``calls`` (the recorded-passthrough spelling)."""
+
+    return SimpleNamespace(
+        label=label,
+        _module_context_is_module_output=True,
+        _module_context_output_of_module_calls=calls,
+    )
+
+
+@pytest.mark.parametrize(
+    ("own", "returned", "expected"),
+    [
+        ((), ("linear_1_1:1",), ("linear_1_1:1",)),
+        (("relu_1_2:1",), ("linear_1_1:1",), ("relu_1_2:1", "linear_1_1:1")),
+        ((), ("linear_1_1:1", "linear_2_2:1"), ()),
+    ],
+    ids=["passthrough", "own-then-returned", "two-returned-unresolved"],
+)
+def test_recorded_passthrough_is_read_as_the_call_output(
+    own: tuple[str, ...], returned: tuple[str, ...], expected: tuple[str, ...]
+) -> None:
+    """A returned input reads as the call's output after its own outputs; two refuse to order."""
+
+    call = SimpleNamespace(label="drop:1", ops=list(own), output_ops=list(own))
+    trace = SimpleNamespace(
+        _layer_list=[_returning(label, "drop:1") for label in (*returned, *own)]
+    )
+    assert _xb_calls._outputs(call, trace) == expected

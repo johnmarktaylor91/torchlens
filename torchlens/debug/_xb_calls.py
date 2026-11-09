@@ -6,6 +6,13 @@ that this reader absorbs, without changing capture: the root's own children carr
 ``call_parent=None`` on torch and ``"self:1"`` on the preview backends, and
 container segments that are never called (a torch ``ModuleList``, a plain MLX
 list) appear in addresses as ``layers.0`` on one side and ``0`` on the other.
+
+A call that returns its input unchanged (an identity module, dropout in eval mode) is an
+op inside the call on torch, which inserts an identity op at module exit, but a recorded
+passthrough on the preview backends: the returned input's op is flagged as the call's
+output and stays out of ``output_ops``. The reader appends those passthrough ops after
+the call's own outputs, the order torch's exit-time identity ops take, so both spellings
+give the same output roster.
 """
 
 from __future__ import annotations
@@ -13,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._module_passthrough import passthrough_op_labels
 from ._common import _op_label, _ordered_ops
 
 if TYPE_CHECKING:
@@ -85,12 +93,25 @@ def _parent_label(call: Any, roots: list[Any]) -> str | None:
     return str(parent)
 
 
-def _span(call: Any, order: dict[str, int]) -> tuple[int, int]:
+def _outputs(call: Any, trace: Trace) -> tuple[str, ...]:
+    """The call's recorded outputs: its own output ops, then any returned inputs.
+
+    Two or more returned inputs give no outputs (the boundary reads as unrecorded):
+    their producers' execution order need not be the order the call returned them in.
+    """
+
+    passthrough = passthrough_op_labels(call, trace)
+    if len(passthrough) > 1:
+        return ()
+    return tuple(str(label) for label in (*(call.output_ops or ()), *passthrough))
+
+
+def _span(call: Any, outputs: tuple[str, ...], order: dict[str, int]) -> tuple[int, int]:
     """Return ``(enter, exit)`` execution positions from the call's ops, else its outputs."""
 
     positions = [order[label] for label in (call.ops or ()) if label in order]
     if not positions:
-        positions = [order[label] for label in (call.output_ops or ()) if label in order]
+        positions = [order[label] for label in outputs if label in order]
     if not positions:
         return -1, -1
     return min(positions), max(positions)
@@ -128,7 +149,8 @@ def read_calls(trace: Trace) -> list[CallInfo]:
 
     infos = []
     for module, call in raw:
-        enter, exit_ = _span(call, order)
+        outputs = _outputs(call, trace)
+        enter, exit_ = _span(call, outputs, order)
         training = getattr(module, "training", None)
         infos.append(
             CallInfo(
@@ -142,7 +164,7 @@ def read_calls(trace: Trace) -> list[CallInfo]:
                 enter=enter,
                 exit=exit_,
                 depth=depth(str(call.label)),
-                outputs=tuple(str(label) for label in (call.output_ops or ())),
+                outputs=outputs,
                 inputs=tuple(str(label) for label in (call.input_ops or ())),
                 training=None if training is None else bool(training),
             )

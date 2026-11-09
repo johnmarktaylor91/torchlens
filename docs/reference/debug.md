@@ -699,8 +699,12 @@ producer ran. A saved and reloaded pair gives the same answer with no live model
 ```
 
 **Which backends.** A backend joins module pairing once its recorded module outputs pass
-TorchLens's conformance checks. Any other backend is refused with `backend_unsupported`, and the
-message names the admitted backends. Comparing works on the machine that captured both traces;
+TorchLens's conformance checks; PyTorch and MLX are admitted. Any other backend is refused with
+`backend_unsupported`, and the message names the admitted backends. A module call that returns
+its input unchanged (an identity, or dropout in eval mode) is compared through the returned
+value: PyTorch logs an identity op inside the call, MLX records the returned input's op, and both
+read as that call's output. A call that returns two or more of its inputs unchanged reads as
+`boundary unrecorded`, because the order it returned them in is not recorded. Comparing works on the machine that captured both traces;
 nothing here promises reading one backend's saved trace on a machine without that backend.
 
 ## `isolated_capture` / `preserved_rng_state` / `clone_input_tree`
