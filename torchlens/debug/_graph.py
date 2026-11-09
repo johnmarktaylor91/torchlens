@@ -31,6 +31,7 @@ from ._common import (
     _tensor_unavailable_reason,
 )
 from ._compare_guard import refuse_uncomparable_pair
+from ._compare_pairing import paired_rows, row_source
 from ._unit_axis import unit_axis
 
 LineageDirection = Literal["ancestors", "descendants", "both"]
@@ -359,7 +360,6 @@ def _compare_rows(
     # whichever op sorts first (op 67 of 70 on resnet18). Rows follow trace_a's
     # execution order; ops only present in trace_b append afterwards in
     # trace_b's execution order (disclosed by their "only-b" status).
-    labels = list(ops_a) + [label for label in ops_b if label not in ops_a]
     rows: list[dict[str, Any]] = []
     summary = {
         "matched": 0,
@@ -370,16 +370,10 @@ def _compare_rows(
         "activation_unavailable": 0,
     }
 
-    for label in labels:
-        op_a = ops_a.get(label)
-        op_b = ops_b.get(label)
-        if op_a is None:
-            summary["only_b"] += 1
-            rows.append(_activation_row(label, "only-b", "only-b", _source_line(ops_b[label])))
-            continue
-        if op_b is None:
-            summary["only_a"] += 1
-            rows.append(_activation_row(label, "only-a", "only-a", _source_line(op_a)))
+    for label, status, op_a, op_b, note in paired_rows(trace_a, trace_b, ops_a, ops_b):
+        if status != "present-in-both":
+            summary[status.replace("-", "_")] += 1
+            rows.append(_activation_row(label, status, note, _source_line(row_source(op_a, op_b))))
             continue
 
         out_a, reason_a = _safe_out(op_a, get_payload_codec(str(trace_a._provenance_backend)))
@@ -396,7 +390,7 @@ def _compare_rows(
             "max_abs": None,
             "mean_abs": None,
             "allclose": None,
-            "reason": "",
+            "reason": note,
             "source_line": _source_line(op_a) or _source_line(op_b),
         }
         if not shape_match:
@@ -417,7 +411,8 @@ def _compare_rows(
             row["reason"] = "shape-mismatch"
             rows.append(row)
             continue
-        cmp_a, cmp_b, row["reason"] = aligned
+        cmp_a, cmp_b, aligned_note = aligned
+        row["reason"] = "; ".join(filter(None, (note, aligned_note)))
 
         max_abs, mean_abs, allclose = _value_delta(cmp_a, cmp_b, rtol=rtol, atol=atol)
         if allclose:
@@ -470,11 +465,12 @@ def compare(
         are compared on the CPU, and different dtypes in the wider dtype (the row's ``reason``
         says so, and the card's coverage line names every alignment); integer and boolean
         activations must match exactly. The coverage line also counts the ops that could not be
-        compared and why. Ops pair by label, so both traces must come from the same backend:
-        a pair whose ``trace.provenance.backend`` differs raises
-        :class:`~torchlens.errors.BackendUnsupportedError` (code ``backend_unsupported``)
-        before any value is read. The optional view over :func:`_compare_rows` (the
-        pandas-free core).
+        compared and why. Ops pair by label when the graph fingerprints
+        (``trace.provenance.fingerprint``) are equal, else by graph structure, never by value: an
+        inserted or deleted op is an ``only-a``/``only-b`` row instead of shifting every later pair,
+        and ops whose structural twins differ in number stay unpaired (``ambiguous``). Traces from
+        different backends raise :class:`~torchlens.errors.BackendUnsupportedError` before any value
+        is read. The optional view over :func:`_compare_rows` (the pandas-free core).
 
     Examples
     --------
@@ -528,10 +524,11 @@ def first_divergence(
     (unsaved, non-tensor, sparse, meta, quantized) are NOT divergences;
     ``print(tl.debug.compare(trace_a, trace_b))`` counts them on its coverage line, and a
     divergence inside such a region cannot be excluded. The row's ``source_line`` is the
-    ``"file:line"`` of the user code that ran the op. Ops pair by label, so two traces from
-    different backends (``trace.provenance.backend``) raise
-    :class:`~torchlens.errors.BackendUnsupportedError` (code ``backend_unsupported``) instead
-    of reporting a divergence that is not there.
+    ``"file:line"`` of the user code that ran the op. Ops pair as in :func:`compare`: by
+    label for equal graph fingerprints, else by graph structure, so an inserted op is
+    reported as itself (an ``only-b`` row, after every paired row) and a later value change
+    is still placed on the changed op. Two traces from different backends
+    (``trace.provenance.backend``) raise :class:`~torchlens.errors.BackendUnsupportedError`.
 
     Parameters
     ----------
