@@ -619,6 +619,30 @@ EXECUTION-ORDER row where two traces separate (value, shape, or structural), or 
 It is the direct spelling of the first-diverging-op recipe over [`compare`](#compare),
 whose rows follow execution order -- never alphabetical.
 
+## Comparing runs from different backends
+
+[`compare`](#compare) and [`first_divergence`](#first_divergence) pair the operations of two
+traces by label. That works for two runs captured on the same backend: two inputs, two
+devices, two dtypes or two versions of a model, all on PyTorch (or all on one preview backend).
+
+Two traces from different backends (`trace.provenance.backend` differs, for example a PyTorch
+trace and an MLX trace of the same model) are refused with
+`tl.errors.BackendUnsupportedError` (code `backend_unsupported`) before any value is read.
+Operation labels and operation order do not correspond across backends: each backend numbers
+and spells its operations its own way, so joining the runs by label would name the first
+operation as a divergence even for a correct port, or compare two unrelated operations whose
+labels happen to match. The refusal holds for saved and reloaded traces too.
+
+```text
+>>> tl.debug.first_divergence(torch_trace, mlx_trace)
+BackendUnsupportedError: cannot compare a 'torch' trace with a 'mlx' trace op by op: ...
+>>> tl.debug.compare(torch_trace, mlx_trace)
+BackendUnsupportedError: cannot compare a 'torch' trace with a 'mlx' trace op by op: ...
+```
+
+Module-level comparison across backends (pairing module calls by name and comparing their
+recorded outputs) is planned. Until then, compare two runs captured on the same backend.
+
 ## `isolated_capture` / `preserved_rng_state` / `clone_input_tree`
 
 The shared isolated-rerun harness (experimental) behind

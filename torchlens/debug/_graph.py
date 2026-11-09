@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
-from torchlens._runnable import refuse_poisoned_trace
-
 from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
@@ -32,6 +30,7 @@ from ._common import (
     _source_line,
     _tensor_unavailable_reason,
 )
+from ._compare_guard import refuse_uncomparable_pair
 from ._unit_axis import unit_axis
 
 LineageDirection = Literal["ancestors", "descendants", "both"]
@@ -352,8 +351,7 @@ def _compare_rows(
         returns it directly.
     """
 
-    refuse_poisoned_trace(trace_a, "faithful comparison")
-    refuse_poisoned_trace(trace_b, "faithful comparison")
+    refuse_uncomparable_pair(trace_a, trace_b)
     ops_a = _compared_site_ops(trace_a)
     ops_b = _compared_site_ops(trace_b)
     # EXECUTION order, never alphabetical (observe memo item 2): the published
@@ -466,15 +464,16 @@ def compare(
     Returns
     -------
     Report
-        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
-        DataFrame described here.
-        One row per pass-qualified op with summary counts in ``df.attrs``;
-        ``source_line`` is the ``"file:line"`` of the user code that ran the
-        op. Activations on different devices are compared on the CPU, and
-        different dtypes in the wider dtype (the row's ``reason`` says so, and
-        the card's coverage line names every alignment); integer and boolean
-        activations must match exactly. The coverage line also counts the ops
-        that could not be compared and why. The optional view over :func:`_compare_rows` (the
+        Tabular ``tl.debug`` report; ``.to_pandas()`` returns the DataFrame described here.
+        One row per pass-qualified op with summary counts in ``df.attrs``; ``source_line`` is
+        the ``"file:line"`` of the user code that ran the op. Activations on different devices
+        are compared on the CPU, and different dtypes in the wider dtype (the row's ``reason``
+        says so, and the card's coverage line names every alignment); integer and boolean
+        activations must match exactly. The coverage line also counts the ops that could not be
+        compared and why. Ops pair by label, so both traces must come from the same backend:
+        a pair whose ``trace.provenance.backend`` differs raises
+        :class:`~torchlens.errors.BackendUnsupportedError` (code ``backend_unsupported``)
+        before any value is read. The optional view over :func:`_compare_rows` (the
         pandas-free core).
 
     Examples
@@ -521,17 +520,18 @@ def first_divergence(
 ) -> dict[str, Any] | None:
     """Return the first EXECUTION-ORDER row where the two traces separate.
 
-    A divergence row is one whose compared payloads crossed tolerance
-    (``allclose=False``), mismatched shape, or exists in only one trace.
-    Payloads on different devices (a CPU run against a GPU run) are compared
-    on the CPU, and different dtypes in the wider dtype, so those runs
-    diverge where their values really separate; integer and boolean payloads
-    (indices, masks) must match exactly. Rows whose payloads could not be
-    compared at all (unsaved, non-tensor, sparse, meta, quantized) are NOT
-    divergences; ``print(tl.debug.compare(trace_a, trace_b))`` counts them
-    on its coverage line, and a divergence inside such a region cannot be
-    excluded. The row's ``source_line`` is the ``"file:line"`` of the user
-    code that ran the op.
+    A divergence row is one whose compared payloads crossed tolerance (``allclose=False``),
+    mismatched shape, or exists in only one trace. Payloads on different devices (a CPU run
+    against a GPU run) are compared on the CPU, and different dtypes in the wider dtype, so
+    those runs diverge where their values really separate; integer and boolean payloads
+    (indices, masks) must match exactly. Rows whose payloads could not be compared at all
+    (unsaved, non-tensor, sparse, meta, quantized) are NOT divergences;
+    ``print(tl.debug.compare(trace_a, trace_b))`` counts them on its coverage line, and a
+    divergence inside such a region cannot be excluded. The row's ``source_line`` is the
+    ``"file:line"`` of the user code that ran the op. Ops pair by label, so two traces from
+    different backends (``trace.provenance.backend``) raise
+    :class:`~torchlens.errors.BackendUnsupportedError` (code ``backend_unsupported``) instead
+    of reporting a divergence that is not there.
 
     Parameters
     ----------

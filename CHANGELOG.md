@@ -5,6 +5,14 @@
 
 <!-- version list -->
 
+### Fixed
+
+- **debug**: `tl.debug.compare` and `tl.debug.first_divergence` refuse two traces from
+  different backends with `tl.errors.BackendUnsupportedError` (code `backend_unsupported`)
+  before reading any value. Their labels and op order do not correspond, so the label join
+  reported the first op as a divergence even for a correct port. Two runs on the same backend
+  compare as before; module-level comparison across backends is planned.
+
 ## v3.0.2 (2026-11-06)
 
 ### Fixed
