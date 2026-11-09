@@ -130,6 +130,8 @@ def test_correct_twin_agrees_at_every_paired_module() -> None:
     assert str(rows.loc["blocks.1:1", "inputs_agree"]) == "True"
     coverage = frame.attrs["coverage"]
     assert coverage["a"]["boundary_unrecorded"] == coverage["b"]["boundary_unrecorded"] == 0
+    assert coverage["a"]["unpaired"] == coverage["b"]["unpaired"] == 0
+    assert "blocks:1" not in rows.index
     assert not frame["reason"].fillna("").str.contains("randomness").any()
 
 

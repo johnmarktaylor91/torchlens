@@ -31,6 +31,11 @@ if TYPE_CHECKING:
 
 ROOT_ADDRESS = "self"
 
+#: Plain Python containers: a preview backend records one holding sub-modules as a
+#: module (with a call, since its address prefixes its children's), but it is never
+#: called, like a torch ``ModuleList``.
+_CONTAINER_CLASSES = frozenset({"list", "tuple", "dict"})
+
 
 @dataclass(frozen=True)
 class CallInfo:
@@ -74,6 +79,32 @@ def _raw_calls(trace: Trace) -> list[tuple[Any, Any]]:
     return [(module, call) for module in trace._module_logs for call in module.calls.values()]
 
 
+def _drop_containers(
+    raw: list[tuple[Any, Any]], parents: dict[str, str | None]
+) -> tuple[list[tuple[Any, Any]], dict[str, str | None]]:
+    """Drop calls recorded for plain containers; their children take the container's parent."""
+
+    containers = {
+        str(call.label)
+        for module, call in raw
+        if (getattr(call, "class_name", "") or getattr(module, "class_name", ""))
+        in _CONTAINER_CLASSES
+    }
+
+    def lift(label: str | None) -> str | None:
+        """The nearest non-container ancestor (bounded by the call count)."""
+
+        steps = 0
+        while label in containers and steps <= len(parents):
+            label, steps = parents.get(str(label)), steps + 1
+        return label
+
+    kept = [(module, call) for module, call in raw if str(call.label) not in containers]
+    return kept, {
+        label: lift(parent) for label, parent in parents.items() if label not in containers
+    }
+
+
 def _root_parent_of(label: str, roots: list[Any]) -> str | None:
     """Return the root call that owns a top-level call (``call_parent`` unset)."""
 
@@ -112,12 +143,20 @@ def _outputs(call: Any, trace: Trace) -> tuple[str, ...]:
     return tuple(str(label) for label in (*(call.output_ops or ()), *passthrough))
 
 
-def _inputs(call: Any, trace: Trace, order: dict[str, int]) -> tuple[str, ...]:
-    """The call's recorded input ops, else the ops outside it that feed its own ops."""
+def _inputs(
+    call: Any, trace: Trace, outputs: tuple[str, ...], order: dict[str, int]
+) -> tuple[str, ...]:
+    """The call's recorded input ops, else the ops outside it that feed its own ops.
+
+    A call with no ops of its own (a recorded pass-through) returned its input, so
+    its outputs are its inputs.
+    """
 
     if call.input_ops:
         return tuple(str(label) for label in call.input_ops)
     inside = {str(label) for label in (call.ops or ())}
+    if not inside:
+        return outputs
     feeders: set[str] = set()
     for label in inside:
         op = _op_from_label(trace, label)
@@ -160,6 +199,7 @@ def read_calls(trace: Trace) -> list[CallInfo]:
     raw = _raw_calls(trace)
     roots = [call for _module, call in raw if call.address == ROOT_ADDRESS]
     parents = {str(call.label): _parent_label(call, roots) for _module, call in raw}
+    raw, parents = _drop_containers(raw, parents)
 
     def depth(label: str) -> int:
         """Nesting depth by walking parents (bounded by the call count)."""
@@ -187,7 +227,7 @@ def read_calls(trace: Trace) -> list[CallInfo]:
                 exit=exit_,
                 depth=depth(str(call.label)),
                 outputs=outputs,
-                inputs=_inputs(call, trace, order),
+                inputs=_inputs(call, trace, outputs, order),
                 training=None if training is None else bool(training),
             )
         )

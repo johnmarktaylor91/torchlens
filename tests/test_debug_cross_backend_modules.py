@@ -804,8 +804,23 @@ def test_recorded_passthrough_is_read_as_the_call_output(
 ) -> None:
     """A returned input reads as the call's output after its own outputs; two refuse to order."""
 
-    call = SimpleNamespace(label="drop:1", ops=list(own), output_ops=list(own))
+    call = SimpleNamespace(address="drop", label="drop:1", ops=list(own), output_ops=list(own))
     trace = SimpleNamespace(
-        _layer_list=[_returning(label, "drop:1") for label in (*returned, *own)]
+        output_layers=[], _layer_list=[_returning(label, "drop:1") for label in (*returned, *own)]
     )
     assert _xb_calls._outputs(call, trace) == expected
+
+
+def test_plain_container_calls_are_dropped_and_their_children_lifted() -> None:
+    """A call recorded for a plain list is no call; its children take the list's parent."""
+
+    def entry(label: str, class_name: str) -> tuple[SimpleNamespace, SimpleNamespace]:
+        """A ``(module, call)`` pair whose module has ``class_name``."""
+
+        return SimpleNamespace(class_name=class_name), SimpleNamespace(label=label, class_name="")
+
+    raw = [entry("self:1", "Twin"), entry("blocks:1", "list"), entry("blocks.0:1", "Block")]
+    parents = {"self:1": None, "blocks:1": "self:1", "blocks.0:1": "blocks:1"}
+    kept, lifted = _xb_calls._drop_containers(raw, parents)
+    assert [call.label for _module, call in kept] == ["self:1", "blocks.0:1"]
+    assert lifted == {"self:1": None, "blocks.0:1": "self:1"}
