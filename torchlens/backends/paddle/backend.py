@@ -2637,7 +2637,7 @@ def _paddle_replay_module_stack(value: object) -> tuple[str, ...]:
         address = getattr(item, "address", None)
         call_index = getattr(item, "call_index", None)
         known = address is not None and call_index is not None
-        labels.append(f"{address}:{int(call_index)}" if known else str(item))
+        labels.append(f"{address}:{int(call_index or 0)}" if known else str(item))
     return strip_root_frames(labels)
 
 
