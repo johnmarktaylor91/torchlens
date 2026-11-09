@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ._common import _op_from_label, _op_label
 from ._xb_op_scope import SideGraph, collapsed_pairs, seeds, side_graph
 from ._xb_op_walk import Placement, Walk, place
 from ._xb_pairing import CallPair
@@ -56,6 +57,17 @@ def _judge(graphs: tuple[SideGraph, SideGraph], options: ValueOptions) -> Any:
         return compare_leaf(a, b, justified=justified, options=options).outcome == EQUAL
 
     return judge
+
+
+def _canonical(traces: tuple[Trace, Trace], pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Recorded boundary labels as pass-qualified op labels (the walk's spelling); unresolved dropped."""
+
+    found = []
+    for label_a, label_b in pairs:
+        op_a, op_b = _op_from_label(traces[0], label_a), _op_from_label(traces[1], label_b)
+        if op_a is not None and op_b is not None:
+            found.append((_op_label(op_a), _op_label(op_b)))
+    return found
 
 
 def _listed(labels: Any) -> str:
@@ -179,7 +191,7 @@ def _placed_in(
     rows, pairs = table
     calls_a, calls_b = facts["calls"]
     collapsed = collapsed_pairs(pair.a, pairs, rows, calls_a)
-    seeded = seeds(pair.a, pair.b, collapsed)
+    seeded = _canonical(traces, seeds(pair.a, pair.b, collapsed))
     graphs = (
         side_graph(
             traces[0],
@@ -200,5 +212,5 @@ def _placed_in(
         bool(facts["cross_backend"]), tol[0], tol[1], input_scale(traces[0], pair.a.inputs)
     )
     walk = Walk(graphs[0], graphs[1], _judge(graphs, options))
-    outputs = list(zip(pair.a.outputs, pair.b.outputs, strict=False))
+    outputs = _canonical(traces, list(zip(pair.a.outputs, pair.b.outputs, strict=False)))
     return _phrase(place(walk, seeded, outputs), walk)
