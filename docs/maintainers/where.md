@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1762 modules, 707544 lines, 0 modules without a docstring.
+85 packages, 1772 modules, 709271 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -54,20 +54,20 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 22 | 7341 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 23 | 7562 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
-| `torchlens.backends.jax` | JAX backend preview exports. | 13 | 9171 |
-| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6948 |
-| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
-| `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
-| `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59358 |
+| `torchlens.backends.jax` | JAX backend preview exports. | 14 | 9286 |
+| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 18 | 7131 |
+| `torchlens.backends.paddle` | Paddle backend preview. | 15 | 6704 |
+| `torchlens.backends.tf` | TensorFlow backend preview exports. | 14 | 8646 |
+| `torchlens.backends.tinygrad` | tinygrad backend preview. | 11 | 4548 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 139 | 59410 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 705 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2035 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 38 | 12819 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 41 | 13618 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 423 |
 | `torchlens.errors` | Public TorchLens exception classes. | 6 | 1589 |
@@ -1332,7 +1332,7 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (22 modules, 7341 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (23 modules, 7562 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1352,6 +1352,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (22 modules
 | `_intervention_evidence` | Which backends write the intervention evidence a Trace's pristine reading uses. | 31 |
 | `_invariants` | Run the metadata-invariant tripwire from a backend's validate path. | 23 |
 | `_module_returns` | Recorded module returns: how a preview backend hands module-call outputs to the finalizer. | 234 |
+| `_op_spelling` | Canonical op spellings across backends, for cross-backend labelling only. | 221 |
 | `_options` | Shared backend trace-option defaulting and rejection helpers. | 790 |
 | `_protocol` | Backend Protocol for unified TorchLens capture. | 354 |
 | `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 206 |
@@ -1376,7 +1377,7 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 
 ### `torchlens.backends.jax`
 
-JAX backend preview exports. (13 modules, 9171 lines)
+JAX backend preview exports. (14 modules, 9286 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1386,6 +1387,7 @@ JAX backend preview exports. (13 modules, 9171 lines)
 | `_raw_relabel` | Raw-label helpers for finishing a JAX trace: lineage relabel, equivalence members, sources. | 79 |
 | `_site_dialect` | THE JAX SITE DIALECT for ''site_key_v1'' minting. | 73 |
 | `_source_path_components` | Source-path component normalization for JAX equation captures. | 44 |
+| `_spellings` | JAX's op spelling list (see :mod:'torchlens.backends._op_spelling'). | 115 |
 | `_trace_graph_helpers` | Trace-graph helpers for the JAX preview backend's validation oracles. | 535 |
 | `_validation_log` | Per-run validation decision log for the JAX backend. | 153 |
 | `_zero_annihilator` | Zero-annihilator value proof for the JAX preview backend's perturbation oracle. | 88 |
@@ -1396,7 +1398,7 @@ JAX backend preview exports. (13 modules, 9171 lines)
 
 ### `torchlens.backends.mlx`
 
-Technical-preview MLX backend for TorchLens. (17 modules, 6948 lines)
+Technical-preview MLX backend for TorchLens. (18 modules, 7131 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1407,6 +1409,7 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6948 lines)
 | `_param_tree` | Flattened MLX parameter-tree walkers for the backend's parameter logs. | 71 |
 | `_replay_args` | Saved-payload lookup and replay-argument reconstruction for MLX validation. | 216 |
 | `_replay_frames` | Module-call frames for the MLX AD replay observers. | 51 |
+| `_spellings` | MLX's op spelling list (see :mod:'torchlens.backends._op_spelling'). | 183 |
 | `_tap_observers` | MLX intermediate-gradient tap observers and the array helpers they share. | 552 |
 | `backend` | Technical-preview MLX implementation of the capture backend Protocol. | 2496 |
 | `capabilities` | Registry-backed capability exports for the technical-preview MLX backend. | 38 |
@@ -1420,13 +1423,14 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6948 lines)
 
 ### `torchlens.backends.paddle`
 
-Paddle backend preview. (14 modules, 6537 lines)
+Paddle backend preview. (15 modules, 6704 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Paddle backend preview. | 7 |
 | `_capture_helpers` | Private helpers the Paddle backend's capture path calls (file cap split). | 124 |
 | `_param_writes` | Paddle parameter-write guard for the preview capture. | 106 |
+| `_spellings` | Paddle's op spelling list (see :mod:'torchlens.backends._op_spelling'). | 167 |
 | `backend` | Technical-preview Paddle implementation of the capture backend Protocol. | 2734 |
 | `capabilities` | Registry-backed capability exports for the Paddle backend preview. | 38 |
 | `constants_rule` | The shared constants rule, Paddle side (closure constants and literal producers). | 261 |
@@ -1441,12 +1445,13 @@ Paddle backend preview. (14 modules, 6537 lines)
 
 ### `torchlens.backends.tf`
 
-TensorFlow backend preview exports. (13 modules, 8522 lines)
+TensorFlow backend preview exports. (14 modules, 8646 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TensorFlow backend preview exports. | 8 |
 | `_raw_op_replay` | Raw-op replay kernels for TensorFlow validation. | 457 |
+| `_spellings` | TensorFlow's op spelling list (see :mod:'torchlens.backends._op_spelling'). | 124 |
 | `_tensor_leaves` | Tensor-leaf helpers shared by the TensorFlow intervention engine (file cap split). | 62 |
 | `_tensor_probe` | TensorFlow tensor probes for the eager op-callback capture (file cap split). | 232 |
 | `_tf_compat` | TensorFlow compatibility probes for private eager-capture APIs. | 164 |
@@ -1461,7 +1466,7 @@ TensorFlow backend preview exports. (13 modules, 8522 lines)
 
 ### `torchlens.backends.tinygrad`
 
-tinygrad backend preview. (10 modules, 4482 lines)
+tinygrad backend preview. (11 modules, 4548 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1472,13 +1477,14 @@ tinygrad backend preview. (10 modules, 4482 lines)
 | `_raw_labels` | Resolve materialized tinygrad op labels back to their raw capture labels. | 37 |
 | `_realize_once` | Realize-once capture: every recorded tinygrad value comes from one evaluation. | 379 |
 | `_rules` | tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants. | 323 |
+| `_spellings` | tinygrad's op spelling list (see :mod:'torchlens.backends._op_spelling'). | 66 |
 | `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 171 |
 | `backend` | UOp-snapshot tinygrad backend preview. | 3120 |
 | `capabilities` | Registry-backed capability exports for the tinygrad backend preview. | 38 |
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (138 modules, 59358 lines)
+Torch backend implementation package for TorchLens capture. (139 modules, 59410 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1579,6 +1585,7 @@ Torch backend implementation package for TorchLens capture. (138 modules, 59358 
 | `_session_cleanup` | Session-end tensor metadata cleanup for torch capture. | 759 |
 | `_session_forwards` | Session-scoped ''forward'' wrappers for non-root submodules. | 293 |
 | `_sources_lazy` | Lazy source-tensor logging for a lean plain ''tl.module'' read. | 69 |
+| `_spellings` | Torch's op spelling list (see :mod:'torchlens.backends._op_spelling'). | 52 |
 | `_state_bytes` | Byte views of tensor state: the whole-storage snapshot and the byte-exact state compare. | 102 |
 | `_storage_exports` | Copy out pending payload aliases before a tensor's storage is handed to the host zero-copy. | 291 |
 | `_storage_overlap` | Storage-overlap geometry for mutation-label propagation (pure, no capture state). | 191 |
@@ -1727,7 +1734,7 @@ Compatibility adapters for TorchLens 2.37 and earlier. (5 modules, 2035 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (38 modules, 12819 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (41 modules, 13618 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1740,7 +1747,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_compare_values` | Value helpers behind the label-joined ''tl.debug.compare'' rows. | 147 |
 | `_compile_counter` | Count Dynamo compilation events around a block of user code. | 175 |
 | `_cost` | Forward-cost ranking helpers for TorchLens traces. | 182 |
-| `_cross_backend` | Module-level comparison of two traces, written for any backend pair. | 310 |
+| `_cross_backend` | Module-level comparison of two traces, written for any backend pair. | 313 |
 | `_determinism` | check_determinism: one controlled repeatability verdict, cost never hidden. | 610 |
 | `_dtype_range` | Saved-activation numeric range and precision diagnostics. | 404 |
 | `_dynamo_explain_shapes` | Version-neutral shapes of ''torch._dynamo.explain'' results (pure, no torch access). | 130 |
@@ -1764,11 +1771,14 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_rerun` | Isolated reruns: run the same forward more than once under controlled state. | 225 |
 | `_unit_axis` | Pick the unit (feature) axis of an op's activation for ''dead_neurons''. | 105 |
 | `_xb_calls` | Read a trace's recorded module calls into a backend-neutral form for pairing. | 299 |
+| `_xb_op_place` | Op-level placement inside the first differing module call (slice 3). | 248 |
+| `_xb_op_scope` | The ops of one paired module call on each side, read for op-level placement. | 218 |
+| `_xb_op_walk` | The op walk inside one paired module call: structural candidates and brackets. | 298 |
 | `_xb_pairing` | Pair the module calls of two traces without looking at any value. | 241 |
 | `_xb_refusals` | Typed refusals of the module-level comparison in ''tl.debug''. | 56 |
-| `_xb_report` | The two public answers of the module-level comparison: a Report and a first row. | 233 |
+| `_xb_report` | The two public answers of the module-level comparison: a Report and a first row. | 236 |
 | `_xb_tolerance` | Tolerance policy for comparing two recorded values in ''tl.debug'' comparisons. | 191 |
-| `_xb_values` | Compare the recorded values of one paired module call. | 251 |
+| `_xb_values` | Compare the recorded values of one paired module call. | 280 |
 
 ### `torchlens.debug._checks`
 
