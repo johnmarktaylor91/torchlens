@@ -788,16 +788,22 @@ class _EquinoxListOwner(eqx.Module):
 
 
 def test_jax_equinox_modules_in_a_list_field_are_discovered() -> None:
-    """Modules in a list field get ``field.index`` addresses, calls and their own params."""
+    """Modules in a list field get ``field.index`` addresses under a ``field`` container.
+
+    The container mirrors torch's ModuleList and NNX's ``nnx.List``: it is named after the
+    field and typed ``list``, so the dotted address tree has every parent it names.
+    """
 
     keys = jax.random.split(jax.random.PRNGKey(3), 2)
     model = _EquinoxListOwner([_EquinoxListBlock(eqx.nn.Linear(3, 3, key=key)) for key in keys])
     trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
 
     addresses = {module.address for module in trace.modules}
-    assert {"blocks.0", "blocks.0.fc", "blocks.1", "blocks.1.fc"} <= addresses
-    assert trace.modules["self"].address_children == ["blocks.0", "blocks.1"]
-    assert trace.modules["blocks.1"].address_parent == "self"
+    assert {"blocks", "blocks.0", "blocks.0.fc", "blocks.1", "blocks.1.fc"} <= addresses
+    assert trace.modules["self"].address_children == ["blocks"]
+    assert trace.modules["blocks"].class_name == "list"
+    assert trace.modules["blocks"].address_children == ["blocks.0", "blocks.1"]
+    assert trace.modules["blocks.1"].address_parent == "blocks"
     assert {param.module_address for param in trace.modules["blocks.1.fc"].params} == {
         "blocks.1.fc"
     }
