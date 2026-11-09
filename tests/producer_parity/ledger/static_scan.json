@@ -8148,7 +8148,7 @@
   "field": "parents",
   "file": "torchlens/debug/_xb_op_walk.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 11,
   "via_getattr": false
  },
  {

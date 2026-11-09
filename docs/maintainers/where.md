@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1772 modules, 709042 lines, 0 modules without a docstring.
+85 packages, 1772 modules, 709131 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -67,7 +67,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 705 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2035 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 41 | 13394 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 41 | 13483 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 423 |
 | `torchlens.errors` | Public TorchLens exception classes. | 6 | 1589 |
@@ -1734,7 +1734,7 @@ Compatibility adapters for TorchLens 2.37 and earlier. (5 modules, 2035 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (41 modules, 13394 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (41 modules, 13483 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1771,9 +1771,9 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_rerun` | Isolated reruns: run the same forward more than once under controlled state. | 225 |
 | `_unit_axis` | Pick the unit (feature) axis of an op's activation for ''dead_neurons''. | 105 |
 | `_xb_calls` | Read a trace's recorded module calls into a backend-neutral form for pairing. | 265 |
-| `_xb_op_place` | Op-level placement inside the first differing module call (slice 3). | 216 |
-| `_xb_op_scope` | The ops of one paired module call on each side, read for op-level placement. | 207 |
-| `_xb_op_walk` | The op walk inside one paired module call: structural candidates and brackets. | 233 |
+| `_xb_op_place` | Op-level placement inside the first differing module call (slice 3). | 226 |
+| `_xb_op_scope` | The ops of one paired module call on each side, read for op-level placement. | 221 |
+| `_xb_op_walk` | The op walk inside one paired module call: structural candidates and brackets. | 298 |
 | `_xb_pairing` | Pair the module calls of two traces without looking at any value. | 241 |
 | `_xb_refusals` | Typed refusals of the module-level comparison in ''tl.debug''. | 56 |
 | `_xb_report` | The two public answers of the module-level comparison: a Report and a first row. | 236 |
