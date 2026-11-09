@@ -120,6 +120,9 @@ def _value_delta(
 def _compare_coverage(rows: list[dict[str, Any]]) -> str:
     """Return the compare card's coverage line: compared vs skipped, and why."""
 
+    # Moved verbatim from _graph.py (cognitive 19 there too): one pass that counts compared,
+    # aligned and skipped rows and words them; splitting it would scatter one sentence.
+
     compared = sum(1 for row in rows if row["allclose"] is not None)
     aligned = sum(1 for row in rows if row["allclose"] is not None and row["reason"])
     skipped: dict[str, int] = {}

@@ -135,7 +135,9 @@ def read_calls(trace: Trace) -> list[CallInfo]:
                 label=str(call.label),
                 address=str(call.address),
                 call_index=int(call.call_index),
-                class_name=str(getattr(call, "class_name", "") or ""),
+                class_name=str(
+                    getattr(call, "class_name", "") or getattr(module, "class_name", "") or ""
+                ),
                 parent=parents[str(call.label)],
                 enter=enter,
                 exit=exit_,

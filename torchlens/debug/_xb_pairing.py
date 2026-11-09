@@ -135,6 +135,25 @@ def _zip_group(
     return pairs, calls_a[count:]
 
 
+def _pair_groups(
+    groups: dict[tuple[str, str], list[CallInfo]], pool_b: list[CallInfo]
+) -> tuple[list[CallPair], list[CallInfo]]:
+    """Zip each keyed side-a group with the side-b calls at its target address."""
+
+    by_target: dict[str, list[CallInfo]] = {}
+    for call in pool_b:
+        by_target.setdefault(call.address, []).append(call)
+    pairs: list[CallPair] = []
+    rest: list[CallInfo] = []
+    for (kind, target), calls_a in groups.items():
+        alignment = ASSERTED if kind == ASSERTED else SUPPORTED
+        note = "" if kind == SUPPORTED else f"{kind}: {calls_a[0].address} ~ {target}"
+        found, rest_a = _zip_group(calls_a, by_target.get(target, []), alignment, note)
+        pairs.extend(found)
+        rest.extend(rest_a)
+    return pairs, rest
+
+
 def _match_pool(
     pool_a: list[CallInfo],
     pool_b: list[CallInfo],
@@ -144,26 +163,35 @@ def _match_pool(
     """Match one pool; return pairs, unpaired a, unpaired b, ambiguous a."""
 
     keys_a, ambiguous = _keys(pool_a, pool_b, sides, module_map)
-    by_target: dict[str, list[CallInfo]] = {}
-    for call in pool_b:
-        by_target.setdefault(call.address, []).append(call)
     groups: dict[tuple[str, str], list[CallInfo]] = {}
-    for call in pool_a:
-        if call.address in keys_a:
-            groups.setdefault(keys_a[call.address], []).append(call)
-    pairs: list[CallPair] = []
-    left_a = [call for call in pool_a if call.address not in keys_a]
-    for (kind, target), calls_a in groups.items():
-        alignment = ASSERTED if kind == ASSERTED else SUPPORTED
-        note = "" if kind == SUPPORTED else f"{kind}: {calls_a[0].address} ~ {target}"
-        found, rest_a = _zip_group(calls_a, by_target.get(target, []), alignment, note)
-        pairs.extend(found)
-        left_a.extend(rest_a)
+    for call in (call for call in pool_a if call.address in keys_a):
+        groups.setdefault(keys_a[call.address], []).append(call)
+    pairs, rest_a = _pair_groups(groups, pool_b)
+    left_a = [call for call in pool_a if call.address not in keys_a] + rest_a
     used_b = {pair.b.label for pair in pairs if pair.b is not None}
     left_b = [call for call in pool_b if call.label not in used_b]
     ambiguous_calls = [call for call in left_a if call.address in ambiguous]
     left_a = [call for call in left_a if call.address not in ambiguous]
     return pairs, left_a, left_b, ambiguous_calls
+
+
+def _unpaired_rows(
+    left_a: list[CallInfo], left_b: list[CallInfo], ambiguous: list[CallInfo]
+) -> list[CallPair]:
+    """Rows for the calls one pool left without a partner (coverage gaps)."""
+
+    note = "normalized address matches several"
+    return [
+        *(CallPair(call, None, AMBIGUOUS, note) for call in ambiguous),
+        *(CallPair(call, None, ABSENT, "") for call in left_a),
+        *(CallPair(None, call, ABSENT, "") for call in left_b),
+    ]
+
+
+def _lift(calls: list[CallInfo], side: _Side) -> list[CallInfo]:
+    """The children of unpaired calls, handed up to the parent's pool."""
+
+    return [kid for call in calls for kid in side.children.get(call.label, [])]
 
 
 def _pair_under(
@@ -182,17 +210,10 @@ def _pair_under(
         pairs, left_a, left_b, ambiguous = _match_pool(pool_a, pool_b, sides, module_map)
         for pair in pairs:
             rows.append(pair)
-            label_a = pair.a.label if pair.a is not None else None
-            label_b = pair.b.label if pair.b is not None else None
-            rows.extend(_pair_under(label_a, label_b, sides, module_map))
-        note = "normalized address matches several"
-        rows.extend(CallPair(call, None, AMBIGUOUS, note) for call in ambiguous)
-        rows.extend(CallPair(call, None, ABSENT, "") for call in left_a)
-        rows.extend(CallPair(None, call, ABSENT, "") for call in left_b)
-        unpaired_a = left_a + ambiguous
-        lifted_a = [kid for call in unpaired_a for kid in side_a.children.get(call.label, [])]
-        lifted_b = [kid for call in left_b for kid in side_b.children.get(call.label, [])]
-        pool_a, pool_b = lifted_a, lifted_b
+            if pair.a is not None and pair.b is not None:
+                rows.extend(_pair_under(pair.a.label, pair.b.label, sides, module_map))
+        rows.extend(_unpaired_rows(left_a, left_b, ambiguous))
+        pool_a, pool_b = _lift(left_a + ambiguous, side_a), _lift(left_b, side_b)
     return rows
 
 

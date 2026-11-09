@@ -136,15 +136,17 @@ def _refuse_batch_mismatch(
             )
 
 
-def _skipped_before(
-    trace_a: Trace, pair: CallPair, rows: list[dict[str, Any]], pairs: list[CallPair]
-) -> str:
+_Table = tuple[list[dict[str, Any]], list[CallPair]]
+
+
+def _skipped_before(trace_a: Trace, pair: CallPair, table: _Table) -> str:
     """Side-a ops between the last agreeing paired module exit and this module's entry."""
 
-    assert pair.a is not None
+    if pair.a is None:
+        return ""
     exits = [
         p.a.exit
-        for r, p in zip(rows, pairs, strict=True)
+        for r, p in zip(*table, strict=True)
         if p.a is not None and r["outcome"] == EQUAL and p.a.exit < pair.a.enter
     ]
     start = max(exits, default=-1) + 1
@@ -157,12 +159,7 @@ def _skipped_before(
 
 
 def _worded(
-    row: dict[str, Any],
-    trace_a: Trace,
-    pair: CallPair,
-    rows: list[dict[str, Any]],
-    pairs: list[CallPair],
-    randomness: str,
+    row: dict[str, Any], pair: CallPair, trace_a: Trace, table: _Table, randomness: str
 ) -> dict[str, Any]:
     """Prefix the row's reason with what the input check allows it to claim."""
 
@@ -170,7 +167,7 @@ def _worded(
         lead = f"{_LOCALIZED} (inputs agree, output differs)"
     else:
         state = "inputs already differ" if row["inputs_agree"] is False else "inputs not compared"
-        lead = f"{_FIRST_OBSERVED} ({state}); {_skipped_before(trace_a, pair, rows, pairs)}"
+        lead = f"{_FIRST_OBSERVED} ({state}); {_skipped_before(trace_a, pair, table)}"
     parts = [lead, row["reason"], randomness]
     return {**row, "reason": "; ".join(part for part in parts if part)}
 
@@ -189,7 +186,7 @@ def module_first_divergence(
     _refuse_unanswerable(rows, pairs, facts)
     for row, pair in zip(rows, pairs, strict=True):
         if row["outcome"] == DIFFERENT:
-            return _worded(row, trace_a, pair, rows, pairs, facts["randomness"])
+            return _worded(row, pair, trace_a, (rows, pairs), facts["randomness"])
     paired = [row for row in rows if row["alignment"] in (SUPPORTED, ASSERTED)]
     if not any(row["outcome"] == EQUAL for row in paired):
         refuse_inconclusive(

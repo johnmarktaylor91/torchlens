@@ -42,6 +42,23 @@ _CHANNELS_LAST = "channels-last to channels-first"
 
 
 @dataclass(frozen=True)
+class ValueOptions:
+    """How values are judged for one comparison.
+
+    Parameters
+    ----------
+    cross_backend:
+        Whether the two runs come from different backends.
+    rtol, atol:
+        User tolerance overrides, or ``None`` for the policy default.
+    """
+
+    cross_backend: bool
+    rtol: float | None
+    atol: float | None
+
+
+@dataclass(frozen=True)
 class ValueResult:
     """What the values of one paired call showed.
 
@@ -76,7 +93,7 @@ def read_values(trace: Trace, labels: tuple[str, ...]) -> list[tuple[Any, str | 
     """Return ``(tensor or None, unavailable reason)`` for each op label."""
 
     codec = get_payload_codec(str(trace._provenance_backend))
-    values = []
+    values: list[tuple[Any, str | None]] = []
     for label in labels:
         op = _op_from_label(trace, label)
         if op is None:
@@ -136,13 +153,7 @@ def _align_shapes(
 
 
 def compare_leaf(
-    a: torch.Tensor,
-    b: torch.Tensor,
-    *,
-    justified: bool,
-    cross_backend: bool,
-    rtol: float | None,
-    atol: float | None,
+    a: torch.Tensor, b: torch.Tensor, *, justified: bool, options: ValueOptions
 ) -> ValueResult:
     """Compare one pair of recorded tensors under the tolerance policy."""
 
@@ -152,7 +163,7 @@ def compare_leaf(
         return ValueResult(**{**shaped.__dict__, "dtype_match": dtype_match})
     a_s, b_s, transform = shaped
     tol: Tolerance = tolerance_for(
-        a.dtype, b.dtype, cross_backend=cross_backend, rtol=rtol, atol=atol
+        a.dtype, b.dtype, cross_backend=options.cross_backend, rtol=options.rtol, atol=options.atol
     )
     aligned = _align_for_compare(a_s, b_s)
     if aligned is None:  # pragma: no cover - shapes were made equal above

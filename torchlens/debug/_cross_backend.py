@@ -29,6 +29,7 @@ from ._xb_values import (
     NOT_EVALUATED,
     SHAPE_INCOMPATIBLE,
     UNAVAILABLE,
+    ValueOptions,
     ValueResult,
     combine,
     compare_leaf,
@@ -90,9 +91,7 @@ def _boundary(
     labels: tuple[tuple[str, ...], tuple[str, ...]],
     *,
     justified: bool,
-    cross_backend: bool,
-    rtol: float | None,
-    atol: float | None,
+    options: ValueOptions,
 ) -> ValueResult:
     """Compare the recorded values at one paired boundary (outputs or inputs)."""
 
@@ -109,16 +108,7 @@ def _boundary(
         if value_a is None or value_b is None:
             results.append(ValueResult(UNAVAILABLE, reason=f"a={why_a or 'ok'}; b={why_b or 'ok'}"))
             continue
-        results.append(
-            compare_leaf(
-                value_a,
-                value_b,
-                justified=justified,
-                cross_backend=cross_backend,
-                rtol=rtol,
-                atol=atol,
-            )
-        )
+        results.append(compare_leaf(value_a, value_b, justified=justified, options=options))
     return combine(results, disclosure)
 
 
@@ -165,14 +155,10 @@ def _row(
     row = _base_row(pair, traces[0])
     if pair.alignment not in _PAIRED or pair.a is None or pair.b is None:
         return row, None
-    options = {
-        "justified": layout_justified(pair.a.class_name, pair.b.class_name),
-        "cross_backend": cross_backend,
-        "rtol": tol[0],
-        "atol": tol[1],
-    }
-    out = _boundary(traces, (pair.a.outputs, pair.b.outputs), **options)
-    inputs = _boundary(traces, (pair.a.inputs, pair.b.inputs), **options)
+    justified = layout_justified(pair.a.class_name, pair.b.class_name)
+    options = ValueOptions(cross_backend, tol[0], tol[1])
+    out = _boundary(traces, (pair.a.outputs, pair.b.outputs), justified=justified, options=options)
+    inputs = _boundary(traces, (pair.a.inputs, pair.b.inputs), justified=justified, options=options)
     row.update(
         {
             "dtype_match": out.dtype_match,
@@ -195,7 +181,8 @@ def _order_key(pair: CallPair) -> tuple[int, int, int, int]:
     """Side a's exit order first, then side-b-only calls in side b's exit order."""
 
     call = pair.a if pair.a is not None else pair.b
-    assert call is not None
+    if call is None:  # a pair always has at least one side
+        return (2, 0, 0, 0)
     return (0 if pair.a is not None else 1, call.exit, -call.depth, call.enter)
 
 
