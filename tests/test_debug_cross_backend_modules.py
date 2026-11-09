@@ -185,9 +185,7 @@ def test_correct_decomposed_port_agrees_with_normalized_addresses() -> None:
     _assert_evidence_rule(frame)
     paired = frame[frame["alignment"] == "supported"]
     assert set(paired["outcome"]) == {"equal"}
-    assert (paired["rtol"] == 1e-4).all() and (paired["atol"] > 0.0).all()
-    floor = 10 * torch.finfo(torch.float32).eps * float(x.double().square().mean().sqrt())
-    assert frame.loc[frame["op"] == "self:1", "atol"].item() == pytest.approx(floor)
+    assert (paired["rtol"] == 1e-4).all() and (paired["atol"] == 0.0).all()
     assert frame.attrs["value_diverged"] == 0
     assert frame.loc[frame["op"] == "1.fc:1", "module_b"].item() == "layers.1.fc:1"
     assert frame.attrs["coverage"]["a"]["unpaired"] == 0
@@ -979,3 +977,45 @@ def test_leaf_plan(counts: tuple[int, int], ordered: tuple[bool, bool], expected
         assert plan.outcome == "unavailable" and plan.reason == expected  # type: ignore[union-attr]
     else:
         assert plan == expected
+
+
+class _ZeroWithMask(nn.Module):
+    """Returns zeros shaped like ``x`` plus ``shift``, reading a mask-like second input."""
+
+    def __init__(self, shift: float = 0.0) -> None:
+        """Hold the bug shift."""
+
+        super().__init__()
+        self.shift = shift
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """``x * 0 + (mask * 0).sum() + shift``: all zero on the reference."""
+
+        return x * 0.0 + (mask * 0.0).sum() + self.shift
+
+
+class _MaskNet(nn.Module):
+    """Builds a causal-mask-like tensor of huge finite values and feeds it beside ``x``."""
+
+    def __init__(self, shift: float = 0.0) -> None:
+        """Hold the zero module."""
+
+        super().__init__()
+        self.zero = _ZeroWithMask(shift)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """``zero(x, mask)`` with ``mask`` full of ``-3e38``."""
+
+        return self.zero(x, torch.full_like(x, -3e38))
+
+
+def test_a_mask_like_input_cannot_inflate_the_atol_floor() -> None:
+    """On an all-zero output the floor scales by the smallest input rms, never the mask's."""
+
+    x = torch.randn(2, 4)
+    trace_a, trace_b = _traces(_MaskNet(), _MaskNet(shift=1e-3), x)
+    row = _frame(trace_a, trace_b).set_index("op").loc["zero:1"]
+    assert row["outcome"] == "different", row["reason"]
+    floor = 10 * torch.finfo(torch.float32).eps * float(x.double().square().mean().sqrt())
+    assert row["atol"] == pytest.approx(floor)
+    assert tl.debug.first_divergence(trace_a, trace_b)["op"] == "zero:1"  # type: ignore[index]
