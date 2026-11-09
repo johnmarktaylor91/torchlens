@@ -219,7 +219,7 @@ def test_mlx_list_container_and_parameterless_modules_are_discovered() -> None:
 
     parameterless = tl.trace(MLXParameterless(), _input(), backend="mlx")
     assert [module.address for module in parameterless.modules] == ["self"]
-    assert parameterless[tl.in_module("self")].labels
+    assert parameterless.modules["self"].calls.get(1).ops
     assert check_metadata_invariants(parameterless) is True
 
 

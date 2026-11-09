@@ -72,4 +72,5 @@ def strip_op_root_frames(ops: Iterable[Any]) -> None:
         op_log.module = op_log.modules[-1] if op_log.modules else None
         call_stack = getattr(op_log, "_module_context_call_stack", None)
         if call_stack:
-            op_log._module_context_call_stack = list(strip_root_frames(call_stack))
+            # Entries keep their stored form (raw pairs or labels): site keys recompute from them.
+            op_log._module_context_call_stack = list(without_root_frames(call_stack))

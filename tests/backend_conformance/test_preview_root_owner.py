@@ -198,8 +198,8 @@ def _root_call_ops(trace: Any) -> set[str]:
     return {label for index in root.calls for label in root.calls.get(index).ops}
 
 
-def test_torch_top_level_ops_carry_no_owner() -> None:
-    """The reference shape: torch's top-level ops have no module and no ``self`` frame."""
+def _torch_trace() -> Any:
+    """Torch trace of a linear submodule followed by top-level tanh and exp."""
 
     import torch
 
@@ -211,7 +211,13 @@ def test_torch_top_level_ops_carry_no_owner() -> None:
         def forward(self, x):
             return torch.exp(torch.tanh(self.lin(x)))
 
-    trace = tl.trace(Chain(), torch.ones(1, 4))
+    return tl.trace(Chain(), torch.ones(1, 4))
+
+
+def test_torch_top_level_ops_carry_no_owner() -> None:
+    """The reference shape: torch's top-level ops have no module and no ``self`` frame."""
+
+    trace = _torch_trace()
     top, inner = _split(trace)
     assert all(op.module is None and tuple(op.modules) == () for op in top)
     assert all(str(frame).split(":")[0] != "self" for op in inner for frame in op.modules)
@@ -302,3 +308,18 @@ def test_raw_stack_without_the_root_frame_is_refused(
     with pytest.raises((MetadataInvariantError, ValueError)):
         trace = _TRACES[backend]()
         check_metadata_invariants(trace)
+
+
+def _selects_a_top_level_op(trace: Any) -> bool:
+    """Whether post-hoc ``tl.in_module("self")`` selects any top-level compute op."""
+
+    top, _inner = _split(trace)
+    names = {name for op in top for name in (op.label, op.layer_label)}
+    return bool(names & set(trace[tl.in_module("self")].labels))
+
+
+@pytest.mark.parametrize("backend", _params(_BACKENDS))
+def test_in_module_self_selects_what_it_selects_on_torch(backend: str) -> None:
+    """Post hoc, ``tl.in_module("self")`` reads op frames, so preview matches torch."""
+
+    assert _selects_a_top_level_op(_TRACES[backend]()) == _selects_a_top_level_op(_torch_trace())

@@ -361,7 +361,7 @@ def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
     )
     by_name = {op.func_name: op for op in trace._layer_list if not op.is_input}
     relu_op = by_name["relu"]
-    assert relu_op.modules, "fixture must be module-shaped (ops carry module frames)"
+    assert any(op.modules for op in trace._layer_list), "fixture must carry submodule frames"
     saved = {
         op.label
         for op in trace._layer_list
