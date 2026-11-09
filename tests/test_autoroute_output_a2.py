@@ -203,7 +203,7 @@ def test_multi_output_selects_logits_and_fails_closed_on_ambiguity() -> None:
 
 
 def test_hf_text_decode_uses_attached_tokenizer() -> None:
-    """HF text style decodes argmax token ids with the attached tokenizer."""
+    """HF text style decodes the top next tokens with the attached tokenizer."""
 
     model = _Classifier(torch.tensor([[[0.0, 5.0], [6.0, 1.0]]])).eval()
     model._torchlens_output_tokenizer = _Tokenizer()
@@ -212,8 +212,22 @@ def test_hf_text_decode_uses_attached_tokenizer() -> None:
 
     assert trace.provenance.output_postprocessor is not None
     assert trace.provenance.output_postprocessor.style == "hf_text"
+    probs = torch.softmax(torch.tensor([6.0, 1.0]), dim=-1)
     assert trace._decoded_output == [
-        {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}
+        {
+            "batch_item": 0,
+            "rank": 1,
+            "token_id": 0,
+            "text": "tok0",
+            "prob": pytest.approx(float(probs[0])),
+        },
+        {
+            "batch_item": 0,
+            "rank": 2,
+            "token_id": 1,
+            "text": "tok1",
+            "prob": pytest.approx(float(probs[1])),
+        },
     ]
 
 

@@ -6,7 +6,7 @@ schema_version: 1
 
 context:
   name: torchlens
-  version: "3.0.2"
+  version: "3.0.3"
 
 package:
   name: ${{ name }}

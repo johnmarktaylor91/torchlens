@@ -1,6 +1,6 @@
 # Learn TorchLens
 
-Eleven notebooks, in order. Start with `00_quickstart.ipynb` (five minutes). Each later notebook
+Twelve notebooks, in order. Start with `00_quickstart.ipynb` (five minutes). Each later notebook
 adds one idea and names the earlier ones it uses. After setup, each runs on a laptop CPU in about
 a minute on tiny local models from `learn_models.py` beside the notebooks; no model weights are
 downloaded.
@@ -37,6 +37,7 @@ Rungs: 0 one call; 1 read like a dict; 2 one more keyword on the same call; 3 co
 | 08 | `08_semantic_shortcuts.ipynb` | 3 to 5 | You keep typing "head 3's query" |
 | 09 | `09_scale.ipynb` | 4 | Thousands of batches |
 | 10 | `10_beyond_one_forward.ipynb` | 4 to 5 | Your field's experiment |
+| 11 | `11_dynamic_graphs.ipynb` | 4 | The graph changes between forwards |
 
 ## Run in Colab
 

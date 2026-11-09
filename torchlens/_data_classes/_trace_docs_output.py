@@ -112,6 +112,12 @@ DOCS: dict[str, str] = {
         decode produced. Naming a ``style``, a ``head`` or a ``tokenizer``
         decodes again from the retained output tensors, the persisted
         ``output_id2label`` and the ImageNet bank, never ``decoded_output``.
+        A classification decode returns ``{"kind": "batch_topk", "rows": ...}``
+        with ``batch_item``, ``rank``, ``class_index``, ``label`` and ``prob``
+        rows; a text decode (``"hf_text"``) returns the top next tokens at the
+        last position as a list of ``batch_item``, ``rank``, ``token_id``,
+        ``text`` and ``prob`` rows, ``prob`` being the softmax over the
+        vocabulary at that position.
         
         Parameters
         ----------
@@ -126,7 +132,7 @@ DOCS: dict[str, str] = {
             ``"logits"``, ``"0"`` or ``"0.logits"``.
         tokenizer:
             Tokenizer with a ``decode`` method, used by ``"hf_text"``; without
-            one the rows carry the argmax ``token_ids`` and ``text`` is ``None``.
+            one the rows carry each ``token_id`` and ``text`` is ``None``.
         
         Returns
         -------
@@ -146,10 +152,15 @@ DOCS: dict[str, str] = {
     "output_table": (
         """Return decoded output as a batch top-k dataframe.
         
+        A classifier gives its top ``k`` classes per batch item. A language
+        model (a text decode) gives its top ``k`` next tokens at the last
+        position per batch item, with each token's probability under the
+        softmax over the vocabulary at that position.
+        
         Parameters
         ----------
         k:
-            Maximum number of class rows per batch item.
+            Maximum number of rows (classes, or next tokens) per batch item.
         batch_items:
             ``None`` returns all captured batch items, an integer returns the
             first ``N`` batch items, and a sequence selects explicit batch item
@@ -162,12 +173,15 @@ DOCS: dict[str, str] = {
         Returns
         -------
         pd.DataFrame
-            Table with columns ``batch_item``, ``rank``, ``label``, and ``prob``.
+            Table with columns ``batch_item``, ``rank``, ``label``, and ``prob``
+            for a classification decode, and ``batch_item``, ``rank``,
+            ``token_id``, ``text`` and ``prob`` for a text decode (``text`` is
+            ``None`` when no tokenizer was available).
         
         Raises
         ------
         ValueError
-            If classification logits were not decoded or cannot be recomputed.
+            If the output logits were not decoded or cannot be recomputed.
         """
     ),
     "show": (

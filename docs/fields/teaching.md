@@ -8,7 +8,7 @@ The lists below start with drawing and inspecting, then move to the tutorial not
 
 - [See the graph and inspect any operation](../field-guide/see_and_inspect.md): one call draws every operation the forward ran, including ones no module returns; one lookup gives any operation's output, module and arguments.
 - [Visualize notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/quick/visualize.ipynb): render a model graph and learn to read the layer labels.
-- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): eleven short notebooks on laptop-sized models, each one rung up from the last. Notebook 01 is "capture and look", 02 reads one activation like a dict, 03 draws the graph when the summary is too long to read. They run on a laptop CPU in about a minute each, or in the browser on Colab, so they work as lab exercises.
+- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): twelve short notebooks on laptop-sized models, each one rung up from the last. Notebook 01 is "capture and look", 02 reads one activation like a dict, 03 draws the graph when the summary is too long to read. They run on a laptop CPU in about a minute each, or in the browser on Colab, so they work as lab exercises.
 - [TorchLens in 10 minutes](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/torchlens_in_10_minutes.ipynb): trace, intervene, run a backward pass, see control flow drawn as IF, THEN and ELSE, and compare two traces.
 
 ## Drawing the graph

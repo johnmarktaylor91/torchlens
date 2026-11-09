@@ -60,6 +60,7 @@ STORED_OUTPUT_NOTEBOOKS = (
     "notebooks/learn/08_semantic_shortcuts.ipynb",
     "notebooks/learn/09_scale.ipynb",
     "notebooks/learn/10_beyond_one_forward.ipynb",
+    "notebooks/learn/11_dynamic_graphs.ipynb",
     "examples/workflows/multi_call_bundle.ipynb",
     "examples/workflows/paired_prompt_patching.ipynb",
     "examples/methods/jacobian_lens_recipe.ipynb",
