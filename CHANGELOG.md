@@ -18,6 +18,18 @@
   module that returns its input unchanged compares through the returned value. `rtol=` and
   `atol=` now default to `None`, which on one backend means `1e-5` and `1e-8` as before.
 
+### Changed
+
+- **backends**: the preview backends (MLX, Paddle, TensorFlow, JAX, tinygrad) number op labels
+  the way PyTorch does. Input ops are `input_1`, `input_2` with no step number (MLX and Paddle
+  called them `input.arg_0`), and the step count starts at 1 on the first op after the inputs, so
+  an op whose graph matches a PyTorch trace gets the same label (`linear_1_1:1`, not
+  `linear_1_2:1`). Short labels drop the step (`linear_1:1`) and `step_index` counts ops as on
+  PyTorch. This renumbers the labels in preview traces and in preview artifacts saved from now
+  on. Preview artifacts saved before this change still load and keep the labels they were saved
+  with (loading does not renumber), so a label read from an old artifact can be one step higher
+  than the same op's label in a new capture.
+
 ### Fixed
 
 - **debug**: `tl.debug.compare` and `tl.debug.first_divergence` no longer join two traces from
