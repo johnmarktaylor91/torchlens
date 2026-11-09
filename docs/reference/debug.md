@@ -711,11 +711,13 @@ producer ran. A saved and reloaded pair gives the same answer with no live model
 ```
 
 **Which backends.** A backend joins module pairing once its recorded module outputs pass
-TorchLens's conformance checks; PyTorch and MLX are admitted. Any other backend is refused with
-`backend_unsupported`, and the message names the admitted backends. A module call that returns
+TorchLens's conformance checks; PyTorch, MLX, Paddle, TensorFlow and JAX (Equinox and Flax NNX
+modules) are admitted. Any other backend, tinygrad included, is refused with
+`backend_unsupported`, and the message names the admitted backends. JAX module calls made inside
+`jax.vmap` or another transform are not recorded, so compare an unbatched JAX call. A module call that returns
 its input unchanged (an identity, or dropout in eval mode) is compared through the returned
-value: PyTorch logs an identity op inside the call, MLX records the returned input's op, and both
-read as that call's output. A call that returns two or more of its inputs unchanged reads as
+value: PyTorch logs an identity op inside the call, the other admitted backends record the
+returned input's op, and both read as that call's output. A call that returns two or more of its inputs unchanged reads as
 `boundary unrecorded`, because the order it returned them in is not recorded. Comparing works on the machine that captured both traces;
 nothing here promises reading one backend's saved trace on a machine without that backend.
 
