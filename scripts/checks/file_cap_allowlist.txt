@@ -724,7 +724,7 @@ torchlens/backends/_finalize.py::attach_object_module_logs	65
 torchlens/backends/_finalize.py::finalize_single_pass_trace	150
 torchlens/backends/_finalize.py::new_preview_function_trace	100
 torchlens/backends/_finalize.py::populate_object_module_build_data	72
-torchlens/backends/jax/backend.py	4329
+torchlens/backends/jax/backend.py	4328
 torchlens/backends/jax/backend.py::JAXBackend._append_event	173
 torchlens/backends/jax/backend.py::JAXBackend._attach_derived_grads	170
 torchlens/backends/jax/backend.py::JAXBackend._build_jax_recurrence_grouping_graph	71
@@ -732,10 +732,10 @@ torchlens/backends/jax/backend.py::JAXBackend._builtin_container_spec	63
 torchlens/backends/jax/backend.py::JAXBackend._derive_intermediate_grads_zero_tap	177
 torchlens/backends/jax/backend.py::JAXBackend._emit_equations	87
 torchlens/backends/jax/backend.py::JAXBackend._emit_region_capture	122
-torchlens/backends/jax/backend.py::JAXBackend._finish_trace	296
+torchlens/backends/jax/backend.py::JAXBackend._finish_trace	294
 torchlens/backends/jax/backend.py::JAXBackend._populate_pytree_module_build_data	82
 torchlens/backends/jax/backend.py::JAXBackend._validate_jax_regions	70
-torchlens/backends/jax/backend.py::JAXBackend.capture_trace	335
+torchlens/backends/jax/backend.py::JAXBackend.capture_trace	331
 torchlens/backends/jax/backend.py::_experimental_per_op_boundary_vjp_oracle	79
 torchlens/backends/jax/backend.py::_finite_difference_directional_check	83
 torchlens/backends/jax/backend.py::_jax_intermediate_oracle_passes	62
@@ -749,7 +749,7 @@ torchlens/backends/jax/jaxpr.py::_region_metadata	100
 torchlens/backends/jax/jaxpr.py::_replay_while_decision	63
 torchlens/backends/jax/jaxpr.py::interpret_closed_jaxpr_with_inlining	339
 torchlens/backends/jax/jaxpr.py::interpret_closed_jaxpr_with_inlining.interpret_inner	252
-torchlens/backends/jax/modules.py	986
+torchlens/backends/jax/modules.py	955
 torchlens/backends/jax/modules.py::_walk_equinox_modules	81
 torchlens/backends/jax/modules.py::_walk_nnx_modules	76
 torchlens/backends/jax/modules.py::equinox_param_logs	74
@@ -807,7 +807,7 @@ torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._record_cont
 torchlens/backends/tf/validation.py	1076
 torchlens/backends/tf/validation.py::_validate_self_consistency	85
 torchlens/backends/tf/validation.py::validate_tf_trace_detailed	80
-torchlens/backends/tinygrad/backend.py	3120
+torchlens/backends/tinygrad/backend.py	3070
 torchlens/backends/tinygrad/backend.py::TinygradBackend._append_event	176
 torchlens/backends/tinygrad/backend.py::TinygradBackend._attach_derived_grads	90
 torchlens/backends/tinygrad/backend.py::TinygradBackend._derive_intermediate_grads_no_realize	74
