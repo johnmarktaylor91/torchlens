@@ -1032,9 +1032,9 @@
         "tests/test_field_order_contract.py",
         "tests/test_indexing_coherence.py",
         "tests/test_io_scrub_policy.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_r18c_bridge_adapters.py",
-        "tests/test_record_field_policy.py",
-        "tests/test_strict_accessors.py"
+        "tests/test_record_field_policy.py"
       ],
       "torchlens/_data_classes/_module_accessor_filters.py": [
         "tests/surface_oracle/test_surface_oracle.py",
@@ -2146,9 +2146,9 @@
         "tests/behaviour/test_chunked_oracle.py",
         "tests/behaviour/test_hook_passes_restore.py",
         "tests/behaviour/test_hooks_oracle.py",
-        "tests/test_b2_sel_selector_doors.py",
         "tests/test_extract_fast_path.py",
         "tests/test_extract_text_fast_path.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_tvscope_clip_roundtrip.py"
       ],
       "torchlens/_extract_refusals.py": [
@@ -2158,7 +2158,7 @@
         "tests/behaviour/test_hooks_oracle.py",
         "tests/test_b2_sel_selector_doors.py",
         "tests/test_extract_fast_path.py",
-        "tests/test_extract_text_fast_path.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_tvscope_clip_roundtrip.py"
       ],
       "torchlens/_extraction/__init__.py": [
@@ -2181,7 +2181,7 @@
         "tests/behaviour/test_hooks_oracle.py",
         "tests/test_b2_sel_selector_doors.py",
         "tests/test_extract_fast_path.py",
-        "tests/test_extract_text_fast_path.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_tvscope_clip_roundtrip.py"
       ],
       "torchlens/_extraction/callable_identity.py": [
@@ -3143,9 +3143,9 @@
         "tests/test_io_platform_save_paths.py",
         "tests/test_io_secio_hardening.py",
         "tests/test_io_security.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_rf_ext_path.py",
-        "tests/test_tlspec_runnable_r75_envelope_path.py",
-        "tests/test_unpickle_c_path.py"
+        "tests/test_tlspec_runnable_r75_envelope_path.py"
       ],
       "torchlens/_io/payload_codec.py": [
         "tests/test_backend_registry.py",
@@ -5853,7 +5853,7 @@
         "tests/test_extract_fast_path.py",
         "tests/test_grind_b4_lane_p.py",
         "tests/test_io_scrub_policy.py",
-        "tests/test_record_field_policy.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_repr_fix_contracts.py",
         "tests/test_repr_selection_intervention.py"
       ],
@@ -11752,8 +11752,8 @@
         "tests/test_auto_capture.py",
         "tests/test_capopts_truth_stop_after.py",
         "tests/test_freeze_module.py",
-        "tests/test_node_modes.py",
         "tests/test_onramp.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_public_entry_refusal_codes.py",
         "tests/test_replayable_callers.py",
         "tests/test_viz_render_identity_oracle.py"
@@ -13595,7 +13595,7 @@
         "tests/test_repr_fix_contracts.py"
       ],
       "torchlens/receptive_field/_path.py": [
-        "tests/test_extract_fast_path.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_r19b_rf_gradient_verify.py",
         "tests/test_rf_ext_forward_walk.py",
         "tests/test_rf_ext_path.py",
