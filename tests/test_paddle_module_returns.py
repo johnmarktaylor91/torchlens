@@ -175,7 +175,7 @@ def test_pass_through_records_no_output_op(trace_and_actual: tuple[Any, dict[str
     assert list(call.output_ops) == []
     assert call.output_paths == ((),)
     with pytest.raises(MultiOutputModuleError):
-        trace.modules["ident"].out
+        _ = trace.modules["ident"].out
     (label,) = returned_op_labels(trace, "ident:1")
     np.testing.assert_allclose(_np(trace.layers[label].out), _np(actual["ident:1"]))
 
