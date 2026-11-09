@@ -94,6 +94,7 @@ from .._options import (
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from .._validation_shared import float_replay_tolerances
+from . import _module_return_probe as return_probe
 from ._closure_consts import _readable_closure_consts
 from ._perturbation_probes import _perturb_candidates
 from ._raw_relabel import (
@@ -713,16 +714,16 @@ class JAXBackend:
         trace._provenance_start_time = time.time()
         if use_pytree_module and module_tree is None:
             raise AssertionError("pytree_module mode requires JAX module metadata.")
-        closed_jaxpr, closure_consts, output = _derive_and_run(
-            model, args, static_argnums, module_tree if use_pytree_module else None
-        )
+        tree = module_tree if use_pytree_module else None
+        closed_jaxpr, closure_consts, output = _derive_and_run(model, args, static_argnums, tree)
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         result = interpret_closed_jaxpr_with_inlining(
-            closed_jaxpr,
+            return_probe.jaxpr_to_interpret(tree, closed_jaxpr),
             flat_args,
             jax_control_flow=cast(str, jax_control_flow),
             jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
         )
+        result = return_probe.split_outputs(result, tree)
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
@@ -734,19 +735,14 @@ class JAXBackend:
         self._emit_equations(trace, result)
         trace.jax_outvar_key_to_capture_index = dict(result.outvar_key_to_capture_index)
         self._mark_output_events(trace, result.outputs, output_leaf_paths, output_container_spec)
+        return_probe.note_return_labels(trace, tree)
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
-        if use_pytree_module:
-            if module_tree is None:
-                raise AssertionError("pytree_module mode requires JAX module metadata.")
-            self._attach_pytree_params(trace, module_tree)
+        if tree is not None:
+            self._attach_pytree_params(trace, tree)
         else:
             self._attach_params(trace, args[0] if args else None)
-        self._finish_trace(
-            trace,
-            module_tree if use_pytree_module else None,
-            result.equations,
-        )
+        self._finish_trace(trace, tree, result.equations)
         _stamp_jaxpr_results(trace, closed_jaxpr, result, static_argnums)
         apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")
         if grad_options is not None:
@@ -2508,7 +2504,7 @@ class JAXBackend:
                 mbd["module_nparams_frozen"][owner] += param.num_params
 
         self._populate_pytree_module_build_data(trace)
-        _build_module_logs(trace)
+        return_probe.build_module_logs_with_returns(trace, tree, _build_module_logs)
 
     def _populate_pytree_module_build_data(self, trace: Trace) -> None:
         """Populate module hierarchy side channels from attributed JAX ops.
@@ -3154,7 +3150,10 @@ def _derive_and_run(
         return closed_jaxpr, closure_consts, model(*args)
     try:
         with _scoped_pytree_module_calls(module_tree):
-            closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+            extended = return_probe.extend(model, module_tree)
+            closed_jaxpr = return_probe.strip(
+                derive_closed_jaxpr(extended, args, static_argnums), module_tree
+            )
     except Exception as exc:
         _raise_nnx_trace_context_error(module_tree, exc)
         raise

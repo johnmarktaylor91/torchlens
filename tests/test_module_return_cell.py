@@ -211,10 +211,137 @@ class MLXKit(TorchKit):
         return tl.trace(model, value, backend="mlx")
 
 
+class EquinoxKit(TorchKit):
+    """Kit for the JAX preview backend on Equinox modules."""
+
+    name = "equinox"
+    inserts_identity = False
+
+    def load(self) -> None:
+        """Import JAX and Equinox or skip; define a batch-aware linear module."""
+
+        self.jax = pytest.importorskip("jax")
+        self.jnp = pytest.importorskip("jax.numpy")
+        self.eqx = pytest.importorskip("equinox")
+        self.keys = iter(range(1, 1000))
+        jnp = self.jnp
+
+        class _Linear(self.eqx.Module):  # type: ignore[name-defined, misc]
+            """Square linear layer applied to the last axis (``eqx.nn.Linear`` is unbatched)."""
+
+            weight: Any
+            bias: Any
+
+            def __call__(self, value: Any) -> Any:
+                """Return ``value @ weight.T + bias``."""
+
+                return jnp.matmul(value, self.weight.T) + self.bias
+
+        self.linear_class = _Linear
+
+    def build_module(self, call: Callable[..., Any], **children: Any) -> Any:
+        """Wrap ``call(self, *args)`` as an Equinox module whose fields are ``children``."""
+
+        def forward(module: Any, *args: Any) -> Any:
+            """Run the case callable."""
+
+            return call(module, *args)
+
+        namespace = {"__annotations__": dict.fromkeys(children, Any), "__call__": forward}
+        cell_class = type("_Cell", (self.eqx.Module,), namespace)
+        return cell_class(**children)
+
+    def linear(self) -> Any:
+        """Return a square linear layer with its own random weights."""
+
+        key = self.jax.random.PRNGKey(next(self.keys))
+        weight = self.jax.random.normal(key, (_WIDTH, _WIDTH)) / _WIDTH
+        return self.linear_class(weight=weight, bias=self.jnp.full((_WIDTH,), 0.1))
+
+    def relu(self, value: Any) -> Any:
+        """Return the rectified value."""
+
+        return self.jnp.maximum(value, 0.0)
+
+    def add(self, left: Any, right: Any) -> Any:
+        """Return the elementwise sum."""
+
+        return self.jnp.add(left, right)
+
+    def input(self) -> Any:
+        """Return a deterministic model input."""
+
+        return self.jnp.linspace(-1.0, 1.0, 2 * _WIDTH).reshape(2, _WIDTH)
+
+    def is_leaf(self, value: object) -> bool:
+        """Return whether ``value`` is a native array."""
+
+        return isinstance(value, self.jax.Array)
+
+    def to_numpy(self, value: Any) -> np.ndarray:
+        """Convert a native array to numpy."""
+
+        return np.asarray(value)
+
+    def set_training(self, model: Any, training: bool) -> None:
+        """Equinox modules carry no train/eval flag: nothing to set."""
+
+    def training(self, module: Any) -> bool:
+        """Equinox modules carry no train/eval flag; the backend records ``False``."""
+
+        return False
+
+    def trace(self, model: Any, value: Any) -> Any:
+        """Capture ``model(value)`` on the JAX backend."""
+
+        return tl.trace(model, value, backend="jax")
+
+
+class NnxKit(EquinoxKit):
+    """Kit for the JAX preview backend on Flax NNX modules."""
+
+    name = "nnx"
+
+    def load(self) -> None:
+        """Import JAX and Flax NNX or skip."""
+
+        self.jax = pytest.importorskip("jax")
+        self.jnp = pytest.importorskip("jax.numpy")
+        self.nnx = pytest.importorskip("flax.nnx")
+        self.keys = iter(range(1, 1000))
+
+    def build_module(self, call: Callable[..., Any], **children: Any) -> Any:
+        """Wrap ``call(self, *args)`` as an NNX module holding ``children``."""
+
+        class _Cell(self.nnx.Module):  # type: ignore[name-defined, misc]
+            """Cell module whose ``__call__`` is the case callable."""
+
+            def __init__(self) -> None:
+                """Register the children."""
+
+                for name, child in children.items():
+                    setattr(self, name, child)
+
+            def __call__(self, *args: Any) -> Any:
+                """Run the case callable."""
+
+                return call(self, *args)
+
+        return _Cell()
+
+    def linear(self) -> Any:
+        """Return a square linear layer."""
+
+        return self.nnx.Linear(_WIDTH, _WIDTH, rngs=self.nnx.Rngs(next(self.keys)))
+
+
 _MLX_MARKS = (pytest.mark.backend_mlx, pytest.mark.optional, pytest.mark.rare)
+_JAX_MARKS = (pytest.mark.backend_jax, pytest.mark.optional, pytest.mark.rare)
 KITS = (
     pytest.param(TorchKit, id="torch"),
     pytest.param(MLXKit, id="mlx", marks=_MLX_MARKS),
+    pytest.param(EquinoxKit, id="equinox", marks=_JAX_MARKS),
+    pytest.param(NnxKit, id="nnx", marks=_JAX_MARKS),
 )
 
 
