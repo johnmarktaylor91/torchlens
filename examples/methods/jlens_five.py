@@ -75,12 +75,14 @@ trace = tl.trace(model, ids0, capture=capture)
 groups = {}
 for call in trace.module_calls:
     outs = call.outs
-    if len(outs) == 1 and outs[0].dim() == 3:
-        parent = call.address.rpartition(".")[0]
-        key = parent, call.class_name, outs[0].shape
-        group = groups.setdefault(key, {})
-        group[call.address] = call
-calls = list(max(groups.values(), key=len).values())
+    if len(outs) != 1 or outs[0].dim() != 3:
+        continue
+    parent = call.address.rpartition(".")[0]
+    key = parent, call.class_name, outs[0].shape
+    group = groups.setdefault(key, {})
+    group[call.address] = call
+biggest = max(groups.values(), key=len)
+calls = list(biggest.values())
 blocks = [call.address for call in calls]
 last = trace.ops[calls[-1].output_ops[0]]
 steps = readout_steps(trace, last, logits.shape)
@@ -91,7 +93,8 @@ VIEW = tl.options.CaptureOptions(save_mode="view")
 
 def block_outputs(text):
     # Block outputs, live on the autograd graph.
-    trace = tl.trace(model, ids(text), capture=VIEW)
+    x = ids(text)
+    trace = tl.trace(model, x, capture=VIEW)
     return [trace[b].out for b in blocks]
 
 
