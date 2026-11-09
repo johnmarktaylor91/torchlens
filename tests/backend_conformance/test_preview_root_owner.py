@@ -282,6 +282,9 @@ def test_raw_stack_without_the_root_frame_is_refused(
 ) -> None:
     """An op whose raw module stack lost the root frame fails, at capture or validation.
 
+    The finalizer refuses it at capture with ``ValueError`` (a malformed raw stack);
+    before that refusal existed, validation's ``module_attribution`` caught it.
+
     ``nested`` drops the root frame from stacks inside a submodule (the op still
     names its submodule); ``root_only`` drops it from top-level stacks (the op is
     left with no frame at all). Both are capture gaps the carve-out must not mask.
@@ -296,6 +299,6 @@ def test_raw_stack_without_the_root_frame_is_refused(
         return tuple(call for call in calls if call[0] != "self") if drop else calls
 
     monkeypatch.setattr(module, "normalize_op_module_calls", lose_root_frame)
-    with pytest.raises(MetadataInvariantError):
+    with pytest.raises((MetadataInvariantError, ValueError)):
         trace = _TRACES[backend]()
         check_metadata_invariants(trace)

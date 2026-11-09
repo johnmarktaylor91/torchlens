@@ -16,7 +16,6 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from .._data_classes._site_key import ROOT_MODULE_ADDRESS, without_root_frames
-from ..errors import MetadataInvariantError
 
 
 def strip_root_frames(frames: Iterable[object]) -> tuple[str, ...]:
@@ -48,17 +47,17 @@ def refuse_rootless_stack(
 
     Raises
     ------
-    MetadataInvariantError
-        ``module_attribution``: the op's recorded stack is empty or names a
-        submodule without the root frame, so its owner cannot be trusted.
+    ValueError
+        The op's recorded stack is empty or names a submodule without the root
+        frame, so its owner cannot be trusted (a capture bug, refused like the
+        malformed module-call entries ``normalize_op_module_calls`` refuses).
     """
 
     if op_log.is_input or op_log.is_output or op_log.graph.is_buffer:
         return calls
     if calls and (nested_root_dropped or calls[0][0] == ROOT_MODULE_ADDRESS):
         return calls
-    raise MetadataInvariantError(
-        "module_attribution",
+    raise ValueError(
         f"Compute op '{op_log.layer_label}' was recorded outside the root module call "
         f"(raw module stack {list(calls)}); every op of a module capture must run "
         "inside the root call",
