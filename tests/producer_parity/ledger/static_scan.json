@@ -8138,6 +8138,22 @@
  {
   "ambiguous": true,
   "field": "parents",
+  "file": "torchlens/debug/_xb_op_scope.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/debug/_xb_op_walk.py",
+  "has_default": false,
+  "sites": 9,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
   "file": "torchlens/debug/_xb_values.py",
   "has_default": true,
   "sites": 1,

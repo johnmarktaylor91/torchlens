@@ -3390,7 +3390,6 @@ docs-md	docs/maintainers/where.md	126
 docs-md	docs/maintainers/where.md	1263
 docs-md	docs/maintainers/where.md	127
 docs-md	docs/maintainers/where.md	12733
-docs-md	docs/maintainers/where.md	12735
 docs-md	docs/maintainers/where.md	1274
 docs-md	docs/maintainers/where.md	1278
 docs-md	docs/maintainers/where.md	1279
@@ -3408,6 +3407,7 @@ docs-md	docs/maintainers/where.md	1321
 docs-md	docs/maintainers/where.md	133
 docs-md	docs/maintainers/where.md	1331
 docs-md	docs/maintainers/where.md	1334
+docs-md	docs/maintainers/where.md	13394
 docs-md	docs/maintainers/where.md	134
 docs-md	docs/maintainers/where.md	135
 docs-md	docs/maintainers/where.md	136
@@ -3502,11 +3502,10 @@ docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	174
 docs-md	docs/maintainers/where.md	1748
 docs-md	docs/maintainers/where.md	175
-docs-md	docs/maintainers/where.md	1756
 docs-md	docs/maintainers/where.md	176
-docs-md	docs/maintainers/where.md	1762
 docs-md	docs/maintainers/where.md	1767
 docs-md	docs/maintainers/where.md	177
+docs-md	docs/maintainers/where.md	1772
 docs-md	docs/maintainers/where.md	178
 docs-md	docs/maintainers/where.md	179
 docs-md	docs/maintainers/where.md	18
@@ -4036,7 +4035,6 @@ docs-md	docs/maintainers/where.md	691
 docs-md	docs/maintainers/where.md	692
 docs-md	docs/maintainers/where.md	693
 docs-md	docs/maintainers/where.md	694
-docs-md	docs/maintainers/where.md	6948
 docs-md	docs/maintainers/where.md	695
 docs-md	docs/maintainers/where.md	696
 docs-md	docs/maintainers/where.md	697
@@ -4049,13 +4047,12 @@ docs-md	docs/maintainers/where.md	702
 docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
-docs-md	docs/maintainers/where.md	706109
 docs-md	docs/maintainers/where.md	707
-docs-md	docs/maintainers/where.md	7085
-docs-md	docs/maintainers/where.md	707455
+docs-md	docs/maintainers/where.md	709042
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	711
 docs-md	docs/maintainers/where.md	712
+docs-md	docs/maintainers/where.md	7131
 docs-md	docs/maintainers/where.md	714
 docs-md	docs/maintainers/where.md	715
 docs-md	docs/maintainers/where.md	717
@@ -4065,11 +4062,9 @@ docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	7241
 docs-md	docs/maintainers/where.md	725
-docs-md	docs/maintainers/where.md	7287
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
 docs-md	docs/maintainers/where.md	731
-docs-md	docs/maintainers/where.md	7341
 docs-md	docs/maintainers/where.md	735
 docs-md	docs/maintainers/where.md	736
 docs-md	docs/maintainers/where.md	738
@@ -4086,6 +4081,7 @@ docs-md	docs/maintainers/where.md	752
 docs-md	docs/maintainers/where.md	754
 docs-md	docs/maintainers/where.md	755
 docs-md	docs/maintainers/where.md	756
+docs-md	docs/maintainers/where.md	7562
 docs-md	docs/maintainers/where.md	757
 docs-md	docs/maintainers/where.md	759
 docs-md	docs/maintainers/where.md	76
@@ -7576,6 +7572,8 @@ package-docstrings	torchlens/debug/_rerun.py	1_2
 package-docstrings	torchlens/debug/_rerun.py	2.0
 package-docstrings	torchlens/debug/_rerun.py	57
 package-docstrings	torchlens/debug/_rerun.py	64
+package-docstrings	torchlens/debug/_xb_op_place.py	2.2
+package-docstrings	torchlens/debug/_xb_op_walk.py	2.1
 package-docstrings	torchlens/debug/_xb_tolerance.py	1.0
 package-docstrings	torchlens/debug/_xb_tolerance.py	10
 package-docstrings	torchlens/debug/_xb_tolerance.py	135
@@ -8885,6 +8883,8 @@ test-docstrings	tests/test_debug_cross_backend_modules.py	16
 test-docstrings	tests/test_debug_cross_backend_modules.py	16,
 test-docstrings	tests/test_debug_cross_backend_modules.py	2.1
 test-docstrings	tests/test_debug_cross_backend_modules.py	32
+test-docstrings	tests/test_debug_cross_backend_ops.py	1.5
+test-docstrings	tests/test_debug_cross_backend_ops.py	1_1
 test-docstrings	tests/test_debug_findings_source_lines.py	1.0
 test-docstrings	tests/test_debug_findings_source_lines.py	32
 test-docstrings	tests/test_debug_findings_source_lines.py	64
