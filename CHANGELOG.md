@@ -14,7 +14,7 @@
   partner is a coverage gap, and the default tolerance comes from the narrower dtype (relative RMS
   error; float32 `1e-4`, float16 `5e-2`, bfloat16 `0.75`; `atol` 0 except on an all-zero
   reference output). Module frames name the pairing mode and backends in `df.attrs["align"]` and
-  `df.attrs["backends"]`. PyTorch and MLX are admitted; a
+  `df.attrs["backends"]`. Returned values pair by return position. PyTorch and MLX are admitted; a
   module that returns its input unchanged compares through the returned value. `rtol=` and
   `atol=` now default to `None`, which on one backend means `1e-5` and `1e-8` as before.
 
