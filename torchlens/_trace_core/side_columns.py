@@ -181,7 +181,7 @@ class PendingCell:
     def __eq__(self, other: object) -> bool:
         """Compare by answer, so two states that would hold equal values compare equal."""
 
-        theirs = other.answer() if other.__class__ is PendingCell else other  # type: ignore[attr-defined]
+        theirs = other.answer() if other.__class__ is PendingCell else other
         result: bool = self.answer() == theirs
         return result
 

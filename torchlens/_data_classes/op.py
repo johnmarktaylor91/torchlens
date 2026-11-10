@@ -2993,7 +2993,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
 # field touch, so each avoided Python-level re-entry is measurable).
 _CORE_GET = Op.__dict__["_core"].__get__
 _ROW_GET = Op.__dict__["_row"].__get__
-Op.__tl_state_items__ = make_op_state_items(  # type: ignore[method-assign]
+Op.__tl_state_items__ = make_op_state_items(  # type: ignore[attr-defined]
     _OP_STATE_ATTRS, _OP_STORE_LAYOUT.fid_by_name, _CORE_GET, _ROW_GET
 )
 

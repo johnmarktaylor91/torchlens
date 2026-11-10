@@ -123,7 +123,8 @@ def resolve_template(template: Any, labels: TemplateLabels, name: str) -> Any:
     if records is not None:
         fail_open(lambda: _bind_keys(renamed, records.get, _record_key), _ignore)
     elif labels.keys is not None:
-        fail_open(lambda: _bind_keys(renamed, labels.keys.get, str), _ignore)
+        keys = labels.keys
+        fail_open(lambda: _bind_keys(renamed, keys.get, str), _ignore)
     return renamed
 
 
@@ -168,6 +169,7 @@ def _bind_keys(value: Any, lookup: Any, key_of: Any) -> None:
 def template_labels(trace: Trace, parent_ref_cls: type[Any]) -> TemplateLabels:
     """Return the label context for the carried templates of ``trace``."""
 
+    trace_ref: Any
     try:
         trace_ref = weakref.ref(trace)
     except TypeError:  # a trace double without weak-reference support
@@ -242,9 +244,11 @@ def carry_entry_templates(
         labels = field_cache[_LABELS_KEY] = template_labels(trace, parent_ref_cls)
     place = _row_place(layer_entry)
     side = None
+    row = 0
     if place is not None:
+        store, row = place
         try:
-            side = REPLAY_TEMPLATES.bind(place[0], labels)
+            side = REPLAY_TEMPLATES.bind(store, labels)
         except TypeError:  # a detached single-row store holds no side columns
             side = None
     for name in TEMPLATE_FIELDS:
@@ -252,7 +256,7 @@ def carry_entry_templates(
         if template is None:
             continue
         if side is not None:
-            set_entry_field(name, REPLAY_TEMPLATES.hold(side, name, place[1], template))
+            set_entry_field(name, REPLAY_TEMPLATES.hold(side, name, row, template))
         else:
             set_entry_field(name, resolve_template(template, labels, name))
 
