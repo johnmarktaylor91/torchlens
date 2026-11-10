@@ -3226,14 +3226,6 @@
  {
   "ambiguous": false,
   "field": "_edge_uses",
-  "file": "torchlens/_postprocess/_label_rename.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
-  "field": "_edge_uses",
   "file": "torchlens/_postprocess/_materialize.py",
   "has_default": false,
   "sites": 1,
