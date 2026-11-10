@@ -322,6 +322,52 @@ def _build_args_template(
     )
 
 
+def module_args_template(
+    module: torch.nn.Module,
+    call: tuple[tuple[Any, ...], dict[str, Any]],
+    known: dict[int, str | None],
+    key_cache: list[Any],
+) -> CapturedArgTemplate:
+    """Build the module call's replay template, as ``_build_args_template`` would.
+
+    Parameters
+    ----------
+    module:
+        The module being called; its installed ``forward`` names the function.
+    call:
+        ``(args, kwargs)`` of the call.
+    known:
+        Labels of the call's input tensors by ``id``, read before the template
+        (``input_labels_by_id``). Tensors outside it are read live, exactly
+        as the template builder reads them without a snapshot.
+    key_cache:
+        The decorated forward's per-run slots ``[run nonce, meta, forward id,
+        registry key]``; the last two are filled here.
+
+    Returns
+    -------
+    CapturedArgTemplate
+        The template ``_build_args_template(module.forward, args, kwargs)`` returns.
+    """
+
+    args, kwargs = call
+    forward = module.forward
+    if key_cache[2] != id(forward):
+        key_cache[2:] = [id(forward), _function_registry_key(forward, None, None)]
+    notes: list[str] = []
+    arg_components = tuple(_classify_arg_component(arg, notes, None, known) for arg in args)
+    kwarg_components = tuple(
+        (str(key), _classify_arg_component(value, notes, None, known))
+        for key, value in kwargs.items()
+    )
+    return CapturedArgTemplate(
+        args=arg_components,
+        kwargs=kwarg_components,
+        func_id=key_cache[3],
+        notes=tuple(notes),
+    )
+
+
 def _arg_location_to_path(location: Any) -> tuple[OutputPathComponent, ...]:
     """Convert a parent-layer arg location to the MVP edge path schema.
 

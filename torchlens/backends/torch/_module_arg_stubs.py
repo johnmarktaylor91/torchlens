@@ -17,13 +17,15 @@ from typing import Any, cast
 import torch
 
 from ..._ir.workspaces import ReleasedTensorStub
-from ..._utils._tensor_label import get_tensor_label
+from ..._utils._tensor_label import clear_tensor_label, get_tensor_label, raw_tensor_label
 from ..._utils.introspection import get_vars_of_type_from_obj
 
 _MODULE_ARG_STUB_MAX_DEPTH = 5
 
 
-def stub_module_arg_payloads(value: Any, _depth: int = 0) -> Any:
+def stub_module_arg_payloads(
+    value: Any, _depth: int = 0, labels: dict[int, str | None] | None = None
+) -> Any:
     """Replace tensor leaves in a module-arg tree with payload-free stubs.
 
     Parameters
@@ -32,6 +34,9 @@ def stub_module_arg_payloads(value: Any, _depth: int = 0) -> Any:
         Module-forward argument tree (positional tuple or kwargs dict).
     _depth:
         Internal recursion depth (callers must not supply this).
+    labels:
+        Labels the caller has just read for some tensors, by ``id``; any other
+        tensor's label is read here.
 
     Returns
     -------
@@ -47,18 +52,24 @@ def stub_module_arg_payloads(value: Any, _depth: int = 0) -> Any:
             shape=tuple(value.shape),
             dtype=str(value.dtype).removeprefix("torch."),
             device=str(value.device),
-            label_raw=get_tensor_label(value),
+            label_raw=(
+                labels[id(value)]
+                if labels is not None and id(value) in labels
+                else get_tensor_label(value)
+            ),
         )
     if _depth >= _MODULE_ARG_STUB_MAX_DEPTH:
         return value
     if isinstance(value, tuple):
-        rebuilt = tuple(stub_module_arg_payloads(item, _depth + 1) for item in value)
+        rebuilt = tuple(stub_module_arg_payloads(item, _depth + 1, labels) for item in value)
         is_namedtuple = hasattr(value, "_make") and hasattr(value, "_fields")
         return cast(Any, type(value))._make(rebuilt) if is_namedtuple else rebuilt
     if isinstance(value, list):
-        return [stub_module_arg_payloads(item, _depth + 1) for item in value]
+        return [stub_module_arg_payloads(item, _depth + 1, labels) for item in value]
     if isinstance(value, dict):
-        return {key: stub_module_arg_payloads(item, _depth + 1) for key, item in value.items()}
+        return {
+            key: stub_module_arg_payloads(item, _depth + 1, labels) for key, item in value.items()
+        }
     return value
 
 
@@ -85,3 +96,43 @@ def first_stub_shape(value: Any, search_depth: int = 5) -> tuple[int, ...] | Non
     if stubs:
         return tuple(stubs[0].shape)
     return None
+
+
+def input_labels_by_id(input_tensors: list[Any]) -> dict[int, str | None]:
+    """Return each input tensor's gated label (``get_tensor_label``), keyed by ``id``.
+
+    A module entry reads its input tensors' labels once, for the replay template,
+    the input-adoption loop (:func:`entry_live_label`) and the payload stubs.
+    """
+
+    return {id(t): get_tensor_label(t) for t in input_tensors}
+
+
+def entry_live_label(
+    t: Any, known: dict[int, str | None] | None, live_labels: Any
+) -> tuple[str | None, bool]:
+    """Return ``get_live_tensor_label(t, live_labels)`` from a label read earlier.
+
+    Parameters
+    ----------
+    t:
+        Input tensor.
+    known:
+        :func:`input_labels_by_id` of the call, valid while no stamp has changed
+        since it was read; ``None`` reads the label now.
+    live_labels:
+        Raw labels live in the active trace.
+
+    Returns
+    -------
+    tuple[str | None, bool]
+        The live label, and whether a stale stamp was cleared off ``t``.
+    """
+
+    label = get_tensor_label(t) if known is None else known[id(t)]
+    if label is not None and label in live_labels:
+        return label, False
+    if raw_tensor_label(t) is not None:
+        clear_tensor_label(t)
+        return None, True
+    return None, False
