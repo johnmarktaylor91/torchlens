@@ -9,6 +9,10 @@ cell by cell with the live records:
 - ``value`` and ``id_array`` cells compare equal (floats by exact repr); a ``ref`` cell
   resolves to the row of the same live record object, whose cells are compared in turn;
   a label or address string stands for the live record object that carries it;
+- the live state is read through ``plain_state`` (the door the save scrub reads: a trace's
+  op list and label dictionaries as plain containers of the records), and every live
+  record a row was paired with is held until the comparison ends, so "the same live
+  record object" is an identity check between two live objects, never between addresses;
 - ``tensor_ref`` cells compare by dtype, shape and recorded device, and the payload read
   from its chunk by ``torch.equal`` with the live tensor;
 - an ``unencodable`` disclosure compares its ``repr`` with the live value's ``repr``.
@@ -43,7 +47,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._data_classes._accessor_base import Accessor
-from torchlens._data_classes._state_adapter import state_items
+from torchlens._data_classes._state_adapter import plain_state
 from torchlens._io.format3 import schema as format_schema
 from torchlens._io.format3.contract import TENSOR_REFERENCE_FIELDS, TYPED_VALUE_KEY
 from torchlens._io.format3.decode import decode_value
@@ -141,7 +145,7 @@ class _Comparison:
             if barcodes
             else None
         )
-        self.paired: dict[tuple[str, int], int] = {}
+        self.paired: dict[tuple[str, int], Any] = {}
         self.pending: deque[tuple[str, int, Any]] = deque()
         self.object_ids: dict[str, dict[int, int]] = {}
         self.mismatches: dict[str, str] = {}
@@ -154,9 +158,12 @@ class _Comparison:
     def pair(self, kind: str, row: int, live: Any, at: str) -> None:
         known = self.paired.get((kind, row))
         if known is None:
-            self.paired[(kind, row)] = id(live)
+            # The paired record is held for the whole comparison: an Op or Layer is a view
+            # that is one object only while something holds it, and the address of a
+            # record that is gone can be taken by another.
+            self.paired[(kind, row)] = live
             self.pending.append((kind, row, live))
-        elif known != id(live):
+        elif known is not live:
             self.miss(f"{at}: ref {kind}[{row}] names another live record")
 
     def run(self) -> None:
@@ -170,7 +177,7 @@ class _Comparison:
         if payload is None:
             self.miss(f"{kind}[{row}]: no records/{kind}.json")
             return
-        state = dict(state_items(live))
+        state = plain_state(live)
         schema = format_schema.record_schema(kind)
         cells = payload["fields"] if kind == "trace" else payload["columns"]
         expected = format_schema.level_columns(kind, self.policy)

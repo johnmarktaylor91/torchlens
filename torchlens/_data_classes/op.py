@@ -2266,7 +2266,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def input_ops(self) -> "OpAccessor":
         """Accessor over graph-parent Op records in ``parents`` order."""
 
-        return OpAccessor(_op_relations.input_ops_by_index(self))
+        return _op_relations.kept(self, OpAccessor(_op_relations.input_ops_by_index(self)))
 
     @input_ops.deleter
     def input_ops(self) -> None:
@@ -2276,7 +2276,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def _graph_buffer_source_ops(self) -> "OpAccessor":
         """Accessor over buffer source Ops that feed this Op."""
 
-        return OpAccessor(_op_relations.buffer_source_ops_by_index(self))
+        return _op_relations.kept(self, OpAccessor(_op_relations.buffer_source_ops_by_index(self)))
 
     @_graph_buffer_source_ops.deleter
     def _graph_buffer_source_ops(self) -> None:
@@ -2286,7 +2286,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def _graph_buffer_sink_ops(self) -> "OpAccessor":
         """Accessor over buffer sink Ops directly consuming this Op."""
 
-        return OpAccessor(_op_relations.buffer_sink_ops_by_index(self))
+        return _op_relations.kept(self, OpAccessor(_op_relations.buffer_sink_ops_by_index(self)))
 
     @_graph_buffer_sink_ops.deleter
     def _graph_buffer_sink_ops(self) -> None:

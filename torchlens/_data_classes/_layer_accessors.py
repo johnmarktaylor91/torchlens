@@ -18,13 +18,14 @@ from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
 from .._pass_tokens import split_pass_token
-from .._trace_core.view_tables import WeakViews
+from .._trace_core.view_tables import DEAD, WeakViews
 from .._utils._display_collections import collection_repr
 from .._utils._display_errors import lookup_message
 from .._utils._display_keys import display_key
 from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._accessor_base import Accessor, attach_source_honesty
+from ._layer_ops_door import bind_op_accessor
 from ._layer_state import STORE_CLASSES, LayerSequence, LayerStore, hold_view
 from ._layer_views import _layer_log_to_row
 from ._lookup_kinds import converted, layer_for_key, scoped_op_by_lookup_key
@@ -71,6 +72,8 @@ class OpAccessor(Accessor["Op"]):
     """Scoped dict-like accessor for the Op entries owned by one Layer."""
 
     _COUNTABLE_FIELDS = _LAYER_COUNTABLE_FIELDS
+    # ``_owner``: the trace a handed-out accessor keeps alive; ``_handed``: see ``_layer_ops_door``.
+    __slots__ = ("_handed", "_owner")
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
@@ -94,6 +97,8 @@ class OpAccessor(Accessor["Op"]):
         self._keys = array("q")
         self._core_ref: Any = None
         self._store: Any = None
+        self._owner: Any = None
+        self._handed: Any = DEAD
         for pass_index, op in (ops or {}).items():
             self._put(pass_index, op)
 
@@ -471,6 +476,9 @@ class OpAccessor(Accessor["Op"]):
             }:
                 return op_log
         return scoped_op_by_lookup_key(ops, key)  # module-call or buffer key
+
+
+bind_op_accessor(OpAccessor)
 
 
 class LayerAccessor(Accessor["Layer"]):

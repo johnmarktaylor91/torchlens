@@ -492,7 +492,7 @@ def _fill_layer_shells(
         shell.source_trace = fork
         parent_ops = parent_layer.__dict__.get("ops")
         if parent_ops is not None:
-            shell.ops = OpAccessor(
+            shell_dict["ops"] = OpAccessor(
                 OrderedDict(
                     (call_index, remap.get(id(layer_pass), layer_pass))
                     for call_index, layer_pass in parent_ops.items()
