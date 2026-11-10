@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+from operator import attrgetter
 from typing import Any
 
 from .._data_classes._template_walk import dataclass_field_names
@@ -31,11 +32,16 @@ _LABEL_FIELDS = frozenset(
     {"parent_label", "child_label", "target_label", "call_label", "site_label", "layer_label"}
 )
 _ABSENT = object()
-_NO_STATE: dict[str, Any] = {}
 _CONTAINERS = (tuple, list, dict)
 _FieldCache = dict[Any, Any]
-#: Field names of a record class, and whether its instance dict answers them.
-_RecordPlan = tuple[tuple[str, ...], bool]
+#: Field names of a record class, and the reader of all of them in one call.
+_RecordPlan = tuple[tuple[str, ...], Callable[[Any], tuple[Any, ...]]]
+
+
+def _no_fields(value: Any) -> tuple[Any, ...]:
+    """Return the field values of a dataclass that has no fields."""
+
+    return ()
 
 
 def _record_plan(
@@ -51,23 +57,19 @@ def _record_plan(
         calls: Whether the walk returns a callable unchanged before that branch.
 
     Returns:
-        ``(field names, direct)`` for a class whose instances the walk rebuilds
-        field by field, else ``None``. ``direct`` says a field the instance
-        ``__dict__`` holds is what ``getattr`` returns: the class has the plain
-        attribute lookup and no descriptor under a field name.
+        ``(field names, reader)`` for a class whose instances the walk rebuilds
+        field by field, else ``None``. ``reader`` returns every field of one
+        instance by ordinary attribute lookup, in one call.
     """
 
     plan = None
     if not isinstance(value, ladder) and not (calls and callable(value)):
         names = dataclass_field_names(value, cache)
         if names is not None:
-            cls = value.__class__
-            direct = (
-                hasattr(value, "__dict__")
-                and cls.__getattribute__ is object.__getattribute__
-                and not any(hasattr(getattr(cls, name, None), "__get__") for name in names)
-            )
-            plan = (names, direct)
+            if len(names) > 1:
+                plan = (names, attrgetter(*names))
+            else:  # one name would read as a bare value, not a tuple
+                plan = (names, attrgetter(*names, *names) if names else _no_fields)
     cache[key] = plan
     return plan
 
@@ -92,16 +94,15 @@ def _rebuild_template_record(
         ``dataclasses.replace`` of ``value`` with every present field walked.
     """
 
-    names, direct = plan
-    state = value.__dict__ if direct else _NO_STATE
+    names, reader = plan
+    try:
+        items: Any = reader(value)
+    except AttributeError:  # a field this instance does not carry
+        items = [getattr(value, name, _ABSENT) for name in names]
     updates = {}
-    for name in names:
-        if name in state:
-            item = state[name]
-        else:
-            item = getattr(value, name, _ABSENT)
-            if item is _ABSENT:
-                continue
+    for name, item in zip(names, items):
+        if item is _ABSENT:
+            continue
         item_cls = item.__class__
         if item_cls is str or item_cls in _ATOMIC_CLASSES or (item_cls is tuple and not item):
             updates[name] = item
@@ -216,16 +217,15 @@ def _rebuild_label_record(
         ``dataclasses.replace`` of ``value`` with every present field walked.
     """
 
-    names, direct = plan
-    state = value.__dict__ if direct else _NO_STATE
+    names, reader = plan
+    try:
+        items: Any = reader(value)
+    except AttributeError:  # a field this instance does not carry
+        items = [getattr(value, name, _ABSENT) for name in names]
     updates = {}
-    for name in names:
-        if name in state:
-            item = state[name]
-        else:
-            item = getattr(value, name, _ABSENT)
-            if item is _ABSENT:
-                continue
+    for name, item in zip(names, items):
+        if item is _ABSENT:
+            continue
         item_cls = item.__class__
         if item_cls is str:
             updates[name] = mapping[item] if item in mapping else item
