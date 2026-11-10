@@ -93,18 +93,18 @@ def _weak_layer_views(slots: Any, states: list[dict[str, Any]]) -> list[Any]:
     return views
 
 
-def ops_with_layers_kept(trace: Any) -> Any:
-    """Pair each op of ``trace`` with one list holding every Layer view of the trace.
+def ops_and_layer_views(trace: Any) -> tuple[Any, Any]:
+    """Return the ops of ``trace`` and one list holding every Layer view of the trace.
 
-    For a loop that looks layers up again and again (a table export): the
-    views stay alive while the loop runs, so each lookup meets the live view
-    instead of building a new one.
+    For a loop that looks layers up again and again (a table export): while the
+    caller holds the list the views stay alive, so each lookup meets the live
+    view instead of building a new one.
     """
 
     logs = trace.__dict__.get("_layer_logs")
     if logs.__class__ in STORE_CLASSES:
-        return zip(trace._layer_list, repeat(logs.views_as_stored()))
-    return zip(trace._layer_list, repeat(list(logs.values()) if logs else ()))
+        return trace._layer_list, logs.views_as_stored()
+    return trace._layer_list, list(logs.values()) if logs else ()
 
 
 def _layer_index(state: dict[str, Any]) -> tuple[Any, int]:

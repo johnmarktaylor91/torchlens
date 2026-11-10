@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
-from .._data_classes._layer_state import ops_with_layers_kept
+from .._data_classes._layer_state import ops_and_layer_views
 from .._data_classes._trace_field_spec import TRACE_PORTABLE_STATE_SPEC
 from .._data_classes.interface import _format_conditional_branch_stack
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
@@ -499,15 +499,10 @@ def to_pandas(trace: "Trace", include_decoded_output_summary: bool = False) -> "
         )
     )
 
-    # Keep every Layer view alive while the table is built, so layer lookups meet live views.
-    ops_and_layers = list(ops_with_layers_kept(trace))
-    model_df_dictlist = table_rows(
-        [op for op, _layers in ops_and_layers],
-        fields_for_df,
-        partial(_table_cell, trace),
-        _PER_OP_TABLE_FIELDS,
+    ops, _live_layer_views = ops_and_layer_views(trace)  # layer lookups meet live views
+    model_df = pd.DataFrame(
+        table_rows(ops, fields_for_df, partial(_table_cell, trace), _PER_OP_TABLE_FIELDS)
     )
-    model_df = pd.DataFrame(model_df_dictlist)
 
     for column_name, column_type in _TO_PANDAS_COLUMN_TYPES.items():
         model_df[column_name] = model_df[column_name].astype(column_type)
