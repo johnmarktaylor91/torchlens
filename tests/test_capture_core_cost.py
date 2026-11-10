@@ -207,7 +207,7 @@ def test_store_write_observer_sees_capture_ingest_and_pass_writes() -> None:
 
 def test_held_tensor_bytes_classifies_by_the_outermost_name() -> None:
     saved, argument, shared, loose = (torch.zeros(n) for n in (2, 4, 8, 16))
-    own_input, input_copy = torch.zeros(32), torch.zeros(64)
+    own_input, input_copy, forward_copy = torch.zeros(32), torch.zeros(64), torch.zeros(128)
     owner = nn.Linear(3, 3)
     root = {
         "out": saved,
@@ -217,6 +217,7 @@ def test_held_tensor_bytes_classifies_by_the_outermost_name() -> None:
         "module": owner,
         "kwargs": {"x": own_input[:8]},
         "_output_attribution_input_tensors": (own_input, input_copy),
+        "workspace": {"root_forward_args": ((forward_copy,), {"args": forward_copy[:4]})},
     }
     owned = caller_owned_keys(owner, {"x": [own_input]})
     totals, holders, truncated = held_tensor_bytes(root, *owned)
@@ -224,6 +225,7 @@ def test_held_tensor_bytes_classifies_by_the_outermost_name() -> None:
     assert totals["saved_output"] == (2 + 8) * 4
     assert totals["argument"] == 4 * 4
     assert totals["other"] == (16 + 64) * 4
+    assert totals["forward_input"] == 128 * 4
     assert totals["caller_owned"] == (9 + 32) * 4
     assert holders["argument"] == {"saved_args": 16}
     assert holders["saved_output"] == {"out": 8, "transformed_out": 32}

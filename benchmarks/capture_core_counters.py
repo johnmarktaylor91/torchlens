@@ -387,8 +387,10 @@ class StoreWriteObserver:
         }
 
 
-SAVED_OUTPUT, ARGUMENT, OTHER, MODEL_OWNED = 0, 1, 2, 3
-CATEGORY_NAMES = ("saved_output", "argument", "other", "caller_owned")
+SAVED_OUTPUT, ARGUMENT, FORWARD_INPUT, OTHER, MODEL_OWNED = 0, 1, 2, 3, 4
+CATEGORY_NAMES = ("saved_output", "argument", "forward_input", "other", "caller_owned")
+#: Names that hold the forward's own input (the copy the forward runs on), not an op's arguments.
+_FORWARD_INPUT_NAMES = frozenset({"root_forward_args"})
 _ARGUMENT_TOKENS = frozenset({"arg", "args", "kwarg", "kwargs"})
 _OUTPUT_TOKENS = frozenset(
     {"out", "outs", "output", "outputs", "activation", "activations", "payload", "payloads"}
@@ -422,7 +424,9 @@ def _name_rank(name: str) -> int:
     rank = _NAME_RANKS.get(name)
     if rank is None:
         tokens = set(name.strip("_").split("_"))
-        if name == "input_activations" or tokens & _ARGUMENT_TOKENS:
+        if name in _FORWARD_INPUT_NAMES:
+            rank = FORWARD_INPUT
+        elif name == "input_activations" or tokens & _ARGUMENT_TOKENS:
             rank = ARGUMENT
         elif tokens & _INPUT_TOKENS:
             rank = OTHER
@@ -480,11 +484,12 @@ def held_tensor_bytes(
     and stops at modules, classes, functions' globals, ``nn.Module`` instances
     and weak references. A tensor's category is that of the outermost named
     hop on the path to it (an op-store field, an attribute, a string key):
+    ``root_forward_args`` holds the forward's own input ("forward_input");
     a name with an ``arg`` or ``kwarg`` token (or ``input_activations``) is an
     argument, any other name with an ``input`` token "other", one with an
     ``out``, ``output``, ``activation`` or ``payload`` token a saved output,
     anything else "other". Bytes are counted once per storage, under the
-    strongest claim (saved output, then argument, then other); the tensors the
+    strongest claim (saved output, argument, forward input, other); the tensors the
     caller owns (see :func:`caller_owned_keys`) are reported apart.
 
     Returns
@@ -656,7 +661,7 @@ class TensorBytesObserver:
         """Return the peak, the per-category maxima and the end-of-forward holders."""
 
         def held(totals: dict[str, int]) -> int:
-            return totals["saved_output"] + totals["argument"] + totals["other"]
+            return sum(totals[name] for name in CATEGORY_NAMES[:-1])
 
         if not self.samples:
             return {"boundaries": self.boundaries, "sampled": 0}
@@ -676,6 +681,7 @@ class TensorBytesObserver:
             "peak": dict(peak),
             "argument_bytes_max": max(totals["argument"] for _b, totals in self.samples),
             "saved_output_bytes_max": max(totals["saved_output"] for _b, totals in self.samples),
+            "forward_input_bytes_max": max(totals["forward_input"] for _b, totals in self.samples),
             "other_bytes_max": max(totals["other"] for _b, totals in self.samples),
             "end_of_forward": dict(end),
             "end_of_forward_holders": top,
