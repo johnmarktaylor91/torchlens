@@ -26,10 +26,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture_state_helpers import bypass_compiled_plain_callables
-from torchlens._compiled_callable_sites import (
-    cannot_carry_compile_marker,
-    compiled_plain_callable_sites,
-)
 from torchlens._data_classes._param_row import PARAM_ROW_FIELDS, init_param_row
 from torchlens._data_classes.param import Param
 from torchlens._ir.refs import DtypeRef
@@ -38,6 +34,10 @@ from torchlens._quantities import Bytes
 from torchlens._trace_core.record_rows import CORE_KEY, ROW_KEY, bind_record_row
 from torchlens._utils._tensor_label import get_param_meta, set_param_meta
 from torchlens._utils._torch_compat import is_dynamo_compiled_callable
+from torchlens.backends.torch._compiled_callable_sites import (
+    cannot_carry_compile_marker,
+    compiled_plain_callable_sites,
+)
 from torchlens.backends.torch._held_plain_holders import (
     DICTLESS_LEAF_TYPES,
     plain_holder_tensor_attrs,
@@ -157,9 +157,11 @@ def test_row_write_on_a_bound_record_overwrites_every_field_and_checks_width() -
 
     record = Param(**_GIVEN)
     store = record.__dict__[CORE_KEY]
-    init_param_row(
-        record, "head", "bias", (2,), torch.float64, 2, 16, False, "head.bias", "zz", True
-    )
+    dtype_ref = DtypeRef.from_value(torch.float64)
+    given = ("head", "bias", (2,), torch.float64, 2, 16, False, "head.bias", "zz", True)
+    init_param_row(record, dtype_ref, *given)
+    with pytest.raises(ValueError):
+        init_param_row(record, dtype_ref, *given[:-1])
     assert record.__dict__[CORE_KEY] is store
     reference = _cells(
         _field_by_field_param(

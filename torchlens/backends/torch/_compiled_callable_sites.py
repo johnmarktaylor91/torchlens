@@ -17,9 +17,9 @@ from typing import Any
 
 from torch import nn
 
-from ._plain_attr_fidelity import _PLAIN_ATTR_IGNORED_NAMES
-from ._utils._model_walk import model_named_modules
-from ._utils._torch_compat import is_dynamo_compiled_callable
+from ..._plain_attr_fidelity import _PLAIN_ATTR_IGNORED_NAMES
+from ..._utils._model_walk import model_named_modules
+from ..._utils._torch_compat import is_dynamo_compiled_callable
 
 #: Exact builtin types whose instances have no ``__dict__``: they can hold no
 #: ``_torchdynamo_orig_callable`` marker and are never an ``nn.Module``.

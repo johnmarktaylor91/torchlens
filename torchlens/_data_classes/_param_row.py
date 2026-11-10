@@ -17,13 +17,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._ir.refs import DeviceRef, DtypeRef
 from .._quantities import Bytes
 from .._trace_core.record_rows import bind_record_row
 
 if TYPE_CHECKING:
     import torch
 
+    from .._ir.refs import DeviceRef, DtypeRef
     from .op import GradientRecord
 
 #: The order of the row :func:`init_param_row` builds (``Param``'s stored fields).
@@ -102,31 +102,24 @@ class ParamRowFields:
     _derived_grad_record_path: str | None
 
 
-def init_param_row(
-    record: Any,
-    module_address: str,
-    name: str,
-    shape: tuple[int, ...],
-    dtype: Any,
-    num_params: int,
-    param_memory: int,
-    trainable: bool,
-    address: str,
-    barcode: str,
-    has_optimizer: bool | None,
-) -> None:
+def init_param_row(record: Any, dtype_ref: DtypeRef | None, *given: Any) -> None:
     """Write a new ``Param``'s stored fields in one row write.
 
     Parameters
     ----------
     record
         The ``Param`` being initialised.
-    module_address, name, shape, dtype, num_params, param_memory, trainable
-        ``Param.__init__``'s arguments of the same names, unchanged.
-    address, barcode, has_optimizer
-        ``Param.__init__``'s arguments of the same names, unchanged.
+    dtype_ref
+        The dtype reference for the parameter's dtype, built by the caller.
+    *given
+        ``Param.__init__``'s ten arguments, unchanged and in its order:
+        ``module_address``, ``name``, ``shape``, ``dtype``, ``num_params``,
+        ``param_memory``, ``trainable``, ``address``, ``barcode`` and
+        ``has_optimizer``. Any other count raises ``ValueError``.
     """
 
+    module_address, name, shape, dtype, num_params = given[:5]
+    param_memory, trainable, address, barcode, has_optimizer = given[5:]
     bind_record_row(
         record,
         [
@@ -134,7 +127,7 @@ def init_param_row(
             name,
             shape,
             dtype,
-            DtypeRef.from_value(dtype),  # dtype_ref
+            dtype_ref,
             None,  # device_ref
             address,  # backend_address
             "resolved",  # resolver_status

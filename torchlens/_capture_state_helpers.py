@@ -23,7 +23,6 @@ from torch import nn
 
 from . import _state
 from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
-from ._compiled_callable_sites import cannot_carry_compile_marker, compiled_plain_callable_sites
 from ._data_classes.trace import Trace
 from ._plain_attr_fidelity import (
     _PLAIN_ATTR_IGNORED_NAMES,
@@ -55,6 +54,7 @@ from ._utils.input_leaves import move_input_tensor
 from ._utils.tensor_leaves import iter_tensors
 from ._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
+from .backends.torch import _compiled_callable_sites as _compiled_sites
 from .backends.torch._tracing_pass import lift_hop_entry_compiles
 from .errors._base import transparent_contextmanager
 
@@ -438,7 +438,7 @@ def bypass_compiled_plain_callables(model: nn.Module) -> Iterator[None]:
             except (TypeError, AttributeError):
                 continue
             for attr_name, value in attributes:
-                if cannot_carry_compile_marker(value):
+                if _compiled_sites.cannot_carry_compile_marker(value):
                     continue
                 if attr_name in _PLAIN_ATTR_IGNORED_NAMES or isinstance(value, nn.Module):
                     continue
@@ -515,7 +515,7 @@ def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
     """
 
     with unwrap_compiled_submodules(model), hold_fused_attention_fastpath_off(model) as held:
-        sites = compiled_plain_callable_sites(model)
+        sites = _compiled_sites.compiled_plain_callable_sites(model)
         with force_eager_stance_scope() as stance_active, lift_hop_entry_compiles():
             if stance_active:
                 if sites:

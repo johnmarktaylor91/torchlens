@@ -265,9 +265,9 @@ class Param(_ParamFields):
         has_optimizer:
             Whether optimizer state was detected for the parameter.
         """
-
         init_param_row(
             self,
+            DtypeRef.from_value(dtype),
             module_address,
             name,
             shape,
