@@ -1301,8 +1301,13 @@
         "tests/test_op_row_release_counters.py"
       ],
       "torchlens/_data_classes/_param_fork.py": [
-        "tests/test_backward.py",
+        "tests/surface_oracle/test_surface_oracle.py",
+        "tests/test_checkpoint_live_ref_guard.py",
+        "tests/test_io_scrub_policy.py",
         "tests/test_perf8_fork_copy.py",
+        "tests/test_pin_b6b.py",
+        "tests/test_record_field_policy.py",
+        "tests/test_strict_accessors.py",
         "tests/test_trace_fork_structural_sharing.py"
       ],
       "torchlens/_data_classes/_param_pin.py": [

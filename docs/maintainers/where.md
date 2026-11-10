@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1777 modules, 714172 lines, 0 modules without a docstring.
+85 packages, 1777 modules, 714176 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 132 | 46713 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 132 | 46717 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (132 modules, 46713 lines)
+Core data structures for representing a logged forward pass. (132 modules, 46717 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -372,7 +372,7 @@ Core data structures for representing a logged forward pass. (132 modules, 46713
 | `_op_row_release` | Direct row release for op removal (the facade-husk shortcut). | 107 |
 | `_op_save` | Tensor save, grad logging, transform validation and copy logic for ''Op''. | 800 |
 | `_op_transforms` | User-transform application and validation helpers for saved payloads. | 260 |
-| `_param_fork` | How a fork takes its parent's ''Param'' records: by row, building no parent view. | 164 |
+| `_param_fork` | How a fork takes its parent's ''Param'' records: by row, building no parent view. | 166 |
 | `_param_pin` | Pin ''Param'': the trace keeps parameter rows, and a ''Param'' handed out keeps the trace. | 327 |
 | `_param_rows` | Trace-side ''Param'' containers that hold row keys, and the trace's ''Param'' views. | 550 |
 | `_preprocessing_provenance` | Preprocessing provenance derivations that live WITH the record. | 114 |
@@ -447,7 +447,7 @@ Core data structures for representing a logged forward pass. (132 modules, 46713
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1547 |
 | `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2584 |
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3302 |
-| `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1067 |
+| `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1069 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 223 |
 | `trace` | Trace: the top-level container for a fully logged forward pass. | 3414 |
 
