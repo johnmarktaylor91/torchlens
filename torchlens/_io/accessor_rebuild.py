@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._row_refs import rekey_child_cells
 from .._data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
 from .._data_classes.buffer import Buffer, BufferAccessor
 from .._data_classes.module import ModuleAccessor
@@ -60,20 +61,22 @@ def rebuild_trace_accessors(
     # with empty kind tables (closure review gap). Live captures arrive
     # already table-bound (postprocess/finalization adopts them just before
     # calling this), so adoption is an idempotent no-op there. Tables born
-    # after a sealed core are sealed too, exactly like buffers below.
+    # after a sealed core are sealed too, exactly like buffers below. Between
+    # adoption and the seal, each module's ``ops`` and ``params`` cells swap
+    # their accessors for the children's rows, so the module table holds no
+    # record (a cell written after the seal would leave the accessor in place).
     _core = trace.__dict__.get("_trace_core")
     if _core is not None and _core.ops is not None:
         from torchlens._trace_core.record_rows import adopt_records
 
-        for kind, records in (
-            ("module", list(module_dict.values())),
-            ("module_call", list(pass_dict.values())),
-        ):
-            if not records:
-                continue
-            adopt_records(_core, kind, records)
+        kinds = (("module", list(module_dict.values())), ("module_call", list(pass_dict.values())))
+        for kind, records in kinds:
+            if records:
+                adopt_records(_core, kind, records)
+        rekey_child_cells(module_dict.values(), trace)
+        for kind, records in kinds:
             kind_store = _core.kind_rows.get(kind)
-            if kind_store is not None and not kind_store.frozen and _core.ops.frozen:
+            if records and kind_store is not None and not kind_store.frozen and _core.ops.frozen:
                 kind_store.freeze()
 
     rebuild_buffer_accessor(trace)

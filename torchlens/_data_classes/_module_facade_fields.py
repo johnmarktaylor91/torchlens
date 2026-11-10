@@ -1,9 +1,12 @@
 """Stored-field tables for the ``ModuleCall`` and ``Module`` record facades.
 
-``module.py`` installs these with ``install_record_facade`` at import time.
+``module.py`` installs these through ``install_module_facades`` at import time.
 """
 
 from __future__ import annotations
+
+from .._trace_core.record_rows import install_record_facade
+from ._row_refs import install_child_fields
 
 # ---------------------------------------------------------------------------
 # The facades: declared stored fields become row-cell descriptors; the
@@ -93,3 +96,15 @@ _MODULE_STORED_FIELDS: tuple[str, ...] = (
     "custom_attributes",
     "custom_methods",
 )
+
+
+def install_module_facades(module_call_cls: type, module_cls: type) -> None:
+    """Install the ``ModuleCall`` and ``Module`` row-cell descriptors.
+
+    ``Module.ops`` and ``Module.params`` list child records, so their cells
+    take the row-key descriptors of ``_row_refs``.
+    """
+
+    install_record_facade(module_call_cls, _MODULE_CALL_STORED_FIELDS)
+    install_record_facade(module_cls, _MODULE_STORED_FIELDS)
+    install_child_fields(module_cls, {"ops": "module_call", "params": "param"})

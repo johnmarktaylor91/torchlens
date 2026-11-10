@@ -61,7 +61,7 @@ from ._call_tree import (
 from ._lookup_kinds import converted, module_call_owning_op, module_for_key, module_item
 from ._module_accessor_filters import ModuleAccessorFilters
 from ._module_call_rows import _module_call_log_to_row
-from ._module_facade_fields import _MODULE_CALL_STORED_FIELDS, _MODULE_STORED_FIELDS
+from ._module_facade_fields import install_module_facades
 from ._moe_views import _ModuleRouting
 from ._runtime_handles import runtime_handle_from_trace
 from .attribute_write import AttributeWrite
@@ -1793,9 +1793,9 @@ class Module(_ModuleRouting):
     def __tl_state_items__(self) -> Any:
         """Yield live state pairs from the backing row (facade hook)."""
 
-        from .._trace_core.record_rows import record_state_items
+        from ._row_refs import child_state_items
 
-        return record_state_items(self)
+        return child_state_items(self)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
         """Install a state mapping through the cell descriptors (hook)."""
@@ -2572,10 +2572,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
 def _install_module_facades() -> None:
     """Install the ModuleCall/Module row-cell descriptors (import-time)."""
 
-    from .._trace_core.record_rows import install_record_facade
-
-    install_record_facade(ModuleCall, _MODULE_CALL_STORED_FIELDS)
-    install_record_facade(Module, _MODULE_STORED_FIELDS)
+    install_module_facades(ModuleCall, Module)
 
 
 _install_module_facades()
