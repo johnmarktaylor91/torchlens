@@ -65,7 +65,7 @@ def test_layer_from_a_chained_trace_keeps_it_and_reprs_live() -> None:
     text = repr(layer)
     assert "relu_1" in text
     assert "detached" not in text
-    assert str(layer) == text
+    assert "relu_1" in str(layer)  # the live str adds the value summary to the repr
     assert f"context: {layer}"  # f-string interpolation must not raise
     assert isinstance(layer.source_trace, tl.Trace)
     assert [parent.label for parent in layer.parents]
