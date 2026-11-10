@@ -7,11 +7,11 @@ renderer. It is the ONLY default route to ``collapse="auto"`` anywhere
 and the legacy wrapper keeps its own defaults.
 
 Viewer policy: never auto-open, anywhere, by default -- ``open_viewer=True``
-is explicit opt-in. Notebook policy (settled 3:0): inline display, no
-implicit file, no viewer. Script policy: branch A (write a file in plain scripts) ships as the
-default, switched by ONE constant below.
+is explicit opt-in. Notebook policy: inline display, no implicit file, no
+viewer. Script policy: plain scripts write a file by default, switched by ONE
+constant below.
 
-Every spelling is DOCUMENTED-UNSTABLE pending the naming sprint.
+Every spelling is DOCUMENTED-UNSTABLE: the names may still change.
 """
 
 from __future__ import annotations
@@ -84,11 +84,11 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
 ) -> Drawing:
     """One-call model picture: resolve input, capture metadata-only, draw.
 
-    The three input rungs::
+    Three ways to give the input (with none, the shape is inferred or an error names the fix)::
 
         tl.draw(model, x)                            # best: your real input
         tl.draw(model, input_shape=(1, 3, 224, 224))  # your shape, random values; disclosed
-        tl.draw(model)                               # inferred shape + random values; disclosed, or a teach
+        tl.draw(model)                               # inferred shape, random values; disclosed
         tl.draw(lm, "The quick brown fox")           # HF models: a string is a real input
 
     Parameters
@@ -100,11 +100,11 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
     input_kwargs:
         Keyword inputs forwarded to the model.
     input_shape:
-        Shape of a synthesized input (rung 2); disclosed in the provenance.
+        Shape of a synthesized input when no real input is given; disclosed in the provenance.
     theme:
         Skin preset (``Trace.draw(theme=)``).
     collapse:
-        Collapse mode; the facade default is ``"auto"`` (``Trace.draw`` keeps ``"none"``).
+        Collapse mode; ``tl.draw`` defaults to ``"auto"`` (``Trace.draw`` keeps ``"none"``).
     module:
         Focus the picture on one module.
     depth:
@@ -112,7 +112,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
     path:
         Explicit paths write and report. With no path, notebooks display inline without a file;
         scripts write collision-safe ``<ModelClass>-graph.pdf`` plus one printed line when
-        ``BARE_RENDER_WRITES_FILE_IN_SCRIPTS`` is True (branch A).
+        ``BARE_RENDER_WRITES_FILE_IN_SCRIPTS`` is True (the default).
     file_format:
         Format for a path with no extension (an extension picks it): ``"svg"`` inline, else ``"pdf"``.
     open_viewer:

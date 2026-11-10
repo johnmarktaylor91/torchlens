@@ -1,6 +1,6 @@
 # TorchLens
 
-> A package for extracting activations from PyTorch models and saving portable bundles
+> Inspect, visualize and intervene on any operation in any neural network
 
 ## Tasks
 

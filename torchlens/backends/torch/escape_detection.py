@@ -600,7 +600,7 @@ def _report_escape(
         "TorchLens shadow detector observed a raw torch callable outside its registered "
         f"wrapper edge: {callable_name} at {detail['file']}:{detail['line']} in "
         f"{detail['function']} (storage hint: {detail['storage_hint']}). The Trace is marked "
-        "capture_verified=False. Rebind after torchlens.backends.torch.wrappers"
+        "trace.provenance.verified=False. Rebind after torchlens.backends.torch.wrappers"
         ".wrap_torch() or use a live torch "
         "namespace lookup; escapes with a signal are recovered by the rescue re-run.",
         CaptureGapWarning,
@@ -903,7 +903,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                 )
                 warnings.warn(
                     "TorchLens failed to uninstall its escape detector "
-                    f"({teardown_exc!r}). The Trace is marked capture_verified=False "
+                    f"({teardown_exc!r}). The Trace is marked trace.provenance.verified=False "
                     "(reason: escape_detector_teardown_failed); a leaked hook may still "
                     "be active in this process.",
                     CaptureGapWarning,

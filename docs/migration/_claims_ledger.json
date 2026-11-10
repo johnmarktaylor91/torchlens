@@ -12,10 +12,13 @@
     {
       "id": "readme-any-pytorch-model",
       "category": "any-model",
-      "wording": "Inspect, visualize and intervene on any operation in any neural network.",
+      "wording": "Inspect, visualize and intervene on any operation in any neural network",
       "locations": [
         {
           "file": "README.md"
+        },
+        {
+          "file": "pyproject.toml"
         }
       ],
       "release": null,
@@ -301,27 +304,6 @@
         "perf-no-single-multiplier",
         "perf-fastlog-attribution"
       ]
-    },
-    {
-      "id": "pyproject-description",
-      "category": "capability",
-      "wording": "A package for extracting activations from PyTorch models and saving portable bundles",
-      "locations": [
-        {
-          "file": "pyproject.toml"
-        }
-      ],
-      "release": "v2.36.1@550b96a6",
-      "runtime_backend": "PyTorch eager (torch backend)",
-      "models": "n/a",
-      "evidence": [
-        "tests/test_quickstart_readme_gate.py"
-      ],
-      "evidence_note": "Plain description; to be replaced by the author's pitch.",
-      "exclusions": "",
-      "date": "2026-10-29",
-      "status": "release-supported",
-      "registry_ids": []
     },
     {
       "id": "github-repo-description",

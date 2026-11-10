@@ -262,7 +262,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 "TorchLens completeness witness observed "
                 f"{len(diagnostics)} unaccounted aten dispatch event(s); first: "
                 f"{first['operator']} ({first['reason']}). The Trace is marked "
-                "capture_verified=False; inspect trace.completeness_diagnostics.",
+                "trace.provenance.verified=False; inspect trace.completeness_diagnostics.",
                 CaptureGapWarning,
                 stacklevel=external_warning_stacklevel(),
             )

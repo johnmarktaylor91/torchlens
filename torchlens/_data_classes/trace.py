@@ -115,6 +115,7 @@ from . import (
 )
 from ._accessor_base import Accessor
 from ._conditional_arms import ArmRef, ConditionalOutcome, arm_role_ops, derive_conditional_outcome
+from ._draw_keywords import teach_unknown_draw_keywords
 from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from ._preprocessing_provenance import status_of
 from ._trace_accessors import (
@@ -3243,6 +3244,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
 
         return _doors.visualization()._trace_draw.show(self, kind=kind, **kwargs)
 
+    @teach_unknown_draw_keywords
     def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
         self,
         path: str | None = None,
@@ -3299,7 +3301,6 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         view: DrawViewLiteral | None = None,
     ) -> "Drawing":
         """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`."""
-
         return _forward_draw(_doors.visualization()._trace_draw.draw, locals())
 
     def animate(
@@ -3310,7 +3311,6 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         open_viewer: bool = False,
     ) -> "Drawing":
         """Animate the passes at ``site`` and return the picture as a :class:`~torchlens.viz.Drawing`."""
-
         return _doors.visualization()._trace_draw.animate(
             self, site, path=path, open_viewer=open_viewer
         )

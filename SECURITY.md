@@ -12,9 +12,9 @@ best-effort basis; include a minimal reproduction where possible.
 
 | Version | Supported |
 |---------|-----------|
-| Latest 2.x release | Yes |
-| Older 2.x releases | Upgrade to the latest release before reporting |
-| 1.x | No |
+| Latest 3.x release | Yes |
+| Older 3.x releases | Upgrade to the latest release before reporting |
+| 2.x and 1.x | No |
 
 ## The trust model, in one paragraph
 
@@ -27,19 +27,25 @@ anyway.
 
 ## Artifact loading (`.tlspec` bundles)
 
-Portable bundles contain a `metadata.pkl` payload. It is treated as UNTRUSTED
-input and is read through a restricted unpickler with a default-deny class
-allowlist (`torchlens/_io/_safe_unpickle.py`), mirroring the intent of
-`torch.load(..., weights_only=True)`:
+A saved artifact is UNTRUSTED input. In the 3.x saved format
+(`docs/maintainers/saved_format_3.md`) it is a directory of typed JSON record
+files plus safetensors tensor blobs:
 
-- Code-execution gadgets (`os` / `sys` / `subprocess` / `builtins` /
-  `importlib` and the `torch.serialization` loaders) are denied and execute
-  nothing; trust is decided by the resolved object's real module, never the
-  pickled path.
-- Foreign (non-torchlens) callables embedded in an artifact are NEVER imported
-  at load time. By default they deserialize as inert placeholders: the trace
-  loads structurally, and any attempt to CALL such a recipe fails closed.
+- Nothing in the directory is pickled, and the reader never unpickles,
+  evaluates, or imports by name anything it reads.
 - Tensor payloads travel as safetensors blobs, not pickles.
+- Foreign (non-torchlens) callables named in an artifact are NEVER imported
+  at load time: the trace loads structurally, and any attempt to CALL such a
+  recipe fails closed.
+- Artifacts saved by TorchLens 2.x, whose bundles carried a pickled
+  `metadata.pkl`, are not read: `tl.load` raises
+  `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`).
+- Where the load path still meets a legacy pickle payload, it reads it
+  through a restricted unpickler with a default-deny class allowlist
+  (`torchlens/_io/_safe_unpickle.py`), mirroring the intent of
+  `torch.load(..., weights_only=True)`: code-execution gadgets (`os` / `sys` /
+  `subprocess` / `builtins` / `importlib` and the `torch.serialization`
+  loaders) are denied and execute nothing.
 
 Executing what an artifact DESCRIBES is a separate, explicit step with its own
 opt-ins:
@@ -68,8 +74,10 @@ packaging, torch, safetensors, tqdm, graphviz, typing_extensions, pillow). CI
 runs `pip-audit` over that runtime tree with NO suppressions: an advisory in a
 runtime dependency blocks release.
 
-The OPTIONAL extras tree is audited separately, with each accepted advisory
-documented here and in the workflow (`.github/workflows/quality.yml`):
+Both audits run nightly in `.github/workflows/nightly.yml` (the "Dependency
+audit" and "Dependency audit (extras)" jobs). The OPTIONAL extras tree is
+audited separately, and each accepted advisory is documented here, with any
+waiver also written out beside its flag in that workflow:
 
 - **transformers 4.x band (four advisories, fixed only in 5.x).** The `hf`
   and `test` extras admit `transformers>=4.45,<6`. Installs resolving to the

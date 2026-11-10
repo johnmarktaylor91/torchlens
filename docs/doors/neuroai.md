@@ -1,4 +1,4 @@
-# Door: NeuroAI
+# Where to start: NeuroAI
 
 ## Start here
 

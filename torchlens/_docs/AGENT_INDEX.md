@@ -1,6 +1,6 @@
 # TorchLens agent index
 
-A package for extracting activations from PyTorch models and saving portable bundles. Import as `import torchlens as tl`.
+Inspect, visualize and intervene on any operation in any neural network. Import as `import torchlens as tl`.
 
 Page paths below are relative to https://github.com/johnmarktaylor91/torchlens/blob/main/
 

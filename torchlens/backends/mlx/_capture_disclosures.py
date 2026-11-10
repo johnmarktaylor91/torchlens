@@ -41,7 +41,7 @@ def _disclose_compiled_attributes(trace: Trace, compiled_attribute_paths: Sequen
         warnings.warn(
             "MLX model holds mx.compile/traced-transform attribute(s) "
             f"({names}); their interiors are not logged, so this capture "
-            "is marked capture_verified=False.",
+            "is marked trace.provenance.verified=False.",
             UserWarning,
             stacklevel=3,
         )

@@ -1,4 +1,4 @@
-# Door: vision and dynamic models
+# Where to start: vision and dynamic models
 
 ## Start here
 

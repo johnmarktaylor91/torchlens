@@ -300,7 +300,7 @@ def test_bare_view_draw_writes_census_beside_written_file(
     fork = _edited_fork(log)
     # The autouse conftest fixture gives draw() a tmp_path default path; put the
     # shipped default (None: a bare draw picks a collision-safe name) back here.
-    draw = Trace.draw
+    draw = inspect.unwrap(Trace.draw)
     positional = [
         name
         for name, parameter in inspect.signature(draw).parameters.items()

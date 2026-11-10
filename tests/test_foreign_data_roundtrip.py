@@ -101,6 +101,16 @@ def _foreign_ops(trace: tl.Trace) -> list:
     return [op for op in trace._layer_list if op.func_name == FOREIGN_DATA_FUNC_NAME]
 
 
+def _trace_unresolved(model: nn.Module, x: torch.Tensor) -> tl.Trace:
+    """Trace a model with an unresolved round trip; assert the one capture-time warning."""
+
+    with pytest.warns(TorchLensWarning, match="re-entered torch after host computation") as rec:
+        trace = tl.trace(model, x)
+    codes = [w.message.fields.get("code") for w in rec if isinstance(w.message, TorchLensWarning)]
+    assert codes.count("foreign_data_roundtrip_unresolved") == 1
+    return trace
+
+
 def _trace_quiet(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
@@ -173,11 +183,16 @@ def test_host_computation_between_export_and_reentry_is_a_typed_failure(round_tr
 
     model = _RoundTripModel(round_trip)
     x = torch.randn(3, 4)
-    trace = _trace_quiet(model, x)
+    trace = _trace_unresolved(model, x)
     _assert_one_round_trip(trace, RESOLUTION_UNRESOLVED, "detach")
     assert _validate(model, x) is False
     failure = last_validation_failure()
     assert failure is not None
+    # The capture-time warning opens with validation's own sentence for this op.
+    with pytest.warns(TorchLensWarning) as rec:
+        tl.trace(model, x)
+    sentence = failure.message.split("; the recorded value")[0]
+    assert str(rec[0].message).startswith(sentence)
     assert failure.check_name == CHECK_REPLAY
     assert failure.func_name == FOREIGN_DATA_FUNC_NAME
     assert failure.extra["reason"] == FOREIGN_DATA_REPLAY_REASON
@@ -225,7 +240,7 @@ def test_scalar_constructor_links_only_tolist_departures() -> None:
     trace = _trace_quiet(numpy_model, torch.randn(3, 4))
     assert _foreign_ops(trace) == []
     tolist_model = _ScalarAfterTolistModel("tolist")
-    trace = _trace_quiet(tolist_model, torch.randn(3, 4))
+    trace = _trace_unresolved(tolist_model, torch.randn(3, 4))
     ops = _foreign_ops(trace)
     assert (
         len(ops) == 1 and ops[0].call.func_transform_config["resolution"] == RESOLUTION_UNRESOLVED

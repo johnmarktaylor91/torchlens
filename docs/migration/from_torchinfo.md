@@ -150,7 +150,7 @@ Params   1,388 declared | trainable 1,388 (100%) | size 5.42 KiB
 Compute  16.6k FLOPs fwd (fma=2) | 8.2k MACs | 4/4 ops known
 Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
-Capture  torch | complete | no NaN/Inf (exact)
+Capture  torch | complete | verification not checked | no NaN/Inf (exact)
 Legend   1 MAC = 2 FLOPs
 more     result.details() | view='compute' for per-row MACs | docs/reference/summary.md
 ```
@@ -176,7 +176,7 @@ Params   1,388 declared | trainable 1,388 (100%) | size 5.42 KiB
 Compute  16.6k FLOPs fwd (fma=2) | 8.2k MACs | 4/4 ops known
 Memory   <masked>
 Graph    4 ops, 4 rows shown | 6 tracked tensor rows
-Capture  torch | complete | no NaN/Inf (exact)
+Capture  torch | complete | verification not checked | no NaN/Inf (exact)
 Legend   1 MAC = 2 FLOPs
 more     result.details() | view='compute' for per-row MACs | docs/reference/summary.md
 ```

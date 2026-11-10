@@ -115,7 +115,7 @@ def _record_input_semantics_gaps(
     warnings.warn(
         "TorchLens cannot verify the captured model-input semantics "
         f"({reason}); affected path(s): {', '.join(gaps)}. The completeness "
-        "verdict is ceilinged at capture_verified=False.",
+        "verdict is ceilinged at trace.provenance.verified=False.",
         CaptureGapWarning,
         stacklevel=3,
     )

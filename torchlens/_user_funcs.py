@@ -168,10 +168,10 @@ def reset_naming_counter(class_name: str | None = None) -> None:
 
 
 def draw(*args: Any, **kwargs: Any) -> Any:
-    """One-call model picture over the quickstart input ladder.
+    """One-call model picture: resolve the input, capture metadata only, draw.
 
     ONE metadata-only eval/no-grad capture (training flags, RNG, and norm
-    buffers restored), rendered with the facade default ``collapse="auto"``
+    buffers restored), rendered with ``collapse="auto"`` by default
     (``Trace.draw`` keeps ``"none"``). Returns a detached
     :class:`torchlens.viz.Drawing`; never auto-opens a viewer.
     See :func:`torchlens._quickstart.draw` for the parameters.
@@ -258,14 +258,14 @@ def trace(
     Parameters
     ----------
     model:
-        PyTorch model, or a bound method of one (the ruled root contract): ``tl.trace(model.generate, ids, ...)`` resolves the owner via
-        ``method.__self__``, wraps it in a TL-authored synthetic root, and
-        calls the method exactly once.
+        PyTorch model, or a bound method of one: ``tl.trace(model.generate, ids, ...)``
+        resolves the owner via ``method.__self__``, wraps it in a synthetic root module
+        that TorchLens builds, and calls the method exactly once.
     inputs:
-        Positional args for ``model.forward()``; a single tensor or list.
-        The input ladder: a real input is the gold rung; omit
-        it and pass ``input_shape=``, or omit both to infer -- synthesized
-        values, disclosed, or a teach; mixing refuses ``input_rung_conflict``.
+        Positional args for ``model.forward()``; a single tensor or list. A real input
+        is best; else omit it and pass ``input_shape=``, or omit both to infer the shape
+        (synthesized values, disclosed, or an error that names the fix). Passing both a
+        real input and ``input_shape=`` raises ``input_rung_conflict``.
     input_kwargs:
         Keyword args for ``model.forward()``.
     input_shape:
@@ -288,8 +288,8 @@ def trace(
         ``structure_only``, ``save_mode``, ``lookback``, ``chunk_size``,
         ``grouping``, ...); the former flat kwargs are removed. ``grouping``
         (UNSTABLE) is the closed-vocabulary grouping policy: ``"structural"``
-        (the default), ``"strict_shapes"`` and ``"fold_sites"`` refuse typed
-        until their designs land; the request is recorded on
+        (the default); ``"strict_shapes"`` and ``"fold_sites"`` raise a typed
+        error (not implemented yet); the request is recorded on
         ``trace.options.grouping`` and the policy that ran on
         ``trace.options.grouping_policy``.
     intervene:
@@ -301,10 +301,10 @@ def trace(
         (``tl.func("relu")``, ``tl.module(...)``) or a callable predicate
         taking the live op context. Capture halts inclusively after the first
         match and returns a partial halted trace. A selector-shaped site that
-        never fires refuses typed (``stop_after_never_fired``); a callable that
+        never fires raises (``stop_after_never_fired``); a callable that
         never fires warns (``stop_after_never_fired_callable``). Finalized
-        labels refuse (``stop_after_site_not_live``); an unsupported type
-        refuses (``stop_after_type_invalid``). Cannot combine with
+        labels raise (``stop_after_site_not_live``); an unsupported type
+        raises (``stop_after_type_invalid``). Cannot combine with
         ``CaptureOptions(chunk_size=...)``. ``None`` reads the ambient
         ``tl.experimental.stop_after`` site, if one is active.
     storage:
@@ -322,7 +322,7 @@ def trace(
         every completed tensor-output event plus module structure lines;
         ``"modules"`` narrates structure only; a live selector scopes the
         stream; ``tl.options.NarrationOptions`` groups the full surface (stats
-        rungs, sink, crash tail). Narration is a display of capture
+        levels, sink, crash tail). Narration is a display of capture
         events -- independent of ``save=`` retention. Torch-only.
     episode:
         Torch-only episode capture declaration (``EpisodeOptions``).
@@ -335,8 +335,8 @@ def trace(
         it; ``"disclose"`` records only. Same knob as ``spec.bind`` and ``Trace.run``
         (spelling DOCUMENTED-UNSTABLE).
     **forward_kwargs:
-        Never accepted -- unknown keywords refuse typed with
-        ``trace_forward_kwargs_unrouted`` naming the ``input_kwargs=`` routing.
+        Never accepted -- unknown keywords raise ``trace_forward_kwargs_unrouted``,
+        which says to pass forward keywords through ``input_kwargs=``.
 
     Postfunc behavior:
         ``CaptureOptions.activation_transform`` and ``grad_transform`` both take a tensor, should return a
@@ -510,7 +510,7 @@ def release_model(model: nn.Module) -> None:
 def summary(*args: Any, **kwargs: Any) -> str:
     """Run a one-call capture and return the rendered summary string.
 
-    ``tl.summary(model, x)`` is the first-class one-call front door: it runs a
+    ``tl.summary(model, x)`` is the one-call entry point: it runs a
     metadata-only capture and RETURNS the rendered summary text (it never
     auto-prints). ``trace.summary()`` reports an existing capture instead.
 
