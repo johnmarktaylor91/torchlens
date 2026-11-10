@@ -227,7 +227,7 @@ def build_layer_state(state: dict[str, Any]) -> None:
 
 
 def _merge_layer_state(
-    state: dict[str, Any], arrivals: Any, layer_class: type[Any], reconcile: Any, read: Any
+    state: dict[str, Any], arrivals: Any, layer_class: Any, reconcile: Any, read: Any
 ) -> None:
     """Build a pending layer state by the full merge over its passes.
 
