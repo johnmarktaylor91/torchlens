@@ -141,17 +141,23 @@ def _carry_extras(parent_rows: Any, rows: Any, translator: Any) -> None:
 
 
 def pin_fork_params(fork: Any) -> None:
-    """Rebind the fork's param rows to it, carry the parent views' extras, then pin."""
+    """Pin ``fork``'s params; during its fork build, first rebind its param rows and carry extras.
+
+    Also reached from ``replace_state_from``, which builds no fork: the fork
+    steps run only while the fork core's translator is still building.
+    """
 
     core = fork.__dict__.get("_trace_core")
-    rows = param_rows_of(core) if core is not None else None
-    parent_ref = getattr(fork, "_parent_run", None)
-    parent = parent_ref() if parent_ref is not None else None
-    parent_core = parent.__dict__.get("_trace_core") if parent is not None else None
-    parent_rows = param_rows_of(parent_core) if parent_core is not None else None
-    if rows is not None and parent_rows is not None:
-        _rebind_trace_cells(rows.table.store, weakref.ref(fork))
-        _carry_extras(parent_rows, rows, getattr(core, "_record_translator", None))
+    translator = core._record_translator if core is not None else None
+    if translator is not None and translator.map is not None:
+        parent_ref = translator._parent_ref
+        parent = parent_ref() if parent_ref is not None else None
+        parent_core = parent.__dict__.get("_trace_core") if parent is not None else None
+        rows = param_rows_of(core)
+        parent_rows = param_rows_of(parent_core) if parent_core is not None else None
+        if rows is not None and parent_rows is not None:
+            _rebind_trace_cells(rows.table.store, weakref.ref(fork))
+            _carry_extras(parent_rows, rows, translator)
     pin_params(fork, forked=True)
 
 

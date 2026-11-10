@@ -33,7 +33,8 @@ _OBJECT_GETATTRIBUTE = object.__getattribute__
 _OP_KIND = "op"
 #: Class -> ``copier(value, translator)``: the fork's copy of a parent row-key container,
 #: and (added by ``_param_fork``) the fork's ``Param`` for a parent ``Param``.
-FORK_COPIERS: dict[type, Any] = dict.fromkeys(ROW_FORMS, fork_copy)
+FORK_COPIERS: dict[type, Any] = {}
+FORK_COPIERS.update(dict.fromkeys(ROW_FORMS, fork_copy))
 
 
 def _bound_op(op: Any, op_cls: type, store: Any, row: int) -> bool:
