@@ -100,4 +100,4 @@ def test_view_refuses_after_its_trace_is_collected() -> None:
     gc.collect()
     with pytest.raises(tl.errors.RecordBindingError) as raised:
         _ = view._record
-    assert raised.value.code == "trace_reference_collected"
+    assert raised.value.fields["code"] == "trace_reference_collected"
