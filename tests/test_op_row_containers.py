@@ -28,6 +28,8 @@ from torchlens._data_classes._state_adapter import plain_state
 # with the module's bare name, and a pickle of a model defined here carries it.
 _CONTAINER_MARKS = (b"_data_classes._op_row_containers", b"OpSequence", b"OpLabelMap", b"OpRows")
 _PLAIN_TYPES = (list, dict, OrderedDict)
+# A loaded file's label dictionaries are both plain dictionaries, as before the row keys.
+_LOADED_TYPES = (list, dict, dict)
 
 
 class _Record:
@@ -326,6 +328,6 @@ def test_pickle_state_pickles_and_saved_files_keep_the_plain_container_types(
     files = [bundle] if bundle.is_file() else [path for path in bundle.rglob("*") if path.is_file()]
     assert files and not any(_names_containers(path.read_bytes()) for path in files)
     loaded = tl.load(bundle)
-    assert _container_types(loaded.__getstate__()) == _PLAIN_TYPES
-    assert _container_types(plain_state(loaded)) == _PLAIN_TYPES
+    assert _container_types(loaded.__getstate__()) == _LOADED_TYPES
+    assert _container_types(plain_state(loaded)) == _LOADED_TYPES
     assert [op.label for op in loaded._layer_list] == labels
