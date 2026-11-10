@@ -308,3 +308,27 @@ def test_a_fork_reads_its_own_buffers() -> None:
     gc.collect()
     assert fork_ref() is not None
     assert held.trace is fork_ref()
+
+
+def test_a_fork_reads_module_buffers_read_before_the_fork() -> None:
+    """A module's cached scoped accessor copies into the fork as one that reads for the fork."""
+
+    trace = _build()
+    before = {
+        name: list(module.buffers.keys()) for name, module in trace.modules.items()
+    }  # caches each module's scoped accessor on the parent
+    parent = trace
+    for _depth in range(2):  # a fork, then a fork of that fork after its modules were read
+        fork = parent.fork()
+        for name, module in fork.modules.items():
+            accessor = module.buffers
+            assert list(accessor.keys()) == before[name]
+            for address in accessor.keys():
+                fork_buffer = accessor[address]
+                assert fork_buffer.trace is fork
+                assert fork_buffer is fork.buffers[address]
+                assert torch.equal(fork_buffer.final_value, trace.buffers[address].final_value)
+        parent = fork
+    parent_buffer = trace.modules["bn"].buffers["bn.running_mean"]
+    assert parent_buffer.trace is trace
+    assert parent_buffer is trace.buffers["bn.running_mean"]

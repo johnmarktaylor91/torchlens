@@ -142,6 +142,22 @@ def module_buffers(module: Module) -> BufferAccessor:
     return handed(cached, reference() if reference is not None else None)
 
 
+def fork_module_accessor(
+    stored: BufferAccessor, fork_core: Any, fork: Any, member: Callable[[Any], Any]
+) -> BufferAccessor:
+    """Return a fork module's copy of ``stored``, a module's cached scoped accessor.
+
+    A keyed accessor names the same rows in the fork's buffer table (a
+    copy-on-write view with the parent's rows) and reads for the fork. Without
+    a fork buffer table it becomes an accessor holding the fork's Buffers.
+    """
+
+    rows = stored.__dict__.get("_rows")
+    if rows is not None and fork_core is not None and fork_core.kind_rows.get(KIND) is not None:
+        return keyed_accessor(dict(rows), fork_core, fork)
+    return BufferAccessor({a: member(b) for a, b in stored._dict.items()}, source_trace=fork)
+
+
 def bind_fork_buffers(
     parent: Trace, fork: Trace, fork_core: Any, copy_value: Callable[[Any], Any]
 ) -> None:
