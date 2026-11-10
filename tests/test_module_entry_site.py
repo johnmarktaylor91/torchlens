@@ -232,7 +232,8 @@ def test_value_equal_codes_from_two_files_get_separate_module_entries(
     walked = _run(model, x, 0, True, monkeypatch)
     assert served[0] == walked[0]
     assert served[1] == walked[1]
-    block_files = {
-        frames[-1][0] for address, _index, frames in served[0] if address == "block" and frames
-    }
-    assert block_files == {str(tmp_path / "file_a.py"), str(tmp_path / "file_b.py")}
+    # Each block call (and its lin and act) is a new entry site: a key that merged the
+    # two value-equal codes would serve the second call's three entries from the first.
+    # (The walk's own whole-context cache keys on (code, line, offset) without the
+    # file, so both calls' contexts come from one walk entry, on either path.)
+    assert served[2] == 0
