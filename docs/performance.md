@@ -109,9 +109,15 @@ with the partial capture on `exc.partial_trace`.
 
 ### Escape diagnostics
 
-The sys.modules crawler is deleted (replaced by the rescue re-run + the
-mechanical belt), so the default capture pays no crawl cost. The callable
-detector is a separate, opt-in diagnostic cost:
+The default capture does not scan every loaded module for stale references to
+torch functions, so it pays no scanning cost. Two narrower steps cover that
+ground instead: when TorchLens wraps torch, it also patches module-level names
+bound to a torch function before the wrap (such as `from torch import bmm`); and
+when a finished `tl.trace` capture shows a sign that an op escaped the
+wrappers, TorchLens re-runs the forward once with a `TorchFunctionMode` that
+routes stale references to their wrappers, warns that the forward ran twice,
+and discloses the re-run on the trace. The callable detector is a separate,
+opt-in diagnostic cost:
 
 ```python
 import torch
@@ -496,8 +502,8 @@ Representative CPU rows ("vs raw" = multiple of the raw forward pass):
 | gpt2_hooked | fastlog_halt_25 | 283.6 | **0.83x** |
 
 (Full exhaustive capture (`tl_trace`) costs ~14x the forward and amortizes on large models; the
-`fastlog_*` rows show selective / early-exit capture, where halting at 25% depth drops below the
-raw-forward cost. TinyNet ratios are dominated by fixed per-capture overhead — see the full table.)
+`fastlog_*` rows show selective / early-exit capture with `tl.record` (named `fastlog` when these
+numbers were measured), where halting at 25% depth drops below the raw-forward cost. TinyNet ratios are dominated by fixed per-capture overhead — see the full table.)
 
 ## Re-capturing baselines (canonical host)
 
