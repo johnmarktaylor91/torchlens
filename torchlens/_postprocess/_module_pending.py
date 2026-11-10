@@ -21,6 +21,7 @@ from .._data_classes._module_role_hints import (
     role_hints_for_module_class,
 )
 from .._data_classes._op_column_scan import call_outputs
+from .._data_classes._param_pin import pin_module_param_groups
 from .._io._buffer_versions import seal_scan
 from .._ir.workspaces import ModuleCaptureWorkspace, _init_module_hierarchy_data
 from ._module_census import uncalled_module_addresses
@@ -113,6 +114,7 @@ class PendingModules:
         )
         try:
             self.build(trace, self)
+            pin_module_param_groups(trace)
         except BaseException:
             for name in LAZY_MODULE_FIELDS:
                 state.pop(name, None)

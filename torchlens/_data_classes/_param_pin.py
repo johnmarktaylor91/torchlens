@@ -62,6 +62,28 @@ def _accessor_class() -> type:
     return _ACCESSOR[0]
 
 
+def _pin_by_module(state: dict[str, Any], rows: Any, memo: dict[int, Any]) -> None:
+    """Turn the per-module ``Param`` lists in ``state`` into row-key sequences of ``rows``."""
+
+    by_module = state.get(_BY_MODULE)
+    if by_module:
+        for address, params in list(by_module.items()):
+            by_module[address] = as_sequence(rows, params, memo)
+
+
+def pin_module_param_groups(trace: Any) -> None:
+    """Hold ``trace``'s per-module ``Param`` lists by row key once a deferred build fills them.
+
+    The module build can run after ``pin_params`` (on the first read of a
+    module field), so the lists it groups are converted here as well.
+    """
+
+    core = trace.__dict__.get("_trace_core")
+    rows = param_rows_of(core) if core is not None else None
+    if rows is not None:
+        _pin_by_module(trace.__dict__, rows, {})
+
+
 def pin_params(trace: Any, *, forked: bool = False) -> None:
     """Turn ``trace``'s ``Param`` containers into row keys and name it the views' owner.
 
@@ -85,10 +107,7 @@ def pin_params(trace: Any, *, forked: bool = False) -> None:
     accessor = state.get(_FIELD)
     if accessor is not None and accessor.__class__ is _accessor_class():
         own_accessor(rows, accessor)
-    by_module = state.get(_BY_MODULE)
-    if by_module:
-        for address, params in list(by_module.items()):
-            by_module[address] = as_sequence(rows, params, memo)
+    _pin_by_module(state, rows, memo)
     if not forked:
         if isinstance(core.ops, OpRowStore):
             _pin_op_cells(core.ops, rows, memo)
