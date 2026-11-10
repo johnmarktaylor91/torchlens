@@ -916,6 +916,16 @@
         "tests/test_sae5_save_door.py",
         "tests/test_selection_door.py"
       ],
+      "torchlens/_data_classes/_draw_keywords.py": [
+        "tests/test_auto_collapse_atomic_spans.py",
+        "tests/test_conditional_branches.py",
+        "tests/test_draw_keyword_teaching.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_encoding_size.py",
+        "tests/test_indexing_coherence.py",
+        "tests/test_validation.py",
+        "tests/test_vizx_netron_baseline_diff.py"
+      ],
       "torchlens/_data_classes/_familiar_names.py": [
         "tests/test_indexing_coherence.py",
         "tests/test_io_plain_pickle.py",
@@ -6170,7 +6180,7 @@
       ],
       "torchlens/_utils/_subprocess.py": [
         "tests/test_doctor.py",
-        "tests/test_draw_headless.py",
+        "tests/test_doctor_expected_absences.py",
         "tests/test_r18i3_utils_residue.py",
         "tests/test_render_bugs.py",
         "tests/test_subprocess_grandchild_reaper.py",
@@ -6767,11 +6777,11 @@
         "tests/test_bundle_diff_renderer.py",
         "tests/test_cairosvg_capability.py",
         "tests/test_doctor.py",
+        "tests/test_doctor_expected_absences.py",
         "tests/test_explorer_watch_renderers.py",
         "tests/test_intervention_render_marks.py",
         "tests/test_label_geometry.py",
-        "tests/test_render_flow_reverse_index.py",
-        "tests/visualization/test_sibling_order_clusters.py"
+        "tests/test_render_flow_reverse_index.py"
       ],
       "torchlens/_visualization/_collapse_disclosures.py": [
         "tests/test_auto_collapse_atomic_spans.py",
@@ -9167,11 +9177,11 @@
       ],
       "torchlens/backends/tf/_tf_compat.py": [
         "tests/test_doctor.py",
+        "tests/test_doctor_expected_absences.py",
         "tests/test_mechanical_belt.py",
         "tests/test_r18i3_utils_residue.py",
         "tests/test_r23_type_reduce_rce.py",
         "tests/test_report_honesty_wave0.py",
-        "tests/test_selective_save_zero_match_warning.py",
         "tests/test_tf_compat.py",
         "tests/test_tlspec_unpickler_first_party_rce.py"
       ],
@@ -9609,6 +9619,16 @@
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_scoped_patching_escape_detection.py",
         "tests/test_wrap_state_compat.py"
+      ],
+      "torchlens/backends/torch/_foreign_data_warning.py": [
+        "tests/behaviour/test_hook_passes_restore.py",
+        "tests/test_defaults.py",
+        "tests/test_exception_taxonomy.py",
+        "tests/test_save_union_lookup.py",
+        "tests/test_validate_save_options.py",
+        "tests/test_validation.py",
+        "tests/test_validation_degenerate_forward.py",
+        "tests/test_validation_uninitialized_dest.py"
       ],
       "torchlens/backends/torch/_foreign_wrappers.py": [
         "tests/test_capture_guard_transactionality.py",
@@ -14192,12 +14212,12 @@
         "tests/test_distributed_honesty.py",
         "tests/test_doctor.py",
         "tests/test_doctor_backend_rows.py",
-        "tests/test_mechanical_belt.py",
+        "tests/test_doctor_expected_absences.py",
         "tests/test_r18a_compat_report.py"
       ],
       "torchlens/report/_environment.py": [
-        "tests/test_distributed_honesty.py",
         "tests/test_doctor.py",
+        "tests/test_doctor_expected_absences.py",
         "tests/test_mechanical_belt.py",
         "tests/test_r18a_compat_report.py",
         "tests/test_r18i3_utils_residue.py",
