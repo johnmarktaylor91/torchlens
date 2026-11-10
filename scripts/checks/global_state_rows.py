@@ -228,6 +228,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_state.py", "_prepared_models"),
         ("torchlens/_state.py", "_prepared_root_by_module"),
         ("torchlens/_state.py", "_stale_prepared_roots"),
+        # Module tree each prepared root had when it was last prepared, keyed
+        # weakly by the root and holding its modules through weak references;
+        # a tree that no longer matches sends the model through full preparation.
+        ("torchlens/backends/torch/_prepared_tree.py", "_prepared_trees"),
         ("torchlens/_utils/_tensor_label.py", "_RETIRED_LABEL_SESSION"),
         # F3b's lazy public-impl metadata sync (3c7ed93e): a one-way
         # synced-yet? sentinel flipped on first successful wrap, install-class.
@@ -970,6 +974,14 @@ _PROCESS_CACHES = frozenset(
         # immutable, so a stale slot is a miss, never a wrong answer; the strong
         # part is a frozenset of address strings.
         ("torchlens/_capture/predicates.py", "_module_union_cache"),
+        # One psutil handle for the current process, kept with its pid so a
+        # forked child opens its own; holds no user object.
+        ("torchlens/_capture/peak_memory.py", "_PSUTIL_PROCESS"),
+        # Byte-bounded memo of the tensors sampled from a torchvision
+        # checkpoint file, keyed by path, file stat and sampled names: copies of
+        # file contents only, never a model or its tensors; a rewritten file
+        # misses, and clearing it only costs the next load.
+        ("torchlens/_utils/torchvision_weights.py", "_sample_cache"),
         # Bounded (64-entry) memo of whether an intervene= spec can fire at the
         # per-op door, keyed by id(spec): each value holds the spec through a
         # weakref plus a bool, and a hit requires the weakref to resolve to the
@@ -1023,6 +1035,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/_state.py", "_prepared_models"),
         ("torchlens/_state.py", "_prepared_root_by_module"),
         ("torchlens/_state.py", "_stale_prepared_roots"),
+        ("torchlens/backends/torch/_prepared_tree.py", "_prepared_trees"),
         # Released-model registry became a WeakSet in fixwave-5 concmem: a
         # release registration must never pin the released model itself.
         ("torchlens/backends/torch/_held_refs.py", "_RELEASED_MODELS"),
@@ -1285,6 +1298,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/_held_refs_capture.py", "__all__"),
         ("torchlens/backends/torch/_op_markers.py", "__all__"),
         ("torchlens/backends/torch/_pinned_graph.py", "__all__"),
+        ("torchlens/backends/torch/_prepared_tree.py", "__all__"),
         ("torchlens/backends/torch/_protocol_redispatch.py", "__all__"),
         ("torchlens/_utils/_tensor_label.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_ctx.py", "__all__"),
