@@ -113,12 +113,24 @@ def _reference_store_evict(store: Any) -> None:
 # --- structural description: what is a tensor, what is the same object as before ---
 
 
+def _row_keys_only(value: Any) -> bool:
+    """Whether ``value`` is a record row form, which the walk returns unchanged.
+
+    Iterating one hands out its records, and a held record keeps its trace, so the
+    index and the description name the form without reading its items.
+    """
+
+    return type(value).__dict__.get("_ROW_KEYS_ONLY") is True
+
+
 def _index_objects(value: Any, path: str, out: dict[int, Any], depth: int = 0) -> None:
     """Map ``id`` to ``(path, object)``; holding the object keeps its id from reuse."""
 
     if id(value) in out or depth > _CEILING + 3:
         return
     out[id(value)] = (path, value)
+    if _row_keys_only(value):
+        return
     if isinstance(value, dict):
         for key, item in list(dict.items(value)):
             _index_objects(item, f"{path}[{key!r}]", out, depth + 1)
@@ -145,6 +157,8 @@ def _describe(
         return f"<again {origin}>"
     seen.add(id(value))
     name = f"{type(value).__name__}<{origin}>"
+    if _row_keys_only(value):
+        return name
     if isinstance(value, dict):
         inner = ",".join(
             f"{type(key).__name__}:{_describe(item, before, depth + 1, seen)}"
