@@ -310,9 +310,13 @@ def _build_args_template(
     notes: list[str] = []
     known = arg_slot_labels(trace, args, kwargs)
     arg_components = tuple(_classify_arg_component(arg, notes, trace, known) for arg in args)
+    # A list, not a generator: an empty result is then the shared ``()``, not a
+    # private empty tuple per op (3.10 resizes a generator's tuple to a new block).
     kwarg_components = tuple(
-        (str(key), _classify_arg_component(value, notes, trace, known))
-        for key, value in kwargs.items()
+        [
+            (str(key), _classify_arg_component(value, notes, trace, known))
+            for key, value in kwargs.items()
+        ]
     )
     return CapturedArgTemplate(
         args=arg_components,

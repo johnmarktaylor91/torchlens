@@ -79,6 +79,10 @@ class RawGraphWorkspace:
     #: ``(func_call_id, call-site chain)`` of the wrapped call whose outputs are
     #: being logged (written by the shared-fields builder, read per output).
     _pending_call_site: tuple[Any, Any] | None = None
+    #: Per-capture call-site table (``backends.torch._ops_call_site_fields``):
+    #: site key -> code context and chain, plus the interned remainder of each
+    #: module call. Internal and never persisted: it goes away with the workspace.
+    _call_site_memo: Any = None
     #: The wrapped call's argument slot snapshot (``backends.torch._ops_arg_slots``),
     #: written by the shared-fields builder and retired by its witness step.
     _pending_arg_slots: Any = None

@@ -151,7 +151,7 @@ def extract_tensors_and_params(
                     elif isinstance(item, torch.Tensor):
                         tensors.append(item)
 
-    for name in spec.tensor_kwargs:
+    for name in spec.tensor_kwargs if kwargs else ():  # no kwargs: every name is absent
         val = _get_tensor_kwarg(kwargs, name)
         if val is not None:
             _append_tensor_or_param(val)
