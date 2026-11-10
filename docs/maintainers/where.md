@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1776 modules, 713732 lines, 0 modules without a docstring.
+85 packages, 1776 modules, 713755 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 53 | 21966 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 53 | 21989 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
@@ -730,7 +730,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (53 modules, 21966 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (53 modules, 21989 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -757,7 +757,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `_layer_depths` | Step 4 of graph traversal: optional layer-depth marking. | 348 |
 | `_layer_row_scan` | Raw row scan behind step 15.5: group the passes of each layer. | 430 |
 | `_lazy_param_geometry` | Step 15 support: finalize deferred geometry for lazy-at-prep parameters. | 36 |
-| `_lookup_key_scan` | Raw row scan behind step 11: final op order, labels and lookup keys. | 434 |
+| `_lookup_key_scan` | Raw row scan behind step 11: final op order, labels and lookup keys. | 455 |
 | `_materialize` | Step 0 of postprocess: materialize raw Trace state from capture events. | 1710 |
 | `_module_census` | Module-build helpers for the root call's labels, uncalled modules and Layer roles. | 144 |
 | `_module_containment` | Op containment facts: tally each op's module calls into the module build data. | 107 |
@@ -771,7 +771,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 407 |
 | `_root_module_log` | Module-build-data readers for the root module's calls. | 86 |
 | `_row_ingest` | Step-0 ingest of the exhaustive capture rows (capture C2c). | 317 |
-| `_saved_summary_scan` | Raw row scan behind the saved-output summary refresh. | 245 |
+| `_saved_summary_scan` | Raw row scan behind the saved-output summary refresh. | 247 |
 | `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 344 |
 | `_site_join` | Site-key JOIN (guarded, witness-corroborated, verdict-tiered) and the | 294 |
 | `_site_key` | Re-export shim: the site-key minter moved to :mod:'torchlens._data_classes._site_key'. | 34 |
