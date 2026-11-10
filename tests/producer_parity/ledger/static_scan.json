@@ -1225,6 +1225,14 @@
  },
  {
   "ambiguous": false,
+  "field": "_edge_uses",
+  "file": "torchlens/_data_classes/_trace_removal.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "pass_index",
   "file": "torchlens/_data_classes/_trace_stats_grad_fn_site.py",
   "has_default": false,
@@ -3196,7 +3204,7 @@
   "field": "is_scalar_bool",
   "file": "torchlens/_postprocess/_column_passes_graph.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -3204,7 +3212,7 @@
   "field": "parents",
   "file": "torchlens/_postprocess/_column_passes_graph.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -3416,20 +3424,20 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "func_call_id",
+  "file": "torchlens/_postprocess/_orphan_seeds.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_postprocess/_orphan_seeds.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/_postprocess/_orphan_seeds.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
  },
  {
   "ambiguous": true,

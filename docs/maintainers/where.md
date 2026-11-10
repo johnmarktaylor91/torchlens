@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1767 modules, 711326 lines, 0 modules without a docstring.
+85 packages, 1767 modules, 711427 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45442 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45537 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 49 | 20559 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 49 | 20565 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (128 modules, 45442 lines)
+Core data structures for representing a logged forward pass. (128 modules, 45537 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -412,7 +412,7 @@ Core data structures for representing a logged forward pass. (128 modules, 45442
 | `_trace_pristine` | The pristine reading of a Trace, derived from the evidence it carries. | 172 |
 | `_trace_profile` | Trace model-profile helpers. | 190 |
 | `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 231 |
-| `_trace_removal` | Entry removal and parameter-reference release for ''Trace''. | 171 |
+| `_trace_removal` | Entry removal and parameter-reference release for ''Trace''. | 266 |
 | `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays, and ''append''. | 812 |
 | `_trace_source` | Captured forward-source annotations, independent of live source files. | 45 |
 | `_trace_source_introspection` | Source-model introspection fallbacks for ''Trace'''s ''_source_*'' fields. | 67 |
@@ -729,7 +729,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (49 modules, 20559 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (49 modules, 20565 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -742,11 +742,11 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (4
 | `_call_site_contract` | The call-site grouping contract (''callsite_v1'', ''callsite_v2'') and its in-memory evidence. | 133 |
 | `_column_passes` | Postprocess pass bodies that read and write ''Op'' fields through column views. | 76 |
 | `_column_passes_finalize` | Step 15.5 (build aggregate ''Layer'' records) over ''Op'' column views. | 416 |
-| `_column_passes_graph` | Column-view bodies of the graph passes: step 3's orphan flood and step 5's arms. | 597 |
+| `_column_passes_graph` | Column-view bodies of the graph passes: step 3's orphan flood and step 5's arms. | 631 |
 | `_conditional_child_rename` | Conditional child-label renaming for ''labeling._replace_layer_names_for_layer_entry''. | 84 |
 | `_conditional_records` | Leaf helpers of ''finalization._build_conditional_records''. | 253 |
 | `_executor` | Postprocess step adapters: ''StepContext'' and one function per pipeline step. | 437 |
-| `_final_info_columns` | Step 9 by column: the per-op part of final layer info over the building rows. | 383 |
+| `_final_info_columns` | Step 9 by column: the per-op part of final layer info over the building rows. | 391 |
 | `_final_info_rename` | Step 9 by column: raw-to-final label renaming over the building rows. | 261 |
 | `_finished_marks` | Step 17 body: mark every final op finished and bind template display keys. | 249 |
 | `_grouping_stamp` | The grouping-policy stamp (''grouping_policy_v1''): writer, loader | 292 |
@@ -760,7 +760,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (4
 | `_module_containment` | Op containment facts: tally each op's module calls into the module build data. | 107 |
 | `_multipass_params` | Parameter fields of a layer whose passes consume different parameters. | 48 |
 | `_orphan_predicates` | Predicates deciding whether a pruned orphan op's nondeterministic value mattered. | 132 |
-| `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 163 |
+| `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 150 |
 | `_output_payload` | Whether a model-output row rides its producer's retained payload (HONESTY 13-R1). | 153 |
 | `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 610 |
 | `_pre_hook_provenance` | Pre-hook provenance of one module call, with raw producer labels finalized. | 70 |
@@ -775,7 +775,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (4
 | `ast_branches` | AST indexing for boolean-context classification and branch attribution. | 2202 |
 | `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 1045 |
 | `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1475 |
-| `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 762 |
+| `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 739 |
 | `incremental` | Opt-in incremental enrichments for fastlog recordings. | 87 |
 | `labeling` | Steps 8-11: Label mapping, final info logging, renaming, cleanup, and lookup keys. | 917 |
 | `loop_detection` | Step 7: Adapt Trace state to the backend-neutral recurrence grouper. | 699 |
