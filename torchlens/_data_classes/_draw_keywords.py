@@ -92,6 +92,7 @@ def teach_unknown_draw_keywords(method: _F) -> _F:
 
     @functools.wraps(method)
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        """Refuse unknown keywords with a teaching error, else call ``Trace.draw``."""
         unknown = sorted(kwargs.keys() - accepted)
         if unknown:
             raise ArgumentTypeError(
