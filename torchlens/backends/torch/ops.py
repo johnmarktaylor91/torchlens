@@ -124,6 +124,9 @@ from ..._utils._call_site import (
     CALL_SITE_CLASS_MARKER,  # noqa: F401 (re-exported to the split modules)
 )
 from ..._utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
+from ..._utils._detached_activations import (
+    mark_detached_saved_activation,
+)
 from ..._utils._mutation_names import (
     _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS as _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
     _SETTER_MUTATION_FUNC_NAMES as _SETTER_MUTATION_FUNC_NAMES,
@@ -138,7 +141,6 @@ from ..._utils._tensor_label import (
     get_tensor_label,
     get_tensor_meta,
     is_tensor_data_alias,
-    mark_detached_saved_activation,
     mutated_parameter_label,
     promote_mutated_parameters,
     session_label_storage_intact,

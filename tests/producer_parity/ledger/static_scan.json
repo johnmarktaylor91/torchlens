@@ -4508,7 +4508,7 @@
   "field": "label_raw",
   "file": "torchlens/_utils/_tensor_label.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 11,
   "via_getattr": false
  },
  {

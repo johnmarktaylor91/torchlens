@@ -1,11 +1,17 @@
 """Compatibility path for the tensor-label metadata helpers (now ``torchlens._utils._tensor_label``)."""
 
 # layering: re-export kept for record importers; remove after the record-tier fold
-from ..._utils._tensor_label import (  # noqa: F401
-    _ACTIVE_LABEL_SESSION as _ACTIVE_LABEL_SESSION,
+from ..._utils._detached_activations import (  # noqa: F401
     _DETACHED_ACTIVATION_ANY_INPUT_FUNCS as _DETACHED_ACTIVATION_ANY_INPUT_FUNCS,
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS as _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
     _DETACHED_SAVED_ACTIVATIONS as _DETACHED_SAVED_ACTIVATIONS,
+    detached_saved_activation_label as detached_saved_activation_label,
+    has_detached_saved_activations as has_detached_saved_activations,
+    mark_detached_saved_activation as mark_detached_saved_activation,
+    propagate_detached_saved_activation as propagate_detached_saved_activation,
+)
+from ..._utils._tensor_label import (  # noqa: F401
+    _ACTIVE_LABEL_SESSION as _ACTIVE_LABEL_SESSION,
     _LABEL_SESSION_COUNTER as _LABEL_SESSION_COUNTER,
     _MODULE_REGISTRY as _MODULE_REGISTRY,
     _PARAM_REGISTRY as _PARAM_REGISTRY,
@@ -33,7 +39,6 @@ from ..._utils._tensor_label import (  # noqa: F401
     clear_param_meta as clear_param_meta,
     clear_tensor_label as clear_tensor_label,
     copy_replacement_meta as copy_replacement_meta,
-    detached_saved_activation_label as detached_saved_activation_label,
     end_label_session as end_label_session,
     get as get,
     get_buffer_address as get_buffer_address,
@@ -44,7 +49,6 @@ from ..._utils._tensor_label import (  # noqa: F401
     get_param_meta as get_param_meta,
     get_tensor_label as get_tensor_label,
     get_tensor_meta as get_tensor_meta,
-    has_detached_saved_activations as has_detached_saved_activations,
     increment_param_call_index as increment_param_call_index,
     is_decorated_function as is_decorated_function,
     is_forward_call_decorated as is_forward_call_decorated,
@@ -52,14 +56,12 @@ from ..._utils._tensor_label import (  # noqa: F401
     is_tensor_replacement_wrapped as is_tensor_replacement_wrapped,
     is_tracked as is_tracked,
     mark_decorated_function as mark_decorated_function,
-    mark_detached_saved_activation as mark_detached_saved_activation,
     mark_forward_call_decorated as mark_forward_call_decorated,
     mark_tensor_data_alias as mark_tensor_data_alias,
     mark_tensor_replacement_wrapped as mark_tensor_replacement_wrapped,
     mutated_parameter_label as mutated_parameter_label,
     promote_label_to_buffer_source_and_clear_label as promote_label_to_buffer_source_and_clear_label,
     promote_mutated_parameters as promote_mutated_parameters,
-    propagate_detached_saved_activation as propagate_detached_saved_activation,
     raw_tensor_label as raw_tensor_label,
     restore_param_requires_grad as restore_param_requires_grad,
     session_label_storage_intact as session_label_storage_intact,
