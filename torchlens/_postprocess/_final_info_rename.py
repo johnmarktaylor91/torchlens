@@ -15,6 +15,7 @@ projection, so this module imports nothing from the package's import cycle.
 from __future__ import annotations
 
 from collections.abc import Callable
+from itertools import repeat
 from typing import TYPE_CHECKING, Any
 
 from ._conditional_child_rename import _rename_children_by_cond, _rename_elif_children
@@ -204,7 +205,9 @@ def _rename_replay_columns(
         fid = fids[name]
         for row, records in zip(rows, columns[name]):
             if records:
-                row[fid] = [_rename_label_dataclass(record, mapping, cache) for record in records]
+                row[fid] = list(
+                    map(_rename_label_dataclass, records, repeat(mapping), repeat(cache))
+                )
     for name in ("args_template", "kwargs_template"):
         fid = fids[name]
         for row, template in zip(rows, columns[name]):

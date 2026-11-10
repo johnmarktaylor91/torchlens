@@ -47,7 +47,7 @@ _FX_INDEX = "_source_fx_call_index"
 #: The closure fields: properties over a staging set while the trace builds.
 #: Any other cell class (the compact bitset) is not read here.
 _CLOSURES = ("root_ancestors", "input_ancestors", "output_descendants", "internal_source_ancestors")
-_CLOSURE_CLASSES = frozenset({set, frozenset, type(None)})
+_CLOSURE_CLASSES: frozenset[type] = frozenset({set, frozenset, type(None)})
 
 #: Columns read by attribute name: ``name -> cell classes the pass accepts``
 #: (``None`` accepts any class the facade returns as stored). An unset cell

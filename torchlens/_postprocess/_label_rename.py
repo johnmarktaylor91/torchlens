@@ -62,14 +62,16 @@ def _record_plan(
         instance by ordinary attribute lookup, in one call.
     """
 
-    plan = None
+    plan: _RecordPlan | None = None
     if not isinstance(value, ladder) and not (calls and callable(value)):
         names = dataclass_field_names(value, cache)
         if names is not None:
+            reader: Callable[[Any], tuple[Any, ...]] = _no_fields
             if len(names) > 1:
-                plan = (names, attrgetter(*names))
-            else:  # one name would read as a bare value, not a tuple
-                plan = (names, attrgetter(*names, *names) if names else _no_fields)
+                reader = attrgetter(*names)
+            elif names:  # one name would read as a bare value, not a tuple
+                reader = attrgetter(*names, *names)
+            plan = (names, reader)
     cache[key] = plan
     return plan
 
