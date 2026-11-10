@@ -23,6 +23,7 @@ from torch import nn
 
 from . import _state
 from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
+from ._compiled_callable_sites import cannot_carry_compile_marker, compiled_plain_callable_sites
 from ._data_classes.trace import Trace
 from ._plain_attr_fidelity import (
     _PLAIN_ATTR_IGNORED_NAMES,
@@ -372,44 +373,6 @@ def unwrap_compiled_model(model: nn.Module) -> nn.Module:
     return orig_mod
 
 
-def compiled_plain_callable_sites(model: nn.Module) -> tuple[str, ...]:
-    """Return plain module attributes carrying Dynamo-compiled callables.
-
-    Parameters
-    ----------
-    model:
-        Model whose module instance dictionaries are inspected.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Stable module-attribute paths for compiled non-module callables.
-
-    Notes
-    -----
-    The direct ``vars`` walk never executes descriptors. This inventory is what
-    makes cache-hit handling independent of the transient ``is_compiling()`` flag:
-    a hot compiled callable can bypass Python torch wrappers entirely.
-    """
-    sites: list[str] = []
-    try:
-        modules = model_named_modules(model)
-    except Exception:
-        modules = (("", model),)
-    for module_name, module in modules:
-        try:
-            attributes = vars(module)
-        except (TypeError, AttributeError):
-            continue
-        for attr_name, value in attributes.items():
-            if attr_name in _PLAIN_ATTR_IGNORED_NAMES or isinstance(value, nn.Module):
-                continue
-            if is_dynamo_compiled_callable(value):
-                prefix = module_name or "<root>"
-                sites.append(f"{prefix}.{attr_name}")
-    return tuple(dict.fromkeys(sites))
-
-
 def _make_compiled_callable_bypass(
     compiled_callable: Callable[..., Any],
 ) -> Callable[..., Any]:
@@ -475,6 +438,8 @@ def bypass_compiled_plain_callables(model: nn.Module) -> Iterator[None]:
             except (TypeError, AttributeError):
                 continue
             for attr_name, value in attributes:
+                if cannot_carry_compile_marker(value):
+                    continue
                 if attr_name in _PLAIN_ATTR_IGNORED_NAMES or isinstance(value, nn.Module):
                     continue
                 if not callable(value) or not is_dynamo_compiled_callable(value):
