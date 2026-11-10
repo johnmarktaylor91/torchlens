@@ -965,6 +965,9 @@ def _register_first_use_state(trace: Any, arg_tensorlike: Iterable[torch.Tensor]
             if watched_lazy_slots is not None and t in watched_lazy_slots:
                 late_register_forward_created_parameter(trace, t)
             continue
+        if get_tensor_label(t) is not None:
+            # A current-session op output or registered source: no rung below logs or stamps it.
+            continue
         # The identity ladder + lazy late-index live in
         # buffer_writes.resolve_or_late_index_buffer_address.
         address = resolve_or_late_index_buffer_address(trace, t)
@@ -1245,10 +1248,10 @@ def torch_func_decorator(
         data_alias_inputs = tuple(filter(is_tensor_data_alias, () if fast else arg_tensorlike))
         mutates_data_alias = bool(
             not fast
+            and mutates_receiver
             and args
             and isinstance(args[0], torch.Tensor)
             and is_tensor_data_alias(args[0])
-            and mutates_receiver
         )
 
         # Register buffers (and a Parameter materialized from a pending lazy slot
