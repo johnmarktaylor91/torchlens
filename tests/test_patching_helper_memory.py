@@ -208,7 +208,10 @@ def test_no_helper_trace_or_the_model_outlives_the_call() -> None:
     """After the grid and per-head patching return, their traces and the model are freed."""
 
     gc.collect()
-    traces_before = sum(isinstance(obj, Trace) for obj in gc.get_objects())
+    # Hold the traces that already exist (an earlier test in this worker may
+    # still own one) so the check below counts only traces this call created;
+    # comparing bare counts fails when such a trace is freed mid-test.
+    traces_before = [obj for obj in gc.get_objects() if isinstance(obj, Trace)]
     model = TinyLM().eval()
     clean, corrupt = _prompts(256)
     tl.mechinterp.patch_heads_grid(model, clean, corrupt, _metric)
@@ -219,7 +222,12 @@ def test_no_helper_trace_or_the_model_outlives_the_call() -> None:
     del model
     gc.collect()
     assert model_ref() is None, "a helper kept the model alive after returning"
-    assert sum(isinstance(obj, Trace) for obj in gc.get_objects()) == traces_before
+    survivors = [
+        obj
+        for obj in gc.get_objects()
+        if isinstance(obj, Trace) and not any(obj is held for held in traces_before)
+    ]
+    assert not survivors, f"{len(survivors)} helper trace(s) outlived the call"
 
 
 _RSS_SCRIPT = textwrap.dedent(
