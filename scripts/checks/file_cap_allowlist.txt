@@ -843,7 +843,7 @@ torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	68
 torchlens/backends/torch/_module_class_metadata.py::_get_class_metadata	97
 torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	302
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
-torchlens/backends/torch/_ops_activations.py::_save_activation_fields	194
+torchlens/backends/torch/_ops_activations.py::_save_activation_fields	193
 torchlens/backends/torch/_ops_arguments.py::_build_edge_use_records	68
 torchlens/backends/torch/_ops_arguments.py::_tensor_has_known_provenance	106
 torchlens/backends/torch/_ops_autograd.py::_partition_output_entries_with_autograd_stats	98
