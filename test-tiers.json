@@ -6117,6 +6117,16 @@
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
+      "torchlens/_utils/_model_walk.py": [
+        "tests/test_distributed_honesty.py",
+        "tests/test_grind_b4_lane_p.py",
+        "tests/test_model_prep_hardening.py",
+        "tests/test_model_walk_reuse.py",
+        "tests/test_per_trace_cost_model_changes.py",
+        "tests/test_record_overhead_counters.py",
+        "tests/test_robustness_pr2.py",
+        "tests/test_robustness_pr4.py"
+      ],
       "torchlens/_utils/_module_call_dispatch.py": [
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
@@ -13399,10 +13409,10 @@
       ],
       "torchlens/mechinterp/_walk.py": [
         "tests/real_model/r1/test_circ3_induction_real.py",
-        "tests/test_display_walk_guards.py",
         "tests/test_mikit_core.py",
         "tests/test_mikit_oracle_tlens.py",
         "tests/test_mikit_refusals.py",
+        "tests/test_model_walk_reuse.py",
         "tests/test_moe_router_facts.py",
         "tests/test_w051_mechinterp_dla.py",
         "tests/test_walk_rulings_viz.py"
