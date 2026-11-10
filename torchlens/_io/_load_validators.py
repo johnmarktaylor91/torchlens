@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn
 
 from .._utils._record_group_table import record_member
-from ._graph_refusal import graph_invalid as _graph_invalid
+from ._field_refusal import graph_invalid as _graph_invalid
 from .forgery_validation import _is_digest, _is_int, _is_sequence, _refuse, _trace_ops
 
 if TYPE_CHECKING:

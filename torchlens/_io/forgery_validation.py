@@ -16,7 +16,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
 
 from .._utils._record_group_table import record_member
-from . import ArtifactError
+from ._field_refusal import _refuse
 from ._forgery_identity_facts import _validate_identity_facts
 from ._injected_row_cells import check_injection_provenance_row
 
@@ -125,44 +125,6 @@ def validate_persisted_forgery_surfaces(trace: Trace) -> None:
     _validate_source_snapshots(trace)
     _validate_structure_evidence(trace)
     _validate_executed_flops_records(trace)
-
-
-def _refuse(
-    message: str,
-    *,
-    code: str,
-    field: str,
-    reason: str,
-    remedy: str,
-) -> NoReturn:
-    """Raise one teaching portable-field refusal.
-
-    Parameters
-    ----------
-    message:
-        Human-readable description of the structural violation.
-    code:
-        Stable refusal code for the owning field family.
-    field:
-        Fully-qualified persisted field name.
-    reason:
-        Machine-readable structural failure class.
-    remedy:
-        Concrete recovery action.
-
-    Raises
-    ------
-    ArtifactError
-        Always.
-    """
-
-    raise ArtifactError(
-        f"{field} is invalid in the loaded artifact: {message}. Remedy: {remedy}.",
-        code=code,
-        field=field,
-        reason=reason,
-        remedy=remedy,
-    )
 
 
 def _is_int(value: Any) -> TypeGuard[int]:

@@ -19,7 +19,7 @@ from typing import Any, Final
 import torch
 
 from ..._data_classes._state_adapter import state_new
-from .._graph_refusal import refuse_pass_key
+from .._field_refusal import refuse_pass_key
 from ..format_contract import BlobRef
 from ..prerelease import PRERELEASE_STATE_KEY, validate_prerelease_state
 from ..state_contract import governed_artifact_load
