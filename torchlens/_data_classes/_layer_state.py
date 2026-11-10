@@ -5,16 +5,20 @@ overrides, deletion tombstones, build-phase snapshots and ``annotations``
 all live in it, exactly as they did in the Layer's own ``__dict__``). A
 ``Layer`` object is a view whose ``__dict__`` *is* that dictionary, so a view
 built later reads and writes the same state. The store holds the state; the
-view objects are held by the trace core's strong view table until views
-become disposable.
+view objects are cached in the trace core's view table
+(``_trace_core/view_tables.py``): strongly while the trace is built, weakly
+afterwards, when a view nobody kept is built again from the state.
 """
 
 from __future__ import annotations
 
 import weakref
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from collections.abc import Iterator, Mapping, Sequence
+from itertools import repeat
 from typing import Any, ClassVar, cast
+
+from .._trace_core.view_tables import DEAD, OP_KIND, WeakViews
 
 #: The ``Layer`` class, bound by ``layer.py`` at import so this module stays a leaf.
 _LAYER_CLASS: list[type] = []
@@ -26,27 +30,71 @@ def bind_layer_class(layer_class: type) -> None:
     _LAYER_CLASS[:] = [layer_class]
 
 
-def view_slots(core: Any, kind: str) -> list[Any]:
-    """Return the core's strong view list for ``kind`` (indexed by row), creating it."""
-
-    table = cast("dict[Any, Any]", core._strong_facades)
-    slots = table.get(kind)
-    if slots is None:
-        slots = table[kind] = []
-    return cast("list[Any]", slots)
-
-
 def hold_view(core: Any, kind: str, index: int, view: Any, *, replace: bool = False) -> bool:
-    """Hold ``view`` at ``index`` of the core's view list; return whether it is held there."""
+    """Cache ``view`` at ``index`` of the core's view table for ``kind``; return whether it is there.
 
-    slots = view_slots(core, kind)
-    if index >= len(slots):
-        slots.extend([None] * (index + 1 - len(slots)))
-    current = slots[index]
+    A row another live view holds is left to it unless ``replace`` is set.
+    """
+
+    tables = core._views
+    slots = tables.ops if kind == OP_KIND else tables.layers
+    if slots.__class__ is WeakViews:
+        # A weak table is asked for the live view only (a plain read builds
+        # one). Written out, with no call per row: a fork holds every layer here.
+        weak: Any = slots
+        try:
+            current = weak.refs[index]()
+        except IndexError:
+            grow = index + 1 - len(weak)
+            weak.refs.extend(repeat(DEAD, grow))
+            list.extend(weak, repeat(None, grow))
+            current = None
+    else:
+        if index >= len(slots):
+            slots.pad(index + 1)
+        current = slots[index]
     if current is None or replace:
         slots[index] = view
         return True
-    return current is view
+    return bool(current is view)
+
+
+def _weak_layer_views(slots: Any, states: list[dict[str, Any]]) -> list[Any]:
+    """Return the Layer view of each state from a weak table, building the ones nobody kept.
+
+    The work per layer runs in C, so reading every layer of a built trace
+    costs a fixed number of calls. Raises ``KeyError`` for a layer that is not
+    keyed into the table (the caller then takes the per-label path).
+    """
+
+    rows = [state["ops"].__dict__["_keys"][1] for state in states]
+    if rows and min(rows) < 0:
+        raise KeyError("unkeyed layer")
+    views = cast("list[Any]", slots.many(rows))
+    stale = [
+        at
+        for at, (view, state) in enumerate(zip(views, states, strict=True))
+        if view is None or view.__dict__ is not state
+    ]
+    if stale:
+        built: list[Any] = list(map(object.__new__, repeat(_LAYER_CLASS[0], len(stale))))
+        deque(map(object.__setattr__, built, repeat("__dict__"), [states[at] for at in stale]), 0)
+        slots.adopt([rows[at] for at in stale], built)
+        for at, view in zip(stale, built, strict=True):
+            views[at] = view
+    return views
+
+
+def ops_with_layers_kept(trace: Any) -> Any:
+    """Pair each op of ``trace`` with one list holding every Layer view of the trace.
+
+    For a loop that looks layers up again and again (a table export): the
+    views stay alive while the loop runs, so each lookup meets the live view
+    instead of building a new one.
+    """
+
+    logs = trace.__dict__.get("_layer_logs")
+    return zip(trace._layer_list, repeat(list(logs.values()) if logs else ()))
 
 
 def _layer_index(state: dict[str, Any]) -> tuple[Any, int]:
@@ -101,9 +149,9 @@ class LayerStore(OrderedDict[str, Any]):
                 return view
         try:
             accessor_state = state["ops"].__dict__
-            view = accessor_state["_core_ref"]()._strong_facades["layer"][
-                accessor_state["_keys"][1]
-            ]
+            slots = accessor_state["_core_ref"]()._views.layers
+            refs, row = slots.refs, accessor_state["_keys"][1]
+            view = slots[row] if refs is None else refs[row]()  # no call for a live view
             if view.__dict__ is state:
                 return view
         except (KeyError, IndexError, AttributeError, TypeError):
@@ -124,9 +172,9 @@ class LayerStore(OrderedDict[str, Any]):
         if self._held is None:
             try:
                 accessor_state = state["ops"].__dict__
-                view = accessor_state["_core_ref"]()._strong_facades["layer"][
-                    accessor_state["_keys"][1]
-                ]
+                slots = accessor_state["_core_ref"]()._views.layers
+                refs, row = slots.refs, accessor_state["_keys"][1]
+                view = slots[row] if refs is None else refs[row]()  # no call for a live view
                 if view.__dict__ is state:
                     return view
             except (KeyError, IndexError, AttributeError, TypeError):
@@ -180,7 +228,9 @@ class LayerStore(OrderedDict[str, Any]):
             # view list, keeping only a view that is over this store's state.
             try:
                 ref: Any = self._trace_ref
-                slots = ref().__dict__["_trace_core"]._strong_facades["layer"]
+                slots = ref().__dict__["_trace_core"]._views.layers
+                if slots.__class__ is WeakViews:
+                    return _weak_layer_views(slots, list(dict.values(self)))
                 views = [
                     view
                     for state in dict.values(self)
@@ -315,8 +365,8 @@ class LayerStore(OrderedDict[str, Any]):
         core, index = _layer_index(state)
         if core is None:
             return
-        slots = core._strong_facades.get("layer")
-        if slots is not None and index < len(slots):
+        slots = core._views.layers
+        if index < len(slots):
             view = slots[index]
             if view is not None and view.__dict__ is state:
                 slots[index] = None

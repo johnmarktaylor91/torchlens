@@ -7,6 +7,7 @@ from typing import Any
 from .._constants import _is_suffixed_raw_label
 from .._errors import AmbiguousOpLookupError
 from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
+from .._trace_core.view_tables import DEREF, WeakViews
 from .._utils._display_errors import lookup_message
 from .._utils._display_keys import display_key
 from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
@@ -240,6 +241,8 @@ class TraceOpAccessor(Accessor[Op]):
     """
 
     _COUNTABLE_FIELDS = _LAYER_COUNTABLE_FIELDS
+    # ``_owner``: the trace this door keeps alive; ``_handed``: see ``_trace_views.ops``.
+    __slots__ = ("_handed", "_owner")
 
     def __init__(
         self,
@@ -262,7 +265,8 @@ class TraceOpAccessor(Accessor[Op]):
         """
 
         members = list(ops)
-        self._table, self._keys = hold_ops(members, first_source_trace(members))
+        self._owner = first_source_trace(members)
+        self._table, self._keys = hold_ops(members, self._owner)
         label_keys: dict[str, int] = {}
         self._raw_index_lookup: dict[int, int] = {}
         # Final Op labels name exactly one row. Two rows sharing one is corrupt
@@ -533,8 +537,11 @@ class TraceOpAccessor(Accessor[Op]):
         if index is None:
             scanned = table.records(keys)
             return [op for op in scanned if key in {op.layer_label, op.short_layer_label}]
-        held = index.get(key, ())
-        return list(map(table.rows.__getitem__, held) if table.plain else table.records(held))
+        held, rows = index.get(key, ()), table.rows
+        if table.plain and rows.__class__ is WeakViews:  # live views cost no call
+            found: list[Any] = list(map(DEREF, map(rows.refs.__getitem__, held)))
+            return found if None not in found else rows.many(held)
+        return list(map(rows.__getitem__, held) if table.plain else table.records(held))
 
     def _ensure_alias_indexes(self) -> _AliasIndexes | None:
         """Build the alias reverse indexes once, or report them unavailable.

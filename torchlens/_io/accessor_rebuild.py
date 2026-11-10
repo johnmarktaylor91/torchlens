@@ -11,11 +11,10 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
-from .._data_classes._row_refs import rekey_child_cells
 from .._data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
 from .._data_classes.buffer import Buffer, BufferAccessor
 from .._data_classes.module import ModuleAccessor
-from .._trace_core.record_refs import name_owner_by_row
+from .._trace_core.record_refs import name_owner_by_row, rekey_child_cells
 from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:

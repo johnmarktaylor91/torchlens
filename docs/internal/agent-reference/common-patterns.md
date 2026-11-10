@@ -290,7 +290,7 @@ assert steered.last_report.num_fires == 5  # one firing per generated token
 # Steering plus evidence: one tl.record per forward; rec.output is the model output.
 rec = tl.record(lm, ids, save=site, intervene=spec)
 out = rec.output
-rec_trace = rec.to_trace()  # keep the Trace in a variable while reading its ops
+rec_trace = rec.to_trace()  # an op looked up on this Trace keeps it alive
 steered_mlp = rec_trace.find_sites(site).first().out  # the steered site output
 assert torch.equal(out.logits, logits)
 

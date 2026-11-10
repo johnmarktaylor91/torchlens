@@ -197,23 +197,27 @@ refcounting alone (`del trace` with `gc` disabled leaves its weakref dead; the r
 tests in `tests/test_trace_lifetime.py` and `tests/test_gc.py` hold this). Still call
 `Trace.cleanup()` when retaining many logs or after visualization-only workflows.
 
-Views are weak by design (JMT ruling, 3 Nov 2026): an `Op` or `Layer` never keeps its
-Trace alive, so a chained temporary such as `tl.trace(model, x).output_ops[0].out` or
-`tl.trace(model, x)["conv2d_1_1"].receptive_field` loses its Trace as soon as the view is
-taken. Every Op and Layer read that needs the Trace then refuses
-`RecordBindingError(code="trace_reference_collected")` with the remedy "keep the Trace in
-a variable"; none returns a silent `None`. Docs, docstring examples and tests bind the
-Trace first: `trace = tl.trace(model, x)`, then read `trace[...]`.
+A view keeps its trace (ruling of 9 Nov 2026): an `Op` or `Layer` handed out by a Trace,
+and the `trace.ops` / `trace.layers` doors, hold the Trace strongly in an `_owner` slot, so
+a chained temporary such as `tl.trace(model, x)["relu_1"].out` or
+`tl.trace(model, x).output_ops[0].out` reads a Trace that is still alive. The Trace holds
+no `Op` or `Layer` object: the trace core's view tables (`_trace_core/view_tables.py`) map
+a row to a weak reference, a lookup returns the live view or builds one, and identity
+holds only while somebody keeps the view. The reference therefore runs one way and a Trace
+with no outside references is still freed by refcounting. While a trace is being built
+the tables hold the records strongly (`TraceCore(pinned=True)`); `postprocess()` ends
+that. The two doors are memoized on the Trace without an owner, and each read hands out a
+second object over the same state that has one.
 
-Retained-Op payload lifetime (fix/fork F4): an `Op` kept past its Trace's death no longer
-pins every captured activation. Each owning `TraceCore` (the capture's core plus one per
-fork core sharing the sealed base) registers a `weakref.finalize` on the op store; when
-the LAST owner is garbage-collected the store evicts top-level tensor cells (and the
-snapshot surfaces of surviving fork `OpStoreView`s). A payload read on the retained
-facade (`op.out`) then refuses `trace_reference_collected`; metadata held on the Op itself
-stays readable. Keep the Trace alive (or clone the tensor) to keep payloads. Fork views hold the fork's record
-translator weakly (anchored on the fork core) so a retained fork Op cannot root the
-whole fork graph.
+Payload lifetime: a held record keeps its Trace's saved activations and arguments.
+`Trace.cleanup()` is the explicit release while records are held. A record that holds no
+Trace (a copy, a restored record) and whose Trace is gone refuses
+`RecordBindingError(code="trace_reference_collected")` on reads that need the Trace; none
+returns a silent `None`. Each owning `TraceCore` (the capture's core plus one per fork core
+sharing the sealed base) still registers a `weakref.finalize` on the op store, so when
+the last owner is collected the store evicts top-level tensor cells. Fork views hold the
+fork's record translator weakly (anchored on the fork core) so a retained fork Op cannot
+root the whole fork graph.
 
 ## Key Access Patterns
 

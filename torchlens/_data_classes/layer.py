@@ -211,6 +211,7 @@ class Layer(_SelectionOperand):
     (1, 4, 8, 8)
     """
 
+    __slots__ = ("__dict__", "__weakref__", "_owner")  # _owner: the trace a handed-out view holds
     if TYPE_CHECKING:
         # The mirror fields are runtime-installed data descriptors
         # (``_install_layer_mirror_descriptors``); declared here so static
@@ -679,7 +680,7 @@ class Layer(_SelectionOperand):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected; a Layer does not keep its Trace alive",
+                "Trace has been garbage-collected and this Layer holds none: a Layer looked up on a Trace keeps it, a copied or restored one does not",
                 code="trace_reference_collected",
                 remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
             )
@@ -728,8 +729,7 @@ class Layer(_SelectionOperand):
 
         value = self.__dict__.get("equivalent_ops", _LAYER_UNSET)
         if value is _LAYER_DELETED:
-            # Fall back to ``__getattr__`` delegation, matching a plain
-            # missing attribute.
+            # Fall back to ``__getattr__`` delegation, matching a plain missing attribute.
             raise AttributeError("equivalent_ops")
         if value is _LAYER_UNSET:
             rep = _layer_rep_op(self)

@@ -377,6 +377,15 @@ such as `relu_1_2`.
 again (a loop, a recursion, a comprehension) is another pass, addressed with a one-based
 suffix such as `linear_1:2`.
 
+- Lifetime: an `Op` or a `Layer` you hold keeps its `Trace`, and with it the trace's saved
+  activations and arguments, so `tl.trace(model, x)["relu_1"].out` reads the tensor in one
+  expression (from `trace[...]`, `trace.ops[...]` and `trace.layers[...]` alike). The `Trace`
+  keeps no `Op` or `Layer` object: looking one up returns the object you still hold, or builds
+  a new one over the same stored row, so `trace.ops[0] is trace.ops[0]` holds while a
+  reference is kept and not across a drop. Dropping the last record frees the trace
+  without the garbage collector; `Trace.cleanup()` releases the saved payloads while
+  records are still held.
+
 - Passes: `op.pass_number` is the pass and `num_passes` the count. `graph.is_recurrent` is
   true when some layer runs more than one pass.
 - Module calls: a module object called again is another module call (`m:1`, `m:2`), a

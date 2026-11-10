@@ -361,7 +361,7 @@ torchlens/_postprocess/finalization.py::_finalize_streamed_bundle	67
 torchlens/_postprocess/finalization.py::_reconcile_multipass_layer_fields	77
 torchlens/_postprocess/finalization.py::_reuse_streamed_blob_ids	79
 torchlens/_postprocess/graph_traversal.py::_add_output_layers	274
-torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	70
+torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	63
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	129
 torchlens/_postprocess/labeling.py	916
 torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	100
@@ -1141,7 +1141,7 @@ torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
 torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71
 torchlens/intervention/_trace_selection_edits.py::apply_selection_do	78
 torchlens/intervention/_types.py	822
-torchlens/intervention/hooks.py	1706
+torchlens/intervention/hooks.py	1703
 torchlens/intervention/hooks.py::_adapt_tensor_backward_hook	64
 torchlens/intervention/hooks.py::_normalize_sticky_hook_specs	61
 torchlens/intervention/hooks.py::_normalize_value_specs	63

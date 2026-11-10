@@ -583,9 +583,9 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
         translator.add(parent_op, shell)
 
     layer_shells: dict[int, Any] = {}
-    for parent_layer in (parent.__dict__.get("_layer_logs") or {}).values():
-        if id(parent_layer) not in layer_shells:
-            layer_shells[id(parent_layer)] = state_new(type(parent_layer))
+    kept = list((parent.__dict__.get("_layer_logs") or {}).values())  # held: ids key the shells
+    for parent_layer in kept:
+        layer_shells.setdefault(id(parent_layer), state_new(type(parent_layer)))
 
     record_shells: list[tuple[Any, Any]] = []
     detached_records: list[tuple[Any, Any]] = []

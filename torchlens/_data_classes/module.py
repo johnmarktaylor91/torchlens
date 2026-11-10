@@ -1793,7 +1793,7 @@ class Module(_ModuleRouting):
     def __tl_state_items__(self) -> Any:
         """Yield live state pairs from the backing row (facade hook)."""
 
-        from ._row_refs import child_state_items
+        from .._trace_core.record_refs import child_state_items
 
         return child_state_items(self)
 

@@ -3,25 +3,22 @@
 ``TraceOpAccessor`` holds one integer key per member instead of the ``Op``
 record. A key is the op's row in the trace core's op store. A record with no
 row there (a detached single-row copy, a stand-in row, any record of a trace
-without a core) gets the next free negative key. Until records are handed out
-weakly, the record behind a key is cached strongly in one side table on the
-core: ``TraceCore._strong_facades["op"]`` is a list indexed by store row
-(``None`` where no record was cached) and
-``TraceCore._strong_facades["op.detached"]`` is a dictionary from negative key
-to record. A door whose records reach no core keeps the same two tables itself.
+without a core) gets the next free negative key. The record behind a row key
+is read through the trace core's view table (``_trace_core/view_tables.py``),
+which holds it weakly once the trace is built and builds it again when nobody
+kept it; a record behind a negative key is held strongly in the table's
+``detached`` dictionary. A door whose records reach no core keeps a plain row
+list and dictionary itself.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from itertools import repeat
-from typing import Any
+from typing import Any, cast
 
+from .._trace_core.view_tables import WeakViews, tables_of
 from .._utils._record_group_table import record_member
-
-OP_KIND = "op"
-DETACHED_KIND = "op.detached"
 
 # Read a record's slot without importing ``Op`` (this module sits below it).
 _slot = object.__getattribute__
@@ -35,7 +32,7 @@ class OpTable:
     """
 
     def __init__(self, rows: list[Any], detached: dict[int, Any]) -> None:
-        """Wrap the row list and the detached dictionary; both are held strongly."""
+        """Wrap the row list (a view table, or a plain list) and the detached dictionary."""
 
         self.rows = rows
         self.detached = detached
@@ -51,6 +48,8 @@ class OpTable:
 
         rows, detached = self.rows, self.detached
         if self.plain:
+            if rows.__class__ is WeakViews:
+                return iter(cast("WeakViews", rows).many(keys))
             return map(rows.__getitem__, keys)
         return iter([rows[key] if key >= 0 else detached[key] for key in keys])
 
@@ -66,11 +65,14 @@ class OpTable:
         size = len(rows)
         keys = [0] * len(records)
         ids: dict[int, int] | None = None
+        # A weak table is asked for the live record only: a plain read would
+        # build one, and the record being held would then lose its row to it.
+        weak = rows.__class__ is WeakViews
         for position, record in enumerate(records):
             try:
                 row = _slot(record, "_row")
                 if 0 <= row < size:
-                    held = rows[row]
+                    held = cast("WeakViews", rows).peek(row) if weak else rows[row]
                     if held is None and _slot(record, "_core") is store:
                         rows[row] = held = record
                     if held is record:
@@ -96,8 +98,11 @@ class OpTable:
 
         try:
             row = _slot(record, "_row")
-            if 0 <= row < len(self.rows) and self.rows[row] is record:
-                return row
+            rows = self.rows
+            if 0 <= row < len(rows):
+                weak = rows.__class__ is WeakViews
+                if (cast("WeakViews", rows).peek(row) if weak else rows[row]) is record:
+                    return row
         except (TypeError, AttributeError):
             pass
         for key, held in self.detached.items():
@@ -119,20 +124,16 @@ class OpTable:
 
 
 def _side_tables(trace: Any) -> tuple[list[Any], dict[int, Any], Any]:
-    """Return the row list, detached dictionary and op store of ``trace`` (``None`` for no trace)."""
+    """Return the row table, detached dictionary and op store of ``trace`` (``None`` for no trace)."""
 
-    core = getattr(trace, "__dict__", {}).get("_trace_core")
-    facades = getattr(core, "_strong_facades", None)
-    if core is None or not isinstance(facades, dict):
+    tables = tables_of(trace)
+    if tables is None:
         return [], {}, None
-    rows = facades.get(OP_KIND)
-    if rows is None:
-        rows = facades[OP_KIND] = []
-    detached = facades.setdefault(DETACHED_KIND, {})
-    store = core.ops
-    if store is not None and len(rows) < len(store):
-        rows.extend(repeat(None, len(store) - len(rows)))
-    return rows, detached, store
+    tables.set_owner(trace)
+    store = trace.__dict__["_trace_core"].ops
+    if store is not None:
+        tables.ops.pad(len(store))
+    return tables.ops, tables.detached, store
 
 
 def hold_ops(records: Sequence[Any], trace: Any) -> tuple[OpTable, list[int]]:

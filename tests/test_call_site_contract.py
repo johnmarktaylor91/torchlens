@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._postprocess import _call_site_contract as contract, loop_detection
+from torchlens._postprocess import _call_site_contract as contract, _step7_rows as step7_rows
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
 from torchlens.validation._diagnostics import get_validation_diagnostics
@@ -77,15 +77,15 @@ def _capture_must_breach(model: nn.Module, clause: str) -> None:
 def test_planted_merge_of_two_call_sites_fails_step7(monkeypatch: pytest.MonkeyPatch) -> None:
     """A grouping key that fuses the two relu lines into one layer breaches (i)."""
 
-    original = loop_detection._call_site_group_key
+    original = step7_rows.call_site_group_key
 
-    def _merging_key(node, classes):
-        site = classes.get(node._label_raw, "")
+    def _merging_key(label, handle, site_key, func_name, read):
+        site = read.classes.get(label, "")
         if site.startswith("relu"):
             return ("call_site", "planted-merge")
-        return original(node, classes)
+        return original(label, handle, site_key, func_name, read)
 
-    monkeypatch.setattr(loop_detection, "_call_site_group_key", _merging_key)
+    monkeypatch.setattr(step7_rows, "call_site_group_key", _merging_key)
     _capture_must_breach(_TwoReluLines(), "i")
 
 
@@ -95,16 +95,18 @@ def test_planted_recurrent_group_spanning_two_sites_fails_step7(
 ) -> None:
     """A pass rebuild that joins the two relu layers' groups breaches (iii)."""
 
-    original = loop_detection._rebuild_pass_assignments
+    original = step7_rows.rebuild_passes
 
-    def _joining_rebuild(trace):
-        original(trace)
-        relus = [entry for entry in trace if entry.func_name == "relu"]
-        joined = sorted(entry._label_raw for entry in relus)
-        for entry in relus:
-            entry._graph_recurrent_ops = joined
+    def _joining_rebuild(rows, layer_of):
+        original(rows, layer_of)
+        read_func = rows.getter("func_name")
+        relus = [(label, handle) for label, handle in rows.retained if read_func(handle) == "relu"]
+        joined = sorted(label for label, _handle in relus)
+        write_group = rows.setter("recurrent_ops")
+        for _label, handle in relus:
+            write_group(handle, joined)
 
-    monkeypatch.setattr(loop_detection, "_rebuild_pass_assignments", _joining_rebuild)
+    monkeypatch.setattr(step7_rows, "rebuild_passes", _joining_rebuild)
     _capture_must_breach(_TwoReluLines(), "iii")
 
 

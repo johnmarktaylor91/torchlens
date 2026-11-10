@@ -9,11 +9,11 @@ from typing import TYPE_CHECKING, Any, cast
 from .._constants import BUFFER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import TLSPEC_VERSION, FieldPolicy, default_fill_state, read_tlspec_version
+from .._trace_core.record_refs import child_state_items, install_child_fields
 from .._utils._display_errors import short_name_message
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._lookup_kinds import buffer_for_key, converted
-from ._row_refs import child_state_items, install_child_fields
 from ._runtime_handles import runtime_handle_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
@@ -141,6 +141,8 @@ class Buffer:
         state = dict(state_items(self))
         state["_source_ref"] = None
         state["tlspec_version"] = TLSPEC_VERSION
+        if isinstance(state.get("versions"), list):
+            state["versions"] = list(state["versions"])  # the plain list, not the row-keyed one
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:

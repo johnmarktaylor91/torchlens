@@ -48,17 +48,29 @@ class _TwoLayer(nn.Module):
         return self.second(self.first(x))
 
 
-def test_layer_read_after_trace_collection_refuses_trace_reference_collected() -> None:
-    """A Layer read whose owning Trace was garbage-collected refuses typed."""
+def test_module_view_read_after_trace_collection_refuses_trace_reference_collected() -> None:
+    """A held Layer keeps its Trace; a module view kept past its Trace refuses typed.
+
+    A Layer looked up on a Trace holds that Trace, so its reads answer after
+    ``del trace``. A module record's view does not keep its Trace, so once
+    nothing holds the Trace a read through it refuses ``trace_reference_collected``.
+    """
 
     trace = tl.trace(_TwoLayer(), torch.randn(2, 4))
-    layer = trace["linear_1_1"]
+    layer = trace.layers["linear_1_1"]
+    facets = trace.modules["first"].facets
+    trace_ref = weakref.ref(trace)
 
     del trace
     gc.collect()
+    assert layer.source_trace is trace_ref()
+    assert trace_ref() is not None
 
+    del layer
+    gc.collect()
+    assert trace_ref() is None
     with pytest.raises(RecordBindingError) as exc_info:
-        _ = layer.source_trace
+        _ = facets._record
 
     assert exc_info.value.fields["code"] == "trace_reference_collected"
     assert exc_info.value.fields["remedy"]

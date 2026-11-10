@@ -1489,7 +1489,7 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
     from .._semantic.facets import Facet, FacetSpec
 
     resolved: list[tuple[str, Any]] = []
-    seen: set[tuple[int, str, str]] = set()
+    seen: set[tuple[object, str, str]] = set()
     facet_names = _DEFAULT_HEAD_FACET_NAMES if selector.name is None else (selector.name,)
     for record in _iter_facet_records(log):
         view = _scoped_facet_view(record, selector)
@@ -1505,16 +1505,13 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
                     value = view.head(selector.head_index)[facet_name]
             except (AttributeError, KeyError, RuntimeError, ValueError):
                 continue
-            spec = (
-                value.spec
-                if isinstance(value, Facet)
-                else value
-                if isinstance(value, FacetSpec)
-                else None
-            )
-            if spec is None:
+            spec = value.spec if isinstance(value, Facet) else value
+            if spec is None or not isinstance(value, (Facet, FacetSpec)):
                 continue
-            dedupe_key = (id(spec.home), repr(spec.transforms), facet_name)
+            # An op view's id can be reused once unheld, so an op home is keyed by label.
+            home = spec.home
+            label = getattr(home, "_layer_label_raw", None) or getattr(home, "_label_raw", None)
+            dedupe_key = (id(home) if label is None else label, repr(spec.transforms), facet_name)
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)

@@ -14,7 +14,9 @@ compare it with the walk on each audit case:
 * every reference to a record must be accounted for by the walk (a count
   against ``sys.getrefcount``), so a holder the walk cannot reach also fails;
 * every path that reaches an ``Op`` or a ``Layer`` belongs to a conversion
-  step that lands before those two kinds are activated.
+  step that lands before those two kinds are activated;
+* the state handed to pickle is a transient projection: its rows stay listed
+  but block nothing, and a projection that outlives the pickle call fails.
 
 Run ``python -m tools.record_ownership`` to print the walk.
 """
@@ -22,24 +24,25 @@ Run ``python -m tools.record_ownership`` to print the walk.
 from __future__ import annotations
 
 import functools
+import pickle
 import weakref
 from typing import Any
 
 import pytest
 
-from tools.record_ownership import audit_roots, run_case, signature, uses
-from tools.record_ownership.cases import CASES
+from tools.record_ownership import audit_roots, record_types, run_case, signature, uses
+from tools.record_ownership.cases import CASES, _read_doors, _trace
 from tools.record_ownership.graph import strong_edges
 from tools.record_ownership.holders import (
     ACTIVATED_FIRST,
-    ACTIVATION,
-    BEFORE_ACTIVATION,
     HOLDERS,
     KNOWN,
-    SIDE_TABLE,
+    PICKLE_CASE,
     STEPS,
+    TRANSIENT,
     blocking,
     expected,
+    is_transient,
 )
 
 
@@ -91,19 +94,74 @@ def test_known_holder_is_found(name: str) -> None:
     assert path in _found(case)
 
 
-def test_paths_to_op_and_layer_convert_before_activation() -> None:
-    """Every path that reaches an ``Op`` or ``Layer`` has a step that lands before the pin.
+def test_no_trace_holds_an_op_or_layer() -> None:
+    """``Op`` and ``Layer`` are activated: no pinned path from a trace reaches one.
 
-    The one exception is the strong side table of records, which activation itself makes weak.
+    The only rows left for them are the transient pickle projection, which no
+    trace holds. A path through a buffer, a module record or a gradient record
+    counts: it would be a row here like any other.
     """
 
-    late = {
+    held = {
         path: holder.step
         for path, holder in blocking(ACTIVATED_FIRST).items()
-        if holder.step not in BEFORE_ACTIVATION
-        and not (holder.step == ACTIVATION and path.startswith(SIDE_TABLE))
+        if not is_transient(path, holder)
     }
-    assert late == {}
+    assert held == {}
+
+
+def test_transient_rows_are_only_the_pickle_projection() -> None:
+    """A transient row is rooted at a pickle state and appears in that case alone."""
+
+    rows = {path: holder for path, holder in HOLDERS.items() if holder.step in TRANSIENT}
+    assert rows, "the pickle projection rows stay listed"
+    assert [path for path, holder in rows.items() if not is_transient(path, holder)] == []
+    assert rows.keys() <= expected(PICKLE_CASE)
+    for case in sorted(set(CASES) - {PICKLE_CASE}):
+        assert not rows.keys() & expected(case), case
+
+
+def _live_paths(trace: Any) -> tuple[set[str], dict[str, Any]]:
+    """Walk one live trace; return its holder paths and its unexplained referrers."""
+
+    audit = audit_roots([("Trace", trace)], record_types())
+    paths = {signature(edge) for edge in (*audit.trace_edges, *audit.record_edges)}
+    return paths, audit.unexplained
+
+
+def test_pickle_projection_does_not_outlive_the_pickle_call() -> None:
+    """After ``pickle.dumps`` returns, the trace holds nothing it did not hold before."""
+
+    trace = _trace()
+    _read_doors(trace)
+    before, _ = _live_paths(trace)
+    payload = pickle.dumps(trace)
+    after, unexplained = _live_paths(trace)
+    assert payload
+    # Pickling may build caches a live trace is allowed to keep (the rows of the
+    # other cases); nothing else may appear, and no referrer may be out of the walk's reach.
+    live_rows = set().union(*(expected(case) for case in CASES if case != PICKLE_CASE))
+    assert sorted(after - before - live_rows) == []
+    assert unexplained == {}
+
+
+def test_a_kept_pickle_projection_is_a_new_holder() -> None:
+    """A state that outlives the pickle call is found on the trace and no row excuses it."""
+
+    trace = _trace()
+    _read_doors(trace)
+    before, _ = _live_paths(trace)
+    trace.__dict__["_kept_state"] = trace.__getstate__()
+    kept = _live_paths(trace)[0] - before
+    assert kept, "the walk must find the records the kept state holds"
+    assert all(path.startswith("Trace._kept_state") for path in kept), sorted(kept)
+    assert not kept & HOLDERS.keys()
+    excused = [
+        path for path in kept if any(is_transient(path, holder) for holder in HOLDERS.values())
+    ]
+    assert excused == []
+    for case in sorted(CASES):
+        assert kept - expected(case) == kept, case
 
 
 def test_table_is_well_formed() -> None:

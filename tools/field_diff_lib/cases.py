@@ -191,6 +191,29 @@ class TwoRelu(nn.Module):
         return second.view(-1) + 0
 
 
+class DeadBranches(nn.Module):
+    """Dead computation of several kinds, so orphan removal has rows to drop.
+
+    The dead ops share op types with live ones (equivalence classes span
+    both), read a parameter, and drive a Python conditional.
+    """
+
+    def __init__(self) -> None:
+        """Build one linear layer."""
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Mix live ops with constants, a parameter read and a predicate that reach nothing."""
+        h = torch.relu(self.fc(x))
+        dead = torch.relu(torch.ones(4) * 3) + 1
+        _ = dead.sum()
+        _ = self.fc.weight.abs().mean()
+        if torch.ones(()).sum() > 0:
+            h = h + 1
+        return torch.relu(h) * 2
+
+
 def _resnet18() -> tuple[nn.Module, Any]:
     """Build an untrained ResNet-18 and its input."""
 
@@ -224,6 +247,7 @@ MODELS: dict[str, Callable[[], tuple[nn.Module, Any]]] = {
     "autocast": lambda: (AutocastModel().eval(), torch.randn(2, 8)),
     "transform": lambda: (TransformModel().eval(), torch.randn(3, 4)),
     "two_relu": lambda: (TwoRelu().eval(), torch.randn(2, 4)),
+    "dead_branches": lambda: (DeadBranches().eval(), torch.randn(2, 4)),
 }
 
 #: The models every option variant runs on, with the layer filter of its selective save.
@@ -349,6 +373,8 @@ def case_list() -> list[Case]:
         Case("saved_loaded", "conditional", _saved_loaded),
         Case("saved_loaded-varied8", "varied8", _saved_loaded),
         Case("two_relu", "two_relu", _default, mutation_probe=True),
+        Case("dead_branches", "dead_branches", _default),
+        Case("dead_branches-save_args", "dead_branches", _save_args),
     ]
     return cases
 

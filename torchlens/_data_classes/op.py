@@ -1148,7 +1148,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     (1, 4, 8, 8)
     """
 
-    __slots__ = ("_core", "_row")
+    __slots__ = ("__weakref__", "_core", "_owner", "_row")
 
     if TYPE_CHECKING:
         # Static field declarations for type checkers ONLY (invisible at
@@ -2421,7 +2421,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected; an Op does not keep its Trace alive",
+                "Trace has been garbage-collected and this Op holds none: an Op read from the Trace keeps it; one reached through a Layer's ops, copied or restored does not",
                 code="trace_reference_collected",
                 remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
             )
