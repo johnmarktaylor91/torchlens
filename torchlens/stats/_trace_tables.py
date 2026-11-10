@@ -5,7 +5,7 @@ Bodies of the ``Trace`` export verbs (``to_pandas``, ``decode_output``,
 method per verb that forwards to these functions.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, cast
@@ -408,38 +408,37 @@ _TO_PANDAS_COLUMN_TYPES: dict[str, type] = {
 
 
 #: ``to_pandas`` columns computed by :func:`_table_cell` itself, never read as stored columns.
-_PER_OP_TABLE_FIELDS: frozenset[str] = frozenset(
-    {
-        "conditional_branch_stack",
-        "layer_type",
-        "grad",
-        "num_saved_grads",
-        "output_role",
-        "decoded_output_summary",
-    }
-)
+def _decoded_output_cell(trace: "Trace", layer_entry: Any) -> Any:
+    """The decoded output summary on an output op, ``None`` elsewhere."""
+
+    if bool(getattr(layer_entry, "is_output", False)):
+        return _decoded_output_summary(trace)
+    return None
+
+
+# Table columns that are not plain stored reads: each is computed op by op.
+_TABLE_CELL_READERS: dict[str, Callable[["Trace", Any], Any]] = {
+    "conditional_branch_stack": lambda trace, entry: _format_conditional_branch_stack(
+        entry.control_flow.branch_stack
+    ),
+    # The table keeps its layer_type column; an Op names it type.
+    "layer_type": lambda trace, entry: entry.type,
+    "grad": lambda trace, entry: getattr(entry, "grad"),
+    "num_saved_grads": lambda trace, entry: len(getattr(entry, "_grad_records", ())),
+    "output_role": lambda trace, entry: _output_role_from_container_path(
+        getattr(entry, "container_path", ())
+    ),
+    "decoded_output_summary": _decoded_output_cell,
+}
+_PER_OP_TABLE_FIELDS: frozenset[str] = frozenset(_TABLE_CELL_READERS)
 
 
 def _table_cell(trace: "Trace", layer_entry: Any, field_name: str) -> Any:
     """Return one ``to_pandas`` cell of ``layer_entry`` read through the facade."""
 
-    if field_name == "conditional_branch_stack":
-        return _format_conditional_branch_stack(layer_entry.control_flow.branch_stack)
-    if field_name == "layer_type":
-        # The table keeps its layer_type column; an Op names it type.
-        return layer_entry.type
-    if field_name == "grad":
-        return getattr(layer_entry, "grad")
-    if field_name == "num_saved_grads":
-        return len(getattr(layer_entry, "_grad_records", ()))
-    if field_name == "output_role":
-        return _output_role_from_container_path(getattr(layer_entry, "container_path", ()))
-    if field_name == "decoded_output_summary":
-        return (
-            _decoded_output_summary(trace)
-            if bool(getattr(layer_entry, "is_output", False))
-            else None
-        )
+    reader = _TABLE_CELL_READERS.get(field_name)
+    if reader is not None:
+        return reader(trace, layer_entry)
     return record_member(layer_entry, field_name)
 
 

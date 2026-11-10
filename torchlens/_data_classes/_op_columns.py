@@ -334,7 +334,8 @@ def _raw_column(store: Any, fid: int, rows: Sequence[int]) -> list[Any] | None:
     if cells is not None:
         return [cells[row][fid] for row in rows]
     columns = store._columns
-    assert columns is not None  # a store without row cells is frozen columnar
+    if columns is None:  # neither row cells nor columns: read row by row
+        return None
     column = columns[fid]
     backing = column.values.tolist() if column.packed else column.values
     present = column.present
