@@ -275,7 +275,7 @@ class StoreWriteObserver:
     so each stage is measured as a difference of row snapshots, by identity:
 
     * capture: cells set in the capture journal's rows when postprocessing
-      takes them over;
+      takes them over (a default-omitted cell is not set);
     * ingest: cells of the trace's store that are set or replaced between that
       moment and the end of ``materialize_from_events``;
     * passes: cells set, replaced or deleted from there to the store's freeze
@@ -286,9 +286,12 @@ class StoreWriteObserver:
     """
 
     def __init__(self) -> None:
+        from torchlens._trace_core.cell_states import STATE_DEFAULT, LazyCell
         from torchlens._trace_core.op_store import _MISSING
 
         self._missing = _MISSING
+        self._lazy = LazyCell
+        self._default = STATE_DEFAULT
         self.stage = "capture"
         self.cells = {"capture": 0, "ingest": 0, "passes": 0}
         self.calls: dict[str, int] = {}
@@ -319,8 +322,18 @@ class StoreWriteObserver:
         self.calls[key] = self.calls.get(key, 0) + 1
 
     def _set_cells(self, row: list[Any]) -> int:
+        # A default-omitted cell holds the field's shared marker, not a value:
+        # nothing was written for it, so it counts as unset. Its later write
+        # (a read's write-back, the freeze-seam settle) is an identity change
+        # and counts in the stage where it happens.
         missing = self._missing
-        return sum(1 for cell in row if cell is not missing)
+        lazy = self._lazy
+        default = self._default
+        return sum(
+            1
+            for cell in row
+            if cell is not missing and not (cell.__class__ is lazy and cell.state == default)
+        )
 
     def _take_snapshot(self, rows: list[list[Any]]) -> None:
         self._snapshot = {id(row): (row, list(row)) for row in rows}

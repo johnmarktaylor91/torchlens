@@ -11,10 +11,13 @@ carries no compaction method and the freeze owns the compaction role
 from __future__ import annotations
 
 import weakref
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from .._quantities import Duration
-from .._trace_core.op_store import _MISSING
+from .._trace_core.cell_states import LazyCell, settle_default_cells
+from .._trace_core.op_store import _MISSING, PooledCell
+from ._op_container_census import _EMPTY_CONTAINER_POOL_KEYS
 
 if TYPE_CHECKING:
     from .trace import Trace
@@ -37,55 +40,87 @@ def compact_op_metadata(trace: Trace) -> None:
     Field values are unchanged -- see :func:`~torchlens._data_classes.op._pool_key`
     for why pooling is injective, and ``Op._compact_metadata`` for the
     per-field walk. Running it more than once is a no-op beyond the first.
+    Op cells still default-omitted are written last, in the form the pooling
+    would have left them in (see :func:`_pool_core_containers`).
     """
 
-    if trace in _COMPACTED_TRACES:
-        return
-    ops = trace.__dict__.get("_layer_list")
-    if not ops:
-        return
-    _COMPACTED_TRACES.add(trace)
-    pool: dict[Any, Any] = {}
     core = trace.__dict__.get("_trace_core")
     store = core.ops if core is not None else None
-    if store is not None:
-        # Core-backed ops pool in ONE column-major sweep over the row
-        # cells (same ladder, same skips as the per-op walk) without
-        # paying the attribute protocol per field.
-        _compact_store_rows(store, pool)
-    if core is not None:
-        # Whole-cell container pooling (the memory slice): duplicate and
-        # empty provably-immutable mutable-container cells collapse onto one
-        # shared PooledCell per distinct content — allowlisted op fields,
-        # every kind-table field (Module hook lists, custom_attributes...).
-        from .op import _POOLED_CONTAINER_FIELDS, _pool_container_cells
-
-        container_stores: list[tuple[Any, Any]] = []
+    ops = trace.__dict__.get("_layer_list")
+    share: Callable[[int, Any], Any] | None = None
+    if ops and trace not in _COMPACTED_TRACES:
+        _COMPACTED_TRACES.add(trace)
+        pool: dict[Any, Any] = {}
         if store is not None:
-            fid_by_name = store.layout.fid_by_name
-            container_stores.append(
-                (
-                    store,
-                    tuple(
-                        fid_by_name[name]
-                        for name in _POOLED_CONTAINER_FIELDS
-                        if name in fid_by_name
-                    ),
-                )
-            )
-        for kind_store in core.kind_rows.values():
-            container_stores.append((kind_store, None))
-        if container_stores:
-            _pool_container_cells(container_stores, {})
-    seen_ops: set[int] = set()
-    for op in ops:
-        op_id = id(op)
-        if op_id in seen_ops:
-            continue
-        seen_ops.add(op_id)
-        if store is not None and getattr(op, "_core", None) is store:
-            continue
-        op._compact_metadata(pool)
+            # Core-backed ops pool in ONE column-major sweep over the row
+            # cells (same ladder, same skips as the per-op walk) without
+            # paying the attribute protocol per field.
+            _compact_store_rows(store, pool)
+        if core is not None:
+            share = _pool_core_containers(core, store)
+        seen_ops: set[int] = set()
+        for op in ops:
+            if store is not None and getattr(op, "_core", None) is store:
+                continue
+            op_id = id(op)
+            if op_id in seen_ops:
+                continue
+            seen_ops.add(op_id)
+            op._compact_metadata(pool)
+    rows = store.rows_building() if store is not None else None
+    if rows is not None:
+        settle_default_cells(rows, share)
+
+
+def _pool_core_containers(core: Any, store: Any) -> Callable[[int, Any], Any]:
+    """Pool whole container cells of a core's stores; return the default-cell hook.
+
+    Whole-cell container pooling (the memory slice): duplicate and empty
+    provably-immutable mutable-container cells collapse onto one shared
+    ``PooledCell`` per distinct content: allowlisted op fields, every
+    kind-table field (Module hook lists, ``custom_attributes``...).
+
+    The returned ``share(fid, value)`` hook is what ``settle_default_cells``
+    calls for an op cell nothing read or wrote before the freeze seam: a
+    fresh empty default of a sanctioned field becomes the shared
+    ``PooledCell`` of its content, from the same table the pooling used, so
+    the settled store equals one whose capture wrote every container. Any
+    other default stays a fresh container per row.
+    """
+
+    from .op import _POOLED_CONTAINER_FIELDS, _container_pool_key, _pool_container_cells
+
+    container_pool: dict[Any, Any] = {}
+    container_stores: list[tuple[Any, Any]] = []
+    pooled_fids: tuple[int, ...] = ()
+    if store is not None:
+        fid_by_name = store.layout.fid_by_name
+        pooled_fids = tuple(
+            fid_by_name[name] for name in _POOLED_CONTAINER_FIELDS if name in fid_by_name
+        )
+        container_stores.append((store, pooled_fids))
+    for kind_store in core.kind_rows.values():
+        container_stores.append((kind_store, None))
+    if container_stores:
+        _pool_container_cells(container_stores, container_pool)
+    sanctioned = frozenset(pooled_fids)
+
+    def share(fid: int, value: Any) -> Any:
+        """Return the shared pooled cell for a sanctioned empty container."""
+
+        if fid not in sanctioned:
+            return value
+        key = _EMPTY_CONTAINER_POOL_KEYS.get(value.__class__)
+        if key is None:
+            key = _container_pool_key(value, 0, [])
+            if key is None:
+                return value
+        cell = container_pool.get(key)
+        if cell is None:
+            cell = container_pool[key] = PooledCell.from_value(value)
+        return cell
+
+    return share
 
 
 def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
@@ -122,6 +157,10 @@ def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
             if value is None or value is _MISSING:
                 continue
             cls = value.__class__
+            if cls is bool or cls is int or cls is LazyCell or cls is float:
+                # Nothing below pools these: plain numbers are not pooled
+                # values and a default-omitted cell holds no value yet.
+                continue
             if cls in pooled_classes and (cls is not Duration or not value):
                 key = (cls, value.hex()) if cls is Duration else (cls, value)
                 pooled = pool_get(key)

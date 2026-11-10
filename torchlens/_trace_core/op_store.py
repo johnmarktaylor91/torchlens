@@ -38,7 +38,7 @@ from ._fork_copy import (
     _needs_eager_isolation,
     cow_copy_value,
 )
-from .cell_states import _CSR, _FACT, _MISSING, LazyCell
+from .cell_states import _CSR, _FACT, _MISSING, LazyCell, default_answer
 from .eviction_walk import _evict_payloads_in_list, _evict_payloads_in_mapping, _EvictTypes
 from .groups import GroupRef, MembershipGroups
 
@@ -398,7 +398,7 @@ class OpRowStore:
                 assert columns is not None
                 value = columns[fid].get(row)
         if value.__class__ is LazyCell and not raw:
-            return value.read(self, row, fid)
+            return value.read(self, row, fid) if value.make else value.source
         return value
 
     def cell_set(self, row: int, fid: int, value: Any) -> None:
@@ -1054,7 +1054,7 @@ class _CombinedAuditOpRowStore(OpRowStore):
             effects = _AUDIT_WRITE_EFFECTS.get(store_id)
             if effects is not None and fid not in effects:
                 rows = self._rows
-                old = rows[row][fid] if rows is not None else _MISSING
+                old = default_answer(rows[row][fid]) if rows is not None else _MISSING
                 if _write_is_content_effective(old, value):
                     effects.add(fid)
         OpRowStore.cell_set(self, row, fid, value)

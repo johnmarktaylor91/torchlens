@@ -24,8 +24,11 @@ per registered field and builds the seed row that starts default-capable
 fields default-omitted and derived fields derived. Markers carry their own
 answer, so the store read path needs no lookup: one exact-class test.
 
-Nothing in the product registers a field yet; the mechanism is exercised
-by ``tests/test_cell_states.py``.
+The exhaustive torch capture registers its constant-valued op cells as
+defaults (``backends/torch/_ops_row_cells.py``): a draft row starts them
+default-omitted instead of writing each value, and ``settle_default_cells``
+writes the remaining ones at the freeze seam, so a sealed store holds the
+values every reader of raw cells expects.
 """
 
 from __future__ import annotations
@@ -221,6 +224,58 @@ def cell_state(store: Any, row: int, fid: int) -> str:
     if value.__class__ is LazyCell:
         return str(value.state)
     return STATE_SET
+
+
+def default_answer(value: Any) -> Any:
+    """Return what a default-omitted cell answers, or ``value`` for any other cell.
+
+    Nothing is written: a mutable default is built fresh for the caller. This
+    is the comparison form for code that inspects a raw cell.
+    """
+
+    if value.__class__ is LazyCell and value.state == STATE_DEFAULT:
+        return value.source() if value.make else value.source
+    return value
+
+
+def settle_default_cells(
+    rows: Iterable[list[Any]], share: Callable[[int, Any], Any] | None = None
+) -> None:
+    """Write the default into every cell of ``rows`` that is still default-omitted.
+
+    Parameters
+    ----------
+    rows:
+        Row cell lists of a building store (``rows_building()``).
+    share:
+        Optional ``(fid, value) -> cell`` hook for mutable defaults. It is
+        called once per field with a fresh default and returns either that
+        same object (the field gets a fresh container per row) or one shared
+        storage cell that every settled row of the field then holds.
+    """
+
+    shared: dict[int, Any] = {}
+    fresh: set[int] = set()
+    for row in rows:
+        for fid, value in enumerate(row):
+            if value.__class__ is not LazyCell or value.state != STATE_DEFAULT:
+                continue
+            if not value.make:
+                row[fid] = value.source
+            elif fid in shared:
+                row[fid] = shared[fid]
+            elif fid in fresh or share is None:
+                # Exact list and dict factories are built by display, not a call.
+                source = value.source
+                row[fid] = [] if source is list else {} if source is dict else source()
+            else:
+                made = value.source()
+                cell = share(fid, made)
+                if cell is made:
+                    fresh.add(fid)
+                else:
+                    shared[fid] = cell
+                row[fid] = cell
 
 
 class LazyFields:

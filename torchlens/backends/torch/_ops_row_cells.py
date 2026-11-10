@@ -33,8 +33,10 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
+from ..._ir._op_row_seed import INIT_BYTES_FIELDS
 from ..._ir.op_record import FACET_DEFAULTS
 from ..._ir.op_record_scatter import _resolve_dtype, _write_function_ref_cells
+from ..._trace_core.cell_states import LazyFields
 from ..._trace_core.op_store import _MISSING
 from ._ops_freeze_refs import _copy_parent_arg_positions, _resolve_call_function_ref
 
@@ -337,22 +339,57 @@ def _fill_row(
     ``row`` is a layout row (``f`` the layout's field ids) or a cell dict
     (``f`` maps each name to itself). The scalar constants are not written
     here: the layout row starts from a template holding them and the dict form
-    adds them first. Fresh empty containers are written per op.
+    adds them first. The empty containers are not written here either: the
+    layout row starts them default-omitted (the store answers a fresh one on
+    first read) and the dict form adds them through ``_fill_empty_containers``.
     """
 
-    for name in _EMPTY_LIST_CELLS:
-        row[f[name]] = []
-    for name in _EMPTY_DICT_CELLS:
-        row[f[name]] = {}
-    row[f["output_descendants"]] = set()
-    row[f["module_entry_arg_keys"]] = defaultdict(list)
     _fill_core_graph(row, f, trace, fields_dict)
     _fill_output(row, f, fields_dict)
     _fill_transform(row, f, fields_dict, _fill_facets(row, f, fields_dict, fire_results))
 
 
+def _arg_keys_default() -> defaultdict[Any, list[Any]]:
+    """Return a fresh ``module_entry_arg_keys`` default."""
+
+    return defaultdict(list)
+
+
+def _fill_empty_containers(cells: dict[str, Any]) -> None:
+    """Write the fresh empty container cells of one op into the dict form."""
+
+    for name in _EMPTY_LIST_CELLS:
+        cells[name] = []
+    for name in _EMPTY_DICT_CELLS:
+        cells[name] = {}
+    cells["output_descendants"] = set()
+    cells["module_entry_arg_keys"] = _arg_keys_default()
+
+
+def _default_fields(layout: OpStoreLayout) -> LazyFields:
+    """Register the constant-valued cells of an exhaustive draft as defaults.
+
+    The scalar constants are shared immutable defaults; the empty containers
+    and ``_grad_records`` (which ingest used to seed) are per-row factories.
+    A constant that ingest converts in place (the byte quantities of
+    ``INIT_BYTES_FIELDS``) is not registered: the capture writes its value.
+    """
+
+    fields = LazyFields(layout.names)
+    for name, value in _SCALAR_CONSTANT_CELLS:
+        if name not in INIT_BYTES_FIELDS:
+            fields.register_default(name, value)
+    for name in (*_EMPTY_LIST_CELLS, "_grad_records"):
+        fields.register_default(name, factory=list)
+    for name in _EMPTY_DICT_CELLS:
+        fields.register_default(name, factory=dict)
+    fields.register_default("output_descendants", factory=set)
+    fields.register_default("module_entry_arg_keys", factory=_arg_keys_default)
+    return fields
+
+
 class _RowPlan:
-    """One layout's field ids and its row template holding the scalar constant cells."""
+    """One layout's field ids and its row template of default-omitted cells."""
 
     __slots__ = ("layout", "fids", "template")
 
@@ -361,9 +398,10 @@ class _RowPlan:
 
         self.layout = layout
         self.fids = layout.fid_by_name
-        template: list[Any] = [_MISSING] * layout.n_fields
+        template = _default_fields(layout).seed_row()
         for name, value in _SCALAR_CONSTANT_CELLS:
-            template[self.fids[name]] = value
+            if name in INIT_BYTES_FIELDS:
+                template[self.fids[name]] = value
         self.template = template
 
 
@@ -392,7 +430,8 @@ def write_draft_row(
 
     The row holds exactly what ``write_op_row(store, op_row_cells(...))`` holds
     for the same draft and the same resolved call ref, written straight into a
-    copy of the layout's constant template (no intermediate cell dicts).
+    copy of the layout's template (no intermediate cell dicts), except that the
+    constant-valued cells stay default-omitted: the store answers them on read.
 
     Parameters
     ----------
@@ -454,6 +493,7 @@ def op_row_cells(
 
     function = _resolve_call_function_ref(cast(dict[str, Any], fields_dict), call_ref_box)
     cells: dict[str, Any] = dict(_SCALAR_CONSTANT_CELLS)
+    _fill_empty_containers(cells)
     _fill_row(cells, _NAME_KEYS, trace, fields_dict, fire_results)
     _write_function_ref_cells(cells, _NAME_KEYS, function)
     return cells
