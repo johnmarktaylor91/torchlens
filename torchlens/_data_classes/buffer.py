@@ -13,6 +13,7 @@ from .._utils._display_errors import short_name_message
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._lookup_kinds import buffer_for_key, converted
+from ._row_refs import child_state_items, install_child_fields
 from ._runtime_handles import runtime_handle_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
@@ -107,16 +108,16 @@ class Buffer:
 
         self.address = address
         self.module_address = address.rsplit(".", 1)[0] if "." in address else ""
+        # The owner reference comes first: ``versions`` is stored as the ops'
+        # rows in the owning trace's op store when it has them all.
+        self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
         self.versions = list(versions)
         self._initial_value = initial_value
-        self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
 
     def __tl_state_items__(self) -> Any:
         """Yield live state pairs from the backing row (facade hook)."""
 
-        from .._trace_core.record_rows import record_state_items
-
-        return record_state_items(self)
+        return child_state_items(self)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
         """Install a state mapping through the cell descriptors (hook)."""
@@ -396,6 +397,7 @@ def _install_buffer_facade() -> None:
     from .._trace_core.record_rows import install_record_facade
 
     install_record_facade(Buffer, _BUFFER_STORED_FIELDS)
+    install_child_fields(Buffer, {"versions": None})
 
 
 _install_buffer_facade()
