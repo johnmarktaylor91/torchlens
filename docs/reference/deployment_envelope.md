@@ -57,7 +57,7 @@ uint8 payloads) outside the registered parameter/buffer contract:
 
 - Reads of that state can appear as unattributed tensor arguments; the
   capture disclosure warning names the exact ops, and 8-bit captures may be
-  ceilinged `capture_verified=False`.
+  ceilinged `provenance.verified=False`.
 - `tl.validate` keeps its tripwires armed: on 8-bit models the metadata
   invariant honestly flags those reads (a raise, not a pass); 4-bit replay
   reports `False`. A quantized model never validates as if it were dense.

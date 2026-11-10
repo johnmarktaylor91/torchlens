@@ -143,8 +143,8 @@ mode is the cost; the values add memory (roughly 1.4x to 2.7x the saved `Op.out`
 intermediate ATen result is kept), not time. With the switch off nothing is installed.
 
 The independent aten-level completeness witness is also opt-in and can run alone or alongside the
-callable detector. **This is the only route to `capture_verified=True`.** A plain `tl.trace()` never
-arms it: every default capture reads `capture_verified=None`, which every honesty surface renders as
+callable detector. **This is the only route to `provenance.verified=True`.** A plain `tl.trace()` never
+arms it: every default capture reads `provenance.verified=None`, which every honesty surface renders as
 "not checked" -- not a clean bill. Escapes the wrappers themselves observe (worker-thread ops,
 `torch.jit.script` regions, direct `torch.ops.aten.*` calls, `.data.copy_()`) still ceiling the
 default capture to `False`, and tensor-to-scalar escapes (`.item()`, `int(argmax)`) raise the
@@ -179,7 +179,7 @@ unwrap_torch()
 ```
 
 A value-free capture (`structure_only=True`, on meta or real tensors) is never verified: under the
-witness it still reads `capture_verified=None`, and `completeness_witness_verified` records the
+witness it still reads `provenance.verified=None`, and `completeness_witness_verified` records the
 census result.
 
 The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
@@ -196,9 +196,9 @@ still accounted normally.
 event observed during active logging was correlated to an emitted op or to an exact audited boundary.
 It does not prove that every user call route entered active logging. In particular, a transform callable
 built before wrapping can escape without a transform boundary op; TorchLens detects that route and leaves
-the census result `True` while setting `capture_verified=False` with
+the census result `True` while setting `provenance.verified=False` with
 `capture_verification_reason="transform_call_route_unverified"`. `escape_detector_verified=True` makes
-the separate claim that the callable detector saw no observable raw-call escape. `capture_verified=True`
+the separate claim that the callable detector saw no observable raw-call escape. `provenance.verified=True`
 is the combined result only when the enabled census/detector checks pass, no raw-transform escape was
 detected, and the owner-thread qualification remains valid. A bypassed `torch.compile` region reports
 the more specific `capture_verification_reason="dynamo_region_not_logged"` in preference to any of the

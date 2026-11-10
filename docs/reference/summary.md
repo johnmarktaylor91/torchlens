@@ -214,7 +214,10 @@ Capture honesty travels with the table: structure-only, unverified,
 partial, rescued, and episode captures banner ABOVE the table via the one
 shared honesty chokepoint, and the footer's five subjects (Params /
 Compute / Memory / Graph / Capture) carry coverage, both payload scopes
-(`at capture` vs `retained now`), and the health verdict.
+(`at capture` vs `retained now`), and the health verdict. The Capture line
+always states verification: `verified`, `unverified`, or `verification not
+checked` (the default capture does not arm the completeness witness; read
+`trace.provenance.verified`).
 
 The Params footer also carries the parameter storage (`size 5.42 KiB`); on
 a model pruned with `torch.nn.utils.prune` it names the pruned tensors

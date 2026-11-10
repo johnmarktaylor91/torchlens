@@ -2451,7 +2451,7 @@ code outside the registry fails the backend's `c0_refusal_codes_registered` cell
 | `foreign_tensor_input` | an input leaf belongs to another framework |
 | `constant_unrealizable` | a closure or literal constant has no readable buffer; the message names the constant op |
 | `rng_state_in_graph` | the traced forward draws random numbers itself (`Tensor.rand`, dropout) on a lazy backend, so replay would draw different values; random state created before the forward is captured |
-| `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `capture_verified=False` with this code as `provenance.verification_reason` and a warning |
+| `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `provenance.verified=False` with this code as `provenance.verification_reason` and a warning |
 | `runtime_mode_unsupported` | Paddle runs outside dygraph mode, or in PIR mode |
 | `inplace_op_unsupported` | an in-place or global-state Paddle op runs inside the forward |
 | `input_mutation_unsupported` | the traced tinygrad callable mutates an input (`Tensor.assign`, `Tensor.replace`, setitem) |
@@ -2557,7 +2557,7 @@ table equals this summary and renders `untested` as "not yet proven"; the check 
 
 **Conformance case ids added by the protocol**: The conformance cells the backend protocol adds, by tier. A typed refusal inside any other cell
 makes it `unsupported`; an untyped exception, a wrong value or a trace marked
-`capture_verified=False` makes it `failed`.
+`provenance.verified=False` makes it `failed`.
 
 - Tier 0, the provider API (no model execution): `c0_protocol_complete`,
   `c0_framework_requirement_consistent`, `c0_refusal_codes_registered`,

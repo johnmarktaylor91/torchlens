@@ -93,7 +93,7 @@ def test_compiled_attribute_ceilings_capture_verified() -> None:
     model = _TinyMLP()
     model.fast_path = mx.compile(lambda x: x * 2)
     x = mx.random.normal((2, 4))
-    with pytest.warns(UserWarning, match="capture_verified=False"):
+    with pytest.warns(UserWarning, match="trace.provenance.verified=False"):
         log = tl.trace(model, x, backend="mlx")
     assert log.provenance.verified is False
     assert log.provenance.verification_reason == "mlx_compiled_attribute_not_logged"
