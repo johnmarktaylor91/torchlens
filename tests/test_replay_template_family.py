@@ -33,7 +33,6 @@ from torchlens._trace_core.cell_states import (
     cell_state,
 )
 from torchlens._trace_core.op_store import DetachedOpStore
-from torchlens._trace_core.record_rows import CORE_KEY, ROW_KEY
 from torchlens._utils._display_keys import display_key
 from torchlens.intervention._types import CapturedArgTemplate, ParentRef
 
@@ -52,7 +51,6 @@ class _Looped(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = torch.relu(self.fc(x))
         y = self.fc(y)
-        y = torch.nn.functional.leaky_relu(y, negative_slope=0.2)
         return torch.sum(y * 2.0, dim=1, keepdim=True)
 
 
@@ -64,8 +62,8 @@ def _trace(**kwargs: Any) -> Any:
 def _cell(op: Any, name: str) -> tuple[Any, int, int]:
     """Return ``(store, row, fid)`` of one stored field of an op."""
 
-    store = op.__dict__[CORE_KEY]
-    return store, op.__dict__[ROW_KEY], store.layout.fid_by_name[name]
+    store = op._core
+    return store, op._row, store.layout.fid_by_name[name]
 
 
 def _states(trace: Any) -> list[str]:

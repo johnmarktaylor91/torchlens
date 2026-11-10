@@ -166,7 +166,27 @@ def _bind_keys(value: Any, lookup: Any, key_of: Any) -> None:
 def template_labels(trace: Trace, parent_ref_cls: type[Any]) -> TemplateLabels:
     """Return the label context for the carried templates of ``trace``."""
 
-    return TemplateLabels(trace._raw_to_final_layer_labels, parent_ref_cls, weakref.ref(trace))
+    try:
+        trace_ref = weakref.ref(trace)
+    except TypeError:  # a trace double without weak-reference support
+        trace_ref = _StrongRef(trace)
+    return TemplateLabels(trace._raw_to_final_layer_labels, parent_ref_cls, trace_ref)
+
+
+class _StrongRef:
+    """Callable holding an object that refuses weak references."""
+
+    __slots__ = ("target",)
+
+    def __init__(self, target: Any) -> None:
+        """Hold ``target``."""
+
+        self.target = target
+
+    def __call__(self) -> Any:
+        """Return the held object."""
+
+        return self.target
 
 
 def carry_templates(
@@ -211,7 +231,7 @@ def carry_entry_templates(
     labels = field_cache.get(_LABELS_KEY)
     if labels is None or labels.mapping is not trace._raw_to_final_layer_labels:
         labels = field_cache[_LABELS_KEY] = template_labels(trace, parent_ref_cls)
-    carried = CORE_KEY in getattr(layer_entry, "__dict__", ())
+    carried = _row_backed(layer_entry)
     for name in TEMPLATE_FIELDS:
         template = record_member(layer_entry, name, None)
         if template is None:
@@ -220,6 +240,18 @@ def carry_entry_templates(
             set_entry_field(name, REPLAY_TEMPLATES.carry(name, (template, labels)))
         else:
             set_entry_field(name, resolve_template(None, 0, name, (template, labels)))
+
+
+def _row_backed(record: Any) -> bool:
+    """Return whether ``record`` reads its stored fields from a row store.
+
+    An ``Op`` holds its store in the ``_core`` slot; other facade records in
+    their instance dict.
+    """
+
+    if getattr(record, "_core", None) is not None:
+        return True
+    return CORE_KEY in getattr(record, "__dict__", ())
 
 
 def rename_replay_entry(
