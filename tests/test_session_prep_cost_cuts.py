@@ -336,7 +336,7 @@ def _closing_class(held: torch.Tensor) -> type[nn.Module]:
     return _Closing
 
 
-def _shared_forward_model(sub_first: bool) -> tuple[nn.Module, list[torch.Tensor]]:
+def _shared_forward_model(sub_first: bool) -> tuple[nn.Sequential, list[torch.Tensor]]:
     """Return a model whose modules share forwards, and the tensors those forwards reach."""
 
     closed = [torch.full((1,), 3.0), torch.full((1,), 4.0)]
@@ -401,7 +401,7 @@ def test_module_attribute_tensor_added_between_sweeps_is_seen() -> None:
     held = torch.full((1,), 6.0)
     owned_before, _ = collect_pre_forward_tensor_ids(model)
     assert id(held) not in owned_before
-    model[2].stash = [held]
+    cast(Any, model[2]).stash = [held]
     owned_after, callable_only = collect_pre_forward_tensor_ids(model)
     assert owned_after[id(held)] is held
     assert id(held) not in callable_only
@@ -435,14 +435,14 @@ def _unskipped_sites(model: nn.Module) -> tuple[str, ...]:
     return tuple(dict.fromkeys(sites))
 
 
-class _MarkedDict(OrderedDict):  # type: ignore[type-arg]
+class _MarkedDict(OrderedDict[str, int]):
     """An ``OrderedDict`` subclass; never skipped on its type."""
 
 
-def _attribute_zoo() -> nn.Module:
+def _attribute_zoo() -> Any:
     """Return a model whose instance dictionaries hold every skipped type and some marked values."""
 
-    model = _TwoLayer()
+    model: Any = _TwoLayer()
     marked_ordered: OrderedDict[str, int] = OrderedDict(a=1)
     marked_ordered._torchdynamo_orig_callable = len  # type: ignore[attr-defined]
     marked_subclass = _MarkedDict()
@@ -553,7 +553,7 @@ def test_held_scan_type_skip_drops_only_values_that_hold_no_tensor() -> None:
     for leaf in leaves:
         assert plain_holder_tensor_attrs(leaf) == []
 
-    module = nn.Linear(2, 2)
+    module: Any = nn.Linear(2, 2)
     module.scale = torch.full((2,), 2.0)
     module.count = 3
     module.label = "x"
