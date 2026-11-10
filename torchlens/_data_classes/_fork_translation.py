@@ -6,7 +6,8 @@ the store it is bound to and its row, and finds the fork's record for the same
 kind and row through the fork's own doors. It holds no record of either trace:
 only store identities (weakly), row numbers, positions in the fork's op list,
 and weak references to the fork's non-``Op`` records, which the fork's doors
-keep alive.
+keep alive. The one thing it keeps is the fork's copy of an object that has no
+row at all (a code location), which no door of the fork holds.
 
 While the fork is being built the translator also carries ``map``, the
 identity table from each parent object to its fork shell that the build's
@@ -71,6 +72,7 @@ class RowTranslator:
 
     __slots__ = (
         "__weakref__",
+        "_copies",
         "_fork_ref",
         "_guards",
         "_miss_classes",
@@ -126,6 +128,8 @@ class RowTranslator:
         self._shells: dict[Any, Any] = {}
         # id(parent object) -> weak reference to it, for the identity names.
         self._guards: dict[int, Any] = {}
+        # id(parent object with no row, a code location) -> the fork's copy.
+        self._copies: dict[int, Any] = {}
         # op row -> position in the fork's op list (checked on every use).
         self._op_positions: dict[int, int] = {}
         if fork_core is not None and parent is not None:
@@ -192,8 +196,13 @@ class RowTranslator:
         entry = stores.get(id(store)) if store is not None else None
         if entry is not None:
             self._shells[(entry[1], parent_record.__dict__[ROW_KEY])] = weakref.ref(shell)
+            return
+        self._guards[key] = weakref.ref(parent_record)
+        if store is None:
+            # No row names this object and no door of the fork holds its
+            # copy, so the copy lives here for as long as the fork does.
+            self._copies[key] = shell
         else:
-            self._guards[key] = weakref.ref(parent_record)
             self._shells[key] = weakref.ref(shell)
 
     def _remember_accessor(self, accessor: Any, clone: Any) -> None:
@@ -218,7 +227,11 @@ class RowTranslator:
             # ``value``: drop the stale entry.
             del self._guards[key]
             self._shells.pop(key, None)
+            self._copies.pop(key, None)
             return None
+        copied = self._copies.get(key)
+        if copied is not None:
+            return copied
         shell_ref = self._shells.get(key)
         return shell_ref() if shell_ref is not None else None
 
