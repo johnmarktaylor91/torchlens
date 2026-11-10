@@ -41,9 +41,10 @@ def error_record(error: BaseException, normalize: Any = None) -> dict[str, Any]:
 
     fields = getattr(error, "fields", None)
     code = fields.get("code") if isinstance(fields, dict) else getattr(error, "code", None)
-    message = _ADDRESS.sub("<addr>", str(error))[:_MESSAGE_LIMIT]
+    message = _ADDRESS.sub("<addr>", str(error))
     if normalize is not None:
         message = normalize(message)
+    message = message[:_MESSAGE_LIMIT]
     return {
         "__raises__": type(error).__name__,
         "code": code if isinstance(code, (str, int)) else None,
