@@ -4224,15 +4224,13 @@
       "torchlens/_postprocess/_call_site_contract.py": [
         "tests/test_ancestry_closure_invariant.py",
         "tests/test_call_site_contract.py",
-        "tests/test_io_determinism_fixes.py",
-        "tests/test_loop_recurrence_hardening_2.py",
         "tests/test_validation.py",
         "tests/test_validation_key_forgery.py",
         "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
         "tests/validation_goldens/test_arm_campaign_killers_mutants3.py"
       ],
       "torchlens/_postprocess/_column_passes.py": [
-        "tests/test_capture_outcome_characterization.py",
+        "tests/test_call_site_contract.py",
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_column_passes_graph.py",
@@ -4501,6 +4499,11 @@
         "tests/test_site_key.py",
         "tests/test_state_hygiene_oracles.py"
       ],
+      "torchlens/_postprocess/_step7_rows.py": [
+        "tests/test_call_site_contract.py",
+        "tests/test_io_determinism_fixes.py",
+        "tests/test_loop_recurrence_hardening_2.py"
+      ],
       "torchlens/_postprocess/_streamed_tensor_types.py": [
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
@@ -4568,7 +4571,6 @@
       ],
       "torchlens/_postprocess/loop_detection.py": [
         "tests/test_arch_spine_relocations.py",
-        "tests/test_call_site_contract.py",
         "tests/test_executor_cuda_cache_arming.py",
         "tests/test_io_determinism_fixes.py",
         "tests/test_loop_recurrence_hardening_2.py",
