@@ -3233,14 +3233,6 @@
  },
  {
   "ambiguous": false,
-  "field": "_edge_uses",
-  "file": "torchlens/_postprocess/_label_rename.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/_postprocess/_layer_row_scan.py",
   "has_default": false,

@@ -6019,3 +6019,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: b821677b9e61f3b9af8d5a5321c4c241b6271e9a
 recorded: 2026-11-10T20:50:56+00:00
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: stage 2 wave-3 merge: ledgers regenerated on the merged train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 527d2622012f488f94aa77c3b86820c2cd4889b2
+recorded: 2026-11-10T22:04:42+00:00
