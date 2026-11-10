@@ -106,8 +106,10 @@ def _rebuild_template_record(
         if item is _ABSENT:
             continue
         item_cls = item.__class__
-        if item_cls is str or item_cls in _ATOMIC_CLASSES or (item_cls is tuple and not item):
+        if item_cls is str or item_cls in _ATOMIC_CLASSES:
             updates[name] = item
+        elif item_cls is tuple and not item:
+            updates[name] = ()  # the ladder's ``tuple([])``: the shared empty tuple
         elif item_cls is parent_ref_cls:
             label = item.parent_label
             if label in mapping:
@@ -226,8 +228,10 @@ def _rebuild_label_record(
             if item in mapping:
                 item = mapping[item]
             updates[name] = item
-        elif item_cls in _ATOMIC_CLASSES or (item_cls is tuple and not item):
+        elif item_cls in _ATOMIC_CLASSES:
             updates[name] = item
+        elif item_cls is tuple and not item:
+            updates[name] = ()  # the ladder's ``tuple([])``: the shared empty tuple
         elif name in _LABEL_FIELDS and isinstance(item, str):
             updates[name] = mapping.get(item, item)
         else:
