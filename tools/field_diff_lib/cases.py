@@ -310,7 +310,8 @@ def _fork(tl: Any, model: nn.Module, x: Any, scratch: str) -> dict[str, Any]:
 def _backward(tl: Any, model: nn.Module, x: Any, scratch: str) -> dict[str, Any]:
     """Capture with gradients armed and run one backward pass."""
 
-    trace = tl.trace(model, x, capture=_capture(tl, backward_ready=True, save_grads="all"))
+    capture = _capture(tl, backward_ready=True, save_grads="all")
+    trace = tl.trace(model, x, capture=capture)
     trace.backward(trace.output.sum())
     return {"trace": trace}
 

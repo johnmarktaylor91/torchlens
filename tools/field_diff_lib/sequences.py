@@ -244,7 +244,7 @@ def _new_attributes(tl: Any, log: Log, scratch: str) -> None:
         log.step("new.fork.layer.read", lambda: fork.layers[layer_label].h3_note)
         log.step("new.fork.trace.read", lambda: fork.h3_note)
     path = os.path.join(folder(scratch, "new_attributes"), "trace.tlspec")
-    log.step("new.save", lambda: trace.save(path) and None)
+    log.step("new.save", lambda trace=trace, path=path: trace.save(path) and None)
 
 
 def seq_mutate_before_read(tl: Any, log: Log, scratch: str) -> None:
@@ -269,14 +269,14 @@ def seq_mutate_before_read(tl: Any, log: Log, scratch: str) -> None:
     if fork is not None:
         _checks(log, "fork", fork, op_label, layer_label)
     path = os.path.join(folder(scratch, "mutated"), "trace.tlspec")
-    log.step("save", lambda: trace.save(path) and None)
-    loaded = log.step("load", lambda: tl.load(path))
+    log.step("save", lambda trace=trace, path=path: trace.save(path) and None)
+    loaded = log.step("load", lambda path=path: tl.load(path))
     if loaded is not None:
         _checks(log, "loaded", loaded, op_label, layer_label)
-    pickled = log.step("pickle", lambda: pickle.loads(pickle.dumps(trace)))  # noqa: S301
+    pickled = log.step("pickle", lambda trace=trace: pickle.loads(pickle.dumps(trace)))  # noqa: S301
     if pickled is not None:
         _checks(log, "pickled", pickled, op_label, layer_label)
-    copied = log.step("deepcopy", lambda: copy.deepcopy(trace))
+    copied = log.step("deepcopy", lambda trace=trace: copy.deepcopy(trace))
     if copied is not None:
         _checks(log, "deepcopied", copied, op_label, layer_label)
     _new_attributes(tl, log, scratch)
@@ -322,7 +322,8 @@ def seq_source_changes(tl: Any, log: Log, scratch: str) -> None:
         path, model = _source_model(scratch, f"h3_source_{variant}")
         capture = tl.options.CaptureOptions(seed=SEED, save_source_context=True)
         trace = log.step(
-            f"{variant}.capture", lambda: tl.trace(model, torch.ones(2, 4), capture=capture)
+            f"{variant}.capture",
+            lambda model=model, capture=capture: tl.trace(model, torch.ones(2, 4), capture=capture),
         )
         if trace is None:
             continue
@@ -332,8 +333,8 @@ def seq_source_changes(tl: Any, log: Log, scratch: str) -> None:
                 handle.write(SOURCE_MODEL_TEXT.replace("torch.relu", "torch.tanh"))
         elif variant == "deleted":
             os.remove(path)
-        log.step(f"{variant}.source_fields", lambda: _source_fields(trace, canon))
-        log.step(f"{variant}.repr", lambda: canon.string(repr(trace)))
+        log.step(f"{variant}.source_fields", lambda trace=trace: _source_fields(trace, canon))
+        log.step(f"{variant}.repr", lambda trace=trace: canon.string(repr(trace)))
 
 
 def _argument_fields(trace: Any, canon: Canonicalizer) -> dict[str, Any]:
@@ -372,7 +373,12 @@ def seq_arguments(tl: Any, log: Log, scratch: str) -> None:
         model = namespace["ArgModel"]().eval()
         model_input = torch.ones(2, 4)
         capture = tl.options.CaptureOptions(seed=SEED, save_args=save_args)
-        trace = log.step(f"{tag}.capture", lambda: tl.trace(model, model_input, capture=capture))
+        trace = log.step(
+            f"{tag}.capture",
+            lambda model=model, model_input=model_input, capture=capture: tl.trace(
+                model, model_input, capture=capture
+            ),
+        )
         if trace is None:
             continue
         with torch.no_grad():
@@ -380,7 +386,9 @@ def seq_arguments(tl: Any, log: Log, scratch: str) -> None:
         model.held_list.clear()
         model.held_dict.clear()
         canon = Canonicalizer(log.roots, REFERENCED_CLASSES)
-        log.step(f"{tag}.arguments", lambda: _argument_fields(trace, canon))
+        log.step(
+            f"{tag}.arguments", lambda trace=trace, canon=canon: _argument_fields(trace, canon)
+        )
 
 
 def seq_forks(tl: Any, log: Log, scratch: str) -> None:
@@ -393,13 +401,19 @@ def seq_forks(tl: Any, log: Log, scratch: str) -> None:
             snap(trace, log.roots)
         fork = log.step(f"{timing}.fork", trace.fork)
         edited = log.step(f"{timing}.fork_for_edit", trace.fork)
-        log.step(f"{timing}.edit", lambda: edited.do(tl.func("relu"), tl.zero_ablate()) and None)
+        log.step(
+            f"{timing}.edit",
+            lambda edited=edited: edited.do(tl.func("relu"), tl.zero_ablate()) and None,
+        )
         replaced = log.step(f"{timing}.fork_for_module", trace.fork)
         log.step(
             f"{timing}.replace_module",
-            lambda: replaced.do(tl.module("fc"), tl.zero_ablate()) and None,
+            lambda replaced=replaced: replaced.do(tl.module("fc"), tl.zero_ablate()) and None,
         )
-        rerun = log.step(f"{timing}.rerun", lambda: trace.run(model, model_input))
+        rerun = log.step(
+            f"{timing}.rerun",
+            lambda trace=trace, model=model, model_input=model_input: trace.run(model, model_input),
+        )
         for name, item in (
             ("fork", fork),
             ("edited", edited),
@@ -428,11 +442,13 @@ def seq_serialisation(tl: Any, log: Log, scratch: str) -> None:
         if timing == "warm":
             snap(trace, log.roots)
         path = os.path.join(folder(scratch, f"serialised_{timing}"), "trace.tlspec")
-        log.step(f"{timing}.save", lambda: trace.save(path) and None)
+        log.step(f"{timing}.save", lambda trace=trace, path=path: trace.save(path) and None)
         copies = {
-            "loaded": log.step(f"{timing}.load", lambda: tl.load(path)),
-            "pickled": log.step(f"{timing}.pickle", lambda: pickle.loads(pickle.dumps(trace))),  # noqa: S301
-            "deepcopied": log.step(f"{timing}.deepcopy", lambda: copy.deepcopy(trace)),
+            "loaded": log.step(f"{timing}.load", lambda path=path: tl.load(path)),
+            "pickled": log.step(
+                f"{timing}.pickle", lambda trace=trace: pickle.loads(pickle.dumps(trace))
+            ),  # noqa: S301
+            "deepcopied": log.step(f"{timing}.deepcopy", lambda trace=trace: copy.deepcopy(trace)),
         }
         snaps[f"{timing}.live"] = snap(trace, log.roots)
         for name, item in copies.items():
