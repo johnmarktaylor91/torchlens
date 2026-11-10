@@ -256,6 +256,7 @@ TRACE_BINDINGS: dict[str, StorageBinding] = {
     "_tl_save_selector_fire_count": StorageBinding(StorageKind.RUNTIME),
     "_tl_intervene_selector_fire_count": StorageBinding(StorageKind.RUNTIME),
     "_module_call_accessor": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any'),
+    "_module_pending": StorageBinding(StorageKind.RUNTIME),
     "_op_accessor_cache": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any'),
     "_layer_accessor_cache": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any'),
     "_receptive_field_solution": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any'),

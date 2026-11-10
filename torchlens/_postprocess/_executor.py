@@ -242,7 +242,7 @@ def _run_build_module_logs(ctx: StepContext) -> None:
     """Build ``Module`` records and the trace's module-call accessor."""
 
     with _vtimed(ctx.trace, "  Step 16: Build module logs", bucket="build_module_logs"):
-        finalization._build_module_logs(ctx.trace)  # sets the module-call accessor too
+        finalization._seal_module_logs(ctx.trace)  # the records are built on first lookup
 
 
 def _run_hash_graph_shape(ctx: StepContext) -> None:
@@ -407,7 +407,8 @@ def _build_layer_logs_violation(ctx: StepContext) -> str | None:
 def _build_module_logs_violation(ctx: StepContext) -> str | None:
     """Return the module-log postcondition violation, if any."""
 
-    if ctx.trace._module_logs is None:
+    state = ctx.trace.__dict__
+    if state.get("_module_pending") is None and state.get("_module_logs") is None:
         return "build_module_logs must build module logs"
     return None
 

@@ -19,7 +19,7 @@ from .._ir.op_record import amend_preview_output_parent_mark
 from .._ir.workspaces import _init_module_hierarchy_data
 from .._postprocess._grouping_stamp import build_grouping_policy_stamp
 from .._postprocess._recurrence import compute_preview_recurrence_assignments, relabel_edge_metadata
-from .._postprocess.finalization import _build_module_logs, _build_root_module_log
+from .._postprocess.finalization import _build_module_logs_now, _build_root_module_log
 from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from .._quantities import Bytes
 from .._utils._record_group_table import record_member
@@ -360,7 +360,7 @@ def attach_object_module_logs(
         normalize_module_calls=normalize_module_calls,
         op_top_level=op_top_level,
     )
-    _build_module_logs(trace)
+    _build_module_logs_now(trace)
 
 
 def populate_object_module_build_data(

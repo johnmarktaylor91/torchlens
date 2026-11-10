@@ -118,7 +118,13 @@ def _raise_missing_trace_attribute(trace: Trace, name: str) -> Any:
         Always, with an actionable memory-field hint when available.
     """
 
-    if getattr(trace, "__dict__", {}).get("_tl_cleaned_up", False):
+    state = getattr(trace, "__dict__", {})
+    pending = state.get("_module_pending")  # module records built on first lookup
+    if pending is not None:
+        found, value = pending.read(trace, name)
+        if found:
+            return value
+    if state.get("_tl_cleaned_up", False):
         # One typed refusal for every reader of a husked trace, instead of a
         # raw AttributeError naming whichever private field the reader hit
         # first (summary/iteration/getitem/draw/receptive_fields

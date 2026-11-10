@@ -42,13 +42,15 @@ def op_space_labels(trace: Trace, labels: Sequence[str]) -> list[str]:
     return op_labels
 
 
-def uncalled_module_addresses(trace: Trace) -> tuple[str, ...] | None:
+def uncalled_module_addresses(trace: Trace, called: set[str]) -> tuple[str, ...] | None:
     """Return the registered module addresses this capture never called.
 
     Parameters
     ----------
     trace:
-        Trace whose module records were just built.
+        Trace whose source model is walked.
+    called:
+        Every address and alias of the modules the capture recorded.
 
     Returns
     -------
@@ -62,9 +64,6 @@ def uncalled_module_addresses(trace: Trace) -> tuple[str, ...] | None:
     if model is None or not hasattr(model, "named_modules"):
         return None
     registered = {address or "self" for address, _module in model.named_modules()}
-    module_logs = trace._module_logs
-    called = set(getattr(module_logs, "_dict", {}).keys())
-    called.update(getattr(module_logs, "_alias_dict", {}).keys())
     return tuple(sorted(registered - called))
 
 

@@ -59,14 +59,12 @@ def cleanup(self: "Trace") -> None:
     Raises
     ------
     CaptureNotActiveError
-        If ``self`` is the trace a live capture window is currently writing
-        into (code ``cleanup_during_active_capture``). Husking the active
-        trace mid-window (reachable single-threaded from a forward hook or
-        ``activation_transform``) previously let the capture die on a raw
-        ``AttributeError`` deep inside the commit path — sibling of the
-        ``unwrap_torch`` / ``release_model`` mid-capture guards, refused
-        typed here instead. Cleaning up a *different*, finished trace during
-        a capture stays supported.
+        If ``self`` is the trace a live capture window is currently writing into (code
+        ``cleanup_during_active_capture``). Husking the active trace mid-window (reachable
+        single-threaded from a forward hook or ``activation_transform``) previously let the
+        capture die on a raw ``AttributeError`` deep inside the commit path — sibling of the
+        ``unwrap_torch`` / ``release_model`` mid-capture guards, refused typed here instead.
+        Cleaning up a *different*, finished trace during a capture stays supported.
     """
     from .. import _state
     from .._captured_run import forget_event_stream
@@ -119,6 +117,7 @@ def cleanup(self: "Trace") -> None:
     # (via source_trace) without needing per-entry reference removal.
     for tensor_log_entry in self:
         _clear_entry_attributes(tensor_log_entry)
+    self.__dict__.pop("_module_pending", None)  # so no read below builds module records
     # Then delete all Trace attributes listed in the canonical FIELD_ORDER.
     for attr in MODEL_LOG_FIELD_ORDER:
         if attr in self.__dict__ or hasattr(self, attr):  # stored first: a getter may refuse

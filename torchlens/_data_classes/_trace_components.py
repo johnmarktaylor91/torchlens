@@ -334,6 +334,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_tl_save_selector_fire_count": "session",
     "_tl_intervene_selector_fire_count": "session",
     "_module_call_accessor": "graph",
+    "_module_pending": "graph",
     "_op_accessor_cache": "graph",
     "_layer_accessor_cache": "graph",
     "_receptive_field_solution": "session",
