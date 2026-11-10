@@ -12,6 +12,7 @@ applied to its own baseline, and the two observers that read product state
 from __future__ import annotations
 
 import json
+import weakref
 
 import pytest
 import torch
@@ -26,6 +27,7 @@ from benchmarks.capture_core_counters import (
     count_calls,
     count_phases,
     held_tensor_bytes,
+    retained_after,
 )
 
 
@@ -182,6 +184,36 @@ def test_two_measurements_of_one_commit_agree() -> None:
     assert c8["commit_ops"] >= 1 and c8["wrapper_calls"] >= 1
     assert c8["fast_lane_calls"] == 1 and 0.0 < c8["fast_lane_share"] <= 1.0
     assert first["models"]["one_op"]["c4"]["Op"] >= 1
+
+
+class _Referent:
+    """A weakly referenceable object for the C2 weak-reference tests."""
+
+
+def _ignore(_ref: object) -> None:
+    """Weak-reference callback; a reference with a callback is never shared."""
+
+
+def test_c2_counts_a_kept_weak_reference_only_while_its_referent_lives() -> None:
+    alive = _Referent()
+    _, empty = retained_after(lambda: [])
+    _, live = retained_after(lambda: [weakref.ref(alive)])
+    _, dead = retained_after(lambda: [weakref.ref(_Referent())])
+    assert live["objects"] - empty["objects"] == 1
+    assert dead["objects"] == empty["objects"]
+    assert dead["dead_weakrefs"] - empty["dead_weakrefs"] == 1
+
+
+def test_c2_rises_when_a_trace_keeps_a_live_weak_reference() -> None:
+    model = nn.Sequential(nn.Linear(3, 3), nn.ReLU()).eval()
+    x = torch.randn(2, 3)
+    tl.trace(model, x)
+    plain, without = retained_after(lambda: (tl.trace(model, x), None))
+    del plain
+    # Without a callback CPython hands back the model's existing weak reference.
+    planted, with_ref = retained_after(lambda: (tl.trace(model, x), weakref.ref(model, _ignore)))
+    del planted
+    assert with_ref["objects"] - without["objects"] == 1
 
 
 def test_phase_counter_attributes_calls_and_leaves_no_profile_hook() -> None:
