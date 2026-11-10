@@ -169,6 +169,19 @@ def _shared_views(trace: tl.Trace) -> tuple[Any, ...]:
     )
 
 
+def _views_agree(trace: tl.Trace) -> bool:
+    """Whether the shared and the private structures name the same ops.
+
+    A trace holds no Op: one is kept alive only while something references
+    it. Every op is held across both builds so ``id`` names the same op on
+    both sides instead of a freed address the allocator may or may not reuse.
+    """
+
+    held_ops = list(trace._layer_list)
+    shared = _shared_views(trace)
+    return bool(held_ops) and shared == _fresh_views(trace)
+
+
 def test_label_writes_reach_only_their_own_trace(pair: Any) -> None:
     """A label write on one fork or on the parent never shows through another trace."""
 
@@ -180,7 +193,7 @@ def test_label_writes_reach_only_their_own_trace(pair: Any) -> None:
     try:
         sib_a, sib_b = parent.fork(), parent.fork()
         _logits(sib_a.fork(), france, 0, 0)  # the shared entry exists before any write
-        assert _shared_views(sib_b) == _fresh_views(sib_b)
+        assert _views_agree(sib_b)
 
         in_place = sib_a._layer_list[3]
         in_place.lookup_keys.append("zz_fork_alias")  # no cell write at all
@@ -189,7 +202,7 @@ def test_label_writes_reach_only_their_own_trace(pair: Any) -> None:
         parent._layer_list[4].lookup_keys.append("zz_parent_alias")  # parent, after forks exist
 
         for trace in (parent, sib_a, sib_b, sib_a.fork(), sib_b.fork()):
-            assert _shared_views(trace) == _fresh_views(trace)
+            assert _views_agree(trace)
         assert _replay_cone._shared_label_key_map(sib_a)["zz_fork_alias"] == (in_place.label,)
         for trace in (parent, sib_b):
             keys = _replay_cone._shared_label_key_map(trace)
