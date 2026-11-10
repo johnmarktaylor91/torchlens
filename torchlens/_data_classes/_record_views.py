@@ -78,7 +78,7 @@ def adopt(records: list[Any]) -> list[dict[str, Any]]:
 
     states: list[Any] = list(map(vars, records))
     deque(map(_set, records, repeat("_owner"), _owners(states)), 0)
-    _VIEWS.update(zip(map(id, states), map(_ref, records)))
+    _VIEWS.update(zip(map(id, states), map(_ref, records), strict=True))
     if len(_VIEWS) > _SWEEP_AT[0]:
         _sweep()
     return states
@@ -90,7 +90,7 @@ def _build(states: list[dict[str, Any]], cls: type) -> list[Any]:
     views: list[Any] = list(map(_new, repeat(cls, len(states))))
     deque(map(_set, views, repeat("__dict__"), states), 0)
     deque(map(_set, views, repeat("_owner"), _owners(states)), 0)
-    _VIEWS.update(zip(map(id, states), map(_ref, views)))
+    _VIEWS.update(zip(map(id, states), map(_ref, views), strict=True))
     if len(_VIEWS) > _SWEEP_AT[0]:
         _sweep()
     return views
@@ -531,9 +531,8 @@ def plain(value: Any) -> Any:
 
     if value.__class__ in HELD_CLASSES:
         return value.plain()
-    if value.__class__ is dict and value:
-        if next(iter(value.values())).__class__ is RecordList:
-            return {key: plain(group) for key, group in value.items()}
+    if value.__class__ is dict and value and next(iter(value.values())).__class__ is RecordList:
+        return {key: plain(group) for key, group in value.items()}
     return value
 
 
@@ -763,7 +762,7 @@ def install(module_cls: Any, call_cls: Any, module_accessor: Any, call_accessor:
     )
     _install_accessor(call_accessor, {"_dict": calls, "_list": (record_list, call_cls)})
     field = module_cls.__dict__["ops"]
-    setattr(module_cls, "ops", OwnedChildField(field._name, field._fid, field._kind))
+    module_cls.ops = OwnedChildField(field._name, field._fid, field._kind)
 
 
 def install_trace_calls(accessor_cls: Any) -> None:

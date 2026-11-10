@@ -214,7 +214,8 @@ def test_record_copied_or_restored_on_its_own_holds_no_trace(
 
 def _facet_outcomes(view: Any) -> dict[str, str]:
     outcomes = {}
-    for key in view.keys():
+    keys = view.keys()
+    for key in keys:
         try:
             outcomes[str(key)] = f"ok {type(view[key]).__name__}"
         except Exception as exc:  # noqa: BLE001 - the outcome is what is compared
@@ -293,12 +294,13 @@ def test_view_table_does_not_trust_a_reused_identity(monkeypatch: pytest.MonkeyP
 
     trace = _trace()
     monkeypatch.setattr(_record_views, "id", lambda obj: 7, raising=False)
-    for address in trace.modules.keys():
+    addresses, labels = trace.modules.keys(), trace.module_calls.keys()
+    for address in addresses:
         assert trace.modules[address].address == address
-    assert [module.address for module in trace.modules] == trace.modules.keys()
-    for label in trace.module_calls.keys():
+    assert [module.address for module in trace.modules] == addresses
+    for label in labels:
         assert trace.module_calls[label].label == label
-    assert [call.label for call in trace.module_calls] == trace.module_calls.keys()
+    assert [call.label for call in trace.module_calls] == labels
 
 
 def test_holders_keep_state_and_state_streams_keep_records() -> None:

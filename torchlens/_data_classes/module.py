@@ -131,6 +131,16 @@ _MULTI_CALL_PER_PASS_MODULE_FIELDS: frozenset[str] = frozenset(
 )
 
 
+def _facets_of(record: Any, through_call: bool = False) -> Any:
+    """Return the facet view a ``Module`` or a ``ModuleCall`` hands out."""
+
+    from .._semantic import _call_subject, _facet_door
+    from .._semantic.facets import FacetView
+
+    subject = _call_subject.call_subject if through_call else None
+    return _facet_door.record_facets(record, FacetView, subject)
+
+
 def _module_log_to_row(module_log: "Module") -> dict[str, Any]:
     """Convert a Module into one DataFrame row.
 
@@ -920,9 +930,7 @@ class ModuleCall:
     def facets(self) -> Any:
         """Return the lazy semantic facet view for this module call."""
 
-        from .._semantic import _call_subject, _facet_door, facets
-
-        return _facet_door.record_facets(self, facets.FacetView, _call_subject.call_subject)
+        return _facets_of(self, through_call=True)
 
     @facets.deleter
     def facets(self) -> None:
@@ -1832,10 +1840,8 @@ class Module(_ModuleRouting):
     def facets(self) -> Any:
         """Return the lazy semantic facet view for this Module."""
 
-        from .._semantic import _facet_door, facets
-
         self._single_call_or_error()
-        return _facet_door.record_facets(self, facets.FacetView)
+        return _facets_of(self)
 
     @facets.deleter
     def facets(self) -> None:
