@@ -170,13 +170,18 @@ def test_a_kept_pickle_projection_is_a_new_holder() -> None:
 
 
 def test_table_is_well_formed() -> None:
-    """Rows name real cases and real steps, and no case is left without rows."""
+    """Rows name real cases and real steps, and no case is left without rows.
+
+    Once every lasting holder is converted, only the transient pickle-state
+    rows remain; a case may then expect no rows at all (its audit must find none).
+    """
 
     for path, holder in HOLDERS.items():
         assert holder.step in STEPS, path
         assert set(holder.only) | set(holder.but) <= set(CASES), path
         assert not (holder.only and holder.but), path
-    assert all(expected(case) for case in CASES) or not HOLDERS
+    lasting = [path for path, holder in HOLDERS.items() if holder.step not in TRANSIENT]
+    assert all(expected(case) for case in CASES) or not lasting
 
 
 class _Record:
