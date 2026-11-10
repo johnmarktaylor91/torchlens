@@ -79,7 +79,7 @@ def seal_scan(trace: Trace) -> tuple[dict[str, list[str]], dict[str, list[str]]]
     for op in owner.records(_candidates(rows, keys, fid_by_name["_grad_records"])):
         name_owner_by_row(trace_ref, op)
     calls_of, layer_of, flag_of, address_of, label_of = readers
-    layer_fid, address_fid, label_fid = (fid_by_name[name] for name in _FIELDS[1::2])
+    layer_fid, flag_fid, address_fid, label_fid = (fid_by_name[name] for name in _FIELDS[1:])
     inputs: dict[str, list[str]] = defaultdict(list)
     for key in _candidates(rows, keys, fid_by_name[_FIELDS[0]]):
         layer = rows[key][layer_fid]
@@ -88,9 +88,9 @@ def seal_scan(trace: Trace) -> tuple[dict[str, list[str]], dict[str, list[str]]]
         for call_label in calls_of(key) or ():
             inputs[call_label].append(layer)
     versions: dict[str, list[str]] = {}
-    for key in _candidates(rows, keys, fid_by_name[_FIELDS[2]]):
+    for key in _candidates(rows, keys, flag_fid):
         row = rows[key]
-        if row[fid_by_name[_FIELDS[2]]] is not True and not flag_of(key):
+        if row[flag_fid] is not True and not flag_of(key):
             continue
         address = row[address_fid]
         if address.__class__ is not str:
