@@ -49,7 +49,6 @@ from ..._utils._tensor_label import (
     is_forward_call_decorated,  # noqa: F401  (re-exported for tests)
     mark_tensor_replacement_wrapped,
     set_module_meta,
-    set_param_meta,
     set_tensor_label,
 )
 from ..._utils.hashing import make_random_barcode
@@ -70,7 +69,7 @@ from ._model_prep_containers import (
     _register_module_input_container_snapshots,
     _register_module_output_container_snapshot,
 )
-from ._module_aliases import _add_shared_module_aliases, shared_module_addresses
+from ._module_aliases import shared_module_addresses
 from ._module_arg_stubs import entry_live_label, input_labels_by_id, stub_module_call_args
 from ._module_boundary_adoption import (
     _tag_untagged_buffers,
@@ -110,6 +109,7 @@ from ._session_forwards import (
     restore_session_forward_wrappers as _restore_session_forward_wrappers,
     restore_undecorated_forward as _restore_undecorated_forward,
 )
+from ._session_param_logs import create_session_param_logs
 from ._session_param_release import restore_session_param_state
 from .bound_root import capture_root_module
 from .buffer_writes import session_validated_buffer_address
@@ -117,7 +117,6 @@ from .escape_detection import (
     expected_original_call,
     mark_expected_original_accounted,
 )
-from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
 from .offload_hooks import uninstall_offload_hook_shims
 from .ops import _VIEW_MUTATION_RELABELS, _add_tensor_backward_hook
 from .prehook_provenance import bind_invocation
@@ -497,7 +496,7 @@ def _prepare_model_session(
             register_session_module_calls(trace, module)
     register_bound_owner_calls(trace, model)
     if trace._options_mode != "predicate":
-        _create_session_param_logs(trace, model, optimizer)
+        create_session_param_logs((Param, ParamAccessor), trace, model, optimizer)
     else:
         _register_predicate_session_params(model)
     prepare_buffer_tensors(trace, model)
@@ -525,109 +524,10 @@ def _prepare_model_session(
     install_offload_hook_shims(trace, model)
 
 
-def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any = None) -> None:
-    """Create ``Param`` objects and stamp each parameter's session metadata.
-
-    Capture never changes a parameter's ``requires_grad``: a frozen parameter
-    stays frozen, so the captured forward runs the same autograd program as an
-    eager forward (torch picks kernels from it, e.g. the attention paths).
-    Parameter provenance does not need ``grad_fn``: a parameter read is resolved
-    by identity at the op boundary from the stamped barcode. The user's flag is
-    still recorded on ``_tl.requires_grad_before_capture`` (``Param.is_trainable``,
-    and ``_cleanup_model_session`` restores it if the forward itself changed it).
-    The one exception is a capture inside ``frozen_parameter_gradients()``: an
-    analysis that backpropagates through its own capture (edge attribution
-    patching) needs a gradient path through frozen weights, so there floating
-    leaf parameters are set to require grad for the session and restored after.
-    """
-    if not hasattr(trace, "_param_log_by_pid"):
-        raise AttributeError("Trace._param_log_by_pid must be initialized before param logging.")
-
-    optimized_param_ids: set[int] = set()
-    if optimizer is not None:
-        for group in optimizer.param_groups:
-            for p in group["params"]:
-                optimized_param_ids.add(id(p))
-
-    param_logs: dict[str, Param] = {}
-    seen_param_ids: set[int] = set()
-    param_id_to_address: dict[int, str] = {}
-    # Record every parameter this prep STAMPS so cleanup can
-    # clear stamps from this inventory instead of re-traversing the live model tree.
-    # A param popped from ``_parameters`` mid-forward escapes the re-traversal but
-    # never escapes this list (session-scoped strong refs, dropped at cleanup).
-    stamped_params: list[nn.Parameter] = []
-    for module in model_modules(model):
-        address = _module_address(module)
-        for param_name, param in module._parameters.items():
-            if param is None:
-                continue
-            # Shared parameters: only create one Param per unique tensor.
-            pid = id(param)
-            if pid in seen_param_ids:
-                existing_address = param_id_to_address[pid]
-                alias_address = f"{address}.{param_name}" if address else param_name
-                param_log = param_logs[existing_address]
-                if alias_address not in param_log.all_addresses:
-                    param_log.all_addresses.append(alias_address)
-                alias_module_address = address or "self"
-                if alias_module_address not in param_log.all_module_addresses:
-                    param_log.all_module_addresses.append(alias_module_address)
-                continue
-            seen_param_ids.add(pid)
-
-            module_address = address or "self"
-            param_address = f"{address}.{param_name}" if address else param_name
-            param_id_to_address[pid] = param_address
-
-            # Lazy modules (nn.LazyLinear etc.) hold UninitializedParameter
-            # until the first forward; shape/numel/dtype-kind access raises.
-            # The pre-forward scan TOLERATES them: register the identity now
-            # with deferred geometry, and finalize the inventory after the one
-            # captured forward materializes them in place (postprocess step 15).
-            param_is_lazy = _is_uninitialized_param(param)
-
-            requires_grad_before = param.requires_grad
-            if not param_is_lazy and _forces_frozen_parameter_gradients(trace, param):
-                param.requires_grad = True
-
-            barcode = make_random_barcode()
-            set_param_meta(
-                param,
-                barcode=barcode,
-                address=param_address,
-                requires_grad_before=requires_grad_before,
-            )
-            stamped_params.append(param)
-
-            param_fsize = Bytes(0) if param_is_lazy else get_memory_amount(param)
-            param_log = Param(
-                module_address=module_address,
-                name=param_name,
-                shape=() if param_is_lazy else tuple(param.shape),
-                dtype=param.dtype,
-                num_params=0 if param_is_lazy else param.numel(),
-                param_memory=param_fsize,
-                trainable=requires_grad_before,
-                address=param_address,
-                barcode=barcode,
-                has_optimizer=id(param) in optimized_param_ids if optimizer is not None else None,
-            )
-            param_log._param_ref = param
-            if param_is_lazy:
-                param_log._lazy_at_prep = True  # type: ignore[attr-defined]
-            param_logs[param_address] = param_log
-
-    _add_shared_module_aliases(model, param_logs, param_id_to_address)
-    trace._param_log_by_pid = param_id_to_address
-    trace._session_param_inventory = stamped_params
-    trace._param_logs = ParamAccessor(param_logs)
-
-
 def _register_predicate_session_params(model: nn.Module) -> None:
     """Register the model's own Parameters for this predicate pass.
 
-    Predicate capture skips ``_create_session_param_logs`` (no ``Param`` logs, no
+    Predicate capture skips ``create_session_param_logs`` (no ``Param`` logs, no
     stamps), which left a Parameter write unable to tell prepared model state
     from a Parameter the forward created. Registering identities (weakly, with
     the lazy-at-prep flag) lets ``parameter_mutation_output_for_logging`` keep a
@@ -743,6 +643,20 @@ def _alias_prepared_param(
 # ---------------------------------------------------------------------------
 
 
+#: ``(metadata field, module attribute)`` for each torch hook registry.
+_HOOK_REGISTRIES = tuple(
+    (name, f"_{name}")
+    for name in (
+        "forward_pre_hooks",
+        "forward_hooks",
+        "backward_pre_hooks",
+        "backward_hooks",
+        "full_backward_pre_hooks",
+        "full_backward_hooks",
+    )
+)
+
+
 def _hook_info_from_registry(registry: Any) -> list[HookInfo]:
     """Build HookInfo entries for a PyTorch module hook registry.
 
@@ -833,19 +747,12 @@ def _capture_module_metadata(
         if doc is not None:
             meta["forward_docstring"] = doc
 
-    # Instance-specific fields
-    meta["forward_pre_hooks"] = _hook_info_from_registry(getattr(module, "_forward_pre_hooks", {}))
-    meta["forward_hooks"] = _hook_info_from_registry(getattr(module, "_forward_hooks", {}))
-    meta["backward_pre_hooks"] = _hook_info_from_registry(
-        getattr(module, "_backward_pre_hooks", {})
-    )
-    meta["backward_hooks"] = _hook_info_from_registry(getattr(module, "_backward_hooks", {}))
-    meta["full_backward_pre_hooks"] = _hook_info_from_registry(
-        getattr(module, "_full_backward_pre_hooks", {})
-    )
-    meta["full_backward_hooks"] = _hook_info_from_registry(
-        getattr(module, "_full_backward_hooks", {})
-    )
+    # Instance-specific fields. An empty registry (the usual case) yields no
+    # entries, so it skips the per-registry call.
+    state = module.__dict__
+    for field, attr in _HOOK_REGISTRIES:
+        registry = state[attr] if attr in state else getattr(module, attr, {})
+        meta[field] = _hook_info_from_registry(registry) if registry else []
     meta["training"] = module.training
 
     child_addresses = []
@@ -860,7 +767,7 @@ def _capture_module_metadata(
     # Scan instance __dict__ for user-defined non-callable attrs (e.g. fc1, act).
     # Much faster than dir(module) which walks the full MRO.
     for attr_name, val in module.__dict__.items():
-        if attr_name.startswith("_") or attr_name.startswith("tl_"):
+        if attr_name[:1] == "_" or attr_name[:3] == "tl_":  # startswith, without a call
             continue
         if attr_name in _PYTORCH_INTERNAL or attr_name in _NN_MODULE_ATTRS:
             continue

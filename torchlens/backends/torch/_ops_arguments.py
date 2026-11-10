@@ -564,7 +564,7 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
     -----
     the Parameter rung requires ACTUAL TorchLens provenance -- the
     prep-stamped :class:`ParamMeta` address written by model preparation
-    (``_create_session_param_logs``) -- not bare ``isinstance``. A fresh
+    (``create_session_param_logs``) -- not bare ``isinstance``. A fresh
     in-forward ``torch.nn.Parameter(...)`` or a foreign model's parameter has no
     prep stamp; exempting it suppressed the ``unattributed_tensor_args`` break
     marker, so the layout ancestry-integrity rung judged the chain CLEAN and

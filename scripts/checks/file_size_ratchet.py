@@ -421,7 +421,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 2300 -> 2200: the module-call shell keeps one frame per call and stopped
     # writing side tables the journal rebuilds (2197 measured); the ceiling
     # follows the file down.
-    "torchlens/backends/torch/model_prep.py": 2163,
+    # 2200 -> 2100: parameter preparation moved to _session_param_logs.py
+    # (2068 measured); the ceiling follows the file down.
+    "torchlens/backends/torch/model_prep.py": 2100,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
     # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
