@@ -101,6 +101,9 @@ _TRACE_ACCESSOR_CACHE_FIELDS = frozenset(
     }
 )
 
+#: Trace fields a fork drops after its field pass: both sets above.
+_FORK_DROPPED_FIELDS = _STREAM_DERIVED_GUARD_FIELDS | _TRACE_ACCESSOR_CACHE_FIELDS
+
 # Trace fields written only while their own trace captures and never mutated
 # afterwards: the capture-time edge truth (one ``setdefault`` per op entry in the
 # torch op finalizer, read by the topology invariant) and the pre-forward RNG
@@ -616,10 +619,8 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
         for field_name, value in state_items(parent)
     }
     state_restore(fork, fork_state)
-    for stale_guard_field in _STREAM_DERIVED_GUARD_FIELDS:
-        fork.__dict__.pop(stale_guard_field, None)
-    for accessor_cache_field in _TRACE_ACCESSOR_CACHE_FIELDS:
-        fork.__dict__.pop(accessor_cache_field, None)
+    for dropped_field in _FORK_DROPPED_FIELDS:
+        fork.__dict__.pop(dropped_field, None)
     # The fork gets exactly ONE fresh DETACHED stream — never the parent's
     # (shared lists let a fork backward corrupt the parent's projection),
     # and never none (a fork remains a supported backward-capture target).
