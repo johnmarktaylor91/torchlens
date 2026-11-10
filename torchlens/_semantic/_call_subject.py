@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._trace_core.record_refs import RecordSlot
+
 # Names both records carry whose Module reading delegates to its single call;
 # on a bound subject they answer for the bound call.
 _PER_CALL_SHARED = frozenset(
@@ -55,6 +57,10 @@ _PER_CALL_SHARED = frozenset(
 )
 
 
+# The two record slots: a read of an unset slot must not recurse through ``__getattr__``.
+_BOUND = frozenset({"_call", "_module"})
+
+
 def _carries(record: Any, name: str) -> bool:
     """Return whether ``record`` defines ``name`` itself, without evaluating it."""
 
@@ -62,9 +68,14 @@ def _carries(record: Any, name: str) -> bool:
 
 
 class CallBoundModule:
-    """A Module record seen through exactly one of its calls."""
+    """A Module record seen through exactly one of its calls.
 
-    __slots__ = ("_call", "_module")
+    The Module and the call are kept as row keys (``RecordSlot``), so a facet
+    view cached on the call does not hold either record.
+    """
+
+    _call = RecordSlot("_call")
+    _module = RecordSlot("_module")
 
     def __init__(self, module: Any, call: Any) -> None:
         """Bind ``module`` to its ``call``.
@@ -83,7 +94,7 @@ class CallBoundModule:
     def __getattr__(self, name: str) -> Any:
         """Answer per-call reads from the call and every other read from the Module."""
 
-        if name.startswith("__") and name.endswith("__"):
+        if (name.startswith("__") and name.endswith("__")) or name in _BOUND:
             raise AttributeError(name)
         call = self._call
         if name in _PER_CALL_SHARED or (_carries(call, name) and not _carries(self._module, name)):

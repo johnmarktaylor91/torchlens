@@ -57,18 +57,7 @@ NOTHING_KEPT = (
 
 #: Scenario -> (objects only the cycle collector frees today, lanes that remove the cycle, holder).
 #: A scenario that is not listed has no such object. The lane named here deletes its entry.
-CYCLES_AT_BASE: dict[str, tuple[frozenset[str], tuple[str, ...], str]] = {
-    "all_fields_read": (
-        frozenset({"buffer", "module", "module_call"}),
-        ("B3b",),
-        "module cells, module facet caches and buffer versions hold records",
-    ),
-    "backward_capture_all_fields_read": (
-        frozenset({"module", "module_call"}),
-        ("B3b",),
-        "module cells and module facet caches hold records",
-    ),
-}
+CYCLES_AT_BASE: dict[str, tuple[frozenset[str], tuple[str, ...], str]] = {}
 
 #: The lanes that may own a cycle, with what each removes.
 OWNERSHIP_LANES = {

@@ -90,15 +90,6 @@ HOLDERS: dict[str, Holder] = {
     ),
     f"{CELLS}{{*}}[*]:ParamAccessor._dict{{*}} -> Param": Holder(LATER_KINDS, only=("deepcopied",)),
     f"{CELLS}{{*}}[*]:ParamAccessor._list[*] -> Param": Holder(LATER_KINDS, only=("deepcopied",)),
-    "Module._facets_cache:FacetView._record -> Module": Holder(
-        OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
-    ),
-    "ModuleCall._facets_cache:FacetView._record:CallBoundModule._call -> ModuleCall": Holder(
-        OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
-    ),
-    "ModuleCall._facets_cache:FacetView._record:CallBoundModule._module -> Module": Holder(
-        OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
-    ),
     "BufferState.versions[*] -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
     "GradFnState.calls:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
         PICKLE_PROJECTION, only=(PICKLE_CASE,)
