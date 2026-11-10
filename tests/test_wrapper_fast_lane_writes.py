@@ -195,7 +195,7 @@ def test_out_argument_runs_the_general_body(monkeypatch: pytest.MonkeyPatch) -> 
 
     def body(module: nn.Module, x: torch.Tensor) -> torch.Tensor:
         y = x * 2
-        z = torch.empty_like(y)
+        z = torch.zeros_like(y)
         torch.mul(y, 3, out=z)
         return z + y
 
