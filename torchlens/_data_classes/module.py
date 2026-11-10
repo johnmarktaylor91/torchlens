@@ -2242,24 +2242,9 @@ class Module(_ModuleRouting):
     @property
     def buffers(self) -> "BufferAccessor":
         """Scoped BufferAccessor for buffers belonging to this module."""
-        if self._buffer_accessor is not None:
-            return cast("BufferAccessor", self._buffer_accessor)
-        # Build on first access from the source Trace
-        from .buffer import BufferAccessor
+        from ._buffer_rows import module_buffers
 
-        if self._source_trace is None or self._source_trace._buffer_accessor is None:
-            self._buffer_accessor = BufferAccessor({})
-            return cast("BufferAccessor", self._buffer_accessor)
-        parent_accessor = self._source_trace._buffer_accessor
-        scoped = {
-            addr: bl
-            for addr, bl in parent_accessor._dict.items()
-            if self.address in {"", "self"}
-            or addr == self.address
-            or addr.startswith(f"{self.address}.")
-        }
-        self._buffer_accessor = BufferAccessor(scoped, source_trace=self._source_trace)
-        return cast("BufferAccessor", self._buffer_accessor)
+        return module_buffers(self)
 
     @property
     def total_flops_forward(self) -> Flops:

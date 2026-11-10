@@ -35,6 +35,7 @@ from tools.record_ownership.cases import CASES, _read_doors, _trace
 from tools.record_ownership.graph import strong_edges
 from tools.record_ownership.holders import (
     ACTIVATED_FIRST,
+    ACTIVATED_LATER,
     HOLDERS,
     KNOWN,
     PICKLE_CASE,
@@ -95,7 +96,7 @@ def test_known_holder_is_found(name: str) -> None:
 
 
 def test_no_trace_holds_an_op_or_layer() -> None:
-    """``Op`` and ``Layer`` are activated: no pinned path from a trace reaches one.
+    """``Op``, ``Layer`` and ``Buffer`` are activated: no pinned path from a trace reaches one.
 
     The only rows left for them are the transient pickle projection, which no
     trace holds. A path through a buffer, a module record or a gradient record
@@ -104,7 +105,7 @@ def test_no_trace_holds_an_op_or_layer() -> None:
 
     held = {
         path: holder.step
-        for path, holder in blocking(ACTIVATED_FIRST).items()
+        for path, holder in blocking(ACTIVATED_FIRST + ACTIVATED_LATER).items()
         if not is_transient(path, holder)
     }
     assert held == {}

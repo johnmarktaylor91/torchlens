@@ -24,6 +24,7 @@ from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
+from ._buffer_rows import fork_module_accessor
 from ._state_adapter import state_new
 
 _OBJECT_SETATTR = object.__setattr__
@@ -73,6 +74,7 @@ class RowTranslator:
     __slots__ = (
         "__weakref__",
         "_copies",
+        "_fork_core_ref",
         "_fork_ref",
         "_guards",
         "_miss_classes",
@@ -114,6 +116,8 @@ class RowTranslator:
         self._record_classes: set[type] = set()
         self._parent_cls: type | None = None if parent is None else type(parent)
         self._fork_ref = fork_ref
+        # Weak fork core: a module's cached keyed buffer accessor rebinds to its buffer table.
+        self._fork_core_ref: Any = None if fork_core is None else weakref.ref(fork_core)
         # Weak parent-trace reference: a parent-trace value met in copied
         # state translates to the fork WITHOUT the translator pinning the
         # parent (GC parity).
@@ -251,6 +255,13 @@ class RowTranslator:
             known = self._by_identity(accessor)
             if known is not None:
                 return known
+        if "_rows" in accessor.__dict__:
+            core_ref = self._fork_core_ref
+            fork = self._fork_ref() if self._fork_ref is not None else None
+            core = core_ref() if core_ref is not None else None
+            keyed = fork_module_accessor(accessor, core, fork, self._member)
+            self._remember_accessor(accessor, keyed)
+            return keyed
         accessor_cls: Any = type(accessor)
         clone = accessor_cls.__new__(accessor_cls)
         clone.__dict__.update(accessor.__dict__)

@@ -234,7 +234,7 @@ class WeakViews(_Views):
 class ViewTables:
     """The view tables of one trace core."""
 
-    __slots__ = ("cells", "detached", "layers", "ops", "pinned")
+    __slots__ = ("cells", "detached", "kinds", "layers", "ops", "pinned")
 
     def __init__(self, core: Any, *, pinned: bool = False) -> None:
         """Create empty tables for ``core``; ``pinned`` starts them strong for a build."""
@@ -248,6 +248,8 @@ class ViewTables:
         # per-trace object that must persist (held strongly: a dropped entry
         # would lose an in-place write).
         self.cells: dict[Any, Any] = {}
+        # Weak views of the row-facade kinds, by kind then row (``record_views``).
+        self.kinds: dict[str, dict[int, Any]] = {}
 
     def _table(self, core: Any, kind: str) -> Any:
         """Return an empty table of ``kind`` for ``core``."""
