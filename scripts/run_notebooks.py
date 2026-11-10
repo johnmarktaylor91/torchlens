@@ -68,6 +68,7 @@ STORED_OUTPUT_NOTEBOOKS = (
     "examples/methods/logit_lens_recipe.ipynb",
     "notebooks/jfilter_lens.ipynb",
     "examples/methods/jpp_lens_architectures_colab.ipynb",
+    "examples/methods/jpp_rules_colab.ipynb",
 )
 # Run alone, after the parallel pool: each runs for minutes, and sharing a 4-CPU runner with
 # another of them pushed each past the 600 s cell timeout (the LEACE recipe also took about
@@ -78,6 +79,7 @@ HEAVY_NOTEBOOKS = frozenset(
         "examples/methods/eap_ig_circuit_recipe.ipynb",
         "examples/methods/jacobian_lens_recipe.ipynb",
         "examples/methods/jpp_lens_architectures_colab.ipynb",
+        "examples/methods/jpp_rules_colab.ipynb",
         "examples/methods/leace_concept_erasure_recipe.ipynb",
     }
 )

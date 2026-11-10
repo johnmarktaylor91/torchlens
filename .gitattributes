@@ -25,6 +25,7 @@ examples/methods/jacobian_lens_recipe.ipynb -filter
 examples/methods/logit_lens_recipe.ipynb -filter
 notebooks/jfilter_lens.ipynb -filter
 examples/methods/jpp_lens_architectures_colab.ipynb -filter
+examples/methods/jpp_rules_colab.ipynb -filter
 
 # Append-only multi-writer ledgers: union merge keeps both branches' appended rows.
 # Union also keeps both rows when two branches change one row or neighbouring rows,
