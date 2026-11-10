@@ -1470,6 +1470,20 @@ def _reproduced_facet_entry(log: Any, rule: HookSpec) -> tuple[NormalizedHookEnt
     return None, "the facet selector resolves to another home op or facet"
 
 
+def _facet_home_key(spec: Any) -> object:
+    """Return what identifies a facet's home when de-duplicating resolved facets.
+
+    An op home is keyed by its label: an op view's id is stable only while the
+    view is held (the trace hands views out from weak tables) and can be reused.
+    A home with no label (a computed facet's function) is keyed by identity;
+    the resolved spec holds it.
+    """
+
+    home = getattr(spec, "home", None)
+    label = getattr(home, "_layer_label_raw", None) or getattr(home, "_label_raw", None)
+    return label if label is not None else id(home)
+
+
 def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, Any]]:
     """Resolve a semantic facet selector against captured module facet views.
 
@@ -1489,7 +1503,7 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
     from .._semantic.facets import Facet, FacetSpec
 
     resolved: list[tuple[str, Any]] = []
-    seen: set[tuple[int, str, str]] = set()
+    seen: set[tuple[object, str, str]] = set()
     facet_names = _DEFAULT_HEAD_FACET_NAMES if selector.name is None else (selector.name,)
     for record in _iter_facet_records(log):
         view = _scoped_facet_view(record, selector)
@@ -1514,9 +1528,7 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
             )
             if spec is None:
                 continue
-            # Keyed by the home op's label: a held view's id is not stable once the
-            # trace hands out views from weak tables, and an id can be reused.
-            dedupe_key = (_facet_home_label(spec), repr(spec.transforms), facet_name)
+            dedupe_key = (_facet_home_key(spec), repr(spec.transforms), facet_name)
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
