@@ -30,14 +30,10 @@ import torch
 
 from .._capture.outcome import outcome_for
 from .._data_classes._module_facade_fields import summarize_call_args
-from .._data_classes._module_role_hints import (
-    multi_output_role_from_path,
-    role_hints_for_module_class,
-)
-from .._data_classes._op_column_scan import call_outputs, op_labels, ops_with
+from .._data_classes._op_column_scan import op_labels
 from .._data_classes._state_adapter import state_items
 from .._data_classes.layer import Layer
-from .._data_classes.module import Module, ModuleCall
+from .._data_classes.module import Module, ModuleAccessor, ModuleCall, set_attribute_writes
 from .._data_classes.param import ParamAccessor, param_key
 from .._data_classes.trace import (
     Conditional,
@@ -52,7 +48,6 @@ from .._io.lazy import LazyActivationRef
 from .._io.scrub import BlobSpec, scrub_for_save
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
-from .._ir.workspaces import _init_module_hierarchy_data
 from .._quantities import Bytes, Duration, Flops
 from .._utils._record_group_table import layer_attr, op_attr, record_member, record_storage_attr
 from .._utils._tensor_label import clear_meta
@@ -75,8 +70,8 @@ from ._module_census import (
     module_source_and_hooks,
     op_space_labels,
     param_totals,
-    uncalled_module_addresses,
 )
+from ._module_pending import PendingModules, ensure_modules_built, seal_module_facts
 from ._multipass_params import pass_param_addresses, union_multipass_params
 from ._pre_hook_provenance import _pre_hook_provenance_for_call
 from ._root_module_log import (
@@ -90,7 +85,6 @@ from .saved_summary import _has_retained_gradient_payloads
 
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
-    from .._data_classes.op import Op
     from .._data_classes.trace import Trace
 
 
@@ -422,39 +416,6 @@ def _first_output_structure(self: "Trace", output_layers: list[str]) -> Any | No
     return None
 
 
-def _assign_output_roles(
-    output_entries: list["Op"],
-    *,
-    hints: Any | None,
-) -> None:
-    """Populate semantic multi-output roles on output entries.
-
-    Parameters
-    ----------
-    output_entries:
-        Output OpLogs from one module call.
-    hints:
-        Optional role-hint mapping keyed by primitive output paths.
-    """
-
-    if len(output_entries) <= 1:
-        return
-    for index, output in enumerate(output_entries):
-        if output.multi_output_name is not None:
-            parent_layer = output.source_trace._layer_logs.get(output.layer_label)
-            if parent_layer is not None:
-                parent_layer.multi_output_name = output.multi_output_name
-            continue
-        output.multi_output_name = multi_output_role_from_path(
-            tuple(output.container_path or ()),
-            output.multi_output_index if output.multi_output_index is not None else index,
-            hints=hints,
-        )
-        parent_layer = output.source_trace._layer_logs.get(output.layer_label)
-        if parent_layer is not None:
-            parent_layer.multi_output_name = output.multi_output_name
-
-
 def _build_submodule_call_logs(
     self: "Trace",
     address: str,
@@ -487,9 +448,6 @@ def _build_submodule_call_logs(
         pass_input_layers, pass_output_layers, pass_output_ops = _call_io_layers(
             call_label, pass_layers, pass_input_layers_by_call or {}, outputs_by_call or {}
         )
-        if len(pass_output_ops) > 1:  # roles are named only among several outputs
-            pass_outputs = [self.ops[op_label] for op_label in pass_output_ops]
-            _assign_output_roles(pass_outputs, hints=role_hints_for_module_class(module_class))
 
         # Forward args for this pass
         fwd_args = self._module_capture_ws.module_forward_args.get((address, call_index))
@@ -626,8 +584,41 @@ def _build_module_param_info(
     )
 
 
-def _build_module_logs(self: "Trace") -> None:
-    """Step 16: Build structured Module/ModuleCall objects.
+def _seal_module_logs(self: "Trace") -> None:
+    """Step 16: seal the module facts; the records are built on first lookup."""
+
+    seal_module_facts(self, _build_pending_module_logs)
+
+
+def _build_module_logs_now(self: "Trace") -> None:
+    """Seal and build at once: other backends do not stub call arguments at entry."""
+
+    seal_module_facts(self, _build_pending_module_logs)
+    ensure_modules_built(self)
+
+
+def _build_pending_module_logs(self: "Trace", pending: PendingModules) -> None:
+    """Build the records from the sealed facts, then attach the forward's attribute writes."""
+
+    # Build as step 16 did, before step 20 released the live parameter
+    # references: iterating the params must not restore them from the model.
+    params: Any = self.__dict__.get("_param_logs")
+    rehydrate = getattr(params, "_rehydrate_on_iter", False)
+    if rehydrate:
+        params._rehydrate_on_iter = False
+    try:
+        _build_module_logs(self, pending)
+    finally:
+        if rehydrate:
+            params._rehydrate_on_iter = rehydrate
+    records = self.modules  # the door the eager capture wrote through
+    for address, writes in (pending.attribute_writes or {}).items():
+        if writes is not None and address in records:
+            set_attribute_writes(records[address], writes)
+
+
+def _build_module_logs(self: "Trace", pending: PendingModules) -> None:
+    """Build structured Module/ModuleCall objects from a pending trace's sealed facts.
 
     Constructs the module hierarchy from _module_build_data (populated in Step 9)
     and _module_metadata (captured during model preparation). Creates:
@@ -637,9 +628,10 @@ def _build_module_logs(self: "Trace") -> None:
 
     Handles shared modules (same nn.Module registered under multiple addresses)
     via an alias-to-metadata map. Computes nesting depths via BFS from root.
-    Clears temporary state (_module_metadata, _module_forward_args, _module_build_data)
-    after building.
+    Runs inside ``PendingModules.ensure``, which installs the sealed facts
+    as the module workspace, so the builders read what step 16 captured.
     """
+    self.__dict__.update(_module_logs=ModuleAccessor({}), _buffer_accessor=None)  # read mid-build
     mbd = self._module_capture_ws.module_build_data
     module_dict = {}  # address -> Module
     pass_dict: dict[str, ModuleCall] = {}  # "addr:pass" -> ModuleCall
@@ -656,11 +648,8 @@ def _build_module_logs(self: "Trace") -> None:
     # Pre-compute input layers for each module call.  Large traces may have
     # tens of thousands of ModuleCalls; scanning every Op once per call is
     # quadratic and dominates validation postprocessing.
-    _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
-    for te in ops_with(self, "input_to_module_calls"):  # only ops that feed a call
-        for call_label in te._module_context_input_to_module_calls:
-            _pass_input_layers_by_call[call_label].append(te.layer_label)
-    _outputs_by_call = call_outputs(self)
+    _pass_input_layers_by_call = pending.input_layers_by_call  # read at the seal
+    _outputs_by_call = pending.outputs_by_call
 
     # --- Build root Module ("self") ---
     module_order.append(root_module)
@@ -788,19 +777,20 @@ def _build_module_logs(self: "Trace") -> None:
     # keeps them) to release tensor references from the model's forward() call args.
     keep_forward_args = self._options_module_identity_mode in {"pytree_module", "object_module"}
     summarize_call_args(pass_dict.values(), keep_forward_args)
+    if pending.root_summaries is not None and not _recorded_root_calls(mbd):
+        # The root call's live arguments were summarised at the seal.
+        root_call = pass_dict["self:1"]
+        root_call.forward_args_summary, root_call.forward_kwargs_summary = pending.root_summaries
 
     # The rebuild adopts the finished Module/ModuleCall rows into the per-trace
     # kind tables and puts the accessors around them.
-    rebuild_trace_accessors(self, module_dict, module_order, pass_dict, built_for_trace=True)
-    self.__dict__["_uncalled_module_addresses"] = uncalled_module_addresses(self)
-
-    # Clean up temporary build state to free memory. These dicts are only
-    # needed during construction and are not part of the user-facing API.
-    self._module_capture_ws.module_metadata = {}
-    self._module_capture_ws.module_forward_args = {}
-    self._module_capture_ws.root_forward_args = None
-
-    self._module_capture_ws.module_build_data = _init_module_hierarchy_data()
+    rebuild_trace_accessors(
+        self,
+        module_dict,
+        module_order,
+        pass_dict,
+        sealed_buffer_versions=pending.buffer_versions,
+    )
 
 
 # Aggregate Layer fields that may legitimately DIVERGE across genuine recurrent

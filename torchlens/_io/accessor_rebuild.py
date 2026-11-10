@@ -8,12 +8,10 @@ rehydrated object graph is ready for normal user access.
 
 from __future__ import annotations
 
-import weakref
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
 from .._data_classes._buffer_rows import trace_accessor
-from .._data_classes._op_column_scan import ops_with
 from .._data_classes._trace_accessors import (
     _TRACE_MODULE_CALL_ACCESSOR_ATTR,
     TraceModuleCallAccessor,
@@ -21,12 +19,11 @@ from .._data_classes._trace_accessors import (
 )
 from .._data_classes.buffer import Buffer
 from .._data_classes.module import ModuleAccessor
-from .._trace_core.record_refs import name_owner_by_row, rekey_child_cells
-from .._utils._record_group_table import record_member
+from .._trace_core.record_refs import rekey_child_cells
+from ._buffer_versions import seal_buffer_versions
 
 if TYPE_CHECKING:
     from .._data_classes.module import Module, ModuleCall
-    from .._data_classes.op import Op
     from .._data_classes.trace import Trace
 
 
@@ -36,7 +33,7 @@ def rebuild_trace_accessors(
     module_order: list[Module],
     pass_dict: dict[str, ModuleCall],
     *,
-    built_for_trace: bool = False,
+    sealed_buffer_versions: dict[str, list[str]] | None = None,
 ) -> None:
     """Rebuild the user-facing module and buffer accessors on a ``Trace``.
 
@@ -50,11 +47,14 @@ def rebuild_trace_accessors(
         Ordered list of module logs for iteration and integer indexing.
     pass_dict:
         Mapping from ``"address:pass"`` labels to ``ModuleCall`` entries.
-    built_for_trace:
-        The records were just constructed for ``trace`` and are still
-        detached (the step 16 build): they already name it, so they are not
+    sealed_buffer_versions:
+        Given only by the step 16 build: each buffer's version op labels as
+        step 16 sealed them. The records were just constructed for ``trace``
+        and are still detached: they already name it, so they are not
         rebound, and they are adopted here even when the trace has no op store.
     """
+
+    built_for_trace = sealed_buffer_versions is not None
 
     # The door is set first: a module whose ``ops`` cell already holds rows
     # (a second rebuild of the same records) reads its calls through it.
@@ -71,7 +71,7 @@ def rebuild_trace_accessors(
             module_call._source_trace = trace
 
     _adopt_module_rows(trace, module_dict, pass_dict, built_for_trace)
-    rebuild_buffer_accessor(trace)
+    rebuild_buffer_accessor(trace, sealed_buffer_versions)
     if built_for_trace:
         _list_calls_in_build_order(trace, pass_dict)
 
@@ -124,7 +124,7 @@ def _adopt_module_rows(
             kind_store.freeze()
 
 
-def rebuild_buffer_accessor(trace: Trace) -> None:
+def rebuild_buffer_accessor(trace: Trace, sealed: dict[str, list[str]] | None = None) -> None:
     """Rebuild the user-facing buffer accessor on a ``Trace`` from its buffer ops.
 
     Split out of ``rebuild_trace_accessors`` so preview function-root traces,
@@ -135,19 +135,16 @@ def rebuild_buffer_accessor(trace: Trace) -> None:
     ----------
     trace:
         Model log receiving the rebuilt buffer accessor.
+    sealed:
+        Each buffer's version op labels from ``seal_buffer_versions``, read
+        when step 16 sealed; ``None`` runs that scan here.
     """
 
-    buffer_versions: dict[str, list[Op]] = {}
-    trace_ref = weakref.ref(trace)
-    for param in trace.__dict__.get("_param_logs") or ():
-        name_owner_by_row(trace_ref, param)
-    # Only an op with gradient records or a buffer flag has work here.
-    for entry in ops_with(trace, "_grad_records", "is_buffer"):
-        name_owner_by_row(trace_ref, entry)
-        if record_member(entry, "is_buffer", False):
-            address = entry.buffer_address
-            if address is not None:
-                buffer_versions.setdefault(address, []).append(entry)
+    ops = trace.ops
+    labels_by_buffer = seal_buffer_versions(trace) if sealed is None else sealed
+    buffer_versions = {
+        address: [ops[label] for label in labels] for address, labels in labels_by_buffer.items()
+    }
     buffer_dict = {
         address: Buffer(
             address,

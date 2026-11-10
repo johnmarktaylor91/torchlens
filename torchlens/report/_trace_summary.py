@@ -392,7 +392,9 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
         return []
     if not trace._tracing_finished:
         return [("captured", f"{plural(len(trace.event_stream.op_events), 'op event')} so far")]
-    modules = max(0, len(trace._module_logs) - 1)
+    pending = trace.__dict__.get("_module_pending")  # counted without building the records
+    modules = pending.module_count if pending is not None else len(trace._module_logs) - 1
+    modules = max(0, modules)
     params = _count_text(getattr(trace, "num_params", 0), "param")
     param_tensors = _count_text(trace._num_param_tensors, "tensor")
     duration = float(trace._provenance_duration)

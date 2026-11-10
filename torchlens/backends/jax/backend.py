@@ -48,7 +48,7 @@ from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
     pop_static_label_save_predicate,
 )
-from ..._postprocess.finalization import _build_module_logs
+from ..._postprocess.finalization import _build_module_logs_now
 from ..._postprocess.loop_grouping_adapter import (
     RecurrenceAssignment,
     RecurrenceGroupingGraph,
@@ -2507,7 +2507,7 @@ class JAXBackend:
                 mbd["module_nparams_frozen"][owner] += param.num_params
 
         self._populate_pytree_module_build_data(trace)
-        _build_module_logs(trace)
+        _build_module_logs_now(trace)
 
     def _populate_pytree_module_build_data(self, trace: Trace) -> None:
         """Populate module hierarchy side channels from attributed JAX ops.

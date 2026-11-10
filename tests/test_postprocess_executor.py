@@ -452,8 +452,8 @@ def _clear_layer_logs(trace: Any) -> None:
     trace._layer_logs.clear()
 
 
-def _null_module_logs(trace: Any) -> None:
-    trace._module_logs = None
+def _drop_module_pending(trace: Any) -> None:
+    trace.__dict__.pop("_module_pending", None)
 
 
 def _postcondition_breakers() -> list[Any]:
@@ -511,9 +511,9 @@ def _postcondition_breakers() -> list[Any]:
         ),
         pytest.param(
             "build_module_logs",
-            # The step's whole body, so nothing inside step 16 reads the nulled field.
-            "_build_module_logs",
-            lambda: _wrap_then(pp.finalization._build_module_logs, _null_module_logs),
+            # The step's whole body: the seal leaves the records pending for first lookup.
+            "_seal_module_logs",
+            lambda: _wrap_then(pp.finalization._seal_module_logs, _drop_module_pending),
             "module logs",
             id="16",
         ),
@@ -562,6 +562,7 @@ def test_unmet_step_postcondition_raises_typed_error(
         "_build_lookup_keys_and_finalize_retained_layers": pp.labeling,
         "_build_layer_logs": pp.finalization,
         "_build_module_logs": pp.finalization,
+        "_seal_module_logs": pp.finalization,
         "compute_graph_shape_hash": hashing,
         "_set_tracing_finished": pp.finalization,
     }

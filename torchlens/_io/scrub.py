@@ -29,7 +29,7 @@ from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensWarning
 from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
 from ._scrub_identities import _scrub_nondeterministic_identities
-from ._scrub_runtime_fields import RUNTIME_ONLY_TRACE_FIELDS
+from ._scrub_runtime_fields import RUNTIME_ONLY_TRACE_FIELDS, built_for_save
 from ._scrub_undeclared import _refuse_undeclared_field
 from ._small_raw import _is_safely_picklable, _small_raw_value, _stringify_value
 from ._source_privacy import (
@@ -214,7 +214,6 @@ def scrub_for_save(
         Scrubbed top-level state dict plus blob specs and unsupported tensor
         audit records.
     """
-
     options = _ScrubOptions(
         include_outs=include_outs,
         include_grads=include_grads,
@@ -233,7 +232,7 @@ def scrub_for_save(
     blob_specs: list[BlobSpec] = []
     blob_counter = [blob_id_floor]
 
-    scrubbed_model = _scrub_value(trace, options, memo, blob_specs, blob_counter)
+    scrubbed_model = _scrub_value(built_for_save(trace), options, memo, blob_specs, blob_counter)
     if not isinstance(scrubbed_model, Trace):
         raise ArtifactError("Portable scrub expected a scrubbed Trace instance.")
 

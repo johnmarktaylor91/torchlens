@@ -293,6 +293,10 @@ def _drop_runtime_only_caches(state: dict[str, Any]) -> None:
     state.pop("_op_accessor_cache", None)
     state.pop("_layer_accessor_cache", None)
     state.pop("_module_call_accessor", None)
+    # Pending module facts: never in a saved file (save and pickle build
+    # first), and kept out of the field spec so the writer contract digest
+    # does not move.
+    state.pop("_module_pending", None)
     # Lazy influence-geometry caches (FieldPolicy.DROP) hold
     # mappingproxy-bearing solution objects after any receptive-field
     # access, so carrying them made pickle.dumps/copy.deepcopy crash with

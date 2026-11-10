@@ -348,15 +348,20 @@ def attach_attribute_writes(
     """Give each traced ``Module`` record the attribute writes its forward made.
 
     Runs for a completed capture only (a failed capture's partial product
-    carries no record); a module the trace has no record for is skipped.
+    carries no record); a module the trace has no record for is skipped. A
+    trace whose module records are still pending keeps the writes with its
+    pending facts, and the build attaches them on first lookup.
     """
 
+    found = [(path or "self", writes.get(id(module))) for path, module in paths]
+    pending = getattr(trace, "__dict__", {}).get("_module_pending")  # a stub has no state
+    if pending is not None:
+        pending.attribute_writes = dict(found)
+        return
     records = getattr(trace, "modules", None) if trace is not None else None
     if records is None:
         return
-    for path, module in paths:
-        module_writes = writes.get(id(module))
-        address = path or "self"
+    for address, module_writes in found:
         if module_writes is not None and address in records:
             set_attribute_writes(records[address], module_writes)
 

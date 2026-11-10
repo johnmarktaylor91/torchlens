@@ -1244,6 +1244,7 @@ class Module(_ModuleRouting):
     full_backward_hooks: list[HookInfo]
     custom_attributes: dict[str, Any]
     custom_methods: list[str]
+    _buffer_accessor: Any  # filled by the module build
 
     def __init__(
         self,

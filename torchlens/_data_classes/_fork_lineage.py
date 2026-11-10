@@ -92,5 +92,6 @@ def rebind_fork_owner_refs(trace: Trace) -> None:
         del layer_pass.facets
     for layer_log in trace._layer_logs.values():
         layer_log.source_trace = trace
-    rebind_module_records(trace)
+    if "_module_logs" in trace.__dict__:  # pending records are built later, owned by this trace
+        rebind_module_records(trace)
     pin_fork_params(trace)

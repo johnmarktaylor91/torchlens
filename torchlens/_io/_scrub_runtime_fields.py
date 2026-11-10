@@ -6,9 +6,9 @@ the predicate and its callers are unchanged.
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Any, Final
 
-__all__ = ["RUNTIME_ONLY_TRACE_FIELDS"]
+__all__ = ["RUNTIME_ONLY_TRACE_FIELDS", "built_for_save"]
 
 RUNTIME_ONLY_TRACE_FIELDS: Final[frozenset[str]] = frozenset(
     {
@@ -69,3 +69,17 @@ RUNTIME_ONLY_TRACE_FIELDS: Final[frozenset[str]] = frozenset(
         "_tf_static_fallback_error",
     }
 )
+
+
+def built_for_save(trace: Any) -> Any:
+    """Return ``trace`` with any module records still pending built first.
+
+    Step 16 leaves the module records to be built on first lookup; a save
+    reads the trace state directly, so it builds them here and the saved
+    format is unchanged.
+    """
+
+    pending = trace.__dict__.get("_module_pending")
+    if pending is not None:
+        pending.ensure(trace)
+    return trace

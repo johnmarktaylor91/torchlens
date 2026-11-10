@@ -176,9 +176,9 @@ def layers(trace: Trace) -> LayerAccessor:
 def module_calls(trace: Trace) -> TraceModuleCallAccessor:
     """Body of ``Trace.module_calls``; the record keeps the thin spelling and docstring."""
 
-    # Memoized on the instance, never in a module global: the accessor
-    # reaches this Trace through ``ModuleCall._source_trace``, so a global
-    # weak-keyed cache would pin every Trace forever.
+    # Memoized on the instance (a weak-keyed global would pin every Trace).
+    if "_module_pending" in trace.__dict__:  # the build makes the accessor
+        trace.__dict__["_module_pending"].ensure(trace)
     cached = trace.__dict__.get(_TRACE_MODULE_CALL_ACCESSOR_ATTR)
     if cached is not None:
         return handed(cached, trace)

@@ -535,8 +535,14 @@ def adopt_restored_layer_logs(trace: Any) -> Any:
 
 
 def trace_state_copy(trace: Any) -> dict[str, Any]:
-    """Return a copy of the trace's ``__dict__`` with the layer store in its saved shape."""
+    """Return a copy of the trace's ``__dict__`` with the layer store in its saved shape.
 
+    Module records still pending from step 16 are built first, so pickle
+    state keeps its format.
+    """
+
+    if (pending := trace.__dict__.get("_module_pending")) is not None:
+        pending.ensure(trace)
     state = cast("dict[str, Any]", trace.__dict__.copy())
     logs = state.get("_layer_logs")
     if logs.__class__ in STORE_CLASSES:

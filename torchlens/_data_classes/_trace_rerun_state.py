@@ -96,11 +96,10 @@ _IMMUTABLE_MEMBER_TYPES = _ATOMIC_RERUN_VALUE_TYPES | {torch.Tensor, torch.nn.Pa
 def replace_state_from(target: Trace, trace: Trace) -> None:
     """Atomically replace this log's run-state from another ``Trace``.
 
-    This method is intended for intervention rerun. The rerun engine builds
-    ``trace`` off to the side and calls this only after validation ops.
-    The final state replacement uses one state-restore pass over the new fields
-    to minimize torn-state windows. Concurrent reads during rerun are
-    unsupported; no lock is taken.
+    This method is intended for intervention rerun. The rerun engine builds ``trace``
+    off to the side and calls this only after validation ops. The final state
+    replacement uses one state-restore pass over the new fields to minimize
+    torn-state windows. Concurrent reads during rerun are unsupported; no lock.
 
     Parameters
     ----------
@@ -147,12 +146,13 @@ def replace_state_from(target: Trace, trace: Trace) -> None:
     )
     preserved_state = {field_name: current_state.get(field_name) for field_name in preserved_fields}
     # DERIVED annotation blobs (feature maps / RDM / MDS / scree, the
-    # ``_DERIVED_ANNOTATION_BLOB_PREFIXES`` namespaces) are NOT preserved:
-    # they were computed from the replaced run's activations and would
-    # render stale data over the new run's stimuli. USER
-    # ``annotate(data=...)`` blobs (bare ``layer:``/``op:`` keys) are the
-    # user's own attachments and survive like the user annotations above.
+    # ``_DERIVED_ANNOTATION_BLOB_PREFIXES`` namespaces) are NOT preserved: they were
+    # computed from the replaced run's activations and would render stale data over
+    # the new run's stimuli. USER ``annotate(data=...)`` blobs (bare ``layer:``/``op:``
+    # keys) are the user's own attachments and survive like the user annotations above.
     preserved_state["_annotation_blobs"] = target._user_annotation_blobs()
+    if (pending := trace.__dict__.get("_module_pending")) is not None:
+        pending.ensure(trace)  # its module records replace the target's, as when built eagerly
     replacement_state = dict(state_items(trace))
     replacement_state.update(preserved_state)
     replacement_state["annotations"] = target._merge_user_annotations(

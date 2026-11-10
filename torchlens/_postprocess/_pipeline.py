@@ -498,6 +498,7 @@ PIPELINE: tuple[PipelineStep, ...] = (
             "_module_call_accessor",
             "_module_capture_ws",
             "_module_logs",
+            "_module_pending",
             "_op_accessor_cache",
             "_param_logs_by_module",
             "_trace_core",
