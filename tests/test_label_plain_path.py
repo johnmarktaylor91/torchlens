@@ -254,7 +254,9 @@ def test_subclass_keeps_the_general_stamp(monkeypatch: pytest.MonkeyPatch, sessi
 
 def test_async_collective_tensor_is_a_strict_subclass_and_still_delegates(session: Any) -> None:
     """The delegation the plain read skips applies only to a strict tensor subclass."""
-    funcol = pytest.importorskip("torch.distributed._functional_collectives")
+    pytest.importorskip("torch.distributed")
+    import torch.distributed._functional_collectives as funcol
+
     act_cls = funcol.AsyncCollectiveTensor
     assert act_cls is not torch.Tensor and issubclass(act_cls, torch.Tensor)
     inner = torch.randn(3)
