@@ -314,3 +314,13 @@ def test_retained_state_holds_only_its_trace() -> None:
     finally:
         gc.enable()
     assert type(kept["_param_logs"].__dict__["_list"]) is list
+
+
+def test_no_trace_holds_a_param() -> None:
+    """The only pinned paths to a ``Param`` are the transient pickle projection."""
+
+    from tools.record_ownership.holders import blocking, is_transient
+
+    rows = blocking(("Param",))
+    assert rows
+    assert all(is_transient(path, holder) for path, holder in rows.items()), sorted(rows)
