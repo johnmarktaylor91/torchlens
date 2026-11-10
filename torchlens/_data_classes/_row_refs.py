@@ -11,13 +11,17 @@ by a re-run of the build passes) keeps the objects, exactly as before.
 Reading resolves a row through the owning trace: an op through the trace's
 label dictionary (validated against the row, with a scan as fallback), a
 module call or a param through the core's weak-valued facade cache (filled
-from the trace's doors on a miss). The public attributes keep their names and
-values: ``Buffer.versions`` reads as a list of ops, ``Module.ops`` and
+from the trace's doors on a miss). A module cell also keeps a weak reference
+to each child beside its row, read first by the record the keys were made
+for, so that record still answers when another trace has taken it over (a
+state dictionary restored into a second ``Trace`` without a copy). The public
+attributes keep their names and values: ``Buffer.versions`` reads as a list of ops, ``Module.ops`` and
 ``Module.params`` as accessors.
 """
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Iterable, Iterator, Mapping
 from typing import Any
 
@@ -114,16 +118,35 @@ class RowKeys(dict[Any, int]):
     """A child cell in key form: lookup key -> the child's row in its kind store.
 
     ``build`` is the class of the accessor the cell held, called with
-    ``key -> record`` to give a read the same accessor again.
+    ``key -> record`` to give a read the same accessor again. ``owner`` is a
+    weak reference to the record whose cell this is and ``refs`` maps each
+    key to a weak reference to the child it named: a fork's copy of the
+    record shares this object but names its own trace's records, so only
+    ``owner`` reads ``refs``.
     """
 
-    __slots__ = ("build",)
+    __slots__ = ("build", "owner", "refs")
 
     build: Any
+    owner: Any
+    refs: dict[Any, Any]
+
+    def kept(self, record: Any) -> dict[Any, Any] | None:
+        """Return ``key -> child`` for ``owner`` while every child is alive, else ``None``."""
+
+        if self.owner() is not record:
+            return None
+        children: dict[Any, Any] = {}
+        for key, ref in self.refs.items():
+            child = ref()
+            if child is None or child.__dict__.get(ROW_KEY) != self[key]:
+                return None
+            children[key] = child
+        return children
 
 
-def child_keys(children: Any, kind: str, core: Any) -> RowKeys | None:
-    """Return ``key -> row`` for an accessor's children, or ``None`` when one has no row.
+def child_keys(children: Any, kind: str, core: Any, owner: Any) -> RowKeys | None:
+    """Return ``key -> row`` for ``owner``'s accessor of children, or ``None`` when one has no row.
 
     Each child is entered in the core's weak-valued facade cache, which is
     how a later read finds it.
@@ -135,6 +158,7 @@ def child_keys(children: Any, kind: str, core: Any) -> RowKeys | None:
         return None
     keys = RowKeys()
     keys.build = type(children)
+    keys.owner = weakref.ref(owner)
     for key, child in items.items():
         child_dict = getattr(child, "__dict__", None)
         if child_dict is None or child_dict.get(CORE_KEY) is not store:
@@ -143,6 +167,7 @@ def child_keys(children: Any, kind: str, core: Any) -> RowKeys | None:
     facades = core._facades
     for child in items.values():
         facades[(kind, child.__dict__[ROW_KEY])] = child
+    keys.refs = {key: weakref.ref(child) for key, child in items.items()}
     return keys
 
 
@@ -228,8 +253,11 @@ class ChildAccessorField(RecordCellField):
         held = RecordCellField.__get__(self, record, objtype)
         if held.__class__ is not RowKeys:
             return held
-        ref = record.__dict__.get("_source_trace_ref")
-        return held.build(children_at(held, self._kind, ref, "Module"))
+        children = held.kept(record)
+        if children is None:
+            ref = record.__dict__.get("_source_trace_ref")
+            children = children_at(held, self._kind, ref, "Module")
+        return held.build(children)
 
 
 def install_child_fields(cls: type, fields: Mapping[str, str | None]) -> None:
@@ -281,6 +309,8 @@ def rekey_child_cells(records: Iterable[Any], trace: Any) -> None:
                 held = RecordCellField.__get__(field, record)
             except AttributeError:
                 continue
-            keys = None if held.__class__ is RowKeys else child_keys(held, field._kind, core)
+            keys = (
+                None if held.__class__ is RowKeys else child_keys(held, field._kind, core, record)
+            )
             if keys is not None:
                 RecordCellField.__set__(field, record, keys)
