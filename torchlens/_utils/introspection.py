@@ -858,15 +858,14 @@ def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
 
 def build_locations(
     selected: list[tuple[FrameType, CodeType, int, int]],
-    num_context_lines: int,
-    source_loading_enabled: bool,
-    disable_col_offset: bool,
+    options: tuple[int, bool, bool],
     context_cache: _CodeContextCache | None,
     known: dict[tuple[CodeType, str, int, int], Any] | None = None,
 ) -> list[Any]:
     """One ``FuncCallLocation`` per kept ``(frame, code, lineno, lasti)``.
 
-    ``known`` (the call-site memo's table) maps ``(code, co_filename, f_lasti,
+    ``options`` is ``(num_context_lines, source_loading_enabled,
+    disable_col_offset)``. ``known`` (the call-site memo's table) maps ``(code, co_filename, f_lasti,
     f_lineno)`` to a location already built in this capture: reused, and each
     new one is added.
     """
@@ -876,6 +875,7 @@ def build_locations(
         from .._data_classes.func_call_location import FuncCallLocation as location_type
 
         _FUNC_CALL_LOCATION = location_type
+    num_context_lines, source_loading_enabled, disable_col_offset = options
     result = []
     for frame_ref, code, lineno, lasti in selected:
         if known is not None:
@@ -918,7 +918,6 @@ def _get_code_context(
     disable_col_offset: bool = False,
     context_cache: _CodeContextCache | None = None,
     call_site_out: list[Any] | None = None,
-    locations: dict[tuple[CodeType, str, int, int], Any] | None = None,
 ) -> list[Any]:
     """Build a list of FuncCallLocation objects for the current call stack.
 
@@ -967,12 +966,14 @@ def _get_code_context(
             call-site chain (:func:`torchlens._utils._call_site.canonical_chain`
             of the frames inside the innermost stateful module call), or ``()``
             when no Python frame lies inside it. Grouping (step 7) keys layers on it.
-        locations: Optional per-capture location table (``build_locations``'s ``known``).
+            An item already in it is the per-capture location table
+            (``build_locations``'s ``known``); read the chain as the last item.
 
     Returns:
         List[FuncCallLocation] ordered outermost to innermost; the last entry
         is the frame that ran the op.
     """
+    locations = call_site_out[0] if call_site_out else None
     anchor: tuple[int, CodeType, int, int] | None = None
     if context_cache is not None:
         anchor = context_cache.get(_CODE_CONTEXT_ANCHOR_KEY)
@@ -1054,7 +1055,7 @@ def _get_code_context(
             return list(cached)
 
     # Locations only for the kept frames (~5-10), on a cache miss.
-    result = build_locations(selected, *options, context_cache, locations)
+    result = build_locations(selected, options, context_cache, locations)
     if context_cache is not None and cache_key is not None:
         context_cache[cache_key] = tuple(result)
     return result

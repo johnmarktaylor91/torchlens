@@ -152,7 +152,7 @@ def _named(kept: list[_Kept]) -> tuple[_Named, ...]:
 def _locations(memo: Any, kept: list[_Kept], options: tuple[Any, ...]) -> list[Any]:
     """The locations of ``kept`` frames, each built once per capture (``build_locations``)."""
 
-    return build_locations(kept, *options, memo.locations)
+    return build_locations(kept, options[:3], options[3], memo.locations)
 
 
 def _combine(

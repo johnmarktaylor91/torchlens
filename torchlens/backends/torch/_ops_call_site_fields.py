@@ -272,16 +272,15 @@ def _full_walk(self: "Trace", memo: _CallSiteMemo) -> tuple[list[Any], Any]:
     path, so a first-time site under a deep stack builds only its new frames.
     """
 
-    call_site_out: list[Any] = []
+    call_site_out: list[Any] = [memo.locations]  # the walk appends the chain
     code_context = _get_code_context(
         self.num_context_lines,
         source_loading_enabled=self._options_save_source_context,
         disable_col_offset=False,
         context_cache=memo.cache,
         call_site_out=call_site_out,
-        locations=memo.locations,
     )
-    return code_context, call_site_out[0]
+    return code_context, call_site_out[-1]
 
 
 def _set_call_site_fields(self: "Trace", fields_dict: dict[str, Any], func_call_id: int) -> None:
