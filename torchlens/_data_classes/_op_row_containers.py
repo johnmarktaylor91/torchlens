@@ -166,7 +166,7 @@ def _copied(records: Iterable[Any], memo: dict[Any, Any]) -> list[Any]:
     return out
 
 
-class OpSequence(MutableSequence):  # type: ignore[type-arg]
+class OpSequence(MutableSequence[Any]):
     """A list of ops stored as row keys; reads return the ``Op`` records."""
 
     __slots__ = ("__weakref__", "_keys", "_owner")
@@ -303,7 +303,7 @@ class OpSequence(MutableSequence):  # type: ignore[type-arg]
         return list, (self._records(),)
 
 
-class OpLabelMap(MutableMapping):  # type: ignore[type-arg]
+class OpLabelMap(MutableMapping[Any, Any]):
     """A label dictionary stored as label to row key; reads return the ``Op`` records."""
 
     __slots__ = ("__weakref__", "_keys", "_ordered", "_owner")
@@ -481,18 +481,24 @@ def clear_op_holders(trace: Any) -> None:
 
 
 def bind_op_containers(trace: Any, core: Any = None) -> None:
-    """Install ``core`` on ``trace`` (when given) and move the held records to its side tables."""
+    """Install ``core`` on ``trace`` (when given), then adopt and bind its op containers.
+
+    A fork's field copy reads the parent through ``plain_state_items``, so the
+    fork arrives here with plain containers of its own records.
+    """
 
     if core is not None:
         trace.__dict__["_trace_core"] = core
-    op_rows(trace).bind()
+    adopt_op_containers(trace)
 
 
 def adopt_op_containers(trace: Any, rebuild_core: Any = None) -> None:
     """Wrap plain containers found on ``trace`` (after a state restore) and bind them.
 
     ``rebuild_core`` (the restored trace's core rehydration) runs first, on the
-    plain containers, so the records are keyed by the rows it gives them.
+    plain containers, so the records are keyed by the rows it gives them. An
+    empty plain container holds no record and is left as it is (a field absent
+    from the restored state keeps its plain default).
     """
 
     if rebuild_core is not None:
@@ -500,13 +506,24 @@ def adopt_op_containers(trace: Any, rebuild_core: Any = None) -> None:
     state = trace.__dict__
     owner = op_rows(trace)
     plain_list = state.get("_layer_list")
-    if isinstance(plain_list, list):
+    if plain_list and isinstance(plain_list, list):
         state["_layer_list"] = OpSequence(owner, plain_list)
     for name in CONTAINER_FIELDS[1:]:
         plain = state.get(name)
-        if isinstance(plain, dict):
+        if plain and isinstance(plain, dict):
             state[name] = OpLabelMap(owner, plain, ordered=isinstance(plain, OrderedDict))
     owner.bind()
+
+
+def plain_state_items(trace: Any) -> Any:
+    """Return ``trace``'s state fields with the op containers as plain ones.
+
+    This is ``Trace.__tl_state_items__``: every reader of a trace's state (the
+    save scrub, the fork's field copy) sees the list and dictionaries of records
+    it saw before the containers held row keys.
+    """
+
+    return project_op_containers(dict(trace.__dict__)).items()
 
 
 def project_op_containers(state: dict[str, Any]) -> dict[str, Any]:

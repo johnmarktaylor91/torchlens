@@ -1,0 +1,261 @@
+"""The trace's op list and label dictionaries hold row keys and hand back records.
+
+``torchlens/_data_classes/_op_row_containers.py`` replaces the plain list and
+dictionaries of ``Op`` records with containers that store one integer key per
+entry. These tests drive the containers with stand-in records and a stand-in
+core, so they pin the container contract alone: list and dictionary behaviour,
+the side-table layout, the move to a core's tables, copying and pickling.
+"""
+
+from __future__ import annotations
+
+import copy
+import gc
+import pickle
+from collections import OrderedDict
+from typing import Any
+
+import pytest
+
+from torchlens._data_classes import _op_row_containers as containers
+
+
+class _Record:
+    """A stand-in op record: a store and a row, like ``Op``'s two slots."""
+
+    __slots__ = ("_core", "_row", "name")
+
+    def __init__(self, store: Any, row: int, name: str) -> None:
+        """Bind the record to ``row`` of ``store``."""
+
+        self._core = store
+        self._row = row
+        self.name = name
+
+
+class _Core:
+    """A stand-in trace core: an op store and the strong side table."""
+
+    def __init__(self) -> None:
+        """Start with an empty side table."""
+
+        self.ops = object()
+        self._strong_facades: dict[Any, Any] = {}
+
+
+class _Trace:
+    """A stand-in trace: an attribute dictionary the containers hang from."""
+
+
+def _new_trace() -> Any:
+    """Return a stand-in trace with its three empty containers."""
+
+    trace: Any = _Trace()
+    holders = containers.op_holders(trace)
+    trace._layer_list, trace._layer_dict_main_keys, trace._layer_dict_all_keys = holders
+    return trace
+
+
+def _rows(core: _Core, start: int, count: int) -> list[_Record]:
+    """Return ``count`` records on consecutive rows of ``core``'s store."""
+
+    return [_Record(core.ops, row, f"r{row}") for row in range(start, start + count)]
+
+
+def test_keys_are_store_rows_and_the_side_table_is_a_list_by_row() -> None:
+    """A record on the core's store is keyed by its row; the cache slot is that row."""
+
+    trace, core = _new_trace(), _Core()
+    trace._trace_core = core
+    records = _rows(core, 300, 4)
+    for record in records:
+        trace._layer_list.append(record)
+        trace._layer_dict_all_keys[record.name] = record
+    assert trace._layer_list._keys == [300, 301, 302, 303]
+    assert trace._layer_list._keys[3] is records[3]._row  # the row integer itself: no new object
+    assert core._strong_facades[containers.OP_KIND][302] is records[2]
+    assert core._strong_facades[containers.OP_KIND][:300] == [None] * 300
+    assert core._strong_facades[containers.DETACHED_KIND] == {}
+    assert list(trace._layer_list) == records
+    assert trace._layer_dict_all_keys["r301"] is records[1]
+
+
+def test_a_record_off_the_store_gets_the_next_negative_key() -> None:
+    """A detached copy (row always 0 of its own store) is keyed below zero."""
+
+    trace, core = _new_trace(), _Core()
+    trace._trace_core = core
+    records = _rows(core, 0, 3)
+    for record in records:
+        trace._layer_list.append(record)
+    first, second = _Record(object(), 0, "copy1"), _Record(object(), 0, "copy2")
+    trace._layer_list.insert(1, first)
+    trace._layer_list.append(second)
+    trace._layer_dict_all_keys["copy1"] = first
+    assert trace._layer_list._keys == [0, -1, 1, 2, -2]
+    assert core._strong_facades[containers.DETACHED_KIND] == {-1: first, -2: second}
+    assert trace._layer_dict_all_keys._keys == {"copy1": -1}  # one key per record, reused
+    assert list(trace._layer_list) == [records[0], first, records[1], records[2], second]
+    assert next(i for i, op in enumerate(trace._layer_list) if op is first) == 1
+
+
+def test_records_held_before_the_core_exists_move_to_it_on_the_next_write() -> None:
+    """An append that finds a new core moves every container's keys, itself included."""
+
+    trace, core = _new_trace(), _Core()
+    records = _rows(core, 0, 4)
+    for record in records[:2]:
+        trace._layer_list.append(record)
+        trace._layer_dict_all_keys[record.name] = record
+    assert trace._layer_list._keys == [-1, -2]
+    trace._trace_core = core
+    for record in records[2:]:
+        trace._layer_list.append(record)
+    assert trace._layer_list._keys == [0, 1, 2, 3]
+    assert list(trace._layer_list) == records
+    assert trace._layer_dict_all_keys._keys == {"r0": 0, "r1": 1}
+    assert core._strong_facades[containers.OP_KIND] == records
+
+
+def test_list_behaviour_matches_a_plain_list() -> None:
+    """Indexing, slicing, comparison, reversal and membership answer like a list."""
+
+    trace, core = _new_trace(), _Core()
+    trace._trace_core = core
+    records = _rows(core, 0, 5)
+    trace._layer_list.extend(records)
+    sequence = trace._layer_list
+    assert len(sequence) == 5 and sequence[0] is records[0] and sequence[-1] is records[4]
+    assert sequence[1:3] == records[1:3] and type(sequence[1:3]) is list
+    assert sequence == records and records[2] in sequence
+    assert list(reversed(sequence)) == records[::-1]
+    assert sequence.index(records[3]) == 3
+    assert sequence + [1] == [*records, 1] and type(sequence.copy()) is list
+    del sequence[0]
+    sequence[0] = records[4]
+    assert list(sequence) == [records[4], records[2], records[3], records[4]]
+    with pytest.raises(IndexError):
+        sequence[10]
+    with pytest.raises(TypeError):
+        hash(sequence)
+
+
+def test_dictionary_behaviour_matches_a_plain_dictionary() -> None:
+    """Lookup, ``get``, views, deletion and the missing-key error answer like a dictionary."""
+
+    trace, core = _new_trace(), _Core()
+    trace._trace_core = core
+    records = _rows(core, 0, 3)
+    mapping = trace._layer_dict_all_keys
+    for record in records:
+        mapping[record.name] = record
+    assert list(mapping) == ["r0", "r1", "r2"] and "r1" in mapping and "zz" not in mapping
+    assert (
+        mapping.get("zz") is None and mapping.get("zz", 7) == 7 and mapping.get("r2") is records[2]
+    )
+    assert list(mapping.values()) == records
+    assert list(mapping.items()) == [(record.name, record) for record in records]
+    assert dict(mapping) == {record.name: record for record in records}
+    assert mapping == {record.name: record for record in records}
+    with pytest.raises(KeyError) as missing:
+        mapping["zz"]
+    assert missing.value.args == ("zz",)
+    del mapping["r0"]
+    assert mapping.pop("r1") is records[1] and list(mapping) == ["r2"]
+
+
+def test_pickle_state_and_pickles_are_plain_containers_of_the_same_type() -> None:
+    """Projection restores ``list``, ``OrderedDict`` and (after a restart) ``dict``."""
+
+    trace, core = _new_trace(), _Core()
+    trace._trace_core = core
+    containers.restart_op_holders(trace)
+    records = _rows(core, 0, 2)
+    for record in records:
+        trace._layer_list.append(record)
+        trace._layer_dict_main_keys[record.name] = record
+        trace._layer_dict_all_keys[record.name] = record
+    state = containers.project_op_containers(dict(trace.__dict__))
+    assert type(state["_layer_list"]) is list and state["_layer_list"] == records
+    assert type(state["_layer_dict_main_keys"]) is dict
+    assert type(state["_layer_dict_all_keys"]) is OrderedDict
+    assert state["_layer_dict_all_keys"]["r1"] is records[1]
+    plain = pickle.loads(pickle.dumps(containers.OpSequence(containers.OpRows(), [1, 2])))
+    assert type(plain) is list and plain == [1, 2]
+
+
+def test_restored_plain_containers_are_adopted_after_the_core_is_rebuilt() -> None:
+    """Adoption wraps the plain containers and keys them by the rebuilt core's rows."""
+
+    trace: Any = _Trace()
+    core = _Core()
+    records = _rows(core, 0, 3)
+    trace._layer_list = list(records)
+    trace._layer_dict_main_keys = {"r0": records[0]}
+    trace._layer_dict_all_keys = OrderedDict(r1=records[1])
+
+    def rebuild(restored: Any) -> None:
+        """Install the core, as rehydration does."""
+
+        restored._trace_core = core
+
+    containers.adopt_op_containers(trace, rebuild)
+    assert trace._layer_list._keys == [0, 1, 2]
+    assert core._strong_facades[containers.OP_KIND] == records
+    assert trace._layer_dict_all_keys._ordered and not trace._layer_dict_main_keys._ordered
+    assert trace._layer_dict_main_keys["r0"] is records[0]
+
+
+def test_deepcopy_follows_the_memo_to_the_copied_trace_and_its_records() -> None:
+    """A fork's field copy yields containers over the fork's records, then binds to its core."""
+
+    trace, core = _new_trace(), _Core()
+    trace._trace_core = core
+    records = _rows(core, 0, 3)
+    for record in records:
+        trace._layer_list.append(record)
+        trace._layer_dict_all_keys[record.name] = record
+    fork: Any = _Trace()
+    fork_core = _Core()
+    shells = [_Record(fork_core.ops, record._row, "f" + record.name) for record in records]
+    memo: dict[Any, Any] = {id(trace): fork}
+    memo.update({id(record): shell for record, shell in zip(records, shells)})
+    fork._layer_list = copy.deepcopy(trace._layer_list, memo)
+    fork._layer_dict_all_keys = copy.deepcopy(trace._layer_dict_all_keys, memo)
+    assert list(fork._layer_list) == shells and list(trace._layer_list) == records
+    assert fork._layer_list._owner is fork._layer_dict_all_keys._owner
+    assert fork_core._strong_facades == {}
+    containers.bind_op_containers(fork, fork_core)
+    assert fork._trace_core is fork_core and fork._layer_list._keys == [0, 1, 2]
+    assert fork_core._strong_facades[containers.OP_KIND] == shells
+    assert fork._layer_dict_all_keys["r1"] is shells[1]
+    assert core._strong_facades[containers.OP_KIND] == records
+
+
+def test_the_list_still_reads_after_the_core_is_dropped() -> None:
+    """A cleaned trace drops its core; the list keeps handing back its records."""
+
+    trace, core = _new_trace(), _Core()
+    trace._trace_core = core
+    records = _rows(core, 0, 3)
+    trace._layer_list.extend(records)
+    del trace._trace_core, core
+    gc.collect()
+    assert list(trace._layer_list) == records
+
+
+def test_restart_and_clear_give_a_new_list_object() -> None:
+    """The labeling restart and the backend clear replace the list, not empty it in place."""
+
+    trace, core = _new_trace(), _Core()
+    trace._trace_core = core
+    trace._layer_list.extend(_rows(core, 0, 2))
+    before = trace._layer_list
+    all_keys = trace._layer_dict_all_keys
+    all_keys["r0"] = before[0]
+    containers.restart_op_holders(trace)
+    assert trace._layer_list is not before and len(trace._layer_list) == 0 and len(before) == 2
+    assert trace._layer_dict_all_keys is all_keys and len(all_keys) == 1
+    restarted = trace._layer_list
+    containers.clear_op_holders(trace)
+    assert trace._layer_list is not restarted and len(all_keys) == 0
