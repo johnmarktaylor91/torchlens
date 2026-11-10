@@ -27,6 +27,18 @@ __tl_layer__ = "L1"
 #: spaced ones in between); exact equality on all of them is the match.
 _SAMPLE_TENSORS = 6
 
+#: Total bytes of sampled checkpoint tensors kept between matches. A sample
+#: that does not fit is read from the checkpoint file on every match instead.
+_SAMPLE_CACHE_BYTES = 32 * 1024 * 1024
+
+#: Stand-in kept for a checkpoint that is not a state mapping (never a match).
+_NOT_A_STATE: Any = object()
+
+#: ``(path, mtime_ns, ctime_ns, size, inode, sampled keys)`` -> ``(sampled tensors, bytes)``.
+#: Only checkpoint tensors copied out of the file are held, never a model. The
+#: file identity in the key makes a replaced or rewritten checkpoint a miss.
+_sample_cache: dict[tuple[Any, ...], tuple[Any, int]] = {}
+
 
 def is_torchvision_model(model: Any) -> bool:
     """Return whether ``model`` is an instance of a ``torchvision.models`` class."""
@@ -120,6 +132,73 @@ def _load_checkpoint(path: str) -> Any:
             return torch.load(path, map_location="cpu", weights_only=True)
 
 
+def _sample_nbytes(sample: dict[str, Any]) -> int:
+    """Return the bytes of the tensors in ``sample`` (dense element storage)."""
+
+    return sum(
+        int(value.numel()) * int(value.element_size())
+        for value in sample.values()
+        if isinstance(value, torch.Tensor)
+    )
+
+
+def _remember_sample(cache_key: tuple[Any, ...], sample: Any, nbytes: int) -> None:
+    """Keep ``sample`` under ``cache_key``, dropping the oldest entries to fit the budget."""
+
+    held = sum(entry[1] for entry in _sample_cache.values())
+    for stale_key in list(_sample_cache):
+        if held + nbytes <= _SAMPLE_CACHE_BYTES:
+            break
+        held -= _sample_cache.pop(stale_key)[1]
+    _sample_cache[cache_key] = (sample, nbytes)
+
+
+def _checkpoint_sample(path: str, keys: list[str]) -> Any:
+    """Return what ``_state_matches`` reads from the checkpoint at ``path``.
+
+    The answer is the same mapping lookups the loaded checkpoint would give
+    for ``keys``. The first match of a checkpoint file loads it and copies the
+    sampled tensors out of the memory map; later matches of the same file
+    (same path, modification and change times, size and inode) and the same keys reuse the
+    copies, so a model traced many times does not reload its checkpoint on
+    every trace. A sample over :data:`_SAMPLE_CACHE_BYTES`, a file that cannot
+    be stat'ed and a sample that cannot be copied are never kept: the loaded
+    checkpoint is returned as before.
+
+    Raises
+    ------
+    Exception
+        Whatever the checkpoint load raises; nothing is kept for that file.
+    """
+
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return _load_checkpoint(path)
+    file_identity = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino)
+    cache_key = (path, *file_identity, tuple(keys))
+    held = _sample_cache.get(cache_key)
+    if held is not None:
+        return held[0]
+    checkpoint = _load_checkpoint(path)
+    if not isinstance(checkpoint, dict):
+        _remember_sample(cache_key, _NOT_A_STATE, 0)
+        return checkpoint
+    try:
+        sample = {key: checkpoint.get(key) for key in keys}
+        nbytes = _sample_nbytes(sample)
+        if nbytes > _SAMPLE_CACHE_BYTES:
+            return checkpoint
+        copies = {
+            key: value.detach().clone() if isinstance(value, torch.Tensor) else value
+            for key, value in sample.items()
+        }
+    except Exception:
+        return checkpoint
+    _remember_sample(cache_key, copies, nbytes)
+    return copies
+
+
 def _state_matches(model_state: dict[str, torch.Tensor], checkpoint: Any) -> bool:
     """Return whether the sampled model tensors equal the checkpoint's exactly."""
 
@@ -167,12 +246,13 @@ def match_torchvision_weights(model: Any) -> Any | None:
     if not model_state:
         return None
     matches: list[Any] = []
+    sampled_keys = _sample_keys(list(model_state))
     for member in _candidate_weights(model):
         path = cached_checkpoint_path(member)
         if path is None:
             continue
         try:
-            checkpoint = _load_checkpoint(path)
+            checkpoint = _checkpoint_sample(path, sampled_keys)
         except Exception:
             continue
         if _state_matches(model_state, checkpoint):

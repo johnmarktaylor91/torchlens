@@ -17,9 +17,13 @@ touch the host mark and are unchanged.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from .._quantities import Bytes
+
+#: ``[(pid, psutil.Process)]`` for the current process, built on first use.
+_PSUTIL_PROCESS: list[tuple[int, Any]] = []
 
 
 def process_rss_bytes() -> int:
@@ -40,13 +44,16 @@ def process_rss_bytes() -> int:
         import psutil
     except ImportError:
         try:
-            import os
-
             with open("/proc/self/statm") as handle:
                 return int(handle.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
         except (OSError, ValueError, IndexError):
             return 0
-    return int(psutil.Process().memory_info().rss)
+    # One handle per process id: building ``psutil.Process()`` costs about as
+    # much as the reading, and a forked child must not read its parent.
+    pid = os.getpid()
+    if not _PSUTIL_PROCESS or _PSUTIL_PROCESS[0][0] != pid:
+        _PSUTIL_PROCESS[:] = [(pid, psutil.Process(pid))]
+    return int(_PSUTIL_PROCESS[0][1].memory_info().rss)
 
 
 def reset_peak_rss() -> bool:

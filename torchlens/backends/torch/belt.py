@@ -43,6 +43,7 @@ torch.frombuffer, torch.Tensor.as_subclass, torch.Tensor._make_subclass}``
 from __future__ import annotations
 
 import atexit
+import operator
 import os
 import sys
 import tempfile
@@ -494,6 +495,31 @@ def _wrapped_callable_replacement(value: Any, member_map: dict[int, Any] | None)
     return wrapper
 
 
+_ENTRY_VALUE = operator.itemgetter(1)
+"""Reads the module out of a ``sys.modules`` item without running Python bytecode."""
+
+
+def _unswept_module_items() -> list[tuple[str, Any]]:
+    """Return the ``sys.modules`` entries this wrapper epoch has not swept yet.
+
+    Every id in ``_swept_ids_live`` is an entry this epoch's sweep already
+    scanned AND that is provably still the same object (death callbacks evict
+    dead ids, so a reused id reads as new). ``set(map(id, ...))`` executes no
+    Python bytecode, so the nothing-new check is atomic under the GIL like the
+    ``list(sys.modules.items())`` snapshot. When something is new, only the
+    entries outside the live set are returned, in ``sys.modules`` order: the
+    snapshot keeps every entry alive while it is filtered, so no id in it can
+    be reused, and the sweep does work for the new entries alone instead of
+    re-checking every module already swept.
+    """
+
+    if not set(map(id, sys.modules.values())) - _swept_ids_live:
+        return []
+    items = list(sys.modules.items())
+    entry_ids = map(id, map(_ENTRY_VALUE, items))
+    return [item for item, entry_id in zip(items, entry_ids) if entry_id not in _swept_ids_live]
+
+
 def sweep_stale_belt_references() -> int:
     """Patch stale module-level references to wrapped torch callables, with a ledger.
 
@@ -518,15 +544,8 @@ def sweep_stale_belt_references() -> int:
     report = belt_report()
     if report is None:
         return 0
-    # O(new-modules) pre-filter: every id in ``_swept_ids_live`` is a module
-    # this epoch's loop already scanned AND that is provably still the same
-    # object (death callbacks evict dead ids, so a reused id reads as new).
-    # ``set(map(id, ...))`` executes no Python bytecode, so it is atomic
-    # under the GIL like the ``list(sys.modules.items())`` snapshot below.
-    if not set(map(id, sys.modules.values())) - _swept_ids_live:
-        return 0
     patched = 0
-    for mod_key, module in list(sys.modules.items()):
+    for mod_key, module in _unswept_module_items():
         if not isinstance(module, types.ModuleType):
             # Non-module sys.modules entries (e.g. the typing.io/typing.re
             # pseudo-module classes) are never scanned, but they must still
