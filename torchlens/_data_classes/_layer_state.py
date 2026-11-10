@@ -74,6 +74,18 @@ def _weak_layer_views(slots: Any, states: list[dict[str, Any]]) -> list[Any]:
     return views
 
 
+def ops_with_layers_kept(trace: Any) -> Any:
+    """Pair each op of ``trace`` with one list holding every Layer view of the trace.
+
+    For a loop that looks layers up again and again (a table export): the
+    views stay alive while the loop runs, so each lookup meets the live view
+    instead of building a new one.
+    """
+
+    logs = trace.__dict__.get("_layer_logs")
+    return zip(trace._layer_list, repeat(list(logs.values()) if logs else ()))
+
+
 def _layer_index(state: dict[str, Any]) -> tuple[Any, int]:
     """Return ``(core, index)`` for a layer state keyed into a live core, else ``(None, -1)``.
 
@@ -126,7 +138,9 @@ class LayerStore(OrderedDict[str, Any]):
                 return view
         try:
             accessor_state = state["ops"].__dict__
-            view = accessor_state["_core_ref"]()._views.layers[accessor_state["_keys"][1]]
+            slots = accessor_state["_core_ref"]()._views.layers
+            refs, row = slots.refs, accessor_state["_keys"][1]
+            view = slots[row] if refs is None else refs[row]()  # no call for a live view
             if view.__dict__ is state:
                 return view
         except (KeyError, IndexError, AttributeError, TypeError):
@@ -147,7 +161,9 @@ class LayerStore(OrderedDict[str, Any]):
         if self._held is None:
             try:
                 accessor_state = state["ops"].__dict__
-                view = accessor_state["_core_ref"]()._views.layers[accessor_state["_keys"][1]]
+                slots = accessor_state["_core_ref"]()._views.layers
+                refs, row = slots.refs, accessor_state["_keys"][1]
+                view = slots[row] if refs is None else refs[row]()  # no call for a live view
                 if view.__dict__ is state:
                     return view
             except (KeyError, IndexError, AttributeError, TypeError):

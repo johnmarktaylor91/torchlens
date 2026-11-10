@@ -7,6 +7,7 @@ from typing import Any
 from .._constants import _is_suffixed_raw_label
 from .._errors import AmbiguousOpLookupError
 from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
+from .._trace_core.view_tables import DEREF, WeakViews
 from .._utils._display_errors import lookup_message
 from .._utils._display_keys import display_key
 from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
@@ -536,8 +537,11 @@ class TraceOpAccessor(Accessor[Op]):
         if index is None:
             scanned = table.records(keys)
             return [op for op in scanned if key in {op.layer_label, op.short_layer_label}]
-        held = index.get(key, ())
-        return list(map(table.rows.__getitem__, held) if table.plain else table.records(held))
+        held, rows = index.get(key, ()), table.rows
+        if table.plain and rows.__class__ is WeakViews:  # live views cost no call
+            found = list(map(DEREF, map(rows.refs.__getitem__, held)))
+            return found if None not in found else rows.many(held)
+        return list(map(rows.__getitem__, held) if table.plain else table.records(held))
 
     def _ensure_alias_indexes(self) -> _AliasIndexes | None:
         """Build the alias reverse indexes once, or report them unavailable.

@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
+from .._data_classes._layer_state import ops_with_layers_kept
 from .._data_classes._trace_field_spec import TRACE_PORTABLE_STATE_SPEC
 from .._data_classes.interface import _format_conditional_branch_stack
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
@@ -462,7 +463,7 @@ def to_pandas(trace: "Trace", include_decoded_output_summary: bool = False) -> "
     )
 
     model_df_dictlist: list[dict[str, Any]] = []
-    for layer_entry in trace._layer_list:
+    for layer_entry, _layers in ops_with_layers_kept(trace):  # layer lookups meet live views
         layer_dict: dict[str, Any] = {}
         for field_name in fields_for_df:
             if field_name == "conditional_branch_stack":

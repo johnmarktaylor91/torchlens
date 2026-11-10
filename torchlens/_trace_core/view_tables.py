@@ -40,6 +40,8 @@ from typing import Any
 
 _ref = weakref.ref
 _deref = weakref.ref.__call__
+#: Calls a weak reference (for ``map``): the referent, or ``None`` once it is gone.
+DEREF = _deref
 _new = object.__new__
 _set = object.__setattr__
 _list_get = list.__getitem__
@@ -77,13 +79,17 @@ class _Views(list[Any]):
 
     ``core_ref`` and ``owner_ref`` are weak references (``owner_ref`` is
     ``None`` until a trace is named), ``kind`` is ``"op"`` or ``"layer"``.
+    ``refs`` is ``None`` for a pinned table. A weak table keeps its weak
+    references there, one per row, in a plain list: a reader on a hot path
+    indexes that list and calls the reference without entering a method.
     """
 
-    __slots__ = ("core_ref", "kind", "owner_ref")
+    __slots__ = ("core_ref", "kind", "owner_ref", "refs")
 
     core_ref: Any
     kind: str
     owner_ref: Any
+    refs: Any
 
 
 class PinnedViews(_Views):
@@ -105,8 +111,9 @@ class PinnedViews(_Views):
 class WeakViews(_Views):
     """Views by row, held weakly: a read returns the live view or builds one.
 
-    The list's own items are weak references (``DEAD`` where there is no live
-    view). An ``Op`` table builds a missing view from its row; a ``Layer``
+    The weak references are in ``refs`` (``DEAD`` where there is no live
+    view); the list's own items are ``None`` and only give the table its
+    length. An ``Op`` table builds a missing view from its row; a ``Layer``
     table cannot (the layer store builds from its state) and returns ``None``.
     """
 
@@ -115,7 +122,7 @@ class WeakViews(_Views):
     def __getitem__(self, row: Any) -> Any:
         """Return the view at ``row``, building an op view that is not alive."""
 
-        view = _list_get(self, row)()
+        view = self.refs[row]()
         if view is None and self.kind == OP_KIND:
             return self.build((row,))[0]
         return view
@@ -124,9 +131,9 @@ class WeakViews(_Views):
         """Cache ``view`` at ``row`` (``None`` clears the row) and give it its owner."""
 
         if view is None:
-            _list_set(self, row, DEAD)
+            self.refs[row] = DEAD
             return
-        _list_set(self, row, _ref(view))
+        self.refs[row] = _ref(view)
         reference = self.owner_ref
         owner = reference() if reference is not None else None
         if owner is not None:
@@ -140,12 +147,13 @@ class WeakViews(_Views):
     def live(self) -> list[Any]:
         """Return the live view of every row (``None`` where a row has none); never builds."""
 
-        return list(map(_deref, list.__iter__(self)))
+        return list(map(_deref, self.refs))
 
     def append(self, view: Any) -> None:
         """Add one row holding ``view``."""
 
-        _list_extend(self, (DEAD,))
+        _list_extend(self, (None,))
+        self.refs.append(DEAD)
         if view is not None:
             self[len(self) - 1] = view
 
@@ -159,19 +167,20 @@ class WeakViews(_Views):
         """Grow to ``size`` rows."""
 
         if len(self) < size:
-            _list_extend(self, repeat(DEAD, size - len(self)))
+            self.refs.extend(repeat(DEAD, size - len(self)))
+            _list_extend(self, repeat(None, size - len(self)))
 
     def peek(self, row: int) -> Any:
         """Return the live view at ``row``, or ``None``; never builds."""
 
-        return _list_get(self, row)() if 0 <= row < len(self) else None
+        return self.refs[row]() if 0 <= row < len(self) else None
 
     def claim(self, row: int, view: Any) -> Any:
         """Cache ``view`` at ``row`` unless another view is alive there; return the one held."""
 
         if row >= len(self):
             self.pad(row + 1)
-        current = _list_get(self, row)()
+        current = self.refs[row]()
         if current is not None:
             return current
         self[row] = view
@@ -185,7 +194,7 @@ class WeakViews(_Views):
         """
 
         rows = list(rows)
-        found = list(map(_deref, map(_list_get, repeat(self), rows)))
+        found = list(map(_deref, map(self.refs.__getitem__, rows)))
         if self.kind != OP_KIND or None not in found:
             return found
         missing = list(dict.fromkeys([row for row, view in zip(rows, found) if view is None]))
@@ -217,7 +226,7 @@ class WeakViews(_Views):
             owner = unowned
         if owner is not DEAD:
             deque(map(_set, views, repeat("_owner"), repeat(owner)), 0)
-        deque(map(_list_set, repeat(self), rows, map(_ref, views)), 0)
+        deque(map(_list_set, repeat(self.refs), rows, map(_ref, views)), 0)
 
 
 class ViewTables:
@@ -245,6 +254,7 @@ class ViewTables:
         table.core_ref = _ref(core)
         table.kind = kind
         table.owner_ref = None
+        table.refs = None if self.pinned else []
         return table
 
     def owner(self) -> Any:
@@ -283,12 +293,13 @@ class ViewTables:
             rows = [row for row, view in enumerate(list.__iter__(table)) if view is not None]
             references = [_ref(view) for view in list.__iter__(table) if view is not None]
             table.__class__ = WeakViews
-            _list_set(table, slice(None), [DEAD] * len(table))
+            table.refs = [DEAD] * len(table)
+            _list_set(table, slice(None), [None] * len(table))
             # Nothing above still holds a view: a reference that is alive now
             # is to a record somebody else kept.
             for row, reference, view in zip(rows, references, list(map(_deref, references))):
                 if view is not None:
-                    _list_set(table, row, reference)
+                    table.refs[row] = reference
                     _set(view, "_owner", owner)
 
 
