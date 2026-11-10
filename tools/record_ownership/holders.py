@@ -300,8 +300,12 @@ HOLDERS: dict[str, Holder] = {
         LATER_KINDS, only=("backward",)
     ),
     "Trace._trace_core:TraceCore.ops:Store.rows[_param_logs][*] -> Param": Holder(
-        LATER_KINDS, but=("pickle_state",)
+        LATER_KINDS, but=("pickle_state", "pickled", "deepcopied")
     ),
+    # A restored layer's state shares its first op's parameter list (one list
+    # object); the walk now reaches that list through the trace-held layer
+    # state first, so in these cases it carries this name instead of the row above.
+    "Trace._layer_logs{*}{*}[*] -> Param": Holder(LATER_KINDS, only=("pickled", "deepcopied")),
     "Trace._trace_core:TraceCore.ops:Store.rows[grad_fn] -> GradFn": Holder(
         LATER_KINDS, only=("backward", "pickled")
     ),

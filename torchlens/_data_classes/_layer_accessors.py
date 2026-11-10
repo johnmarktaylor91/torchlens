@@ -102,10 +102,23 @@ class OpAccessor(Accessor["Op"]):
         state = self.__dict__
         if name not in ("_keys", "_core_ref", "_store") or "_dict" not in state:
             raise AttributeError(name)
-        saved = {"_dict": state.pop("_dict")}
+        saved = state.pop("_dict")
         state.pop("_list", None)
-        self.__setstate__(saved)
+        state["_keys"] = array("q")
+        state["_core_ref"] = None
+        state["_store"] = None
+        for pass_index, op in (saved or {}).items():
+            self._put(pass_index, op)
         return state[name]
+
+    def _internal_set(self, name: str, value: Any) -> None:
+        """Loader write: install one saved-shape field (``_dict`` or ``_list``) as stored state.
+
+        The load door assigns restored fields one by one; the two saved-shape
+        containers are kept as given and turn into row keys on first use.
+        """
+
+        self.__dict__[name] = value
 
     def saved(self) -> "OpAccessor":
         """Return a copy in the saved shape: it holds the Op records, not row keys.
@@ -251,8 +264,9 @@ class OpAccessor(Accessor["Op"]):
     def _rekey(self, core: Any) -> bool:
         """Key held ops into ``core`` where their store is now its op store."""
 
+        keys = self._keys  # revives a saved-shape copy first
         held = self.__dict__.get("_held")
-        if held:
+        if held and keys:
             current = self._core_ref() if self._core_ref is not None else None
             if current is not core and not any(
                 self._keys[at] >= 0 for at in range(1, len(self._keys), 2)

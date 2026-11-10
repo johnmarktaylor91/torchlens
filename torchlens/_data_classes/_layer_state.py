@@ -56,7 +56,7 @@ def _layer_index(state: dict[str, Any]) -> tuple[Any, int]:
     layer's own op accessor, so the state carries no extra key.
     """
 
-    accessor_state = getattr(state.get("ops"), "__dict__", None)
+    accessor_state: Any = getattr(state.get("ops"), "__dict__", None)
     keys = accessor_state.get("_keys") if accessor_state is not None else None
     if not keys or keys[1] < 0:
         return None, -1
@@ -94,7 +94,7 @@ class LayerStore(OrderedDict[str, Any]):
             view = held.get(label)
             if view is not None:
                 return view
-        accessor_state = getattr(state.get("ops"), "__dict__", None)
+        accessor_state: Any = getattr(state.get("ops"), "__dict__", None)
         keys = accessor_state.get("_keys") if accessor_state is not None else None
         if keys and keys[1] >= 0:
             core_ref = accessor_state.get("_core_ref")
