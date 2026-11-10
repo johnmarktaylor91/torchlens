@@ -69,10 +69,13 @@ def keyed_accessor(rows: dict[str, int], core: Any, trace: Trace | None) -> Buff
 
 
 def trace_accessor(buffer_dict: dict[str, Buffer], trace: Trace) -> BufferAccessor:
-    """Return the accessor a trace keeps for ``buffer_dict``: keyed by row when every Buffer has one."""
+    """Return the accessor a trace keeps for ``buffer_dict``: keyed by row when every Buffer has one.
+
+    An empty accessor holds no Buffer, so it stays the plain one (a fork copies it as before).
+    """
 
     core = trace.__dict__.get("_trace_core")
-    rows = rows_in(buffer_dict.values(), core, KIND)
+    rows = rows_in(buffer_dict.values(), core, KIND) if buffer_dict else None
     if rows is None:
         return BufferAccessor(buffer_dict, source_trace=trace)
     return keyed_accessor(dict(zip(buffer_dict, rows, strict=True)), core, trace)
@@ -98,7 +101,7 @@ def handed(stored: Any, trace: Any) -> Any:
 def trace_buffers(trace: Trace) -> BufferAccessor:
     """Body of ``Trace.buffers``: the stored accessor, handed out so it keeps the trace."""
 
-    return handed(trace.__dict__.get("_buffer_accessor"), trace)  # type: ignore[no-any-return]
+    return handed(trace.__dict__.get("_buffer_accessor"), trace)
 
 
 def _in_scope(module_address: str, address: str) -> bool:
@@ -120,7 +123,7 @@ def module_buffers(module: Module) -> BufferAccessor:
         parent = None if trace is None else trace._buffer_accessor
         if parent is None:
             module._buffer_accessor = BufferAccessor({})
-            return module._buffer_accessor  # type: ignore[no-any-return]
+            return module._buffer_accessor
         address = module.address
         parent_state = parent.__dict__
         rows = parent_state.get("_rows")
@@ -136,13 +139,7 @@ def module_buffers(module: Module) -> BufferAccessor:
             cached.__dict__["_source_ref"] = _ref(trace)
         module._buffer_accessor = cached
     reference = cached.__dict__.get("_source_ref")
-    return handed(cached, reference() if reference is not None else None)  # type: ignore[no-any-return]
-
-
-def fork_accessor_kept(value: Any) -> bool:
-    """Return whether the fork's field pass skips ``value``: a keyed accessor is bound after it."""
-
-    return value.__class__ is BufferAccessor and "_rows" in value.__dict__
+    return handed(cached, reference() if reference is not None else None)
 
 
 def bind_fork_buffers(
@@ -157,7 +154,7 @@ def bind_fork_buffers(
     """
 
     stored = parent.__dict__.get("_buffer_accessor")
-    if stored is None or not fork_accessor_kept(stored):
+    if stored is None or "_rows" not in stored.__dict__:
         return
     if fork_core is None or fork_core.kind_rows.get(KIND) is None:
         fork.__dict__["_buffer_accessor"] = copy_value(stored)

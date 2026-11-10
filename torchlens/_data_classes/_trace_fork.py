@@ -54,7 +54,7 @@ from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils._record_group_table import record_member
 from .._utils.env_flags import closed_bool_env
 from ..intervention._types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
-from ._buffer_rows import bind_fork_buffers, fork_accessor_kept
+from ._buffer_rows import bind_fork_buffers
 from ._fork_flat_copy import _FLAT_COPY_DEPTH, _NO_FLAT_COPY, _flat_container_copy
 from ._fork_translation import RowTranslator
 from ._layer_state import install_layer_logs
@@ -256,7 +256,7 @@ def _fork_model_field(parent: Trace, field_name: str, value: Any, memo: dict[Any
         # parent's values would make the fork's guard silently skip its
         # first materialize. ``build_fork`` pops these after restore.
         return None
-    if field_name == "_buffer_accessor" and fork_accessor_kept(value):
+    if field_name == "_buffer_accessor" and value is not None and "_rows" in value.__dict__:
         return None  # ``build_fork`` binds a keyed accessor on the fork core
     if field_name in _TRACE_ACCESSOR_CACHE_FIELDS:
         # Memoized accessors hold parent facades (tuple-wrapped, so the

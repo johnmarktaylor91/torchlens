@@ -69,7 +69,7 @@ def view_at(table: dict[int, Any], store: Any, cls: type, row: int, owner: Any) 
     view = reference() if reference is not None else None
     if view is None or view.__dict__.get(CORE_KEY) is not store:
         view = _new(cls)
-        state = view.__dict__
+        state: dict[str, Any] = view.__dict__
         state[CORE_KEY] = store
         state[ROW_KEY] = row
         _set(view, "_owner", owner)

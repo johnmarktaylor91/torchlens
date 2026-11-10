@@ -35,6 +35,8 @@ class HeldOpRows(OpRows):
 
     __slots__ = ("_trace",)
 
+    _trace: Any
+
 
 def _held_rows(shared: OpRows, trace: Any) -> HeldOpRows:
     """Return a resolver over ``shared``'s tables that keeps ``trace``."""
@@ -52,7 +54,7 @@ def handed_versions(record: Any, stored: OpSequence, trace: Any) -> OpSequence:
 
     kept = getattr(record, "_versions", None)
     if kept is not None and kept[0] is stored and kept[1]._owner._trace is trace:
-        return kept[1]  # type: ignore[no-any-return]
+        return kept[1]
     handed = OpSequence.__new__(OpSequence)
     _list_extend(handed, list(_list_iter(stored)))
     handed._owner = _held_rows(stored._owner, trace)

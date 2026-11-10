@@ -445,40 +445,20 @@ class BufferAccessor(Accessor["Buffer"]):
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
         super().__init__(buffer_dict, source_ref=source_ref)
 
-    @property
-    def _dict(self) -> dict[str, Buffer]:  # type: ignore[override]
-        """Address to Buffer, in insertion order (built on each read when keyed by row)."""
+    def __getattr__(self, name: str) -> Any:
+        """Build ``_dict`` or ``_list`` for an accessor that names its Buffers by row.
 
-        state = self.__dict__
-        rows = state.get("_rows")
-        if rows is None:
-            return cast("dict[str, Buffer]", state["_dict"])
-        return dict(zip(rows, self._views_at(rows.values()), strict=True))
+        An accessor that holds its records has both in its ``__dict__``, so it
+        never reaches here; a keyed one builds them on each read.
+        """
 
-    @_dict.setter
-    def _dict(self, value: dict[str, Buffer]) -> None:
-        """Hold ``value`` itself: the accessor stops naming its Buffers by row."""
-
-        state = self.__dict__
-        for key in ("_rows", "_store", "_views", "_core_ref"):
-            state.pop(key, None)
-        state["_dict"] = value
-
-    @property
-    def _list(self) -> list[Buffer]:  # type: ignore[override]
-        """Buffers in order (built on each read when keyed by row)."""
-
-        state = self.__dict__
-        rows = state.get("_rows")
-        if rows is None:
-            return cast("list[Buffer]", state["_list"])
-        return self._views_at(rows.values())
-
-    @_list.setter
-    def _list(self, value: list[Buffer]) -> None:
-        """Hold ``value`` as the ordered Buffers of an accessor that holds its records."""
-
-        self.__dict__["_list"] = value
+        rows = self.__dict__.get("_rows")
+        if rows is not None:
+            if name == "_dict":
+                return dict(zip(rows, self._views_at(rows.values()), strict=True))
+            if name == "_list":
+                return self._views_at(rows.values())
+        raise AttributeError(name)
 
     def _views_at(self, rows: Any) -> list[Buffer]:
         """Return the Buffer at each row, each holding the trace this accessor reads."""
@@ -510,21 +490,21 @@ class BufferAccessor(Accessor["Buffer"]):
     def __len__(self) -> int:
         """Return the number of buffers."""
 
-        rows = self.__dict__.get("_rows")
-        return len(self._dict) if rows is None else len(rows)
+        state = self.__dict__
+        return len(state["_rows"] if "_rows" in state else state["_dict"])
 
     def keys(self) -> list[Any]:
         """Return the buffer addresses in order."""
 
-        rows = self.__dict__.get("_rows")
-        return super().keys() if rows is None else list(rows)
+        state = self.__dict__
+        return list(state["_rows"]) if "_rows" in state else super().keys()
 
     def __getitem__(self, key: int | str) -> Buffer:
         """Return a Buffer by address, short name or index; an exact address builds one view."""
 
-        rows = self.__dict__.get("_rows")
-        if rows is not None and key.__class__ is str and key in rows:
-            return self._views_at((rows[key],))[0]
+        state = self.__dict__
+        if "_rows" in state and key.__class__ is str and key in state["_rows"]:
+            return self._views_at((state["_rows"][key],))[0]
         return super().__getitem__(key)
 
     def _resolve_substring(self, key: str) -> Buffer | None:

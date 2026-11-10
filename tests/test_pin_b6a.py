@@ -63,7 +63,7 @@ def _version_label() -> str:
     """Return the label of an op that is a version of a buffer (read from a held trace)."""
 
     trace = _build()
-    return next(op.label for op in trace.ops.values() if getattr(op, "is_buffer", False))
+    return str(trace.buffers["scale.factor"].versions[0].label)
 
 
 # Every door that reaches a Buffer, read as one expression from the trace.
@@ -248,8 +248,12 @@ def test_the_trace_holds_no_buffer_object() -> None:
     assert torch.equal(again.final_value, final)
 
 
-def test_a_copied_or_restored_buffer_holds_no_trace() -> None:
-    """A Buffer copied or restored on its own names no trace and does not keep one alive."""
+def test_a_copied_or_restored_buffer_names_no_trace() -> None:
+    """A Buffer copied or restored on its own names no trace; a restored one keeps none alive.
+
+    A shallow or deep copy carries the version ops as a plain list, and those
+    ops keep their trace, as they do without the pin.
+    """
 
     trace = _build()
     trace_ref = weakref.ref(trace)
@@ -261,10 +265,12 @@ def test_a_copied_or_restored_buffer_holds_no_trace() -> None:
         assert other is not buffer
         assert other.trace is None
         assert other.address == buffer.address
+        assert not hasattr(other, "_owner")
     assert type(buffer.__getstate__()["versions"]) is list
-    del trace, buffer
+    del trace, buffer, copied, deep
     gc.collect()
-    assert trace_ref() is None, "a copied or restored Buffer kept the trace"
+    assert trace_ref() is None, "a restored Buffer kept the trace"
+    assert restored.trace is None
 
 
 def test_an_accessor_pickles_as_one_that_holds_its_buffers() -> None:
