@@ -7,6 +7,7 @@ from .._quantities import Bytes
 from .._utils._record_group_table import record_member
 from ..backends import TORCH_BACKEND_NAME
 from ..backends.torch._pinned_graph import pinned_autograd_bytes
+from ._saved_summary_scan import refresh_saved_summary_by_rows
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -174,6 +175,8 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
         None. Mutates aggregate saved-output fields on ``self``.
     """
 
+    if refresh_saved_summary_by_rows(self, pinned_autograd_bytes, TORCH_BACKEND_NAME):
+        return
     saved_layers = [
         layer_entry
         for layer_entry in self._layer_list

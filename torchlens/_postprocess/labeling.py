@@ -34,6 +34,7 @@ from ..intervention._types import ParentRef
 from ._conditional_child_rename import _rename_children_by_cond, _rename_conditional_child_views
 from ._final_info_columns import log_final_info_by_column, ops_inside_modules
 from ._label_rename import _rename_label_dataclass, _rename_replay_fields
+from ._lookup_key_scan import scan_lookup_keys
 from ._module_containment import _log_module_hierarchy_info_for_layer
 
 if TYPE_CHECKING:
@@ -593,7 +594,8 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
         Mutates final layer lookup containers in place.
     """
 
-    # Quick loop to count how many tensors are saved:
+    if scan_lookup_keys(self, _add_lookup_keys_for_layer_entry):
+        return
     self._num_saved_ops = sum(
         1
         for layer_entry in self
@@ -626,11 +628,8 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
             self.layer_labels.append(layer_entry.layer_label)
         self.op_labels.append(layer_entry.label)
         self._layer_num_calls[layer_entry.layer_label] = layer_entry.num_passes
-        # No per-layer byte increment here -- the
-        # saved-summary refresh later in this same step writes the aggregate
-        # from the ONE alias-aware byte model (retained_activation_bytes),
-        # which also serves the explorer memory truth (reduce-only
-        # captures count the retained TRANSFORMED bytes).
+        # No per-layer byte increment: the saved-summary refresh in this step writes
+        # the aggregate from the one alias-aware byte model (retained_activation_bytes).
         i += 1
 
     self._layers_logged = True
