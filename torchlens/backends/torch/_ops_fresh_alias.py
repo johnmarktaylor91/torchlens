@@ -39,13 +39,13 @@ from typing import Any
 import torch
 
 from ..._utils import tensor_utils as _tensor_utils
+from ..._utils._payload_alias import mint_payload_alias
 from ..._utils._torch_symbols import tensor_read, tensor_reads
 from ..._utils.tensor_utils import (
     _DEFER_GATE,
     _DEFER_PENDING,
     _copy_tensor_payload,
     _drop_dead_deferred_alias,
-    _mint_graph_connected_alias,
     _PendingPayloadAlias,
 )
 
@@ -85,7 +85,7 @@ def _whole_storage_alias(
             # Partial coverage stays eager: an alias would pin the whole storage.
             return None
         key = (ptr, nbytes, str(t.device))
-        alias = _mint_graph_connected_alias(t) if graph_connected else t.detach()
+        alias = mint_payload_alias(t, graph_connected)
         version = int(alias._version)
     except Exception:
         return None
