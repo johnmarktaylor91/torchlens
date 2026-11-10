@@ -76,9 +76,12 @@ def _fast_names_and_check(
         names.append(call[1])
         return real_commit(emit, trace, call, *rest)
 
+    # The spy is a frame on the stack while a fast commit records its source frames, so
+    # the capture that is compared runs without it.
     with monkeypatch.context() as patch:
         patch.setattr(_call_plan, "commit_fast_call", spy)
-        trace, fast_dump, fast_state = _trace(body, training)
+        trace, _spied_dump, _spied_state = _trace(body, training)
+    _fast, fast_dump, fast_state = _trace(body, training)
     with monkeypatch.context() as patch:
         patch.setattr(_call_plan, "admit_call", lambda *_: None)
         _general, general_dump, general_state = _trace(body, training)

@@ -283,9 +283,12 @@ def test_one_label_read_per_tensor_slot(
 
 #: Measured ``get_tensor_label`` calls per trace (fixed seed). Before the slot snapshot the
 #: same traces read 91, 186 and 159 labels: every derivation read each tensor again.
+#: The receiver-write fast lane took ``inplace_mlp`` from 64 to 57. ``buffer`` went from
+#: 120 to 122: a first-use buffer is read once at the registration ladder's labeled-argument
+#: skip and once more after its address resolves.
 _PINNED_LABEL_READS = (
-    ("inplace_mlp", _InplaceMLP, (2, 8), 64),
-    ("buffer", _BufferModel, (2, 3, 6, 6), 120),
+    ("inplace_mlp", _InplaceMLP, (2, 8), 57),
+    ("buffer", _BufferModel, (2, 3, 6, 6), 122),
     ("nested_args", _NestedArgsModel, (3, 4), 81),
 )
 

@@ -579,9 +579,7 @@ def commit_admitted(
         return result
     if type(out) is not _TENSOR or out is not args[0]:
         return DECLINED
-    # A planned callable's name requests mutation (the wrapper's ``has_inplace_signature``)
-    # exactly when it ends in an underscore: every other clause of that flag has no plan.
-    return _commit_same_object(trace, call, func_call_id, window, snapshots, call[1].endswith("_"))
+    return _commit_same_object(trace, call, func_call_id, window, snapshots)
 
 
 def _commit_same_object(
@@ -590,7 +588,6 @@ def _commit_same_object(
     func_call_id: int,
     window: Any,
     snapshots: list[BufferSnapshot],
-    was_inplace: bool,
 ) -> Any:
     """Commit an admitted call that returned its plain-tensor receiver (``relu_``, ``contiguous``).
 
@@ -601,6 +598,9 @@ def _commit_same_object(
     Parameter, so the Parameter mutation steps do not apply.
     """
 
+    # A planned callable's name requests mutation (the wrapper's ``has_inplace_signature``)
+    # exactly when it ends in an underscore: every other clause of that flag has no plan.
+    was_inplace = call[1].endswith("_")
     receiver = call[6]
     logged = same_object_logging_copy(receiver, trace, was_inplace)
     _stamp_same_object(logged, receiver, was_inplace)
