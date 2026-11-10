@@ -40,7 +40,9 @@ def _field_ids(record: Any, layout: Any) -> tuple[int, ...] | None:
     """Return the store field id behind each of ``_ATTRS``, or ``None``."""
 
     cls = record.__class__
-    fids = tuple(getattr(getattr(cls, name, None), "_fid", None) for name in _ATTRS)
+    fids: tuple[Any, ...] = tuple(
+        getattr(getattr(cls, name, None), "_fid", None) for name in _ATTRS
+    )
     if [fid for fid in fids if fid.__class__ is not int]:
         return None
     member = layout.fid_by_name
@@ -118,7 +120,9 @@ def _other_entries(payload: Any) -> list[tuple[tuple[Any, ...], int]] | None:
 def _retained_bytes(pairs: list[tuple[Any, Any]], keys: list[int], owner: Any) -> int:
     """Return ``retained_activation_bytes`` of the saved ops at ``keys`` (payloads ``pairs``)."""
     # One flat loop on purpose (complexity): a helper per payload is a counted call per op.
-    total, seen, devices, read = 0, {}, {}, None  # ``seen`` a dict: ``set.add`` is a call
+    seen: dict[Any, None] = {}  # a dict: ``set.add`` is a call
+    devices: dict[Any, str] = {}
+    total, read = 0, None
     with pause_logging():
         for pair in pairs:
             counted = False
@@ -231,7 +235,10 @@ def refresh_saved_summary_by_rows(
         return False
     owner, saved, pairs = found
     store = owner._store
-    keys = _building_rows(trace)[2]
+    rows = _building_rows(trace)
+    if rows is None:
+        return False
+    keys = rows[2]
     if not _plain_labels(store, keys):
         return False
     trace._num_saved_ops = len(saved)
