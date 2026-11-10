@@ -1032,6 +1032,9 @@ when its entries are session-scoped (see ``_module_class_metadata_cache``).
 
 _WEAKLY_HELD = frozenset(
     {
+        # The live view of each backward-record state (storage fact:
+        # WeakValueDictionary; an entry dies with its view).
+        ("torchlens/_data_classes/_record_views.py", "_VIEWS"),
         ("torchlens/_utils/_optimizer_hooks.py", "_BINDINGS"),
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),

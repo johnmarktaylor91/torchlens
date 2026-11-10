@@ -414,6 +414,9 @@ def adopt_trace_states(state: dict[str, Any]) -> None:
 
     for name, cls in TRACE_STATE_FIELDS.items():
         plain = state.get(name)
-        if plain and plain.__class__ in (dict, OrderedDict):
-            if any(value.__class__ is cls for value in plain.values()):
-                state[name] = StateDict(cls, plain, ordered=plain.__class__ is OrderedDict)
+        if (
+            plain
+            and plain.__class__ in (dict, OrderedDict)
+            and any(value.__class__ is cls for value in plain.values())
+        ):
+            state[name] = StateDict(cls, plain, ordered=plain.__class__ is OrderedDict)
