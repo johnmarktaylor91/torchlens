@@ -333,10 +333,12 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_data_classes/_layer_state.py", "_LAYER_CLASS"),
         # The Param and ParamAccessor classes the param row modules bind on
         # first use so they import no record class, and the fork translator's
-        # class -> copier table for row-key param containers, filled at import;
+        # class -> copier table for row-key param containers, filled at import,
+        # and the pin function the module child field binds on first use;
         # none is mutated by a capture.
         ("torchlens/_data_classes/_param_rows.py", "_PARAM"),
         ("torchlens/_data_classes/_param_pin.py", "_ACCESSOR"),
+        ("torchlens/_trace_core/record_refs.py", "_OWN_CHILDREN"),
         ("torchlens/_data_classes/_fork_translation.py", "FORK_COPIERS"),
         # The OpAccessor class (and an empty subclass of it) the layer
         # accessors bind once at import so the ``Layer.ops`` door can hand out

@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any, TypeVar
 
 from ._op_row_containers import adopt_op_containers, project_op_containers
-from ._param_pin import ROW_FORMS, pin_params, plain_form, project_params
+from ._param_pin import _ACCESSOR, ROW_FORMS, pin_params, plain_form, project_params
 
 _T = TypeVar("_T")
 
@@ -32,10 +32,19 @@ def finish_state_restore(trace: _T) -> _T:
 
 
 def plain_items(obj: Any) -> Iterable[tuple[str, Any]]:
-    """Yield ``state_items(obj)`` with each row-key ``Param`` container in its plain form."""
+    """Return ``state_items(obj)``, with plain ``Param`` containers for a ``ParamAccessor``.
 
-    for name, value in state_items(obj):
-        yield name, plain_form(value) if value.__class__ in ROW_FORMS else value
+    A ``ParamAccessor`` is the one record without a state hook that keeps
+    row-key containers in its own cells; every other object passes through.
+    """
+
+    items = state_items(obj)
+    if not (_ACCESSOR and obj.__class__ is _ACCESSOR[0]):
+        return items
+    return [
+        (name, plain_form(value) if value.__class__ in ROW_FORMS else value)
+        for name, value in items
+    ]
 
 
 def state_items(obj: Any) -> Iterable[tuple[str, Any]]:
