@@ -19,9 +19,11 @@ for the call-site chain, the outermost ``forward`` frame, where a stateful
 module call ends the chain, the outermost wrapper, the module tokens of
 crossed stateless modules and hooks, and the ``FuncCallLocation`` records of the
 kept frames the code context takes from above the wrapper. The op's result is
-then the same list and chain the full walk returns. Locations are built once per
-``(code, f_lasti, f_lineno)`` in a capture, the identity the full walk's own
-location cache keys on. No frame is held past the call that walks it.
+then the same list and chain the full walk returns. The chain is built outermost
+first, so the upper part's share is kept as a state the op's own frames resume
+from. Locations are built once per ``(code, f_lasti, f_lineno)`` in a capture,
+shared with the full walk (``introspection.build_locations``). No frame is held
+past the call that walks it.
 """
 
 from types import CodeType, FrameType
@@ -31,8 +33,9 @@ from ..._utils._call_site import (
     _BOUNDARY_CODES,
     _BOUNDARY_NAMES,
     _BOUNDARY_PUSHED,
-    cached_chain,
+    _code_token,
     chain_boundary,
+    instruction_id,
     module_id_scope_entry,
     module_scope_entry,
 )
@@ -47,7 +50,17 @@ _Kept = tuple[FrameType, CodeType, int, int]
 class _Upper:
     """What the full walk reads above one module forward wrapper, positions from the wrapper."""
 
-    __slots__ = ("first", "forward", "inner", "outer", "prefix", "raw", "record", "scopes")
+    __slots__ = (
+        "first",
+        "forward",
+        "inner",
+        "outer",
+        "prefix",
+        "raw",
+        "record",
+        "scopes",
+        "states",
+    )
 
     def __init__(
         self,
@@ -81,6 +94,8 @@ class _Upper:
         #: Location of the first kept frame above the wrapper, else of the anchor
         #: frame; ``None`` when there is neither.
         self.first = first
+        #: Chain state after this part's first ``n`` kept frames, per ``n`` (``_upper_state``).
+        self.states: dict[int, tuple[list[Any], dict[Any, int]]] = {}
 
 
 def is_anchor(anchor: tuple[int, CodeType, int, int], frame: FrameType) -> bool:
@@ -133,21 +148,9 @@ def stateful(memo: Any, record: Any) -> bool:
 
 
 def _locations(memo: Any, kept: list[_Kept], options: tuple[Any, ...]) -> list[Any]:
-    """The locations of ``kept`` frames, each built once per capture."""
+    """The locations of ``kept`` frames, each built once per capture (``build_locations``)."""
 
-    built = memo.locations
-    pins = memo.pins
-    out = []
-    for item in kept:
-        _frame, code, lineno, lasti = item
-        key = (id(code), lasti, lineno)
-        loc = built.get(key)
-        if loc is None:
-            pins[key[0]] = code
-            loc = build_locations([item], *options)[0]
-            built[key] = loc
-        out.append(loc)
-    return out
+    return build_locations(kept, *options)
 
 
 def _combine(
@@ -212,7 +215,7 @@ def _upper(memo: Any, wrapper: FrameType, depth: int, options: tuple[Any, ...]) 
             if parent is None:
                 return None
             break
-        if code is anchor_code and is_anchor(anchor, frame):  # type: ignore[arg-type]
+        if code is anchor_code and is_anchor(anchor, frame):
             kept = (frame, code, frame.f_lineno, frame.f_lasti)
             anchor_first = _locations(memo, [kept], options)[0]
             break
@@ -231,16 +234,9 @@ def _upper(memo: Any, wrapper: FrameType, depth: int, options: tuple[Any, ...]) 
     return upper
 
 
-def _raw_chain(
-    raw_kept: list[tuple[CodeType, int]],
-    boundary: int,
-    scopes: list[tuple[int, Any]],
-    cache: dict[Any, Any],
-) -> tuple[Any, ...]:
-    """The call-site chain of the first ``boundary`` kept frames (``introspection._call_site_chain``)."""
+def _interleave(raw_kept: list[Any], scopes: list[tuple[int, Any]], boundary: int) -> list[Any]:
+    """The first ``boundary`` kept frames with the module tokens met among them, innermost first."""
 
-    if boundary <= 0:
-        return ()
     raw: list[Any] = []
     pending = iter(scopes)
     scope = next(pending, None)
@@ -252,7 +248,55 @@ def _raw_chain(
     while scope is not None and scope[0] <= boundary:
         raw.append(scope[1])
         scope = next(pending, None)
-    return cached_chain(tuple(raw), cache)
+    return raw
+
+
+def _collapse(out: list[Any], position: dict[Any, int], raw: list[Any]) -> None:
+    """Continue ``_call_site.canonical_chain`` over ``raw`` (innermost first) from a saved state."""
+
+    for code, lasti in reversed(raw):
+        if isinstance(code, tuple):
+            code_token, instruction = code, lasti
+        else:
+            code_token, instruction = _code_token(code), instruction_id(code, lasti)
+        earlier = position.get(code_token)
+        if earlier is not None:
+            for dropped, _ in out[earlier:]:
+                position.pop(dropped, None)
+            del out[earlier:]
+        position[code_token] = len(out)
+        out.append((code_token, instruction))
+
+
+def _upper_state(upper: _Upper, count: int) -> tuple[list[Any], dict[Any, int]]:
+    """The chain state after the upper part's first ``count`` kept frames, once per module call."""
+
+    state = upper.states.get(count)
+    if state is None:
+        state = ([], {})
+        _collapse(*state, _interleave(upper.raw, upper.scopes, count))
+        upper.states[count] = state
+    return state
+
+
+def _chain(
+    lower: list[tuple[CodeType, int]], scopes: list[tuple[int, Any]], boundary: int, upper: _Upper
+) -> tuple[Any, ...]:
+    """The op's call-site chain (``introspection._call_site_chain``), per op only its own frames.
+
+    The chain runs outermost first, so the upper part's share is a saved state
+    the op's own frames continue from.
+    """
+
+    count = len(lower)
+    if boundary < count:
+        out: list[Any] = []
+        position: dict[Any, int] = {}
+    else:
+        saved_out, saved_position = _upper_state(upper, boundary - count)
+        out, position = list(saved_out), dict(saved_position)
+    _collapse(out, position, _interleave(lower, scopes, min(boundary, count)))
+    return tuple(out)
 
 
 def _context(
@@ -290,14 +334,19 @@ def build_from_parts(
         name = code.co_name
         if name in _BOUNDARY_NAMES and code in _BOUNDARY_CODES:
             break
-        if code is anchor_code and is_anchor(anchor, frame):  # type: ignore[arg-type]
+        if code is anchor_code and is_anchor(anchor, frame):
             return None
         if name == "_call_impl":
             scopes.append((len(lower), module_scope_entry(frame.f_locals.get("self"))))
-        elif "_call_impl" not in name and not is_internal(code):
-            if name == "forward":
-                forward = len(lower)
-            lower.append((frame, code, frame.f_lineno, frame.f_lasti))
+        elif "_call_impl" not in name:
+            try:
+                internal = _VERDICTS[code.co_filename]
+            except KeyError:
+                internal = is_torchlens_code(code)
+            if not internal:
+                if name == "forward":
+                    forward = len(lower)
+                lower.append((frame, code, frame.f_lineno, frame.f_lasti))
         frame = frame.f_back
     if frame is None:
         return None
@@ -310,8 +359,5 @@ def build_from_parts(
     inner = count + upper.inner if upper.inner >= 0 else -1
     boundary = chain_boundary(inner, count + upper.outer, last_forward)  # type: ignore[operator]
     raw_kept = [(code, lasti) for _frame, code, _lineno, lasti in lower]
-    if boundary > count:
-        raw_kept += upper.raw
-    scopes += [(count + position, entry) for position, entry in upper.scopes]
-    chain = _raw_chain(raw_kept, boundary, scopes, memo.cache)
+    chain = _chain(raw_kept, scopes, boundary, upper) if boundary > 0 else ()
     return _context(memo, lower, forward, upper, options), chain

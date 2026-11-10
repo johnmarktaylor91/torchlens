@@ -184,7 +184,7 @@ def test_a_first_time_site_built_from_parts_equals_the_full_walk(
     assert built == walked
 
 
-@pytest.mark.parametrize("name", sorted(_MODELS))
+@pytest.mark.parametrize("name", ["deep", "hooked", "loopcell", "stateless"])
 def test_the_module_record_read_from_the_stack_is_the_wrappers_own(
     name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

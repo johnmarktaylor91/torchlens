@@ -63,13 +63,9 @@ _CodeContextCacheKey: TypeAlias = tuple[
 ]
 _CodeContextCache: TypeAlias = dict[Any, tuple[Any, ...]]
 
-# Reserved key holding the per-capture call-site anchor inside a
-# ``context_cache`` dict (see ``_get_code_context``). The cache dict itself is
-# created fresh per ``Trace`` and reset on fork/``__setstate__``, so the anchor
-# inherits exactly the capture-scoped lifetime it needs. The value is
-# ``(id(frame), code_object, f_lasti, f_lineno)`` -- ints plus an immutable
-# code object, never the frame itself (a retained frame would pin its
-# ``f_locals`` and therefore the user's model/input tensors).
+# Key of the per-capture call-site anchor in a ``context_cache`` (made fresh per
+# ``Trace``, reset on fork/``__setstate__``): ``(id(frame), code, f_lasti,
+# f_lineno)``, never the frame itself (it would pin the user's tensors).
 _CODE_CONTEXT_ANCHOR_KEY = "__torchlens_code_context_anchor__"
 
 # The stack filter for ``_get_code_context`` is ``_package_frames.is_torchlens_code``:
@@ -77,8 +73,7 @@ _CODE_CONTEXT_ANCHOR_KEY = "__torchlens_code_context_anchor__"
 # import system gave TorchLens's own files (``/repo/./torchlens/...`` under a
 # ``sys.path`` entry of ``"."``) never decides which frames an op's chain keeps.
 
-# ``FuncCallLocation`` lives in ``..data_classes``, which imports this module, so
-# it cannot be imported at module scope. Resolve it on first use and memoize.
+# ``FuncCallLocation`` imports this module: resolved on first use, then memoized.
 _FUNC_CALL_LOCATION: Any = None
 
 
@@ -93,9 +88,8 @@ def _build_col_offset_map(code: CodeType) -> dict[int, int | None]:
     INSIDE that cache region. Without spreading each instruction's column
     across its cache slots, every ``x.sum()``-style call site resolved to a
     missing key -- silently degrading branch attribution to line-only mode
-    for method-produced bools. Every code unit
-    from the instruction's offset up to the next listed instruction (or the
-    end of ``co_code``) therefore maps to that instruction's column.
+    for method-produced bools. Every code unit from the instruction's offset
+    to the next listed one (or the end) therefore maps to its column.
 
     Instructions whose ``positions`` are missing or whose ``col_offset`` is
     ``None`` are stored with ``None`` so callers can distinguish "not in map"
@@ -899,7 +893,7 @@ def build_locations(
     disable_col_offset: bool,
     context_cache: _CodeContextCache | None,
 ) -> list[Any]:
-    """One ``FuncCallLocation`` per kept ``(frame, code, lineno, lasti)`` (also the miss path's)."""
+    """One ``FuncCallLocation`` per kept ``(frame, code, lineno, lasti)``, built once per capture."""
     global _FUNC_CALL_LOCATION
     location_type = _FUNC_CALL_LOCATION
     if location_type is None:
@@ -907,7 +901,11 @@ def build_locations(
 
         _FUNC_CALL_LOCATION = location_type
     result = []
-    for frame_ref, code, lineno, _lasti in selected:
+    for frame_ref, code, lineno, lasti in selected:
+        key = ("__torchlens_location__", code, lasti, lineno)
+        if context_cache is not None and key in context_cache:
+            result.append(context_cache[key][0])
+            continue
         func_name = code.co_name
         loc = location_type(
             file=code.co_filename,
@@ -930,6 +928,8 @@ def build_locations(
             loc._linecache_entry = location_type._cached_source_fingerprint(
                 code.co_filename, num_context_lines, context_cache
             )
+        if context_cache is not None:
+            context_cache[key] = (loc,)
         result.append(loc)
     return result
 

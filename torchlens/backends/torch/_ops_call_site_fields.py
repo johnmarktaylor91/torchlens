@@ -31,6 +31,7 @@ from types import CodeType, FrameType
 from typing import TYPE_CHECKING, Any
 
 from ..._utils._call_site import _BOUNDARY_CODES, _BOUNDARY_NAMES, _BOUNDARY_PUSHED
+from ..._utils._package_frames import _VERDICTS
 from ..._utils.introspection import _CODE_CONTEXT_ANCHOR_KEY, _get_code_context
 from ._call_site_parts import (
     build_from_parts,
@@ -69,7 +70,6 @@ class _CallSiteMemo:
         "interns",
         "last_ids",
         "last_record",
-        "locations",
         "module_ws",
         "pins",
         "sites",
@@ -100,7 +100,6 @@ class _CallSiteMemo:
         #: ``id(ModuleStackFrame)`` -> upper part above that module call (miss path).
         self.uppers: dict[int, Any] = {}
         #: ``(id(code), f_lasti, f_lineno)`` -> ``FuncCallLocation`` (miss path).
-        self.locations: dict[tuple[int, int, int], Any] = {}
         #: The module call the previous op's key ended in, and its ids remainder.
         self.last_record: Any = None
         self.last_ids = 0
@@ -239,10 +238,15 @@ def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
             code_id = id(code)
             pins[code_id] = code
             key = (key, code_id, frame.f_lasti, id(frame.f_locals.get("self")))
-        elif not _is_internal(code):
-            code_id = id(code)
-            pins[code_id] = code
-            key = (key, code_id, frame.f_lasti)
+        else:
+            try:
+                internal = _VERDICTS[code.co_filename]
+            except KeyError:
+                internal = _is_internal(code)
+            if not internal:
+                code_id = id(code)
+                pins[code_id] = code
+                key = (key, code_id, frame.f_lasti)
         frame = frame.f_back
     return (key, _AT_TOP)
 
