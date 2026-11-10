@@ -33,6 +33,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
+from ..._ir._op_row_seed import INIT_BYTES_FIELDS
 from ..._ir.op_record import FACET_DEFAULTS
 from ..._ir.op_record_scatter import _resolve_dtype, _write_function_ref_cells
 from ..._trace_core.cell_states import LazyFields
@@ -370,11 +371,14 @@ def _default_fields(layout: OpStoreLayout) -> LazyFields:
 
     The scalar constants are shared immutable defaults; the empty containers
     and ``_grad_records`` (which ingest used to seed) are per-row factories.
+    A constant that ingest converts in place (the byte quantities of
+    ``INIT_BYTES_FIELDS``) is not registered: the capture writes its value.
     """
 
     fields = LazyFields(layout.names)
     for name, value in _SCALAR_CONSTANT_CELLS:
-        fields.register_default(name, value)
+        if name not in INIT_BYTES_FIELDS:
+            fields.register_default(name, value)
     for name in (*_EMPTY_LIST_CELLS, "_grad_records"):
         fields.register_default(name, factory=list)
     for name in _EMPTY_DICT_CELLS:
@@ -394,7 +398,11 @@ class _RowPlan:
 
         self.layout = layout
         self.fids = layout.fid_by_name
-        self.template = _default_fields(layout).seed_row()
+        template = _default_fields(layout).seed_row()
+        for name, value in _SCALAR_CONSTANT_CELLS:
+            if name in INIT_BYTES_FIELDS:
+                template[self.fids[name]] = value
+        self.template = template
 
 
 #: Row plans by layout identity (the layout is kept by the plan, so ids are not reused).
