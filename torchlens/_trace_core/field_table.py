@@ -23,7 +23,7 @@ a postprocess pipeline step. An empty ``settled`` means no phase writes it.
 Representation-only phases (compaction, view freezing) are not counted.
 
 The table is keyed on by field resolvers and by field-level differential
-checks; ``tests/test_capture_fields.py`` fails when a store column has no row.
+checks; ``tests/test_field_families.py`` fails when a store column has no row.
 """
 
 from __future__ import annotations
