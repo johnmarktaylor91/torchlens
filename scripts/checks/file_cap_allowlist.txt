@@ -492,7 +492,7 @@ torchlens/_utils/_callable_safety.py	1555
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
-torchlens/_utils/_tensor_label.py	1748
+torchlens/_utils/_tensor_label.py	1714
 torchlens/_utils/_torch_compat.py	4229
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	79
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
@@ -883,7 +883,7 @@ torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wra
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wrapped_builder.wrapped_transform	62
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
-torchlens/backends/torch/backward.py	3805
+torchlens/backends/torch/backward.py	3804
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	94
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	72
@@ -951,7 +951,7 @@ torchlens/backends/torch/tensor_tracking.py::_build_grad_payloads	61
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2810
+torchlens/backends/torch/wrappers.py	2806
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	117
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	82
