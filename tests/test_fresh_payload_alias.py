@@ -34,6 +34,7 @@ def _cases() -> dict[str, Callable[[], torch.Tensor]]:
     """Return one tensor factory per alias check (all exact strided ``torch.Tensor``)."""
 
     def inference() -> torch.Tensor:
+        """Return an inference tensor."""
         with torch.inference_mode():
             return torch.randn(3, 4)
 
