@@ -37,6 +37,7 @@ import importlib
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from .._trace_core.cell_states import LazyCell
 from .._trace_core.groups import GroupRef
 from .._trace_core.op_store import _CSR, _FACT, _MISSING, OpRowStore, PooledCell
 from .._trace_core.relation_views import OP_BITSET_VIEW_FIELDS
@@ -205,6 +206,8 @@ class OpColumns:
 
             if store.__class__ is OpRowStore and store._rows is not None:
                 value = store._rows[row][fid]
+                if value.__class__ is LazyCell:
+                    value = store.cell_get(row, fid) if value.make else value.source
             else:
                 value = store.cell_get(row, fid)
             if value is not _MISSING and value is not sentinel:

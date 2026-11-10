@@ -208,7 +208,8 @@ def adopt_capture_row(
     seed_op_values(row, plan.keys)
     if override is not _NO_OVERRIDE:
         row[plan.keys.backend_address] = override
-    row[plan.grad_records] = []
+    if row[plan.grad_records] is _MISSING:
+        row[plan.grad_records] = []
     row[plan.construction_done] = True
     op: Any = object.__new__(op_class)
     object.__setattr__(op, "_core", store)
