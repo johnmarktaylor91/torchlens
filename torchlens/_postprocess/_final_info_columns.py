@@ -25,7 +25,7 @@ from collections.abc import Callable, Collection
 from typing import TYPE_CHECKING, Any
 
 from .._quantities import Bytes, Duration
-from .._trace_core.cell_states import _MISSING, LazyCell
+from .._trace_core.cell_states import _MISSING, STATE_DEFAULT, LazyCell
 from .._trace_core.groups import GroupRef
 from .._trace_core.op_store import OpRowStore, PooledCell
 from .._utils._record_group_table import op_attr
@@ -142,12 +142,20 @@ class _Table:
         return column
 
     def _answer(self, column: list[Any], fid: int, optional: bool) -> None:
-        """Replace the marker cells of ``column`` by the values a read answers."""
+        """Replace the marker cells of ``column`` by the values a read answers.
+
+        A default marker answers its default without writing it back: the
+        cell keeps the marker, as it would until the first facade read, and a
+        default names no label, so the rename has nothing to write for it.
+        """
 
         cell_get = self.store.cell_get
         for position, value in enumerate(column):
             if value.__class__ is LazyCell:
-                value = column[position] = cell_get(self.row_ids[position], fid)
+                if value.state == STATE_DEFAULT:
+                    value = column[position] = value.source() if value.make else value.source
+                else:
+                    value = column[position] = cell_get(self.row_ids[position], fid)
             if value is _MISSING and optional:
                 column[position] = None
             elif value.__class__ in _OPAQUE:
