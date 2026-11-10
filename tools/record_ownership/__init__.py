@@ -18,6 +18,7 @@ __all__ = ["Audit", "HolderEdge", "audit_roots", "record_types", "run_case", "si
 def record_types() -> dict[type, str]:
     """Return the record classes the audit stops at, keyed to their kind name."""
 
+    from torchlens._data_classes.backward_pass import BackwardPass
     from torchlens._data_classes.buffer import Buffer
     from torchlens._data_classes.grad_fn import GradFn
     from torchlens._data_classes.grad_fn_call import GradFnCall
@@ -35,6 +36,7 @@ def record_types() -> dict[type, str]:
         Buffer: "Buffer",
         GradFn: "GradFn",
         GradFnCall: "GradFnCall",
+        BackwardPass: "BackwardPass",
     }
 
 

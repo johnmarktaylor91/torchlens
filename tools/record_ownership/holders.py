@@ -59,7 +59,15 @@ BEFORE_ACTIVATION = frozenset(
 )
 ACTIVATED_FIRST = ("Op", "Layer")
 # Kinds activated after Op and Layer: no trace holds one of these either.
-ACTIVATED_LATER = ("Buffer",)
+ACTIVATED_LATER = (
+    "Buffer",
+    "Param",
+    "Module",
+    "ModuleCall",
+    "GradFn",
+    "GradFnCall",
+    "BackwardPass",
+)
 # Steps whose paths are not held by a trace: nothing has to convert them before
 # a kind is activated, because the holder is gone when the call that made it returns.
 TRANSIENT = frozenset({PICKLE_PROJECTION})
@@ -84,18 +92,12 @@ class Holder:
 
 
 HOLDERS: dict[str, Holder] = {
+    "TraceState._backward_pass_logs{*} -> BackwardPass": Holder(
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
+    ),
     "BufferState.versions[*] -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
-    "GradFnState.calls:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
-        PICKLE_PROJECTION, only=(PICKLE_CASE,)
-    ),
-    "GradFnState.calls:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
-        PICKLE_PROJECTION, only=(PICKLE_CASE,)
-    ),
     "LayerState.ops:OpAccessor._dict{*} -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
     "LayerState.ops:OpAccessor._list[*] -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
-    "TraceState._backward_pass_logs{*}:BackwardPass._tl_core:Store.rows[grad_fn_calls][*] -> GradFnCall": Holder(
-        PICKLE_PROJECTION, only=(PICKLE_CASE,)
-    ),
     "TraceState._grad_fn_logs{*} -> GradFn": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
     "TraceState._layer_dict_all_keys{*} -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
     "TraceState._layer_dict_main_keys{*} -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
@@ -109,35 +111,6 @@ HOLDERS: dict[str, Holder] = {
     ),
     "TraceState._param_logs_by_module{*}[*] -> Param": Holder(
         PICKLE_PROJECTION, only=(PICKLE_CASE,)
-    ),
-    "GradFn._tl_core:Store.rows[calls]:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
-        LATER_KINDS, only=("pickled",)
-    ),
-    "GradFn._tl_core:Store.rows[calls]:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
-        LATER_KINDS, only=("pickled",)
-    ),
-    "Op._owner:Trace._trace_core:TraceCore.backward_epochs[*]:BackwardEpoch.stores{grad_fn}:Store.rows[calls]:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
-        LATER_KINDS, only=("pickle_state",)
-    ),
-    "Op._owner:Trace._trace_core:TraceCore.backward_epochs[*]:BackwardEpoch.stores{grad_fn}:Store.rows[calls]:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
-        LATER_KINDS, only=("pickle_state",)
-    ),
-    "Op._core:Store.rows[grad_fn] -> GradFn": Holder(LATER_KINDS, only=("pickle_state",)),
-    "Trace._backward_pass_logs{*}:BackwardPass._tl_core:Store.rows[grad_fn_calls][*] -> GradFnCall": Holder(
-        LATER_KINDS, only=("backward", "pickled")
-    ),
-    "Trace._grad_fn_logs{*} -> GradFn": Holder(LATER_KINDS, only=("backward", "pickled")),
-    "Trace._trace_core:TraceCore.backward_epochs[*]:BackwardEpoch.stores{grad_fn}:Store.rows[calls]:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
-        LATER_KINDS, only=("backward",)
-    ),
-    "Trace._trace_core:TraceCore.backward_epochs[*]:BackwardEpoch.stores{grad_fn}:Store.rows[calls]:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
-        LATER_KINDS, only=("backward",)
-    ),
-    "Trace._trace_core:TraceCore.ops:Store.rows[grad_fn] -> GradFn": Holder(
-        LATER_KINDS, only=("backward", "pickled")
-    ),
-    "Trace._trace_core:TraceCore.ops:Store.rows[grad_fn_handle] -> GradFn": Holder(
-        LATER_KINDS, only=("pickled",)
     ),
 }
 

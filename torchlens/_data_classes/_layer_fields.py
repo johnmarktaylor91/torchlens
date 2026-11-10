@@ -161,16 +161,20 @@ class LayerGradFnKey:
 
     The table (``Trace._grad_fn_logs``, keyed by ``grad_fn_object_id``) owns
     the record; the key names it by that id and keeps a weak reference so a
-    read returns the identical record without a table lookup.
+    read returns the identical record without a table lookup. The table
+    builds its records on a read, so the key also names the trace whose table
+    it was made for: a fork's layer carries its parent's key, and reads the
+    parent's record for as long as the parent lives, then its own.
     """
 
-    __slots__ = ("_record_ref", "object_id")
+    __slots__ = ("_record_ref", "_trace_ref", "object_id")
 
-    def __init__(self, record: Any) -> None:
-        """Key ``record`` by its autograd object id."""
+    def __init__(self, record: Any, trace_ref: Any = None) -> None:
+        """Key ``record`` by its autograd object id, in the table of ``trace_ref``'s trace."""
 
         self.object_id = record.grad_fn_object_id
         self._record_ref = weakref.ref(record)
+        self._trace_ref = trace_ref
 
     def resolve(self, layer: Any) -> Any:
         """Return the keyed record (``None`` when the trace no longer has it)."""
@@ -178,19 +182,25 @@ class LayerGradFnKey:
         record = self._record_ref()
         if record is not None:
             return record
-        logs = _grad_fn_table(layer)
-        try:
-            return logs[self.object_id] if logs is not None else None
-        except KeyError:
-            return None
+        reference = self._trace_ref
+        trace = reference() if reference is not None else None
+        for logs in (_table_of(trace), _grad_fn_table(layer)):
+            if logs is not None and self.object_id in logs:
+                return logs[self.object_id]
+        return None
+
+
+def _table_of(trace: Any) -> Any:
+    """Return the grad-fn table of ``trace``, or ``None``."""
+
+    return trace.__dict__.get("_grad_fn_logs") if trace is not None else None
 
 
 def _grad_fn_table(layer: Any) -> Any:
     """Return the grad-fn table of the trace ``layer`` is bound to, or ``None``."""
 
     ref = layer.__dict__.get("_source_trace_ref")
-    trace = ref() if ref is not None else None
-    return trace.__dict__.get("_grad_fn_logs") if trace is not None else None
+    return _table_of(ref() if ref is not None else None)
 
 
 def _grad_fn_key(layer: Any, value: Any) -> Any:
@@ -203,7 +213,7 @@ def _grad_fn_key(layer: Any, value: Any) -> Any:
         owned = logs is not None and logs[value.grad_fn_object_id] is value
     except (KeyError, AttributeError, TypeError):
         owned = False
-    return LayerGradFnKey(value) if owned else value
+    return LayerGradFnKey(value, layer.__dict__.get("_source_trace_ref")) if owned else value
 
 
 def key_layer_grad_fns(layer: Any) -> None:

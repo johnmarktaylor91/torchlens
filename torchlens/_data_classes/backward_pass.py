@@ -18,6 +18,8 @@ from .._quantities import Duration
 from .._utils._display_bounded import RecordTuple
 from .._utils._display_records import backward_repr, backward_str
 from ._accessor_base import Accessor
+from ._grad_fn_views import install_backward_pass_facade, pass_state_value, restore_pass_state
+from ._grad_state_views import set_owner
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
 if TYPE_CHECKING:
@@ -86,6 +88,8 @@ class BackwardPass:
     ('BackwardPass', 1)
     """
 
+    # _owner: the trace a handed-out view holds; _calls: the call list this view hands out.
+    __slots__ = ("__dict__", "__weakref__", "_calls", "_owner")
     __repr__ = backward_repr
     __str__ = backward_str
 
@@ -157,7 +161,7 @@ class BackwardPass:
                 seen = True
                 if value is None:
                     value = live
-            yield name, value
+            yield name, pass_state_value(value)
         if not seen and live is not None:
             yield "_executed_flops_record", live
 
@@ -175,9 +179,7 @@ class BackwardPass:
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
         """Install a state mapping through the cell descriptors (hook)."""
 
-        from .._trace_core.record_rows import record_state_restore
-
-        record_state_restore(self, mapping)
+        restore_pass_state(self, mapping)
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with an IO format marker."""
@@ -218,9 +220,7 @@ class BackwardPass:
         from .._io.state_keys import refuse_callable_shadowing_state_keys
 
         refuse_callable_shadowing_state_keys(type(self), state)
-        from .._trace_core.record_rows import record_state_restore
-
-        record_state_restore(self, state)
+        restore_pass_state(self, state)
 
     @property
     def _source_trace(self) -> Any:
@@ -234,6 +234,7 @@ class BackwardPass:
         """Set the owning Trace weakref."""
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
+        set_owner(self, value)
 
     @property
     def trace(self) -> Any:
@@ -343,15 +344,7 @@ _BACKWARD_PASS_STORED_FIELDS: tuple[str, ...] = (
 )
 
 
-def _install_backward_pass_facade() -> None:
-    """Install the BackwardPass row-cell descriptors (import-time)."""
-
-    from .._trace_core.record_rows import install_record_facade
-
-    install_record_facade(BackwardPass, _BACKWARD_PASS_STORED_FIELDS)
-
-
-_install_backward_pass_facade()
+install_backward_pass_facade(BackwardPass, _BACKWARD_PASS_STORED_FIELDS)
 
 
 class BackwardPassAccessor(Accessor[BackwardPass]):

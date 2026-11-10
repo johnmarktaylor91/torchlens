@@ -367,6 +367,16 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # import by the op containers so the record reference module imports no
         # record container; never mutated by a capture.
         ("torchlens/_trace_core/record_refs.py", "VERSIONS_LIST"),
+        # The backward records as views over trace-held state: the live view
+        # of each state, held weakly (an entry dies with its view, and a view
+        # never keeps another trace's state); the trace fields that hold
+        # records as state; and the GradFn and BackwardPass classes. The last
+        # three are bound once at import by the record classes and never
+        # mutated by a capture.
+        ("torchlens/_data_classes/_grad_state_views.py", "_VIEWS"),
+        ("torchlens/_data_classes/_grad_state_views.py", "TRACE_STATE_FIELDS"),
+        ("torchlens/_data_classes/_grad_fn_views.py", "GRAD_FN"),
+        ("torchlens/_data_classes/_grad_fn_views.py", "BACKWARD_PASS"),
         # First-read source digests for conditional/source attribution (deep-hunt
         # C4, fix/postproc 7a58a021). Deliberately NOT a _PROCESS_CACHES row:
         # clearing it is not correctness-neutral (the pin is the fail-closed
@@ -1075,6 +1085,9 @@ when its entries are session-scoped (see ``_module_class_metadata_cache``).
 
 _WEAKLY_HELD = frozenset(
     {
+        # The live view of each backward-record state (storage fact:
+        # WeakValueDictionary; an entry dies with its view).
+        ("torchlens/_data_classes/_grad_state_views.py", "_VIEWS"),
         ("torchlens/_utils/_optimizer_hooks.py", "_BINDINGS"),
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),

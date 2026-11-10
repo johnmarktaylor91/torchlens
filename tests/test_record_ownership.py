@@ -96,7 +96,11 @@ def test_known_holder_is_found(name: str) -> None:
 
 
 def test_no_trace_holds_an_op_or_layer() -> None:
-    """``Op``, ``Layer`` and ``Buffer`` are activated: no pinned path from a trace reaches one.
+    """Every pinned kind is activated: no pinned path from a trace reaches one.
+
+    The kinds are ``ACTIVATED_FIRST`` (``Op``, ``Layer``) and ``ACTIVATED_LATER``
+    (``Buffer``, ``Param``, ``Module``, ``ModuleCall``, ``GradFn``, ``GradFnCall``,
+    ``BackwardPass``).
 
     The only rows left for them are the transient pickle projection, which no
     trace holds. A path through a buffer, a module record or a gradient record

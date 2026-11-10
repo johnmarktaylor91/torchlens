@@ -23,6 +23,8 @@ from .._quantities import Duration
 from .._utils._display_records import backward_repr, backward_str
 from ._accessor_base import Accessor
 from ._grad_fn_pass import _pass_op_for_grad_fn
+from ._grad_fn_views import StateBackedCalls, install_grad_fn_facade
+from ._grad_state_views import set_owner
 from ._lookup_kinds import converted, grad_fn_for_key, refuse_several
 from ._runtime_handles import runtime_handle_from_owner
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -34,7 +36,7 @@ if TYPE_CHECKING:
     from .layer import Layer
 
 
-class GradFnCallAccessor(Accessor[GradFnCall]):
+class GradFnCallAccessor(StateBackedCalls):
     """Scoped dict-like accessor for GradFnCall entries owned by a GradFn."""
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -258,6 +260,7 @@ class GradFn:
     >>> "ReluBackward0" in [grad_fn.class_name for grad_fn in trace.autograd.grad_fns]
     True"""
 
+    __slots__ = ("__dict__", "__weakref__", "_owner")  # _owner: the trace a handed-out view holds
     __repr__ = backward_repr
     __str__ = backward_str
 
@@ -477,6 +480,7 @@ class GradFn:
         """
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
+        set_owner(self, value)
         for call in self.calls.values():
             call._source_trace = value
 
@@ -749,15 +753,7 @@ _GRAD_FN_STORED_FIELDS: tuple[str, ...] = (
 )
 
 
-def _install_grad_fn_facade() -> None:
-    """Install the GradFn row-cell descriptors (import-time)."""
-
-    from .._trace_core.record_rows import install_record_facade
-
-    install_record_facade(GradFn, _GRAD_FN_STORED_FIELDS)
-
-
-_install_grad_fn_facade()
+install_grad_fn_facade(GradFn, _GRAD_FN_STORED_FIELDS)
 
 
 class GradFnAccessor(Accessor[GradFn]):

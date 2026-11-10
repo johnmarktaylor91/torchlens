@@ -20,6 +20,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Duration
+from ._grad_state_views import set_owner
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
 # GradFnCall currently declares no plain-container (list/dict/tuple/set)
@@ -30,9 +31,13 @@ from .field_policy import build_record_field_policy_table, portable_state_spec_f
 # to this dataclass is automatically covered instead of silently missed.
 _GRAD_FN_CALL_CONTAINER_DEFAULTS: dict[str, Any] = {}
 
-_ORDINAL_POSITIONS_CACHE: weakref.WeakKeyDictionary[Any, tuple[Any, dict[int, int]]] = (
-    weakref.WeakKeyDictionary()
-)
+#: Per trace: the projection revision and each call's position, keyed by the
+#: ``id`` of the call's state (its instance dictionary). The entry keeps that
+#: state, so its ``id`` cannot be reused while the entry lives, and a reader
+#: counts an entry only when the state it holds is the reader's own.
+_ORDINAL_POSITIONS_CACHE: weakref.WeakKeyDictionary[
+    Any, tuple[Any, dict[int, tuple[int, dict[str, Any]]]]
+] = weakref.WeakKeyDictionary()
 """Per-trace ``id(call) -> position`` map for :attr:`GradFnCall.ordinal_index`.
 
 Weak-keyed on the owning Trace and validated against the trace's backward
@@ -105,6 +110,7 @@ class GradFnCall:
     ('GradFnCall', True)
     """
 
+    __slots__ = ("__dict__", "__weakref__", "_owner")  # _owner: the trace a handed-out view holds
     __repr__ = backward_repr
     __str__ = backward_str
 
@@ -221,6 +227,7 @@ class GradFnCall:
         """Set the owning Trace weakref."""
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
+        set_owner(self, value)
 
     @property
     def trace(self) -> Any:
@@ -278,26 +285,31 @@ class GradFnCall:
     def ordinal_index(self) -> int:
         """Return this GradFnCall's 0-based position in ``trace.autograd.grad_fn_calls``.
 
-        Amortized O(1) per access through a per-trace identity-position map
-        (see :data:`_ORDINAL_POSITIONS_CACHE`); a call not present in its
-        trace's projection returns ``-1`` like a trace-less call.
+        Amortized O(1) per access through a per-trace position map keyed by
+        each call's state (see :data:`_ORDINAL_POSITIONS_CACHE`); a call not
+        present in its trace's projection returns ``-1`` like a trace-less call.
         """
 
         trace = self._source_trace
         if trace is None:
             return -1
+        state = self.__dict__
         revision = getattr(trace, "_backward_projection_revision", None)
         cached = _ORDINAL_POSITIONS_CACHE.get(trace)
-        if cached is None or cached[0] != revision or id(self) not in cached[1]:
+        if cached is None or cached[0] != revision or id(state) not in cached[1]:
             calls = trace.autograd.grad_fn_calls  # syncs the lazy backward projection
             revision = getattr(trace, "_backward_projection_revision", None)
-            positions = {id(call): index for index, call in enumerate(calls.values())}
+            positions = {
+                id(call.__dict__): (index, call.__dict__)
+                for index, call in enumerate(calls.values())
+            }
             cached = (revision, positions)
             try:
                 _ORDINAL_POSITIONS_CACHE[trace] = cached
             except TypeError:
                 pass  # non-weakref-able trace stand-ins: fall through uncached
-        return cached[1].get(id(self), -1)
+        entry = cached[1].get(id(state))
+        return entry[0] if entry is not None and entry[1] is state else -1
 
     @property
     def label(self) -> str:
