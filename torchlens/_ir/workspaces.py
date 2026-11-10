@@ -122,6 +122,22 @@ class ReleasedTensorStub:
     label_raw: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class ReleasedObjectStub:
+    """Payload-free surrogate for an opaque module-forward argument object.
+
+    An argument that is not a tensor, a plain list, tuple or dict, or a literal
+    the summary prints by ``repr`` (a model's key-value cache object, say) is
+    replaced at module entry when the capture's ``module_identity_mode`` nulls
+    ``ModuleCall.forward_args`` and ``forward_kwargs`` before the trace is
+    returned, so the tensors it holds are not pinned. The entry scan has
+    already read its tensors' labels; its only later reader is the summary,
+    which shows an opaque object by its type name.
+    """
+
+    type_name: str
+
+
 @dataclass(slots=True)
 class ModuleCaptureWorkspace:
     """Module prep/stack capture state consumed by the step 16 module build."""
@@ -194,3 +210,8 @@ class WrapperRuntimeWorkspace:
     #: (``backends/torch/param_mutation``). ``None`` until the first such call,
     #: so the hot path pays one attribute read.
     materialized_lazy_slots: Any = None
+    #: ``(args, admitted tensors)`` of the fast-lane call being emitted, set by
+    #: ``_call_plan.commit_fast_call`` around its emit so the argument scan reuses
+    #: the tensors ``admit_call`` collected; the scan clears it on reading, and it
+    #: is ``None`` outside that emit.
+    fast_scan: Any = None

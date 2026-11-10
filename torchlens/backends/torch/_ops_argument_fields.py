@@ -11,11 +11,19 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ... import _state as _st
+from ..._capture.arg_positions import (
+    FUNC_ARG_SPECS,
+    VARIADIC_TENSOR_ARG_FUNCS,
+    ArgSpec,
+    dynamic_spec_covers_call,
+)
 from ..._utils._tensor_label import (
     clear_tensor_label,
     get_tensor_label,
     get_tensor_meta,
     mutated_parameter_label,
+    promote_mutated_parameters,
     raw_tensor_label,
     session_meta_is_anchored,
     set_tensor_label,
@@ -63,9 +71,21 @@ def _scan_call_arguments(
     per distinct parent: a repeat's multiplicity is its ``parent_arg_positions``.
     """
     func_name, args, kwargs = call.func_name, call.args, call.kwargs
-    # O(1) tensor/param extraction via lookup table (replaces BFS crawl)
-    arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
-    tensors_to_resolve = get_arg_tensors_for_resolution(args, kwargs)
+    # Taken once and cleared, so the trace does not hold the call's tensors
+    # while the rest of the emit (and the op commit) runs.
+    runtime = self._wrapper_runtime_ws
+    fast, runtime.fast_scan = runtime.fast_scan, None
+    scanned = (
+        _fast_lane_arg_tensors(layer_type, args, kwargs, fast[1])
+        if fast is not None and fast[0] is args
+        else None
+    )
+    if scanned is None:
+        # O(1) tensor/param extraction via lookup table (replaces BFS crawl)
+        arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
+        tensors_to_resolve = get_arg_tensors_for_resolution(args, kwargs)
+    else:
+        arg_tensors, arg_parameters, tensors_to_resolve = scanned
     # Inline, not a helper: once per op (tests/test_capture_row_commit_cost.py pins calls).
     for tensor in tensors_to_resolve:
         if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
@@ -83,6 +103,102 @@ def _scan_call_arguments(
     slots = snapshot_arg_slots(self, call, arg_tensors)
     parent_layer_labels = list(dict.fromkeys(parents_from_slots(self, slots, arg_tensors)))
     return arg_tensors, arg_parameters, parent_layer_labels
+
+
+#: ``(normalized name, argument types, keyword names, keyword types) -> spec`` of the
+#: fast-lane call shapes whose per-slot spec extraction was shown, on first sight, to
+#: equal the admitted tensors in argument order. The value is the spec the slow path
+#: extracted through; a dynamic spec that the name-keyed cache has since replaced
+#: invalidates the entry.
+_FAST_SHAPES: dict[tuple[Any, ...], tuple[bool, ArgSpec]] = {}
+
+
+def _fast_lane_arg_tensors(
+    layer_type: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    admitted: list[torch.Tensor],
+) -> tuple[list[torch.Tensor], list[torch.nn.Parameter], list[torch.Tensor]] | None:
+    """Return a fast-lane call's ``(arg tensors, parameters, tensors to resolve)``.
+
+    ``admitted`` is the tensor list ``admit_call`` collected: every tensor of an
+    admitted call is a top-level positional or keyword value, in argument order.
+    The spec lookup is replaced by one check of the call's shape (argument and
+    keyword types) against shapes whose spec extraction matched this list once;
+    a new shape runs the spec path, compares and remembers the shape when equal.
+    Returns ``None`` when the caller must run the spec path (a new or unproven
+    shape, or a variadic transform).
+    """
+
+    shape = (
+        layer_type,
+        tuple(map(type, args)),
+        tuple(kwargs) if kwargs else (),
+        tuple(map(type, kwargs.values())) if kwargs else (),
+    )
+    known = _FAST_SHAPES.get(shape)
+    if known is not None and (known[0] or _st._dynamic_arg_specs.get(layer_type) is known[1]):
+        return _split_admitted(admitted)
+    if layer_type in VARIADIC_TENSOR_ARG_FUNCS:
+        return None
+    arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
+    fast = _split_admitted(admitted)
+    spec = _per_slot_spec(layer_type, args, kwargs)
+    if (
+        spec is not None
+        and _same_objects(fast[0], arg_tensors)
+        and _same_objects(fast[1], arg_parameters)
+    ):
+        _FAST_SHAPES[shape] = spec
+    else:
+        _FAST_SHAPES.pop(shape, None)
+    return arg_tensors, arg_parameters, fast[2]
+
+
+def _split_admitted(
+    admitted: list[torch.Tensor],
+) -> tuple[list[torch.Tensor], list[Any], list[torch.Tensor]]:
+    """Split admitted tensors into per-slot tensors, parameters and resolution targets.
+
+    The resolution targets are the non-Parameter tensors once each, in argument
+    order, as ``get_arg_tensors_for_resolution`` returns them for a flat call.
+    """
+
+    tensors: list[torch.Tensor] = []
+    params: list[Any] = []
+    for value in admitted:
+        if type(value) is torch.nn.Parameter:
+            params.append(value)
+        else:
+            tensors.append(value)
+    to_resolve = tensors[:] if len(tensors) < 2 else list({id(t): t for t in tensors}.values())
+    if params:
+        tensors, params = promote_mutated_parameters(tensors, params)
+    return tensors, params, to_resolve
+
+
+def _per_slot_spec(
+    layer_type: str, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> tuple[bool, ArgSpec] | None:
+    """Return ``(is static, spec)`` the spec path extracted this call through, per slot.
+
+    ``None`` when the call took the deduplicating crawl, whose result the
+    admitted list does not reproduce in general.
+    """
+
+    spec = FUNC_ARG_SPECS.get(layer_type)
+    if spec is not None:
+        return (True, spec) if dynamic_spec_covers_call(spec, args, kwargs) else None
+    cached = _st._dynamic_arg_specs.get(layer_type)
+    if isinstance(cached, ArgSpec) and dynamic_spec_covers_call(cached, args, kwargs):
+        return False, cached
+    return None
+
+
+def _same_objects(first: list[Any], second: list[Any]) -> bool:
+    """Return whether two lists hold the same objects in the same order."""
+
+    return len(first) == len(second) and all(a is b for a, b in zip(first, second, strict=True))
 
 
 def _unvalidated_provenance(

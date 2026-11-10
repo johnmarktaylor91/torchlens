@@ -385,7 +385,7 @@ def _build_graph_relationship_fields(
     fields_dict["has_internal_source_ancestor"] = len(internal_source_ancestors) > 0
     fields_dict["internal_source_ancestors"] = internal_source_ancestors
 
-    in_multi_output = any(issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set])
+    in_multi_output = issubclass(type(out_orig), (list, tuple, dict, set))
     fields_dict["in_multi_output"] = in_multi_output
 
 
@@ -490,8 +490,14 @@ def _build_param_fields(
             continue
         param_meta = get_param_meta(param)
         addr = None if param_meta is None else param_meta.param_address
-        if addr is not None and addr in self._param_logs:
+        if addr is None:
+            continue
+        # An exact address key is what the accessor's lookup returns first; anything
+        # else (short names, pass notation) keeps the accessor's own resolution.
+        param_log = self._param_logs._dict.get(addr)
+        if param_log is None and addr in self._param_logs:
             param_log = self._param_logs[addr]
+        if param_log is not None:
             if getattr(param_log, "_param_ref", None) is not param:
                 # Offload rebind rung: accelerate offload hooks
                 # replace the prep-stamped meta parameter with a fresh
