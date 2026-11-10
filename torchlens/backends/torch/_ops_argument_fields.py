@@ -71,7 +71,10 @@ def _scan_call_arguments(
     per distinct parent: a repeat's multiplicity is its ``parent_arg_positions``.
     """
     func_name, args, kwargs = call.func_name, call.args, call.kwargs
-    fast = self._wrapper_runtime_ws.fast_scan
+    # Taken once and cleared, so the trace does not hold the call's tensors
+    # while the rest of the emit (and the op commit) runs.
+    runtime = self._wrapper_runtime_ws
+    fast, runtime.fast_scan = runtime.fast_scan, None
     scanned = (
         _fast_lane_arg_tensors(layer_type, args, kwargs, fast[1])
         if fast is not None and fast[0] is args
