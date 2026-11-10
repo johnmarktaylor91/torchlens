@@ -509,12 +509,12 @@ torchlens/_utils/display.py::warn_parallel	101
 torchlens/_utils/facade.py::resolve_facade_attr	118
 torchlens/_utils/hashing.py::compute_graph_shape_hash	105
 torchlens/_utils/hashing.py::compute_raw_event_shape_hash	73
-torchlens/_utils/introspection.py	1061
+torchlens/_utils/introspection.py	1060
 torchlens/_utils/introspection.py::_extend_search_stack_from_item	89
 torchlens/_utils/introspection.py::_get_code_context	147
 torchlens/_utils/introspection.py::_search_stack_for_vars_of_type	70
 torchlens/_utils/introspection.py::get_arg_tensors_for_resolution	74
-torchlens/_utils/introspection.py::get_vars_of_type_from_obj	80
+torchlens/_utils/introspection.py::get_vars_of_type_from_obj	78
 torchlens/_utils/rng/call_sites.py::_call_site_time_arg_proof	74
 torchlens/_utils/rng/deep_inventory.py::_deep_inventory_frame_reachable	321
 torchlens/_utils/rng/digest.py::_digest_rng_instance	61
@@ -921,7 +921,7 @@ torchlens/backends/torch/identity_shims.py	955
 torchlens/backends/torch/identity_shims.py::_install_causal_bias_shim	81
 torchlens/backends/torch/identity_shims.py::_install_expanded_weights_shims	70
 torchlens/backends/torch/identity_shims.py::_install_overrides_membership_shims	70
-torchlens/backends/torch/model_prep.py	2162
+torchlens/backends/torch/model_prep.py	2159
 torchlens/backends/torch/model_prep.py::_capture_module_metadata	88
 torchlens/backends/torch/model_prep.py::_create_session_param_logs	97
 torchlens/backends/torch/model_prep.py::_ensure_module_output_tensor_logged	314
@@ -929,7 +929,7 @@ torchlens/backends/torch/model_prep.py::_make_user_forward_hook_wrapper	101
 torchlens/backends/torch/model_prep.py::_make_user_forward_hook_wrapper.wrapped_hook	79
 torchlens/backends/torch/model_prep.py::_prepare_model_session	125
 torchlens/backends/torch/model_prep.py::_record_module_entry_metadata	138
-torchlens/backends/torch/model_prep.py::_record_module_exit_metadata	172
+torchlens/backends/torch/model_prep.py::_record_module_exit_metadata	169
 torchlens/backends/torch/model_prep.py::module_forward_decorator	123
 torchlens/backends/torch/model_prep.py::module_forward_decorator.decorated_forward	84
 torchlens/backends/torch/model_prep.py::prepare_buffer_tensors	71
@@ -1082,7 +1082,7 @@ torchlens/intervention/_injection.py	832
 torchlens/intervention/_injection.py::injection_recorder._record_call	62
 torchlens/intervention/_masked_edit.py::_derive_masked_edit	73
 torchlens/intervention/_masked_edit.py::_row_equivariance_facts	69
-torchlens/intervention/_module_boundary.py::_apply_module_boundary_live_hooks	84
+torchlens/intervention/_module_boundary.py::_apply_module_boundary_live_hooks	82
 torchlens/intervention/_param_substitution.py::_derive_entry_occurrences	65
 torchlens/intervention/_param_substitution.py::_stage_param_entry	66
 torchlens/intervention/_param_substitution.py::apply_param_substitution_do	70

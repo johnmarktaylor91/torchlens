@@ -22,6 +22,7 @@ from ._call_site import _BOUNDARY_CODES
 from ._input_tree import INPUT_TREE_MAX_DEPTH
 from ._package_frames import _VERDICTS as _PACKAGE_VERDICTS, is_torchlens_code
 from ._quiet_property import _QuietPropertyLogs, class_crawl_names, read_attr_quietly
+from ._tensor_search_last_level import match_last_level
 from ._walk_chain import call_site_chain as _call_site_chain
 
 # Attributes to skip when crawling an object's namespace looking for tensors.
@@ -273,19 +274,15 @@ def get_vars_of_type_from_obj(
     found_addresses: list[Any] = []
     found_addresses_full: list[_AddressPath] = []
     found_ids: set[int] = set()
-    # R30: arm the expansion memo whenever results are deduplicated anyway
-    # (allow_repeats=False, the dominant call shape) -- without it a shared
-    # container was re-expanded at EVERY depth level (found_ids dedups the
-    # RESULTS, so the extra traversal was pure waste). allow_repeats=True
-    # keeps the historical repeat traversal, whose repeats are the point.
+    # R30: memoize expansions whenever results are deduplicated (allow_repeats=False).
     expanded_ids: set[int] | None = (
         set() if (depth_exceeded_paths is not None or not allow_repeats) else None
     )
-    # BFS: each iteration processes one depth level.
-    # Hoist warnings context manager to avoid ~77K per-attribute entries.
+    # BFS, one level per iteration; the last is matched, not expanded, unless the frontier is read.
+    expand_last = depth_exceeded_paths is not None
     with warnings.catch_warnings(), _QuietPropertyLogs():
         warnings.simplefilter("ignore")
-        for _ in range(search_depth):
+        for _ in range(search_depth if expand_last else search_depth - 1):
             this_stack = _search_stack_for_vars_of_type(
                 this_stack,
                 which_type,
@@ -298,8 +295,10 @@ def get_vars_of_type_from_obj(
                 return_addresses,
                 expanded_ids,
             )
-
-    if depth_exceeded_paths is not None and this_stack:
+    found = (found_items, found_addresses, found_addresses_full, found_ids)
+    if not expand_last and search_depth > 0:
+        match_last_level(this_stack, which_type, found, subclass_exceptions, allow_repeats)
+    elif depth_exceeded_paths is not None and this_stack:
         depth_exceeded_paths.extend(str(address) for _, address, _ in this_stack)
 
     if return_addresses:

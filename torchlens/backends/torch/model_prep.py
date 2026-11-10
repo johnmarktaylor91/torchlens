@@ -60,9 +60,9 @@ from ..._utils.introspection import (
 from ..._utils.tensor_utils import (
     get_memory_amount,
     get_memory_amount_from_metadata,
-    is_functorch_wrapped_tensor,
 )
 from . import buffer_writes as _buffer_writes, module_stack as _mstack
+from ._functorch_check import functorch_wrapped_check
 from ._held_refs import normalize_held_torch_function_refs, register_released_model
 from ._held_tensor_scan import iter_module_held_plain_tensors
 from ._model_prep_containers import (
@@ -894,7 +894,7 @@ def _record_module_entry_metadata(
     module: nn.Module,
     frame: "ModuleStackFrame",
     call: tuple[tuple[Any, ...], dict[str, Any]],
-) -> tuple[set[str], list[str], float]:
+) -> tuple[set[str], list[str], float, Any]:
     """Record pre-forward module metadata for exhaustive mode.
 
     Called right before ``orig_forward`` in ``module_forward_decorator``. Reads the call's
@@ -908,9 +908,8 @@ def _record_module_entry_metadata(
         call: ``(args, kwargs)`` of the forward call.
 
     Returns:
-        ``(input_tensor_labels, input_tensor_labels_at_entry, forward_start_time)``,
-        needed by ``_record_module_exit_metadata`` for pass-through detection,
-        replacement-output recovery and the forward duration.
+        ``(input_tensor_labels, input_tensor_labels_at_entry, forward_start_time, session)``
+        for ``_record_module_exit_metadata`` (pass-through, replacement, duration, escrow).
     """
 
     args, kwargs = call
@@ -944,7 +943,7 @@ def _record_module_entry_metadata(
     labels_at_entry = input_labels_by_id(input_tensors)
     forward_args_template = forward_kwargs_template = None
     if getattr(trace, "is_replayable", False) or trace._options_save_arg_templates:
-        from ._ops_arguments import module_args_template
+        from torchlens.backends.torch._ops_arguments import module_args_template
 
         forward_args_template = module_args_template(trace, module, call, labels_at_entry)
         forward_kwargs_template = forward_args_template if kwargs else None
@@ -954,8 +953,9 @@ def _record_module_entry_metadata(
     input_tensor_labels_at_entry = []
     layer_argnames: list[tuple[str, Any]] = []
     stamps_changed = False
+    is_wrapped = functorch_wrapped_check(trace.capture_events.run_nonce) if input_tensors else None
     for t in input_tensors:
-        if is_functorch_wrapped_tensor(t):
+        if is_wrapped is not None and is_wrapped(t):
             continue
         known = None if stamps_changed else labels_at_entry
         label, cleared = entry_live_label(t, known, trace.capture_events.live_index.by_raw_label)
@@ -1026,7 +1026,7 @@ def _record_module_entry_metadata(
             input_labels=tuple(input_tensor_labels_at_entry),
         )
     )
-    return input_tensor_labels, input_tensor_labels_at_entry, forward_start_time
+    return input_tensor_labels, input_tensor_labels_at_entry, forward_start_time, capture_session
 
 
 def _note_replacement_event(
@@ -1545,7 +1545,7 @@ def _record_module_exit_metadata(
     module: nn.Module,
     frame: "ModuleStackFrame",
     out: Any,
-    entry: tuple[set[str], list[str], float],
+    entry: tuple[set[str], list[str], float, Any],
 ) -> tuple[tuple[torch.Tensor, str], ...]:
     """Record post-forward module metadata for exhaustive mode.
 
@@ -1560,12 +1560,12 @@ def _record_module_exit_metadata(
         Exact output tensors and raw labels of boundary Ops inserted for otherwise
         untraceable outputs.
     """
-    input_tensor_labels, _labels_at_entry, forward_start_time = entry
+    input_tensor_labels, _labels_at_entry, forward_start_time, capture_session = entry
     address = "" if frame.address is None else frame.address
     module_call_index = frame.pass_number
     module_type = type(module).__name__ if frame.module_type is None else frame.module_type
     is_identity_module = module_type.lower() == "identity"
-    from ...intervention._runtime import (
+    from torchlens.intervention._runtime import (
         _peek_module_intervention_parent_labels,
         _peek_tensor_live_fire_results,
         _record_module_intervention_parent_labels,
@@ -1577,7 +1577,7 @@ def _record_module_exit_metadata(
     if not output_tensors:
         output_tensors = get_vars_of_type_from_obj(out, torch.Tensor, search_depth=4)
         output_entries = [(tensor, (), None) for tensor in output_tensors]
-    role_hints = role_hints_for_module(module)
+    role_hints = role_hints_for_module(module) if len(output_entries) > 1 else None
     module_call_label = f"{address}:{module_call_index}"
     forward_duration = time.time() - forward_start_time
     output_structure = output_entries[0][2] if output_entries else None
@@ -1688,9 +1688,7 @@ def _record_module_exit_metadata(
         output_name = None
         if len(output_entries) > 1:
             output_name = multi_output_role_from_path(
-                container_path,
-                output_index,
-                hints=role_hints,
+                container_path, output_index, hints=role_hints
             )
         output_names.append(output_name)
     trace.capture_events.append_module_exit(
@@ -1708,7 +1706,6 @@ def _record_module_exit_metadata(
         )
     )
 
-    capture_session = capture_session_for(trace)
     if capture_session is not None:
         capture_session.escrow_module_exit_outputs(module_call_label, tuple(exit_outputs))
     return tuple(untraceable_output_boundaries)
@@ -1835,7 +1832,7 @@ def module_forward_decorator(
                         out = orig_forward(*args, **kwargs)
                 else:
                     out = orig_forward(*args, **kwargs)
-                from ...intervention._runtime import _apply_module_boundary_live_hooks
+                from torchlens.intervention._runtime import _apply_module_boundary_live_hooks
 
                 out = _apply_module_boundary_live_hooks(
                     out,
