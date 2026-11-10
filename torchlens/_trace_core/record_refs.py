@@ -21,9 +21,26 @@ from typing import Any
 from .._errors import RecordBindingError
 
 #: Record class name -> kind. Other kinds are held as given until they convert.
-_KINDS: dict[str, str] = {"Op": "op", "Param": "param"}
+_KINDS: dict[str, str] = {
+    "Op": "op",
+    "Param": "param",
+    "Module": "module",
+    "ModuleCall": "module_call",
+}
 #: Kind -> the field whose value keys that kind's door (a lookup hint only).
-_HINT_FIELDS: dict[str, str] = {"op": "label", "param": "address"}
+_HINT_FIELDS: dict[str, str] = {
+    "op": "label",
+    "param": "address",
+    "module": "address",
+    "module_call": "label",
+}
+#: Kind other than ``op`` -> (trace attribute holding the kind's door, attribute
+#: of the door that maps each key to its record).
+_DOORS: dict[str, tuple[str, str]] = {
+    "param": ("_param_logs", "_dict"),
+    "module": ("_module_logs", "_dict"),
+    "module_call": ("_module_logs", "_pass_dict"),
+}
 
 
 def _store_and_row(record: Any, kind: str) -> tuple[Any, Any]:
@@ -44,14 +61,9 @@ def _door(trace: Any, kind: str) -> tuple[Any, Any, Any]:
         return None, None, ()
     if kind == "op":
         return core.ops, cells.get("_layer_dict_main_keys"), cells.get("_layer_list") or ()
-    params = cells.get("_param_logs")
-    return core.kind_rows.get(kind), getattr(params, "_dict", None), _members(params)
-
-
-def _members(door: Any) -> Any:
-    """Return an iterable over a door's records; an absent door has none."""
-
-    return () if door is None else door
+    door_name, mapping_name = _DOORS[kind]
+    keyed = getattr(cells.get(door_name), mapping_name, None)
+    return core.kind_rows.get(kind), keyed, () if keyed is None else keyed.values()
 
 
 class RowKey:
@@ -62,7 +74,7 @@ class RowKey:
     trace_ref:
         Weak reference to the trace that owns the row.
     kind:
-        Record kind, ``"op"`` or ``"param"``.
+        Record kind: ``"op"``, ``"param"``, ``"module"`` or ``"module_call"``.
     row:
         Row of the record in that kind's store.
     hint:

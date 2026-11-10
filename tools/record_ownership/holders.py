@@ -83,15 +83,6 @@ HOLDERS: dict[str, Holder] = {
     ),
     f"{SIDE_TABLE}{{*}}[*] -> Op": Holder(ACTIVATION, but=("pickle_state",)),
     f"{SIDE_TABLE}{{*}}[*] -> Layer": Holder(ACTIVATION, but=("pickle_state",)),
-    "Module._facets_cache:FacetView._record -> Module": Holder(
-        OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
-    ),
-    "ModuleCall._facets_cache:FacetView._record:CallBoundModule._call -> ModuleCall": Holder(
-        OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
-    ),
-    "ModuleCall._facets_cache:FacetView._record:CallBoundModule._module -> Module": Holder(
-        OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
-    ),
     "BufferState.versions[*] -> Op": Holder(FORK_AND_SAVED_STATE, only=("pickle_state",)),
     "GradFnState.calls:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
         FORK_AND_SAVED_STATE, only=("pickle_state",)

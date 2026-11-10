@@ -59,14 +59,9 @@ NOTHING_KEPT = (
 #: A scenario that is not listed has no such object. The lane named here deletes its entry.
 CYCLES_AT_BASE: dict[str, tuple[frozenset[str], tuple[str, ...], str]] = {
     "all_fields_read": (
-        frozenset({"buffer", "module", "module_call"}),
+        frozenset({"buffer"}),
         ("B3b",),
-        "module cells, module facet caches and buffer versions hold records",
-    ),
-    "backward_capture_all_fields_read": (
-        frozenset({"module", "module_call"}),
-        ("B3b",),
-        "module cells and module facet caches hold records",
+        "buffer versions hold records",
     ),
 }
 
