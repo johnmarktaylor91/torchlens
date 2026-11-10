@@ -32,6 +32,7 @@ from .._record_type import record_type
 from .._utils._record_group_table import op_attr, record_member
 from ..intervention._types import ParentRef
 from ._conditional_child_rename import _rename_children_by_cond, _rename_conditional_child_views
+from ._final_info_columns import log_final_info_by_column, ops_inside_modules
 from ._label_rename import _rename_label_dataclass, _rename_replay_fields
 from ._module_containment import _log_module_hierarchy_info_for_layer
 
@@ -135,16 +136,14 @@ def _log_final_info_for_layers(self: "Trace") -> None:
     MUST run before Step 11 because ``_add_lookup_keys_for_layer_entry``
     (called in Step 11) needs module_num_calls data populated here.
 
-    Uses shadow sets for O(1) membership checks to avoid expensive linear
-    ``in`` checks on lists for large models.
+    The per-op part runs by column over the building rows (``_final_info_columns``);
+    the loop below is the same work through the facade, for a trace that is not columnar.
     """
     unique_layers_seen = set()  # to avoid double-counting params of recurrent layers
     step_index = 1
     mbd = self._module_capture_ws.module_build_data
 
-    # Shadow sets for O(1) membership checks in _log_module_hierarchy_info_for_layer.
-    # Lists are kept as primary storage (insertion order matters for downstream consumers),
-    # but linear `in` checks on lists are expensive for large models.
+    # The lists stay primary storage (consumers need insertion order); these sets answer `in`.
     _shadow_sets: dict[str, Any] = {
         "module_layers": defaultdict(set),
         "module_pass_layers": defaultdict(set),
@@ -154,14 +153,15 @@ def _log_final_info_for_layers(self: "Trace") -> None:
         "module_ops": set(),
     }
 
-    # One rename per equivalence class / recurrence group instead of one per
-    # pass; see ``_replace_layer_names_for_layer_entry`` for why the shared
-    # results are safe.
+    # One rename per equivalence class and recurrence group, not one per pass.
     equivalent_ops_memo: dict[int, tuple[Any, Any]] = {}
     recurrent_ops_memo: dict[str, list[str]] = {}
     field_cache: dict[type, Any] = {}
 
-    for _t, layer_entry in enumerate(self):
+    columnar = log_final_info_by_column(
+        self, _shadow_sets, ParentRef, _project_conditional_child_views
+    )
+    for layer_entry in () if columnar else self:
         _normalize_io_role_flags(layer_entry)
         step_index = _assign_step_index(self, layer_entry, step_index)
 
@@ -343,7 +343,7 @@ def _compute_fx_qualpaths(self: "Trace") -> None:
     """Compute FX-style structural qualpath metadata for every Op.
 
     ``modules`` stores cumulative module addresses, so the most nested module
-    address already contains the full dotted path.
+    address already contains the full dotted path (``ops_inside_modules`` settles the rest).
 
     Parameters
     ----------
@@ -352,7 +352,7 @@ def _compute_fx_qualpaths(self: "Trace") -> None:
     """
 
     fx_call_counts: dict[str, int] = {}
-    for layer_entry in self:
+    for layer_entry in ops_inside_modules(self):
         module_calls = getattr(layer_entry, "modules", None) or []
         op_type_segment = str(layer_entry.func_name or record_type(layer_entry) or "").lower()
         if not module_calls or not op_type_segment:

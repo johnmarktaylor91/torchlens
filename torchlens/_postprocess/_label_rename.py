@@ -7,12 +7,19 @@ class rather than once per node. Node order, rebuilt types and results are those
 of the plain ladder: tuple, list, dict, then dataclass instance. The caller passes
 the ``ParentRef`` class in, so this module imports nothing from ``intervention``
 and stays outside the package's import cycle.
+
+A class that reaches the dataclass branch is remembered in the same cache
+(``_record_plan``), so its later instances skip the ladder, and a field holding
+an exact string, an atom, an empty tuple or a ``ParentRef`` is answered in the
+field loop instead of by a recursive call. The values are those of the ladder;
+only the number of Python calls differs.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+from operator import attrgetter
 from typing import Any
 
 from .._data_classes._template_walk import dataclass_field_names
@@ -25,7 +32,120 @@ _LABEL_FIELDS = frozenset(
     {"parent_label", "child_label", "target_label", "call_label", "site_label", "layer_label"}
 )
 _ABSENT = object()
-_FieldCache = dict[type, Any]
+_CONTAINERS = (tuple, list, dict)
+_FieldCache = dict[Any, Any]
+#: Field names of a record class, and the reader of all of them in one call.
+_RecordPlan = tuple[tuple[str, ...], Callable[[Any], tuple[Any, ...]]]
+
+
+def _no_fields(value: Any) -> tuple[Any, ...]:
+    """Return the field values of a dataclass that has no fields."""
+
+    return ()
+
+
+def _record_plan(
+    value: Any, cache: _FieldCache, key: tuple[Any, type], ladder: tuple[type, ...], calls: bool
+) -> _RecordPlan | None:
+    """Decide once per class whether ``value`` reaches a walk's dataclass branch.
+
+    Args:
+        value: First instance of its class the walk meets.
+        cache: The walk's cache; the answer is stored under ``key``.
+        key: ``(walk marker, class)``.
+        ladder: Classes the walk tests before its dataclass branch.
+        calls: Whether the walk returns a callable unchanged before that branch.
+
+    Returns:
+        ``(field names, reader)`` for a class whose instances the walk rebuilds
+        field by field, else ``None``. ``reader`` returns every field of one
+        instance by ordinary attribute lookup, in one call.
+    """
+
+    plan: _RecordPlan | None = None
+    if not isinstance(value, ladder) and not (calls and callable(value)):
+        names = dataclass_field_names(value, cache)
+        if names is not None:
+            reader: Callable[[Any], tuple[Any, ...]] = _no_fields
+            if len(names) > 1:
+                reader = attrgetter(*names)
+            elif names:  # one name would read as a bare value, not a tuple
+                reader = attrgetter(*names, *names)
+            plan = (names, reader)
+    cache[key] = plan
+    return plan
+
+
+def _rebuild_template_record(
+    value: Any,
+    plan: _RecordPlan,
+    mapping: dict[str, str],
+    parent_ref_cls: type[Any],
+    cache: _FieldCache,
+) -> Any:
+    """Rebuild one template dataclass node with its ``ParentRef`` leaves renamed.
+
+    Args:
+        value: Dataclass instance the template walk reached.
+        plan: The class's ``_record_plan``.
+        mapping: Raw-to-final layer-label mapping.
+        parent_ref_cls: The ``ParentRef`` class.
+        cache: The walk's cache.
+
+    Returns:
+        ``dataclasses.replace`` of ``value`` with every present field walked.
+    """
+
+    names, reader = plan
+    try:
+        items: Any = reader(value)
+    except AttributeError:  # a field this instance does not carry
+        items = [getattr(value, name, _ABSENT) for name in names]
+    updates = {}
+    for name, item in zip(names, items, strict=False):  # a one-name reader reads twice
+        if item is _ABSENT:
+            continue
+        item_cls = item.__class__
+        if item_cls is str or item_cls in _ATOMIC_CLASSES:
+            updates[name] = item
+        elif item_cls is tuple and not item:
+            updates[name] = ()  # the ladder's ``tuple([])``: the shared empty tuple
+        elif item_cls is parent_ref_cls:
+            label = item.parent_label
+            if label in mapping:
+                label = mapping[label]
+            updates[name] = parent_ref_cls(label, item._capture_layout)
+        else:
+            updates[name] = _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
+    return replace(value, **updates)
+
+
+def _rename_template_sequence(
+    value: Any, mapping: dict[str, str], parent_ref_cls: type[Any], cache: _FieldCache
+) -> list[Any]:
+    """Return the walked items of an exact tuple or list template node.
+
+    Args:
+        value: Exact ``tuple`` or ``list``.
+        mapping: Raw-to-final layer-label mapping.
+        parent_ref_cls: The ``ParentRef`` class.
+        cache: The walk's cache.
+
+    Returns:
+        A new list holding each item as the template walk returns it.
+    """
+
+    items = list(value)
+    for index, item in enumerate(value):
+        item_cls = item.__class__
+        if item_cls is parent_ref_cls:
+            label = item.parent_label
+            if label in mapping:
+                label = mapping[label]
+            items[index] = parent_ref_cls(label, item._capture_layout)
+        elif item_cls is not str and item_cls not in _ATOMIC_CLASSES:
+            items[index] = _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
+    return items
 
 
 def _rename_template_parent_refs(
@@ -50,29 +170,73 @@ def _rename_template_parent_refs(
         return parent_ref_cls(mapping.get(label, label), value._capture_layout)
     if cls is str or cls in _ATOMIC_CLASSES:
         return value
-    if isinstance(value, parent_ref_cls):
-        return replace(value, parent_label=mapping.get(value.parent_label, value.parent_label))
     if cache is None:
         cache = {}
-    if isinstance(value, (tuple, list)):
+    if cls is tuple or cls is list:
+        items = _rename_template_sequence(value, mapping, parent_ref_cls, cache)
+        return tuple(items) if cls is tuple else items
+    plan_key = (parent_ref_cls, cls)
+    plan = (
+        cache[plan_key]
+        if plan_key in cache
+        else _record_plan(value, cache, plan_key, (parent_ref_cls, *_CONTAINERS), False)
+    )
+    if plan is not None:
+        return _rebuild_template_record(value, plan, mapping, parent_ref_cls, cache)
+    # No plan: a subclass of the ladder's classes, or a leaf that is no dataclass.
+    if isinstance(value, parent_ref_cls):
+        value = replace(value, parent_label=mapping.get(value.parent_label, value.parent_label))
+    elif isinstance(value, (tuple, list)):
         items = [
             _rename_template_parent_refs(item, mapping, parent_ref_cls, cache) for item in value
         ]
-        return tuple(items) if isinstance(value, tuple) else items
-    if isinstance(value, dict):
-        return {
+        value = tuple(items) if isinstance(value, tuple) else items
+    elif isinstance(value, dict):
+        value = {
             key: _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
             for key, item in value.items()
         }
-    names = dataclass_field_names(value, cache)
-    if names is not None:
-        updates = {}
-        for name in names:
-            item = getattr(value, name, _ABSENT)
-            if item is not _ABSENT:
-                updates[name] = _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
-        value = replace(value, **updates)
     return value
+
+
+def _rebuild_label_record(
+    value: Any, plan: _RecordPlan, mapping: dict[str, str], cache: _FieldCache
+) -> Any:
+    """Rebuild one label-bearing dataclass record with its labels renamed.
+
+    Args:
+        value: Dataclass instance the label walk reached.
+        plan: The class's ``_record_plan``.
+        mapping: Raw-to-final layer-label mapping.
+        cache: The walk's cache.
+
+    Returns:
+        ``dataclasses.replace`` of ``value`` with every present field walked.
+    """
+
+    names, reader = plan
+    try:
+        items: Any = reader(value)
+    except AttributeError:  # a field this instance does not carry
+        items = [getattr(value, name, _ABSENT) for name in names]
+    updates = {}
+    for name, item in zip(names, items, strict=False):  # a one-name reader reads twice
+        if item is _ABSENT:
+            continue
+        item_cls = item.__class__
+        if item_cls is str:
+            if item in mapping:
+                item = mapping[item]
+            updates[name] = item
+        elif item_cls in _ATOMIC_CLASSES:
+            updates[name] = item
+        elif item_cls is tuple and not item:
+            updates[name] = ()  # the ladder's ``tuple([])``: the shared empty tuple
+        elif name in _LABEL_FIELDS and isinstance(item, str):
+            updates[name] = mapping.get(item, item)
+        else:
+            updates[name] = _rename_label_dataclass(item, mapping, cache)
+    return replace(value, **updates)
 
 
 def _rename_label_dataclass(
@@ -92,10 +256,20 @@ def _rename_label_dataclass(
     cls = value.__class__
     if cls is str:
         return mapping.get(value, value)
-    if cls in _ATOMIC_CLASSES or callable(value):
+    if cls in _ATOMIC_CLASSES:
         return value
     if cache is None:
         cache = {}
+    plan_key = (None, cls)
+    plan = (
+        cache[plan_key]
+        if plan_key in cache
+        else _record_plan(value, cache, plan_key, _CONTAINERS, True)
+    )
+    if plan is not None:
+        return _rebuild_label_record(value, plan, mapping, cache)
+    if callable(value):
+        return value
     if isinstance(value, tuple):
         return tuple([_rename_label_dataclass(item, mapping, cache) for item in value])
     if isinstance(value, list):
@@ -107,18 +281,7 @@ def _rename_label_dataclass(
             )
             for key, item in value.items()
         }
-    names = dataclass_field_names(value, cache)
-    if names is not None:
-        updates = {}
-        for name in names:
-            field_value = getattr(value, name, _ABSENT)
-            if field_value is _ABSENT:
-                continue
-            if name in _LABEL_FIELDS and isinstance(field_value, str):
-                updates[name] = mapping.get(field_value, field_value)
-            else:
-                updates[name] = _rename_label_dataclass(field_value, mapping, cache)
-        return replace(value, **updates)
+    # No plan and no container: a leaf that is no dataclass.
     if isinstance(value, str):
         return mapping.get(value, value)
     return value
