@@ -600,7 +600,17 @@ def _build_module_logs_now(self: "Trace") -> None:
 def _build_pending_module_logs(self: "Trace", pending: PendingModules) -> None:
     """Build the records from the sealed facts, then attach the forward's attribute writes."""
 
-    _build_module_logs(self, pending)
+    # Build as step 16 did, before step 20 released the live parameter
+    # references: iterating the params must not restore them from the model.
+    params = self.__dict__.get("_param_logs")
+    rehydrate = getattr(params, "_rehydrate_on_iter", False)
+    if rehydrate:
+        params._rehydrate_on_iter = False
+    try:
+        _build_module_logs(self, pending)
+    finally:
+        if rehydrate:
+            params._rehydrate_on_iter = rehydrate
     records = self.modules  # the door the eager capture wrote through
     for address, writes in (pending.attribute_writes or {}).items():
         if writes is not None and address in records:
