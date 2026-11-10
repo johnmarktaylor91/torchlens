@@ -170,7 +170,7 @@ def handed_params(trace: Any) -> Any:
     cls = _accessor_class()
     if stored.__class__ is not cls or stored.__dict__.get("_list").__class__ is not ParamSequence:
         return stored
-    table = stored._list._owner.table
+    table = stored.__dict__["_list"]._owner.table
     reference = table.handed
     handed = reference() if reference is not None else None
     if handed is None or handed._owner is not trace or handed.__dict__ is not stored.__dict__:
@@ -283,8 +283,9 @@ def param_index(accessor: Any, param: Any) -> int:
 
     items = getattr(accessor, "_list", None)
     if items.__class__ is ParamSequence:
-        key = items._owner.key_of(param)
-        index = None if key is None else items._owner.position(items, key)
+        owner: Any = items._owner
+        key = owner.key_of(param)
+        index = None if key is None else owner.position(items, key)
         if index is not None:
             return index
         raise ValueError(f"{param.address!r} is not in trace.params")

@@ -453,7 +453,7 @@ class ParamTuple(tuple):  # noqa: SLOT001 (a tuple subclass cannot declare slots
 
         return other + self._records()
 
-    def __mul__(self, count: Any) -> tuple[Any, ...]:  # type: ignore[override]
+    def __mul__(self, count: Any) -> tuple[Any, ...]:
         """Repeat as a plain tuple of records."""
 
         return self._records() * count
@@ -522,8 +522,9 @@ def as_sequence(rows: ParamRows, value: Any, memo: dict[int, Any]) -> Any:
         return value
     known = memo.get(id(value))
     if known is None:
+        owner: Any = rows  # ParamSequence types its owner as the OpRows it extends
         form = ParamSequence if cls is list else ParamTuple
-        known = memo[id(value)] = form(rows, value)
+        known = memo[id(value)] = form(owner, value)
     return known
 
 
