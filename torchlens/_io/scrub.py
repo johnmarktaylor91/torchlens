@@ -21,7 +21,7 @@ import numpy as np
 import torch
 
 from .._constants import MODEL_LOG_FIELD_ORDER
-from .._data_classes._state_adapter import state_items, state_new, state_restore
+from .._data_classes._state_adapter import plain_state, state_items, state_new, state_restore
 from .._data_classes.trace import Trace, _scrubbed_transform_repr
 from .._output_slot import saved_transformed_output
 from .._utils._display_bounded import RecordTuple, short_dataclass_repr
@@ -1139,7 +1139,7 @@ def _trace_state_items_for_scrub(
         existing unknown-field guard can raise.
     """
 
-    live_state = dict(state_items(trace))
+    live_state = plain_state(trace)
     yielded_fields: set[str] = set()
 
     for field_name in MODEL_LOG_FIELD_ORDER:

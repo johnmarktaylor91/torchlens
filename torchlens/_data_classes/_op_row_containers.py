@@ -483,8 +483,8 @@ def clear_op_holders(trace: Any) -> None:
 def bind_op_containers(trace: Any, core: Any = None) -> None:
     """Install ``core`` on ``trace`` (when given), then adopt and bind its op containers.
 
-    A fork's field copy reads the parent through ``plain_state_items``, so the
-    fork arrives here with plain containers of its own records.
+    A fork arrives here with containers its field copy made (``__deepcopy__``),
+    still keyed locally because the fork had no core while its fields were copied.
     """
 
     if core is not None:
@@ -513,17 +513,6 @@ def adopt_op_containers(trace: Any, rebuild_core: Any = None) -> None:
         if plain and isinstance(plain, dict):
             state[name] = OpLabelMap(owner, plain, ordered=isinstance(plain, OrderedDict))
     owner.bind()
-
-
-def plain_state_items(trace: Any) -> Any:
-    """Return ``trace``'s state fields with the op containers as plain ones.
-
-    This is ``Trace.__tl_state_items__``: every reader of a trace's state (the
-    save scrub, the fork's field copy) sees the list and dictionaries of records
-    it saw before the containers held row keys.
-    """
-
-    return project_op_containers(dict(trace.__dict__)).items()
 
 
 def project_op_containers(state: dict[str, Any]) -> dict[str, Any]:

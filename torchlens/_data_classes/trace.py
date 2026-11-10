@@ -116,7 +116,7 @@ from . import (
 from ._accessor_base import Accessor
 from ._conditional_arms import ArmRef, ConditionalOutcome, arm_role_ops, derive_conditional_outcome
 from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
-from ._op_row_containers import op_holders, plain_state_items
+from ._op_row_containers import op_holders
 from ._preprocessing_provenance import status_of
 from ._trace_accessors import (
     OrphanAccessor,
@@ -818,7 +818,6 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         schema_key="trace",
     )
     _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
-    __tl_state_items__ = plain_state_items  # state readers get plain op containers
 
     def __init__(
         self,
