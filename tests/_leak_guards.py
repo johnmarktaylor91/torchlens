@@ -371,7 +371,9 @@ def _draw_default_outpath_in_tmp_path(tmp_path: Path) -> Iterator[None]:
     saved: list[tuple[Any, tuple[object, ...] | None]] = []
     try:
         for owner, method_name, basename in _DRAW_DEFAULT_OUTPATH_TARGETS:
-            func = getattr(owner, method_name)
+            # Unwrap decorators (Trace.draw's unknown-keyword teaching wrapper): the
+            # defaults live on the function that binds the arguments.
+            func = inspect.unwrap(getattr(owner, method_name))
             saved.append((func, func.__defaults__))
             func.__defaults__ = _defaults_with_replacement(func, "path", str(tmp_path / basename))
         yield

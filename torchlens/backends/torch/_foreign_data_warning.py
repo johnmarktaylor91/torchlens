@@ -17,8 +17,6 @@ from ..._utils._record_group_table import record_member
 from ...errors._base import TorchLensWarning
 from ._foreign_data import is_unresolved_foreign_data
 
-FOREIGN_DATA_ROUNDTRIP_WARNING_CODE = "foreign_data_roundtrip_unresolved"
-
 
 def _roundtrip_sentence(op: Any) -> str:
     """Return validation's description of one unresolved round trip."""
@@ -53,7 +51,7 @@ def warn_unresolved_foreign_data(trace: Any) -> None:
             "replayed as a constant, so tl.validate fails this op. Remedy: wrap the "
             "foreign step in an autograd.Function or build the constant before the "
             "forward pass",
-            code=FOREIGN_DATA_ROUNDTRIP_WARNING_CODE,
+            code="foreign_data_roundtrip_unresolved",
             op_labels=[op.label for op in unresolved],
         ),
         stacklevel=external_warning_stacklevel(),
