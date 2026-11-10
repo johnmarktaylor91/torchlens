@@ -1527,9 +1527,9 @@ def torch_func_decorator(
         fast_out = fast and is_bottom_level_func and not buffer_snapshots
         if fast_out and _call_plan.output_admitted(out_orig, args, kwargs):
             call = (func, func_name, args, kwargs, arg_copies, kwarg_copies, out_orig, exec_ctx)
-            window = _cow_payload_state_ptrs(trace)
+            window = (_cow_payload_state_ptrs(trace), fast[0])
             return _call_plan.commit_fast_call(
-                log_function_output_tensors, trace, call, func_call_id, window, fast[0]
+                log_function_output_tensors, trace, call, func_call_id, window
             )
         if isinstance(out_orig, torch.nn.Parameter):
             # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.

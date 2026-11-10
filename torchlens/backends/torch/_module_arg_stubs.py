@@ -71,17 +71,23 @@ def _stub(value: Any, depth: int, release_opaque: bool) -> Any:
         )
     if depth >= _MODULE_ARG_STUB_MAX_DEPTH:
         return value
-    if isinstance(value, tuple):
-        rebuilt = tuple(_stub(item, depth + 1, release_opaque) for item in value)
-        is_namedtuple = hasattr(value, "_make") and hasattr(value, "_fields")
-        return cast(Any, type(value))._make(rebuilt) if is_namedtuple else rebuilt
-    if isinstance(value, list):
-        return [_stub(item, depth + 1, release_opaque) for item in value]
-    if isinstance(value, dict):
-        return {key: _stub(item, depth + 1, release_opaque) for key, item in value.items()}
+    if isinstance(value, (tuple, list, dict)):
+        return _stub_container(value, depth + 1, release_opaque)
     if release_opaque and not isinstance(value, _SUMMARY_LITERALS):
         return ReleasedObjectStub(type_name=type(value).__name__)
     return value
+
+
+def _stub_container(value: Any, depth: int, release_opaque: bool) -> Any:
+    """Rebuild a tuple (namedtuples keep their type), list or dict with stubbed items."""
+
+    if isinstance(value, dict):
+        return {key: _stub(item, depth, release_opaque) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_stub(item, depth, release_opaque) for item in value]
+    rebuilt = tuple(_stub(item, depth, release_opaque) for item in value)
+    is_namedtuple = hasattr(value, "_make") and hasattr(value, "_fields")
+    return cast(Any, type(value))._make(rebuilt) if is_namedtuple else rebuilt
 
 
 def stub_module_call_args(args: Any, kwargs: Any, trace: Any) -> tuple[Any, Any]:
