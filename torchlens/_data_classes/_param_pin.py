@@ -281,6 +281,22 @@ def param_index(accessor: Any, param: Any) -> int:
 # ---------------------------------------------------------------- forks
 
 
+def live_params(accessor: Any) -> Any:
+    """Return the records of ``accessor`` someone holds, building none.
+
+    A fork maps each parent record it may meet in a cell to its own; a
+    parent ``Param`` nobody holds cannot be in a cell (containers keep keys).
+    """
+
+    items = accessor.__dict__.get("_list")
+    if items.__class__ is not ParamSequence:
+        return accessor.values()
+    rows = items._owner
+    peek, resolve = rows.table.peek, rows.resolve
+    live = [resolve(key) if key < 0 else peek(key) for key in list.__iter__(items)]
+    return [record for record in live if record is not None]
+
+
 def fork_copy(value: Any, translator: Any) -> Any:
     """Return the fork's copy of a parent row-key container, or ``None`` before the fork has rows.
 

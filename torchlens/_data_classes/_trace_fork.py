@@ -54,6 +54,7 @@ from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils._record_group_table import record_member
 from .._utils.env_flags import closed_bool_env
 from ..intervention._types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
+from . import _param_pin
 from ._fork_flat_copy import _FLAT_COPY_DEPTH, _NO_FLAT_COPY, _flat_container_copy
 from ._fork_translation import RowTranslator
 from ._layer_state import install_layer_logs
@@ -339,7 +340,7 @@ def _iter_parent_records(parent: Trace) -> Iterator[Any]:
                 yield from calls.values()
     param_accessor = parent.__dict__.get("_param_logs")
     if param_accessor is not None:
-        yield from param_accessor.values()
+        yield from _param_pin.live_params(param_accessor)
     buffer_accessor = parent.__dict__.get("_buffer_accessor")
     if buffer_accessor is not None:
         yield from buffer_accessor.values()

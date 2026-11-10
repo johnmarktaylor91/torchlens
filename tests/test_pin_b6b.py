@@ -205,6 +205,20 @@ def test_fork_params_read_the_fork() -> None:
     assert chained.trace is not None and chained.module.address == "fc"
 
 
+def test_fork_of_a_fork_and_a_held_parent_param() -> None:
+    trace = _trace()
+    held = trace.params["conv.weight"]
+    fork = trace.fork()
+    grandchild = fork.fork()
+    for member in (fork, grandchild):
+        param = member.params["conv.weight"]
+        assert param is not held
+        assert param.trace is member
+        assert member.layers["conv2d_1"].ops[0].params["conv.weight"] is param
+        assert _first(member.modules["conv"].params) is param
+    assert held.trace is trace
+
+
 def _param_only_id(real: Callable[[Any], int]) -> Callable[[Any], int]:
     """Return an ``id`` that gives every Param the same value (forced reuse)."""
 
