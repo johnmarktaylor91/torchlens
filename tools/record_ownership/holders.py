@@ -18,6 +18,12 @@ a cell of that field in a row store. Paths that start at ``Trace`` are held
 by a live trace; paths that start at ``TraceState`` or ``<Kind>State`` are
 what pickle (and so a deep copy) carries; paths that start at a record kind
 are held by that record's own state.
+
+The pickle-state paths are transient projections (step ``PICKLE_PROJECTION``):
+the state dictionary exists only while pickle runs, so they block no
+activation. They stay listed, and ``is_transient`` accepts them only from a
+``<Kind>State`` root in the pickle-state case; the tests also check on a live
+trace that nothing of the state survives the call.
 """
 
 from __future__ import annotations
@@ -31,6 +37,10 @@ MODULE_AND_BUFFER_CELLS = "module_and_buffer_cells"
 FORK_AND_SAVED_STATE = "fork_and_saved_state"
 LATER_KINDS = "later_kinds"
 ACTIVATION = "activation"
+PICKLE_PROJECTION = "pickle_projection"
+# The audit case that walks the state handed to pickle, and the roots it names.
+PICKLE_CASE = "pickle_state"
+PICKLE_ROOT_SUFFIX = "State"
 # The one strong cache of records: a path may wait for ``ACTIVATION`` only through it.
 SIDE_TABLE = "Trace._trace_core:TraceCore._strong_facades"
 
@@ -39,15 +49,19 @@ STEPS: dict[str, str] = {
     LAYER_STATE: "Layer records, the layers door and each Layer's op accessor",
     OP_ROW_CELLS: "cells of a record's own row: the facet cache and gradient records",
     MODULE_AND_BUFFER_CELLS: "module cells (calls, params) and buffer versions",
-    FORK_AND_SAVED_STATE: "fork translation, copy-on-write overlays and pickled state",
+    FORK_AND_SAVED_STATE: "fork translation and copy-on-write overlays",
     LATER_KINDS: "holders of the kinds activated after Op and Layer",
     ACTIVATION: "the one strong side table of records, made weak when its kind is activated",
+    PICKLE_PROJECTION: "the state handed to pickle: it holds the records only for the pickle call",
 }
 
 BEFORE_ACTIVATION = frozenset(
     {OP_LIST, LAYER_STATE, OP_ROW_CELLS, MODULE_AND_BUFFER_CELLS, FORK_AND_SAVED_STATE}
 )
 ACTIVATED_FIRST = ("Op", "Layer")
+# Steps whose paths are not held by a trace: nothing has to convert them before
+# a kind is activated, because the holder is gone when the call that made it returns.
+TRANSIENT = frozenset({PICKLE_PROJECTION})
 
 
 @dataclass(frozen=True)
@@ -92,60 +106,52 @@ HOLDERS: dict[str, Holder] = {
     "ModuleCall._facets_cache:FacetView._record:CallBoundModule._module -> Module": Holder(
         OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
     ),
-    "BufferState.versions[*] -> Op": Holder(FORK_AND_SAVED_STATE, only=("pickle_state",)),
+    "BufferState.versions[*] -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
     "GradFnState.calls:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "GradFnState.calls:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
-    "LayerState.ops:OpAccessor._dict{*} -> Op": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
-    ),
-    "LayerState.ops:OpAccessor._list[*] -> Op": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
-    ),
+    "LayerState.ops:OpAccessor._dict{*} -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
+    "LayerState.ops:OpAccessor._list[*] -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
     "ModuleState.ops:ModuleCallAccessor._dict{*} -> ModuleCall": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "ModuleState.ops:ModuleCallAccessor._list[*] -> ModuleCall": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "ModuleState.params:ParamAccessor._dict{*} -> Param": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "ModuleState.params:ParamAccessor._list[*] -> Param": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "TraceState._backward_pass_logs{*}:BackwardPass._tl_core:Store.rows[grad_fn_calls][*] -> GradFnCall": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
-    "TraceState._grad_fn_logs{*} -> GradFn": Holder(FORK_AND_SAVED_STATE, only=("pickle_state",)),
-    "TraceState._layer_dict_all_keys{*} -> Op": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
-    ),
-    "TraceState._layer_dict_main_keys{*} -> Op": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
-    ),
-    "TraceState._layer_list[*] -> Op": Holder(FORK_AND_SAVED_STATE, only=("pickle_state",)),
-    "TraceState._layer_logs{*} -> Layer": Holder(FORK_AND_SAVED_STATE, only=("pickle_state",)),
+    "TraceState._grad_fn_logs{*} -> GradFn": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
+    "TraceState._layer_dict_all_keys{*} -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
+    "TraceState._layer_dict_main_keys{*} -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
+    "TraceState._layer_list[*] -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
+    "TraceState._layer_logs{*} -> Layer": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
     "TraceState._param_logs:ParamAccessor._dict{*} -> Param": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "TraceState._param_logs:ParamAccessor._list[*] -> Param": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "TraceState._param_logs_by_module{*}[*] -> Param": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "TraceState._pickle_module_accessor_state:ModuleAccessor._dict{*} -> Module": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "TraceState._pickle_module_accessor_state:ModuleAccessor._list[*] -> Module": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "TraceState._pickle_module_accessor_state:ModuleAccessor._pass_dict{*} -> ModuleCall": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
+        PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "GradFn._tl_core:Store.rows[calls]:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
         LATER_KINDS, only=("pickle_state", "pickled")
@@ -224,6 +230,24 @@ KNOWN: dict[str, tuple[str, str]] = {
         "Trace._trace_core:TraceCore.ops:Store.rows[_grad_records][*]:GradientRecord.owner -> Op",
     ),
 }
+
+
+def is_transient(path: str, holder: Holder) -> bool:
+    """Return whether a row names a transient projection, not something a trace keeps.
+
+    Only the state handed to pickle qualifies: the row is in a transient step,
+    appears in the pickle-state case alone, and starts at a ``<Kind>State`` root
+    (the state object itself). The same holder chain reached from a live
+    ``Trace`` is a different path, has no transient row, and fails as a new
+    holder: a projection that outlives the pickle call is not transient.
+    """
+
+    root = path.split(".", 1)[0].split(":", 1)[0]
+    return (
+        holder.step in TRANSIENT
+        and holder.only == (PICKLE_CASE,)
+        and root.endswith(PICKLE_ROOT_SUFFIX)
+    )
 
 
 def expected(case: str) -> set[str]:
