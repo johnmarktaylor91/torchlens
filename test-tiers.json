@@ -6333,6 +6333,10 @@
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
+      "torchlens/_utils/_log_mute.py": [
+        "tests/test_capture_overhead_counters.py",
+        "tests/test_crawl_log_mute.py"
+      ],
       "torchlens/_utils/_model_walk.py": [
         "tests/test_distributed_honesty.py",
         "tests/test_grind_b4_lane_p.py",
@@ -6426,8 +6430,8 @@
         "tests/test_capture_guard_transactionality.py",
         "tests/test_capture_overhead_counters.py",
         "tests/test_col_offset_map_frame_free.py",
-        "tests/test_completeness_witness.py",
         "tests/test_conditional_integration.py",
+        "tests/test_crawl_log_mute.py",
         "tests/test_fastlog/test_perf_smoke.py",
         "tests/test_module_entry_search_cuts.py",
         "tests/test_r18h_introspect_hash.py"
@@ -9849,7 +9853,8 @@
       ],
       "torchlens/backends/torch/_call_site_parts.py": [
         "tests/test_call_site_memo.py",
-        "tests/test_conditional_integration.py"
+        "tests/test_conditional_integration.py",
+        "tests/test_module_entry_site.py"
       ],
       "torchlens/backends/torch/_callable_location.py": [
         "tests/test_rf_ext_projective_gradient.py",
@@ -10306,6 +10311,16 @@
         "tests/test_validation_hardening.py",
         "tests/test_wrong_trace_cache_cluster.py"
       ],
+      "torchlens/backends/torch/_module_entry_site.py": [
+        "tests/test_capopts_truth_failed_capture_release.py",
+        "tests/test_fastlog/test_dispatch_smoke.py",
+        "tests/test_model_prep_hardening.py",
+        "tests/test_module_entry_site.py",
+        "tests/test_perf_gate.py",
+        "tests/test_release_model.py",
+        "tests/test_tl_lifecycle.py",
+        "tests/test_validation_hardening.py"
+      ],
       "torchlens/backends/torch/_module_state.py": [
         "tests/test_grouping_call_sites.py",
         "tests/test_prep_keyed_caches.py"
@@ -10384,8 +10399,8 @@
         "tests/test_argpos_hardening.py",
         "tests/test_call_site_memo.py",
         "tests/test_capture_outcome_matrix.py",
-        "tests/test_capture_unification_p3a.py",
         "tests/test_conditional_integration.py",
+        "tests/test_module_entry_site.py",
         "tests/test_r28_validation_identity_witness.py",
         "tests/test_r29_capval_hardening.py",
         "tests/test_valmem5_saved_value_aliases.py"

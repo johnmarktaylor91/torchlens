@@ -8,6 +8,8 @@ import sys
 import threading
 from typing import Any
 
+from ._log_mute import MUTED_LEVEL, mute, unmute
+
 _PROPERTY_TYPES = (property, functools.cached_property)
 
 _UNMUTED = object()
@@ -18,19 +20,19 @@ _scope = threading.local()
 
 ``_scope.restore`` is absent outside every scope, :data:`_UNMUTED` inside a scope
 that has not muted yet, and otherwise the ``logging.disable`` level to restore when
-that scope ends.
+that scope ends (:func:`~torchlens._utils._log_mute.unmute`'s ``previous``).
 """
 
 
 class _QuietPropertyLogs:
     """One tensor search's mute window for property getters' log records.
 
-    ``logging.disable`` clears every logger's level cache, and a library with many
-    loggers (transformers) makes each clear expensive. Muting around every property
-    read cost two clears per read; inside this scope the first property read mutes
-    and the scope's exit restores the exact level found then, so a search clears
-    the caches at most twice. The window opens at the first property read and closes
-    when the search returns or raises; it covers only TorchLens's own attribute walk.
+    The mute (:mod:`torchlens._utils._log_mute`) has ``logging.disable(WARNING)``'s
+    effect without clearing any logger's level cache. Inside this scope the first
+    property read mutes and the scope's exit restores the exact level found then,
+    so a search mutes at most once. The window opens at the first property read and
+    closes when the search returns or raises; it covers only TorchLens's own
+    attribute walk, and the user's logging state is as found when it closes.
     """
 
     __slots__ = ("_outer",)
@@ -46,7 +48,7 @@ class _QuietPropertyLogs:
         else:
             _scope.restore = self._outer
         if restore is not _UNMUTED:
-            logging.disable(restore)
+            unmute(restore)
 
 
 def read_attr_quietly(item: Any, name: str) -> Any:
@@ -64,16 +66,16 @@ def read_attr_quietly(item: Any, name: str) -> Any:
     except Exception:
         is_property = False
     previous = logging.root.manager.disable
-    if not is_property or previous >= logging.WARNING:
+    if not is_property or previous >= MUTED_LEVEL:
         return getattr(item, name)
-    logging.disable(logging.WARNING)
+    mute()
     if getattr(_scope, "restore", None) is _UNMUTED:
         _scope.restore = previous
         return getattr(item, name)
     try:
         return getattr(item, name)
     finally:
-        logging.disable(previous)
+        unmute(previous)
 
 
 def class_crawl_names(obj_type: type) -> list[str]:

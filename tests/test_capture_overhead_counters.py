@@ -2,10 +2,12 @@
 
 The tensor search muted log records around every property read with
 ``logging.disable``, which clears every logger's level cache (costly when a
-library registers many loggers): two clears per property read. Capture also
+library registers many loggers): two clears per property read. The search now
+mutes without clearing any cache (``_utils/_log_mute.py``). Capture also
 entered ``@contextmanager`` generators on every op (phase timing, internal
-scalar reads). These tests pin that the clears do not grow with the number of
-properties the search reads, that capture's generator context-manager entries
+scalar reads). These tests pin that the search mutes and restores while it
+reads properties, that it clears no level cache however many properties it
+reads, that capture's generator context-manager entries
 do not grow with the op count, and the mute window's contract: the user's own
 ``logging.disable`` level survives a trace (also when a search raises), and a
 record the model logs in its forward still reaches a handler.
@@ -29,6 +31,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._postprocess as postprocess_pkg
+import torchlens._utils._quiet_property as quiet_property
 import torchlens.intervention._resolver_registry as resolver_registry
 
 _CACHE_LOGGER = "tl_counter_cache"
@@ -69,24 +72,33 @@ class _Stack(nn.Module):
         return x
 
 
-def _clears_during_trace(monkeypatch: pytest.MonkeyPatch, n_props: int) -> int:
+def _mute_counts_during_trace(monkeypatch: pytest.MonkeyPatch, n_props: int) -> dict[str, int]:
+    """Level-cache clears, mute window openings and closings during one trace."""
+
     counts: dict[str, int] = {}
-    real = logging.Manager._clear_cache
-    monkeypatch.setattr(logging.Manager, "_clear_cache", thread_counting(real, counts, "clear"))
-    cache = _cache_class(n_props)()
-    with quiet_gc():
-        tl.trace(_Stack(), torch.zeros(1, 8), input_kwargs={"cache": cache})
-    monkeypatch.setattr(logging.Manager, "_clear_cache", real)
-    return counts.get("clear", 0)
+    wrapped = (
+        (logging.Manager, "_clear_cache", "clear"),
+        (quiet_property, "mute", "mute"),
+        (quiet_property, "unmute", "unmute"),
+    )
+    with monkeypatch.context() as patch:
+        for owner, name, key in wrapped:
+            patch.setattr(owner, name, thread_counting(getattr(owner, name), counts, key))
+        cache = _cache_class(n_props)()
+        with quiet_gc():
+            tl.trace(_Stack(), torch.zeros(1, 8), input_kwargs={"cache": cache})
+    return {key: counts.get(key, 0) for _owner, _name, key in wrapped}
 
 
 def test_logger_cache_clears_do_not_grow_with_property_reads(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    one = _clears_during_trace(monkeypatch, 1)
-    many = _clears_during_trace(monkeypatch, 8)
-    assert one >= 2  # the search did mute, and restored
-    assert many == one, f"1 property: {one} clears; 8 properties: {many} clears"
+    one = _mute_counts_during_trace(monkeypatch, 1)
+    many = _mute_counts_during_trace(monkeypatch, 8)
+    assert one["mute"] >= 1  # the search did mute,
+    assert one["unmute"] == one["mute"]  # and restored
+    assert one["clear"] == 0
+    assert many == one, f"1 property: {one}; 8 properties: {many}"
 
 
 def test_user_disable_level_survives_and_forward_records_reach_handlers(
