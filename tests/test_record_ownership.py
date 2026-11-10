@@ -29,6 +29,7 @@ import pytest
 
 from tools.record_ownership import audit_roots, run_case, signature, uses
 from tools.record_ownership.cases import CASES
+from tools.record_ownership.graph import strong_edges
 from tools.record_ownership.holders import (
     ACTIVATED_FIRST,
     ACTIVATION,
@@ -194,6 +195,28 @@ def test_walk_reports_a_holder_it_cannot_reach() -> None:
     names = [name for found in audit.unexplained.values() for name in found]
     assert any("_Slotted" in name for name in names), audit.unexplained
     assert hidden.held is owner.items[0]
+
+
+class _ViewingMapping(dict):  # type: ignore[type-arg]
+    """A dict subclass whose reads hand out stand-ins, with a second holder in a slot."""
+
+    __slots__ = ("_side",)
+
+    def items(self) -> Any:
+        """Hide the entries the mapping really holds."""
+
+        return [(key, None) for key in self]
+
+
+def test_walk_reads_a_dict_subclass_raw_and_follows_its_slots() -> None:
+    """A mapping's own ``items`` may not hide what it holds, and its slots are holders too."""
+
+    entry, side = _Owner(), _Owner()
+    mapping = _ViewingMapping(label=entry)
+    mapping._side = [side]
+    found = dict(strong_edges(mapping))
+    assert any(child is entry for child in found.values()), found
+    assert found.get("._side") is mapping._side, found
 
 
 def test_walk_does_not_run_attribute_hooks() -> None:
