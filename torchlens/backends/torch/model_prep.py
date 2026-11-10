@@ -37,11 +37,10 @@ from ..._ir.op_record import (
 )
 from ..._ir.refs import ParamRef
 from ..._quantities import Bytes
-from ..._utils._model_walk import model_modules, model_parameters, own_named_buffers
+from ..._utils._model_walk import model_modules, own_named_buffers
 from ..._utils._tensor_label import (
     begin_label_session,
     clear_meta,
-    clear_param_meta,
     end_label_session,
     get_buffer_address,
     get_live_tensor_label,
@@ -50,7 +49,6 @@ from ..._utils._tensor_label import (
     is_forward_call_decorated,  # noqa: F401  (re-exported for tests)
     mark_tensor_replacement_wrapped,
     promote_label_to_buffer_source_and_clear_label,
-    restore_param_requires_grad,
     set_module_meta,
     set_param_meta,
     set_tensor_label,
@@ -112,6 +110,7 @@ from ._session_forwards import (
     restore_session_forward_wrappers as _restore_session_forward_wrappers,
     restore_undecorated_forward as _restore_undecorated_forward,
 )
+from ._session_param_release import restore_session_param_state
 from .bound_root import capture_root_module
 from .buffer_writes import session_validated_buffer_address
 from .escape_detection import (
@@ -2042,41 +2041,6 @@ def clear_hooks(hook_handles: list[Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _restore_session_param_state(trace: "Trace", model: nn.Module) -> None:
-    """Restore parameter grad flags and remove session-scoped parameter metadata.
-
-    This cleanup is deliberately independent of the exception that ended the
-    capture. Callers invoke it from teardown paths that may be handling any
-    ``BaseException`` raised by user code.
-
-    The AUTHORITATIVE clear iterates the RECORDED prep
-    inventory (``trace._session_param_inventory``), never only the live model
-    tree -- a parameter popped from ``_parameters`` mid-forward escapes a
-    ``model.parameters()`` re-traversal, and its surviving prep stamp would let
-    a LATER capture accept stale provenance (false VERIFIED / wrong-bind). The
-    live-tree walk is kept as belt-and-suspenders; both passes are idempotent
-    (``clear_meta`` pops with a default, ``restore_param_requires_grad`` no-ops
-    once the stamp is gone).
-
-    Parameters
-    ----------
-    trace
-        Trace whose session prep recorded the stamped-parameter inventory.
-    model
-        Model whose parameters were prepared for the capture session.
-    """
-
-    inventory = getattr(trace, "_session_param_inventory", None)
-    for param in inventory or ():
-        restore_param_requires_grad(param)
-        clear_param_meta(param)
-    if inventory:
-        trace._session_param_inventory = []
-    for param in model_parameters(model):
-        restore_param_requires_grad(param)
-        clear_param_meta(param)
-
-
 def _cleanup_model_session(
     trace: "Trace",
     model: nn.Module,
@@ -2103,7 +2067,7 @@ def _cleanup_model_session(
         rollback_prehook_provenance(trace)
     finally:
         # Restore requires_grad and remove session-scoped param attributes
-        _restore_session_param_state(trace, model)
+        restore_session_param_state(trace, model)
 
     # Session-scoped module tracking data lives in Trace dicts (not on
     # modules), so no per-module cleanup iteration is needed — the dicts
