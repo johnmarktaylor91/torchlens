@@ -168,9 +168,6 @@ HOLDERS: dict[str, Holder] = {
     "ModuleState.params:ParamAccessor._list[*] -> Param": Holder(
         FORK_AND_SAVED_STATE, only=("pickle_state",)
     ),
-    "ParamState._grad_records[*]:GradientRecord.owner -> Param": Holder(
-        FORK_AND_SAVED_STATE, only=("pickle_state",)
-    ),
     "Trace._trace_core:TraceCore._record_translator:_RecordTranslator._keepalive[*] -> Op": Holder(
         FORK_AND_SAVED_STATE, only=("fork", "fork_cold")
     ),
