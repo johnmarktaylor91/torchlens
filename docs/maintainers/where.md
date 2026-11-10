@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1777 modules, 714155 lines, 0 modules without a docstring.
+85 packages, 1777 modules, 714172 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 132 | 46700 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 132 | 46713 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -39,7 +39,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 16 | 7447 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
-| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 20 | 6374 |
+| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 20 | 6378 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24192 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (132 modules, 46700 lines)
+Core data structures for representing a logged forward pass. (132 modules, 46713 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -332,7 +332,7 @@ Core data structures for representing a logged forward pass. (132 modules, 46700
 | `_familiar_names` | Hints for attribute names that TorchLens objects do not have but users guess. | 109 |
 | `_fork_flat_copy` | Flat copies for the fork builder: ''copy.deepcopy'' results without per-member recursion. | 189 |
 | `_fork_lineage` | Fork lineage: the ''fork'' verb's record-side helpers and the parent-chain test. | 99 |
-| `_fork_translation` | Fork record translation by kind and row. | 424 |
+| `_fork_translation` | Fork record translation by kind and row. | 425 |
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
 | `_grad_fn_pass` | Resolve the forward pass one GradFn differentiates. | 41 |
 | `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 179 |
@@ -372,9 +372,9 @@ Core data structures for representing a logged forward pass. (132 modules, 46700
 | `_op_row_release` | Direct row release for op removal (the facade-husk shortcut). | 107 |
 | `_op_save` | Tensor save, grad logging, transform validation and copy logic for ''Op''. | 800 |
 | `_op_transforms` | User-transform application and validation helpers for saved payloads. | 260 |
-| `_param_fork` | How a fork takes its parent's ''Param'' records: by row, building no parent view. | 158 |
+| `_param_fork` | How a fork takes its parent's ''Param'' records: by row, building no parent view. | 164 |
 | `_param_pin` | Pin ''Param'': the trace keeps parameter rows, and a ''Param'' handed out keeps the trace. | 327 |
-| `_param_rows` | Trace-side ''Param'' containers that hold row keys, and the trace's ''Param'' views. | 544 |
+| `_param_rows` | Trace-side ''Param'' containers that hold row keys, and the trace's ''Param'' views. | 550 |
 | `_preprocessing_provenance` | Preprocessing provenance derivations that live WITH the record. | 114 |
 | `_record_group_base` | Base classes of the Op and Layer concern groups (''op.cost'', ''layer.call'', ...). | 85 |
 | `_record_groups` | Concern-group views of an ''Op'' or ''Layer'': ''op.cost'', ''layer.control_flow'', ... | 570 |
@@ -930,7 +930,7 @@ Live narration for TorchLens captures (the torchsnooper niche, better). (10 modu
 
 ### `torchlens._trace_core`
 
-Private per-trace semantic store substrate (trace_core_design.md). (20 modules, 6374 lines)
+Private per-trace semantic store substrate (trace_core_design.md). (20 modules, 6378 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -940,7 +940,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (20 modules, 
 | `cell_states` | Cell states of the row stores: stored, default-omitted, derived and deleted. | 392 |
 | `columns` | Typed chunked column builders and frozen columns. | 167 |
 | `core` | TraceCore: per-trace ownership and cross-domain coordination. | 364 |
-| `eviction_walk` | Payload eviction walk: replace every tensor reachable from a store cell with ''None''. | 302 |
+| `eviction_walk` | Payload eviction walk: replace every tensor reachable from a store cell with ''None''. | 306 |
 | `fact_blocks` | Shared-fact column blocks: the FunctionCall / ParamAlias group tables. | 224 |
 | `field_table` | Capture event schema and the stored-field table (pure data). | 371 |
 | `groups` | Label-membership group tables with cached immutable views. | 98 |
