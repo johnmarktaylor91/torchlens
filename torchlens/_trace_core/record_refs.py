@@ -154,6 +154,14 @@ def row_key_or_value(value: Any, trace_ref: Any = None) -> Any:
         return value
     if trace_ref is None or store is None:
         return value
+    trace = trace_ref()
+    if trace is None:
+        return value
+    # Verify through the keyed door inline (the common case): a full ``find`` per
+    # facet spec raised trace plus ``to_pandas`` calls past the C7 tolerance.
+    door_store, keyed, _ = _door(trace, kind)
+    if door_store is store and keyed is not None and keyed.get(hint) is value:
+        return RowKey(trace_ref, kind, row, hint)
     key = RowKey(trace_ref, kind, row, hint)
     return key if key.find() is value else value
 
