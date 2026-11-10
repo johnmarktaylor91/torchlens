@@ -23,6 +23,7 @@ from typing import Any, TypeAlias
 import torch
 from torch import nn
 
+from ..._utils._model_walk import model_modules
 from ..._utils._tensor_label import clear_meta, is_forward_call_decorated
 
 __all__ = [
@@ -752,7 +753,7 @@ def _clear_model_tree_tensor_metadata(model: nn.Module, seen: set[int]) -> None:
     cached tensor the snapshot pinned.
     """
 
-    submodules = list(model.modules())
+    submodules = list(model_modules(model))
     methods = method_index(type(submodule) for submodule in submodules)
     for submodule in submodules:
         _clear_module_attribute_tensor_metadata(submodule, seen)

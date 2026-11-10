@@ -15,6 +15,7 @@ from ._errors import AmbiguousOpLookupError, ArgumentTypeError
 from ._selection.selectors import BaseSelector
 from ._trace_selection_shape import _selector_component_is_final_only
 from ._utils._display_errors import lookup_message
+from ._utils._model_walk import model_named_modules
 from .backends import registry as _backend_registry
 from .recording._options import PredicateFn
 from .recording._types import RecordContext
@@ -186,7 +187,7 @@ def _flatten_stage_names_in_options(capture_options: CaptureOptions, model: Any)
     named_modules = getattr(model, "named_modules", None)
     if not callable(named_modules) or not isinstance(selection, (str, list, tuple)):
         return capture_options
-    addresses = [name for name, _module in named_modules() if name]
+    addresses = [name for name, _module in model_named_modules(model) if name]
     items = [selection] if isinstance(selection, str) else list(selection)
     rewritten = [_flattened_stage_name(item, addresses) for item in items]
     if rewritten == items:

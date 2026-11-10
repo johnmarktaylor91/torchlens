@@ -41,6 +41,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._utils._model_walk import model_named_modules
 from .._utils._torch_compat import (
     get_device_mesh_type,
     get_dtensor_type,
@@ -624,11 +625,10 @@ def _collect_module_evidence(model: nn.Module, evidence: _Evidence) -> None:
         return
 
     try:
-        named_modules = list(model.named_modules())
+        named_modules = list(model_named_modules(model))
     except Exception:
         evidence.scan_incomplete_sites.append("model.named_modules()")
         named_modules = [("", model)]
-
     for name, module in named_modules:
         label = name or "<root>"
         if check_tp_namespace and _type_in_namespace(module, _TENSOR_PARALLEL_NAMESPACES):

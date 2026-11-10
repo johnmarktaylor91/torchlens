@@ -38,6 +38,7 @@ from typing import Any
 from torch import nn
 
 from ... import _state
+from ..._utils._model_walk import model_modules
 from ._held_refs import _is_namedtuple_instance, _live_counterpart
 
 __all__ = ["rebind_held_torch_refs", "restore_held_torch_refs"]
@@ -276,7 +277,7 @@ def rebind_held_torch_refs(session: object, model: nn.Module) -> None:
     _PENDING_UNDO[id(session)] = journal
     try:
         rebinder = _Rebinder(journal)
-        for _name, module in model.named_modules():
+        for module in model_modules(model):
             rebinder.rebind_module(module)
     except BaseException:
         restore_held_torch_refs(session)

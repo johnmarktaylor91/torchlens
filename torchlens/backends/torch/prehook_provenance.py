@@ -24,6 +24,7 @@ from ..._data_classes.prehook import (
 )
 from ..._errors import RecordBindingError
 from ..._utils._display_bounded import short_dataclass_repr
+from ..._utils._model_walk import model_modules
 from ..._utils._record_group_table import record_member
 from ._prehook_state import (
     _compare_observations,
@@ -158,7 +159,7 @@ def install_prehook_provenance(
         Any installation error is re-raised after rolling back partial work.
     """
 
-    modules = tuple(model.modules())
+    modules = model_modules(model)
     ledger = PreHookProvenanceLedger(
         trace_ref=weakref.ref(trace),
         model=model,

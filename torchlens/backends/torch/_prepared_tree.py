@@ -14,6 +14,7 @@ import weakref
 from typing import Any
 
 from ... import _state
+from ..._utils._model_walk import module_tree_key, same_module_tree
 
 #: Returned by :func:`changed_module_tree` when the recorded tree still holds.
 UNCHANGED: Any = object()
@@ -21,42 +22,6 @@ UNCHANGED: Any = object()
 #: Model -> the tree key its last one-time preparation ran over. Weak in the
 #: model, and the key holds modules weakly, so nothing here keeps a model alive.
 _prepared_trees: weakref.WeakKeyDictionary[Any, tuple[Any, ...]] = weakref.WeakKeyDictionary()
-
-
-def module_tree_key(model: Any) -> tuple[Any, ...] | None:
-    """Return the identity, class and child names of every module under ``model``.
-
-    Every registration path is walked, parents before children, so the key
-    fixes which modules the tree holds, under which names and in which order:
-    all that one-time preparation reads. Modules are held through weak
-    references, and a dead reference equals nothing but itself, so a new
-    module that happens to be allocated where a replaced one lived still reads
-    as a change. A child registered as ``None`` keeps its place in the key.
-
-    Returns
-    -------
-    tuple[Any, ...] | None
-        The key, or ``None`` when a module's registry cannot be walked or a
-        module cannot be weakly referenced; the caller then prepares in full.
-    """
-
-    key: list[Any] = []
-    pending: list[Any] = [model]
-    try:
-        for module in pending:
-            if module is None:
-                key += (None,)
-                continue
-            children = module._modules
-            key += (weakref.ref(module), type(module), *children)
-            # Subscripts, not ``.values()``: the walk runs on every trace and
-            # is kept free of calls so the proof costs next to nothing.
-            for name in children:
-                pending += (children[name],)
-    except Exception:
-        # Not an error to report: an undescribable tree is prepared in full.
-        return None
-    return tuple(key)
 
 
 def changed_module_tree(model: Any) -> Any:
@@ -70,13 +35,9 @@ def changed_module_tree(model: Any) -> Any:
     """
 
     current = module_tree_key(model)
-    if current is not None:
-        try:
-            if _prepared_trees.get(model) == current:
-                return UNCHANGED
-        except Exception:
-            # A module whose ``__eq__`` raises cannot be proven unchanged.
-            pass
+    recorded = _prepared_trees.get(model)
+    if current is not None and recorded is not None and same_module_tree(recorded, current):
+        return UNCHANGED
     _state.release_model_prep(model, ())
     return current
 

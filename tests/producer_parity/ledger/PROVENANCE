@@ -5987,3 +5987,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: b097e1c43358ab98b66c768a1bb4d0782d83c0a2
 recorded: 2026-11-10T15:02:56+00:00
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: perf: one recorded module walk per tree replaces repeated model.modules() walks
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 479ddcd6e818c3861ee063f5d41a67941a7b6d1b
+recorded: 2026-11-10T14:51:15Z

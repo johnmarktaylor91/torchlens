@@ -30,6 +30,7 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.module import set_attribute_writes
 from .._storage_bindings import rebind_if_moved, record_storage_binding
 from .._utils import rng as _rng
+from .._utils._model_walk import model_named_modules
 from .._utils._sparse_parts import sparse_component_tensors
 from ..errors import TorchLensWarning
 from .state import (
@@ -219,7 +220,7 @@ def _observed_modules(model: Any) -> list[tuple[str, Any]]:
 
     return [
         (path, module)
-        for path, module in model.named_modules(remove_duplicate=False)
+        for path, module in model_named_modules(model, remove_duplicate=False)
         if not isinstance(module, LazyModuleMixin)
     ]
 

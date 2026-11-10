@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING, Any
 import torch.nn as nn
 
 from ..._state import pause_logging
+from ..._utils._model_walk import model_modules
 from ..._utils._tensor_label import get_param_meta, set_param_meta
 
 if TYPE_CHECKING:
@@ -126,7 +127,7 @@ def install_offload_hook_shims(trace: Trace, model: nn.Module) -> None:
     """Shadow accelerate-style hooks' pre/post_forward for this session."""
 
     shims: list[tuple[Any, str]] = []
-    for module in model.modules():
+    for module in model_modules(model):
         hook = getattr(module, "_hf_hook", None)
         if hook is None or not _is_shimmable_hook(hook):
             continue

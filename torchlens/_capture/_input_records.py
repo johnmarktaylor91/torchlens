@@ -23,6 +23,7 @@ from ..recording._exceptions import PredicateError
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 from .._data_classes._lookup_keys import _give_user_feedback_about_lookup_key
+from .._utils._model_walk import model_named_modules
 from ._forward_helpers import _backend_name_for_trace
 
 
@@ -453,7 +454,7 @@ def _record_runnable_module_training_modes(trace: "Trace", model: Any) -> None:
         return
     modes: dict[str, bool] = {}
     try:
-        for name, module in named_modules():
+        for name, module in model_named_modules(model):
             address = name or "self"
             modes[address] = bool(getattr(module, "training", False))
     except (AttributeError, TypeError):

@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+from .._utils._model_walk import model_named_modules
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
@@ -62,7 +64,7 @@ def uncalled_module_addresses(trace: Trace) -> tuple[str, ...] | None:
     model = source_ref() if source_ref is not None else None
     if model is None or not hasattr(model, "named_modules"):
         return None
-    registered = {address or "self" for address, _module in model.named_modules()}
+    registered = {address or "self" for address, _module in model_named_modules(model)}
     module_logs = trace._module_logs
     called = set(getattr(module_logs, "_dict", {}).keys())
     called.update(getattr(module_logs, "_alias_dict", {}).keys())

@@ -114,7 +114,7 @@ torchlens/_data_substrate/digests.py::merkle_digest	74
 torchlens/_data_substrate/model_identity.py::compute_model_identity	88
 torchlens/_distributed/__init__.py	1148
 torchlens/_distributed/__init__.py::_build_findings	167
-torchlens/_distributed/__init__.py::_collect_module_evidence	73
+torchlens/_distributed/__init__.py::_collect_module_evidence	72
 torchlens/_distributed/__init__.py::_walk_attribute_values	67
 torchlens/_distributed/_dtensor.py::dtensor_dual_geometry	81
 torchlens/_distributed/_ledger.py::GroupLifecycleEvent.from_payload	64
@@ -900,7 +900,7 @@ torchlens/backends/torch/backward.py::_walk_and_hook_backward_graph	202
 torchlens/backends/torch/backward.py::install_autograd_wrappers	102
 torchlens/backends/torch/backward.py::log_recording_backward	81
 torchlens/backends/torch/belt.py::sweep_stale_belt_references	64
-torchlens/backends/torch/buffer_writes.py	1767
+torchlens/backends/torch/buffer_writes.py	1765
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_param_index	68
 torchlens/backends/torch/buffer_writes.py::session_validated_buffer_address	61
@@ -928,7 +928,7 @@ torchlens/backends/torch/model_prep.py::_create_session_param_logs	97
 torchlens/backends/torch/model_prep.py::_ensure_module_output_tensor_logged	314
 torchlens/backends/torch/model_prep.py::_make_user_forward_hook_wrapper	101
 torchlens/backends/torch/model_prep.py::_make_user_forward_hook_wrapper.wrapped_hook	79
-torchlens/backends/torch/model_prep.py::_prepare_model_session	126
+torchlens/backends/torch/model_prep.py::_prepare_model_session	125
 torchlens/backends/torch/model_prep.py::_record_module_entry_metadata	138
 torchlens/backends/torch/model_prep.py::_record_module_exit_metadata	172
 torchlens/backends/torch/model_prep.py::module_forward_decorator	123

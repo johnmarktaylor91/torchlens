@@ -37,6 +37,7 @@ import torch.nn as nn
 
 from ..._entry_refusals import refuse_bound_root
 from ..._errors import InvalidArgumentError
+from ..._utils._model_walk import model_modules
 
 #: Address of the capture's root module (the bound method's owner).
 ROOT_ADDRESS = "self"
@@ -173,7 +174,7 @@ def instrumented_modules(model: nn.Module) -> Iterator[nn.Module]:
     calls inside the method are counted like a submodule's.
     """
 
-    for module in model.modules():
+    for module in model_modules(model):
         if module is not model:
             yield module
 
