@@ -120,7 +120,7 @@ def pin_fork_params(fork: Any) -> None:
 
     core = fork.__dict__.get("_trace_core")
     rows = param_rows_of(core) if core is not None else None
-    parent_ref = fork.__dict__.get("_parent_run")
+    parent_ref = getattr(fork, "_parent_run", None)
     parent = parent_ref() if parent_ref is not None else None
     parent_core = parent.__dict__.get("_trace_core") if parent is not None else None
     parent_rows = param_rows_of(parent_core) if parent_core is not None else None
