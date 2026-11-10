@@ -88,9 +88,8 @@ def _column_plan(
     store = columns.store
     if store.__class__ is not OpRowStore or store._rows is None:
         return None
-    for label, op in ops.items():
-        if label not in records or records[label] is not op:
-            return None
+    if not _same_records(ops, records):
+        return None
     try:
         columns.setter(_FIELDS[0])
         for name in _FIELDS[1:]:
@@ -101,6 +100,23 @@ def _column_plan(
         return None
     fid_by_name = store.layout.fid_by_name
     return store._rows, rows, tuple([fid_by_name[name] for name in _FIELDS])
+
+
+def _same_records(ops: Any, records: Any) -> bool:
+    """Return whether ``records`` holds each main label's op, without reading records.
+
+    Two row-key label maps of one owner compare their row keys; any other pair
+    compares the records by identity, as the facade walk reads them.
+    """
+
+    owner = getattr(ops, "_owner", None)
+    if owner is None or getattr(records, "_owner", None) is not owner:
+        for label, op in ops.items():  # noqa: SIM110 - a generator costs a call per op
+            if label not in records or records[label] is not op:
+                return False
+        return True
+    # Row keys are ints: the item views compare as sets, in C, with no call per op.
+    return dict.items(ops) <= dict.items(records)
 
 
 def _mark_plain_rows(ops: dict[str, Any], records: Any, plan: tuple[Any, Any, Any]) -> None:
@@ -116,7 +132,7 @@ def _mark_plain_rows(ops: dict[str, Any], records: Any, plan: tuple[Any, Any, An
     # op or per template member is the cost this body removes.
     raw_rows, rows, fids = plan
     flag_fid, args_fid, kwargs_fid = fids[:3]
-    for label, op in ops.items():
+    for label in dict.keys(ops):
         cells = raw_rows[rows[label]]
         cells[flag_fid] = True
         template = cells[args_fid]
@@ -144,9 +160,9 @@ def _mark_plain_rows(ops: dict[str, Any], records: Any, plan: tuple[Any, Any, An
                 if parent.__class__ is not str or parent not in rows:
                     general = True
                     break
-                _object_setattr(member, "_display_key", _key_of(parent, records[parent], plan))
+                _object_setattr(member, "_display_key", _key_of(parent, records, plan))
         if general:
-            _bind_both(op, template, keywords, records, plan)
+            _bind_both(ops[label], template, keywords, records, plan)
 
 
 def _bind_both(op: Any, template: Any, keywords: Any, records: Any, plan: Any) -> None:
@@ -188,9 +204,8 @@ def _bind_keys(value: Any, records: Any, plan: Any) -> None:
     name = type(value).__name__
     if name == "ParentRef":
         label = value.parent_label
-        record = records.get(label)
-        if record is not None:
-            _object_setattr(value, "_display_key", _key_of(label, record, plan))
+        if records.get(label) is not None:
+            _object_setattr(value, "_display_key", _key_of(label, records, plan))
     elif name == "CapturedArgTemplate":
         _bind_keys(value.args, records, plan)
         _bind_keys(value.kwargs, records, plan)
@@ -205,18 +220,18 @@ def _bind_keys(value: Any, records: Any, plan: Any) -> None:
             _bind_keys(member, records, plan)
 
 
-def _key_of(label: Any, record: Any, plan: tuple[Any, Any, Any]) -> str:
-    """Return ``display_key(record)`` for the record the lookups hold under ``label``.
+def _key_of(label: Any, records: Any, plan: tuple[Any, Any, Any]) -> str:
+    """Return ``display_key(records[label])``, from raw cells where it can.
 
-    When ``label`` is a main-lookup label, ``record`` is that op (``_column_plan``
-    checked it) and the key comes from the op's raw cells if they hold a
-    non-empty ``str`` label and plain pass counts; any other case reads the
-    record through :func:`display_key`.
+    When ``label`` is a main-lookup label, ``records[label]`` is that op
+    (``_column_plan`` checked it) and the key comes from the op's raw cells if
+    they hold a non-empty ``str`` label and plain pass counts; any other case
+    reads the record through :func:`display_key`.
     """
 
     raw_rows, rows, fids = plan
     if label.__class__ is not str or label not in rows:
-        return display_key(record)
+        return display_key(records[label])
     cells = raw_rows[rows[label]]
     short = cells[fids[3]]
     passes = cells[fids[4]]
@@ -226,9 +241,9 @@ def _key_of(label: Any, record: Any, plan: tuple[Any, Any, Any]) -> str:
     if number.__class__ is LazyCell and not number.make:
         number = number.source
     if short.__class__ is not str or not short or passes.__class__ is not int:
-        return display_key(record)
+        return display_key(records[label])
     if passes <= 1 or number is None:
         return str(short)
     if number.__class__ is int:
         return f"{short}:{number}"
-    return display_key(record)
+    return display_key(records[label])
