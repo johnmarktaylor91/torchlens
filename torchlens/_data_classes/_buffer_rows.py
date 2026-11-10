@@ -105,7 +105,7 @@ def trace_buffers(trace: Trace) -> BufferAccessor:
     build on a trace whose module records are still pending.
     """
 
-    return handed(getattr(trace, "_buffer_accessor", None), trace)
+    return handed(trace._buffer_accessor, trace)
 
 
 def _in_scope(module_address: str, address: str) -> bool:

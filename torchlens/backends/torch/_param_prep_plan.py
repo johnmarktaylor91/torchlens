@@ -107,28 +107,28 @@ def _slots(modules: tuple[nn.Module, ...]) -> tuple[tuple[str, ...], tuple[Any, 
     return tuple(names), tuple(refs)
 
 
-def _unique_entry(param: nn.Parameter, log: Param) -> tuple[Any, ...] | None:
+def _unique_entry(param: nn.Parameter, param_log: Param) -> tuple[Any, ...] | None:
     """Return the plan entry for one unique parameter, or ``None`` if it cannot be planned."""
 
-    if getattr(log, "_lazy_at_prep", False) or param.layout is not torch.strided:
+    if getattr(param_log, "_lazy_at_prep", False) or param.layout is not torch.strided:
         return None
-    address = log.address
-    module_address = log.module_address
+    address = param_log.address
+    module_address = param_log.module_address
     return (
         weakref.ref(param),
         address,
         module_address,
-        log.name,
-        log.shape,
-        log.dtype,
-        log.num_params,
-        int(log.param_memory),
-        tuple(name for name in log.all_addresses if name != address),
-        tuple(name for name in log.all_module_addresses if name != module_address),
+        param_log.name,
+        param_log.shape,
+        param_log.dtype,
+        param_log.num_params,
+        int(param_log.param_memory),
+        tuple(name for name in param_log.all_addresses if name != address),
+        tuple(name for name in param_log.all_module_addresses if name != module_address),
         id(param),
         param.__class__,
         param.device.type,
-        log.is_trainable,
+        param_log.is_trainable,
     )
 
 

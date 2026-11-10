@@ -103,7 +103,7 @@ class TemplateLabels:
         """Return the live trace's all-keys lookup, or ``None`` once the trace is gone."""
 
         trace = self.trace_ref() if self.trace_ref is not None else None
-        return None if trace is None else getattr(trace, "_layer_dict_all_keys", None)
+        return None if trace is None else trace.__dict__.get("_layer_dict_all_keys")
 
     def display_keys(self) -> dict[str, str] | None:
         """Return the display key of every final label the live trace resolves.
