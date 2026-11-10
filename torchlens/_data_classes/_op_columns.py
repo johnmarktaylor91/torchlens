@@ -35,12 +35,20 @@ from __future__ import annotations
 
 import importlib
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from .._trace_core.cell_states import LazyCell
 from .._trace_core.groups import GroupRef
-from .._trace_core.op_store import _CSR, _FACT, _MISSING, OpRowStore, PooledCell
+from .._trace_core.op_store import (
+    _CSR,
+    _FACT,
+    _MISSING,
+    _NO_OVERLAY,
+    OpRowStore,
+    PooledCell,
+    _SealedRowMajorOpRowStore,
+)
 from .._trace_core.relation_views import OP_BITSET_VIEW_FIELDS
 from .._utils._record_group_table import op_attr
 from ._op_row_release import _OP_FACADE
@@ -223,6 +231,51 @@ class OpColumns:
 
         return get
 
+    def column(self, name: str, rows: Sequence[int]) -> list[Any]:
+        """Return field ``name`` for every row in ``rows``, in one pass.
+
+        The bulk readers' column read (``to_pandas``): each value is what
+        ``getter(name)(row)`` returns, but a plain or sealed row store and a
+        frozen columnar store are read straight from their backing, so a
+        cell the facade returns unchanged costs no call. Every other cell
+        (an unanswered lazy cell, an encoding the facade transforms, an
+        unset cell) and every other store shape goes through ``getter``.
+
+        Parameters
+        ----------
+        name:
+            Stored ``Op`` field name.
+        rows:
+            Row indices, in the order the values are returned.
+
+        Returns
+        -------
+        list[Any]
+            One value per row.
+
+        Raises
+        ------
+        ValueError
+            As :meth:`getter`.
+        """
+
+        get = self.getter(name)
+        raw = _raw_column(self.store, self.store.layout.fid_by_name[name], rows)
+        if raw is None:
+            return [get(row) for row in rows]
+        slow_types, sentinel = _slow_cell_types(name, self._attribute(name))
+        slow_by_class: dict[type, bool] = {LazyCell: True}
+        values: list[Any] = []
+        append = values.append
+        for row, value in zip(rows, raw):
+            cls = value.__class__
+            try:
+                slow = slow_by_class[cls]
+            except KeyError:
+                slow = slow_by_class[cls] = issubclass(cls, slow_types)
+            append(get(row) if slow or value is _MISSING or value is sentinel else value)
+        return values
+
     def setter(self, name: str) -> Callable[[int, Any], None]:
         """Return a row-indexed writer for stored field ``name``.
 
@@ -267,6 +320,35 @@ class OpColumns:
             facade_set(shell(row), value)
 
         return put
+
+
+def _raw_column(store: Any, fid: int, rows: Sequence[int]) -> list[Any] | None:
+    """Return the raw cells ``store.cell_get(row, fid, raw=True)`` holds, or ``None``.
+
+    ``None`` for a store shape this does not read directly (fork views, audit
+    twins, detached stores); the caller then reads cell by cell. A packed
+    numeric column converts in one ``tolist`` (the same Python scalars its
+    per-cell ``item`` returns); an absent cell reads ``_MISSING`` and an
+    overlay cell wins over the frozen backing, as in ``cell_get``.
+    """
+
+    if store.__class__ is not OpRowStore and store.__class__ is not _SealedRowMajorOpRowStore:
+        return None
+    cells = store._rows
+    if cells is not None:
+        return [cells[row][fid] for row in rows]
+    column = store._columns[fid]
+    backing = column.values.tolist() if column.packed else column.values
+    present = column.present
+    raw = [backing[row] if present is None or present[row] else _MISSING for row in rows]
+    overlay = store._overlay
+    if overlay:
+        n_fields = store.layout.n_fields
+        for index, row in enumerate(rows):
+            value = overlay.get(row * n_fields + fid, _NO_OVERLAY)
+            if value is not _NO_OVERLAY:
+                raw[index] = value
+    return raw
 
 
 def column_rows_by_label(

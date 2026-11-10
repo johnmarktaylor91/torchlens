@@ -6,6 +6,7 @@ method per verb that forwards to these functions.
 """
 
 from collections.abc import Mapping, Sequence
+from functools import partial
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, cast
 
@@ -23,6 +24,7 @@ from .._data_classes.interface import _format_conditional_branch_stack
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
 from .._utils._record_group_table import record_member
 from .._utils.collections import _path_component_key
+from ._trace_table_rows import table_rows
 
 
 def _output_role_from_container_path(path: Any) -> str | None:
@@ -405,6 +407,42 @@ _TO_PANDAS_COLUMN_TYPES: dict[str, type] = {
 }
 
 
+#: ``to_pandas`` columns computed by :func:`_table_cell` itself, never read as stored columns.
+_PER_OP_TABLE_FIELDS: frozenset[str] = frozenset(
+    {
+        "conditional_branch_stack",
+        "layer_type",
+        "grad",
+        "num_saved_grads",
+        "output_role",
+        "decoded_output_summary",
+    }
+)
+
+
+def _table_cell(trace: "Trace", layer_entry: Any, field_name: str) -> Any:
+    """Return one ``to_pandas`` cell of ``layer_entry`` read through the facade."""
+
+    if field_name == "conditional_branch_stack":
+        return _format_conditional_branch_stack(layer_entry.control_flow.branch_stack)
+    if field_name == "layer_type":
+        # The table keeps its layer_type column; an Op names it type.
+        return layer_entry.type
+    if field_name == "grad":
+        return getattr(layer_entry, "grad")
+    if field_name == "num_saved_grads":
+        return len(getattr(layer_entry, "_grad_records", ()))
+    if field_name == "output_role":
+        return _output_role_from_container_path(getattr(layer_entry, "container_path", ()))
+    if field_name == "decoded_output_summary":
+        return (
+            _decoded_output_summary(trace)
+            if bool(getattr(layer_entry, "is_output", False))
+            else None
+        )
+    return record_member(layer_entry, field_name)
+
+
 def to_pandas(trace: "Trace", include_decoded_output_summary: bool = False) -> "pd.DataFrame":
     """Body of ``Trace.to_pandas``; the method docstring is the contract."""
     from .._runnable import refuse_poisoned_trace  # deferred: cycle _runnable (layering follow-up)
@@ -461,34 +499,9 @@ def to_pandas(trace: "Trace", include_decoded_output_summary: bool = False) -> "
         )
     )
 
-    model_df_dictlist: list[dict[str, Any]] = []
-    for layer_entry in trace._layer_list:
-        layer_dict: dict[str, Any] = {}
-        for field_name in fields_for_df:
-            if field_name == "conditional_branch_stack":
-                layer_dict[field_name] = _format_conditional_branch_stack(
-                    layer_entry.control_flow.branch_stack
-                )
-            elif field_name == "layer_type":
-                # The table keeps its layer_type column; an Op names it type.
-                layer_dict[field_name] = layer_entry.type
-            elif field_name == "grad":
-                layer_dict[field_name] = getattr(layer_entry, "grad")
-            elif field_name == "num_saved_grads":
-                layer_dict[field_name] = len(getattr(layer_entry, "_grad_records", ()))
-            elif field_name == "output_role":
-                layer_dict[field_name] = _output_role_from_container_path(
-                    getattr(layer_entry, "container_path", ())
-                )
-            elif field_name == "decoded_output_summary":
-                layer_dict[field_name] = (
-                    _decoded_output_summary(trace)
-                    if bool(getattr(layer_entry, "is_output", False))
-                    else None
-                )
-            else:
-                layer_dict[field_name] = record_member(layer_entry, field_name)
-        model_df_dictlist.append(layer_dict)
+    model_df_dictlist = table_rows(
+        trace._layer_list, fields_for_df, partial(_table_cell, trace), _PER_OP_TABLE_FIELDS
+    )
     model_df = pd.DataFrame(model_df_dictlist)
 
     for column_name, column_type in _TO_PANDAS_COLUMN_TYPES.items():

@@ -1325,7 +1325,7 @@ torchlens/stats/_stats_kernel.py::_float_kernel	132
 torchlens/stats/_stats_render.py::_distribution_zone	83
 torchlens/stats/_streaming.py::cka	64
 torchlens/stats/_tensor_stats.py::_record_from_kernel	73
-torchlens/stats/_trace_tables.py::to_pandas	91
+torchlens/stats/_trace_tables.py::to_pandas	66
 torchlens/stats/_trajectory.py::measure_trajectory	62
 torchlens/trackers/_amp.py::correct_histogram	63
 torchlens/trackers/_graph.py::build_graph_ir	61

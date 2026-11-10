@@ -6,7 +6,8 @@ property per view.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
@@ -18,6 +19,8 @@ __all__ = [
     "multi_output_type",
     "siblings",
     "co_parents",
+    "memoized_relation_lookup",
+    "relation_lookup",
     "input_ops_by_index",
     "buffer_source_ops_by_index",
     "buffer_sink_ops_by_index",
@@ -72,64 +75,96 @@ def multi_output_type(op: Op) -> type | str | None:
     return type_qualname
 
 
-def siblings(op: Op) -> list[str]:
-    """Layers sharing at least one parent (excluding output layers and this op)."""
-    ml = op._source_trace
-    if ml is None:
-        return []
-    siblings = []
-    seen = op._own_label_spellings()
-    for parent_label in op.parents:
-        try:
-            parent = ml[parent_label]
-        except (KeyError, ValueError):
-            try:
-                parent = ml.graph.orphans[parent_label]
-            except KeyError:
-                continue
-        for child_label in parent.children:
-            if child_label not in seen:
-                seen.add(child_label)
-                try:
-                    child = ml[child_label]
-                except (KeyError, ValueError):
-                    try:
-                        child = ml.graph.orphans[child_label]
-                    except KeyError:
-                        continue
-                if not child.is_output:
-                    siblings.append(child_label)
-    return siblings
+#: What a relation lookup returns for a label neither the trace nor its orphans hold.
+_NOT_FOUND: Any = object()
 
 
-def co_parents(op: Op) -> list[str]:
-    """Layers sharing at least one child (excluding output layers and this op)."""
-    ml = op._source_trace
-    if ml is None:
-        return []
-    spouses = []
-    seen = op._own_label_spellings()
-    for child_label in op.children:
+def relation_lookup(trace: Any) -> Callable[[str], Any]:
+    """Return ``label -> record`` the sibling and co-parent views resolve labels with.
+
+    A label reads through ``trace[label]``, then the graph's orphans; one
+    neither holds answers ``_NOT_FOUND`` (the view skips it).
+    """
+
+    def lookup(label: str) -> Any:
+        """Return the record a relation list's ``label`` names, or ``_NOT_FOUND``."""
+
         try:
-            child = ml[child_label]
+            return trace[label]
         except (KeyError, ValueError):
             try:
-                child = ml.graph.orphans[child_label]
+                return trace.graph.orphans[label]
             except KeyError:
-                continue
-        for parent_label in child.parents:
-            if parent_label not in seen:
-                seen.add(parent_label)
-                try:
-                    parent = ml[parent_label]
-                except (KeyError, ValueError):
-                    try:
-                        parent = ml.graph.orphans[parent_label]
-                    except KeyError:
-                        continue
-                if not parent.is_output:
-                    spouses.append(parent_label)
-    return spouses
+                return _NOT_FOUND
+
+    return lookup
+
+
+def memoized_relation_lookup(trace: Any) -> Callable[[str], Any]:
+    """Return :func:`relation_lookup` with each label resolved once.
+
+    For a bulk reader that resolves the relation views of every op of one
+    finished trace (``to_pandas``): label lookups are pure there, so a label
+    met again answers the record found the first time.
+    """
+
+    plain = relation_lookup(trace)
+    found: dict[str, Any] = {}
+
+    def lookup(label: str) -> Any:
+        """Return the record ``label`` names, resolving it on first use."""
+
+        try:
+            return found[label]
+        except KeyError:
+            record = found[label] = plain(label)
+            return record
+
+    return lookup
+
+
+def _graph_neighbours(
+    op: Op, outward: str, inward: str, lookup: Callable[[str], Any] | None
+) -> list[str]:
+    """Labels reached ``outward`` then back ``inward``, excluding outputs and this op."""
+
+    if lookup is None:
+        ml = op._source_trace
+        if ml is None:
+            return []
+        lookup = relation_lookup(ml)
+    neighbours = []
+    seen = op._own_label_spellings()
+    for via_label in getattr(op, outward):
+        via = lookup(via_label)
+        if via is _NOT_FOUND:
+            continue
+        for label in getattr(via, inward):
+            if label not in seen:
+                seen.add(label)
+                record = lookup(label)
+                if record is not _NOT_FOUND and not record.is_output:
+                    neighbours.append(label)
+    return neighbours
+
+
+def siblings(op: Op, lookup: Callable[[str], Any] | None = None) -> list[str]:
+    """Layers sharing at least one parent (excluding output layers and this op).
+
+    ``lookup`` resolves labels (:func:`memoized_relation_lookup` for a bulk
+    reader); by default the op's source trace, and ``[]`` without one.
+    """
+
+    return _graph_neighbours(op, "parents", "children", lookup)
+
+
+def co_parents(op: Op, lookup: Callable[[str], Any] | None = None) -> list[str]:
+    """Layers sharing at least one child (excluding output layers and this op).
+
+    ``lookup`` as for :func:`siblings`.
+    """
+
+    return _graph_neighbours(op, "children", "parents", lookup)
 
 
 def input_ops_by_index(op: Op) -> dict[int, Op]:

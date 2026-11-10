@@ -525,6 +525,21 @@ def _resolve_stored_member(cls: type, name: str) -> str | None:
     return _stored_leaf_attr(cls, path)
 
 
+def stored_member(cls: type, name: str) -> str | None:
+    """Return the attribute :func:`record_member` reads ``name`` through on ``cls``.
+
+    ``None`` when the member reads through a group view or a Layer's pass
+    instead (``record_member`` then walks that path per record).
+
+    Examples
+    --------
+    >>> stored_member(object, "anything")
+    'anything'
+    """
+
+    return _resolve_stored_member(cls, name)
+
+
 def _record_member_via_view(obj: Any, name: str, default: Any) -> Any:
     """``record_member`` for a member that reads through its group view or the Layer's pass."""
 
