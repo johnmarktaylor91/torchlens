@@ -206,6 +206,53 @@ def count_calls(fn: Callable[[], Any]) -> tuple[Any, int]:
     return result, total[0]
 
 
+def code_context_lookups(fn: Callable[[], Any]) -> tuple[Any, dict[str, int]]:
+    """Run ``fn`` and count the emit's code-context lookups (the full frame walk).
+
+    ``lookups`` counts calls of ``_get_code_context`` made by the call-site step
+    of the emit (``backends.torch._ops_call_site_fields``); ``repeat_lookups``
+    counts those whose result (the same ``FuncCallLocation`` records and the
+    same call-site chain) an earlier lookup of the same trace already returned,
+    that is lookups for a site the capture had already seen.
+    """
+
+    from torchlens.backends.torch import _ops_call_site_fields as site_module
+
+    original = site_module._get_code_context
+    seen: set[tuple[Any, ...]] = set()
+    counts = {"lookups": 0, "repeat_lookups": 0}
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        result = original(*args, **kwargs)
+        out = kwargs.get("call_site_out")
+        chain = out[-1] if out else None
+        key = (tuple(id(item) for item in result), id(chain))
+        counts["lookups"] += 1
+        if key in seen:
+            counts["repeat_lookups"] += 1
+        seen.add(key)
+        return result
+
+    site_module._get_code_context = counted
+    try:
+        result = fn()
+    finally:
+        site_module._get_code_context = original
+    return result, counts
+
+
+def flatten_code_context(document: dict[str, Any]) -> dict[str, float]:
+    """``code_context.<model>.<count>_per_op`` for each model record that has the block."""
+
+    flat: dict[str, float] = {}
+    for model, record in document.get("models", {}).items():
+        block = record.get("code_context") if isinstance(record, dict) else None
+        if block and record.get("rows"):
+            for name, count in block.items():
+                flat[f"code_context.{model}.{name}_per_op"] = count / record["rows"]
+    return flat
+
+
 def record_kinds() -> tuple[type, ...]:
     """Return the public record classes whose live instances C4 counts."""
 

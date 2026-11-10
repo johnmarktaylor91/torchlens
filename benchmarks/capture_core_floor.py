@@ -96,7 +96,7 @@ SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "extract_salient_args",
     ),
     # Call-site capture: the frame walk, the site lookup, the location.
-    "call_site": ("_get_code_context",),
+    "call_site": ("_set_call_site_fields", "_get_code_context"),
     # The output walk and autograd saved-tensor statistics.
     "autograd": ("_partition_output_entries_with_autograd_stats",),
     # Shape, dtype, memory, gradient function, in-place and edit facts of one output.

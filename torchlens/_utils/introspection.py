@@ -986,7 +986,7 @@ def _get_code_context(
     # as (survivor count, module) so the chain keeps distinct modules' hooks apart.
     hook_scopes: list[tuple[int, Any]] = []
     anchor_frame: FrameType | None = None
-    frame: FrameType | None = sys._getframe(0)
+    frame: FrameType | None = sys._getframe(1)  # own frame: torchlens code, never kept
     while frame is not None:
         code = frame.f_code
         if call_site_out is not None and code in _BOUNDARY_CODES:

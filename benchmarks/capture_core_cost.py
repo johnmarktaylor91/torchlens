@@ -71,8 +71,10 @@ from benchmarks import (  # noqa: E402
 from benchmarks.capture_core_counters import (  # noqa: E402
     StoreWriteObserver,
     TensorBytesObserver,
+    code_context_lookups,
     count_calls,
     count_phases,
+    flatten_code_context,
     retained_after,
 )
 from benchmarks.host_label import benchmark_host_label  # noqa: E402
@@ -347,6 +349,7 @@ def measure_model(name: str, wall: bool = True) -> dict[str, Any]:
             record["prepared_modules"] = sum(1 for _ in model.body.modules())
         if name in floor.FLOOR_MODELS:
             record["floor"] = floor.measure_sections(model, x)
+            record["code_context"] = code_context_lookups(lambda: tl.trace(model, x))[1]
         return record
     record["c3"], record["c9"] = _c3_c9(model, x)
     record["c7"] = _c7(model, x)
@@ -354,6 +357,7 @@ def measure_model(name: str, wall: bool = True) -> dict[str, Any]:
         record["wall"] = _wall(model, x)
     # Last, so the extra counted trace cannot touch the counters above.
     record["floor"] = floor.measure_sections(model, x)
+    record["code_context"] = code_context_lookups(lambda: tl.trace(model, x))[1]
     return record
 
 
@@ -467,7 +471,11 @@ def _write(path: Path, document: dict[str, Any]) -> None:
 def _flatten(document: dict[str, Any]) -> dict[str, float]:
     """Return the phase counters and the call-time section counters of a measurement."""
 
-    return {**bars_mod.flatten(document), **floor.flatten(document)}
+    return {
+        **bars_mod.flatten(document),
+        **floor.flatten(document),
+        **flatten_code_context(document),
+    }
 
 
 def _report(label: str, problems: list[str]) -> int:
