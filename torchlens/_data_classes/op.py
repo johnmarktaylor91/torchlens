@@ -2419,7 +2419,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected and this Op holds none: an Op looked up on a Trace keeps it, a copied or restored one does not",
+                "Trace has been garbage-collected and this Op holds none: an Op read from the Trace keeps it; one reached through a Layer's ops, copied or restored does not",
                 code="trace_reference_collected",
                 remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
             )

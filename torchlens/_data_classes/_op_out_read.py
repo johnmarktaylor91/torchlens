@@ -19,8 +19,9 @@ def _refuse_read_without_trace(
     A bound Op whose Trace was garbage-collected lost its saved values (the op
     store evicts payloads with its last owner) and its graph, so reads that need
     them would answer ``None`` or an untyped miss that reads as "no such value".
-    An Op looked up on a Trace keeps that Trace, so this reaches only an Op copied
-    or restored without it. The refusal is ``Op.trace``'s own typed
+    An Op read from a Trace keeps that Trace, so this reaches an Op reached
+    through a Layer's ops that nothing else holds, or one copied or restored
+    without its Trace. The refusal is ``Op.trace``'s own typed
     ``trace_reference_collected``. An Op never bound to a Trace (standalone
     pickle) keeps its own ``record_not_bound`` handling.
 
