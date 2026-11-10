@@ -294,6 +294,8 @@ class ParamSequence(OpSequence):
     """A list of ``Param`` records stored as row keys; reads return the records."""
 
     __slots__ = ()
+    #: Items are row keys (and the records they name): the payload eviction walk skips the form.
+    _ROW_KEYS_ONLY = True
 
     def __tl_plain__(self) -> list[Any]:
         """Return the plain list of records this sequence stands in for."""
@@ -317,6 +319,8 @@ class ParamMap(OpLabelMap):
     """A ``key -> Param`` dictionary stored as row keys; reads return the records."""
 
     __slots__ = ()
+    #: Items are row keys (and the records they name): the payload eviction walk skips the form.
+    _ROW_KEYS_ONLY = True
 
     def __init__(self, owner: Any, items: Any = (), *, ordered: bool = False) -> None:
         """Hold the records of ``items``; the plain form is a ``dict``."""
@@ -352,6 +356,8 @@ class ParamTuple(tuple):  # noqa: SLOT001 (a tuple subclass cannot declare slots
     """
 
     _owner: ParamRows
+    #: Items are row keys (and the records they name): the payload eviction walk skips the form.
+    _ROW_KEYS_ONLY = True
 
     def __new__(cls, owner: ParamRows, records: Iterable[Any] = ()) -> ParamTuple:
         """Hold ``records`` through ``owner``."""
