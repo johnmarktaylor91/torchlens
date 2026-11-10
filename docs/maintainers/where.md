@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1771 modules, 712164 lines, 0 modules without a docstring.
+85 packages, 1774 modules, 712551 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 127 | 45291 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45385 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 50 | 20764 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 51 | 20858 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
@@ -39,8 +39,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 16 | 7447 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
-| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 20 | 6316 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24192 |
+| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 21 | 6540 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24167 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (127 modules, 45291 lines)
+Core data structures for representing a logged forward pass. (128 modules, 45385 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -369,6 +369,7 @@ Core data structures for representing a logged forward pass. (127 modules, 45291
 | `_op_row_containers` | Trace-side op containers that hold row keys instead of ''Op'' records. | 692 |
 | `_op_row_release` | Direct row release for op removal (the facade-husk shortcut). | 107 |
 | `_op_save` | Tensor save, grad logging, transform validation and copy logic for ''Op''. | 800 |
+| `_op_state_items` | The op state stream, ''Op.__tl_state_items__''. | 85 |
 | `_op_transforms` | User-transform application and validation helpers for saved payloads. | 260 |
 | `_preprocessing_provenance` | Preprocessing provenance derivations that live WITH the record. | 114 |
 | `_record_group_base` | Base classes of the Op and Layer concern groups (''op.cost'', ''layer.call'', ...). | 85 |
@@ -386,7 +387,7 @@ Core data structures for representing a logged forward pass. (127 modules, 45291
 | `_schema_bindings_trace` | GENERATED storage bindings for the ''trace'' record. DO NOT EDIT. | 355 |
 | `_site_key` | Structural site keys (''site_key_v1''): the portable bridging relation. | 273 |
 | `_staged_spec` | Staged intervention spec reads shared by the ''Trace.run'' door. | 28 |
-| `_state_adapter` | Class-agnostic live-state enumeration and restoration helpers. | 143 |
+| `_state_adapter` | Class-agnostic live-state enumeration and restoration helpers. | 159 |
 | `_summary` | Summary helpers for compact formatting of captured call arguments. | 72 |
 | `_template_walk` | Generic walks over replay templates (tuples, lists, dict values, dataclass fields). | 104 |
 | `_trace_accessors` | Trace accessor helpers. | 798 |
@@ -399,7 +400,7 @@ Core data structures for representing a logged forward pass. (127 modules, 45291
 | `_trace_docs_stats` | Full docstrings of the ''Trace'' statistics, views and reports methods. | 547 |
 | `_trace_docs_validation` | Full docstrings of the ''Trace'' validation, run and backward verbs methods. | 368 |
 | `_trace_field_spec` | The persisted-field policy table of ''Trace'' (''Trace._PORTABLE_STATE_SPEC''). | 491 |
-| `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 683 |
+| `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 686 |
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 338 |
 | `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 799 |
 | `_trace_groups_capture` | Capture-side concern groups of a ''Trace'': ''trace.options'', ''trace.source'', ''trace.health''. | 479 |
@@ -441,7 +442,7 @@ Core data structures for representing a logged forward pass. (127 modules, 45291
 | `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 60 |
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1547 |
 | `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2584 |
-| `op` | Op: per-operation metadata for a single invocation of a layer. | 3302 |
+| `op` | Op: per-operation metadata for a single invocation of a layer. | 3292 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1084 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 223 |
 | `trace` | Trace: the top-level container for a fully logged forward pass. | 3414 |
@@ -728,7 +729,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (50 modules, 20764 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (51 modules, 20858 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -747,10 +748,10 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `_executor` | Postprocess step adapters: ''StepContext'' and one function per pipeline step. | 437 |
 | `_final_info_columns` | Step 9 by column: the per-op part of final layer info over the building rows. | 391 |
 | `_final_info_rename` | Step 9 by column: raw-to-final label renaming over the building rows. | 261 |
-| `_finished_marks` | Step 17 body: mark every final op finished and bind template display keys. | 249 |
+| `_finished_marks` | Step 17 body: mark every final op finished. | 79 |
 | `_grouping_stamp` | The grouping-policy stamp (''grouping_policy_v1''): writer, loader | 292 |
 | `_ingest_contract` | Frozen step-0 ingest seam contracts: ''IngestInputs'' v1 / ''Step0Result'' v1. | 152 |
-| `_label_rename` | Raw-to-final label renaming inside replay templates and label-bearing records. | 328 |
+| `_label_rename` | Raw-to-final label renaming inside replay templates and label-bearing records. | 286 |
 | `_layer_conditional_merge` | Rolled conditional edge-pass indices rebuilt after Step 15.5. | 66 |
 | `_layer_depths` | Step 4 of graph traversal: optional layer-depth marking. | 348 |
 | `_lazy_param_geometry` | Step 15 support: finalize deferred geometry for lazy-at-prep parameters. | 36 |
@@ -765,6 +766,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `_pre_hook_provenance` | Pre-hook provenance of one module call, with raw producer labels finalized. | 70 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 400 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 407 |
+| `_replay_template_cells` | Replay argument templates as a derived on-read family. | 307 |
 | `_root_module_log` | Module-build-data readers for the root module's calls. | 84 |
 | `_row_ingest` | Step-0 ingest of the exhaustive capture rows (capture C2c). | 317 |
 | `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 344 |
@@ -777,7 +779,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1475 |
 | `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 739 |
 | `incremental` | Opt-in incremental enrichments for fastlog recordings. | 87 |
-| `labeling` | Steps 8-11: Label mapping, final info logging, renaming, cleanup, and lookup keys. | 917 |
+| `labeling` | Steps 8-11: Label mapping, final info logging, renaming, cleanup, and lookup keys. | 916 |
 | `loop_detection` | Step 7: Adapt Trace state to the backend-neutral recurrence grouper. | 509 |
 | `loop_grouping_adapter` | Backend-neutral recurrence grouping model and service. | 2590 |
 | `saved_summary` | Shared saved-output summary helpers. | 193 |
@@ -924,7 +926,7 @@ Live narration for TorchLens captures (the torchsnooper niche, better). (10 modu
 
 ### `torchlens._trace_core`
 
-Private per-trace semantic store substrate (trace_core_design.md). (20 modules, 6316 lines)
+Private per-trace semantic store substrate (trace_core_design.md). (21 modules, 6540 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -947,11 +949,12 @@ Private per-trace semantic store substrate (trace_core_design.md). (20 modules, 
 | `record_rows` | Generic store-backed record facades for the non-Op record kinds. | 288 |
 | `relation_views` | Freeze-time conversion of relation staging containers to immutable views. | 528 |
 | `relations` | The canonical edge-occurrence table with CSR indexes. | 162 |
+| `side_columns` | Side-column families: derived fields whose raw values live beside the store. | 224 |
 | `view_tables` | The per-trace view tables: where ''Op'' and ''Layer'' records are cached, weakly. | 322 |
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (75 modules, 24192 lines)
+Shared helpers used by two or more TorchLens packages. (75 modules, 24167 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -967,7 +970,7 @@ Shared helpers used by two or more TorchLens packages. (75 modules, 24192 lines)
 | `_display_bounded` | Bounded printouts for collections and private records (house style v1). | 152 |
 | `_display_card` | Card and one-line layout shared by every printout (house style v1). | 120 |
 | `_display_collections` | Metadata-only summaries for owned accessors and callable report containers. | 84 |
-| `_display_constructor` | Bounded, metadata-only arguments for constructor-style displays. | 112 |
+| `_display_constructor` | Bounded, metadata-only arguments for constructor-style displays. | 87 |
 | `_display_errors` | Consistent, bounded candidate rows for lookup error messages. | 96 |
 | `_display_keys` | Display keys for ops and layers (house style v1, rule A5). | 59 |
 | `_display_numbers` | Number and unit spellings shared by every printout (house style v1). | 120 |
