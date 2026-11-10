@@ -35,6 +35,13 @@ classes (`Trace`, `Op`, ...) present rows from here as facades. The architecture
   any state leaves `_MISSING`, which never answers a default or a resolver.
   `cell_state()` reports the state. No product field is registered yet;
   `tests/test_cell_states.py` is the contract.
+- `side_columns.py`: `SideColumnFamily`, a derived family whose per-row raw values live in
+  one side column per field (a list indexed by row) plus one context per store, keyed weakly
+  by the root `OpRowStore` (fork views read through `.base`); every cell holds the field's one
+  shared marker, so an unread cell costs no object. The op state stream yields an unread cell
+  as a `PendingCell`: a consumer that drops the field never answers it, one that keeps it calls
+  `answer_pending` (or `_state_adapter.answered_state`), and pickling one carries the raw value
+  plus the context. `tests/test_side_columns.py` is the contract.
 
 ## Relations and views
 - `relations.py`: `EdgeTable` is the canonical dataflow edge-occurrence table (`Edge` rows,

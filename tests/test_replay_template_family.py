@@ -1,7 +1,8 @@
 """Replay argument templates are a derived family, resolved on first read.
 
-Step 9 stores each captured ``args_template`` and ``kwargs_template`` as a
-carried cell (``torchlens/_postprocess/_replay_template_cells.py``); the first
+Step 9 keeps each captured ``args_template`` and ``kwargs_template`` in a side
+column and stores the field's one shared marker in its cell
+(``torchlens/_postprocess/_replay_template_cells.py``); the first
 read renames its labels and binds each ``ParentRef``'s display key, the work
 steps 9 and 17 used to do for every op. These tests pin that nothing in
 capture, ``to_pandas``, ``repr`` or a default save resolves a template, that a
@@ -33,7 +34,7 @@ from torchlens._trace_core.cell_states import (
     LazyCell,
     cell_state,
 )
-from torchlens._trace_core.op_store import DetachedOpStore
+from torchlens._trace_core.side_columns import PendingCell, answer_pending
 from torchlens._utils._display_keys import display_key
 from torchlens.intervention._types import CapturedArgTemplate, LiteralTensor, ParentRef
 
@@ -137,7 +138,7 @@ def _snapshot(trace: Any) -> list[tuple[Any, ...]]:
     return rows
 
 
-def test_capture_leaves_every_template_carried() -> None:
+def test_capture_leaves_every_template_derived() -> None:
     """No postprocess step reads a template: each one is still unresolved."""
 
     states = _states(_trace())
@@ -218,7 +219,7 @@ def test_pickle_and_deepcopy_with_unresolved_templates(replayable: bool) -> None
 
 
 def test_fork_resolves_into_its_own_view() -> None:
-    """A fork's read answers the parent's template and leaves the parent's cell carried."""
+    """A fork's read answers the parent's template and leaves the parent's cell derived."""
 
     trace = _trace()
     fork = trace.fork()
@@ -227,36 +228,62 @@ def test_fork_resolves_into_its_own_view() -> None:
     assert fork_snapshot == _snapshot(trace)
 
 
-def _raw_material(op: Any) -> Any:
-    """Return the raw template an op's carried ``args_template`` cell holds, else ``None``."""
+def _raw_template(op: Any) -> Any:
+    """Return the raw template an op's unread ``args_template`` cell resolves from, else ``None``."""
 
-    store, row, fid = _cell(op, "args_template")
-    material = REPLAY_TEMPLATES.material_of(store.cell_get(row, fid, True))
-    return None if material is _MISSING else material[0]
+    store, row, _fid = _cell(op, "args_template")
+    raw = REPLAY_TEMPLATES.raw(store, row, "args_template")
+    return None if raw is _MISSING else raw
 
 
-def test_carried_cell_pickled_away_from_its_trace_keeps_display_keys() -> None:
-    """A pickled carried cell carries the label map and display keys, not the trace."""
+def _pending(op: Any, name: str) -> Any:
+    """Return what the op state stream yields for one template field."""
+
+    return dict(op.__tl_state_items__())[name]
+
+
+def test_state_stream_yields_unread_templates_pending() -> None:
+    """The state stream never resolves a template; a dropped field costs no answer."""
 
     trace = _trace()
-    op = next(op for op in reversed(trace._layer_list) if _parent_refs(_raw_material(op), []))
-    store, row, fid = _cell(op, "args_template")
-    layout = store.layout
-    payload = pickle.dumps(store.cell_get(row, fid, True))
+    for op in trace._layer_list:
+        for name in FIELDS:
+            value = _pending(op, name)
+            if value is not None:
+                assert value.__class__ is PendingCell
+    assert set(_states(trace)) == {STATE_DERIVED}
+    op = next(op for op in trace._layer_list if _pending(op, "args_template") is not None)
+    assert _plain(answer_pending(_pending(op, "args_template"))) == _plain(op.call.args_template)
+
+
+def test_every_unread_template_cell_holds_the_shared_marker() -> None:
+    """An unread template adds no object per op: every cell holds the field's one marker."""
+
+    trace = _trace()
+    for name in FIELDS:
+        marker = REPLAY_TEMPLATES.markers[name]
+        held = [
+            op._core.cell_get(op._row, op._core.layout.fid_by_name[name], True)
+            for op in trace._layer_list
+        ]
+        assert all(cell is marker for cell in held if cell is not None)
+        assert any(cell is marker for cell in held)
+
+
+def test_pending_template_pickled_away_from_its_trace_keeps_display_keys() -> None:
+    """A pickled pending template carries the label map and display keys, not the trace."""
+
+    trace = _trace()
+    op = next(op for op in reversed(trace._layer_list) if _parent_refs(_raw_template(op), []))
+    payload = pickle.dumps(_pending(op, "args_template"))
     expected = [
         (ref.parent_label, getattr(ref, "_display_key", None))
         for ref in _parent_refs(op.call.args_template, [])
     ]
     assert all(key is not None for _label, key in expected)
-    del trace, op, store
+    del trace, op
     gc.collect()
-    cell = pickle.loads(payload)
-    assert cell.material[1].trace_ref is None
-    seed: list[Any] = [_MISSING] * layout.n_fields
-    seed[fid] = cell
-    detached = DetachedOpStore(layout)
-    detached.adopt_row(seed)
-    resolved = detached.cell_get(0, fid)
+    resolved = pickle.loads(payload)
     got = [
         (ref.parent_label, getattr(ref, "_display_key", None)) for ref in _parent_refs(resolved, [])
     ]

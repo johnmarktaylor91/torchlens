@@ -24,15 +24,6 @@ per registered field and builds the seed row that starts default-capable
 fields default-omitted and derived fields derived. Markers carry their own
 answer, so the store read path needs no lookup: one exact-class test.
 
-A ``CarriedFamily`` is a derived family whose raw material differs per row
-and was observed before the family is installed: a pipeline step writes one
-carried ``LazyCell`` per row, holding that row's material, where it would
-have written the computed value, and the first read runs the resolver on
-it. A carried cell is in state ``"derived"`` like any other derived cell. A
-state stream answers it without writing it back; pickling the cell itself
-carries the material, so a store holding unresolved cells never refuses to
-pickle.
-
 The exhaustive torch capture registers its constant-valued op cells as
 defaults (``backends/torch/_ops_row_cells.py``): a draft row starts them
 default-omitted instead of writing each value, and ``settle_default_cells``
@@ -43,7 +34,7 @@ values every reader of raw cells expects.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any
+from typing import Any, NoReturn
 
 #: Unset-cell sentinel; distinct from None (a real storable value).
 _MISSING = object()
@@ -124,22 +115,9 @@ class LazyCell:
     cache:
         Whether a per-cell answer is written back (object-valued results
         must be, so ``op.x is op.x`` holds; cheap scalars need not be).
-    material:
-        The raw material of one carried cell (``CarriedFamily.carry``); the
-        resolver is then called as ``source(store, row, name, material)``.
-        ``_MISSING`` for the shared markers.
     """
 
-    __slots__ = (
-        "cache",
-        "family",
-        "make",
-        "material",
-        "name",
-        "source",
-        "state",
-        "whole_column",
-    )
+    __slots__ = ("cache", "family", "make", "name", "source", "state", "whole_column")
 
     def __init__(
         self,
@@ -151,7 +129,6 @@ class LazyCell:
         make: bool,
         whole_column: bool = False,
         cache: bool = True,
-        material: Any = _MISSING,
     ) -> None:
         """Bind the marker to its field and its answer."""
 
@@ -162,7 +139,6 @@ class LazyCell:
         self.make = make
         self.whole_column = whole_column
         self.cache = cache
-        self.material = material
 
     def __repr__(self) -> str:
         """Return a stable representation (never an address)."""
@@ -179,17 +155,10 @@ class LazyCell:
 
         return self
 
-    def __reduce__(self) -> tuple[Any, tuple[Any, ...]]:
-        """Carry a carried cell's material; refuse for a shared marker.
+    def __reduce__(self) -> NoReturn:
+        """Refuse: a state stream carries the answered value, never the marker."""
 
-        A state stream carries the answered value, never a shared marker. A
-        carried cell pickles as its family's resolver plus its material, so
-        the unpickled cell answers what the original would have.
-        """
-
-        if self.material is _MISSING:
-            raise TypeError(f"{self!r} is a storage marker and never enters a state stream")
-        return _carried_cell, (self.name, self.family, self.source, self.material, self.cache)
+        raise TypeError(f"{self!r} is a storage marker and never enters a state stream")
 
     def read(self, store: Any, row: int, fid: int, keep: bool = True) -> Any:
         """Answer the cell at ``(row, fid)`` of ``store``, which holds this marker.
@@ -208,12 +177,7 @@ class LazyCell:
         elif self.whole_column:
             return self._fill_column(store, row, fid)
         else:
-            material = self.material
-            if material is _MISSING:
-                value = self.source(store, row, self.name)
-            else:
-                value = self.source(store, row, self.name, material)
-            value = self._checked(value)
+            value = self._checked(self.source(store, row, self.name))
             keep = keep and self.cache
         if keep:
             _cache_cell(store, row, fid, value)
@@ -249,84 +213,6 @@ class LazyCell:
             if cell_get(other, fid, True) is self:
                 _cache_cell(store, other, fid, self._checked(values[other]))
         return answer
-
-
-def _carried_cell(name: str, family: str, resolver: Any, material: Any, cache: bool) -> LazyCell:
-    """Rebuild a pickled carried cell."""
-
-    return LazyCell(
-        STATE_DERIVED, name, family, resolver, make=True, cache=cache, material=material
-    )
-
-
-class CarriedFamily:
-    """A derived family whose cells carry their own per-row raw material.
-
-    Parameters
-    ----------
-    family:
-        Family name.
-    fields:
-        The stored fields the family resolves.
-    resolver:
-        ``(store, row, name, material) -> value``: the value today's pipeline
-        would have stored, computed from the material alone (plus what the
-        material points at). It must be a module-level function so a pickled
-        cell can name it, and it raises when it lacks its raw material.
-    cache:
-        Whether an answer is written back into its cell (object-valued
-        results must be, so ``op.x is op.x`` holds).
-    """
-
-    __slots__ = ("cache", "family", "fields", "resolver")
-
-    def __init__(
-        self,
-        family: str,
-        fields: Iterable[str],
-        resolver: Callable[..., Any],
-        *,
-        cache: bool = True,
-    ) -> None:
-        """Register the family's fields and resolver."""
-
-        names = tuple(fields)
-        if not names:
-            raise ValueError(f"family {family!r} registers no fields")
-        if family == "default":
-            raise ValueError("'default' names the default cells, not a family")
-        self.family = family
-        self.fields = names
-        self.resolver = resolver
-        self.cache = cache
-
-    def carry(self, name: str, material: Any) -> LazyCell:
-        """Return the cell a row stores for field ``name`` while it is unresolved."""
-
-        if name not in self.fields:
-            raise KeyError(f"{name!r} is not a field of family {self.family!r}")
-        if material is _MISSING or material.__class__ is LazyCell:
-            raise ValueError(f"family {self.family!r}: a carried cell needs its raw material")
-        return LazyCell(
-            STATE_DERIVED,
-            name,
-            self.family,
-            self.resolver,
-            make=True,
-            cache=self.cache,
-            material=material,
-        )
-
-    def material_of(self, value: Any) -> Any:
-        """Return the material of a raw cell value carried by this family, else ``_MISSING``.
-
-        Lets a reader that needs only part of the raw material (an identity
-        the resolver does not change) peek without resolving the cell.
-        """
-
-        if value.__class__ is LazyCell and value.family == self.family:
-            return value.material
-        return _MISSING
 
 
 def cell_state(store: Any, row: int, fid: int) -> str:

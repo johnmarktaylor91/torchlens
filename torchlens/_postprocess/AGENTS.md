@@ -34,7 +34,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_lazy_param_geometry.py` | 15 support | Finalize deferred geometry for lazy-at-prep params (R43 split from `finalization.py`) |
 | `_column_passes_finalize.py` | 15.5 | Step 15.5 body (aggregate `Layer` build) over the `OpColumns` view, its facade body as the fallback, and the conditional merge and view helpers both share; `finalization._build_layer_logs` delegates to it (split from `finalization.py`) |
 | `_finished_marks.py` | 17 | Step 17 body: per-op finished flag written on the raw rows of a building store, the facade body as the fallback; `finalization._set_tracing_finished` delegates to it |
-| `_replay_template_cells.py` | 9 | Replay templates as a derived on-read family: step 9 stores each `args_template` and `kwargs_template` as a carried cell (raw template plus the trace's label map); the first read renames its labels and binds its `ParentRef` display keys |
+| `_replay_template_cells.py` | 9 | Replay templates as a derived on-read family: step 9 keeps each raw `args_template` and `kwargs_template` in a side column indexed by row (`_trace_core/side_columns.py`), with the trace's label map held once, and stores the field's one shared marker in the cell; the first read renames its labels and binds its `ParentRef` display keys |
 | `saved_summary.py` | 11 support | Saved-output summary refresh helpers (`_refresh_fast_saved_summary`) |
 | `source_provenance.py` | 11, 11.5 | Provenance disclosure warning (`_warn_unattributed_tensor_args`) and source variable names (`_populate_var_names`) |
 | `incremental.py` | fastlog enrichment | Adds module path strings to sparse recordings (`Recording.enrich`) |

@@ -1,17 +1,20 @@
 """Replay argument templates as a derived on-read family.
 
 Capture observes each op's ``args_template`` and ``kwargs_template`` with raw
-labels in its ``ParentRef`` leaves. Step 9 does not rename them: it stores one
-carried cell per template (``REPLAY_TEMPLATES.carry``) holding the raw template
-and the trace's ``TemplateLabels``, and the first read of a template runs
-:func:`resolve_template`. The resolver rebuilds the template with final labels,
-as step 9 used to, and caches on each ``ParentRef`` the display key of the op
-it refers to, as step 17 used to. A template nobody reads is never rebuilt.
+labels in its ``ParentRef`` leaves. Step 9 does not rename them: it keeps the
+raw templates in the family's side columns, indexed by store row, with one
+``TemplateLabels`` per trace, and writes the field's shared marker into each
+set template cell (``REPLAY_TEMPLATES``, a ``SideColumnFamily``). The first
+read of a template runs :func:`resolve_template`. The resolver rebuilds the
+template with final labels, as step 9 used to, and caches on each
+``ParentRef`` the display key of the op it refers to, as step 17 used to. A
+template nobody reads is never rebuilt and costs no object beyond the raw
+template capture already made.
 
 ``TemplateLabels`` holds the raw-to-final label map and a weak reference to
-the trace, whose all-keys lookup gives the display keys. Pickled, it carries
-the map plus the display keys read from the live trace, so a carried cell
-that leaves its trace (a pickled store row) resolves to the same template.
+the trace, whose all-keys lookup gives the display keys. Pickled (with a
+pending template of a replayable op), it carries the map plus the display
+keys read from the live trace, so the load resolves to the same template.
 """
 
 from __future__ import annotations
@@ -20,8 +23,8 @@ import weakref
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from .._trace_core.cell_states import CarriedFamily
-from .._trace_core.record_rows import CORE_KEY
+from .._trace_core.record_rows import CORE_KEY, ROW_KEY
+from .._trace_core.side_columns import SideColumnFamily
 from .._utils._display_keys import display_key
 from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
@@ -35,6 +38,7 @@ __all__ = (
     "TemplateLabels",
     "carry_entry_templates",
     "carry_templates",
+    "resolve_template",
     "rename_replay_entry",
     "template_labels",
 )
@@ -105,15 +109,13 @@ class TemplateLabels:
         return keys
 
 
-def resolve_template(store: Any, row: int, name: str, material: Any) -> Any:
-    """Return the template step 9 and step 17 would have stored for one carried cell.
+def resolve_template(template: Any, labels: TemplateLabels, name: str) -> Any:
+    """Return the template step 9 and step 17 would have stored for one raw template.
 
-    ``material`` is ``(raw template, TemplateLabels)``. Each read builds a new
-    template: the args and kwargs cells of one op resolve to equal but
-    distinct objects, as the per-field rename did.
+    Each read builds a new template: the args and kwargs cells of one op
+    resolve to equal but distinct objects, as the per-field rename did.
     """
 
-    template, labels = material
     renamed = _rename_template_parent_refs(
         template, labels.mapping, labels.parent_ref_cls, labels.field_cache
     )
@@ -126,7 +128,7 @@ def resolve_template(store: Any, row: int, name: str, material: Any) -> Any:
 
 
 #: The family. Its cells cache their answer, so ``op.x is op.x`` holds.
-REPLAY_TEMPLATES = CarriedFamily("replay_templates", TEMPLATE_FIELDS, resolve_template)
+REPLAY_TEMPLATES = SideColumnFamily("replay_templates", TEMPLATE_FIELDS, resolve_template)
 
 
 def _record_key(record: Any) -> str:
@@ -189,24 +191,31 @@ class _StrongRef:
         return self.target
 
 
-def carry_templates(
-    rows: list[list[Any]],
-    fids: dict[str, int],
-    columns: dict[str, list[Any]],
-    labels: TemplateLabels,
-) -> None:
-    """Replace each set template cell of ``rows`` by its carried cell.
+def carry_templates(table: Any, columns: dict[str, list[Any]], labels: TemplateLabels) -> None:
+    """Hold each set template of ``table`` in the side columns and mark its cell.
 
-    ``columns`` holds each template column as read before step 9 wrote
-    anything; a ``None`` template stays ``None``.
+    ``table`` is step 9's raw-row table (``store``, ``row_ids``, ``rows``,
+    ``fids``); ``columns`` holds each template column as read before step 9
+    wrote anything, indexed like ``table.rows``. A ``None`` template stays
+    ``None``.
     """
 
-    carry = REPLAY_TEMPLATES.carry
+    store, row_ids, rows = table.store, table.row_ids, table.rows
+    side = REPLAY_TEMPLATES.bind(store, labels)
+    aligned = row_ids == list(range(len(store)))
     for name in TEMPLATE_FIELDS:
-        fid = fids[name]
-        for row, template in zip(rows, columns[name], strict=True):
+        fid = table.fids[name]
+        templates = columns[name]
+        if aligned:
+            by_row = templates
+        else:
+            by_row = [None] * len(store)
+            for row_id, template in zip(row_ids, templates, strict=True):
+                by_row[row_id] = template
+        marker = REPLAY_TEMPLATES.hold_column(side, name, by_row)
+        for row, template in zip(rows, templates, strict=True):
             if template is not None:
-                row[fid] = carry(name, (template, labels))
+                row[fid] = marker
 
 
 #: Key of the sweep's ``TemplateLabels`` in the per-op path's field-name cache.
@@ -222,36 +231,46 @@ def carry_entry_templates(
 ) -> None:
     """Per-op form of :func:`carry_templates` for traces off the column path.
 
-    A store-backed record gets a carried cell per set template; a record with
-    no row store (a test double) cannot answer one, so its templates are
-    renamed now. The sweep shares one ``TemplateLabels``, kept in its
-    field-name cache.
+    An op on a shared row store has its set templates held in the side
+    columns; a record with no shared row store (a detached row, a test double)
+    cannot hold them, so its templates are renamed now. The sweep shares one
+    ``TemplateLabels``, kept in its field-name cache.
     """
 
     labels = field_cache.get(_LABELS_KEY)
     if labels is None or labels.mapping is not trace._raw_to_final_layer_labels:
         labels = field_cache[_LABELS_KEY] = template_labels(trace, parent_ref_cls)
-    carried = _row_backed(layer_entry)
+    place = _row_place(layer_entry)
+    side = None
+    if place is not None:
+        try:
+            side = REPLAY_TEMPLATES.bind(place[0], labels)
+        except TypeError:  # a detached single-row store holds no side columns
+            side = None
     for name in TEMPLATE_FIELDS:
         template = record_member(layer_entry, name, None)
         if template is None:
             continue
-        if carried:
-            set_entry_field(name, REPLAY_TEMPLATES.carry(name, (template, labels)))
+        if side is not None:
+            set_entry_field(name, REPLAY_TEMPLATES.hold(side, name, place[1], template))
         else:
-            set_entry_field(name, resolve_template(None, 0, name, (template, labels)))
+            set_entry_field(name, resolve_template(template, labels, name))
 
 
-def _row_backed(record: Any) -> bool:
-    """Return whether ``record`` reads its stored fields from a row store.
+def _row_place(record: Any) -> tuple[Any, int] | None:
+    """Return ``(store, row)`` of a record that reads its fields from a row store.
 
     An ``Op`` holds its store in the ``_core`` slot; other facade records in
     their instance dict.
     """
 
-    if getattr(record, "_core", None) is not None:
-        return True
-    return CORE_KEY in getattr(record, "__dict__", ())
+    store = getattr(record, "_core", None)
+    if store is not None:
+        return store, record._row
+    instance_dict = getattr(record, "__dict__", {})
+    if CORE_KEY in instance_dict:
+        return instance_dict[CORE_KEY], instance_dict[ROW_KEY]
+    return None
 
 
 def rename_replay_entry(
