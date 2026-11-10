@@ -300,6 +300,15 @@ def param_index(accessor: Any, param: Any) -> int:
 # ---------------------------------------------------------------- forks
 
 
+def fork_rows(translator: Any) -> ParamRows | None:
+    """Return the ``ParamRows`` of the fork that owns ``translator``, or ``None`` before it has rows."""
+
+    fork_ref = getattr(translator, "_fork_ref", None)
+    fork = fork_ref() if fork_ref is not None else None
+    core = fork.__dict__.get("_trace_core") if fork is not None else None
+    return param_rows_of(core) if core is not None else None
+
+
 def fork_copy(value: Any, translator: Any) -> Any:
     """Return the fork's copy of a parent row-key container, or ``None`` before the fork has rows.
 
@@ -307,10 +316,7 @@ def fork_copy(value: Any, translator: Any) -> Any:
     the copy has the same keys, read through the fork's views.
     """
 
-    fork_ref = getattr(translator, "_fork_ref", None)
-    fork = fork_ref() if fork_ref is not None else None
-    core = fork.__dict__.get("_trace_core") if fork is not None else None
-    rows = param_rows_of(core) if core is not None else None
+    rows = fork_rows(translator)
     if rows is None:
         return None
     if value.__class__ is ParamMap:

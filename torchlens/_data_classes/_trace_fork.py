@@ -58,6 +58,7 @@ from ._fork_flat_copy import _FLAT_COPY_DEPTH, _NO_FLAT_COPY, _flat_container_co
 from ._fork_translation import RowTranslator
 from ._layer_state import install_layer_logs
 from ._op_row_containers import bind_op_containers
+from ._param_fork import seed_param_memo
 from ._state_adapter import state_items, state_new, state_restore
 from .func_call_location import FuncCallLocation
 from .layer import OpAccessor
@@ -322,12 +323,14 @@ class _RecordTranslator(RowTranslator):
         return _iter_parent_ops(trace)
 
 
-def _iter_parent_records(parent: Trace) -> Iterator[Any]:
+def _iter_parent_records(parent: Trace, params_seeded: bool = False) -> Iterator[Any]:
     """Yield the parent's non-Op record facades (modules/calls/params/...).
 
     Enumerates from the owning containers (never the kind tables), so the
     fork maps exactly the objects the parent hands out; ``Layer`` shells are
-    seeded separately because their state lives trace-side.
+    seeded separately because their state lives trace-side. ``Param``
+    records are skipped when ``params_seeded``: the fork's own views stand
+    for them (``_param_fork``).
     """
 
     module_accessor = parent.__dict__.get("_module_logs")
@@ -338,7 +341,7 @@ def _iter_parent_records(parent: Trace) -> Iterator[Any]:
             if calls:
                 yield from calls.values()
     param_accessor = parent.__dict__.get("_param_logs")
-    if param_accessor is not None:
+    if param_accessor is not None and not params_seeded:
         yield from param_accessor.values()
     buffer_accessor = parent.__dict__.get("_buffer_accessor")
     if buffer_accessor is not None:
@@ -586,7 +589,7 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
 
     record_shells: list[tuple[Any, Any]] = []
     detached_records: list[tuple[Any, Any]] = []
-    for parent_record in _iter_parent_records(parent):
+    for parent_record in _iter_parent_records(parent, seed_param_memo(parent, fork_core, memo)):
         if id(parent_record) in shells:
             continue
         shell = state_new(type(parent_record))
