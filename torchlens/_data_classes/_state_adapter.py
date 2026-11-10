@@ -7,6 +7,7 @@ from typing import Any, TypeVar
 
 from .._trace_core.side_columns import SIDE_FIELDS, answer_pending
 from ._op_row_containers import adopt_op_containers, project_op_containers
+from ._param_pin import _ACCESSOR, ROW_FORMS, pin_params, plain_form, project_params
 
 _T = TypeVar("_T")
 
@@ -20,7 +21,7 @@ def plain_state(obj: Any) -> dict[str, Any]:
     through this door, so they see what they saw before the containers changed.
     """
 
-    return project_op_containers(dict(state_items(obj)))
+    return project_params(project_op_containers(dict(state_items(obj))))
 
 
 def answered_state(obj: Any) -> dict[str, Any]:
@@ -42,7 +43,24 @@ def finish_state_restore(trace: _T) -> _T:
     """Turn plain op containers a state walk left on ``trace`` back into row-key ones."""
 
     adopt_op_containers(trace)
+    pin_params(trace)
     return trace
+
+
+def plain_items(obj: Any) -> Iterable[tuple[str, Any]]:
+    """Return ``state_items(obj)``, with plain ``Param`` containers for a ``ParamAccessor``.
+
+    A ``ParamAccessor`` is the one record without a state hook that keeps
+    row-key containers in its own cells; every other object passes through.
+    """
+
+    items = state_items(obj)
+    if not (_ACCESSOR and obj.__class__ is _ACCESSOR[0]):
+        return items
+    return [
+        (name, plain_form(value) if value.__class__ in ROW_FORMS else value)
+        for name, value in items
+    ]
 
 
 def state_items(obj: Any) -> Iterable[tuple[str, Any]]:
@@ -68,7 +86,9 @@ def state_items(obj: Any) -> Iterable[tuple[str, Any]]:
 
     items_hook = getattr(type(obj), "__tl_state_items__", None)
     if items_hook is not None:
-        yield from items_hook(obj)
+        # A record's ``Param`` lists are row-key sequences; streams see plain lists.
+        for name, value in items_hook(obj):
+            yield name, plain_form(value) if value.__class__ in ROW_FORMS else value
         return
     instance_dict = getattr(obj, "__dict__", None)
     if instance_dict is not None:

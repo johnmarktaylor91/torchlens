@@ -403,14 +403,13 @@ def child_keys(children: Any, kind: str, trace: Any, door_keys: Any) -> RowKeys 
     door: list[Any] = []
     for key, child in items.items():
         child_dict = getattr(child, "__dict__", None)
-        if (
-            child_dict is None
-            or child_dict.get(CORE_KEY) is not store
-            or id(child) not in door_keys
-        ):
+        if child_dict is None or child_dict.get(CORE_KEY) is not store:
+            return None
+        identity = _door_identity(child, kind)
+        if identity not in door_keys:
             return None
         keys[key] = child_dict[ROW_KEY]
-        door.append(door_keys[id(child)])
+        door.append(door_keys[identity])
     keys.build = type(children)
     keys.door = tuple(door)
     keys.home = weakref.ref(trace)
@@ -532,8 +531,51 @@ class ChildAccessorField(RecordCellField):
             record,
             self._name,
             held,
-            lambda: held.build(_children_in(trace, held, kind, "Module")),
+            (lambda: held.build(_children_in(trace, held, kind, "Module")))
+            if kind != "param"
+            else lambda: _owned(trace, kind, held.build(_children_in(trace, held, kind, "Module"))),
         )
+
+
+def _door_identity(child: Any, kind: str) -> Any:
+    """Return what names ``child`` in its door: its row for a ``Param``, else its identity.
+
+    A trace hands out ``Param`` views built on demand, so two views of one row
+    may differ in identity and one ``id`` may name different views over time.
+    """
+
+    return child.__dict__.get(ROW_KEY) if kind == "param" else id(child)
+
+
+def _door_identities(mapping: Any, kind: str, store: Any) -> dict[Any, Any]:
+    """Return ``identity -> key`` for the records a door maps (see ``_door_identity``).
+
+    For ``Param`` only records over ``store`` count: a row names a record of one store.
+    """
+
+    if kind != "param":
+        return {id(child): key for key, child in mapping.items()}
+    return {
+        child.__dict__.get(ROW_KEY): key
+        for key, child in mapping.items()
+        if child.__dict__.get(CORE_KEY) is store
+    }
+
+
+#: ``own_children`` from the param pin module, bound there at import (no import cycle).
+_OWN_CHILDREN: list[Any] = []
+
+
+def bind_own_children(own_children: Any) -> None:
+    """Bind the param pin module's ``own_children``; that module calls this once at import."""
+
+    _OWN_CHILDREN[:] = [own_children]
+
+
+def _owned(trace: Any, kind: str, accessor: Any) -> Any:
+    """Return a module's built child accessor, its ``Param`` containers held by row."""
+
+    return _OWN_CHILDREN[0](trace, kind, accessor)
 
 
 def install_child_fields(cls: type, fields: Mapping[str, str | None]) -> None:
@@ -592,7 +634,9 @@ def rekey_child_cells(records: Iterable[Any], trace: Any) -> None:
             if kind not in door_keys:
                 mapping = _door_of(trace, kind)
                 door_keys[kind] = (
-                    None if mapping is None else {id(child): key for key, child in mapping.items()}
+                    None
+                    if mapping is None
+                    else _door_identities(mapping, kind, _core_of(trace).kind_rows.get(kind))
                 )
             keys = child_keys(held, kind, trace, door_keys[kind])
             if keys is not None:

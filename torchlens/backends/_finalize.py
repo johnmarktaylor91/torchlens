@@ -10,6 +10,7 @@ from typing import Any, Literal, TypeAlias, cast
 
 from .._capture._nonfinite_prefix import strip_raw_label_suffix
 from .._data_classes._compaction import compact_op_metadata
+from .._data_classes._param_pin import param_key
 from .._data_classes._site_key import SiteKeyMinter
 from .._data_classes._trace_state_io import fill_unset_declared_fields
 from .._data_classes.layer import Layer
@@ -667,7 +668,7 @@ def _apply_recurrence_relabel_epilogue(
 def _attach_param_usage(
     trace: Trace,
     op_log: Any,
-    membership_by_param: dict[int, tuple[set[str], set[str], set[str]]] | None = None,
+    membership_by_param: dict[Any, tuple[set[str], set[str], set[str]]] | None = None,
 ) -> None:
     """Update parameter usage cross-links for params attached to one op.
 
@@ -678,12 +679,11 @@ def _attach_param_usage(
     op_log:
         Finalized op log that may carry ``_param_logs``.
     membership_by_param:
-        Per-pass membership memo shared across ops (back-port of the torch
-        path's ``finalization.py`` set-based membership). Without it, the
-        bare ``label not in param.used_by_ops`` list scans made a parameter
-        consumed by ``m`` ops cost O(m^2) on EVERY preview backend. The
-        lists stay authoritative and keep first-seen order; the sets only
-        replace the growing-list scans.
+        Per-pass membership memo shared across ops, keyed by ``param_key``
+        (back-port of the torch path's set-based membership). Without it,
+        the bare ``label not in param.used_by_ops`` list scans made a
+        parameter consumed by ``m`` ops cost O(m^2) on EVERY preview
+        backend; the lists stay authoritative and keep first-seen order.
 
     Returns
     -------
@@ -694,14 +694,14 @@ def _attach_param_usage(
     if membership_by_param is None:
         membership_by_param = {}
     for param in op_log._param_logs:
-        membership = membership_by_param.get(id(param))
+        membership = membership_by_param.get(param_key(param))
         if membership is None:
             membership = (
                 set(param.used_by_ops),
                 set(param.used_by_layers),
                 set(trace.layers_with_params[param.barcode]),
             )
-            membership_by_param[id(param)] = membership
+            membership_by_param[param_key(param)] = membership
         used_by_ops, used_by_layers, layer_membership = membership
         if op_log.label not in used_by_ops:
             param.used_by_ops.append(op_log.label)

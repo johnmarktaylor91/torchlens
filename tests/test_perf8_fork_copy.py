@@ -569,6 +569,7 @@ def _labels(trace: Any, keep: list[Any]) -> dict[int, Any]:
             labels.setdefault(id(call), ("call", key, call_key))
     params = trace.__dict__.get("_param_logs")
     for key, param in params._dict.items() if params is not None else ():
+        keep.append(param)  # a Param is a view built on lookup, like a Layer
         labels.setdefault(id(param), ("param", key))
     return labels
 

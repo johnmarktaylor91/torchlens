@@ -25,11 +25,17 @@ from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._buffer_rows import fork_module_accessor
+from ._param_pin import fork_copy
+from ._param_rows import ROW_FORMS
 from ._state_adapter import state_new
 
 _OBJECT_SETATTR = object.__setattr__
 _OBJECT_GETATTRIBUTE = object.__getattribute__
 _OP_KIND = "op"
+#: Class -> ``copier(value, translator)``: the fork's copy of a parent row-key container,
+#: and (added by ``_param_fork``) the fork's ``Param`` for a parent ``Param``.
+FORK_COPIERS: dict[type, Any] = {}
+FORK_COPIERS.update(dict.fromkeys(ROW_FORMS, fork_copy))
 
 
 def _bound_op(op: Any, op_cls: type, store: Any, row: int) -> bool:
@@ -359,7 +365,9 @@ class RowTranslator:
         key = (kind, value.__dict__[ROW_KEY])
         shell_ref = self._shells.get(key)
         if shell_ref is None:
-            return None
+            # No shell for this row (a kind the fork maps by row, ``Param``).
+            copier = FORK_COPIERS.get(value.__class__)
+            return None if copier is None else copier(value, self)
         shell = shell_ref()
         if shell is None:
             # No fork door holds this record any more. A record over a view is
@@ -374,12 +382,25 @@ class RowTranslator:
             self._shells[key] = weakref.ref(shell)
         return shell
 
+    def row_of(self, value: Any) -> tuple[str, int] | None:
+        """Return ``(kind, row)`` for a record bound to one of the parent's row stores, or ``None``."""
+
+        stores = self._stores
+        store = value.__dict__.get(CORE_KEY)
+        entry = stores.get(id(store)) if stores is not None and store is not None else None
+        if entry is None or entry[0]() is not store:
+            return None
+        return entry[1], value.__dict__[ROW_KEY]
+
     def _other(self, value: Any, cls: type) -> Any:
         """Translate the parent trace or a cell-stored accessor; learn a miss class."""
 
         parent_ref = self._parent_ref
         if parent_ref is not None and value is parent_ref():
             return self._fork_ref() if self._fork_ref is not None else None
+        copier = FORK_COPIERS.get(cls)
+        if copier is not None:
+            return copier(value, self)
         if isinstance(value, Accessor):
             return self._rebuild_accessor(value)
         if (

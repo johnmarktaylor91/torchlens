@@ -40,15 +40,11 @@ from .._quantities import Bytes
 from .._utils._display_errors import short_name_message
 from ._accessor_base import Accessor
 from ._lookup_kinds import converted, param_for_key
+from ._param_fork import bind_fork_param
+from ._param_pin import bind_param_classes, param_index, param_key as param_key
 from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .op import GradientRecord, GradientRecordAccessor
-
-#: Per-accessor id -> position maps for ``Param.index`` (weakly keyed
-#: so a dropped accessor releases its map). Entries are verified by identity
-#: against the accessor's current ``_list`` before use, so a stale map can
-#: only trigger a rebuild, never a wrong answer.
-_ORDINAL_INDEX_CACHE: "weakref.WeakKeyDictionary[Any, dict[int, int]]" = weakref.WeakKeyDictionary()
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -178,6 +174,8 @@ class Param:
     >>> type(param).__name__, param.address, tuple(param.shape)
     ('Param', '0.weight', (4, 3, 3, 3))
     """
+
+    __slots__ = ("__dict__", "__weakref__", "_owner")  # _owner: the trace a handed-out view holds
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "module_address": FieldPolicy.KEEP,
@@ -337,34 +335,15 @@ class Param:
 
     @property
     def index(self) -> int:
-        """Return this Param's 0-based position in ``trace.params``.
+        """Return this Param's 0-based position in ``trace.params`` (-1 with no trace).
 
-        Amortized O(1): the historical ``list(trace.params).index(self)``
-        materialized the accessor (through its ref-rehydrating ``__iter__``)
-        and identity-scanned it on EVERY read, so a full-table sweep measured
-        a ~2.1 scaling exponent. The id-keyed position map is cached per
-        accessor and verified by identity before use (stale caches rebuild),
-        so results are exactly the historical identity semantics.
+        Amortized O(1): the position map is cached per accessor, keyed by row
+        (never by object identity, which a rebuilt view does not keep), and
+        verified before use, so a stale map only triggers a rebuild.
         """
 
         trace = self.trace
-        if trace is None:
-            return -1
-        accessor = trace.params
-        items = getattr(accessor, "_list", None)
-        if not isinstance(items, list):
-            return list(accessor).index(self)
-        cache = _ORDINAL_INDEX_CACHE.get(accessor)
-        if cache is not None and len(cache) == len(items):
-            index = cache.get(id(self))
-            if index is not None and items[index] is self:
-                return index
-        cache = {id(param): position for position, param in enumerate(items)}
-        _ORDINAL_INDEX_CACHE[accessor] = cache
-        index = cache.get(id(self))
-        if index is None:
-            raise ValueError(f"{self.address!r} is not in trace.params")
-        return index
+        return -1 if trace is None else param_index(trace.params, self)
 
     @property
     def module(self) -> Any:
@@ -935,6 +914,8 @@ class ParamAccessor(Accessor["Param"]):
     Available as ``trace.params``, ``layer_log.params``, ``module_log.params``.
     """
 
+    __slots__ = ("_owner",)  # the accessor ``trace.params`` hands out keeps its trace
+
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
@@ -1082,3 +1063,7 @@ class ParamAccessor(Accessor["Param"]):
 
         rows = [_param_log_to_row(param_log) for param_log in self._list]
         return pd.DataFrame(rows, columns=PARAM_LOG_FIELD_ORDER)
+
+
+bind_param_classes(Param, ParamAccessor)
+bind_fork_param(Param)

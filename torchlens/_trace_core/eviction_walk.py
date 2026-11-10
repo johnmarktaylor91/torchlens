@@ -130,6 +130,10 @@ def _evict_payloads_in_cell(
             else:
                 inert.refused.add(cls)
         return value
+    if cls.__dict__.get("_ROW_KEYS_ONLY") is True:
+        # A record row form: row keys and records only, which the walk returns unchanged.
+        inert.add(cls)
+        return value
     if depth >= _EVICT_WALK_DEPTH_CEILING:
         return value
     return _evict_payloads_in_subclass(value, tensor_cls, depth, seen, inert)

@@ -341,6 +341,15 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # module can build Layer views without importing it; never mutated
         # by a capture.
         ("torchlens/_data_classes/_layer_state.py", "_LAYER_CLASS"),
+        # The Param and ParamAccessor classes param.py binds once at import
+        # so the param row modules import no record class, the fork
+        # translator's class -> copier table for row-key param containers,
+        # filled at import, and the pin function the param pin module binds
+        # into the module child field at import; none is mutated by a capture.
+        ("torchlens/_data_classes/_param_rows.py", "_PARAM"),
+        ("torchlens/_data_classes/_param_pin.py", "_ACCESSOR"),
+        ("torchlens/_trace_core/record_refs.py", "_OWN_CHILDREN"),
+        ("torchlens/_data_classes/_fork_translation.py", "FORK_COPIERS"),
         # The OpAccessor class (and an empty subclass of it) the layer
         # accessors bind once at import so the ``Layer.ops`` door can hand out
         # an accessor without importing it; never mutated by a capture.
@@ -725,9 +734,10 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Per-trace grad_fn-call ordinal index (fix/walkers f399c63a, linear
         # ordinal_index): keyed weakly by the owning trace, dies with it.
         ("torchlens/_data_classes/grad_fn_call.py", "_ORDINAL_POSITIONS_CACHE"),
-        # Per-accessor param ordinal index, keyed weakly by the owning
-        # accessor; entries die with it (mirror of _ORDINAL_POSITIONS_CACHE).
-        ("torchlens/_data_classes/param.py", "_ORDINAL_INDEX_CACHE"),
+        # Param stream sessions, keyed weakly by the trace's param resolver: one
+        # memo per state stream in flight, closed by a finalizer on that
+        # stream's own state; entries die with the resolver.
+        ("torchlens/_data_classes/_param_pin.py", "_SESSIONS"),
         # Live telemetry relations are keyed by AtenOp facades and disappear
         # with those rows; they never retain a Trace or profiler session.
         ("torchlens/_kernel_telemetry.py", "_ATEN_KERNELS"),
@@ -1147,7 +1157,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/_data_classes/_compaction.py", "_COMPACTED_TRACES"),
         ("torchlens/_data_classes/_nonfinite.py", "_MEMOS"),
         ("torchlens/_data_classes/grad_fn_call.py", "_ORDINAL_POSITIONS_CACHE"),
-        ("torchlens/_data_classes/param.py", "_ORDINAL_INDEX_CACHE"),
+        ("torchlens/_data_classes/_param_pin.py", "_SESSIONS"),
         ("torchlens/_kernel_telemetry.py", "_ATEN_KERNELS"),
         ("torchlens/_visualization/auto_collapse.py", "_ANALYSIS_CACHE"),
         ("torchlens/_visualization/auto_collapse.py", "_OP_ADJACENCY_INDEX_CACHE"),
