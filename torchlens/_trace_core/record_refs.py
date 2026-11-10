@@ -405,19 +405,15 @@ def child_keys(children: Any, kind: str, trace: Any, door_keys: Any) -> RowKeys 
     keys = RowKeys()
     door: list[Any] = []
     for key, child in items.items():
-        try:
-            child_dict = child.__dict__
-        except AttributeError:
-            return None
-        identity = id(child)
+        child_dict = getattr(child, "__dict__", None)
         if (
-            CORE_KEY not in child_dict
-            or child_dict[CORE_KEY] is not store
-            or identity not in door_keys
+            child_dict is None
+            or child_dict.get(CORE_KEY) is not store
+            or id(child) not in door_keys
         ):
             return None
         keys[key] = child_dict[ROW_KEY]
-        door += (door_keys[identity],)
+        door.append(door_keys[id(child)])
     keys.build = type(children)
     keys.door = tuple(door)
     keys.home = weakref.ref(trace)
