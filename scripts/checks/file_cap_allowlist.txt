@@ -351,9 +351,9 @@ torchlens/_postprocess/control_flow.py::_materialize_conditional_records	138
 torchlens/_postprocess/control_flow.py::_merge_buffer_entries	150
 torchlens/_postprocess/control_flow.py::_merge_same_version_buffers	68
 torchlens/_postprocess/control_flow.py::_repropagate_ancestry_after_buffer_wiring	64
-torchlens/_postprocess/finalization.py	1475
-torchlens/_postprocess/finalization.py::_build_conditional_records	147
-torchlens/_postprocess/finalization.py::_build_module_logs	205
+torchlens/_postprocess/finalization.py	1465
+torchlens/_postprocess/finalization.py::_build_conditional_records	137
+torchlens/_postprocess/finalization.py::_build_module_logs	203
 torchlens/_postprocess/finalization.py::_build_root_module_log	101
 torchlens/_postprocess/finalization.py::_build_submodule_call_logs	98
 torchlens/_postprocess/finalization.py::_finalize_param_logs	71
@@ -477,7 +477,7 @@ torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98
 torchlens/_trace_core/op_store.py	1668
 torchlens/_trace_core/op_store.py::OpRowStore.__init__	72
 torchlens/_trace_core/relation_views.py::freeze_op_relation_views	136
-torchlens/_trace_core/relation_views.py::freeze_trace_relation_views	79
+torchlens/_trace_core/relation_views.py::freeze_trace_relation_views	71
 torchlens/_trace_selector_helpers.py::_make_layers_to_save_predicate	76
 torchlens/_training_validation.py::validate_training_compatibility	69
 torchlens/_user_funcs.py::trace	222

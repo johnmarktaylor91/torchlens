@@ -3475,10 +3475,10 @@ docs-md	docs/maintainers/where.md	144
 docs-md	docs/maintainers/where.md	1440
 docs-md	docs/maintainers/where.md	145
 docs-md	docs/maintainers/where.md	146
+docs-md	docs/maintainers/where.md	1465
 docs-md	docs/maintainers/where.md	14664
 docs-md	docs/maintainers/where.md	1468
 docs-md	docs/maintainers/where.md	147
-docs-md	docs/maintainers/where.md	1475
 docs-md	docs/maintainers/where.md	148
 docs-md	docs/maintainers/where.md	149
 docs-md	docs/maintainers/where.md	15
@@ -3546,6 +3546,7 @@ docs-md	docs/maintainers/where.md	1767
 docs-md	docs/maintainers/where.md	1768
 docs-md	docs/maintainers/where.md	177
 docs-md	docs/maintainers/where.md	1772
+docs-md	docs/maintainers/where.md	1773
 docs-md	docs/maintainers/where.md	178
 docs-md	docs/maintainers/where.md	179
 docs-md	docs/maintainers/where.md	18
@@ -3602,7 +3603,6 @@ docs-md	docs/maintainers/where.md	2041
 docs-md	docs/maintainers/where.md	205
 docs-md	docs/maintainers/where.md	206
 docs-md	docs/maintainers/where.md	207
-docs-md	docs/maintainers/where.md	20764
 docs-md	docs/maintainers/where.md	208
 docs-md	docs/maintainers/where.md	209
 docs-md	docs/maintainers/where.md	2091
@@ -3612,6 +3612,7 @@ docs-md	docs/maintainers/where.md	2102
 docs-md	docs/maintainers/where.md	211
 docs-md	docs/maintainers/where.md	2111
 docs-md	docs/maintainers/where.md	212
+docs-md	docs/maintainers/where.md	21284
 docs-md	docs/maintainers/where.md	213
 docs-md	docs/maintainers/where.md	214
 docs-md	docs/maintainers/where.md	2141
@@ -3809,7 +3810,7 @@ docs-md	docs/maintainers/where.md	371
 docs-md	docs/maintainers/where.md	3710
 docs-md	docs/maintainers/where.md	372
 docs-md	docs/maintainers/where.md	373
-docs-md	docs/maintainers/where.md	37320
+docs-md	docs/maintainers/where.md	37322
 docs-md	docs/maintainers/where.md	374
 docs-md	docs/maintainers/where.md	376
 docs-md	docs/maintainers/where.md	377
@@ -3876,6 +3877,7 @@ docs-md	docs/maintainers/where.md	430
 docs-md	docs/maintainers/where.md	431
 docs-md	docs/maintainers/where.md	432
 docs-md	docs/maintainers/where.md	4328
+docs-md	docs/maintainers/where.md	433
 docs-md	docs/maintainers/where.md	434
 docs-md	docs/maintainers/where.md	436
 docs-md	docs/maintainers/where.md	437
@@ -3897,6 +3899,7 @@ docs-md	docs/maintainers/where.md	452
 docs-md	docs/maintainers/where.md	453
 docs-md	docs/maintainers/where.md	454
 docs-md	docs/maintainers/where.md	45437
+docs-md	docs/maintainers/where.md	45495
 docs-md	docs/maintainers/where.md	455
 docs-md	docs/maintainers/where.md	45559
 docs-md	docs/maintainers/where.md	456
@@ -3969,6 +3972,7 @@ docs-md	docs/maintainers/where.md	539
 docs-md	docs/maintainers/where.md	54
 docs-md	docs/maintainers/where.md	540
 docs-md	docs/maintainers/where.md	5407
+docs-md	docs/maintainers/where.md	542
 docs-md	docs/maintainers/where.md	544
 docs-md	docs/maintainers/where.md	546
 docs-md	docs/maintainers/where.md	547
@@ -4039,8 +4043,8 @@ docs-md	docs/maintainers/where.md	628
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	631
-docs-md	docs/maintainers/where.md	6316
 docs-md	docs/maintainers/where.md	632
+docs-md	docs/maintainers/where.md	6330
 docs-md	docs/maintainers/where.md	634
 docs-md	docs/maintainers/where.md	635
 docs-md	docs/maintainers/where.md	638
@@ -4099,6 +4103,7 @@ docs-md	docs/maintainers/where.md	711
 docs-md	docs/maintainers/where.md	711619
 docs-md	docs/maintainers/where.md	712
 docs-md	docs/maintainers/where.md	712310
+docs-md	docs/maintainers/where.md	712904
 docs-md	docs/maintainers/where.md	714
 docs-md	docs/maintainers/where.md	715
 docs-md	docs/maintainers/where.md	717
@@ -6494,6 +6499,7 @@ package-docstrings	torchlens/_postprocess/_ingest_contract.py	9.1
 package-docstrings	torchlens/_postprocess/_ingest_contract.py	9.3.
 package-docstrings	torchlens/_postprocess/_label_rename.py	10
 package-docstrings	torchlens/_postprocess/_layer_conditional_merge.py	15.5.
+package-docstrings	torchlens/_postprocess/_layer_row_scan.py	15.5
 package-docstrings	torchlens/_postprocess/_lazy_param_geometry.py	15
 package-docstrings	torchlens/_postprocess/_lazy_param_geometry.py	43
 package-docstrings	torchlens/_postprocess/_materialize.py	9.1

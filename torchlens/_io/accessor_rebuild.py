@@ -11,6 +11,7 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._op_column_scan import ops_with
 from .._data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
 from .._data_classes.buffer import Buffer, BufferAccessor
 from .._data_classes.module import ModuleAccessor
@@ -102,7 +103,8 @@ def rebuild_buffer_accessor(trace: Trace) -> None:
     trace_ref = weakref.ref(trace)
     for param in trace.__dict__.get("_param_logs") or ():
         name_owner_by_row(trace_ref, param)
-    for entry in trace._layer_list:
+    # Only an op with gradient records or a buffer flag has work here.
+    for entry in ops_with(trace, "_grad_records", "is_buffer"):
         name_owner_by_row(trace_ref, entry)
         if record_member(entry, "is_buffer", False) and entry.buffer_address is not None:
             buffer_versions.setdefault(entry.buffer_address, []).append(entry)

@@ -1,42 +1,49 @@
-"""Step 15.5 (build aggregate ``Layer`` records) over ``Op`` column views.
+"""Step 15.5 (aggregate ``Layer`` records): a pending state per layer, built on first lookup.
 
-The pass groups ``trace._layer_list`` by ``layer_label`` into aggregate
-``Layer`` records, merges the multi-pass aggregate fields, sums autograd
-memory and refreshes the conditional views. Its per-op field reads and writes
-run through bound :class:`~torchlens._data_classes._op_columns.OpColumns`
-accessors whenever every op shares one row store; otherwise the facade body
-runs. Both bodies visit the same ops in the same order and perform the same
-reads (same short-circuits) and writes, so the stored result is identical
-(checked by per-pass store and layer fingerprints over the corpus).
+The step no longer builds every ``Layer``. One raw scan of the op rows
+(:mod:`._layer_row_scan`) groups the passes of each layer into a pending
+state, stamps the op columns the step owns and indexes the ops by pass. A
+layer's state is built the first time one of the layer store's doors hands
+that layer out (:func:`build_layer_state`), from the facts the scan kept at
+that moment, so the state does not depend on when or through which door the
+layer is first looked up.
 
-Layer construction, the constant-op predicates and the multi-pass parameter
-addresses keep reading the ``Op`` facade: they run once per layer or once per
-op through shared predicates other passes call.
+The scan keeps facts for a layer with nothing to merge beyond its pass lists,
+its autograd sums and the two flags a later pass can raise. Every other layer
+runs the merge inside the step: the multi-pass aggregate fields, the autograd
+sums, the multi-pass reconcile and the conditional views, reading its passes
+through bound :class:`~torchlens._data_classes._op_columns.OpColumns` getters
+or, for a short layer or ops not backed by one row store, through the ``Op``
+facade.
+
+A trace with a conditional event builds every layer inside the step, before
+the conditional rebind changes the op fields the layers copy. So does a trace
+whose ops are not rows of one building row store.
 """
 
 from __future__ import annotations
 
-from collections import OrderedDict
 from collections.abc import Callable, Iterable
 from itertools import zip_longest
 from typing import TYPE_CHECKING, Any, cast
 
-from .._data_classes._layer_state import install_layer_logs
-from .._data_classes._op_columns import column_rows_by_label
+from .._data_classes._layer_state import PENDING, LayerStore
+from .._data_classes._op_columns import OpColumns, column_rows_by_label
+from .._data_classes._op_row_containers import OpSequence
 from .._quantities import Bytes
+from .._trace_core.op_store import OpRowStore
 from .._utils._record_group_table import record_member
 from ..backends._constants import is_constant_op
+from ._layer_row_scan import RowScan
 
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
     from .._data_classes.trace import Trace
 
-__all__ = ("build_layer_logs",)
+__all__ = ("build_layer_logs", "build_layer_state")
 
-#: Fields step 15.5 reads per op; bound once per pass on the column path.
+#: Fields the layer merge reads per op; bound once per layer on the column path.
 _READ_FIELDS = (
-    "layer_label",
-    "is_constant",
     "has_input_ancestor",
     "io_role",
     "is_atomic_module",
@@ -45,16 +52,16 @@ _READ_FIELDS = (
     "conditional_branch_stack",
     "in_conditionals",
     "conditional_arm_children",
-    "_param_logs",
-    "annotations",
     "autograd_memory",
     "num_autograd_tensors",
     "conditional_entry_children",
 )
+#: A layer with fewer passes than this reads the facade: binding getters costs more.
+_COLUMN_READ_PASSES = 8
 
 
-def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., None]) -> None:
-    """Build ``trace._layer_logs`` and the autograd-memory total (step 15.5 body).
+def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., None]) -> bool:
+    """Fill ``trace._layer_logs`` with pending layer states (step 15.5 body).
 
     Parameters
     ----------
@@ -64,27 +71,224 @@ def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., N
         The aggregate ``Layer`` class (passed in so this module stays outside
         the record import cycle).
     reconcile:
-        Multi-pass reconcile applied to every aggregate layer after its
-        autograd sums (``finalization._reconcile_multipass_layer_fields``),
-        called as ``reconcile(layer, read)`` with the pass's field reader.
+        Multi-pass reconcile applied to every merged layer after its autograd
+        sums (``finalization._reconcile_multipass_layer_fields``), called as
+        ``reconcile(layer, read)`` with the layer's field reader.
+
+    Returns
+    -------
+    bool
+        Whether the scan already reset each op's conditional fields (a trace
+        with no conditional event). When ``False`` every layer is built and
+        the caller runs its per-op rebind.
     """
 
-    ops = list(trace._layer_list)  # one local list: the ``id()`` keys below need live records
-    # Keyed by position, not label: reading every label would cost a facade read per op.
-    lookup = column_rows_by_label(cast("dict[str, Any]", dict(enumerate(ops)))) if ops else None
-    if lookup is None:
-        layer_logs = _group_passes_facade(ops, layer_class)
-        total = _sum_autograd(layer_logs, reconcile, _facade_reader)
-    else:
-        columns, rows_by_index = cast("tuple[Any, dict[int, int]]", lookup)
+    scan = _row_scan(trace)
+    if scan is None:
+        _group_through_facade(trace, layer_class, reconcile)
+        return False
+    scan.run()
+    trace._cost_total_autograd_memory = scan.total()
+    trace._by_pass = scan.by_pass
+    logs = LayerStore(trace)
+    logs.adopt_pending(scan.pending_states(), build_layer_state)
+    scan.core._views.layers.pad(len(scan.rows))
+    trace.__dict__["_layer_logs"] = logs
+    if scan.eager or scan.merged:
+        _merge_inside_step(logs, scan, layer_class, reconcile)
+    return not scan.eager
+
+
+def _merge_inside_step(
+    logs: LayerStore, scan: RowScan, layer_class: type, reconcile: Callable[..., None]
+) -> None:
+    """Merge now each layer the scan kept no facts for (every layer of an eager scan)."""
+
+    read = None
+    if scan.eager:
+        # Every layer is merged: all read through one set of bound column getters.
+        columns = scan.columns
+        ops = list(scan.trace._layer_list)  # held: the ``id()`` keys below need live records
         get = {name: columns.getter(name) for name in _READ_FIELDS}
-        row_of = {id(op): rows_by_index[index] for index, op in enumerate(ops)}
-        layer_logs = _group_passes_columns(
-            ops, layer_class, get, columns.setter("is_constant"), row_of
-        )
-        total = _sum_autograd(layer_logs, reconcile, _column_reader(columns, get, row_of))
-    trace._cost_total_autograd_memory = total
-    install_layer_logs(trace, layer_logs)
+        row_of = dict(zip(map(id, ops), scan.keys, strict=True))
+        read = _column_reader(columns, get, row_of)
+    for state in list(dict.values(logs)):
+        if state[PENDING] is True:
+            _merge_layer_state(state, True, layer_class, reconcile, read)
+    if scan.eager:
+        logs.build_pending()  # nothing is left pending: clears the store's flag
+
+
+def _row_scan(trace: Trace) -> RowScan | None:
+    """Return the raw scan for ``trace``, or ``None`` when its ops are not rows of one row store."""
+
+    ops = trace._layer_list
+    core = trace.__dict__.get("_trace_core")
+    if ops.__class__ is not OpSequence or not ops or core is None:
+        return None
+    lookup = column_rows_by_label(cast("dict[str, Any]", {0: ops[0]}))
+    if lookup is None:
+        return None
+    columns = lookup[0]
+    store = columns.store
+    keys = list(list.__iter__(ops))
+    if (
+        store.__class__ is not OpRowStore
+        or store._rows is None
+        or core.ops is not store
+        or ops._owner._store is not store
+        or min(keys) < 0
+    ):
+        return None
+    try:
+        return RowScan(trace, core, columns, keys, rebind=not trace._graph_conditional_records)
+    except ValueError:
+        return None
+
+
+def _group_through_facade(trace: Trace, layer_class: type, reconcile: Callable[..., None]) -> None:
+    """Group, stamp and build every layer through the ``Op`` facade (no row store to scan)."""
+
+    ops = list(trace._layer_list)
+    states: dict[str, dict[str, Any]] = {}
+    by_pass: dict[int, list[int]] = {}
+    memories = []
+    for position, op in enumerate(ops):
+        # backends.2 constants stamp: rule-running backends set it; torch eager is stamped here.
+        op.is_constant = bool(op.is_constant) or is_constant_op(op)
+        _annotate_tied(op)
+        memory = record_member(op, "autograd_memory")
+        if memory is not None:
+            memories.append(memory)
+        state = states.setdefault(op.layer_label, {PENDING: []})
+        state[PENDING].append(op)
+        if getattr(op, "pass_number", None) is not None:
+            by_pass.setdefault(op.pass_number, []).append(position)
+    trace._cost_total_autograd_memory = Bytes(sum(map(int, memories))) if memories else None
+    trace._by_pass = by_pass
+    logs = LayerStore(trace)
+    logs.adopt_pending(states, build_layer_state)
+    trace.__dict__["_layer_logs"] = logs
+    for state in states.values():
+        _merge_layer_state(state, state[PENDING], layer_class, reconcile, None)
+    logs.build_pending()  # nothing is left pending: clears the store's flag
+
+
+def _annotate_tied(op: Any) -> None:
+    """Note the tied parameters of one op in its ``annotations`` (facade twin of the scan's)."""
+
+    linked_labels = []
+    for param_log in record_member(op, "_param_logs"):
+        for alias_address in getattr(param_log, "all_addresses", []):
+            if alias_address != param_log.address:
+                linked_labels.append(f"{param_log.address} → {alias_address}")
+    if linked_labels:
+        record_member(op, "annotations")["tied_parameter_notation"] = linked_labels
+
+
+def build_layer_state(state: dict[str, Any]) -> None:
+    """Build one pending layer ``state`` in place: the layer's first lookup.
+
+    The pending value is the scan's ``(pass labels, pass numbers, autograd
+    memory, autograd tensors, has input ancestor, is atomic module)``. The
+    step merges every layer the scan kept no such facts for before it
+    returns, so no other pending value reaches a lookup.
+    """
+
+    labels, numbers, memory, count, has_input, atomic = state[PENDING]
+    if memory is not None:
+        memory = Bytes(int(memory))
+        count = 0 if count is None else count
+    else:
+        count = None
+    accessor = state["ops"]
+    views = accessor._store.dataflow_edges is not None  # the relation freeze already ran
+    del state["ops"], state[PENDING]
+    state["in_conditionals"] = () if views else []
+    state["terminal_bool_for"] = None
+    state["_is_in_conditional_body"] = False
+    state["conditional_role_stacks"] = ([],) if views else [[]]
+    state["conditional_branch_stack_ops"] = {(): numbers}
+    state["conditional_arm_children"] = {}
+    state["annotations"] = {}
+    state["ops"] = accessor
+    state["call_labels"] = labels
+    if has_input:
+        state["has_input_ancestor"] = True
+    if atomic:
+        state["is_atomic_module"] = True
+    state["autograd_memory"] = memory
+    state["total_autograd_memory"] = memory
+    state["num_autograd_tensors"] = count
+    state["conditional_entry_children"] = () if views else []
+    state["conditional_then_children"] = () if views else []
+    state["conditional_elif_children"] = {}
+    state["conditional_else_children"] = () if views else []
+
+
+def _merge_layer_state(
+    state: dict[str, Any], arrivals: Any, layer_class: type, reconcile: Any, read: Any
+) -> None:
+    """Build a pending layer state by the full merge over its passes.
+
+    ``arrivals`` is ``True`` for a layer keyed by the scan, else its ops in
+    arrival order. ``read`` is the bound field reader, or ``None`` to pick one
+    for this layer. The state is replaced only when the merge succeeds.
+    """
+
+    accessor = state.get("ops")
+    scratch: dict[str, Any] = {}
+    layer = layer_class.__new__(layer_class)
+    layer.__dict__ = scratch
+    keyed = accessor is not None and "_order" not in accessor.__dict__
+    if arrivals is True:
+        arrivals = accessor.values() if keyed else [accessor[at] for at in accessor._order]
+    layer_class.__init__(layer, arrivals[0])
+    if keyed:
+        scratch["ops"] = accessor
+    if read is None:
+        read = _pass_reader(accessor, arrivals) if keyed else _facade_reader
+    for index, op in enumerate(arrivals):
+        _merge_pass(layer, op, read, first=not index, keyed=keyed)
+    _set_layer_autograd(layer, read)
+    reconcile(layer, read)
+    _rebuild_layer_log_conditional_views(layer, read)
+    # The roles a layer of a trace with no conditional holds; the rebind overwrites it otherwise.
+    scratch["in_conditionals"] = []
+    state.clear()
+    state.update(scratch)
+
+
+def _merge_pass(layer: Any, op: Any, read: Any, *, first: bool, keyed: bool) -> None:
+    """Merge one pass into its layer (the multi-pass rules of ``finalization._build_layer_logs``)."""
+
+    if not first:
+        if read(op, "has_input_ancestor"):
+            layer._graph_has_input_ancestor = True
+        role = read(op, "io_role")
+        if layer._graph_io_role is not None and role is not None:
+            layer._graph_io_role = _merge_io_role(layer._graph_io_role, role)
+        if read(op, "is_atomic_module"):
+            layer._module_context_is_atomic_module = True
+    number = read(op, "pass_number")
+    if not keyed:
+        layer.ops[number] = op
+    layer.call_labels.append(read(op, "label"))
+    stack = read(op, "conditional_branch_stack")
+    # ``Op.is_in_conditional_body``, read from the two stored fields it derives from.
+    in_body = bool(stack) or any(role.role == "body" for role in read(op, "in_conditionals") or [])
+    _merge_conditional_values(layer, in_body, stack, number, read(op, "conditional_arm_children"))
+
+
+def _pass_reader(accessor: Any, passes: list[Any]) -> Any:
+    """Return the field reader for a keyed layer's passes: column getters for a long layer."""
+
+    if len(passes) < _COLUMN_READ_PASSES or column_rows_by_label({0: passes[0]}) is None:
+        return _facade_reader
+    columns = OpColumns(accessor._store)
+    get = {name: columns.getter(name) for name in _READ_FIELDS}
+    row_of = dict(zip(map(id, passes), accessor._keys[1::2], strict=True))
+    return _column_reader(columns, get, row_of)
 
 
 def _facade_reader(op: Any, name: str, *default: Any) -> Any:
@@ -139,110 +343,6 @@ def _merge_io_role(layer_role: str, pass_role: str) -> str:
     if merged.endswith("*"):
         merged = merged.rstrip("*") + "*"
     return merged
-
-
-def _group_passes_facade(ops: list[Any], layer_class: Any) -> OrderedDict[str, Any]:
-    """Group per-pass ops into aggregate layers, reading the ``Op`` facade."""
-
-    layer_logs: OrderedDict[str, Any] = OrderedDict()
-    for pass_log in ops:
-        no_call_label = pass_log.layer_label
-        # backends.2 constants stamp: rule-running backends set it; torch eager is stamped here.
-        pass_log.is_constant = bool(pass_log.is_constant) or is_constant_op(pass_log)
-        if no_call_label not in layer_logs:
-            layer_log = layer_logs[no_call_label] = layer_class(pass_log)
-        else:
-            layer_log = layer_logs[no_call_label]
-            if pass_log._graph_has_input_ancestor:
-                layer_log._graph_has_input_ancestor = True
-            if layer_log._graph_io_role is not None and pass_log._graph_io_role is not None:
-                layer_log._graph_io_role = _merge_io_role(
-                    layer_log._graph_io_role, pass_log._graph_io_role
-                )
-            if pass_log._module_context_is_atomic_module:
-                layer_log._module_context_is_atomic_module = True
-        layer_log.ops[pass_log.pass_number] = pass_log
-        layer_log.call_labels.append(pass_log.label)
-        _merge_layer_log_conditional_fields(layer_log, pass_log)
-    return layer_logs
-
-
-def _group_passes_columns(
-    ops: list[Any],
-    layer_class: Any,
-    get: dict[str, Callable[[int], Any]],
-    set_constant: Callable[[int, Any], None],
-    row_of: dict[int, int],
-) -> OrderedDict[str, Any]:
-    """Group per-pass ops into aggregate layers, reading bound column getters.
-
-    Same reads, short-circuits and writes as :func:`_group_passes_facade`.
-    """
-
-    layer_label, is_constant = get["layer_label"], get["is_constant"]
-    io_role, pass_number = get["io_role"], get["pass_number"]
-    layer_logs: OrderedDict[str, Any] = OrderedDict()
-    for pass_log in ops:
-        row = row_of[id(pass_log)]
-        no_call_label = layer_label(row)
-        set_constant(row, bool(is_constant(row)) or is_constant_op(pass_log))
-        if no_call_label not in layer_logs:
-            layer_log = layer_logs[no_call_label] = layer_class(pass_log)
-        else:
-            layer_log = layer_logs[no_call_label]
-            if get["has_input_ancestor"](row):
-                layer_log._graph_has_input_ancestor = True
-            if layer_log._graph_io_role is not None and io_role(row) is not None:
-                layer_log._graph_io_role = _merge_io_role(layer_log._graph_io_role, io_role(row))
-            if get["is_atomic_module"](row):
-                layer_log._module_context_is_atomic_module = True
-        number = pass_number(row)
-        layer_log.ops[number] = pass_log
-        layer_log.call_labels.append(get["label"](row))
-        stack = get["conditional_branch_stack"](row)
-        # ``Op.is_in_conditional_body``, read from the two stored fields it derives from.
-        in_body = bool(stack) or any(
-            role.role == "body" for role in get["in_conditionals"](row) or []
-        )
-        _merge_conditional_values(
-            layer_log, in_body, stack, number, get["conditional_arm_children"](row)
-        )
-    return layer_logs
-
-
-def _sum_autograd(
-    layer_logs: OrderedDict[str, Any],
-    reconcile: Callable[..., None],
-    read: Callable[[Any, str], Any],
-) -> Bytes | None:
-    """Annotate tied parameters, sum autograd memory per layer and refresh views.
-
-    Returns
-    -------
-    Bytes | None
-        Trace-wide autograd memory, or ``None`` when no pass saved any.
-    """
-
-    autograd_memory = 0
-    has_autograd_saved_value = False
-    for layer_log in layer_logs.values():
-        for pass_log in layer_log.ops.values():
-            linked_labels = []
-            for param_log in read(pass_log, "_param_logs"):
-                # Tied parameters list every aliasing address in ``all_addresses`` (primary
-                # first); co-occurring distinct tensors (``co_parent_params``) are not tying.
-                for alias_address in getattr(param_log, "all_addresses", []):
-                    if alias_address == param_log.address:
-                        continue
-                    linked_labels.append(f"{param_log.address} → {alias_address}")
-            if linked_labels:
-                read(pass_log, "annotations")["tied_parameter_notation"] = linked_labels
-        if _set_layer_autograd(layer_log, read):
-            autograd_memory += layer_log._cost_autograd_memory
-            has_autograd_saved_value = True
-        reconcile(layer_log, read)
-        _rebuild_layer_log_conditional_views(layer_log, read)
-    return Bytes(autograd_memory) if has_autograd_saved_value else None
 
 
 def _set_layer_autograd(layer_log: Any, read: Callable[[Any, str], Any]) -> bool:
@@ -302,28 +402,6 @@ def _strip_pass_suffix(layer_label: str) -> str:
         Layer label without any pass suffix.
     """
     return layer_label.split(":", 1)[0]
-
-
-def _merge_layer_log_conditional_fields(
-    layer_log: Layer,
-    pass_log: Any,
-) -> None:
-    """Merge one pass's conditional metadata into an aggregate ``Layer``.
-
-    Parameters
-    ----------
-    layer_log:
-        Aggregate layer entry being updated.
-    pass_log:
-        Per-pass layer entry contributing conditional metadata.
-    """
-    _merge_conditional_values(
-        layer_log,
-        pass_log._control_flow_is_in_conditional_body,
-        pass_log._control_flow_branch_stack,
-        pass_log.pass_number,
-        pass_log._control_flow_arm_children,
-    )
 
 
 def _merge_conditional_values(

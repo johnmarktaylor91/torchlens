@@ -505,24 +505,38 @@ def freeze_trace_relation_views(trace: Any) -> RelationFreezeStats | None:
 
     convert_fact_cells(store, pool)
 
-    for layer_log in (trace._layer_logs or {}).values():
-        record_dict = getattr(layer_log, "__dict__", None)
+    layer_logs = trace._layer_logs or {}
+    built_states = getattr(layer_logs, "built_states", None)
+    # A layer still pending is converted when its first lookup builds it.
+    for record_dict in (
+        [getattr(layer_log, "__dict__", None) for layer_log in layer_logs.values()]
+        if built_states is None
+        else built_states()
+    ):
         if record_dict is None:
             continue
-        convert_record_dict_views(
-            record_dict,
-            pool,
-            tuple_fields=LAYER_TUPLE_VIEW_FIELDS,
-            frozenset_fields=LAYER_FROZENSET_VIEW_FIELDS,
-        )
-        # Layer aggregates share the ops' canonical equivalence containers;
-        # store the group's ONE cached view (Layer is dict-backed,
-        # so the value itself is the public read).
-        group_value = record_dict.get("equivalent_ops")
-        if group_value.__class__ is set:
-            ref = group_refs.get(id(group_value))
-            record_dict["equivalent_ops"] = (
-                ref.view() if ref is not None else frozenset_view(group_value, pool)
-            )
+        convert_layer_state_views(record_dict, pool, group_refs)
     del group_keepalive
     return stats
+
+
+def convert_layer_state_views(
+    record_dict: dict[str, Any], pool: dict[Any, Any], group_refs: dict[int, GroupRef]
+) -> None:
+    """Convert one Layer state's stored relation containers to views, in place."""
+
+    convert_record_dict_views(
+        record_dict,
+        pool,
+        tuple_fields=LAYER_TUPLE_VIEW_FIELDS,
+        frozenset_fields=LAYER_FROZENSET_VIEW_FIELDS,
+    )
+    # Layer aggregates share the ops' canonical equivalence containers;
+    # store the group's ONE cached view (Layer is dict-backed,
+    # so the value itself is the public read).
+    group_value = record_dict.get("equivalent_ops")
+    if group_value.__class__ is set:
+        ref = group_refs.get(id(group_value))
+        record_dict["equivalent_ops"] = (
+            ref.view() if ref is not None else frozenset_view(group_value, pool)
+        )
