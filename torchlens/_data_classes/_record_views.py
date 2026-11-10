@@ -38,7 +38,6 @@ _ref = weakref.ref
 _DEREF: Any = DEREF
 _new = object.__new__
 _set = object.__setattr__
-_dict_item = dict.__getitem__
 _list_item = list.__getitem__
 _TRACE_REF = "_source_trace_ref"
 _T = TypeVar("_T")
@@ -117,6 +116,11 @@ def views_of(states: list[Any], cls: type) -> list[Any]:
     """
 
     found = list(map(_DEREF, map(_VIEWS.get, map(id, states), repeat(DEAD))))
+    # Every item has a live view of its own state: the comparison runs in C.
+    if list(map(id, map(getattr, found, repeat("__dict__"), repeat(None)))) == list(
+        map(id, states)
+    ):
+        return found
     stale = [
         at
         for at, (view, state) in enumerate(zip(found, states, strict=True))
@@ -173,24 +177,37 @@ class RecordDict(dict[Any, Any]):
     hands out the record view of that state. ``kind`` is the container type
     it stands in for (``dict`` or ``OrderedDict``): its plain form, which is
     what a copy, a pickle, a comparison and a repr use, has that type.
+
+    A read by key is the hot path, so it makes no call: ``raw`` is a plain
+    ``dict`` with the same entries (a subscript of this mapping would come
+    back here), ``vals`` its values, and ``live`` remembers weakly the view
+    last handed out for each key. A ``live`` entry is used only while its view
+    is alive and is the view of the state now at that key.
     """
 
-    __slots__ = ("cls", "kind")
+    __slots__ = ("cls", "kind", "live", "raw", "vals")
 
     cls: type
     kind: type
+    live: dict[Any, Any]
+    raw: dict[Any, Any]
+    vals: Any
 
     def __getitem__(self, key: Any) -> Any:
         """Return the record at ``key``."""
 
-        state = _dict_item(self, key)
+        state = self.raw[key]
         try:
-            view = _VIEWS[id(state)]()
+            view = self.live[key]()
             if view.__dict__ is state:
                 return view
         except (KeyError, AttributeError):
-            pass  # no view of this state is alive: build one
-        return _item(state, self.cls)
+            pass  # no view was handed out for this key, or it is gone
+        if state.__class__ is Kept:
+            return state.value
+        view = view_of(state, self.cls)
+        self.live[key] = _ref(view)
+        return view
 
     def get(self, key: Any, default: Any = None) -> Any:
         """Return the record at ``key``, or ``default``."""
@@ -203,7 +220,22 @@ class RecordDict(dict[Any, Any]):
     def __setitem__(self, key: Any, record: Any) -> None:
         """Hold ``record`` at ``key``."""
 
-        dict.__setitem__(self, key, _held(record, self.cls))
+        state = _held(record, self.cls)
+        dict.__setitem__(self, key, state)
+        self.raw[key] = state
+
+    def __delitem__(self, key: Any) -> None:
+        """Remove ``key``."""
+
+        dict.__delitem__(self, key)
+        del self.raw[key]
+
+    def clear(self) -> None:
+        """Remove every item."""
+
+        dict.clear(self)
+        self.raw.clear()
+        self.live.clear()
 
     def __iter__(self) -> Iterator[Any]:
         """Iterate the keys (defined here so a copy reads records, never states)."""
@@ -213,17 +245,17 @@ class RecordDict(dict[Any, Any]):
     def values(self) -> Any:
         """Return every record in insertion order."""
 
-        return views_of(list(dict.values(self)), self.cls)
+        return views_of(list(self.vals), self.cls)
 
     def items(self) -> Any:
         """Return ``(key, record)`` pairs in insertion order."""
 
-        return list(zip(dict.keys(self), self.values(), strict=True))
+        return list(zip(self.raw, views_of(list(self.vals), self.cls), strict=True))
 
     def states(self) -> Any:
         """Return the stored states (no record is built)."""
 
-        return dict.values(self)
+        return self.vals
 
     def plain(self) -> Any:
         """Return the plain mapping (of the type this stands in for) from key to record."""
@@ -243,7 +275,7 @@ class RecordDict(dict[Any, Any]):
                 return default[0]
             raise KeyError(key)
         record = self[key]
-        dict.__delitem__(self, key)
+        del self[key]
         return record
 
     def popitem(self) -> tuple[Any, Any]:
@@ -469,8 +501,10 @@ def record_dict(items: Any, cls: type) -> Any:
     if items.__class__ is not dict and items.__class__ is not OrderedDict:
         return items
     held = RecordDict()
-    held.cls, held.kind = cls, items.__class__
-    dict.update(held, zip(items, _all_held(list(items.values()), cls), strict=True))
+    held.cls, held.kind, held.live = cls, items.__class__, {}
+    held.raw = raw = dict(zip(items, _all_held(list(items.values()), cls), strict=True))
+    held.vals = raw.values()
+    dict.update(held, raw)
     return held
 
 
@@ -524,9 +558,9 @@ def handed(stored: _T, owner: Any) -> _T:
     if owner is None or stored.__class__ not in _FIELDS:
         return stored
     twin = _new(stored.__class__)
-    _set(twin, "__dict__", stored.__dict__)
-    _set(twin, "_owner", owner)
-    _set(stored, "_handed", _ref(twin))
+    twin.__dict__ = stored.__dict__
+    twin._owner = owner
+    stored._handed = _ref(twin)  # type: ignore[attr-defined]
     return twin
 
 
@@ -543,7 +577,15 @@ class OwnedChildField(ChildAccessorField):
             owner = record._owner
         except AttributeError:
             return stored
-        return stored if owner is None else handed(stored, owner)
+        if owner is None:
+            return stored
+        try:
+            twin = stored._handed()
+            if twin._owner is owner:
+                return twin
+        except (AttributeError, TypeError):
+            pass  # none handed out yet, or the one handed out is gone
+        return handed(stored, owner)
 
 
 def _source_trace(record: Any) -> Any:
@@ -591,6 +633,35 @@ def _plain_state(accessor: Any) -> dict[str, Any]:
     return state
 
 
+class _HeldField:
+    """An accessor field that holds a container of records as states.
+
+    The field has no ``__get__``, so a read finds the value in the instance
+    dictionary at no cost; only an assignment comes here, and converts the
+    container assigned.
+    """
+
+    __slots__ = ("cls", "convert", "name")
+
+    def __init__(self, name: str, convert: Any, cls: type) -> None:
+        """Bind the field to its name, its converter and the record class it holds."""
+
+        self.name, self.convert, self.cls = name, convert, cls
+
+    def __set__(self, accessor: Any, value: Any) -> None:
+        """Store ``value``, a record container as states."""
+
+        accessor.__dict__[self.name] = value if value is None else self.convert(value, self.cls)
+
+    def __delete__(self, accessor: Any) -> None:
+        """Delete the field from the accessor."""
+
+        try:
+            del accessor.__dict__[self.name]
+        except KeyError:
+            raise AttributeError(self.name) from None
+
+
 def _install_accessor(accessor_cls: Any, fields: dict[str, tuple[Any, type]]) -> None:
     """Make ``accessor_cls`` hold states in ``fields`` and state-stream the plain containers."""
 
@@ -598,11 +669,8 @@ def _install_accessor(accessor_cls: Any, fields: dict[str, tuple[Any, type]]) ->
     base_getstate = accessor_cls.__getstate__
     base_setstate = accessor_cls.__setstate__
 
-    def __setattr__(self: Any, name: str, value: Any) -> None:
-        """Set an attribute; a record container is held as states."""
-
-        spec = fields.get(name)
-        _set(self, name, value if spec is None or value is None else spec[0](value, spec[1]))
+    for name, (convert, cls) in fields.items():
+        setattr(accessor_cls, name, _HeldField(name, convert, cls))
 
     def __getstate__(self: Any) -> dict[str, Any]:
         """Return the pickle state, with the plain containers of records the base carried."""
@@ -624,7 +692,7 @@ def _install_accessor(accessor_cls: Any, fields: dict[str, tuple[Any, type]]) ->
 
         return iter(_plain_state(self).items())
 
-    for method in (__setattr__, __getstate__, __setstate__, __tl_state_items__):
+    for method in (__getstate__, __setstate__, __tl_state_items__):
         method.__qualname__ = f"{accessor_cls.__name__}.{method.__name__}"
         setattr(accessor_cls, method.__name__, method)
 
@@ -671,7 +739,7 @@ def reached(accessor: Any, *, in_order: bool = False) -> tuple[list[Any], list[A
 def rebind(trace: Any) -> None:
     """Name ``trace`` as the owner of every module and call it holds; drop module facet caches."""
 
-    modules, calls = reached(trace.modules, in_order=True)
+    modules, calls = reached(trace._module_logs, in_order=True)
     reference = _ref(trace)
     module_states: list[Any] = list(map(vars, modules))
     states: list[Any] = module_states + list(map(vars, calls))

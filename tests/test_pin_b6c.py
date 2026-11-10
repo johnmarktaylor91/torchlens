@@ -110,6 +110,13 @@ _DOORS: dict[str, Callable[[Any], Any]] = {
 }
 
 
+# An Op keeps the receptive-field view it computed in its own row, and that view holds the
+# Op, which holds the trace. A read of either field through any record therefore leaves the
+# trace to the cycle collector, as it does before this change. Both names are compared with
+# the control; the lifetime check reads every other attribute.
+_OP_FIELD_VIEWS = frozenset({"receptive_field", "projective_field"})
+
+
 @pytest.mark.parametrize("door", sorted(_DOORS))
 def test_chained_read_matches_a_held_trace(door: str, no_gc: None) -> None:
     """Every public attribute reads the same with no variable holding the trace."""
@@ -122,6 +129,11 @@ def test_chained_read_matches_a_held_trace(door: str, no_gc: None) -> None:
     assert isinstance(record, (Module, ModuleCall))
     assert _LAST[0]() is not None, "the record did not keep its trace"
     assert _outcomes(record) == held
+    del record
+    record = reach(_trace())
+    for name in _names(record):
+        if name not in _OP_FIELD_VIEWS:
+            _outcome(record, name)
     del record
     assert _LAST[0]() is None, "the trace outlived the record that held it"
 

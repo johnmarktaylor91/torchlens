@@ -523,7 +523,7 @@ class ModuleCall:
         """Return the Module record invoked by this call."""
 
         trace = _bound_call_trace(self)
-        return cast("Module", trace.modules[self.address])
+        return cast("Module", trace._module_logs[self.address])
 
     @property
     def num_layers(self) -> int:
@@ -771,10 +771,8 @@ class ModuleCall:
         trace = self._source_trace
         if trace is None:
             return 0
-        return sum(
-            1 + trace.module_calls[child_label].num_descendant_calls
-            for child_label in self.call_children
-        )
+        calls = trace.module_calls
+        return sum(1 + calls[label].num_descendant_calls for label in self.call_children)
 
     @property
     def max_descendant_depth(self) -> int:
@@ -783,10 +781,8 @@ class ModuleCall:
         trace = self._source_trace
         if trace is None or not self.call_children:
             return 0
-        return 1 + max(
-            trace.module_calls[child_label].max_descendant_depth
-            for child_label in self.call_children
-        )
+        calls = trace.module_calls
+        return 1 + max(calls[label].max_descendant_depth for label in self.call_children)
 
     def walk_descendants(self, include_self: bool = True) -> Iterator["ModuleCall"]:
         """Yield this ModuleCall and all descendant calls in depth-first order.
@@ -809,10 +805,9 @@ class ModuleCall:
 
         if include_self:
             yield self
-        trace = _bound_call_trace(self)
+        calls = _bound_call_trace(self).module_calls
         for child_label in self.call_children:
-            child = trace.module_calls[child_label]
-            yield from child.walk_descendants(include_self=True)
+            yield from calls[child_label].walk_descendants(include_self=True)
 
     @property
     def call_tree(self) -> "ModuleCall":
@@ -1614,10 +1609,10 @@ class Module(_ModuleRouting):
         # with it these records and their trace, until the cycle collector runs.
         modules: list[Module] = []
         pending: list[Module] = [self]
+        known = trace._module_logs
         while pending:
             module = pending.pop()
             modules.append(module)
-            known = trace.modules
             children = [known[child] for child in sorted(module.address_children) if child in known]
             pending.extend(reversed(children))
         return modules
