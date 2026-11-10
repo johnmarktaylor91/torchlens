@@ -452,7 +452,8 @@ class BufferAccessor(Accessor["Buffer"]):
         never reaches here; a keyed one builds them on each read.
         """
 
-        rows = self.__dict__.get("_rows")
+        # A protocol lookup (``__deepcopy__`` in a fork's copy) costs no further call.
+        rows = None if name[:2] == "__" else self.__dict__.get("_rows")
         if rows is not None:
             if name == "_dict":
                 return dict(zip(rows, self._views_at(rows.values()), strict=True))
@@ -480,7 +481,10 @@ class BufferAccessor(Accessor["Buffer"]):
 
         state = self.__dict__
         if "_rows" not in state:
-            return super().__getstate__()
+            out = state.copy()  # ``Accessor.__getstate__``, written out: a fork copies this
+            if "_source_ref" in out:
+                out["_source_ref"] = None
+            return out
         records = self._dict
         out: dict[str, Any] = {"_dict": records, "_list": list(records.values())}
         if "_source_ref" in state:
