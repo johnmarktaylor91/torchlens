@@ -99,7 +99,7 @@ from ._function_boundary import (
     print_funcs,
     unlogged_wrapper_name,
 )
-from ._fused_norm_writes import fused_call_writes
+from ._fused_norm_writes import _FUSED_MUTATOR_NAMES, fused_call_writes
 from ._logged_arguments import logged_args, logged_receiver_output
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
@@ -1130,6 +1130,7 @@ def torch_func_decorator(
     is_host_constructor = func_name in HOST_CONSTRUCTOR_FUNC_NAMES
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
+    flag = inplace_param_index is not None or func_name in _FUSED_MUTATOR_NAMES
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
     writes_args = mutates_receiver or reconstructs_receiver_output or is_mutating_property_setter
     exports_storage = func_name in _storage_exports.STORAGE_EXPORT_FUNC_NAMES
@@ -1212,8 +1213,8 @@ def torch_func_decorator(
             if _COW_GATE.armed and (
                 writes_args
                 or "out" in kwargs
-                or _call_requests_inplace(inplace_param_index, args, kwargs)
-                or fused_call_writes(func_name, args, kwargs)
+                or ((kwargs or flag) and _call_requests_inplace(inplace_param_index, args, kwargs))
+                or (flag and fused_call_writes(func_name, args, kwargs))
             ):
                 _COW_GATE.materialize(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
@@ -1328,9 +1329,7 @@ def torch_func_decorator(
         # Inline tensor extraction — avoids BFS crawl for the common case
         # where args are flat tensors. Falls back to BFS only for nested containers.
         arg_tensorlike = fast[0] if fast else _collect_tensor_args(args, kwargs)
-        data_alias_inputs = tuple(
-            tensor for tensor in (() if fast else arg_tensorlike) if is_tensor_data_alias(tensor)
-        )
+        data_alias_inputs = tuple(filter(is_tensor_data_alias, () if fast else arg_tensorlike))
         mutates_data_alias = bool(
             not fast
             and args
@@ -1393,8 +1392,8 @@ def torch_func_decorator(
             and (
                 writes_args
                 or "out" in kwargs
-                or _call_requests_inplace(inplace_param_index, args, kwargs)
-                or fused_call_writes(func_name, args, kwargs)
+                or ((kwargs or flag) and _call_requests_inplace(inplace_param_index, args, kwargs))
+                or (flag and fused_call_writes(func_name, args, kwargs))
             )
         ):
             _COW_GATE.materialize(arg_tensorlike)
@@ -1505,7 +1504,8 @@ def torch_func_decorator(
         finally:
             # Markers close FIRST so the range covers the user op, not the
             # mode-paused interior bookkeeping recorded below.
-            _pop_op_markers(op_marker_tokens)
+            if op_marker_tokens[0] or op_marker_tokens[1] is not None:
+                _pop_op_markers(op_marker_tokens)
             if paused_modes:
                 from ._aten_capture import _record_mode_paused_interior
 

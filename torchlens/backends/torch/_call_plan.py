@@ -96,15 +96,16 @@ class CallPlan:
         self.name_could_mutate = name_could_mutate
 
 
-def _schema_suits_fast_lane(schema: Any) -> bool:
+def _schema_suits_fast_lane(schema: Any) -> bool | None:
     """Return whether one dispatcher schema leaves its operator eligible for the fast lane.
 
-    A schema with no tensor in its arguments or returns (the scalar, string and
-    list overloads TorchScript registers under names such as ``add``) can never
-    serve a wrapped call that yields a tensor, so it does not count against the
-    name. Any other schema must return exactly one tensor and write no
-    argument. A keyword-only ``out`` destination is allowed here because a call
-    that passes ``out=`` is refused per call.
+    ``None`` for a schema with no tensor in its arguments or returns (the
+    scalar, string and list overloads TorchScript registers under names such as
+    ``add``): it can never serve a wrapped call that yields a tensor, so it
+    counts neither for nor against the name. Any other schema must return
+    exactly one tensor and write no argument. A keyword-only ``out``
+    destination is allowed here because a call that passes ``out=`` is refused
+    per call.
     """
 
     returns = schema.returns
@@ -115,7 +116,7 @@ def _schema_suits_fast_lane(schema: Any) -> bool:
             touches_tensor = True
             break
     if not touches_tensor:
-        return True
+        return None
     if len(returns) != 1 or str(returns[0].type) != "Tensor":
         return False
     for argument in arguments:
@@ -136,16 +137,18 @@ def single_tensor_schema_names() -> dict[str, bool]:
     Returns
     -------
     dict[str, bool]
-        Operator name to ``True`` when every tensor overload is out-of-place
-        and returns exactly one tensor. Empty when the schema enumeration
-        capability is absent, so no callable gets a plan.
+        Operator name to ``True`` when it has a tensor overload and every
+        tensor overload is out-of-place and returns exactly one tensor. Empty
+        when the schema enumeration capability is absent, so no callable gets
+        a plan.
     """
 
     names: dict[str, bool] = {}
     for schema in _torch_compat.get_jit_all_schemas() or ():
         namespace, _, name = schema.name.partition("::")
-        if namespace == "aten":
-            names[name] = names.get(name, True) and _schema_suits_fast_lane(schema)
+        verdict = _schema_suits_fast_lane(schema) if namespace == "aten" else None
+        if verdict is not None:
+            names[name] = names.get(name, True) and verdict
     return names
 
 
