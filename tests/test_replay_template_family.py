@@ -35,7 +35,7 @@ from torchlens._trace_core.cell_states import (
 )
 from torchlens._trace_core.op_store import DetachedOpStore
 from torchlens._utils._display_keys import display_key
-from torchlens.intervention._types import CapturedArgTemplate, ParentRef
+from torchlens.intervention._types import CapturedArgTemplate, LiteralTensor, ParentRef
 
 pytestmark = pytest.mark.filterwarnings("ignore::torchlens.errors.InterventionWarning")
 
@@ -109,6 +109,9 @@ def _plain(value: Any) -> Any:
         return ("template", _plain(value.args), _plain(value.kwargs))
     if isinstance(value, torch.Tensor):
         return ("tensor", tuple(value.shape), value.dtype)
+    if isinstance(value, LiteralTensor):
+        # Parameter barcodes and fingerprints differ between two traces' models.
+        return ("literal tensor", _plain(value.value))
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         compared = [field.name for field in dataclasses.fields(value) if field.compare]
         return (type(value).__name__, [(name, _plain(getattr(value, name))) for name in compared])
