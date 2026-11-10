@@ -131,7 +131,7 @@ class Reader:
     def _masked(self, kind: str, leaf: str, canonical: Any) -> Any:
         """Apply the mask to one field's canonical value."""
 
-        return self.mask.apply(kind, leaf, canonical)
+        return self.mask.apply(leaf, canonical)
 
     def record(self, obj: Any, site: str) -> dict[str, Any]:
         """Read every public member of one record, grouped members included."""

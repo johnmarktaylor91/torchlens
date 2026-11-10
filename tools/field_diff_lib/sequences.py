@@ -17,7 +17,6 @@ import gc
 import importlib.util
 import os
 import pickle
-import tempfile
 import warnings
 import weakref
 from collections import Counter
@@ -120,6 +119,14 @@ def fresh(tl: Any, model_name: str = "inplace_buffers", **options: Any) -> tuple
     model, model_input = build_model(model_name)
     capture = tl.options.CaptureOptions(seed=SEED, **options)
     return model, model_input, tl.trace(model, model_input, capture=capture)
+
+
+def folder(scratch: str, name: str) -> str:
+    """Create and return a named folder under the scratch folder (no random part in its name)."""
+
+    path = os.path.join(scratch, name)
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
 def snap(trace: Any, roots: list[tuple[str, str]]) -> dict[str, Any]:
@@ -236,7 +243,7 @@ def _new_attributes(tl: Any, log: Log, scratch: str) -> None:
     if fork is not None:
         log.step("new.fork.layer.read", lambda: fork.layers[layer_label].h3_note)
         log.step("new.fork.trace.read", lambda: fork.h3_note)
-    path = os.path.join(tempfile.mkdtemp(dir=scratch), "new_attributes.tlspec")
+    path = os.path.join(folder(scratch, "new_attributes"), "trace.tlspec")
     log.step("new.save", lambda: trace.save(path) and None)
 
 
@@ -261,7 +268,7 @@ def seq_mutate_before_read(tl: Any, log: Log, scratch: str) -> None:
     fork = log.step("fork", trace.fork)
     if fork is not None:
         _checks(log, "fork", fork, op_label, layer_label)
-    path = os.path.join(tempfile.mkdtemp(dir=scratch), "mutated.tlspec")
+    path = os.path.join(folder(scratch, "mutated"), "trace.tlspec")
     log.step("save", lambda: trace.save(path) and None)
     loaded = log.step("load", lambda: tl.load(path))
     if loaded is not None:
@@ -278,8 +285,8 @@ def seq_mutate_before_read(tl: Any, log: Log, scratch: str) -> None:
 def _source_model(scratch: str, name: str) -> tuple[str, nn.Module]:
     """Write the source-sequence model to its own file and import it."""
 
-    folder = tempfile.mkdtemp(dir=scratch)
-    path = os.path.join(folder, f"{name}.py")
+    where = folder(scratch, f"source_{name}")
+    path = os.path.join(where, f"{name}.py")
     with open(path, "w") as handle:
         handle.write(SOURCE_MODEL_TEXT)
     spec = importlib.util.spec_from_file_location(name, path)
@@ -300,7 +307,7 @@ def _source_fields(trace: Any, canon: Canonicalizer) -> dict[str, Any]:
     for op in trace._layer_list:  # noqa: SLF001
         for name in names:
             try:
-                value = mask.apply("Op", name, canon.value(getattr(op, storage.get(name, name))))
+                value = mask.apply(name, canon.value(getattr(op, storage.get(name, name))))
             except Exception as error:  # noqa: BLE001 - a raising read is an outcome
                 value = error_record(error, canon.string)
             result[f"{op.label}.{name}"] = value
@@ -347,7 +354,7 @@ def _argument_fields(trace: Any, canon: Canonicalizer) -> dict[str, Any]:
                     continue
                 try:
                     raw = canon.value(getattr(record, storage.get(name, name)))
-                    value = mask.apply(kind, name, raw)
+                    value = mask.apply(name, raw)
                 except Exception as error:  # noqa: BLE001 - a raising read is an outcome
                     value = error_record(error, canon.string)
                 result[f"{family}[{key}].{name}"] = value
@@ -420,7 +427,7 @@ def seq_serialisation(tl: Any, log: Log, scratch: str) -> None:
         trace = fresh(tl)[2]
         if timing == "warm":
             snap(trace, log.roots)
-        path = os.path.join(tempfile.mkdtemp(dir=scratch), f"{timing}.tlspec")
+        path = os.path.join(folder(scratch, f"serialised_{timing}"), "trace.tlspec")
         log.step(f"{timing}.save", lambda: trace.save(path) and None)
         copies = {
             "loaded": log.step(f"{timing}.load", lambda: tl.load(path)),
@@ -466,7 +473,7 @@ def _bulk(trace: Any, roots: list[tuple[str, str]]) -> dict[str, Any]:
     facets: dict[str, Any] = {}
     for op in trace._layer_list:  # noqa: SLF001
         try:
-            facets[str(op.label)] = mask.apply("Op", "facets", canon.value(op.facets))
+            facets[str(op.label)] = mask.apply("facets", canon.value(op.facets))
         except Exception as error:  # noqa: BLE001 - a refusing facet read is an outcome
             facets[str(op.label)] = error_record(error, canon.string)
     result["facets"] = facets
@@ -511,31 +518,57 @@ RECORD_NAMES = {
 
 
 def sample_records(trace: Any, prefix: str = "") -> dict[str, Any]:
-    """Take the trace and one record of every family through its door."""
+    """Take the trace, one record of every family through its door, and one saved activation."""
 
     taken: dict[str, Any] = {f"{prefix}trace": trace}
     for family, records in trace_families(trace).items():
         if isinstance(records, dict) and records:
             taken[prefix + RECORD_NAMES[family]] = list(records.values())[len(records) // 2]
+    saved = getattr(taken.get(f"{prefix}op"), "out", None)
+    if hasattr(saved, "shape"):
+        taken[f"{prefix}activation"] = saved
     return taken
 
 
+class _ByIdentity:
+    """Liveness of an object that allows no weak reference, by type and address.
+
+    The collector's object list is searched for a live object of the same
+    type at the same address. No object of that type is created between the
+    drop and the check, so a reused address cannot be mistaken for it.
+    """
+
+    def __init__(self, item: Any) -> None:
+        """Remember the type and the address, not the object."""
+
+        self._type = type(item)
+        self._address = id(item)
+
+    def __call__(self) -> object:
+        """Return a true value while the object is alive, ``None`` once it is gone."""
+
+        for candidate in gc.get_objects():
+            if type(candidate) is self._type and id(candidate) == self._address:
+                return True
+        return None
+
+
 def _weak(objects: dict[str, Any]) -> dict[str, Any]:
-    """Return a weak reference per named object; ``None`` where the type allows none."""
+    """Return a liveness probe per named object: a weak reference where the type allows one."""
 
     refs: dict[str, Any] = {}
     for name, item in objects.items():
         try:
             refs[name] = weakref.ref(item)
         except TypeError:
-            refs[name] = None
+            refs[name] = _ByIdentity(item)
     return refs
 
 
 def _dead(refs: dict[str, Any]) -> set[str]:
     """Return the names whose object is gone."""
 
-    return {name for name, ref in refs.items() if ref is not None and ref() is None}
+    return {name for name, ref in refs.items() if ref() is None}
 
 
 def _freed(make: Callable[[], Any], act: Callable[[Any], tuple[dict[str, Any], Any]]) -> Any:
@@ -564,8 +597,8 @@ def _freed(make: Callable[[], Any], act: Callable[[Any], tuple[dict[str, Any], A
         "freed_when_trace_dropped": sorted(first),
         "freed_when_kept_dropped": sorted(second - first),
         "freed_only_by_collector": sorted(third - second),
-        "never_freed": sorted(set(refs) - third - {n for n, r in refs.items() if r is None}),
-        "no_weak_reference": sorted(name for name, ref in refs.items() if ref is None),
+        "never_freed": sorted(set(refs) - third),
+        "watched_by_address": sorted(n for n, r in refs.items() if isinstance(r, _ByIdentity)),
     }
 
 
@@ -611,7 +644,7 @@ def release_scenarios(tl: Any, scratch: str) -> dict[str, Scenario]:
         return act
 
     def round_trip(trace: Any) -> Any:
-        path = os.path.join(tempfile.mkdtemp(dir=scratch), "release.tlspec")
+        path = os.path.join(folder(scratch, "release"), "trace.tlspec")
         trace.save(path)
         return tl.load(path)
 

@@ -232,8 +232,8 @@ def cmd_cases(args: argparse.Namespace) -> int:
 
     for case in case_list():
         print(f"case {case.name} (model {case.model})")
-    for rule in mask.MASK + mask.NESTED_MASK:
-        print(f"mask {rule.kind}.{rule.field} [{rule.rule}]: {rule.reason}")
+    for rule in mask.MASK:
+        print(f"mask {rule.field} [{rule.rule}]: {rule.reason}")
     for text_rule in mask.TEXT_RULES:
         print(f"text {text_rule.pattern!r}: {text_rule.reason}")
     for name, reason in mask.NOT_READ.items():
