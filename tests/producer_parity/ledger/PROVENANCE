@@ -5939,3 +5939,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: ce035198b9c7bb9b0155386a43a1bbcbe3c563fc
 recorded: 2026-11-10T12:24:14Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: ledger-owner regen at da3e412a8: static-scan moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: da3e412a83b6935f87bae43a05bd38173c92827f
+recorded: 2026-11-10T12:12:11Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: lane E0: split _ops_shared_fields into argument, call-site and descriptive modules (bodies moved verbatim)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 428a2ec06e822686e6c31fd6bfcff38b8610f87f
+recorded: 2026-11-10T11:37:53+00:00
