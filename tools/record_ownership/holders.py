@@ -91,12 +91,6 @@ HOLDERS: dict[str, Holder] = {
     f"{CELLS}{{*}}[*]:ParamAccessor._dict{{*}} -> Param": Holder(LATER_KINDS, only=("deepcopied",)),
     f"{CELLS}{{*}}[*]:ParamAccessor._list[*] -> Param": Holder(LATER_KINDS, only=("deepcopied",)),
     "BufferState.versions[*] -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
-    "GradFnState.calls:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
-        PICKLE_PROJECTION, only=(PICKLE_CASE,)
-    ),
-    "GradFnState.calls:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
-        PICKLE_PROJECTION, only=(PICKLE_CASE,)
-    ),
     "LayerState.ops:OpAccessor._dict{*} -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
     "LayerState.ops:OpAccessor._list[*] -> Op": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
     "ModuleState.ops:ModuleCallAccessor._dict{*} -> ModuleCall": Holder(
@@ -111,7 +105,7 @@ HOLDERS: dict[str, Holder] = {
     "ModuleState.params:ParamAccessor._list[*] -> Param": Holder(
         PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
-    "TraceState._backward_pass_logs{*}:BackwardPass._tl_core:Store.rows[grad_fn_calls][*] -> GradFnCall": Holder(
+    "TraceState._backward_pass_logs{*} -> BackwardPass": Holder(
         PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "TraceState._grad_fn_logs{*} -> GradFn": Holder(PICKLE_PROJECTION, only=(PICKLE_CASE,)),
@@ -137,12 +131,6 @@ HOLDERS: dict[str, Holder] = {
     "TraceState._pickle_module_accessor_state:ModuleAccessor._pass_dict{*} -> ModuleCall": Holder(
         PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
-    "GradFn._tl_core:Store.rows[calls]:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
-        LATER_KINDS, only=("pickled",)
-    ),
-    "GradFn._tl_core:Store.rows[calls]:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
-        LATER_KINDS, only=("pickled",)
-    ),
     # An ``Op`` in a pickle state keeps its trace (its owner slot), so while the
     # state exists the walk reaches what that live trace holds through the op.
     "Op._owner:Trace._buffer_accessor:BufferAccessor._dict{*} -> Buffer": Holder(
@@ -163,24 +151,13 @@ HOLDERS: dict[str, Holder] = {
     "Op._owner:Trace._trace_core:TraceCore._views:ViewTables.cells{*}[*]:ModuleCallAccessor._list[*] -> ModuleCall": Holder(
         LATER_KINDS, only=("pickle_state",)
     ),
-    "Op._owner:Trace._trace_core:TraceCore.backward_epochs[*]:BackwardEpoch.stores{grad_fn}:Store.rows[calls]:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
-        LATER_KINDS, only=("pickle_state",)
-    ),
-    "Op._owner:Trace._trace_core:TraceCore.backward_epochs[*]:BackwardEpoch.stores{grad_fn}:Store.rows[calls]:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
-        LATER_KINDS, only=("pickle_state",)
-    ),
     "Op._core:Store.rows[_param_logs][*] -> Param": Holder(LATER_KINDS, only=("pickle_state",)),
-    "Op._core:Store.rows[grad_fn] -> GradFn": Holder(LATER_KINDS, only=("pickle_state",)),
-    "Trace._backward_pass_logs{*}:BackwardPass._tl_core:Store.rows[grad_fn_calls][*] -> GradFnCall": Holder(
-        LATER_KINDS, only=("backward", "pickled")
-    ),
     "Trace._buffer_accessor:BufferAccessor._dict{*} -> Buffer": Holder(
         LATER_KINDS, but=("pickle_state",)
     ),
     "Trace._buffer_accessor:BufferAccessor._list[*] -> Buffer": Holder(
         LATER_KINDS, but=("pickle_state",)
     ),
-    "Trace._grad_fn_logs{*} -> GradFn": Holder(LATER_KINDS, only=("backward", "pickled")),
     "Trace._module_call_accessor:TraceModuleCallAccessor._dict{*} -> ModuleCall": Holder(
         LATER_KINDS, but=("fork_cold", "pickle_state")
     ),
@@ -201,12 +178,6 @@ HOLDERS: dict[str, Holder] = {
     "Trace._param_logs_by_module{*}[*] -> Param": Holder(
         LATER_KINDS, but=("loaded", "pickle_state")
     ),
-    "Trace._trace_core:TraceCore.backward_epochs[*]:BackwardEpoch.stores{grad_fn}:Store.rows[calls]:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
-        LATER_KINDS, only=("backward",)
-    ),
-    "Trace._trace_core:TraceCore.backward_epochs[*]:BackwardEpoch.stores{grad_fn}:Store.rows[calls]:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
-        LATER_KINDS, only=("backward",)
-    ),
     "Trace._trace_core:TraceCore.ops:Store.rows[_param_logs][*] -> Param": Holder(
         LATER_KINDS, but=("pickle_state", "pickled", "loaded")
     ),
@@ -215,12 +186,6 @@ HOLDERS: dict[str, Holder] = {
     # state first, so in these cases it carries this name instead of the row above.
     "Trace._layer_logs{*}{*}[*] -> Param": Holder(
         LATER_KINDS, only=("pickled", "deepcopied", "loaded")
-    ),
-    "Trace._trace_core:TraceCore.ops:Store.rows[grad_fn] -> GradFn": Holder(
-        LATER_KINDS, only=("backward", "pickled")
-    ),
-    "Trace._trace_core:TraceCore.ops:Store.rows[grad_fn_handle] -> GradFn": Holder(
-        LATER_KINDS, only=("pickled",)
     ),
 }
 
