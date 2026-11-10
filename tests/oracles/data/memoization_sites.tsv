@@ -20,4 +20,5 @@ torchlens/_visualization/_text_metrics.py::_face
 torchlens/_visualization/_text_metrics.py::text_width
 torchlens/agent/_example_bank.py::load_bank
 torchlens/agent/_example_bank.py::load_fixtures
+torchlens/backends/torch/_call_plan.py::inplace_schema_names
 torchlens/backends/torch/_call_plan.py::single_tensor_schema_names
