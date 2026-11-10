@@ -14,7 +14,7 @@ template capture already made.
 ``TemplateLabels`` holds the raw-to-final label map and a weak reference to
 the trace, whose all-keys lookup gives the display keys. A fork reads its
 parent's side columns through a context of its own, bound to the fork at fork
-time (``for_trace``), so it resolves the same display keys after the parent
+time (``rebound``), so it resolves the same display keys after the parent
 is gone. Pickled (with a pending template of a replayable op), it carries the
 map plus the display keys read from the live trace, so the load resolves to
 the same template.
@@ -89,10 +89,13 @@ class TemplateLabels:
 
         return TemplateLabels, (self.mapping, self.parent_ref_cls, None, self.display_keys())
 
-    def for_trace(self, trace: Any) -> TemplateLabels:
-        """Return this context bound to ``trace`` (a fork), sharing the map and the cache."""
+    def rebound(self, trace_ref: Any) -> TemplateLabels:
+        """Return this context bound to the trace ``trace_ref`` names (a fork).
 
-        bound = TemplateLabels(self.mapping, self.parent_ref_cls, _trace_ref(trace), self.keys)
+        The copy shares the label map and the field cache.
+        """
+
+        bound = TemplateLabels(self.mapping, self.parent_ref_cls, trace_ref, self.keys)
         bound.field_cache = self.field_cache
         return bound
 
@@ -179,16 +182,12 @@ def _bind_keys(value: Any, lookup: Any, key_of: Any) -> None:
 def template_labels(trace: Trace, parent_ref_cls: type[Any]) -> TemplateLabels:
     """Return the label context for the carried templates of ``trace``."""
 
-    return TemplateLabels(trace._raw_to_final_layer_labels, parent_ref_cls, _trace_ref(trace))
-
-
-def _trace_ref(trace: Any) -> Any:
-    """Return a weak reference to ``trace``, or a holder for a double that refuses one."""
-
+    trace_ref: Any
     try:
-        return weakref.ref(trace)
+        trace_ref = weakref.ref(trace)
     except TypeError:  # a trace double without weak-reference support
-        return _StrongRef(trace)
+        trace_ref = _StrongRef(trace)
+    return TemplateLabels(trace._raw_to_final_layer_labels, parent_ref_cls, trace_ref)
 
 
 class _StrongRef:

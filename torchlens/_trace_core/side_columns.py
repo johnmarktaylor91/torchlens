@@ -13,9 +13,10 @@ for a store's life, which is what keeps a row-indexed side column valid.
 
 A context may name the trace its resolver reads (the replay templates read
 display keys from it), and a fork can outlive that trace. At fork time
-``bind_fork_views`` gives each fork view its own side: the root's columns,
-shared, with the context bound to the fork (``context.for_trace(fork)``).
-The fork holds trace data, never a record of its parent.
+``bind_fork_view`` gives the fork's op store view its own side: the root's
+columns, shared, with the context bound to the fork
+(``context.rebound(fork_ref)``). The fork holds trace data, never a record of
+its parent.
 
 A read of a marker answers ``resolver(raw, context, name)`` and caches it in
 the cell, like any per-cell derived family. A state stream must not answer a
@@ -40,7 +41,7 @@ __all__ = (
     "PendingCell",
     "SideColumnFamily",
     "answer_pending",
-    "bind_fork_views",
+    "bind_fork_view",
     "pending_cell",
 )
 
@@ -167,22 +168,22 @@ class SideColumnFamily:
         return self.resolver(raw, context, name)
 
 
-def bind_fork_views(views: Iterable[Any], trace: Any) -> None:
-    """Give each fork view whose root holds side columns its own context.
+def bind_fork_view(view: Any, fork_ref: Any) -> None:
+    """Give a fork's store view its own side when its root store holds side columns.
 
-    ``views`` are a new fork's store views and ``trace`` the fork. The view's
-    side shares its root's columns; its context is the root's, bound to
-    ``trace`` by ``context.for_trace``, so a first read after the parent trace
-    is gone answers as it would with the parent alive.
+    ``view`` is a new fork's store view and ``fork_ref`` a weak reference to
+    the fork. The view's side shares its root's columns; its context is the
+    root's, rebound to the fork (``context.rebound(fork_ref)``), so a first
+    read after the parent trace is gone answers as it would with the parent
+    alive.
     """
 
-    families = tuple(SIDE_FAMILIES.values())
-    for view in views:
-        root = view.base
-        for family in families:
-            side = family._sides.get(root)
-            if side is not None:
-                family._sides[view] = _Side(side.context.for_trace(trace), side.columns)
+    root = view.base
+    for family in SIDE_FAMILIES.values():
+        sides = family._sides
+        side = sides.get(root)
+        if side is not None:
+            sides[view] = _Side(side.context.rebound(fork_ref), side.columns)
 
 
 class PendingCell:
