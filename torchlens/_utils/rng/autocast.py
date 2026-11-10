@@ -14,11 +14,18 @@ from typing import Any, cast
 import torch
 
 from .._torch_compat import (
+    AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED,
     autocast_get_dtype,
     autocast_is_enabled,
 )
 
 _AUTOCAST_DEVICES = ("cpu", "cuda")
+
+# The per-device queries, resolved once. On torch>=2.4 the shim functions only forward to
+# these two torch callables, so calling them directly records the same values for two Python
+# frames less per device on every logged call; torch 2.1 to 2.3 keep the legacy shims.
+_IS_ENABLED: Any = torch.is_autocast_enabled if AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED else None
+_GET_DTYPE: Any = torch.get_autocast_dtype if AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED else None
 
 
 def log_current_autocast_state() -> dict[str, dict[str, Any]]:
@@ -40,14 +47,34 @@ def log_current_autocast_state() -> dict[str, dict[str, Any]]:
         "grad_enabled": bool(torch.is_grad_enabled()),
         "inference_mode": bool(torch.is_inference_mode_enabled()),
     }
+    is_enabled = _IS_ENABLED
+    if is_enabled is None:
+        _legacy_device_states(state)
+        return state
+    get_dtype = _GET_DTYPE
     for device in _AUTOCAST_DEVICES:
         try:
-            # Routed through the version-neutral shim so TorchLens runs on
-            # torch 2.1+ (the per-device ``device_type`` argument to these
-            # query helpers is torch 2.4+ only). On torch>=2.4 the shim calls
-            # ``torch.is_autocast_enabled``/``torch.get_autocast_dtype``
-            # directly (identical behavior); on torch 2.1-2.3 it routes to the
-            # legacy per-device helpers. See _utils/_torch_compat.py.
+            # torch>=2.4: the same two calls the version-neutral shim makes.
+            state[device] = {"enabled": bool(is_enabled(device)), "dtype": get_dtype(device)}
+        except (RuntimeError, TypeError):
+            # Device doesn't support autocast queries (e.g. no CUDA).
+            pass
+    return state
+
+
+def _legacy_device_states(state: dict[str, dict[str, Any]]) -> None:
+    """Fill ``state`` per device through the torch 2.1 to 2.3 shims.
+
+    Parameters
+    ----------
+    state:
+        The snapshot being built; each device that answers gets its entry.
+    """
+
+    for device in _AUTOCAST_DEVICES:
+        try:
+            # The per-device ``device_type`` argument is torch 2.4+ only; the
+            # shim routes to the legacy per-device helpers. See _utils/_torch_compat.py.
             state[device] = {
                 "enabled": autocast_is_enabled(device),
                 "dtype": autocast_get_dtype(device),
@@ -55,7 +82,6 @@ def log_current_autocast_state() -> dict[str, dict[str, Any]]:
         except (RuntimeError, TypeError):
             # Device doesn't support autocast queries (e.g. no CUDA).
             pass
-    return state
 
 
 class AutocastRestore:

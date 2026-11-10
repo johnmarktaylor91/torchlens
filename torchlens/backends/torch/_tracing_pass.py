@@ -49,6 +49,7 @@ from ..._utils._torch_compat import (
     dynamo_is_compiling,
     get_current_dispatch_mode_stack,
     get_fake_tensor_mode_class,
+    get_functorch_transform_probe,
     get_higher_order_operator,
     get_tracing_tensor_types,
 )
@@ -56,9 +57,33 @@ from ...errors._base import transparent_contextmanager
 from ._completeness_hop import hide_witness_hop_rules_from_dynamo
 from ._modes import _TorchLensDispatchMode
 
+#: Values whose class proves they are neither a tracing tensor, a tracing tensor class
+#: nor a list or tuple: a tracing tensor is a strict ``torch.Tensor`` subclass, so an
+#: exact ``torch.Tensor`` is never one. Used to skip the per-argument ``isinstance`` chain.
+_NOT_TRACING_CLASSES = frozenset(
+    {
+        torch.Tensor,
+        int,
+        float,
+        bool,
+        complex,
+        str,
+        type(None),
+        torch.dtype,
+        torch.device,
+        torch.layout,
+        torch.memory_format,
+    }
+)
+#: torch's dispatch-mode stack length (``_get_current_dispatch_mode_stack`` builds its
+#: list from it, so a zero length is an empty stack), or ``None`` on a build without it.
+_LEN_DISPATCH_STACK: Callable[[], int] | None = getattr(torch._C, "_len_torch_dispatch_stack", None)
+
+
 __all__ = (
     "call_inside_tracing_pass",
     "hop_internal_compile_scope",
+    "inside_functorch_transform",
     "inside_hop_internal_compile",
     "inside_lifted_cond_compile",
     "inside_tracing_tensor_pass",
@@ -355,7 +380,9 @@ def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) ->
     # ``Tensor._make_subclass``), or a list or tuple holding a tracing tensor. The
     # dispatch-mode stack, empty in ordinary capture, is read before the
     # FakeTensorMode class.
-    for value in (*args, *kwargs.values()):
+    for value in (*args, *kwargs.values()) if kwargs else args:
+        if value.__class__ in _NOT_TRACING_CLASSES:
+            continue
         if isinstance(value, tracing_types):
             return hop_entry_lifted or not _inside_unsupported_grad_operator()
         if isinstance(value, type):
@@ -365,10 +392,31 @@ def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) ->
             for item in value:
                 if isinstance(item, tracing_types):
                     return hop_entry_lifted or not _inside_unsupported_grad_operator()
+    if _LEN_DISPATCH_STACK is not None and not _LEN_DISPATCH_STACK():
+        return False
     stack = get_current_dispatch_mode_stack()
     if not stack or not _fake_tensor_mode_active(stack):
         return False
     return hop_entry_lifted or not _inside_unsupported_grad_operator()
+
+
+_FUNCTORCH_PROBE: list[Any] = []  # the resolved probe, once found (process-stable)
+
+
+def inside_functorch_transform() -> bool:
+    """Return True if inside a vmap/grad/etc. functorch transform.
+
+    The probe resolves once; a build without one resolves again on each call so
+    the missing capability stays reported as before.
+    """
+
+    if _FUNCTORCH_PROBE:
+        return _FUNCTORCH_PROBE[0]() is not None
+    transform_probe = get_functorch_transform_probe()
+    if transform_probe is None:
+        return False
+    _FUNCTORCH_PROBE.append(transform_probe)
+    return transform_probe() is not None
 
 
 def call_inside_tracing_pass(

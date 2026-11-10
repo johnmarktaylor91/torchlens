@@ -8,11 +8,24 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace as dataclass_replace
 from typing import Any, cast
 
+import torch
 from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from .. import _state
+
+# Re-exported for existing importers: detached-activation guidance lives in its own module.
+from ._detached_activations import (  # noqa: F401
+    _DETACHED_ACTIVATION_ANY_INPUT_FUNCS as _DETACHED_ACTIVATION_ANY_INPUT_FUNCS,
+    _DETACHED_ACTIVATION_PROPAGATION_FUNCS as _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
+    _DETACHED_SAVED_ACTIVATIONS as _DETACHED_SAVED_ACTIVATIONS,
+    detached_saved_activation_label as detached_saved_activation_label,
+    has_detached_saved_activations as has_detached_saved_activations,
+    mark_detached_saved_activation as mark_detached_saved_activation,
+    propagate_detached_saved_activation as propagate_detached_saved_activation,
+)
 from ._internal_read import internal_scalar_read
+from ._torch_compat import get_tensorbase_class
 
 __all__ = [
     "TorchLensMeta",
@@ -261,189 +274,6 @@ _MODULE_REGISTRY: WeakIdKeyDictionary = WeakIdKeyDictionary()
 _PARAM_REGISTRY: WeakIdKeyDictionary = WeakIdKeyDictionary()
 
 
-# Retained activations are TorchLens-owned tensors, but this diagnostic state stays in an
-# identity-keyed weak registry instead of their ``TensorMeta``. Capture labels are session-scoped
-# and retired between traces; the guidance must remain available for exactly as long as the
-# retained payload itself remains alive.
-_DETACHED_SAVED_ACTIVATIONS: WeakIdKeyDictionary = WeakIdKeyDictionary()
-
-# This is intentionally a small allowlist. Each operation preserves an autograd path from a
-# floating/complex tensor input to its tensor output when that input requires grad. A false
-# positive is worse than missing guidance for an unusual loss-building operation.
-_DETACHED_ACTIVATION_PROPAGATION_FUNCS = frozenset(
-    {
-        "__abs__",
-        "__add__",
-        "__getitem__",
-        "__mul__",
-        "__neg__",
-        "__pow__",
-        "__radd__",
-        "__rmul__",
-        "__rsub__",
-        "__rtruediv__",
-        "__sub__",
-        "__truediv__",
-        "abs",
-        "absolute",
-        "add",
-        "clone",
-        "contiguous",
-        "div",
-        "divide",
-        "flatten",
-        "mean",
-        "mul",
-        "nansum",
-        "neg",
-        "negative",
-        "permute",
-        "pow",
-        "prod",
-        "reshape",
-        "reshape_as",
-        "select",
-        "squeeze",
-        "sub",
-        "sum",
-        "t",
-        "transpose",
-        "true_divide",
-        "unsqueeze",
-        "view",
-        "view_as",
-    }
-)
-_DETACHED_ACTIVATION_ANY_INPUT_FUNCS = frozenset(
-    {
-        "__add__",
-        "__mul__",
-        "__pow__",
-        "__radd__",
-        "__rmul__",
-        "__rsub__",
-        "__rtruediv__",
-        "__sub__",
-        "__truediv__",
-        "add",
-        "div",
-        "divide",
-        "mul",
-        "pow",
-        "sub",
-        "true_divide",
-    }
-)
-
-
-def mark_detached_saved_activation(
-    source: Tensor,
-    retained: Tensor,
-    label: str | None,
-) -> None:
-    """Mark a retained activation only when TorchLens severed its autograd path.
-
-    Parameters
-    ----------
-    source:
-        Live operation output before TorchLens retained a payload copy.
-    retained:
-        Tensor payload exposed by the resulting ``Op``.
-    label:
-        Best available operation label for diagnostic guidance.
-
-    Returns
-    -------
-    None
-        The weak identity registry is updated only for a proven TorchLens detach.
-    """
-
-    # These `requires_grad`/`grad_fn` reads are TorchLens-internal bookkeeping run for
-    # every saved activation (including registered-buffer sources). Mark them as internal
-    # scalar reads so the host-escape witness does not record them as host declared-state
-    # facts.
-    with internal_scalar_read():
-        source_was_connected = bool(source.requires_grad and source.grad_fn is not None)
-        retained_is_disconnected = not retained.requires_grad and retained.grad_fn is None
-    if source_was_connected and retained_is_disconnected:
-        _DETACHED_SAVED_ACTIVATIONS[retained] = label or "saved activation"
-
-
-def has_detached_saved_activations() -> bool:
-    """Return whether any guided-backward activation marker is still alive.
-
-    Returns
-    -------
-    bool
-        ``True`` when steady-state wrappers need to inspect tensor lineage.
-    """
-
-    return bool(_DETACHED_SAVED_ACTIVATIONS)
-
-
-def propagate_detached_saved_activation(
-    func_name: str,
-    inputs: Iterable[Any],
-    outputs: Iterable[Any],
-) -> None:
-    """Propagate guided-backward provenance through safe loss-building operations.
-
-    Parameters
-    ----------
-    func_name:
-        Decorated Torch callable name.
-    inputs:
-        Direct tensor arguments to the call.
-    outputs:
-        Direct tensor outputs from the call.
-
-    Returns
-    -------
-    None
-        Eligible disconnected outputs inherit the retained activation label weakly.
-    """
-
-    if not _DETACHED_SAVED_ACTIVATIONS or func_name not in _DETACHED_ACTIVATION_PROPAGATION_FUNCS:
-        return
-    tensor_inputs = [value for value in inputs if isinstance(value, Tensor)]
-    if func_name in _DETACHED_ACTIVATION_ANY_INPUT_FUNCS:
-        candidate_inputs = tensor_inputs
-    else:
-        candidate_inputs = tensor_inputs[:1]
-    marked_labels = [
-        label
-        for value in candidate_inputs
-        if (label := _DETACHED_SAVED_ACTIVATIONS.get(value)) is not None
-    ]
-    if not marked_labels:
-        return
-    label = marked_labels[0]
-    for output in outputs:
-        if not isinstance(output, Tensor):
-            continue
-        if output.requires_grad or output.grad_fn is not None:
-            continue
-        if output.is_floating_point() or output.is_complex():
-            _DETACHED_SAVED_ACTIVATIONS[output] = label
-
-
-def detached_saved_activation_label(tensor: Tensor) -> str | None:
-    """Return the label for an exactly registered detached activation lineage.
-
-    Parameters
-    ----------
-    tensor:
-        Candidate autograd root tensor.
-
-    Returns
-    -------
-    str | None
-        Retained activation label for an identity match, otherwise ``None``.
-    """
-
-    return cast(str | None, _DETACHED_SAVED_ACTIVATIONS.get(tensor))
-
-
 # --------------------------------------------------------------------------- #
 # CURRENT-SESSION OBJECT ANCHORING FOR RAW LABELS.
 #
@@ -525,6 +355,15 @@ class _LabelSession:
 
 _ACTIVE_LABEL_SESSION: _LabelSession | None = None
 _RETIRED_LABEL_SESSION: _LabelSession | None = None
+
+# True-original storage accessors, captured at import before any wrapper or per-forward
+# escape patch exists (the completeness witness snapshots the same ones). Calling them runs no
+# TorchLens wrapper, toggle or observer, so with the escape detector off and no fast collector
+# a plain tensor's label read and stamp use them without ``pause_logging``.
+_TENSORBASE = get_tensorbase_class()
+_ORIG_UNTYPED_STORAGE: Any = None if _TENSORBASE is None else _TENSORBASE.untyped_storage
+_ORIG_STORAGE_DATA_PTR: Any = torch.UntypedStorage.data_ptr
+_ORIG_STORAGE_NBYTES: Any = torch.UntypedStorage.nbytes
 
 
 def begin_label_session() -> int:
@@ -795,6 +634,21 @@ def session_meta_is_anchored(meta: TensorMeta | None) -> bool:
     return meta.label_session == session.token
 
 
+def _fast_collector_live() -> bool:
+    """Return whether a fast-run collector is live (it keeps the wrapped storage read)."""
+    return _state._active_fast_run_collector is not None
+
+
+def _plain_reads_allowed() -> bool:
+    """Return whether the plain-tensor path may call the original storage accessors bare.
+
+    True with no live fast collector and no armed wrapper-edge observer (so the escape
+    detector is ``"off"``): the originals then reach no wrapper, toggle or patch, and the
+    ``pause_logging`` the general path adds guards no observer.
+    """
+    return not _fast_collector_live() and not _state.diagnostic_observer_armed()
+
+
 def _pinned_storage(t: Any) -> Any | None:
     """Return ``t``'s ``UntypedStorage`` for pinning/validation, else ``None``.
 
@@ -805,7 +659,7 @@ def _pinned_storage(t: Any) -> Any | None:
     """
     try:
         with _state.pause_logging():
-            fast = _state._active_fast_run_collector is not None
+            fast = _fast_collector_live()
             ledger = {} if fast else _state.wrap_epoch_ledgers()[0]
             original = ledger.get(id(getattr(type(t), "untyped_storage", None)))
             return t.untyped_storage() if original is None else original(t)
@@ -1045,6 +899,12 @@ def _ensure_tensor_meta(t: Any) -> TensorMeta:
 def set_tensor_label(t: Any, label: str) -> None:
     """Set the raw capture label on a tensor.
 
+    A plain tensor (exact ``torch.Tensor`` carrying no metadata or TorchLens
+    ``TensorMeta``) stamped while the escape detector is off and no fast collector
+    runs takes :func:`_stamp_plain_tensor`, which writes the same fields through
+    the true-original storage accessors. Everything else takes the general stamp
+    below, unchanged.
+
     Parameters
     ----------
     t : Any
@@ -1068,6 +928,96 @@ def set_tensor_label(t: Any, label: str) -> None:
     still detected on the consuming op (against the PRIOR stamp) before this call
     re-pins to the post-op storage. A tracked in-place op keeps the pointer, so
     re-pinning to the same storage is a no-op for honest mutation.
+    """
+    meta = getattr(t, "_tl", None)
+    # The plain-tensor conditions: an exact tensor with no foreign metadata, and storage
+    # reads that ``_pinned_storage`` would take through the original accessor anyway (no
+    # armed escape detector with its typed accounting, no fast collector keeping the wrapped
+    # read), where the pause it adds guards no observer because the originals reach no wrapper.
+    if (
+        t.__class__ is Tensor
+        and (meta is None or meta.__class__ is TensorMeta)
+        and _ORIG_UNTYPED_STORAGE is not None
+        and _plain_reads_allowed()
+    ):
+        _stamp_plain_tensor(t, label, meta)
+        return
+    _set_tensor_label_general(t, label)
+
+
+def _stamp_plain_tensor(t: Any, label: str, meta: TensorMeta | None) -> None:
+    """Stamp a plain tensor: :func:`_set_tensor_label_general`'s writes, fewer frames.
+
+    Parameters
+    ----------
+    t : Any
+        Exact ``torch.Tensor`` being stamped.
+    label : str
+        Raw TorchLens label.
+    meta : Optional[TensorMeta]
+        Its current metadata, already known to be TorchLens-owned or absent.
+    """
+
+    if meta is None:
+        meta = TensorMeta()
+        t._tl = meta
+    meta.label_raw = label
+    try:
+        storage = _ORIG_UNTYPED_STORAGE(t)
+    except Exception:  # noqa: BLE001 -- as _pinned_storage: an unreadable storage pins None
+        storage = None
+    meta.label_storage = storage
+    session = _ACTIVE_LABEL_SESSION
+    if session is None:
+        meta.label_session = None
+        return
+    if meta.label_session != session.token:
+        meta.label_session = session.token
+        try:
+            session.stamped[t] = True
+        except TypeError:
+            pass
+    if storage is None:
+        return
+    try:
+        storage_ptr: int | None = int(_ORIG_STORAGE_DATA_PTR(storage))
+    except Exception:  # noqa: BLE001 -- as storage_alias_index_key: unreadable registers nothing
+        storage_ptr = None
+    if storage_ptr == 0:
+        # Meta and empty storages: the general key (``_cdata`` on the meta substrate).
+        storage_ptr = _general_alias_key(storage)
+    if storage_ptr is None:
+        return
+    index = session.by_storage_ptr
+    if storage_ptr not in index:
+        # ``_register_storage_alias``'s empty-bucket arm, inline.
+        try:
+            index[storage_ptr] = weakref.ref(t)
+        except TypeError:
+            pass
+        return
+    _register_storage_alias(session, storage_ptr, t)
+
+
+def _general_alias_key(storage: Any) -> int | None:
+    """Return :func:`storage_alias_index_key` read under the general stamp's guards."""
+
+    try:
+        with _state.pause_logging(), internal_scalar_read():
+            return storage_alias_index_key(storage)
+    except Exception:  # noqa: BLE001 -- as the general stamp: unreadable registers nothing
+        return None
+
+
+def _set_tensor_label_general(t: Any, label: str) -> None:
+    """Stamp any tensor-like object: the anchor, storage pin and alias index together.
+
+    Parameters
+    ----------
+    t : Any
+        Tensor-like object to tag.
+    label : str
+        Raw TorchLens label.
     """
     meta = _ensure_tensor_meta(t)
     meta.label_raw = label
@@ -1135,7 +1085,38 @@ def get_tensor_label(t: Any) -> str | None:
     storage after labeling (:func:`_session_storage_gate_blocks`), so the
     rebound activation never re-binds as its same-named graph parent and the
     break marker on the consuming op stands.
+
+    An exact ``torch.Tensor`` skips the AsyncCollectiveTensor delegation (a strict
+    subclass) and, when its live storage is the one pinned at stamp time (same
+    ``_cdata``), the pointer, size and device comparison.
     """
+    plain_meta = getattr(t, "_tl", None)
+    if t.__class__ is Tensor and (plain_meta is None or plain_meta.__class__ is TensorMeta):
+        # Hot path (CC above 10 on purpose): one frame per plain-tensor read.
+        if plain_meta is None or plain_meta.label_raw is None:
+            return None
+        session = _ACTIVE_LABEL_SESSION
+        if session is None:
+            return plain_meta.label_raw
+        if plain_meta.label_session != session.token:
+            return None
+        keeper = plain_meta.label_storage
+        if keeper is not None and _plain_reads_allowed():  # the stamp's read conditions
+            try:  # a missing original raises too
+                same_storage = _ORIG_UNTYPED_STORAGE(t)._cdata == keeper._cdata
+                # One storage object equals itself; the two reads keep the general path's raises.
+                same_storage = same_storage and _ORIG_STORAGE_DATA_PTR(keeper) >= 0
+                same_storage = same_storage and _ORIG_STORAGE_NBYTES(keeper) >= 0
+            except Exception:  # noqa: BLE001 -- unreadable: the general comparison decides
+                same_storage = False
+            if same_storage:
+                return plain_meta.label_raw
+        return plain_meta.label_raw if session_label_storage_intact(plain_meta, t) else None
+    return _general_tensor_label(t)
+
+
+def _general_tensor_label(t: Any) -> str | None:
+    """Return :func:`get_tensor_label` for any object other than a plain tensor."""
     meta = get_tensor_meta(t)
     if meta is None or meta.label_raw is None:
         # AsyncCollectiveTensor is a transparent async view of its inner ``.elem``
