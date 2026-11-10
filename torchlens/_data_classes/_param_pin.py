@@ -111,7 +111,7 @@ def own_children(trace: Any, kind: str, accessor: Any) -> Any:
 
 
 def _pin_op_cells(store: Any, rows: ParamRows, memo: dict[int, Any]) -> None:
-    """Replace each op's non-empty parameter list or tuple with its row-key form of ``rows``.
+    """Replace each op's non-empty parameter list or tuple with its row-key form.
 
     The cell is released before the new value is written, so a sealed store
     lets go of the plain list it kept in its column.
@@ -123,8 +123,8 @@ def _pin_op_cells(store: Any, rows: ParamRows, memo: dict[int, Any]) -> None:
     cell_get, cell_del, cell_set = store.cell_get, store.cell_del, store.cell_set
     for row in range(len(store)):
         value = cell_get(row, fid, True)
-        converted = as_sequence(rows, value, memo)
-        if converted is not value:
+        if (value.__class__ is list or value.__class__ is tuple) and value:
+            converted = as_sequence(rows, value, memo)
             cell_del(row, fid)
             cell_set(row, fid, converted)
 
@@ -279,22 +279,6 @@ def param_index(accessor: Any, param: Any) -> int:
 
 
 # ---------------------------------------------------------------- forks
-
-
-def live_params(accessor: Any) -> Any:
-    """Return the records of ``accessor`` someone holds, building none.
-
-    A fork maps each parent record it may meet in a cell to its own; a
-    parent ``Param`` nobody holds cannot be in a cell (containers keep keys).
-    """
-
-    items = accessor.__dict__.get("_list")
-    if items.__class__ is not ParamSequence:
-        return accessor.values()
-    rows = items._owner
-    peek, resolve = rows.table.peek, rows.resolve
-    live = [resolve(key) if key < 0 else peek(key) for key in list.__iter__(items)]
-    return [record for record in live if record is not None]
 
 
 def fork_copy(value: Any, translator: Any) -> Any:
