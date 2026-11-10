@@ -117,24 +117,6 @@ HOLDERS: dict[str, Holder] = {
     "ModuleState.params:ParamAccessor._list[*] -> Param": Holder(
         FORK_AND_SAVED_STATE, only=("pickle_state",)
     ),
-    "Trace._trace_core:TraceCore._record_translator:_RecordTranslator._keepalive[*] -> Op": Holder(
-        FORK_AND_SAVED_STATE, only=("fork", "fork_cold")
-    ),
-    "Trace._trace_core:TraceCore._record_translator:_RecordTranslator.map{*} -> Buffer": Holder(
-        FORK_AND_SAVED_STATE, only=("fork", "fork_cold")
-    ),
-    "Trace._trace_core:TraceCore._record_translator:_RecordTranslator.map{*} -> Module": Holder(
-        FORK_AND_SAVED_STATE, only=("fork", "fork_cold")
-    ),
-    "Trace._trace_core:TraceCore._record_translator:_RecordTranslator.map{*} -> ModuleCall": Holder(
-        FORK_AND_SAVED_STATE, only=("fork", "fork_cold")
-    ),
-    "Trace._trace_core:TraceCore._record_translator:_RecordTranslator.map{*} -> Op": Holder(
-        FORK_AND_SAVED_STATE, only=("fork", "fork_cold")
-    ),
-    "Trace._trace_core:TraceCore._record_translator:_RecordTranslator.map{*} -> Param": Holder(
-        FORK_AND_SAVED_STATE, only=("fork", "fork_cold")
-    ),
     "TraceState._backward_pass_logs{*}:BackwardPass._tl_core:Store.rows[grad_fn_calls][*] -> GradFnCall": Holder(
         FORK_AND_SAVED_STATE, only=("pickle_state",)
     ),
@@ -233,10 +215,6 @@ KNOWN: dict[str, tuple[str, str]] = {
     "facet cache": (
         "facets_read",
         "Trace._trace_core:TraceCore.ops:Store.rows[_facets_cache]:FacetView._record -> Op",
-    ),
-    "fork translation": (
-        "fork",
-        "Trace._trace_core:TraceCore._record_translator:_RecordTranslator.map{*} -> Op",
     ),
     "serialised state": ("pickle_state", "TraceState._layer_list[*] -> Op"),
     "gradient records": (

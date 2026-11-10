@@ -68,11 +68,6 @@ CYCLES_AT_BASE: dict[str, tuple[frozenset[str], tuple[str, ...], str]] = {
         ("B3b",),
         "module cells and module facet caches hold records",
     ),
-    "fork_held": (
-        frozenset({"param"}),
-        ("B4",),
-        "fork translation holds the parent's records",
-    ),
 }
 
 #: The lanes that may own a cycle, with what each removes.

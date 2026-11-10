@@ -148,6 +148,7 @@ class OpRowStore:
     """
 
     __slots__ = (
+        "__weakref__",
         "_columns",
         "_compacted_singletons",
         "_cow_shared",
@@ -1312,15 +1313,17 @@ class _ViewFactBlocks:
     __slots__ = ("_base", "_view")
 
     def __init__(self, base: Any, view: OpStoreView) -> None:
-        """Bind the base fact blocks and the owning view."""
+        """Bind the base fact blocks and, weakly, the owning view (which owns this adapter)."""
 
         self._base = base
-        self._view = view
+        self._view = weakref.ref(view)
 
     def hydrate(self, row: int, name: str) -> Any:
         """Hydrate one shared fact, translating record members for the fork."""
 
-        return cow_copy_value(self._base.hydrate(row, name), self._view.record_translator)
+        view = self._view()
+        translate = None if view is None else view.record_translator
+        return cow_copy_value(self._base.hydrate(row, name), translate)
 
 
 class OpStoreView:
@@ -1344,7 +1347,8 @@ class OpStoreView:
       removal scrub on either trace never reaches the other.
     * Record facades inside containers and hydrated fact blocks translate
       through ``record_translator`` (installed by the fork builder) to the
-      fork's own facades.
+      fork's own facades; a cell that is itself a record translates on every
+      read, by kind and row, and is never cached in the overlay.
 
     Non-builtin mutable cell values (custom objects) are shared by identity —
     the same residual the shallow fork path already accepted for
@@ -1517,12 +1521,8 @@ class OpStoreView:
             self._overlay[key] = copied
             return copied
         translate = self.record_translator
-        if translate is not None:
-            mapped = translate(value)
-            if mapped is not None:
-                self._overlay[key] = mapped
-                return mapped
-        return value
+        mapped = translate(value) if translate is not None else None
+        return value if mapped is None else mapped
 
     def cell_get(self, row: int, fid: int, raw: bool = False) -> Any:
         """Return one cell value with fork-side isolation applied."""

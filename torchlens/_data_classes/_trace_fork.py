@@ -54,8 +54,8 @@ from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils._record_group_table import record_member
 from .._utils.env_flags import closed_bool_env
 from ..intervention._types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
-from ._accessor_base import Accessor
 from ._fork_flat_copy import _FLAT_COPY_DEPTH, _NO_FLAT_COPY, _flat_container_copy
+from ._fork_translation import RowTranslator
 from ._op_row_containers import bind_op_containers
 from ._state_adapter import state_items, state_new, state_restore
 from .func_call_location import FuncCallLocation
@@ -190,107 +190,6 @@ def _memoized_deep_copy(
             return fallback
 
 
-class _RecordTranslator:
-    """Map parent record facades to their fork shells by identity.
-
-    Installed as ``OpStoreView.record_translator``: consulted on every COW
-    cell read so record references inside stored containers and hydrated
-    fact blocks resolve to the FORK's facades. ``Accessor`` instances stored
-    in cells (``Module.ops``/``Module.params``) are rebuilt lazily with their
-    members translated, memoized by identity. The keepalive list pins every
-    keyed parent object so a recycled ``id`` can never mistranslate.
-    """
-
-    __slots__ = (
-        "__weakref__",
-        "_fork_ref",
-        "_guards",
-        "_keepalive",
-        "_miss_classes",
-        "_parent_cls",
-        "_parent_ref",
-        "map",
-    )
-
-    def __init__(self, fork_ref: Any = None) -> None:
-        """Create an empty translator owned by the fork behind ``fork_ref``."""
-
-        self.map: dict[int, Any] = {}
-        # Classes whose instances can never translate (tensors, dtypes,
-        # plain metadata): one set lookup short-circuits the miss path. Safe
-        # because the id-map lookup runs FIRST (record facades hit there even
-        # if their class is cached) and the parent Trace's class is excluded
-        # (parent translation is identity-based, not class-based).
-        self._miss_classes: set[type] = set()
-        self._parent_cls: type | None = None
-        # id-recycling protection WITHOUT pinning the parent graph (records
-        # like ModuleCall hold a STRONG trace reference, so a blanket
-        # keepalive would keep the parent Trace alive for the fork's whole
-        # lifetime — a GC parity break). Weak-referenceable parents get a
-        # weakref guard validated on lookup; only non-weakref-able parents
-        # (Op facades, which hold no strong trace reference) are pinned.
-        self._guards: dict[int, Any] = {}
-        self._keepalive: list[Any] = []
-        self._fork_ref = fork_ref
-        # Weak parent-trace reference: a parent-trace value met in copied
-        # state translates to the fork WITHOUT the translator pinning the
-        # parent (GC parity).
-        self._parent_ref: Any = None
-
-    def add(self, parent_record: Any, shell: Any) -> None:
-        """Register one parent record -> fork shell mapping."""
-
-        key = id(parent_record)
-        self.map[key] = shell
-        try:
-            self._guards[key] = weakref.ref(parent_record)
-        except TypeError:
-            self._guards[key] = None
-            self._keepalive.append(parent_record)
-
-    def _rebuild_accessor(self, accessor: Any) -> Any:
-        """Rebuild one cell-stored accessor with translated members."""
-
-        accessor_cls: Any = type(accessor)
-        clone = accessor_cls.__new__(accessor_cls)
-        clone.__dict__.update(accessor.__dict__)
-        remap = self.map
-        clone._dict = {key: remap.get(id(item), item) for key, item in accessor._dict.items()}
-        clone._list = [remap.get(id(item), item) for item in accessor._list]
-        if "_source_ref" in clone.__dict__ and self._fork_ref is not None:
-            clone._source_ref = self._fork_ref
-        self.add(accessor, clone)
-        return clone
-
-    def __call__(self, value: Any) -> Any:
-        """Return the fork-side object for ``value``, or ``None``."""
-
-        key = id(value)
-        mapped = self.map.get(key)
-        if mapped is not None:
-            guard = self._guards.get(key)
-            if guard is None or guard() is value:
-                return mapped
-            # The original parent object died and its id was recycled by
-            # ``value``: drop the stale entry and fall through.
-            del self.map[key]
-            del self._guards[key]
-        cls = value.__class__
-        if cls in self._miss_classes:
-            return None
-        parent_ref = self._parent_ref
-        if parent_ref is not None and value is parent_ref():
-            return self._fork_ref() if self._fork_ref is not None else None
-        if isinstance(value, Accessor):
-            return self._rebuild_accessor(value)
-        if cls is not self._parent_cls:
-            # ``isinstance`` returned False, so no instance of ``cls`` can
-            # ever rebuild as an accessor; only the parent's own class must
-            # keep taking the identity check above.
-            self._miss_classes.add(cls)
-        return None
-
-
 def _copy_fork_value(value: Any, memo: dict[Any, Any] | None = None) -> Any:
     """Copy a fork field while preserving tensor and callable identity."""
 
@@ -405,6 +304,21 @@ def _iter_parent_ops(parent: Trace) -> Iterator[Op]:
             if id(op) not in seen and isinstance(op, Op):
                 seen.add(id(op))
                 yield op
+
+
+class _RecordTranslator(RowTranslator):
+    """The fork's record translator, bound to ``Op`` and its row layout."""
+
+    __slots__ = ()
+
+    _op_cls = Op
+    _op_trace_ref_fid = _SOURCE_TRACE_REF_FID
+
+    @staticmethod
+    def _iter_ops(trace: Any) -> Iterator[Op]:
+        """Walk every op container of ``trace``."""
+
+        return _iter_parent_ops(trace)
 
 
 def _iter_parent_records(parent: Trace) -> Iterator[Any]:
@@ -556,7 +470,7 @@ def _fill_layer_shells(
     # quadratic on single-class traces (32 MB/fork measured on a 2002-op
     # stack). Equal views are documented as shareable across records.
     equivalent_view_memo: dict[Any, Any] = {}
-    remap = translator.map
+    remap = translator.building()
     for label, parent_layer in (parent.__dict__.get("_layer_logs") or {}).items():
         parent_layer_id = id(parent_layer)
         if parent_layer_id in consumed_shells:
@@ -630,9 +544,8 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     fork_ref = weakref.ref(fork)
     memo = _ForkMemo()
     dict.update(memo, {id(parent): fork})
-    translator = _RecordTranslator(fork_ref)
-    translator._parent_ref = weakref.ref(parent)
-    translator._parent_cls = type(parent)
+    translator = _RecordTranslator(fork_ref, parent, fork_core)
+    shells = translator.building()
 
     ops_view = fork_core.ops if fork_core is not None else None
     base_store = core.ops if core is not None else None
@@ -673,7 +586,7 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     record_shells: list[tuple[Any, Any]] = []
     detached_records: list[tuple[Any, Any]] = []
     for parent_record in _iter_parent_records(parent):
-        if id(parent_record) in translator.map:
+        if id(parent_record) in shells:
             continue
         shell = state_new(type(parent_record))
         record_store = parent_record.__dict__.get(CORE_KEY)
@@ -686,17 +599,10 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
         record_shells.append((parent_record, shell))
         translator.add(parent_record, shell)
 
-    dict.update(memo, translator.map)
+    dict.update(memo, shells)
     dict.update(memo, layer_shells)
     if fork_core is not None:
-        # The views hold the translator WEAKLY (a retained fork Op reaching
-        # the fork Trace through translator-mapped shells would root the
-        # whole fork graph and disarm last-owner payload eviction); the fork
-        # core is its strong anchor, so translation lives exactly as long as
-        # the fork itself.
-        fork_core._record_translator = translator
-        for view in fork_core.store_views():
-            view.record_translator = translator
+        translator.install(fork_core)
 
     # Phase 2: the policy-driven Trace field pass (one shared-memo deepcopy
     # over the trace-side remainder; every record reference resolves to its
@@ -770,5 +676,7 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
             if gc_was_enabled:
                 gc.enable()
     fork._rebind_fork_owner_refs()
+    # The build is over: the translator keeps rows and weak references only.
+    translator.seal()
     _state.register_log(fork)
     return fork
