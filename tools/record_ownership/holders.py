@@ -81,12 +81,17 @@ class Holder:
         return case in self.only if self.only else case not in self.but
 
 
+#: The cases that read a module's calls after the module build.
+_CALLS_READ_AFTER_BUILD = ("facets_read", "fork", "fork_cold", "loaded", "pickled", "deepcopied")
+
 HOLDERS: dict[str, Holder] = {
+    # The module build no longer reads every module's calls, so a module's call
+    # accessor reaches the view cells only in the cases that read it afterwards.
     f"{CELLS}{{*}}[*]:ModuleCallAccessor._dict{{*}} -> ModuleCall": Holder(
-        LATER_KINDS, but=("pickle_state",)
+        LATER_KINDS, only=_CALLS_READ_AFTER_BUILD
     ),
     f"{CELLS}{{*}}[*]:ModuleCallAccessor._list[*] -> ModuleCall": Holder(
-        LATER_KINDS, but=("pickle_state",)
+        LATER_KINDS, only=_CALLS_READ_AFTER_BUILD
     ),
     f"{CELLS}{{*}}[*]:ParamAccessor._dict{{*}} -> Param": Holder(LATER_KINDS, only=("deepcopied",)),
     f"{CELLS}{{*}}[*]:ParamAccessor._list[*] -> Param": Holder(LATER_KINDS, only=("deepcopied",)),
