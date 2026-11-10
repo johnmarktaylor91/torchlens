@@ -11,8 +11,9 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._buffer_rows import trace_accessor
 from .._data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
-from .._data_classes.buffer import Buffer, BufferAccessor
+from .._data_classes.buffer import Buffer
 from .._data_classes.module import ModuleAccessor
 from .._trace_core.record_refs import name_owner_by_row, rekey_child_cells
 from .._utils._record_group_table import record_member
@@ -133,7 +134,7 @@ def rebuild_buffer_accessor(trace: Trace) -> None:
             and _core.ops.frozen
         ):
             buffer_store.freeze()
-    trace._buffer_accessor = BufferAccessor(buffer_dict, source_trace=trace)  # type: ignore[assignment]
+    trace._buffer_accessor = trace_accessor(buffer_dict, trace)  # type: ignore[assignment]
 
 
 def rebuild_saved_trace_accessors(trace: Trace, module_accessor_state: Any) -> None:

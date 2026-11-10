@@ -58,6 +58,8 @@ BEFORE_ACTIVATION = frozenset(
     {OP_LIST, LAYER_STATE, OP_ROW_CELLS, MODULE_AND_BUFFER_CELLS, FORK_AND_SAVED_STATE}
 )
 ACTIVATED_FIRST = ("Op", "Layer")
+# Kinds activated after Op and Layer: no trace holds one of these either.
+ACTIVATED_LATER = ("Buffer",)
 # Steps whose paths are not held by a trace: nothing has to convert them before
 # a kind is activated, because the holder is gone when the call that made it returns.
 TRANSIENT = frozenset({PICKLE_PROJECTION})
@@ -145,12 +147,6 @@ HOLDERS: dict[str, Holder] = {
     ),
     # An ``Op`` in a pickle state keeps its trace (its owner slot), so while the
     # state exists the walk reaches what that live trace holds through the op.
-    "Op._owner:Trace._buffer_accessor:BufferAccessor._dict{*} -> Buffer": Holder(
-        LATER_KINDS, only=("pickle_state",)
-    ),
-    "Op._owner:Trace._buffer_accessor:BufferAccessor._list[*] -> Buffer": Holder(
-        LATER_KINDS, only=("pickle_state",)
-    ),
     "Op._owner:Trace._module_call_accessor:TraceModuleCallAccessor._dict{*} -> ModuleCall": Holder(
         LATER_KINDS, only=("pickle_state",)
     ),
@@ -173,12 +169,6 @@ HOLDERS: dict[str, Holder] = {
     "Op._core:Store.rows[grad_fn] -> GradFn": Holder(LATER_KINDS, only=("pickle_state",)),
     "Trace._backward_pass_logs{*}:BackwardPass._tl_core:Store.rows[grad_fn_calls][*] -> GradFnCall": Holder(
         LATER_KINDS, only=("backward", "pickled")
-    ),
-    "Trace._buffer_accessor:BufferAccessor._dict{*} -> Buffer": Holder(
-        LATER_KINDS, but=("pickle_state",)
-    ),
-    "Trace._buffer_accessor:BufferAccessor._list[*] -> Buffer": Holder(
-        LATER_KINDS, but=("pickle_state",)
     ),
     "Trace._grad_fn_logs{*} -> GradFn": Holder(LATER_KINDS, only=("backward", "pickled")),
     "Trace._module_call_accessor:TraceModuleCallAccessor._dict{*} -> ModuleCall": Holder(

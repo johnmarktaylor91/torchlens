@@ -100,6 +100,7 @@ from ..intervention._types import (
 )
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from . import (
+    _buffer_rows,
     _call_tree,
     _doors,
     _fork_lineage,
@@ -2451,12 +2452,11 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
     @property
     def buffers(self) -> "BufferAccessor":
         """Access buffer metadata by address, short name, or index."""
-        return self._buffer_accessor  # type: ignore[return-value]
+        return _buffer_rows.trace_buffers(self)
 
     @property
     def _graph_orphans(self) -> OrphanAccessor:
         """Access retained orphan island operations by raw or final label."""
-
         return _trace_views.graph_orphans(self)
 
     @property

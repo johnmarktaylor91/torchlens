@@ -10,9 +10,11 @@ from .._constants import BUFFER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import TLSPEC_VERSION, FieldPolicy, default_fill_state, read_tlspec_version
 from .._trace_core.record_refs import child_state_items, install_child_fields
+from .._trace_core.record_views import view_at
 from .._utils._display_errors import short_name_message
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
+from ._buffer_versions import install_handed_versions
 from ._lookup_kinds import buffer_for_key, converted
 from ._runtime_handles import runtime_handle_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -74,6 +76,12 @@ class Buffer:
     >>> type(buffer).__name__
     'Buffer'
     """
+
+    # ``_owner``: the trace a Buffer handed out by that trace's doors keeps
+    # alive (``_buffer_rows``); ``_versions``: the ``versions`` list such a
+    # Buffer handed out (``_buffer_versions``). Slots, so neither enters a
+    # state stream.
+    __slots__ = ("__dict__", "__weakref__", "_owner", "_versions")
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "address": FieldPolicy.KEEP,
@@ -400,13 +408,24 @@ def _install_buffer_facade() -> None:
 
     install_record_facade(Buffer, _BUFFER_STORED_FIELDS)
     install_child_fields(Buffer, {"versions": None})
+    install_handed_versions(Buffer)
 
 
 _install_buffer_facade()
 
 
 class BufferAccessor(Accessor["Buffer"]):
-    """Dict-like accessor for persistent Buffer entities."""
+    """Dict-like accessor for persistent Buffer entities.
+
+    The trace's own accessor names its Buffers by row in the trace's buffer
+    kind table and builds each Buffer when read (``_buffer_rows``); one built
+    from records (direct construction, a restored copy, a trace without a
+    core) holds them, as before.
+    """
+
+    # ``_owner``: the trace a handed-out accessor keeps alive; ``_handed``: a
+    # weak reference to that accessor, cached on the stored one.
+    __slots__ = ("_handed", "_owner")
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
@@ -421,8 +440,92 @@ class BufferAccessor(Accessor["Buffer"]):
     ) -> None:
         """Initialize the accessor from address-keyed buffer entities."""
 
+        self._owner = None
+        self._handed = None
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
         super().__init__(buffer_dict, source_ref=source_ref)
+
+    @property
+    def _dict(self) -> dict[str, Buffer]:  # type: ignore[override]
+        """Address to Buffer, in insertion order (built on each read when keyed by row)."""
+
+        state = self.__dict__
+        rows = state.get("_rows")
+        if rows is None:
+            return cast("dict[str, Buffer]", state["_dict"])
+        return dict(zip(rows, self._views_at(rows.values()), strict=True))
+
+    @_dict.setter
+    def _dict(self, value: dict[str, Buffer]) -> None:
+        """Hold ``value`` itself: the accessor stops naming its Buffers by row."""
+
+        state = self.__dict__
+        for key in ("_rows", "_store", "_views", "_core_ref"):
+            state.pop(key, None)
+        state["_dict"] = value
+
+    @property
+    def _list(self) -> list[Buffer]:  # type: ignore[override]
+        """Buffers in order (built on each read when keyed by row)."""
+
+        state = self.__dict__
+        rows = state.get("_rows")
+        if rows is None:
+            return cast("list[Buffer]", state["_list"])
+        return self._views_at(rows.values())
+
+    @_list.setter
+    def _list(self, value: list[Buffer]) -> None:
+        """Hold ``value`` as the ordered Buffers of an accessor that holds its records."""
+
+        self.__dict__["_list"] = value
+
+    def _views_at(self, rows: Any) -> list[Buffer]:
+        """Return the Buffer at each row, each holding the trace this accessor reads."""
+
+        state = self.__dict__
+        owner = getattr(self, "_owner", None)
+        if owner is None:
+            reference = state.get("_source_ref")
+            owner = reference() if reference is not None else None
+        core_ref = state["_core_ref"]
+        core = core_ref() if core_ref is not None else None
+        if core is None or core._views.pinned:
+            owner = None  # the trace is gone, or still being built: hand out unowned views
+        table, store = state["_views"], state["_store"]
+        return [view_at(table, store, Buffer, row, owner) for row in rows]
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return pickle state holding the Buffer records, as an accessor that holds them would."""
+
+        state = self.__dict__
+        if "_rows" not in state:
+            return super().__getstate__()
+        records = self._dict
+        out: dict[str, Any] = {"_dict": records, "_list": list(records.values())}
+        if "_source_ref" in state:
+            out["_source_ref"] = None
+        return out
+
+    def __len__(self) -> int:
+        """Return the number of buffers."""
+
+        rows = self.__dict__.get("_rows")
+        return len(self._dict) if rows is None else len(rows)
+
+    def keys(self) -> list[Any]:
+        """Return the buffer addresses in order."""
+
+        rows = self.__dict__.get("_rows")
+        return super().keys() if rows is None else list(rows)
+
+    def __getitem__(self, key: int | str) -> Buffer:
+        """Return a Buffer by address, short name or index; an exact address builds one view."""
+
+        rows = self.__dict__.get("_rows")
+        if rows is not None and key.__class__ is str and key in rows:
+            return self._views_at((rows[key],))[0]
+        return super().__getitem__(key)
 
     def _resolve_substring(self, key: str) -> Buffer | None:
         """Resolve an unambiguous buffer short name."""
