@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from weakref import WeakKeyDictionary
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
-from .._data_classes._state_adapter import state_items
+from .._data_classes._state_adapter import answered_state, state_items
 from .._data_classes.param import ParamAccessor
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
@@ -245,7 +245,7 @@ class RefreshProjector:
                 stacklevel=user_stacklevel(),
             )
 
-        preserved_states = [dict(state_items(layer)) for layer in self.target._layer_list]
+        preserved_states = [answered_state(layer) for layer in self.target._layer_list]
         if not self.target._refresh_matching_rerun_state_from(refreshed):
             raise self._graph_change_error(
                 refreshed,
@@ -347,7 +347,7 @@ class RefreshProjector:
         """
 
         held = {name for name, _value in state_items(layer)}
-        new_state = dict(state_items(new_layer))
+        new_state = answered_state(new_layer)
         dynamic = self._DYNAMIC_OP_FIELDS
         copy_value = self.target._copy_rerun_value
         for field_name in LAYER_PASS_LOG_FIELD_ORDER:

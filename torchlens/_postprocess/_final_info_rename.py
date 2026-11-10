@@ -19,7 +19,8 @@ from itertools import repeat
 from typing import TYPE_CHECKING, Any
 
 from ._conditional_child_rename import _rename_children_by_cond, _rename_elif_children
-from ._label_rename import _rename_label_dataclass, _rename_template_parent_refs
+from ._label_rename import _rename_label_dataclass
+from ._replay_template_cells import carry_templates, template_labels
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -197,9 +198,12 @@ def _rename_replay_columns(
     fids: dict[str, int],
     columns: dict[str, list[Any]],
     mapping: dict[str, str],
-    parent_ref_cls: type[Any],
 ) -> None:
-    """Rename labels in the edge uses, replay templates and edit records of every op."""
+    """Rename labels in the edge uses and edit records of every op.
+
+    The replay templates are not renamed here (:func:`carry_templates`): each
+    one is renamed, and its display keys bound, on first read.
+    """
 
     cache: dict[Any, Any] = {}
     for name in ("_edge_uses", "edits"):
@@ -209,11 +213,6 @@ def _rename_replay_columns(
                 row[fid] = list(
                     map(_rename_label_dataclass, records, repeat(mapping), repeat(cache))
                 )
-    for name in ("args_template", "kwargs_template"):
-        fid = fids[name]
-        for row, template in zip(rows, columns[name], strict=True):
-            if template is not None:
-                row[fid] = _rename_template_parent_refs(template, mapping, parent_ref_cls, cache)
 
 
 def rename_label_columns(
@@ -258,4 +257,5 @@ def rename_label_columns(
     name = "out_versions_by_child"
     _rename_out_versions(rows, fids[name], columns[name], mapping)
     _rename_conditional_children(rows, fids, columns, layer_mapping, project_views)
-    _rename_replay_columns(rows, fids, columns, mapping, parent_ref_cls)
+    _rename_replay_columns(rows, fids, columns, mapping)
+    carry_templates(table, columns, template_labels(trace, parent_ref_cls))

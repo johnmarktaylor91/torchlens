@@ -23,7 +23,6 @@ from operator import attrgetter
 from typing import Any
 
 from .._data_classes._template_walk import dataclass_field_names
-from .._utils._record_group_table import record_member
 
 #: Exact leaf classes that are never containers, dataclasses or callables.
 _ATOMIC_CLASSES = frozenset({int, float, bool, bytes, complex, type(None)})
@@ -285,44 +284,3 @@ def _rename_label_dataclass(
     if isinstance(value, str):
         return mapping.get(value, value)
     return value
-
-
-def _rename_replay_fields(
-    layer_entry: Any,
-    mapping: dict[str, str],
-    set_entry_field: Callable[[str, Any], None],
-    cache: _FieldCache,
-    parent_ref_cls: type[Any],
-) -> None:
-    """Rename labels in one Op's edge uses, replay templates and edit records.
-
-    Args:
-        layer_entry: Op (or test double) whose fields are renamed.
-        mapping: Raw-to-final layer-label mapping.
-        set_entry_field: Writer for one renamed field of ``layer_entry``.
-        cache: Dataclass field-name cache shared across the rename sweep.
-        parent_ref_cls: The ``ParentRef`` class.
-    """
-
-    edge_uses = getattr(layer_entry, "_edge_uses", None)
-    if edge_uses:
-        set_entry_field(
-            "_edge_uses", [_rename_label_dataclass(record, mapping, cache) for record in edge_uses]
-        )
-    args_template = record_member(layer_entry, "args_template", None)
-    if args_template is not None:
-        set_entry_field(
-            "args_template",
-            _rename_template_parent_refs(args_template, mapping, parent_ref_cls, cache),
-        )
-    kwargs_template = record_member(layer_entry, "kwargs_template", None)
-    if kwargs_template is not None:
-        set_entry_field(
-            "kwargs_template",
-            _rename_template_parent_refs(kwargs_template, mapping, parent_ref_cls, cache),
-        )
-    interventions = getattr(layer_entry, "edits", None)
-    if interventions:
-        set_entry_field(
-            "edits", [_rename_label_dataclass(record, mapping, cache) for record in interventions]
-        )

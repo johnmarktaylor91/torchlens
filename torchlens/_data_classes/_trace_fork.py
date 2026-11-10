@@ -51,6 +51,7 @@ from .._capture.outcome import stamp_forked
 from .._trace_core._fork_copy import _COW_ATOMIC, cow_copy_value
 from .._trace_core.op_store import _MISSING, DetachedOpStore, PooledCell
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
+from .._trace_core.side_columns import PendingCell
 from .._utils._record_group_table import record_member
 from .._utils.env_flags import closed_bool_env
 from ..intervention._types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
@@ -363,6 +364,8 @@ def _fill_detached_op(
     for field_name, value in parent_op.__tl_state_items__():
         if field_name in _OP_SESSION_CACHE_FIELDS or field_name == "_source_trace_ref":
             continue
+        if value.__class__ is PendingCell:  # isolate and translate the answer, as before
+            value = value.answer()
         state[field_name] = cow_copy_value(value, translator)
     shell.__tl_state_restore__(state)
     _OBJECT_SETATTR(shell, "_source_trace_ref", fork_ref)

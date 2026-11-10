@@ -199,6 +199,11 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_io/prerelease.py", "_ACTIVE"),
         ("torchlens/_io/prerelease.py", "_ANNOTATIONS_KEY_REGISTRY"),
         ("torchlens/_io/prerelease.py", "_REGISTRY"),
+        # Side-column families (lane E0b): DECLARATION tables filled when each
+        # SideColumnFamily is constructed at its owning module's import (the replay
+        # templates); never cleared or rebound -- install-time facts, not caches.
+        ("torchlens/_trace_core/side_columns.py", "SIDE_FAMILIES"),
+        ("torchlens/_trace_core/side_columns.py", "SIDE_FIELDS"),
         # Selection-AST term dispatch: import-time table, sibling producers register at import.
         ("torchlens/_selection/selection.py", "_TERM_RESOLVERS"),
         # F40a annotations travel policy: DECLARATION table populated at import

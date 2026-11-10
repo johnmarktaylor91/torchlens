@@ -21,6 +21,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._trace_core import op_store
+from torchlens._trace_core.cell_states import LazyCell
 from torchlens.options import CaptureOptions
 
 
@@ -68,6 +69,9 @@ def _reference_cell_get(view: Any, row: int, fid: int) -> Any:
             columns = view.base._columns
             assert columns is not None
             value = columns[fid].get(row)
+    if value.__class__ is LazyCell:
+        # A derived cell held its answer before its family resolved on read.
+        return value.read(view, row, fid, False)
     return view._isolate(key, value)
 
 

@@ -17,7 +17,7 @@ from .._quantities import Bytes, Quantity
 from .._utils._record_group_table import layer_attr, op_attr, record_member
 from .._utils.fail_open import fail_open
 from . import _doors
-from ._state_adapter import state_items, state_restore
+from ._state_adapter import answered_state, state_items, state_restore
 from ._trace_accessors import (
     _invalidate_trace_module_call_accessor_cache,
     _invalidate_trace_op_layer_accessor_caches,
@@ -273,7 +273,7 @@ def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any, *, moved: bo
         "num_inputs",
         "is_in_conditional_body",
     }
-    new_layer_state = dict(state_items(new_layer))
+    new_layer_state = answered_state(new_layer)
     preserved_user_annotations = copy_user_annotations(trace, getattr(layer, "annotations", None))
     copies: dict[str, Any] = {}  # fields both loops below write are copied once
     copy_fresh = partial(copy_rerun_value, trace, moved=moved)

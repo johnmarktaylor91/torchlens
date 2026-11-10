@@ -33,8 +33,9 @@ from .._utils._record_group_table import op_attr, record_member
 from ..intervention._types import ParentRef
 from ._conditional_child_rename import _rename_children_by_cond, _rename_conditional_child_views
 from ._final_info_columns import log_final_info_by_column, ops_inside_modules
-from ._label_rename import _rename_label_dataclass, _rename_replay_fields
+from ._label_rename import _rename_label_dataclass
 from ._module_containment import _log_module_hierarchy_info_for_layer
+from ._replay_template_cells import rename_replay_entry
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -429,11 +430,9 @@ def _replace_layer_names_for_layer_entry(
 ) -> None:
     """Replace all raw labels in a Op's fields with final labels.
 
-    Handles three categories of fields:
-    1. List/set fields (parents, children, etc.): creates NEW objects
-       via type(orig)([comprehension]) — no shared-set corruption possible.
-    2. parent_arg_positions dict: renames values in-place.
-    3. out_versions_by_child dict: renames keys.
+    List and set fields (parents, children, etc.) get NEW objects via
+    type(orig)([comprehension]); parent_arg_positions is renamed in place,
+    out_versions_by_child by key; replay templates are carried, not renamed.
 
     ``equivalent_ops`` is the one exception to "new object per Op". Capture hands
     every member of an equivalence class the SAME trace-level set (see
@@ -576,7 +575,7 @@ def _replace_layer_names_for_layer_entry(
         set_entry_field("conditional_else_children", conditional_else_children)
     else:
         _rename_conditional_child_views(layer_entry, layer_mapping, set_entry_field)
-    _rename_replay_fields(layer_entry, mapping, set_entry_field, field_cache, ParentRef)
+    rename_replay_entry(self, layer_entry, set_entry_field, field_cache, ParentRef)
 
 
 def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
