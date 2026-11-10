@@ -19,7 +19,7 @@ from __future__ import annotations
 from itertools import repeat
 from typing import Any
 
-from .._data_classes._labels import public_raw_label
+from .._data_classes._labels import public_raw_labels
 from .._data_classes._op_columns import OpColumns
 from .._data_classes._op_row_containers import op_rows, restart_op_holders
 from .._trace_core.cell_states import LazyCell
@@ -153,6 +153,7 @@ class _Scan:
         self.new_keys: dict[Any, int] = {}
         self.names: dict[str, str] = {}
         self.fx_paths: dict[str, str] = {}
+        self.publics: list[str] = []  # each kept op's public raw label, by position
         self.exact: tuple[Any, ...] = ()  # the current op's exact keys, from ``keys_of``
 
     def orphans_and_saved(self, keys: list[int]) -> tuple[list[bool], int]:
@@ -226,7 +227,7 @@ class _Scan:
                 module_keys = _no_module_keys(cells[self.write_fids[3]])
         except _Unscannable:
             return None
-        public = public_raw_label(raw)  # ``Op.raw_label``'s own rule
+        public = self.publics[position]  # ``Op.raw_label``'s own rule, batched
         self.exact = (raw, public, cells[f_label])  # read by ``register`` for this op
         keys = [
             raw,
@@ -432,6 +433,8 @@ def _finish(
         for record, key in zip(kept, keys, strict=True):
             table[key] = record
     total = len(keys)
+    f_raw = scan.fids[0]
+    scan.publics = public_raw_labels([scan.rows[key][f_raw] for key in keys])
     try:
         for position, (record, key) in enumerate(zip(kept, keys, strict=True)):
             op_keys = scan.keys_of(key, position, total)
