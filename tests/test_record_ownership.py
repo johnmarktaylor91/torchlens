@@ -222,6 +222,28 @@ def test_walk_reads_a_dict_subclass_raw_and_follows_its_slots() -> None:
     assert found.get("._side") is mapping._side, found
 
 
+class _ViewingSequence(list):  # type: ignore[type-arg]
+    """A list subclass whose iteration hands out stand-ins, with a second holder in a slot."""
+
+    __slots__ = ("_side",)
+
+    def __iter__(self) -> Any:
+        """Hide the items the sequence really holds."""
+
+        return iter([None] * len(self))
+
+
+def test_walk_reads_a_list_subclass_raw_and_follows_its_slots() -> None:
+    """A sequence's own iteration may not hide what it holds, and its slots are holders too."""
+
+    item, side = _Owner(), _Owner()
+    sequence = _ViewingSequence([item])
+    sequence._side = [side]
+    found = list(strong_edges(sequence))
+    assert any(child is item for _name, child in found), found
+    assert any(child is sequence._side for _name, child in found), found
+
+
 def test_walk_does_not_run_attribute_hooks() -> None:
     """The walk reads slots and dictionaries directly; a lookup would build caches."""
 

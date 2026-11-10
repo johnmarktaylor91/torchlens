@@ -219,6 +219,25 @@ def _mapping_subclass_edges(obj: Any) -> Iterator[Edge]:
             yield slot_by_id[id(referent)], referent
 
 
+def _list_subclass_edges(obj: Any) -> Iterator[Edge]:
+    """Yield a list subclass's own items, then its slots and instance attributes.
+
+    The items are read with ``list.__iter__``, never through the subclass's
+    own iteration: a sequence that hands out records for the keys it stores
+    holds the keys, not the records.
+    """
+
+    for item in list(list.__iter__(obj)):
+        yield "[*]", item
+    instance_dict = _instance_dict(obj)
+    slot_by_id = _slot_names_by_id(obj)
+    for referent in gc.get_referents(obj):
+        if instance_dict is not None and referent is instance_dict:
+            yield from _dict_edges(referent, attribute_style=True)
+        elif id(referent) in slot_by_id:
+            yield slot_by_id[id(referent)], referent
+
+
 def _sequence_edges(obj: Any) -> Iterator[Edge]:
     """Yield the items of a list, tuple, set or deque."""
 
@@ -280,6 +299,8 @@ def strong_edges(obj: Any, absorb: Absorb = lambda _container: True) -> Iterator
 
     if isinstance(obj, dict) and type(obj).__module__ not in ("builtins", "collections"):
         return _mapping_subclass_edges(obj)
+    if isinstance(obj, list) and type(obj).__module__ != "builtins":
+        return _list_subclass_edges(obj)
     for kinds, reader in _EDGE_READERS:
         if isinstance(obj, kinds):
             return reader(obj)
