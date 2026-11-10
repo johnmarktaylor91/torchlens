@@ -252,7 +252,6 @@ def _call_site_partition(
 
     classes = trace._raw_graph_ws._call_site_classes
     read_buffer = rows.getter("is_buffer")
-    read_address = rows.getter("buffer_address")
     read_func = rows.getter("func_name")
     read_index = rows.getter("raw_index")
     read = KeyReaders(
@@ -262,7 +261,8 @@ def _call_site_partition(
     keys: dict[str, tuple[Any, ...]] = {}
     buffers: list[tuple[str, Any]] = []
     for (label, handle), site_key in zip(rows.retained, site_keys):
-        if read_buffer(handle) and read_address(handle):
+        # ``buffer_address`` is a facade member, not a column; buffers are few.
+        if read_buffer(handle) and trace[label].buffer_address:
             buffers.append((label, handle))
             continue
         key = call_site_group_key(label, handle, site_key, read_func(handle), read, classes)
