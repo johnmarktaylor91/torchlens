@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1774 modules, 712551 lines, 0 modules without a docstring.
+85 packages, 1774 modules, 712595 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45385 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45387 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 51 | 20858 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 51 | 20871 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
@@ -39,7 +39,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 16 | 7447 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
-| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 21 | 6540 |
+| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 21 | 6569 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24167 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (128 modules, 45385 lines)
+Core data structures for representing a logged forward pass. (128 modules, 45387 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -400,7 +400,7 @@ Core data structures for representing a logged forward pass. (128 modules, 45385
 | `_trace_docs_stats` | Full docstrings of the ''Trace'' statistics, views and reports methods. | 547 |
 | `_trace_docs_validation` | Full docstrings of the ''Trace'' validation, run and backward verbs methods. | 368 |
 | `_trace_field_spec` | The persisted-field policy table of ''Trace'' (''Trace._PORTABLE_STATE_SPEC''). | 491 |
-| `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 686 |
+| `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 688 |
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 338 |
 | `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 799 |
 | `_trace_groups_capture` | Capture-side concern groups of a ''Trace'': ''trace.options'', ''trace.source'', ''trace.health''. | 479 |
@@ -729,7 +729,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (51 modules, 20858 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (51 modules, 20871 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -766,7 +766,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `_pre_hook_provenance` | Pre-hook provenance of one module call, with raw producer labels finalized. | 70 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 400 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 407 |
-| `_replay_template_cells` | Replay argument templates as a derived on-read family. | 307 |
+| `_replay_template_cells` | Replay argument templates as a derived on-read family. | 320 |
 | `_root_module_log` | Module-build-data readers for the root module's calls. | 84 |
 | `_row_ingest` | Step-0 ingest of the exhaustive capture rows (capture C2c). | 317 |
 | `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 344 |
@@ -926,7 +926,7 @@ Live narration for TorchLens captures (the torchsnooper niche, better). (10 modu
 
 ### `torchlens._trace_core`
 
-Private per-trace semantic store substrate (trace_core_design.md). (21 modules, 6540 lines)
+Private per-trace semantic store substrate (trace_core_design.md). (21 modules, 6569 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -949,7 +949,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (21 modules, 
 | `record_rows` | Generic store-backed record facades for the non-Op record kinds. | 288 |
 | `relation_views` | Freeze-time conversion of relation staging containers to immutable views. | 528 |
 | `relations` | The canonical edge-occurrence table with CSR indexes. | 162 |
-| `side_columns` | Side-column families: derived fields whose raw values live beside the store. | 224 |
+| `side_columns` | Side-column families: derived fields whose raw values live beside the store. | 253 |
 | `view_tables` | The per-trace view tables: where ''Op'' and ''Layer'' records are cached, weakly. | 322 |
 
 ### `torchlens._utils`
