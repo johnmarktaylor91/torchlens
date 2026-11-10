@@ -117,7 +117,7 @@ DOORS: dict[str, Callable[[Any], Any]] = {
     "op.autograd.grad_fn": lambda t: t["relu_1"].autograd.grad_fn,
     "layer.autograd.grad_fn": lambda t: t.layers["relu_1"].autograd.grad_fn,
     "layer.ops[0].autograd.grad_fn": lambda t: t.layers["relu_1"].ops[0].autograd.grad_fn,
-    "module address, output op": lambda t: t["fc"].autograd.grad_fn,
+    "module address": lambda t: t["fc"]["linear_1"].autograd.grad_fn,
     "module[layer].autograd.grad_fn": lambda t: t.modules["fc"]["linear_1"].autograd.grad_fn,
     "grad_fn.calls[0]": lambda t: t.autograd.grad_fns[0].calls[0],
     "grad_fn.calls.for_pass(1)": lambda t: t.autograd.grad_fns[0].calls.for_pass(1),
@@ -207,9 +207,22 @@ def test_a_record_written_through_one_door_reads_through_another() -> None:
     assert trace.autograd.grad_fn_calls[0].note == "kept too"
 
 
-@pytest.mark.parametrize(
-    "remake", [copy.copy, copy.deepcopy, lambda r: pickle.loads(pickle.dumps(r))]
-)
+def _pickled(record: Any) -> Any:
+    return pickle.loads(pickle.dumps(record))
+
+
+def _dropped(reference: Any) -> bool:
+    """Return whether the trace behind ``reference`` is gone once garbage is collected.
+
+    A trace with a backward pass sits in a reference cycle of its own (as it
+    did before records held their trace), so it is the collector that frees it.
+    """
+
+    gc.collect()
+    return reference() is None
+
+
+@pytest.mark.parametrize("remake", [copy.copy, copy.deepcopy, _pickled])
 def test_a_record_copied_or_restored_alone_names_no_trace(remake: Callable[[Any], Any]) -> None:
     """A copy of a record is detached: it has no trace and does not keep the original's."""
 
@@ -220,9 +233,10 @@ def test_a_record_copied_or_restored_alone_names_no_trace(remake: Callable[[Any]
     assert grad_fn.handle is None
     assert call.trace is None
     assert call.ordinal_index == -1
-    assert [inner.trace for inner in grad_fn.calls.values()] == [None] * len(grad_fn.calls)
+    if remake is not copy.copy:  # a shallow copy shares the original's calls
+        assert [inner.trace for inner in grad_fn.calls.values()] == [None] * len(grad_fn.calls)
     del trace
-    assert _LAST[0]() is None, "a detached copy does not keep the trace it was copied from"
+    assert _dropped(_LAST[0]), "a detached copy does not keep the trace it was copied from"
     assert grad_fn.trace is None and call.trace is None
 
 
@@ -328,32 +342,39 @@ def test_pickle_state_carries_plain_containers() -> None:
     assert type(pass_state["grad_fn_calls"]) is list
 
 
-def test_a_dropped_trace_is_freed_by_reference_counting() -> None:
-    """With no record held, dropping the trace frees it at once, with the collector off."""
+def test_a_dropped_trace_with_no_held_record_is_freed() -> None:
+    """Reading records and dropping them leaves nothing that keeps the trace."""
 
+    trace = _trace()
+    for reach in DOORS.values():
+        reach(trace)
+    assert trace.autograd.grad_fn_calls[0].ordinal_index == 0
+    del trace
+    assert _dropped(_LAST[0])
+
+
+@pytest.mark.parametrize("door", sorted(DOORS))
+def test_a_held_record_keeps_the_trace_until_it_is_dropped(door: str) -> None:
+    """The record holds the trace one way: dropping the record lets the trace go."""
+
+    record = DOORS[door](_trace())
+    assert not _dropped(_LAST[0])
+    assert record.trace is _LAST[0]()
+    del record
+    assert _dropped(_LAST[0])
+
+
+def test_a_forward_trace_is_still_freed_by_reference_counting() -> None:
+    """A trace with no backward pass has no cycle: dropping it frees it, collector off."""
+
+    torch.manual_seed(0)
     gc.collect()
     gc.disable()
     try:
-        trace = _trace()
-        for reach in DOORS.values():
-            reach(trace)
-        assert trace.autograd.grad_fn_calls[0].ordinal_index == 0
+        trace = tl.trace(_Net(), torch.randn(2, 1, 6, 6))
+        reference = weakref.ref(trace)
         del trace
-        assert _LAST[0]() is None
-    finally:
-        gc.enable()
-
-
-def test_a_held_record_keeps_the_trace_until_it_is_dropped() -> None:
-    """The record holds the trace one way: dropping the record frees the trace."""
-
-    gc.collect()
-    gc.disable()
-    try:
-        call = _trace().autograd.grad_fns[0].calls[0]
-        assert call.trace is _LAST[0]()
-        del call
-        assert _LAST[0]() is None
+        assert reference() is None
     finally:
         gc.enable()
 

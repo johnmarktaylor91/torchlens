@@ -321,6 +321,16 @@ class StateDict(dict[Any, Any]):
         for key, value in dict(*args, **kwargs).items():
             _dict_set(self, key, hold(cls, value))
 
+    def __or__(self, other: Any) -> Any:
+        """Return a plain dictionary of these records merged with ``other``."""
+
+        return self.plain() | other
+
+    def __ror__(self, other: Any) -> Any:
+        """Return a plain dictionary of ``other`` merged with these records."""
+
+        return other | self.plain()
+
     def __ior__(self, other: Any) -> Any:
         """Hold every record of ``other`` in place."""
 
