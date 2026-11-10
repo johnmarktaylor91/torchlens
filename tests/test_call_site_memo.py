@@ -127,16 +127,16 @@ _MODELS = {
 
 
 def _projection(trace: Any) -> list[tuple[Any, ...]]:
-    """Every layer's label and the user-visible fields of its code context."""
+    """Every op's layer label, pass and the user-visible fields of its code context."""
 
     rows = []
     for label in trace.layer_labels:
-        layer = trace[label]
-        frames = tuple(
-            (f.file, f.line_number, f.func_name, f.func_qualname, f.col_offset)
-            for f in (layer.source.frames or ())
-        )
-        rows.append((label, frames))
+        for index, op in enumerate(trace[label].ops):
+            frames = tuple(
+                (f.file, f.line_number, f.func_name, f.func_qualname, f.col_offset)
+                for f in (op.source.frames or ())
+            )
+            rows.append((label, index, frames))
     return rows
 
 
@@ -164,20 +164,47 @@ def test_a_seen_site_is_never_walked_again(name: str) -> None:
     assert 0 < counts["lookups"] <= len(trace)
 
 
-def _call_site_per_output(model: nn.Module, x: Tensor, depth: int) -> float:
+class _LoopN(nn.Module):
+    def __init__(self, steps: int) -> None:
+        super().__init__()
+        self.steps = steps
+        self.cell = nn.Linear(4, 4)
+
+    def forward(self, x: Tensor) -> Tensor:
+        for _ in range(self.steps):
+            x = torch.tanh(self.cell(x))
+        return x
+
+
+class _DeepN(nn.Module):
+    """``_LoopN`` called under 30 extra frames inside the root forward."""
+
+    def __init__(self, steps: int) -> None:
+        super().__init__()
+        self.inner = _LoopN(steps)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return _recurse(self.inner, 30, x)
+
+
+def _call_site_count(model: nn.Module, x: Tensor, depth: int) -> tuple[int, int]:
     run = lambda: _recurse(tl.trace, depth, model, x)  # noqa: E731
     run()
     run()
     _trace, record = floor.count_sections(run)
-    return record["calls"]["call_site"] / record["outputs"]
+    return record["calls"]["call_site"], record["outputs"]
 
 
-def test_call_site_cost_does_not_grow_with_stack_depth() -> None:
+def _per_op(build: Any, depth: int) -> float:
+    """Call-site calls per extra op: 40 loop steps against 10, so first-time sites cancel."""
+
     x = torch.randn(2, 4)
-    shallow = _call_site_per_output(_LoopCell(), x, 0)
-    deep_harness = _call_site_per_output(_LoopCell(), x, 30)
-    deep_model = _call_site_per_output(_Deep(), x, 0)
-    assert deep_harness <= shallow * 1.05
-    # ``_Deep`` adds one relu at the root and one module level; its 30 extra
-    # frames are walked once per module call at most, never per op.
-    assert deep_model <= shallow * 1.5
+    calls_10, outputs_10 = _call_site_count(build(10), x, depth)
+    calls_40, outputs_40 = _call_site_count(build(40), x, depth)
+    return (calls_40 - calls_10) / (outputs_40 - outputs_10)
+
+
+def test_call_site_cost_per_op_does_not_grow_with_stack_depth() -> None:
+    shallow = _per_op(_LoopN, 0)
+    assert _per_op(_LoopN, 30) <= shallow + 0.5
+    assert _per_op(_DeepN, 0) <= shallow + 0.5

@@ -154,12 +154,38 @@ def _module_entry(memo: _CallSiteMemo, wrapper: FrameType) -> tuple[Any, int, in
     return entry
 
 
+def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
+    """The site key of the op being recorded, walking up from ``frame``.
+
+    Walks to the innermost module wrapper (or the anchor, or the top) reading each
+    frame's code object and offset, and the module of each ``_call_impl`` frame;
+    ``None`` when the wrapper holds no module stack frame (the full walk applies).
+    """
+
+    anchor = memo.anchor
+    anchor_code = anchor[1] if anchor is not None else None
+    key: Any = None
+    while frame is not None:
+        code = frame.f_code
+        if code in _BOUNDARY_CODES:
+            entry = _module_entry(memo, frame)
+            return None if entry is None else (key, entry[1])
+        if code is anchor_code and _is_anchor(anchor, frame):  # type: ignore[arg-type]
+            return (key, _AT_ANCHOR)
+        if code.co_name == "_call_impl":
+            key = (key, code, frame.f_lasti, id(frame.f_locals.get("self")))
+        else:
+            key = (key, code, frame.f_lasti)
+        frame = frame.f_back
+    return (key, _AT_TOP)
+
+
 def _set_call_site_fields(self: "Trace", fields_dict: dict[str, Any], func_call_id: int) -> None:
     """Record the call's ``code_context`` and stage its call-site chain for the row commit.
 
-    Hot path: walk to the innermost module wrapper (or the anchor) building the
-    site key, one table lookup. Complexity is the inlined walk, kept in one
-    function so a hit costs no extra Python call.
+    One site-key walk and one table lookup per op; a miss takes the full walk. The
+    first op of a capture takes the full walk before its key, so the call-site
+    anchor that walk establishes ends every key, the first included.
     """
 
     workspace = self._raw_graph_ws
@@ -171,34 +197,22 @@ def _set_call_site_fields(self: "Trace", fields_dict: dict[str, Any], func_call_
             self._code_context_cache = cache
         memo = _CallSiteMemo(cache)
         workspace._call_site_memo = memo
-    anchor = memo.anchor
-    anchor_code = anchor[1] if anchor is not None else None
-    key: Any = None
-    frame: FrameType | None = sys._getframe(1)
-    while frame is not None:
-        code = frame.f_code
-        if code in _BOUNDARY_CODES:
-            entry = _module_entry(memo, frame)
-            key = None if entry is None else (key, entry[1])
-            break
-        if code is anchor_code and _is_anchor(anchor, frame):  # type: ignore[arg-type]
-            key = (key, _AT_ANCHOR)
-            break
-        if code.co_name == "_call_impl":
-            key = (key, code, frame.f_lasti, id(frame.f_locals.get("self")))
-        else:
-            key = (key, code, frame.f_lasti)
-        frame = frame.f_back
-    else:
-        key = (key, _AT_TOP)
+        if memo.anchor is None:
+            code_context, chain = _walk_call_site(self, cache)
+            memo.anchor = cache.get(_CODE_CONTEXT_ANCHOR_KEY)
+            key = _site_key(memo, sys._getframe(1))
+            if key is not None:
+                memo.sites[key] = (tuple(code_context), chain)
+            fields_dict["code_context"] = code_context
+            workspace._pending_call_site = (func_call_id, chain)
+            return
+    key = _site_key(memo, sys._getframe(1))
     try:
         context, chain = memo.sites[key]
     except KeyError:
         code_context, chain = _walk_call_site(self, cache)
         if key is not None:
             memo.sites[key] = (tuple(code_context), chain)
-        if memo.anchor is None:
-            memo.anchor = cache.get(_CODE_CONTEXT_ANCHOR_KEY)
         fields_dict["code_context"] = code_context
     else:
         fields_dict["code_context"] = [*context]
