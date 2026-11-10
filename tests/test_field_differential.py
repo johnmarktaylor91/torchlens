@@ -33,7 +33,7 @@ from field_diff_lib.mask import Mask  # noqa: E402
 
 #: Entries of the fixed mask, and the digest of their lines (see ``_mask_lines``).
 APPROVED_MASK_ENTRIES = 65
-APPROVED_MASK_DIGEST = "82a2e59262c0b1d3"
+APPROVED_MASK_DIGEST = "620e49209c059e35"
 
 
 def _mask_lines() -> list[str]:
@@ -41,7 +41,8 @@ def _mask_lines() -> list[str]:
 
     lines = [f"name {rule.field} {rule.rule}" for rule in mask_module.MASK]
     lines += [f"text {rule.pattern} {rule.replacement}" for rule in mask_module.TEXT_RULES]
-    lines += [f"not-read {name}" for name in mask_module.NOT_READ]
+    read_on = ",".join(mask_module.GEOMETRY_READ_MODELS)
+    lines += [f"not-read {name} except {read_on}" for name in mask_module.NOT_READ]
     return sorted(lines)
 
 
@@ -120,6 +121,18 @@ def test_identity_rule_keeps_presence_and_shape() -> None:
     assert mask.apply("next_grad_fn_ids", [140351636512999, 7]) == ["<id>", "<id>"]
     assert mask.apply("backend_handle_id", "140350999223472") == "<id>"
     assert mask.apply("backend_handle_id", "not-a-number") == "not-a-number"
+
+
+def test_id_keys_rule_masks_only_the_keys() -> None:
+    """A mapping keyed by address hides its keys and compares every value under them."""
+
+    record = {"__dataclass__": "GradFn", "fields": {"name": "AddBackward0", "index": 3}}
+    value = {"__dict__": "dict", "items": [[140351636512656, record], ["label", 7]]}
+    assert Mask().apply("_grad_fn_logs", value) == {
+        "__dict__": "dict",
+        "items": [["<id>", record], ["label", 7]],
+    }
+    assert Mask(enabled=False).apply("_grad_fn_logs", value) == value
 
 
 def test_address_rule_leaves_small_numbers_alone() -> None:

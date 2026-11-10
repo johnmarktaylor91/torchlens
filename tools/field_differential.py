@@ -71,7 +71,7 @@ def _dump_case(case: Any, built: Any, scratch: str, args: argparse.Namespace) ->
 
     from field_diff_lib import faults
     from field_diff_lib.canonical import Canonicalizer, error_record
-    from field_diff_lib.mask import Mask
+    from field_diff_lib.mask import GEOMETRY_READ_MODELS, Mask
     from field_diff_lib.surface import snapshot_trace
 
     import torchlens as tl
@@ -96,7 +96,13 @@ def _dump_case(case: Any, built: Any, scratch: str, args: argparse.Namespace) ->
     if args.plant and case.name == faults.PLANT_CASE:
         skip = faults.plant(args.plant, next(iter(traces.values())))
     for name, trace in traces.items():
-        dump, canon = snapshot_trace(trace, roots, Mask(enabled=not args.no_mask), skip)
+        dump, canon = snapshot_trace(
+            trace,
+            roots,
+            Mask(enabled=not args.no_mask),
+            skip,
+            read_geometry=case.model in GEOMETRY_READ_MODELS,
+        )
         result["traces"][name] = dump
         if case.mutation_probe:
             result.setdefault("mutation_probe", {})[name] = faults.mutation_probe(

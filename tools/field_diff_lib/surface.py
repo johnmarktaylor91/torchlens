@@ -88,16 +88,23 @@ class Reader:
         The fixed mask.
     skip_names:
         Names left out of the dump on purpose (the planted missing-field fault).
+    read_geometry:
+        Whether the ``NOT_READ`` geometry fields are read (small models only).
     """
 
     def __init__(
-        self, canon: Canonicalizer, mask: Mask, skip_names: frozenset[str] = frozenset()
+        self,
+        canon: Canonicalizer,
+        mask: Mask,
+        skip_names: frozenset[str] = frozenset(),
+        read_geometry: bool = False,
     ) -> None:
         """Start with an empty warning list."""
 
         self.canon = canon
         self.mask = mask
         self.skip_names = skip_names
+        self.read_geometry = read_geometry
         self.warnings: list[dict[str, Any]] = []
 
     def read(self, obj: Any, attr: str, kind: str, key: str, site: str) -> tuple[Any, Any]:
@@ -108,7 +115,7 @@ class Reader:
         """
 
         leaf = key.rsplit(".", 1)[-1]
-        if leaf in NOT_READ:
+        if leaf in NOT_READ and not self.read_geometry:
             return {"__not_read__": NOT_READ[leaf]}, None
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
@@ -239,6 +246,7 @@ def snapshot_trace(
     mask: Mask | None = None,
     skip_names: frozenset[str] = frozenset(),
     with_tables: bool = True,
+    read_geometry: bool = False,
 ) -> tuple[dict[str, Any], Canonicalizer]:
     """Dump the trace, every record family, the reprs and the tables.
 
@@ -254,6 +262,8 @@ def snapshot_trace(
         Field names left out on purpose (the planted missing-field fault).
     with_tables:
         Whether to include ``to_pandas()`` of the trace.
+    read_geometry:
+        Whether the ``NOT_READ`` geometry fields are read (small models only).
 
     Returns
     -------
@@ -263,7 +273,7 @@ def snapshot_trace(
     """
 
     canon = Canonicalizer(roots, REFERENCED_CLASSES)
-    reader = Reader(canon, mask or Mask(), skip_names)
+    reader = Reader(canon, mask or Mask(), skip_names, read_geometry)
     dump: dict[str, Any] = {"trace": reader.record(trace, "trace")}
     dump["trace"]["__str__"] = reader.text(trace, str, "trace.__str__")
     for family, records in trace_families(trace).items():

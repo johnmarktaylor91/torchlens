@@ -29,6 +29,10 @@ part that varies and compares the rest.
     one, and is replaced by its order of first appearance in the trace, so
     equality between the fields that carry the same identifier is still
     compared.
+``id_keys``
+    the value is a mapping keyed by memory address: only the integer keys
+    are replaced by ``<id>``; every value under them is walked and compared
+    like any other field.
 
 Names that are not read at all are in ``NOT_READ`` with their reason; the
 name is still recorded, so a field that disappears still shows.
@@ -43,7 +47,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-RULES = ("clock", "identity", "address", "barcode")
+RULES = ("clock", "identity", "address", "barcode", "id_keys")
 
 
 @dataclass(frozen=True)
@@ -150,13 +154,24 @@ MASK: tuple[MaskRule, ...] = (
         "grad_fn_object_id",
         "next_grad_fn_ids",
         "root_grad_fn_ids",
-        "grad_fn_order",
         "backward_root_grad_fn_object_ids",
         "last_backward_root_grad_fn_object_id",
         "grad_fn_call_ref",
+        "_autograd_backward_root_grad_fn_object_ids",
+    ),
+    *_rules(
+        "identity",
+        "a sequence of autograd node addresses and nothing else (discovery order, next-function "
+        "ids): every integer is an object_id; length is compared, and the graph shape is compared "
+        "through each GradFn record's own fields",
+        "grad_fn_order",
         "topology",
         "_autograd_grad_fn_order",
-        "_autograd_backward_root_grad_fn_object_ids",
+    ),
+    *_rules(
+        "id_keys",
+        "mapping keyed by autograd node address: only the integer keys are masked, and every "
+        "GradFn record under them is compared field by field",
         "_grad_fn_logs",
     ),
     *_rules(
@@ -220,6 +235,9 @@ NOT_READ: dict[str, str] = {
     "projective_field": "lazy geometry solver that returns a view; cost unbounded on real models",
 }
 
+#: Models small enough that the ``NOT_READ`` geometry fields are read and compared on them.
+GEOMETRY_READ_MODELS: tuple[str, ...] = ("chain40", "varied8", "loopcell12")
+
 _ADDRESS_DIGITS = 12
 
 
@@ -227,6 +245,14 @@ def _is_tag(key: str, entry: object) -> bool:
     """Return whether a canonical entry is a type tag (``"__dict__": "OrderedDict"``)."""
 
     return key.startswith("__") and isinstance(entry, str)
+
+
+def _is_id_key(key: object) -> bool:
+    """Return whether a canonical mapping key is an integer identity."""
+
+    if isinstance(key, bool):
+        return False
+    return isinstance(key, int) or (isinstance(key, str) and key.isdigit())
 
 
 class Mask:
@@ -272,6 +298,8 @@ class Mask:
     def _by_rule(self, rule: str, value: Any) -> Any:  # noqa: PLR0911
         """Apply one rule to every leaf of a canonical value."""
 
+        if rule == "id_keys":
+            return self._id_keys(value)
         if isinstance(value, list):
             return [self._by_rule(rule, member) for member in value]
         if isinstance(value, dict):
@@ -294,6 +322,17 @@ class Mask:
             if rule == "barcode":
                 return f"<barcode#{self._barcodes.setdefault(value, len(self._barcodes))}>"
         return value
+
+    def _id_keys(self, value: Any) -> Any:
+        """Mask the integer keys of a canonical mapping and walk its values."""
+
+        if isinstance(value, dict) and isinstance(value.get("items"), list):
+            items = [
+                ["<id>" if _is_id_key(key) else key, self._walk(entry)]
+                for key, entry in value["items"]
+            ]
+            return {**value, "items": items}
+        return self._walk(value)
 
     def _walk(self, canonical: Any) -> Any:
         """Apply the rules to named entries, and the text rules to object reprs, inside a value."""
