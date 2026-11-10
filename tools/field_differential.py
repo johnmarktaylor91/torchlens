@@ -251,6 +251,8 @@ def cmd_cases(args: argparse.Namespace) -> int:
     for name, names in mask.TYPE_TAG_ONLY.items():
         print(f"type tag only {name} {names}: {mask.TYPE_TAG_ONLY_REASON}")
     print(f"release order {mask.RELEASE_ORDER}: {mask.RELEASE_ORDER_REASON}")
+    for name, steps in mask.RELEASE_LATER_CLASSES.items():
+        print(f"release later {name} in steps {sorted(steps)}: {mask.RELEASE_LATER_REASON}")
     for name, what in FAULTS.items():
         print(f"fault {name}: {what}")
     return 0

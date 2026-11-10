@@ -32,8 +32,8 @@ from field_diff_lib.faults import FAULTS, PLANT_CASE  # noqa: E402
 from field_diff_lib.mask import Mask  # noqa: E402
 
 #: Entries of the fixed mask, and the digest of their lines (see ``_mask_lines``).
-APPROVED_MASK_ENTRIES = 68
-APPROVED_MASK_DIGEST = "66e2af42be3256f1"
+APPROVED_MASK_ENTRIES = 71
+APPROVED_MASK_DIGEST = "7ff90018e342992e"
 
 
 def _mask_lines() -> list[str]:
@@ -50,6 +50,10 @@ def _mask_lines() -> list[str]:
     lines.append(f"type-tag-only {tags}")
     classes = ",".join(mask_module.RELEASE_CLASSES)
     lines.append(f"release-order {mask_module.RELEASE_ORDER} steps/outcome {classes}")
+    lines += [
+        f"release-later {name} steps " + ",".join(sorted(steps))
+        for name, steps in mask_module.RELEASE_LATER_CLASSES.items()
+    ]
     return sorted(lines)
 
 
@@ -73,6 +77,7 @@ def test_every_mask_entry_states_its_rule_and_reason() -> None:
         assert len(text_rule.reason) > 10
     assert len(mask_module.TYPE_TAG_ONLY_REASON) > 10
     assert len(mask_module.RELEASE_ORDER_REASON) > 10
+    assert len(mask_module.RELEASE_LATER_REASON) > 10
 
 
 def test_diff_reports_value_type_length_and_missing_key() -> None:
@@ -212,6 +217,40 @@ def test_release_order_accepts_only_earlier_release() -> None:
         "sequence-5_forks", _release_log(base), _release_log(earlier)
     )
     assert diff(_release_log(base), other) != []
+
+
+def test_release_later_is_accepted_only_in_a_step_that_keeps_the_record() -> None:
+    """A held record may keep its trace: trace-dropped to kept-dropped, in its own steps only."""
+
+    name = mask_module.RELEASE_ORDER
+    base = _release(freed_when_trace_dropped=["op", "trace"], freed_when_kept_dropped=["param"])
+    later = _release(freed_when_kept_dropped=["op", "param", "trace"])
+    for step in ("params_and_buffers_held", "modules_held", "facets_read", "every_door_held"):
+        assert mask_module.release_moved_earlier(base, later, step)
+        log_base = [{"step": step, "outcome": base, "warnings": []}]
+        log_head = [{"step": step, "outcome": later, "warnings": []}]
+        assert diff(log_base, mask_module.accept_release_moves(name, log_base, log_head)) == []
+    assert not mask_module.release_moved_earlier(base, later)
+    assert not mask_module.release_moved_earlier(base, later, "fork_held")
+    kept = mask_module.accept_release_moves(name, _release_log(base), _release_log(later))
+    assert diff(_release_log(base), kept) != []
+    collector = _release(freed_when_kept_dropped=["op", "param"], freed_only_by_collector=["trace"])
+    assert not mask_module.release_moved_earlier(base, collector, "params_and_buffers_held")
+    never_base = _release(freed_when_trace_dropped=["op"], never_freed=["trace"])
+    never_head = _release(freed_when_kept_dropped=["op", "trace"])
+    assert not mask_module.release_moved_earlier(never_base, never_head, "modules_held")
+
+
+def test_param_tuple_reads_as_the_plain_tuple_tag() -> None:
+    """``_param_logs`` held as a ``ParamTuple`` reads as the tuple it replaces, elsewhere not."""
+
+    mask = Mask()
+    held = {"__seq__": "ParamTuple", "items": [{"__ref__": "param:fc.weight"}]}
+    assert mask.apply("_param_logs", held) == {"__tuple__": held["items"]}
+    assert mask.apply("parent_params", held) == held
+    state = {"__dict__": "StateDict", "items": [["1", 2]]}
+    assert mask.apply("_grad_fn_logs", state)["__dict__"] == "OrderedDict"
+    assert mask.apply("_backward_pass_logs", state)["__dict__"] == "OrderedDict"
 
 
 def test_identity_rule_keeps_presence_and_shape() -> None:

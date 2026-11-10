@@ -249,10 +249,13 @@ TYPE_TAG_ONLY: dict[str, dict[str, str]] = {
     "_layer_dict_main_keys": {"OpLabelMap": "dict"},
     "_layer_dict_all_keys": {"OpOrderedLabelMap": "OrderedDict", "OpLabelMap": "dict"},
     "_layer_logs": {"LayerDictStore": "dict", "LayerStore": "OrderedDict"},
+    "_grad_fn_logs": {"StateDict": "OrderedDict"},
+    "_backward_pass_logs": {"StateDict": "OrderedDict"},
+    "_param_logs": {"ParamTuple": "tuple"},
 }
 TYPE_TAG_ONLY_REASON = (
-    "capture-core stage 1 replaced these containers by subclasses that hold row keys and"
-    " hand out the same records"
+    "capture-core replaced these containers by subclasses that hold row keys and hand out"
+    " the same records in the same order; pickle, saves and plain_state keep the base class"
 )
 
 #: The sequence dump compared by release order, and its classes from earliest to latest.
@@ -265,8 +268,28 @@ RELEASE_CLASSES = (
 )
 RELEASE_ORDER_REASON = (
     "each capture-core ownership lane frees records earlier by design (PLAN 3.3 item 8);"
-    " only moves toward an earlier release are accepted"
+    " only moves toward an earlier release are accepted, except the held-record moves below"
 )
+
+#: Release steps in which a held record now keeps its trace, by class: the steps whose
+#: kept objects include that record kind. Only there may a name move from
+#: ``freed_when_trace_dropped`` to ``freed_when_kept_dropped``, and only when the step
+#: watches the same names, ``never_freed`` is unchanged and nothing moves further.
+_KEEPS_PARAM_OR_BUFFER = frozenset(
+    {"params_and_buffers_held", "every_door_held", "every_door_held_reversed"}
+)
+RELEASE_LATER_CLASSES: dict[str, frozenset[str]] = {
+    "release_later_keeps_params": _KEEPS_PARAM_OR_BUFFER,
+    "release_later_keeps_buffer": _KEEPS_PARAM_OR_BUFFER,
+    "release_later_keeps_module_or_facet_view": frozenset(
+        {"modules_held", "every_door_held", "every_door_held_reversed", "facets_read"}
+    ),
+}
+RELEASE_LATER_REASON = (
+    "a held Param, Buffer, Module, ModuleCall, module accessor or facet view keeps its"
+    " trace by design, so the trace is freed when the kept record is dropped"
+)
+_KEEPING_STEPS = frozenset().union(*RELEASE_LATER_CLASSES.values())
 
 
 def _release_classes(outcome: Any) -> dict[str, Any] | None:
@@ -298,12 +321,15 @@ def _release_rank(table: dict[str, Any]) -> dict[str, int] | None:
     return rank
 
 
-def release_moved_earlier(base: Any, head: Any) -> bool:
-    """Return whether ``head`` differs from ``base`` only by objects released earlier.
+def release_moved_earlier(base: Any, head: Any, step: object = None) -> bool:
+    """Return whether ``head`` differs from ``base`` only by accepted release moves.
 
-    Both are canonical outcomes of one release step. The same names must be
-    watched (and watched the same way); every name's class in ``head`` must be
-    the same as or earlier than in ``base``.
+    Both are canonical outcomes of the release step named ``step``. The same
+    names must be watched (and watched the same way); every name's class in
+    ``head`` must be the same as or earlier than in ``base``, except that in a
+    ``RELEASE_LATER_CLASSES`` step a name may move from
+    ``freed_when_trace_dropped`` to ``freed_when_kept_dropped`` when
+    ``never_freed`` is unchanged.
     """
 
     left, right = _release_classes(base), _release_classes(head)
@@ -315,7 +341,14 @@ def release_moved_earlier(base: Any, head: Any) -> bool:
     base_rank, head_rank = _release_rank(left), _release_rank(right)
     if base_rank is None or head_rank is None or set(base_rank) != set(head_rank):
         return False
-    return all(head_rank[name] <= rank for name, rank in base_rank.items())
+    later = {(rank, head_rank[name]) for name, rank in base_rank.items() if head_rank[name] > rank}
+    if not later:
+        return True
+    return (
+        later == {(0, 1)}
+        and step in _KEEPING_STEPS
+        and set(left["never_freed"]) == set(right["never_freed"])
+    )
 
 
 def accept_release_moves(name: str, base: Any, head: Any) -> Any:
@@ -343,7 +376,7 @@ def accept_release_moves(name: str, base: Any, head: Any) -> Any:
         if (
             before is not None
             and before.get("outcome") != step.get("outcome")
-            and release_moved_earlier(before.get("outcome"), step.get("outcome"))
+            and release_moved_earlier(before.get("outcome"), step.get("outcome"), step.get("step"))
         ):
             step = {**step, "outcome": before["outcome"]}
         accepted.append(step)
@@ -442,6 +475,8 @@ class Mask:
             return canonical
         if "__seq__" in canonical and names.get(canonical["__seq__"]) == "list":
             return canonical.get("items")
+        if "__seq__" in canonical and names.get(canonical["__seq__"]) == "tuple":
+            return {"__tuple__": canonical.get("items")}
         if "__dict__" in canonical and canonical["__dict__"] in names:
             return {**canonical, "__dict__": names[canonical["__dict__"]]}
         return canonical
