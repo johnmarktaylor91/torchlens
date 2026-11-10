@@ -138,7 +138,7 @@ class RowScan:
 
     def _group(self) -> None:
         """Group passes by layer, stamp ``is_constant``, index passes, collect autograd memory."""
-
+        # One flat loop on purpose (complexity): a helper would add a counted call per op.
         rows, groups, by_pass, memories = self.rows, self.groups, self.by_pass, self.memories
         f_label, f_pass, _full, f_const, f_name, f_parents, f_params, f_memory = self.fids[:8]
         for position, key in enumerate(self.keys):
@@ -182,7 +182,7 @@ class RowScan:
         the first op that makes the scan eager: the caller's rebind then
         resets the fields itself.
         """
-
+        # One flat loop on purpose (complexity): a helper would add a counted call per op.
         rows, simple = self.rows, self.simple
         f_full, f_memory, f_count, f_stack, f_roles, f_arms, f_entry, f_notes, f_terminal = (
             self.fids[2],
@@ -398,7 +398,7 @@ def _same_values(row: list[Any], first: list[Any], fids: tuple[int, ...]) -> boo
     Equal means what the multi-pass reconcile means, the same ``repr``, so a
     cell in any shape but the plain ones counts as different.
     """
-
+    # Flat on purpose (complexity): it runs once per pass, so a helper is a counted call per op.
     for fid in fids[18:20]:
         mine, theirs = row[fid], first[fid]
         if mine is not None or theirs is not None:
