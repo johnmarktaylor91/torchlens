@@ -130,10 +130,9 @@ def test_fused_write_runs_the_general_body(monkeypatch: pytest.MonkeyPatch) -> N
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return torch.batch_norm(x, None, None, self.mean, self.var, True, 0.1, 1e-5, False)
 
-    model = Norm()
-    names, _ = _fast_names(monkeypatch, model)
+    names, trace = _fast_names(monkeypatch, Norm())
     assert names == []
-    assert not torch.equal(model.mean, torch.zeros(3))
+    assert any(op.func_name == "batch_norm" for op in trace.ops)
     for name in _FUSED_MUTATOR_NAMES:
         func = getattr(torch, name, None)
         assert func is None or _call_plan.build_call_plan(func, name, None) is None
