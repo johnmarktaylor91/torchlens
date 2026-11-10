@@ -75,6 +75,12 @@ _PLAIN_TYPES = frozenset(
 )
 _MODEL_OWNED_KEY = "model_owned_tensor_ids_at_entry"
 _DECLINED = -1
+# A flat list or tuple argument held a tensor (``torch.cat``): the call's
+# tensor order then differs from today's argument walk, so it is admitted only
+# when the buffer helpers, which consume that order, have nothing to do.
+_LISTED = 2
+#: Reflected dunders whose dispatcher operator is the forward one.
+_REFLECTED_SCHEMA_NAMES = {"__radd__": "add", "__rmul__": "mul"}
 
 
 class CallPlan:
@@ -103,9 +109,10 @@ def _schema_suits_fast_lane(schema: Any) -> bool | None:
     scalar, string and list overloads TorchScript registers under names such as
     ``add``): it can never serve a wrapped call that yields a tensor, so it
     counts neither for nor against the name. Any other schema must return
-    exactly one tensor and write no argument. A keyword-only ``out``
-    destination is allowed here because a call that passes ``out=`` is refused
-    per call.
+    tensors only (one tensor, a tuple of tensors or one ``Tensor[]``) and write
+    no argument. A keyword-only ``out`` destination is allowed here because a
+    call that passes ``out=`` is refused per call; a multi-output call's return
+    value is checked per call (:func:`output_admitted`).
     """
 
     returns = schema.returns
@@ -117,7 +124,11 @@ def _schema_suits_fast_lane(schema: Any) -> bool | None:
             break
     if not touches_tensor:
         return None
-    if len(returns) != 1 or str(returns[0].type) != "Tensor":
+    return_types = [str(value.type) for value in returns]
+    if not return_types or (
+        return_types not in (["Tensor[]"], ["List[Tensor]"])
+        and any(kind != "Tensor" for kind in return_types)
+    ):
         return False
     for argument in arguments:
         alias = argument.alias_info
@@ -138,7 +149,7 @@ def single_tensor_schema_names() -> dict[str, bool]:
     -------
     dict[str, bool]
         Operator name to ``True`` when it has a tensor overload and every
-        tensor overload is out-of-place and returns exactly one tensor. Empty
+        tensor overload is out-of-place and returns only tensors. Empty
         when the schema enumeration capability is absent, so no callable gets
         a plan.
     """
@@ -173,7 +184,9 @@ def build_call_plan(
     CallPlan | None
         The plan, or ``None`` for a Python-level callable, a property accessor,
         a fused running-statistic writer, a name in the in-place naming family
-        or a name without an all-overloads single-tensor out-of-place schema.
+        or a name without an all-overloads tensor-returning out-of-place schema.
+        A reflected dunder (``__radd__``, ``__rmul__``) reads its forward
+        operator's schemas.
     """
 
     if property_accessor is not None or type(func) not in _C_CALLABLE_TYPES:
@@ -181,8 +194,8 @@ def build_call_plan(
     if func_name in _FUSED_MUTATOR_NAMES or func_name.startswith("__i"):
         return None
     schema_names = single_tensor_schema_names()
-    schema_name = func_name
-    if func_name not in schema_names and func_name.startswith("__") and func_name.endswith("__"):
+    schema_name = _REFLECTED_SCHEMA_NAMES.get(func_name, func_name)
+    if schema_name not in schema_names and func_name.startswith("__") and func_name.endswith("__"):
         schema_name = func_name[2:-2]
     if not schema_names.get(schema_name, False):
         return None
@@ -196,9 +209,10 @@ def _scan_values(values: Iterable[Any], tensors: list[torch.Tensor]) -> int:
     -------
     int
         ``_DECLINED`` when a value is neither plain, a tensor, a Parameter nor a
-        flat list or tuple of plain values, or when a tensor carries foreign
-        metadata or is a ``Tensor.data`` alias; otherwise ``1`` when a
-        non-Parameter tensor carries a buffer address and ``0`` when none does.
+        flat list or tuple of these, or when a tensor carries foreign metadata
+        or is a ``Tensor.data`` alias; otherwise a bit set: ``1`` when a
+        non-Parameter tensor carries a buffer address, ``_LISTED`` when a list
+        or tuple held a tensor.
     """
 
     stamped = 0
@@ -210,15 +224,36 @@ def _scan_values(values: Iterable[Any], tensors: list[torch.Tensor]) -> int:
                 if type(meta) is not TensorMeta or meta.data_alias:
                     return _DECLINED
                 if kind is _TENSOR and meta.address is not None:
-                    stamped = 1
+                    stamped |= 1
             tensors += (value,)
         elif kind is tuple or kind is list:
             for item in value:
-                if type(item) not in _PLAIN_TYPES:
+                item_kind = type(item)
+                if item_kind is _TENSOR or item_kind is _PARAMETER:
+                    stamped |= _scan_listed_tensor(item, item_kind, tensors)
+                elif item_kind not in _PLAIN_TYPES:
                     return _DECLINED
+            if stamped < 0:
+                return _DECLINED
         elif kind not in _PLAIN_TYPES:
             return _DECLINED
     return stamped
+
+
+def _scan_listed_tensor(value: torch.Tensor, kind: type, tensors: list[torch.Tensor]) -> int:
+    """Collect one tensor member of a list or tuple argument (see :func:`_scan_values`).
+
+    Returns ``_DECLINED`` for foreign metadata or a ``Tensor.data`` alias, else
+    ``_LISTED``, with bit ``1`` set when the tensor carries a buffer address.
+    """
+
+    tensors += (value,)
+    meta = getattr(value, "_tl", None)
+    if meta is None:
+        return _LISTED
+    if type(meta) is not TensorMeta or meta.data_alias:
+        return _DECLINED
+    return _LISTED | (1 if kind is _TENSOR and meta.address is not None else 0)
 
 
 def _buffer_work_needed(plan: CallPlan, trace: Any) -> bool:
@@ -255,8 +290,7 @@ def admit_call(
 ) -> Admission | None:
     """Return the admitted pre-call state of one call, or ``None`` for the general body.
 
-    Runs after the wrapper's tracing-pass, transform and compile-region guards.
-    Every refusal happens before any side effect.
+    Runs after the wrapper's region guards; every refusal precedes any side effect.
 
     Parameters
     ----------
@@ -291,7 +325,10 @@ def admit_call(
         options = trace_dict["_predicate_save_options"]
         if options is not None and options.intervene is not None:
             return None
-    if trace._wrapper_runtime_ws.materialized_lazy_slots is not None or type(args[0]) is _PARAMETER:
+    # A Parameter receiver matters only to a name that may write it (frozen-receiver context).
+    if trace._wrapper_runtime_ws.materialized_lazy_slots is not None or (
+        plan.name_could_mutate and type(args[0]) is _PARAMETER
+    ):
         return None
     tensors: list[torch.Tensor] = []
     stamped = _scan_values(args, tensors)
@@ -304,7 +341,9 @@ def admit_call(
     for device in autocast_state:
         if autocast_state[device]["enabled"]:
             return None
-    return tensors, stamped == 1 or _buffer_work_needed(plan, trace), autocast_state
+    buffer_work = (stamped & 1) == 1 or _buffer_work_needed(plan, trace)
+    # A listed buffer needs the buffer helpers, which read today's argument order.
+    return None if buffer_work and stamped & _LISTED else (tensors, buffer_work, autocast_state)
 
 
 def call_admitted(
@@ -328,13 +367,16 @@ def call_admitted(
 def output_admitted(out: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> bool:
     """Return whether an admitted call's output may take the fast commit.
 
-    The output must be a plain tensor that is none of the call's arguments and
-    carries no TorchLens metadata, hence no label. Anything else is handed to
-    the wrapper's general post-call handling.
+    The output must be a plain tensor, or a plain tuple or list of distinct
+    plain tensors (``chunk``, ``unbind``), where no tensor is one of the call's
+    arguments or a member of a list argument and none carries TorchLens
+    metadata, hence a label. Anything else (a same-object return, a named
+    tuple, a labelled or empty result) is handed to the wrapper's general
+    post-call handling.
     """
 
     if type(out) is not _TENSOR:
-        return False
+        return _multi_output_admitted(out, args, kwargs)
     for value in args:
         if value is out:
             return False
@@ -343,6 +385,27 @@ def output_admitted(out: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> 
             if value is out:
                 return False
     return getattr(out, "_tl", None) is None
+
+
+def _multi_output_admitted(out: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> bool:
+    """Return whether a tuple or list output may take the fast commit (see :func:`output_admitted`)."""
+
+    kind = type(out)
+    if not (kind is tuple or kind is list) or not out:
+        return False
+    if len({id(member) for member in out}) != len(out):
+        return False
+    input_ids: set[int] = set()
+    for value in (*args, *kwargs.values()):
+        input_ids.add(id(value))
+        if type(value) is tuple or type(value) is list:
+            input_ids.update(id(item) for item in value)
+    for member in out:
+        if type(member) is not _TENSOR or id(member) in input_ids:
+            return False
+        if getattr(member, "_tl", None) is not None:
+            return False
+    return True
 
 
 def commit_fast_call(
@@ -375,7 +438,7 @@ def commit_fast_call(
     Returns
     -------
     Any
-        The call's output tensor.
+        The call's output: a tensor, or a tuple or list of tensors.
     """
 
     cow_state_ptrs, tensors = window

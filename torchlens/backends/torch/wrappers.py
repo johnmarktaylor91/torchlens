@@ -1957,14 +1957,11 @@ def decorate_all_once() -> None:
     Iterates over every ``(namespace, func_name)`` pair in ``ORIG_TORCH_FUNCS``
     and replaces each function with a ``torch_func_decorator`` wrapper. Also:
 
-    - Pre-computes ``_state._arg_names`` for metadata capture.
-    - Populates ``_state._orig_to_decorated`` / ``_state._decorated_to_orig``
-      bidirectional mappings (keyed by ``id()``).
-    - Registers wrappers in ``torch.jit._builtins._builtin_table`` so JIT
-      compilation recognizes wrapped functions as known ATen ops.
+    - Populates the ``id()``-keyed ``_state._orig_to_decorated`` and
+      ``_state._decorated_to_orig`` maps.
+    - Registers wrappers in ``torch.jit._builtins._builtin_table`` (JIT sees ATen ops).
     - Collects ``_DEVICE_CONSTRUCTOR_NAMES`` for DeviceContext bypass.
-    - Creates ``_state._decorated_identity`` (a no-op that forces new log
-      entries at module boundaries).
+    - Creates ``_state._decorated_identity`` (forces log entries at module boundaries).
 
     **Shared-original deduplication**: Multiple torch namespaces can alias the
     same C builtin (e.g. ``torch.cos`` and ``torch._VF.cos``). When the same
@@ -1982,6 +1979,8 @@ def decorate_all_once() -> None:
 
     _warm_derived_identity_caches()
 
+    # Torchvision imported already: this pass and the JIT registration cover its ops.
+    torchvision_covered = bool(_get_torchvision_funcs())
     _decorate_torch_func_pairs(get_orig_torch_funcs())
 
     # ---- JIT builtin table registration ----
@@ -2010,8 +2009,9 @@ def decorate_all_once() -> None:
     _state._decorated_identity = torch_func_decorator(identity, "identity")
     _decorate_transform_builders()
     _decorate_direct_transforms()
-    global _FULL_DECORATION_COMPLETED
+    global _FULL_DECORATION_COMPLETED, _torchvision_ops_ensured
     _FULL_DECORATION_COMPLETED = True
+    _torchvision_ops_ensured = _torchvision_ops_ensured or torchvision_covered
     _state._is_decorated = True
 
     # Wrapping __getitem__ on torch.Tensor pollutes the C-level sq_item slot,
@@ -2337,16 +2337,13 @@ per explicit re-wrap), so the lock is never on the capture hot path.
 def _ensure_torchvision_ops_decorated() -> None:
     """Decorate torchvision custom ops when torchvision appears after first wrap.
 
-    TorchLens never imports torchvision itself (the eager probe cost ~1.9 s
-    and ~150 MB RSS on the first capture of ANY model). ``decorate_all_once``
-    therefore only covers ``torch.ops.torchvision.*`` targets when torchvision
-    was already imported by the user at first-wrap time. A user may import
-    torchvision *after* the first capture; this per-wrap re-check decorates
-    those ops before the next capture begins, so torchvision models wrap
-    exactly as they did under the eager probe. A model cannot call a
-    torchvision op without torchvision imported (the ops only register with
-    the dispatcher during ``import torchvision``), so checking at wrap time is
-    exact, not heuristic. Once confirmed, this reduces to one flag check.
+    TorchLens never imports torchvision itself (the eager probe cost ~1.9 s and
+    ~150 MB RSS on the first capture of ANY model), so ``decorate_all_once``
+    covers ``torch.ops.torchvision.*`` only when the user imported torchvision
+    before the first wrap, and then sets the flag. A later import is decorated
+    here before the next capture. A model cannot call a torchvision op without
+    the import (the ops register with the dispatcher during it), so the
+    wrap-time check is exact. Once confirmed, this is one flag check.
     """
     global _torchvision_ops_ensured
     if _torchvision_ops_ensured or not _state._is_decorated:
