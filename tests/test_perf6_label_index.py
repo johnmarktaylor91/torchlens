@@ -82,8 +82,12 @@ def _outcome(log: tl.Trace, spelling: str) -> tuple[Any, ...]:
 
 
 def test_label_resolution_inside_the_scope_equals_the_evaluator(trace) -> None:
+    # A trace holds no Op: one is kept alive only while something references
+    # it. Hold every op across both passes so ``id`` names the same op on both
+    # sides instead of a freed address the allocator may or may not reuse.
+    held_ops = list(trace._layer_list)
     spellings = _spellings(trace)
-    assert len(spellings) > len(trace._layer_list)
+    assert len(spellings) > len(held_ops)
     want = [_outcome(trace, spelling) for spelling in spellings]
     with resolver._label_index_scope():
         got = [_outcome(trace, spelling) for spelling in spellings]
