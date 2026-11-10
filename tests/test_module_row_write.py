@@ -11,7 +11,9 @@ import inspect
 from typing import Any
 
 import pytest
+import torch
 
+import torchlens as tl
 from torchlens._data_classes._module_facade_fields import (
     _MODULE_CALL_STORED_FIELDS,
     _MODULE_STORED_FIELDS,
@@ -129,3 +131,23 @@ def test_write_row_keeps_a_row_the_record_already_has() -> None:
 def test_row_builders_cover_every_stored_field(cls: type) -> None:
     fields = _MODULE_STORED_FIELDS if cls is Module else _MODULE_CALL_STORED_FIELDS
     assert cls._TL_LAYOUT.n_fields == len(fields)
+
+
+class _SharedBlock(torch.nn.Module):
+    """A nested model that calls one submodule twice."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.inner = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
+        self.head = torch.nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.inner(self.inner(x)) + x)
+
+
+def test_flat_call_accessor_lists_calls_module_by_module() -> None:
+    trace = tl.trace(_SharedBlock(), torch.ones(1, 4))
+    flat = trace.module_calls
+    walked = [call for module in trace._module_logs for call in module.calls.values()]
+    assert list(flat.keys()) == [call.label for call in walked]
+    assert all(flat[call.label] is call for call in walked)

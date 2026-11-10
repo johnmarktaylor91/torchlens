@@ -9,10 +9,15 @@ rehydrated object graph is ready for normal user access.
 from __future__ import annotations
 
 import weakref
+from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
 from .._data_classes._op_column_scan import ops_with
-from .._data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
+from .._data_classes._trace_accessors import (
+    _TRACE_MODULE_CALL_ACCESSOR_ATTR,
+    TraceModuleCallAccessor,
+    _invalidate_trace_module_call_accessor_cache,
+)
 from .._data_classes.buffer import Buffer, BufferAccessor
 from .._data_classes.module import ModuleAccessor
 from .._trace_core.record_refs import name_owner_by_row, rekey_child_cells
@@ -66,6 +71,20 @@ def rebuild_trace_accessors(
 
     _adopt_module_rows(trace, module_dict, pass_dict, built_for_trace)
     rebuild_buffer_accessor(trace)
+    if built_for_trace:
+        _list_calls_in_build_order(trace, pass_dict)
+
+
+def _list_calls_in_build_order(trace: Trace, pass_dict: dict[str, ModuleCall]) -> None:
+    """Set the trace's flat module-call accessor from the calls the build just made.
+
+    The build makes the root's calls first and then each module's calls in
+    module order, which is the order ``Trace.module_calls`` lists them in, so
+    the accessor needs no walk over every module's calls.
+    """
+
+    calls = TraceModuleCallAccessor(OrderedDict(pass_dict))
+    trace.__dict__[_TRACE_MODULE_CALL_ACCESSOR_ATTR] = calls
 
 
 def _adopt_module_rows(
