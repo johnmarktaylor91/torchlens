@@ -158,8 +158,8 @@ class _SessionForward:
 
         if _tracing_pass.cond_entry_innermost and _tracing_pass.inside_lifted_cond_compile():
             return self._original(*args, **kwargs)
-        if _state._logging_enabled:
-            _note_direct_forward_call(self._module, sys._getframe(1))
+        if _state._logging_enabled and not forward_entered_through_module_call(sys._getframe(1)):
+            _note_direct_forward_call(self._module)
         return self._delegate(*args, **kwargs)
 
     def __copy__(self) -> _SessionForward:
@@ -198,8 +198,8 @@ class _SessionForward:
         return (operator.getitem, ((self._prior,), 0))
 
 
-def _note_direct_forward_call(module: nn.Module, caller: Any) -> None:
-    """Mark ``module`` when the active capture reached it by ``module.forward(x)``.
+def _note_direct_forward_call(module: nn.Module) -> None:
+    """Mark ``module``: the active capture reached it by ``module.forward(x)``.
 
     Such a call skips ``Module.__call__`` and so every torch hook; the capture
     still records it (its ``forward`` is decorated), and the mark on the
@@ -210,7 +210,7 @@ def _note_direct_forward_call(module: nn.Module, caller: Any) -> None:
     """
 
     trace = _state._active_trace
-    if trace is None or forward_entered_through_module_call(caller):
+    if trace is None:
         return
     meta = get_module_meta(module)
     if meta is not None and id(module) in trace._module_capture_ws.mod_call_index:
