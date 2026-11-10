@@ -1610,17 +1610,16 @@ class Module(_ModuleRouting):
         if trace is None:
             return [self]
 
+        # A loop, not a function that calls itself: such a function holds itself, and
+        # with it these records and their trace, until the cycle collector runs.
         modules: list[Module] = []
-
-        def visit(module: Module) -> None:
-            """Append one module and recursively visit address-sorted children."""
-
+        pending: list[Module] = [self]
+        while pending:
+            module = pending.pop()
             modules.append(module)
-            for child_address in sorted(module.address_children):
-                if child_address in trace.modules:
-                    visit(cast("Module", trace.modules[child_address]))
-
-        visit(self)
+            known = trace.modules
+            children = [known[child] for child in sorted(module.address_children) if child in known]
+            pending.extend(reversed(children))
         return modules
 
     @property

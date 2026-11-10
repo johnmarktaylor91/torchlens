@@ -129,12 +129,13 @@ def views_of(states: list[Any], cls: type) -> list[Any]:
                 found[at] = states[at].value
             stale = [at for at in stale if states[at].__class__ is not Kept]
         missing = [states[at] for at in stale]
-        built = _build(missing, cls)  # held until the table is read back below
-        # Read back through the table: a state named twice gets one view.
+        built = _build(missing, cls)
+        # Read back through the table, so a state named twice gets one view; a
+        # table entry that names another state (an identity reported twice) is
+        # not trusted, and the view just built is returned.
         fresh = list(map(_DEREF, map(_VIEWS.__getitem__, map(id, missing))))
-        for at, view in zip(stale, fresh, strict=True):
-            found[at] = view
-        del built
+        for at, view, own in zip(stale, fresh, built, strict=True):
+            found[at] = view if view.__dict__ is own.__dict__ else own
     return found
 
 
@@ -672,8 +673,8 @@ def rebind(trace: Any) -> None:
 
     modules, calls = reached(trace.modules, in_order=True)
     reference = _ref(trace)
-    module_states = list(map(vars, modules))
-    states = module_states + list(map(vars, calls))
+    module_states: list[Any] = list(map(vars, modules))
+    states: list[Any] = module_states + list(map(vars, calls))
     deque(map(dict.__setitem__, states, repeat(_TRACE_REF), repeat(reference)), 0)
     deque(map(dict.pop, module_states, repeat("_facets_cache"), repeat(None)), 0)
     deque(map(_set, modules + calls, repeat("_owner"), repeat(trace)), 0)
