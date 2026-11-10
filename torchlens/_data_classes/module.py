@@ -63,6 +63,7 @@ from ._module_accessor_filters import ModuleAccessorFilters
 from ._module_call_rows import _module_call_log_to_row
 from ._module_facade_fields import install_module_facades
 from ._moe_views import _ModuleRouting
+from ._record_views import SOURCE_TRACE, install
 from ._runtime_handles import runtime_handle_from_trace
 from .attribute_write import AttributeWrite
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -162,6 +163,10 @@ def _module_log_to_row(module_log: "Module") -> dict[str, Any]:
 class ModuleCallAccessor(Accessor["ModuleCall"]):
     """Scoped dict-like accessor for ModuleCall entries owned by a Module."""
 
+    __slots__ = (
+        "_handed",
+        "_owner",
+    )  # the accessor a door handed out, and the trace that one holds
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
@@ -302,6 +307,7 @@ class ModuleCall:
     ()
     """
 
+    __slots__ = ("__dict__", "__weakref__", "_owner")  # _owner: the trace a handed-out call holds
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "address": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
@@ -850,20 +856,7 @@ class ModuleCall:
             file=file,
         )
 
-    @property
-    def _source_trace(self) -> "Trace | None":
-        """Owning Trace, if still alive (held weakly: a call never pins its trace)."""
-
-        ref = self.__dict__.get("_source_trace_ref")
-        if ref is None:
-            return None
-        return cast("Trace | None", ref())
-
-    @_source_trace.setter
-    def _source_trace(self, value: "Trace | None") -> None:
-        """Store the owning Trace weak reference for live module-call lookups."""
-
-        self._source_trace_ref = weakref.ref(value) if value is not None else None
+    _source_trace = SOURCE_TRACE  # the owning Trace: named weakly, held by a handed-out call
 
     @property
     def trace(self) -> "Trace | None":
@@ -932,13 +925,9 @@ class ModuleCall:
     def facets(self) -> Any:
         """Return the lazy semantic facet view for this module call."""
 
-        cache = self.__dict__.get("_facets_cache")
-        if cache is None:
-            from .._semantic import _call_subject, facets
+        from .._semantic import _call_subject, _facet_door, facets
 
-            cache = facets.FacetView(_call_subject.call_subject(self))
-            self.__dict__["_facets_cache"] = cache
-        return cache
+        return _facet_door.record_facets(self, facets.FacetView, _call_subject.call_subject)
 
     @facets.deleter
     def facets(self) -> None:
@@ -1170,6 +1159,7 @@ class Module(_ModuleRouting):
     ('Module', '0', 1)
     """
 
+    __slots__ = ("_owner",)  # the trace a handed-out module holds
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "address": FieldPolicy.KEEP,
         "all_addresses": FieldPolicy.KEEP,
@@ -1739,19 +1729,7 @@ class Module(_ModuleRouting):
             or self.full_backward_hooks
         )
 
-    @property
-    def _source_trace(self) -> "Trace | None":
-        """Back-reference to the owning Trace (stored as weakref)."""
-        ref = self.__dict__.get("_source_trace_ref")
-        if ref is None:
-            return None
-        return cast("Trace | None", ref())
-
-    @_source_trace.setter
-    def _source_trace(self, value: "Trace | None") -> None:
-        """Store the owning Trace weak reference for live module lookups."""
-
-        self._source_trace_ref = weakref.ref(value) if value is not None else None
+    _source_trace = SOURCE_TRACE  # the owning Trace: named weakly, held by a handed-out module
 
     @property
     def trace(self) -> "Trace | None":
@@ -1860,14 +1838,10 @@ class Module(_ModuleRouting):
     def facets(self) -> Any:
         """Return the lazy semantic facet view for this Module."""
 
-        self._single_call_or_error()
-        cache = self.__dict__.get("_facets_cache")
-        if cache is None:
-            from .._semantic.facets import FacetView
+        from .._semantic import _facet_door, facets
 
-            cache = FacetView(self)
-            self.__dict__["_facets_cache"] = cache
-        return cache
+        self._single_call_or_error()
+        return _facet_door.record_facets(self, facets.FacetView)
 
     @facets.deleter
     def facets(self) -> None:
@@ -2435,6 +2409,10 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
     Available as ``trace.modules``.
     """
 
+    __slots__ = (
+        "_handed",
+        "_owner",
+    )  # the accessor a door handed out, and the trace that one holds
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
         "_list": FieldPolicy.KEEP,
@@ -2573,6 +2551,7 @@ def _install_module_facades() -> None:
     """Install the ModuleCall/Module row-cell descriptors (import-time)."""
 
     install_module_facades(ModuleCall, Module)
+    install(Module, ModuleCall, ModuleAccessor, ModuleCallAccessor)
 
 
 _install_module_facades()

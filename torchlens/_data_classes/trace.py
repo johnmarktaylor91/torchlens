@@ -2307,7 +2307,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
     @property
     def modules(self) -> "ModuleAccessor":
         """Access structured per-module metadata by address, index, or pass notation."""
-        return self._module_logs
+        return _trace_views.handed(self._module_logs, self)
 
     @property
     def module_collapse_order(self) -> list[tuple[str, float]]:

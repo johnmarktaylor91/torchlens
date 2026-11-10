@@ -390,9 +390,11 @@ class RowKeys(dict[Any, int]):
 def child_keys(children: Any, kind: str, trace: Any, door_keys: Any) -> RowKeys | None:
     """Return ``key -> row`` for an accessor's children, or ``None`` when one cannot be keyed.
 
-    ``door_keys`` maps the identity of each record the trace's door hands out
-    to its key there. A child with no row in the trace's store for ``kind``,
-    or one the door does not hand out, leaves the accessor in the cell.
+    ``door_keys`` maps the row of each record the trace's door hands out (in
+    the trace's store for ``kind``) to its key there. A child with no row in
+    that store, or one the door does not hand out, leaves the accessor in the
+    cell. Rows, not object identities: a record is a view that lives only
+    while somebody holds it, so its ``id`` can name another record later.
     """
 
     items = getattr(children, "_dict", None)
@@ -403,14 +405,13 @@ def child_keys(children: Any, kind: str, trace: Any, door_keys: Any) -> RowKeys 
     door: list[Any] = []
     for key, child in items.items():
         child_dict = getattr(child, "__dict__", None)
-        if (
-            child_dict is None
-            or child_dict.get(CORE_KEY) is not store
-            or id(child) not in door_keys
-        ):
+        if child_dict is None or child_dict.get(CORE_KEY) is not store:
             return None
-        keys[key] = child_dict[ROW_KEY]
-        door.append(door_keys[id(child)])
+        row = child_dict[ROW_KEY]
+        if row not in door_keys:
+            return None
+        keys[key] = row
+        door.append(door_keys[row])
     keys.build = type(children)
     keys.door = tuple(door)
     keys.home = weakref.ref(trace)
@@ -567,6 +568,18 @@ def child_state_items(record: Any) -> Iterator[tuple[str, Any]]:
         yield name, value
 
 
+def _rows_to_door_keys(mapping: Any, trace: Any, kind: str) -> dict[Any, Any]:
+    """Return ``row -> door key`` for the records of ``mapping`` in the trace's store for ``kind``."""
+
+    store = _core_of(trace).kind_rows.get(kind)
+    rows: dict[Any, Any] = {}
+    for key, child in mapping.items():
+        child_dict = getattr(child, "__dict__", None)
+        if child_dict is not None and child_dict.get(CORE_KEY) is store:
+            rows[child_dict[ROW_KEY]] = key
+    return rows
+
+
 def rekey_child_cells(records: Iterable[Any], trace: Any) -> None:
     """Replace each record's child accessors with the children's rows.
 
@@ -592,7 +605,7 @@ def rekey_child_cells(records: Iterable[Any], trace: Any) -> None:
             if kind not in door_keys:
                 mapping = _door_of(trace, kind)
                 door_keys[kind] = (
-                    None if mapping is None else {id(child): key for key, child in mapping.items()}
+                    None if mapping is None else _rows_to_door_keys(mapping, trace, kind)
                 )
             keys = child_keys(held, kind, trace, door_keys[kind])
             if keys is not None:
