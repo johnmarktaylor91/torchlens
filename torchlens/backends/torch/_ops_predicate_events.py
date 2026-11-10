@@ -713,6 +713,9 @@ def _defer_lazy_op_output(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._ops_call_site_fields import (  # noqa: E402
+    _predicate_call_site_chain,
+)
 from ._ops_capture_records import (  # noqa: E402
     _is_inplace_augmented_assignment_dunder,
 )
@@ -727,7 +730,6 @@ from ._ops_predicates import (  # noqa: E402
     _record_predicate_output,
 )
 from ._ops_shared_fields import (  # noqa: E402
-    _predicate_call_site_chain,
     _predicate_equivalence_class,
     _prepared_param_refs,
 )

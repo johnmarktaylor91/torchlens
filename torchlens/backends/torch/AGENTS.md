@@ -17,7 +17,10 @@ Core capture path:
   freezing), `_ops_containers.py` / `_ops_container_base.py` (output containers),
   `_ops_predicates.py` / `_ops_predicate_events.py` / `_ops_finalize.py` (predicate
   path), `_ops_interventions.py` (live interventions), `_ops_autograd.py` (saved-tensor
-  stats), `_ops_shared_fields.py` (shared fields).
+  stats), `_ops_shared_fields.py` (shared fields builder, output version tracking), split by
+  field family: `_ops_argument_fields.py` (argument scan, slot snapshot, templates),
+  `_ops_call_site_fields.py` (code context, call-site chain) and
+  `_ops_descriptive_fields.py` (qualified name, argument names, transform descriptors).
 - `sources.py` — log source tensors; `tensor_tracking.py` — provenance, family links,
   equivalence classes; `module_stack.py` — module-call stack;
   `prehook_provenance.py` — reversible forward-pre-hook input provenance;

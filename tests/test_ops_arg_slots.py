@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.backends.torch import _ops_arg_slots, _ops_shared_fields
+from torchlens.backends.torch import _ops_arg_slots, _ops_argument_fields, _ops_shared_fields
 from torchlens.intervention._types import CapturedArgTemplate, LiteralTensor, ParentRef
 
 _CLOSURE_CONSTANT = torch.linspace(-1.0, 1.0, 8)
@@ -205,7 +205,7 @@ def test_slot_derivations_equal_per_argument_lookups(
 
     with_slots = _derived_fields(model_cls, shape)
     with monkeypatch.context() as patch:
-        patch.setattr(_ops_shared_fields, "snapshot_arg_slots", lambda *_args: ())
+        patch.setattr(_ops_argument_fields, "snapshot_arg_slots", lambda *_args: ())
         without_slots = _derived_fields(model_cls, shape)
     assert len(with_slots) == len(without_slots), name
     diffs = [
@@ -240,7 +240,7 @@ def label_reads_per_op(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[i
             for attr, value in list(vars(module).items()):
                 if value is real_label:
                     monkeypatch.setattr(module, attr, counting_label)
-    real_snapshot = _ops_shared_fields.snapshot_arg_slots
+    real_snapshot = _ops_argument_fields.snapshot_arg_slots
     real_witness = _ops_shared_fields.witness_from_slots
 
     def snapshot(*args: Any) -> Any:
@@ -258,7 +258,7 @@ def label_reads_per_op(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[i
             seen.append((window["reads"], window["slots"]))
             window["open"] = False
 
-    monkeypatch.setattr(_ops_shared_fields, "snapshot_arg_slots", snapshot)
+    monkeypatch.setattr(_ops_argument_fields, "snapshot_arg_slots", snapshot)
     monkeypatch.setattr(_ops_shared_fields, "witness_from_slots", witness)
     yield seen
 
