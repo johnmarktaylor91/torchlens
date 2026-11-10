@@ -19,7 +19,7 @@ from __future__ import annotations
 from itertools import repeat
 from typing import Any
 
-from .._constants import _RAW_LABEL_SUFFIX
+from .._data_classes._labels import public_raw_label
 from .._data_classes._op_columns import OpColumns
 from .._data_classes._op_row_containers import op_rows, restart_op_holders
 from .._trace_core.cell_states import LazyCell
@@ -29,7 +29,6 @@ from .._trace_core.view_tables import PinnedViews
 __all__ = ("scan_lookup_keys",)
 
 _slot = object.__getattribute__
-_SUFFIX_LEN = len(_RAW_LABEL_SUFFIX)
 #: Fields the scan reads, in the order ``_Scan.fids`` unpacks them.
 _READS = (
     "_label_raw",
@@ -142,6 +141,7 @@ class _Scan:
         self.new_keys: dict[Any, int] = {}
         self.names: dict[str, str] = {}
         self.fx_paths: dict[str, str] = {}
+        self.exact: tuple[Any, ...] = ()  # the current op's exact keys, from ``keys_of``
 
     def orphans_and_saved(self, keys: list[int]) -> tuple[list[bool], int]:
         """Return each op's orphan flag and how many kept ops hold an activation (-1: unknown)."""
@@ -206,9 +206,11 @@ class _Scan:
         module_keys = self.module_keys(cells)
         if module_keys is None:
             return None
+        public = public_raw_label(raw)  # ``Op.raw_label``'s own rule
+        self.exact = (raw, public, cells[f_label])  # read by ``register`` for this op
         keys = [
             raw,
-            raw[:-_SUFFIX_LEN] if raw[-_SUFFIX_LEN:] == _RAW_LABEL_SUFFIX else raw,
+            public,
             cells[f_layer],
             cells[f_short_layer],
             cells[f_label],
@@ -300,9 +302,9 @@ class _Scan:
         """
         # One flat loop on purpose (complexity): a helper per key would be a counted call per key.
         trace, new_keys, cells = self.trace, self.new_keys, self.rows[key]
-        f_raw, f_label, f_layer, f_short_layer, f_short, f_index = self.fids[:6]
-        index, raw, label = cells[f_index], cells[f_raw], cells[f_label]
-        exact = (raw, raw[:-_SUFFIX_LEN] if raw[-_SUFFIX_LEN:] == _RAW_LABEL_SUFFIX else raw, label)
+        _raw, _label, f_layer, f_short_layer, f_short, f_index = self.fids[:6]
+        index, exact = cells[f_index], self.exact  # set by ``keys_of`` for this op
+        label = exact[2]
         by_key = trace._lookup_keys_to_layer_num_dict
         for lookup_key in keys:
             if lookup_key in by_key and by_key[lookup_key] != index and lookup_key in exact:
