@@ -64,9 +64,9 @@ def op_keys(ops: Iterable[Any], trace: Any) -> list[Any]:
 
     ops = list(ops)
     core = _core_of(trace)
-    store = core.ops if core is not None else None
-    if store is None or not ops:
+    if core is None or core.ops is None or not ops:
         return ops
+    store = core.ops
     rows: list[Any] = []
     for op in ops:
         try:
@@ -83,9 +83,9 @@ def ops_at(rows: list[int], trace_ref: Any, record_name: str) -> list[Any]:
 
     trace = _live_trace(trace_ref, record_name)
     core = _core_of(trace)
-    store = core.ops if core is not None else None
-    if store is None:
+    if core is None or core.ops is None:
         _live_trace(None, record_name)
+    store = core.ops
     label_fid = store.layout.fid_by_name["label"]
     by_label = trace._layer_dict_main_keys
     ops: list[Any] = []
