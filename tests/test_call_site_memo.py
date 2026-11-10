@@ -1,11 +1,13 @@
 """The per-op call-site lookup (``backends/torch/_ops_call_site_fields.py``).
 
 A repeated call site is served from the capture's site table instead of the
-full frame walk. These tests pin that a hit returns exactly what the walk
-returns (code context and call-site grouping) on the shapes the walk reads
-(module hooks, stateless modules, module lists, recursion, deep stacks), that
-a site seen before is never walked again, and that the per-op cost does not
-grow with stack depth.
+full frame walk, and a first-time site is built from the module call's upper
+part plus the op's own frames. These tests pin that both return exactly what
+the walk returns (code context and call-site grouping) on the shapes the walk
+reads (module hooks, stateless modules, module lists, recursion, deep stacks),
+that the module record read from the module stack is the wrapper's own, that a
+site seen before is never walked again, and that neither the per-op cost nor
+the first-time-site cost grows with stack depth.
 """
 
 from __future__ import annotations
@@ -19,7 +21,10 @@ from torch import Tensor, nn
 import torchlens as tl
 from benchmarks import capture_core_floor as floor
 from benchmarks.capture_core_counters import code_context_lookups
-from torchlens.backends.torch import _ops_call_site_fields as site_module
+from torchlens.backends.torch import (
+    _call_site_parts as parts_module,
+    _ops_call_site_fields as site_module,
+)
 
 
 class _NeverHit(dict):
@@ -30,10 +35,20 @@ class _NeverHit(dict):
 
 
 class _WalkEveryOp(site_module._CallSiteMemo):
-    """The capture's site table with lookups disabled."""
+    """The capture's site table with lookups and the first-time-site builder disabled."""
 
-    def __init__(self, cache: dict[Any, Any]) -> None:
-        super().__init__(cache)
+    build_misses = False
+
+    def __init__(self, cache: dict[Any, Any], module_ws: Any = None) -> None:
+        super().__init__(cache, module_ws)
+        self.sites = _NeverHit()
+
+
+class _BuildEveryOp(site_module._CallSiteMemo):
+    """The capture's site table with lookups disabled: every op is a first-time site."""
+
+    def __init__(self, cache: dict[Any, Any], module_ws: Any = None) -> None:
+        super().__init__(cache, module_ws)
         self.sites = _NeverHit()
 
 
@@ -155,6 +170,41 @@ def test_site_table_hit_equals_the_full_walk(
 
 
 @pytest.mark.parametrize("name", sorted(_MODELS))
+@pytest.mark.parametrize("harness_depth", [0, 30])
+def test_a_first_time_site_built_from_parts_equals_the_full_walk(
+    name: str, harness_depth: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    torch.manual_seed(0)
+    model = _MODELS[name]()
+    x = torch.randn(2, 4)
+    monkeypatch.setattr(site_module, "_CallSiteMemo", _BuildEveryOp)
+    built = _projection(_recurse(tl.trace, harness_depth, model, x))
+    monkeypatch.setattr(site_module, "_CallSiteMemo", _WalkEveryOp)
+    walked = _projection(_recurse(tl.trace, harness_depth, model, x))
+    assert built == walked
+
+
+@pytest.mark.parametrize("name", sorted(_MODELS))
+def test_the_module_record_read_from_the_stack_is_the_wrappers_own(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = parts_module.module_record
+    checked = []
+
+    def checking(memo: Any, wrapper: Any, depth: int) -> tuple[Any, int]:
+        record, next_depth = original(memo, wrapper, depth)
+        assert record is wrapper.f_locals.get("frame")
+        checked.append(next_depth)
+        return record, next_depth
+
+    monkeypatch.setattr(parts_module, "module_record", checking)
+    monkeypatch.setattr(site_module, "module_record", checking)
+    monkeypatch.setattr(site_module, "_CallSiteMemo", _BuildEveryOp)
+    tl.trace(_MODELS[name](), torch.randn(2, 4))
+    assert any(next_depth > 0 for next_depth in checked)
+
+
+@pytest.mark.parametrize("name", sorted(_MODELS))
 def test_a_seen_site_is_never_walked_again(name: str) -> None:
     model = _MODELS[name]()
     x = torch.randn(2, 4)
@@ -211,3 +261,41 @@ def test_call_site_cost_per_op_does_not_grow_with_stack_depth() -> None:
     assert _per_op(_LoopN, 30) <= _per_op(_LoopN, 0) + 0.5
     in_model_shallow = _per_op(lambda steps: _DeepN(steps, 0), 0)
     assert _per_op(lambda steps: _DeepN(steps, 30), 0) <= in_model_shallow + 0.5
+
+
+class _Acts(nn.Module):
+    """``count`` distinct stateless modules from one line: every op is a first-time site."""
+
+    def __init__(self, count: int) -> None:
+        super().__init__()
+        self.acts = nn.ModuleList([nn.ReLU() for _ in range(count)])
+
+    def forward(self, x: Tensor) -> Tensor:
+        for act in self.acts:
+            x = act(x)
+        return x
+
+
+class _DeepActs(nn.Module):
+    """``_Acts`` called under ``depth`` extra frames inside the root forward."""
+
+    def __init__(self, count: int, depth: int) -> None:
+        super().__init__()
+        self.depth = depth
+        self.inner = _Acts(count)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return _recurse(self.inner, self.depth, x)
+
+
+def test_first_time_site_cost_does_not_grow_with_stack_depth() -> None:
+    """30 extra frames inside the root forward cost the same with 10 or 40 first-time sites."""
+
+    x = torch.randn(2, 4)
+
+    def depth_cost(count: int) -> int:
+        deep, _ = _call_site_count(_DeepActs(count, 30), x, 0)
+        shallow, _ = _call_site_count(_DeepActs(count, 0), x, 0)
+        return deep - shallow
+
+    assert depth_cost(40) <= depth_cost(10) + 30

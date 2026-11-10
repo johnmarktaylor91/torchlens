@@ -889,16 +889,49 @@ def _call_site_chain(
     while scope is not None and scope[0] <= boundary:
         raw_frames.append(_call_site.module_scope_entry(scope[1]))
         scope = next(scopes, None)
-    raw = tuple(raw_frames)
-    cache_key = ("__torchlens_call_site__", raw)
-    if context_cache is not None:
-        cached = context_cache.get(cache_key)
-        if cached is not None:
-            return cached
-    chain = _call_site.canonical_chain(raw)
-    if context_cache is not None:
-        context_cache[cache_key] = chain
-    return chain
+    return _call_site.cached_chain(tuple(raw_frames), context_cache)
+
+
+def build_locations(
+    selected: list[tuple[FrameType, CodeType, int, int]],
+    num_context_lines: int,
+    source_loading_enabled: bool,
+    disable_col_offset: bool,
+    context_cache: _CodeContextCache | None,
+) -> list[Any]:
+    """One ``FuncCallLocation`` per kept ``(frame, code, lineno, lasti)`` (also the miss path's)."""
+    global _FUNC_CALL_LOCATION
+    location_type = _FUNC_CALL_LOCATION
+    if location_type is None:
+        from .._data_classes.func_call_location import FuncCallLocation as location_type
+
+        _FUNC_CALL_LOCATION = location_type
+    result = []
+    for frame_ref, code, lineno, _lasti in selected:
+        func_name = code.co_name
+        loc = location_type(
+            file=code.co_filename,
+            line_number=lineno,
+            func_name=func_name,
+            num_context_lines_requested=num_context_lines,
+            _frame_func_obj=(
+                frame_ref.f_locals.get(func_name) or frame_ref.f_globals.get(func_name)
+                if source_loading_enabled
+                else None
+            ),
+            code_firstlineno=code.co_firstlineno,
+            func_qualname=_get_code_qualname(frame_ref),
+            col_offset=None if disable_col_offset else _get_col_offset(frame_ref),
+            source_loading_enabled=source_loading_enabled,
+        )
+        if source_loading_enabled:  # save_source_context: snapshot the text at capture
+            loc._ensure_source_loaded()
+        else:
+            loc._linecache_entry = location_type._cached_source_fingerprint(
+                code.co_filename, num_context_lines, context_cache
+            )
+        result.append(loc)
+    return result
 
 
 def _get_code_context(
@@ -960,14 +993,6 @@ def _get_code_context(
         List[FuncCallLocation] ordered outermost to innermost; the last entry
         is the frame that ran the op.
     """
-    global _FUNC_CALL_LOCATION
-
-    FuncCallLocation = _FUNC_CALL_LOCATION
-    if FuncCallLocation is None:
-        from .._data_classes.func_call_location import FuncCallLocation
-
-        _FUNC_CALL_LOCATION = FuncCallLocation
-
     anchor: tuple[int, CodeType, int, int] | None = None
     if context_cache is not None:
         anchor = context_cache.get(_CODE_CONTEXT_ANCHOR_KEY)
@@ -1051,35 +1076,10 @@ def _get_code_context(
         if cached is not None:
             return list(cached)
 
-    # Build FuncCallLocation objects only for surviving frames (~5-10) and
-    # only on a cache miss. f_locals/f_globals lookups, qualname reads, and
-    # bytecode walks happen exclusively here.
-    result = []
-    for frame_ref, code, lineno, _lasti in selected:
-        func_name = code.co_name
-        loc = FuncCallLocation(
-            file=code.co_filename,
-            line_number=lineno,
-            func_name=func_name,
-            num_context_lines_requested=num_context_lines,
-            _frame_func_obj=(
-                frame_ref.f_locals.get(func_name) or frame_ref.f_globals.get(func_name)
-                if source_loading_enabled
-                else None
-            ),
-            code_firstlineno=code.co_firstlineno,
-            func_qualname=_get_code_qualname(frame_ref),
-            col_offset=None if disable_col_offset else _get_col_offset(frame_ref),
-            source_loading_enabled=source_loading_enabled,
-        )
-        if source_loading_enabled:  # save_source_context: snapshot the text at capture
-            loc._ensure_source_loaded()
-        else:
-            loc._linecache_entry = FuncCallLocation._cached_source_fingerprint(
-                code.co_filename, num_context_lines, context_cache
-            )
-        result.append(loc)
-
+    # Locations only for the kept frames (~5-10), on a cache miss.
+    result = build_locations(
+        selected, num_context_lines, source_loading_enabled, disable_col_offset, context_cache
+    )
     if context_cache is not None and cache_key is not None:
         context_cache[cache_key] = tuple(result)
     return result

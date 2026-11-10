@@ -512,7 +512,7 @@ torchlens/_utils/hashing.py::compute_graph_shape_hash	105
 torchlens/_utils/hashing.py::compute_raw_event_shape_hash	73
 torchlens/_utils/introspection.py	1085
 torchlens/_utils/introspection.py::_extend_search_stack_from_item	89
-torchlens/_utils/introspection.py::_get_code_context	182
+torchlens/_utils/introspection.py::_get_code_context	149
 torchlens/_utils/introspection.py::_search_stack_for_vars_of_type	70
 torchlens/_utils/introspection.py::get_arg_tensors_for_resolution	74
 torchlens/_utils/introspection.py::get_vars_of_type_from_obj	80
