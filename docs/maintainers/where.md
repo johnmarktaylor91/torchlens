@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1755 modules, 706541 lines, 0 modules without a docstring.
+85 packages, 1757 modules, 707348 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 46 | 19277 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 48 | 20084 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
@@ -723,7 +723,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (46 modules, 19277 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (48 modules, 20084 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -740,9 +740,11 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (4
 | `_conditional_child_rename` | Conditional child-label renaming for ''labeling._replace_layer_names_for_layer_entry''. | 84 |
 | `_conditional_records` | Leaf helpers of ''finalization._build_conditional_records''. | 253 |
 | `_executor` | Postprocess step adapters: ''StepContext'' and one function per pipeline step. | 437 |
+| `_final_info_columns` | Step 9 by column: the per-op part of final layer info over the building rows. | 383 |
+| `_final_info_rename` | Step 9 by column: raw-to-final label renaming over the building rows. | 261 |
 | `_grouping_stamp` | The grouping-policy stamp (''grouping_policy_v1''): writer, loader | 292 |
 | `_ingest_contract` | Frozen step-0 ingest seam contracts: ''IngestInputs'' v1 / ''Step0Result'' v1. | 152 |
-| `_label_rename` | Raw-to-final label renaming inside replay templates and label-bearing records. | 165 |
+| `_label_rename` | Raw-to-final label renaming inside replay templates and label-bearing records. | 328 |
 | `_layer_conditional_merge` | Rolled conditional edge-pass indices rebuilt after Step 15.5. | 66 |
 | `_layer_depths` | Step 4 of graph traversal: optional layer-depth marking. | 120 |
 | `_lazy_param_geometry` | Step 15 support: finalize deferred geometry for lazy-at-prep parameters. | 36 |
