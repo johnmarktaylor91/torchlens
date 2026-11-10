@@ -65,6 +65,8 @@ __all__ = [
     "HAS_C10D_GROUP_SEQ",
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
+    "HAS_LEN_TORCH_DISPATCH_STACK",
+    "HAS_MODULE_NAMED_MEMBERS",
     "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_VIEW_FUNC_UNSAFE",
     "HAS_REV_VIEW_FUNC_UNSAFE",
@@ -323,6 +325,8 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_ACCUMULATE_GRAD_CLASS": ("torch:_C._functions.AccumulateGrad",),
     "HAS_CURRENT_GRAPH_TASK_ID": ("torch:_C._current_graph_task_id",),
     "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
+    "HAS_LEN_TORCH_DISPATCH_STACK": ("torch:_C._len_torch_dispatch_stack",),
+    "HAS_MODULE_NAMED_MEMBERS": ("torch:nn.Module._named_members",),
     "HAS_ORIGINAL_VIEW_TRACKING": ("torch:autograd._force_original_view_tracking",),
     "HAS_VIEW_FUNC_UNSAFE": ("torch:Tensor._view_func_unsafe",),
     "HAS_REV_VIEW_FUNC_UNSAFE": ("torch:Tensor._rev_view_func_unsafe",),
@@ -1185,6 +1189,8 @@ HAS_DEVICE_CONSTRUCTORS: bool = _probe_attribute_paths("HAS_DEVICE_CONSTRUCTORS"
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_attribute_paths("HAS_ACCUMULATE_GRAD_CLASS")
 HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK_ID")
 HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
+HAS_LEN_TORCH_DISPATCH_STACK: bool = _probe_attribute_paths("HAS_LEN_TORCH_DISPATCH_STACK")
+HAS_MODULE_NAMED_MEMBERS: bool = _probe_attribute_paths("HAS_MODULE_NAMED_MEMBERS")
 HAS_ORIGINAL_VIEW_TRACKING: bool = _probe_attribute_paths("HAS_ORIGINAL_VIEW_TRACKING")
 HAS_VIEW_FUNC_UNSAFE: bool = _probe_attribute_paths("HAS_VIEW_FUNC_UNSAFE")
 HAS_REV_VIEW_FUNC_UNSAFE: bool = _probe_attribute_paths("HAS_REV_VIEW_FUNC_UNSAFE")
@@ -1397,6 +1403,8 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
+    "HAS_LEN_TORCH_DISPATCH_STACK",
+    "HAS_MODULE_NAMED_MEMBERS",
     "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_VIEW_FUNC_UNSAFE",
     "HAS_REV_VIEW_FUNC_UNSAFE",
@@ -1965,6 +1973,18 @@ def get_current_autograd_node_fn() -> Callable[[], Any] | None:
     return _resolve_or_mark_missing(
         "HAS_CURRENT_AUTOGRAD_NODE", "executed backward FLOPs read unknown, not per node"
     )
+
+
+def get_len_torch_dispatch_stack_fn() -> Callable[[], int] | None:
+    """Return torch's dispatch-mode stack length reader, or ``None`` (flag flipped) when absent."""
+    return _resolve_or_mark_missing(
+        "HAS_LEN_TORCH_DISPATCH_STACK", "fake-mode checks read the whole dispatch-mode stack"
+    )
+
+
+def get_module_named_members() -> Callable[..., Any] | None:
+    """Return ``nn.Module._named_members``, or ``None`` (flag flipped) when absent."""
+    return _resolve_or_mark_missing("HAS_MODULE_NAMED_MEMBERS", "module walks are read live")
 
 
 def get_force_original_view_tracking() -> Callable[[bool], Any] | None:

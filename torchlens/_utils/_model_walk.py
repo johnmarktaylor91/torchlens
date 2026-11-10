@@ -30,6 +30,8 @@ from typing import Any
 
 from torch import nn
 
+from ._torch_compat import get_module_named_members
+
 #: Root module -> its recorded walk. Weak in the root; the value holds modules weakly.
 _RECORDED: weakref.WeakKeyDictionary[nn.Module, tuple[Any, ...]] = weakref.WeakKeyDictionary()
 
@@ -43,7 +45,11 @@ _WALK_METHODS = (
     "buffers",
     "_named_members",
 )
-_STOCK = tuple(getattr(nn.Module, name) for name in _WALK_METHODS)
+#: ``_named_members`` comes through the compat layer: a fresh sentinel when torch lacks it,
+#: so no class matches and every tree is walked live.
+_STOCK = tuple(getattr(nn.Module, name) for name in _WALK_METHODS[:-1]) + (
+    get_module_named_members() or object(),
+)
 
 
 def module_tree_key(model: Any) -> tuple[Any, ...] | None:
@@ -287,7 +293,7 @@ def _own_members(module: nn.Module, registry: str, method: str) -> tuple[tuple[s
 
     cls = type(module)
     if getattr(cls, method, None) is not getattr(nn.Module, method) or (
-        cls._named_members is not nn.Module._named_members
+        getattr(cls, "_named_members", None) is not _STOCK[-1]
     ):
         return tuple(getattr(module, method)(recurse=False))
     members = getattr(module, registry)

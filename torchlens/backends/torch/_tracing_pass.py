@@ -51,6 +51,7 @@ from ..._utils._torch_compat import (
     get_fake_tensor_mode_class,
     get_functorch_transform_probe,
     get_higher_order_operator,
+    get_len_torch_dispatch_stack_fn,
     get_tracing_tensor_types,
 )
 from ...errors._base import transparent_contextmanager
@@ -77,7 +78,7 @@ _NOT_TRACING_CLASSES = frozenset(
 )
 #: torch's dispatch-mode stack length (``_get_current_dispatch_mode_stack`` builds its
 #: list from it, so a zero length is an empty stack), or ``None`` on a build without it.
-_LEN_DISPATCH_STACK: Callable[[], int] | None = getattr(torch._C, "_len_torch_dispatch_stack", None)
+_LEN_DISPATCH_STACK: Callable[[], int] | None = get_len_torch_dispatch_stack_fn()
 
 
 __all__ = (

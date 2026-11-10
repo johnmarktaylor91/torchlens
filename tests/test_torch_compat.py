@@ -416,6 +416,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # The executing-node resolver matches backward FLOPs to the node that
         # ran them; a build without it charges the innermost node marker.
         "HAS_CURRENT_AUTOGRAD_NODE": tc.HAS_CURRENT_AUTOGRAD_NODE,
+        # The dispatch-stack length short-circuit and the recorded module walk's
+        # stock ``_named_members``: present across the supported range (tripwires).
+        "HAS_LEN_TORCH_DISPATCH_STACK": True,
+        "HAS_MODULE_NAMED_MEMBERS": True,
         "HAS_ORIGINAL_VIEW_TRACKING": tc.HAS_ORIGINAL_VIEW_TRACKING,
         # The unchecked view replay; older torch spells it ``_view_func``.
         "HAS_VIEW_FUNC_UNSAFE": tc.HAS_VIEW_FUNC_UNSAFE,
