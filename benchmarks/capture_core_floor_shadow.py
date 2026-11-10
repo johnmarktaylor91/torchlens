@@ -340,7 +340,7 @@ def measure_model(probe: _Probe, name: str, repeats: int) -> dict[str, Any]:
     shadow = probe.traces(model, x, True, repeats)
     best = min(shadow, key=lambda row: row[0] - row[2])
     less_emit = best[0] - best[2]
-    sections = {key: value * us for key, value in zip(OBSERVATION_SECTIONS, best[3])}
+    sections = {key: value * us for key, value in zip(OBSERVATION_SECTIONS, best[3], strict=True)}
     return {
         "outputs": outputs,
         "whole_trace_ms": min(row[4] for row in production) * 1e3,
