@@ -77,9 +77,15 @@ def _is_private_name(name: str) -> bool:
 
 
 def _is_trace_base(base: str) -> bool:
-    """Whether an unparsed assignment base denotes a Trace."""
+    """Whether an unparsed assignment base denotes a Trace.
 
-    return base.split(".")[-1].split("[")[0] in _TRACE_IDENTIFIERS
+    A subscripted trace (``trace[label]``) is a record lookup: the write lands
+    on that Op or Layer, whose private fields are declared on the record class,
+    not on the Trace.
+    """
+
+    last = base.split(".")[-1]
+    return "[" not in last and last in _TRACE_IDENTIFIERS
 
 
 def _external_writes(tree: ast.AST) -> list[tuple[str, int, str]]:
@@ -252,12 +258,15 @@ def test_gate_scanner_detects_planted_offenders() -> None:
         "ml._annotated: int = 2\n"
         "setattr(model_log, '_via_setattr', 3)\n"
         "delattr(state.trace, '_via_delattr')\n"
-        # Negatives: own state, public name, dunder, non-trace base, non-literal.
+        # Negatives: own state, public name, dunder, non-trace base, non-literal,
+        # and a record looked up from the trace (its fields are the record's).
         "self._own_state = 4\n"
         "trace.public_field = 5\n"
         "trace.__dict__['x'] = 6\n"
         "some_module._private = 7\n"
         "setattr(trace, name, 8)\n"
+        "trace[label]._record_field = 9\n"
+        "setattr(log[label], '_record_via_setattr', 10)\n"
     )
     attrs = sorted(attr for attr, _, _ in _external_writes(planted))
     assert attrs == [
