@@ -50,7 +50,6 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_tl_save_selector_fire_count": FieldPolicy.DROP,
     "_tl_intervene_selector_fire_count": FieldPolicy.DROP,
     "_module_call_accessor": FieldPolicy.DROP,
-    "_module_pending": FieldPolicy.DROP,
     "_op_accessor_cache": FieldPolicy.DROP,
     "_layer_accessor_cache": FieldPolicy.DROP,
     "_receptive_field_solution": FieldPolicy.DROP,
