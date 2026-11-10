@@ -5,17 +5,17 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1778 modules, 714998 lines, 0 modules without a docstring.
+85 packages, 1780 modules, 715083 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 86 | 35535 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 87 | 35579 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1560 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26866 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26873 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 129 | 45760 |
@@ -23,8 +23,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
 | `torchlens._extraction` | Private implementation of dataset extraction. | 20 | 11066 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 67 | 37322 |
-| `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 26 | 9242 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 68 | 37354 |
+| `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 26 | 9245 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 25 | 12764 |
 | `torchlens._merged` | Cross-rank trace merging. | 15 | 6005 |
 | `torchlens._observability` | Shared observability substrate. | 22 | 8273 |
@@ -34,7 +34,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 51 | 21287 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
-| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15064 |
+| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 23 | 10600 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 16 | 7447 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
@@ -101,7 +101,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35535 lines)
+TorchLens - extract outs and metadata from PyTorch models. (87 modules, 35579 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -147,6 +147,7 @@ TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35535 li
 | `_memory_probes` | Host and device memory headroom probes for the save budget. | 108 |
 | `_model_wrappers` | Pre-flight detection of model wrappers TorchLens cannot instrument. | 91 |
 | `_option_receipt` | Option explicitness readers, the frozen option-group kit, and :class:'NarrationOptions'. | 242 |
+| `_optional_psutil` | The optional ''psutil'' import, with its absence remembered for the process. | 44 |
 | `_options_removed` | Public option members removed with no alias, with the remedy each one names. | 61 |
 | `_options_validation` | Value validators for the grouped option dataclasses in ''options.py''. | 484 |
 | `_output_slot` | The model-output slot behind ''Trace.output'' and ''Recording.output''. | 226 |
@@ -224,7 +225,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (56 modules, 26866 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (56 modules, 26873 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -269,7 +270,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `compute_record` | The two-term compute record: true MACs, never flops // 2. | 526 |
 | `config` | Internal grouped capture configuration for spine orchestration. | 9 |
 | `flops` | FLOPs (Floating Point Operations) computation module for TorchLens. | 1942 |
-| `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 762 |
+| `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 769 |
 | `peak_memory` | Host peak-memory instrumentation helpers (brainpipe). | 407 |
 | `plan` | Compiled, backend-neutral capture intent for the unification spine. | 270 |
 | `predicates` | Predicate evaluation helpers for capture-time fastlog projections. | 554 |
@@ -509,7 +510,7 @@ Private implementation of dataset extraction. (20 modules, 11066 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (67 modules, 37322 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (68 modules, 37354 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -522,12 +523,13 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 | `_durability` | Crash-durability helpers for atomic artifact publishes. | 252 |
 | `_extra_files` | The shared advisory emission for ignored, unlisted artifact files. | 13 |
 | `_field_policy` | ''FieldPolicy'': the portable scrub policy enum (leaf module, no ''_io'' import). | 91 |
+| `_field_refusal` | The loaded-artifact field refusal, and the op graph's structural refusal built on it. | 86 |
 | `_forgery_identity_facts` | C07X identity-fact load validators (tlspec v9 entry-dark slots). | 267 |
 | `_format3_runnable_bind` | Runnable binding of a 3.0 artifact: attach the component the carrier read, bind its families. | 510 |
 | `_injected_row_cells` | Cell checks for injected-op rows: the identity grammar and the codec envelope. | 324 |
 | `_inline_tensor` | Inline metadata tensors: a bounded, TorchLens-owned pickle reduction. | 276 |
 | `_json` | Bounded JSON reads for attacker-controlled ''.tlspec'' manifest boundaries. | 461 |
-| `_load_validators` | Load-boundary structural validators for the op graph, edge carriers, and annotations. | 524 |
+| `_load_validators` | Load-boundary structural validators for the op graph, edge carriers, and annotations. | 508 |
 | `_numpy_payload_codec` | Numeric NumPy values carried by the existing array payload transport. | 88 |
 | `_payload_codec_paddle` | Paddle place resolution for the payload codec. | 36 |
 | `_pickle_prescan` | Pre-scan for the restricted bundle unpickler: the plan the C machine enforces. | 773 |
@@ -556,7 +558,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 | `bundle_container` | Bundle-container loading for ''tl.load'': ''bundle.json'' and its members. | 360 |
 | `bundle_metadata` | Bundle-metadata (''bundle.json'') section + member-relation loading. | 314 |
 | `field_registry` | Persisted-field registry: the one queryable index of the tlspec envelope. | 286 |
-| `forgery_validation` | Load-boundary validation for persisted cross-record claim families. | 1914 |
+| `forgery_validation` | Load-boundary validation for persisted cross-record claim families. | 1876 |
 | `format_contract` | The tlspec FORMAT CONTRACT: L1 product vocabulary + record-adjacent helpers. | 801 |
 | `format_errors` | Portable-I/O error vocabulary (logical L0; physically homed with _io). | 184 |
 | `injection_codec` | Injected-op persistence codec (''log_injections'' stage 2). | 632 |
@@ -583,7 +585,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 
 ### `torchlens._io.format3`
 
-The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (26 modules, 9242 lines)
+The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (26 modules, 9245 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -601,7 +603,7 @@ The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (26
 | `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 761 |
 | `inventory` | Inert inventory of a 3.0 save's record tables against the persisted-state contract. | 163 |
 | `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 614 |
-| `reader` | Reader of the 2.38 saved format: manifest first, digests, record tables, records. | 780 |
+| `reader` | Reader of the 2.38 saved format: manifest first, digests, record tables, records. | 783 |
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 725 |
 | `recipe_shape` | Structural checks of a recipe document, run before any value is decoded. | 120 |
 | `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 185 |
@@ -814,7 +816,7 @@ Private registry kernel package (never public API). (3 modules, 556 lines)
 
 ### `torchlens._runnable`
 
-Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (20 modules, 15064 lines)
+Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (20 modules, 15063 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -823,7 +825,7 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (20 modules, 15
 | `call_arguments` | Sparse-call argument decoding and binding. | 647 |
 | `call_outputs` | Sparse-call output binding and mutation checks. | 700 |
 | `execution` | Transactional execution providers for the unified :meth:'Trace.run' surface. | 403 |
-| `host_budget` | The host allocation budget the runnable preflight refuses against. | 97 |
+| `host_budget` | The host allocation budget the runnable preflight refuses against. | 96 |
 | `input_aliases` | Input alias topology and non-tensor tree contracts. | 507 |
 | `input_metadata` | Input structure, literal, and metadata witness helpers. | 675 |
 | `input_sites` | Live input sites and metadata contract checks. | 625 |
