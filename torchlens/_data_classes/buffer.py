@@ -88,6 +88,13 @@ class Buffer:
     )
     _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
+    # Stored fields, written as one row by ``__init__``.
+    address: str
+    module_address: str
+    versions: list[Op]
+    _initial_value: Any
+    _source_ref: weakref.ref[Trace] | None
+
     def __init__(
         self,
         address: str,

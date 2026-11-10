@@ -1244,6 +1244,7 @@ class Module(_ModuleRouting):
     full_backward_hooks: list[HookInfo]
     custom_attributes: dict[str, Any]
     custom_methods: list[str]
+    _buffer_accessor: Any  # filled by the module build
 
     def __init__(
         self,
@@ -2124,10 +2125,9 @@ class Module(_ModuleRouting):
         if self._source_trace is None or self._source_trace._buffer_accessor is None:
             self._buffer_accessor = BufferAccessor({})
             return cast("BufferAccessor", self._buffer_accessor)
-        parent_accessor = self._source_trace._buffer_accessor
         scoped = {
             addr: bl
-            for addr, bl in parent_accessor._dict.items()
+            for addr, bl in self._source_trace._buffer_accessor._dict.items()
             if self.address in {"", "self"}
             or addr == self.address
             or addr.startswith(f"{self.address}.")
