@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1776 modules, 713755 lines, 0 modules without a docstring.
+85 packages, 1776 modules, 713774 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 129 | 45641 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 129 | 45657 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 53 | 21989 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 53 | 21992 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (129 modules, 45641 lines)
+Core data structures for representing a logged forward pass. (129 modules, 45657 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -335,7 +335,7 @@ Core data structures for representing a logged forward pass. (129 modules, 45641
 | `_fork_translation` | Fork record translation by kind and row. | 404 |
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
 | `_grad_fn_pass` | Resolve the forward pass one GradFn differentiates. | 41 |
-| `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 179 |
+| `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 195 |
 | `_layer_accessors` | OpAccessor and LayerAccessor: dict-like lookup over ops and layers. | 705 |
 | `_layer_fields` | Layer field descriptors: mirror reads, per-layer shadows, tombstones and grad-fn keys. | 237 |
 | `_layer_mirror` | Layer mirror reads: the representative op behind a Layer and its mirrored values. | 86 |
@@ -730,7 +730,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (53 modules, 21989 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (53 modules, 21992 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -757,7 +757,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `_layer_depths` | Step 4 of graph traversal: optional layer-depth marking. | 348 |
 | `_layer_row_scan` | Raw row scan behind step 15.5: group the passes of each layer. | 430 |
 | `_lazy_param_geometry` | Step 15 support: finalize deferred geometry for lazy-at-prep parameters. | 36 |
-| `_lookup_key_scan` | Raw row scan behind step 11: final op order, labels and lookup keys. | 455 |
+| `_lookup_key_scan` | Raw row scan behind step 11: final op order, labels and lookup keys. | 458 |
 | `_materialize` | Step 0 of postprocess: materialize raw Trace state from capture events. | 1710 |
 | `_module_census` | Module-build helpers for the root call's labels, uncalled modules and Layer roles. | 144 |
 | `_module_containment` | Op containment facts: tally each op's module calls into the module build data. | 107 |
