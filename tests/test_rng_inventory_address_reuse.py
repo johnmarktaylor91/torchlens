@@ -15,6 +15,7 @@ way user code does.
 from __future__ import annotations
 
 import gc
+import sys
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -80,7 +81,8 @@ def _hold_generator(holder: Any, seed: int) -> np.random.Generator:
 _KINDS: dict[str, tuple[Callable[[], Any], Callable[[], Any]]] = {
     # (first visited object, a fresh object of the same shape)
     "plain_object": (_Plain, _Plain),
-    "dict": (lambda: {"leaf": 1}, dict),
+    # ``{}`` takes a freed dict from the free list; ``dict()`` would not.
+    "dict": (lambda: {"leaf": 1}, lambda: {}),
 }
 
 
@@ -108,33 +110,62 @@ def test_walk_digests_a_new_holder_at_a_freed_address(kind: str) -> None:
     assert _CHANNEL in monitor.result.channels
 
 
-def test_window_marks_a_draw_behind_a_holder_at_a_reused_address() -> None:
-    """Inside one real window: visit, free, rebuild at the address, draw, check verdict."""
+def _alias_address(monkeypatch: pytest.MonkeyPatch, alias: Any, address: int) -> None:
+    """Make the walk see ``alias`` at ``address`` (an address reuse it cannot avoid).
 
+    Inside a live window the profile hook allocates between the free and the rebuild,
+    so a real reuse cannot be arranged reliably; the walk's own ``id`` lookups are
+    redirected instead, in every module that keys the memo.
+    """
+
+    real_id = id
+
+    def _id(value: Any) -> int:
+        return address if value is alias else real_id(value)
+
+    for module_name in ("deep_inventory", "walk_memo"):
+        module = sys.modules.get(f"torchlens._utils.rng.{module_name}")
+        if module is not None:
+            monkeypatch.setattr(module, "id", _id, raising=False)
+
+
+def _window_with_aliased_holder(monkeypatch: pytest.MonkeyPatch, draw: bool) -> set[str]:
+    """Visit and free a holder, alias a new holder to its address, maybe draw; channels.
+
+    The generator is built before the window and attached inline, so no helper frame
+    returns it (a returned generator is digested on its own, which would hide the skip).
+    """
+
+    inner = _Plain()
+    inner.gen = np.random.default_rng(12)  # type: ignore[attr-defined]
     with host_nondeterminism_monitor(None) as result:
         first = _Plain()
         _look(first)
         address = id(first)
         del first
-        holder, reused = _rebuild_at(address, _Plain)
-        _hold_generator(holder, seed=12)
-        _draw(holder)
-    assert reused, "the allocator never repeated the freed address"
-    assert _CHANNEL in result.channels
+        holder = _Plain()
+        _alias_address(monkeypatch, holder, address)
+        holder.inner = inner  # type: ignore[attr-defined]
+        if draw:
+            _draw(holder)
+        else:
+            _look(holder)
+    monkeypatch.undo()
+    return set(result.channels)
 
 
-def test_window_without_a_draw_stays_unmarked() -> None:
+def test_window_marks_a_draw_behind_a_holder_at_a_reused_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Inside one real window: visit, free, a new holder at the address, draw, verdict."""
+
+    assert _CHANNEL in _window_with_aliased_holder(monkeypatch, draw=True)
+
+
+def test_window_without_a_draw_stays_unmarked(monkeypatch: pytest.MonkeyPatch) -> None:
     """Control: the same reuse with no draw marks nothing."""
 
-    with host_nondeterminism_monitor(None) as result:
-        first = _Plain()
-        _look(first)
-        address = id(first)
-        del first
-        holder, _ = _rebuild_at(address, _Plain)
-        _hold_generator(holder, seed=13)
-        _look(holder)
-    assert _CHANNEL not in result.channels
+    assert _CHANNEL not in _window_with_aliased_holder(monkeypatch, draw=False)
 
 
 @contextmanager
