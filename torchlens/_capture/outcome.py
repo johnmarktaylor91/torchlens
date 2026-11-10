@@ -147,6 +147,10 @@ _WITNESS_REDISPATCH_MARKER = "result = func(*args, **(kwargs or {}))"
 # exception the handler raises there is the user's op failing in library code.
 _PROTOCOL_REDISPATCH_FILE = "_protocol_redispatch.py"
 _PROTOCOL_REDISPATCH_MARKER = "result = value.__torch_function__(wrapper, types, args, kwargs)"
+# The wrapper fast lane's call of an admitted op (``_call_plan.call_admitted``):
+# the same call of the user's op as the trampoline, one frame further in.
+_ADMITTED_CALL_FILE = "_call_plan.py"
+_ADMITTED_CALL_MARKER = "return func(*args, **kwargs)"
 # The ``torch.ops`` call-class recorder's pass-through to the original ``__call__``
 # (the census redispatch and unrecorded calls reach the operator through it).
 _TORCH_OPS_PASSTHROUGH_FILE = "_torch_ops_calls.py"
@@ -205,9 +209,10 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
 
     A :class:`~torchlens.errors.TraceCaptureError` classifies as its ``__cause__``. Walks the
     traceback from the innermost frame outward; the innermost attributable frame wins: user
-    code -> USER_OP; a torchlens frame -> TORCHLENS, except the wrapper trampoline, the
-    completeness-witness redispatch, the declined-protocol re-offer and the module-forward
-    pass-throughs (each executing the user's op or forward) -> USER_OP. Interrupts classify
+    code -> USER_OP; a torchlens frame -> TORCHLENS, except the wrapper trampoline and its
+    fast lane's admitted call, the completeness-witness redispatch, the declined-protocol
+    re-offer and the module-forward pass-throughs (each executing the user's op or forward)
+    -> USER_OP. Interrupts classify
     INTERRUPT; no traceback or nothing attributable -> UNKNOWN. Misclassification is
     capability-safe by construction -- origin never steers a gate.
     """
@@ -251,6 +256,8 @@ def _executes_user_code(filename: str, line: str) -> bool:
 
     if _TRAMPOLINE_SOURCE_MARKER in line:
         return True
+    if filename.endswith(_ADMITTED_CALL_FILE):
+        return _ADMITTED_CALL_MARKER in line
     if filename.endswith(_WITNESS_REDISPATCH_FILE):
         return _WITNESS_REDISPATCH_MARKER in line
     if filename.endswith(_PROTOCOL_REDISPATCH_FILE):
