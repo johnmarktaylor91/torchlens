@@ -70,14 +70,14 @@ def changed_module_tree(model: Any) -> Any:
     """
 
     current = module_tree_key(model)
-    if current is not None and model in _state._prepared_models:
+    if current is not None:
         try:
             if _prepared_trees.get(model) == current:
                 return UNCHANGED
         except Exception:
             # A module whose ``__eq__`` raises cannot be proven unchanged.
             pass
-    _state._prepared_models.discard(model)
+    _state.release_model_prep(model, ())
     return current
 
 
