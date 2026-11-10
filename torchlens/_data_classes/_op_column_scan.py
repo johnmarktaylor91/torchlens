@@ -27,7 +27,7 @@ from .._trace_core.op_store import OpRowStore
 from ._op_columns import OpColumns
 from ._op_row_containers import OpSequence, _list_iter
 
-__all__ = ("op_labels", "ops_with")
+__all__ = ("call_outputs", "op_labels", "ops_with")
 
 #: Plain container classes whose empty instance means "no value".
 _PLAIN_CONTAINERS = (list, tuple)
@@ -143,3 +143,58 @@ def op_labels(trace: Any) -> list[Any]:
             if not [label for label in labels if label.__class__ is not str]:
                 return labels
     return [op.label for op in trace._layer_list]
+
+
+def call_outputs(trace: Any) -> dict[str, dict[str, str]]:
+    """Return each module call's output ops as ``{op label: layer label}``.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose ops are read, in trace order.
+
+    Returns
+    -------
+    dict[str, dict[str, str]]
+        Keyed by call label: the ops whose ``is_module_output`` flag is set and
+        whose ``output_of_module_calls`` names the call.
+    """
+
+    by_call: dict[str, dict[str, str]] = {}
+    scan = _building_rows(trace)
+    readers = None
+    if scan is not None and not [key for key in scan[2] if key < 0]:
+        columns = OpColumns(scan[1])
+        names = ("is_module_output", "output_of_module_calls", "label", "layer_label")
+        try:
+            readers = [columns.getter(name) for name in names]
+        except ValueError:  # a field the facade transforms: read the facade
+            readers = None
+    if scan is None or readers is None:
+        for op in trace._layer_list:
+            if op._module_context_is_module_output:
+                for call_label in op._module_context_output_of_module_calls:
+                    by_call.setdefault(call_label, {})[op.label] = op.layer_label
+        return by_call
+    _owner, store, keys = scan
+    rows = store._rows
+    fid_by_name = store.layout.fid_by_name
+    flag_fid, label_fid, layer_fid = (fid_by_name[name] for name in (names[0], *names[2:]))
+    flag_of, calls_of, label_of, layer_label_of = readers
+    for key in keys:
+        row = rows[key]
+        # A plain ``True``, ``False`` or ``str`` cell is what the facade returns.
+        flag = row[flag_fid]
+        if flag is False or not (flag is True or flag_of(key)):
+            continue
+        label = row[label_fid]
+        if label.__class__ is not str:
+            label = label_of(key)
+        layer_label = row[layer_fid]
+        if layer_label.__class__ is not str:
+            layer_label = layer_label_of(key)
+        for call_label in calls_of(key):
+            if call_label not in by_call:
+                by_call[call_label] = {}
+            by_call[call_label][label] = layer_label
+    return by_call

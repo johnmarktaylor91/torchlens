@@ -265,8 +265,11 @@ def name_owner_by_row(trace_ref: Any, owner: Any) -> None:
         Record whose ``_grad_records`` are rebound.
     """
 
+    grad_records = getattr(owner, "_grad_records", None)
+    if not grad_records:
+        return  # nothing to rebind, so the owner's row is not looked up
     stored = row_key_or_value(owner, trace_ref)
-    for grad_record in getattr(owner, "_grad_records", None) or ():
+    for grad_record in grad_records:
         grad_record.__dict__["owner"] = stored
 
 

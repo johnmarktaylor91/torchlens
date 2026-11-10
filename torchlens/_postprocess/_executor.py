@@ -242,9 +242,7 @@ def _run_build_module_logs(ctx: StepContext) -> None:
     """Build ``Module`` records and the trace's module-call accessor."""
 
     with _vtimed(ctx.trace, "  Step 16: Build module logs", bucket="build_module_logs"):
-        finalization._build_module_logs(ctx.trace)
-        # The saved module-call count is derived on read; only the accessor is kept.
-        _ = ctx.trace.module_calls
+        finalization._build_module_logs(ctx.trace)  # sets the module-call accessor too
 
 
 def _run_hash_graph_shape(ctx: StepContext) -> None:

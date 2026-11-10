@@ -47,6 +47,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Bytes, Duration, Flops, Macs
+from .._trace_core.record_rows import write_row
 from .._utils._display_errors import module_output_message
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
@@ -61,7 +62,12 @@ from ._call_tree import (
 from ._lookup_kinds import converted, module_call_owning_op, module_for_key, module_item
 from ._module_accessor_filters import ModuleAccessorFilters
 from ._module_call_rows import _module_call_log_to_row
-from ._module_facade_fields import install_module_facades
+from ._module_facade_fields import (
+    call_boundaries,
+    install_module_facades,
+    module_call_row,
+    module_row,
+)
 from ._moe_views import _ModuleRouting
 from ._record_views import SOURCE_TRACE, install
 from ._runtime_handles import runtime_handle_from_trace
@@ -491,41 +497,9 @@ class ModuleCall:
             Owning trace used for live accessors.
         """
 
-        self.address = address
-        self.all_addresses = all_addresses if all_addresses is not None else [address]
-        self.cls = cls
-        self.class_name = class_name
-        self.class_qualname = class_qualname
-        self.call_index = call_index
-        self.label = label  # e.g. "features.0:1"
-        self.ordinal_index = ordinal_index
-        self.ops = ops  # pass-qualified Op labels
-        self.input_layers = input_layers
-        self.output_layers = output_layers
-        self.input_ops = list(input_layers)
-        self.output_ops = output_ops if output_ops is not None else list(output_layers)
-        self.output_structure = output_structure
-        self.output_paths = output_paths if output_paths is not None else ()
-        self.forward_args = forward_args
-        self.forward_kwargs = forward_kwargs
-        self.inputs_before_pre_hooks = inputs_before_pre_hooks
-        self.inputs_after_pre_hooks = inputs_after_pre_hooks
-        self.forward_pre_hook_effects = (
-            forward_pre_hook_effects if forward_pre_hook_effects is not None else ()
-        )
-        self.forward_arg_names = forward_arg_names if forward_arg_names is not None else []
-        self.num_forward_pos_args = len(forward_args) if forward_args is not None else 0
-        self.num_forward_kwargs = len(forward_kwargs) if forward_kwargs is not None else 0
-        self.num_forward_args_total = self.num_forward_pos_args + self.num_forward_kwargs
-        self.forward_args_summary = ""
-        self.forward_kwargs_summary = ""
+        write_row(self, module_call_row(locals()))
         self.forward_args_template = forward_args_template
         self.forward_kwargs_template = forward_kwargs_template
-        self.forward_duration = Duration(forward_duration)
-        self.code_context = code_context if code_context is not None else []
-        self.module_call_stack = module_call_stack if module_call_stack is not None else []
-        self.call_parent = call_parent
-        self.call_children = call_children if call_children is not None else []
         self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
 
     @property
@@ -1419,66 +1393,11 @@ class Module(_ModuleRouting):
             Owning trace used for live accessors.
         """
 
-        self.address = address
-        self.all_addresses = all_addresses if all_addresses is not None else [address]
-        self.cls = cls
-        self.class_name = class_name
-        self.class_qualname = class_qualname
-
-        self.class_source_file = class_source_file
-        self.class_source_line = class_source_line
-        self.init_source_file = init_source_file
-        self.init_source_line = init_source_line
-        self.forward_source_file = forward_source_file
-        self.forward_source_line = forward_source_line
-        self.class_docstring = class_docstring
-        self.init_signature = init_signature
-        self.init_docstring = init_docstring
-        self.forward_signature = forward_signature
-        self.forward_docstring = forward_docstring
-
-        self.address_parent = address_parent
-        self.address_children = address_children if address_children is not None else []
-        self.address_depth = address_depth
-
-        self.call_parent = call_parent
-        self.call_children = call_children if call_children is not None else []
-        self.call_depth = call_depth
-
-        self.num_calls = num_calls
-        self.ops = ModuleCallAccessor(ops)
-        self.call_labels = call_labels if call_labels is not None else []
-
-        # layer_labels stores NO-PASS labels (e.g. "conv2d_1_1") -> Layer.
-        # Contrast with ModuleCall.ops which stores pass-qualified labels.
-        self.layer_labels = layer_labels if layer_labels is not None else []
-        self.input_ops: list[str] = []
-        self.input_layers: list[str] = []
-        self.output_ops: list[str] = []
-        self.output_layers: list[str] = []
-        self._sync_boundary_fields_from_calls()
-
         from .param import ParamAccessor
 
-        self.params = params if params is not None else ParamAccessor({})
-        self.num_params = num_params
-        self.num_params_trainable = num_params_trainable
-        self.num_params_frozen = num_params_frozen
-        self.buffer_layers = buffer_layers if buffer_layers is not None else []
-        self._buffer_accessor: Any = None  # populated by _build_module_logs
-
-        self.training = training
-        self.forward_pre_hooks = forward_pre_hooks if forward_pre_hooks is not None else []
-        self.forward_hooks = forward_hooks if forward_hooks is not None else []
-        self.backward_pre_hooks = backward_pre_hooks if backward_pre_hooks is not None else []
-        self.backward_hooks = backward_hooks if backward_hooks is not None else []
-        self.full_backward_pre_hooks = (
-            full_backward_pre_hooks if full_backward_pre_hooks is not None else []
-        )
-        self.full_backward_hooks = full_backward_hooks if full_backward_hooks is not None else []
-        self.custom_attributes = custom_attributes if custom_attributes is not None else {}
-        self.custom_methods = custom_methods if custom_methods is not None else []
-
+        if params is None:
+            params = ParamAccessor({})
+        write_row(self, module_row(locals(), ModuleCallAccessor(ops)))
         # Store as weakref to break circular reference (Trace -> _module_logs -> Module -> Trace).
         self._source_trace_ref = weakref.ref(_source_trace) if _source_trace is not None else None
 
@@ -1491,27 +1410,8 @@ class Module(_ModuleRouting):
             Boundary lists are updated in first-seen call order.
         """
 
-        input_ops: list[str] = []
-        input_layers: list[str] = []
-        output_ops: list[str] = []
-        output_layers: list[str] = []
-        for call in self.ops.values():
-            for label in call.input_ops:
-                if label not in input_ops:
-                    input_ops.append(label)
-            for label in call.input_layers:
-                if label not in input_layers:
-                    input_layers.append(label)
-            for label in call.output_ops:
-                if label not in output_ops:
-                    output_ops.append(label)
-            for label in call.output_layers:
-                if label not in output_layers:
-                    output_layers.append(label)
-        self.input_ops = input_ops
-        self.input_layers = input_layers
-        self.output_ops = output_ops
-        self.output_layers = output_layers
+        boundary = call_boundaries(self.ops)
+        self.input_ops, self.input_layers, self.output_ops, self.output_layers = boundary
 
     @property
     def attribute_writes(self) -> Mapping[str, AttributeWrite] | None:

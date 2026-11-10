@@ -9,10 +9,15 @@ rehydrated object graph is ready for normal user access.
 from __future__ import annotations
 
 import weakref
+from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
 from .._data_classes._op_column_scan import ops_with
-from .._data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
+from .._data_classes._trace_accessors import (
+    _TRACE_MODULE_CALL_ACCESSOR_ATTR,
+    TraceModuleCallAccessor,
+    _invalidate_trace_module_call_accessor_cache,
+)
 from .._data_classes.buffer import Buffer, BufferAccessor
 from .._data_classes.module import ModuleAccessor
 from .._trace_core.record_refs import name_owner_by_row, rekey_child_cells
@@ -29,6 +34,8 @@ def rebuild_trace_accessors(
     module_dict: dict[str, Module],
     module_order: list[Module],
     pass_dict: dict[str, ModuleCall],
+    *,
+    built_for_trace: bool = False,
 ) -> None:
     """Rebuild the user-facing module and buffer accessors on a ``Trace``.
 
@@ -42,6 +49,10 @@ def rebuild_trace_accessors(
         Ordered list of module logs for iteration and integer indexing.
     pass_dict:
         Mapping from ``"address:pass"`` labels to ``ModuleCall`` entries.
+    built_for_trace:
+        The records were just constructed for ``trace`` and are still
+        detached (the step 16 build): they already name it, so they are not
+        rebound, and they are adopted here even when the trace has no op store.
     """
 
     # The door is set first: a module whose ``ops`` cell already holds rows
@@ -49,7 +60,7 @@ def rebuild_trace_accessors(
     _invalidate_trace_module_call_accessor_cache(trace)
     trace._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
 
-    for module_log in module_dict.values():
+    for module_log in () if built_for_trace else module_dict.values():
         module_log._source_trace = trace
         module_log._buffer_accessor = None
         module_ops = getattr(module_log, "ops", None)
@@ -58,32 +69,58 @@ def rebuild_trace_accessors(
         for module_call in module_ops._dict.values():
             module_call._source_trace = trace
 
-    # Adopt Module/ModuleCall rows into the per-trace kind tables. A
-    # ``.tlspec`` load rebuilds the module accessor only HERE — after
-    # ``__setstate__`` already rehydrated and sealed the core — which
-    # used to leave every public Module/ModuleCall facade detached-backed
-    # with empty kind tables (closure review gap). Live captures arrive
-    # already table-bound (postprocess/finalization adopts them just before
-    # calling this), so adoption is an idempotent no-op there. Tables born
-    # after a sealed core are sealed too, exactly like buffers below. Between
-    # adoption and the seal, each module's ``ops`` and ``params`` cells swap
-    # their accessors for the children's rows, so the module table holds no
-    # record (a cell written after the seal would leave the accessor in place).
-    _core = trace.__dict__.get("_trace_core")
-    if _core is not None and _core.ops is not None:
-        from torchlens._trace_core.record_rows import adopt_records
-
-        kinds = (("module", list(module_dict.values())), ("module_call", list(pass_dict.values())))
-        for kind, records in kinds:
-            if records:
-                adopt_records(_core, kind, records)
-        rekey_child_cells(module_dict.values(), trace)
-        for kind, records in kinds:
-            kind_store = _core.kind_rows.get(kind)
-            if records and kind_store is not None and not kind_store.frozen and _core.ops.frozen:
-                kind_store.freeze()
-
+    _adopt_module_rows(trace, module_dict, pass_dict, built_for_trace)
     rebuild_buffer_accessor(trace)
+    if built_for_trace:
+        _list_calls_in_build_order(trace, pass_dict)
+
+
+def _list_calls_in_build_order(trace: Trace, pass_dict: dict[str, ModuleCall]) -> None:
+    """Set the trace's flat module-call accessor from the calls the build just made.
+
+    The build makes the root's calls first and then each module's calls in
+    module order, which is the order ``Trace.module_calls`` lists them in, so
+    the accessor needs no walk over every module's calls.
+    """
+
+    calls = TraceModuleCallAccessor(OrderedDict(pass_dict))
+    trace.__dict__[_TRACE_MODULE_CALL_ACCESSOR_ATTR] = calls
+
+
+def _adopt_module_rows(
+    trace: Trace,
+    module_dict: dict[str, Module],
+    pass_dict: dict[str, ModuleCall],
+    built_for_trace: bool,
+) -> None:
+    """Adopt the Module and ModuleCall rows into the trace's kind tables.
+
+    A ``.tlspec`` load rebuilds the module accessor only after ``__setstate__``
+    rehydrated and sealed the core, which would leave every public Module and
+    ModuleCall facade detached-backed with empty kind tables; a live capture's
+    step 16 hands its freshly built records here for the same adoption. Tables
+    born after a sealed core are sealed too, exactly like buffers. Between
+    adoption and the seal, each module's ``ops`` and ``params`` cells swap
+    their accessors for the children's rows, so the module table holds no
+    record (a cell written after the seal would leave the accessor in place).
+    """
+
+    _core = trace.__dict__.get("_trace_core")
+    if _core is None or not (built_for_trace or _core.ops is not None):
+        return
+    from torchlens._trace_core.record_rows import adopt_records
+
+    kinds = (("module", list(module_dict.values())), ("module_call", list(pass_dict.values())))
+    for kind, records in kinds:
+        if records:
+            adopt_records(_core, kind, records)
+    if _core.ops is None:
+        return
+    rekey_child_cells(module_dict.values(), trace)
+    for kind, records in kinds:
+        kind_store = _core.kind_rows.get(kind)
+        if records and kind_store is not None and not kind_store.frozen and _core.ops.frozen:
+            kind_store.freeze()
 
 
 def rebuild_buffer_accessor(trace: Trace) -> None:
@@ -106,8 +143,10 @@ def rebuild_buffer_accessor(trace: Trace) -> None:
     # Only an op with gradient records or a buffer flag has work here.
     for entry in ops_with(trace, "_grad_records", "is_buffer"):
         name_owner_by_row(trace_ref, entry)
-        if record_member(entry, "is_buffer", False) and entry.buffer_address is not None:
-            buffer_versions.setdefault(entry.buffer_address, []).append(entry)
+        if record_member(entry, "is_buffer", False):
+            address = entry.buffer_address
+            if address is not None:
+                buffer_versions.setdefault(address, []).append(entry)
     buffer_dict = {
         address: Buffer(
             address,
