@@ -68,7 +68,7 @@ def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., N
         called as ``reconcile(layer, read)`` with the pass's field reader.
     """
 
-    ops = trace._layer_list
+    ops = list(trace._layer_list)  # one local list: the ``id()`` keys below need live records
     # Keyed by position, not label: reading every label would cost a facade read per op.
     lookup = column_rows_by_label(cast("dict[str, Any]", dict(enumerate(ops)))) if ops else None
     if lookup is None:

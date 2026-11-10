@@ -23,7 +23,7 @@ from safetensors.torch import load_file
 
 from torchlens.backends.registry import BackendRuntimeCompatibilityError
 
-from .._data_classes._state_adapter import state_items
+from .._data_classes._state_adapter import finish_state_restore, plain_state, state_items
 from .._data_classes.trace import ConditionalAccessor, Trace
 from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
 from .._utils._record_group_table import record_storage_attr
@@ -201,7 +201,7 @@ def rehydrate_trace(
     _bind_conditional_arms(trace)
     _set_payload_load_status(trace, manifest_index, payload_statuses)
     _restore_trace_state_order(trace, portable_key_order)
-    return trace
+    return finish_state_restore(trace)
 
 
 def _stamp_serialized_tlspec_version(trace: Trace, manifest: Manifest | dict[str, Any]) -> None:
@@ -506,7 +506,7 @@ def _rehydrate_object(
     if spec is None:
         return value
 
-    for field_name, field_value in list(state_items(value)):
+    for field_name, field_value in list(plain_state(value).items()):
         if field_name not in spec:
             continue
         # Registered pre-release fields materialize under their SWITCHED-ON

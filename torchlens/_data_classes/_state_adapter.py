@@ -5,7 +5,28 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any, TypeVar
 
+from ._op_row_containers import adopt_op_containers, project_op_containers
+
 _T = TypeVar("_T")
+
+
+def plain_state(obj: Any) -> dict[str, Any]:
+    """Return ``obj``'s live state as a new dictionary for a walk over plain containers.
+
+    A trace's op list and label dictionaries hold row keys; here they are
+    plain ``list`` and ``dict`` objects of the records, which live as long as
+    the returned dictionary. The save scrub and the load walk read a trace
+    through this door, so they see what they saw before the containers changed.
+    """
+
+    return project_op_containers(dict(state_items(obj)))
+
+
+def finish_state_restore(trace: _T) -> _T:
+    """Turn plain op containers a state walk left on ``trace`` back into row-key ones."""
+
+    adopt_op_containers(trace)
+    return trace
 
 
 def state_items(obj: Any) -> Iterable[tuple[str, Any]]:

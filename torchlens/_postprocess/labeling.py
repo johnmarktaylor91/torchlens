@@ -23,6 +23,7 @@ Step 11 (_build_lookup_keys_and_finalize_retained_layers): Builds lookup key map
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._op_row_containers import restart_op_holders
 from .._data_classes.cleanup import _project_conditional_child_views
 from .._data_classes.op import Op
 from .._errors import AmbiguousOpLookupError
@@ -603,8 +604,7 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
         1 for layer_entry in self if not record_member(layer_entry, "is_orphan", False)
     )
 
-    self._layer_list = []
-    self._layer_dict_main_keys = {}
+    restart_op_holders(self)
     self.layer_labels = []
     self.op_labels = []
     self._layer_num_calls = {}

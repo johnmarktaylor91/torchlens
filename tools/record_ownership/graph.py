@@ -95,7 +95,7 @@ def _dict_edges(mapping: dict[Any, Any], attribute_style: bool) -> Iterator[Edge
     a string key that names a row table, which stays in the path.
     """
 
-    for key, value in list(mapping.items()):
+    for key, value in list(dict.items(mapping)):
         if attribute_style and isinstance(key, str):
             yield f".{key}", value
             continue
@@ -201,6 +201,43 @@ def _object_edges(obj: Any, absorb: Absorb) -> Iterator[Edge]:
             yield name, referent
 
 
+def _mapping_subclass_edges(obj: Any) -> Iterator[Edge]:
+    """Yield a dict subclass's own entries, then its slots and instance attributes.
+
+    The entries are read with ``dict.items``, never through the subclass's
+    own ``items``: a mapping that hands out views of its entries holds the
+    entries, not the views.
+    """
+
+    yield from _dict_edges(obj, attribute_style=False)
+    instance_dict = _instance_dict(obj)
+    slot_by_id = _slot_names_by_id(obj)
+    for referent in gc.get_referents(obj):
+        if instance_dict is not None and referent is instance_dict:
+            yield from _dict_edges(referent, attribute_style=True)
+        elif id(referent) in slot_by_id:
+            yield slot_by_id[id(referent)], referent
+
+
+def _list_subclass_edges(obj: Any) -> Iterator[Edge]:
+    """Yield a list subclass's own items, then its slots and instance attributes.
+
+    The items are read with ``list.__iter__``, never through the subclass's
+    own iteration: a sequence that hands out records for the keys it stores
+    holds the keys, not the records.
+    """
+
+    for item in list(list.__iter__(obj)):
+        yield "[*]", item
+    instance_dict = _instance_dict(obj)
+    slot_by_id = _slot_names_by_id(obj)
+    for referent in gc.get_referents(obj):
+        if instance_dict is not None and referent is instance_dict:
+            yield from _dict_edges(referent, attribute_style=True)
+        elif id(referent) in slot_by_id:
+            yield slot_by_id[id(referent)], referent
+
+
 def _sequence_edges(obj: Any) -> Iterator[Edge]:
     """Yield the items of a list, tuple, set or deque."""
 
@@ -260,6 +297,10 @@ def strong_edges(obj: Any, absorb: Absorb = lambda _container: True) -> Iterator
     answers whether it is new.
     """
 
+    if isinstance(obj, dict) and type(obj).__module__ not in ("builtins", "collections"):
+        return _mapping_subclass_edges(obj)
+    if isinstance(obj, list) and type(obj).__module__ != "builtins":
+        return _list_subclass_edges(obj)
     for kinds, reader in _EDGE_READERS:
         if isinstance(obj, kinds):
             return reader(obj)

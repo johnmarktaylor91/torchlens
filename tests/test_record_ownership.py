@@ -29,11 +29,14 @@ import pytest
 
 from tools.record_ownership import audit_roots, run_case, signature, uses
 from tools.record_ownership.cases import CASES
+from tools.record_ownership.graph import strong_edges
 from tools.record_ownership.holders import (
     ACTIVATED_FIRST,
+    ACTIVATION,
     BEFORE_ACTIVATION,
     HOLDERS,
     KNOWN,
+    SIDE_TABLE,
     STEPS,
     blocking,
     expected,
@@ -89,12 +92,16 @@ def test_known_holder_is_found(name: str) -> None:
 
 
 def test_paths_to_op_and_layer_convert_before_activation() -> None:
-    """Every path that reaches an ``Op`` or ``Layer`` has a step that lands before the pin."""
+    """Every path that reaches an ``Op`` or ``Layer`` has a step that lands before the pin.
+
+    The one exception is the strong side table of records, which activation itself makes weak.
+    """
 
     late = {
         path: holder.step
         for path, holder in blocking(ACTIVATED_FIRST).items()
         if holder.step not in BEFORE_ACTIVATION
+        and not (holder.step == ACTIVATION and path.startswith(SIDE_TABLE))
     }
     assert late == {}
 
@@ -191,6 +198,50 @@ def test_walk_reports_a_holder_it_cannot_reach() -> None:
     names = [name for found in audit.unexplained.values() for name in found]
     assert any("_Slotted" in name for name in names), audit.unexplained
     assert hidden.held is owner.items[0]
+
+
+class _ViewingMapping(dict):  # type: ignore[type-arg]
+    """A dict subclass whose reads hand out stand-ins, with a second holder in a slot."""
+
+    __slots__ = ("_side",)
+
+    def items(self) -> Any:
+        """Hide the entries the mapping really holds."""
+
+        return [(key, None) for key in self]
+
+
+def test_walk_reads_a_dict_subclass_raw_and_follows_its_slots() -> None:
+    """A mapping's own ``items`` may not hide what it holds, and its slots are holders too."""
+
+    entry, side = _Owner(), _Owner()
+    mapping = _ViewingMapping(label=entry)
+    mapping._side = [side]
+    found = dict(strong_edges(mapping))
+    assert any(child is entry for child in found.values()), found
+    assert found.get("._side") is mapping._side, found
+
+
+class _ViewingSequence(list):  # type: ignore[type-arg]
+    """A list subclass whose iteration hands out stand-ins, with a second holder in a slot."""
+
+    __slots__ = ("_side",)
+
+    def __iter__(self) -> Any:
+        """Hide the items the sequence really holds."""
+
+        return iter([None] * len(self))
+
+
+def test_walk_reads_a_list_subclass_raw_and_follows_its_slots() -> None:
+    """A sequence's own iteration may not hide what it holds, and its slots are holders too."""
+
+    item, side = _Owner(), _Owner()
+    sequence = _ViewingSequence([item])
+    sequence._side = [side]
+    found = list(strong_edges(sequence))
+    assert any(child is item for _name, child in found), found
+    assert any(child is sequence._side for _name, child in found), found
 
 
 def test_walk_does_not_run_attribute_hooks() -> None:
