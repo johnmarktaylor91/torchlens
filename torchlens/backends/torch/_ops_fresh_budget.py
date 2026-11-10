@@ -79,10 +79,8 @@ def admit_fresh(
 def commit_fresh(
     budget: SaveBudget,
     admitted: _DeviceLedger | _BudgetReservation,
-    payload: torch.Tensor,
     identity: tuple[str, int, int] | None,
     device: torch.device,
-    num_bytes: int,
     fields_dict: dict[str, Any],
 ) -> None:
     """Reconcile one admission with its payload as ``SaveBudget.commit`` would.
@@ -93,25 +91,23 @@ def commit_fresh(
         The trace's accountant.
     admitted:
         What :func:`admit_fresh` returned (not ``None``).
-    payload:
-        The saved payload.
     identity:
         The payload's ``(device string, storage data pointer, storage bytes)``, or
         ``None`` when unreadable.
     device:
         The admitted device (the source's).
-    num_bytes:
-        The admitted byte size.
     fields_dict:
-        The output's fields (for the refusal label).
+        The output's fields after the save: ``"out"`` holds the payload and
+        ``"activation_memory"`` the admitted byte size.
     """
 
-    if type(admitted) is _BudgetReservation:
+    payload = fields_dict["out"]
+    if isinstance(admitted, _BudgetReservation):
         budget.commit(admitted, (payload, None))
         return
     # ``admitted`` is the ledger keyed ``str(device)`` (never a cuda device without
     # an index), so an identity on that device string is a payload on that ledger.
-    assert type(admitted) is _DeviceLedger
+    num_bytes = fields_dict["activation_memory"]
     ledger_key = str(device)
     if (
         identity is None
