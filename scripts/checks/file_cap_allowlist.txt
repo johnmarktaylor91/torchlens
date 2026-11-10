@@ -77,7 +77,7 @@ torchlens/_data_classes/_op_save.py::_log_tensor_grad	104
 torchlens/_data_classes/_op_save.py::save_activation	171
 torchlens/_data_classes/_op_transforms.py::validate_train_mode_transform_output	65
 torchlens/_data_classes/_trace_fork.py::_fill_layer_shells	62
-torchlens/_data_classes/_trace_fork.py::build_fork	177
+torchlens/_data_classes/_trace_fork.py::build_fork	176
 torchlens/_data_classes/_trace_inventory.py::build_bill_of_materials	90
 torchlens/_data_classes/_trace_inventory.py::build_sites_table	92
 torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	97
@@ -106,8 +106,8 @@ torchlens/_data_classes/op.py::_pool_container_cells	66
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1077
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3392
-torchlens/_data_classes/trace.py::Trace.__init__	358
+torchlens/_data_classes/trace.py	3391
+torchlens/_data_classes/trace.py::Trace.__init__	356
 torchlens/_data_classes/trace.py::Trace.save	83
 torchlens/_data_substrate/artifact.py::ArtifactWriter.commit_shard	67
 torchlens/_data_substrate/artifact.py::read_trusted_rows	73
@@ -724,7 +724,7 @@ torchlens/backends/_finalize.py::attach_object_module_logs	65
 torchlens/backends/_finalize.py::finalize_single_pass_trace	150
 torchlens/backends/_finalize.py::new_preview_function_trace	100
 torchlens/backends/_finalize.py::populate_object_module_build_data	72
-torchlens/backends/jax/backend.py	4329
+torchlens/backends/jax/backend.py	4328
 torchlens/backends/jax/backend.py::JAXBackend._append_event	173
 torchlens/backends/jax/backend.py::JAXBackend._attach_derived_grads	170
 torchlens/backends/jax/backend.py::JAXBackend._build_jax_recurrence_grouping_graph	71
@@ -732,7 +732,7 @@ torchlens/backends/jax/backend.py::JAXBackend._builtin_container_spec	63
 torchlens/backends/jax/backend.py::JAXBackend._derive_intermediate_grads_zero_tap	177
 torchlens/backends/jax/backend.py::JAXBackend._emit_equations	87
 torchlens/backends/jax/backend.py::JAXBackend._emit_region_capture	122
-torchlens/backends/jax/backend.py::JAXBackend._finish_trace	296
+torchlens/backends/jax/backend.py::JAXBackend._finish_trace	294
 torchlens/backends/jax/backend.py::JAXBackend._populate_pytree_module_build_data	82
 torchlens/backends/jax/backend.py::JAXBackend._validate_jax_regions	70
 torchlens/backends/jax/backend.py::JAXBackend.capture_trace	335
