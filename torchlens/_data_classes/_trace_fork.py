@@ -51,7 +51,7 @@ from .._capture.outcome import stamp_forked
 from .._trace_core._fork_copy import _COW_ATOMIC, cow_copy_value
 from .._trace_core.op_store import _MISSING, DetachedOpStore, PooledCell
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
-from .._trace_core.side_columns import PendingCell
+from .._trace_core.side_columns import PendingCell, bind_fork_views
 from .._utils._record_group_table import record_member
 from .._utils.env_flags import closed_bool_env
 from ..intervention._types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
@@ -626,6 +626,8 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     fork.__dict__.pop("capture_events", None)
     fork.__dict__["_capture_events"] = CaptureEvents.detached_from(parent)
     bind_op_containers(fork, fork_core)
+    if fork_core is not None:  # side-column contexts the fork holds, not its parent
+        bind_fork_views(fork_core.store_views(), fork)
     fork._parent_run = weakref.ref(parent)
     fork.name = name or parent._next_fork_name()
     # Read the parent's spec, never create one: fork() must not mutate its parent.

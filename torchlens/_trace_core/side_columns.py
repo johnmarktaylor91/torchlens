@@ -11,6 +11,12 @@ long as the store, which outlives its trace while a facade holds it; a fork
 view reads through its root store, whose rows it shares. Row ids never change
 for a store's life, which is what keeps a row-indexed side column valid.
 
+A context may name the trace its resolver reads (the replay templates read
+display keys from it), and a fork can outlive that trace. At fork time
+``bind_fork_views`` gives each fork view its own side: the root's columns,
+shared, with the context bound to the fork (``context.for_trace(fork)``).
+The fork holds trace data, never a record of its parent.
+
 A read of a marker answers ``resolver(raw, context, name)`` and caches it in
 the cell, like any per-cell derived family. A state stream must not answer a
 cell only to have its consumer drop it, so the op state stream yields a
@@ -34,6 +40,7 @@ __all__ = (
     "PendingCell",
     "SideColumnFamily",
     "answer_pending",
+    "bind_fork_views",
     "pending_cell",
 )
 
@@ -48,11 +55,11 @@ class _Side:
 
     __slots__ = ("columns", "context")
 
-    def __init__(self, context: Any) -> None:
-        """Start with no columns."""
+    def __init__(self, context: Any, columns: dict[str, list[Any]] | None = None) -> None:
+        """Start with ``columns`` (another side's, shared), else with none."""
 
         self.context = context
-        self.columns: dict[str, list[Any]] = {}
+        self.columns: dict[str, list[Any]] = {} if columns is None else columns
 
 
 def _root(store: Any) -> Any:
@@ -130,8 +137,11 @@ class SideColumnFamily:
     def material(self, store: Any, row: int, name: str) -> tuple[Any, Any]:
         """Return ``(raw value, context)`` of one row, raising when the store holds none."""
 
+        sides = self._sides
         try:
-            side = self._sides.get(_root(store))
+            side = sides.get(store)  # a fork view's own side, else its root's
+            if side is None:
+                side = sides.get(_root(store))
         except TypeError:  # a store without weak references never holds side columns
             side = None
         if side is None:
@@ -155,6 +165,24 @@ class SideColumnFamily:
 
         raw, context = self.material(store, row, name)
         return self.resolver(raw, context, name)
+
+
+def bind_fork_views(views: Iterable[Any], trace: Any) -> None:
+    """Give each fork view whose root holds side columns its own context.
+
+    ``views`` are a new fork's store views and ``trace`` the fork. The view's
+    side shares its root's columns; its context is the root's, bound to
+    ``trace`` by ``context.for_trace``, so a first read after the parent trace
+    is gone answers as it would with the parent alive.
+    """
+
+    families = tuple(SIDE_FAMILIES.values())
+    for view in views:
+        root = view.base
+        for family in families:
+            side = family._sides.get(root)
+            if side is not None:
+                family._sides[view] = _Side(side.context.for_trace(trace), side.columns)
 
 
 class PendingCell:
