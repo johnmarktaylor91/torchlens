@@ -602,7 +602,7 @@ def _build_pending_module_logs(self: "Trace", pending: PendingModules) -> None:
 
     # Build as step 16 did, before step 20 released the live parameter
     # references: iterating the params must not restore them from the model.
-    params = self.__dict__.get("_param_logs")
+    params: Any = self.__dict__.get("_param_logs")
     rehydrate = getattr(params, "_rehydrate_on_iter", False)
     if rehydrate:
         params._rehydrate_on_iter = False

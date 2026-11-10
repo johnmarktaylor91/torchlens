@@ -141,17 +141,30 @@ HOLDERS: dict[str, Holder] = {
     "Trace._backward_pass_logs{*}:BackwardPass._tl_core:Store.rows[grad_fn_calls][*] -> GradFnCall": Holder(
         LATER_KINDS, only=("backward", "pickled")
     ),
+    # Module records, the buffer accessor and the by-module param map are built
+    # on first lookup, so a case that reads none of their doors holds none.
     "Trace._buffer_accessor:BufferAccessor._dict{*} -> Buffer": Holder(
-        LATER_KINDS, but=("pickle_state",)
+        LATER_KINDS,
+        but=("alias_lookup", "fork_cold", "pickle_state", "plain", "readers", "save_none"),
     ),
     "Trace._buffer_accessor:BufferAccessor._list[*] -> Buffer": Holder(
-        LATER_KINDS, but=("pickle_state",)
+        LATER_KINDS,
+        but=("alias_lookup", "fork_cold", "pickle_state", "plain", "readers", "save_none"),
     ),
     "Trace._grad_fn_logs{*} -> GradFn": Holder(LATER_KINDS, only=("backward", "pickled")),
     "Trace._param_logs:ParamAccessor._dict{*} -> Param": Holder(LATER_KINDS, but=("pickle_state",)),
     "Trace._param_logs:ParamAccessor._list[*] -> Param": Holder(LATER_KINDS, but=("pickle_state",)),
     "Trace._param_logs_by_module{*}[*] -> Param": Holder(
-        LATER_KINDS, but=("loaded", "pickle_state")
+        LATER_KINDS,
+        but=(
+            "alias_lookup",
+            "fork_cold",
+            "loaded",
+            "pickle_state",
+            "plain",
+            "readers",
+            "save_none",
+        ),
     ),
     "Trace._trace_core:TraceCore.backward_epochs[*]:BackwardEpoch.stores{grad_fn}:Store.rows[calls]:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
         LATER_KINDS, only=("backward",)

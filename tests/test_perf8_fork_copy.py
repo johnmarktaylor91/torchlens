@@ -669,6 +669,7 @@ def test_a_fork_equals_one_built_by_the_former_copy_path(
 
     trace = _capture(model_cls)
     assert (trace._trace_core.ops._columns is not None) is (model_cls is _Long), "store shape"
+    assert len(trace.modules) > 1  # build first: the path under test copies built records
     current = {name: getattr(trace_fork, name) for name in _REFERENCES}
     for name, reference in _REFERENCES.items():
         monkeypatch.setattr(trace_fork, name, reference)
