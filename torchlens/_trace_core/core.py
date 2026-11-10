@@ -22,6 +22,7 @@ from .overlays import MISSING, RowOverlay, Transaction
 from .payloads import PayloadArena
 from .pools import ClosurePool, InternPool
 from .relations import EdgeTable
+from .view_tables import ViewTables
 
 
 class KindTable:
@@ -104,7 +105,7 @@ class TraceCore:
         "_facade_factory",
         "_facades",
         "_record_translator",
-        "_strong_facades",
+        "_views",
         "backward_epochs",
         "closures",
         "edges",
@@ -118,8 +119,8 @@ class TraceCore:
         "tables",
     )
 
-    def __init__(self) -> None:
-        """Create an empty core."""
+    def __init__(self, *, pinned: bool = False) -> None:
+        """Create an empty core; ``pinned`` holds its records strongly until the build ends."""
 
         self.tables: dict[str, KindTable] = {}
         # The Op row store (op_store.OpRowStore) once the ingress binds it;
@@ -138,18 +139,14 @@ class TraceCore:
         self.groups: dict[str, MembershipGroups] = {}
         self.payloads = PayloadArena()
         self.overlay = RowOverlay()
-        # Weak-valued facade cache (the strong->weak flip): identity is
-        # stable while ANY reference lives, and an uninspected row retains no
-        # facade. Record lifetime stays pinned by the trace-side lookup
-        # containers (aliases-v1 row 1b), never by this cache. ``Op`` is
-        # deliberately NOT weak-referenceable (aliases-v1 pins the refusal),
-        # so non-weakref-able facades fall back to the strong side table.
+        # Where records are cached: ``Op`` and ``Layer`` views weakly by row
+        # (identity holds while anyone keeps the view; an uninspected row
+        # keeps no view), plus the strong tables that remain (view_tables.py).
+        self._views = ViewTables(self, pinned=pinned)
+        # The generic facade cache behind ``facade()``, weak-valued.
         self._facades: weakref.WeakValueDictionary[tuple[str, int], Any] = (
             weakref.WeakValueDictionary()
         )
-        # Also the one strong record cache of the ownership conversion: kind -> list
-        # indexed by store row, "<kind>.detached" -> dict by negative key.
-        self._strong_facades: dict[Any, Any] = {}
         self._facade_factory: Callable[[str, int], Any] | None = None
         # Strong anchor for a fork core's record translator: the store views
         # hold it WEAKLY (a retained fork Op must not root the fork graph
@@ -202,14 +199,14 @@ class TraceCore:
 
         Weak-valued: the cache guarantees ``facade(k, r) is facade(k, r)``
         while any reference to the facade lives, and never pins an
-        unreferenced facade. Facades whose class refuses weak references
-        (``Op``) are held in the strong side table instead.
+        unreferenced facade. A facade whose class refuses weak references is
+        kept in the trace's strong cell table instead.
         """
 
         key = (kind, row)
         cached = self._facades.get(key)
         if cached is None:
-            cached = self._strong_facades.get(key)
+            cached = self._views.cells.get(key)
         if cached is None:
             if self._facade_factory is None:
                 raise RuntimeError("no facade factory installed")
@@ -217,7 +214,7 @@ class TraceCore:
             try:
                 self._facades[key] = cached
             except TypeError:
-                self._strong_facades[key] = cached
+                self._views.cells[key] = cached
         return cached
 
     def freeze(self) -> None:
@@ -289,7 +286,7 @@ class TraceCore:
         for key, value in self.overlay.snapshot().items():
             child.overlay.write(key[0], key[1], value)
         child._facades = weakref.WeakValueDictionary()
-        child._strong_facades = {}
+        child._views = ViewTables(child)
         child._facade_factory = self._facade_factory
         child._record_translator = None
         child.backward_epochs = []

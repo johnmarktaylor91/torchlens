@@ -174,7 +174,7 @@ def build_ingest_inputs(
         from torchlens._data_classes.op import _OP_STORE_LAYOUT
         from torchlens._trace_core import OpRowStore, TraceCore
 
-        core = TraceCore()
+        core = TraceCore(pinned=True)
         core.ops = OpRowStore(_OP_STORE_LAYOUT)
         trace._trace_core = core
 

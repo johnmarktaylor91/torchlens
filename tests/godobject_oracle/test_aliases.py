@@ -17,7 +17,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import RecordBindingError
 from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import DirectActivationWriteWarning
 
@@ -160,11 +159,13 @@ def test_direct_write_warning_and_dirty_transition() -> None:
     assert repeat == []
 
 
-def test_source_trace_weakref_lifetime() -> None:
-    """Row 9: op->trace is weak; a collected Trace is not resurrected.
+def test_source_trace_lifetime() -> None:
+    """Row 9: a held op keeps its Trace; dropping the op frees the Trace.
 
-    The read after collection refuses typed (r5 b7-opus R52-B: never a bare
-    ``None`` behind the ``-> Trace`` signature) rather than returning ``None``.
+    The op names its Trace strongly (its owner slot), which is what lets the
+    chained read ``tl.trace(model, x)[label].out`` work. The Trace keeps no op,
+    so the reference runs one way and reference counting frees the Trace when
+    the last record is dropped.
     """
 
     trace = _capture_cnn()
@@ -174,10 +175,11 @@ def test_source_trace_weakref_lifetime() -> None:
     trace_ref = weakref.ref(trace)
     del trace
     gc.collect()
+    assert trace_ref() is not None
+    assert op.source_trace is trace_ref()
+    del op
+    gc.collect()
     assert trace_ref() is None
-    with pytest.raises(RecordBindingError) as exc_info:
-        _ = op.source_trace
-    assert exc_info.value.fields["code"] == "trace_reference_collected"
 
 
 def test_equivalence_group_shared_live_view() -> None:

@@ -9,12 +9,13 @@ keeps ``len`` and membership at built-in speed.
 
 A key is the op's row in the trace core's op store. A record that has no row
 there (a detached single-row copy, or any record of a trace without a core)
-gets the next free negative key. Until records are handed out weakly, the
-record behind a key is cached strongly in one side table on the core:
-``TraceCore._strong_facades["op"]`` is a list indexed by store row (``None``
-where no record was cached) and ``TraceCore._strong_facades["op.detached"]``
-is a dictionary from negative key to record. A trace without a core keeps the
-same two tables on its ``OpRows`` resolver until a core is bound.
+gets the next free negative key. The record behind a row key is read through
+the trace core's view table (``_trace_core/view_tables.py``): strongly held
+while the trace is built, weakly afterwards, when a record nobody kept is
+built again from its row on the next read. A record behind a negative key is
+held strongly in the table's ``detached`` dictionary. A trace without a core
+keeps a plain row list and dictionary on its ``OpRows`` resolver until a core
+is bound.
 """
 
 from __future__ import annotations
@@ -26,11 +27,11 @@ from collections.abc import Iterable, Iterator, Mapping
 from itertools import repeat
 from typing import TYPE_CHECKING, Any, cast
 
+from .._trace_core.view_tables import WeakViews
+
 if TYPE_CHECKING:
     from .op import Op
 
-OP_KIND = "op"
-DETACHED_KIND = "op.detached"
 CONTAINER_FIELDS = ("_layer_list", "_layer_dict_main_keys", "_layer_dict_all_keys")
 
 _MISSING: Any = object()
@@ -45,19 +46,6 @@ _dict_item = dict.__getitem__
 _dict_get = dict.get
 _dict_set = dict.__setitem__
 _dict_values = dict.values
-
-
-def _side_tables(core: Any) -> tuple[list[Any], dict[int, Any]]:
-    """Return the core's op side tables (rows list, detached dictionary), creating them once."""
-
-    facades = core._strong_facades
-    rows = facades.get(OP_KIND)
-    if rows is None:
-        rows = facades[OP_KIND] = []
-    detached = facades.get(DETACHED_KIND)
-    if detached is None:
-        detached = facades[DETACHED_KIND] = {}
-    return rows, detached
 
 
 class OpRows:
@@ -114,7 +102,9 @@ class OpRows:
         contents = [(container, container._records()) for container in live]
         self._core_ref = weakref.ref(core)
         self._store = core.ops
-        self._tables = _side_tables(core)
+        views = core._views
+        views.set_owner(self._trace_ref() if self._trace_ref is not None else None)
+        self._tables = (views.ops, views.detached)
         self._last = -1
         self._ids = {id(record): key for key, record in self._tables[1].items()}
         for container, records in contents:
@@ -133,17 +123,22 @@ class OpRows:
                 self.bind()  # the trace may have gained its core since the last write
             if store is self._store:
                 rows = self._tables[0]
-                try:
-                    held = rows[row]
-                except IndexError:
-                    size = len(rows)
-                    if row > size:
-                        rows.extend(repeat(None, row - size))
-                    rows.append(record)
-                    self._last = row
-                    return row
-                if held is None:
-                    rows[row] = held = record
+                if rows.__class__ is WeakViews:
+                    # Never a plain read here: it would build a record for the
+                    # row, and the one being held would lose its row to it.
+                    held = cast("WeakViews", rows).claim(row, record)
+                else:
+                    try:
+                        held = rows[row]
+                    except IndexError:
+                        size = len(rows)
+                        if row > size:
+                            rows.extend(repeat(None, row - size))
+                        rows.append(record)
+                        self._last = row
+                        return row
+                    if held is None:
+                        rows[row] = held = record
                 if held is record:
                     self._last = row
                     return row
@@ -178,6 +173,8 @@ class OpRows:
 
         rows, detached = self._tables
         if not detached:
+            if rows.__class__ is WeakViews:
+                return iter(cast("WeakViews", rows).many(keys))
             return map(rows.__getitem__, keys)
         if not rows:
             return map(detached.__getitem__, keys)

@@ -1146,7 +1146,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     (1, 4, 8, 8)
     """
 
-    __slots__ = ("_core", "_row")
+    __slots__ = ("__weakref__", "_core", "_owner", "_row")
 
     if TYPE_CHECKING:
         # Static field declarations for type checkers ONLY (invisible at

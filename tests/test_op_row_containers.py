@@ -23,6 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes import _op_row_containers as containers
 from torchlens._data_classes._state_adapter import plain_state
+from torchlens._trace_core.view_tables import ViewTables
 
 # The module's dotted name and its class names: this test file's own name ends
 # with the module's bare name, and a pickle of a model defined here carries it.
@@ -52,13 +53,13 @@ class _Record:
 
 
 class _Core:
-    """A stand-in trace core: an op store and the strong side table."""
+    """A stand-in trace core: an op store and the view tables, pinned as during a build."""
 
     def __init__(self) -> None:
-        """Start with an empty side table."""
+        """Start with empty tables that hold their records strongly."""
 
         self.ops = object()
-        self._strong_facades: dict[Any, Any] = {}
+        self._views = ViewTables(self, pinned=True)
 
 
 class _Trace:
@@ -91,9 +92,9 @@ def test_keys_are_store_rows_and_the_side_table_is_a_list_by_row() -> None:
         trace._layer_dict_all_keys[record.name] = record
     assert trace._layer_list._keys == [300, 301, 302, 303]
     assert trace._layer_list._keys[3] is records[3]._row  # the row integer itself: no new object
-    assert core._strong_facades[containers.OP_KIND][302] is records[2]
-    assert core._strong_facades[containers.OP_KIND][:300] == [None] * 300
-    assert core._strong_facades[containers.DETACHED_KIND] == {}
+    assert core._views.ops[302] is records[2]
+    assert core._views.ops[:300] == [None] * 300
+    assert core._views.detached == {}
     assert list(trace._layer_list) == records
     assert trace._layer_dict_all_keys["r301"] is records[1]
 
@@ -111,7 +112,7 @@ def test_a_record_off_the_store_gets_the_next_negative_key() -> None:
     trace._layer_list.append(second)
     trace._layer_dict_all_keys["copy1"] = first
     assert trace._layer_list._keys == [0, -1, 1, 2, -2]
-    assert core._strong_facades[containers.DETACHED_KIND] == {-1: first, -2: second}
+    assert core._views.detached == {-1: first, -2: second}
     assert trace._layer_dict_all_keys._keys == {"copy1": -1}  # one key per record, reused
     assert list(trace._layer_list) == [records[0], first, records[1], records[2], second]
     assert next(i for i, op in enumerate(trace._layer_list) if op is first) == 1
@@ -132,7 +133,7 @@ def test_records_held_before_the_core_exists_move_to_it_on_the_next_write() -> N
     assert trace._layer_list._keys == [0, 1, 2, 3]
     assert list(trace._layer_list) == records
     assert trace._layer_dict_all_keys._keys == {"r0": 0, "r1": 1}
-    assert core._strong_facades[containers.OP_KIND] == records
+    assert core._views.ops == records
 
 
 def test_list_behaviour_matches_a_plain_list() -> None:
@@ -219,7 +220,7 @@ def test_restored_plain_containers_are_adopted_after_the_core_is_rebuilt() -> No
 
     containers.adopt_op_containers(trace, rebuild)
     assert trace._layer_list._keys == [0, 1, 2]
-    assert core._strong_facades[containers.OP_KIND] == records
+    assert core._views.ops == records
     assert trace._layer_dict_all_keys._ordered and not trace._layer_dict_main_keys._ordered
     assert trace._layer_dict_main_keys["r0"] is records[0]
 
@@ -242,12 +243,12 @@ def test_deepcopy_follows_the_memo_to_the_copied_trace_and_its_records() -> None
     fork._layer_dict_all_keys = copy.deepcopy(trace._layer_dict_all_keys, memo)
     assert list(fork._layer_list) == shells and list(trace._layer_list) == records
     assert fork._layer_list._owner is fork._layer_dict_all_keys._owner
-    assert fork_core._strong_facades == {}
+    assert not fork_core._views.ops and not fork_core._views.detached
     containers.bind_op_containers(fork, fork_core)
     assert fork._trace_core is fork_core and fork._layer_list._keys == [0, 1, 2]
-    assert fork_core._strong_facades[containers.OP_KIND] == shells
+    assert fork_core._views.ops == shells
     assert fork._layer_dict_all_keys["r1"] is shells[1]
-    assert core._strong_facades[containers.OP_KIND] == records
+    assert core._views.ops == records
 
 
 def test_the_list_still_reads_after_the_core_is_dropped() -> None:

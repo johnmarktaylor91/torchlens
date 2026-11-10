@@ -240,6 +240,8 @@ class TraceOpAccessor(Accessor[Op]):
     """
 
     _COUNTABLE_FIELDS = _LAYER_COUNTABLE_FIELDS
+    # ``_owner``: the trace this door keeps alive; ``_handed``: see ``_trace_views.ops``.
+    __slots__ = ("_handed", "_owner")
 
     def __init__(
         self,
@@ -262,7 +264,8 @@ class TraceOpAccessor(Accessor[Op]):
         """
 
         members = list(ops)
-        self._table, self._keys = hold_ops(members, first_source_trace(members))
+        self._owner = first_source_trace(members)
+        self._table, self._keys = hold_ops(members, self._owner)
         label_keys: dict[str, int] = {}
         self._raw_index_lookup: dict[int, int] = {}
         # Final Op labels name exactly one row. Two rows sharing one is corrupt

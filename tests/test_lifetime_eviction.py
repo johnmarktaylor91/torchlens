@@ -1,17 +1,14 @@
-"""grind-r8 cluster 4.0.7: the lifetime/eviction pair (R37 + R50).
+"""The lifetime of a trace's saved payloads: who keeps them, and what releases them.
 
-R37 (sol repro): the last-owner payload eviction replaced only DIRECT tensor
-cells, so a tensor nested inside a saved-args container (``torch.stack``'s
-list argument, ``input_activations`` tuples) survived Trace death through any
-retained ``Op`` facade -- pinning the very payloads the F4 fix exists to
-release. The eviction now walks builtin container cells (bounded depth,
-cycle-safe); tensors inside non-builtin custom objects remain the disclosed
-residual.
+A record you keep a reference to keeps its trace, and with it the saved
+activations and arguments. That is what makes the chained read work:
+``tl.trace(model, x)["relu_1"].out`` returns the tensor from the plain door,
+the ops door and the layers door, although nothing else holds the trace.
+Dropping the last record (or door) frees the trace by reference counting, and
+``Trace.cleanup()`` is the explicit release while records are still held.
 
-R50 (sol, verify-first): ``Trace.cleanup()`` left ``_save_budget_accountant``
-alive on the husked trace (the sibling ``_predicate_lookback_candidates``
-claim was verified already-clean -- the field is deleted by the existing
-husk).
+``Trace.cleanup()`` also deletes ``_save_budget_accountant`` with the rest of
+the session state.
 """
 
 from __future__ import annotations
@@ -24,7 +21,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import RecordBindingError
 from torchlens._utils._record_group_table import record_member
 
 
@@ -53,8 +49,8 @@ def _nested_arg_tensor_refs(trace) -> list[weakref.ref]:
     return refs
 
 
-def test_nested_container_payloads_evict_with_last_owner() -> None:
-    """Tensors inside saved-args containers must not survive Trace death."""
+def _stack_trace_and_refs() -> tuple[tl.Trace, list[weakref.ref]]:
+    """Capture ``_StackNet`` saving arguments; return the trace and its nested tensors."""
 
     log = tl.trace(
         _StackNet(),
@@ -63,21 +59,53 @@ def test_nested_container_payloads_evict_with_last_owner() -> None:
     )
     refs = _nested_arg_tensor_refs(log)
     assert refs, "expected retained arg containers holding tensors"
-    retained_op = log["stack"]  # keep ONE facade alive past the trace
+    return log, refs
+
+
+def _holds_a_tensor(value) -> bool:
+    """Whether ``value`` is a tensor or a builtin container holding one."""
+
+    if isinstance(value, torch.Tensor):
+        return True
+    return isinstance(value, (list, tuple)) and any(_holds_a_tensor(item) for item in value)
+
+
+def test_held_record_keeps_nested_payloads_until_it_is_dropped() -> None:
+    """A held Op keeps its trace's saved arguments; dropping it frees them without the collector."""
+
+    log, refs = _stack_trace_and_refs()
+    trace_ref = weakref.ref(log)
+    retained_op = log["stack"]
+    del log
+    gc.collect()
+    assert trace_ref() is not None and retained_op.source_trace is trace_ref()
+    assert all(ref() is not None for ref in refs)
+    assert _holds_a_tensor(retained_op.call.saved_args)
+    gc.collect()
+    gc.disable()
+    try:
+        del retained_op
+        survivors = [ref for ref in refs if ref() is not None]
+        assert trace_ref() is None, "the trace outlived its last record"
+        assert not survivors, f"{len(survivors)}/{len(refs)} nested arg tensors survived"
+    finally:
+        gc.enable()
+
+
+def test_cleanup_releases_payloads_while_a_record_is_held() -> None:
+    """``cleanup()`` is the explicit release: the payloads go although a record is still held."""
+
+    log, refs = _stack_trace_and_refs()
+    retained_op = log["stack"]
+    log.cleanup()
     del log
     gc.collect()
     survivors = [ref for ref in refs if ref() is not None]
     assert not survivors, (
-        f"{len(survivors)}/{len(refs)} nested arg tensors survived Trace death "
-        "through the retained Op facade"
+        f"{len(survivors)}/{len(refs)} nested arg tensors survived cleanup() "
+        "through the retained Op"
     )
-    # Metadata stays readable on the retained facade; evicted slots read None.
-    saved = retained_op.call.saved_args
-    assert saved is not None
-    assert not any(
-        isinstance(item, torch.Tensor)
-        for item in (saved if isinstance(saved, (list, tuple)) else [])
-    )
+    assert retained_op is not None
 
 
 def test_cleanup_husks_the_save_budget_accountant() -> None:
@@ -107,21 +135,78 @@ def _relu_op(trace):
 
 
 @pytest.mark.parametrize("save", [None, "relu"], ids=["save-all", "save-selected"])
-def test_op_out_after_trace_collection_refuses_typed(save) -> None:
-    """A held Op's ``.out`` never reads a silent ``None`` once its Trace is collected.
-
-    The Op holds its Trace weakly and the last owner's death evicts the saved
-    payload, so the read refuses with the documented ``trace_reference_collected``
-    code instead of returning ``None`` (backend-table defect 9).
-    """
+def test_op_out_reads_after_the_trace_variable_is_dropped(save) -> None:
+    """A held Op keeps its Trace, so ``.out`` and ``.source_trace`` still read."""
 
     kwargs = {} if save is None else {"save": tl.func(save)}
     trace = tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6), **kwargs)
     op = _relu_op(trace)
-    assert isinstance(op.out, torch.Tensor)
+    expected = op.out
+    assert isinstance(expected, torch.Tensor)
+    trace_ref = weakref.ref(trace)
     del trace
     gc.collect()
-    with pytest.raises(RecordBindingError) as exc_info:
-        _ = op.out
-    assert exc_info.value.fields["code"] == "trace_reference_collected"
-    assert op.func_name == "relu"  # metadata stays readable
+    assert op.out is expected
+    assert op.source_trace is trace_ref()
+    assert op.func_name == "relu"
+    del op
+    assert trace_ref() is None  # freed by reference counting: no collector run
+
+
+def _relu_label() -> str:
+    """Return the label that names the relu of ``_ConvReluNet`` at every door."""
+
+    trace = tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6))
+    return _relu_op(trace).layer_label
+
+
+@pytest.mark.parametrize("door", ["plain", "ops", "layers"])
+def test_chained_read_returns_the_tensor_from_every_door(door) -> None:
+    """``tl.trace(model, x)[label].out`` works in one expression at each door."""
+
+    torch.manual_seed(0)
+    model, x = _ConvReluNet(), torch.randn(1, 1, 6, 6)
+    expected = torch.relu(model.conv(x))
+    label = _relu_label()
+    if door == "plain":
+        out = tl.trace(model, x)[label].out
+    elif door == "ops":
+        out = tl.trace(model, x).ops[label].out
+    else:
+        out = tl.trace(model, x).layers[label].out
+    assert isinstance(out, torch.Tensor)
+    assert torch.equal(out, expected)
+
+
+@pytest.mark.parametrize("door", ["ops", "layers"])
+def test_a_held_door_keeps_its_trace_and_dropping_it_frees_the_trace(door) -> None:
+    """A door is a view like a record: it keeps the trace, by reference counting only."""
+
+    trace = tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6))
+    trace_ref = weakref.ref(trace)
+    held = trace.ops if door == "ops" else trace.layers
+    assert (trace.ops if door == "ops" else trace.layers) is held
+    del trace
+    gc.collect()
+    assert trace_ref() is not None
+    assert [record.label for record in held]
+    gc.disable()
+    try:
+        del held
+        assert trace_ref() is None, "the trace outlived its last door"
+    finally:
+        gc.enable()
+
+
+def test_identity_holds_while_a_record_is_held_and_no_longer() -> None:
+    """The trace keeps no Op or Layer: a lookup returns the held one, or builds a new one."""
+
+    trace = tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6))
+    label = _relu_op(trace).layer_label
+    op, layer = trace[label], trace.layers[label]
+    assert trace[label] is op and trace.ops[label] is op
+    assert trace.layers[label] is layer
+    op_ref, layer_ref = weakref.ref(op), weakref.ref(layer)
+    del op, layer
+    assert op_ref() is None and layer_ref() is None
+    assert trace[label].func_name == "relu" and trace.layers[label].func_name == "relu"

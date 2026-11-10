@@ -8,8 +8,9 @@ holder, and a row the audit no longer finds is stale. A step that converts a
 holder to row keys deletes its rows here in the same change.
 
 Records can be handed out weakly and hold their trace only once no row is
-left for that record kind. ``Op`` and ``Layer`` go first, so every path that
-reaches one of them must belong to a step in ``BEFORE_ACTIVATION``.
+left for that record kind. ``Op`` and ``Layer`` went first and are activated:
+a trace holds neither, so no row may reach one of them except a transient
+projection. The rows left belong to the kinds activated later.
 
 Reading a path: ``.name`` is an attribute or slot, ``[*]`` any position of a
 sequence, ``{*}`` any value of a dictionary, ``{name}`` one named entry,
@@ -36,13 +37,12 @@ OP_ROW_CELLS = "op_row_cells"
 MODULE_AND_BUFFER_CELLS = "module_and_buffer_cells"
 FORK_AND_SAVED_STATE = "fork_and_saved_state"
 LATER_KINDS = "later_kinds"
-ACTIVATION = "activation"
 PICKLE_PROJECTION = "pickle_projection"
 # The audit case that walks the state handed to pickle, and the roots it names.
 PICKLE_CASE = "pickle_state"
 PICKLE_ROOT_SUFFIX = "State"
-# The one strong cache of records: a path may wait for ``ACTIVATION`` only through it.
-SIDE_TABLE = "Trace._trace_core:TraceCore._strong_facades"
+# The containers built once per module cell, kept strongly for the trace's life.
+CELLS = "Trace._trace_core:TraceCore._views:ViewTables.cells"
 
 STEPS: dict[str, str] = {
     OP_LIST: "the op list, the label dictionaries and the caches of the ops door",
@@ -51,7 +51,6 @@ STEPS: dict[str, str] = {
     MODULE_AND_BUFFER_CELLS: "module cells (calls, params) and buffer versions",
     FORK_AND_SAVED_STATE: "fork translation and copy-on-write overlays",
     LATER_KINDS: "holders of the kinds activated after Op and Layer",
-    ACTIVATION: "the one strong side table of records, made weak when its kind is activated",
     PICKLE_PROJECTION: "the state handed to pickle: it holds the records only for the pickle call",
 }
 
@@ -83,20 +82,14 @@ class Holder:
 
 
 HOLDERS: dict[str, Holder] = {
-    "Trace._trace_core:TraceCore._strong_facades{*}{*}[*]:ModuleCallAccessor._dict{*} -> ModuleCall": Holder(
-        ACTIVATION, but=("pickle_state",)
+    f"{CELLS}{{*}}[*]:ModuleCallAccessor._dict{{*}} -> ModuleCall": Holder(
+        LATER_KINDS, but=("pickle_state",)
     ),
-    "Trace._trace_core:TraceCore._strong_facades{*}{*}[*]:ModuleCallAccessor._list[*] -> ModuleCall": Holder(
-        ACTIVATION, but=("pickle_state",)
+    f"{CELLS}{{*}}[*]:ModuleCallAccessor._list[*] -> ModuleCall": Holder(
+        LATER_KINDS, but=("pickle_state",)
     ),
-    "Trace._trace_core:TraceCore._strong_facades{*}{*}[*]:ParamAccessor._dict{*} -> Param": Holder(
-        ACTIVATION, only=("deepcopied",)
-    ),
-    "Trace._trace_core:TraceCore._strong_facades{*}{*}[*]:ParamAccessor._list[*] -> Param": Holder(
-        ACTIVATION, only=("deepcopied",)
-    ),
-    f"{SIDE_TABLE}{{*}}[*] -> Op": Holder(ACTIVATION, but=("pickle_state",)),
-    f"{SIDE_TABLE}{{*}}[*] -> Layer": Holder(ACTIVATION, but=("pickle_state",)),
+    f"{CELLS}{{*}}[*]:ParamAccessor._dict{{*}} -> Param": Holder(LATER_KINDS, only=("deepcopied",)),
+    f"{CELLS}{{*}}[*]:ParamAccessor._list[*] -> Param": Holder(LATER_KINDS, only=("deepcopied",)),
     "Module._facets_cache:FacetView._record -> Module": Holder(
         OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
     ),

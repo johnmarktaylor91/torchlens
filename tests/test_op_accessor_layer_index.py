@@ -137,8 +137,8 @@ def test_reloaded_trace_with_a_backward_capture_keys_its_ops_door_by_row() -> No
         restored = pickle.loads(pickle.dumps(trace))
     door = restored.ops
     rows = list(restored._layer_list)
-    side_table = restored.__dict__["_trace_core"]._strong_facades
-    assert door._table.rows is side_table["op"] and not side_table["op.detached"]
+    tables = restored.__dict__["_trace_core"]._views
+    assert door._table.rows is tables.ops and not tables.detached
     assert door._keys and all(type(key) is int and key >= 0 for key in door._keys)
     assert all(found is row for found, row in zip(door._list, rows, strict=True))
 

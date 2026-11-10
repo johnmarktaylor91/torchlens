@@ -18,13 +18,14 @@ from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
 from .._pass_tokens import split_pass_token
+from .._trace_core.view_tables import WeakViews
 from .._utils._display_collections import collection_repr
 from .._utils._display_errors import lookup_message
 from .._utils._display_keys import display_key
 from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._accessor_base import Accessor, attach_source_honesty
-from ._layer_state import STORE_CLASSES, LayerSequence, LayerStore, hold_view, view_slots
+from ._layer_state import STORE_CLASSES, LayerSequence, LayerStore, hold_view
 from ._layer_views import _layer_log_to_row
 from ._lookup_kinds import converted, layer_for_key, scoped_op_by_lookup_key
 from ._op_row_release import _OP_FACADE
@@ -186,7 +187,10 @@ class OpAccessor(Accessor["Op"]):
         if core_ref is None:
             return None
         try:
-            ops = list(map(core_ref()._strong_facades["op"].__getitem__, state["_keys"][1::2]))
+            slots = core_ref()._views.ops
+            if slots.__class__ is WeakViews:
+                return cast("list[Op]", slots.many(state["_keys"][1::2]))
+            ops = list(map(slots.__getitem__, state["_keys"][1::2]))
         except (AttributeError, KeyError, IndexError, TypeError):
             return None
         return None if None in ops else ops
@@ -252,14 +256,17 @@ class OpAccessor(Accessor["Op"]):
             if core is not None and state["_store"] is store:
                 # The view list is read through the core each time: the
                 # accessor itself holds no list of op views.
-                slots = view_slots(core, "op")
-                if op_row >= len(slots):
-                    slots.extend([None] * (op_row + 1 - len(slots)))
-                current = slots[op_row]
-                if current is None:
-                    slots[op_row] = op
-                    row = op_row
-                elif current is op:
+                slots = core._views.ops
+                if slots.__class__ is WeakViews:
+                    # Asked for the live view only: a plain read builds one.
+                    current = slots.claim(op_row, op)
+                else:
+                    if op_row >= len(slots):
+                        slots.pad(op_row + 1)
+                    current = slots[op_row]
+                    if current is None:
+                        slots[op_row] = current = op
+                if current is op:
                     row = op_row
         self._insert(pass_index, row)
         held = self.__dict__.get("_held")
@@ -301,7 +308,7 @@ class OpAccessor(Accessor["Op"]):
             return cast("Op", self._held[keys[2 * position]])
         core = self._core_ref()
         try:
-            op = core._strong_facades["op"][row]
+            op = core._views.ops[row]
         except (AttributeError, KeyError, IndexError):
             op = None
         return cast("Op", op) if op is not None else self._rebuild(core, row)
@@ -480,6 +487,8 @@ class LayerAccessor(Accessor["Layer"]):
     """
 
     _COUNTABLE_FIELDS = _LAYER_COUNTABLE_FIELDS
+    # ``_owner``: the trace this door keeps alive; ``_handed``: see ``_trace_views.layers``.
+    __slots__ = ("_handed", "_owner")
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_dict": FieldPolicy.KEEP,
@@ -526,6 +535,7 @@ class LayerAccessor(Accessor["Layer"]):
         if cast("Any", layer_logs).__class__ in STORE_CLASSES:
             # The trace's own layer store: read through it, holding no Layer record here.
             cast("LayerStore", layer_logs).settle()
+            self._owner = source_trace
             self.__dict__["_dict"] = layer_logs
             self.__dict__["_list"] = LayerSequence(cast("LayerStore", layer_logs))
             if source_ref is not None:

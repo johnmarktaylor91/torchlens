@@ -35,6 +35,7 @@ from .._capture.session import capture_session_for_events
 from .._data_classes._compaction import compact_op_metadata as _compact_op_metadata
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._trace_core.relation_views import freeze_trace_relation_views as _freeze_relation_views
+from .._trace_core.view_tables import release_views
 from .._utils.hashing import (
     compute_raw_event_shape_hash,
 )
@@ -189,6 +190,9 @@ def postprocess(
         try:
             ast_branches.release_parsed_asts()
         finally:
+            # The build is over on every exit: records are handed out weakly
+            # from here on, and each one handed out holds this trace.
+            release_views(self)
             if gc_was_enabled:
                 gc.enable()
 

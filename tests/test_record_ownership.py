@@ -35,12 +35,9 @@ from tools.record_ownership.cases import CASES, _read_doors, _trace
 from tools.record_ownership.graph import strong_edges
 from tools.record_ownership.holders import (
     ACTIVATED_FIRST,
-    ACTIVATION,
-    BEFORE_ACTIVATION,
     HOLDERS,
     KNOWN,
     PICKLE_CASE,
-    SIDE_TABLE,
     STEPS,
     TRANSIENT,
     blocking,
@@ -97,21 +94,20 @@ def test_known_holder_is_found(name: str) -> None:
     assert path in _found(case)
 
 
-def test_paths_to_op_and_layer_convert_before_activation() -> None:
-    """Every path that reaches an ``Op`` or ``Layer`` has a step that lands before the pin.
+def test_no_trace_holds_an_op_or_layer() -> None:
+    """``Op`` and ``Layer`` are activated: no pinned path from a trace reaches one.
 
-    The exceptions are the strong side table of records, which activation itself makes
-    weak, and the transient pickle projection, which no trace holds.
+    The only rows left for them are the transient pickle projection, which no
+    trace holds. A path through a buffer, a module record or a gradient record
+    counts: it would be a row here like any other.
     """
 
-    late = {
+    held = {
         path: holder.step
         for path, holder in blocking(ACTIVATED_FIRST).items()
-        if holder.step not in BEFORE_ACTIVATION
-        and not (holder.step == ACTIVATION and path.startswith(SIDE_TABLE))
-        and not is_transient(path, holder)
+        if not is_transient(path, holder)
     }
-    assert late == {}
+    assert held == {}
 
 
 def test_transient_rows_are_only_the_pickle_projection() -> None:

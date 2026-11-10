@@ -16,9 +16,10 @@ public attributes keep their names and values: ``Buffer.versions`` reads as a
 list of ops, ``Module.ops`` and ``Module.params`` as accessors.
 
 The first read of a key-form cell builds its container and keeps it in the
-reading trace's side table (``TraceCore._strong_facades[CHILD_CELLS]``),
-strong for the trace's life, so later reads return the same object and an
-in-place write persists, as when the cell held the container itself.
+reading trace's cell table (``ViewTables.cells``, on the trace core), strong
+for the trace's life, so later reads return the same object and an in-place
+write persists, as when the cell held the container itself. The container of
+version ops holds them by row key, so it keeps no ``Op`` alive.
 """
 
 from __future__ import annotations
@@ -30,11 +31,9 @@ from typing import Any
 from .._errors import RecordBindingError
 from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY, RecordCellField, record_state_items
+from ._op_row_containers import OpSequence, op_rows
 
 _GET = object.__getattribute__
-
-#: Side-table kind holding the containers built from key-form cells.
-CHILD_CELLS = "child_cells"
 
 #: Record kind -> (trace attribute holding that kind's door, attribute of the
 #: door that maps to every record of the kind).
@@ -77,12 +76,10 @@ def _built_once(trace: Any, record: Any, name: str, held: Any, build: Any) -> An
     """
 
     core = _core_of(trace)
-    facades = getattr(core, "_strong_facades", None)
-    if not isinstance(facades, dict):
+    views = getattr(core, "_views", None)
+    if views is None:
         return build()
-    table = facades.get(CHILD_CELLS)
-    if table is None:
-        table = facades[CHILD_CELLS] = {}
+    table = views.cells
     record_dict = record.__dict__
     store = record_dict.get(CORE_KEY)
     key = (id(store), record_dict.get(ROW_KEY), name)
@@ -268,7 +265,13 @@ class VersionsField(RecordCellField):
             return held
         ref = getattr(record, "_source_ref", None)
         trace = _live_trace(ref, "Buffer")
-        return _built_once(trace, record, self._name, held, lambda: ops_at(held, ref, "Buffer"))
+        return _built_once(
+            trace,
+            record,
+            self._name,
+            held,
+            lambda: OpSequence(op_rows(trace), ops_at(held, ref, "Buffer")),
+        )
 
     def __set__(self, record: Any, value: Any) -> None:
         """Store the version ops by row when the owning trace's op store has them all."""

@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes._row_refs import CHILD_CELLS, RowKeys
+from torchlens._data_classes._row_refs import RowKeys
 from torchlens._trace_core.record_rows import RecordCellField
 
 
@@ -108,5 +108,5 @@ def test_containers_live_in_the_trace_side_table() -> None:
     trace = _trace()
     module = _keyed_module(trace, "ops")
     calls = module.ops
-    table = trace._trace_core._strong_facades[CHILD_CELLS]  # noqa: SLF001
+    table = trace._trace_core._views.cells  # noqa: SLF001
     assert any(entry[2] is calls for entry in table.values())
