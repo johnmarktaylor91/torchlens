@@ -77,10 +77,11 @@ def pin_params(trace: Any) -> None:
     if isinstance(core.ops, OpRowStore):
         _pin_op_cells(core.ops, rows, memo)
     _pin_layer_states(state.get("_layer_logs"), rows, memo)
+    cls = _accessor_class()
     for entry in list(core._views.cells.values()):
         if entry.__class__ is tuple and len(entry) == 3:
             built = entry[2]
-            if built.__class__ is _accessor_class():
+            if built.__class__ is cls:
                 own_accessor(rows, built)
 
 
@@ -103,7 +104,8 @@ def own_accessor(rows: ParamRows, accessor: Any) -> Any:
 def own_children(trace: Any, kind: str, accessor: Any) -> Any:
     """Return a module's child accessor, with row-key containers when its children are params."""
 
-    if kind != PARAM_KIND or accessor.__class__ is not _accessor_class():
+    cls = _ACCESSOR[0] if _ACCESSOR else _accessor_class()
+    if kind != PARAM_KIND or accessor.__class__ is not cls:
         return accessor
     core = trace.__dict__.get("_trace_core")
     rows = param_rows_of(core) if core is not None else None

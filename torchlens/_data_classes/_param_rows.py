@@ -93,9 +93,9 @@ class ParamTable:
                 _set(view, "_owner", trace)
 
     def _pad(self, size: int) -> None:
-        """Grow to ``size`` rows."""
+        """Grow to ``size`` rows, and at least to the store's row count (one growth per table)."""
 
-        grow = size - len(self.refs)
+        grow = max(size, len(self.store)) - len(self.refs)
         if grow > 0:
             self.states.extend([None] * grow)
             self.refs.extend([DEAD] * grow)
@@ -174,7 +174,12 @@ class ParamRows:
         state = getattr(record, "__dict__", None)
         if state is not None and state.get(CORE_KEY) is table.store:
             row: int = state[ROW_KEY]
-            table.claim(row, record)
+            try:
+                current = table.refs[row]()
+            except IndexError:
+                current = None
+            if current is not record:
+                table.claim(row, record)
             return row
         key = self._ids.get(id(record))
         if key is None or detached.get(key) is not record:
@@ -241,7 +246,14 @@ class ParamRows:
     def resolve(self, key: int) -> Any:
         """Return the record behind one key."""
 
-        return self._tables[0][key] if key >= 0 else self._tables[1][key]
+        if key < 0:
+            return self._tables[1][key]
+        table = self._tables[0]
+        try:
+            view = table.refs[key]()
+        except IndexError:
+            view = None
+        return table[key] if view is None else view
 
     def records(self, keys: Iterable[int]) -> Iterator[Any]:
         """Return an iterator over the records behind ``keys``."""

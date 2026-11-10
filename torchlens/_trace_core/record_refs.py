@@ -563,6 +563,8 @@ def _door_identities(mapping: Any, kind: str, store: Any) -> dict[Any, Any]:
 def _owned(trace: Any, kind: str, accessor: Any) -> Any:
     """Return a module's built child accessor, its ``Param`` containers held by row."""
 
+    if kind != "param":
+        return accessor
     from .._data_classes._param_pin import own_children
 
     return own_children(trace, kind, accessor)
