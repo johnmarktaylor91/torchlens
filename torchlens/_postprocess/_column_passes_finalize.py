@@ -27,12 +27,11 @@ from collections.abc import Callable, Iterable
 from itertools import zip_longest
 from typing import TYPE_CHECKING, Any, cast
 
-from .._data_classes._layer_state import PENDING, LayerStore, bind_layer_builder
+from .._data_classes._layer_state import PENDING, LayerStore
 from .._data_classes._op_columns import OpColumns, column_rows_by_label
 from .._data_classes._op_row_containers import OpSequence
 from .._quantities import Bytes
 from .._trace_core.op_store import OpRowStore
-from .._trace_core.relation_views import convert_layer_state_views
 from .._utils._record_group_table import record_member
 from ..backends._constants import is_constant_op
 from ._layer_row_scan import RowScan
@@ -59,10 +58,6 @@ _READ_FIELDS = (
 )
 #: A layer with fewer passes than this reads the facade: binding getters costs more.
 _COLUMN_READ_PASSES = 8
-#: ``[Layer class, multi-pass reconcile]`` of the last step 15.5 run.
-_BUILD_ARGS: list[Any] = []
-#: ``[field reader]`` while one step 15.5 run builds every layer itself, else empty.
-_STEP_READER: list[Any] = []
 
 
 def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., None]) -> bool:
@@ -88,39 +83,40 @@ def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., N
         the caller runs its per-op rebind.
     """
 
-    _BUILD_ARGS[:] = [layer_class, reconcile]
     scan = _row_scan(trace)
     if scan is None:
-        _group_through_facade(trace)
+        _group_through_facade(trace, layer_class, reconcile)
         return False
     scan.run()
     trace._cost_total_autograd_memory = scan.total()
     trace._by_pass = scan.by_pass
     logs = LayerStore(trace)
-    logs.adopt_pending(scan.pending_states())
+    logs.adopt_pending(scan.pending_states(), build_layer_state)
     scan.core._views.layers.pad(len(scan.rows))
     trace.__dict__["_layer_logs"] = logs
-    if scan.eager:
-        _build_inside_step(logs, scan)
-    elif scan.merged:
-        for state in list(dict.values(logs)):
-            if state[PENDING] is True:
-                _merge_layer_state(state, True)
+    if scan.eager or scan.merged:
+        _merge_inside_step(logs, scan, layer_class, reconcile)
     return not scan.eager
 
 
-def _build_inside_step(logs: LayerStore, scan: RowScan) -> None:
-    """Build every layer now, all reading through one set of bound column getters."""
+def _merge_inside_step(
+    logs: LayerStore, scan: RowScan, layer_class: type, reconcile: Callable[..., None]
+) -> None:
+    """Merge now each layer the scan kept no facts for (every layer of an eager scan)."""
 
-    columns = scan.columns
-    ops = list(scan.trace._layer_list)  # held: the ``id()`` keys below need live records
-    get = {name: columns.getter(name) for name in _READ_FIELDS}
-    row_of = dict(zip(map(id, ops), scan.keys, strict=True))
-    _STEP_READER[:] = [_column_reader(columns, get, row_of)]
-    try:
-        logs.build_pending()
-    finally:
-        del _STEP_READER[:]
+    read = None
+    if scan.eager:
+        # Every layer is merged: all read through one set of bound column getters.
+        columns = scan.columns
+        ops = list(scan.trace._layer_list)  # held: the ``id()`` keys below need live records
+        get = {name: columns.getter(name) for name in _READ_FIELDS}
+        row_of = dict(zip(map(id, ops), scan.keys, strict=True))
+        read = _column_reader(columns, get, row_of)
+    for state in list(dict.values(logs)):
+        if state[PENDING] is True:
+            _merge_layer_state(state, True, layer_class, reconcile, read)
+    if scan.eager:
+        logs.build_pending()  # nothing is left pending: clears the store's flag
 
 
 def _row_scan(trace: Trace) -> RowScan | None:
@@ -150,7 +146,7 @@ def _row_scan(trace: Trace) -> RowScan | None:
         return None
 
 
-def _group_through_facade(trace: Trace) -> None:
+def _group_through_facade(trace: Trace, layer_class: type, reconcile: Callable[..., None]) -> None:
     """Group, stamp and build every layer through the ``Op`` facade (no row store to scan)."""
 
     ops = list(trace._layer_list)
@@ -171,9 +167,11 @@ def _group_through_facade(trace: Trace) -> None:
     trace._cost_total_autograd_memory = Bytes(sum(map(int, memories))) if memories else None
     trace._by_pass = by_pass
     logs = LayerStore(trace)
-    logs.adopt_pending(states)
+    logs.adopt_pending(states, build_layer_state)
     trace.__dict__["_layer_logs"] = logs
-    logs.build_pending()
+    for state in states.values():
+        _merge_layer_state(state, state[PENDING], layer_class, reconcile, None)
+    logs.build_pending()  # nothing is left pending: clears the store's flag
 
 
 def _annotate_tied(op: Any) -> None:
@@ -192,17 +190,12 @@ def build_layer_state(state: dict[str, Any]) -> None:
     """Build one pending layer ``state`` in place: the layer's first lookup.
 
     The pending value is the scan's ``(pass labels, pass numbers, autograd
-    memory, autograd tensors, has input ancestor, is atomic module)`` for a
-    layer with nothing else to merge, the arrival-ordered ops for a
-    facade-grouped layer, and ``True`` for a layer to merge from its keyed
-    passes. A failed build leaves the state pending.
+    memory, autograd tensors, has input ancestor, is atomic module)``. The
+    step merges every layer the scan kept no such facts for before it
+    returns, so no other pending value reaches a lookup.
     """
 
-    fact = state[PENDING]
-    if fact.__class__ is not tuple:
-        _merge_layer_state(state, fact)
-        return
-    labels, numbers, memory, count, has_input, atomic = fact
+    labels, numbers, memory, count, has_input, atomic = state[PENDING]
     if memory is not None:
         memory = Bytes(int(memory))
         count = 0 if count is None else count
@@ -233,10 +226,16 @@ def build_layer_state(state: dict[str, Any]) -> None:
     state["conditional_else_children"] = () if views else []
 
 
-def _merge_layer_state(state: dict[str, Any], arrivals: Any) -> None:
-    """Build a pending layer state by the full merge over its passes."""
+def _merge_layer_state(
+    state: dict[str, Any], arrivals: Any, layer_class: type, reconcile: Any, read: Any
+) -> None:
+    """Build a pending layer state by the full merge over its passes.
 
-    layer_class, reconcile = _BUILD_ARGS
+    ``arrivals`` is ``True`` for a layer keyed by the scan, else its ops in
+    arrival order. ``read`` is the bound field reader, or ``None`` to pick one
+    for this layer. The state is replaced only when the merge succeeds.
+    """
+
     accessor = state.get("ops")
     scratch: dict[str, Any] = {}
     layer = layer_class.__new__(layer_class)
@@ -247,9 +246,7 @@ def _merge_layer_state(state: dict[str, Any], arrivals: Any) -> None:
     layer_class.__init__(layer, arrivals[0])
     if keyed:
         scratch["ops"] = accessor
-    if _STEP_READER:
-        read = _STEP_READER[0]
-    else:
+    if read is None:
         read = _pass_reader(accessor, arrivals) if keyed else _facade_reader
     for index, op in enumerate(arrivals):
         _merge_pass(layer, op, read, first=not index, keyed=keyed)
@@ -258,9 +255,6 @@ def _merge_layer_state(state: dict[str, Any], arrivals: Any) -> None:
     _rebuild_layer_log_conditional_views(layer, read)
     # The roles a layer of a trace with no conditional holds; the rebind overwrites it otherwise.
     scratch["in_conditionals"] = []
-    store = getattr(scratch["ops"], "_store", None)
-    if store is not None and store.dataflow_edges is not None:
-        convert_layer_state_views(scratch, {}, {})
     state.clear()
     state.update(scratch)
 
@@ -295,9 +289,6 @@ def _pass_reader(accessor: Any, passes: list[Any]) -> Any:
     get = {name: columns.getter(name) for name in _READ_FIELDS}
     row_of = dict(zip(map(id, passes), accessor._keys[1::2], strict=True))
     return _column_reader(columns, get, row_of)
-
-
-bind_layer_builder(build_layer_state)
 
 
 def _facade_reader(op: Any, name: str, *default: Any) -> Any:

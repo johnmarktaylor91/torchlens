@@ -29,15 +29,6 @@ _LAYER_CLASS: list[type] = []
 #: the rest, in place, before it hands the layer out.
 PENDING = "_tl_pending"
 
-#: ``build(state)`` filling one pending layer state, bound by the layer build.
-_LAYER_BUILDER: list[Any] = []
-
-
-def bind_layer_builder(build: Any) -> None:
-    """Bind the function that builds one pending layer state on first lookup."""
-
-    _LAYER_BUILDER[:] = [build]
-
 
 def bind_layer_class(layer_class: type) -> None:
     """Bind the ``Layer`` class that views are built from."""
@@ -140,7 +131,7 @@ class LayerStore(OrderedDict[str, Any]):
     plain form (pickle, copy, repr, equality) is a ``dict`` again.
     """
 
-    __slots__ = ("_held", "_labels", "_pending", "_trace_ref")
+    __slots__ = ("_builder", "_held", "_labels", "_pending", "_trace_ref")
 
     #: The container this store stands in for: its plain form has this type.
     plain_type: ClassVar[type[dict[str, Any]]] = OrderedDict
@@ -153,8 +144,10 @@ class LayerStore(OrderedDict[str, Any]):
         # ops not bound to it): held here until ``settle`` can move them.
         self._held: dict[str, Any] | None = None
         self._labels: tuple[str, ...] | None = None
-        # Whether any state may still be pending (unbuilt until first lookup).
+        # Whether any state may still be pending (unbuilt until first lookup),
+        # and the ``build(state)`` that fills a pending state in place.
         self._pending = False
+        self._builder: Any = None
         self._trace_ref = weakref.ref(trace) if trace is not None else None
 
     def __getitem__(self, label: str) -> Any:
@@ -162,7 +155,7 @@ class LayerStore(OrderedDict[str, Any]):
 
         state = dict.__getitem__(self, label)
         if PENDING in state:
-            _LAYER_BUILDER[0](state)
+            self._builder(state)
         held = self._held
         if held is not None:
             view = held.get(label)
@@ -191,7 +184,7 @@ class LayerStore(OrderedDict[str, Any]):
         except KeyError:
             return default
         if PENDING in state:
-            _LAYER_BUILDER[0](state)
+            self._builder(state)
         if self._held is None:
             try:
                 accessor_state = state["ops"].__dict__
@@ -210,8 +203,6 @@ class LayerStore(OrderedDict[str, Any]):
         state = vars(layer)
         if label not in self:
             self._labels = None
-        if PENDING in state:
-            self._pending = True
         OrderedDict.__setitem__(self, label, state)
         self._place(label, state, layer)
 
@@ -275,7 +266,7 @@ class LayerStore(OrderedDict[str, Any]):
         """Build every layer state that is still pending."""
 
         self._pending = False
-        build = _LAYER_BUILDER[0]
+        build = self._builder
         for state in list(dict.values(self)):
             if PENDING in state:
                 build(state)
@@ -299,13 +290,18 @@ class LayerStore(OrderedDict[str, Any]):
 
         return [state for state in dict.values(self) if PENDING not in state]
 
-    def adopt_pending(self, states: Mapping[str, dict[str, Any]]) -> None:
-        """Take ``label -> pending state`` entries as this store's layers."""
+    def adopt_pending(self, states: Mapping[str, dict[str, Any]], build: Any) -> None:
+        """Take ``label -> pending state`` entries as this store's layers.
+
+        ``build(state)`` fills one pending state in place; the store calls it
+        before it hands that layer out.
+        """
 
         for label, state in states.items():
             OrderedDict.__setitem__(self, label, state)
         self._labels = None
         self._pending = True
+        self._builder = build
 
     def items(self) -> Any:
         """Return ``(label, Layer view)`` pairs in insertion order."""
