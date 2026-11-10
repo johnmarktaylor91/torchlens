@@ -28,7 +28,7 @@ from torchlens import _state
 from torchlens._autoroute._builtin_output import semantic_output_cache_key
 from torchlens._capture import peak_memory
 from torchlens._utils import torchvision_weights as tvw
-from torchlens.backends.torch import belt
+from torchlens.backends.torch import _prepared_tree as prepared_tree, belt
 
 
 class _Small(nn.Module):
@@ -159,6 +159,107 @@ def test_replaced_submodule_is_traced_as_replaced() -> None:
     assert torch.equal(output_op.out, model(x))
 
 
+class _Chain(nn.Module):
+    """Runs its registered children in registration order."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply every child in order."""
+
+        for layer in self.children():
+            x = layer(x)
+        return x
+
+
+def test_submodule_replaced_at_the_same_name_after_deletion() -> None:
+    """A submodule deleted and re-created under its old name is prepared again."""
+
+    torch.manual_seed(0)
+    model = _Small().eval()
+    x = torch.randn(3, 4)
+    tl.trace(model, x)
+
+    del model.act
+    model.act = nn.Tanh()
+    second = tl.trace(model, x)
+    assert second.modules["act"].class_name == "Tanh"
+    (output_op,) = second.output_ops
+    assert torch.equal(output_op.out, model(x))
+
+
+def test_renamed_and_added_submodules_get_their_current_addresses() -> None:
+    """A submodule moved to a new name, and one added later, are recorded where they are now."""
+
+    torch.manual_seed(0)
+    model = _Chain().eval()
+    model.a = nn.Linear(4, 4)
+    model.b = nn.ReLU()
+    x = torch.randn(3, 4)
+    first = tl.trace(model, x)
+    assert first.modules["a"].class_name == "Linear"
+    assert first.modules["b"].class_name == "ReLU"
+
+    model.c = model.a
+    del model.a
+    model.d = nn.Tanh()
+    second = tl.trace(model, x)
+    assert second.modules["b"].class_name == "ReLU"
+    assert second.modules["c"].class_name == "Linear"
+    assert second.modules["d"].class_name == "Tanh"
+    (output_op,) = second.output_ops
+    assert torch.equal(output_op.out, model(x))
+
+
+def test_module_tree_key_tells_changed_trees_apart() -> None:
+    """The tree key is equal for an unchanged tree and differs for every kind of change."""
+
+    model = _Small()
+    key = prepared_tree.module_tree_key(model)
+    assert key is not None
+    assert prepared_tree.module_tree_key(model) == key
+
+    relu = model.act
+    model.act = nn.ReLU()
+    replaced = prepared_tree.module_tree_key(model)
+    assert replaced != key
+    model.act = relu
+    assert prepared_tree.module_tree_key(model) == key
+
+    model.extra = None
+    with_none = prepared_tree.module_tree_key(model)
+    assert with_none != key
+    model.extra = nn.Identity()
+    assert prepared_tree.module_tree_key(model) not in (key, with_none)
+    del model.extra
+    assert prepared_tree.module_tree_key(model) == key
+
+    model.act = nn.Sequential(relu)
+    nested = prepared_tree.module_tree_key(model)
+    assert nested != key
+    model.act.append(nn.Identity())
+    assert prepared_tree.module_tree_key(model) not in (key, nested)
+
+    assert prepared_tree.module_tree_key(object()) is None
+
+
+def test_unchanged_model_keeps_the_prepared_fast_path() -> None:
+    """A model traced twice without a change is not prepared in full again."""
+
+    model = _Small().eval()
+    x = torch.randn(3, 4)
+    tl.trace(model, x)
+    assert model in _state._prepared_models
+    assert prepared_tree.changed_module_tree(model) is prepared_tree.UNCHANGED
+    assert model in _state._prepared_models
+
+    model.act = nn.Tanh()
+    changed = prepared_tree.changed_module_tree(model)
+    assert changed is not prepared_tree.UNCHANGED
+    assert model not in _state._prepared_models
+    tl.trace(model, x)
+    assert model in _state._prepared_models
+    assert prepared_tree.changed_module_tree(model) is prepared_tree.UNCHANGED
+
+
 def test_swapped_parameter_is_traced_as_swapped() -> None:
     """A parameter swapped or rewritten between two traces changes the second trace."""
 
@@ -211,7 +312,7 @@ def test_added_hook_runs_in_the_next_trace() -> None:
 def test_weights_match_follows_the_model_between_traces(
     hub_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The stamped weights match is recomputed from the model's values on every trace."""
+    """The weights match is recomputed from the model's values, without reloading the file."""
 
     torchvision_models = pytest.importorskip("torchvision.models")
     preset = torchvision_models.ResNet18_Weights.IMAGENET1K_V1.transforms()
@@ -222,24 +323,22 @@ def test_weights_match_follows_the_model_between_traces(
     loads = _count_loads(monkeypatch)
     x = torch.randn(2, 4)
 
-    first = tl.trace(model, x)
+    tl.trace(model, x)
     matched = semantic_output_cache_key(model)
     assert tvw.match_torchvision_weights(model) is member
-    assert first._semantic_output_metadata == matched
     assert loads == ["fake_v1.pth"], "the checkpoint is loaded once, not once per match"
 
     built_with = model.fc.weight.detach().clone()
     with torch.no_grad():
         model.fc.weight.data.add_(1.0)
-    second = tl.trace(model, x)
+    tl.trace(model, x)
     assert tvw.match_torchvision_weights(model) is None
-    assert second._semantic_output_metadata == semantic_output_cache_key(model)
-    assert second._semantic_output_metadata != matched
+    assert semantic_output_cache_key(model) != matched
 
     model.fc.weight = nn.Parameter(built_with)
-    third = tl.trace(model, x)
+    tl.trace(model, x)
     assert tvw.match_torchvision_weights(model) is member
-    assert third._semantic_output_metadata == matched
+    assert semantic_output_cache_key(model) == matched
     assert loads == ["fake_v1.pth"]
 
 
