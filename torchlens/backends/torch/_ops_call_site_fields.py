@@ -38,6 +38,7 @@ from ._call_site_parts import (
     is_anchor as _is_anchor,
     is_internal as _is_internal,
     module_record,
+    seed_locations,
     stateful as _stateful,
 )
 
@@ -70,6 +71,7 @@ class _CallSiteMemo:
         "interns",
         "last_ids",
         "last_record",
+        "locations",
         "module_ws",
         "pins",
         "sites",
@@ -99,7 +101,9 @@ class _CallSiteMemo:
         self.pins: dict[int, CodeType] = {}
         #: ``id(ModuleStackFrame)`` -> upper part above that module call (miss path).
         self.uppers: dict[int, Any] = {}
-        #: ``(id(code), f_lasti, f_lineno)`` -> ``FuncCallLocation`` (miss path).
+        #: ``(code, f_lasti, f_lineno)`` -> ``FuncCallLocation``, so the miss path
+        #: builds each location once and reuses the full walk's (``seed_locations``).
+        self.locations: dict[tuple[CodeType, int, int], Any] = {}
         #: The module call the previous op's key ended in, and its ids remainder.
         self.last_record: Any = None
         self.last_ids = 0
@@ -232,12 +236,17 @@ def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
             memo.last_record = entry[0]
             memo.last_ids = entry[1]
             return (key, entry[1])
-        if code is anchor_code and _is_anchor(anchor, frame):  # type: ignore[arg-type]
+        if (
+            code is anchor_code
+            and frame.f_lasti == anchor[2]  # type: ignore[index]
+            and frame.f_lineno == anchor[3]  # type: ignore[index]
+            and id(frame) == anchor[0]  # type: ignore[index]
+        ):  # ``_is_anchor``, inlined: one call fewer per op
             return (key, _AT_ANCHOR)
         if name == "_call_impl":
             code_id = id(code)
             pins[code_id] = code
-            key = (key, code_id, frame.f_lasti, id(frame.f_locals.get("self")))
+            key = (key, code_id, frame.f_lasti, id(frame.f_locals["self"]))
         else:
             try:
                 internal = _VERDICTS[code.co_filename]
@@ -285,6 +294,7 @@ def _set_call_site_fields(self: "Trace", fields_dict: dict[str, Any], func_call_
         memo = _CallSiteMemo(cache, self._module_capture_ws)
         workspace._call_site_memo = memo
         code_context, chain = _full_walk(self, cache)
+        seed_locations(memo)
         if memo.anchor is None:
             memo.anchor = cache.get(_CODE_CONTEXT_ANCHOR_KEY)
         key = _site_key(memo, sys._getframe(1))

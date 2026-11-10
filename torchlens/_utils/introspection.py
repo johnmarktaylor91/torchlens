@@ -893,7 +893,7 @@ def build_locations(
     disable_col_offset: bool,
     context_cache: _CodeContextCache | None,
 ) -> list[Any]:
-    """One ``FuncCallLocation`` per kept ``(frame, code, lineno, lasti)``, built once per capture."""
+    """One ``FuncCallLocation`` per kept ``(frame, code, lineno, lasti)``."""
     global _FUNC_CALL_LOCATION
     location_type = _FUNC_CALL_LOCATION
     if location_type is None:
@@ -902,10 +902,6 @@ def build_locations(
         _FUNC_CALL_LOCATION = location_type
     result = []
     for frame_ref, code, lineno, lasti in selected:
-        key = ("__torchlens_location__", code, lasti, lineno)
-        if context_cache is not None and key in context_cache:
-            result.append(context_cache[key][0])
-            continue
         func_name = code.co_name
         loc = location_type(
             file=code.co_filename,
@@ -928,8 +924,6 @@ def build_locations(
             loc._linecache_entry = location_type._cached_source_fingerprint(
                 code.co_filename, num_context_lines, context_cache
             )
-        if context_cache is not None:
-            context_cache[key] = (loc,)
         result.append(loc)
     return result
 

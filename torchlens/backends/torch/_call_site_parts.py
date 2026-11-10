@@ -42,9 +42,18 @@ from ..._utils._call_site import (
 from ..._utils._package_frames import _VERDICTS, is_torchlens_code
 from ..._utils.introspection import build_locations
 
-__all__ = ("build_from_parts", "is_anchor", "is_internal", "module_record", "stateful")
+__all__ = (
+    "build_from_parts",
+    "is_anchor",
+    "is_internal",
+    "module_record",
+    "seed_locations",
+    "stateful",
+)
 
 _Kept = tuple[FrameType, CodeType, int, int]
+#: A kept frame as the code-context cache key names it: ``(code, f_lineno, f_lasti)``.
+_Named = tuple[CodeType, int, int]
 
 
 class _Upper(NamedTuple):
@@ -66,11 +75,16 @@ class _Upper(NamedTuple):
     #: The code context's locations from above the wrapper (call site first),
     #: when the outermost ``forward`` frame lies above it; else ``None``.
     prefix: list[Any] | None
+    #: The frames of ``prefix`` as the code-context cache key names them.
+    prefix_key: tuple[_Named, ...]
     #: Location of the first kept frame above the wrapper, else of the anchor
     #: frame; ``None`` when there is neither.
     first: Any
-    #: Chain state after this part's first ``n`` kept frames, per ``n`` (``_upper_state``).
-    states: dict[int, tuple[list[Any], dict[Any, int]]]
+    #: The frame of ``first`` as the code-context cache key names it.
+    first_key: tuple[_Named, ...]
+    #: Per ``n``: the chain state after this part's first ``n`` kept frames and
+    #: their raw chain entries (``_upper_state``).
+    states: dict[int, tuple[list[Any], dict[Any, int], tuple[Any, ...]]]
 
 
 def is_anchor(anchor: tuple[int, CodeType, int, int], frame: FrameType) -> bool:
@@ -122,10 +136,38 @@ def stateful(memo: Any, record: Any) -> bool:
     return stateful_ids is None or record.module_id in stateful_ids
 
 
+def seed_locations(memo: Any) -> None:
+    """Index the locations the capture's first full walk built, for reuse by the miss path."""
+
+    known = memo.locations
+    for key, value in memo.cache.items():
+        if type(key) is tuple and len(key) == 4 and type(key[3]) is tuple:
+            for (code, lineno, lasti), location in zip(key[3], value):
+                known[(code, lasti, lineno)] = location
+
+
+def _named(kept: list[_Kept]) -> tuple[_Named, ...]:
+    """``kept`` frames as the code-context cache key names them."""
+
+    named: list[_Named] = []
+    for _frame, code, lineno, lasti in kept:
+        named.append((code, lineno, lasti))
+    return tuple(named)
+
+
 def _locations(memo: Any, kept: list[_Kept], options: tuple[Any, ...]) -> list[Any]:
     """The locations of ``kept`` frames, each built once per capture (``build_locations``)."""
 
-    return build_locations(kept, *options)
+    known = memo.locations
+    result = []
+    for item in kept:
+        _frame, code, lineno, lasti = item
+        location = known.get((code, lasti, lineno))
+        if location is None:
+            location = build_locations([item], *options)[0]
+            known[(code, lasti, lineno)] = location
+        result.append(location)
+    return result
 
 
 def _combine(
@@ -141,23 +183,36 @@ def _combine(
     count = len(between)
     raw = [(code, lasti) for _frame, code, _lineno, lasti in between] + parent.raw
     prefix: list[Any] | None = None
+    prefix_key: tuple[_Named, ...] = ()
     if parent.forward >= 0:
         forward = count + parent.forward
         prefix = [*parent.prefix, *_locations(memo, between[::-1], options)]  # type: ignore[misc]
+        prefix_key = parent.prefix_key + _named(between[::-1])
     elif forward >= 0:
         above = forward + 1
-        call_site = (
-            _locations(memo, [between[above]], options)[0] if above < count else parent.first
-        )
+        if above < count:
+            call_site, call_key = (
+                _locations(memo, [between[above]], options)[0],
+                _named([between[above]]),
+            )
+        else:
+            call_site, call_key = parent.first, parent.first_key
         prefix = _locations(memo, between[forward::-1], options)
+        prefix_key = _named(between[forward::-1])
         if call_site is not None:
             prefix = [call_site, *prefix]
-    first = _locations(memo, between[:1], options)[0] if between else parent.first
+            prefix_key = call_key + prefix_key
+    if between:
+        first, first_key = _locations(memo, between[:1], options)[0], _named(between[:1])
+    else:
+        first, first_key = parent.first, parent.first_key
     if inner < 0:
         inner = count + parent.inner if parent.inner >= 0 else -1
         scopes = scopes + [(count + position, entry) for position, entry in parent.scopes]
     outer = 0 if parent.outer is None else count + parent.outer
-    return _Upper(record, raw, forward, inner, outer, scopes, prefix, first, {})
+    return _Upper(
+        record, raw, forward, inner, outer, scopes, prefix, prefix_key, first, first_key, {}
+    )
 
 
 def _upper(memo: Any, wrapper: FrameType, depth: int, options: tuple[Any, ...]) -> _Upper | None:
@@ -181,6 +236,7 @@ def _upper(memo: Any, wrapper: FrameType, depth: int, options: tuple[Any, ...]) 
     anchor_code = anchor[1] if anchor is not None else None
     parent: _Upper | None = None
     anchor_first = None
+    anchor_key: tuple[_Named, ...] = ()
     frame = wrapper.f_back
     while frame is not None:
         code = frame.f_code
@@ -193,6 +249,7 @@ def _upper(memo: Any, wrapper: FrameType, depth: int, options: tuple[Any, ...]) 
         if code is anchor_code and is_anchor(anchor, frame):
             kept = (frame, code, frame.f_lineno, frame.f_lasti)
             anchor_first = _locations(memo, [kept], options)[0]
+            anchor_key = _named([kept])
             break
         if name == "_call_impl":
             if inner < 0:
@@ -203,7 +260,7 @@ def _upper(memo: Any, wrapper: FrameType, depth: int, options: tuple[Any, ...]) 
             between.append((frame, code, frame.f_lineno, frame.f_lasti))
         frame = frame.f_back
     if parent is None:
-        parent = _Upper(None, [], -1, -1, None, [], None, anchor_first, {})
+        parent = _Upper(None, [], -1, -1, None, [], None, (), anchor_first, anchor_key, {})
     upper = _combine(memo, record, (inner, scopes, between, forward), parent, options)
     memo.uppers[id(record)] = upper
     return upper
@@ -243,50 +300,92 @@ def _collapse(out: list[Any], position: dict[Any, int], raw: list[Any]) -> None:
         out.append((code_token, instruction))
 
 
-def _upper_state(upper: _Upper, count: int) -> tuple[list[Any], dict[Any, int]]:
-    """The chain state after the upper part's first ``count`` kept frames, once per module call."""
+def _upper_state(upper: _Upper, count: int) -> tuple[list[Any], dict[Any, int], tuple[Any, ...]]:
+    """The chain state after the upper part's first ``count`` kept frames, and their raw entries.
+
+    Once per module call and ``count``.
+    """
 
     state = upper.states.get(count)
     if state is None:
-        state = ([], {})
-        _collapse(*state, _interleave(upper.raw, upper.scopes, count))
+        raw = _interleave(upper.raw, upper.scopes, count)
+        state = ([], {}, tuple(raw))
+        _collapse(state[0], state[1], raw)
         upper.states[count] = state
     return state
 
 
 def _chain(
-    lower: list[tuple[CodeType, int]], scopes: list[tuple[int, Any]], boundary: int, upper: _Upper
+    lower: list[tuple[CodeType, int]],
+    scopes: list[tuple[int, Any]],
+    boundary: int,
+    upper: _Upper,
+    cache: dict[Any, Any],
 ) -> tuple[Any, ...]:
     """The op's call-site chain (``introspection._call_site_chain``), per op only its own frames.
 
     The chain runs outermost first, so the upper part's share is a saved state
-    the op's own frames continue from.
+    the op's own frames continue from. It is cached under the same raw-frames
+    key the full walk uses (``_call_site.cached_chain``).
     """
 
     count = len(lower)
-    if boundary < count:
+    lower_raw = _interleave(lower, scopes, min(boundary, count))
+    upper_raw: tuple[Any, ...] = ()
+    if boundary >= count:
+        saved_out, saved_position, upper_raw = _upper_state(upper, boundary - count)
+    key = ("__torchlens_call_site__", tuple(lower_raw) + upper_raw)
+    chain = cache.get(key)
+    if chain is None:
         out: list[Any] = []
         position: dict[Any, int] = {}
-    else:
-        saved_out, saved_position = _upper_state(upper, boundary - count)
-        out, position = list(saved_out), dict(saved_position)
-    _collapse(out, position, _interleave(lower, scopes, min(boundary, count)))
-    return tuple(out)
+        if boundary >= count:
+            out, position = list(saved_out), dict(saved_position)
+        _collapse(out, position, lower_raw)
+        chain = tuple(out)
+        cache[key] = chain
+    return chain
 
 
 def _context(
-    memo: Any, lower: list[_Kept], forward: int, upper: _Upper, options: tuple[Any, ...]
+    memo: Any,
+    lower: tuple[list[_Kept], tuple[_Named, ...]],
+    forward: int,
+    upper: _Upper,
+    options: tuple[Any, ...],
 ) -> list[Any]:
-    """The op's code context: outermost first, the frame that ran the op last."""
+    """The op's code context: outermost first, the frame that ran the op last.
 
-    if upper.forward >= 0:
-        return [*upper.prefix, *_locations(memo, lower[::-1], options)]  # type: ignore[misc]
-    if forward < 0:
-        return []
+    Cached under the same key the full walk uses (``introspection._get_code_context``).
+    """
+
+    kept, named = lower
     above = forward + 1
-    call_site = _locations(memo, [lower[above]], options)[0] if above < len(lower) else upper.first
-    kept = _locations(memo, lower[forward::-1], options)
-    return kept if call_site is None else [call_site, *kept]
+    if upper.forward >= 0:
+        named = upper.prefix_key + named[::-1]
+    elif forward < 0:
+        named = ()
+    elif above < len(kept):
+        named = named[above : above + 1] + named[forward::-1]
+    else:
+        named = upper.first_key + named[forward::-1]
+    key = (*options[:3], named)
+    cached = memo.cache.get(key)
+    if cached is not None:
+        return list(cached)
+    if upper.forward >= 0:
+        result = [*upper.prefix, *_locations(memo, kept[::-1], options)]  # type: ignore[misc]
+    elif forward < 0:
+        result = []
+    else:
+        call_site = (
+            _locations(memo, [kept[above]], options)[0] if above < len(kept) else upper.first
+        )
+        result = _locations(memo, kept[forward::-1], options)
+        if call_site is not None:
+            result = [call_site, *result]
+    memo.cache[key] = tuple(result)
+    return result
 
 
 def build_from_parts(
@@ -302,6 +401,7 @@ def build_from_parts(
     anchor = memo.anchor
     anchor_code = anchor[1] if anchor is not None else None
     lower: list[_Kept] = []
+    named: list[_Named] = []
     scopes: list[tuple[int, Any]] = []
     forward = -1
     while frame is not None:
@@ -321,7 +421,10 @@ def build_from_parts(
             if not internal:
                 if name == "forward":
                     forward = len(lower)
-                lower.append((frame, code, frame.f_lineno, frame.f_lasti))
+                lineno = frame.f_lineno
+                lasti = frame.f_lasti
+                lower.append((frame, code, lineno, lasti))
+                named.append((code, lineno, lasti))
         frame = frame.f_back
     if frame is None:
         return None
@@ -334,5 +437,5 @@ def build_from_parts(
     inner = count + upper.inner if upper.inner >= 0 else -1
     boundary = chain_boundary(inner, count + upper.outer, last_forward)  # type: ignore[operator]
     raw_kept = [(code, lasti) for _frame, code, _lineno, lasti in lower]
-    chain = _chain(raw_kept, scopes, boundary, upper) if boundary > 0 else ()
-    return _context(memo, lower, forward, upper, options), chain
+    chain = _chain(raw_kept, scopes, boundary, upper, memo.cache) if boundary > 0 else ()
+    return _context(memo, (lower, tuple(named)), forward, upper, options), chain
