@@ -19,6 +19,7 @@ from typing import Any, Final
 import torch
 
 from ..._data_classes._state_adapter import state_new
+from .._graph_refusal import refuse_pass_key
 from ..format_contract import BlobRef
 from ..prerelease import PRERELEASE_STATE_KEY, validate_prerelease_state
 from ..state_contract import governed_artifact_load
@@ -552,6 +553,8 @@ class DecodedArtifact(_RecordResolver):
                 if index is None:
                     raise cell_error(at, f"a member is not a {member_kind} row", code=CELL_CODE)
                 member_key = member_rows[index].get(key)
+                if key == "pass_number":
+                    refuse_pass_key(member_rows[index].get("label"), member_key)
                 if isinstance(member_key, bool) or not isinstance(member_key, (int, str)):
                     raise cell_error(
                         at, f"member {member_kind}[{index}].{key} is not a key", code=CELL_CODE

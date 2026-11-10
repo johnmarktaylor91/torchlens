@@ -19,27 +19,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn
 
 from .._utils._record_group_table import record_member
+from ._graph_refusal import graph_invalid as _graph_invalid
 from .forgery_validation import _is_digest, _is_int, _is_sequence, _refuse, _trace_ops
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-
-_GRAPH_REMEDY = (
-    "re-save the artifact from its source capture with one current TorchLens "
-    "version; do not hand-edit op rows, labels, pass stamps, or relation lists"
-)
-
-
-def _graph_invalid(message: str, field: str, reason: str) -> NoReturn:
-    """Raise the graph-structure refusal (AUD-CODE 3.0b)."""
-
-    _refuse(
-        message,
-        code="artifact_graph_structure_invalid",
-        field=field,
-        reason=reason,
-        remedy=_GRAPH_REMEDY,
-    )
 
 
 def _validate_graph_structure(trace: Trace) -> None:
