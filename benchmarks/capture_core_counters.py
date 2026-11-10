@@ -223,6 +223,29 @@ def _kind_census(objects: list[Any], kinds: tuple[type, ...]) -> Counter[str]:
     return Counter(type(obj).__name__ for obj in objects if isinstance(obj, kinds))
 
 
+_PROXY_TYPES = (weakref.ProxyType, weakref.CallableProxyType)
+
+
+def _is_dead_weakref(obj: Any) -> bool:
+    """Return whether ``obj`` is a weak reference or proxy whose referent is gone."""
+
+    if isinstance(obj, weakref.ReferenceType):
+        return obj() is None
+    if isinstance(obj, _PROXY_TYPES):
+        try:
+            obj.__class__  # noqa: B018 - a dead proxy raises on any attribute
+        except ReferenceError:
+            return True
+    return False
+
+
+def _settled_count(objects: list[Any]) -> tuple[int, int]:
+    """Return (objects counted, dead weak references left out) for a snapshot."""
+
+    dead = sum(1 for obj in objects if _is_dead_weakref(obj))
+    return len(objects) - dead, dead
+
+
 def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
     """Run ``fn`` and report what its result keeps alive.
 
@@ -231,21 +254,31 @@ def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
     tuple
         ``fn``'s result (hold it; dropping it ends the measurement's meaning)
         and a dict with ``blocks`` (``sys.getallocatedblocks`` delta),
-        ``objects`` (collector-tracked object delta) and ``kinds`` (live record
-        objects per class name, delta), all after a full collection.
+        ``objects`` (collector-tracked object delta, dead weak references left
+        out), ``dead_weakrefs`` (the delta of those left out, for diagnosis)
+        and ``kinds`` (live record objects per class name, delta), all after a
+        full collection.
 
     Each side collects twice. The collector stops tracking a tuple that holds
     only untracked items, but in one pass it can visit an outer tuple before
     its inner ones, so a single pass leaves some key tuples tracked depending
     on when the automatic collections inside ``fn`` happened. The second pass
     settles them, so ``objects`` does not move with allocation timing.
+
+    A weak reference whose referent has died is not counted on either side.
+    The collector clears such a reference but the reference object lives on
+    until whatever holds it lets go (a weak container's pending removals, an
+    attribute nobody resets), and how many are waiting at each snapshot varies
+    between runs of one commit. They keep nothing alive. A weak reference with a
+    live referent is counted like any other object, so one the trace keeps
+    still raises ``objects``.
     """
 
     kinds = record_kinds()
     gc.collect()
     gc.collect()
     before = gc.get_objects()
-    objects_before = len(before)
+    objects_before, dead_before = _settled_count(before)
     kinds_before = _kind_census(before, kinds)
     del before
     blocks_before = sys.getallocatedblocks()
@@ -254,7 +287,7 @@ def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
     gc.collect()
     blocks_after = sys.getallocatedblocks()
     after = gc.get_objects()
-    objects_after = len(after)
+    objects_after, dead_after = _settled_count(after)
     kinds_after = _kind_census(after, kinds)
     del after
     census = {
@@ -266,6 +299,7 @@ def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
     return result, {
         "blocks": blocks_after - blocks_before,
         "objects": objects_after - objects_before,
+        "dead_weakrefs": dead_after - dead_before,
         "kinds": census,
     }
 
