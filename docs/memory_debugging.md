@@ -42,6 +42,25 @@ Notes:
 - TorchLens reports can hold an opaque reference to a snapshot you dumped
   (kind + digest + byte size), but the payload is never parsed.
 
+## What keeps a trace's activations in memory
+
+A record you keep keeps its trace. Holding one `Op` or `Layer` (or a door
+such as `trace.ops`) keeps the whole `Trace` alive, with every activation and
+argument it saved:
+
+```python
+relu = tl.trace(model, x)["relu_1"]   # the trace lives as long as `relu` does
+relu.out                              # the saved tensor
+```
+
+This is what lets the one-line read `tl.trace(model, x)["relu_1"].out` work.
+The cost is that a list of records collected across many traces holds every
+one of those traces. To keep one tensor and let the rest go, keep the tensor
+(`out = trace["relu_1"].out`) and not the record. To release a trace's saved
+payloads while records are still held, call `trace.cleanup()`. The trace
+itself holds no record object, so dropping the last record and door frees it
+at once, with no garbage-collector pass.
+
 ## Leak detection
 
 ```python

@@ -1,7 +1,7 @@
 """Key-form child cells keep read identity: an in-place write to the container persists.
 
 ``Module.ops``, ``Module.params`` and ``Buffer.versions`` store their children
-as row keys (``torchlens/_data_classes/_row_refs.py``). The first read in a
+as row keys (``torchlens/_trace_core/record_refs.py``). The first read in a
 trace builds the container and keeps it in the trace's side table, so later
 reads return the same object and a write into it is seen by the next read, as
 when the cell held the container itself.
@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes._row_refs import CHILD_CELLS, RowKeys
+from torchlens._trace_core.record_refs import RowKeys
 from torchlens._trace_core.record_rows import RecordCellField
 
 
@@ -108,5 +108,5 @@ def test_containers_live_in_the_trace_side_table() -> None:
     trace = _trace()
     module = _keyed_module(trace, "ops")
     calls = module.ops
-    table = trace._trace_core._strong_facades[CHILD_CELLS]  # noqa: SLF001
+    table = trace._trace_core._views.cells  # noqa: SLF001
     assert any(entry[2] is calls for entry in table.values())

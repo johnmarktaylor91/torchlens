@@ -9,6 +9,7 @@ property per name with its public docstring and forwards to these.
 from __future__ import annotations
 
 import difflib
+import weakref
 from typing import TYPE_CHECKING, Any
 
 from .._utils._display_bounded import RecordTuple
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 from collections import OrderedDict
 from typing import TYPE_CHECKING, cast
 
+from .._trace_core.view_tables import DEAD
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
@@ -46,6 +48,20 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 __all__: list[str] = []
+
+
+class _HandedOps(TraceOpAccessor):
+    """An empty ops door: ``ops`` creates one (no ``__init__`` runs) and makes it a ``TraceOpAccessor``."""
+
+    __slots__ = ()
+    __init__ = cast("Any", object.__init__)
+
+
+class _HandedLayers(LayerAccessor):
+    """An empty layers door: ``layers`` creates one and makes it a ``LayerAccessor``."""
+
+    __slots__ = ()
+    __init__ = cast("Any", object.__init__)
 
 
 def layers_recurrent(trace: Trace) -> LayerAccessor:
@@ -92,10 +108,23 @@ def ops(trace: Trace) -> TraceOpAccessor:
     container = trace._layer_list
     cache_entry = trace.__dict__.get(_TRACE_OP_ACCESSOR_ATTR)
     if cache_entry is not None and cache_entry[0] is container and cache_entry[1] == len(container):
-        return cast(TraceOpAccessor, cache_entry[2])
-    accessor = TraceOpAccessor(container, trace._layer_num_calls, counted_view=True)
-    trace.__dict__[_TRACE_OP_ACCESSOR_ATTR] = (container, len(container), accessor)
-    return accessor
+        door: Any = cache_entry[2]
+        handed = door._handed()
+        if handed is not None:
+            return cast(TraceOpAccessor, handed)
+    else:
+        door = TraceOpAccessor(container, trace._layer_num_calls, counted_view=True)
+        door._owner, door._handed = None, DEAD
+        trace.__dict__[_TRACE_OP_ACCESSOR_ATTR] = (container, len(container), door)
+    # The trace keeps ``door`` and so ``door`` cannot keep the trace. What the
+    # caller gets is a second object over the same state that does, cached
+    # weakly: ``tl.trace(model, x).ops["relu_1"]`` reads a trace still alive.
+    handed = _HandedOps()
+    handed.__class__ = TraceOpAccessor
+    handed.__dict__ = door.__dict__
+    handed._owner = trace
+    door._handed = weakref.ref(handed)
+    return cast(TraceOpAccessor, handed)
 
 
 def transforms(trace: Trace) -> tuple[Op, ...]:
@@ -121,10 +150,21 @@ def layers(trace: Trace) -> LayerAccessor:
     container = trace._layer_logs
     cache_entry = trace.__dict__.get(_TRACE_LAYER_ACCESSOR_ATTR)
     if cache_entry is not None and cache_entry[0] is container and cache_entry[1] == len(container):
-        return cast("LayerAccessor", cache_entry[2])
-    accessor = LayerAccessor(container, source_trace=trace)
-    trace.__dict__[_TRACE_LAYER_ACCESSOR_ATTR] = (container, len(container), accessor)
-    return accessor
+        door: Any = cache_entry[2]
+        handed = door._handed()
+        if handed is not None:
+            return cast("LayerAccessor", handed)
+    else:
+        door = LayerAccessor(container, source_trace=trace)
+        door._owner, door._handed = None, DEAD
+        trace.__dict__[_TRACE_LAYER_ACCESSOR_ATTR] = (container, len(container), door)
+    # As in ``ops``: the caller's object shares the door's state and keeps the trace.
+    handed = _HandedLayers()
+    handed.__class__ = LayerAccessor
+    handed.__dict__ = door.__dict__
+    handed._owner = trace
+    door._handed = weakref.ref(handed)
+    return cast("LayerAccessor", handed)
 
 
 def module_calls(trace: Trace) -> TraceModuleCallAccessor:

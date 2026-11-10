@@ -30,7 +30,10 @@ def _layer_rep_op(layer: Layer) -> Op | None:
         row = state["_keys"][1]
         if row >= 0:
             # A typed local, not ``cast``: no call on the per-read path.
-            op: Op | None = state["_core_ref"]()._strong_facades["op"][row]
+            slots = state["_core_ref"]()._views.ops
+            refs = slots.refs
+            # No call for a live view; a dropped one is built on the slow path below.
+            op: Op | None = slots[row] if refs is None else refs[row]()
             if op is not None:
                 return op
     except (KeyError, IndexError, AttributeError, TypeError):

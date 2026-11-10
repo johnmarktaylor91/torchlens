@@ -10,14 +10,18 @@ hydrating pooled or shared-fact cells it is about to drop.
 
 ``op.py`` binds the ``Op`` facade here once its field descriptors exist
 (:func:`bind_op_facade`); backends that install a property over a stored
-field declare it (:func:`register_row_release_property`). Standard library
-only, so ``op.py`` imports it without an import cycle.
+field declare it (:func:`register_row_release_property`). It imports the
+standard library and the view tables (which import no record class), so
+``op.py`` imports it without an import cycle. Binding the facade also names
+``Op`` to the view tables, which build op views on demand.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from typing import Any
+
+from .._trace_core.view_tables import OP_CLASS
 
 #: The bound facade, set once by ``op.py``: ``(Op class, its live class
 #: namespace, stored field names, generated field descriptor classes)``.
@@ -44,6 +48,7 @@ def bind_op_facade(
     """
 
     _OP_FACADE[:] = [(op_class, vars(op_class), tuple(slot_names), field_classes)]
+    OP_CLASS[:] = [op_class]
 
 
 def register_row_release_property(name: str) -> None:

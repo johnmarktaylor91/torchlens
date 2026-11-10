@@ -5,8 +5,8 @@
 
 from __future__ import annotations
 
+from .._trace_core.record_refs import install_child_fields
 from .._trace_core.record_rows import install_record_facade
-from ._row_refs import install_child_fields
 
 # ---------------------------------------------------------------------------
 # The facades: declared stored fields become row-cell descriptors; the
@@ -102,7 +102,7 @@ def install_module_facades(module_call_cls: type, module_cls: type) -> None:
     """Install the ``ModuleCall`` and ``Module`` row-cell descriptors.
 
     ``Module.ops`` and ``Module.params`` list child records, so their cells
-    take the row-key descriptors of ``_row_refs``.
+    take the row-key descriptors of ``_trace_core.record_refs``.
     """
 
     install_record_facade(module_call_cls, _MODULE_CALL_STORED_FIELDS)
