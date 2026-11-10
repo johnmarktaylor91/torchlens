@@ -226,29 +226,25 @@ def _run_finalize_param_logs(ctx: StepContext) -> None:
 
 
 def _run_build_layer_logs(ctx: StepContext) -> None:
-    """Build aggregate ``Layer`` records and the pass-index index.
+    """Group the ops into aggregate ``Layer`` records and build the pass index.
 
     ``Trace._by_pass`` maps each pass index to the ``layer_list`` positions of
     the layers recorded at that pass; layers with no ``pass_index`` are absent
-    rather than bucketed.
+    rather than bucketed. The step's body builds it in its one scan of the ops.
     """
 
     trace = ctx.trace
     with _vtimed(trace, "  Step 15.5: Build layer logs", bucket="build_layer_logs"):
         finalization._build_layer_logs(trace)
-        trace._by_pass = {}
-        for index, op in enumerate(trace._layer_list):
-            pass_index = getattr(op, "pass_number", None)
-            if pass_index is not None:
-                trace._by_pass.setdefault(pass_index, []).append(index)
 
 
 def _run_build_module_logs(ctx: StepContext) -> None:
-    """Build ``Module`` records and refresh the saved module-call count."""
+    """Build ``Module`` records and the trace's module-call accessor."""
 
     with _vtimed(ctx.trace, "  Step 16: Build module logs", bucket="build_module_logs"):
         finalization._build_module_logs(ctx.trace)
-        saved_summary.refresh_saved_module_call_count(ctx.trace)
+        # The saved module-call count is derived on read; only the accessor is kept.
+        _ = ctx.trace.module_calls
 
 
 def _run_hash_graph_shape(ctx: StepContext) -> None:

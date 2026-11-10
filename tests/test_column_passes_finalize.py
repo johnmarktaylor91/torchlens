@@ -20,9 +20,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes._layer_state import PENDING
 from torchlens._data_classes.op import Op
 from torchlens._postprocess import _column_passes_finalize, finalization
-from torchlens._trace_core.op_store import _MISSING
+from torchlens._postprocess._layer_row_scan import RowScan
+from torchlens._trace_core.op_store import _MISSING, PooledCell
 from torchlens._utils._record_group_table import record_member
 
 _ADDRESS = re.compile(r"0x[0-9a-fA-F]+")
@@ -52,6 +54,23 @@ class _LoopBranch(nn.Module):
         return self.head(x)
 
 
+class _PlainLoop(nn.Module):
+    """One Linear applied four times at one shape, with no branch."""
+
+    def __init__(self) -> None:
+        """Build the shared layer."""
+
+        super().__init__()
+        self.cell = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the loop."""
+
+        for _ in range(4):
+            x = torch.relu(self.cell(x)) + 1
+        return x
+
+
 class _TiedShrinking(nn.Module):
     """Tied input/output weights and a recurrence over a shrinking sequence."""
 
@@ -77,13 +96,22 @@ _MODELS: dict[str, Callable[[], tuple[nn.Module, torch.Tensor]]] = {
     "loop_branch": lambda: (_LoopBranch(), torch.ones(2, 4)),
     "long_loop": lambda: (_LoopBranch(steps=40), torch.ones(2, 4)),
     "tied_shrinking": lambda: (_TiedShrinking(), torch.ones(4, 4)),
+    "plain_loop": lambda: (_PlainLoop(), torch.ones(2, 4)),
 }
+#: Models with no conditional event, whose layers stay pending after the trace.
+_PLAIN = ("tied_shrinking", "plain_loop")
 
 
 def _canon(value: Any) -> str:
     """Return an address-free ``repr`` of ``value``."""
 
     return _ADDRESS.sub("0x", repr(value))
+
+
+def _unpooled(cell: Any) -> Any:
+    """Return the value a stored cell holds, reading through a shared pooled cell."""
+
+    return cell.prototype if cell.__class__ is PooledCell else cell
 
 
 def _snapshot(trace: Any) -> dict[str, Any]:
@@ -105,7 +133,7 @@ def _snapshot(trace: Any) -> dict[str, Any]:
     for name in ("is_constant", "annotations"):
         fid = store.layout.fid_by_name[name]
         cells[name] = [
-            _canon(store.cell_get(object.__getattribute__(op, "_row"), fid))
+            _canon(_unpooled(store.cell_get(object.__getattribute__(op, "_row"), fid)))
             for op in trace._layer_list
         ]
     return {
@@ -242,3 +270,78 @@ def test_column_reader_matches_getattr_semantics() -> None:
         assert read(op, "no_such_field", "fallback") == "fallback"
     for op in unset:
         assert read(op, "transformed_out_shape", None) is None
+
+
+def _trace_plain(model_name: str = "tied_shrinking") -> Any:
+    """Trace one of the models with no conditional event."""
+
+    torch.manual_seed(0)
+    model, x = _MODELS[model_name]()
+    return tl.trace(model, x)
+
+
+def _pending_labels(trace: Any) -> list[str]:
+    """Return the labels of the layers whose state is not built yet."""
+
+    logs = trace._layer_logs
+    return [label for label in logs if PENDING in dict.__getitem__(logs, label)]
+
+
+def test_layers_stay_pending_until_looked_up() -> None:
+    """A finished trace holds unbuilt layers; a lookup builds that layer only."""
+
+    trace = _trace_plain()
+    pending = _pending_labels(trace)
+    assert len(pending) > 1
+    layer = trace._layer_logs[pending[0]]
+    assert PENDING not in layer.__dict__
+    assert _pending_labels(trace) == pending[1:]
+
+
+def test_many_pass_layer_stays_pending() -> None:
+    """A layer whose passes agree keeps its facts and is built on its first lookup."""
+
+    trace = _trace_plain("plain_loop")
+    logs = trace._layer_logs
+    pending = {label: dict.__getitem__(logs, label) for label in _pending_labels(trace)}
+    looped = [label for label, state in pending.items() if len(state["ops"]) == 4]
+    assert looped
+    layer = logs[looped[0]]
+    assert layer.call_labels == [f"{looped[0]}:{number}" for number in (1, 2, 3, 4)]
+    assert [op.pass_number for op in layer.ops.values()] == [1, 2, 3, 4]
+
+
+@pytest.mark.parametrize("model_name", _PLAIN)
+def test_first_lookup_order_does_not_change_the_layers(model_name: str) -> None:
+    """Layers looked up first-to-last and last-to-first hold the same state."""
+
+    forward, backward = _trace_plain(model_name), _trace_plain(model_name)
+    labels = list(forward._layer_logs)
+    for label in labels:
+        forward._layer_logs[label]
+    for label in reversed(labels):
+        backward._layer_logs[label]
+    assert _snapshot(forward) == _snapshot(backward)
+
+
+@pytest.mark.parametrize("model_name", _PLAIN)
+def test_first_lookup_matches_a_build_inside_the_step(
+    model_name: str, isolated_patch: pytest.MonkeyPatch
+) -> None:
+    """A layer built on its first lookup equals the layer step 15.5 would have built."""
+
+    real_run = RowScan.run
+
+    def run_then_build_all(scan: RowScan) -> None:
+        """Run the scan, then ask the step to build every layer itself."""
+
+        real_run(scan)
+        scan.eager = True
+
+    isolated_patch.setattr(RowScan, "run", run_then_build_all)
+    built_in_step = _trace_plain(model_name)
+    isolated_patch.undo()
+    assert not _pending_labels(built_in_step)
+    on_lookup = _trace_plain(model_name)
+    assert _pending_labels(on_lookup)
+    assert _snapshot(on_lookup) == _snapshot(built_in_step)
