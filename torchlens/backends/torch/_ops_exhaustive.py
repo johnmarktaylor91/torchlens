@@ -72,21 +72,21 @@ def _emit_exhaustive_operation_events(
       1. Build per-tensor fields (label, shape, equivalence type, FLOPs).
       2. Create a Op entry and optionally save out data.
       3. Update bidirectional family links (parent→child, sibling, spouse).
-      4. Tag the output tensor with ``_tl.label_raw`` so downstream
-         operations can identify it as a parent.
+      4. Tag the output tensor with ``_tl.label_raw`` (downstream ops find parents).
       5. Track parent content variations (for in-place mutation detection).
 
     Args:
         func: The original (unwrapped) function that was called.
-        args: Positional arguments to the function.
-        kwargs: Keyword arguments to the function.
-        arg_copies: Pre-call copies of args (for child tensor variation tracking).
-        kwarg_copies: Pre-call copies of kwargs.
+        args, kwargs: Positional and keyword arguments to the function.
+        arg_copies, kwarg_copies: Pre-call copies of args and kwargs.
         out_orig: Original output from the function (may be tensor, tuple, etc.).
         exec_ctx: Timing, RNG, and autocast state captured around the function call.
-        is_bottom_level_func: True if this function was not called by another
-            decorated function (i.e., it's a leaf in the decoration nesting).
+        is_bottom_level_func: True for a leaf of the decoration nesting.
     """
+    if not is_bottom_level_func and _nested_call_logged_output(out_orig):
+        # The skipped body's one func_call_id consumer: the id sequence stays the same.
+        _partition_output_entries_with_autograd_stats(self, out_orig)
+        return
     with _timed_phase(self, "ctx_build_shared_fields"):
         (
             fields_dict,
@@ -440,6 +440,19 @@ def _get_parent_contents(
         if label == parent_label:
             return index_nested(kwarg_copies, argname)
     raise ValueError("Parent layer not found in function arguments.")
+
+
+def _nested_call_logged_output(out: Any) -> bool:
+    """Return whether a higher-level call's output is one tensor a nested call already logged.
+
+    ``nn.ReLU.forward`` calls ``F.relu``, which calls ``torch.relu``: the inner,
+    bottom-level call logs the op and labels its output, so the outer call
+    would log nothing (:func:`_output_should_be_logged` is False for its only
+    output, and a bare tensor registers no output container). Its emission
+    exits before the shared fields are built.
+    """
+
+    return type(out) is torch.Tensor and get_tensor_label(out) is not None
 
 
 def _output_should_be_logged(out: Any, is_bottom_level_func: bool) -> bool:
