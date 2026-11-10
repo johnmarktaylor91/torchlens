@@ -22,6 +22,7 @@ from torch import nn
 from torch.nn import functional as F
 
 import torchlens as tl
+from torchlens import _state
 from torchlens.backends.torch import _call_plan
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -233,11 +234,18 @@ def test_inplace_schema_names() -> None:
     assert _call_plan._inplace_schema_name("__iadd__") == "add_"
     assert _call_plan._inplace_schema_name("__itruediv__") == "div_"
     assert _call_plan._inplace_schema_name("relu_") == "relu_"
-    writing = _call_plan.build_fast_plan(False, torch.Tensor.relu_, "relu_", None, True)
+
+    def original(func: Any) -> Any:
+        """The torch callable a wrapper was built from (torch stays decorated after import)."""
+        return _state._decorated_to_orig.get(id(func), func)
+
+    relu_ = original(torch.Tensor.relu_)
+    writing = _call_plan.build_fast_plan(False, relu_, "relu_", None, True)
     assert writing is not None and writing.writes
-    assert _call_plan.build_fast_plan(True, torch.Tensor.relu_, "relu_", None, True) is None
-    assert _call_plan.build_fast_plan(False, torch.Tensor.relu_, "relu_", "set", True) is None
-    norm = _call_plan.build_fast_plan(False, torch.batch_norm, "batch_norm", None, False)
+    assert _call_plan.build_fast_plan(True, relu_, "relu_", None, True) is None
+    assert _call_plan.build_fast_plan(False, relu_, "relu_", "set", True) is None
+    norm = _call_plan.build_fast_plan(False, original(torch.batch_norm), "batch_norm", None, False)
     assert norm is not None and norm.writes
-    reading = _call_plan.build_fast_plan(False, torch.Tensor.contiguous, "contiguous", None, False)
+    contiguous = original(torch.Tensor.contiguous)
+    reading = _call_plan.build_fast_plan(False, contiguous, "contiguous", None, False)
     assert reading is not None and not reading.writes
