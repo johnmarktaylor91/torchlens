@@ -416,6 +416,7 @@ def _clear_callable_session_tensor_metadata(
     seen: set[int],
     visit: Callable[[torch.Tensor], None] | None = None,
     methods: MethodIndex | None = None,
+    swept: dict[int, Any] | None = None,
 ) -> None:
     """Clear TorchLens tensor metadata captured by a callable object.
 
@@ -446,6 +447,8 @@ def _clear_callable_session_tensor_metadata(
         The model's user methods by name (:func:`method_index`), so a
         ``self.<method>`` or ``self.child.<method>`` the forward names is followed
         as a helper (see :func:`_walk_named_globals`).
+    swept
+        This sweep's memo (:func:`_clear_module_callables_tensor_metadata`), or ``None``.
 
     Returns
     -------
@@ -454,14 +457,20 @@ def _clear_callable_session_tensor_metadata(
     """
 
     chain = _forward_wrapper_chain(getattr(callable_obj, "__func__", callable_obj))
+    if swept is not None and id(chain[-1]) in swept:
+        # TorchLens's own wrapper links differ per module and are still swept.
+        for link in chain[:-1]:
+            _clear_callable_link_tensor_metadata(link, seen, visit)
+        return
     for link in chain:
         _clear_callable_link_tensor_metadata(link, seen, visit)
-    # A user decorator on the forward itself (``@beartype``, a ``functools.wraps``
-    # gradient switch) is transparent: the decorated forward's names are read at
-    # the full budget, not one hop down behind the wrapper.
+    # A user decorator on the forward (``@beartype``, a ``functools.wraps`` gradient
+    # switch) is transparent: its names are read at the full budget, not one hop down.
     for link in _wrapped_links(chain[-1]):
         _clear_callable_link_tensor_metadata(link, seen, visit)
         _walk_named_globals(link, methods, seen, visit, _HELPER_HOP_BUDGET)
+    if swept is not None:
+        swept[id(chain[-1])] = chain[-1]  # recorded only once the whole walk has run
 
 
 def _code_names(code: types.CodeType) -> Iterator[str]:
@@ -713,6 +722,7 @@ def _clear_module_callables_tensor_metadata(
     seen: set[int],
     visit: Callable[[torch.Tensor], None] | None = None,
     methods: MethodIndex | None = None,
+    swept: dict[int, Any] | None = None,
 ) -> None:
     """Walk one module's forward callable and its helpers, then its class's ``lru_cache`` contents.
 
@@ -732,6 +742,15 @@ def _clear_module_callables_tensor_metadata(
     methods
         The whole model's :func:`method_index`, built once per sweep; ``None``
         indexes ``module``'s own class only.
+    swept
+        The user callables this sweep has already walked, by id (the callable is
+        the value, so its id cannot be reused while the sweep runs). A model's
+        modules mostly share one class ``forward``; walking it again with the
+        same ``seen``, ``visit`` and ``methods`` reaches nothing new (containers
+        and helpers are in ``seen``, and a tensor's action is idempotent), so
+        the repeat is skipped. Pass one dict per sweep, with that sweep's one
+        ``seen``, ``visit`` and whole-model ``methods``; it is ignored when
+        ``methods`` is ``None`` (a per-class index differs between modules).
     """
 
     _clear_callable_session_tensor_metadata(
@@ -739,6 +758,7 @@ def _clear_module_callables_tensor_metadata(
         seen,
         visit=visit,
         methods=method_index((type(module),)) if methods is None else methods,
+        swept=None if methods is None else swept,
     )
     for cache in _class_lru_caches(type(module)):
         _clear_session_tensor_metadata(cache, seen, visit=visit)
@@ -755,6 +775,7 @@ def _clear_model_tree_tensor_metadata(model: nn.Module, seen: set[int]) -> None:
 
     submodules = list(model_modules(model))
     methods = method_index(type(submodule) for submodule in submodules)
+    swept: dict[int, Any] = {}
     for submodule in submodules:
         _clear_module_attribute_tensor_metadata(submodule, seen)
-        _clear_module_callables_tensor_metadata(submodule, seen, methods=methods)
+        _clear_module_callables_tensor_metadata(submodule, seen, methods=methods, swept=swept)

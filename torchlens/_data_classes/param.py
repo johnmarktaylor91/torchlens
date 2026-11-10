@@ -35,19 +35,24 @@ from .._io import (
     default_fill_state,
     read_tlspec_version,
 )
-from .._ir.refs import DeviceRef, DtypeRef
+from .._ir.refs import DtypeRef
 from .._quantities import Bytes
 from .._utils._display_errors import short_name_message
 from ._accessor_base import Accessor
 from ._lookup_kinds import converted, param_for_key
 from ._param_fork import bind_fork_param
 from ._param_pin import bind_param_classes, param_index, param_key as param_key
+from ._param_row import PARAM_ROW_FIELDS, init_param_row
 from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .op import GradientRecord, GradientRecordAccessor
 
 if TYPE_CHECKING:
     import pandas as pd
+
+    from ._param_row import ParamRowFields as _ParamFields
+else:
+    _ParamFields = object  # the stored fields' static types exist for the checker only
 
 
 def _param_log_to_row(param_log: "Param") -> dict[str, Any]:
@@ -161,7 +166,7 @@ class ParamValueBasis:
         return self.basis if self.reason is None else f"{self.basis}({self.reason})"
 
 
-class Param:
+class Param(_ParamFields):
     """Metadata about a single model parameter (weight or bias).
 
     Captures static parameter identity (address, shape, dtype, trainability)
@@ -258,43 +263,20 @@ class Param:
         has_optimizer:
             Whether optimizer state was detected for the parameter.
         """
-
-        self.address = address  # e.g. "features.0.weight"
-        self.name = name  # short name, e.g. "weight"
-        self.shape = shape
-        self.dtype = dtype
-        self.dtype_ref: DtypeRef | None = DtypeRef.from_value(dtype)
-        self.device_ref: DeviceRef | None = None
-        self.backend_address: str | None = address
-        self.resolver_status: str = "resolved"
-        self.num_params = num_params
-        self.param_memory = Bytes(param_memory)
-        self.is_trainable = trainable
-        self.module_address = module_address
-        self.all_addresses = [address]
-        self.all_module_addresses = [module_address]
-        self.barcode = barcode
-        self.has_optimizer = has_optimizer
-
-        # Direct reference to the actual nn.Parameter for lazy grad access.
-        # Prevents GC of the parameter while this Param is alive (acceptable
-        # because Trace lifetime <= model lifetime; cleanup() clears it).
-        self._param_ref: torch.nn.Parameter | None = None
-        self._param_ref_released: bool = False
-        self._source_trace_ref: Any = None
-
-        # Populated during postprocessing:
-        self.num_calls: int = 1  # how many forward ops used this param
-        self.used_by_ops: list[str] = []  # op labels that used this param
-        self.used_by_layers: list[str] = []  # layer labels that used this param
-        self.co_parent_params: list[str] = []  # other param addresses used by the same op
-        self._has_grad: bool = False  # one-shot flag: once True, no further checks
-        self._grad_shape: tuple[int, ...] | None = None
-        self._grad_dtype: torch.dtype | None = None
-        self._grad_memory: Bytes = Bytes(0)
-        self._grad_records: list[GradientRecord] = []
-        self._derived_grad_payload: Any | None = None
-        self._derived_grad_record_path: str | None = None
+        init_param_row(
+            self,
+            DtypeRef.from_value(dtype),
+            module_address,
+            name,
+            shape,
+            dtype,
+            num_params,
+            param_memory,
+            trainable,
+            address,
+            barcode,
+            has_optimizer,
+        )
 
     @property
     def is_quantized(self) -> bool:
@@ -897,6 +879,8 @@ def _install_param_facade() -> None:
 
     from .._trace_core.record_rows import install_record_facade
 
+    if PARAM_ROW_FIELDS != _PARAM_STORED_FIELDS:
+        raise RuntimeError("Param's one-write row order differs from its stored fields")
     install_record_facade(Param, _PARAM_STORED_FIELDS)
 
 

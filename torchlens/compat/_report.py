@@ -15,7 +15,6 @@ import torch
 from torch import nn
 
 from torchlens import _state
-from torchlens._capture_state_helpers import compiled_plain_callable_sites
 from torchlens._distributed import DistributedFinding, detect_distributed_state
 from torchlens._doctor_types import DoctorCheck, Severity, Status
 from torchlens._robustness import _iter_tensors
@@ -25,6 +24,7 @@ from torchlens._utils._torch_compat import (
     get_fp8_dtypes,
     get_fx_graph_module_type,
 )
+from torchlens.backends.torch._compiled_callable_sites import compiled_plain_callable_sites
 from torchlens.backends.torch.belt import belt_report
 
 

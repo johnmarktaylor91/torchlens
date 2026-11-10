@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 from ..._utils._model_walk import own_named_buffers
-from ._held_plain_holders import iter_plain_holder_tensors
+from ._held_plain_holders import DICTLESS_LEAF_TYPES, iter_plain_holder_tensors
 
 _HELD_SCAN_MAX_DEPTH = 4
 """Container levels below a module attribute that the held-tensor scan descends.
@@ -310,11 +310,11 @@ def iter_module_held_plain_tensors(
     """
 
     scan = _HeldScan(truncations, module_address)
-    scan.taken.update(name for name in module.__dict__ if not name.startswith(("_", "tl_")))
+    scan.taken.update({name for name in module.__dict__ if not name.startswith(("_", "tl_"))})
     for _, registered in own_named_buffers(module):
         scan.stamp(registered)
     for attr_name, attr_val in module.__dict__.items():
-        if attr_name.startswith(("_", "tl_")):
+        if attr_name.startswith(("_", "tl_")) or type(attr_val) in DICTLESS_LEAF_TYPES:
             continue
         if isinstance(attr_val, torch.Tensor):
             if not isinstance(attr_val, nn.Parameter):

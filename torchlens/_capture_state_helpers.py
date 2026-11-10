@@ -54,6 +54,7 @@ from ._utils.input_leaves import move_input_tensor
 from ._utils.tensor_leaves import iter_tensors
 from ._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
+from .backends.torch import _compiled_callable_sites as _compiled_sites
 from .backends.torch._tracing_pass import lift_hop_entry_compiles
 from .errors._base import transparent_contextmanager
 
@@ -372,44 +373,6 @@ def unwrap_compiled_model(model: nn.Module) -> nn.Module:
     return orig_mod
 
 
-def compiled_plain_callable_sites(model: nn.Module) -> tuple[str, ...]:
-    """Return plain module attributes carrying Dynamo-compiled callables.
-
-    Parameters
-    ----------
-    model:
-        Model whose module instance dictionaries are inspected.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Stable module-attribute paths for compiled non-module callables.
-
-    Notes
-    -----
-    The direct ``vars`` walk never executes descriptors. This inventory is what
-    makes cache-hit handling independent of the transient ``is_compiling()`` flag:
-    a hot compiled callable can bypass Python torch wrappers entirely.
-    """
-    sites: list[str] = []
-    try:
-        modules = model_named_modules(model)
-    except Exception:
-        modules = (("", model),)
-    for module_name, module in modules:
-        try:
-            attributes = vars(module)
-        except (TypeError, AttributeError):
-            continue
-        for attr_name, value in attributes.items():
-            if attr_name in _PLAIN_ATTR_IGNORED_NAMES or isinstance(value, nn.Module):
-                continue
-            if is_dynamo_compiled_callable(value):
-                prefix = module_name or "<root>"
-                sites.append(f"{prefix}.{attr_name}")
-    return tuple(dict.fromkeys(sites))
-
-
 def _make_compiled_callable_bypass(
     compiled_callable: Callable[..., Any],
 ) -> Callable[..., Any]:
@@ -475,6 +438,8 @@ def bypass_compiled_plain_callables(model: nn.Module) -> Iterator[None]:
             except (TypeError, AttributeError):
                 continue
             for attr_name, value in attributes:
+                if _compiled_sites.cannot_carry_compile_marker(value):
+                    continue
                 if attr_name in _PLAIN_ATTR_IGNORED_NAMES or isinstance(value, nn.Module):
                     continue
                 if not callable(value) or not is_dynamo_compiled_callable(value):
@@ -550,7 +515,7 @@ def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
     """
 
     with unwrap_compiled_submodules(model), hold_fused_attention_fastpath_off(model) as held:
-        sites = compiled_plain_callable_sites(model)
+        sites = _compiled_sites.compiled_plain_callable_sites(model)
         with force_eager_stance_scope() as stance_active, lift_hop_entry_compiles():
             if stance_active:
                 if sites:
