@@ -392,12 +392,11 @@ def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) ->
             for item in value:
                 if isinstance(item, tracing_types):
                     return hop_entry_lifted or not _inside_unsupported_grad_operator()
-    if _LEN_DISPATCH_STACK is not None and not _LEN_DISPATCH_STACK():
-        return False
-    stack = get_current_dispatch_mode_stack()
-    if not stack or not _fake_tensor_mode_active(stack):
-        return False
-    return hop_entry_lifted or not _inside_unsupported_grad_operator()
+    if _LEN_DISPATCH_STACK is None or _LEN_DISPATCH_STACK():
+        stack = get_current_dispatch_mode_stack()
+        if stack and _fake_tensor_mode_active(stack):
+            return hop_entry_lifted or not _inside_unsupported_grad_operator()
+    return False
 
 
 _FUNCTORCH_PROBE: list[Any] = []  # the resolved probe, once found (process-stable)

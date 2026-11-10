@@ -37,18 +37,20 @@ from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureNotActiveError
 from ..._utils import _compiled_write_guard
 from ..._utils._compiled_write_guard import materialize_deferred_for_call
+from ..._utils._detached_activations import (
+    _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
+    has_detached_saved_activations,
+    propagate_detached_saved_activation,
+)
 from ..._utils._dispatch_modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ..._utils._hop_entry_compile import compile_disabled
 from ..._utils._tensor_label import (
-    _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
     DescriptorCompatProperty,
     get_tensor_label,
-    has_detached_saved_activations,
     is_decorated_function,
     is_tensor_data_alias,
     mark_decorated_function,
     mark_tensor_data_alias,
-    propagate_detached_saved_activation,
     set_tensor_label,
 )
 from ..._utils._torch_compat import (

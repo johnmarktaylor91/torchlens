@@ -21,9 +21,11 @@ from ..._data_classes.op import (
 )
 from ..._robustness import UnsupportedTensorVariantError
 from ..._utils._call_site import call_site_class, call_site_scope
+from ..._utils._detached_activations import (
+    mark_detached_saved_activation,
+)
 from ..._utils._tensor_label import (
     get_tensor_label,
-    mark_detached_saved_activation,
 )
 from ..._utils._torch_compat import (
     tensor_version_or_none,

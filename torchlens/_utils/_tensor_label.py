@@ -13,17 +13,6 @@ from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from .. import _state
-
-# Re-exported for existing importers: detached-activation guidance lives in its own module.
-from ._detached_activations import (  # noqa: F401
-    _DETACHED_ACTIVATION_ANY_INPUT_FUNCS as _DETACHED_ACTIVATION_ANY_INPUT_FUNCS,
-    _DETACHED_ACTIVATION_PROPAGATION_FUNCS as _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
-    _DETACHED_SAVED_ACTIVATIONS as _DETACHED_SAVED_ACTIVATIONS,
-    detached_saved_activation_label as detached_saved_activation_label,
-    has_detached_saved_activations as has_detached_saved_activations,
-    mark_detached_saved_activation as mark_detached_saved_activation,
-    propagate_detached_saved_activation as propagate_detached_saved_activation,
-)
 from ._internal_read import internal_scalar_read
 from ._torch_compat import get_tensorbase_class
 
@@ -71,10 +60,6 @@ __all__ = [
     "mark_tensor_replacement_wrapped",
     "is_tensor_replacement_wrapped",
     "copy_replacement_meta",
-    "mark_detached_saved_activation",
-    "has_detached_saved_activations",
-    "propagate_detached_saved_activation",
-    "detached_saved_activation_label",
     "DescriptorCompatProperty",
 ]
 

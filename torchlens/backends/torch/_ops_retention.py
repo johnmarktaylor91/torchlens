@@ -28,7 +28,7 @@ from ..._ir.selector_eval import split_followed_by_conjunction
 from ..._selection.selectors import (
     BaseSelector,
 )
-from ..._utils._tensor_label import (
+from ..._utils._detached_activations import (
     mark_detached_saved_activation,
 )
 from ..._utils.tensor_utils import (
