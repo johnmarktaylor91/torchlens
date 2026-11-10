@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from torch import nn
 
-from ..._utils._tensor_label import get_module_meta
-
 
 def _owns_state(module: nn.Module) -> bool:
     """Whether ``module`` itself registers a non-None parameter or buffer."""
@@ -56,16 +54,3 @@ def stateful_modules(model: nn.Module) -> dict[int, nn.Module]:
             if child is not None and id(child) not in verdict
         )
     return keep
-
-
-def stateful_scope_facts(model: nn.Module) -> tuple[frozenset[int], frozenset[str]]:
-    """The stateful modules' ids and their prepared addresses (the module-stack spelling)."""
-
-    modules = stateful_modules(model)
-    addresses: set[str] = set()
-    for module in modules.values():
-        meta = get_module_meta(module)
-        address = getattr(meta, "address", None)
-        if address:
-            addresses.add(str(address))
-    return frozenset(modules), frozenset(addresses)

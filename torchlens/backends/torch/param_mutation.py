@@ -507,7 +507,7 @@ def parameter_mutation_output_for_logging(
 # Late registration of parameters the captured forward itself created (lazy modules).
 # ---------------------------------------------------------------------------
 # Model preparation stamps every parameter of the module tree before the forward runs
-# (``model_prep._create_session_param_logs``). A lazy module built INSIDE forward
+# (``_session_param_logs.create_session_param_logs``). A lazy module built INSIDE forward
 # (``self.lazy = nn.LazyLinear(4)`` followed by ``self.lazy(x)``) is not in that tree yet:
 # torch materializes its pending ``UninitializedParameter`` slots in place from the lazy
 # pre-hook, fills them in ``reset_parameters``, and the module body then consumes them

@@ -168,6 +168,19 @@ def _current(model: Any) -> tuple[Any, ...] | None:
     return record if record[1] else None
 
 
+def current_tree_record(model: Any) -> tuple[Any, ...] | None:
+    """Return the recorded walk standing for ``model``'s tree now, or ``None``.
+
+    The same object comes back for as long as the tree is unchanged, and a new
+    one after any change, so a cache keyed on this tree holds the record and
+    compares it by identity. ``None`` means the tree is walked live (it cannot
+    be described, or a class in it walks its own way), and nothing may be
+    cached on it.
+    """
+
+    return _current(model)
+
+
 def _paired(names: tuple[str, ...], refs: tuple[Any, ...]) -> tuple[tuple[str, Any], ...]:
     """Return ``(name, module)`` pairs from the record, dereferenced without a call per item."""
 
@@ -307,6 +320,7 @@ def _own_members(module: nn.Module, registry: str, method: str) -> tuple[tuple[s
 
 
 __all__ = [
+    "current_tree_record",
     "model_modules",
     "model_named_buffers",
     "model_named_modules",
