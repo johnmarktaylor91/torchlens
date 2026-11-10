@@ -27,6 +27,7 @@ from .._trace_core.view_tables import DEAD
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
+from ._record_views import handed, install_trace_calls
 from ._trace_accessors import (
     _TRACE_LAYER_ACCESSOR_ATTR,
     _TRACE_MODULE_CALL_ACCESSOR_ATTR,
@@ -48,6 +49,9 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 __all__: list[str] = []
+
+
+install_trace_calls(TraceModuleCallAccessor)
 
 
 class _HandedOps(TraceOpAccessor):
@@ -175,14 +179,13 @@ def module_calls(trace: Trace) -> TraceModuleCallAccessor:
     # weak-keyed cache would pin every Trace forever.
     cached = trace.__dict__.get(_TRACE_MODULE_CALL_ACCESSOR_ATTR)
     if cached is not None:
-        return cached
+        return handed(cached, trace)
     calls: OrderedDict[str, Any] = OrderedDict()
     for module in trace._module_logs:
         for call in module.calls.values():
             calls[call.label] = call
-    accessor = TraceModuleCallAccessor(calls)
-    trace.__dict__[_TRACE_MODULE_CALL_ACCESSOR_ATTR] = accessor
-    return accessor
+    accessor = trace.__dict__[_TRACE_MODULE_CALL_ACCESSOR_ATTR] = TraceModuleCallAccessor(calls)
+    return handed(accessor, trace)
 
 
 def num_edges(trace: Trace) -> int:

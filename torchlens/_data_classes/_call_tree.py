@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, TextIO, cast
 
 from .._errors import RecordBindingError
+from .._trace_core.record_refs import collected_text
 from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
@@ -298,7 +299,7 @@ def _live_call_trace(
     trace = ref()
     if trace is None:
         raise RecordBindingError(
-            f"Trace has been garbage-collected; a {record} does not keep its Trace alive",
+            collected_text(record),
             code="trace_reference_collected",
             remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
         )

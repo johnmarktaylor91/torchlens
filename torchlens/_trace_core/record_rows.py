@@ -102,6 +102,28 @@ class RecordCellField:
             raise AttributeError(self._name)
 
 
+def write_row(record: Any, cells: list[Any]) -> None:
+    """Write every declared field of ``record`` at once from ``cells``.
+
+    ``cells`` holds one value per declared field in layout order and becomes
+    the record's row, so the caller must not keep it. A record that already
+    has a row (a subclass wrote a field first) takes the values cell by cell,
+    as one descriptor write per field did.
+    """
+
+    instance_dict = record.__dict__
+    if CORE_KEY in instance_dict:
+        store = instance_dict[CORE_KEY]
+        row = instance_dict[ROW_KEY]
+        for fid, value in enumerate(cells):
+            store.cell_set(row, fid, value)
+        return
+    store = DetachedOpStore(type(record)._TL_LAYOUT)
+    store._cells = cells
+    instance_dict[CORE_KEY] = store
+    instance_dict[ROW_KEY] = 0
+
+
 def install_record_facade(cls: type, stored_names: tuple[str, ...]) -> OpStoreLayout:
     """Install cell descriptors for ``stored_names`` on ``cls``.
 

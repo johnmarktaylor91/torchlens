@@ -13,6 +13,7 @@ from operator import eq, methodcaller, truth
 from typing import TYPE_CHECKING, Any
 
 from ._param_fork import pin_fork_params
+from ._record_views import rebind as rebind_module_records
 from ._trace_intervention_records import record_operation
 from ._trace_missing_attrs import is_live_trace
 
@@ -91,9 +92,5 @@ def rebind_fork_owner_refs(trace: Trace) -> None:
         del layer_pass.facets
     for layer_log in trace._layer_logs.values():
         layer_log.source_trace = trace
-    for module_log in trace.modules:
-        module_log._source_trace = trace
-        module_log.__dict__.pop("_facets_cache", None)
-        for module_call in module_log.calls.values():
-            module_call._source_trace = trace
+    rebind_module_records(trace)
     pin_fork_params(trace)

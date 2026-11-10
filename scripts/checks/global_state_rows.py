@@ -350,6 +350,12 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_data_classes/_param_pin.py", "_ACCESSOR"),
         ("torchlens/_trace_core/record_refs.py", "_OWN_CHILDREN"),
         ("torchlens/_data_classes/_fork_translation.py", "FORK_COPIERS"),
+        # The Module and ModuleCall classes and, per module accessor class,
+        # the fields that hold record state; module.py and the trace accessors
+        # bind both once at import so the record view module imports no record
+        # class; never mutated by a capture.
+        ("torchlens/_data_classes/_record_views.py", "_CLASSES"),
+        ("torchlens/_data_classes/_record_views.py", "_FIELDS"),
         # The OpAccessor class (and an empty subclass of it) the layer
         # accessors bind once at import so the ``Layer.ops`` door can hand out
         # an accessor without importing it; never mutated by a capture.
@@ -855,6 +861,13 @@ _PROCESS_CACHES = frozenset(
         # shape), registered at install so the census can tell a dispatch made by the
         # C++ apply epilogue from one inside the user's forward; process-stable.
         ("torchlens/backends/torch/_function_epilogue.py", "_APPLY_CODES"),
+        # The live Module or ModuleCall view of each trace-held state, keyed by
+        # id(state): each value is a weak reference to the view, a read trusts
+        # an entry only when the view's state is that state, and dead entries
+        # are swept when the table reaches the size in _SWEEP_AT. Holds no
+        # record, state or trace.
+        ("torchlens/_data_classes/_record_views.py", "_VIEWS"),
+        ("torchlens/_data_classes/_record_views.py", "_SWEEP_AT"),
         # tl.errors.quiet: one quieted subclass per warning class, built on first use.
         ("torchlens/errors/_base.py", "_QUIETED_CLASSES"),
         # Routed tensor reads: last resolution per routed name (ten keys), held with the

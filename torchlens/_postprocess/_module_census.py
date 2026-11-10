@@ -6,13 +6,12 @@ conditional records), which sits at the package's file-size cap.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from .._utils._model_walk import model_named_modules
 
 if TYPE_CHECKING:
-    from .._data_classes.op import Op
     from .._data_classes.trace import Trace
 
 __all__ = ("bind_layer_conditional_roles", "op_space_labels", "uncalled_module_addresses")
@@ -90,57 +89,98 @@ def bind_layer_conditional_roles(trace: Trace, roles_by_label: Mapping[str, Sequ
         layer._control_flow_in_conditionals = list(roles_by_label.get(layer_label, []))
 
 
-def _call_io_layers(
-    self: Trace,
-    call_label: str,
-    pass_layers: list[str],
-    pass_input_layers_by_call: dict[str, list[str]] | None,
-) -> tuple[list[str], list[str], list[str], list[Op]]:
-    """Derive one module call's input and output layers from its Op fields.
+#: ``Module`` constructor arguments copied from the captured metadata, ``None`` when absent.
+_SOURCE_AND_HOOK_NAMES = (
+    "class_source_file",
+    "class_source_line",
+    "init_source_file",
+    "init_source_line",
+    "forward_source_file",
+    "forward_source_line",
+    "class_docstring",
+    "init_signature",
+    "init_docstring",
+    "forward_signature",
+    "forward_docstring",
+    "forward_pre_hooks",
+    "forward_hooks",
+    "backward_pre_hooks",
+    "backward_hooks",
+    "full_backward_pre_hooks",
+    "full_backward_hooks",
+)
+
+
+def module_source_and_hooks(meta: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a module's source and hook facts from its captured metadata.
 
     Parameters
     ----------
-    self:
-        Trace being finalized.
+    meta:
+        Metadata captured for the module during model preparation.
+
+    Returns
+    -------
+    dict[str, Any]
+        One ``Module`` constructor argument per source or hook fact, ``None``
+        for a fact the metadata does not hold.
+    """
+
+    facts: dict[str, Any] = dict.fromkeys(_SOURCE_AND_HOOK_NAMES)
+    for name in _SOURCE_AND_HOOK_NAMES:
+        if name in meta:
+            facts[name] = meta[name]
+    return facts
+
+
+def param_totals(params: Iterable[Any]) -> tuple[int, int, int, int]:
+    """Return the parameter count, trainable count, frozen count and memory of ``params``.
+
+    One pass that reads each parameter's count, trainable flag and memory once.
+    """
+
+    total = trainable = memory = 0
+    for param in params:
+        count = param.num_params
+        total += count
+        if param.is_trainable:
+            trainable += count
+        memory += int(param.param_memory)
+    return total, trainable, total - trainable, memory
+
+
+def _call_io_layers(
+    call_label: str,
+    pass_layers: list[str],
+    input_layers_by_call: dict[str, list[str]],
+    outputs_by_call: dict[str, dict[str, str]],
+) -> tuple[list[str], list[str], list[str]]:
+    """Derive one module call's input and output layers from the trace-wide rosters.
+
+    Both rosters were collected over every op of the trace, so no op is read here.
+
+    Parameters
+    ----------
     call_label:
         Module call label (``address:call_index``).
     pass_layers:
         Op labels executed inside the call.
-    pass_input_layers_by_call:
-        Pre-collected input layers keyed by call label, if any.
+    input_layers_by_call:
+        Layer labels of the ops that feed each call (``input_to_module_calls``
+        is the authoritative fed-call fact), keyed by call label.
+    outputs_by_call:
+        Each call's output ops as ``{op label: layer label}``, keyed by call label.
 
     Returns
     -------
-    tuple[list[str], list[str], list[str], list[Op]]
-        Input layer labels, output layer labels, output op labels and the
-        output Op entries.
+    tuple[list[str], list[str], list[str]]
+        Input layer labels, output layer labels and output op labels; the
+        outputs are the call's own ops that are its outputs, in call order.
     """
 
-    pass_input_layers = list((pass_input_layers_by_call or {}).get(call_label, []))
-    pass_output_layers = []
-    pass_output_ops = []
-    pass_outputs = []
-    for op_label in pass_layers:
-        try:
-            te = self.ops[op_label]
-        except (KeyError, TypeError):
-            continue
-        # ``input_to_module_calls`` is the authoritative
-        # fed-call fact. The old ``len(module_call_stack) > 0`` companion
-        # test was a proxy for the same thing only while the enter lane
-        # wrote both together; under containment semantics it would drop
-        # top-level-created inputs (e.g. the model input) from the call's
-        # input roster.
-        if (
-            call_label in te._module_context_input_to_module_calls
-            and te.layer_label not in pass_input_layers
-        ):
-            pass_input_layers.append(te.layer_label)
-        if (
-            te._module_context_is_module_output
-            and call_label in te._module_context_output_of_module_calls
-        ):
-            pass_output_layers.append(te.layer_label)
-            pass_output_ops.append(te.label)
-            pass_outputs.append(te)
-    return pass_input_layers, pass_output_layers, pass_output_ops, pass_outputs
+    pass_input_layers = list(input_layers_by_call.get(call_label, []))
+    outputs = outputs_by_call.get(call_label)
+    if not outputs:
+        return pass_input_layers, [], []
+    pass_output_ops = [op_label for op_label in pass_layers if op_label in outputs]
+    return pass_input_layers, [outputs[op_label] for op_label in pass_output_ops], pass_output_ops

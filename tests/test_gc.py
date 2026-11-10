@@ -268,7 +268,9 @@ class TestTraceGC:
         trace = tl.trace(model, torch.randn(1, 5))
         accessor = trace.module_calls
 
-        assert trace.__dict__[_TRACE_MODULE_CALL_ACCESSOR_ATTR] is accessor
+        # The Trace stores the accessor; the property hands out one object that
+        # shares its state and keeps the Trace.
+        assert trace.__dict__[_TRACE_MODULE_CALL_ACCESSOR_ATTR].__dict__ is accessor.__dict__
         assert trace.module_calls is accessor
         assert Trace._PORTABLE_STATE_SPEC[_TRACE_MODULE_CALL_ACCESSOR_ATTR] is FieldPolicy.DROP
 
@@ -291,24 +293,33 @@ class TestTraceGC:
             gc.collect()
         assert [ref() for ref in refs] == [None, None, None]
 
-    def test_held_module_call_does_not_pin_its_trace(self):
-        """A ModuleCall holds its Trace weakly, as Module and Op already did.
+    def test_held_module_call_keeps_its_trace_and_a_copy_does_not(self):
+        """A ModuleCall read from the Trace keeps it; one copied on its own does not.
 
-        The strong owner edge it used to carry closed Trace -> module_calls ->
-        ModuleCall -> Trace, so no Trace could die at zero refcount. A call held
-        past its Trace now answers ``trace`` with None.
+        The Trace holds each call's state, not the call, so the owner edge of a
+        call it hands out closes no cycle: with no record held, a Trace still
+        dies at zero refcount. A copy holds its Trace weakly and answers
+        ``trace`` with None once the Trace is gone.
         """
+
+        import copy
 
         model = _TwoLayerNet()
         trace = tl.trace(model, torch.randn(1, 5))
         module_call = trace.module_calls[0]
+        twin = copy.copy(module_call)
         ref = weakref.ref(trace)
         assert module_call.trace is trace
 
         del trace
         gc.collect()
-        assert ref() is None, "holding a ModuleCall pinned its Trace"
-        assert module_call.trace is None
+        assert ref() is not None, "a held ModuleCall let its Trace go"
+        assert module_call.trace is ref()
+
+        del module_call
+        gc.collect()
+        assert ref() is None, "a copied ModuleCall pinned its Trace"
+        assert twin.trace is None
 
     def test_trace_reclamation_is_prompt_refcount(self):
         """A dropped Trace and its saved activations are freed at zero refcount.

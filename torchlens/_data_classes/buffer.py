@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any, cast
 from .._constants import BUFFER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import TLSPEC_VERSION, FieldPolicy, default_fill_state, read_tlspec_version
-from .._trace_core.record_refs import child_state_items, install_child_fields
+from .._trace_core.record_refs import child_state_items, install_child_fields, op_keys
+from .._trace_core.record_rows import write_row
 from .._trace_core.record_views import view_at
 from .._utils._display_errors import short_name_message
 from .._utils._record_group_table import record_member
@@ -114,13 +115,18 @@ class Buffer:
             Trace that owns the graph nodes.
         """
 
-        self.address = address
-        self.module_address = address.rsplit(".", 1)[0] if "." in address else ""
-        # The owner reference comes first: ``versions`` is stored as the ops'
-        # rows in the owning trace's op store when it has them all.
-        self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
-        self.versions = list(versions)
-        self._initial_value = initial_value
+        # One row in the order of ``_BUFFER_STORED_FIELDS``; ``versions`` is stored
+        # as the ops' rows in the owning trace's op store when it has them all.
+        write_row(
+            self,
+            [
+                address,
+                address.rsplit(".", 1)[0] if "." in address else "",
+                op_keys(versions, source_trace),
+                initial_value,
+                weakref.ref(source_trace) if source_trace is not None else None,
+            ],
+        )
 
     def __tl_state_items__(self) -> Any:
         """Yield live state pairs from the backing row (facade hook)."""

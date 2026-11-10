@@ -2421,7 +2421,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected and this Op holds none: an Op read from the Trace keeps it; one reached through a Layer's ops, copied or restored does not",
+                "Trace has been garbage-collected and this Op holds none: an Op read from the Trace or through a Layer's ops keeps it; one copied or restored does not",
                 code="trace_reference_collected",
                 remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
             )
@@ -2587,13 +2587,9 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def facets(self) -> Any:
         """Return the lazy semantic facet view for this Op."""
 
-        cache = self._slot("_facets_cache")
-        if cache is None:
-            from .._semantic.facets import FacetView
+        from .._semantic import _facet_door, facets
 
-            cache = FacetView(self)
-            object.__setattr__(self, "_facets_cache", cache)
-        return cache
+        return _facet_door.op_facets(self, facets.FacetView)
 
     @facets.deleter
     def facets(self) -> None:

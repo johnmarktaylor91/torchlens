@@ -6003,3 +6003,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a6d7dd7263292de441e222cfc6b89323aac6648a
 recorded: 2026-11-10T20:16:46+00:00
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: lane B6c: Module and ModuleCall records keep their trace
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bb651b9fe7d63164bb84dfcc7668e1ee03e64adf
+recorded: 2026-11-10T17:33:15Z

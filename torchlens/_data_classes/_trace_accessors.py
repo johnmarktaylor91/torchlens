@@ -699,6 +699,8 @@ class TraceOpAccessor(Accessor[Op]):
 class TraceModuleCallAccessor(Accessor[Any]):
     """Trace-level accessor for type-strict ModuleCall lookups."""
 
+    __slots__ = ("_handed", "_owner")  # as ``TraceOpAccessor``: see ``_record_views.handed``
+
     def __init__(self, calls: Mapping[str, Any]) -> None:
         """Initialize from call-label keyed ModuleCalls."""
 

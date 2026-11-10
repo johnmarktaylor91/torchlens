@@ -16,6 +16,7 @@ the raising code.
 
 from __future__ import annotations
 
+import copy
 import gc
 import weakref
 from types import SimpleNamespace
@@ -49,16 +50,17 @@ class _TwoLayer(nn.Module):
 
 
 def test_module_view_read_after_trace_collection_refuses_trace_reference_collected() -> None:
-    """A held Layer keeps its Trace; a module view kept past its Trace refuses typed.
+    """A held Layer keeps its Trace; a copied module view kept past its Trace refuses typed.
 
     A Layer looked up on a Trace holds that Trace, so its reads answer after
-    ``del trace``. A module record's view does not keep its Trace, so once
-    nothing holds the Trace a read through it refuses ``trace_reference_collected``.
+    ``del trace``. So does a module record's facet view read from the Trace. A
+    copy of that view holds no Trace, so once nothing holds the Trace a read
+    through the copy refuses ``trace_reference_collected``.
     """
 
     trace = tl.trace(_TwoLayer(), torch.randn(2, 4))
     layer = trace.layers["linear_1_1"]
-    facets = trace.modules["first"].facets
+    facets = copy.copy(trace.modules["first"].facets)
     trace_ref = weakref.ref(trace)
 
     del trace

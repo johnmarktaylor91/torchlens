@@ -265,8 +265,11 @@ def name_owner_by_row(trace_ref: Any, owner: Any) -> None:
         Record whose ``_grad_records`` are rebound.
     """
 
+    grad_records = getattr(owner, "_grad_records", None)
+    if not grad_records:
+        return  # nothing to rebind, so the owner's row is not looked up
     stored = row_key_or_value(owner, trace_ref)
-    for grad_record in getattr(owner, "_grad_records", None) or ():
+    for grad_record in grad_records:
         grad_record.__dict__["owner"] = stored
 
 
@@ -274,6 +277,21 @@ def _core_of(trace: Any) -> Any:
     """Return the trace's core, or ``None`` for no trace or a trace without one."""
 
     return None if trace is None else trace.__dict__.get("_trace_core")
+
+
+#: Record kinds whose objects hold their Trace when read from it.
+_KEEPS_TRACE = frozenset({"Module", "ModuleCall"})
+
+
+def collected_text(record_name: str) -> str:
+    """Return the ``trace_reference_collected`` message for a ``record_name`` record."""
+
+    if record_name in _KEEPS_TRACE:
+        return (
+            f"Trace has been garbage-collected and this {record_name} holds none: a "
+            f"{record_name} read from the Trace keeps it; one copied or restored does not"
+        )
+    return f"Trace has been garbage-collected; a {record_name} does not keep its Trace alive"
 
 
 def _live_trace(ref: Any, record_name: str) -> Any:
@@ -288,7 +306,7 @@ def _live_trace(ref: Any, record_name: str) -> Any:
     trace = ref()
     if trace is None:
         raise RecordBindingError(
-            f"Trace has been garbage-collected; a {record_name} does not keep its Trace alive",
+            collected_text(record_name),
             code="trace_reference_collected",
             remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
         )
@@ -390,9 +408,11 @@ class RowKeys(dict[Any, int]):
 def child_keys(children: Any, kind: str, trace: Any, door_keys: Any) -> RowKeys | None:
     """Return ``key -> row`` for an accessor's children, or ``None`` when one cannot be keyed.
 
-    ``door_keys`` maps the identity of each record the trace's door hands out
-    to its key there. A child with no row in the trace's store for ``kind``,
-    or one the door does not hand out, leaves the accessor in the cell.
+    ``door_keys`` maps the row of each record the trace's door hands out (in
+    the trace's store for ``kind``) to its key there. A child with no row in
+    that store, or one the door does not hand out, leaves the accessor in the
+    cell. Rows, not object identities: a record is a view that lives only
+    while somebody holds it, so its ``id`` can name another record later.
     """
 
     items = getattr(children, "_dict", None)
@@ -405,11 +425,11 @@ def child_keys(children: Any, kind: str, trace: Any, door_keys: Any) -> RowKeys 
         child_dict = getattr(child, "__dict__", None)
         if child_dict is None or child_dict.get(CORE_KEY) is not store:
             return None
-        identity = _door_identity(child, kind)
-        if identity not in door_keys:
+        row = child_dict[ROW_KEY]
+        if row not in door_keys:
             return None
-        keys[key] = child_dict[ROW_KEY]
-        door.append(door_keys[identity])
+        keys[key] = row
+        door.append(door_keys[row])
     keys.build = type(children)
     keys.door = tuple(door)
     keys.home = weakref.ref(trace)
@@ -537,31 +557,6 @@ class ChildAccessorField(RecordCellField):
         )
 
 
-def _door_identity(child: Any, kind: str) -> Any:
-    """Return what names ``child`` in its door: its row for a ``Param``, else its identity.
-
-    A trace hands out ``Param`` views built on demand, so two views of one row
-    may differ in identity and one ``id`` may name different views over time.
-    """
-
-    return child.__dict__.get(ROW_KEY) if kind == "param" else id(child)
-
-
-def _door_identities(mapping: Any, kind: str, store: Any) -> dict[Any, Any]:
-    """Return ``identity -> key`` for the records a door maps (see ``_door_identity``).
-
-    For ``Param`` only records over ``store`` count: a row names a record of one store.
-    """
-
-    if kind != "param":
-        return {id(child): key for key, child in mapping.items()}
-    return {
-        child.__dict__.get(ROW_KEY): key
-        for key, child in mapping.items()
-        if child.__dict__.get(CORE_KEY) is store
-    }
-
-
 #: ``own_children`` from the param pin module, bound there at import (no import cycle).
 _OWN_CHILDREN: list[Any] = []
 
@@ -605,8 +600,25 @@ def child_state_items(record: Any) -> Iterator[tuple[str, Any]]:
     child_fields = type(record)._TL_CHILD_FIELDS
     for name, value in record_state_items(record):
         if name in child_fields:
-            value = getattr(record, name)
+            field = getattr(type(record), name)
+            if isinstance(field, ChildAccessorField):
+                # The stored accessor, never one a record handed out (that one holds the trace).
+                value = ChildAccessorField.__get__(field, record)
+            else:
+                value = getattr(record, name)
         yield name, value
+
+
+def _rows_to_door_keys(mapping: Any, trace: Any, kind: str) -> dict[Any, Any]:
+    """Return ``row -> door key`` for the records of ``mapping`` in the trace's store for ``kind``."""
+
+    store = _core_of(trace).kind_rows.get(kind)
+    rows: dict[Any, Any] = {}
+    for key, child in mapping.items():
+        child_dict = getattr(child, "__dict__", None)
+        if child_dict is not None and child_dict.get(CORE_KEY) is store:
+            rows[child_dict[ROW_KEY]] = key
+    return rows
 
 
 def rekey_child_cells(records: Iterable[Any], trace: Any) -> None:
@@ -634,9 +646,7 @@ def rekey_child_cells(records: Iterable[Any], trace: Any) -> None:
             if kind not in door_keys:
                 mapping = _door_of(trace, kind)
                 door_keys[kind] = (
-                    None
-                    if mapping is None
-                    else _door_identities(mapping, kind, _core_of(trace).kind_rows.get(kind))
+                    None if mapping is None else _rows_to_door_keys(mapping, trace, kind)
                 )
             keys = child_keys(held, kind, trace, door_keys[kind])
             if keys is not None:

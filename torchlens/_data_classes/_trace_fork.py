@@ -61,6 +61,7 @@ from ._fork_translation import RowTranslator
 from ._layer_state import install_layer_logs
 from ._op_row_containers import bind_op_containers
 from ._param_fork import seed_param_memo
+from ._record_views import reached as reached_module_records
 from ._state_adapter import state_items, state_new, state_restore
 from .func_call_location import FuncCallLocation
 from .layer import OpAccessor
@@ -344,11 +345,9 @@ def _iter_parent_records(parent: Trace, params_seeded: bool = False) -> Iterator
 
     module_accessor = parent.__dict__.get("_module_logs")
     if module_accessor is not None:
-        for module in module_accessor.values():
-            yield module
-            calls = getattr(module, "calls", None)
-            if calls:
-                yield from calls.values()
+        modules, calls = reached_module_records(module_accessor)
+        yield from modules
+        yield from calls
     param_accessor = parent.__dict__.get("_param_logs")
     if param_accessor is not None and not params_seeded:
         yield from param_accessor.values()

@@ -1108,6 +1108,8 @@ class FacetView(Mapping[FacetKey, Any]):
     (1, 4, 8, 8)"""
 
     _record = RecordSlot("_record")
+    __slots__ = ("__dict__", "__weakref__", "_handed", "_owner")
+    __getstate__ = lambda self: self.__dict__  # noqa: E731 - streams carry the state, never the slots
 
     def __init__(self, record: Any) -> None:
         """Create a facet view for a record.
@@ -1137,11 +1139,9 @@ class FacetView(Mapping[FacetKey, Any]):
                 self._recipes, key=lambda item: _recipe_sort_key(item, self._record)
             )
         )
-        if not names:
-            return None
         if len(names) == 1:
             return names[0]
-        return names
+        return names or None
 
     def keys(self) -> builtins.list[FacetKey]:  # type: ignore[override]
         """Return facet names available in the current trace."""

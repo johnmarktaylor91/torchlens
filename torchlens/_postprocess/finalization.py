@@ -29,13 +29,13 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 import torch
 
 from .._capture.outcome import outcome_for
+from .._data_classes._module_facade_fields import summarize_call_args
 from .._data_classes._module_role_hints import (
     multi_output_role_from_path,
     role_hints_for_module_class,
 )
-from .._data_classes._op_column_scan import op_labels, ops_with
+from .._data_classes._op_column_scan import call_outputs, op_labels, ops_with
 from .._data_classes._state_adapter import state_items
-from .._data_classes._summary import format_call_arg
 from .._data_classes.layer import Layer
 from .._data_classes.module import Module, ModuleCall
 from .._data_classes.param import ParamAccessor, param_key
@@ -72,7 +72,9 @@ from ._layer_conditional_merge import _rebuild_conditional_edge_call_indices
 from ._module_census import (
     _call_io_layers,
     bind_layer_conditional_roles,
+    module_source_and_hooks,
     op_space_labels,
+    param_totals,
     uncalled_module_addresses,
 )
 from ._multipass_params import pass_param_addresses, union_multipass_params
@@ -222,10 +224,10 @@ def _build_root_module_log(
 
     root_param_dict = {pl.address: pl for pl in self._param_logs}
     root_params = ParamAccessor(root_param_dict)
-    root_num_params = sum(pl.num_params for pl in self._param_logs)
-    root_num_trainable = sum(pl.num_params for pl in self._param_logs if pl.is_trainable)
-    root_num_frozen = sum(pl.num_params for pl in self._param_logs if not pl.is_trainable)
-    root_fsize = Bytes(sum(int(pl.param_memory) for pl in self._param_logs))
+    root_num_params, root_num_trainable, root_num_frozen, root_memory = param_totals(
+        self._param_logs
+    )
+    root_fsize = Bytes(root_memory)
     address_children = _root_address_children(root_meta, mbd)
 
     root_ops: dict[int, ModuleCall] = {}
@@ -463,6 +465,7 @@ def _build_submodule_call_logs(
     all_addresses: list[str] | None = None,
     module_class: type[torch.nn.Module] | None = None,
     pass_input_layers_by_call: dict[str, list[str]] | None = None,
+    outputs_by_call: dict[str, dict[str, str]] | None = None,
 ) -> tuple[dict[int, "ModuleCall"], list[str]]:
     """Build ModuleCall objects for all ops of a single submodule.
 
@@ -480,19 +483,16 @@ def _build_submodule_call_logs(
 
         pass_layers = list(mbd["module_pass_layers"].get(call_label, []))
 
-        # Derive input/output layers per pass from Op fields
-        pass_input_layers, pass_output_layers, pass_output_ops, pass_outputs = _call_io_layers(
-            self, call_label, pass_layers, pass_input_layers_by_call
+        # Derive input/output layers per pass from the trace-wide rosters
+        pass_input_layers, pass_output_layers, pass_output_ops = _call_io_layers(
+            call_label, pass_layers, pass_input_layers_by_call or {}, outputs_by_call or {}
         )
-
-        role_hints = role_hints_for_module_class(module_class)
-        _assign_output_roles(pass_outputs, hints=role_hints)
+        if len(pass_output_ops) > 1:  # roles are named only among several outputs
+            pass_outputs = [self.ops[op_label] for op_label in pass_output_ops]
+            _assign_output_roles(pass_outputs, hints=role_hints_for_module_class(module_class))
 
         # Forward args for this pass
-        module_forward_args = cast(
-            dict[tuple[str, int], tuple[Any, Any]], self._module_capture_ws.module_forward_args
-        )
-        fwd_args = module_forward_args.get((address, call_index))
+        fwd_args = self._module_capture_ws.module_forward_args.get((address, call_index))
         fwd_positional = fwd_args[0] if fwd_args else None
         fwd_kwargs = fwd_args[1] if fwd_args else None
         fwd_templates = mbd.get("module_forward_templates", {}).get(call_label)
@@ -574,10 +574,10 @@ def _resolve_call_hierarchy(
 
     call_parent_addr = None
     if ops:
-        first_pass = next(iter(ops.values()))
-        if first_pass.call_parent and first_pass.call_parent != "self:1":
-            call_parent_addr = first_pass.call_parent.rsplit(":", 1)[0]
-        elif first_pass.call_parent == "self:1":
+        first_parent = next(iter(ops.values())).call_parent
+        if first_parent and first_parent != "self:1":
+            call_parent_addr = first_parent.rsplit(":", 1)[0]
+        elif first_parent == "self:1":
             call_parent_addr = "self"
 
     return call_children_all, call_parent_addr
@@ -660,6 +660,7 @@ def _build_module_logs(self: "Trace") -> None:
     for te in ops_with(self, "input_to_module_calls"):  # only ops that feed a call
         for call_label in te._module_context_input_to_module_calls:
             _pass_input_layers_by_call[call_label].append(te.layer_label)
+    _outputs_by_call = call_outputs(self)
 
     # --- Build root Module ("self") ---
     module_order.append(root_module)
@@ -690,6 +691,8 @@ def _build_module_logs(self: "Trace") -> None:
                 _buffer_layers_by_module[module_addr].append(bl)
 
     # --- Build ModuleLogs for each submodule ---
+    _all_keys = self._layer_dict_all_keys
+    _layer_label_of: dict[str, str] = {}
     for address in mbd["addresses"]:
         if address == "self":
             continue
@@ -699,16 +702,15 @@ def _build_module_logs(self: "Trace") -> None:
         name = address.rsplit(".", 1)[-1] if "." in address else address
         address_parent = address.rsplit(".", 1)[0] if "." in address else "self"
         address_depth = address.count(".") + 1
-        layers_raw = list(mbd["module_layers"].get(address, []))
-        seen = set()
-        layers = []
-        for label in layers_raw:
-            entry = self._layer_dict_all_keys.get(label)
-            if entry is not None:
-                no_pass = entry.layer_label
-                if no_pass not in seen:
-                    seen.add(no_pass)
-                    layers.append(no_pass)
+        layers_seen: dict[str, None] = {}  # insertion-ordered, deduplicated
+        for label in mbd["module_layers"].get(address, []):
+            if label not in _layer_label_of:  # nested modules list the same ops again
+                entry = _all_keys.get(label)
+                if entry is None:
+                    continue
+                _layer_label_of[label] = entry.layer_label
+            layers_seen[_layer_label_of[label]] = None
+        layers = list(layers_seen)
 
         all_addresses = meta.get("all_addresses", [address])
         ops, call_labels_list = _build_submodule_call_logs(
@@ -721,6 +723,7 @@ def _build_module_logs(self: "Trace") -> None:
             all_addresses=all_addresses,
             module_class=meta.get("cls"),
             pass_input_layers_by_call=_pass_input_layers_by_call,
+            outputs_by_call=_outputs_by_call,
         )
         call_children_all, call_parent_addr = _resolve_call_hierarchy(ops)
         param_info = _build_module_param_info(self, address, mbd, _buffer_layers_by_module)
@@ -753,17 +756,7 @@ def _build_module_logs(self: "Trace") -> None:
             cls=meta.get("cls"),
             class_name=meta.get("class_name", mbd["module_types"].get(address, "")),
             class_qualname=meta.get("class_qualname", ""),
-            class_source_file=meta.get("class_source_file"),
-            class_source_line=meta.get("class_source_line"),
-            init_source_file=meta.get("init_source_file"),
-            init_source_line=meta.get("init_source_line"),
-            forward_source_file=meta.get("forward_source_file"),
-            forward_source_line=meta.get("forward_source_line"),
-            class_docstring=meta.get("class_docstring"),
-            init_signature=meta.get("init_signature"),
-            init_docstring=meta.get("init_docstring"),
-            forward_signature=meta.get("forward_signature"),
-            forward_docstring=meta.get("forward_docstring"),
+            **module_source_and_hooks(meta),
             address_parent=address_parent,
             address_children=address_children,
             address_depth=address_depth,
@@ -781,12 +774,6 @@ def _build_module_logs(self: "Trace") -> None:
             param_memory=param_info.memory,
             buffer_layers=param_info.buffer_layers,
             training=mbd["module_training_modes"].get(address, meta.get("training", True)),
-            forward_pre_hooks=meta.get("forward_pre_hooks"),
-            forward_hooks=meta.get("forward_hooks"),
-            backward_pre_hooks=meta.get("backward_pre_hooks"),
-            backward_hooks=meta.get("backward_hooks"),
-            full_backward_pre_hooks=meta.get("full_backward_pre_hooks"),
-            full_backward_hooks=meta.get("full_backward_hooks"),
             custom_attributes=meta.get("custom_attributes", {}),
             custom_methods=meta.get("custom_methods", []),
             _source_trace=self,
@@ -797,16 +784,14 @@ def _build_module_logs(self: "Trace") -> None:
     # --- Compute nesting depths ---
     _compute_call_depths(module_dict, root_module)
 
-    # Adopt the finished Module/ModuleCall rows into the per-trace kind
-    # tables before the accessors are rebuilt around them.
-    _core = self.__dict__.get("_trace_core")
-    if _core is not None:
-        from .._trace_core.record_rows import adopt_records
+    # Summarize the calls' forward args, then drop them (unless the identity mode
+    # keeps them) to release tensor references from the model's forward() call args.
+    keep_forward_args = self._options_module_identity_mode in {"pytree_module", "object_module"}
+    summarize_call_args(pass_dict.values(), keep_forward_args)
 
-        adopt_records(_core, "module", module_dict.values())
-        adopt_records(_core, "module_call", pass_dict.values())
-
-    rebuild_trace_accessors(self, module_dict, module_order, pass_dict)
+    # The rebuild adopts the finished Module/ModuleCall rows into the per-trace
+    # kind tables and puts the accessors around them.
+    rebuild_trace_accessors(self, module_dict, module_order, pass_dict, built_for_trace=True)
     self.__dict__["_uncalled_module_addresses"] = uncalled_module_addresses(self)
 
     # Clean up temporary build state to free memory. These dicts are only
@@ -816,19 +801,6 @@ def _build_module_logs(self: "Trace") -> None:
     self._module_capture_ws.root_forward_args = None
 
     self._module_capture_ws.module_build_data = _init_module_hierarchy_data()
-
-    # Clear forward_args/kwargs from ModuleCallLogs to release tensor references.
-    # These can hold large tensors from the model's forward() call args.
-    keep_forward_args = self._options_module_identity_mode in {
-        "pytree_module",
-        "object_module",
-    }
-    for pass_log in pass_dict.values():
-        pass_log.forward_args_summary = format_call_arg(pass_log.forward_args)
-        pass_log.forward_kwargs_summary = format_call_arg(pass_log.forward_kwargs)
-        if not keep_forward_args:
-            pass_log.forward_args = None
-            pass_log.forward_kwargs = None
 
 
 # Aggregate Layer fields that may legitimately DIVERGE across genuine recurrent

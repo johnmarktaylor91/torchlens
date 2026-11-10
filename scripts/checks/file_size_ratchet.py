@@ -431,7 +431,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # the bounce froze this ceiling, so the split is the fix, not the raise.
     # 2800 -> 2650: the ModuleCall/Module facade stored-field tables split to
     # _data_classes/_module_facade_fields.py (2635 measured); the ceiling follows down.
-    "torchlens/_data_classes/module.py": 2650,
+    # 2650 -> 2500: the two constructors write one row built in
+    # _module_facade_fields.py, the accessors hold record state through
+    # _data_classes/_record_views.py and the facets doors read through
+    # _semantic/_facet_door.py (2463 lines); the ceiling follows down.
+    "torchlens/_data_classes/module.py": 2500,
     # 2100 -> 2150 (2026-08-29 F11 T74b fix): +9 lines documenting the
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
