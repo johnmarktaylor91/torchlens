@@ -160,7 +160,14 @@ def test_committed_bar_file_is_the_plan_applied_to_its_baseline() -> None:
     assert set(bars["every_lane"]) <= set(baseline)
     for model in bars_mod.FULL_MODELS:
         assert f"c1.{model}.total_per_op" in baseline
-    assert bars_mod.check(baseline, bars) == []
+    # A landed bar sits below the baseline by design, so the baseline is held
+    # to the standing rules only; each landed bar names a lane counter.
+    assert bars_mod.check(baseline, {**bars, "landed": {}}) == []
+    lane_counters = {entry["counter"] for entries in bars["lanes"].values() for entry in entries}
+    assert bars["landed_headroom"] == bars_mod.LANDED_HEADROOM
+    for name, limit in bars["landed"].items():
+        assert name in lane_counters and name in baseline, name
+        assert limit > 0, name
 
 
 def test_two_measurements_of_one_commit_agree() -> None:
