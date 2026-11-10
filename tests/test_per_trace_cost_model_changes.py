@@ -224,7 +224,7 @@ def test_module_tree_key_tells_changed_trees_apart() -> None:
     model.act = relu
     assert prepared_tree.module_tree_key(model) == key
 
-    model.extra = None
+    model.register_module("extra", None)
     with_none = prepared_tree.module_tree_key(model)
     assert with_none != key
     model.extra = nn.Identity()
