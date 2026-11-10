@@ -248,7 +248,7 @@ TYPE_TAG_ONLY: dict[str, dict[str, str]] = {
     "_layer_list": {"OpSequence": "list"},
     "_layer_dict_main_keys": {"OpLabelMap": "dict"},
     "_layer_dict_all_keys": {"OpOrderedLabelMap": "OrderedDict", "OpLabelMap": "dict"},
-    "_layer_logs": {"LayerStore": "OrderedDict"},
+    "_layer_logs": {"LayerDictStore": "dict", "LayerStore": "OrderedDict"},
 }
 TYPE_TAG_ONLY_REASON = (
     "capture-core stage 1 replaced these containers by subclasses that hold row keys and"

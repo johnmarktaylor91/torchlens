@@ -33,7 +33,7 @@ from field_diff_lib.mask import Mask  # noqa: E402
 
 #: Entries of the fixed mask, and the digest of their lines (see ``_mask_lines``).
 APPROVED_MASK_ENTRIES = 68
-APPROVED_MASK_DIGEST = "aa2223e23a499895"
+APPROVED_MASK_DIGEST = "66e2af42be3256f1"
 
 
 def _mask_lines() -> list[str]:
@@ -150,6 +150,9 @@ def test_type_tag_only_reads_the_subclass_as_its_base() -> None:
     layers = {"__dict__": "LayerStore", "items": []}
     assert mask.apply("_layer_logs", layers)["__dict__"] == "OrderedDict"
     assert mask.apply("_layer_logs", {"__dict__": "dict", "items": []})["__dict__"] == "dict"
+    loaded = {"__dict__": "LayerDictStore", "items": [["relu_1", 1]]}
+    assert mask.apply("_layer_logs", loaded) == {"__dict__": "dict", "items": [["relu_1", 1]]}
+    assert mask.apply("_layer_dict_main_keys", loaded) == loaded
     nested = {"__dict__": "dict", "items": [["_layer_logs", layers]]}
     assert mask.apply("trace", nested)["items"][0][1]["__dict__"] == "OrderedDict"
     assert Mask(enabled=False).apply("_layer_list", seq) == seq
