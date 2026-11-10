@@ -131,6 +131,7 @@ from .wrappers import wrap_torch
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from ...recording._types import ModuleStackFrame
 
 
 # ---------------------------------------------------------------------------
@@ -441,6 +442,7 @@ def _prepare_model_session(
     for module in model.modules():
         is_root = module is root_module
         address = _module_address(module)
+        module_type_str = _module_type(module)
         named_children = list(module.named_children())
         _capture_module_metadata(
             trace,
@@ -465,7 +467,7 @@ def _prepare_model_session(
                 ModulePrepEvent(
                     address=meta_address,
                     all_addresses=tuple(meta["all_addresses"]),
-                    module_type_str=_module_type(module),
+                    module_type_str=module_type_str,
                     cls_qualname=meta["class_qualname"],
                     class_name=meta["class_name"],
                     address_children=tuple(meta["address_children"]),
@@ -492,9 +494,7 @@ def _prepare_model_session(
                 )
             )
         if not is_root:
-            trace._module_capture_ws.module_build_data["module_types"][address] = _module_type(
-                module
-            )
+            trace._module_capture_ws.module_build_data["module_types"][address] = module_type_str
             register_session_module_calls(trace, module)
     register_bound_owner_calls(trace, model)
     if trace._options_mode != "predicate":
@@ -987,14 +987,12 @@ def _tag_untagged_buffers(trace: "Trace", module: nn.Module) -> None:
         promote_label_to_buffer_source_and_clear_label(buffer_tensor)
 
 
-def _record_module_entry_build_data(
-    trace: "Trace", module_call_label_str: str
-) -> tuple[float, Any, list[str]]:
-    """Stamp and return the forward start time, code context and call stack for one entry."""
+def _record_module_entry_build_data(trace: "Trace") -> tuple[float, Any, list[str]]:
+    """Return the forward start time, code context and call stack for one entry.
+
+    The enter event carries them; ingest rebuilds the module side channel from the journal.
+    """
     forward_start_time = time.time()
-    trace._module_capture_ws.module_build_data.setdefault("module_forward_start_times", {})[
-        module_call_label_str
-    ] = forward_start_time
     code_context_cache = getattr(trace, "_code_context_cache", None)
     if code_context_cache is None:
         code_context_cache = {}
@@ -1004,9 +1002,6 @@ def _record_module_entry_build_data(
         source_loading_enabled=trace._options_save_source_context,
         context_cache=code_context_cache,
     )
-    trace._module_capture_ws.module_build_data.setdefault("module_code_contexts", {})[
-        module_call_label_str
-    ] = code_context
     # Ancestor module calls, root excluded: a plain root is never pushed, and a
     # bound-method root's owner (address ``self``) is dropped here so the
     # containment facts read exactly as under a plain trace of the owner.
@@ -1015,43 +1010,42 @@ def _record_module_entry_build_data(
         for frame in trace._module_capture_ws.exhaustive_module_stack[:-1]
         if frame.address != "self"
     ]
-    trace._module_capture_ws.module_build_data.setdefault("module_call_stacks", {})[
-        module_call_label_str
-    ] = call_stack
     return forward_start_time, code_context, call_stack
 
 
 def _record_module_entry_metadata(
     trace: "Trace",
     module: nn.Module,
+    frame: "ModuleStackFrame",
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
-) -> tuple[set[str], list[str]]:
+) -> tuple[set[str], list[str], float]:
     """Record pre-forward module metadata for exhaustive mode.
 
     Called immediately before ``orig_forward(*args, **kwargs)`` in the
-    ``module_forward_decorator``. Reads the module's pass counter, records
+    ``module_forward_decorator``. Reads the call's frame (the one record of
+    this module call, pushed on entry and popped on exit), records
     input-tensor/module-entry annotations, stores raw forward args for module-log
     construction, and tags dynamically-created buffers.
 
     Args:
         trace: The active Trace.
         module: The nn.Module about to execute.
+        frame: The frame ``push_frame`` created for this call.
         args: Positional arguments to forward.
         kwargs: Keyword arguments to forward.
 
     Returns:
-        Tuple of ``(input_tensor_labels, input_tensor_labels_at_entry)`` —
-        needed by ``_record_module_exit_metadata`` for pass-through detection and
-        replacement-output recovery.
+        ``(input_tensor_labels, input_tensor_labels_at_entry, forward_start_time)``,
+        needed by ``_record_module_exit_metadata`` for pass-through detection,
+        replacement-output recovery and the forward duration.
     """
 
-    module_address = _module_address(module)
-    mod_id = id(module)
-    trace._module_capture_ws.module_build_data["module_training_modes"][module_address] = (
-        module.training
-    )
-    module_call_index = trace._module_capture_ws.mod_call_index[mod_id]
+    workspace = trace._module_capture_ws
+    module_address = "" if frame.address is None else frame.address
+    mod_id = frame.module_id
+    workspace.module_build_data["module_training_modes"][module_address] = module.training
+    module_call_index = frame.pass_number
     if module_call_index <= 0:
         # A hard raise, not an assert: ``python -O`` strips asserts, and this
         # guard catches a broken push_frame/entry ordering that would silently
@@ -1061,15 +1055,8 @@ def _record_module_entry_metadata(
             f"before module entry (module {module_address!r} has call index "
             f"{module_call_index})"
         )
-    module_call_label = (module_address, module_call_index)
-    # Push onto stack — popped by _record_module_exit_metadata (or exception handler).
-    trace._module_capture_ws.mod_call_labels[mod_id].append(module_call_label)
-
-    # Stash forward args for later use by _build_module_logs.
-    trace._module_capture_ws.module_forward_args[(module_address, module_call_index)] = (
-        args,
-        kwargs,
-    )
+    # Stash forward args for the input-adoption loop below (stubbed at the end).
+    workspace.module_forward_args[(module_address, module_call_index)] = (args, kwargs)
     module_call_label_str = f"{module_address}:{module_call_index}"
 
     capture_session = capture_session_for(trace)
@@ -1092,20 +1079,13 @@ def _record_module_entry_metadata(
         captured_template = _build_args_template(module.forward, args, kwargs)
         forward_args_template = captured_template
         forward_kwargs_template = captured_template if kwargs else None
-        trace._module_capture_ws.module_build_data.setdefault("module_forward_templates", {})[
-            module_call_label_str
-        ] = (
-            forward_args_template,
-            forward_kwargs_template,
-        )
-    forward_start_time, code_context, call_stack = _record_module_entry_build_data(
-        trace, module_call_label_str
-    )
+    forward_start_time, code_context, call_stack = _record_module_entry_build_data(trace)
 
     # Find all tensor arguments (excluding Parameters, which are source tensors).
     input_tensors = get_arg_tensors_for_resolution(args, kwargs)
     input_tensor_labels = set()
     input_tensor_labels_at_entry = []
+    layer_argnames: list[tuple[str, Any]] = []
     for t in input_tensors:
         if is_functorch_wrapped_tensor(t):
             continue
@@ -1138,14 +1118,11 @@ def _record_module_entry_metadata(
         if label is None:
             continue  # Skip untracked tensors (e.g. external constants) (#117)
         input_tensor_labels.add(label)
-        trace._module_capture_ws.mod_entered[mod_id].append(label)
         trace.capture_events.live_index.note_module_entry(mod_id, label, module_address)
         # Record which arg position this tensor occupies for this module pass.
         for arg_key, arg_val in itertools.chain(enumerate(args), kwargs.items()):
             if arg_val is t:
-                trace._module_capture_ws.module_build_data["module_layer_argnames"][
-                    (f"{module_call_label[0]}:{module_call_label[1]}")
-                ].append((label, arg_key))
+                layer_argnames.append((label, arg_key))
         input_tensor_labels_at_entry.append(label)
 
     # Catch buffers created dynamically (e.g. in forward()) after initial scan.
@@ -1158,10 +1135,7 @@ def _record_module_entry_metadata(
     # labels the stubs can carry.
     stub_args = stub_module_arg_payloads(args)
     stub_kwargs = stub_module_arg_payloads(kwargs)
-    trace._module_capture_ws.module_forward_args[(module_address, module_call_index)] = (
-        stub_args,
-        stub_kwargs,
-    )
+    workspace.module_forward_args[(module_address, module_call_index)] = (stub_args, stub_kwargs)
     trace.capture_events.append_module_enter(
         ModuleEnterEvent(
             address=module_address,
@@ -1175,15 +1149,11 @@ def _record_module_entry_metadata(
             forward_kwargs=stub_kwargs,
             forward_args_template=forward_args_template,
             forward_kwargs_template=forward_kwargs_template,
-            layer_argnames=tuple(
-                trace._module_capture_ws.module_build_data["module_layer_argnames"][
-                    module_call_label_str
-                ]
-            ),
+            layer_argnames=tuple(layer_argnames),
             input_labels=tuple(input_tensor_labels_at_entry),
         )
     )
-    return input_tensor_labels, input_tensor_labels_at_entry
+    return input_tensor_labels, input_tensor_labels_at_entry, forward_start_time
 
 
 def _note_replacement_event(
@@ -1697,31 +1667,17 @@ def _make_user_forward_hook_wrapper(
     return wrapped_hook
 
 
-def _record_module_forward_duration(trace: "Trace", module_call_label: str) -> float:
-    """Record and return the forward duration for one module call, 0.0 without a start."""
-    start_times = trace._module_capture_ws.module_build_data.setdefault(
-        "module_forward_start_times", {}
-    )
-    forward_duration = 0.0
-    if module_call_label in start_times:
-        forward_duration = time.time() - start_times[module_call_label]
-        trace._module_capture_ws.module_build_data.setdefault("module_forward_durations", {})[
-            module_call_label
-        ] = forward_duration
-    return forward_duration
-
-
 def _record_module_exit_metadata(
     trace: "Trace",
     module: nn.Module,
+    frame: "ModuleStackFrame",
     out: Any,
-    input_tensor_labels: set[str],
-    input_tensor_labels_at_entry: list[str],
+    entry: tuple[set[str], list[str], float],
 ) -> tuple[tuple[torch.Tensor, str], ...]:
     """Record post-forward module metadata for exhaustive mode.
 
     Called immediately after ``orig_forward()`` returns in the
-    ``module_forward_decorator``. Pops the module call-label stack, creates
+    ``module_forward_decorator`` with the call's frame and its entry facts. Creates
     boundary identity ops for pass-through outputs, recovers replacement outputs,
     and annotates output tensors with module-exit metadata.
 
@@ -1731,10 +1687,11 @@ def _record_module_exit_metadata(
         Exact output tensors and raw labels of boundary Ops inserted for otherwise
         untraceable outputs.
     """
-    address = _module_address(module)
-    mod_id = id(module)
-    module_call_index = trace._module_capture_ws.mod_call_index[mod_id]
-    trace._module_capture_ws.mod_call_labels[mod_id].pop()
+    input_tensor_labels, _labels_at_entry, forward_start_time = entry
+    address = "" if frame.address is None else frame.address
+    module_call_index = frame.pass_number
+    module_type = type(module).__name__ if frame.module_type is None else frame.module_type
+    is_identity_module = module_type.lower() == "identity"
     from ...intervention._runtime import (
         _peek_module_intervention_parent_labels,
         _peek_tensor_live_fire_results,
@@ -1749,13 +1706,8 @@ def _record_module_exit_metadata(
         output_entries = [(tensor, (), None) for tensor in output_tensors]
     role_hints = role_hints_for_module(module)
     module_call_label = f"{address}:{module_call_index}"
-    forward_duration = _record_module_forward_duration(trace, module_call_label)
-    output_structure = None
-    if output_entries:
-        output_structure = output_entries[0][2]
-        trace._module_capture_ws.module_build_data.setdefault("module_output_structures", {})[
-            module_call_label
-        ] = output_structure
+    forward_duration = time.time() - forward_start_time
+    output_structure = output_entries[0][2] if output_entries else None
     _register_module_output_container_snapshot(
         trace,
         out,
@@ -1772,14 +1724,14 @@ def _record_module_exit_metadata(
         # as input) need _decorated_identity() to create a distinct log entry
         # so the graph correctly shows the module boundary.
         tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
+        label_is_live = tensor_label is not None  # the live lookup just accepted it
         # Peek through BOTH evidence channels (plain attribute + the
         # storage-owned side table): a replacement tensor that rejects dynamic
         # attributes must not read as evidence-free here, or the fresh value
         # below is silently misclassified as an internal source.
         fire_results = _peek_tensor_live_fire_results(t)
-        if (_module_type(module).lower() == "identity") or (
-            tensor_label is not None and tensor_label in input_tensor_labels
-        ):
+        if is_identity_module or (tensor_label is not None and tensor_label in input_tensor_labels):
+            label_is_live = False
             intervention_parent_labels: list[str] = list(
                 _peek_module_intervention_parent_labels(t, trace)
             )
@@ -1846,7 +1798,9 @@ def _record_module_exit_metadata(
                     )
                 if any_replaced and _live_intervention_machinery_armed():
                     _note_replacement_event(trace, tensor_label, origin="live_fire")
-        is_atomic_module = _is_bottom_level_submodule_exit(trace, t, module)
+        # The stub only re-validates the label; a label the live lookup returned
+        # for this very tensor needs no second lookup.
+        is_atomic_module = not label_is_live and _is_bottom_level_submodule_exit(trace, t, module)
         atomic_module_call = (address, module_call_index) if is_atomic_module else None
         output_tensor_labels_raw.append(tensor_label)
         output_paths.append(tuple(container_path))
@@ -1868,7 +1822,6 @@ def _record_module_exit_metadata(
                 hints=role_hints,
             )
         output_names.append(output_name)
-        trace._module_capture_ws.mod_exited[mod_id].append(tensor_label)
     trace.capture_events.append_module_exit(
         ModuleExitEvent(
             address=address,
@@ -1888,6 +1841,41 @@ def _record_module_exit_metadata(
     if capture_session is not None:
         capture_session.escrow_module_exit_outputs(module_call_label, tuple(exit_outputs))
     return tuple(untraceable_output_boundaries)
+
+
+def _evaluate_module_exit_halt(
+    trace: "Trace", frame: "ModuleStackFrame", module_type: str, options: Any, out: Any
+) -> None:
+    """Evaluate the session's halt predicate at one exhaustive module exit."""
+    from ..._capture.predicates import _evaluate_halt
+    from ..._capture.projections import _build_record_context
+
+    exit_ctx = _build_record_context(
+        kind="module_exit",
+        op_log_or_op_data={
+            "label": f"{frame.address}:exit:{frame.pass_number}",
+            "address": frame.address,
+            "module_type": module_type,
+            "module_pass_number": frame.pass_number,
+            # tl.module evaluates capture-time subjects through
+            # output_of_module_calls, so a module-boundary halt
+            # (incl. compiled stop_after= module addresses) can only
+            # fire if this exit ctx names its own module call; the
+            # exhaustive path previously left it empty and every
+            # tl.module halt silently ran the full forward.
+            "output_of_module_calls": (f"{frame.address}:{frame.pass_number}",),
+        },
+        module_stack=[],
+        history=(),
+        op_counts={},
+        pass_index=1,
+        event_index=trace._raw_graph_ws.layer_counter,
+        step_index=None,
+        time_since_pass_start=0.0,
+        include_source_events=False,
+        sample_id=None,
+    )
+    _evaluate_halt(exit_ctx, options, frontier_output=out)
 
 
 def module_forward_decorator(
@@ -1921,6 +1909,11 @@ def module_forward_decorator(
         The decorated forward function.
     """
 
+    module_id = id(module)
+    # ``[run nonce, ModuleMeta]``: the registry lookup is paid once per capture
+    # run (an entry is only ever removed by ``release_model``, refused mid-capture).
+    meta_of_run: list[Any] = [None, None]
+
     @wraps(orig_forward)
     def decorated_forward(*args: Any, **kwargs: Any) -> Any:
         """Route one module forward call through TorchLens capture bookkeeping."""
@@ -1929,31 +1922,36 @@ def module_forward_decorator(
             return orig_forward(*args, **kwargs)
 
         trace = _state._active_trace
+        workspace = trace._module_capture_ws
         # A wrapper that outlived its own session (a stashed ``module.forward``,
         # a shallow module copy) reaching an UNRELATED capture: the module is not
         # registered there, so it runs unrecorded, like any helper function.
-        if id(module) not in trace._module_capture_ws.mod_call_index:
+        if module_id not in workspace.mod_call_index:
             return orig_forward(*args, **kwargs)
+        if trace._options_mode == "predicate":
+            _state.note_fingerprint_token(_state.module_token(_module_address(module)))
+            return _predicate_module_forward(trace, module, orig_forward, args, kwargs)
+        run_nonce = trace.capture_events.run_nonce
+        if meta_of_run[0] != run_nonce:
+            meta_of_run[:] = [run_nonce, get_module_meta(module)]
+        meta = meta_of_run[1]
         # Module-entry fingerprint token, before any of this module's ops; the
         # native twin is ``_call_fingerprint.install_module_token_hooks``. The
         # address is read per call because role swaps re-address modules.
-        _state.note_fingerprint_token(_state.module_token(_module_address(module)))
-
-        if trace._options_mode == "predicate":
-            return _predicate_module_forward(trace, module, orig_forward, args, kwargs)
+        address = "" if meta is None or meta.address is None else meta.address
+        _state.note_fingerprint_token(_state.module_token(address))
 
         # ---- Exhaustive mode: full entry -> forward -> exit ----
-        frame = _mstack.push_frame(trace, trace._module_capture_ws.exhaustive_module_stack, module)
+        frame = _mstack.push_frame(trace, workspace.exhaustive_module_stack, module, meta)
+        module_type = type(module).__name__ if frame.module_type is None else frame.module_type
         bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
         try:
-            input_tensor_labels, input_tensor_labels_at_entry = _record_module_entry_metadata(
-                trace, module, args, kwargs
-            )
+            entry = _record_module_entry_metadata(trace, module, frame, args, kwargs)
             # Echo narrator slot (module seam, exhaustive tier).
             # Duck-typed session read: the hot path imports nothing.
             echo_session = trace.__dict__.get("_echo_session")
             if echo_session is not None:
-                echo_session.emit_module_enter(frame.address, _module_type(module))
+                echo_session.emit_module_enter(frame.address, module_type)
             expected_token = None
             try:
                 if (
@@ -1972,17 +1970,13 @@ def module_forward_decorator(
                     out,
                     module_address=frame.address,
                     module_call_index=frame.pass_number,
-                    module_type=_module_type(module),
+                    module_type=module_type,
                     call_args=args,
                     call_kwargs=dict(kwargs),
                 )
             except Exception:
-                # Exception safety: pop module pass label to keep the stack
-                # consistent, preventing corruption in subsequent forward calls (#122).
-                mod_id = id(module)
-                call_labels = trace._module_capture_ws.mod_call_labels.get(mod_id)
-                if call_labels:
-                    call_labels.pop()
+                # Exception safety (#122): the frame is the call's only record and
+                # the ``finally`` below pops it.
                 # A raising module never completed: abandon the echo frame
                 # without an exit line (the enter without exit is the honest
                 # crash shape; depth stays consistent if user code catches).
@@ -1990,7 +1984,7 @@ def module_forward_decorator(
                     echo_session.abandon_module_frame()
                 raise
             untraceable_output_boundaries = _record_module_exit_metadata(
-                trace, module, out, input_tensor_labels, input_tensor_labels_at_entry
+                trace, module, frame, out, entry
             )
             if echo_session is not None:
                 echo_session.emit_module_exit(frame.address)
@@ -2001,35 +1995,7 @@ def module_forward_decorator(
             )
             options = trace.__dict__.get("_predicate_save_options")
             if options is not None and options.halt is not None:
-                from ..._capture.predicates import _evaluate_halt
-                from ..._capture.projections import _build_record_context
-
-                exit_ctx = _build_record_context(
-                    kind="module_exit",
-                    op_log_or_op_data={
-                        "label": f"{frame.address}:exit:{frame.pass_number}",
-                        "address": frame.address,
-                        "module_type": _module_type(module),
-                        "module_pass_number": frame.pass_number,
-                        # tl.module evaluates capture-time subjects through
-                        # output_of_module_calls, so a module-boundary halt
-                        # (incl. compiled stop_after= module addresses) can only
-                        # fire if this exit ctx names its own module call; the
-                        # exhaustive path previously left it empty and every
-                        # tl.module halt silently ran the full forward.
-                        "output_of_module_calls": (f"{frame.address}:{frame.pass_number}",),
-                    },
-                    module_stack=[],
-                    history=(),
-                    op_counts={},
-                    pass_index=1,
-                    event_index=trace._raw_graph_ws.layer_counter,
-                    step_index=None,
-                    time_since_pass_start=0.0,
-                    include_source_events=False,
-                    sample_id=None,
-                )
-                _evaluate_halt(exit_ctx, options, frontier_output=out)
+                _evaluate_module_exit_halt(trace, frame, module_type, options, out)
             return out
         finally:
             _mstack.pop_frame(trace._module_capture_ws.exhaustive_module_stack, frame)

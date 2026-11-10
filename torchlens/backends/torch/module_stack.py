@@ -6,7 +6,7 @@ module is the only incrementer of ``trace._module_capture_ws.mod_call_index``.
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 import torch.nn as nn
 
@@ -15,11 +15,16 @@ from ..._entry_refusals import (
     refuse_module_stack_underflow,
     refuse_module_unprepared,
 )
-from ..._utils._tensor_label import get_module_meta
+from ..._utils._tensor_label import ModuleMeta, get_module_meta
 from ...recording._types import ModuleStackFrame
 
 
-def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> ModuleStackFrame:
+def push_frame(
+    trace: Any,
+    stack: list[ModuleStackFrame],
+    module: nn.Module,
+    module_meta: ModuleMeta | None = None,
+) -> ModuleStackFrame:
     """Increment per-module call counter, build frame, append to stack.
 
     Parameters
@@ -35,6 +40,9 @@ def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> 
     module:
         The nn.Module entering forward. Must have ``_tl.address`` and
         ``_tl.module_type`` set by ``_prepare_model_once``.
+    module_meta:
+        The module's metadata when the caller already holds it (the exhaustive
+        shell looks it up once per capture run); looked up here otherwise.
 
     Returns
     -------
@@ -42,15 +50,17 @@ def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> 
         The freshly created frame, identity-comparable for pop_frame.
     """
     module_id = id(module)
-    trace._module_capture_ws.mod_call_index[module_id] += 1
-    module_meta = get_module_meta(module)
+    call_index = trace._module_capture_ws.mod_call_index
+    call_index[module_id] += 1
     if module_meta is None:
-        refuse_module_unprepared()
+        module_meta = get_module_meta(module)
+        if module_meta is None:
+            refuse_module_unprepared()
     frame = ModuleStackFrame(
-        address=cast(str, module_meta.address),
-        module_type=cast(str, module_meta.module_type),
+        address=module_meta.address,  # type: ignore[arg-type]
+        module_type=module_meta.module_type,  # type: ignore[arg-type]
         module_id=module_id,
-        pass_number=trace._module_capture_ws.mod_call_index[module_id],
+        pass_number=call_index[module_id],
     )
     stack.append(frame)
     return frame
