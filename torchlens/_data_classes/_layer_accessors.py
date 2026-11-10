@@ -9,9 +9,10 @@ lives in ``_layer_views.py``), so the split introduces no import cycle.
 """
 
 import weakref
+from array import array
 from collections import OrderedDict
-from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, Optional
+from collections.abc import Callable, Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
@@ -23,8 +24,10 @@ from .._utils._display_keys import display_key
 from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._accessor_base import Accessor, attach_source_honesty
+from ._layer_state import LayerSequence, LayerStore, hold_view
 from ._layer_views import _layer_log_to_row
 from ._lookup_kinds import converted, layer_for_key, scoped_op_by_lookup_key
+from ._op_row_release import _OP_FACADE
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -44,6 +47,16 @@ def _record_kind(record: object) -> str:
     """Return the op family token (``conv2d``, ``relu``) of a layer or op record."""
 
     return str(getattr(record, "func_name", None) or getattr(record, "layer_type", None))
+
+
+def _core_of(op: object) -> Any:
+    """Return the trace core of the trace ``op`` is bound to, or ``None``."""
+
+    try:
+        trace = op.source_trace  # type: ignore[attr-defined]
+        return trace.__dict__.get("_trace_core")
+    except Exception:  # noqa: BLE001 - an unbound or foreign record has no core to key into
+        return None
 
 
 #: ``count_by`` fields shared by the layer and op accessors.
@@ -73,14 +86,166 @@ class OpAccessor(Accessor["Op"]):
             Mapping from 1-based pass index to Op.
         """
 
-        ops = ops or {}
-        super().__init__(ops, item_list=[op for _, op in sorted(ops.items())])
+        # ``_keys`` holds ``pass, row`` pairs sorted by pass: the accessor
+        # names its ops by store row and reads them through the trace core's
+        # view table. A row of -1 marks an op that could not be keyed (no
+        # core, or a detached store); that op is held in ``_held``.
+        self._keys = array("q")
+        self._core_ref: Any = None
+        self._store: Any = None
+        for pass_index, op in (ops or {}).items():
+            self._put(pass_index, op)
+
+    @property
+    def _dict(self) -> dict[int, "Op"]:
+        """Pass index to Op, in insertion order (built on each read)."""
+
+        keys = self._keys
+        by_pass = {keys[at]: self._op_at(at >> 1) for at in range(0, len(keys), 2)}
+        order = self.__dict__.get("_order")
+        return by_pass if order is None else {number: by_pass[number] for number in order}
+
+    @property
+    def _list(self) -> list["Op"]:
+        """Ops sorted by pass index (built on each read)."""
+
+        return [self._op_at(position) for position in range(len(self._keys) >> 1)]
+
+    def __len__(self) -> int:
+        """Return the number of passes."""
+
+        return len(self._keys) >> 1
+
+    def __iter__(self) -> Iterator["Op"]:
+        """Iterate the ops in pass order."""
+
+        return iter(self._list)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return the saved shape: the pass mapping and the pass-ordered list of Op records."""
+
+        return {"_dict": self._dict, "_list": self._list}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore from the saved shape; restored ops are held until re-keyed."""
+
+        self.__dict__.clear()
+        self._keys = array("q")
+        self._core_ref = None
+        self._store = None
+        for pass_index, op in (state.get("_dict") or {}).items():
+            self._put(pass_index, op)
+
+    def __tl_state_items__(self) -> Iterator[tuple[str, Any]]:
+        """Yield the saved-shape state fields."""
+
+        yield from self.__getstate__().items()
+
+    def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
+        """Install a saved-shape state mapping."""
+
+        self.__setstate__(dict(mapping))
+
+    def _put(self, pass_index: int, op: "Op") -> None:
+        """Store ``op`` as pass ``pass_index``, by row key when its store is the trace core's."""
+
+        row = -1
+        try:
+            store = object.__getattribute__(op, "_core")
+            op_row = object.__getattribute__(op, "_row")
+        except AttributeError:
+            store = None
+        if store is not None and isinstance(op_row, int):
+            core_ref = self._core_ref
+            core = core_ref() if core_ref is not None else _core_of(op)
+            if core is not None and core.ops is store and hold_view(core, "op", op_row, op):
+                row = op_row
+                if core_ref is None:
+                    self._core_ref = core.weak_self()
+                    self._store = store
+        self._insert(pass_index, row)
+        held = self.__dict__.get("_held")
+        if row < 0:
+            if held is None:
+                held = {}
+                self._held: dict[int, Any] = held
+            held[pass_index] = op
+        elif held is not None:
+            held.pop(pass_index, None)
+
+    def _insert(self, pass_index: int, row: int) -> None:
+        """Record ``pass_index -> row`` keeping the pairs sorted by pass."""
+
+        keys = self._keys
+        order = self.__dict__.get("_order")
+        if not keys or pass_index > keys[-2]:
+            keys.extend((pass_index, row))
+            if order is not None:
+                order.append(pass_index)
+            return
+        for at in range(0, len(keys), 2):
+            if keys[at] == pass_index:
+                keys[at + 1] = row
+                return
+            if keys[at] > pass_index:
+                break
+        if order is None:
+            order = self._order = [keys[index] for index in range(0, len(keys), 2)]
+        order.append(pass_index)
+        keys[at:at] = array("q", (pass_index, row))
+
+    def _op_at(self, position: int) -> "Op":
+        """Return the op at 0-based ``position`` in pass order."""
+
+        keys = self._keys
+        row = keys[2 * position + 1]
+        if row < 0:
+            return cast("Op", self._held[keys[2 * position]])
+        core = self._core_ref()
+        if core is not None:
+            slots = core._strong_facades.get("op")
+            if slots is not None and row < len(slots):
+                op = slots[row]
+                if op is not None:
+                    return cast("Op", op)
+        return self._rebuild(core, row)
+
+    def _rebuild(self, core: Any, row: int) -> "Op":
+        """Build an Op view over ``row`` of the accessor's store (its view was dropped)."""
+
+        op_class = _OP_FACADE[0][0]
+        op = cast("Op", op_class.__new__(op_class))
+        object.__setattr__(op, "_core", self._store)
+        object.__setattr__(op, "_row", row)
+        if core is not None:
+            hold_view(core, "op", row, op)
+        return op
+
+    def _rekey(self, core: Any) -> bool:
+        """Key held ops into ``core`` where their store is now its op store."""
+
+        held = self.__dict__.get("_held")
+        if held:
+            current = self._core_ref() if self._core_ref is not None else None
+            if current is not core and not any(
+                self._keys[at] >= 0 for at in range(1, len(self._keys), 2)
+            ):
+                self._core_ref = None
+            for pass_index, op in list(held.items()):
+                self._put(pass_index, op)
+            if not self.__dict__.get("_held"):
+                self.__dict__.pop("_held", None)
+        return bool(self._keys) and self._keys[1] >= 0
 
     def __getitem__(self, key: int | str) -> "Op":
         """Return an Op by 0-based position or pass-qualified label."""
 
         if isinstance(key, int):
-            return self._list[key]
+            count = len(self._keys) >> 1
+            position = key + count if key < 0 else key
+            if not 0 <= position < count:
+                raise IndexError("list index out of range")
+            return self._op_at(position)
         resolved = self._resolve_substring(key)
         if resolved is not None:
             return resolved
@@ -98,7 +263,7 @@ class OpAccessor(Accessor["Op"]):
         head = collection_repr("OpAccessor", count, "op" if count == 1 else "ops")
         if not count:
             return head + ", 0-based positions, pass-qualified labels"
-        first, last = self._list[0], self._list[-1]
+        first, last = self[0], self[-1]
         passes = str(first.pass_number)
         if count > 1:
             passes += f"-{last.pass_number}"
@@ -118,8 +283,7 @@ class OpAccessor(Accessor["Op"]):
             raise ValueError(
                 f"OpAccessor.set_pass expects a 1-based pass index (int >= 1), got {pass_index!r}"
             )
-        self._dict[pass_index] = value
-        self._list = [op for _, op in sorted(self._dict.items())]
+        self._put(pass_index, value)
 
     def __setitem__(self, key: int, value: "Op") -> None:
         """Set an Op by 1-based pass index (``set_pass`` is the explicit spelling).
@@ -139,7 +303,7 @@ class OpAccessor(Accessor["Op"]):
         """Return whether key resolves to an Op."""
 
         if isinstance(key, int):
-            return -len(self._list) <= key < len(self._list)
+            return -len(self) <= key < len(self)
         if isinstance(key, str):
             try:
                 self[key]
@@ -165,14 +329,15 @@ class OpAccessor(Accessor["Op"]):
         """Owning layer and the REAL read basis of ``ops[...]``, with no members listed."""
 
         basis = "0-based positions or pass-qualified labels"
-        first = self._list[0] if self._list else None
+        first = self[0] if len(self) else None
         layer = getattr(first, "short_layer_label", None) or getattr(first, "layer_label", None)
         return f"layer {layer}; {basis}" if layer else basis
 
     def _resolve_substring(self, key: str) -> "Op | None":
         """Resolve Op by any scoped layer-label variant."""
-        if len(self._dict) == 1:
-            only_op = next(iter(self._dict.values()))
+        ops = list(self._dict.values())
+        if len(ops) == 1:
+            only_op = ops[0]
             if key in {
                 only_op.layer_label,
                 only_op.short_layer_label,
@@ -181,9 +346,7 @@ class OpAccessor(Accessor["Op"]):
             }:
                 return only_op
         parent_matches = [
-            op_log
-            for op_log in self._dict.values()
-            if key in {op_log.layer_label, op_log.short_layer_label}
+            op_log for op_log in ops if key in {op_log.layer_label, op_log.short_layer_label}
         ]
         if len(parent_matches) > 1:
             parent_label = parent_matches[0].short_layer_label
@@ -195,7 +358,7 @@ class OpAccessor(Accessor["Op"]):
                     query=key,
                 )
             )
-        for op_log in self._dict.values():
+        for op_log in ops:
             if key in {
                 op_log.label,
                 op_log.short_label,
@@ -203,7 +366,7 @@ class OpAccessor(Accessor["Op"]):
                 op_log.raw_label,
             }:
                 return op_log
-        return scoped_op_by_lookup_key(self._dict.values(), key)  # module-call or buffer key
+        return scoped_op_by_lookup_key(ops, key)  # module-call or buffer key
 
 
 class LayerAccessor(Accessor["Layer"]):
@@ -263,7 +426,24 @@ class LayerAccessor(Accessor["Layer"]):
         """
 
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
+        if layer_logs.__class__ is LayerStore:
+            # The trace's own layer store: read through it, holding no Layer record here.
+            cast("LayerStore", layer_logs).settle()
+            self.__dict__["_dict"] = layer_logs
+            self.__dict__["_list"] = LayerSequence(cast("LayerStore", layer_logs))
+            if source_ref is not None:
+                self._source_ref = source_ref
+            return
         super().__init__(layer_logs, source_ref=source_ref)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return pickle state holding plain containers of Layer records."""
+
+        state = super().__getstate__()
+        if state["_dict"].__class__ is LayerStore:
+            state["_dict"] = dict(state["_dict"].items())
+            state["_list"] = list(state["_dict"].values())
+        return state
 
     def _resolve_pass_qualified(self, key: str) -> "Layer | None":
         """Resolve ``layer_label:pass``, ``:last`` or ``:all`` notation to the parent Layer.

@@ -30,6 +30,8 @@ OP_ROW_CELLS = "op_row_cells"
 MODULE_AND_BUFFER_CELLS = "module_and_buffer_cells"
 FORK_AND_SAVED_STATE = "fork_and_saved_state"
 LATER_KINDS = "later_kinds"
+ACTIVATION = "activation"
+STRONG_VIEW_TABLE = "Trace._trace_core:TraceCore._strong_facades"
 
 STEPS: dict[str, str] = {
     OP_LIST: "the op list, the label dictionaries and the caches of the ops door",
@@ -38,6 +40,7 @@ STEPS: dict[str, str] = {
     MODULE_AND_BUFFER_CELLS: "module cells (calls, params) and buffer versions",
     FORK_AND_SAVED_STATE: "fork translation, copy-on-write overlays and pickled state",
     LATER_KINDS: "holders of the kinds activated after Op and Layer",
+    ACTIVATION: "the trace core's strong view table, removed when views become disposable",
 }
 
 BEFORE_ACTIVATION = frozenset(
@@ -93,17 +96,8 @@ HOLDERS: dict[str, Holder] = {
     "Trace._op_accessor_cache[*]:TraceOpAccessor._raw_index_lookup{*} -> Op": Holder(
         OP_LIST, but=("fork_cold", "pickle_state")
     ),
-    "Layer.ops:OpAccessor._dict{*} -> Op": Holder(LAYER_STATE),
-    "Layer.ops:OpAccessor._list[*] -> Op": Holder(LAYER_STATE),
-    "Trace._layer_accessor_cache[*]:LayerAccessor._dict{*} -> Layer": Holder(
-        LAYER_STATE,
-        but=("facets_read", "fork_cold", "pickle_state", "plain", "readers", "save_none"),
-    ),
-    "Trace._layer_accessor_cache[*]:LayerAccessor._list[*] -> Layer": Holder(
-        LAYER_STATE,
-        but=("facets_read", "fork_cold", "pickle_state", "plain", "readers", "save_none"),
-    ),
-    "Trace._layer_logs{*} -> Layer": Holder(LAYER_STATE, but=("pickle_state",)),
+    f"{STRONG_VIEW_TABLE}{{*}}[*] -> Op": Holder(ACTIVATION, but=("pickle_state",)),
+    f"{STRONG_VIEW_TABLE}{{*}}[*] -> Layer": Holder(ACTIVATION, but=("pickle_state",)),
     "Module._facets_cache:FacetView._record -> Module": Holder(
         OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
     ),
@@ -267,8 +261,6 @@ HOLDERS: dict[str, Holder] = {
     "GradFn._tl_core:Store.rows[calls]:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
         LATER_KINDS, only=("pickle_state", "pickled")
     ),
-    "Layer.grad_fn -> GradFn": Holder(LATER_KINDS, only=("backward", "pickle_state", "pickled")),
-    "Layer.grad_fn_handle -> GradFn": Holder(LATER_KINDS, only=("pickled",)),
     "Op._core:Store.rows[_param_logs][*] -> Param": Holder(LATER_KINDS, only=("pickle_state",)),
     "Op._core:Store.rows[grad_fn] -> GradFn": Holder(LATER_KINDS, only=("pickle_state",)),
     "Trace._backward_pass_logs{*}:BackwardPass._tl_core:Store.rows[grad_fn_calls][*] -> GradFnCall": Holder(
@@ -324,8 +316,6 @@ KNOWN: dict[str, tuple[str, str]] = {
     "op list": ("plain", "Trace._layer_list[*] -> Op"),
     "label dictionary (main keys)": ("plain", "Trace._layer_dict_main_keys{*} -> Op"),
     "label dictionary (all keys)": ("plain", "Trace._layer_dict_all_keys{*} -> Op"),
-    "Layer records": ("plain", "Trace._layer_logs{*} -> Layer"),
-    "Layer op accessors": ("plain", "Layer.ops:OpAccessor._list[*] -> Op"),
     "facet cache": (
         "facets_read",
         "Trace._trace_core:TraceCore.ops:Store.rows[_facets_cache]:FacetView._record -> Op",
