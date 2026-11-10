@@ -5,20 +5,20 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1775 modules, 712748 lines, 0 modules without a docstring.
+85 packages, 1775 modules, 712741 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 87 | 35599 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 86 | 35500 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1560 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26866 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45439 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45432 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 145 | 60049 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 146 | 60148 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -101,7 +101,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (87 modules, 35599 lines)
+TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35500 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -118,7 +118,6 @@ TorchLens - extract outs and metadata from PyTorch models. (87 modules, 35599 li
 | `_chunked_capture_helpers` | Internal chunked-forward helper functions for public trace capture. | 14 |
 | `_chunking` | Input chunking helpers for forward-only chunked capture. | 24 |
 | `_comparison_tensor` | Host tensor conversion for saved-payload comparisons without artifact imports. | 48 |
-| `_compiled_callable_sites` | The per-capture scan for Dynamo-compiled callables held as plain module attributes. | 99 |
 | `_constants` | Shared constants: field-order tuples and function discovery for TorchLens. | 1426 |
 | `_debug_report` | The one typed ''tl.debug'' report object (experimental). | 489 |
 | `_deploy_env` | Deployment-envelope detection helpers. | 192 |
@@ -315,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (128 modules, 45439 lines)
+Core data structures for representing a logged forward pass. (128 modules, 45432 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -371,7 +370,7 @@ Core data structures for representing a logged forward pass. (128 modules, 45439
 | `_op_row_release` | Direct row release for op removal (the facade-husk shortcut). | 107 |
 | `_op_save` | Tensor save, grad logging, transform validation and copy logic for ''Op''. | 800 |
 | `_op_transforms` | User-transform application and validation helpers for saved payloads. | 260 |
-| `_param_row` | One row write for a new ''Param'' record. | 164 |
+| `_param_row` | One row write for a new ''Param'' record. | 157 |
 | `_preprocessing_provenance` | Preprocessing provenance derivations that live WITH the record. | 114 |
 | `_record_group_base` | Base classes of the Op and Layer concern groups (''op.cost'', ''layer.call'', ...). | 85 |
 | `_record_groups` | Concern-group views of an ''Op'' or ''Layer'': ''op.cost'', ''layer.control_flow'', ... | 570 |
@@ -1493,7 +1492,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (145 modules, 60049 lines)
+Torch backend implementation package for TorchLens capture. (146 modules, 60148 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1509,6 +1508,7 @@ Torch backend implementation package for TorchLens capture. (145 modules, 60049 
 | `_boundary_types` | Plain data records of one ''autograd.Function'' boundary call. | 51 |
 | `_call_plan` | Wrapper fast lane, first version: call plans, per-call admission and the fast commit. | 385 |
 | `_callable_location` | Lazy source location of the user callable a transform boundary op wraps. | 50 |
+| `_compiled_callable_sites` | The per-capture scan for Dynamo-compiled callables held as plain module attributes. | 99 |
 | `_completeness_audited` | Audited expected-opaque boundaries of the aten-dispatch completeness witness. | 129 |
 | `_completeness_boundaries` | Audited wrapper boundaries and input sites. | 352 |
 | `_completeness_cross_thread` | Cross-thread and scalar escape observation. | 477 |
