@@ -5918,6 +5918,16 @@
         "tests/test_rescue_rerun.py",
         "tests/test_torchnative_nan_report.py"
       ],
+      "torchlens/_utils/_detached_activations.py": [
+        "tests/test_capture_guard_transactionality.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_decoration.py",
+        "tests/test_implicit_boundary_tightening.py",
+        "tests/test_legacy_tensor_constructors.py",
+        "tests/test_scoped_patching_escape_detection.py",
+        "tests/test_wrap_state_compat.py",
+        "tests/test_wrapper_teardown_hygiene.py"
+      ],
       "torchlens/_utils/_dispatch_modes.py": [
         "tests/test_deferred_payload_clone.py",
         "tests/test_identity_shims.py",
@@ -6042,8 +6052,8 @@
         "tests/test_completeness_witness.py",
         "tests/test_decoration.py",
         "tests/test_hop_grad_trace.py",
+        "tests/test_label_plain_path.py",
         "tests/test_legacy_tensor_constructors.py",
-        "tests/test_release_model.py",
         "tests/test_scoped_patching_escape_detection.py",
         "tests/test_wrap_state_compat.py"
       ],
@@ -6060,9 +6070,9 @@
       "torchlens/_utils/_internal_read.py": [
         "tests/test_completeness_witness.py",
         "tests/test_deferred_payload_clone.py",
+        "tests/test_label_plain_path.py",
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_r36_cuda_hygiene.py",
-        "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_tl_meta.py",
         "tests/test_torchnative_markers.py",
         "tests/test_valmem5_saved_value_aliases.py"
@@ -6298,9 +6308,9 @@
         "tests/visualization/test_rolled_loop_route_fallback.py"
       ],
       "torchlens/_utils/_tensor_label.py": [
-        "tests/test_capture_instrument.py",
         "tests/test_deepcopy_capture_identity.py",
         "tests/test_internals.py",
+        "tests/test_label_plain_path.py",
         "tests/test_release_model.py",
         "tests/test_tl_lifecycle.py",
         "tests/test_tl_meta.py",
@@ -6318,9 +6328,9 @@
         "tests/test_tlspec_runnable_resolver.py"
       ],
       "torchlens/_utils/_tl_collective.py": [
-        "tests/test_capture_instrument.py",
         "tests/test_deepcopy_capture_identity.py",
         "tests/test_internals.py",
+        "tests/test_label_plain_path.py",
         "tests/test_release_model.py",
         "tests/test_tl_lifecycle.py",
         "tests/test_tl_meta.py",
@@ -6527,7 +6537,7 @@
         "tests/test_tlspec_runnable_r65_torch_rng.py"
       ],
       "torchlens/_utils/rng/autocast.py": [
-        "tests/test_foreign_kernel_boundary.py",
+        "tests/test_label_plain_path.py",
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_r18g_tensor_rng.py",
         "tests/test_rng_monitor_transactionality.py",
@@ -6590,8 +6600,8 @@
         "tests/test_capture_guard_transactionality.py",
         "tests/test_completeness_witness.py",
         "tests/test_decoration.py",
+        "tests/test_label_plain_path.py",
         "tests/test_legacy_tensor_constructors.py",
-        "tests/test_release_model.py",
         "tests/test_scoped_patching_escape_detection.py",
         "tests/test_validation_explicit_generator_replay.py",
         "tests/test_wrap_state_compat.py"
@@ -9639,8 +9649,8 @@
         "tests/test_completeness_hop_rules.py",
         "tests/test_completeness_witness.py",
         "tests/test_flops2_backward_attribution.py",
-        "tests/test_flops2_cost_columns.py",
         "tests/test_hop_grad_trace.py",
+        "tests/test_label_plain_path.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_vmap_boundary_replay.py",
         "tests/test_w1f3_observer_failopen.py"
@@ -9948,11 +9958,11 @@
         "tests/behaviour/test_cell_tmp.py",
         "tests/behaviour/test_chunked_oracle.py",
         "tests/behaviour/test_hook_passes_restore.py",
-        "tests/behaviour/test_hooks_oracle.py",
         "tests/test_exception_taxonomy.py",
         "tests/test_fast_run_faithfulness.py",
         "tests/test_fastlog/test_storage_modes.py",
-        "tests/test_hop_grad_trace.py"
+        "tests/test_hop_grad_trace.py",
+        "tests/test_label_plain_path.py"
       ],
       "torchlens/backends/torch/_module_aliases.py": [
         "tests/test_capopts_truth_failed_capture_release.py",
@@ -10465,10 +10475,10 @@
         "tests/test_w051_capt2_validate_forward_invariant.py"
       ],
       "torchlens/backends/torch/_tracing_pass.py": [
-        "tests/test_capture_guard_transactionality.py",
         "tests/test_completeness_witness.py",
         "tests/test_hop_cond_closure_params.py",
         "tests/test_hop_grad_trace.py",
+        "tests/test_label_plain_path.py",
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_robustness_pr4.py",
         "tests/test_scoped_patching_escape_detection.py",
