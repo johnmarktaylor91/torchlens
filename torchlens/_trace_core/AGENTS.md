@@ -53,6 +53,12 @@ classes (`Trace`, `Op`, ...) present rows from here as facades. The architecture
   `TraceCore.backward_epochs`.
 - `record_state_items()` / `record_state_restore()` handle facade pickle state.
 
+## capture_fields.py
+- Pure data: `EVENT_SLOTS` (the slots of one capture event) and `FIELD_TABLE`, one `FieldRow`
+  per op-store column (family, source, event slots, the phase that settles the value).
+  `UNSTORED_OBSERVATIONS` lists call-time observations that feed columns without being one.
+- A new op-store column needs a row; `tests/test_capture_fields.py` fails without it.
+
 ## Local invariants
 - Substrate-only imports: modules here import each other and numpy/stdlib, never
   `data_classes/` (facade classes reach down, not the reverse).
