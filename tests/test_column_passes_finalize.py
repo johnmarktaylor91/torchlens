@@ -221,7 +221,7 @@ def test_column_reader_matches_getattr_semantics() -> None:
     torch.manual_seed(0)
     model, x = _MODELS["loop_branch"]()
     trace = tl.trace(model, x)
-    ops = trace._layer_list
+    ops = list(trace._layer_list)  # held: a view's id is stable only while it is held
     lookup = _column_passes_finalize.column_rows_by_label(dict(enumerate(ops)))
     assert lookup is not None
     columns, rows_by_index = lookup

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import weakref
+
 import pytest
 import torch
 from torch import nn
@@ -46,12 +48,13 @@ class _TwoStage(nn.Module):
         return torch.relu(self.lin(x))
 
 
-def test_layer_repr_after_trace_collection_degrades_not_raises() -> None:
-    """repr/str/format on a Layer whose Trace was collected must not raise.
+def test_layer_from_a_chained_trace_keeps_it_and_reprs_live() -> None:
+    """``tl.trace(model, x).layers[label]`` keeps its Trace: repr and relations read live.
 
-    R52-A shape 1 (round-4 b7-opus): the natural one-liner
-    ``tl.trace(model, x)[label]`` leaves the Layer holding a dead weakref;
-    ``__repr__`` is data-model API and must degrade, never raise.
+    R52-A shape 1 left the Layer holding a dead weakref here. A Layer looked up
+    on a Trace now holds that Trace, so the one-liner reads like a held trace.
+    The degraded repr of a Layer without its Trace is covered by the standalone
+    pickle test below.
     """
 
     import gc
@@ -61,16 +64,11 @@ def test_layer_repr_after_trace_collection_degrades_not_raises() -> None:
 
     text = repr(layer)
     assert "relu_1" in text
-    assert "detached" in text
+    assert "detached" not in text
     assert str(layer) == text
     assert f"context: {layer}"  # f-string interpolation must not raise
-    # Relation accessors still refuse TYPED - repr degrading must not
-    # loosen the accessor contract.
-    from torchlens._errors import RecordBindingError
-
-    with pytest.raises(RecordBindingError) as exc_info:
-        _ = layer.parents
-    assert exc_info.value.fields["code"] == "trace_reference_collected"
+    assert isinstance(layer.source_trace, tl.Trace)
+    assert [parent.label for parent in layer.parents]
 
 
 def test_layer_standalone_pickle_repr_and_accessors_typed() -> None:
@@ -105,13 +103,13 @@ def test_layer_standalone_pickle_repr_and_accessors_typed() -> None:
 
 
 # Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
-def test_op_source_trace_refuses_typed_when_detached() -> None:
-    """``Op.source_trace`` must refuse TYPED for both detachment shapes.
+def test_op_source_trace_refuses_typed_when_unbound_and_reads_when_held() -> None:
+    """``Op.source_trace`` refuses TYPED when unbound and answers while the Op is held.
 
-    R52-B (b7-opus r5): the Layer half landed in 1a2b715e but ``Op`` kept
-    the identical type-lie -- a standalone-pickled Op returned a bare
-    ``None`` behind the ``-> Trace`` signature, and a dead weakref returned
-    ``None`` the same way, crashing relation accessors untyped.
+    R52-B (b7-opus r5): a standalone-pickled Op returned a bare ``None``
+    behind the ``-> Trace`` signature, crashing relation accessors untyped.
+    It must refuse ``record_not_bound``. An Op looked up on a Trace keeps
+    that Trace, so a held one still answers after ``del trace``.
     """
 
     import gc
@@ -132,14 +130,14 @@ def test_op_source_trace_refuses_typed_when_detached() -> None:
         _ = restored.get_children()
     assert children_exc.value.fields["code"] == "record_not_bound"
 
-    dead = trace.layers["relu_1_2"].ops[0]
+    # A held Op keeps its Trace, so its reads still answer after ``del trace``.
+    kept = trace.layers["relu_1_2"].ops[0]
+    trace_ref = weakref.ref(trace)
     del trace, op
     gc.collect()
-    with pytest.raises(RecordBindingError) as dead_exc:
-        _ = dead.source_trace
-    assert dead_exc.value.fields["code"] == "trace_reference_collected"
-    # repr on the dead-ref op must still degrade, never raise.
-    assert "relu_1" in repr(dead)
+    assert kept.source_trace is trace_ref()
+    assert trace_ref() is not None
+    assert "relu_1" in repr(kept)
 
 
 def test_op_repr_degrades_under_predicate_save() -> None:
