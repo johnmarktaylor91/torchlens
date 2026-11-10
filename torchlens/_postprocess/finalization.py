@@ -33,7 +33,7 @@ from .._data_classes._module_facade_fields import summarize_call_args
 from .._data_classes._op_column_scan import op_labels
 from .._data_classes._state_adapter import state_items
 from .._data_classes.layer import Layer
-from .._data_classes.module import Module, ModuleAccessor, ModuleCall
+from .._data_classes.module import Module, ModuleAccessor, ModuleCall, set_attribute_writes
 from .._data_classes.param import ParamAccessor
 from .._data_classes.trace import (
     Conditional,
@@ -587,14 +587,24 @@ def _build_module_param_info(
 def _seal_module_logs(self: "Trace") -> None:
     """Step 16: seal the module facts; the records are built on first lookup."""
 
-    seal_module_facts(self, _build_module_logs)
+    seal_module_facts(self, _build_pending_module_logs)
 
 
 def _build_module_logs_now(self: "Trace") -> None:
     """Seal and build at once: other backends do not stub call arguments at entry."""
 
-    seal_module_facts(self, _build_module_logs)
+    seal_module_facts(self, _build_pending_module_logs)
     ensure_modules_built(self)
+
+
+def _build_pending_module_logs(self: "Trace", pending: PendingModules) -> None:
+    """Build the records from the sealed facts, then attach the forward's attribute writes."""
+
+    _build_module_logs(self, pending)
+    records = self.modules  # the door the eager capture wrote through
+    for address, writes in (pending.attribute_writes or {}).items():
+        if writes is not None and address in records:
+            set_attribute_writes(records[address], writes)
 
 
 def _build_module_logs(self: "Trace", pending: PendingModules) -> None:
@@ -769,8 +779,7 @@ def _build_module_logs(self: "Trace", pending: PendingModules) -> None:
         module_dict,
         module_order,
         pass_dict,
-        built_for_trace=True,
-        buffer_versions=pending.buffer_versions,
+        sealed_buffer_versions=pending.buffer_versions,
     )
 
 

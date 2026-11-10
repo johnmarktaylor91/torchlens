@@ -58,8 +58,20 @@ class PendingModules:
         "input_layers_by_call",
         "buffer_versions",
         "module_count",
+        "attribute_writes",
         "build",
     )
+    module_build_data: dict[str, Any]
+    module_metadata: dict[Any, Any]
+    module_forward_args: dict[Any, Any]
+    root_forward_args: Any
+    root_summaries: tuple[str, str] | None
+    outputs_by_call: Any
+    input_layers_by_call: dict[str, list[str]]
+    buffer_versions: dict[str, list[str]]
+    module_count: int
+    attribute_writes: dict[str, Any] | None
+    build: Callable[[Any, PendingModules], None]
 
     def __init__(self, **facts: Any) -> None:
         """Store the captured facts by name (every slot is required)."""
@@ -149,6 +161,7 @@ def seal_module_facts(trace: Trace, build: Callable[[Any, PendingModules], None]
         input_layers_by_call=input_layers_by_call,
         buffer_versions=seal_buffer_versions(trace),
         module_count=len(mbd["addresses"]) - ("self" in mbd["addresses"]),
+        attribute_writes=None,  # the capture's observer bracket fills it
         build=build,
     )
     for name in LAZY_MODULE_FIELDS:

@@ -32,8 +32,7 @@ def rebuild_trace_accessors(
     module_order: list[Module],
     pass_dict: dict[str, ModuleCall],
     *,
-    built_for_trace: bool = False,
-    buffer_versions: dict[str, list[str]] | None = None,
+    sealed_buffer_versions: dict[str, list[str]] | None = None,
 ) -> None:
     """Rebuild the user-facing module and buffer accessors on a ``Trace``.
 
@@ -47,13 +46,14 @@ def rebuild_trace_accessors(
         Ordered list of module logs for iteration and integer indexing.
     pass_dict:
         Mapping from ``"address:pass"`` labels to ``ModuleCall`` entries.
-    built_for_trace:
-        The records were just constructed for ``trace`` and are still
-        detached (the step 16 build): they already name it, so they are not
+    sealed_buffer_versions:
+        Given only by the step 16 build: each buffer's version op labels as
+        step 16 sealed them. The records were just constructed for ``trace``
+        and are still detached: they already name it, so they are not
         rebound, and they are adopted here even when the trace has no op store.
-    buffer_versions:
-        Each buffer's version op labels as sealed by step 16, or ``None``.
     """
+
+    built_for_trace = sealed_buffer_versions is not None
 
     # The door is set first: a module whose ``ops`` cell already holds rows
     # (a second rebuild of the same records) reads its calls through it.
@@ -70,7 +70,7 @@ def rebuild_trace_accessors(
             module_call._source_trace = trace
 
     _adopt_module_rows(trace, module_dict, pass_dict, built_for_trace)
-    rebuild_buffer_accessor(trace, buffer_versions)
+    rebuild_buffer_accessor(trace, sealed_buffer_versions)
     if built_for_trace:
         _list_calls_in_build_order(trace, pass_dict)
 

@@ -17,8 +17,6 @@ from .._utils._record_group_table import record_member
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
-__all__ = ["seal_buffer_versions"]
-
 
 def seal_buffer_versions(trace: Trace) -> dict[str, list[str]]:
     """Name gradient-record owners and return each buffer's version op labels.

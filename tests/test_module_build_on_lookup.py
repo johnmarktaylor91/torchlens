@@ -166,7 +166,7 @@ def test_repr_and_to_pandas_do_not_build() -> None:
     text = repr(trace)
     trace.to_pandas()
     assert _pending(trace)
-    trace.modules
+    assert len(trace.modules) > 1
     assert repr(trace) == text
 
 
@@ -189,7 +189,7 @@ def test_fork_of_built_trace_matches_fork_of_pending_trace() -> None:
     """Forking before or after the build gives the same records."""
 
     built = _trace()
-    built.modules
+    assert len(built.modules) > 1
     assert _facts(built.fork()) == _facts(_trace().fork())
 
 
@@ -204,7 +204,7 @@ def test_pickle_and_save_build_first(tmp_path: Path) -> None:
     loaded = tl.load(path)
     reference = tmp_path / "built.tlspec"
     built = _trace()
-    built.modules
+    assert len(built.modules) > 1
     built.save(reference)
     assert _facts(loaded) == _facts(tl.load(reference))
 
