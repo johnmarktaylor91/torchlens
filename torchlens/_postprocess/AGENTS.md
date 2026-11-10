@@ -117,7 +117,7 @@ Torch captures group by call site (`docs/guides/grouping.md`). At op creation
 `_ops_activations._call_site_equivalence_class` keys each op by (innermost stateful module,
 call-site chain from `utils/_call_site.py`, func_name, output slot) and writes
 `equivalence_class = "<type>@cs<N>"`; the key itself is not persisted. Step 7
-(`_group_by_call_sites`) makes ops with one class passes of one layer, buffers group by buffer
+(`_step7_rows.group_call_sites`, over op columns) makes ops with one class passes of one layer, buffers group by buffer
 address, inputs and outputs stay single, and ops with no chain fall back to their site key
 position. A module call repeats the ops inside it only for a stateful module (one that
 registers a non-None parameter or buffer, itself or below it; decided once per capture by
