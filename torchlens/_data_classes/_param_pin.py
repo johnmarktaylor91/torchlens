@@ -58,12 +58,19 @@ def _accessor_class() -> type:
 
 
 def pin_params(trace: Any) -> None:
-    """Turn ``trace``'s ``Param`` containers into row keys and name it the views' owner."""
+    """Turn ``trace``'s ``Param`` containers into row keys and name it the views' owner.
+
+    A stream session still open for these rows ends here: a restored trace may
+    keep the plain accessor a state walk built, and the session's plain forms
+    must not keep the trace alive.
+    """
 
     core = trace.__dict__.get("_trace_core")
     rows = param_rows_of(core) if core is not None else None
     if rows is None:
         return
+    if _SESSIONS:
+        _close_session(weakref.ref(rows), _SESSIONS.get(rows, {}))
     rows.table.set_owner(trace)
     memo: dict[int, Any] = {}
     state = trace.__dict__
