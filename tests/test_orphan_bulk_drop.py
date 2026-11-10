@@ -9,9 +9,11 @@ scrubs nothing.
 
 from __future__ import annotations
 
+import json
 import sys
 from collections import OrderedDict
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -38,14 +40,20 @@ def _general_drop(trace: Any, orphan_nodes: set[str]) -> None:
     ws.raw_layer_labels_list = kept
 
 
-def _dump(save_args: bool = False) -> tuple[Any, dict[str, Any]]:
-    """Trace the dead-branches model and return the trace and its canonical dump."""
+def _dump(save_args: bool = False) -> tuple[Any, Any]:
+    """Trace the dead-branches model and return the trace and its canonical dump.
+
+    The per-process trace counter (the name suffix and the run nonce) differs
+    between two traces in one process, so both are replaced by fixed tokens.
+    """
 
     model, x = build_model("dead_branches")
     capture = tl.options.CaptureOptions(seed=SEED, save_args=save_args)
     trace = tl.trace(model, x, capture=capture)
     dump, _canon = snapshot_trace(trace, [(str(REPO_ROOT), "<repo>")], read_geometry=True)
-    return trace, dump
+    dump["trace"]["event_stream"]["fields"].pop("run_nonce")
+    text = json.dumps(dump, default=repr, sort_keys=True).replace(trace.name, "<trace>")
+    return trace, json.loads(text)
 
 
 @pytest.mark.parametrize("save_args", [False, True])
@@ -65,7 +73,7 @@ def test_bulk_drop_equals_the_general_removal(
 def test_bulk_drop_scrubs_only_the_survivors_that_name_an_orphan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The scrub visits a strict subset of the survivors, and every op it skips names no orphan."""
+    """The scrub visits exactly the survivors that name an orphan, never all of them."""
 
     seen: dict[str, Any] = {}
     real = _trace_removal.batch_remove_log_entries
@@ -84,7 +92,32 @@ def test_bulk_drop_scrubs_only_the_survivors_that_name_an_orphan(
     model, x = build_model("dead_branches")
     tl.trace(model, x, capture=tl.options.CaptureOptions(seed=SEED))
     assert seen["removed"]
-    assert 0 < len(seen["scrubbed"]) < len(seen["survivors"])
+    removed = seen["removed"]
+    naming = [op for op in seen["survivors"] if _trace_removal._names_removed_label(op, removed)]
+    assert seen["scrubbed"] == naming
+    assert len(seen["scrubbed"]) < len(seen["survivors"])
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        *({attr: ["live_1", "dead_1"]} for attr in _trace_removal._LABEL_ATTRS),
+        {"parent_arg_positions": {"args": {0: "dead_1"}, "kwargs": {}}},
+        {"out_versions_by_child": {"dead_1": 0}},
+        {"conditional_arm_children": {0: {"then": ["dead_1"]}}},
+        {"conditional_elif_children": {0: {1: ["dead_1"]}}},
+        {"_edge_uses": [SimpleNamespace(parent_label="live_1", child_label="dead_1")]},
+        {"edits": ["dead_1"]},
+    ],
+)
+def test_names_removed_label_sees_every_scrubbed_field(fields: dict[str, Any]) -> None:
+    """Each field the general scrub rewrites marks its op for the bulk drop's scrub."""
+
+    assert _trace_removal._names_removed_label(SimpleNamespace(**fields), {"dead_1"})
+    clean = SimpleNamespace(
+        **{attr: ["live_1"] for attr in _trace_removal._LABEL_ATTRS}, edits=["live_1"]
+    )
+    assert not _trace_removal._names_removed_label(clean, {"dead_1"})
 
 
 def test_no_orphans_scrubs_nothing_and_keeps_the_layer_dict(
