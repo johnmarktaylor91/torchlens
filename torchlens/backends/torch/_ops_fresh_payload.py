@@ -128,7 +128,7 @@ def save_fresh_plain_activation(
     fields_dict["transformed_out_dtype"] = None
     fields_dict["transformed_activation_memory"] = None
     fields_dict["has_saved_activation"] = True
-    if admitted is not None:
+    if budget is not None and admitted is not None:
         commit_fresh(budget, admitted, raw_out, identity, device, num_bytes, fields_dict)
     fields_dict["saved_args"] = None
     fields_dict["saved_kwargs"] = None

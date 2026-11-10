@@ -111,6 +111,7 @@ def commit_fresh(
         return
     # ``admitted`` is the ledger keyed ``str(device)`` (never a cuda device without
     # an index), so an identity on that device string is a payload on that ledger.
+    assert type(admitted) is _DeviceLedger
     ledger_key = str(device)
     if (
         identity is None
