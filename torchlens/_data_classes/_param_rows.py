@@ -111,7 +111,7 @@ class ParamTable:
         state = self.states[row]
         if state is None:
             state = self.states[row] = {CORE_KEY: self.store, ROW_KEY: row}
-        view = _new(_PARAM[0])
+        view: Any = _new(_PARAM[0])
         view.__dict__ = state
         reference = self.owner_ref
         _set(view, "_owner", reference() if reference is not None else None)
@@ -218,7 +218,8 @@ class ParamRows:
         keys = self.adopt_keys(container)
         if container.__class__ is ParamTuple:
             return ParamTuple.from_keys(self, keys)
-        sequence = ParamSequence(self)
+        owner: Any = self  # ParamSequence types its owner as the OpRows it extends
+        sequence = ParamSequence(owner)
         list.extend(sequence, keys)
         return sequence
 
@@ -229,8 +230,8 @@ class ParamRows:
         for fresh in (False, True):
             if fresh or entry is None or entry[0] is not sequence:
                 table: dict[int, int] = {}
-                for index, held in enumerate(_list_iter(sequence)):
-                    table.setdefault(held, index)
+                for position, held in enumerate(_list_iter(sequence)):
+                    table.setdefault(held, position)
                 entry = self._positions[id(sequence)] = (sequence, table)
             index = entry[1].get(key)
             if (
@@ -304,7 +305,7 @@ class ParamSequence(OpSequence):
 
         return ParamSequence(self._owner, self._records())
 
-    def __deepcopy__(self, memo: dict[Any, Any]) -> list[Any]:
+    def __deepcopy__(self, memo: dict[Any, Any]) -> list[Any]:  # type: ignore[override]
         """Copy as a plain list of the copied records (a copied trace keys them again)."""
 
         new = _copied(self._records(), memo)
@@ -333,7 +334,7 @@ class ParamMap(OpLabelMap):
 
         return ParamMap(self._owner, self.items(), ordered=self._ordered)
 
-    def __deepcopy__(self, memo: dict[Any, Any]) -> dict[Any, Any]:
+    def __deepcopy__(self, memo: dict[Any, Any]) -> dict[Any, Any]:  # type: ignore[override]
         """Copy as a plain dictionary of the copied records (a copied trace keys them again)."""
 
         plain = self.plain()
@@ -385,7 +386,7 @@ class ParamTuple(tuple):  # noqa: SLOT001 (a tuple subclass cannot declare slots
 
         return self._owner.records(reversed(_tuple_get(self, slice(None))))
 
-    def __getitem__(self, index: Any) -> Any:  # type: ignore[override]
+    def __getitem__(self, index: Any) -> Any:
         """Return one record, or a plain tuple of records for a slice."""
 
         key = _tuple_get(self, index)
@@ -443,7 +444,7 @@ class ParamTuple(tuple):  # noqa: SLOT001 (a tuple subclass cannot declare slots
 
         return hash(self._records())
 
-    def __add__(self, other: Any) -> tuple[Any, ...]:  # type: ignore[override]
+    def __add__(self, other: Any) -> tuple[Any, ...]:
         """Concatenate as a plain tuple of records."""
 
         return self._records() + other
