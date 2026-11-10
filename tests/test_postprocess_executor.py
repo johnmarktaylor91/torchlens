@@ -562,6 +562,7 @@ def test_unmet_step_postcondition_raises_typed_error(
         "_build_lookup_keys_and_finalize_retained_layers": pp.labeling,
         "_build_layer_logs": pp.finalization,
         "_build_module_logs": pp.finalization,
+        "_seal_module_logs": pp.finalization,
         "compute_graph_shape_hash": hashing,
         "_set_tracing_finished": pp.finalization,
     }
