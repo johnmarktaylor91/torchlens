@@ -385,7 +385,7 @@ def _name_use(path: str, node: ast.Constant, parents: dict[ast.AST, ast.AST]) ->
     parent = parents.get(node)
     called = _call_name(parent) if isinstance(parent, ast.Call) else ""
     category = "mutate" if called in {"setattr", "delattr"} else "by-name"
-    return Use(path, node.lineno, node.value, category, called or "string")
+    return Use(path, node.lineno, str(node.value), category, called or "string")
 
 
 def scan_source(path: str, source: str) -> tuple[list[Use], list[IdentityLoop]]:

@@ -79,12 +79,12 @@ def _read_facets(trace: Any) -> None:
     """Read the facet view of every op and module."""
 
     for op in list(trace.ops):
-        op.facets
+        _ = op.facets
     for module in list(trace.modules):
         if len(module.calls) == 1:
-            module.facets
+            _ = module.facets
     for call in list(trace.module_calls):
-        call.facets
+        _ = call.facets
 
 
 def case_plain() -> Roots:
