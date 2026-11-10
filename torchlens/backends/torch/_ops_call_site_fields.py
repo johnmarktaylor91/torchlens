@@ -37,7 +37,6 @@ from ._call_site_parts import (
     build_from_parts,
     is_internal as _is_internal,
     module_record,
-    seed_locations,
     stateful as _stateful,
 )
 
@@ -72,7 +71,6 @@ class _CallSiteMemo:
         "last_record",
         "locations",
         "module_ws",
-        "pins",
         "sites",
         "uppers",
     )
@@ -95,14 +93,12 @@ class _CallSiteMemo:
         self.entries: dict[int, tuple[Any, int, int]] = {}
         #: Remainder content -> small int.
         self.interns: dict[Any, int] = {}
-        #: ``id(code)`` -> code for every code a key names by id, so no id is
-        #: reused while the table lives (the capture).
-        self.pins: dict[int, CodeType] = {}
         #: ``id(ModuleStackFrame)`` -> upper part above that module call (miss path).
         self.uppers: dict[int, Any] = {}
-        #: ``(code, f_lasti, f_lineno)`` -> ``FuncCallLocation``, so the miss path
-        #: builds each location once and reuses the full walk's (``seed_locations``).
-        self.locations: dict[tuple[CodeType, int, int], Any] = {}
+        #: ``(code, co_filename, f_lasti, f_lineno)`` -> ``FuncCallLocation``: the
+        #: full walk and the miss path build each location once per capture
+        #: (``introspection.build_locations``).
+        self.locations: dict[tuple[CodeType, str, int, int], Any] = {}
         #: The module call the previous op's key ended in, and its ids remainder.
         self.last_record: Any = None
         self.last_ids = 0
@@ -132,8 +128,8 @@ def _module_entry(
     passed yet (the wrapper's own statefulness, its module when stateless, and the
     module of each ``_call_impl`` frame above it). ``None`` when the wrapper holds
     no module stack frame (a pass-through or predicate-mode call): the caller then
-    takes the full walk. Codes are named by id and pinned in ``memo.pins``;
-    TorchLens's own frames are left out (the walk never keeps or reads them).
+    takes the full walk. Codes are named as in :func:`_site_key`; TorchLens's
+    own frames are left out (the walk never keeps or reads them).
     """
 
     record, next_depth = module_record(memo, wrapper, depth)
@@ -147,7 +143,6 @@ def _module_entry(
     if walked is None:
         return None
     plain, ids, tail = walked
-    pins = memo.pins
     if isinstance(tail, tuple):
         plain_number = _intern(memo, (plain, tail[2]))
         ids_tail: Any = tail[1]
@@ -157,9 +152,7 @@ def _module_entry(
     if stateful:
         ids_number = _intern(memo, (_STATEFUL, plain_number))
     else:
-        wrapper_id = id(wrapper.f_code)
-        pins[wrapper_id] = wrapper.f_code
-        ids_number = _intern(memo, (_CROSSED, wrapper_id, record.module_id, ids, ids_tail))
+        ids_number = _intern(memo, (_CROSSED, wrapper.f_code, record.module_id, ids, ids_tail))
     entry = (record, ids_number, plain_number)
     memo.entries[id(record)] = entry
     return entry
@@ -177,7 +170,6 @@ def _remainder_walk(
 
     anchor = memo.anchor
     anchor_code = anchor[1] if anchor is not None else None
-    pins = memo.pins
     plain: Any = None
     ids: Any = None
     frame = wrapper.f_back
@@ -202,15 +194,14 @@ def _remainder_walk(
             except KeyError:
                 internal = _is_internal(code)
         if not internal:
-            code_id = id(code)
-            pins[code_id] = code
+            filename = code.co_filename
             lasti = frame.f_lasti
-            plain = (plain, code_id, lasti)
+            plain = (plain, code, filename, lasti)
             if not stateful:
                 if name == "_call_impl":
-                    ids = (ids, code_id, lasti, id(frame.f_locals["self"]))
+                    ids = (ids, code, filename, lasti, id(frame.f_locals["self"]))
                 else:
-                    ids = (ids, code_id, lasti)
+                    ids = (ids, code, filename, lasti)
         frame = frame.f_back
     return plain, ids, _AT_TOP
 
@@ -219,16 +210,18 @@ def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
     """The site key of the op being recorded, walking up from ``frame``.
 
     Walks to the innermost module wrapper (or the anchor, or the top) naming each
-    kept-kind frame by its code's id and offset, and each ``_call_impl`` frame
-    also by its module; TorchLens's own frames are skipped, since the walk never
-    keeps or reads them. ``None`` when the wrapper holds no module stack frame
+    kept-kind frame by its code object, the code's file and the offset, and each
+    ``_call_impl`` frame also by its module; TorchLens's own frames are skipped,
+    since the walk never keeps or reads them. Code objects compare by value, and
+    two equal codes may come from different files, so the file is part of the
+    name: no call per frame, and no two files share a site. The key holds its
+    codes, so they live as long as the table (the capture). ``None`` when the wrapper holds no module stack frame
     (the full walk applies). Consecutive ops in one module call reuse its
     remainder without touching the wrapper frame's locals.
     """
 
     anchor = memo.anchor
     anchor_code = anchor[1] if anchor is not None else None
-    pins = memo.pins
     key: Any = None
     while frame is not None:
         code = frame.f_code
@@ -259,32 +252,34 @@ def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
         ):  # ``_is_anchor``, inlined: one call fewer per op
             return (key, _AT_ANCHOR)
         if name == "_call_impl":
-            code_id = id(code)
-            pins[code_id] = code
-            key = (key, code_id, frame.f_lasti, id(frame.f_locals["self"]))
+            key = (key, code, code.co_filename, frame.f_lasti, id(frame.f_locals["self"]))
         else:
+            filename = code.co_filename
             try:
-                internal = _VERDICTS[code.co_filename]
+                internal = _VERDICTS[filename]
             except KeyError:
                 internal = _is_internal(code)
             if not internal:
-                code_id = id(code)
-                pins[code_id] = code
-                key = (key, code_id, frame.f_lasti)
+                key = (key, code, filename, frame.f_lasti)
         frame = frame.f_back
     return (key, _AT_TOP)
 
 
-def _full_walk(self: "Trace", cache: dict[Any, Any]) -> tuple[list[Any], Any]:
-    """The full code-context walk for the op being recorded (two frames up)."""
+def _full_walk(self: "Trace", memo: _CallSiteMemo) -> tuple[list[Any], Any]:
+    """The full code-context walk for the op being recorded (two frames up).
+
+    Its locations come from and go to ``memo.locations``, shared with the miss
+    path, so a first-time site under a deep stack builds only its new frames.
+    """
 
     call_site_out: list[Any] = []
     code_context = _get_code_context(
         self.num_context_lines,
         source_loading_enabled=self._options_save_source_context,
         disable_col_offset=False,
-        context_cache=cache,
+        context_cache=memo.cache,
         call_site_out=call_site_out,
+        locations=memo.locations,
     )
     return code_context, call_site_out[0]
 
@@ -308,8 +303,7 @@ def _set_call_site_fields(self: "Trace", fields_dict: dict[str, Any], func_call_
             self._code_context_cache = cache
         memo = _CallSiteMemo(cache, self._module_capture_ws)
         workspace._call_site_memo = memo
-        code_context, chain = _full_walk(self, cache)
-        seed_locations(memo)
+        code_context, chain = _full_walk(self, memo)
         if memo.anchor is None:
             memo.anchor = cache.get(_CODE_CONTEXT_ANCHOR_KEY)
         key = _site_key(memo, sys._getframe(1))
@@ -328,7 +322,7 @@ def _set_call_site_fields(self: "Trace", fields_dict: dict[str, Any], func_call_
         if key is not None and memo.build_misses:
             built = build_from_parts(memo, frame, self)
         if built is None:
-            code_context, chain = _full_walk(self, cache)
+            code_context, chain = _full_walk(self, memo)
             if memo.anchor is None:  # a full walk may set the anchor
                 memo.anchor = cache.get(_CODE_CONTEXT_ANCHOR_KEY)
                 key = _site_key(memo, frame)
