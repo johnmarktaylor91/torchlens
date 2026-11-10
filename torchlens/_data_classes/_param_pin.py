@@ -11,12 +11,13 @@ cannot hold the trace (the trace would hold itself), so the door hands out a
 second accessor over the same state that does, cached weakly, as
 ``trace.ops`` does.
 
-State streams (pickle, deep copy, ``plain_state``) see plain lists and
-dictionaries of records, exactly as before: ``plain_form`` gives the plain
+State streams (pickle, deep copy, ``plain_state``) see plain lists, tuples
+and dictionaries of records, exactly as before: ``plain_form`` gives the plain
 form of a row-key container. One container reached from two places in one
-stream (a layer reads its first op's parameter list) must give one plain
+stream (a layer reads its first op's parameter tuple) must give one plain
 object, or pickle would write it twice, so a trace's stream opens a session
-that remembers each plain form until the stream's own state is dropped.
+on that trace's resolver that remembers each plain form until the stream's
+own state is dropped. A session only ever serves its own trace's containers.
 """
 
 from __future__ import annotations
@@ -164,33 +165,46 @@ def handed_params(trace: Any) -> Any:
 
 # ---------------------------------------------------------------- state streams
 
-#: Open stream sessions: each maps ``id(container)`` to ``(container, plain form)``.
-_SESSIONS: list[dict[int, tuple[Any, Any]]] = []
+#: Open stream sessions by trace resolver: ``id(container) -> (container, keys, plain form)``.
+#: Kept off the trace, so no trace holds the plain forms; each entry lives as long
+#: as the state of the stream that opened it.
+_SESSIONS: weakref.WeakKeyDictionary[ParamRows, dict[int, tuple[Any, Any, Any]]] = (
+    weakref.WeakKeyDictionary()
+)
 
 
-def _close_session(memo: dict[int, tuple[Any, Any]]) -> None:
+def _close_session(rows_ref: Any, memo: dict[int, tuple[Any, Any, Any]]) -> None:
     """End one stream session and drop the plain forms it kept."""
 
-    for index, open_memo in enumerate(_SESSIONS):
-        if open_memo is memo:
-            del _SESSIONS[index]
-            break
+    rows = rows_ref()
+    if rows is not None and _SESSIONS.get(rows) is memo:
+        del _SESSIONS[rows]
     memo.clear()
 
 
-def plain_form(value: Any) -> Any:
-    """Return the plain list or dictionary a row-key container stands in for.
+def _keys_of(value: Any) -> tuple[Any, ...]:
+    """Return the keys a row-key container holds, in order (a snapshot for the session memo)."""
 
-    Inside an open stream session one container always gives the same plain object.
+    if isinstance(value, dict):
+        return tuple(dict.items(value))
+    return tuple(tuple.__iter__(value) if isinstance(value, tuple) else list.__iter__(value))
+
+
+def plain_form(value: Any) -> Any:
+    """Return the plain list, tuple or dictionary a row-key container stands in for.
+
+    While its trace has a stream session open, one container (with the same
+    keys) always gives the same plain object.
     """
 
-    if not _SESSIONS:
+    memo = _SESSIONS.get(value._owner) if _SESSIONS else None
+    if memo is None:
         return value.__tl_plain__()
-    memo = _SESSIONS[-1]
+    keys = _keys_of(value)
     entry = memo.get(id(value))
-    if entry is None or entry[0] is not value:
-        entry = memo[id(value)] = (value, value.__tl_plain__())
-    return entry[1]
+    if entry is None or entry[0] is not value or entry[1] != keys:
+        entry = memo[id(value)] = (value, keys, value.__tl_plain__())
+    return entry[2]
 
 
 def plain_value(value: Any) -> Any:
@@ -209,14 +223,15 @@ def project_params(state: dict[str, Any]) -> dict[str, Any]:
     accessor = state.get(_FIELD)
     cls = _accessor_class()
     if accessor.__class__ is cls and accessor.__dict__.get("_list").__class__ is ParamSequence:
-        memo: dict[int, tuple[Any, Any]] = {}
-        _SESSIONS.append(memo)
+        rows = accessor.__dict__["_list"]._owner
+        memo: dict[int, tuple[Any, Any, Any]] = {}
+        _SESSIONS[rows] = memo
         twin = _new(cls)
         twin.__dict__ = {
             name: plain_form(value) if value.__class__ in ROW_FORMS else value
             for name, value in accessor.__dict__.items()
         }
-        weakref.finalize(twin, _close_session, memo)
+        weakref.finalize(twin, _close_session, weakref.ref(rows), memo)
         state[_FIELD] = twin
     by_module = state.get(_BY_MODULE)
     if by_module and any(value.__class__ is ParamSequence for value in by_module.values()):

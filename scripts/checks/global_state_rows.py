@@ -25,10 +25,6 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # Foreign-kernel boundary: the stack of export names seen inside each live
         # Function.apply frame, pushed and popped around that one apply call.
         ("torchlens/backends/torch/_function_boundary.py", "_FRAMES"),
-        # Param stream sessions: one memo per state stream (pickle, deep copy,
-        # plain_state) in flight, closed by a finalizer on that stream's own
-        # state; a survivor only keeps one stream's plain lists alive.
-        ("torchlens/_data_classes/_param_pin.py", "_SESSIONS"),
         ("torchlens/backends/torch/_torch_ops_calls.py", "_SUPPRESS_DEPTH"),
         # Operator entry compile depth: incremented/decremented in
         # hop_internal_compile_scope's try/finally around one lifted compile; a
@@ -723,6 +719,10 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Per-trace grad_fn-call ordinal index (fix/walkers f399c63a, linear
         # ordinal_index): keyed weakly by the owning trace, dies with it.
         ("torchlens/_data_classes/grad_fn_call.py", "_ORDINAL_POSITIONS_CACHE"),
+        # Param stream sessions, keyed weakly by the trace's param resolver: one
+        # memo per state stream in flight, closed by a finalizer on that
+        # stream's own state; entries die with the resolver.
+        ("torchlens/_data_classes/_param_pin.py", "_SESSIONS"),
         # Live telemetry relations are keyed by AtenOp facades and disappear
         # with those rows; they never retain a Trace or profiler session.
         ("torchlens/_kernel_telemetry.py", "_ATEN_KERNELS"),
@@ -1124,6 +1124,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/_data_classes/_compaction.py", "_COMPACTED_TRACES"),
         ("torchlens/_data_classes/_nonfinite.py", "_MEMOS"),
         ("torchlens/_data_classes/grad_fn_call.py", "_ORDINAL_POSITIONS_CACHE"),
+        ("torchlens/_data_classes/_param_pin.py", "_SESSIONS"),
         ("torchlens/_kernel_telemetry.py", "_ATEN_KERNELS"),
         ("torchlens/_visualization/auto_collapse.py", "_ANALYSIS_CACHE"),
         ("torchlens/_visualization/auto_collapse.py", "_OP_ADJACENCY_INDEX_CACHE"),

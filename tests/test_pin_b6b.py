@@ -296,3 +296,21 @@ def test_validation_identity_site_reads_held_inventory() -> None:
     del inventory, held
     gc.collect()
     _check_layer_param_aggregate_dedup(trace, "b6b")
+
+
+def test_retained_state_holds_only_its_trace() -> None:
+    """A state one trace handed out and someone kept never holds another trace's params."""
+
+    first = _trace()
+    kept = first.__getstate__()
+    gc.disable()
+    try:
+        trace = _trace()
+        trace_ref = weakref.ref(trace)
+        pickle.dumps(trace)
+        copy.deepcopy(trace.params["fc.weight"])
+        del trace
+        assert trace_ref() is None
+    finally:
+        gc.enable()
+    assert type(kept["_param_logs"].__dict__["_list"]) is list
