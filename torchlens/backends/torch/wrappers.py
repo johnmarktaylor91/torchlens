@@ -1529,7 +1529,7 @@ def torch_func_decorator(
             call = (func, func_name, args, kwargs, arg_copies, kwarg_copies, out_orig, exec_ctx)
             window = _cow_payload_state_ptrs(trace)
             return _call_plan.commit_fast_call(
-                log_function_output_tensors, trace, call, func_call_id, window
+                log_function_output_tensors, trace, call, func_call_id, window, fast[0]
             )
         if isinstance(out_orig, torch.nn.Parameter):
             # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.

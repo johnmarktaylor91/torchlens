@@ -351,6 +351,7 @@ def commit_fast_call(
     call: tuple[Any, ...],
     func_call_id: int,
     cow_state_ptrs: Any,
+    tensors: list[torch.Tensor],
 ) -> Any:
     """Emit one admitted bottom-level call through today's emit and return its output.
 
@@ -368,6 +369,9 @@ def commit_fast_call(
         The call's id.
     cow_state_ptrs:
         The trace's deferred payload window state, or ``None``.
+    tensors:
+        The call's tensor arguments as :func:`admit_call` collected them; the
+        emit's argument scan reuses them instead of scanning the arguments again.
 
     Returns
     -------
@@ -377,9 +381,12 @@ def commit_fast_call(
 
     if cow_state_ptrs is not None:
         arm_deferred_payload_window(cow_state_ptrs)
+    runtime = trace._wrapper_runtime_ws
+    runtime.fast_scan = (call[2], tensors)
     try:
         emit(trace, *call, True, func_call_id)
     finally:
+        runtime.fast_scan = None
         if cow_state_ptrs is not None:
             disarm_deferred_payload_window()
     return call[6]

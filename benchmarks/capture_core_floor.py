@@ -80,6 +80,7 @@ SECTION_MARKERS: dict[str, tuple[str, ...]] = {
     # Argument scan, parents, versions, parameters, slot map, source resolution.
     "arg_scan": (
         "_extract_arg_tensors_and_params",
+        "_fast_lane_arg_tensors",
         "get_arg_tensors_for_resolution",
         "split_non_tensor_args",
         "_bind_call_alias_labels",

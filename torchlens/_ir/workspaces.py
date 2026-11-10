@@ -190,3 +190,7 @@ class WrapperRuntimeWorkspace:
     #: (``backends/torch/param_mutation``). ``None`` until the first such call,
     #: so the hot path pays one attribute read.
     materialized_lazy_slots: Any = None
+    #: ``(args, admitted tensors)`` of the fast-lane call being emitted, set by
+    #: ``_call_plan.commit_fast_call`` around its emit so the argument scan reuses
+    #: the tensors ``admit_call`` collected; ``None`` outside that emit.
+    fast_scan: Any = None

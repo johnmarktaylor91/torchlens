@@ -385,7 +385,7 @@ def _build_graph_relationship_fields(
     fields_dict["has_internal_source_ancestor"] = len(internal_source_ancestors) > 0
     fields_dict["internal_source_ancestors"] = internal_source_ancestors
 
-    in_multi_output = any(issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set])
+    in_multi_output = issubclass(type(out_orig), (list, tuple, dict, set))
     fields_dict["in_multi_output"] = in_multi_output
 
 
