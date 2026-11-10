@@ -144,12 +144,63 @@ def test_direct_path_matches_with_detached_payloads(monkeypatch: pytest.MonkeyPa
 def test_same_object_returns_and_views_keep_dedup_and_ledger(
     monkeypatch: pytest.MonkeyPatch, requires_grad: bool
 ) -> None:
-    """A same-object return keeps its dedup hit; a view's shared storage is charged once."""
+    """Same-object returns and whole-storage views record the same payloads and ledger."""
 
     x = torch.randn(3, 5, requires_grad=requires_grad)
-    direct, general, _ = _both(monkeypatch, lambda: tl.trace(_SameObjectReturns(), x))
+    direct, general, calls = _both(monkeypatch, lambda: tl.trace(_SameObjectReturns(), x))
+    assert calls > 0
     _same(direct, general)
-    assert any(row[7] is not None for row in direct["rows"])
+
+
+def _fields(label: str) -> dict[str, Any]:
+    """Return the field subset ``_save_activation_fields`` reads for a direct call."""
+
+    return {
+        "_label_raw": f"{label}_raw",
+        "_layer_label_raw": label,
+        "annotations": {},
+        "backward_ready": False,
+        "detach_saved_activations": False,
+        "func_name": "manual_test",
+        "output_device": "same",
+    }
+
+
+def _save_twice(direct: bool) -> list[dict[str, Any]]:
+    """Save one tensor twice and another twice; return the four field dicts."""
+
+    trace = tl.trace(nn.Identity(), torch.randn(1, 2))
+    first, second = torch.randn(2, 2), torch.randn(2, 2)
+    fields = [_fields(f"manual_{i}") for i in range(4)]
+    save = _ops_activations._save_activation_fields
+    for entry, tensor in zip(fields, (first, first, second, second), strict=True):
+        if direct:
+            save(trace, entry, tensor, (), {}, None)
+        else:
+            original = _ops_activations.fresh_plain_payload_eligible
+            _ops_activations.fresh_plain_payload_eligible = lambda *a: None
+            try:
+                save(trace, entry, tensor, (), {}, None)
+            finally:
+                _ops_activations.fresh_plain_payload_eligible = original
+    return fields
+
+
+def test_repeat_save_after_a_direct_insert_hits_the_identity_cache() -> None:
+    """A tensor saved again hits the entry the direct path inserted, with the same ordinal."""
+
+    direct, general = _save_twice(True), _save_twice(False)
+    for paths in (direct, general):
+        assert paths[1]["out"] is paths[0]["out"]
+        assert paths[3]["out"] is paths[2]["out"]
+    for a, b in zip(direct, general, strict=True):
+        assert a["annotations"] == b["annotations"]
+        assert {k: v for k, v in a.items() if k not in {"out", "annotations"}} == {
+            k: v for k, v in b.items() if k not in {"out", "annotations"}
+        }
+        assert torch.equal(a["out"], b["out"])
+    assert direct[1]["annotations"]["dedup_source_id"] == 1
+    assert direct[3]["annotations"]["dedup_source_id"] == 2
 
 
 def test_refusals_are_identical(monkeypatch: pytest.MonkeyPatch) -> None:
