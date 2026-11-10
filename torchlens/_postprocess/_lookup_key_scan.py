@@ -232,17 +232,16 @@ class _Scan:
     def module_keys(self, cells: list[Any]) -> list[str] | None:
         """Relabel one op's module calls as ``_relabel_module_calls`` does; return its module keys.
 
-        ``None`` (with nothing written) when a cell is not in a shape the scan
-        reproduces exactly; the caller then uses the facade function. Plain
-        loops on purpose: a comprehension, ``len``, ``zip`` or ``append`` is a
-        counted call per op on the oldest supported Python.
+        ``None`` (nothing written) sends the op to the facade function. Plain loops:
+        a comprehension, ``len``, ``zip`` or ``append`` is a counted call per op on Python 3.10.
         """
         # One flat function on purpose (complexity): it stands in for three facade helpers per op.
         f_module, *f_lists = self.write_fids[2:]
         if not self.relabel:
             return [] if _empty_calls(cells[f_lists[0]]) else None
         relabeled: list[list[str]] = []
-        exit_names: list[Any] = []
+        keys: list[str] = []
+        num_calls = self.num_calls
         for fid in f_lists:
             value = cells[fid]
             if value.__class__ is LazyCell and value.make and value.source is list:
@@ -252,19 +251,26 @@ class _Scan:
             labels: list[str] = []
             for call in value:
                 if call.__class__ is str:
-                    labels += (call,)
-                    name = None
+                    label, name = call, None
                 elif call.__class__ is tuple:
                     try:
                         name, number = call
                     except ValueError:
                         return None
-                    labels += (f"{name}:{number}",)
+                    label = f"{name}:{number}"
                     name = name if name.__class__ is str and number.__class__ is int else None
                 else:
                     return None
-                if not relabeled:
-                    exit_names += (name,)
+                labels += (label,)
+                if relabeled:  # the module keys come from the first list, the exits
+                    continue
+                if num_calls is None or (name is None and ":" not in label):
+                    return None
+                if name is None:
+                    name = label.rsplit(":", 1)[0]
+                keys += (label,)
+                if num_calls[name] == 1:
+                    keys += (name,)
             relabeled += (labels,)
         module = cells[f_module]
         if module.__class__ is LazyCell and not module.make:
@@ -279,22 +285,7 @@ class _Scan:
             return None
         if module is None and relabeled[2]:
             module = relabeled[2][-1]
-        keys: list[str] = []
-        num_calls = self.num_calls
-        if relabeled[0] and num_calls is None:
-            return None
-        at = 0
-        for call in relabeled[0]:
-            name, at = exit_names[at], at + 1
-            if name is None:
-                if ":" not in call:
-                    return None
-                name = call.rsplit(":", 1)[0]
-            keys += (call,)
-            if num_calls[name] == 1:
-                keys += (name,)
-        f_exits, f_entries, f_modules, f_stack = f_lists
-        cells[f_exits], cells[f_entries], cells[f_modules], cells[f_stack] = relabeled
+        cells[f_lists[0]], cells[f_lists[1]], cells[f_lists[2]], cells[f_lists[3]] = relabeled
         if module is not None:
             cells[f_module] = module
         return keys
