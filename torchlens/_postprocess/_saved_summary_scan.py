@@ -90,7 +90,9 @@ def _saved_rows(trace: Any) -> tuple[Any, list[int], list[tuple[Any, Any]]] | No
     orphans = _plain_cells(rows, f_orphan, keys)
     if [1 for flag in saved + orphans if flag.__class__ is not bool]:
         return None
-    saved_keys = [key for key, flag, orphan in zip(keys, saved, orphans) if flag and not orphan]
+    saved_keys = [
+        key for key, flag, orphan in zip(keys, saved, orphans, strict=True) if flag and not orphan
+    ]
     outs = [rows[key][f_out] for key in saved_keys]
     transformed = _plain_cells(rows, f_transformed, saved_keys)
     unusual = [1 for cell in outs + transformed if cell.__class__ is LazyCell]
@@ -99,7 +101,7 @@ def _saved_rows(trace: Any) -> tuple[Any, list[int], list[tuple[Any, Any]]] | No
     refs = [rows[key][store.layout.fid_by_name["_source_trace_ref"]] for key in saved_keys]
     if refs and ([ref for ref in refs if ref is not refs[0]] or refs[0]() is not trace):
         return None
-    return owner, saved_keys, list(zip(outs, transformed))
+    return owner, saved_keys, list(zip(outs, transformed, strict=True))
 
 
 def _other_entries(payload: Any) -> list[tuple[tuple[Any, ...], int]] | None:

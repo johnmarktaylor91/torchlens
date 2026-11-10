@@ -105,6 +105,18 @@ def _plain_column(rows: list[Any], fid: int, keys: list[int]) -> list[Any]:
     ]
 
 
+class _Unscannable(Exception):
+    """Raised by ``_Scan.module_keys`` to send one op to the facade function."""
+
+
+def _no_module_keys(exits: Any) -> list[str]:
+    """Return no module keys for an op whose module exits are provably empty, else raise."""
+
+    if _empty_calls(exits):
+        return []
+    raise _Unscannable
+
+
 def _empty_calls(value: Any) -> bool:
     """Return whether a module-call cell is provably an empty list."""
 
@@ -151,10 +163,10 @@ class _Scan:
             orphan = self.columns.getter("is_orphan", False)
             flags = [
                 flag if flag.__class__ is bool else bool(orphan(key))
-                for flag, key in zip(flags, keys)
+                for flag, key in zip(flags, keys, strict=True)
             ]
         f_saved = self.fids[8]
-        saved = [self.rows[key][f_saved] for key, flag in zip(keys, flags) if not flag]
+        saved = [self.rows[key][f_saved] for key, flag in zip(keys, flags, strict=True) if not flag]
         if [value for value in saved if value.__class__ is not bool]:
             return flags, -1
         return flags, len([value for value in saved if value])
@@ -177,7 +189,11 @@ class _Scan:
             return None
         size = len(table)
         held = [table[key] if key < size else None for key in keys]
-        if [1 for cell, record in zip(held, records) if cell is not None and cell is not record]:
+        if [
+            1
+            for cell, record in zip(held, records, strict=True)
+            if cell is not None and cell is not record
+        ]:
             return None
         return table
 
@@ -203,8 +219,12 @@ class _Scan:
             or (path is not None and (path.__class__ is not str or call.__class__ is not int))
         ):
             return None
-        module_keys = self.module_keys(cells)
-        if module_keys is None:
+        try:
+            if self.relabel:
+                module_keys = self.module_keys(cells)
+            else:  # the facade relabels nothing, so it needs no module keys here either
+                module_keys = _no_module_keys(cells[self.write_fids[3]])
+        except _Unscannable:
             return None
         public = public_raw_label(raw)  # ``Op.raw_label``'s own rule
         self.exact = (raw, public, cells[f_label])  # read by ``register`` for this op
@@ -231,16 +251,14 @@ class _Scan:
         cells[f_ordinal] = position
         return keys
 
-    def module_keys(self, cells: list[Any]) -> list[str] | None:
+    def module_keys(self, cells: list[Any]) -> list[str]:
         """Relabel one op's module calls as ``_relabel_module_calls`` does; return its module keys.
 
-        ``None`` (nothing written) sends the op to the facade function. Plain loops:
+        ``_Unscannable`` (nothing written) sends the op to the facade function. Plain loops:
         a comprehension, ``len``, ``zip`` or ``append`` is a counted call per op on Python 3.10.
         """
         # One flat function on purpose (complexity): it stands in for three facade helpers per op.
         f_module, *f_lists = self.write_fids[2:]
-        if not self.relabel:
-            return [] if _empty_calls(cells[f_lists[0]]) else None
         relabeled: list[list[str]] = []
         keys: list[str] = []
         num_calls = self.num_calls
@@ -249,7 +267,7 @@ class _Scan:
             if value.__class__ is LazyCell and value.make and value.source is list:
                 value = ()
             if value.__class__ is not list and value.__class__ is not tuple:
-                return None
+                raise _Unscannable
             labels: list[str] = []
             for call in value:
                 if call.__class__ is str:
@@ -258,16 +276,16 @@ class _Scan:
                     try:
                         name, number = call
                     except ValueError:
-                        return None
+                        raise _Unscannable from None
                     label = f"{name}:{number}"
                     name = name if name.__class__ is str and number.__class__ is int else None
                 else:
-                    return None
+                    raise _Unscannable
                 labels += (label,)
                 if relabeled:  # the module keys come from the first list, the exits
                     continue
                 if num_calls is None or (name is None and ":" not in label):
-                    return None
+                    raise _Unscannable
                 if name is None:
                     name = label.rsplit(":", 1)[0]
                 keys += (label,)
@@ -281,10 +299,10 @@ class _Scan:
             try:
                 name, number = module
             except ValueError:
-                return None
+                raise _Unscannable from None
             module = f"{name}:{number}"
         elif module is not None and module.__class__ is not str:
-            return None
+            raise _Unscannable
         if module is None and relabeled[2]:
             module = relabeled[2][-1]
         cells[f_lists[0]], cells[f_lists[1]], cells[f_lists[2]], cells[f_lists[3]] = relabeled
@@ -382,29 +400,28 @@ def scan_lookup_keys(trace: Any, add_keys: Any) -> bool:
         records = [raw_dict[label] for label in labels]
     except KeyError:
         return False
-    kept_keys = [key for key, orphan in zip(keys, orphans) if not orphan]
-    kept = [record for record, orphan in zip(records, orphans) if not orphan]
+    kept_keys = [key for key, orphan in zip(keys, orphans, strict=True) if not orphan]
+    kept = [record for record, orphan in zip(records, orphans, strict=True) if not orphan]
     table = scan.pin_table(kept, kept_keys) if saved >= 0 else None
     if table is None:
         return False
-    _finish(trace, scan, table, kept, kept_keys, saved, add_keys)
+    _finish(trace, scan, (table, kept, kept_keys, saved), add_keys)
     return True
 
 
 def _finish(
     trace: Any,
     scan: _Scan,
-    table: Any,
-    kept: list[Any],
-    keys: list[int],
-    saved: int,
+    pinned: tuple[Any, list[Any], list[int], int],
     add_keys: Any,
 ) -> None:
     """Hold every kept op, register its keys and fill the trace's ordered op containers.
 
-    Trace attributes are assigned in the facade loop's order.
+    ``pinned`` is the op view table, the kept ops, their row keys and the saved-op
+    count. Trace attributes are assigned in the facade loop's order.
     """
 
+    table, kept, keys, saved = pinned
     trace._num_saved_ops = saved
     restart_op_holders(trace)
     trace.layer_labels = []
@@ -412,11 +429,11 @@ def _finish(
     trace._layer_num_calls = {}
     if keys:
         table.pad(max(keys) + 1)
-        for record, key in zip(kept, keys):
+        for record, key in zip(kept, keys, strict=True):
             table[key] = record
     total = len(keys)
     try:
-        for position, (record, key) in enumerate(zip(kept, keys)):
+        for position, (record, key) in enumerate(zip(kept, keys, strict=True)):
             op_keys = scan.keys_of(key, position, total)
             if op_keys is None or not scan.register(op_keys, key):
                 scan.flush()
@@ -426,10 +443,12 @@ def _finish(
     labels = scan.column("label", keys, str)
     layer_labels = scan.column("layer_label", keys, str)
     list.extend(trace._layer_list, keys)
-    dict.update(trace._layer_dict_main_keys, zip(labels, keys))
+    dict.update(trace._layer_dict_main_keys, zip(labels, keys, strict=True))
     trace.layer_labels.extend(dict.fromkeys(layer_labels))
     trace.op_labels.extend(labels)
-    trace._layer_num_calls.update(zip(layer_labels, scan.column("num_passes", keys, int)))
+    trace._layer_num_calls.update(
+        zip(layer_labels, scan.column("num_passes", keys, int), strict=True)
+    )
     if keys:
         op_rows(trace)._last = keys[-1]
     trace._layers_logged = True
