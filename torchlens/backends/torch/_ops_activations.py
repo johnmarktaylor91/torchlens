@@ -37,6 +37,7 @@ from ..._utils.tensor_utils import (
 )
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
+from ._ops_fresh_payload import fresh_plain_payload_eligible, save_fresh_plain_activation
 from ._same_object_handoff import pop_same_object_mutation, reference_payload_source
 from ._user_grad_fn import pop_op_grad_fn
 from .tensor_tracking import (
@@ -548,6 +549,10 @@ def _save_activation_fields(
         Mutates ``fields_dict``.
     """
 
+    cache = fresh_plain_payload_eligible(trace, fields_dict, t, activation_transform)
+    if cache is not None:
+        save_fresh_plain_activation(trace, fields_dict, t, cache)
+        return
     writer = getattr(trace, "_out_writer", None)
     try:
         save_mode = _effective_activation_save_mode(
@@ -557,12 +562,9 @@ def _save_activation_fields(
         )
         save_raw_activations = trace._options_save_raw_activations
         store_raw = save_raw_activations or activation_transform is None
-        # Explorer P2: when nothing raw is retained AND the transform declares
-        # the non-differentiable summary role, the transient safe_copy is
-        # skipped entirely -- the reducer sees a detached view of the live
-        # output at the save point (correct: no later in-place mutation has
-        # run yet). Function-local import: layering (the summary-role module
-        # imports the backend), not a cycle at import.
+        # Explorer P2: nothing raw retained and a summary-role transform skip the copy;
+        # the reducer sees a detached view of the live output (no in-place write has run
+        # yet). Function-local import: layering (summary_role imports the backend).
         from ..._ir.summary_role import is_summary_transform
 
         reduce_only = not store_raw and is_summary_transform(activation_transform)
@@ -581,10 +583,8 @@ def _save_activation_fields(
                 retain_in_ram=True,
             )
         )
-        # Pre-copy identity probe (dedup-after-copy ordering): a hit reuses
-        # the already-saved payload and skips the clone entirely. Restricted
-        # to plain "copy" mode -- reference/view copies are free and
-        # cpu_async has fence side effects.
+        # Pre-copy identity probe: a hit reuses the saved payload and skips the clone.
+        # Plain "copy" mode only: reference/view copies are free, cpu_async has fences.
         dedup_cached_out = (
             _dedup_cached_identity_out(
                 trace,
