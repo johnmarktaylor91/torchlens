@@ -28,6 +28,7 @@ import weakref
 from collections import OrderedDict, deque
 from collections.abc import Iterable, Iterator
 from itertools import repeat
+from operator import is_ as _is
 from typing import Any, TypeVar
 
 from .._trace_core.record_refs import ChildAccessorField, RowKeys
@@ -117,9 +118,7 @@ def views_of(states: list[Any], cls: type) -> list[Any]:
 
     found = list(map(_DEREF, map(_VIEWS.get, map(id, states), repeat(DEAD))))
     # Every item has a live view of its own state: the comparison runs in C.
-    if list(map(id, map(getattr, found, repeat("__dict__"), repeat(None)))) == list(
-        map(id, states)
-    ):
+    if False not in map(_is, map(getattr, found, repeat("__dict__"), repeat(None)), states):
         return found
     stale = [
         at

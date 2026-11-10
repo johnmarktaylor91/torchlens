@@ -579,8 +579,12 @@ def child_state_items(record: Any) -> Iterator[tuple[str, Any]]:
     child_fields = type(record)._TL_CHILD_FIELDS
     for name, value in record_state_items(record):
         if name in child_fields:
-            # The stored accessor, never one a record handed out (that one holds the trace).
-            value = ChildAccessorField.__get__(type(record).__dict__[name], record)
+            field = getattr(type(record), name)
+            if isinstance(field, ChildAccessorField):
+                # The stored accessor, never one a record handed out (that one holds the trace).
+                value = ChildAccessorField.__get__(field, record)
+            else:
+                value = getattr(record, name)
         yield name, value
 
 

@@ -21,6 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tools.record_ownership.holders import blocking
 from torchlens._data_classes import _record_views
 from torchlens._data_classes._state_adapter import plain_state
 from torchlens._data_classes.module import Module, ModuleCall
@@ -321,3 +322,24 @@ def test_holders_keep_state_and_state_streams_keep_records() -> None:
     assert forked.modules.keys() == trace.modules.keys()
     assert forked.modules["fc"] is not trace.modules["fc"]
     assert forked.modules["fc"]._source_trace is forked
+
+
+def test_no_pinned_holder_reaches_a_module_or_a_call() -> None:
+    """The ownership table has no row, transient or not, that reaches either kind."""
+
+    assert blocking(("Module", "ModuleCall")) == {}
+
+
+def test_buffer_state_still_carries_its_version_ops() -> None:
+    """A buffer's pickle state names its versions as ops, and a round trip keeps their count."""
+
+    trace = _trace()
+    buffer = next(iter(trace.buffers))
+    assert buffer.versions
+    state = buffer.__getstate__()
+    assert [type(op).__name__ for op in state["versions"]] == ["Op"] * len(buffer.versions)
+    restored = pickle.loads(pickle.dumps(trace))
+    assert [len(item.versions) for item in restored.buffers] == [
+        len(item.versions) for item in trace.buffers
+    ]
+    assert all(type(op).__name__ == "Op" for item in restored.buffers for op in item.versions)
