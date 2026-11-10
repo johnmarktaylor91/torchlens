@@ -31,6 +31,8 @@ from ._call_site_parts import is_internal
 from ._ops_call_site_fields import _module_entry
 
 if TYPE_CHECKING:
+    from types import FrameType
+
     from ..._data_classes.trace import Trace
 
 __all__ = ("module_entry_code_context",)
@@ -56,7 +58,7 @@ def module_entry_code_context(trace: Trace) -> list[Any]:
     memo = trace._raw_graph_ws._call_site_memo
     if memo is None or memo.cache is not cache or memo.anchor is None:
         return _walk(trace, cache)
-    frame = sys._getframe(1)
+    frame: FrameType | None = sys._getframe(1)
     while frame is not None and frame.f_code not in _BOUNDARY_CODES:
         internal = _VERDICTS.get(frame.f_code.co_filename)
         if not (is_internal(frame.f_code) if internal is None else internal):

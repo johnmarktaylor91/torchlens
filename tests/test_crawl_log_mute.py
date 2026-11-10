@@ -175,12 +175,11 @@ def test_a_crawl_that_raises_restores_logging_state(records: Any) -> None:
     holder = _Chatty(torch.zeros(1))
     crawl_logger = logging.getLogger(_CRAWL_LOGGER)
     before = _logging_state()
-    with pytest.raises(RuntimeError, match="crawl failed"):
-        with _QuietPropertyLogs():
-            read_attr_quietly(holder, "size_notice")
-            assert not crawl_logger.isEnabledFor(logging.WARNING)
-            assert crawl_logger.isEnabledFor(logging.ERROR)
-            raise RuntimeError("crawl failed")
+    with pytest.raises(RuntimeError, match="crawl failed"), _QuietPropertyLogs():
+        read_attr_quietly(holder, "size_notice")
+        assert not crawl_logger.isEnabledFor(logging.WARNING)
+        assert crawl_logger.isEnabledFor(logging.ERROR)
+        raise RuntimeError("crawl failed")
     assert _logging_state() == before
     assert records[_CRAWL_LOGGER].records == []
 

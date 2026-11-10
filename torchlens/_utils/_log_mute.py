@@ -35,7 +35,7 @@ def _muted_is_enabled_for(self: logging.Logger, level: int) -> bool:
 
     if level <= MUTED_LEVEL:
         return False
-    return _replaced[0](self, level)  # type: ignore[no-any-return]
+    return _replaced[0](self, level)
 
 
 def mute() -> None:
