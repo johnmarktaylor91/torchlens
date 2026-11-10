@@ -135,6 +135,22 @@ def public_raw_label(label_raw: object) -> str:
     return str(label)
 
 
+def public_raw_labels(labels: list[object]) -> list[str]:
+    """Return ``public_raw_label`` of each label, in order, for whole-column row scans.
+
+    Same result as calling ``public_raw_label`` on each label; a plain ``str`` is
+    stripped inline so a scan pays no call per label.
+    """
+
+    size = len(_RAW_LABEL_SUFFIX)
+    return [
+        label[:-size]
+        if label.__class__ is str and label[-size:] == _RAW_LABEL_SUFFIX
+        else public_raw_label(label)
+        for label in labels
+    ]
+
+
 def own_label_spellings(op: Op) -> set[str]:
     """Return every spelling a relation list may use for THIS op.
 

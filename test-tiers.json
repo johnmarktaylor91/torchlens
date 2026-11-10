@@ -4390,6 +4390,12 @@
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
       ],
+      "torchlens/_postprocess/_lookup_key_scan.py": [
+        "tests/test_buffer_datamodel.py",
+        "tests/test_conditional_lifecycle.py",
+        "tests/test_postprocess_executor.py",
+        "tests/test_postprocess_speed2_counters.py"
+      ],
       "torchlens/_postprocess/_materialize.py": [
         "tests/producer_parity/test_fastlog_late_buffer_probe.py",
         "tests/producer_parity/test_p1_record_types.py",
@@ -4507,6 +4513,16 @@
         "tests/test_capture_row_ingest.py",
         "tests/test_capture_row_journal.py",
         "tests/test_postprocess_executor.py"
+      ],
+      "torchlens/_postprocess/_saved_summary_scan.py": [
+        "tests/test_capture_fields_dict_prune.py",
+        "tests/test_capture_overhead_counters.py",
+        "tests/test_postprocess_executor.py",
+        "tests/test_postprocess_gc_pause.py",
+        "tests/test_postprocess_r14a_regressions.py",
+        "tests/test_postprocess_retention_epilogue.py",
+        "tests/test_postprocess_speed2_counters.py",
+        "tests/test_postprocess_speed_counters.py"
       ],
       "torchlens/_postprocess/_selective_save.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",

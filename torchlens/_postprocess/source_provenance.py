@@ -17,6 +17,7 @@ from .._capture_honesty import (
     ADVISORY_UNRECORDED_OPERATOR_MUTATION,
     append_capture_advisory,
 )
+from .._data_classes._op_column_scan import ops_with
 from .._utils._record_group_table import record_member
 from .ast_branches import resolve_var_names
 
@@ -62,7 +63,7 @@ def _warn_unattributed_tensor_args(self: Trace) -> None:
         Emits at most one aggregate warning.
     """
 
-    offenders = _unattributed_op_offenders(self._layer_list or ())
+    offenders = _unattributed_op_offenders(ops_with(self, "unattributed_tensor_args") or ())
     # Orphan pruning (step 3) runs BEFORE this step and strips the pruned ops, so a
     # source-less tensor whose only consumer was pruned (``G.sum().item()``, a
     # control-flow predicate on a global) would lose its witness with the op;

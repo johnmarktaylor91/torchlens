@@ -3547,6 +3547,7 @@ docs-md	docs/maintainers/where.md	1772
 docs-md	docs/maintainers/where.md	1774
 docs-md	docs/maintainers/where.md	1773
 docs-md	docs/maintainers/where.md	1774
+docs-md	docs/maintainers/where.md	1776
 docs-md	docs/maintainers/where.md	178
 docs-md	docs/maintainers/where.md	1780
 docs-md	docs/maintainers/where.md	179
@@ -3626,6 +3627,8 @@ docs-md	docs/maintainers/where.md	2162
 docs-md	docs/maintainers/where.md	217
 docs-md	docs/maintainers/where.md	218
 docs-md	docs/maintainers/where.md	219
+docs-md	docs/maintainers/where.md	2197
+docs-md	docs/maintainers/where.md	21992
 docs-md	docs/maintainers/where.md	22
 docs-md	docs/maintainers/where.md	220
 docs-md	docs/maintainers/where.md	2202
@@ -3908,6 +3911,7 @@ docs-md	docs/maintainers/where.md	45387
 docs-md	docs/maintainers/where.md	454
 docs-md	docs/maintainers/where.md	455
 docs-md	docs/maintainers/where.md	456
+docs-md	docs/maintainers/where.md	45657
 docs-md	docs/maintainers/where.md	457
 docs-md	docs/maintainers/where.md	45760
 docs-md	docs/maintainers/where.md	458
@@ -4119,6 +4123,7 @@ docs-md	docs/maintainers/where.md	712551
 docs-md	docs/maintainers/where.md	712595
 docs-md	docs/maintainers/where.md	712993
 docs-md	docs/maintainers/where.md	712602
+docs-md	docs/maintainers/where.md	713774
 docs-md	docs/maintainers/where.md	714
 docs-md	docs/maintainers/where.md	715
 docs-md	docs/maintainers/where.md	715083
@@ -6520,6 +6525,8 @@ package-docstrings	torchlens/_postprocess/_layer_conditional_merge.py	15.5.
 package-docstrings	torchlens/_postprocess/_layer_row_scan.py	15.5
 package-docstrings	torchlens/_postprocess/_lazy_param_geometry.py	15
 package-docstrings	torchlens/_postprocess/_lazy_param_geometry.py	43
+package-docstrings	torchlens/_postprocess/_lookup_key_scan.py	11
+package-docstrings	torchlens/_postprocess/_lookup_key_scan.py	3.10.
 package-docstrings	torchlens/_postprocess/_materialize.py	9.1
 package-docstrings	torchlens/_postprocess/_module_census.py	15.5
 package-docstrings	torchlens/_postprocess/_module_census.py	16
