@@ -116,6 +116,7 @@ from . import (
 from ._accessor_base import Accessor
 from ._conditional_arms import ArmRef, ConditionalOutcome, arm_role_ops, derive_conditional_outcome
 from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
+from ._op_row_containers import op_holders
 from ._preprocessing_provenance import status_of
 from ._trace_accessors import (
     OrphanAccessor,
@@ -1116,9 +1117,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         # max_layer_op_count, is_branching, has_conditional_branching)
 
         # Tensor Tracking - post-processed (populated after _tracing_finished=True):
-        self._layer_list: list[Op] = []  # ordered list of all layer ops
-        self._layer_dict_main_keys: dict[str, Op] = OrderedDict()  # primary label -> entry
-        self._layer_dict_all_keys: dict[str, Op] = OrderedDict()  # all lookup keys -> entry
+        self._layer_list, self._layer_dict_main_keys, self._layer_dict_all_keys = op_holders(self)
         self._layer_logs: dict[str, Layer] = OrderedDict()  # no-pass label -> aggregate Layer
         self.op_labels: list[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
         self.layer_labels: list[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")

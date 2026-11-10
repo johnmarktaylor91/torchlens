@@ -17,6 +17,7 @@ from .._quantities import Bytes, Duration
 from .._trace_state import TraceState
 from . import _doors, _trace_rehydrate
 from ._aten_display import bind_owner_keys
+from ._op_row_containers import adopt_op_containers, project_op_containers
 from ._trace_pickle_state import _restore_pickled_verification, _sanitize_pickled_verification
 from ._transform_repr import _scrubbed_transform_repr
 from .derived_grad import DerivedGradAccessor
@@ -314,7 +315,7 @@ def _drop_runtime_only_caches(state: dict[str, Any]) -> None:
 
 def trace_getstate(trace: Trace) -> dict[str, Any]:
     """Return pickle state with non-picklable weakref-backed accessors stripped."""
-    state = trace.__dict__.copy()
+    state = project_op_containers(trace.__dict__.copy())
     state["_pickle_module_accessor_state"] = trace.__dict__.get("_module_logs")
     # Event streams never serialize (FieldPolicy.DROP): strip the stream
     # AND the projection guard derived from it, or a restored trace would
@@ -668,7 +669,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     # preserves the coreless-island behavior; backward records stay
     # detached by design). See _data_classes/_trace_rehydrate.py.
 
-    _trace_rehydrate.rehydrate_trace_core(trace)
+    adopt_op_containers(trace, _trace_rehydrate.rehydrate_trace_core)
     if pickle_module_accessor_state is not None:
         from .._io.accessor_rebuild import rebuild_trace_accessors
 

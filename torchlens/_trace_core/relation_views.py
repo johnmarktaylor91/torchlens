@@ -474,7 +474,7 @@ def freeze_trace_relation_views(trace: Any) -> RelationFreezeStats | None:
     # THIS store (detached copies, foreign records) never resolve.
     label_rows: dict[str, int] = {}
     seen_ids: set[int] = set()
-    for entry in trace._layer_dict_all_keys.values():
+    for entry in list(trace._layer_dict_all_keys.values()):  # held: ``id()`` needs live records
         if id(entry) in seen_ids:
             continue
         seen_ids.add(id(entry))

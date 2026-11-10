@@ -147,7 +147,9 @@ class TraceCore:
         self._facades: weakref.WeakValueDictionary[tuple[str, int], Any] = (
             weakref.WeakValueDictionary()
         )
-        self._strong_facades: dict[tuple[str, int], Any] = {}
+        # Also the one strong record cache of the ownership conversion: kind -> list
+        # indexed by store row, "<kind>.detached" -> dict by negative key.
+        self._strong_facades: dict[Any, Any] = {}
         self._facade_factory: Callable[[str, int], Any] | None = None
         # Strong anchor for a fork core's record translator: the store views
         # hold it WEAKLY (a retained fork Op must not root the fork graph

@@ -56,6 +56,7 @@ from .._utils.env_flags import closed_bool_env
 from ..intervention._types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
 from ._accessor_base import Accessor
 from ._fork_flat_copy import _FLAT_COPY_DEPTH, _NO_FLAT_COPY, _flat_container_copy
+from ._op_row_containers import bind_op_containers
 from ._state_adapter import state_items, state_new, state_restore
 from .func_call_location import FuncCallLocation
 from .layer import OpAccessor
@@ -714,8 +715,7 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     # and never none (a fork remains a supported backward-capture target).
     fork.__dict__.pop("capture_events", None)
     fork.__dict__["_capture_events"] = CaptureEvents.detached_from(parent)
-    if fork_core is not None:
-        fork.__dict__["_trace_core"] = fork_core
+    bind_op_containers(fork, fork_core)
     fork._parent_run = weakref.ref(parent)
     fork.name = name or parent._next_fork_name()
     # Read the parent's spec, never create one: fork() must not mutate its parent.

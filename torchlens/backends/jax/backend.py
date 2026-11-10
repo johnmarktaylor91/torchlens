@@ -15,6 +15,7 @@ from typing import Any, Final, NamedTuple, cast
 from ..._capture._nonfinite_prefix import strip_raw_label_suffix
 from ..._capture.outcome import stamp_backend_finalized
 from ..._data_classes._compaction import compact_op_metadata
+from ..._data_classes._op_row_containers import clear_op_holders
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
@@ -2147,9 +2148,7 @@ class JAXBackend:
         # this sibling mapping feeds ``_relabel_jax_graph_edges`` instead.
         raw_to_final_layer_label: dict[str, str] = {}
 
-        trace._layer_list = []
-        trace._layer_dict_main_keys.clear()
-        trace._layer_dict_all_keys.clear()
+        clear_op_holders(trace)
         trace._layer_logs.clear()
         trace.op_labels = []
         trace.layer_labels = []

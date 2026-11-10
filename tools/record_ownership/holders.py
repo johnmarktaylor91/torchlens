@@ -30,6 +30,9 @@ OP_ROW_CELLS = "op_row_cells"
 MODULE_AND_BUFFER_CELLS = "module_and_buffer_cells"
 FORK_AND_SAVED_STATE = "fork_and_saved_state"
 LATER_KINDS = "later_kinds"
+ACTIVATION = "activation"
+# The one strong cache of records: a path may wait for ``ACTIVATION`` only through it.
+SIDE_TABLE = "Trace._trace_core:TraceCore._strong_facades"
 
 STEPS: dict[str, str] = {
     OP_LIST: "the op list, the label dictionaries and the caches of the ops door",
@@ -38,6 +41,7 @@ STEPS: dict[str, str] = {
     MODULE_AND_BUFFER_CELLS: "module cells (calls, params) and buffer versions",
     FORK_AND_SAVED_STATE: "fork translation, copy-on-write overlays and pickled state",
     LATER_KINDS: "holders of the kinds activated after Op and Layer",
+    ACTIVATION: "the one strong side table of records, made weak when its kind is activated",
 }
 
 BEFORE_ACTIVATION = frozenset(
@@ -65,9 +69,9 @@ class Holder:
 
 
 HOLDERS: dict[str, Holder] = {
-    "Trace._layer_dict_all_keys{*} -> Op": Holder(OP_LIST, but=("pickle_state",)),
-    "Trace._layer_dict_main_keys{*} -> Op": Holder(OP_LIST, but=("pickle_state",)),
-    "Trace._layer_list[*] -> Op": Holder(OP_LIST, but=("pickle_state",)),
+    "Trace._trace_core:TraceCore._strong_facades{*}[*] -> Op": Holder(
+        ACTIVATION, but=("pickle_state",)
+    ),
     "Trace._op_accessor_cache[*]:TraceOpAccessor._alias_indexes:_AliasIndexes.final{*} -> Op": Holder(
         OP_LIST, only=("alias_lookup",)
     ),

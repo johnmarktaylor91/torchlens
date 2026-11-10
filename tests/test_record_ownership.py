@@ -31,9 +31,11 @@ from tools.record_ownership import audit_roots, run_case, signature, uses
 from tools.record_ownership.cases import CASES
 from tools.record_ownership.holders import (
     ACTIVATED_FIRST,
+    ACTIVATION,
     BEFORE_ACTIVATION,
     HOLDERS,
     KNOWN,
+    SIDE_TABLE,
     STEPS,
     blocking,
     expected,
@@ -89,12 +91,16 @@ def test_known_holder_is_found(name: str) -> None:
 
 
 def test_paths_to_op_and_layer_convert_before_activation() -> None:
-    """Every path that reaches an ``Op`` or ``Layer`` has a step that lands before the pin."""
+    """Every path that reaches an ``Op`` or ``Layer`` has a step that lands before the pin.
+
+    The one exception is the strong side table of records, which activation itself makes weak.
+    """
 
     late = {
         path: holder.step
         for path, holder in blocking(ACTIVATED_FIRST).items()
         if holder.step not in BEFORE_ACTIVATION
+        and not (holder.step == ACTIVATION and path.startswith(SIDE_TABLE))
     }
     assert late == {}
 
