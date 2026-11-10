@@ -18,6 +18,7 @@ import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
+from torchlens import _state
 from torchlens.backends.torch import _call_plan, wrappers
 from torchlens.backends.torch._fused_norm_writes import _FUSED_MUTATOR_NAMES
 from torchlens.backends.torch.buffer_writes import (
@@ -40,7 +41,7 @@ class _Forward(nn.Module):
 
 
 def _fast_names(
-    monkeypatch: pytest.MonkeyPatch, body: Callable[[torch.Tensor], torch.Tensor]
+    monkeypatch: pytest.MonkeyPatch, body: Callable[[torch.Tensor], torch.Tensor] | nn.Module
 ) -> tuple[list[str], Any]:
     """Trace ``body`` and return the names the fast lane committed, with the trace."""
 
@@ -53,7 +54,8 @@ def _fast_names(
 
     with monkeypatch.context() as patch:
         patch.setattr(_call_plan, "commit_fast_call", spy)
-        trace = tl.trace(_Forward(body), torch.ones(2, 3))
+        model = body if isinstance(body, nn.Module) else _Forward(body)
+        trace = tl.trace(model, torch.ones(2, 3))
     return names, trace
 
 
@@ -117,14 +119,21 @@ def test_positional_inplace_runs_the_general_body(monkeypatch: pytest.MonkeyPatc
 def test_fused_write_runs_the_general_body(monkeypatch: pytest.MonkeyPatch) -> None:
     """A fused running-statistic writer (``batch_norm`` in training) gets no plan."""
 
-    mean, var = torch.zeros(3), torch.ones(3)
+    class Norm(nn.Module):
+        """A training-mode batch norm over the module's own running statistics."""
 
-    def body(x: torch.Tensor) -> torch.Tensor:
-        return torch.batch_norm(x, None, None, mean, var, True, 0.1, 1e-5, False)
+        def __init__(self) -> None:
+            super().__init__()
+            self.register_buffer("mean", torch.zeros(3))
+            self.register_buffer("var", torch.ones(3))
 
-    names, _ = _fast_names(monkeypatch, body)
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return torch.batch_norm(x, None, None, self.mean, self.var, True, 0.1, 1e-5, False)
+
+    model = Norm()
+    names, _ = _fast_names(monkeypatch, model)
     assert names == []
-    assert not torch.equal(mean, torch.zeros(3))
+    assert not torch.equal(model.mean, torch.zeros(3))
     for name in _FUSED_MUTATOR_NAMES:
         func = getattr(torch, name, None)
         assert func is None or _call_plan.build_call_plan(func, name, None) is None
@@ -181,12 +190,23 @@ def test_transform_begun_inside_the_forward_runs_the_general_body(
 def test_compile_region_runs_the_general_body(monkeypatch: pytest.MonkeyPatch) -> None:
     """While Dynamo traces the frame the compile guard runs and the fast lane does not."""
 
-    def body(x: torch.Tensor) -> torch.Tensor:
-        return torch.relu(x + 1)
+    compiling = [False]
 
-    monkeypatch.setattr(wrappers, "_is_inside_dynamo_compilation", lambda: True)
-    names, _ = _fast_names(monkeypatch, body)
-    assert names == []
+    def body(x: torch.Tensor) -> torch.Tensor:
+        shifted = x + 1
+        compiling[0] = True
+        try:
+            hidden = torch.relu(shifted)
+        finally:
+            compiling[0] = False
+        return hidden * 2
+
+    monkeypatch.setattr(wrappers, "_is_inside_dynamo_compilation", lambda: compiling[0])
+    with pytest.warns(UserWarning, match="torch.compile"):
+        names, trace = _fast_names(monkeypatch, body)
+    assert "__add__" in names
+    assert "relu" not in names
+    assert all(op.func_name != "relu" for op in trace.ops)
 
 
 def test_tensor_subclass_argument_runs_the_general_body(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -214,6 +234,7 @@ def test_no_planned_name_is_in_the_inplace_family() -> None:
     planned = 0
     for name in dir(torch.Tensor):
         func = getattr(torch.Tensor, name, None)
+        func = _state._decorated_to_orig.get(id(func), func)
         plan = _call_plan.build_call_plan(func, name, None) if callable(func) else None
         if plan is None:
             continue
