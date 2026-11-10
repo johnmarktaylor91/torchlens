@@ -202,8 +202,8 @@ def test_nested_outer_call_skips_the_shared_fields(monkeypatch: pytest.MonkeyPat
     with monkeypatch.context() as patch:
         patch.setattr(_ops_exhaustive, "_nested_call_logged_output", lambda _out: False)
         reference = tl.trace(model, torch.randn(2, 3))
-    assert [(op.label, tuple(op.parents), op.func_name, op.func_call_id) for op in trace.ops] == [
-        (op.label, tuple(op.parents), op.func_name, op.func_call_id) for op in reference.ops
+    assert [(op.label, tuple(op.parents), op.func_name, op.call.call_id) for op in trace.ops] == [
+        (op.label, tuple(op.parents), op.func_name, op.call.call_id) for op in reference.ops
     ]
 
 
