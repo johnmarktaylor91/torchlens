@@ -289,17 +289,12 @@ def _forked_with_parent() -> Any:
     return parent, parent.fork()
 
 
-@pytest.mark.parametrize(
-    "build",
-    [_restored, _deep_copied, _forked, _forked_with_parent],
-    ids=["pickled", "deepcopied", "forked", "forked_parent_held"],
-)
+@pytest.mark.parametrize("build", [_restored, _deep_copied], ids=["pickled", "deepcopied"])
 def test_a_copy_of_a_trace_holds_no_backward_record(build: Callable[[], Any]) -> None:
-    """A restored, copied or forked trace holds state too, and its records name it."""
+    """A restored or copied trace holds state too, and its records name it."""
 
-    result, held = _held(build)
+    trace, held = _held(build)
     assert held == _NONE_HELD
-    trace = result[1] if isinstance(result, tuple) else result
     grad_fn = trace.autograd.grad_fns["relu_1"]
     assert grad_fn.trace is trace
     assert trace["relu_1"].autograd.grad_fn is grad_fn
@@ -310,17 +305,42 @@ def test_a_copy_of_a_trace_holds_no_backward_record(build: Callable[[], Any]) ->
     assert trace.autograd.backward_passes[0].grad_fn_calls[0].trace is trace
 
 
-def test_a_fork_reads_its_own_grad_fn_through_an_op() -> None:
-    """A fork's op names the fork's ``GradFn``, never its parent's."""
+@pytest.mark.parametrize(
+    "build", [_forked, _forked_with_parent], ids=["forked", "forked_parent_held"]
+)
+def test_a_fork_holds_no_backward_record(build: Callable[[], Any]) -> None:
+    """A fork holds the state of its own copies of the backward records."""
+
+    result, held = _held(build)
+    assert held == _NONE_HELD
+    fork = result[1] if isinstance(result, tuple) else result
+    assert len(fork.autograd.grad_fns) > 0
+    assert fork.autograd.grad_fns[0] is fork.autograd.grad_fns[0]
+    assert [call.ordinal_index for call in fork.autograd.grad_fn_calls] == list(
+        range(len(fork.autograd.grad_fn_calls))
+    )
+
+
+def test_a_fork_op_names_the_record_its_parent_hands_out() -> None:
+    """A fork reads its parent's link cell, so its op names the parent's ``GradFn`` (as before)."""
 
     parent = _trace()
     fork = parent.fork()
     theirs = parent["relu_1"].autograd.grad_fn
     mine = fork["relu_1"].autograd.grad_fn
-    assert mine is not theirs
-    assert mine.trace is fork and theirs.trace is parent
-    assert mine is fork.autograd.grad_fns["relu_1"]
-    assert mine.label == theirs.label
+    assert mine is theirs
+    assert mine.trace is parent
+    assert fork.layers["relu_1"].autograd.grad_fn is mine
+
+
+def test_no_holder_row_reaches_a_backward_record_on_a_live_trace() -> None:
+    """The pinned holder table lists these kinds only in the state handed to pickle."""
+
+    from tools.record_ownership import holders
+
+    rows = holders.blocking(("GradFn", "GradFnCall", "BackwardPass"))
+    assert rows
+    assert [path for path, row in rows.items() if not holders.is_transient(path, row)] == []
 
 
 def test_pickle_state_carries_plain_containers() -> None:

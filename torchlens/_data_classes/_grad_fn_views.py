@@ -202,32 +202,30 @@ def hold_grad_fn(trace: Any, object_id: int, record: Any) -> None:
 
 
 class GradFnKey:
-    """What an ``Op`` link cell holds for a ``GradFn`` record: its state and autograd object id.
+    """What an ``Op`` link cell holds for a ``GradFn`` record: the record's state.
 
     A bare state dictionary in a store cell could be copied or pooled as a
-    container, so the cell holds this key. The object id names the record in
-    a trace's grad-function table, which is how a fork's op (whose cell is
-    still its parent's key) finds the fork's own record.
+    container, so the cell holds this key. A fork reads its parent's cell
+    until it writes its own, so a fork's op names the record its parent
+    hands out, as it did when the cell held the record itself.
     """
 
-    __slots__ = ("object_id", "state")
+    __slots__ = ("state",)
 
-    def __init__(self, state: dict[str, Any], object_id: Any) -> None:
-        """Name the record with ``state``, filed under ``object_id``."""
+    def __init__(self, state: dict[str, Any]) -> None:
+        """Name the record with ``state``."""
 
         self.state = state
-        self.object_id = object_id
 
     def __deepcopy__(self, memo: dict[int, Any]) -> GradFnKey:
         """Copy the record this key names and key the copy."""
 
-        record = copy.deepcopy(view(GRAD_FN[0], self.state), memo)
-        return GradFnKey(hold(GRAD_FN[0], record), self.object_id)
+        return GradFnKey(hold(GRAD_FN[0], copy.deepcopy(linked(self), memo)))
 
     def __reduce__(self) -> Any:
         """Pickle as the record this key names."""
 
-        return _same, (view(GRAD_FN[0], self.state),)
+        return _same, (linked(self),)
 
 
 def _same(value: Any) -> Any:
@@ -240,25 +238,11 @@ def link_of(value: Any) -> Any:
     """Return what an ``Op`` link cell stores for ``value`` (a ``GradFn`` record becomes a key)."""
 
     if GRAD_FN and value.__class__ is GRAD_FN[0]:
-        return GradFnKey(hold(GRAD_FN[0], value), getattr(value, "grad_fn_object_id", None))
+        return GradFnKey(hold(GRAD_FN[0], value))
     return value
 
 
-def linked(key: GradFnKey, trace: Any) -> Any:
-    """Return the ``GradFn`` record ``key`` names for an op of ``trace`` (``None``: no trace).
+def linked(key: GradFnKey) -> Any:
+    """Return the ``GradFn`` record ``key`` names."""
 
-    The record the key holds is returned when it names ``trace`` or there is
-    no trace to ask. Otherwise the key was written for another trace (the op
-    is a fork's, reading its parent's cell) and ``trace``'s own record under
-    the same autograd object id is returned when it has one.
-    """
-
-    record = view(GRAD_FN[0], key.state)
-    if trace is None:
-        return record
-    reference = getattr(record, "_source_trace_ref", None)
-    if reference is not None and reference() is trace:
-        return record
-    logs = trace.__dict__.get("_grad_fn_logs")
-    mine = logs.get(key.object_id) if logs else None
-    return record if mine is None else mine
+    return view(GRAD_FN[0], key.state)

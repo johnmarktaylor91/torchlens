@@ -57,7 +57,7 @@ class OpGradFnLink:
         row = self._row_get(op)
         value = store.cell_get(row, self._fid)
         if value.__class__ is GradFnKey:
-            return linked(value, op._source_trace_or_none())
+            return linked(value)
         if value is _MISSING:
             name = self._name
             raise AttributeError(
