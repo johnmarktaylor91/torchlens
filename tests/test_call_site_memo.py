@@ -374,8 +374,8 @@ def test_value_equal_codes_from_two_files_get_separate_sites(
     model = _TwoFiles(steps)
     x = torch.randn(2, 4)
     monkeypatch.setattr(site_module, "_site_key", recording)
-    served = _projection(tl.trace(model, x))
+    served = _projection(_recurse(tl.trace, 0, model, x))
     assert seen["a"] and seen["b"]
     assert not seen["a"] & seen["b"]
     monkeypatch.setattr(site_module, "_CallSiteMemo", _WalkEveryOp)
-    assert served == _projection(tl.trace(model, x))
+    assert served == _projection(_recurse(tl.trace, 0, model, x))
