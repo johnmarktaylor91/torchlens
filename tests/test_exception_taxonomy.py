@@ -1253,6 +1253,11 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "holds a cell the raw pass cannot read as the facade would, and caught in the "
         "same module, whose caller then runs the per-op loop; never escapes"
     ),
+    "torchlens._postprocess._lookup_key_scan._Unscannable": (
+        "private internal signal of the lookup-key scan: raised when one op's module "
+        "keys cannot be scanned from the rows, and caught in the same module, whose "
+        "caller then runs the facade function for that op; never escapes"
+    ),
     "torchlens._runnable.execution._ProjectionCountExceeded": (
         "private internal bound signal; caught inside the projection walk"
     ),

@@ -236,6 +236,7 @@ def test_the_trace_holds_no_buffer_object() -> None:
     """The stored accessor names rows; a Buffer read and dropped is gone, and read again equal."""
 
     trace = _build()
+    trace._buffer_accessor  # noqa: B018, SLF001  # runs the deferred module build that stores it
     stored = trace.__dict__["_buffer_accessor"]
     assert "_dict" not in stored.__dict__ and "_list" not in stored.__dict__
     first = trace.buffers["bn.running_mean"]

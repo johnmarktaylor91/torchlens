@@ -110,4 +110,6 @@ def test_containers_live_in_the_trace_side_table() -> None:
     calls = module.ops
     table = trace._trace_core._views.cells  # noqa: SLF001
     # ``module.ops`` hands out an accessor that holds the trace over the kept one's state.
-    assert any(entry[2].__dict__ is calls.__dict__ for entry in table.values())
+    # The table also keeps the trace's param rows (``_param_rows.TABLE_KEY``), not a tuple.
+    kept = [entry for entry in table.values() if entry.__class__ is tuple]
+    assert any(entry[2].__dict__ is calls.__dict__ for entry in kept)
