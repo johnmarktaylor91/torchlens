@@ -1470,20 +1470,6 @@ def _reproduced_facet_entry(log: Any, rule: HookSpec) -> tuple[NormalizedHookEnt
     return None, "the facet selector resolves to another home op or facet"
 
 
-def _facet_home_key(spec: Any) -> object:
-    """Return what identifies a facet's home when de-duplicating resolved facets.
-
-    An op home is keyed by its label: an op view's id is stable only while the
-    view is held (the trace hands views out from weak tables) and can be reused.
-    A home with no label (a computed facet's function) is keyed by identity;
-    the resolved spec holds it.
-    """
-
-    home = getattr(spec, "home", None)
-    label = getattr(home, "_layer_label_raw", None) or getattr(home, "_label_raw", None)
-    return label if label is not None else id(home)
-
-
 def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, Any]]:
     """Resolve a semantic facet selector against captured module facet views.
 
@@ -1519,16 +1505,13 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
                     value = view.head(selector.head_index)[facet_name]
             except (AttributeError, KeyError, RuntimeError, ValueError):
                 continue
-            spec = (
-                value.spec
-                if isinstance(value, Facet)
-                else value
-                if isinstance(value, FacetSpec)
-                else None
-            )
-            if spec is None:
+            spec = value.spec if isinstance(value, Facet) else value
+            if spec is None or not isinstance(value, (Facet, FacetSpec)):
                 continue
-            dedupe_key = (_facet_home_key(spec), repr(spec.transforms), facet_name)
+            # An op view's id can be reused once unheld, so an op home is keyed by label.
+            home = spec.home
+            label = getattr(home, "_layer_label_raw", None) or getattr(home, "_label_raw", None)
+            dedupe_key = (id(home) if label is None else label, repr(spec.transforms), facet_name)
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)

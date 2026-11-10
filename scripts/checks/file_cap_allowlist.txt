@@ -1141,7 +1141,7 @@ torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
 torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71
 torchlens/intervention/_trace_selection_edits.py::apply_selection_do	78
 torchlens/intervention/_types.py	822
-torchlens/intervention/hooks.py	1706
+torchlens/intervention/hooks.py	1703
 torchlens/intervention/hooks.py::_adapt_tensor_backward_hook	64
 torchlens/intervention/hooks.py::_normalize_sticky_hook_specs	61
 torchlens/intervention/hooks.py::_normalize_value_specs	63
