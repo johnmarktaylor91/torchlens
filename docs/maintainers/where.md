@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1755 modules, 706541 lines, 0 modules without a docstring.
+85 packages, 1756 modules, 706925 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 139 | 59440 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 140 | 59824 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1479,7 +1479,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (139 modules, 59440 lines)
+Torch backend implementation package for TorchLens capture. (140 modules, 59824 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1493,6 +1493,7 @@ Torch backend implementation package for TorchLens capture. (139 modules, 59440 
 | `_backward_roots` | Autograd-entry roots: flattening and per-capture ownership. | 129 |
 | `_bool_check_records` | One capture record per conditional test of a reused bool tensor. | 155 |
 | `_boundary_types` | Plain data records of one ''autograd.Function'' boundary call. | 51 |
+| `_call_plan` | Wrapper fast lane, first version: call plans, per-call admission and the fast commit. | 385 |
 | `_callable_location` | Lazy source location of the user callable a transform boundary op wraps. | 50 |
 | `_completeness_audited` | Audited expected-opaque boundaries of the aten-dispatch completeness witness. | 129 |
 | `_completeness_boundaries` | Audited wrapper boundaries and input sites. | 352 |
@@ -1621,7 +1622,7 @@ Torch backend implementation package for TorchLens capture. (139 modules, 59440 
 | `sources` | Log torch capture source tensors. | 782 |
 | `structure_only_belt` | Structure-only teaching-refusal belts. | 656 |
 | `tensor_tracking` | Track torch tensor provenance, family links, and equivalence classes. | 1601 |
-| `wrappers` | Lazy torch function wrapping for capture-time operation interception. | 2811 |
+| `wrappers` | Lazy torch function wrapping for capture-time operation interception. | 2810 |
 
 ### `torchlens.bridge`
 
