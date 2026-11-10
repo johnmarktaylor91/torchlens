@@ -1009,6 +1009,10 @@ _PROCESS_CACHES = frozenset(
         # One psutil handle for the current process, kept with its pid so a
         # forked child opens its own; holds no user object.
         ("torchlens/_capture/peak_memory.py", "_PSUTIL_PROCESS"),
+        # Whether ``import psutil`` already failed with no sys.modules entry, so
+        # each capture's RSS reads do not walk sys.path again; holds no user
+        # object, and clearing it only costs one more failed import search.
+        ("torchlens/_optional_psutil.py", "_ABSENT"),
         # Byte-bounded memo of the tensors sampled from a torchvision
         # checkpoint file, keyed by path, file stat and sampled names: copies of
         # file contents only, never a model or its tensors; a rewritten file

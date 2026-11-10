@@ -73,6 +73,9 @@ def test_pack_sequence_into_lstm_validates() -> None:
 
     model = PackedLSTM()
     x = torch.randn(6, 4)
-    names = [op.func_name for op in tl.trace(model, x)._layer_list]
+    # Ops are views over their trace's rows; the private op list does not keep
+    # the trace, so hold it while reading (the public doors keep it themselves).
+    trace = tl.trace(model, x)
+    names = [op.func_name for op in trace._layer_list]
     assert "pad_sequence" in names
     assert _validate(model, x)

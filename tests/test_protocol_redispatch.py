@@ -311,8 +311,17 @@ def test_unrelated_type_error_in_capture_keeps_torch_traceback_and_user_origin()
     assert classify_failure_origin(exc) is FailureOrigin.USER_OP
     frames = traceback.extract_tb(exc.__traceback__)
     assert "_protocol_redispatch.py" not in {Path(frame.filename).name for frame in frames}
-    assert Path(frames[-1].filename).name == "wrappers.py"
-    assert "out_orig = func(" in (frames[-1].line or "")
+    # The innermost frame is the call of the user's op: the wrapper trampoline,
+    # or, for an out-of-place single-tensor C call, the fast lane's admitted call.
+    innermost = (Path(frames[-1].filename).name, frames[-1].line or "")
+    assert innermost[0] in {"wrappers.py", "_call_plan.py"}, innermost
+    from torchlens._capture import outcome
+
+    marker = {
+        "wrappers.py": outcome._TRAMPOLINE_SOURCE_MARKER,
+        "_call_plan.py": outcome._ADMITTED_CALL_MARKER,
+    }[innermost[0]]
+    assert marker in innermost[1], innermost
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/outcome.py, backends/torch/wrappers.py.

@@ -10,6 +10,7 @@ import os
 
 import torch
 
+from ._optional_psutil import optional_psutil
 from ._utils._mps_memory import mps_headroom_bytes
 
 
@@ -40,9 +41,8 @@ def _available_host_bytes() -> int | None:
             return int(pages) * int(page_size)
     except Exception:
         pass
-    try:
-        import psutil
-    except ImportError:
+    psutil = optional_psutil()
+    if psutil is None:
         return None
     try:
         available = int(psutil.virtual_memory().available)

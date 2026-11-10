@@ -6,8 +6,9 @@ every cell that was not a plain scalar: tuples of scalars (tensor shapes and the
 like) and TorchLens's own record objects, none of which can hold a payload the walk
 would evict. It now learns, once per eviction, which object types it always returns
 unchanged and skips tuples whose members are all such types. The teardown call count
-is pinned in ``test_capture_fields_dict_prune.py``; this test pins that every payload
-tensor is still freed when the trace is dropped while one of its ops is kept.
+is pinned in ``test_capture_fields_dict_prune.py``; this test pins that a kept op keeps
+every payload tensor (a held record keeps its trace) and that every one is freed once
+the trace and that op are both dropped.
 """
 
 from __future__ import annotations
@@ -63,7 +64,7 @@ def _store_values(store: Any) -> Iterator[Any]:
 
 
 def test_dropping_a_gpt2_trace_frees_every_payload_tensor_while_an_op_is_kept() -> None:
-    """With one Op retained, every captured payload tensor dies when the trace is dropped."""
+    """A retained Op keeps the payloads; dropping it after the trace frees every one."""
 
     model, fn, ids, kw = _tiny_gpt2_generate()
     external = {id(t) for t in (*model.parameters(), *model.buffers(), ids)}
@@ -78,7 +79,13 @@ def test_dropping_a_gpt2_trace_frees_every_payload_tensor_while_an_op_is_kept() 
         del payloads, value
         assert len(refs) > 100, "the capture keeps its payload tensors"
         del traced
+        # A held record keeps its trace and that trace's saved activations
+        # (DESIGN.md section 10 item 1, ruled Mon 9 Nov 2026).
+        assert store._payload_owner_count == 1, "the held Op keeps its trace's store owned"
+        held = sum(ref() is not None for ref in refs)
+        assert held == len(refs), f"{len(refs) - held} payload tensors died while an Op is held"
+        assert kept_op.layer_label, "the retained Op stays readable"
+        del kept_op
         assert store._payload_owner_count == 0
         alive = sum(ref() is not None for ref in refs)
         assert alive == 0, f"{alive} of {len(refs)} payload tensors outlived the dropped trace"
-        assert kept_op.layer_label, "the retained Op stays readable"

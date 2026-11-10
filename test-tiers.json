@@ -131,11 +131,11 @@
       "torchlens/_capture/__init__.py": [
         "tests/behaviour/test_hook_passes_restore.py",
         "tests/oracles/test_legacy_peak_memory_bounds.py",
-        "tests/oracles/test_legacy_peak_rss_units.py",
         "tests/test_capture_int_param_and_storage.py",
         "tests/test_episode_capture.py",
         "tests/test_host_peak_without_vmhwm_reset.py",
         "tests/test_peak_memory_counter_lag.py",
+        "tests/test_protocol_redispatch.py",
         "tests/test_saved_tensors_hooks_capture.py"
       ],
       "torchlens/_capture/_annotations_travel.py": [
@@ -317,10 +317,10 @@
         "tests/test_capture_outcome_payload_strictness.py",
         "tests/test_fastlog/test_dispatch_smoke.py",
         "tests/test_fastlog/test_storage_modes.py",
-        "tests/test_fastlog_backward.py",
         "tests/test_fastlog_halt.py",
         "tests/test_fastlog_partial.py",
-        "tests/test_fastlog_postfunc_parity.py"
+        "tests/test_fastlog_postfunc_parity.py",
+        "tests/test_protocol_redispatch.py"
       ],
       "torchlens/_capture/_outcome_types.py": [
         "tests/test_bundle_outcome_authority.py",
@@ -2582,6 +2582,16 @@
         "tests/test_prerelease_registrar.py",
         "tests/test_record_field_policy.py"
       ],
+      "torchlens/_io/_field_refusal.py": [
+        "tests/test_flops2_persisted_counts.py",
+        "tests/test_format3_contract.py",
+        "tests/test_format3_family_schemas.py",
+        "tests/test_format3_round_trip_fidelity.py",
+        "tests/test_io_runnable_payload_integrity.py",
+        "tests/test_schema_v9_audit_rows.py",
+        "tests/test_w051_io_artifact_anchors.py",
+        "tests/test_weightsfree_persistence.py"
+      ],
       "torchlens/_io/_forgery_identity_facts.py": [
         "tests/test_flops2_persisted_counts.py",
         "tests/test_format3_family_schemas.py",
@@ -4082,6 +4092,16 @@
         "tests/test_snoop_stats.py",
         "tests/test_validation.py",
         "tests/test_w051_trackers_echo_slot.py"
+      ],
+      "torchlens/_optional_psutil.py": [
+        "tests/test_forward_peak_pair_rerun.py",
+        "tests/test_io_platform_save_paths.py",
+        "tests/test_measure_host_peak_opt_in.py",
+        "tests/test_memory_probes_mps.py",
+        "tests/test_optional_psutil.py",
+        "tests/test_peak_memory_counter_lag.py",
+        "tests/test_per_trace_cost_model_changes.py",
+        "tests/test_report_lane_forward_peak_none.py"
       ],
       "torchlens/_options_removed.py": [
         "tests/capture_oracle/test_adapter_corruption_plant.py",
@@ -7830,10 +7850,10 @@
         "tests/test_transformer_lens_focus.py"
       ],
       "torchlens/_visualization/lenses/_roster.py": [
+        "tests/test_backend_rosters_tf_jax.py",
         "tests/test_browser_packets_fixd03_f12.py",
         "tests/test_themes_battery.py",
         "tests/test_themes_families_budget.py",
-        "tests/test_themes_filter.py",
         "tests/test_themes_refusals.py",
         "tests/test_themes_roster.py",
         "tests/test_themes_stage0.py",

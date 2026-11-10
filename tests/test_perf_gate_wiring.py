@@ -12,15 +12,36 @@ gate. No actual benchmarks run here.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from benchmarks import capture_core_bars
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _PERF_GATE_PATH = _REPO_ROOT / "benchmarks" / "perf_gate.py"
 _BASELINE_DIR = _REPO_ROOT / "benchmarks" / "perf_baselines"
+# Files in the baselines folder that belong to another instrument and carry that
+# instrument's schema; each is validated by its own owner below, never skipped.
+_CAPTURE_CORE_BARS = "capture_core_bars.json"
+_OTHER_INSTRUMENT_FILES = frozenset({_CAPTURE_CORE_BARS})
+_CAPTURE_CORE_BAR_KEYS = frozenset(
+    {
+        "schema",
+        "base_commit",
+        "tolerance",
+        "landed_headroom",
+        "environment",
+        "baseline",
+        "every_lane",
+        "landed",
+        "lanes",
+        "pending",
+    }
+)
 
 
 @pytest.fixture(scope="module")
@@ -66,11 +87,30 @@ def _payload(module: Any, rows: list[dict[str, Any]]) -> dict[str, Any]:
 def test_perf_gate_committed_baselines_parse(perf_gate: Any) -> None:
     """Every committed baseline file passes the gate's own schema validation."""
 
-    baseline_files = sorted(_BASELINE_DIR.glob("*.json"))
+    baseline_files = sorted(
+        path for path in _BASELINE_DIR.glob("*.json") if path.name not in _OTHER_INSTRUMENT_FILES
+    )
     assert baseline_files, f"no committed perf baselines under {_BASELINE_DIR}"
     for path in baseline_files:
         payload = perf_gate.load_gate_json(path)
         assert payload["rows"], f"baseline {path.name} carries no rows"
+
+
+def test_other_instrument_files_in_the_baselines_folder_match_their_own_schema() -> None:
+    """The capture-core bar file shares the folder but is the bar tool's file.
+
+    ``benchmarks/capture_core_bars.py`` writes and reads it under its own
+    ``SCHEMA``; the perf gate never loads it. Every file in the folder is checked
+    by exactly one owner: the perf gate above or its own instrument here.
+    """
+
+    present = {path.name for path in _BASELINE_DIR.glob("*.json")}
+    assert present >= _OTHER_INSTRUMENT_FILES, _OTHER_INSTRUMENT_FILES - present
+    bars = json.loads((_BASELINE_DIR / _CAPTURE_CORE_BARS).read_text(encoding="utf-8"))
+    assert bars["schema"] == capture_core_bars.SCHEMA
+    assert set(bars) == _CAPTURE_CORE_BAR_KEYS
+    assert bars["baseline"], "the capture-core bar file carries no baseline counters"
+    assert all(isinstance(value, (int, float)) for value in bars["baseline"].values())
 
 
 def test_perf_gate_synthetic_regression_trips(perf_gate: Any) -> None:

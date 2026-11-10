@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from .._optional_psutil import optional_psutil
 from .._quantities import Bytes
 
 #: ``[(pid, psutil.Process)]`` for the current process, built on first use.
@@ -40,9 +41,8 @@ def process_rss_bytes() -> int:
         Resident-set size in bytes, or 0 when neither psutil nor procfs is usable.
     """
 
-    try:
-        import psutil
-    except ImportError:
+    psutil = optional_psutil()
+    if psutil is None:
         try:
             with open("/proc/self/statm") as handle:
                 return int(handle.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
