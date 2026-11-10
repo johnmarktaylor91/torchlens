@@ -11,6 +11,7 @@ and the per-op step 9 path keep the same answers.
 
 from __future__ import annotations
 
+import dataclasses
 import gc
 import pickle
 import types
@@ -108,6 +109,9 @@ def _plain(value: Any) -> Any:
         return ("template", _plain(value.args), _plain(value.kwargs))
     if isinstance(value, torch.Tensor):
         return ("tensor", tuple(value.shape), value.dtype)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        compared = [field.name for field in dataclasses.fields(value) if field.compare]
+        return (type(value).__name__, [(name, _plain(getattr(value, name))) for name in compared])
     if isinstance(value, (tuple, list)):
         return (type(value).__name__, [_plain(member) for member in value])
     if isinstance(value, dict):
