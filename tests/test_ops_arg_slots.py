@@ -284,9 +284,9 @@ def test_one_label_read_per_tensor_slot(
 #: Measured ``get_tensor_label`` calls per trace (fixed seed). Before the slot snapshot the
 #: same traces read 91, 186 and 159 labels: every derivation read each tensor again.
 _PINNED_LABEL_READS = (
-    ("inplace_mlp", _InplaceMLP, (2, 8), 73),
-    ("buffer", _BufferModel, (2, 3, 6, 6), 124),
-    ("nested_args", _NestedArgsModel, (3, 4), 104),
+    ("inplace_mlp", _InplaceMLP, (2, 8), 64),
+    ("buffer", _BufferModel, (2, 3, 6, 6), 120),
+    ("nested_args", _NestedArgsModel, (3, 4), 92),
 )
 
 
