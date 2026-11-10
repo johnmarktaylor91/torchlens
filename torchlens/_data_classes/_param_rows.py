@@ -41,6 +41,8 @@ _new = object.__new__
 _set = object.__setattr__
 _ref = weakref.ref
 _list_iter = list.__iter__
+_tuple_iter = tuple.__iter__
+_tuple_get = tuple.__getitem__
 
 #: The ``Param`` class, bound on first use so this module imports no record class.
 _PARAM: list[type] = []
@@ -142,7 +144,7 @@ class ParamTable:
 class ParamRows:
     """Resolve param row keys to records for one trace's containers."""
 
-    __slots__ = ("__weakref__", "_copies", "_ids", "_last", "_tables")
+    __slots__ = ("__weakref__", "_copies", "_ids", "_last", "_positions", "_tables")
 
     def __init__(self, table: ParamTable) -> None:
         """Resolve through ``table``; records with no row in it are held here."""
@@ -151,6 +153,8 @@ class ParamRows:
         self._ids: dict[int, int] = {}
         # id(parent sequence) -> (parent sequence, this fork's copy of it).
         self._copies: dict[int, tuple[Any, Any]] = {}
+        # id(sequence) -> (sequence, key -> first position), for ``Param.index``.
+        self._positions: dict[int, tuple[Any, dict[int, int]]] = {}
         # Never a row: the containers' one-step reuse of the last key is off.
         self._last = -1
 
@@ -202,10 +206,37 @@ class ParamRows:
 
         entry = self._copies.get(id(parent))
         if entry is None or entry[0] is not parent:
-            copy = ParamSequence(self)
-            list.extend(copy, self.adopt_keys(parent))
-            entry = self._copies[id(parent)] = (parent, copy)
+            entry = self._copies[id(parent)] = (parent, self.rekeyed(parent))
         return entry[1]
+
+    def rekeyed(self, container: Any) -> Any:
+        """Return this resolver's copy of another resolver's ``ParamSequence`` or ``ParamTuple``."""
+
+        keys = self.adopt_keys(container)
+        if container.__class__ is ParamTuple:
+            return ParamTuple.from_keys(self, keys)
+        sequence = ParamSequence(self)
+        list.extend(sequence, keys)
+        return sequence
+
+    def position(self, sequence: Any, key: Any) -> int | None:
+        """Return the first position of ``key`` in one of this resolver's sequences, or ``None``."""
+
+        entry = self._positions.get(id(sequence))
+        for fresh in (False, True):
+            if fresh or entry is None or entry[0] is not sequence:
+                table: dict[int, int] = {}
+                for index, held in enumerate(_list_iter(sequence)):
+                    table.setdefault(held, index)
+                entry = self._positions[id(sequence)] = (sequence, table)
+            index = entry[1].get(key)
+            if (
+                index is not None
+                and index < len(sequence)
+                and list.__getitem__(sequence, index) == key
+            ):
+                return index
+        return None
 
     def resolve(self, key: int) -> Any:
         """Return the record behind one key."""
@@ -226,9 +257,12 @@ class ParamRows:
         """
 
         other = container._owner
-        keys = list(
-            _list_iter(container) if isinstance(container, list) else dict.values(container)
-        )
+        if isinstance(container, dict):
+            keys = list(dict.values(container))
+        elif isinstance(container, tuple):
+            keys = list(_tuple_iter(container))
+        else:
+            keys = list(_list_iter(container))
         return [key if key >= 0 else self.hold(other.resolve(key)) for key in keys]
 
 
@@ -285,8 +319,149 @@ class ParamMap(OpLabelMap):
         return new
 
 
+class ParamTuple(tuple):  # noqa: SLOT001 (a tuple subclass cannot declare slots)
+    """A tuple of ``Param`` records stored as row keys; reads return the records.
+
+    An op's parameter list is a tuple once its store is sealed. The tuple's own
+    items are the keys; every method that hands out or compares items speaks
+    records, and the plain form is a ``tuple``.
+    """
+
+    _owner: ParamRows
+
+    def __new__(cls, owner: ParamRows, records: Iterable[Any] = ()) -> ParamTuple:
+        """Hold ``records`` through ``owner``."""
+
+        return cls.from_keys(owner, owner.hold_many(records))
+
+    @classmethod
+    def from_keys(cls, owner: ParamRows, keys: Iterable[int]) -> ParamTuple:
+        """Return a tuple over keys ``owner`` already holds."""
+
+        new = tuple.__new__(cls, keys)
+        new._owner = owner
+        return new
+
+    def _records(self) -> tuple[Any, ...]:
+        """Return the records as a plain tuple."""
+
+        return tuple(self._owner.records(_tuple_iter(self)))
+
+    def __tl_plain__(self) -> tuple[Any, ...]:
+        """Return the plain tuple of records this tuple stands in for."""
+
+        return self._records()
+
+    def __iter__(self) -> Iterator[Any]:
+        """Iterate the records in order."""
+
+        return self._owner.records(_tuple_iter(self))
+
+    def __reversed__(self) -> Iterator[Any]:
+        """Iterate the records in reverse order."""
+
+        return self._owner.records(reversed(_tuple_get(self, slice(None))))
+
+    def __getitem__(self, index: Any) -> Any:  # type: ignore[override]
+        """Return one record, or a plain tuple of records for a slice."""
+
+        key = _tuple_get(self, index)
+        if index.__class__ is slice:
+            return tuple(self._owner.records(key))
+        return self._owner.resolve(key)
+
+    def __contains__(self, value: object) -> bool:
+        """Return whether ``value`` is one of the records."""
+
+        return value in self._records()
+
+    def index(self, value: Any, *bounds: Any) -> int:
+        """Return the first position of ``value``."""
+
+        return self._records().index(value, *bounds)
+
+    def count(self, value: Any) -> int:
+        """Return how many times ``value`` occurs."""
+
+        return self._records().count(value)
+
+    def __eq__(self, other: object) -> bool:
+        """Compare as a tuple of records."""
+
+        return self._records() == other if isinstance(other, tuple) else NotImplemented
+
+    def __ne__(self, other: object) -> bool:
+        """Compare as a tuple of records."""
+
+        return self._records() != other if isinstance(other, tuple) else NotImplemented
+
+    def __lt__(self, other: Any) -> bool:
+        """Order as a tuple of records."""
+
+        return self._records() < other
+
+    def __le__(self, other: Any) -> bool:
+        """Order as a tuple of records."""
+
+        return self._records() <= other
+
+    def __gt__(self, other: Any) -> bool:
+        """Order as a tuple of records."""
+
+        return self._records() > other
+
+    def __ge__(self, other: Any) -> bool:
+        """Order as a tuple of records."""
+
+        return self._records() >= other
+
+    def __hash__(self) -> int:
+        """Hash as the tuple of records."""
+
+        return hash(self._records())
+
+    def __add__(self, other: Any) -> tuple[Any, ...]:  # type: ignore[override]
+        """Concatenate as a plain tuple of records."""
+
+        return self._records() + other
+
+    def __radd__(self, other: Any) -> tuple[Any, ...]:
+        """Concatenate as a plain tuple of records."""
+
+        return other + self._records()
+
+    def __mul__(self, count: Any) -> tuple[Any, ...]:  # type: ignore[override]
+        """Repeat as a plain tuple of records."""
+
+        return self._records() * count
+
+    __rmul__ = __mul__
+
+    def __repr__(self) -> str:
+        """Return the tuple repr of the records."""
+
+        return repr(self._records())
+
+    def __copy__(self) -> ParamTuple:
+        """Return this tuple (immutable, as ``copy.copy`` of a tuple does)."""
+
+        return self
+
+    def __deepcopy__(self, memo: dict[Any, Any]) -> tuple[Any, ...]:
+        """Copy as a plain tuple of the copied records (a copied trace keys them again)."""
+
+        new = tuple(_copied(self._records(), memo))
+        memo[id(self)] = new
+        return new
+
+    def __reduce_ex__(self, protocol: Any) -> Any:
+        """Pickle as the plain tuple of records."""
+
+        return tuple, (self._records(),)
+
+
 #: The row-key containers, for exact class checks.
-ROW_FORMS = (ParamSequence, ParamMap)
+ROW_FORMS = (ParamSequence, ParamMap, ParamTuple)
 
 
 def param_rows_of(core: Any) -> ParamRows | None:
@@ -305,27 +480,27 @@ def param_rows_of(core: Any) -> ParamRows | None:
 
 
 def as_sequence(rows: ParamRows, value: Any, memo: dict[int, Any]) -> Any:
-    """Return ``value`` (a list of records) as a ``ParamSequence`` of ``rows``.
+    """Return ``value`` (a list or tuple of records) in the row-key form of ``rows``.
 
     ``memo`` maps each plain list already converted to its sequence, so one
-    list object reached from two places stays one object. An empty or
-    non-list value is returned unchanged.
+    list object reached from two places stays one object. An empty value,
+    or one that is not a list or tuple, is returned unchanged.
     """
 
     cls = value.__class__
-    if cls is ParamSequence:
+    if cls is ParamSequence or cls is ParamTuple:
         if value._owner is rows:
             return value
         known = memo.get(id(value))
         if known is None:
-            known = memo[id(value)] = ParamSequence(rows)
-            list.extend(known, rows.adopt_keys(value))
+            known = memo[id(value)] = rows.rekeyed(value)
         return known
-    if cls is not list or not value:
+    if (cls is not list and cls is not tuple) or not value:
         return value
     known = memo.get(id(value))
     if known is None:
-        known = memo[id(value)] = ParamSequence(rows, value)
+        form = ParamSequence if cls is list else ParamTuple
+        known = memo[id(value)] = form(rows, value)
     return known
 
 

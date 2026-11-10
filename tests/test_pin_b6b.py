@@ -23,7 +23,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes._param_rows import ParamMap, ParamSequence
+from torchlens._data_classes._param_rows import ParamMap, ParamSequence, ParamTuple
 from torchlens._data_classes.param import Param
 from torchlens._trace_core.record_rows import ROW_KEY, RecordCellField
 
@@ -115,6 +115,11 @@ def test_held_param_keeps_trace_and_frees_it_without_collector() -> None:
 
 def test_trace_keeps_no_param() -> None:
     trace = _trace()
+    core = trace.__dict__["_trace_core"]
+    fid = core.ops.layout.fid_by_name["_param_logs"]
+    cells = [core.ops.cell_get(row, fid, True) for row in range(len(core.ops))]
+    assert all(type(cell) in (ParamSequence, ParamTuple) for cell in cells if cell)
+    assert any(cells)
     stored = trace.__dict__["_param_logs"]
     assert type(stored.__dict__["_list"]) is ParamSequence
     assert type(stored.__dict__["_dict"]) is ParamMap
@@ -171,16 +176,17 @@ def test_restored_trace_pins_params() -> None:
     assert chained.trace is not None and chained.module.address == "fc"
 
 
-def test_state_streams_see_plain_lists() -> None:
+def test_state_streams_see_plain_containers() -> None:
     trace = _trace()
     state = trace.__getstate__()
     accessor = state["_param_logs"]
     assert type(accessor.__dict__["_list"]) is list
     assert type(accessor.__dict__["_dict"]) is dict
     op_state = trace.layers["linear_1"].ops[0].__getstate__()
-    assert type(op_state["_param_logs"]) is list
+    assert type(op_state["_param_logs"]) in (list, tuple)
     layer_state = trace.layers["linear_1"].__getstate__()
-    assert type(layer_state["_param_logs"]) is list
+    assert type(layer_state["_param_logs"]) in (list, tuple)
+    assert all(type(p) is Param for p in op_state["_param_logs"])
     assert type(trace.params.__getstate__()["_list"]) is list
     assert pickle.dumps(trace) == pickle.dumps(trace)
 

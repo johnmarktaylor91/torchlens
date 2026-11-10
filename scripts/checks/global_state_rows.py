@@ -723,9 +723,6 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Per-trace grad_fn-call ordinal index (fix/walkers f399c63a, linear
         # ordinal_index): keyed weakly by the owning trace, dies with it.
         ("torchlens/_data_classes/grad_fn_call.py", "_ORDINAL_POSITIONS_CACHE"),
-        # Per row-key param sequence position index for ``Param.index``, keyed
-        # weakly by the sequence; entries die with it and are verified before use.
-        ("torchlens/_data_classes/_param_pin.py", "_POSITIONS"),
         # Live telemetry relations are keyed by AtenOp facades and disappear
         # with those rows; they never retain a Trace or profiler session.
         ("torchlens/_kernel_telemetry.py", "_ATEN_KERNELS"),
@@ -1127,7 +1124,6 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/_data_classes/_compaction.py", "_COMPACTED_TRACES"),
         ("torchlens/_data_classes/_nonfinite.py", "_MEMOS"),
         ("torchlens/_data_classes/grad_fn_call.py", "_ORDINAL_POSITIONS_CACHE"),
-        ("torchlens/_data_classes/_param_pin.py", "_POSITIONS"),
         ("torchlens/_kernel_telemetry.py", "_ATEN_KERNELS"),
         ("torchlens/_visualization/auto_collapse.py", "_ANALYSIS_CACHE"),
         ("torchlens/_visualization/auto_collapse.py", "_OP_ADJACENCY_INDEX_CACHE"),

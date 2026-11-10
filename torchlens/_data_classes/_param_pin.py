@@ -38,7 +38,6 @@ from ._param_rows import (
 )
 
 _new = object.__new__
-_list_iter = list.__iter__
 _FIELD = "_param_logs"
 _BY_MODULE = "_param_logs_by_module"
 
@@ -110,7 +109,7 @@ def own_children(trace: Any, kind: str, accessor: Any) -> Any:
 
 
 def _pin_op_cells(store: Any, rows: ParamRows, memo: dict[int, Any]) -> None:
-    """Replace each op's non-empty parameter list with a ``ParamSequence``.
+    """Replace each op's non-empty parameter list or tuple with its row-key form.
 
     The cell is released before the new value is written, so a sealed store
     lets go of the plain list it kept in its column.
@@ -122,14 +121,14 @@ def _pin_op_cells(store: Any, rows: ParamRows, memo: dict[int, Any]) -> None:
     cell_get, cell_del, cell_set = store.cell_get, store.cell_del, store.cell_set
     for row in range(len(store)):
         value = cell_get(row, fid, True)
-        if value.__class__ is list and value:
+        if (value.__class__ is list or value.__class__ is tuple) and value:
             converted = as_sequence(rows, value, memo)
             cell_del(row, fid)
             cell_set(row, fid, converted)
 
 
 def _pin_layer_states(layer_logs: Any, rows: ParamRows, memo: dict[int, Any]) -> None:
-    """Replace each layer state's own parameter list with a ``ParamSequence``."""
+    """Replace each layer state's own parameter list or tuple with its row-key form."""
 
     if not layer_logs:
         return
@@ -245,24 +244,14 @@ def param_key(param: Any) -> Any:
     return param if store is None else (store, cells.get(ROW_KEY))
 
 
-#: Per row-key sequence: ``key -> position`` (weakly keyed; verified before use).
-_POSITIONS: weakref.WeakKeyDictionary[Any, dict[Any, int]] = weakref.WeakKeyDictionary()
-
-
 def param_index(accessor: Any, param: Any) -> int:
     """Return ``param``'s 0-based position in ``accessor`` (``Param.index``)."""
 
     items = getattr(accessor, "_list", None)
     if items.__class__ is ParamSequence:
         key = items._owner.key_of(param)
-        positions = _POSITIONS.get(items)
-        if positions is None or len(positions) != len(items):
-            positions = {}
-            for position, row in enumerate(_list_iter(items)):
-                positions.setdefault(row, position)
-            _POSITIONS[items] = positions
-        index = positions.get(key)
-        if index is not None and list.__getitem__(items, index) == key:
+        index = None if key is None else items._owner.position(items, key)
+        if index is not None:
             return index
         raise ValueError(f"{param.address!r} is not in trace.params")
     if not isinstance(items, list):
