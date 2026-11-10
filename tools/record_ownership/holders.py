@@ -147,10 +147,10 @@ HOLDERS: dict[str, Holder] = {
         PICKLE_PROJECTION, only=(PICKLE_CASE,)
     ),
     "GradFn._tl_core:Store.rows[calls]:GradFnCallAccessor._dict{*} -> GradFnCall": Holder(
-        LATER_KINDS, only=("pickle_state", "pickled")
+        LATER_KINDS, only=("pickled",)
     ),
     "GradFn._tl_core:Store.rows[calls]:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
-        LATER_KINDS, only=("pickle_state", "pickled")
+        LATER_KINDS, only=("pickled",)
     ),
     # An ``Op`` in a pickle state keeps its trace (its owner slot), so while the
     # state exists the walk reaches what that live trace holds through the op.
