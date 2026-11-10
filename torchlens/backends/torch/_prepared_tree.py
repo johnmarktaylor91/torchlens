@@ -49,7 +49,10 @@ def module_tree_key(model: Any) -> tuple[Any, ...] | None:
                 continue
             children = module._modules
             key += (weakref.ref(module), type(module), *children)
-            pending += children.values()
+            # Subscripts, not ``.values()``: the walk runs on every trace and
+            # is kept free of calls so the proof costs next to nothing.
+            for name in children:
+                pending += (children[name],)
     except Exception:
         # Not an error to report: an undescribable tree is prepared in full.
         return None
