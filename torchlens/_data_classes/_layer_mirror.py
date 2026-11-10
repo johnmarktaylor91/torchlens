@@ -26,21 +26,17 @@ def _layer_rep_op(layer: Layer) -> Op | None:
     if ops is None:
         return None
     state = ops.__dict__
-    keys = state.get("_keys")
-    if keys is None:
-        keys = getattr(ops, "_keys", None)  # revives a saved-shape accessor copy
-    if not keys:
-        return None
-    row = keys[1]
-    if row >= 0:
-        core = state["_core_ref"]()
-        if core is not None:
-            slots = core._strong_facades.get("op")
-            if slots is not None and row < len(slots):
-                op = slots[row]
-                if op is not None:
-                    return cast("Op", op)
-    return cast("Op", ops._op_at(0))
+    try:
+        row = state["_keys"][1]
+        if row >= 0:
+            op = state["_slots"][row]
+            if op is not None:
+                return cast("Op", op)
+    except (KeyError, IndexError):
+        pass
+    # Slow path: no pass yet, an unkeyed first pass, a dropped view, or a
+    # saved-shape accessor copy (reading ``_keys`` revives it).
+    return cast("Op", ops._op_at(0)) if getattr(ops, "_keys", None) else None
 
 
 def _layer_mirror_read(layer: Layer, name: str) -> Any:

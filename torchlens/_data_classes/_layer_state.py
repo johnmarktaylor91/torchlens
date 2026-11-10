@@ -94,17 +94,15 @@ class LayerStore(OrderedDict[str, Any]):
             view = held.get(label)
             if view is not None:
                 return view
-        accessor_state: Any = getattr(state.get("ops"), "__dict__", None)
-        keys = accessor_state.get("_keys") if accessor_state is not None else None
-        if keys and keys[1] >= 0:
-            core_ref = accessor_state.get("_core_ref")
-            core = core_ref() if core_ref is not None else None
-            if core is not None:
-                slots = core._strong_facades.get("layer")
-                if slots is not None and keys[1] < len(slots):
-                    view = slots[keys[1]]
-                    if view is not None and view.__dict__ is state:
-                        return view
+        try:
+            accessor_state = state["ops"].__dict__
+            view = accessor_state["_core_ref"]()._strong_facades["layer"][
+                accessor_state["_keys"][1]
+            ]
+            if view.__dict__ is state:
+                return view
+        except (KeyError, IndexError, AttributeError, TypeError):
+            pass  # not keyed into a live core, or its view is gone: build it
         return self._build(label, state)
 
     def get(self, label: Any, default: Any = None) -> Any:
@@ -154,14 +152,29 @@ class LayerStore(OrderedDict[str, Any]):
     def values(self) -> Any:
         """Return every Layer view in insertion order."""
 
+        if self._held is None:
+            # Every layer is keyed: read the views straight from the core's
+            # view list, keeping only a view that is over this store's state.
+            try:
+                ref: Any = self._trace_ref
+                slots = ref().__dict__["_trace_core"]._strong_facades["layer"]
+                views = [
+                    view
+                    for state in dict.values(self)
+                    for view in (slots[state["ops"].__dict__["_keys"][1]],)
+                    if view.__dict__ is state
+                ]
+                if len(views) == len(self):
+                    return views
+            except (KeyError, IndexError, AttributeError, TypeError):
+                pass  # no core or an unkeyed layer: take the per-label path
         self.settle()
         return [self[label] for label in self]
 
     def items(self) -> Any:
         """Return ``(label, Layer view)`` pairs in insertion order."""
 
-        self.settle()
-        return [(label, self[label]) for label in self]
+        return list(zip(self, self.values()))
 
     def clear(self) -> None:
         """Drop every layer's state and view."""

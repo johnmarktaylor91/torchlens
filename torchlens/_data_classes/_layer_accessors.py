@@ -24,7 +24,7 @@ from .._utils._display_keys import display_key
 from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._accessor_base import Accessor, attach_source_honesty
-from ._layer_state import LayerSequence, LayerStore, hold_view
+from ._layer_state import LayerSequence, LayerStore, hold_view, view_slots
 from ._layer_views import _layer_log_to_row
 from ._lookup_kinds import converted, layer_for_key, scoped_op_by_lookup_key
 from ._op_row_release import _OP_FACADE
@@ -118,7 +118,17 @@ class OpAccessor(Accessor["Op"]):
         containers are kept as given and turn into row keys on first use.
         """
 
-        self.__dict__[name] = value
+        state = self.__dict__
+        if name not in ("_dict", "_list") or "_keys" not in state:
+            state[name] = value
+        elif name == "_dict":
+            # Already keyed (the trace state hook ran first): take the passes
+            # again by row key instead of holding the restored containers.
+            state["_keys"] = array("q")
+            state.pop("_held", None)
+            state.pop("_order", None)
+            for pass_index, op in (value or {}).items():
+                self._put(pass_index, op)
 
     def saved(self) -> "OpAccessor":
         """Return a copy in the saved shape: it holds the Op records, not row keys.
@@ -196,13 +206,25 @@ class OpAccessor(Accessor["Op"]):
         except AttributeError:
             store = None
         if store is not None and isinstance(op_row, int):
-            core_ref = self._core_ref
-            core = core_ref() if core_ref is not None else _core_of(op)
-            if core is not None and core.ops is store and hold_view(core, "op", op_row, op):
-                row = op_row
-                if core_ref is None:
-                    self._core_ref = core.weak_self()
-                    self._store = store
+            state = self.__dict__
+            # ``_slots`` is the core's op view list (present once the accessor
+            # is bound to a core): reads index it directly, with no lookup.
+            slots = state.get("_slots")
+            if slots is None:
+                core = _core_of(op)
+                if core is not None and core.ops is store:
+                    slots = state["_slots"] = view_slots(core, "op")
+                    state["_core_ref"] = core.weak_self()
+                    state["_store"] = store
+            if slots is not None and state["_store"] is store:
+                if op_row >= len(slots):
+                    slots.extend([None] * (op_row + 1 - len(slots)))
+                current = slots[op_row]
+                if current is None:
+                    slots[op_row] = op
+                    row = op_row
+                elif current is op:
+                    row = op_row
         self._insert(pass_index, row)
         held = self.__dict__.get("_held")
         if row < 0:
@@ -241,14 +263,10 @@ class OpAccessor(Accessor["Op"]):
         row = keys[2 * position + 1]
         if row < 0:
             return cast("Op", self._held[keys[2 * position]])
-        core = self._core_ref()
-        if core is not None:
-            slots = core._strong_facades.get("op")
-            if slots is not None and row < len(slots):
-                op = slots[row]
-                if op is not None:
-                    return cast("Op", op)
-        return self._rebuild(core, row)
+        op = self.__dict__["_slots"][row]
+        if op is not None:
+            return cast("Op", op)
+        return self._rebuild(self._core_ref(), row)
 
     def _rebuild(self, core: Any, row: int) -> "Op":
         """Build an Op view over ``row`` of the accessor's store (its view was dropped)."""
@@ -265,17 +283,18 @@ class OpAccessor(Accessor["Op"]):
         """Key held ops into ``core`` where their store is now its op store."""
 
         keys = self._keys  # revives a saved-shape copy first
-        held = self.__dict__.get("_held")
+        state = self.__dict__
+        held = state.get("_held")
         if held and keys:
-            current = self._core_ref() if self._core_ref is not None else None
-            if current is not core and not any(
-                self._keys[at] >= 0 for at in range(1, len(self._keys), 2)
-            ):
-                self._core_ref = None
+            if not any(keys[at] >= 0 for at in range(1, len(keys), 2)):
+                # Nothing is keyed yet: forget the old binding so the ops' own core is found.
+                state.pop("_slots", None)
+                state["_core_ref"] = None
+                state["_store"] = None
             for pass_index, op in list(held.items()):
                 self._put(pass_index, op)
-            if not self.__dict__.get("_held"):
-                self.__dict__.pop("_held", None)
+            if not state.get("_held"):
+                state.pop("_held", None)
         return bool(self._keys) and self._keys[1] >= 0
 
     def __getitem__(self, key: int | str) -> "Op":
