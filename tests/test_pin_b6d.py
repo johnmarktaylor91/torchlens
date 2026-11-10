@@ -331,6 +331,9 @@ def test_a_fork_op_names_the_record_its_parent_hands_out() -> None:
     assert mine is theirs
     assert mine.trace is parent
     assert fork.layers["relu_1"].autograd.grad_fn is mine
+    assert fork.layers["relu_1"].ops[0].autograd.grad_fn is mine
+    del mine, theirs
+    assert fork["relu_1"].autograd.grad_fn.trace is parent
 
 
 def test_no_holder_row_reaches_a_backward_record_on_a_live_trace() -> None:
