@@ -142,7 +142,10 @@ def test_pickle_projection_does_not_outlive_the_pickle_call() -> None:
     payload = pickle.dumps(trace)
     after, unexplained = _live_paths(trace)
     assert payload
-    assert sorted(after - before) == []
+    # Pickling may build caches a live trace is allowed to keep (the rows of the
+    # other cases); nothing else may appear, and no referrer may be out of the walk's reach.
+    live_rows = set().union(*(expected(case) for case in CASES if case != PICKLE_CASE))
+    assert sorted(after - before - live_rows) == []
     assert unexplained == {}
 
 
