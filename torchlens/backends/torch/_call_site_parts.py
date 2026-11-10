@@ -27,7 +27,7 @@ past the call that walks it.
 """
 
 from types import CodeType, FrameType
-from typing import Any
+from typing import Any, NamedTuple
 
 from ..._utils._call_site import (
     _BOUNDARY_CODES,
@@ -47,55 +47,30 @@ __all__ = ("build_from_parts", "is_anchor", "is_internal", "module_record", "sta
 _Kept = tuple[FrameType, CodeType, int, int]
 
 
-class _Upper:
+class _Upper(NamedTuple):
     """What the full walk reads above one module forward wrapper, positions from the wrapper."""
 
-    __slots__ = (
-        "first",
-        "forward",
-        "inner",
-        "outer",
-        "prefix",
-        "raw",
-        "record",
-        "scopes",
-        "states",
-    )
-
-    def __init__(
-        self,
-        record: Any,
-        raw: list[tuple[CodeType, int]],
-        forward: int,
-        inner: int,
-        outer: int | None,
-        scopes: list[tuple[int, Any]],
-        prefix: list[Any] | None,
-        first: Any,
-    ) -> None:
-        """Hold one upper part (see the module docstring for the fields)."""
-
-        #: The module call's ``ModuleStackFrame``; ``None`` above the outermost wrapper.
-        self.record = record
-        #: Kept frames above the wrapper as ``(code, f_lasti)``, innermost first.
-        self.raw = raw
-        #: Position of the outermost ``forward`` frame among them, or -1.
-        self.forward = forward
-        #: Position where a stateful module call ends the chain, or -1.
-        self.inner = inner
-        #: Position of the outermost wrapper (0 is this one); ``None`` above it.
-        self.outer = outer
-        #: ``(position, chain entry)`` of each module token met while no stateful
-        #: module call has ended the chain.
-        self.scopes = scopes
-        #: The code context's locations from above the wrapper (call site first),
-        #: when the outermost ``forward`` frame lies above it; else ``None``.
-        self.prefix = prefix
-        #: Location of the first kept frame above the wrapper, else of the anchor
-        #: frame; ``None`` when there is neither.
-        self.first = first
-        #: Chain state after this part's first ``n`` kept frames, per ``n`` (``_upper_state``).
-        self.states: dict[int, tuple[list[Any], dict[Any, int]]] = {}
+    #: The module call's ``ModuleStackFrame``; ``None`` above the outermost wrapper.
+    record: Any
+    #: Kept frames above the wrapper as ``(code, f_lasti)``, innermost first.
+    raw: list[tuple[CodeType, int]]
+    #: Position of the outermost ``forward`` frame among them, or -1.
+    forward: int
+    #: Position where a stateful module call ends the chain, or -1.
+    inner: int
+    #: Position of the outermost wrapper (0 is this one); ``None`` above it.
+    outer: int | None
+    #: ``(position, chain entry)`` of each module token met while no stateful
+    #: module call has ended the chain.
+    scopes: list[tuple[int, Any]]
+    #: The code context's locations from above the wrapper (call site first),
+    #: when the outermost ``forward`` frame lies above it; else ``None``.
+    prefix: list[Any] | None
+    #: Location of the first kept frame above the wrapper, else of the anchor
+    #: frame; ``None`` when there is neither.
+    first: Any
+    #: Chain state after this part's first ``n`` kept frames, per ``n`` (``_upper_state``).
+    states: dict[int, tuple[list[Any], dict[Any, int]]]
 
 
 def is_anchor(anchor: tuple[int, CodeType, int, int], frame: FrameType) -> bool:
@@ -182,7 +157,7 @@ def _combine(
         inner = count + parent.inner if parent.inner >= 0 else -1
         scopes = scopes + [(count + position, entry) for position, entry in parent.scopes]
     outer = 0 if parent.outer is None else count + parent.outer
-    return _Upper(record, raw, forward, inner, outer, scopes, prefix, first)
+    return _Upper(record, raw, forward, inner, outer, scopes, prefix, first, {})
 
 
 def _upper(memo: Any, wrapper: FrameType, depth: int, options: tuple[Any, ...]) -> _Upper | None:
@@ -228,7 +203,7 @@ def _upper(memo: Any, wrapper: FrameType, depth: int, options: tuple[Any, ...]) 
             between.append((frame, code, frame.f_lineno, frame.f_lasti))
         frame = frame.f_back
     if parent is None:
-        parent = _Upper(None, [], -1, -1, None, [], None, anchor_first)
+        parent = _Upper(None, [], -1, -1, None, [], None, anchor_first, {})
     upper = _combine(memo, record, (inner, scopes, between, forward), parent, options)
     memo.uppers[id(record)] = upper
     return upper
