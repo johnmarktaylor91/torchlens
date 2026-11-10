@@ -33,6 +33,7 @@ from .._data_classes._module_role_hints import (
     multi_output_role_from_path,
     role_hints_for_module_class,
 )
+from .._data_classes._op_column_scan import op_labels, ops_with
 from .._data_classes._state_adapter import state_items
 from .._data_classes._summary import format_call_arg
 from .._data_classes.layer import Layer
@@ -316,7 +317,7 @@ def _synthesized_root_call(
         address="self",
         call_index=1,
         label="self:1",
-        ops=[op.label for op in self._layer_list],  # Op space, as on every other call
+        ops=op_labels(self),  # Op space, as on every other call
         input_layers=_layer_space_labels(self, self.input_layers),
         output_layers=_layer_space_labels(self, self.output_layers),
         output_ops=op_space_labels(self, self.output_layers),
@@ -656,9 +657,7 @@ def _build_module_logs(self: "Trace") -> None:
     # tens of thousands of ModuleCalls; scanning every Op once per call is
     # quadratic and dominates validation postprocessing.
     _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
-    for te in self._layer_list:
-        # Iterate the fed-call fact directly; the old
-        # ``module_call_stack`` emptiness guard was an enter-lane proxy.
+    for te in ops_with(self, "input_to_module_calls"):  # only ops that feed a call
         for call_label in te._module_context_input_to_module_calls:
             _pass_input_layers_by_call[call_label].append(te.layer_label)
 

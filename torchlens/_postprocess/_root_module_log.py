@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._op_column_scan import ops_with
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -47,7 +49,7 @@ def _root_call_build_inputs(
         for child in children
     }
     input_layers_by_call: dict[str, list[str]] = defaultdict(list)
-    for op in self._layer_list:
+    for op in ops_with(self, "input_to_module_calls"):
         for call_label in op._module_context_input_to_module_calls:
             input_layers_by_call[call_label].append(op.layer_label)
     return child_to_parent, input_layers_by_call
