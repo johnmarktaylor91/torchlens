@@ -36,11 +36,11 @@ def test_rows_use_declared_values() -> None:
 
 
 def test_source_and_slots_agree() -> None:
-    """A call-time field names its event slot; untracked sources name none."""
+    """A call-time or derived field names its slots; untracked sources name none."""
     for row in cf.FIELD_TABLE.values():
         if row.source in ("call", "derived"):
             assert row.slots, row
-        else:
+        elif row.source != "graph":
             assert row.slots == (), row
         if row.source == "call":
             assert cf.TRACE_SLOT not in row.slots, row

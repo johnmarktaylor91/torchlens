@@ -14,7 +14,8 @@ its value comes to exist:
 * ``state``: storage bookkeeping (references, caches, lifecycle flags).
 
 ``slots`` names the :data:`EVENT_SLOTS` entries that carry a ``call`` value, or
-that a ``derived`` value is computed from. ``settled`` is the last phase that
+that a ``derived`` value is computed from (a ``graph`` row lists only the slots
+it reads directly). ``settled`` is the last phase that
 changes the stored value during a forward capture and its postprocessing:
 ``emit`` (the row commit at the call), ``forward`` (later in the same forward
 pass), ``ingest`` (row adoption at the start of postprocessing) or the name of
@@ -211,7 +212,7 @@ _ROWS: tuple[tuple[str, str, str, tuple[str, ...], str], ...] = (
     ),
     ("equivalent_ops", "relations", "graph", (), "log_final_layer_info"),
     ("recurrent_ops", "relations", "graph", (), "log_final_layer_info"),
-    ("site_key", "site", "call", ("site",), "group_recurrent_layers"),
+    ("site_key", "site", "call", ("site", "module"), "group_recurrent_layers"),
     ("injection_provenance", "intervention", "later", (), "ingest"),
     ("episode_step", "intervention", "later", (), "ingest"),
     ("tl_authored_root", "intervention", "later", (), "ingest"),
@@ -266,7 +267,7 @@ _ROWS: tuple[tuple[str, str, str, tuple[str, ...], str], ...] = (
     ("conditional_entry_children", "control", "graph", (), "log_final_layer_info"),
     ("conditional_then_children", "control", "graph", (), "log_final_layer_info"),
     ("conditional_elif_children", "control", "graph", (), "emit"),
-    ("conditional_else_children", "control", "graph", (), "emit"),
+    ("conditional_else_children", "control", "graph", (), "log_final_layer_info"),
     ("conditional_arm_children", "control", "graph", (), "log_final_layer_info"),
     ("module", "module", "call", ("module",), "build_lookup_keys"),
     ("_address_normalized", "module", "derived", ("module",), "hash_graph_shape"),
