@@ -1113,7 +1113,7 @@
         "tests/producer_parity/test_p1_record_types.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_capture_row_ingest.py",
-        "tests/test_postprocess_executor.py",
+        "tests/test_facets_recipe_helpers_public.py",
         "tests/test_sem_attn_detection.py",
         "tests/test_sem_recon_logit_lens.py",
         "tests/test_stats_trajectory.py"
@@ -1975,11 +1975,11 @@
       ],
       "torchlens/_data_classes/module.py": [
         "tests/test_loop_module_rolling.py",
+        "tests/test_module_build_on_lookup.py",
         "tests/test_module_do_replacement_parity.py",
         "tests/test_module_edit_comparison_reads.py",
         "tests/test_module_log.py",
         "tests/test_module_row_write.py",
-        "tests/test_sae4_multi_call_modules.py",
         "tests/test_selector_module_head_fold.py",
         "tests/test_validation_module_call_counts.py"
       ],
@@ -2539,6 +2539,16 @@
         "tests/test_io_scrub_policy.py",
         "tests/test_io_security_r27.py",
         "tests/test_tlspec_codec_device_allowlist.py"
+      ],
+      "torchlens/_io/_buffer_versions.py": [
+        "tests/test_io_bundle.py",
+        "tests/test_io_corruption.py",
+        "tests/test_io_durability_bounds.py",
+        "tests/test_io_mediated_allocation_bypass.py",
+        "tests/test_io_runnable_payload_integrity.py",
+        "tests/test_io_scrub_policy.py",
+        "tests/test_io_streaming.py",
+        "tests/test_w051_io_artifact_anchors.py"
       ],
       "torchlens/_io/_canonical_pickle.py": [
         "tests/test_io_embedded_tensor_route_refused.py",
@@ -3607,7 +3617,7 @@
         "tests/test_backend_constants_rule.py",
         "tests/test_capture_unification_p2.py",
         "tests/test_conditional_lifecycle.py",
-        "tests/test_encoding_channels.py",
+        "tests/test_indexing_coherence.py",
         "tests/test_io_format_v3_load.py",
         "tests/test_ir_basic.py",
         "tests/test_r20i_ir_livelane.py",
@@ -4399,6 +4409,14 @@
         "tests/test_module_containment_save_load.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed2_counters.py"
+      ],
+      "torchlens/_postprocess/_module_pending.py": [
+        "tests/test_column_passes_depths_finished.py",
+        "tests/test_column_passes_finalize.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_postprocess_executor.py",
+        "tests/test_postprocess_r14a_regressions.py",
+        "tests/test_trace_core_substrate.py"
       ],
       "torchlens/_postprocess/_multipass_params.py": [
         "tests/test_column_passes_depths_finished.py",
@@ -11224,7 +11242,7 @@
         "tests/test_bundle_relations.py",
         "tests/test_compare_gate_lattice.py",
         "tests/test_intervention_phase9.py",
-        "tests/test_io_policy_lookup_counters.py",
+        "tests/test_module_build_on_lookup.py",
         "tests/test_save_union_lookup.py"
       ],
       "torchlens/bundle/_members.py": [
