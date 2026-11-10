@@ -846,6 +846,9 @@ _PROCESS_CACHES = frozenset(
         # class attribute it came from and re-resolved when that attribute changes, so
         # it needs no epoch.
         ("torchlens/_utils/_torch_symbols.py", "_RESOLVED"),
+        # Module-entry functorch check: one (run nonce, check) tuple, re-resolved
+        # through the capability probe at the first module entry of each capture run.
+        ("torchlens/backends/torch/_functorch_check.py", "_resolved"),
         # Call-site grouping per-code memos (content token, instruction map),
         # WeakKeyDictionary keyed by the code object, bounded by live code.
         # Record concern-group table: the group-view class registry filled at import
@@ -1342,6 +1345,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/_weightsfree_ctx.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_transparency.py", "__all__"),
         ("torchlens/backends/torch/_fused_norm_writes.py", "__all__"),
+        ("torchlens/backends/torch/_functorch_check.py", "__all__"),
         ("torchlens/backends/torch/_same_object_handoff.py", "__all__"),
         ("torchlens/backends/torch/backend.py", "__all__"),
         ("torchlens/backends/torch/belt.py", "__all__"),
@@ -1702,6 +1706,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_utils/_multipass_access.py", "__all__"),
         ("torchlens/_utils/_runnable_torch_aliases.py", "__all__"),
         ("torchlens/_utils/_tensor_layout.py", "__all__"),
+        ("torchlens/_utils/_tensor_search_last_level.py", "__all__"),
         ("torchlens/_utils/_torch_compat.py", "__all__"),
         ("torchlens/_utils/env_flags.py", "__all__"),
         ("torchlens/_utils/facade.py", "__all__"),

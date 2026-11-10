@@ -127,11 +127,34 @@ def stub_module_call_args(
         ``(stubbed args, stubbed kwargs)``.
     """
 
+    if type(kwargs) is dict and not kwargs:
+        stubbed = _stub_plain_tensor_tuple(args, labels)
+        if stubbed is not None:
+            return stubbed, {}
     mode = trace._options_module_identity_mode
     return (
         stub_module_arg_payloads(args, labels=labels, identity_mode=mode),
         stub_module_arg_payloads(kwargs, labels=labels, identity_mode=mode),
     )
+
+
+def _stub_plain_tensor_tuple(
+    args: Any, labels: dict[int, str | None] | None
+) -> tuple[Any, ...] | None:
+    """Return a plain tuple of tensors stubbed as the general walk stubs it, else ``None``.
+
+    The common module call passes only tensors, positionally. The walk would rebuild
+    the tuple item by item (no identity mode releases a tensor) and the empty keyword
+    dict as a new empty dict; this does the same without the container dispatch.
+    """
+    if type(args) is not tuple:
+        return None
+    stubbed = []
+    for value in args:
+        if not isinstance(value, torch.Tensor):
+            return None
+        stubbed.append(_stub(value, 1, False, labels))
+    return tuple(stubbed)
 
 
 def first_stub_shape(value: Any, search_depth: int = 5) -> tuple[int, ...] | None:

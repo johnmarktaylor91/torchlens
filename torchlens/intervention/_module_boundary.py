@@ -322,20 +322,18 @@ def _apply_module_boundary_live_hooks(
         Module output with any tensor replacements applied.
     """
 
-    from ._runtime import _apply_live_hooks
-
     trace, _ = _state.active_capture()
-    boundary = _BoundaryCall(
-        trace=trace,
-        call_args=call_args,
-        call_kwargs=call_kwargs,
-        predicate=_resolve_boundary_predicate(trace),
-    )
+    predicate = _resolve_boundary_predicate(trace)
     # `_active_hook_plan` has no accessor by design (same raw
     # single-field hot-path load `runtime.py` keeps at six sites this split
     # relocated from); reviewed and ledgered rather than converted.
-    if not _state._active_hook_plan and boundary.predicate is None:
+    if not _state._active_hook_plan and predicate is None:
         return out_orig
+    from ._runtime import _apply_live_hooks
+
+    boundary = _BoundaryCall(
+        trace=trace, call_args=call_args, call_kwargs=call_kwargs, predicate=predicate
+    )
     replacements: dict[tuple[Any, ...], torch.Tensor] = {}
     for out, container_path in _iter_tensor_outputs(out_orig):
         site = _make_boundary_site(
