@@ -152,8 +152,8 @@ def mint_site_keys(rows: Step7Rows) -> list[str]:
     write_key = rows.setter("site_key")
     mint_at = SiteKeyMinter().mint_at
     sites: dict[Any, tuple[tuple[str, ...], str]] = {}
-    keys: list[str] = []
-    for _label, handle in rows.retained:
+    keys: list[str] = [""] * len(rows.retained)
+    for index, (_label, handle) in enumerate(rows.retained):
         entries = read_modules(handle) or ()
         try:
             site = sites[entries]
@@ -163,7 +163,7 @@ def mint_site_keys(rows: Step7Rows) -> list[str]:
             site = _normalized_site(entries)
         key = mint_at(site[0], site[1], read_type(handle), read_slot(handle))
         write_key(handle, key)
-        keys.append(key)
+        keys[index] = key
     return keys
 
 
@@ -247,8 +247,12 @@ def buffer_group_keys(
 
 def _call_site_partition(
     trace: Trace, rows: Step7Rows, site_keys: list[str]
-) -> list[list[tuple[Any, str, Any]]]:
-    """Partition the retained ops by call-site key; each member is ``(raw_index, label, handle)``."""
+) -> tuple[list[list[tuple[Any, str, Any]]], list[Any]]:
+    """Partition the retained ops by call-site key.
+
+    Returns the groups, each member ``(raw_index, label, handle)``, and every
+    retained op's ``func_name`` aligned with ``rows.retained``.
+    """
 
     classes = trace._raw_graph_ws._call_site_classes
     read_buffer = rows.getter("is_buffer")
@@ -260,19 +264,21 @@ def _call_site_partition(
     groups: dict[tuple[Any, ...], list[tuple[Any, str, Any]]] = defaultdict(list)
     keys: dict[str, tuple[Any, ...]] = {}
     buffers: list[tuple[str, Any]] = []
-    for (label, handle), site_key in zip(rows.retained, site_keys):
+    funcs: list[Any] = [None] * len(site_keys)
+    for index, ((label, handle), site_key) in enumerate(zip(rows.retained, site_keys)):
+        func_name = funcs[index] = read_func(handle)
         # ``buffer_address`` is a facade member, not a column; buffers are few.
         if read_buffer(handle) and trace[label].buffer_address:
             buffers.append((label, handle))
             continue
-        key = call_site_group_key(label, handle, site_key, read_func(handle), read, classes)
+        key = call_site_group_key(label, handle, site_key, func_name, read, classes)
         keys[label] = key
         groups[key].append((read_index(handle), label, handle))
     if buffers:
         nodes = [trace[label] for label, _handle in buffers]
         for (label, handle), (node, key) in zip(buffers, buffer_group_keys(nodes, keys)):
             groups[key].append((node.raw_index, label, handle))
-    return list(groups.values())
+    return list(groups.values()), funcs
 
 
 def rebuild_passes(rows: Step7Rows, layer_of: dict[str, tuple[Any, str]]) -> None:
@@ -336,7 +342,8 @@ def group_call_sites(trace: Trace, rows: Step7Rows, site_keys: list[str]) -> Non
     read_layer = rows.getter("_layer_label_raw")
     write_layer = rows.setter("_layer_label_raw")
     layer_of: dict[str, tuple[Any, str]] = {}
-    for members in _call_site_partition(trace, rows, site_keys):
+    partition, funcs = _call_site_partition(trace, rows, site_keys)
+    for members in partition:
         leader_layer = read_layer(min(members, key=_RAW_INDEX)[2])
         for raw_index, label, handle in members:
             write_layer(handle, leader_layer)
@@ -344,30 +351,30 @@ def group_call_sites(trace: Trace, rows: Step7Rows, site_keys: list[str]) -> Non
 
     rebuild_passes(rows, layer_of)
     classes = trace._raw_graph_ws._call_site_classes
-    check_call_site_contract(rows, classes)
+    check_call_site_contract(rows, classes, funcs)
     remember_call_site_classes(trace, classes)
 
 
-def check_call_site_contract(rows: Step7Rows, classes: dict[str, str]) -> None:
+def check_call_site_contract(rows: Step7Rows, classes: dict[str, str], funcs: list[Any]) -> None:
     """Raise when the stored grouping breaches the call-site contract.
 
     Reads each op's stored layer and recurrent group, not the grouping key,
     so a defect in the key, the partition or the pass rebuild that merges two
     call sites, splits one, or leaves a recurrent group spanning two sites
-    fails here.
+    fails here. ``funcs`` (aligned with ``rows.retained``) is the
+    ``func_name`` column as the partition read it; step 7 never writes it.
     """
 
     read_layer = rows.getter("_layer_label_raw")
-    read_func = rows.getter("func_name")
     read_group = rows.getter("recurrent_ops")
     entries = [
         CallSiteEntry(
             raw_label=label,
             layer=read_layer(handle),
-            func_name=read_func(handle),
+            func_name=func_name,
             group=tuple(read_group(handle) or ()),
         )
-        for label, handle in rows.retained
+        for (label, handle), func_name in zip(rows.retained, funcs)
     ]
     violation = call_site_contract_violation(entries, classes)
     if violation is not None:
