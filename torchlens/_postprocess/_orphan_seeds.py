@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._utils._record_group_table import record_member
-from ._column_passes_graph import log_internally_terminated_tensor
+from ._column_passes_graph import FloodView, flood_kept_siblings
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -74,13 +74,17 @@ def _is_module_boundary_row(trace: Trace, label_raw: str, entry: Any) -> bool:
     return kind in _MODULE_BOUNDARY_KINDS
 
 
-def _expand_seen_nodes_to_complete_func_call_groups(self: Trace, nodes_seen: set[str]) -> set[str]:
+def _expand_seen_nodes_to_complete_func_call_groups(
+    self: Trace, nodes_seen: set[str], view: FloodView
+) -> set[str]:
     """Add raw-label siblings for any surviving ``func_call_id`` group.
 
     Parameters
     ----------
     nodes_seen:
         Raw labels reachable from the input/output flood.
+    view:
+        The step 3 accessors (``_column_passes_graph.flood_view``).
 
     Returns
     -------
@@ -94,51 +98,34 @@ def _expand_seen_nodes_to_complete_func_call_groups(self: Trace, nodes_seen: set
     internal sink and seeds validation's backward walk. Before, it stayed in
     the graph unflooded: neither a sink nor reachable from one, so the
     completeness check could never reach it.
+
+    Only groups of two or more labels can gain a member: a one-label group
+    that meets ``nodes_seen`` is already inside it.
     """
 
+    key, func_call_id = view.key, view.func_call_id
     func_groups: dict[int, set[str]] = {}
     for raw_label in self._raw_graph_ws.raw_layer_labels_list:
-        func_call_id = record_member(
-            self._raw_graph_ws.raw_layer_dict[raw_label], "func_call_id", None
-        )
-        if func_call_id is not None:
-            func_groups.setdefault(func_call_id, set()).add(raw_label)
+        call_id = func_call_id(key(raw_label))
+        if call_id is not None:
+            group = func_groups.get(call_id)
+            if group is None:
+                func_groups[call_id] = {raw_label}
+            else:
+                group.add(raw_label)
+    multi = [labels for labels in func_groups.values() if len(labels) > 1]
 
     expanded_seen = set(nodes_seen)
-    changed = True
+    changed = bool(multi)
     while changed:
         changed = False
-        for raw_labels in func_groups.values():
+        for raw_labels in multi:
             if expanded_seen.intersection(raw_labels) and not raw_labels.issubset(expanded_seen):
                 added = raw_labels - expanded_seen
                 expanded_seen.update(raw_labels)
-                _flood_kept_siblings(self, sorted(added), expanded_seen)
+                flood_kept_siblings(self, sorted(added), expanded_seen, view)
                 changed = True
     return expanded_seen
-
-
-def _flood_kept_siblings(trace: Trace, added: list[str], seen: set[str]) -> None:
-    """Flood from siblings kept with their call group, through not-yet-seen nodes only.
-
-    Applies the main flood's rule to what it never visited: a non-output node
-    with no children is logged as an internal sink. ``seen`` grows in place.
-    """
-
-    raw_layer_dict = trace._raw_graph_ws.raw_layer_dict
-    seen_sinks = set(trace.internal_sink_ops)
-    seen_bools = set(trace.internally_terminated_bool_ops)
-    stack = list(added)
-    while stack:
-        label = stack.pop()
-        entry = raw_layer_dict[label]
-        if len(entry.children) == 0 and not entry.is_output:
-            log_internally_terminated_tensor(
-                trace, label, seen_sink_labels=seen_sinks, seen_terminated_bool_labels=seen_bools
-            )
-        for next_label in [*entry.children, *entry.parents]:
-            if next_label not in seen:
-                seen.add(next_label)
-                stack.append(next_label)
 
 
 def _remember_orphan_rows(self: Trace, orphan_nodes: set[str]) -> None:

@@ -374,15 +374,17 @@ def test_conditional_invariant_rejects_ambiguous_fired_arm_summary(tmp_path: Pat
 def test_internal_sink_logging_never_rescans_the_sink_ledgers() -> None:
     """Sink logging must use shadow sets, not per-node list scans (R52-2).
 
-    ``_log_internally_terminated_tensor`` guarded its appends with
+    The sink logger guarded its appends with
     ``label not in self.internal_sink_ops`` / ``... not in
     self.internally_terminated_bool_ops`` -- list membership once per visited
     childless node, O(k^2) in sink count across the reachability flood. The
     guards now read the flood's persistent shadow sets; the lists stay the
-    portable source of truth and stay duplicate-free.
+    portable source of truth and stay duplicate-free. The logging is inlined
+    in the step 3 flood, which this drives through a facade-shaped view over
+    childless stub records.
     """
 
-    from torchlens._postprocess.graph_traversal import _log_internally_terminated_tensor
+    from torchlens._postprocess._column_passes_graph import FloodView, flood_orphan_reachability
 
     class _CountingList(list):
         """List that counts membership scans."""
@@ -414,24 +416,28 @@ def test_internal_sink_logging_never_rescans_the_sink_ledgers() -> None:
 
     trace = _TraceStub()
 
-    seen_sinks: set[str] = set(trace.internal_sink_ops)
-    seen_bools: set[str] = set(trace.internally_terminated_bool_ops)
+    view = FloodView(
+        lambda label: label,
+        lambda label: [],
+        lambda label: [],
+        lambda label: False,
+        lambda label, value: setattr(layers[label], "is_internal_sink", value),
+        lambda label: layers[label].control_flow.is_scalar_bool,
+        lambda label, value: setattr(layers[label], "_control_flow_is_terminal_bool", value),
+        lambda label: None,
+    )
     _CountingList.contains_calls = 0
-    for label in list(layers) + list(layers):  # revisits exercise the dedupe guard
-        _log_internally_terminated_tensor(
-            trace,
-            label,
-            seen_sink_labels=seen_sinks,
-            seen_terminated_bool_labels=seen_bools,
-        )
+    # Every label seeded twice: the second visit exercises the dedupe guard.
+    flood_orphan_reachability(trace, list(layers) + list(layers), view)
 
     assert _CountingList.contains_calls == 0, (
         f"sink logging scanned the list ledgers {_CountingList.contains_calls} "
         "times -- the O(k^2) membership guard is back"
     )
-    assert list(trace.internal_sink_ops) == list(layers)
+    # The flood pops its stack from the end, so the ledgers list labels in reverse.
+    assert list(trace.internal_sink_ops) == list(reversed(layers))
     assert list(trace.internally_terminated_bool_ops) == [
-        label for i, label in enumerate(layers) if i % 2 == 0
+        label for i, label in reversed(list(enumerate(layers))) if i % 2 == 0
     ]
     for i, label in enumerate(layers):
         assert layers[label].is_internal_sink is True  # record-groups: flat

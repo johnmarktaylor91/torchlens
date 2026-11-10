@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
+from .._data_classes._trace_removal import drop_orphan_entries
 from .._data_classes.op import Op, _dtype_or_none, _memory_or_none, _shape_or_none
 from .._ir._output_occurrences import output_container_path_meta
 from .._ir.op_record import amend_late_buffer_output_parent
@@ -601,10 +602,13 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     """
     _remove_foreign_kernel_interiors(self)
     orig_nodes = set(self._raw_graph_ws.raw_layer_labels_list)
-    # Flood body (column view, facade fallback) lives in ``_column_passes_graph``.
-    nodes_seen = _column_passes_graph.flood_orphan_reachability(self, _orphan_flood_seeds(self))
-
-    nodes_seen = _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen)
+    # Flood bodies (column readers, facade reads when the view declines) live in
+    # ``_column_passes_graph``.
+    view = _column_passes_graph.flood_view(self)
+    nodes_seen = _column_passes_graph.flood_orphan_reachability(
+        self, _orphan_flood_seeds(self), view
+    )
+    nodes_seen = _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen, view)
     orphan_nodes = orig_nodes - nodes_seen
     _remember_orphan_rows(self, orphan_nodes)
     # Record pruned torch-RNG ops that DROVE control flow before the orphan
@@ -641,21 +645,11 @@ def _remove_orphan_nodes(self: "Trace") -> None:
 
     _record_pruned_source_less_witness(self, orphan_nodes)
 
-    # Batch-remove orphaned nodes and rebuild the ordered layer dict/list.
-    orphan_entries = [self._raw_graph_ws.raw_layer_dict[label] for label in orphan_nodes]
-    self._batch_remove_log_entries(orphan_entries, remove_references=True)
+    # Bulk drop: the orphan rows go, and only the survivors that name one are scrubbed.
+    drop_orphan_entries(self, orphan_nodes)
     # Removal strips these records. Retain their labels and payload evidence,
     # not empty shells that no longer have an op identity to serialize.
     self._orphan_logs = ()
-
-    new_layer_dict = OrderedDict()
-    new_layer_list = []
-    for tensor_label in self._raw_graph_ws.raw_layer_labels_list:
-        if tensor_label not in orphan_nodes:
-            new_layer_dict[tensor_label] = self._raw_graph_ws.raw_layer_dict[tensor_label]
-            new_layer_list.append(tensor_label)
-    self._raw_graph_ws.raw_layer_labels_list = new_layer_list
-    self._raw_graph_ws.raw_layer_dict = new_layer_dict
 
 
 def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> None:
@@ -743,20 +737,3 @@ def _record_pruned_alias_mutation(self: "Trace", orphan_nodes: set[str]) -> None
         return
     for label in candidates & orphan_nodes:
         record_pruned_alias_mutation_source(self, label)
-
-
-def _log_internally_terminated_tensor(
-    self: "Trace",
-    tensor_label: str,
-    *,
-    seen_sink_labels: set[str],
-    seen_terminated_bool_labels: set[str],
-) -> None:
-    """Mark a tensor as terminated inside the model (body in ``_column_passes_graph``)."""
-
-    _column_passes_graph.log_internally_terminated_tensor(
-        self,
-        tensor_label,
-        seen_sink_labels=seen_sink_labels,
-        seen_terminated_bool_labels=seen_terminated_bool_labels,
-    )

@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable
 from itertools import chain
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from .._utils._record_group_table import record_member
 from ._branch_attribution import _code_context_position_key
@@ -30,9 +30,11 @@ if TYPE_CHECKING:
 __all__ = (
     "assign_conditional_branch_stacks",
     "attribute_forward_edges",
+    "FloodView",
+    "flood_kept_siblings",
     "flood_orphan_reachability",
+    "flood_view",
     "get_gained_branch_entries",
-    "log_internally_terminated_tensor",
     "materialize_derived_views",
     "reset_and_flood_if_edges",
 )
@@ -59,11 +61,76 @@ def _graph_lookup(trace: Trace) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def flood_orphan_reachability(trace: Trace, node_stack: list[str]) -> set[str]:
+class FloodView(NamedTuple):
+    """Row-keyed accessors of the step 3 floods: column readers, or the facade's.
+
+    ``key`` maps a raw label to what the other accessors take (a row of the
+    shared store, or the label itself when the column view declines).
+    """
+
+    key: Callable[[str], Any]
+    children: Callable[[Any], Any]
+    parents: Callable[[Any], Any]
+    is_output: Callable[[Any], Any]
+    mark_sink: Callable[[Any, bool], None]
+    is_scalar_bool: Callable[[Any], Any]
+    mark_terminal_bool: Callable[[Any, bool], None]
+    func_call_id: Callable[[Any], Any]
+
+
+def flood_view(trace: Trace) -> FloodView:
+    """Return the step 3 accessors: column readers when they apply, else facade reads.
+
+    Both read and write the same fields of the same op (``trace[label]``
+    resolves through the raw layer dict during the pass), so the floods built
+    on either store the same result.
+    """
+
+    lookup = _graph_lookup(trace)
+    if lookup is not None:
+        columns, rows = lookup
+        return FloodView(
+            rows.__getitem__,  # KeyError(label), as the raw layer dict raises
+            columns.getter("children"),
+            columns.getter("parents"),
+            columns.getter("is_output"),
+            columns.setter("is_internal_sink"),
+            columns.getter("is_scalar_bool"),
+            columns.setter("is_terminal_bool"),
+            columns.getter("func_call_id", None),
+        )
+    raw = trace._raw_graph_ws.raw_layer_dict
+
+    def key(label: str) -> str:
+        """Return ``label`` once the raw layer dict knows it (its ``KeyError`` otherwise)."""
+
+        raw[label]
+        return label
+
+    def mark_terminal_bool(label: str, value: bool) -> None:
+        """Write the terminal-bool flag through the facade's storage name."""
+
+        trace[label]._control_flow_is_terminal_bool = value
+
+    return FloodView(
+        key,
+        lambda label: raw[label].children,
+        lambda label: raw[label].parents,
+        lambda label: raw[label].is_output,
+        lambda label, value: setattr(trace[label], "is_internal_sink", value),
+        lambda label: trace[label].control_flow.is_scalar_bool,
+        mark_terminal_bool,
+        lambda label: record_member(raw[label], "func_call_id", None),
+    )
+
+
+def flood_orphan_reachability(trace: Trace, node_stack: list[str], view: FloodView) -> set[str]:
     """Flood both edge directions from ``node_stack`` and log internal sinks.
 
     A visited non-output node with no children is logged as an internally
-    terminated tensor (see :func:`log_internally_terminated_tensor`).
+    terminated tensor: its sink flag is set and it is appended once to
+    ``trace.internal_sink_ops`` (and, when it is a scalar bool, to
+    ``trace.internally_terminated_bool_ops`` with its terminal flag set).
 
     Parameters
     ----------
@@ -71,6 +138,8 @@ def flood_orphan_reachability(trace: Trace, node_stack: list[str]) -> set[str]:
         Trace being postprocessed.
     node_stack:
         Seed labels (inputs, outputs and the other flood seeds); consumed.
+    view:
+        The pass's accessors (:func:`flood_view`).
 
     Returns
     -------
@@ -85,26 +154,16 @@ def flood_orphan_reachability(trace: Trace, node_stack: list[str]) -> set[str]:
     # The lists stay the portable source of truth.
     seen_sink_labels = set(trace.internal_sink_ops)
     seen_terminated_bool_labels = set(trace.internally_terminated_bool_ops)
-    lookup = _graph_lookup(trace)
-    if lookup is None:
-        return _flood_facade(trace, node_stack, seen_sink_labels, seen_terminated_bool_labels)
-    columns, rows = lookup
-    children = columns.getter("children")
-    parents = columns.getter("parents")
-    is_output = columns.getter("is_output")
-    mark_sink = columns.setter("is_internal_sink")
-    is_scalar_bool = columns.getter("is_scalar_bool")
-    mark_terminal_bool = columns.setter("is_terminal_bool")
+    key, children, parents, is_output, mark_sink, is_scalar_bool, mark_terminal_bool, _ = view
     internal_sink_ops = trace.internal_sink_ops
     terminated_bool_ops = trace.internally_terminated_bool_ops
     nodes_seen: set[str] = set()
     while node_stack:
         tensor_label = node_stack.pop()
         nodes_seen.add(tensor_label)
-        row = rows[tensor_label]  # KeyError(label), as the raw layer dict raises
+        row = key(tensor_label)
         child_labels = children(row)
         if len(child_labels) == 0 and not is_output(row):
-            # ``trace[label]`` resolves through the same raw layer dict: same row.
             mark_sink(row, True)
             if tensor_label not in seen_sink_labels:
                 seen_sink_labels.add(tensor_label)
@@ -113,65 +172,40 @@ def flood_orphan_reachability(trace: Trace, node_stack: list[str]) -> set[str]:
                     seen_terminated_bool_labels.add(tensor_label)
                     terminated_bool_ops.append(tensor_label)
                     mark_terminal_bool(row, True)
+        # Follow BOTH directions to ensure full bidirectional reachability.
         for next_label in child_labels + parents(row):
             if next_label not in nodes_seen:
                 node_stack.append(next_label)
     return nodes_seen
 
 
-def _flood_facade(
-    trace: Trace,
-    node_stack: list[str],
-    seen_sink_labels: set[str],
-    seen_terminated_bool_labels: set[str],
-) -> set[str]:
-    """Facade body of :func:`flood_orphan_reachability` for non-column traces."""
+def flood_kept_siblings(trace: Trace, added: list[str], seen: set[str], view: FloodView) -> None:
+    """Flood from siblings kept with their call group, through not-yet-seen nodes only.
 
-    nodes_seen: set[str] = set()
-    while len(node_stack) > 0:
-        tensor_label = node_stack.pop()
-        nodes_seen.add(tensor_label)
-        layer_entry = trace._raw_graph_ws.raw_layer_dict[tensor_label]
-        if (len(layer_entry.children) == 0) and (not layer_entry.is_output):
-            log_internally_terminated_tensor(
-                trace,
-                tensor_label,
-                seen_sink_labels=seen_sink_labels,
-                seen_terminated_bool_labels=seen_terminated_bool_labels,
-            )
-        # Follow BOTH directions to ensure full bidirectional reachability.
-        for next_label in layer_entry.children + layer_entry.parents:
-            if next_label not in nodes_seen:
-                node_stack.append(next_label)
-    return nodes_seen
-
-
-def log_internally_terminated_tensor(
-    trace: Trace,
-    tensor_label: str,
-    *,
-    seen_sink_labels: set[str],
-    seen_terminated_bool_labels: set[str],
-) -> None:
-    """Mark a tensor as terminated inside the model (no children reaching an output node).
-
-    ``seen_sink_labels`` / ``seen_terminated_bool_labels`` are the caller's
-    persistent shadow sets over ``internal_sink_ops`` /
-    ``internally_terminated_bool_ops``; the membership guards read them
-    instead of rescanning the growing lists once per visited node.
+    Applies the main flood's rule to what it never visited: a non-output node
+    with no children is logged as an internal sink. ``seen`` grows in place.
     """
 
-    layer_entry = trace[tensor_label]
-    layer_entry.is_internal_sink = True  # record-groups: flat
-    if tensor_label not in seen_sink_labels:
-        seen_sink_labels.add(tensor_label)
-        trace.internal_sink_ops.append(tensor_label)
-        if layer_entry.control_flow.is_scalar_bool and (
-            tensor_label not in seen_terminated_bool_labels
-        ):
-            seen_terminated_bool_labels.add(tensor_label)
-            trace.internally_terminated_bool_ops.append(tensor_label)
-            layer_entry._control_flow_is_terminal_bool = True
+    seen_sinks = set(trace.internal_sink_ops)
+    seen_bools = set(trace.internally_terminated_bool_ops)
+    stack = list(added)
+    while stack:
+        label = stack.pop()
+        row = view.key(label)
+        child_labels = view.children(row)
+        if len(child_labels) == 0 and not view.is_output(row):
+            view.mark_sink(row, True)
+            if label not in seen_sinks:
+                seen_sinks.add(label)
+                trace.internal_sink_ops.append(label)
+                if view.is_scalar_bool(row) and label not in seen_bools:
+                    seen_bools.add(label)
+                    trace.internally_terminated_bool_ops.append(label)
+                    view.mark_terminal_bool(row, True)
+        for next_label in child_labels + view.parents(row):
+            if next_label not in seen:
+                seen.add(next_label)
+                stack.append(next_label)
 
 
 # ---------------------------------------------------------------------------
