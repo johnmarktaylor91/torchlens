@@ -32,7 +32,8 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_streamed_tensor_types.py` | 18 support | Bind published chunk identities and resolve streamed payload dtype names |
 | `_multipass_params.py` | 14 support | Parameter union for a layer whose passes consume different parameters (split from `finalization.py`) |
 | `_lazy_param_geometry.py` | 15 support | Finalize deferred geometry for lazy-at-prep params (R43 split from `finalization.py`) |
-| `_column_passes_finalize.py` | 15.5 | Step 15.5 body (aggregate `Layer` build) over the `OpColumns` view, its facade body as the fallback, and the conditional merge and view helpers both share; `finalization._build_layer_logs` delegates to it (split from `finalization.py`) |
+| `_column_passes_finalize.py` | 15.5 | Step 15.5 body: leaves one pending state per layer, holding the facts the scan kept, and builds a `Layer` from them on its first lookup (`build_layer_state`); a layer the scan cannot describe is merged inside the step, so no merge runs after the seal; also the merge, conditional and view helpers; `finalization._build_layer_logs` delegates to it (split from `finalization.py`) |
+| `_layer_row_scan.py` | 15.5 | The raw scan of the op rows behind step 15.5: groups passes by layer, stamps the op columns the step owns, indexes ops by pass, and keeps the facts of each layer whose passes agree (`pending_states`) |
 | `_finished_marks.py` | 17 | Step 17 body: per-op finished flag and template display keys written on the raw rows of a building store, the facade body as the fallback; `finalization._set_tracing_finished` delegates to it |
 | `saved_summary.py` | 11 support | Saved-output summary refresh helpers (`_refresh_fast_saved_summary`) |
 | `source_provenance.py` | 11, 11.5 | Provenance disclosure warning (`_warn_unattributed_tensor_args`) and source variable names (`_populate_var_names`) |
@@ -80,7 +81,7 @@ step 17.5 (the contracted container-adoption + workspace-drop seam).
 | 13 | `clear_cuda_cache` | `torch.cuda.empty_cache` | Optional CUDA cache clear |
 | 14 | `log_time_elapsed` | `_log_time_elapsed` | Capture timing |
 | 15 | `finalize_param_logs` | `_finalize_param_logs` | Build and complete ParamLogs |
-| 15.5 | `build_layer_logs` | `_build_layer_logs` (body in `_column_passes_finalize.build_layer_logs`) | Build aggregate LayerLogs |
+| 15.5 | `build_layer_logs` | `_build_layer_logs` (body in `_column_passes_finalize.build_layer_logs`) | Group ops into aggregate LayerLogs, each built on first lookup |
 | 16 | `build_module_logs` | `_build_module_logs` | Build ModuleLogs |
 | 16.5 | `hash_graph_shape` | `compute_graph_shape_hash` | Hash graph shape before pass-finished behavior changes |
 | 17 | `mark_tracing_finished` | `_set_tracing_finished` (body in `_finished_marks.mark_ops_finished`) | Switch Trace to user-facing behavior |

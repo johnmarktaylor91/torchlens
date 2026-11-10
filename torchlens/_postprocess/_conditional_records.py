@@ -226,6 +226,30 @@ def roles_held_by_pass(
     ]
 
 
+def rebind_op_conditional_roles(
+    trace: Trace,
+    roles_by_label: dict[str, list[ConditionalRoleRef]],
+    arm_stack_entries: dict[tuple[str, int], tuple[int, str]],
+    event_by_id: dict[Any, Any],
+    conditional_id_by_event_id: dict[Any, Any],
+) -> None:
+    """Give each op the conditional roles its pass holds and its terminal-bool conditional.
+
+    Runs after the aggregate Layers are built: a Layer keeps the values its
+    first pass had before this rebind.
+    """
+
+    for op in trace._layer_list:
+        op._control_flow_in_conditionals = roles_held_by_pass(
+            op, roles_by_label.get(op.layer_label, []), arm_stack_entries
+        )
+        terminal_id = op.terminal_conditional_id
+        if terminal_id is not None and terminal_id in event_by_id:
+            op._control_flow_terminal_bool_for = (conditional_id_by_event_id[terminal_id], 0)
+        else:
+            op._control_flow_terminal_bool_for = None
+
+
 def _ordered_branch_kinds(event: Any) -> list[str]:
     """Return a conditional event's branch kinds in arm order.
 

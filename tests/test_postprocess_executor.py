@@ -460,6 +460,7 @@ def _postcondition_breakers() -> list[Any]:
     """(step name, patched attribute, factory of the breaking replacement, message)."""
 
     import torchlens._postprocess as pp
+    from torchlens._data_classes import _trace_views as trace_views
 
     def noop(*_args: Any, **_kwargs: Any) -> None:
         return None
@@ -512,8 +513,8 @@ def _postcondition_breakers() -> list[Any]:
         pytest.param(
             "build_module_logs",
             # The step's last call, so nothing inside step 16 reads the nulled field.
-            "refresh_saved_module_call_count",
-            lambda: _wrap_then(pp.saved_summary.refresh_saved_module_call_count, _null_module_logs),
+            "module_calls",
+            lambda: _wrap_then(trace_views.module_calls, _null_module_logs),
             "module logs",
             id="16",
         ),
@@ -553,6 +554,7 @@ def test_unmet_step_postcondition_raises_typed_error(
     import re
 
     import torchlens._postprocess as pp
+    from torchlens._data_classes import _trace_views as trace_views
     from torchlens._utils import hashing
     from torchlens.errors import MetadataInvariantError
 
@@ -561,7 +563,7 @@ def test_unmet_step_postcondition_raises_typed_error(
         "_map_raw_labels_to_final_labels": pp.labeling,
         "_build_lookup_keys_and_finalize_retained_layers": pp.labeling,
         "_build_layer_logs": pp.finalization,
-        "refresh_saved_module_call_count": pp.saved_summary,
+        "module_calls": trace_views,
         "compute_graph_shape_hash": hashing,
         "_set_tracing_finished": pp.finalization,
     }
