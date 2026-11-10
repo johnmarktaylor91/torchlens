@@ -1514,7 +1514,9 @@ def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, A
             )
             if spec is None:
                 continue
-            dedupe_key = (id(spec.home), repr(spec.transforms), facet_name)
+            # Keyed by the home op's label: a held view's id is not stable once the
+            # trace hands out views from weak tables, and an id can be reused.
+            dedupe_key = (_facet_home_label(spec), repr(spec.transforms), facet_name)
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
