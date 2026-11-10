@@ -206,17 +206,19 @@ class OpAccessor(Accessor["Op"]):
         except AttributeError:
             store = None
         if store is not None and isinstance(op_row, int):
+            core_ref = self._core_ref  # attribute read: revives a saved-shape copy
             state = self.__dict__
-            # ``_slots`` is the core's op view list (present once the accessor
-            # is bound to a core): reads index it directly, with no lookup.
-            slots = state.get("_slots")
-            if slots is None:
+            if core_ref is not None:
+                core = core_ref()
+            else:
                 core = _core_of(op)
                 if core is not None and core.ops is store:
-                    slots = state["_slots"] = view_slots(core, "op")
                     state["_core_ref"] = core.weak_self()
                     state["_store"] = store
-            if slots is not None and state["_store"] is store:
+            if core is not None and state["_store"] is store:
+                # The view list is read through the core each time: the
+                # accessor itself holds no list of op views.
+                slots = view_slots(core, "op")
                 if op_row >= len(slots):
                     slots.extend([None] * (op_row + 1 - len(slots)))
                 current = slots[op_row]
@@ -263,10 +265,12 @@ class OpAccessor(Accessor["Op"]):
         row = keys[2 * position + 1]
         if row < 0:
             return cast("Op", self._held[keys[2 * position]])
-        op = self.__dict__["_slots"][row]
-        if op is not None:
-            return cast("Op", op)
-        return self._rebuild(self._core_ref(), row)
+        core = self._core_ref()
+        try:
+            op = core._strong_facades["op"][row]
+        except (AttributeError, KeyError, IndexError):
+            op = None
+        return cast("Op", op) if op is not None else self._rebuild(core, row)
 
     def _rebuild(self, core: Any, row: int) -> "Op":
         """Build an Op view over ``row`` of the accessor's store (its view was dropped)."""
@@ -288,7 +292,6 @@ class OpAccessor(Accessor["Op"]):
         if held and keys:
             if not any(keys[at] >= 0 for at in range(1, len(keys), 2)):
                 # Nothing is keyed yet: forget the old binding so the ops' own core is found.
-                state.pop("_slots", None)
                 state["_core_ref"] = None
                 state["_store"] = None
             for pass_index, op in list(held.items()):

@@ -29,10 +29,10 @@ def _layer_rep_op(layer: Layer) -> Op | None:
     try:
         row = state["_keys"][1]
         if row >= 0:
-            op = state["_slots"][row]
+            op = state["_core_ref"]()._strong_facades["op"][row]
             if op is not None:
                 return cast("Op", op)
-    except (KeyError, IndexError):
+    except (KeyError, IndexError, AttributeError, TypeError):
         pass
     # Slow path: no pass yet, an unkeyed first pass, a dropped view, or a
     # saved-shape accessor copy (reading ``_keys`` revives it).

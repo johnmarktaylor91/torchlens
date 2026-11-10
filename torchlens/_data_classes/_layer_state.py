@@ -108,7 +108,10 @@ class LayerStore(OrderedDict[str, Any]):
     def get(self, label: Any, default: Any = None) -> Any:
         """Return the Layer view for ``label``, or ``default``."""
 
-        return self[label] if label in self else default
+        try:
+            return self[label]
+        except KeyError:
+            return default
 
     def __setitem__(self, label: str, layer: Any) -> None:
         """Adopt ``layer``: its state becomes trace-held and it becomes the label's view."""
