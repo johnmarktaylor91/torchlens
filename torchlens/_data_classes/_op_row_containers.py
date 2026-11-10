@@ -27,6 +27,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from itertools import repeat
 from typing import TYPE_CHECKING, Any, cast
 
+from .._trace_core.record_refs import VERSIONS_LIST
 from .._trace_core.view_tables import WeakViews
 
 if TYPE_CHECKING:
@@ -628,6 +629,10 @@ def clear_op_holders(trace: Any) -> None:
     trace._layer_list = OpSequence(op_rows(trace))
     trace._layer_dict_main_keys.clear()
     trace._layer_dict_all_keys.clear()
+
+
+# The kept ``Buffer.versions`` container: the version ops held by row, read as the ops.
+VERSIONS_LIST[:] = [lambda trace, ops: OpSequence(op_rows(trace), ops)]
 
 
 def bind_op_containers(trace: Any, core: Any = None) -> None:
