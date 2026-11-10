@@ -147,7 +147,7 @@ def seed_locations(memo: Any) -> None:
     known = memo.locations
     for key, value in memo.cache.items():
         if type(key) is tuple and len(key) == 4 and type(key[3]) is tuple:
-            for (code, lineno, lasti), location in zip(key[3], value):
+            for (code, lineno, lasti), location in zip(key[3], value, strict=True):
                 known[(code, lasti, lineno)] = location
 
 

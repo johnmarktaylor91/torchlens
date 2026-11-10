@@ -901,7 +901,7 @@ def build_locations(
 
         _FUNC_CALL_LOCATION = location_type
     result = []
-    for frame_ref, code, lineno, lasti in selected:
+    for frame_ref, code, lineno, _lasti in selected:
         func_name = code.co_name
         loc = location_type(
             file=code.co_filename,
