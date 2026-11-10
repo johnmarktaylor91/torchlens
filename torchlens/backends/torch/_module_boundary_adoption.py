@@ -74,9 +74,10 @@ def collect_pre_forward_tensor_ids(
     for submodule in submodules:
         _clear_module_attribute_tensor_metadata(submodule, seen, visit=_note)
     methods = method_index(type(submodule) for submodule in submodules)
+    swept: dict[int, Any] = {}
     for submodule in submodules:
         _clear_module_callables_tensor_metadata(
-            submodule, seen, visit=_note_callable, methods=methods
+            submodule, seen, visit=_note_callable, methods=methods, swept=swept
         )
     return owned, frozenset(callable_only)
 
