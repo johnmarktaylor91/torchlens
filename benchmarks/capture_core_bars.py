@@ -110,8 +110,13 @@ def lane_bars() -> tuple[Bar, ...]:
         _fraction("T2", _phase("post.map_final_labels"), 5, 75, "map final labels 75 to 5"),
         _fraction("T3", _phase("post"), 150, 563, "postprocess other 420 to 150"),
         Bar("T4a", _phase("post.find_output_ancestors"), "fraction", 0.10, "to 10% of baseline"),
-        Bar("T4a", _phase("post.fix_buffer_layers"), "fraction", 0.10, "to 10% of baseline"),
-        Bar("T4b", _phase("post.mark_conditional_branches"), "fraction", 0.10, "to 10%"),
+        Bar(
+            "T4a",
+            _phase("post.fix_buffer_layers", "resnet18"),
+            "fraction",
+            0.10,
+            "to 10% of baseline, on resnet18 (the only model of the set with buffers)",
+        ),
         _fraction("T4c", "c1.chain1000.total_per_op", 550, 4875, "total at or under 550"),
     ]
     for model in FULL_MODELS:
@@ -135,6 +140,8 @@ PENDING_BARS = (
     "E1: emit down by the call-site family's share, from lane H2's family table",
     "E2: emit down by the argument family's share, from lane H2's family table",
     "E1: code-context lookups per op to 0 for repeated sites (no counter in this tool)",
+    "T4b: conditional marking to 10% of baseline; no model of the set has a conditional, "
+    "so the step costs a constant 25 calls per trace today and a bar on it measures nothing",
 )
 
 
