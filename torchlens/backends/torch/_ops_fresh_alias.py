@@ -55,11 +55,15 @@ __all__ = ("fresh_payload",)
 StorageIdentity = tuple[str, int, int]
 
 
-def _whole_storage_key(t: torch.Tensor) -> tuple[int, int, str] | None:
-    """Return ``t``'s pending-registry key when an alias of it may be deferred, else ``None``.
+def _whole_storage_alias(
+    t: torch.Tensor, graph_connected: bool
+) -> tuple[torch.Tensor, int, tuple[int, int, str]] | None:
+    """Return an alias of ``t``, its version and its pending-registry key, or ``None``.
 
     The flag, storage and coverage checks of ``_try_defer_payload_alias`` for an
-    exact strided ``torch.Tensor``, read through one routed-read scope.
+    exact strided ``torch.Tensor``, read through one routed-read scope, then the
+    alias itself. ``None`` (the eager copy) when a check fails or any read or the
+    mint raises.
     """
 
     state_ptrs = _tensor_utils._DEFER_STATE_PTRS
@@ -74,34 +78,35 @@ def _whole_storage_key(t: torch.Tensor) -> tuple[int, int, str] | None:
         storage = storage_of(t)
         ptr = storage.data_ptr()
         nbytes = storage.nbytes()
+        if ptr == 0 or nbytes == 0 or ptr in state_ptrs:
+            # Model state storages stay eager (C++ side effects move their bytes).
+            return None
+        if not _covers_whole_storage(t, nbytes, offset, element_size):
+            # Partial coverage stays eager: an alias would pin the whole storage.
+            return None
+        key = (ptr, nbytes, str(t.device))
+        alias = _mint_graph_connected_alias(t) if graph_connected else t.detach()
+        version = int(alias._version)
     except Exception:
         return None
-    if ptr == 0 or nbytes == 0 or ptr in state_ptrs:
-        # Model state storages stay eager (C++ side effects move their bytes).
-        return None
-    if not _covers_whole_storage(t, nbytes, offset, element_size):
-        # Partial coverage stays eager: an alias would pin the whole storage.
-        return None
-    return (ptr, nbytes, str(t.device))
+    return alias, version, key
 
 
 def _covers_whole_storage(t: torch.Tensor, nbytes: int, offset: Any, element_size: Any) -> bool:
     """Return whether ``t`` spans its storage end to end from offset 0.
 
-    ``tensor_utils._alias_covers_whole_storage`` with the routed reads passed in.
+    ``tensor_utils._alias_covers_whole_storage`` with the routed reads passed in. A
+    read that raises propagates; the caller's guard turns it into the eager copy.
     """
 
-    try:
-        if offset(t) != 0:
-            return False
-        span = 1
-        for size, stride in zip(t.shape, t.stride(), strict=True):
-            if size == 0:
-                return False
-            span += (size - 1) * (stride if stride >= 0 else -stride)
-        return bool(span * element_size(t) == nbytes)
-    except Exception:
+    if offset(t) != 0:
         return False
+    span = 1
+    for size, stride in zip(t.shape, t.stride(), strict=True):
+        if size == 0:
+            return False
+        span += (size - 1) * (stride if stride >= 0 else -stride)
+    return bool(span * element_size(t) == nbytes)
 
 
 def _defer_fresh_alias(
@@ -113,14 +118,10 @@ def _defer_fresh_alias(
     eager copy.
     """
 
-    key = _whole_storage_key(t)
-    if key is None:
+    found = _whole_storage_alias(t, graph_connected)
+    if found is None:
         return None
-    try:
-        alias = _mint_graph_connected_alias(t) if graph_connected else t.detach()
-        version = int(alias._version)
-    except Exception:
-        return None
+    alias, version, key = found
     ref = weakref.ref(alias, partial(_drop_dead_deferred_alias, key))
     entry = _PendingPayloadAlias(ref, version)
     if key in _DEFER_PENDING:
