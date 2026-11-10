@@ -300,10 +300,6 @@ KNOWN: dict[str, tuple[str, str]] = {
         "facets_read",
         "Trace._trace_core:TraceCore.ops:Store.rows[_facets_cache]:FacetView._record -> Op",
     ),
-    "fork translation": (
-        "fork",
-        "Trace._trace_core:TraceCore._record_translator:_RecordTranslator.map{*} -> Op",
-    ),
     "module cells": (
         "plain",
         "Trace._trace_core:TraceCore.kind_rows{module}:Store.rows[ops]"
