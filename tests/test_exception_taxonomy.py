@@ -1248,6 +1248,11 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "internal control-flow cut signal (BaseException) for trace.run_transaction(inputs=..., fast=True, until=); "
         "raised and caught inside the fast live session, never escapes _fast_run"
     ),
+    "torchlens._postprocess._final_info_columns._NotColumnar": (
+        "private internal signal of the postprocess column pass: raised when a column "
+        "holds a cell the raw pass cannot read as the facade would, and caught in the "
+        "same module, whose caller then runs the per-op loop; never escapes"
+    ),
     "torchlens._runnable.execution._ProjectionCountExceeded": (
         "private internal bound signal; caught inside the projection walk"
     ),
