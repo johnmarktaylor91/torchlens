@@ -224,7 +224,12 @@ def make_random_barcode(barcode_len: int = 8) -> str:
     Returns:
         Random alphanumeric string of the requested length.
     """
-    return "".join(_BARCODE_RNG.choices(_BARCODE_ALPHABET, k=barcode_len))
+    # ``random.choices`` without weights, inlined (it runs once per wrapped call): the
+    # same ``random()`` draw per character and the same index ``floor(random() * n)``
+    # (``int`` floors a non-negative float), so a seeded sequence is unchanged.
+    draw = _BARCODE_RNG.random
+    n = float(len(_BARCODE_ALPHABET))
+    return "".join([_BARCODE_ALPHABET[int(draw() * n)] for _ in range(barcode_len)])
 
 
 def make_short_barcode_from_input(things_to_hash: list[Any], barcode_len: int = 16) -> str:

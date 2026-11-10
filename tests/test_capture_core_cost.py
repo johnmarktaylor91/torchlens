@@ -185,6 +185,9 @@ def test_two_measurements_of_one_commit_agree() -> None:
     c8 = first["models"]["one_op"]["c8"]
     assert c8["commit_ops"] >= 1 and c8["wrapper_calls"] >= 1
     assert c8["fast_lane_calls"] == 1 and 0.0 < c8["fast_lane_share"] <= 1.0
+    # C8 counts function-call commits only; the input's source record is reported apart.
+    assert c8["function_call_commits"] == 1 and c8["fast_lane_commits"] == 1
+    assert c8["source_record_commits"] >= 1 and c8["host_constructor_commits"] == 0
     # A trace keeps no Op view once built (B5: C4 is 0 for Op and Layer).
     assert first["models"]["one_op"]["c4"].get("Op", 0) == 0
 

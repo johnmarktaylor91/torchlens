@@ -110,7 +110,14 @@ from ._ops_capture_records import (
     _stamp_same_object,
 )
 from ._ops_containers import _walk_output_tensors_with_paths
-from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
+from ._ops_emission import (
+    DECLINED,
+    _propagate_mutation_label_to_storage_aliases,
+    _register_inplace_live_grad_hook,
+    apply_live_hooks_to_outputs,
+    commit_admitted,
+    log_function_output_tensors,
+)
 from ._output_tensors import _collect_output_tensors
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
 from ._torch_ops_calls import install_torch_ops_call_recorders, uninstall_torch_ops_call_recorders
@@ -133,8 +140,6 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
     direct_transform_decorator,
     transform_builder_decorator,
 )
-from ._user_grad_fn import grad_fn_read_refused
-from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
 from ._warm_originals import originals_exposed
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from ._wrappers_refusals import (
@@ -171,7 +176,6 @@ from .param_mutation import (
     same_object_logging_copy as _same_object_logging_copy,
 )
 from .sources import log_closure_constant_if_known, log_source_tensor
-from .tensor_tracking import _add_tensor_backward_hook
 
 if TYPE_CHECKING:
     pass
@@ -694,94 +698,6 @@ def _propagate_data_alias_provenance(
                 mark_tensor_data_alias(output)
 
 
-def _register_inplace_live_grad_hook(
-    trace: Any, tensor: Any, raw_label: str, *, owning_backward_only: bool = False
-) -> None:
-    """Hook the live in-place result so its gradient is captured under ``raw_label``.
-
-    In-place ops log their output against a ``safe_copy`` whose grad_fn is a
-    dead-end ``CloneBackward`` node; the live, in-place-modified tensor is what
-    downstream ops consume, so the real gradient flows through it and this hooks
-    it (``_add_tensor_backward_hook`` dedups by ``(label, id(tensor))`` and only
-    hooks autograd-participating tensors). A tensor whose ``grad_fn`` read raises
-    or warns (``grad_fn_read_refused``: a stale multi-output or custom-Function
-    view of the written base) is skipped: eager raises on any use of it, so it
-    carries no gradient. ``owning_backward_only``: see ``_add_tensor_backward_hook``.
-    """
-
-    if not isinstance(tensor, torch.Tensor) or grad_fn_read_refused(tensor):
-        return
-
-    # The live tensor is what downstream ops consume, so it takes gradient
-    # ownership of the label; the logged copy's hook (if any) stops emitting.
-    _add_tensor_backward_hook(
-        trace,
-        tensor,
-        raw_label,
-        take_ownership=True,
-        owning_backward_only=owning_backward_only,
-    )
-
-
-def _propagate_mutation_label_to_storage_aliases(
-    trace: Any, mutated: torch.Tensor, out_label: str
-) -> None:
-    """Advance live labels of storage aliases overlapping an in-place op's target.
-
-    An in-place op that mutates a VIEW (``v = y[0]; v.add_(100.)``) changes the
-    BASE tensor's content, but the base is a different Python object: only the
-    view's label used to advance, so the mutation op was a dead end and later
-    consumers of the base bound to the stale pre-mutation parent while storing
-    the post-mutation value (a silent error). Resolve every OTHER live
-    labeled tensor whose storage byte range overlaps the mutated target and
-    advance its label to the mutating op, exactly like the direct same-object
-    propagation. Value replay is untouched: the consumer's version-snapshot
-    machinery (``_get_parent_output_version_snapshot``) records the alias's
-    actual content per child, so replay and perturbation both see the real
-    full-tensor values.
-
-    Parameters
-    ----------
-    trace
-        Active capture trace.
-    mutated
-        The live tensor object the op actually wrote through (``args[0]`` for
-        in-place/setter ops, each destination for ``out=`` ops).
-    out_label
-        The mutating op's freshly issued raw label.
-    """
-
-    from ._ops_capture_records import _record_label_version_snapshot
-
-    # SCOPE: descriptor/grad-bound captures keep the unadvanced (historical)
-    # topology. The runnable recipe + numeric attestation key payloads PER
-    # LABEL, and advancing a base tensor's label to a view-mutation op makes
-    # one label denote two different values (the op's view-shaped output AND
-    # the full post-mutation base as the consumer's parent) -- byte-exact
-    # attestation then fails on a genuinely-verifiable run.
-    # Those modes stay honest without the edge: the view-lineage gate
-    # fail-closes view-mediated input mutation, and validation's
-    # version-snapshot replay is green with EITHER topology. Default captures
-    # (receptive fields, influence geometry, collapse -- the impact
-    # surface) get the mutation edge. Follow-up: teach the runnable reader
-    # per-(label, consumer) payload keying, then lift this scope.
-    if not view_mutation_propagation_enabled(trace):
-        return
-
-    # ``untyped_storage()`` / ``data_ptr()`` / ``stride()`` / ``storage_offset()``
-    # are WITNESSED host-escape / metadata surfaces, and a genuine user
-    # ``data_ptr()`` read fail-closes runnable captures to UNVERIFIABLE.
-    # These are TorchLens's OWN bookkeeping reads, so they run under
-    # ``pause_logging`` (no spurious op capture) plus ``internal_scalar_read``
-    # (kept off the escape census / metadata patches) -- the same sanctioned
-    # pattern as ``completeness_witness``'s storage-site indexers.
-    with _state.pause_logging(), internal_scalar_read():
-        for alias, alias_label in overlapping_labeled_aliases(mutated, out_label):
-            set_tensor_label(alias, out_label)
-            _register_inplace_live_grad_hook(trace, alias, out_label)
-            _record_label_version_snapshot(alias, mutated_via=(mutated, alias_label))
-
-
 # Positional index of the target Tensor subclass ``cls`` argument for each
 # wrapped callable whose ORIGINAL can crash under an active python
 # TorchDispatchMode on torch 2.1/2.2 (``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``).
@@ -1049,12 +965,15 @@ def _register_first_use_state(trace: Any, arg_tensorlike: Iterable[torch.Tensor]
             if watched_lazy_slots is not None and t in watched_lazy_slots:
                 late_register_forward_created_parameter(trace, t)
             continue
-        # The identity ladder + lazy late-index live in
-        # buffer_writes.resolve_or_late_index_buffer_address.
+        if get_tensor_label(t) is not None:
+            # A current-session op output or registered source: no rung below logs or stamps it.
+            continue
+        # The identity ladder + lazy late-index (buffer_writes.resolve_or_late_index_buffer_address)
+        # never label a tensor, so ``t`` is still unlabeled after it.
         address = resolve_or_late_index_buffer_address(trace, t)
-        if address is not None and get_tensor_label(t) is None:
+        if address is not None:
             log_source_tensor(trace, t, "buffer", address)
-        elif address is None:
+        else:
             # A tensor the forward closes over (SPEC 2 rule 1) becomes a
             # ``constant`` source op on first use; anything not proven
             # pre-forward stays unattributed.
@@ -1181,11 +1100,12 @@ def torch_func_decorator(
     # never occurs in a native forward, so it stays out of the call fingerprint.
     fingerprint_token = None if func_name == "identity" else _state.call_token(func_name)
     # Fast lane (``_call_plan``): no plan for any callable with a special role here.
-    hazard = writes_args or exports_storage or needs_device_injection or is_unlogged_func
+    hazard = reconstructs_receiver_output or is_mutating_property_setter or exports_storage
+    hazard = hazard or needs_device_injection or is_unlogged_func
     hazard = hazard or is_print_func or is_boundary_func or is_host_constructor or mutates_first_arg
     hazard = hazard or force_distinct_return or constructs_tensor_subclass or is_barcode_transparent
     hazard = hazard or inplace_param_index is not None or canonical_capture_callable is None
-    plan = None if hazard else _call_plan.build_call_plan(func, func_name, property_accessor)
+    plan = _call_plan.build_fast_plan(hazard, func, func_name, property_accessor, mutates_receiver)
 
     @wraps(func)
     def wrapped_func(*args: Any, **kwargs: Any) -> Any:
@@ -1328,10 +1248,10 @@ def torch_func_decorator(
         data_alias_inputs = tuple(filter(is_tensor_data_alias, () if fast else arg_tensorlike))
         mutates_data_alias = bool(
             not fast
+            and mutates_receiver
             and args
             and isinstance(args[0], torch.Tensor)
             and is_tensor_data_alias(args[0])
-            and mutates_receiver
         )
 
         # Register buffers (and a Parameter materialized from a pending lazy slot
@@ -1383,7 +1303,7 @@ def torch_func_decorator(
         # via its property-setter signature — a spurious materialization is merely a wasted clone,
         # never a correctness risk.
         if (
-            not fast
+            (not fast or writes_args or flag)
             and _COW_GATE.armed
             and (
                 writes_args
@@ -1520,13 +1440,12 @@ def torch_func_decorator(
             time_elapsed=func_exec_duration, rng_states=rng_states, autocast_state=autocast_state
         )
         is_bottom_level_func = trace._wrapper_runtime_ws.current_func_barcode == func_call_barcode
-        fast_out = fast if is_bottom_level_func and not buffer_snapshots else None
-        if fast_out and _call_plan.output_admitted(out_orig, args, kwargs):
+        if fast and is_bottom_level_func:
             call = (func, func_name, args, kwargs, arg_copies, kwarg_copies, out_orig, exec_ctx)
-            window = (_cow_payload_state_ptrs(trace), fast_out[0])
-            return _call_plan.commit_fast_call(
-                log_function_output_tensors, trace, call, func_call_id, window
-            )
+            window = (_cow_payload_state_ptrs(trace), fast[0])
+            fast_out = commit_admitted(trace, call, func_call_id, window, buffer_snapshots)
+            if fast_out is not DECLINED:
+                return fast_out
         if isinstance(out_orig, torch.nn.Parameter):
             # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.
             _adopt_minted_parameter_label(trace, out_orig, args)

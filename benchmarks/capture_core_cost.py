@@ -13,7 +13,8 @@ C5   calls per module call: (mod_relu200 - func_relu200) / 200
 C6   calls for a minimal trace; calls per prepared module that never runs
 C7   calls per op for ``to_pandas()``, ``repr(trace)`` and ``save``, each on a
      fresh trace, and trace plus ``to_pandas()``
-C8   share of op commits that took the wrapper fast lane
+C8   share of function-call commits that took the wrapper fast lane (source
+     records and host constructors reported apart; ``capture_core_c8.py``)
 C9   tensor bytes the trace holds at op boundaries of the forward, at peak,
      split into saved outputs and argument tensors
 FL   calls per function output in each call-time section of the forward
@@ -68,12 +69,14 @@ from benchmarks import (  # noqa: E402
     capture_core_bars as bars_mod,
     capture_core_floor as floor,
 )
+from benchmarks.capture_core_c8 import CommitCensus  # noqa: E402
 from benchmarks.capture_core_counters import (  # noqa: E402
     StoreWriteObserver,
     TensorBytesObserver,
     code_context_lookups,
     count_calls,
     count_phases,
+    fast_lane_names,
     flatten_code_context,
     retained_after,
 )
@@ -231,18 +234,19 @@ def build(name: str) -> tuple[nn.Module, torch.Tensor]:
 
 
 def _c1_c8(model: nn.Module, x: torch.Tensor) -> tuple[dict[str, Any], dict[str, Any]]:
+    census = CommitCensus(fast_lane_names())
     with quiet_gc():
-        trace, phases, tags = count_phases(lambda: tl.trace(model, x))
+        trace, phases, tags = count_phases(
+            lambda: tl.trace(model, x), {"commit_ops": census.on_commit}
+        )
     del trace
-    commits = tags.get("commit_ops", 0)
-    fast = tags.get("fast_lane_calls", 0)
     c1 = {"total": sum(phases.values()), "phases": dict(sorted(phases.items()))}
     c8 = {
         "wrapper_calls": tags.get("wrapper_calls", 0),
         "emit_calls": tags.get("emit_calls", 0),
-        "commit_ops": commits,
-        "fast_lane_calls": fast,
-        "fast_lane_share": fast / commits if commits else 0.0,
+        "commit_ops": tags.get("commit_ops", 0),
+        "fast_lane_calls": tags.get("fast_lane_calls", 0),
+        **census.report(),
     }
     return c1, c8
 

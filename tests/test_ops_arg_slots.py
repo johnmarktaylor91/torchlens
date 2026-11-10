@@ -283,6 +283,8 @@ def test_one_label_read_per_tensor_slot(
 
 #: Measured ``get_tensor_label`` calls per trace (fixed seed). Before the slot snapshot the
 #: same traces read 91, 186 and 159 labels: every derivation read each tensor again.
+#: The receiver-write fast lane and the registration ladder's labeled-argument skip took
+#: ``inplace_mlp`` from 64 to 57 and ``buffer`` from 120 to 118.
 _PINNED_LABEL_READS = (
     ("inplace_mlp", _InplaceMLP, (2, 8), 57),
     ("buffer", _BufferModel, (2, 3, 6, 6), 112),
@@ -325,6 +327,53 @@ def test_label_reads_per_trace_are_pinned(
     model, x = model_cls(), torch.randn(*shape)
     tl.trace(model, x)
     assert reads[0] == expected, f"{name}: {reads[0]} label reads per trace, pinned at {expected}"
+
+
+class _OwnedTensorModel(nn.Module):
+    """A lazy batch norm plus a plain tensor attribute that is not a registered buffer."""
+
+    def __init__(self) -> None:
+        """Build the lazy norm and the attribute."""
+        super().__init__()
+        self.norm = nn.LazyBatchNorm1d()
+        self.offset = torch.full((4,), 0.25)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalize, then shift by the attribute."""
+        return self.norm(x) + self.offset
+
+
+@pytest.mark.parametrize(
+    ("model_cls", "shape", "expects_address"),
+    [(_BufferModel, (2, 3, 6, 6), True), (_OwnedTensorModel, (3, 4), False)],
+    ids=["buffer", "owned_tensor"],
+)
+def test_buffer_address_resolution_never_labels_a_tensor(
+    monkeypatch: pytest.MonkeyPatch,
+    model_cls: type[nn.Module],
+    shape: tuple[int, ...],
+    expects_address: bool,
+) -> None:
+    """The registration ladder reads a first-use tensor's label once: resolution never sets one."""
+
+    from torchlens.backends.torch import _tl, wrappers
+
+    real_resolve = wrappers.resolve_or_late_index_buffer_address
+    seen: list[tuple[Any, Any, Any]] = []
+
+    def recording(trace: Any, t: torch.Tensor) -> Any:
+        """Record the tensor's label before and after one address resolution."""
+        before = _tl.get_tensor_label(t)
+        address = real_resolve(trace, t)
+        seen.append((before, address, _tl.get_tensor_label(t)))
+        return address
+
+    monkeypatch.setattr(wrappers, "resolve_or_late_index_buffer_address", recording)
+    torch.manual_seed(0)
+    tl.trace(model_cls(), torch.randn(*shape))
+    assert seen, "no first-use tensor reached address resolution"
+    assert not expects_address or any(address is not None for _before, address, _after in seen)
+    assert [entry for entry in seen if entry[0] is not None or entry[2] is not None] == []
 
 
 def test_slot_record_is_frozen() -> None:

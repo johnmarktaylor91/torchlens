@@ -16,13 +16,20 @@ from ..._utils._tensor_label import (
     mutated_parameter_label,
     session_label_storage_intact,
     session_meta_is_anchored,
+    set_tensor_label,
 )
 from ._ops_arg_slots import arg_slot_facts, receiver_data_alias, retire_arg_slots, slot_fact
-from ._view_writeback import data_alias_write_reaches_base
+from ._user_grad_fn import grad_fn_read_refused
+from ._view_writeback import (
+    data_alias_write_reaches_base,
+    overlapping_labeled_aliases,
+    view_mutation_propagation_enabled,
+)
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
     from ._ops_arg_slots import _SlotCall
+    from .buffer_writes import BufferSnapshot
     from .ops import CaptureProducerPolicy  # annotations only; runtime binding at the bottom
 
 
@@ -518,14 +525,199 @@ def witness_from_slots(
         retire_arg_slots(trace)
 
 
+#: Returned by :func:`commit_admitted` when the call needs the general post-call body.
+DECLINED = object()
+_TENSOR = torch.Tensor
+
+
+def commit_admitted(
+    trace: Any,
+    call: tuple[Any, ...],
+    func_call_id: int,
+    window: Any,
+    snapshots: list[BufferSnapshot],
+) -> Any:
+    """Commit one admitted bottom-level call, or return :data:`DECLINED`.
+
+    A call that returned new tensors is committed as :func:`.commit_fast_call`
+    commits it, then its running-statistic writes (a fused normalization call)
+    are recorded from ``snapshots``. A call that returned its plain-tensor
+    receiver (``relu_``, eval ``dropout``, ``contiguous``) takes the general
+    body's same-object steps (:func:`_commit_same_object`). Anything else
+    declines to the general body.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    call:
+        ``(func, func_name, args, kwargs, arg_copies, kwarg_copies, out,
+        exec_ctx)`` of the call.
+    func_call_id:
+        The call's id.
+    window:
+        The deferred payload window argument of :func:`.commit_fast_call`.
+    snapshots:
+        The buffer snapshots the wrapper took before the call.
+
+    Returns
+    -------
+    Any
+        The value the wrapper returns to the caller, or :data:`DECLINED`.
+    """
+
+    out = call[6]
+    args = call[2]
+    if _call_plan.output_admitted(out, args, call[3]):
+        if snapshots and type(out) is not _TENSOR:
+            return DECLINED
+        result = _call_plan.commit_fast_call(
+            log_function_output_tensors, trace, call, func_call_id, window
+        )
+        if snapshots:
+            record_op_buffer_writes(trace, call[1], snapshots, get_tensor_label(out))
+        return result
+    if type(out) is not _TENSOR or out is not args[0]:
+        return DECLINED
+    return _commit_same_object(trace, call, func_call_id, window, snapshots)
+
+
+def _commit_same_object(
+    trace: Any,
+    call: tuple[Any, ...],
+    func_call_id: int,
+    window: Any,
+    snapshots: list[BufferSnapshot],
+) -> Any:
+    """Commit an admitted call that returned its plain-tensor receiver (``relu_``, ``contiguous``).
+
+    The general body's steps for this case, in its order: the safe copy the op
+    is logged against, the mutation verdict, the emit, then the op's label on
+    the live receiver (and, for a write, on its overlapping storage aliases)
+    with its gradient hook, then the buffer writes. A plain receiver is never a
+    Parameter, so the Parameter mutation steps do not apply.
+    """
+
+    # A planned callable's name requests mutation (the wrapper's ``has_inplace_signature``)
+    # exactly when it ends in an underscore: every other clause of that flag has no plan.
+    was_inplace = call[1].endswith("_")
+    receiver = call[6]
+    logged = same_object_logging_copy(receiver, trace, was_inplace)
+    _stamp_same_object(logged, receiver, was_inplace)
+    _call_plan.commit_fast_call(
+        log_function_output_tensors, trace, (*call[:6], logged, call[7]), func_call_id, window
+    )
+    out_label = get_tensor_label(logged)
+    if out_label is not None:
+        if was_inplace:
+            set_tensor_label(receiver, out_label)
+            _register_inplace_live_grad_hook(trace, receiver, out_label)
+            _propagate_mutation_label_to_storage_aliases(trace, receiver, out_label)
+        set_tensor_label(receiver, out_label)
+        _register_inplace_live_grad_hook(trace, receiver, out_label)
+    if snapshots:
+        record_op_buffer_writes(trace, call[1], snapshots, out_label)
+    return receiver
+
+
+def _register_inplace_live_grad_hook(
+    trace: Any, tensor: Any, raw_label: str, *, owning_backward_only: bool = False
+) -> None:
+    """Hook the live in-place result so its gradient is captured under ``raw_label``.
+
+    In-place ops log their output against a ``safe_copy`` whose grad_fn is a
+    dead-end ``CloneBackward`` node; the live, in-place-modified tensor is what
+    downstream ops consume, so the real gradient flows through it and this hooks
+    it (``_add_tensor_backward_hook`` dedups by ``(label, id(tensor))`` and only
+    hooks autograd-participating tensors). A tensor whose ``grad_fn`` read raises
+    or warns (``grad_fn_read_refused``: a stale multi-output or custom-Function
+    view of the written base) is skipped: eager raises on any use of it, so it
+    carries no gradient. ``owning_backward_only``: see ``_add_tensor_backward_hook``.
+    """
+
+    if not isinstance(tensor, torch.Tensor) or grad_fn_read_refused(tensor):
+        return
+
+    # The live tensor is what downstream ops consume, so it takes gradient
+    # ownership of the label; the logged copy's hook (if any) stops emitting.
+    _add_tensor_backward_hook(
+        trace,
+        tensor,
+        raw_label,
+        take_ownership=True,
+        owning_backward_only=owning_backward_only,
+    )
+
+
+def _propagate_mutation_label_to_storage_aliases(
+    trace: Any, mutated: torch.Tensor, out_label: str
+) -> None:
+    """Advance live labels of storage aliases overlapping an in-place op's target.
+
+    An in-place op that mutates a VIEW (``v = y[0]; v.add_(100.)``) changes the
+    BASE tensor's content, but the base is a different Python object: only the
+    view's label used to advance, so the mutation op was a dead end and later
+    consumers of the base bound to the stale pre-mutation parent while storing
+    the post-mutation value (a silent error). Resolve every OTHER live
+    labeled tensor whose storage byte range overlaps the mutated target and
+    advance its label to the mutating op, exactly like the direct same-object
+    propagation. Value replay is untouched: the consumer's version-snapshot
+    machinery (``_get_parent_output_version_snapshot``) records the alias's
+    actual content per child, so replay and perturbation both see the real
+    full-tensor values.
+
+    Parameters
+    ----------
+    trace
+        Active capture trace.
+    mutated
+        The live tensor object the op actually wrote through (``args[0]`` for
+        in-place/setter ops, each destination for ``out=`` ops).
+    out_label
+        The mutating op's freshly issued raw label.
+    """
+
+    # SCOPE: descriptor/grad-bound captures keep the unadvanced (historical)
+    # topology. The runnable recipe + numeric attestation key payloads PER
+    # LABEL, and advancing a base tensor's label to a view-mutation op makes
+    # one label denote two different values (the op's view-shaped output AND
+    # the full post-mutation base as the consumer's parent) -- byte-exact
+    # attestation then fails on a genuinely-verifiable run.
+    # Those modes stay honest without the edge: the view-lineage gate
+    # fail-closes view-mediated input mutation, and validation's
+    # version-snapshot replay is green with EITHER topology. Default captures
+    # (receptive fields, influence geometry, collapse -- the impact
+    # surface) get the mutation edge. Follow-up: teach the runnable reader
+    # per-(label, consumer) payload keying, then lift this scope.
+    if not view_mutation_propagation_enabled(trace):
+        return
+
+    # ``untyped_storage()`` / ``data_ptr()`` / ``stride()`` / ``storage_offset()``
+    # are WITNESSED host-escape / metadata surfaces, and a genuine user
+    # ``data_ptr()`` read fail-closes runnable captures to UNVERIFIABLE.
+    # These are TorchLens's OWN bookkeeping reads, so they run under
+    # ``pause_logging`` (no spurious op capture) plus ``internal_scalar_read``
+    # (kept off the escape census / metadata patches) -- the same sanctioned
+    # pattern as ``completeness_witness``'s storage-site indexers.
+    with _st.pause_logging(), internal_scalar_read():
+        for alias, alias_label in overlapping_labeled_aliases(mutated, out_label):
+            set_tensor_label(alias, out_label)
+            _register_inplace_live_grad_hook(trace, alias, out_label)
+            _record_label_version_snapshot(alias, mutated_via=(mutated, alias_label))
+
+
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from . import _call_plan  # noqa: E402
+from ._completeness_origins import internal_scalar_read  # noqa: E402
 from ._ops_arguments import (  # noqa: E402
     _session_validated_parameter,
     _tensor_has_known_provenance,
 )
 from ._ops_capture_records import (  # noqa: E402
     _is_inplace_augmented_assignment_dunder,
+    _record_label_version_snapshot,
+    _stamp_same_object,
     get_capture_producer_policy,
 )
 from ._ops_interventions import (  # noqa: E402
@@ -534,7 +726,10 @@ from ._ops_interventions import (  # noqa: E402
     _intervene_reaches_op_door,
     _trace_intervene_options,
 )
+from .buffer_writes import record_op_buffer_writes  # noqa: E402
 from .ops import (  # noqa: E402
     _SETTER_MUTATION_FUNC_NAMES,
     CaptureProducerMode,
 )
+from .param_mutation import same_object_logging_copy  # noqa: E402
+from .tensor_tracking import _add_tensor_backward_hook  # noqa: E402

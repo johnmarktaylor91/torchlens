@@ -39,6 +39,7 @@ import torch
 from torch import nn
 
 import torchlens._user_funcs as user_funcs
+import torchlens.backends.torch._ops_emission
 import torchlens.backends.torch._ops_exhaustive
 import torchlens.backends.torch._ops_predicate_events
 import torchlens.backends.torch._ops_shared_fields
@@ -579,7 +580,7 @@ def test_an_in_place_write_after_save_copies_the_pre_write_bytes_out(
     taken = _count_pending_aliases(monkeypatch)
     values: dict[str, dict[tuple[str, str], torch.Tensor]] = {}
     graphs: dict[str, list[tuple[Any, ...]]] = {}
-    original_scan = torchlens.backends.torch.wrappers.overlapping_labeled_aliases
+    original_scan = torchlens.backends.torch._ops_emission.overlapping_labeled_aliases
     scans: list[list[Any]] = []
 
     def scan(mutated: torch.Tensor, exclude_label: str | None) -> list[tuple[torch.Tensor, str]]:
@@ -589,7 +590,7 @@ def test_an_in_place_write_after_save_copies_the_pre_write_bytes_out(
         scans.append([alias for alias, _ in found])
         return found
 
-    monkeypatch.setattr(torchlens.backends.torch.wrappers, "overlapping_labeled_aliases", scan)
+    monkeypatch.setattr(torchlens.backends.torch._ops_emission, "overlapping_labeled_aliases", scan)
 
     diagnostics: list[Any] = []
     copied_out: list[bool] = []

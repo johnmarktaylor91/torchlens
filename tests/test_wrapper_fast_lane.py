@@ -104,20 +104,20 @@ def test_plain_out_of_place_calls_take_the_fast_lane(monkeypatch: pytest.MonkeyP
     _assert_same_capture(monkeypatch, body, trace)
 
 
-def test_positional_inplace_runs_the_general_body(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``F.relu(x, True)``: a positional ``inplace=True`` never reaches the fast lane."""
+def test_positional_inplace_commits_only_its_inner_write(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``F.relu(x, True)``: the outer call stays general, its inner ``relu_`` write is fast."""
 
     def body(x: torch.Tensor) -> torch.Tensor:
         return F.relu(x * 2, True)
 
     names, trace = _fast_names(monkeypatch, body)
-    assert names == ["__mul__"]
+    assert names == ["__mul__", "relu_"]
     assert any(op.is_inplace for op in trace.ops)
     _assert_same_capture(monkeypatch, body, trace)
 
 
-def test_fused_write_runs_the_general_body(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A fused running-statistic writer (``batch_norm`` in training) gets no plan."""
+def test_fused_write_takes_the_writing_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fused running-statistic writer (``batch_norm`` in training) gets only a writing plan."""
 
     class Norm(nn.Module):
         """A training-mode batch norm over the module's own running statistics."""
@@ -131,32 +131,34 @@ def test_fused_write_runs_the_general_body(monkeypatch: pytest.MonkeyPatch) -> N
             return torch.batch_norm(x, None, None, self.mean, self.var, True, 0.1, 1e-5, False)
 
     names, trace = _fast_names(monkeypatch, Norm())
-    assert names == []
+    assert names == ["batch_norm"]
     assert any(op.func_name == "batch_norm" for op in trace.ops)
     for name in _FUSED_MUTATOR_NAMES:
         func = getattr(torch, name, None)
         assert func is None or _call_plan.build_call_plan(func, name, None) is None
 
 
-def test_to_with_the_same_dtype_runs_the_general_body(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``x.to(x.dtype)`` returns its input: the post-call check refuses the output."""
+def test_to_with_the_same_dtype_takes_the_same_object_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``x.to(x.dtype)`` returns its input: the same-object commit, not the plain one."""
 
     def body(x: torch.Tensor) -> torch.Tensor:
         return (x + 1).to(torch.float32)
 
     names, trace = _fast_names(monkeypatch, body)
-    assert names == ["__add__"]
+    assert names == ["__add__", "to"]
     _assert_same_capture(monkeypatch, body, trace)
 
 
-def test_contiguous_runs_the_general_body(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``contiguous`` on a contiguous tensor returns its input: refused after the call."""
+def test_contiguous_takes_the_same_object_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``contiguous`` on a contiguous tensor returns its input: the same-object commit."""
 
     def body(x: torch.Tensor) -> torch.Tensor:
         return (x + 1).contiguous()
 
     names, trace = _fast_names(monkeypatch, body)
-    assert names == ["__add__"]
+    assert names == ["__add__", "contiguous"]
     _assert_same_capture(monkeypatch, body, trace)
 
 
