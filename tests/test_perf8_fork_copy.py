@@ -29,6 +29,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._data_classes._fork_flat_copy as flat_copy
 import torchlens._data_classes._trace_fork as trace_fork
+from torchlens._data_classes._layer_state import STORE_CLASSES
 from torchlens._data_classes._state_adapter import state_items, state_new
 from torchlens._data_classes.layer import OpAccessor
 from torchlens._trace_core.op_store import (
@@ -178,7 +179,8 @@ def _reference_fill_layer_shells(
             else:
                 shell._graph_equivalent_ops = view
         fork_layer_logs[label] = shell
-    fork._layer_logs = fork_layer_logs
+    # The layer store's one writer: a plain assignment would leave a raw mapping.
+    trace_fork.install_layer_logs(fork, fork_layer_logs)
 
 
 _REFERENCES = {
@@ -594,7 +596,8 @@ def _normalize(value: Any, labels: dict[int, Any], parent_ids: set[int], depth: 
     shared = "shared" if id(value) in parent_ids else "own"
     if depth > 8:
         return (type(value).__name__, shared)
-    if type(value) in (dict, OrderedDict, defaultdict):
+    if type(value) in (dict, OrderedDict, defaultdict) or type(value) in STORE_CLASSES:
+        # A layer store's items are its Layer views, named by the labels.
         return (
             type(value).__name__,
             shared,
