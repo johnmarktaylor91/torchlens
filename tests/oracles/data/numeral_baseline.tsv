@@ -3474,7 +3474,7 @@ docs-md	docs/maintainers/where.md	144
 docs-md	docs/maintainers/where.md	1440
 docs-md	docs/maintainers/where.md	145
 docs-md	docs/maintainers/where.md	146
-docs-md	docs/maintainers/where.md	14664
+docs-md	docs/maintainers/where.md	14667
 docs-md	docs/maintainers/where.md	1468
 docs-md	docs/maintainers/where.md	147
 docs-md	docs/maintainers/where.md	1479
@@ -3540,7 +3540,7 @@ docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	174
 docs-md	docs/maintainers/where.md	1748
 docs-md	docs/maintainers/where.md	175
-docs-md	docs/maintainers/where.md	1753
+docs-md	docs/maintainers/where.md	1755
 docs-md	docs/maintainers/where.md	176
 docs-md	docs/maintainers/where.md	1767
 docs-md	docs/maintainers/where.md	177
@@ -3576,7 +3576,6 @@ docs-md	docs/maintainers/where.md	195
 docs-md	docs/maintainers/where.md	196
 docs-md	docs/maintainers/where.md	197
 docs-md	docs/maintainers/where.md	1975
-docs-md	docs/maintainers/where.md	1986
 docs-md	docs/maintainers/where.md	199
 docs-md	docs/maintainers/where.md	1998
 docs-md	docs/maintainers/where.md	2.0.
@@ -3588,6 +3587,7 @@ docs-md	docs/maintainers/where.md	20
 docs-md	docs/maintainers/where.md	200
 docs-md	docs/maintainers/where.md	2006
 docs-md	docs/maintainers/where.md	201
+docs-md	docs/maintainers/where.md	2016
 docs-md	docs/maintainers/where.md	2018
 docs-md	docs/maintainers/where.md	202
 docs-md	docs/maintainers/where.md	2020
@@ -3684,7 +3684,7 @@ docs-md	docs/maintainers/where.md	265
 docs-md	docs/maintainers/where.md	266
 docs-md	docs/maintainers/where.md	267
 docs-md	docs/maintainers/where.md	268
-docs-md	docs/maintainers/where.md	26857
+docs-md	docs/maintainers/where.md	26859
 docs-md	docs/maintainers/where.md	269
 docs-md	docs/maintainers/where.md	27
 docs-md	docs/maintainers/where.md	270
@@ -3783,7 +3783,7 @@ docs-md	docs/maintainers/where.md	352
 docs-md	docs/maintainers/where.md	353
 docs-md	docs/maintainers/where.md	354
 docs-md	docs/maintainers/where.md	355
-docs-md	docs/maintainers/where.md	35533
+docs-md	docs/maintainers/where.md	35553
 docs-md	docs/maintainers/where.md	356
 docs-md	docs/maintainers/where.md	357
 docs-md	docs/maintainers/where.md	358
@@ -3862,9 +3862,9 @@ docs-md	docs/maintainers/where.md	423
 docs-md	docs/maintainers/where.md	4237
 docs-md	docs/maintainers/where.md	424
 docs-md	docs/maintainers/where.md	428
-docs-md	docs/maintainers/where.md	42834
 docs-md	docs/maintainers/where.md	4286
 docs-md	docs/maintainers/where.md	429
+docs-md	docs/maintainers/where.md	42939
 docs-md	docs/maintainers/where.md	43
 docs-md	docs/maintainers/where.md	430
 docs-md	docs/maintainers/where.md	431
@@ -3979,9 +3979,9 @@ docs-md	docs/maintainers/where.md	56
 docs-md	docs/maintainers/where.md	560
 docs-md	docs/maintainers/where.md	563
 docs-md	docs/maintainers/where.md	564
-docs-md	docs/maintainers/where.md	565
 docs-md	docs/maintainers/where.md	566
 docs-md	docs/maintainers/where.md	567
+docs-md	docs/maintainers/where.md	568
 docs-md	docs/maintainers/where.md	569
 docs-md	docs/maintainers/where.md	5690
 docs-md	docs/maintainers/where.md	570
@@ -4002,7 +4002,7 @@ docs-md	docs/maintainers/where.md	59
 docs-md	docs/maintainers/where.md	591
 docs-md	docs/maintainers/where.md	593
 docs-md	docs/maintainers/where.md	594
-docs-md	docs/maintainers/where.md	59440
+docs-md	docs/maintainers/where.md	59498
 docs-md	docs/maintainers/where.md	596
 docs-md	docs/maintainers/where.md	597
 docs-md	docs/maintainers/where.md	598
@@ -4082,7 +4082,7 @@ docs-md	docs/maintainers/where.md	702
 docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
-docs-md	docs/maintainers/where.md	705835
+docs-md	docs/maintainers/where.md	706053
 docs-md	docs/maintainers/where.md	7066
 docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	71
@@ -5920,7 +5920,6 @@ error-strings	torchlens/transforms/_srp.py	132
 error-strings	torchlens/transforms/_srp.py	153
 error-strings	torchlens/validation/_invariants_backward_domain.py	120
 error-strings	torchlens/viz/_drawing.py	1.0
-package-docstrings	torchlens/__init__.py	2.0
 package-docstrings	torchlens/_architecture.py	11
 package-docstrings	torchlens/_capture/_annotations_travel.py	1.1
 package-docstrings	torchlens/_capture/_annotations_travel.py	11
