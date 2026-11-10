@@ -3544,7 +3544,7 @@ docs-md	docs/maintainers/where.md	176
 docs-md	docs/maintainers/where.md	1765
 docs-md	docs/maintainers/where.md	177
 docs-md	docs/maintainers/where.md	178
-docs-md	docs/maintainers/where.md	1782
+docs-md	docs/maintainers/where.md	1784
 docs-md	docs/maintainers/where.md	179
 docs-md	docs/maintainers/where.md	18
 docs-md	docs/maintainers/where.md	180
@@ -3614,8 +3614,8 @@ docs-md	docs/maintainers/where.md	213
 docs-md	docs/maintainers/where.md	214
 docs-md	docs/maintainers/where.md	2141
 docs-md	docs/maintainers/where.md	2146
+docs-md	docs/maintainers/where.md	2148
 docs-md	docs/maintainers/where.md	215
-docs-md	docs/maintainers/where.md	2159
 docs-md	docs/maintainers/where.md	216
 docs-md	docs/maintainers/where.md	217
 docs-md	docs/maintainers/where.md	218
@@ -3654,10 +3654,10 @@ docs-md	docs/maintainers/where.md	245
 docs-md	docs/maintainers/where.md	246
 docs-md	docs/maintainers/where.md	247
 docs-md	docs/maintainers/where.md	248
-docs-md	docs/maintainers/where.md	24836
 docs-md	docs/maintainers/where.md	2486
 docs-md	docs/maintainers/where.md	249
 docs-md	docs/maintainers/where.md	2490
+docs-md	docs/maintainers/where.md	24900
 docs-md	docs/maintainers/where.md	2491
 docs-md	docs/maintainers/where.md	2496
 docs-md	docs/maintainers/where.md	25
@@ -4033,7 +4033,7 @@ docs-md	docs/maintainers/where.md	6105
 docs-md	docs/maintainers/where.md	612
 docs-md	docs/maintainers/where.md	613
 docs-md	docs/maintainers/where.md	614
-docs-md	docs/maintainers/where.md	61752
+docs-md	docs/maintainers/where.md	61820
 docs-md	docs/maintainers/where.md	62
 docs-md	docs/maintainers/where.md	622
 docs-md	docs/maintainers/where.md	623
@@ -4101,7 +4101,7 @@ docs-md	docs/maintainers/where.md	711
 docs-md	docs/maintainers/where.md	712
 docs-md	docs/maintainers/where.md	714
 docs-md	docs/maintainers/where.md	715
-docs-md	docs/maintainers/where.md	715747
+docs-md	docs/maintainers/where.md	715879
 docs-md	docs/maintainers/where.md	717
 docs-md	docs/maintainers/where.md	718
 docs-md	docs/maintainers/where.md	72
@@ -6774,6 +6774,7 @@ package-docstrings	torchlens/_utils/_kernel_probes.py	31
 package-docstrings	torchlens/_utils/_kernel_probes.py	32434
 package-docstrings	torchlens/_utils/_kernel_probes.py	86
 package-docstrings	torchlens/_utils/_kernel_probes.py	9.3
+package-docstrings	torchlens/_utils/_log_mute.py	380
 package-docstrings	torchlens/_utils/_mps_memory.py	2.5
 package-docstrings	torchlens/_utils/_multipass_access.py	12
 package-docstrings	torchlens/_utils/_numpy_bridge.py	16,

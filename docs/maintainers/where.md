@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1784 modules, 715877 lines, 0 modules without a docstring.
+85 packages, 1784 modules, 715879 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 148 | 61818 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 148 | 61820 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1498,7 +1498,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (148 modules, 61818 lines)
+Torch backend implementation package for TorchLens capture. (148 modules, 61820 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1562,7 +1562,7 @@ Torch backend implementation package for TorchLens capture. (148 modules, 61818 
 | `_module_arg_stubs` | Module-arg payload stubbing for release-at-emission. | 222 |
 | `_module_boundary_adoption` | Module-boundary adoption records and the pre-forward tensor ownership snapshot. | 252 |
 | `_module_class_metadata` | Class-level metadata of a module class, cached per class for one capture. | 175 |
-| `_module_entry_site` | Module entry's code context, looked up through the per-capture call-site memo. | 74 |
+| `_module_entry_site` | Module entry's code context, looked up through the per-capture call-site memo. | 76 |
 | `_module_state` | Which modules own state, the fact call-site grouping (''callsite_v2'') scopes on. | 71 |
 | `_op_markers` | Per-call op markers: NVTX ranges + join markers. | 250 |
 | `_opaque_call_advisory` | Name the opaque call behind a completeness-witness gap. | 366 |
