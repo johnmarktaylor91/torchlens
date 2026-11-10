@@ -169,6 +169,7 @@ def _fields(label: str) -> dict[str, Any]:
 def _save_twice(direct: bool) -> list[dict[str, Any]]:
     """Save one tensor twice and another twice; return the four field dicts."""
 
+    torch.manual_seed(0)
     trace = tl.trace(nn.Identity(), torch.randn(1, 2))
     first, second = torch.randn(2, 2), torch.randn(2, 2)
     fields = [_fields(f"manual_{i}") for i in range(4)]
