@@ -615,10 +615,17 @@ def _fork_picture(parent: Any, fork: Any) -> dict[str, Any]:
 
     labels = _labels(fork)
     parent_ids: set[int] = set()
+    # Every value walked stays referenced until the picture is done: a
+    # temporary freed mid-walk hands its id to the next one, which the walk
+    # would then skip as already seen, hiding that layer's shared members.
+    keep: list[Any] = []
     for _name, value in state_items(parent):
+        keep.append(value)
         _collect_ids(value, parent_ids)
     for layer in (parent.__dict__.get("_layer_logs") or {}).values():
-        _collect_ids(list(layer.__dict__.values()), parent_ids)
+        values = list(layer.__dict__.values())
+        keep.append(values)
+        _collect_ids(values, parent_ids)
     picture: dict[str, Any] = {}
     for name, value in state_items(fork):
         picture[f"field:{name}"] = _normalize(value, labels, parent_ids)
