@@ -14,6 +14,11 @@ module call or a param through the trace's door for that kind, by the key the
 child has there (validated against the row, with a scan as fallback). The
 public attributes keep their names and values: ``Buffer.versions`` reads as a
 list of ops, ``Module.ops`` and ``Module.params`` as accessors.
+
+The first read of a key-form cell builds its container and keeps it in the
+reading trace's side table (``TraceCore._strong_facades[CHILD_CELLS]``),
+strong for the trace's life, so later reads return the same object and an
+in-place write persists, as when the cell held the container itself.
 """
 
 from __future__ import annotations
@@ -27,6 +32,9 @@ from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY, RecordCellField, record_state_items
 
 _GET = object.__getattribute__
+
+#: Side-table kind holding the containers built from key-form cells.
+CHILD_CELLS = "child_cells"
 
 #: Record kind -> (trace attribute holding that kind's door, attribute of the
 #: door that maps to every record of the kind).
@@ -59,6 +67,31 @@ def _live_trace(ref: Any, record_name: str) -> Any:
             remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
         )
     return trace
+
+
+def _built_once(trace: Any, record: Any, name: str, held: Any, build: Any) -> Any:
+    """Return the container built from ``held`` for ``record.name``, building it once per trace.
+
+    The container is kept in the trace's side table next to the store and the
+    key-form value it was built from; a cell given a new value builds again.
+    """
+
+    core = _core_of(trace)
+    facades = getattr(core, "_strong_facades", None)
+    if not isinstance(facades, dict):
+        return build()
+    table = facades.get(CHILD_CELLS)
+    if table is None:
+        table = facades[CHILD_CELLS] = {}
+    record_dict = record.__dict__
+    store = record_dict.get(CORE_KEY)
+    key = (id(store), record_dict.get(ROW_KEY), name)
+    entry = table.get(key)
+    if entry is not None and entry[0] is store and entry[1] is held:
+        return entry[2]
+    built = build()
+    table[key] = (store, held, built)
+    return built
 
 
 def op_keys(ops: Iterable[Any], trace: Any) -> list[Any]:
@@ -167,8 +200,8 @@ def child_keys(children: Any, kind: str, trace: Any, door_keys: Any) -> RowKeys 
     return keys
 
 
-def children_at(keys: RowKeys, kind: str, record: Any, record_name: str) -> dict[Any, Any]:
-    """Return ``key -> child record`` for a key-form cell of ``record``.
+def reading_trace(keys: RowKeys, record: Any, record_name: str) -> Any:
+    """Return the trace a key-form cell of ``record`` reads through.
 
     The record the keys were made for reads through the trace they were made
     in while that trace lives, so it still answers after another trace took
@@ -180,6 +213,18 @@ def children_at(keys: RowKeys, kind: str, record: Any, record_name: str) -> dict
     trace = None if record_dict[CORE_KEY].__class__ is DetachedOpStore else keys.home()
     if trace is None:
         trace = _live_trace(record_dict.get("_source_trace_ref"), record_name)
+    return trace
+
+
+def children_at(keys: RowKeys, kind: str, record: Any, record_name: str) -> dict[Any, Any]:
+    """Return ``key -> child record`` for a key-form cell of ``record``."""
+
+    return _children_in(reading_trace(keys, record, record_name), keys, kind, record_name)
+
+
+def _children_in(trace: Any, keys: RowKeys, kind: str, record_name: str) -> dict[Any, Any]:
+    """Return ``key -> child record`` for a key-form cell read through ``trace``."""
+
     mapping = _door_of(trace, kind)
     if mapping is None:
         _live_trace(None, record_name)
@@ -214,14 +259,16 @@ class VersionsField(RecordCellField):
     __slots__ = ()
 
     def __get__(self, record: Any, objtype: Any = None) -> Any:
-        """Return the version ops (a new list when the cell holds rows)."""
+        """Return the version ops (one list per trace when the cell holds rows)."""
 
         if record is None:
             return self
         held = RecordCellField.__get__(self, record, objtype)
         if not held or held[0].__class__ is not int:
             return held
-        return ops_at(held, getattr(record, "_source_ref", None), "Buffer")
+        ref = getattr(record, "_source_ref", None)
+        trace = _live_trace(ref, "Buffer")
+        return _built_once(trace, record, self._name, held, lambda: ops_at(held, ref, "Buffer"))
 
     def __set__(self, record: Any, value: Any) -> None:
         """Store the version ops by row when the owning trace's op store has them all."""
@@ -234,8 +281,9 @@ class ChildAccessorField(RecordCellField):
     """A ``Module`` cell of child records, read as an accessor.
 
     The cell holds the accessor itself until ``rekey_child_cells`` replaces
-    it with the children's rows; from then on each read builds a new
-    accessor over the records at those rows.
+    it with the children's rows; from then on the first read in a trace
+    builds an accessor over the records at those rows and later reads in
+    that trace return it.
     """
 
     __slots__ = ("_kind",)
@@ -247,14 +295,22 @@ class ChildAccessorField(RecordCellField):
         self._kind = kind
 
     def __get__(self, record: Any, objtype: Any = None) -> Any:
-        """Return an accessor over the child records."""
+        """Return an accessor over the child records (one accessor per trace)."""
 
         if record is None:
             return self
         held = RecordCellField.__get__(self, record, objtype)
         if held.__class__ is not RowKeys:
             return held
-        return held.build(children_at(held, self._kind, record, "Module"))
+        trace = reading_trace(held, record, "Module")
+        kind = self._kind
+        return _built_once(
+            trace,
+            record,
+            self._name,
+            held,
+            lambda: held.build(_children_in(trace, held, kind, "Module")),
+        )
 
 
 def install_child_fields(cls: type, fields: Mapping[str, str | None]) -> None:
