@@ -503,6 +503,14 @@ def seq_facets_bulk(tl: Any, log: Log, scratch: str) -> None:
         sorted(paths(bulk_before, bulk_after) - bulk_control)[:50],
     )
     log.note(
+        "bulk.text_before_vs_after_field_reads",
+        {
+            key: [bulk_before[key], bulk_after[key]]
+            for key in ("repr", "str")
+            if bulk_before[key] != bulk_after[key]
+        },
+    )
+    log.note(
         "fields.before_vs_after_bulk",
         summary(paths(fields_before_bulk, fields_after_bulk) - control),
     )

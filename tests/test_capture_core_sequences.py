@@ -98,6 +98,9 @@ OWNERSHIP_LANES = {
 #: Trace fields whose value depends on what was read before them, today.
 READ_ORDER_DEPENDENT_AT_BASE = frozenset({"trace/annotations", "trace/health_facts"})
 
+#: Bulk results that depend on what was read before them, today (the trace's printed summary).
+READ_ORDER_DEPENDENT_TEXT_AT_BASE = frozenset({"/repr", "/str"})
+
 COPIES = ("loaded", "pickled", "deepcopied")
 DOORS = ("other_door", "fork", *COPIES)
 
@@ -279,11 +282,11 @@ def test_forks_and_copies_run_cold_and_warm(steps: dict[str, dict[str, Any]]) ->
 def test_bulk_readers_and_field_reads_do_not_change_each_other(
     steps: dict[str, dict[str, Any]],
 ) -> None:
-    """Tables, text and facets read the same before and after single-field reads."""
+    """Tables and facets read the same before and after single-field reads; no reader refuses."""
 
     found = steps["7_facets_bulk"]
     assert found["bulk.refusals"] == {}
-    assert found["bulk.before_vs_after_field_reads"] == []
+    assert set(found["bulk.before_vs_after_field_reads"]) <= READ_ORDER_DEPENDENT_TEXT_AT_BASE
     assert found["fields.before_vs_after_bulk"] == {}
 
 
