@@ -31,6 +31,7 @@ from .inventory_types import (
     _WEAKREF_PROXY_TYPES,
     _numpy_rng_receiver,
 )
+from .walk_memo import HeldWalkMemo, exhaust_deep_inventory
 
 if TYPE_CHECKING:
     from .monitor import host_nondeterminism_monitor
@@ -112,13 +113,13 @@ def _deep_inventory_frame_reachable(
     if monitor._deep_inventory_exhausted:
         return
     snapshots = monitor._deep_generator_states
-    seen_ids = monitor._deep_walk_seen_ids
+    seen_ids: HeldWalkMemo = monitor._deep_walk_seen_ids
     visited_nodes = monitor._deep_inventory_visited
     try:
         pending = [
             value
             for value in candidates
-            if type(value) not in _INERT_PRIMITIVE_LEAF_TYPES and id(value) not in seen_ids
+            if type(value) not in _INERT_PRIMITIVE_LEAF_TYPES and not seen_ids.holds(value)
         ]
         if not pending:
             return
@@ -126,13 +127,11 @@ def _deep_inventory_frame_reachable(
         while pending:
             value = pending.pop()
             value_type = type(value)
-            if value_type in _INERT_PRIMITIVE_LEAF_TYPES or id(value) in seen_ids:
+            if value_type in _INERT_PRIMITIVE_LEAF_TYPES or not seen_ids.claim(value):
                 continue
-            seen_ids.add(id(value))
             visited_nodes += 1
             if visited_nodes > _types._DEEP_INVENTORY_NODE_CAP:
-                monitor._deep_inventory_exhausted = True
-                monitor._flag_uncertain("deep_inventory_budget_exhausted")
+                exhaust_deep_inventory(monitor)
                 return
             # A weakref PROXY forwards EVERY
             # read -- including ``isinstance`` (via ``__class__``) and attribute
@@ -156,10 +155,9 @@ def _deep_inventory_frame_reachable(
                 receiver = _numpy_rng_receiver(value)
                 if (
                     receiver is not None
-                    and id(receiver) not in seen_ids
                     and id(receiver) not in monitor._exempt_ids
+                    and seen_ids.claim(receiver)
                 ):
-                    seen_ids.add(id(receiver))
                     try:
                         snapshots.append((receiver, monitor._digest_rng_witnessable(receiver)))
                     except Exception:
@@ -283,8 +281,7 @@ def _deep_inventory_frame_reachable(
                         monitor._flag_uncertain("inventory_state_read_failed")
                         continue
                     if visited_nodes + size > _types._DEEP_INVENTORY_NODE_CAP:
-                        monitor._deep_inventory_exhausted = True
-                        monitor._flag_uncertain("deep_inventory_budget_exhausted")
+                        exhaust_deep_inventory(monitor)
                         return
                     try:
                         pending.extend(np.ndarray.flat.__get__(value))

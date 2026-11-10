@@ -208,7 +208,7 @@ class host_nondeterminism_monitor:
         # (``helpers.RNG.random()``) or a nested holder (``HOLDER.inner.gen``) was
         # otherwise unwitnessed -> false VERIFIED.
         self._deep_generator_states: list[tuple[Any, str]] = []
-        self._deep_walk_seen_ids: set[int] = set()
+        self._deep_walk_seen_ids = deep_inventory.HeldWalkMemo()
         self._deep_inventory_visited: int = 0
         self._deep_inventory_exhausted: bool = False
         self._tl_globals_ids: frozenset[int] = frozenset()
@@ -1213,7 +1213,7 @@ class host_nondeterminism_monitor:
         # this monitor reachable; past the verdict it must pin neither model nor sync session.
         self._model = self._owner_sync_session = None
         self._generator_states, self._deep_generator_states = [], []
-        self._numpy_frame_rng_states = {}
+        self._numpy_frame_rng_states, self._deep_walk_seen_ids = {}, deep_inventory.HeldWalkMemo()
         if deferred is not None:
             raise deferred
 
