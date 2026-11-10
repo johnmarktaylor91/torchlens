@@ -220,14 +220,15 @@ def _mapping_subclass_edges(obj: Any) -> Iterator[Edge]:
 
 
 def _list_subclass_edges(obj: Any) -> Iterator[Edge]:
-    """Yield a list subclass's own items, then its slots and instance attributes.
+    """Yield a list or tuple subclass's own items, then its slots and instance attributes.
 
-    The items are read with ``list.__iter__``, never through the subclass's
-    own iteration: a sequence that hands out records for the keys it stores
-    holds the keys, not the records.
+    The items are read with ``list.__iter__`` or ``tuple.__iter__``, never
+    through the subclass's own iteration: a sequence that hands out records
+    for the keys it stores holds the keys, not the records.
     """
 
-    for item in list(list.__iter__(obj)):
+    base_iter = list.__iter__ if isinstance(obj, list) else tuple.__iter__
+    for item in list(base_iter(obj)):
         yield "[*]", item
     instance_dict = _instance_dict(obj)
     slot_by_id = _slot_names_by_id(obj)
@@ -299,7 +300,7 @@ def strong_edges(obj: Any, absorb: Absorb = lambda _container: True) -> Iterator
 
     if isinstance(obj, dict) and type(obj).__module__ not in ("builtins", "collections"):
         return _mapping_subclass_edges(obj)
-    if isinstance(obj, list) and type(obj).__module__ != "builtins":
+    if isinstance(obj, (list, tuple)) and type(obj).__module__ != "builtins":
         return _list_subclass_edges(obj)
     for kinds, reader in _EDGE_READERS:
         if isinstance(obj, kinds):
