@@ -36,6 +36,7 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
     bottom-level submodule output status.
 """
 
+import contextlib
 import warnings
 import weakref
 from collections import defaultdict
@@ -71,6 +72,7 @@ from .._trace_core.op_store import (
     OpStoreLayout,
     PooledCell,
 )
+from .._trace_core.record_refs import OwnerByRow
 from .._trace_core.relation_views import (
     OP_BITSET_VIEW_FIELDS,
     OP_DATAFLOW_FIELDS,
@@ -869,7 +871,7 @@ def _summarize_value(value: Any) -> str:
     return text
 
 
-class GradientRecord:
+class GradientRecord(OwnerByRow):
     """Saved gradient payload observed for one op during one backward pass.
 
     Parameters
@@ -2610,10 +2612,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def facets(self) -> None:
         """Drop the cached semantic facet view for this Op."""
 
-        try:
+        with contextlib.suppress(AttributeError):
             object.__delattr__(self, "_facets_cache")
-        except AttributeError:
-            pass
 
     def __selection__(self) -> object:
         """Lift this op's whole output as an ACT selection term (one pass)."""
