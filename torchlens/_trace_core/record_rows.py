@@ -102,6 +102,38 @@ class RecordCellField:
             raise AttributeError(self._name)
 
 
+def bind_record_row(record: Any, cells: list[Any]) -> None:
+    """Write every declared field of ``record`` at once from a layout-ordered row.
+
+    Equal to assigning each declared field in turn through its descriptor: a
+    record with no store yet binds a detached single-row store that owns
+    ``cells`` (the list itself, so the caller must not keep it), and a record
+    already bound to a store has each cell written in layout order. One store
+    write per record instead of one descriptor call per field.
+
+    Parameters
+    ----------
+    record
+        A facade record of a class prepared by :func:`install_record_facade`.
+    cells
+        One value per declared field, in the class layout's order.
+    """
+
+    instance_dict = record.__dict__
+    store = instance_dict.get(CORE_KEY)
+    if store is None:
+        store = DetachedOpStore(type(record)._TL_LAYOUT)
+        store.adopt_row(cells)
+        instance_dict[CORE_KEY] = store
+        instance_dict[ROW_KEY] = 0
+        return
+    if len(cells) != store.layout.n_fields:
+        raise ValueError("row cell count does not match the layout")
+    row = instance_dict[ROW_KEY]
+    for fid, value in enumerate(cells):
+        store.cell_set(row, fid, value)
+
+
 def install_record_facade(cls: type, stored_names: tuple[str, ...]) -> OpStoreLayout:
     """Install cell descriptors for ``stored_names`` on ``cls``.
 
