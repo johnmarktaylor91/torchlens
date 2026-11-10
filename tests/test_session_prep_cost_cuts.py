@@ -38,6 +38,11 @@ from torchlens._quantities import Bytes
 from torchlens._trace_core.record_rows import CORE_KEY, ROW_KEY, bind_record_row
 from torchlens._utils._tensor_label import get_param_meta, set_param_meta
 from torchlens._utils._torch_compat import is_dynamo_compiled_callable
+from torchlens.backends.torch._held_plain_holders import (
+    DICTLESS_LEAF_TYPES,
+    plain_holder_tensor_attrs,
+)
+from torchlens.backends.torch._held_tensor_scan import iter_module_held_plain_tensors
 from torchlens.backends.torch._module_boundary_adoption import collect_pre_forward_tensor_ids
 from torchlens.backends.torch._session_cleanup import (
     _clear_module_callables_tensor_metadata,
@@ -524,3 +529,45 @@ def test_bypass_swaps_a_marked_callable_added_between_uses_and_restores_it() -> 
         assert model.__dict__["fast"] is not added
         assert model.fc.__dict__["ordered"] == OrderedDict(a=1)
     assert model.__dict__["fast"] is added
+
+
+# ---------------------------------------------------------------------------
+# Held plain tensor scan: the type skip drops only values that hold no tensor
+# ---------------------------------------------------------------------------
+
+
+class _Prior:
+    """A plain object holding one public tensor."""
+
+    def __init__(self) -> None:
+        """Hold the tensor."""
+
+        self.loc = torch.ones(2)
+
+
+def test_held_scan_type_skip_drops_only_values_that_hold_no_tensor() -> None:
+    """Every skipped type yields nothing on the unskipped path; held tensors are still found."""
+
+    leaves: list[Any] = [None, True, 3, 0.5, 1j, "x", b"x"]
+    assert {type(leaf) for leaf in leaves} == DICTLESS_LEAF_TYPES
+    for leaf in leaves:
+        assert plain_holder_tensor_attrs(leaf) == []
+
+    module = nn.Linear(2, 2)
+    module.scale = torch.full((2,), 2.0)
+    module.count = 3
+    module.label = "x"
+    module.nothing = None
+    module.prior = _Prior()
+    module.items = [torch.zeros(1)]
+    found = dict(iter_module_held_plain_tensors(module))
+    assert set(found) == {"scale", "prior[loc]", "items.0"}
+    assert found["scale"] is module.scale
+    assert found["prior[loc]"] is module.prior.loc
+
+    # A skipped attribute that becomes a tensor between two scans is found by the next.
+    module.count = torch.ones(1)
+    del module.scale
+    found_after = dict(iter_module_held_plain_tensors(module))
+    assert set(found_after) == {"count", "prior[loc]", "items.0"}
+    assert found_after["count"] is module.count

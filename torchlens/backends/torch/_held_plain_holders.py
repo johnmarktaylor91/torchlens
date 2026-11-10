@@ -28,6 +28,11 @@ _NOT_PLAIN_HOLDERS = (
     dict,
 )
 
+#: Exact types whose instances have no ``__dict__`` and are neither tensor nor
+#: container: :func:`plain_holder_tensor_attrs` returns ``[]`` for every one
+#: (``vars`` refuses them), so the per-module scan skips them on a type test.
+DICTLESS_LEAF_TYPES = frozenset({type(None), bool, int, float, complex, str, bytes})
+
 
 def plain_holder_tensor_attrs(item: Any) -> list[tuple[str, torch.Tensor]]:
     """Return a plain holder object's direct public non-Parameter tensor attributes.
