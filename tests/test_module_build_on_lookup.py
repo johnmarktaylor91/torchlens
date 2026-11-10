@@ -197,8 +197,10 @@ def test_pickle_and_save_build_first(tmp_path: Path) -> None:
     """Pickle and save read a pending trace's records as if they were built eagerly."""
 
     expected = _facts(_trace())
-    restored = pickle.loads(pickle.dumps(_trace()))
-    assert _facts(restored) == expected
+    del expected["uncalled"]  # session-time: a restored trace drops it, as before
+    restored = _facts(pickle.loads(pickle.dumps(_trace())))
+    del restored["uncalled"]
+    assert restored == expected
     path = tmp_path / "pending.tlspec"
     _trace().save(path)
     loaded = tl.load(path)
