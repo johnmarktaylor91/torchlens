@@ -292,7 +292,7 @@ def column_rows_by_label(
     store = None
     rows: dict[str, int] = {}
     for label, op in ops_by_label.items():
-        if op.__class__ is not op_class:
+        if type(op) is not op_class:  # ``op.__class__`` runs Op.__getattribute__
             return None
         op_store = core_get(op)
         if store is None:

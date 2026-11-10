@@ -99,8 +99,24 @@ def _parent_refs(value: Any, found: list[Any]) -> list[Any]:
     return found
 
 
+def _plain(value: Any) -> Any:
+    """Return a template as comparable plain data (tensors by shape and dtype)."""
+
+    if isinstance(value, ParentRef):
+        return ("ref", value.parent_label, getattr(value, "_display_key", None))
+    if isinstance(value, CapturedArgTemplate):
+        return ("template", _plain(value.args), _plain(value.kwargs))
+    if isinstance(value, torch.Tensor):
+        return ("tensor", tuple(value.shape), value.dtype)
+    if isinstance(value, (tuple, list)):
+        return (type(value).__name__, [_plain(member) for member in value])
+    if isinstance(value, dict):
+        return ("dict", [(key, _plain(member)) for key, member in value.items()])
+    return value
+
+
 def _snapshot(trace: Any) -> list[tuple[Any, ...]]:
-    """Return every op's resolved templates with their display keys."""
+    """Return every op's resolved templates, as plain data, with their display keys."""
 
     rows = []
     for op in trace._layer_list:
@@ -110,7 +126,7 @@ def _snapshot(trace: Any) -> list[tuple[Any, ...]]:
                 (ref.parent_label, getattr(ref, "_display_key", None))
                 for ref in _parent_refs(template, [])
             ]
-            rows.append((op.layer_label, name, template, keys))
+            rows.append((op.layer_label, name, _plain(template), keys))
     return rows
 
 
@@ -184,7 +200,7 @@ def test_pickle_and_deepcopy_with_unresolved_templates(replayable: bool) -> None
     expected = [(label, name, template) for label, name, template, _keys in _snapshot(trace)]
     for other in (restored, copied):
         got = [
-            (op.layer_label, name, getattr(op.call, name))
+            (op.layer_label, name, _plain(getattr(op.call, name)))
             for op in other._layer_list
             for name in FIELDS
         ]
