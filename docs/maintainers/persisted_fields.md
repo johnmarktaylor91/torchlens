@@ -627,10 +627,10 @@ Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handl
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_initial_value` | scalar | required: every level | keep | fact | `Buffer.initial_value` |
-| `_source_ref` | scalar | required: every level | weakref_strip | fact | `Buffer.trace` |
+| `_initial_value` | scalar: `Any` | required: every level | keep | fact | `Buffer.initial_value` |
+| `_source_ref` | scalar: `weakref.ref[Trace] | None` | required: every level | weakref_strip | fact | `Buffer.trace` |
 | `activation_memory` | computed | required: every level | keep | fact | `Buffer.activation_memory` (field) |
-| `address` | scalar | required: every level | keep | fact | `Buffer.address` (field) |
+| `address` | scalar: `str` | required: every level | keep | fact | `Buffer.address` (field) |
 | `call_index` | computed | required: every level | keep | fact | `Buffer.call_index` (field) |
 | `dtype` | computed | required: every level | keep | fact | `Buffer.dtype` (field) |
 | `grad_dtype` | computed | required: every level | keep | fact | `Buffer.grad_dtype` (field) |
@@ -641,12 +641,12 @@ Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handl
 | `initial_value` | computed | required: every level | keep | fact | `Buffer.initial_value` (field) |
 | `layer_label` | computed | required: every level | keep | fact | `Buffer.layer_label` (field) |
 | `module` | computed | required: every level | keep | fact | `Buffer.module` (field) |
-| `module_address` | scalar | required: every level | keep | fact | `Buffer.module_address` (field) |
+| `module_address` | scalar: `str` | required: every level | keep | fact | `Buffer.module_address` (field) |
 | `modules` | computed | required: every level | keep | fact | `Buffer.modules` (field) |
 | `name` | computed | required: every level | keep | fact | `Buffer.name` (field) |
 | `overwrite_index` | computed | required: every level | keep | fact | `Buffer.overwrite_index` (field) |
 | `shape` | computed | required: every level | keep | fact | `Buffer.shape` (field) |
-| `versions` | scalar | required: every level | keep | fact | `Buffer.versions` (field) |
+| `versions` | scalar: `list[Op]` | required: every level | keep | fact | `Buffer.versions` (field) |
 | `writer_label` | computed | required: every level | keep | fact | `Buffer.writer_label` (field) |
 
 ## `func_call_location` (FuncCallLocation, 23 persisted keys)
