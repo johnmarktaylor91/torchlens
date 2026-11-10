@@ -24,8 +24,8 @@ from .._utils._record_group_table import record_member
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
-#: Stored op fields the scan reads, by store layout name.
-_FIELDS = ("input_to_module_calls", "layer_label", "is_buffer", "buffer_address", "label")
+#: Stored op fields the scan reads, by store layout name (``address`` is ``buffer_address``).
+_FIELDS = ("input_to_module_calls", "layer_label", "is_buffer", "address", "label")
 
 
 def seal_buffer_versions(trace: Trace) -> dict[str, list[str]]:
@@ -69,7 +69,7 @@ def seal_scan(trace: Trace) -> tuple[dict[str, list[str]], dict[str, list[str]]]
         columns = OpColumns(scan[1])
         try:
             readers = [columns.getter(name, None) for name in _FIELDS]
-        except ValueError:  # a field the facade transforms: read the facade
+        except (KeyError, ValueError):  # a field the facade transforms: read the facade
             readers = None
     if scan is None or readers is None:
         return _facade_scan(trace, trace_ref)
