@@ -18,7 +18,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from itertools import repeat
 from typing import Any, ClassVar, cast
 
-from .._trace_core.view_tables import OP_KIND, WeakViews
+from .._trace_core.view_tables import DEAD, OP_KIND, WeakViews
 
 #: The ``Layer`` class, bound by ``layer.py`` at import so this module stays a leaf.
 _LAYER_CLASS: list[type] = []
@@ -38,10 +38,21 @@ def hold_view(core: Any, kind: str, index: int, view: Any, *, replace: bool = Fa
 
     tables = core._views
     slots = tables.ops if kind == OP_KIND else tables.layers
-    if index >= len(slots):
-        slots.pad(index + 1)
-    # A weak table is asked for the live view only (a plain read builds one).
-    current = slots.peek(index) if slots.__class__ is WeakViews else slots[index]
+    if slots.__class__ is WeakViews:
+        # A weak table is asked for the live view only (a plain read builds
+        # one). Written out, with no call per row: a fork holds every layer here.
+        weak: Any = slots
+        try:
+            current = weak.refs[index]()
+        except IndexError:
+            grow = index + 1 - len(weak)
+            weak.refs.extend(repeat(DEAD, grow))
+            list.extend(weak, repeat(None, grow))
+            current = None
+    else:
+        if index >= len(slots):
+            slots.pad(index + 1)
+        current = slots[index]
     if current is None or replace:
         slots[index] = view
         return True
