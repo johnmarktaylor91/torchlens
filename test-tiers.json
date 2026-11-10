@@ -5784,9 +5784,9 @@
         "tests/test_executor_cuda_cache_arming.py",
         "tests/test_numpy_bridge_compat.py",
         "tests/test_observe_kit_device_memory.py",
-        "tests/test_patching_helper_memory.py",
         "tests/test_r36_cuda_hygiene.py",
         "tests/test_rng_cuda_isolation.py",
+        "tests/test_sdpa_probe_forced_backend.py",
         "tests/test_torch_compat.py"
       ],
       "torchlens/_utils/_deferred_warnings.py": [
@@ -5954,7 +5954,7 @@
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
+        "tests/test_sdpa_probe_forced_backend.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
