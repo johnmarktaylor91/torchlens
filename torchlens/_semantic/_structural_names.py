@@ -16,6 +16,12 @@ from .._ir.container import (
 )
 
 
+def _is_module_record(record: Any) -> bool:
+    """Return whether a record is module-like for structural facets."""
+
+    return hasattr(record, "output_ops") and hasattr(record, "trace")
+
+
 def _primary_structural_names(records: Sequence[Any]) -> builtins.list[str | None]:
     """Return collision-safe primary string names for output records."""
 

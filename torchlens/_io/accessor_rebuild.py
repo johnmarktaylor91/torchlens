@@ -8,11 +8,13 @@ rehydrated object graph is ready for normal user access.
 
 from __future__ import annotations
 
+import weakref
 from typing import TYPE_CHECKING, Any
 
 from .._data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
 from .._data_classes.buffer import Buffer, BufferAccessor
 from .._data_classes.module import ModuleAccessor
+from .._trace_core.record_refs import name_owner_by_row
 from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
@@ -93,9 +95,11 @@ def rebuild_buffer_accessor(trace: Trace) -> None:
     """
 
     buffer_versions: dict[str, list[Op]] = {}
+    trace_ref = weakref.ref(trace)
+    for param in trace.__dict__.get("_param_logs") or ():
+        name_owner_by_row(trace_ref, param)
     for entry in trace._layer_list:
-        for grad_record in getattr(entry, "_grad_records", ()):
-            grad_record.owner = entry
+        name_owner_by_row(trace_ref, entry)
         if record_member(entry, "is_buffer", False) and entry.buffer_address is not None:
             buffer_versions.setdefault(entry.buffer_address, []).append(entry)
     buffer_dict = {

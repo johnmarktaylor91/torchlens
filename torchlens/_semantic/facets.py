@@ -22,12 +22,14 @@ import torch
 
 from .._ir.container import OutputPathComponent
 from .._selection.selection import _SelectionOperand
+from .._trace_core.record_refs import RecordSlot
 from .._utils._callable_safety import FACET_RECIPE_MARKER_ATTR
 from .._utils._record_group_table import record_member
 from ._facet_tensor_ops import _copy_scatter_value, _ensure_scatter_capable, _heads_geometry
 from ._families import family_entries, family_spec
 from ._structural_names import (
     _canonical_multi_output_name,
+    _is_module_record,
     _path_to_dotted_name,
     _primary_structural_names,
 )
@@ -426,7 +428,7 @@ class FacetSpec(_SelectionOperand):
     conflict_alias_group: str | None = None
     function_id: str | None = None
     function_version: str | None = None
-    home: Any | None = field(default=None, compare=False, repr=False)
+    home: Any | None = field(default=RecordSlot("home"), compare=False, repr=False)
 
     @classmethod
     def from_home(
@@ -1104,6 +1106,8 @@ class FacetView(Mapping[FacetKey, Any]):
     True
     >>> tuple(view["out"].value.shape)
     (1, 4, 8, 8)"""
+
+    _record = RecordSlot("_record")
 
     def __init__(self, record: Any) -> None:
         """Create a facet view for a record.
@@ -1937,12 +1941,6 @@ def _structural_facets(record: Any) -> dict[FacetKey, Any]:
     if hasattr(record, "out"):
         return _op_structural_facets(record)
     return {}
-
-
-def _is_module_record(record: Any) -> bool:
-    """Return whether a record is module-like for structural facets."""
-
-    return hasattr(record, "output_ops") and hasattr(record, "trace")
 
 
 def _module_call_structural_facets(record: Any) -> dict[FacetKey, Any]:

@@ -107,41 +107,11 @@ HOLDERS: dict[str, Holder] = {
     "Module._facets_cache:FacetView._record -> Module": Holder(
         OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
     ),
-    "Module._facets_cache:FacetView._structural{*}:FacetSpec.home -> Op": Holder(
-        OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
-    ),
     "ModuleCall._facets_cache:FacetView._record:CallBoundModule._call -> ModuleCall": Holder(
         OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
     ),
     "ModuleCall._facets_cache:FacetView._record:CallBoundModule._module -> Module": Holder(
         OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
-    ),
-    "ModuleCall._facets_cache:FacetView._structural{*}:FacetSpec.home -> Op": Holder(
-        OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
-    ),
-    "Op._core:Store.rows[_facets_cache]:FacetView._record -> Op": Holder(
-        OP_ROW_CELLS, only=("pickle_state",)
-    ),
-    "Op._core:Store.rows[_facets_cache]:FacetView._structural{*}:FacetSpec.home -> Op": Holder(
-        OP_ROW_CELLS, only=("pickle_state",)
-    ),
-    "Op._core:Store.rows[_grad_records][*]:GradientRecord.owner -> Op": Holder(
-        OP_ROW_CELLS, only=("pickle_state",)
-    ),
-    "Param._tl_core:Store.rows[_grad_records][*]:GradientRecord.owner -> Param": Holder(
-        OP_ROW_CELLS, only=("pickle_state",)
-    ),
-    "Trace._trace_core:TraceCore.kind_rows{param}:Store.rows[_grad_records][*]:GradientRecord.owner -> Param": Holder(
-        OP_ROW_CELLS, only=("backward", "pickled")
-    ),
-    "Trace._trace_core:TraceCore.ops:Store.rows[_facets_cache]:FacetView._record -> Op": Holder(
-        OP_ROW_CELLS, only=("deepcopied", "facets_read")
-    ),
-    "Trace._trace_core:TraceCore.ops:Store.rows[_facets_cache]:FacetView._structural{*}:FacetSpec.home -> Op": Holder(
-        OP_ROW_CELLS, only=("deepcopied", "facets_read")
-    ),
-    "Trace._trace_core:TraceCore.ops:Store.rows[_grad_records][*]:GradientRecord.owner -> Op": Holder(
-        OP_ROW_CELLS, only=("backward", "pickled")
     ),
     "Module._tl_core:Store.rows[ops]:ModuleCallAccessor._dict{*} -> ModuleCall": Holder(
         MODULE_AND_BUFFER_CELLS, only=("pickle_state",)

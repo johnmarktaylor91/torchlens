@@ -58,25 +58,15 @@ NOTHING_KEPT = (
 #: Scenario -> (objects only the cycle collector frees today, lanes that remove the cycle, holder).
 #: A scenario that is not listed has no such object. The lane named here deletes its entry.
 CYCLES_AT_BASE: dict[str, tuple[frozenset[str], tuple[str, ...], str]] = {
-    "facets_read": (
-        frozenset({"facet_view", "op", "param"}),
-        ("B3a",),
-        "the facet cache holds an object that holds the record",
-    ),
-    "backward_capture": (
-        frozenset({"grad_fn", "op", "param"}),
-        ("B3a",),
-        "a gradient record holds its owner",
-    ),
     "all_fields_read": (
         frozenset({"buffer", "module", "module_call", "op", "param"}),
-        ("B3a", "B3b"),
-        "the facet cache, module cells and buffer versions hold records",
+        ("B3b",),
+        "module cells, module facet caches and buffer versions hold records",
     ),
     "backward_capture_all_fields_read": (
         frozenset({"grad_fn", "module", "module_call", "op", "param"}),
-        ("B3a", "B3b"),
-        "gradient records, the facet cache and module cells hold records",
+        ("B3b",),
+        "module cells and module facet caches hold records",
     ),
     "fork_held": (
         frozenset({"param"}),
