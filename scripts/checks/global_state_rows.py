@@ -331,6 +331,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # module can build Layer views without importing it; never mutated
         # by a capture.
         ("torchlens/_data_classes/_layer_state.py", "_LAYER_CLASS"),
+        # The OpAccessor class (and an empty subclass of it) the layer
+        # accessors bind once at import so the ``Layer.ops`` door can hand out
+        # an accessor without importing it; never mutated by a capture.
+        ("torchlens/_data_classes/_layer_ops_door.py", "_ACCESSOR"),
         # The Op class op.py binds once at import so the view tables can build
         # Op views without importing it; never mutated by a capture.
         ("torchlens/_trace_core/view_tables.py", "OP_CLASS"),

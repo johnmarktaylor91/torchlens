@@ -27,7 +27,7 @@ _OPS = "ops"
 
 #: ``OpAccessor`` and an empty subclass of it, bound by ``_layer_accessors`` at
 #: import so this module imports no record class.
-_ACCESSOR: list[type] = []
+_ACCESSOR: list[Any] = []
 
 
 def bind_op_accessor(accessor_class: type) -> None:

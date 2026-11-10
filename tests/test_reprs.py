@@ -218,15 +218,16 @@ def test_op_repr_after_trace_collection_degrades_not_raises() -> None:
 
 
 def test_op_copy_holds_no_trace_and_refuses_typed() -> None:
-    """A copied Op is a record on its own: it keeps no Trace and refuses Trace reads typed."""
+    """An Op copied or restored on its own keeps no Trace and refuses Trace reads typed."""
 
     import copy
+    import pickle
 
     from torchlens._errors import RecordBindingError
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
     op = trace.layers["relu_1_2"].ops[0]
-    for copied in (copy.copy(op), copy.deepcopy(op)):
+    for copied in (copy.copy(op), pickle.loads(pickle.dumps(op))):
         assert copied is not op
         assert "detached" in repr(copied)
         with pytest.raises(RecordBindingError) as exc_info:
