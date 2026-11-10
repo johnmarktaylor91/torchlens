@@ -531,7 +531,9 @@ class ChildAccessorField(RecordCellField):
             record,
             self._name,
             held,
-            lambda: _owned(trace, kind, held.build(_children_in(trace, held, kind, "Module"))),
+            (lambda: held.build(_children_in(trace, held, kind, "Module")))
+            if kind != "param"
+            else lambda: _owned(trace, kind, held.build(_children_in(trace, held, kind, "Module"))),
         )
 
 

@@ -79,7 +79,7 @@ def pin_params(trace: Any) -> None:
     _pin_layer_states(state.get("_layer_logs"), rows, memo)
     cls = _accessor_class()
     for entry in list(core._views.cells.values()):
-        if entry.__class__ is tuple and len(entry) == 3:
+        if entry.__class__ is tuple and entry[2:] and not entry[3:]:
             built = entry[2]
             if built.__class__ is cls:
                 own_accessor(rows, built)

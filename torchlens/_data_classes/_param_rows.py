@@ -123,21 +123,25 @@ class ParamTable:
             state = self.states[row] = {CORE_KEY: self.store, ROW_KEY: row}
         view = _new(_param_class())
         view.__dict__ = state
-        _set(view, "_owner", self.owner())
+        reference = self.owner_ref
+        _set(view, "_owner", reference() if reference is not None else None)
         self.refs[row] = _ref(view)
         return view
 
     def claim(self, row: int, record: Any) -> Any:
         """Make ``record`` the view of ``row`` unless another view is alive there; return the view."""
 
-        if row >= len(self.refs):
+        try:
+            current = self.refs[row]()
+        except IndexError:
             self._pad(row + 1)
-        current = self.refs[row]()
+            current = None
         if current is not None:
             return current
         self.states[row] = record.__dict__
         self.refs[row] = _ref(record)
-        _set(record, "_owner", self.owner())
+        reference = self.owner_ref
+        _set(record, "_owner", reference() if reference is not None else None)
         return record
 
 
@@ -171,8 +175,12 @@ class ParamRows:
         """Return the key of ``record``, caching it as its row's view or holding it detached."""
 
         table, detached = self._tables
-        state = getattr(record, "__dict__", None)
-        if state is not None and state.get(CORE_KEY) is table.store:
+        try:
+            state = record.__dict__
+            on_store = state[CORE_KEY] is table.store
+        except (AttributeError, KeyError, TypeError):
+            on_store = False
+        if on_store:
             row: int = state[ROW_KEY]
             try:
                 current = table.refs[row]()
@@ -256,9 +264,22 @@ class ParamRows:
         return table[key] if view is None else view
 
     def records(self, keys: Iterable[int]) -> Iterator[Any]:
-        """Return an iterator over the records behind ``keys``."""
+        """Return an iterator over the records behind ``keys``.
 
-        return map(self.resolve, keys)
+        Live views are read in place (no call per key); a missing one is built.
+        """
+
+        table, detached = self._tables
+        refs = table.refs
+        size = len(refs)
+        return iter(
+            [
+                detached[key]
+                if key < 0
+                else (view if key < size and (view := refs[key]()) is not None else table[key])
+                for key in keys
+            ]
+        )
 
     def adopt_keys(self, container: Any) -> list[int]:
         """Return this resolver's keys for the entries of another resolver's container.
