@@ -24,7 +24,7 @@ from .._utils._display_keys import display_key
 from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._accessor_base import Accessor, attach_source_honesty
-from ._layer_state import LayerSequence, LayerStore, hold_view, view_slots
+from ._layer_state import STORE_CLASSES, LayerSequence, LayerStore, hold_view, view_slots
 from ._layer_views import _layer_log_to_row
 from ._lookup_kinds import converted, layer_for_key, scoped_op_by_lookup_key
 from ._op_row_release import _OP_FACADE
@@ -170,6 +170,40 @@ class OpAccessor(Accessor["Op"]):
         """Iterate the ops in pass order."""
 
         return iter(self._list)
+
+    def _keyed_ops(self) -> list["Op"] | None:
+        """Return the ops in pass order read by row key, or ``None`` off the keyed path.
+
+        The keyed path is an accessor whose passes were inserted in pass order
+        and are all keyed into a live core with a view at each row; it reads
+        the core's op view list by row without building the pass mapping.
+        """
+
+        state = self.__dict__
+        if "_order" in state or "_held" in state or "_keys" not in state:
+            return None
+        core_ref = state["_core_ref"]
+        if core_ref is None:
+            return None
+        try:
+            ops = list(map(core_ref()._strong_facades["op"].__getitem__, state["_keys"][1::2]))
+        except (AttributeError, KeyError, IndexError, TypeError):
+            return None
+        return None if None in ops else ops
+
+    def values(self) -> list["Op"]:
+        """Return the ops in insertion order, read by row key where they are keyed."""
+
+        ops = self._keyed_ops()
+        return list(self._dict.values()) if ops is None else ops
+
+    def items(self) -> list[tuple[Any, "Op"]]:
+        """Return ``(pass index, Op)`` pairs in insertion order, read by row key where keyed."""
+
+        ops = self._keyed_ops()
+        if ops is None:
+            return list(self._dict.items())
+        return list(zip(self.__dict__["_keys"][0::2], ops, strict=True))
 
     def __getstate__(self) -> dict[str, Any]:
         """Return the saved shape: the pass mapping and the pass-ordered list of Op records."""
@@ -489,7 +523,7 @@ class LayerAccessor(Accessor["Layer"]):
         """
 
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
-        if cast("Any", layer_logs).__class__ is LayerStore:
+        if cast("Any", layer_logs).__class__ in STORE_CLASSES:
             # The trace's own layer store: read through it, holding no Layer record here.
             cast("LayerStore", layer_logs).settle()
             self.__dict__["_dict"] = layer_logs
@@ -503,7 +537,7 @@ class LayerAccessor(Accessor["Layer"]):
         """Return pickle state holding plain containers of Layer records."""
 
         state = super().__getstate__()
-        if state["_dict"].__class__ is LayerStore:
+        if state["_dict"].__class__ in STORE_CLASSES:
             state["_dict"] = dict(state["_dict"].items())
             state["_list"] = list(state["_dict"].values())
         return state

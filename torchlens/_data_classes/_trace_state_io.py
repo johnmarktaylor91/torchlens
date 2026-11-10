@@ -17,7 +17,7 @@ from .._quantities import Bytes, Duration
 from .._trace_state import TraceState
 from . import _doors, _trace_rehydrate
 from ._aten_display import bind_owner_keys
-from ._layer_state import trace_state_copy
+from ._layer_state import LayerStore, adopt_restored_layer_logs, trace_state_copy
 from ._trace_pickle_state import _restore_pickled_verification, _sanitize_pickled_verification
 from ._transform_repr import _scrubbed_transform_repr
 from .derived_grad import DerivedGradAccessor
@@ -313,6 +313,12 @@ def _drop_runtime_only_caches(state: dict[str, Any]) -> None:
     state.pop("_container_ordinals_by_input_func_call_id", None)
 
 
+def initial_layer_logs(trace: Trace) -> dict[str, Any]:
+    """Return a new trace's empty layer store (``Trace.__init__``)."""
+
+    return LayerStore(trace)
+
+
 def trace_getstate(trace: Trace) -> dict[str, Any]:
     """Return pickle state with non-picklable weakref-backed accessors stripped."""
     state = trace_state_copy(trace)
@@ -600,7 +606,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
         trace._module_logs = ModuleAccessor({})
     if "_buffer_accessor" not in trace.__dict__:
         trace._buffer_accessor = None
-    for layer_log in trace._layer_logs.values():
+    for layer_log in adopt_restored_layer_logs(trace).values():
         layer_log.source_trace = trace
         for layer_pass in layer_log.ops.values():
             layer_pass.source_trace = trace

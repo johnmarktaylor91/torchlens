@@ -192,3 +192,46 @@ class TestCaseInsensitiveLookup:
         log = tl.trace(model, torch.randn(2, 10))
         result = log["FC"]
         assert result is not None
+
+
+# ---------------------------------------------------------------------------
+# Layer store container type
+# ---------------------------------------------------------------------------
+
+
+def test_layer_logs_keep_the_container_type_they_were_given(tmp_path) -> None:
+    """A loaded trace's ``_layer_logs`` pickles as ``dict`` and a live one as ``OrderedDict``.
+
+    The store remembers the container it was adopted from: the live trace's
+    ``OrderedDict`` or the ``dict`` a load restores, so the pickle state, a copy
+    and a re-pickled trace keep the type the trace had before layer state
+    moved into the trace.
+    """
+
+    import pickle
+    from collections import OrderedDict
+
+    trace = tl.trace(RecurrentModel(), torch.randn(1, 5))
+    path = tmp_path / "trace.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+
+    for record, plain_type, tag in (
+        (trace, OrderedDict, "LayerStore"),
+        (loaded, dict, "LayerDictStore"),
+    ):
+        store = record._layer_logs
+        assert type(store).__name__ == tag
+        assert "_layer_logs" in vars(record)  # held in the instance dict, no descriptor
+        state = record.__getstate__()["_layer_logs"]
+        assert type(state) is plain_type
+        assert list(state) == list(store)
+        assert all(state[label] is store[label] for label in store)
+        assert type(store.copy()) is plain_type
+        assert store.__reduce__()[0] is plain_type
+        assert type(pickle.loads(pickle.dumps(store))) is plain_type
+        assert repr(store) == repr(plain_type(store.items()))
+        restored = pickle.loads(pickle.dumps(record))
+        assert type(restored._layer_logs).__name__ == tag
+        assert type(restored.__getstate__()["_layer_logs"]) is plain_type
+        assert list(restored._layer_logs) == list(store)

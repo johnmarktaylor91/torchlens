@@ -14,7 +14,7 @@ from __future__ import annotations
 import weakref
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 #: The ``Layer`` class, bound by ``layer.py`` at import so this module stays a leaf.
 _LAYER_CLASS: list[type] = []
@@ -71,9 +71,14 @@ class LayerStore(OrderedDict[str, Any]):
     The mapping's own entries are ``label -> state dictionary``; every read
     hands out the Layer view of that state. It subclasses ``OrderedDict`` so
     the trace field keeps its container type for every ``isinstance`` reader.
+    A store adopted from a plain ``dict`` is a :class:`LayerDictStore`, whose
+    plain form (pickle, copy, repr, equality) is a ``dict`` again.
     """
 
     __slots__ = ("_held", "_labels", "_trace_ref")
+
+    #: The container this store stands in for: its plain form has this type.
+    plain_type: ClassVar[type[dict[str, Any]]] = OrderedDict
 
     def __init__(self, trace: Any = None) -> None:
         """Create an empty store owned by ``trace``."""
@@ -106,12 +111,27 @@ class LayerStore(OrderedDict[str, Any]):
         return self._build(label, state)
 
     def get(self, label: Any, default: Any = None) -> Any:
-        """Return the Layer view for ``label``, or ``default``."""
+        """Return the Layer view for ``label``, or ``default``.
+
+        The keyed view is looked up here directly (one dict read, no nested
+        call); anything else takes the ``__getitem__`` path.
+        """
 
         try:
-            return self[label]
+            state = dict.__getitem__(self, label)
         except KeyError:
             return default
+        if self._held is None:
+            try:
+                accessor_state = state["ops"].__dict__
+                view = accessor_state["_core_ref"]()._strong_facades["layer"][
+                    accessor_state["_keys"][1]
+                ]
+                if view.__dict__ is state:
+                    return view
+            except (KeyError, IndexError, AttributeError, TypeError):
+                pass  # not keyed into a live core, or its view is gone: build it
+        return self[label]
 
     def __setitem__(self, label: str, layer: Any) -> None:
         """Adopt ``layer``: its state becomes trace-held and it becomes the label's view."""
@@ -134,8 +154,8 @@ class LayerStore(OrderedDict[str, Any]):
         """Compare as the ordered mapping of Layer views."""
 
         if isinstance(other, LayerStore):
-            other = other.as_ordered_dict()
-        return bool(self.as_ordered_dict() == other)
+            other = other.plain()
+        return bool(self.plain() == other)
 
     def __ne__(self, other: object) -> bool:
         """Compare as the ordered mapping of Layer views."""
@@ -143,14 +163,14 @@ class LayerStore(OrderedDict[str, Any]):
         return not self == other
 
     def __repr__(self) -> str:
-        """Render as the ordered mapping this store stands in for."""
+        """Render as the plain mapping this store stands in for."""
 
-        return repr(self.as_ordered_dict())
+        return repr(self.plain())
 
     def __reduce__(self) -> tuple[Any, ...]:
-        """Pickle as the plain ordered mapping of Layer records (the saved shape)."""
+        """Pickle as the plain mapping of Layer records it was given (the saved shape)."""
 
-        return (OrderedDict, (), None, None, iter(self.items()))
+        return (self.plain_type, (), None, None, iter(self.items()))
 
     def values(self) -> Any:
         """Return every Layer view in insertion order."""
@@ -189,9 +209,9 @@ class LayerStore(OrderedDict[str, Any]):
         self._labels = None
 
     def copy(self) -> Any:
-        """Return a plain ordered mapping of the Layer views."""
+        """Return the plain mapping of the Layer views."""
 
-        return self.as_ordered_dict()
+        return self.plain()
 
     def pop(self, label: Any, *default: Any) -> Any:
         """Remove ``label`` and return its Layer view (or the default)."""
@@ -219,10 +239,10 @@ class LayerStore(OrderedDict[str, Any]):
             self[label] = default
         return self[label]
 
-    def as_ordered_dict(self) -> OrderedDict[str, Any]:
-        """Return a plain ordered mapping of the Layer views."""
+    def plain(self) -> dict[str, Any]:
+        """Return the plain mapping (of :attr:`plain_type`) from label to Layer view."""
 
-        return OrderedDict(self.items())
+        return self.plain_type(self.items())
 
     def labels(self) -> tuple[str, ...]:
         """Return the labels in insertion order (cached until the label set changes)."""
@@ -302,6 +322,22 @@ class LayerStore(OrderedDict[str, Any]):
                 slots[index] = None
 
 
+class LayerDictStore(LayerStore):
+    """The layer store adopted from a plain ``dict`` (a loaded trace's layers).
+
+    It behaves as :class:`LayerStore`; only its plain form is a ``dict``, so a
+    loaded trace pickles, copies and compares its layers as the base did.
+    """
+
+    __slots__ = ()
+
+    plain_type = dict
+
+
+#: Every layer store class (``__class__`` membership costs no call).
+STORE_CLASSES = (LayerStore, LayerDictStore)
+
+
 def settle_layer_logs(trace: Any) -> bool:
     """Settle the trace's layer store after its core is rebuilt; return ``True``.
 
@@ -309,8 +345,8 @@ def settle_layer_logs(trace: Any) -> bool:
     ``return`` that both settles the store and reports a rebuilt core.
     """
 
-    logs = getattr(trace, "_layer_logs", None)
-    if logs.__class__ is LayerStore:
+    logs = trace.__dict__.get("_layer_logs")
+    if logs.__class__ in STORE_CLASSES:
         logs.settle()
     return True
 
@@ -351,50 +387,40 @@ class LayerSequence(Sequence[Any]):
 
 
 def adopt_layer_logs(trace: Any, value: Any) -> Any:
-    """Return ``value`` as the trace's :class:`LayerStore` (non-mappings pass through)."""
+    """Return ``value`` as the trace's layer store (non-mappings pass through).
 
-    if value.__class__ is LayerStore or not isinstance(value, Mapping):
+    An ``OrderedDict`` (the live trace's container) becomes a
+    :class:`LayerStore`; any other mapping (a loaded trace's ``dict``) becomes a
+    :class:`LayerDictStore`, so the store keeps the container type it was given.
+    """
+
+    if value.__class__ in STORE_CLASSES or not isinstance(value, Mapping):
         return value
     layers = list(value.items())
     if not all(isinstance(getattr(layer, "__dict__", None), dict) for _, layer in layers):
         return value
-    store = LayerStore(trace)
+    store = (LayerStore if isinstance(value, OrderedDict) else LayerDictStore)(trace)
     for label, layer in layers:
         store[label] = layer
     return store
 
 
-class LayerLogsField:
-    """Data descriptor for ``Trace._layer_logs``: every assigned mapping becomes a store."""
+def install_layer_logs(trace: Any, value: Any) -> None:
+    """Set ``trace._layer_logs`` to ``value`` adopted as a layer store.
 
-    __slots__ = ()
+    The store lives in the trace's instance dictionary with no descriptor, so
+    a read of ``trace._layer_logs`` costs no call; every writer of the field
+    goes through here instead.
+    """
 
-    def __get__(self, trace: Any, owner: Any = None) -> Any:
-        """Return the trace's layer store, adopting a raw restored mapping first."""
+    trace.__dict__["_layer_logs"] = adopt_layer_logs(trace, value)
 
-        if trace is None:
-            return self
-        try:
-            logs = trace.__dict__["_layer_logs"]
-        except KeyError:
-            raise AttributeError("_layer_logs") from None
-        if logs.__class__ is LayerStore:
-            return logs
-        logs = trace.__dict__["_layer_logs"] = adopt_layer_logs(trace, logs)
-        return logs
 
-    def __set__(self, trace: Any, value: Any) -> None:
-        """Adopt an assigned mapping of Layer records."""
+def adopt_restored_layer_logs(trace: Any) -> Any:
+    """Adopt the raw mapping a state restore put in ``trace.__dict__``; return the field."""
 
-        trace.__dict__["_layer_logs"] = adopt_layer_logs(trace, value)
-
-    def __delete__(self, trace: Any) -> None:
-        """Remove the layer store."""
-
-        try:
-            del trace.__dict__["_layer_logs"]
-        except KeyError:
-            raise AttributeError("_layer_logs") from None
+    logs = trace.__dict__["_layer_logs"] = adopt_layer_logs(trace, trace.__dict__["_layer_logs"])
+    return logs
 
 
 def trace_state_copy(trace: Any) -> dict[str, Any]:
@@ -402,6 +428,6 @@ def trace_state_copy(trace: Any) -> dict[str, Any]:
 
     state = cast("dict[str, Any]", trace.__dict__.copy())
     logs = state.get("_layer_logs")
-    if logs.__class__ is LayerStore:
-        state["_layer_logs"] = logs.as_ordered_dict()
+    if logs.__class__ in STORE_CLASSES:
+        state["_layer_logs"] = logs.plain()
     return state

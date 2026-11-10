@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from .._output_slot import fork_output_refusal, read_output, read_transformed_output
-from ._layer_state import LayerLogsField
 from ._moe_views import _TraceRouting
 
 
@@ -88,9 +87,3 @@ class TraceOutputMixin(_TraceRouting):
             del self.__dict__["transformed_output"]
         except KeyError:
             raise AttributeError("transformed_output") from None
-
-
-# ``Trace._layer_logs`` is a store of trace-held layer state: every mapping of
-# Layer records assigned to it is adopted. Installed here, on a Trace base, so
-# the size-capped ``trace.py`` does not grow.
-setattr(TraceOutputMixin, "_layer_logs", LayerLogsField())  # noqa: B010 - not a declared field

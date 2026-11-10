@@ -1119,7 +1119,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         self._layer_list: list[Op] = []  # ordered list of all layer ops
         self._layer_dict_main_keys: dict[str, Op] = OrderedDict()  # primary label -> entry
         self._layer_dict_all_keys: dict[str, Op] = OrderedDict()  # all lookup keys -> entry
-        self._layer_logs: dict[str, Layer] = OrderedDict()  # no-pass label -> aggregate Layer
+        self._layer_logs: dict[str, Layer] = _trace_state_io.initial_layer_logs(self)
         self.op_labels: list[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
         self.layer_labels: list[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
         self._layer_num_calls: dict[str, int] = OrderedDict()  # no-pass label -> pass count
