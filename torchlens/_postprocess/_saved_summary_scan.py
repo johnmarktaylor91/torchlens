@@ -116,7 +116,7 @@ def _other_entries(payload: Any) -> list[tuple[tuple[Any, ...], int]] | None:
 def _retained_bytes(pairs: list[tuple[Any, Any]], keys: list[int], owner: Any) -> int:
     """Return ``retained_activation_bytes`` of the saved ops at ``keys`` (payloads ``pairs``)."""
     # One flat loop on purpose (complexity): a helper per payload is a counted call per op.
-    total, seen, devices, read = 0, set(), {}, None
+    total, seen, devices, read = 0, {}, {}, None  # ``seen`` a dict: ``set.add`` is a call
     with pause_logging():
         for pair in pairs:
             counted = False
@@ -147,7 +147,7 @@ def _retained_bytes(pairs: list[tuple[Any, Any]], keys: list[int], owner: Any) -
                 counted = True
                 for identity, size in entries:
                     if identity not in seen:
-                        seen.add(identity)
+                        seen[identity] = None
                         total += size if size.__class__ is int else int(size)
             if not counted:
                 return retained_activation_bytes(owner.records(keys))

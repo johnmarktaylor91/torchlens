@@ -222,7 +222,7 @@ class _Scan:
                 fx_path = self.fx_paths[path]
             except KeyError:
                 fx_path = self.fx_paths[path] = path.replace(".", "_")
-            keys.append(f"{fx_path}_{call}")
+            keys += (f"{fx_path}_{call}",)
         keys = sorted(keys, key=str)
         f_keys, f_ordinal = self.write_fids[:2]
         cells[f_keys] = keys
@@ -233,51 +233,68 @@ class _Scan:
         """Relabel one op's module calls as ``_relabel_module_calls`` does; return its module keys.
 
         ``None`` (with nothing written) when a cell is not in a shape the scan
-        reproduces exactly; the caller then uses the facade function.
+        reproduces exactly; the caller then uses the facade function. Plain
+        loops on purpose: a comprehension, ``len``, ``zip`` or ``append`` is a
+        counted call per op on the oldest supported Python.
         """
         # One flat function on purpose (complexity): it stands in for three facade helpers per op.
         f_module, *f_lists = self.write_fids[2:]
         if not self.relabel:
             return [] if _empty_calls(cells[f_lists[0]]) else None
-        relabeled = []
+        relabeled: list[list[str]] = []
+        exit_names: list[Any] = []
         for fid in f_lists:
             value = cells[fid]
             if value.__class__ is LazyCell and value.make and value.source is list:
                 value = ()
             if value.__class__ is not list and value.__class__ is not tuple:
                 return None
-            if [1 for call in value if call.__class__ is not str and call.__class__ is not tuple]:
-                return None
-            if [1 for call in value if call.__class__ is tuple and len(call) != 2]:
-                return None
-            relabeled.append(
-                [call if call.__class__ is str else f"{call[0]}:{call[1]}" for call in value]
-            )
-        exits = relabeled[0]
-        if [1 for call in exits if ":" not in call]:
-            return None
+            labels: list[str] = []
+            for call in value:
+                if call.__class__ is str:
+                    labels += (call,)
+                    name = None
+                elif call.__class__ is tuple:
+                    try:
+                        name, number = call
+                    except ValueError:
+                        return None
+                    labels += (f"{name}:{number}",)
+                    name = name if name.__class__ is str and number.__class__ is int else None
+                else:
+                    return None
+                if not relabeled:
+                    exit_names += (name,)
+            relabeled += (labels,)
         module = cells[f_module]
         if module.__class__ is LazyCell and not module.make:
             module = module.source
-        if module is not None and module.__class__ is not str:
-            if module.__class__ is not tuple or len(module) != 2:
+        if module.__class__ is tuple:
+            try:
+                name, number = module
+            except ValueError:
                 return None
-            module = f"{module[0]}:{module[1]}"
+            module = f"{name}:{number}"
+        elif module is not None and module.__class__ is not str:
+            return None
         if module is None and relabeled[2]:
             module = relabeled[2][-1]
-        names, num_calls, keys = self.names, self.num_calls, []
-        if exits and num_calls is None:
+        keys: list[str] = []
+        num_calls = self.num_calls
+        if relabeled[0] and num_calls is None:
             return None
-        for call in exits:
-            try:
-                name = names[call]
-            except KeyError:
-                name = names[call] = call.rsplit(":", 1)[0]
-            keys.append(call)
+        at = 0
+        for call in relabeled[0]:
+            name, at = exit_names[at], at + 1
+            if name is None:
+                if ":" not in call:
+                    return None
+                name = call.rsplit(":", 1)[0]
+            keys += (call,)
             if num_calls[name] == 1:
-                keys.append(name)
-        for fid, value in zip(f_lists, relabeled):
-            cells[fid] = value
+                keys += (name,)
+        f_exits, f_entries, f_modules, f_stack = f_lists
+        cells[f_exits], cells[f_entries], cells[f_modules], cells[f_stack] = relabeled
         if module is not None:
             cells[f_module] = module
         return keys
@@ -296,17 +313,22 @@ class _Scan:
         index, raw, label = cells[f_index], cells[f_raw], cells[f_label]
         exact = (raw, raw[:-_SUFFIX_LEN] if raw[-_SUFFIX_LEN:] == _RAW_LABEL_SUFFIX else raw, label)
         by_key = trace._lookup_keys_to_layer_num_dict
-        if [1 for k in keys if k in by_key and by_key[k] != index and k in exact]:
-            return False
+        for lookup_key in keys:
+            if lookup_key in by_key and by_key[lookup_key] != index and lookup_key in exact:
+                return False
         primary = (cells[f_layer], cells[f_short_layer], label, cells[f_short])
+        ambiguous = trace._ambiguous_lookup_keys
         for lookup_key in keys:
             if lookup_key not in by_key:
                 by_key[lookup_key] = index
                 new_keys[lookup_key] = key
             elif by_key[lookup_key] != index:
-                indices = trace._ambiguous_lookup_keys.setdefault(lookup_key, [by_key[lookup_key]])
+                if lookup_key in ambiguous:
+                    indices = ambiguous[lookup_key]
+                else:
+                    indices = ambiguous[lookup_key] = [by_key[lookup_key]]
                 if index not in indices:
-                    indices.append(index)
+                    indices += (index,)
                 if lookup_key in primary:
                     by_key[lookup_key] = index
                     new_keys[lookup_key] = key
