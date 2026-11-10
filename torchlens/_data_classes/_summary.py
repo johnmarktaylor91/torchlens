@@ -69,8 +69,7 @@ def format_call_arg(value: Any, _depth: int = 0, _in_progress: set[int] | None =
     from .._ir import workspaces as _ws  # deferred: layer lint (no eager upward import)
 
     if isinstance(value, _ws.ReleasedTensorStub):
-        # W1a: a released module-arg payload renders exactly like the
-        # live tensor it replaced -- the summary is shape/dtype-only.
+        # A released module-arg payload renders like the live tensor (shape/dtype only).
         return f"Tensor(shape={tuple(value.shape)}, dtype={value.dtype})"
     if isinstance(value, _ws.ReleasedObjectStub):  # renders as the object it replaced
         return f"<{value.type_name}>"

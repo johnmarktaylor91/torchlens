@@ -26,10 +26,7 @@ from ..._capture.peak_memory import record_backward_peak
 from ..._capture.predicates import _evaluate_keep_op
 from ..._capture.projections import sync_recording_grad_records_from_sidecar
 from ..._data_classes._fork_lineage import _is_fork_relative
-from ..._data_classes._grad_fn_naming import (
-    _grad_fn_label_parts,
-    _normalize_grad_fn_type,
-)
+from ..._data_classes._grad_fn_naming import _grad_fn_label_parts, _normalize_grad_fn_type
 from ..._data_classes._grad_fn_views import grad_fn_store, hold_grad_fn, pass_store
 from ..._data_classes.backward_pass import BackwardPass
 from ..._data_classes.func_call_location import FuncCallLocation, with_source_fingerprint

@@ -10,20 +10,12 @@ from __future__ import annotations
 
 import difflib
 import weakref
-from typing import TYPE_CHECKING, Any
-
-from .._utils._display_bounded import RecordTuple
-from .._utils._display_collections import callable_list_repr, callable_list_str
-
-if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
-
-    from .trace import Trace
-
 from collections import OrderedDict
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .._trace_core.view_tables import DEAD
+from .._utils._display_bounded import RecordTuple
+from .._utils._display_collections import callable_list_repr, callable_list_str
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
@@ -47,6 +39,8 @@ from .module import ModuleAccessor
 from .op import Op
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
     from .trace import Trace
 
 __all__: list[str] = []
