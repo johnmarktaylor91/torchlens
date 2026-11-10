@@ -365,29 +365,43 @@ def module_args_template(
 
 
 def _module_forward_key(forward: Any, trace: "Trace") -> FunctionRegistryKey:
-    """Return ``_function_registry_key(forward)``, memoized per capture for bound methods.
+    """Return ``_function_registry_key(forward)``, memoized per capture.
 
-    A bound method's key reads only its function's ``__module__``, ``__qualname__``
-    and ``__name__``, so every module of one class shares it. The capture's
-    function-key memo holds the function (its id cannot be reused) and each hit
-    returns a NEW key object, as the C-callable memo does.
+    Outside the ``torch`` namespace the key is a function of the callable's
+    ``__module__``, ``__qualname__`` and ``__name__`` alone, and every module of
+    one class carries the same three (the session forward copies them from the
+    bound method). The capture's function-key memo is anchored on the
+    underlying Python function (held, so its id cannot be reused) and stores the
+    three names; a hit whose names differ is re-derived, and each hit returns a NEW
+    key object, as the C-callable memo does.
     """
 
-    func = getattr(forward, "__func__", None)
+    names = (
+        getattr(forward, "__module__", None),
+        getattr(forward, "__qualname__", None),
+        getattr(forward, "__name__", None),
+    )
+    inner = getattr(forward, "__wrapped__", forward)
+    anchor = getattr(inner, "__func__", inner)
     workspace = _peek_raw_graph_workspace(trace)
-    if type(forward) is not types.MethodType or type(func) is not types.FunctionType:
+    # Only a Python function anchors an entry: the C-callable memo shares the dict.
+    unnamed = names[1] is None and names[2] is None  # the key would read ``repr``
+    if (
+        workspace is None
+        or type(anchor) is not types.FunctionType
+        or names[0] == "torch"
+        or unnamed
+    ):
         return _function_registry_key(forward, None, None)
-    if workspace is None:
-        return _derive_function_registry_key(forward)
     memo = workspace._function_key_memo
-    hit = memo.get(id(func))
-    if hit is None or hit[0] is not func:
-        key = _derive_function_registry_key(forward)
-        hit = (func, (key.namespace, key.qualname, key.dispatch_kind, key.version, key.import_path))
-        memo[id(func)] = hit
-        return key
-    namespace, qualname, dispatch_kind, version, import_path = hit[1]
-    return FunctionRegistryKey(namespace, qualname, dispatch_kind, version, import_path)
+    hit = memo.get(id(anchor))
+    if hit is not None and hit[0] is anchor and hit[1][0] == names:
+        namespace, qualname, dispatch_kind, version, import_path = hit[1][1]
+        return FunctionRegistryKey(namespace, qualname, dispatch_kind, version, import_path)
+    key = _derive_function_registry_key(forward)
+    fields = (key.namespace, key.qualname, key.dispatch_kind, key.version, key.import_path)
+    memo[id(anchor)] = (anchor, (names, fields))
+    return key
 
 
 def _arg_location_to_path(location: Any) -> tuple[OutputPathComponent, ...]:
