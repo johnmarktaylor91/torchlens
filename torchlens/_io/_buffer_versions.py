@@ -85,7 +85,8 @@ def seal_scan(trace: Trace) -> tuple[dict[str, list[str]], dict[str, list[str]]]
         layer = rows[key][layer_fid]
         if layer.__class__ is not str:
             layer = layer_of(key)
-        for call_label in calls_of(key) or ():
+        calls = rows[key][fid_by_name[_FIELDS[0]]]  # a plain list is what the facade returns
+        for call_label in calls if calls.__class__ is list else calls_of(key) or ():
             inputs[call_label].append(layer)
     versions: dict[str, list[str]] = {}
     for key in _candidates(rows, keys, flag_fid):

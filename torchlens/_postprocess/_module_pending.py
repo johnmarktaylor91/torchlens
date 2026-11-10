@@ -39,51 +39,6 @@ LAZY_MODULE_FIELDS = frozenset({"_module_logs", "_buffer_accessor", "_param_logs
 _NO_WORKSPACE = object()
 
 
-class _Empty:
-    """Stands for an empty ``list`` or ``dict`` value in the sealed module metadata."""
-
-    __slots__ = ("make",)
-
-    def __init__(self, make: Callable[[], Any]) -> None:
-        """Bind the type whose fresh empty instance the build gets back."""
-
-        self.make = make
-
-
-#: One shared marker per empty type, so a pending module keeps no empty container.
-_EMPTY_LIST = _Empty(list)
-_EMPTY_DICT = _Empty(dict)
-
-
-def _freeze_metadata(metadata: dict[Any, Any]) -> dict[Any, Any]:
-    """Replace every empty list or dict value of each module's metadata with a marker."""
-
-    return {
-        address: {
-            key: (_EMPTY_LIST if value.__class__ is list else _EMPTY_DICT)
-            if value.__class__ in (list, dict) and not value
-            else value
-            for key, value in meta.items()
-        }
-        if meta.__class__ is dict
-        else meta
-        for address, meta in metadata.items()
-    }
-
-
-def _thaw_metadata(metadata: dict[Any, Any]) -> dict[Any, Any]:
-    """Return the metadata with a fresh empty container for every marker."""
-
-    return {
-        address: {
-            key: value.make() if value.__class__ is _Empty else value for key, value in meta.items()
-        }
-        if meta.__class__ is dict
-        else meta
-        for address, meta in metadata.items()
-    }
-
-
 class PendingModules:
     """Plain facts the deferred module build reads, captured at step 16.
 
@@ -152,7 +107,7 @@ class PendingModules:
         prior_ws = state.get("_module_capture_ws", _NO_WORKSPACE)
         state["_module_capture_ws"] = ModuleCaptureWorkspace(
             module_build_data=self.module_build_data,
-            module_metadata=_thaw_metadata(self.module_metadata),
+            module_metadata=self.module_metadata,
             module_forward_args=self.module_forward_args,
             root_forward_args=self.root_forward_args,
         )
@@ -194,7 +149,7 @@ def seal_module_facts(trace: Trace, build: Callable[[Any, PendingModules], None]
     )
     state[PENDING_ATTR] = PendingModules(
         module_build_data=mbd,
-        module_metadata=_freeze_metadata(metadata),
+        module_metadata=metadata,
         module_forward_args=ws.module_forward_args,
         root_forward_args=root_args,
         root_summaries=root_summaries,
