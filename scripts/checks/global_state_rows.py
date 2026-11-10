@@ -922,6 +922,11 @@ _PROCESS_CACHES = frozenset(
         # one per op store layout, built on first use; the layout is a module
         # constant held by its plan, so the memo is bounded and needs no epoch.
         ("torchlens/backends/torch/_ops_row_cells.py", "_PLANS"),
+        # Saved-attribute reader per C-defined gradient-function class (A1): keyed
+        # only by classes without Py_TPFLAGS_HEAPTYPE, which are immortal and
+        # immutable, so it holds no grad_fn, tensor or trace, is bounded by the
+        # torch build's node classes and is re-derivable at any time.
+        ("torchlens/backends/torch/_ops_autograd.py", "_SAVED_READER_BY_CLASS"),
         # Agent-surface digest-hint cache (moved from torchlens/bridge/mcp.py
         # in the 2026-10 agent-reference reorg): full stat identity (path,
         # dev, ino, size, mtime_ns) -> content digest, FIFO-evicted at 16. A

@@ -219,7 +219,7 @@ def _saved_reader(cls: type) -> _SavedReader:
     reads_saved_tensors = (
         hasattr(cls, "saved_tensors")
         or cls.__dictoffset__ != 0
-        or cls.__getattribute__ is not object.__getattribute__
+        or getattr(cls, "__getattribute__") is not object.__getattribute__
     )
     getter = operator.attrgetter(*names) if names else None
     return reads_saved_tensors, getter, names
