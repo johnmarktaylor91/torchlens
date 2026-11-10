@@ -219,7 +219,7 @@ def test_deepcopy_follows_the_memo_to_the_copied_trace_and_its_records() -> None
     fork_core = _Core()
     shells = [_Record(fork_core.ops, record._row, "f" + record.name) for record in records]
     memo: dict[Any, Any] = {id(trace): fork}
-    memo.update({id(record): shell for record, shell in zip(records, shells)})
+    memo.update({id(record): shell for record, shell in zip(records, shells, strict=True)})
     fork._layer_list = copy.deepcopy(trace._layer_list, memo)
     fork._layer_dict_all_keys = copy.deepcopy(trace._layer_dict_all_keys, memo)
     assert list(fork._layer_list) == shells and list(trace._layer_list) == records

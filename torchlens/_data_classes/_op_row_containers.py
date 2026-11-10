@@ -316,7 +316,9 @@ class OpLabelMap(MutableMapping[Any, Any]):
         self._ordered = ordered
         pairs = list(items.items()) if isinstance(items, Mapping) else list(items)
         keys = owner.hold_many([record for _label, record in pairs])
-        self._keys: dict[Any, int] = dict(zip((label for label, _record in pairs), keys))
+        self._keys: dict[Any, int] = dict(
+            zip((label for label, _record in pairs), keys, strict=True)
+        )
         owner.register(self)
 
     def _records(self) -> list[Any]:
@@ -327,12 +329,12 @@ class OpLabelMap(MutableMapping[Any, Any]):
     def _rekey(self, keys: list[int]) -> None:
         """Replace the keys in place after the owner moved its records."""
 
-        self._keys.update(zip(list(self._keys), keys))
+        self._keys.update(zip(list(self._keys), keys, strict=True))
 
     def plain(self) -> dict[Any, Any]:
         """Return a plain dictionary (or ``OrderedDict``) from label to record."""
 
-        pairs = zip(self._keys, self._records())
+        pairs = zip(self._keys, self._records(), strict=True)
         return OrderedDict(pairs) if self._ordered else dict(pairs)
 
     def __getitem__(self, label: Any) -> Any:
@@ -391,7 +393,7 @@ class OpLabelMap(MutableMapping[Any, Any]):
     def items(self) -> Any:
         """Return (label, record) pairs, as a list."""
 
-        return list(zip(self._keys, self._records()))
+        return list(zip(self._keys, self._records(), strict=True))
 
     def clear(self) -> None:
         """Drop every label."""
@@ -425,7 +427,7 @@ class OpLabelMap(MutableMapping[Any, Any]):
     def __deepcopy__(self, memo: dict[Any, Any]) -> OpLabelMap:
         """Copy for a fork or a deep copy: the copied trace's records, same labels."""
 
-        pairs = zip(self._keys, _copied(self._records(), memo))
+        pairs = zip(self._keys, _copied(self._records(), memo), strict=True)
         new = OpLabelMap(self._owner.copy_for(memo), pairs, ordered=self._ordered)
         memo[id(self)] = new
         return new
