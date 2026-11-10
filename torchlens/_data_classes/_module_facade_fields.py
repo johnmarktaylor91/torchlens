@@ -10,8 +10,10 @@ from __future__ import annotations
 from typing import Any
 
 from .._quantities import Duration
+from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.record_refs import install_child_fields
-from .._trace_core.record_rows import install_record_facade
+from .._trace_core.record_rows import CORE_KEY, install_record_facade
+from ._summary import format_call_arg
 
 # ---------------------------------------------------------------------------
 # The facades: declared stored fields become row-cell descriptors; the
@@ -102,6 +104,21 @@ _MODULE_STORED_FIELDS: tuple[str, ...] = (
     "custom_methods",
 )
 
+#: Row positions of the ``ModuleCall`` cells the helpers below read in a detached row.
+_IN_LAYERS, _OUT_LAYERS, _IN_OPS, _OUT_OPS, _ARGS, _KWARGS, _ARGS_SUMMARY, _KWARGS_SUMMARY = (
+    _MODULE_CALL_STORED_FIELDS.index(name)
+    for name in (
+        "input_layers",
+        "output_layers",
+        "input_ops",
+        "output_ops",
+        "forward_args",
+        "forward_kwargs",
+        "forward_args_summary",
+        "forward_kwargs_summary",
+    )
+)
+
 
 def install_module_facades(module_call_cls: type, module_cls: type) -> None:
     """Install the ``ModuleCall`` and ``Module`` row-cell descriptors.
@@ -118,7 +135,8 @@ def install_module_facades(module_call_cls: type, module_cls: type) -> None:
 def call_boundaries(calls: Any) -> tuple[list[str], list[str], list[str], list[str]]:
     """Return a module's input ops, input layers, output ops and output layers.
 
-    Each list is the union over ``calls`` in first-seen call order.
+    Each list is the union over ``calls`` in first-seen call order. A call that
+    is still detached (the module build) is read from its own row.
     """
 
     input_ops: list[str] = []
@@ -126,19 +144,40 @@ def call_boundaries(calls: Any) -> tuple[list[str], list[str], list[str], list[s
     output_ops: list[str] = []
     output_layers: list[str] = []
     for call in calls.values():
-        for label in call.input_ops:
-            if label not in input_ops:
-                input_ops.append(label)
-        for label in call.input_layers:
-            if label not in input_layers:
-                input_layers.append(label)
-        for label in call.output_ops:
-            if label not in output_ops:
-                output_ops.append(label)
-        for label in call.output_layers:
-            if label not in output_layers:
-                output_layers.append(label)
+        state = call.__dict__
+        if CORE_KEY in state and state[CORE_KEY].__class__ is DetachedOpStore:
+            row = state[CORE_KEY]._cells
+            sides = (row[_IN_OPS], row[_IN_LAYERS], row[_OUT_OPS], row[_OUT_LAYERS])
+        else:
+            sides = (call.input_ops, call.input_layers, call.output_ops, call.output_layers)
+        for labels, union in zip(sides, (input_ops, input_layers, output_ops, output_layers)):
+            for label in labels:
+                if label not in union:
+                    union += (label,)
     return input_ops, input_layers, output_ops, output_layers
+
+
+def summarize_call_args(calls: Any, keep_args: bool) -> None:
+    """Write each call's argument summaries, then drop its arguments unless kept.
+
+    The arguments can hold large tensors from the model's ``forward`` call. A
+    call that is still detached (the module build) is written in its own row.
+    """
+
+    for call in calls:
+        state = call.__dict__
+        if CORE_KEY in state and state[CORE_KEY].__class__ is DetachedOpStore:
+            row = state[CORE_KEY]._cells
+            row[_ARGS_SUMMARY] = format_call_arg(row[_ARGS])
+            row[_KWARGS_SUMMARY] = format_call_arg(row[_KWARGS])
+            if not keep_args:
+                row[_ARGS] = row[_KWARGS] = None
+            continue
+        call.forward_args_summary = format_call_arg(call.forward_args)
+        call.forward_kwargs_summary = format_call_arg(call.forward_kwargs)
+        if not keep_args:
+            call.forward_args = None
+            call.forward_kwargs = None
 
 
 def module_call_row(given: dict[str, Any]) -> list[Any]:
