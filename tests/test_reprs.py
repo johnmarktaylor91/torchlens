@@ -192,8 +192,21 @@ def test_op_repr_after_trace_collection_degrades_not_raises() -> None:
 
     from torchlens._errors import RecordBindingError
 
-    op = tl.trace(_TwoStage(), torch.randn(2, 4)).layers["relu_1_2"].ops[0]
+    # An Op read through ``Layer.ops`` keeps its Trace, as one read from the Trace does.
+    held = tl.trace(_TwoStage(), torch.randn(2, 4)).layers["relu_1_2"].ops[0]
     gc.collect()
+    assert "relu_1" in repr(held)
+    assert "detached" not in repr(held)
+    assert isinstance(held.source_trace, tl.Trace)
+    del held
+
+    # The accessor the Trace itself keeps holds no Trace (the Trace would hold
+    # itself), so an Op built from it once the Trace is gone has none to read.
+    trace = tl.trace(_TwoStage(), torch.randn(2, 4))
+    stored = vars(trace.layers["relu_1_2"])["ops"]
+    del trace
+    gc.collect()
+    op = stored[0]
 
     text = repr(op)
     assert "relu_1" in text
@@ -202,6 +215,24 @@ def test_op_repr_after_trace_collection_degrades_not_raises() -> None:
     with pytest.raises(RecordBindingError) as exc_info:
         _ = op.source_trace
     assert exc_info.value.fields["code"] == "trace_reference_collected"
+
+
+def test_op_copy_holds_no_trace_and_refuses_typed() -> None:
+    """A copied Op is a record on its own: it keeps no Trace and refuses Trace reads typed."""
+
+    import copy
+
+    from torchlens._errors import RecordBindingError
+
+    trace = tl.trace(_TwoStage(), torch.randn(2, 4))
+    op = trace.layers["relu_1_2"].ops[0]
+    for copied in (copy.copy(op), copy.deepcopy(op)):
+        assert copied is not op
+        assert "detached" in repr(copied)
+        with pytest.raises(RecordBindingError) as exc_info:
+            _ = copied.source_trace
+        assert exc_info.value.fields["code"] == "record_not_bound"
+    assert op.source_trace is trace
 
 
 def test_op_standalone_pickle_accessors_refuse_typed() -> None:

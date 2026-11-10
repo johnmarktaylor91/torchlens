@@ -19,15 +19,17 @@ from itertools import repeat
 from typing import Any, ClassVar, cast
 
 from .._trace_core.view_tables import DEAD, OP_KIND, WeakViews
+from ._layer_ops_door import install as install_ops_door
 
 #: The ``Layer`` class, bound by ``layer.py`` at import so this module stays a leaf.
 _LAYER_CLASS: list[type] = []
 
 
 def bind_layer_class(layer_class: type) -> None:
-    """Bind the ``Layer`` class that views are built from."""
+    """Bind the ``Layer`` class that views are built from, and install its ``ops`` door."""
 
     _LAYER_CLASS[:] = [layer_class]
+    install_ops_door(layer_class)
 
 
 def hold_view(core: Any, kind: str, index: int, view: Any, *, replace: bool = False) -> bool:

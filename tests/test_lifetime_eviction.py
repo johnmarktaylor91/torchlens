@@ -160,7 +160,7 @@ def _relu_label() -> str:
     return _relu_op(trace).layer_label
 
 
-@pytest.mark.parametrize("door", ["plain", "ops", "layers"])
+@pytest.mark.parametrize("door", ["plain", "ops", "layers", "layer_ops"])
 def test_chained_read_returns_the_tensor_from_every_door(door) -> None:
     """``tl.trace(model, x)[label].out`` works in one expression at each door."""
 
@@ -172,20 +172,32 @@ def test_chained_read_returns_the_tensor_from_every_door(door) -> None:
         out = tl.trace(model, x)[label].out
     elif door == "ops":
         out = tl.trace(model, x).ops[label].out
-    else:
+    elif door == "layers":
         out = tl.trace(model, x).layers[label].out
+    else:
+        out = tl.trace(model, x).layers[label].ops[0].out
     assert isinstance(out, torch.Tensor)
     assert torch.equal(out, expected)
 
 
-@pytest.mark.parametrize("door", ["ops", "layers"])
+def _door(trace, door: str):
+    """Read one door of ``trace``: its ops, its layers, or the ops of its relu layer."""
+
+    if door == "ops":
+        return trace.ops
+    if door == "layers":
+        return trace.layers
+    return trace.layers[_relu_op(trace).layer_label].ops
+
+
+@pytest.mark.parametrize("door", ["ops", "layers", "layer_ops"])
 def test_a_held_door_keeps_its_trace_and_dropping_it_frees_the_trace(door) -> None:
     """A door is a view like a record: it keeps the trace, by reference counting only."""
 
     trace = tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6))
     trace_ref = weakref.ref(trace)
-    held = trace.ops if door == "ops" else trace.layers
-    assert (trace.ops if door == "ops" else trace.layers) is held
+    held = _door(trace, door)
+    assert _door(trace, door) is held
     del trace
     gc.collect()
     assert trace_ref() is not None
@@ -194,6 +206,46 @@ def test_a_held_door_keeps_its_trace_and_dropping_it_frees_the_trace(door) -> No
     try:
         del held
         assert trace_ref() is None, "the trace outlived its last door"
+    finally:
+        gc.enable()
+
+
+def test_an_op_from_a_layers_ops_keeps_the_trace_through_every_read() -> None:
+    """Indexing, iterating and ``values()`` of ``layer.ops`` each hand out an Op that holds the trace."""
+
+    def reads():
+        yield "index", lambda ops: ops[0]
+        yield "iter", lambda ops: next(iter(ops))
+        yield "values", lambda ops: ops.values()[0]
+        yield "items", lambda ops: ops.items()[0][1]
+
+    label = _relu_label()
+    for name, read in reads():
+        op = read(tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6)).layers[label].ops)
+        gc.collect()
+        assert isinstance(op.out, torch.Tensor), name
+        assert op.source_trace[label].ops[0] is op, name
+        assert "detached" not in repr(op), name
+
+
+def test_reading_a_layers_ops_leaves_the_trace_freed_by_reference_counting() -> None:
+    """The trace keeps an op accessor that holds no trace: reading or re-assigning it adds no cycle."""
+
+    trace = tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6))
+    trace_ref = weakref.ref(trace)
+    layer = trace.layers[_relu_op(trace).layer_label]
+    handed = layer.ops
+    stored = vars(layer)["ops"]
+    assert type(handed) is type(stored) and handed is not stored
+    assert list(handed) == list(stored) and len(handed) == len(stored) == 1
+    layer.ops = handed  # stores an accessor that holds no trace, never the handed-out one
+    assert vars(layer)["ops"] is not handed
+    assert layer.ops[0] is handed[0]
+    gc.collect()
+    gc.disable()
+    try:
+        del stored, handed, layer, trace
+        assert trace_ref() is None, "reading layer.ops left a reference cycle on the trace"
     finally:
         gc.enable()
 
