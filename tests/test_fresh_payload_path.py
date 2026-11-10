@@ -62,7 +62,7 @@ def _record(trace: tl.Trace) -> dict[str, Any]:
                 op.has_saved_activation,
                 op.shape,
                 op.dtype,
-                op.activation_memory,
+                op.cost.activation_memory,
                 None if out is None else out.detach().clone(),
                 None if out is None else (out.requires_grad, type(out.grad_fn).__name__),
                 annotations.get("dedup_source_id"),
