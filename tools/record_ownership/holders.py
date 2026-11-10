@@ -72,31 +72,6 @@ HOLDERS: dict[str, Holder] = {
     "Trace._trace_core:TraceCore._strong_facades{*}[*] -> Op": Holder(
         ACTIVATION, but=("pickle_state",)
     ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._alias_indexes:_AliasIndexes.final{*} -> Op": Holder(
-        OP_LIST, only=("alias_lookup",)
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._alias_indexes:_AliasIndexes.layer{*}[*] -> Op": Holder(
-        OP_LIST, only=("alias_lookup",)
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._alias_indexes:_AliasIndexes.raw{*} -> Op": Holder(
-        OP_LIST, only=("alias_lookup",)
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._counted_cache[*] -> Op": Holder(
-        OP_LIST, but=("fork_cold", "pickle_state")
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._dict{*} -> Op": Holder(
-        OP_LIST, but=("fork_cold", "pickle_state")
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._layer_label_index{*}[*] -> Op": Holder(
-        OP_LIST,
-        but=("alias_lookup", "facets_read", "fork_cold", "pickle_state", "plain", "save_none"),
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._list[*] -> Op": Holder(
-        OP_LIST, but=("fork_cold", "pickle_state")
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._raw_index_lookup{*} -> Op": Holder(
-        OP_LIST, but=("fork_cold", "pickle_state")
-    ),
     "Layer.ops:OpAccessor._dict{*} -> Op": Holder(LAYER_STATE),
     "Layer.ops:OpAccessor._list[*] -> Op": Holder(LAYER_STATE),
     "Trace._layer_accessor_cache[*]:LayerAccessor._dict{*} -> Layer": Holder(

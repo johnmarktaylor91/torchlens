@@ -119,6 +119,18 @@ def _adopt_backward_primitive_rows(trace: Trace, core: Any) -> None:
         core.backward_epochs = [epoch]
 
 
+def _install_core(trace: Trace, core: TraceCore) -> None:
+    """Bind ``core`` to ``trace`` and drop the ops door built before it existed.
+
+    The grad-fn rebinding in ``Trace.__setstate__`` reads an ops door while the
+    trace is still coreless, and that door keys its records in a table of its
+    own. Dropping it makes the next read key them by row in the core's side table.
+    """
+
+    trace.__dict__["_trace_core"] = core
+    trace.__dict__.pop("_op_accessor_cache", None)
+
+
 def rehydrate_trace_core(trace: Trace) -> bool:
     """Adopt a coreless trace's detached records into a fresh sealed core.
 
@@ -188,7 +200,7 @@ def rehydrate_trace_core(trace: Trace) -> bool:
             record_rows.adopt_records(core, kind, records.values())
         _adopt_backward_primitive_rows(trace, core)
 
-        trace.__dict__["_trace_core"] = core
+        _install_core(trace, core)
         relation_views.freeze_trace_relation_views(trace)
         store.freeze()
         # Register the loaded core as a payload-lifetime owner, exactly like the

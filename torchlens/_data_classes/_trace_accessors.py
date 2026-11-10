@@ -1,8 +1,7 @@
 """Trace accessor helpers."""
 
-from collections import Counter, OrderedDict
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from collections import Counter
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any
 
 from .._constants import _is_suffixed_raw_label
@@ -10,11 +9,19 @@ from .._errors import AmbiguousOpLookupError
 from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from .._utils._display_errors import lookup_message
 from .._utils._display_keys import display_key
-from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
 from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
 from ._lookup_kinds import converted, module_call_for_key, output_op
 from ._nonfinite import nonfinite_op_labels
+from ._op_door_keys import (
+    OpRecordList,
+    OpRecordMap,
+    _AliasIndexes,
+    _claim_alias,
+    _group_by_layer_aliases,
+    _is_counted_op,
+    hold_ops,
+)
 from .op import Op
 
 
@@ -199,47 +206,6 @@ def boundary_label_rows(labels: Sequence[str], resolve: Callable[[str], Any]) ->
     ]
 
 
-def _group_by_layer_aliases(ops: Sequence[Op]) -> dict[Any, list[Op]]:
-    """Group Ops under their layer label and short layer label, in list order.
-
-    An Op lands once under each distinct alias, so ``groups[key]`` lists exactly
-    the Ops for which ``key in {op.layer_label, op.short_layer_label}``, in the
-    order a scan of ``ops`` would meet them.
-    """
-
-    groups: dict[Any, list[Op]] = {}
-    for op in ops:
-        for alias in {op.layer_label, op.short_layer_label}:
-            groups.setdefault(alias, []).append(op)
-    return groups
-
-
-@dataclass(frozen=True)
-class _AliasIndexes:
-    """Reverse indexes behind ``TraceOpAccessor._resolve_substring``.
-
-    ``final`` maps each final-tier alias to its Op, ``collisions`` the final-tier
-    aliases two Ops claim, ``raw`` each unsuffixed raw spelling to its Op, and
-    ``layer`` each bare layer label to its Ops in list order.
-    """
-
-    final: dict[Any, Op]
-    collisions: dict[Any, list[Op]]
-    raw: dict[Any, Op]
-    layer: dict[Any, list[Op]]
-
-
-def _claim_alias(index: dict[Any, Op], collisions: dict[Any, list[Op]], alias: Any, op: Op) -> None:
-    """Record ``alias -> op``; a second, different Op makes the alias a collision."""
-
-    existing = index.setdefault(alias, op)
-    if existing is op or not isinstance(alias, str):
-        return
-    claimants = collisions.setdefault(alias, [existing])
-    if op not in claimants:
-        claimants.append(op)
-
-
 def _refuse_colliding_label(key: Any, claimants: Sequence[Op] | None) -> None:
     """Raise when one final label names several Ops, rather than guess one."""
 
@@ -250,20 +216,6 @@ def _refuse_colliding_label(key: Any, claimants: Sequence[Op] | None) -> None:
         f"Op label {key!r} is claimed by {len(claimants)} different ops: {names}. "
         "A final label must name exactly one op; this is corrupt labeling, not an "
         "ambiguous user key."
-    )
-
-
-def _is_counted_op(op: Op) -> bool:
-    """Whether an op row counts toward the counted op total.
-
-    The count excludes the input, output and buffer rows, the definition in
-    ``backends/_finalize.py``; those rows are aliases of a tensor, not ops.
-    """
-
-    return not (
-        getattr(op, "is_input", False)
-        or getattr(op, "is_output", False)
-        or record_member(op, "is_buffer", False)
     )
 
 
@@ -280,6 +232,11 @@ class TraceOpAccessor(Accessor[Op]):
     alias-inclusive row sequence is ``trace._layer_list``. A derived accessor
     over a chosen row list (``input_ops``, ``output_ops``, ``saved_ops``, ...)
     keeps the default ``counted_view=False`` and lists exactly its rows.
+
+    The door holds one row key per member and every index maps to row keys
+    (``_op_door_keys``); the records stay cached in the trace core's side
+    table. ``_list`` and ``_dict`` read the records back for code written
+    against the containers the door used to hold.
     """
 
     _COUNTABLE_FIELDS = _LAYER_COUNTABLE_FIELDS
@@ -304,70 +261,127 @@ class TraceOpAccessor(Accessor[Op]):
             ``Trace.ops`` view); ``False`` lists every row given.
         """
 
-        op_lookup: OrderedDict[str, Op] = OrderedDict()
-        self._raw_index_lookup: dict[int, Op] = {}
+        members = list(ops)
+        self._table, self._keys = hold_ops(members, first_source_trace(members))
+        label_keys: dict[str, int] = {}
+        self._raw_index_lookup: dict[int, int] = {}
         # Final Op labels name exactly one row. Two rows sharing one is corrupt
         # labeling; recording it here makes every lookup of that label refuse
         # instead of silently answering with whichever row came last.
-        duplicate_labels: dict[str, list[Op]] = {}
-        for op in ops:
+        duplicate_labels: dict[str, list[int]] = {}
+        for held, op in zip(self._keys, members, strict=True):
             label = op.label
-            existing = op_lookup.get(label)
-            if isinstance(label, str) and existing is not None and existing is not op:
-                duplicate_labels.setdefault(label, [existing]).append(op)
-            op_lookup[label] = op
-            self._raw_index_lookup[op.raw_index] = op
-        super().__init__(op_lookup, item_list=list(ops))
+            if label in label_keys and label_keys[label] != held and isinstance(label, str):
+                duplicate_labels.setdefault(label, [label_keys[label]]).append(held)
+            label_keys[label] = held
+            self._raw_index_lookup[op.raw_index] = held
+        self._label_keys = label_keys
         self._duplicate_labels = duplicate_labels
-        self._counted_cache: list[Op] | None = None
+        self._counted_cache: list[int] | None = None
         self._counted_view = counted_view
         self._layer_num_calls = dict(layer_num_calls)
         # Lazily built reverse indexes for ``_resolve_substring``; see
         # ``_ensure_alias_indexes``. Lifetime is this accessor instance, whose
-        # ``_list`` is immutable post-finalization and already rebuilt through the
+        # ``_keys`` is immutable post-finalization and already rebuilt through the
         # existing ``_TRACE_OP_ACCESSOR_CACHE`` invalidation, so this adds no new
         # invalidation surface.
         self._alias_indexes: _AliasIndexes | None = None
         self._alias_index_unavailable = False
-        self._resolved_op_cache: dict[str, Op] = {}
-        # Bare layer label -> its Ops in list order; see ``_layer_label_matches``.
-        self._layer_label_index: dict[Any, list[Op]] | None = None
+        self._resolved_op_cache: dict[str, int] = {}
+        # Bare layer label -> its Ops' row keys in list order; see ``_layer_label_matches``.
+        self._layer_label_index: dict[Any, list[int]] | None = None
 
-    def _counted_ops(self) -> list[Op]:
-        """The counted op rows, in capture order.
+    @property
+    def _list(self) -> OpRecordList:  # type: ignore[override]
+        """Every member record in order, read through the row keys."""
+
+        return OpRecordList(self._table, self._keys)
+
+    @property
+    def _dict(self) -> OpRecordMap:  # type: ignore[override]
+        """Label to member record, read through the row keys."""
+
+        return OpRecordMap(self._table, self._label_keys)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return pickle state holding this door's records, not the trace-wide side table."""
+
+        state = super().__getstate__()
+        state["_table"] = self._table.only(self._keys)
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore pickle state; a door pickled while it held records is rebuilt from them."""
+
+        if "_table" in state:
+            super().__setstate__(state)
+            return
+        calls, counted = state.get("_layer_num_calls", {}), state.get("_counted_view", False)
+        TraceOpAccessor.__init__(self, state["_list"], calls, counted_view=counted)
+
+    def _ops(self, keys: Iterable[int]) -> list[Op]:
+        """The records behind ``keys``, in order."""
+
+        table = self._table
+        return list(map(table.rows.__getitem__, keys) if table.plain else table.records(keys))
+
+    def _counted_keys(self) -> list[int]:
+        """The row keys of the counted op rows, in capture order.
 
         Flags settle at finalization (``_tracing_finished`` is mirrored onto
         every op), so the list is memoized only once the last row is
         finished; mid-capture reads recompute it.
         """
 
-        if not getattr(self, "_counted_view", False):
-            return self._list
-        cached = getattr(self, "_counted_cache", None)
+        keys = self._keys
+        if not self._counted_view:
+            return keys
+        cached = self._counted_cache
         if cached is not None:
             return cached
-        counted = [op for op in self._list if _is_counted_op(op)]
-        if self._list and getattr(self._list[-1], "_tracing_finished", False):
+        table = self._table
+        members = zip(keys, table.records(keys), strict=True)
+        counted = [held for held, op in members if _is_counted_op(op)]
+        if keys and getattr(table.record(keys[-1]), "_tracing_finished", False):
             self._counted_cache = counted
         return counted
+
+    def _counted_ops(self) -> list[Op]:
+        """The counted op rows, in capture order."""
+
+        return self._ops(self._counted_keys())
+
+    def _refuse_duplicate_label(self, key: Any) -> None:
+        """Raise when ``key`` is a member label two rows share."""
+
+        claimed = self._duplicate_labels.get(key)
+        if claimed:
+            _refuse_colliding_label(key, self._ops(claimed))
 
     def __getitem__(self, key: int | str) -> Op:
         """Return a counted op by ordinal, or any row by label."""
 
         if isinstance(key, int):
-            return self._counted_ops()[key]
-        _refuse_colliding_label(key, getattr(self, "_duplicate_labels", {}).get(key))
-        return super().__getitem__(key)
+            held = self._counted_keys()[key]
+        else:
+            if self._duplicate_labels:
+                self._refuse_duplicate_label(key)
+            label_keys = self._label_keys
+            if key not in label_keys:
+                return super().__getitem__(key)
+            held = label_keys[key]
+        table = self._table
+        return table.rows[held] if held >= 0 else table.detached[held]
 
     def __iter__(self) -> Iterator[Op]:
         """Iterate over the counted ops in capture order."""
 
-        return iter(self._counted_ops())
+        return self._table.records(self._counted_keys())
 
     def __len__(self) -> int:
         """Return the counted op total (equals the counted op total)."""
 
-        return len(self._counted_ops())
+        return len(self._counted_keys())
 
     def keys(self) -> list[Any]:
         """Return the labels of the counted ops."""
@@ -377,7 +391,7 @@ class TraceOpAccessor(Accessor[Op]):
     def values(self) -> list[Op]:
         """Return the counted ops."""
 
-        return list(self._counted_ops())
+        return self._counted_ops()
 
     def items(self) -> list[tuple[Any, Op]]:
         """Return ``(label, op)`` pairs for the counted ops."""
@@ -414,7 +428,7 @@ class TraceOpAccessor(Accessor[Op]):
         members that pass the same filter.
         """
 
-        return self._derived([op for op in self._list if _is_counted_op(op)])
+        return self._derived([op for op in self._table.records(self._keys) if _is_counted_op(op)])
 
     @property
     def nonfinite(self) -> "TraceOpAccessor":
@@ -425,11 +439,12 @@ class TraceOpAccessor(Accessor[Op]):
         Empty when no member still reaches its trace.
         """
 
-        trace = first_source_trace(self._list)
+        members = self._ops(self._keys)
+        trace = first_source_trace(members)
         if trace is None:
             return self._derived([])
         flagged = set(nonfinite_op_labels(trace))
-        return self._derived([op for op in self._list if op.label in flagged])
+        return self._derived([op for op in members if op.label in flagged])
 
     def by_raw_index(self, raw_index: int) -> Op:
         """Return an Op by its realtime raw capture index.
@@ -446,16 +461,21 @@ class TraceOpAccessor(Accessor[Op]):
         """
 
         try:
-            return self._raw_index_lookup[raw_index]
+            held = self._raw_index_lookup[raw_index]
         except KeyError as exc:
             raise KeyError(f"Op raw_index {raw_index} not found.") from exc
+        table = self._table
+        return table.rows[held] if held >= 0 else table.detached[held]
 
     def _resolve_pass_qualified(self, key: str) -> Op | None:
         """Resolve pass-qualified Op labels without returning parent Layers."""
 
-        _refuse_colliding_label(key, getattr(self, "_duplicate_labels", {}).get(key))
-        if key in self._dict:
-            return self._dict[key]
+        if self._duplicate_labels:
+            self._refuse_duplicate_label(key)
+        label_keys = self._label_keys
+        if key in label_keys:
+            held, table = label_keys[key], self._table
+            return table.rows[held] if held >= 0 else table.detached[held]
         token = split_pass_token(key)
         if token is None:
             return None
@@ -497,21 +517,24 @@ class TraceOpAccessor(Accessor[Op]):
         row per lookup made validation quadratic in graph size. Once the rows are
         settled (the last row is finished, the predicate ``_counted_ops`` memoizes
         on) a reverse index built in one pass answers instead; it lives on this
-        accessor instance, whose ``_list`` is replaced (with the accessor) on any
+        accessor instance, whose ``_keys`` is replaced (with the accessor) on any
         rebuild or rename. Before settlement the scan answers. A failed index build
         is not cached and the scan answers, raising exactly as it always did.
         """
 
         index = self._layer_label_index
-        if index is None and self._list and getattr(self._list[-1], "_tracing_finished", False):
+        keys, table = self._keys, self._table
+        if index is None and keys and getattr(table.record(keys[-1]), "_tracing_finished", False):
             try:
-                index = _group_by_layer_aliases(self._list)
+                index = _group_by_layer_aliases(keys, table.records(keys))
             except Exception:
                 index = None
             self._layer_label_index = index
         if index is None:
-            return [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
-        return list(index.get(key, ()))
+            scanned = table.records(keys)
+            return [op for op in scanned if key in {op.layer_label, op.short_layer_label}]
+        held = index.get(key, ())
+        return list(map(table.rows.__getitem__, held) if table.plain else table.records(held))
 
     def _ensure_alias_indexes(self) -> _AliasIndexes | None:
         """Build the alias reverse indexes once, or report them unavailable.
@@ -554,17 +577,17 @@ class TraceOpAccessor(Accessor[Op]):
             return self._alias_indexes
         if self._alias_index_unavailable:
             return None
-        final_index: dict[Any, Op] = {}
-        collisions: dict[Any, list[Op]] = {}
-        raw_index: dict[Any, Op] = {}
-        layer_alias_index: dict[Any, list[Op]] = {}
+        final_index: dict[Any, int] = {}
+        collisions: dict[Any, list[int]] = {}
+        raw_index: dict[Any, int] = {}
+        layer_alias_index: dict[Any, list[int]] = {}
         try:
-            for op in self._list:
+            for held, op in zip(self._keys, self._table.records(self._keys), strict=True):
                 for alias in self._final_aliases(op):
-                    _claim_alias(final_index, collisions, alias, op)
-                raw_index.setdefault(op.raw_label, op)
+                    _claim_alias(final_index, collisions, alias, held)
+                raw_index.setdefault(op.raw_label, held)
                 for alias in {op.layer_label, op.short_layer_label}:
-                    layer_alias_index.setdefault(alias, []).append(op)
+                    layer_alias_index.setdefault(alias, []).append(held)
         except Exception:
             self._alias_index_unavailable = True
             return None
@@ -588,18 +611,19 @@ class TraceOpAccessor(Accessor[Op]):
     def _resolve_substring_by_scan(self, key: str) -> Op | None:
         """Resolve by linear scan, used when the alias indexes are unavailable."""
 
+        members = self._ops(self._keys)
         final_matches: list[Op] = []
-        for op in self._list:
+        for op in members:
             if key in self._final_aliases(op) and op not in final_matches:
                 final_matches.append(op)
         _refuse_colliding_label(key, final_matches if len(final_matches) > 1 else None)
         if final_matches:
             return final_matches[0]
-        parent_matches = [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
+        parent_matches = [op for op in members if key in {op.layer_label, op.short_layer_label}]
         resolved = self._resolve_parent_matches(parent_matches)
         if resolved is not None:
             return resolved
-        for op in self._list:
+        for op in members:
             if key == op.raw_label:
                 return op
         # A module, module-call or buffer key names its output Op here.
@@ -629,17 +653,21 @@ class TraceOpAccessor(Accessor[Op]):
         indexes = self._ensure_alias_indexes()
         if indexes is None:
             return self._resolve_substring_by_scan(key)
-        _refuse_colliding_label(key, indexes.collisions.get(key))
+        claimed = indexes.collisions.get(key)
+        if claimed:
+            _refuse_colliding_label(key, self._ops(claimed))
         direct = indexes.final.get(key)
-        if direct is not None:
-            return direct
-        # A multi-pass layer's bare label is final naming too: it refuses as
-        # ambiguous before another Op's raw spelling can answer for it.
-        resolved = self._resolve_parent_matches(indexes.layer.get(key, ()))
-        if resolved is not None:
-            return resolved
-        direct = indexes.raw.get(key)
-        return direct if direct is not None else converted(self, key, output_op)
+        if direct is None:
+            # A multi-pass layer's bare label is final naming too: it refuses as
+            # ambiguous before another Op's raw spelling can answer for it.
+            resolved = self._resolve_parent_matches(self._ops(indexes.layer.get(key, ())))
+            if resolved is not None:
+                return resolved
+            direct = indexes.raw.get(key)
+            if direct is None:
+                return converted(self, key, output_op)
+        table = self._table
+        return table.rows[direct] if direct >= 0 else table.detached[direct]
 
     def _resolved_op(self, key: str) -> Op:
         """Return ``self[key]``, memoized per lookup key.
@@ -650,11 +678,15 @@ class TraceOpAccessor(Accessor[Op]):
         ambiguous key raises exactly as ``self[key]`` does on every call.
         """
 
-        cached = self._resolved_op_cache.get(key)
-        if cached is None:
-            cached = self[key]
-            self._resolved_op_cache[key] = cached
-        return cached
+        held = self._resolved_op_cache.get(key)
+        table = self._table
+        if held is None:
+            op = self[key]
+            known = table.key_of(op)
+            if known is not None:
+                self._resolved_op_cache[key] = known
+            return op
+        return table.rows[held] if held >= 0 else table.detached[held]
 
 
 class TraceModuleCallAccessor(Accessor[Any]):
