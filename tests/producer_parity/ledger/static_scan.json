@@ -3425,6 +3425,14 @@
  },
  {
   "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/_postprocess/_module_pending.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/_postprocess/_orphan_seeds.py",
   "has_default": false,
@@ -3617,18 +3625,18 @@
  },
  {
   "ambiguous": true,
-  "field": "params",
+  "field": "modules",
   "file": "torchlens/_postprocess/finalization.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "source_trace",
+  "ambiguous": true,
+  "field": "params",
   "file": "torchlens/_postprocess/finalization.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
