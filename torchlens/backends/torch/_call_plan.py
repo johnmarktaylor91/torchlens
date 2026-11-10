@@ -277,20 +277,21 @@ def admit_call(
     """
 
     # Hot path (CC above 10 on purpose): one frame per admitted call, guards inline.
-    if not args or trace._options_mode != "exhaustive" or trace._options_structure_only:
-        return None
-    if kwargs and ("out" in kwargs or "inplace" in kwargs):
-        return None
-    if _state._active_hook_plan or _state.diagnostic_observer_armed():
+    if (
+        not args
+        or trace._options_mode != "exhaustive"
+        or trace._options_structure_only
+        or (kwargs and ("out" in kwargs or "inplace" in kwargs))
+        or _state._active_hook_plan
+        or _state.diagnostic_observer_armed()
+    ):
         return None
     trace_dict = trace.__dict__
     if "_predicate_save_options" in trace_dict:
         options = trace_dict["_predicate_save_options"]
         if options is not None and options.intervene is not None:
             return None
-    if trace._wrapper_runtime_ws.materialized_lazy_slots is not None:
-        return None
-    if type(args[0]) is _PARAMETER:
+    if trace._wrapper_runtime_ws.materialized_lazy_slots is not None or type(args[0]) is _PARAMETER:
         return None
     tensors: list[torch.Tensor] = []
     stamped = _scan_values(args, tensors)
