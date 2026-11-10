@@ -81,6 +81,7 @@ from .._trace_core.relation_views import (
     OP_TUPLE_VIEW_FIELDS,
     materialize_dataflow_view,
 )
+from .._trace_core.side_columns import PendingCell
 from .._trace_state import TraceState
 from .._utils._record_group_table import OP_STORAGE_ATTRS, op_attr, record_member
 from .._utils.arg_handling import copy_arg_tree
@@ -127,6 +128,7 @@ from ._op_save import (  # noqa: F401  (re-exported for backends and postprocess
     _shape_or_none,
     _stamp_reference_out,
 )
+from ._op_state_items import make_op_state_items
 from ._op_transforms import (  # noqa: F401  (re-exported for backends.torch importers)
     apply_transform,
     train_mode_tripwire_armed,
@@ -2491,25 +2493,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             self, edit, model=model, inputs=inputs, intervention=intervention
         )
 
-    def __tl_state_items__(self) -> Any:
-        """Yield live state ``(field_name, value)`` pairs in declared order.
-
-        The state-protocol hook. Enumeration follows the declared
-        ``_OP_SLOT_NAMES`` order and reads through
-        ``object.__getattribute__`` -- exactly what the former per-slot walk
-        did -- so class-level compatibility overlays (the ancestor-bitset
-        properties installed by ``backends/torch/ops.py``) keep
-        materializing their public values into pickle/fork state instead of
-        leaking compact internal encodings. Unset cells are skipped; a bare
-        ``object.__new__`` shell with no bound store yields nothing.
-        """
-
-        getattribute = _object_getattribute
-        for name, attr in _OP_STATE_ATTRS:
-            try:
-                yield name, getattribute(self, attr)
-            except AttributeError:
-                continue
+    # ``__tl_state_items__`` (the state-protocol hook) is installed below the
+    # class from ``_op_state_items.make_op_state_items``.
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
         """Install ``mapping`` onto this op through the descriptor protocol.
@@ -2524,6 +2509,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         _ensure_detached_store(self)
         storage_attrs = OP_STORAGE_ATTRS
         for field_name, field_value in mapping.items():
+            if field_value.__class__ is PendingCell:  # an unread side-column cell
+                field_value = field_value.answer()
             _object_setattr(self, storage_attrs.get(field_name, field_name), field_value)
 
     def __getstate__(self) -> dict[str, Any]:
@@ -3006,6 +2993,9 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
 # field touch, so each avoided Python-level re-entry is measurable).
 _CORE_GET = Op.__dict__["_core"].__get__
 _ROW_GET = Op.__dict__["_row"].__get__
+Op.__tl_state_items__ = make_op_state_items(  # type: ignore[method-assign]
+    _OP_STATE_ATTRS, _OP_STORE_LAYOUT.fid_by_name, _CORE_GET, _ROW_GET
+)
 
 
 def _ensure_detached_store(op: "Op") -> None:

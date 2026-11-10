@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any, TypeVar
 
+from .._trace_core.side_columns import SIDE_FIELDS, answer_pending
 from ._op_row_containers import adopt_op_containers, project_op_containers
 
 _T = TypeVar("_T")
@@ -20,6 +21,21 @@ def plain_state(obj: Any) -> dict[str, Any]:
     """
 
     return project_op_containers(dict(state_items(obj)))
+
+
+def answered_state(obj: Any) -> dict[str, Any]:
+    """Return ``obj``'s live state as a new dictionary with pending cells answered.
+
+    The op state stream yields an unread side-column cell as a ``PendingCell``
+    (``torchlens/_trace_core/side_columns.py``) so a consumer that drops the
+    field never resolves it. A consumer that keeps every field it reads, such
+    as a rerun refresh writing each one into another op, reads through here.
+    """
+
+    state = dict(state_items(obj))
+    for name in SIDE_FIELDS.intersection(state):
+        state[name] = answer_pending(state[name])
+    return state
 
 
 def finish_state_restore(trace: _T) -> _T:
