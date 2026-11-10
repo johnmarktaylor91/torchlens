@@ -4,14 +4,17 @@ The step no longer builds every ``Layer``. One raw scan of the op rows
 (:mod:`._layer_row_scan`) groups the passes of each layer into a pending
 state, stamps the op columns the step owns and indexes the ops by pass. A
 layer's state is built the first time one of the layer store's doors hands
-that layer out (:func:`build_layer_state`), from the op rows.
+that layer out (:func:`build_layer_state`), from the facts the scan kept at
+that moment, so the state does not depend on when or through which door the
+layer is first looked up.
 
-A layer with one pass and nothing to merge is written straight from the few
-facts the scan kept. Every other layer runs the merge: the multi-pass
-aggregate fields, the autograd sums, the multi-pass reconcile and the
-conditional views, reading its passes through bound
-:class:`~torchlens._data_classes._op_columns.OpColumns` getters or, for a
-short layer or ops not backed by one row store, through the ``Op`` facade.
+The scan keeps facts for a layer with nothing to merge beyond its pass lists,
+its autograd sums and the two flags a later pass can raise. Every other layer
+runs the merge inside the step: the multi-pass aggregate fields, the autograd
+sums, the multi-pass reconcile and the conditional views, reading its passes
+through bound :class:`~torchlens._data_classes._op_columns.OpColumns` getters
+or, for a short layer or ops not backed by one row store, through the ``Op``
+facade.
 
 A trace with a conditional event builds every layer inside the step, before
 the conditional rebind changes the op fields the layers copy. So does a trace
@@ -99,6 +102,10 @@ def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., N
     trace.__dict__["_layer_logs"] = logs
     if scan.eager:
         _build_inside_step(logs, scan)
+    elif scan.merged:
+        for state in list(dict.values(logs)):
+            if state[PENDING] is True:
+                _merge_layer_state(state, True)
     return not scan.eager
 
 
@@ -184,17 +191,18 @@ def _annotate_tied(op: Any) -> None:
 def build_layer_state(state: dict[str, Any]) -> None:
     """Build one pending layer ``state`` in place: the layer's first lookup.
 
-    The pending value is the scan's ``(label, pass, autograd memory, autograd
-    tensors)`` for a one-pass layer with nothing to merge, the arrival-ordered
-    ops for a facade-grouped layer, and ``True`` for a layer to merge from its
-    keyed passes. A failed build leaves the state pending.
+    The pending value is the scan's ``(pass labels, pass numbers, autograd
+    memory, autograd tensors, has input ancestor, is atomic module)`` for a
+    layer with nothing else to merge, the arrival-ordered ops for a
+    facade-grouped layer, and ``True`` for a layer to merge from its keyed
+    passes. A failed build leaves the state pending.
     """
 
     fact = state[PENDING]
     if fact.__class__ is not tuple:
         _merge_layer_state(state, fact)
         return
-    label, number, memory, count = fact
+    labels, numbers, memory, count, has_input, atomic = fact
     if memory is not None:
         memory = Bytes(int(memory))
         count = 0 if count is None else count
@@ -207,11 +215,15 @@ def build_layer_state(state: dict[str, Any]) -> None:
     state["terminal_bool_for"] = None
     state["_is_in_conditional_body"] = False
     state["conditional_role_stacks"] = ([],) if views else [[]]
-    state["conditional_branch_stack_ops"] = {(): [number]}
+    state["conditional_branch_stack_ops"] = {(): numbers}
     state["conditional_arm_children"] = {}
     state["annotations"] = {}
     state["ops"] = accessor
-    state["call_labels"] = [label]
+    state["call_labels"] = labels
+    if has_input:
+        state["has_input_ancestor"] = True
+    if atomic:
+        state["is_atomic_module"] = True
     state["autograd_memory"] = memory
     state["total_autograd_memory"] = memory
     state["num_autograd_tensors"] = count
