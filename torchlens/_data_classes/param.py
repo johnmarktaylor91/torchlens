@@ -40,6 +40,7 @@ from .._quantities import Bytes
 from .._utils._display_errors import short_name_message
 from ._accessor_base import Accessor
 from ._lookup_kinds import converted, param_for_key
+from ._param_fork import bind_fork_param
 from ._param_pin import bind_param_classes, param_index, param_key as param_key
 from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -1065,3 +1066,4 @@ class ParamAccessor(Accessor["Param"]):
 
 
 bind_param_classes(Param, ParamAccessor)
+bind_fork_param(Param)

@@ -103,7 +103,7 @@ torchlens/_data_classes/op.py::Op.__getattribute__	77
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	66
 torchlens/_data_classes/op.py::_pool_container_members	74
-torchlens/_data_classes/param.py	1060
+torchlens/_data_classes/param.py	1062
 torchlens/_data_classes/param.py::Param.__init__	75
 torchlens/_data_classes/trace.py	3391
 torchlens/_data_classes/trace.py::Trace.__init__	356

@@ -25,7 +25,6 @@ from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from ._fork_translation import FORK_COPIERS
 from ._param_pin import fork_rows, pin_params
 from ._param_rows import PARAM_KIND, ROW_FORMS, ParamMap, as_map, param_rows_of
-from .param import Param
 
 _FIELD = "_param_logs"
 _BY_MODULE = "_param_logs_by_module"
@@ -124,7 +123,7 @@ def _carry_extras(parent_rows: Any, rows: Any, translator: Any) -> None:
 
     states = rows.table.states
     store = rows.table.store
-    declared = Param._TL_LAYOUT.fid_by_name  # type: ignore[attr-defined]
+    declared = store.layout.fid_by_name
     for row, state in enumerate(parent_rows.table.states):
         if state is None or len(state) <= 2:
             continue
@@ -161,4 +160,7 @@ def pin_fork_params(fork: Any) -> None:
     pin_params(fork, forked=True)
 
 
-FORK_COPIERS[Param] = fork_param
+def bind_fork_param(param_class: type) -> None:
+    """Map ``param_class`` to ``fork_param`` in the fork copier table; ``param.py`` calls this at import."""
+
+    FORK_COPIERS[param_class] = fork_param
