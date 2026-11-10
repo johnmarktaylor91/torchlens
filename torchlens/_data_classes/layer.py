@@ -818,6 +818,8 @@ class Layer(_SelectionOperand):
         """Return pickle state with weakrefs and raw autograd handles stripped."""
         state = dict(state_items(self))
         state["_source_trace_ref"] = None
+        if state.get("ops").__class__ is OpAccessor:
+            state["ops"] = state["ops"].saved()
         # `grad_fn_handle` holds the live torch autograd `Node` (e.g.
         # `AddmmBackward0`), which is not picklable. `Layer._FIELD_POLICY`
         # declares it `FieldPolicy.DROP` for exactly this reason; enforce that

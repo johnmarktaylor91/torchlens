@@ -96,19 +96,46 @@ class OpAccessor(Accessor["Op"]):
         for pass_index, op in (ops or {}).items():
             self._put(pass_index, op)
 
+    def __getattr__(self, name: str) -> Any:
+        """Revive a saved-shape copy (``_dict``/``_list`` only) into row keys on first use."""
+
+        state = self.__dict__
+        if name not in ("_keys", "_core_ref", "_store") or "_dict" not in state:
+            raise AttributeError(name)
+        saved = {"_dict": state.pop("_dict")}
+        state.pop("_list", None)
+        self.__setstate__(saved)
+        return state[name]
+
+    def saved(self) -> "OpAccessor":
+        """Return a copy in the saved shape: it holds the Op records, not row keys.
+
+        ``Layer.__getstate__`` hands this out, so a pickle state never reaches
+        the op store through the accessor.
+        """
+
+        copy = OpAccessor.__new__(OpAccessor)
+        copy.__dict__.update(self.__getstate__())
+        return copy
+
     @property
-    def _dict(self) -> dict[int, "Op"]:
+    def _dict(self) -> dict[int, "Op"]:  # type: ignore[override]
         """Pass index to Op, in insertion order (built on each read)."""
 
+        saved = self.__dict__.get("_dict")
+        if saved is not None:
+            return cast("dict[int, Op]", saved)
         keys = self._keys
         by_pass = {keys[at]: self._op_at(at >> 1) for at in range(0, len(keys), 2)}
         order = self.__dict__.get("_order")
         return by_pass if order is None else {number: by_pass[number] for number in order}
 
     @property
-    def _list(self) -> list["Op"]:
+    def _list(self) -> list["Op"]:  # type: ignore[override]
         """Ops sorted by pass index (built on each read)."""
 
+        if "_dict" in self.__dict__:
+            return cast("list[Op]", self.__dict__["_list"])
         return [self._op_at(position) for position in range(len(self._keys) >> 1)]
 
     def __len__(self) -> int:
@@ -213,7 +240,7 @@ class OpAccessor(Accessor["Op"]):
     def _rebuild(self, core: Any, row: int) -> "Op":
         """Build an Op view over ``row`` of the accessor's store (its view was dropped)."""
 
-        op_class = _OP_FACADE[0][0]
+        op_class: Any = _OP_FACADE[0][0]
         op = cast("Op", op_class.__new__(op_class))
         object.__setattr__(op, "_core", self._store)
         object.__setattr__(op, "_row", row)
@@ -426,7 +453,7 @@ class LayerAccessor(Accessor["Layer"]):
         """
 
         source_ref = weakref.ref(source_trace) if source_trace is not None else None
-        if layer_logs.__class__ is LayerStore:
+        if cast("Any", layer_logs).__class__ is LayerStore:
             # The trace's own layer store: read through it, holding no Layer record here.
             cast("LayerStore", layer_logs).settle()
             self.__dict__["_dict"] = layer_logs

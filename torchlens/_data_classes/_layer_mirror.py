@@ -27,6 +27,8 @@ def _layer_rep_op(layer: Layer) -> Op | None:
         return None
     state = ops.__dict__
     keys = state.get("_keys")
+    if keys is None:
+        keys = getattr(ops, "_keys", None)  # revives a saved-shape accessor copy
     if not keys:
         return None
     row = keys[1]
