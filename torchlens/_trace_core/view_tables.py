@@ -197,9 +197,11 @@ class WeakViews(_Views):
         found = list(map(_deref, map(self.refs.__getitem__, rows)))
         if self.kind != OP_KIND or None not in found:
             return found
-        missing = list(dict.fromkeys([row for row, view in zip(rows, found) if view is None]))
-        built = dict(zip(missing, self.build(missing)))
-        return [built[row] if view is None else view for row, view in zip(rows, found)]
+        missing = list(
+            dict.fromkeys([row for row, view in zip(rows, found, strict=True) if view is None])
+        )
+        built = dict(zip(missing, self.build(missing), strict=True))
+        return [built[row] if view is None else view for row, view in zip(rows, found, strict=True)]
 
     def build(self, rows: Any) -> list[Any]:
         """Build an ``Op`` view for each of ``rows`` (no repeats), cache them weakly, return them."""
@@ -297,7 +299,9 @@ class ViewTables:
             _list_set(table, slice(None), [None] * len(table))
             # Nothing above still holds a view: a reference that is alive now
             # is to a record somebody else kept.
-            for row, reference, view in zip(rows, references, list(map(_deref, references))):
+            for row, reference, view in zip(
+                rows, references, list(map(_deref, references)), strict=True
+            ):
                 if view is not None:
                     table.refs[row] = reference
                     _set(view, "_owner", owner)

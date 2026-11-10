@@ -62,14 +62,14 @@ def _weak_layer_views(slots: Any, states: list[dict[str, Any]]) -> list[Any]:
     views = cast("list[Any]", slots.many(rows))
     stale = [
         at
-        for at, (view, state) in enumerate(zip(views, states))
+        for at, (view, state) in enumerate(zip(views, states, strict=True))
         if view is None or view.__dict__ is not state
     ]
     if stale:
         built: list[Any] = list(map(object.__new__, repeat(_LAYER_CLASS[0], len(stale))))
         deque(map(object.__setattr__, built, repeat("__dict__"), [states[at] for at in stale]), 0)
         slots.adopt([rows[at] for at in stale], built)
-        for at, view in zip(stale, built):
+        for at, view in zip(stale, built, strict=True):
             views[at] = view
     return views
 

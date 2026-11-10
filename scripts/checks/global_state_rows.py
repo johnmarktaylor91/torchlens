@@ -331,6 +331,9 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # module can build Layer views without importing it; never mutated
         # by a capture.
         ("torchlens/_data_classes/_layer_state.py", "_LAYER_CLASS"),
+        # The Op class op.py binds once at import so the view tables can build
+        # Op views without importing it; never mutated by a capture.
+        ("torchlens/_trace_core/view_tables.py", "OP_CLASS"),
         # First-read source digests for conditional/source attribution (deep-hunt
         # C4, fix/postproc 7a58a021). Deliberately NOT a _PROCESS_CACHES row:
         # clearing it is not correctness-neutral (the pin is the fail-closed
