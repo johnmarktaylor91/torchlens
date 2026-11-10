@@ -62,18 +62,25 @@ def _param_class() -> type:
 _FORK_MEMO: list[type] = []
 
 
-def _in_fork(memo: Any) -> bool:
-    """Return whether ``memo`` is a fork builder's deepcopy memo.
+def _fork_rows(owner: ParamRows, memo: Any) -> ParamRows | None:
+    """Return the fork's resolver when ``memo`` is a fork builder's memo, else ``None``.
 
-    A fork's param store has the parent's rows, so a fork keeps the keys:
-    ``pin_params`` on the fork rekeys the copy to the fork's own resolver.
+    A fork's param store has the parent's rows, so a fork's copy of a row-key
+    container keeps the keys, read through the fork's own resolver. The fork
+    builder seeds its memo with ``id(parent) -> fork``.
     """
 
     if not _FORK_MEMO:
         from ._trace_fork import _ForkMemo
 
         _FORK_MEMO.append(_ForkMemo)
-    return memo.__class__ is _FORK_MEMO[0]
+    if memo.__class__ is not _FORK_MEMO[0]:
+        return None
+    parent = owner.table.owner()
+    fork = memo.get(id(parent)) if parent is not None else None
+    core = getattr(fork, "__dict__", {}).get("_trace_core")
+    rows = param_rows_of(core) if core is not None else None
+    return rows if rows is not owner else None
 
 
 class ParamTable:
@@ -302,12 +309,12 @@ class ParamSequence(OpSequence):
     def __deepcopy__(self, memo: dict[Any, Any]) -> Any:
         """Copy as a plain list of the copied records (a copied trace keys them again).
 
-        A fork's copy keeps the keys instead (see ``_in_fork``).
+        A fork's copy keeps the keys instead (see ``_fork_rows``).
         """
 
-        if _in_fork(memo):
-            new: Any = ParamSequence(self._owner)
-            list.extend(new, _list_iter(self))
+        rows = _fork_rows(self._owner, memo)
+        if rows is not None:
+            new: Any = rows.forked(self)
         else:
             new = _copied(self._records(), memo)
         memo[id(self)] = new
@@ -338,12 +345,13 @@ class ParamMap(OpLabelMap):
     def __deepcopy__(self, memo: dict[Any, Any]) -> Any:
         """Copy as a plain dictionary of the copied records (a copied trace keys them again).
 
-        A fork's copy keeps the keys instead (see ``_in_fork``).
+        A fork's copy keeps the keys instead (see ``_fork_rows``).
         """
 
-        if _in_fork(memo):
-            new: Any = ParamMap(self._owner, ordered=self._ordered)
-            dict.update(new, dict.items(self))
+        rows = _fork_rows(self._owner, memo)
+        if rows is not None:
+            new: Any = ParamMap(rows, ordered=self._ordered)
+            dict.update(new, zip(list(dict.__iter__(self)), rows.adopt_keys(self), strict=True))
         else:
             plain = self.plain()
             new = type(plain)(zip(plain, _copied(plain.values(), memo), strict=True))
@@ -482,10 +490,11 @@ class ParamTuple(tuple):  # noqa: SLOT001 (a tuple subclass cannot declare slots
     def __deepcopy__(self, memo: dict[Any, Any]) -> Any:
         """Copy as a plain tuple of the copied records (a copied trace keys them again).
 
-        A fork shares this immutable tuple of keys (see ``_in_fork``).
+        A fork's copy keeps the keys instead (see ``_fork_rows``).
         """
 
-        new: Any = self if _in_fork(memo) else tuple(_copied(self._records(), memo))
+        rows = _fork_rows(self._owner, memo)
+        new: Any = rows.rekeyed(self) if rows is not None else tuple(_copied(self._records(), memo))
         memo[id(self)] = new
         return new
 

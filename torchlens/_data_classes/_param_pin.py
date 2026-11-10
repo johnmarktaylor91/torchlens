@@ -111,7 +111,7 @@ def own_children(trace: Any, kind: str, accessor: Any) -> Any:
 
 
 def _pin_op_cells(store: Any, rows: ParamRows, memo: dict[int, Any]) -> None:
-    """Replace each op's non-empty parameter list or tuple with its row-key form.
+    """Replace each op's non-empty parameter list or tuple with its row-key form of ``rows``.
 
     The cell is released before the new value is written, so a sealed store
     lets go of the plain list it kept in its column.
@@ -123,8 +123,8 @@ def _pin_op_cells(store: Any, rows: ParamRows, memo: dict[int, Any]) -> None:
     cell_get, cell_del, cell_set = store.cell_get, store.cell_del, store.cell_set
     for row in range(len(store)):
         value = cell_get(row, fid, True)
-        if (value.__class__ is list or value.__class__ is tuple) and value:
-            converted = as_sequence(rows, value, memo)
+        converted = as_sequence(rows, value, memo)
+        if converted is not value:
             cell_del(row, fid)
             cell_set(row, fid, converted)
 
