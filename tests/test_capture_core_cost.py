@@ -190,6 +190,10 @@ class _Referent:
     """A weakly referenceable object for the C2 weak-reference tests."""
 
 
+def _ignore(_ref: object) -> None:
+    """Weak-reference callback; a reference with a callback is never shared."""
+
+
 def test_c2_counts_a_kept_weak_reference_only_while_its_referent_lives() -> None:
     alive = _Referent()
     _, empty = retained_after(lambda: [])
@@ -206,7 +210,8 @@ def test_c2_rises_when_a_trace_keeps_a_live_weak_reference() -> None:
     tl.trace(model, x)
     plain, without = retained_after(lambda: (tl.trace(model, x), None))
     del plain
-    planted, with_ref = retained_after(lambda: (tl.trace(model, x), weakref.ref(model)))
+    # Without a callback CPython hands back the model's existing weak reference.
+    planted, with_ref = retained_after(lambda: (tl.trace(model, x), weakref.ref(model, _ignore)))
     del planted
     assert with_ref["objects"] - without["objects"] == 1
 
