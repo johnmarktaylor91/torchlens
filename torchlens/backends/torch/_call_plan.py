@@ -7,6 +7,13 @@ fused running-statistic write and none of the wrapper's special roles. The
 schema facts come from the ``get_jit_all_schemas`` capability probe
 (``HAS_JIT_SCHEMA_ENUMERATION``); without it no callable gets a plan.
 
+:func:`build_fast_plan` adds writing plans for two more kinds: an in-place
+receiver write (``relu_``, ``__iadd__``) whose every schema writes exactly its
+``self`` and returns it, and a fused normalization call (``batch_norm``) with an
+out-of-place single-tensor schema, whose running-statistic writes the wrapper
+snapshots before the call. Their commit, and the commit of a call that returns
+its own receiver, is :func:`._ops_emission.commit_admitted`.
+
 At call time :func:`admit_call` decides, before any bookkeeping side effect,
 whether this call may skip the wrapper's general pre-call work. An admitted
 call still records every call-time fact and still ends in today's emit
@@ -94,12 +101,18 @@ class CallPlan:
         tracker's storage metadata cache. For a planned name that is exactly a
         trailing underscore (every dunder has one): the in-place naming family
         gets no plan.
+    writes:
+        Whether the call may write an argument: a receiver write (``relu_``) or
+        a fused normalization call's running statistics (``batch_norm``), both
+        planned by :func:`build_fast_plan`. The wrapper then keeps its
+        pre-mutation copy-out of deferred payloads for the call.
     """
 
-    __slots__ = ("name_could_mutate",)
+    __slots__ = ("name_could_mutate", "writes")
 
-    def __init__(self, name_could_mutate: bool) -> None:
+    def __init__(self, name_could_mutate: bool, writes: bool = False) -> None:
         self.name_could_mutate = name_could_mutate
+        self.writes = writes
 
 
 def _schema_suits_fast_lane(schema: Any) -> bool | None:
@@ -200,6 +213,98 @@ def build_call_plan(
     if not schema_names.get(schema_name, False):
         return None
     return CallPlan(func_name.endswith("_"))
+
+
+#: Augmented-assignment dunders whose in-place operator has another name.
+_AUGMENTED_SCHEMA_NAMES = {"truediv_": "div_", "floordiv_": "floor_divide_", "mod_": "remainder_"}
+
+
+def _inplace_schema_suits(schema: Any) -> bool | None:
+    """Return whether one schema writes exactly its tensor ``self`` and returns it.
+
+    ``None`` for a schema whose first argument is not a single tensor (it cannot
+    serve a receiver-writing tensor method and counts neither way).
+    """
+
+    arguments = schema.arguments
+    if not arguments or str(arguments[0].type) != "Tensor":
+        return None
+    alias = arguments[0].alias_info
+    if alias is None or not alias.is_write:
+        return False
+    for argument in arguments[1:]:
+        if argument.alias_info is not None and argument.alias_info.is_write:
+            return False
+    returns = schema.returns
+    return len(returns) == 1 and str(returns[0].type) == "Tensor"
+
+
+@functools.cache
+def inplace_schema_names() -> dict[str, bool]:
+    """Return, per ``aten`` operator name, whether every overload is a pure receiver write.
+
+    Read once per process; empty without the schema enumeration capability.
+    """
+
+    names: dict[str, bool] = {}
+    for schema in _torch_compat.get_jit_all_schemas() or ():
+        namespace, _, name = schema.name.partition("::")
+        verdict = _inplace_schema_suits(schema) if namespace == "aten" else None
+        if verdict is not None:
+            names[name] = names.get(name, True) and verdict
+    return names
+
+
+def _inplace_schema_name(func_name: str) -> str:
+    """Return the ``aten`` name of a receiver-writing callable (``__iadd__`` reads ``add_``)."""
+
+    if func_name.startswith("__i") and func_name.endswith("__"):
+        name = func_name[3:-2] + "_"
+        return _AUGMENTED_SCHEMA_NAMES.get(name, name)
+    return func_name
+
+
+def build_fast_plan(
+    hazard: bool,
+    func: Callable[..., Any],
+    func_name: str,
+    property_accessor: str | None,
+    mutates_receiver: bool,
+) -> CallPlan | None:
+    """Return the fast-lane plan of a wrapped callable without a special wrapper role.
+
+    Parameters
+    ----------
+    hazard:
+        Whether the wrapper gives the callable a special role (no plan then).
+    func:
+        The original torch callable.
+    func_name:
+        Name the callable is wrapped under.
+    property_accessor:
+        Accessor kind when ``func`` belongs to a wrapped property, else ``None``.
+    mutates_receiver:
+        Whether the wrapper classifies the name as writing its first argument.
+
+    Returns
+    -------
+    CallPlan | None
+        A writing plan for a receiver write or a fused normalization call whose
+        schemas allow it, else :func:`.build_call_plan`'s verdict.
+    """
+
+    if hazard or property_accessor is not None or type(func) not in _C_CALLABLE_TYPES:
+        return None
+    if mutates_receiver:
+        names = inplace_schema_names()
+        if names.get(func_name, False) or names.get(_inplace_schema_name(func_name), False):
+            return CallPlan(True, writes=True)
+        return None
+    if func_name in _FUSED_MUTATOR_NAMES:
+        if single_tensor_schema_names().get(func_name, False):
+            return CallPlan(True, writes=True)
+        return None
+    return build_call_plan(func, func_name, property_accessor)
 
 
 def _scan_values(values: Iterable[Any], tensors: list[torch.Tensor]) -> int:
