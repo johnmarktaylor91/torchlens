@@ -12,6 +12,7 @@ from itertools import compress, repeat
 from operator import eq, methodcaller, truth
 from typing import TYPE_CHECKING, Any
 
+from ._param_pin import pin_params
 from ._trace_intervention_records import record_operation
 from ._trace_missing_attrs import is_live_trace
 
@@ -95,3 +96,4 @@ def rebind_fork_owner_refs(trace: Trace) -> None:
         module_log.__dict__.pop("_facets_cache", None)
         for module_call in module_log.calls.values():
             module_call._source_trace = trace
+    pin_params(trace)

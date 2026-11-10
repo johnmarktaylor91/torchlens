@@ -38,7 +38,7 @@ from .._data_classes._state_adapter import state_items
 from .._data_classes._summary import format_call_arg
 from .._data_classes.layer import Layer
 from .._data_classes.module import Module, ModuleCall
-from .._data_classes.param import ParamAccessor
+from .._data_classes.param import ParamAccessor, param_key
 from .._data_classes.trace import (
     Conditional,
     ConditionalAccessor,
@@ -149,7 +149,7 @@ def _finalize_param_logs(self: "Trace") -> None:
 
     # Lists remain authoritative and preserve first-seen order. Local sets avoid
     # repeatedly scanning those growing lists for high-arity parameterized ops.
-    membership_by_param: dict[int, tuple[set[str], set[str], set[str]]] = {}
+    membership_by_param: dict[Any, tuple[set[str], set[str], set[str]]] = {}
 
     # Build used_by_ops, used_by_layers, and co_parent_params from Op entries
     for layer_entry in self._layer_list:
@@ -157,14 +157,14 @@ def _finalize_param_logs(self: "Trace") -> None:
             continue
         addresses_in_op = [pl.address for pl in layer_entry._param_logs]
         for pl in layer_entry._param_logs:
-            membership = membership_by_param.get(id(pl))
+            membership = membership_by_param.get(param_key(pl))
             if membership is None:
                 membership = (
                     set(pl.used_by_ops),
                     set(pl.used_by_layers),
                     set(pl.co_parent_params),
                 )
-                membership_by_param[id(pl)] = membership
+                membership_by_param[param_key(pl)] = membership
             used_by_ops, used_by_layers, co_parent_params = membership
             if layer_entry.label not in used_by_ops:
                 pl.used_by_ops.append(layer_entry.label)

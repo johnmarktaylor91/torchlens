@@ -103,6 +103,7 @@ from . import (
     _call_tree,
     _doors,
     _fork_lineage,
+    _param_pin,
     _trace_annotations,
     _trace_aten,
     _trace_intervention_records,
@@ -1179,8 +1180,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
     def _init_param_time_and_backward_state(self) -> None:
         """Initialise the param, module, timing and backward-record fields of a fresh Trace."""
 
-        # Param info:
-        self._param_logs: ParamAccessor = ParamAccessor({})
+        self._param_logs: ParamAccessor = ParamAccessor({})  # Param info (rows once pinned)
         self._num_param_tensors: int = 0
         self._num_layers_with_params: int = 0
         self.num_params: int = 0
@@ -2195,7 +2195,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
     @property
     def params(self) -> ParamAccessor:
         """Access parameter metadata by address, short name, or index."""
-        return self._param_logs
+        return _param_pin.handed_params(self)
 
     @property
     def _graph_tied_param_groups(self) -> tuple[tuple[str, ...], ...]:

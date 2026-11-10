@@ -25,6 +25,10 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # Foreign-kernel boundary: the stack of export names seen inside each live
         # Function.apply frame, pushed and popped around that one apply call.
         ("torchlens/backends/torch/_function_boundary.py", "_FRAMES"),
+        # Param stream sessions: one memo per state stream (pickle, deep copy,
+        # plain_state) in flight, closed by a finalizer on that stream's own
+        # state; a survivor only keeps one stream's plain lists alive.
+        ("torchlens/_data_classes/_param_pin.py", "_SESSIONS"),
         ("torchlens/backends/torch/_torch_ops_calls.py", "_SUPPRESS_DEPTH"),
         # Operator entry compile depth: incremented/decremented in
         # hop_internal_compile_scope's try/finally around one lifted compile; a
@@ -331,6 +335,13 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # module can build Layer views without importing it; never mutated
         # by a capture.
         ("torchlens/_data_classes/_layer_state.py", "_LAYER_CLASS"),
+        # The Param and ParamAccessor classes the param row modules bind on
+        # first use so they import no record class, and the fork translator's
+        # class -> copier table for row-key param containers, filled at import;
+        # none is mutated by a capture.
+        ("torchlens/_data_classes/_param_rows.py", "_PARAM"),
+        ("torchlens/_data_classes/_param_pin.py", "_ACCESSOR"),
+        ("torchlens/_data_classes/_fork_translation.py", "FORK_COPIERS"),
         # The OpAccessor class (and an empty subclass of it) the layer
         # accessors bind once at import so the ``Layer.ops`` door can hand out
         # an accessor without importing it; never mutated by a capture.
@@ -712,9 +723,9 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Per-trace grad_fn-call ordinal index (fix/walkers f399c63a, linear
         # ordinal_index): keyed weakly by the owning trace, dies with it.
         ("torchlens/_data_classes/grad_fn_call.py", "_ORDINAL_POSITIONS_CACHE"),
-        # Per-accessor param ordinal index, keyed weakly by the owning
-        # accessor; entries die with it (mirror of _ORDINAL_POSITIONS_CACHE).
-        ("torchlens/_data_classes/param.py", "_ORDINAL_INDEX_CACHE"),
+        # Per row-key param sequence position index for ``Param.index``, keyed
+        # weakly by the sequence; entries die with it and are verified before use.
+        ("torchlens/_data_classes/_param_pin.py", "_POSITIONS"),
         # Live telemetry relations are keyed by AtenOp facades and disappear
         # with those rows; they never retain a Trace or profiler session.
         ("torchlens/_kernel_telemetry.py", "_ATEN_KERNELS"),
@@ -1116,7 +1127,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/_data_classes/_compaction.py", "_COMPACTED_TRACES"),
         ("torchlens/_data_classes/_nonfinite.py", "_MEMOS"),
         ("torchlens/_data_classes/grad_fn_call.py", "_ORDINAL_POSITIONS_CACHE"),
-        ("torchlens/_data_classes/param.py", "_ORDINAL_INDEX_CACHE"),
+        ("torchlens/_data_classes/_param_pin.py", "_POSITIONS"),
         ("torchlens/_kernel_telemetry.py", "_ATEN_KERNELS"),
         ("torchlens/_visualization/auto_collapse.py", "_ANALYSIS_CACHE"),
         ("torchlens/_visualization/auto_collapse.py", "_OP_ADJACENCY_INDEX_CACHE"),

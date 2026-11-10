@@ -24,11 +24,15 @@ from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
+from ._param_pin import fork_copy
+from ._param_rows import ROW_FORMS
 from ._state_adapter import state_new
 
 _OBJECT_SETATTR = object.__setattr__
 _OBJECT_GETATTRIBUTE = object.__getattribute__
 _OP_KIND = "op"
+#: Class -> ``copier(value, translator)``: the fork's copy of a parent row-key container.
+FORK_COPIERS: dict[type, Any] = dict.fromkeys(ROW_FORMS, fork_copy)
 
 
 def _bound_op(op: Any, op_cls: type, store: Any, row: int) -> bool:
@@ -369,6 +373,9 @@ class RowTranslator:
         parent_ref = self._parent_ref
         if parent_ref is not None and value is parent_ref():
             return self._fork_ref() if self._fork_ref is not None else None
+        copier = FORK_COPIERS.get(cls)
+        if copier is not None:
+            return copier(value, self)
         if isinstance(value, Accessor):
             return self._rebuild_accessor(value)
         if (

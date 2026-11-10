@@ -12,6 +12,7 @@ from .._errors import InvalidArgumentError
 from .._utils._display_collections import accessor_noun, collection_repr, collection_str
 from .._utils._display_errors import candidate_keys, lookup_message
 from .._utils.fail_open import fail_open
+from ._param_pin import plain_value
 
 T = TypeVar("T")
 
@@ -115,7 +116,7 @@ class Accessor(Generic[T]):
         ``TypeError: cannot pickle 'weakref.ReferenceType' object``.
         """
 
-        state = self.__dict__.copy()
+        state = {name: plain_value(value) for name, value in self.__dict__.items()}
         if "_source_ref" in state:
             state["_source_ref"] = None
         return state
