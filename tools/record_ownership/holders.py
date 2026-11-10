@@ -72,6 +72,18 @@ HOLDERS: dict[str, Holder] = {
     "Trace._trace_core:TraceCore._strong_facades{*}[*] -> Op": Holder(
         ACTIVATION, but=("pickle_state",)
     ),
+    "Trace._trace_core:TraceCore._strong_facades{*}{*}[*]:ModuleCallAccessor._dict{*} -> ModuleCall": Holder(
+        ACTIVATION, but=("pickle_state",)
+    ),
+    "Trace._trace_core:TraceCore._strong_facades{*}{*}[*]:ModuleCallAccessor._list[*] -> ModuleCall": Holder(
+        ACTIVATION, but=("pickle_state",)
+    ),
+    "Trace._trace_core:TraceCore._strong_facades{*}{*}[*]:ParamAccessor._dict{*} -> Param": Holder(
+        ACTIVATION, only=("deepcopied",)
+    ),
+    "Trace._trace_core:TraceCore._strong_facades{*}{*}[*]:ParamAccessor._list[*] -> Param": Holder(
+        ACTIVATION, only=("deepcopied",)
+    ),
     "Layer.ops:OpAccessor._dict{*} -> Op": Holder(LAYER_STATE),
     "Layer.ops:OpAccessor._list[*] -> Op": Holder(LAYER_STATE),
     "Trace._layer_accessor_cache[*]:LayerAccessor._dict{*} -> Layer": Holder(
