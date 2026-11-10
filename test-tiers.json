@@ -337,6 +337,7 @@
         "tests/test_run_until_projection_cost.py"
       ],
       "torchlens/_capture/_plan_check.py": [
+        "tests/test_postprocess_executor.py",
         "tests/test_w051_gate_plan_check.py",
         "tests/test_weightsfree_plan_check.py"
       ],
@@ -826,7 +827,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_postprocess_executor.py"
       ],
       "torchlens/_data_classes/_accessor_base.py": [
         "tests/test_collapse_optimizer.py",
@@ -888,7 +889,7 @@
         "tests/test_backend_finalize_labels.py",
         "tests/test_capture_fields_dict_prune.py",
         "tests/test_capture_overhead_counters.py",
-        "tests/test_capture_row_ingest.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_validation_reasons_structural.py"
@@ -1007,6 +1008,11 @@
         "tests/test_indexing_coherence.py",
         "tests/test_io_plain_pickle.py",
         "tests/test_orphan_bulk_drop.py"
+      ],
+      "torchlens/_data_classes/_layer_ops_door.py": [
+        "tests/test_column_passes_finalize.py",
+        "tests/test_perf8_fork_copy.py",
+        "tests/test_w051_gate_layer_accessors.py"
       ],
       "torchlens/_data_classes/_layer_sites.py": [
         "tests/test_adversarial_scaling_gates.py",
@@ -1127,7 +1133,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_postprocess_executor.py"
       ],
       "torchlens/_data_classes/_moe_views.py": [
         "tests/surface_oracle/test_surface_oracle.py",
@@ -1175,6 +1181,15 @@
         "tests/test_r18h_introspect_hash.py",
         "tests/test_selective_save_zero_match_warning.py",
         "tests/test_validation.py"
+      ],
+      "torchlens/_data_classes/_op_column_scan.py": [
+        "tests/test_column_passes_depths_finished.py",
+        "tests/test_column_passes_finalize.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
+        "tests/test_postprocess_executor.py",
+        "tests/test_postprocess_r14a_regressions.py",
+        "tests/test_trace_core_substrate.py"
       ],
       "torchlens/_data_classes/_op_columns.py": [
         "tests/test_column_passes_depths_finished.py",
@@ -1284,6 +1299,31 @@
         "tests/test_op_columns.py",
         "tests/test_op_row_cells.py",
         "tests/test_op_row_release_counters.py"
+      ],
+      "torchlens/_data_classes/_param_fork.py": [
+        "tests/test_backward.py",
+        "tests/test_perf8_fork_copy.py",
+        "tests/test_trace_fork_structural_sharing.py"
+      ],
+      "torchlens/_data_classes/_param_pin.py": [
+        "tests/test_auto_collapse_atomic_spans.py",
+        "tests/test_backend_constants_rule.py",
+        "tests/test_conditional_branches.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_encoding_size.py",
+        "tests/test_indexing_coherence.py",
+        "tests/test_validation.py",
+        "tests/test_vizx_netron_baseline_diff.py"
+      ],
+      "torchlens/_data_classes/_param_rows.py": [
+        "tests/test_capture_events_parity.py",
+        "tests/test_format3_reader_fuzz.py",
+        "tests/test_format3_reader_safety.py",
+        "tests/test_io_scrub_policy.py",
+        "tests/test_op_row_containers.py",
+        "tests/test_perf8_fork_copy.py",
+        "tests/test_pin_b6b.py",
+        "tests/test_tlspec_envelope_state_contract.py"
       ],
       "torchlens/_data_classes/_preprocessing_provenance.py": [
         "tests/test_b2_bridge_preprocessing.py",
@@ -1508,7 +1548,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_postprocess_executor.py"
       ],
       "torchlens/_data_classes/_trace_docs_output.py": [
         "tests/backend_conformance/test_capability_truth.py",
@@ -1518,7 +1558,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_postprocess_executor.py"
       ],
       "torchlens/_data_classes/_trace_docs_stats.py": [
         "tests/backend_conformance/test_capability_truth.py",
@@ -1528,7 +1568,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_postprocess_executor.py"
       ],
       "torchlens/_data_classes/_trace_docs_validation.py": [
         "tests/backend_conformance/test_capability_truth.py",
@@ -1538,7 +1578,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_postprocess_executor.py"
       ],
       "torchlens/_data_classes/_trace_field_spec.py": [
         "tests/test_auto_collapse_atomic_spans.py",
@@ -1668,7 +1708,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_postprocess_executor.py"
       ],
       "torchlens/_data_classes/_trace_removal.py": [
         "tests/test_auto_collapse_atomic_spans.py",
@@ -1734,11 +1774,11 @@
         "tests/test_vizx_netron_baseline_diff.py"
       ],
       "torchlens/_data_classes/_trace_views.py": [
-        "tests/test_auto_collapse_atomic_spans.py",
         "tests/test_conditional_branches.py",
         "tests/test_encoding_channels.py",
         "tests/test_encoding_size.py",
         "tests/test_indexing_coherence.py",
+        "tests/test_postprocess_executor.py",
         "tests/test_trace_view_names.py",
         "tests/test_validation.py",
         "tests/test_vizx_netron_baseline_diff.py"
@@ -2848,9 +2888,9 @@
       "torchlens/_io/accessor_rebuild.py": [
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
-        "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_tlspec_rehydrate_no_planted_call.py",
         "tests/test_tlspec_unified.py"
@@ -4243,6 +4283,7 @@
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
@@ -4267,6 +4308,7 @@
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
@@ -4301,6 +4343,7 @@
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
@@ -4334,6 +4377,7 @@
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
@@ -4343,10 +4387,14 @@
         "tests/test_executor_cuda_cache_arming.py",
         "tests/test_postprocess_executor.py"
       ],
+      "torchlens/_postprocess/_layer_row_scan.py": [
+        "tests/test_column_passes_finalize.py"
+      ],
       "torchlens/_postprocess/_lazy_param_geometry.py": [
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
@@ -4365,6 +4413,7 @@
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
@@ -4381,6 +4430,7 @@
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
@@ -4429,6 +4479,7 @@
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
@@ -4449,12 +4500,14 @@
         "tests/test_backends_finalize_cert10.py",
         "tests/test_loop_recurrence_hardening.py",
         "tests/test_mlx_recurrence_grouping.py",
+        "tests/test_pin_b6b.py",
         "tests/test_preview_trace_declared_fields.py"
       ],
       "torchlens/_postprocess/_root_module_log.py": [
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
@@ -4508,6 +4561,7 @@
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
@@ -4536,7 +4590,7 @@
         "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
-        "tests/test_implicit_boundary_tightening.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_streaming_finalization_arming.py",
@@ -5541,11 +5595,11 @@
         "tests/test_wrap_state_compat.py"
       ],
       "torchlens/_trace_core/__init__.py": [
-        "tests/test_capture_row_ingest.py",
         "tests/test_fork_shared_label_index.py",
         "tests/test_op_row_release_counters.py",
         "tests/test_perf7_eviction_walk.py",
         "tests/test_perf7_fork_reads.py",
+        "tests/test_pin_b6b.py",
         "tests/test_sweep_replay_counters.py",
         "tests/test_trace_core_op_store.py",
         "tests/test_trace_core_substrate.py"
@@ -5658,9 +5712,9 @@
         "tests/test_op_row_release_counters.py",
         "tests/test_perf7_eviction_walk.py",
         "tests/test_perf7_fork_reads.py",
+        "tests/test_pin_b6b.py",
         "tests/test_relation_views.py",
         "tests/test_sweep_replay_counters.py",
-        "tests/test_trace_core_op_store.py",
         "tests/test_trace_core_substrate.py"
       ],
       "torchlens/_trace_core/payloads.py": [
@@ -5668,9 +5722,9 @@
         "tests/test_op_row_release_counters.py",
         "tests/test_perf7_eviction_walk.py",
         "tests/test_perf7_fork_reads.py",
+        "tests/test_pin_b6b.py",
         "tests/test_relation_views.py",
         "tests/test_sweep_replay_counters.py",
-        "tests/test_trace_core_op_store.py",
         "tests/test_trace_core_substrate.py"
       ],
       "torchlens/_trace_core/pools.py": [
@@ -5679,8 +5733,8 @@
         "tests/test_op_row_release_counters.py",
         "tests/test_perf7_eviction_walk.py",
         "tests/test_perf7_fork_reads.py",
+        "tests/test_pin_b6b.py",
         "tests/test_relation_views.py",
-        "tests/test_sweep_replay_counters.py",
         "tests/test_trace_core_substrate.py"
       ],
       "torchlens/_trace_core/record_refs.py": [
@@ -5691,7 +5745,7 @@
         "tests/test_module_facet_rows.py",
         "tests/test_op_columns.py",
         "tests/test_op_row_containers.py",
-        "tests/test_record_field_policy.py"
+        "tests/test_pin_b6b.py"
       ],
       "torchlens/_trace_core/record_rows.py": [
         "tests/test_backward_intervention.py",
@@ -5700,7 +5754,7 @@
         "tests/test_container_cell_pooling.py",
         "tests/test_implicit_boundary_tightening.py",
         "tests/test_perf8_fork_copy.py",
-        "tests/test_record_field_policy.py",
+        "tests/test_pin_b6b.py",
         "tests/test_trace_core_substrate.py"
       ],
       "torchlens/_trace_core/relation_views.py": [
@@ -5718,17 +5772,17 @@
         "tests/test_op_row_release_counters.py",
         "tests/test_perf7_eviction_walk.py",
         "tests/test_perf7_fork_reads.py",
+        "tests/test_pin_b6b.py",
         "tests/test_relation_views.py",
         "tests/test_sweep_replay_counters.py",
-        "tests/test_trace_core_op_store.py",
         "tests/test_trace_core_substrate.py"
       ],
       "torchlens/_trace_core/view_tables.py": [
         "tests/test_accessor_alias_index.py",
         "tests/test_capture_overhead_counters.py",
         "tests/test_op_accessor_layer_index.py",
-        "tests/test_op_label_resolution.py",
         "tests/test_op_row_containers.py",
+        "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_r19f_rf_view_table.py",
         "tests/test_trace_core_substrate.py"
@@ -5954,6 +6008,7 @@
         "tests/test_format3_loaded_equals_live.py",
         "tests/test_owned_record_displays.py",
         "tests/test_perf8_fork_copy.py",
+        "tests/test_postprocess_executor.py",
         "tests/test_w051_gate_layer_accessors.py"
       ],
       "torchlens/_utils/_display_constructor.py": [
@@ -8652,10 +8707,10 @@
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
         "tests/test_column_passes_finalize.py",
+        "tests/test_pin_b6b.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_oracle_compare.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
-        "tests/test_preview_trace_declared_fields.py",
         "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/_default_specs.py": [
@@ -8709,18 +8764,18 @@
         "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
+        "tests/test_pin_b6b.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
         "tests/test_preview_trace_declared_fields.py",
-        "tests/test_rulings_names_1103.py",
         "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/_finalize_distances.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
-        "tests/test_backends_finalize_cert10.py",
         "tests/test_jax_backend_derived_grads.py",
+        "tests/test_pin_b6b.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_trace_declared_fields.py",
         "tests/test_validation_reasons_structural.py"
@@ -8729,7 +8784,7 @@
         "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
-        "tests/test_capture_unification_p8.py",
+        "tests/test_pin_b6b.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
         "tests/test_rulings_names_1103.py",
@@ -10279,7 +10334,14 @@
         "tests/test_parameter_inplace_mutation.py"
       ],
       "torchlens/backends/torch/_pinned_graph.py": [
-        "tests/test_postprocess_executor.py"
+        "tests/test_conformance_torch_roster.py",
+        "tests/test_distributed_c0_core.py",
+        "tests/test_identity_shims.py",
+        "tests/test_lazy_torch_module_reads.py",
+        "tests/test_legacy_tensor_constructors.py",
+        "tests/test_ops_arg_slots.py",
+        "tests/test_torch_compat.py",
+        "tests/test_torch_func_transforms.py"
       ],
       "torchlens/backends/torch/_predicate_boundary_replacements.py": [
         "tests/test_module_alias_doors.py",
@@ -14463,8 +14525,8 @@
         "tests/surface_oracle/test_surface_oracle.py",
         "tests/test_checkpoint_live_ref_guard.py",
         "tests/test_facade_dx_contract.py",
-        "tests/test_field_order_contract.py",
         "tests/test_io_scrub_policy.py",
+        "tests/test_pin_b6b.py",
         "tests/test_record_field_policy.py",
         "tests/test_strict_accessors.py",
         "tests/test_value_record_display.py"
@@ -14480,9 +14542,9 @@
         "tests/test_treescope_cards_report.py"
       ],
       "torchlens/report/_notebook/cardtree.py": [
-        "tests/surface_oracle/test_surface_oracle.py",
         "tests/test_checkpoint_live_ref_guard.py",
         "tests/test_io_scrub_policy.py",
+        "tests/test_pin_b6b.py",
         "tests/test_record_field_policy.py",
         "tests/test_render_substrate_cardtree.py",
         "tests/test_strict_accessors.py",
@@ -15628,8 +15690,8 @@
       "torchlens/validation/_invariants_modules_params.py": [
         "tests/test_capture_unification_p7.py",
         "tests/test_multi_output_modules.py",
+        "tests/test_pin_b6b.py",
         "tests/test_validation.py",
-        "tests/test_validation_hardening.py",
         "tests/test_validation_index_domain_in_range.py",
         "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
         "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",

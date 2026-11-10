@@ -185,7 +185,7 @@ record, by record; a rename appears as one removed and one added row.
 | `_orphan_logs` | scalar | required: every level | keep | fact | `Trace.graph.orphans` |
 | `_orphan_records` | scalar | required: every level | blob_recursive | fact | none (storage only) |
 | `_out_recipe_revision` | scalar | required: every level | keep | fact | none (storage only) |
-| `_param_logs` | scalar | required: every level | keep | fact | `Trace.params`, `Trace.graph.tied_param_groups`, `Layer.num_param_tensors_frozen`, `Layer.num_param_tensors_trainable` and 8 more |
+| `_param_logs` | scalar | required: every level | keep | fact | `Trace.graph.tied_param_groups`, `Layer.num_param_tensors_frozen`, `Layer.num_param_tensors_trainable`, `Layer.param_dtypes` and 7 more |
 | `_phase_timings` | scalar | required: every level | keep | fact | none (storage only) |
 | `_primitive_op_profile` | scalar: `Any | None` | required: every level | keep | fact | none (storage only) |
 | `_provenance_backend` | scalar | required: every level | keep | fact | `Trace.provenance.backend` |
@@ -289,7 +289,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `_label_raw` | interned | required: every level | keep | fact | `Op.raw_label` |
 | `_layer_label_raw` | interned | required: every level | keep | fact | none (storage only) |
 | `_param_barcodes` | interned | required: every level | keep | fact | `Op.has_params`, `Layer.has_params` |
-| `_param_logs` | scalar | required: every level | keep | fact | `Op.num_param_tensors_frozen`, `Op.num_param_tensors_trainable`, `Op.param_dtypes`, `Op.param_names` and 8 more |
+| `_param_logs` | scalar | required: every level | keep | fact | `Op.num_param_tensors_frozen`, `Op.num_param_tensors_trainable`, `Op.param_dtypes`, `Op.param_names` and 7 more |
 | `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Op.gradient_transform`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace` and 29 more |
 | `_tracing_finished` | interned | required: every level | keep | fact | none (storage only) |
 | `activation_memory` | interned | required: every level | keep | fact | `Op.cost.activation_memory` (field) |
@@ -467,7 +467,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | --- | --- | --- | --- | --- | --- |
 | `_is_in_conditional_body` | scalar | required: every level | keep | fact | none (storage only) |
 | `_param_barcodes` | scalar | required: every level | keep | fact | `Layer.has_params`, `Op.has_params` |
-| `_param_logs` | scalar | required: every level | keep | fact | `Layer.num_param_tensors_frozen`, `Layer.num_param_tensors_trainable`, `Layer.param_dtypes`, `Layer.param_names` and 8 more |
+| `_param_logs` | scalar | required: every level | keep | fact | `Layer.num_param_tensors_frozen`, `Layer.num_param_tensors_trainable`, `Layer.param_dtypes`, `Layer.param_names` and 7 more |
 | `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 29 more |
 | `activation_memory` | scalar | required: every level | keep | fact | `Layer.cost.activation_memory` (field) |
 | `address` | scalar | required: every level | keep | fact | `Layer.buffer_address` (field) |

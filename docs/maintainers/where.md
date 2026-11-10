@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1774 modules, 713050 lines, 0 modules without a docstring.
+85 packages, 1777 modules, 714155 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 129 | 45641 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 132 | 46700 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 51 | 21284 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 51 | 21286 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
@@ -39,7 +39,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 16 | 7447 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
-| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 20 | 6330 |
+| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 20 | 6374 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24192 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
@@ -314,12 +314,12 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (129 modules, 45641 lines)
+Core data structures for representing a logged forward pass. (132 modules, 46700 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Core data structures for representing a logged forward pass. | 30 |
-| `_accessor_base` | Shared base class for TorchLens dict-like accessors. | 386 |
+| `_accessor_base` | Shared base class for TorchLens dict-like accessors. | 387 |
 | `_annotation_image` | Annotation pictures: ''trace.annotate(label, image=...)'' made drawable as PNG. | 180 |
 | `_aten_display` | ATen cards over recorded tensor metadata, never retained tensor values. | 126 |
 | `_backend_capability_guards` | Capability-derived guards for backward-only public accessors. | 122 |
@@ -331,8 +331,8 @@ Core data structures for representing a logged forward pass. (129 modules, 45641
 | `_doors` | Doors from the records to the packages above them (Rule F). | 142 |
 | `_familiar_names` | Hints for attribute names that TorchLens objects do not have but users guess. | 109 |
 | `_fork_flat_copy` | Flat copies for the fork builder: ''copy.deepcopy'' results without per-member recursion. | 189 |
-| `_fork_lineage` | Fork lineage: the ''fork'' verb's record-side helpers and the parent-chain test. | 97 |
-| `_fork_translation` | Fork record translation by kind and row. | 404 |
+| `_fork_lineage` | Fork lineage: the ''fork'' verb's record-side helpers and the parent-chain test. | 99 |
+| `_fork_translation` | Fork record translation by kind and row. | 424 |
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
 | `_grad_fn_pass` | Resolve the forward pass one GradFn differentiates. | 41 |
 | `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 179 |
@@ -372,6 +372,9 @@ Core data structures for representing a logged forward pass. (129 modules, 45641
 | `_op_row_release` | Direct row release for op removal (the facade-husk shortcut). | 107 |
 | `_op_save` | Tensor save, grad logging, transform validation and copy logic for ''Op''. | 800 |
 | `_op_transforms` | User-transform application and validation helpers for saved payloads. | 260 |
+| `_param_fork` | How a fork takes its parent's ''Param'' records: by row, building no parent view. | 158 |
+| `_param_pin` | Pin ''Param'': the trace keeps parameter rows, and a ''Param'' handed out keeps the trace. | 327 |
+| `_param_rows` | Trace-side ''Param'' containers that hold row keys, and the trace's ''Param'' views. | 544 |
 | `_preprocessing_provenance` | Preprocessing provenance derivations that live WITH the record. | 114 |
 | `_record_group_base` | Base classes of the Op and Layer concern groups (''op.cost'', ''layer.call'', ...). | 85 |
 | `_record_groups` | Concern-group views of an ''Op'' or ''Layer'': ''op.cost'', ''layer.control_flow'', ... | 570 |
@@ -388,7 +391,7 @@ Core data structures for representing a logged forward pass. (129 modules, 45641
 | `_schema_bindings_trace` | GENERATED storage bindings for the ''trace'' record. DO NOT EDIT. | 355 |
 | `_site_key` | Structural site keys (''site_key_v1''): the portable bridging relation. | 273 |
 | `_staged_spec` | Staged intervention spec reads shared by the ''Trace.run'' door. | 28 |
-| `_state_adapter` | Class-agnostic live-state enumeration and restoration helpers. | 143 |
+| `_state_adapter` | Class-agnostic live-state enumeration and restoration helpers. | 163 |
 | `_summary` | Summary helpers for compact formatting of captured call arguments. | 72 |
 | `_template_walk` | Generic walks over replay templates (tuples, lists, dict values, dataclass fields). | 104 |
 | `_trace_accessors` | Trace accessor helpers. | 798 |
@@ -401,7 +404,7 @@ Core data structures for representing a logged forward pass. (129 modules, 45641
 | `_trace_docs_stats` | Full docstrings of the ''Trace'' statistics, views and reports methods. | 547 |
 | `_trace_docs_validation` | Full docstrings of the ''Trace'' validation, run and backward verbs methods. | 368 |
 | `_trace_field_spec` | The persisted-field policy table of ''Trace'' (''Trace._PORTABLE_STATE_SPEC''). | 491 |
-| `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 683 |
+| `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 686 |
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 338 |
 | `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 799 |
 | `_trace_groups_capture` | Capture-side concern groups of a ''Trace'': ''trace.options'', ''trace.source'', ''trace.health''. | 479 |
@@ -418,7 +421,7 @@ Core data structures for representing a logged forward pass. (129 modules, 45641
 | `_trace_source` | Captured forward-source annotations, independent of live source files. | 45 |
 | `_trace_source_introspection` | Source-model introspection fallbacks for ''Trace'''s ''_source_*'' fields. | 67 |
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 140 |
-| `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 698 |
+| `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 699 |
 | `_trace_stats_grad_fn_site` | Pure helpers behind the Trace grad-fn site and fire-timing rollups. | 177 |
 | `_trace_views` | Trace group-view and field-derived accessor functions. | 797 |
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
@@ -444,7 +447,7 @@ Core data structures for representing a logged forward pass. (129 modules, 45641
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1547 |
 | `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2584 |
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3302 |
-| `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1084 |
+| `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1067 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 223 |
 | `trace` | Trace: the top-level container for a fully logged forward pass. | 3414 |
 
@@ -730,11 +733,11 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (51 modules, 21284 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (51 modules, 21286 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 338 |
+| `__init__` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 340 |
 | `_ast_predicates` | Statement and expression predicates for the conditional AST indexer. | 162 |
 | `_branch_attribution` | Frame-level conditional branch attribution for one op's call stack. | 157 |
 | `_branch_source` | Source text readers and source-range predicates for the conditional AST indexer. | 179 |
@@ -927,7 +930,7 @@ Live narration for TorchLens captures (the torchsnooper niche, better). (10 modu
 
 ### `torchlens._trace_core`
 
-Private per-trace semantic store substrate (trace_core_design.md). (20 modules, 6330 lines)
+Private per-trace semantic store substrate (trace_core_design.md). (20 modules, 6374 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -946,7 +949,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (20 modules, 
 | `overlays` | Sparse versioned row overlays and transactions. | 104 |
 | `payloads` | Identity-preserving payload arena. | 66 |
 | `pools` | Per-trace exact-type intern pools. | 92 |
-| `record_refs` | Records named by row from trace-owned storage. | 599 |
+| `record_refs` | Records named by row from trace-owned storage. | 643 |
 | `record_rows` | Generic store-backed record facades for the non-Op record kinds. | 288 |
 | `relation_views` | Freeze-time conversion of relation staging containers to immutable views. | 542 |
 | `relations` | The canonical edge-occurrence table with CSR indexes. | 162 |
