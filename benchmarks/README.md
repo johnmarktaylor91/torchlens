@@ -80,3 +80,30 @@ Counters gate; wall time and the profiled call count are context only:
 ```bash
 python benchmarks/save_path_counters.py --out save_counters.json
 ```
+
+## Capture-core cost counters
+
+`capture_core_cost.py` measures what one `tl.trace` costs in deterministic counts on a
+fixed model set (`chain1000`, `varied200`, `loopcell100`, `resnet18`, `gpt2_tiny4` and four
+small models for the per-trace and per-module costs): Python and C calls per op by phase
+(C1), retained allocation blocks, collector-tracked objects and live record objects (C2,
+C4), op-store cells written by capture, ingest and the passes (C3), calls per module call
+and per trace (C5, C6), calls for `to_pandas()`, `repr(trace)` and `save` (C7), the share
+of op commits on the wrapper fast lane (C8) and the tensor bytes the trace holds during
+the forward, split into saved outputs and argument tensors (C9). Each model is measured in
+its own interpreter after one warm-up trace; wall time is recorded as context and never
+gated.
+
+```bash
+python benchmarks/capture_core_cost.py --out run.json     # measure
+python benchmarks/capture_core_cost.py --check             # standing bars
+python benchmarks/capture_core_cost.py --check --lane W1   # plus one change's own bars
+python benchmarks/capture_core_cost.py --compare a.json b.json
+```
+
+`perf_baselines/capture_core_bars.json` holds the baseline and the bars, each stored as a
+fraction of its baseline counter. It was written once from the baseline (`--write-bars`)
+and is not edited by the changes it judges; `--tighten LANE` records a landed change's
+measured counters plus 5% as regression gates. `capture_core_counters.py` holds the
+instruments and `capture_core_bars.py` the bar arithmetic; `tests/test_capture_core_cost.py`
+pins both.
