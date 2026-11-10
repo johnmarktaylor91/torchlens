@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1771 modules, 712164 lines, 0 modules without a docstring.
+85 packages, 1771 modules, 712251 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 144 | 60036 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 144 | 60123 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1490,7 +1490,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (144 modules, 60036 lines)
+Torch backend implementation package for TorchLens capture. (144 modules, 60123 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1555,11 +1555,11 @@ Torch backend implementation package for TorchLens capture. (144 modules, 60036 
 | `_module_state` | Which modules own state, the fact call-site grouping (''callsite_v2'') scopes on. | 71 |
 | `_op_markers` | Per-call op markers: NVTX ranges + join markers. | 250 |
 | `_opaque_call_advisory` | Name the opaque call behind a completeness-witness gap. | 366 |
-| `_ops_activations` | Output tensor metadata and activation persistence. | 756 |
+| `_ops_activations` | Output tensor metadata and activation persistence. | 790 |
 | `_ops_arg_slots` | One per-op snapshot of the tensor argument slots the shared-fields derivations read. | 273 |
 | `_ops_argument_fields` | Argument family of the shared op fields: argument scan, slot snapshot and templates. | 235 |
 | `_ops_arguments` | Argument templates, edge uses, and tensor provenance. | 671 |
-| `_ops_autograd` | Autograd saved-tensor statistics and container snapshots. | 444 |
+| `_ops_autograd` | Autograd saved-tensor statistics and container snapshots. | 469 |
 | `_ops_call_site_fields` | Call-site family of the shared op fields: the code context and the call-site chain. | 61 |
 | `_ops_capture_records` | Ancestor storage, producer policy, and exhaustive record freezing. | 570 |
 | `_ops_container_base` | Exhaustive drafts and foundational output-container helpers. | 509 |
@@ -1592,7 +1592,7 @@ Torch backend implementation package for TorchLens capture. (144 modules, 60036 
 | `_replacement_op_fields` | Label minting and field copying for synthesized untagged-tensor boundary ops. | 65 |
 | `_replacement_template` | Template field copies for a synthesized untagged-tensor boundary op. | 34 |
 | `_root_prep` | Root-module preparation: the root's identity and the bound-method owner. | 104 |
-| `_same_object_handoff` | Transient handoffs from the op wrapper to activation logging for same-object returns. | 137 |
+| `_same_object_handoff` | Transient handoffs from the op wrapper to activation logging for same-object returns. | 140 |
 | `_script_boundary` | TorchScript call boundary: a ''torch.jit.ScriptFunction'' called from an eager forward. | 253 |
 | `_session_cleanup` | Session-end tensor metadata cleanup for torch capture. | 759 |
 | `_session_forwards` | Session-scoped ''forward'' wrappers for non-root submodules. | 299 |
@@ -1606,7 +1606,7 @@ Torch backend implementation package for TorchLens capture. (144 modules, 60036 
 | `_trace_backward` | Trace backward-capture functions reached from the records through ''_data_classes._doors.backends_torch''. | 145 |
 | `_tracing_pass` | Recognise torch's own fake-tensor tracing passes so the wrappers stay out of them. | 399 |
 | `_transform_wrappers` | Transform-boundary wrappers: torch.func builders and autograd.functional direct calls. | 587 |
-| `_user_grad_fn` | The user op's live autograd node, stamped on a logging copy for its op record. | 456 |
+| `_user_grad_fn` | The user op's live autograd node, stamped on a logging copy for its op record. | 481 |
 | `_view_writeback` | Storage-alias helpers for view mutations. | 141 |
 | `_warm_originals` | Show torch's original callables while a derived identity cache is warmed. | 119 |
 | `_weightsfree_ctx` | The capture-owned factory-device slot. | 78 |
