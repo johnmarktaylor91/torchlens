@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import inspect
-import json
 import warnings
 from typing import Any
 
 from .canonical import Canonicalizer, error_record
-from .mask import NOT_READ, Mask, canonical_type
+from .mask import NOT_READ, Mask
 
 #: Record class name -> the constant in ``torchlens._constants`` that lists its fields.
 FIELD_ORDER_CONSTANTS: dict[str, str] = {
@@ -75,7 +74,7 @@ def public_names(cls: type) -> tuple[str, ...]:
 def _is_group(value: Any) -> bool:
     """Return whether a value is a concern group (``op.cost``) of a record."""
 
-    return any(base.__name__ == "_RecordGroup" for base in type(value).__mro__)
+    return any(base.__name__ in ("_RecordGroup", "_TraceGroup") for base in type(value).__mro__)
 
 
 class Reader:
@@ -130,34 +129,9 @@ class Reader:
         return self._masked(kind, leaf, canonical), value
 
     def _masked(self, kind: str, leaf: str, canonical: Any) -> Any:
-        """Apply the mask rule of ``kind.leaf``, and nested key rules, to a canonical value."""
+        """Apply the mask to one field's canonical value."""
 
-        rule = self.mask.rule_for(kind, leaf)
-        if rule is None:
-            return self._mask_nested(kind, canonical)
-        if rule.rule == "token" and canonical is not None:
-            return self.mask.token(leaf, json.dumps(canonical, sort_keys=True))
-        return canonical_type(canonical)
-
-    def _mask_nested(self, kind: str, canonical: Any) -> Any:
-        """Mask nested mapping keys named in the nested mask."""
-
-        if isinstance(canonical, list):
-            return [self._mask_nested(kind, member) for member in canonical]
-        if not isinstance(canonical, dict):
-            return canonical
-        if "__dict__" in canonical and isinstance(canonical.get("items"), list):
-            items = []
-            for key, entry in canonical["items"]:
-                rule = self.mask.nested_rule_for(kind, key) if isinstance(key, str) else None
-                if rule is None:
-                    items.append([key, self._mask_nested(kind, entry)])
-                elif rule.rule == "token" and entry is not None:
-                    items.append([key, self.mask.token(key, json.dumps(entry, sort_keys=True))])
-                else:
-                    items.append([key, canonical_type(entry)])
-            return {**canonical, "items": items}
-        return {key: self._mask_nested(kind, entry) for key, entry in canonical.items()}
+        return self.mask.apply(kind, leaf, canonical)
 
     def record(self, obj: Any, site: str) -> dict[str, Any]:
         """Read every public member of one record, grouped members included."""

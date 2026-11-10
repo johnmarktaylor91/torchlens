@@ -45,9 +45,39 @@ def diff(base: Any, head: Any, path: str = "") -> list[tuple[str, Any, Any]]:
             return [(f"{path}/<len>", len(base), len(head))]
         found = []
         for index, (left, right) in enumerate(zip(base, head)):
-            found.extend(diff(left, right, f"{path}[{index}]"))
+            if _same_key(left, right):
+                found.extend(diff(left[1], right[1], f"{path}[{index}]/{left[0]}"))
+            else:
+                found.extend(diff(left, right, f"{path}[{index}]"))
         return found
     return [] if base == head else [(path, base, head)]
+
+
+def _same_key(left: Any, right: Any) -> bool:
+    """Return whether two list members are ``[key, value]`` pairs under one string key."""
+
+    return (
+        isinstance(left, list)
+        and isinstance(right, list)
+        and len(left) == len(right) == 2
+        and isinstance(left[0], str)
+        and left[0] == right[0]
+    )
+
+
+def name_key(path: str) -> str:
+    """Reduce a difference path to ``family/field :: innermost name``.
+
+    The innermost name is the last mapping key or dataclass field on the
+    path, which is what a nested mask entry names.
+    """
+
+    parts = [part for part in _KEYED.sub("", path).split("/") if part]
+    named = [part for part in parts if part not in _STRUCTURAL and not part.startswith("__")]
+    return f"{field_key(path)} :: {named[-1] if named else ''}"
+
+
+_STRUCTURAL = frozenset({"items", "fields", "members", "data", "cells"})
 
 
 def _short(value: Any, limit: int = 160) -> Any:
@@ -109,6 +139,17 @@ def report(
 
     total = sum(len(found) for found in differences.values())
     lines = [f"field differential: {total} differences in {len(differences)} cases"]
+    names: Counter[str] = Counter()
+    samples: dict[str, tuple[Any, Any]] = {}
+    for found in differences.values():
+        for path, left, right in found:
+            names[name_key(path)] += 1
+            samples.setdefault(name_key(path), (left, right))
+    for key, count in sorted(names.items())[:150]:
+        left, right = samples[key]
+        lines.append(
+            f"name {key}: {count}  e.g. {str(_short(left, 60))!r} / {str(_short(right, 60))!r}"
+        )
     for case, found in differences.items():
         if not found:
             continue
