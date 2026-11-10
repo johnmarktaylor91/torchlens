@@ -177,14 +177,15 @@ class _LoopN(nn.Module):
 
 
 class _DeepN(nn.Module):
-    """``_LoopN`` called under 30 extra frames inside the root forward."""
+    """``_LoopN`` called under ``depth`` extra frames inside the root forward."""
 
-    def __init__(self, steps: int) -> None:
+    def __init__(self, steps: int, depth: int) -> None:
         super().__init__()
+        self.depth = depth
         self.inner = _LoopN(steps)
 
     def forward(self, x: Tensor) -> Tensor:
-        return _recurse(self.inner, 30, x)
+        return _recurse(self.inner, self.depth, x)
 
 
 def _call_site_count(model: nn.Module, x: Tensor, depth: int) -> tuple[int, int]:
@@ -205,6 +206,8 @@ def _per_op(build: Any, depth: int) -> float:
 
 
 def test_call_site_cost_per_op_does_not_grow_with_stack_depth() -> None:
-    shallow = _per_op(_LoopN, 0)
-    assert _per_op(_LoopN, 30) <= shallow + 0.5
-    assert _per_op(_DeepN, 0) <= shallow + 0.5
+    """30 extra frames above the capture call, or inside the root forward, add nothing per op."""
+
+    assert _per_op(_LoopN, 30) <= _per_op(_LoopN, 0) + 0.5
+    in_model_shallow = _per_op(lambda steps: _DeepN(steps, 0), 0)
+    assert _per_op(lambda steps: _DeepN(steps, 30), 0) <= in_model_shallow + 0.5
