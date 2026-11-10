@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
+from ..._utils._model_walk import model_modules
 from ..._utils._tensor_label import get_tensor_label
 from ._held_late_index import ROOT_MODEL_KEY
 
@@ -69,7 +70,7 @@ def collect_pre_forward_tensor_ids(
             callable_only.add(id(tensor))
         owned[id(tensor)] = tensor
 
-    submodules = list(model.modules())
+    submodules = list(model_modules(model))
     for submodule in submodules:
         _clear_module_attribute_tensor_metadata(submodule, seen, visit=_note)
     methods = method_index(type(submodule) for submodule in submodules)

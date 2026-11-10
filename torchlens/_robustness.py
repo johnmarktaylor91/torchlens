@@ -49,6 +49,7 @@ from ._robustness_offenses import (
     _sparse_state_offense,
 )
 from ._utils._input_tree import INPUT_TREE_MAX_DEPTH
+from ._utils._model_walk import model_modules, model_named_buffers, model_named_parameters
 from ._utils._torch_compat import get_tracing_tensor_types
 from .errors._base import CompatibilityError, TorchLensWarning
 
@@ -167,7 +168,7 @@ def _is_quantized_module(module: nn.Module) -> bool:
 
 def _model_has_quantized_modules(model: nn.Module) -> bool:
     """True if any submodule is a quantized ``nn`` module."""
-    return any(_is_quantized_module(sub) for sub in model.modules())
+    return any(_is_quantized_module(sub) for sub in model_modules(model))
 
 
 # ---------------------------------------------------------------------------
@@ -506,7 +507,7 @@ def check_model_and_input_variants(
     # lazily on the FIRST meta tensor found -- zero cost on the default path.
     offload_backed: frozenset[str] | None = None
     seen_ids: set[int] = set()
-    for name, t in list(model.named_parameters()) + list(model.named_buffers()):
+    for name, t in model_named_parameters(model) + model_named_buffers(model):
         if id(t) in seen_ids:
             continue
         seen_ids.add(id(t))
@@ -725,7 +726,7 @@ def _classify_state_substrates(model: nn.Module) -> tuple[list[str], list[str]]:
     meta_state: list[str] = []
     real_state: list[str] = []
     seen_state_ids: set[int] = set()
-    for name, tensor in list(model.named_parameters()) + list(model.named_buffers()):
+    for name, tensor in model_named_parameters(model) + model_named_buffers(model):
         if id(tensor) in seen_state_ids:
             continue
         seen_state_ids.add(id(tensor))

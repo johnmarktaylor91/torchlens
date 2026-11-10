@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 from torch import nn
 
+from ..._utils._model_walk import model_modules, model_named_modules, model_named_parameters
+
 if TYPE_CHECKING:
     from ..._data_classes.param import Param
 
@@ -49,14 +51,14 @@ def shared_module_addresses(model: nn.Module) -> dict[int, tuple[str, ...]]:
 
     registrations = 0
     distinct: set[int] = set()
-    for module in model.modules():
+    for module in model_modules(model):
         for child in module._modules.values():
             if child is not None:
                 registrations += 1
                 distinct.add(id(child))
     if registrations == len(distinct) and id(model) not in distinct:
         return {}
-    canonical = {id(module): address for address, module in model.named_modules()}
+    canonical = {id(module): address for address, module in model_named_modules(model)}
     max_depth = len(canonical)
     aliases: dict[int, list[str]] = {}
     collected = 0
@@ -89,7 +91,7 @@ def _add_shared_module_aliases(
     so only the duplicate-keeping parameter walk sees the second name.
     """
 
-    for alias_address, param in model.named_parameters(remove_duplicate=False):
+    for alias_address, param in model_named_parameters(model, remove_duplicate=False):
         param_log = param_logs.get(param_id_to_address.get(id(param), ""))
         if param_log is None:
             continue

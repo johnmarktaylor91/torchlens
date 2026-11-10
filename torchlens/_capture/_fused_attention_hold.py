@@ -15,6 +15,7 @@ from typing import Any
 
 from torch import nn
 
+from .._utils._model_walk import model_named_modules
 from .._utils._torch_compat import (
     get_mha_fastpath_enabled,
     get_mha_fastpath_switch_support,
@@ -48,7 +49,7 @@ def fused_attention_fastpath_module_addresses(model: Any) -> tuple[str, ...]:
         return ()
     return tuple(
         name or "self"
-        for name, module in model.named_modules()
+        for name, module in model_named_modules(model)
         if isinstance(module, _FUSED_ATTENTION_FASTPATH_MODULES)
     )
 

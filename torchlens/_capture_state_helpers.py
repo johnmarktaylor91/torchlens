@@ -42,6 +42,7 @@ from ._plain_attr_values import (
     snapshot_rich_value,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
+from ._utils._model_walk import model_named_modules, model_named_parameters
 from ._utils._package_frames import external_warning_stacklevel, is_torchlens_code
 from ._utils._torch_compat import (
     force_eager_stance_scope,
@@ -390,10 +391,9 @@ def compiled_plain_callable_sites(model: nn.Module) -> tuple[str, ...]:
     makes cache-hit handling independent of the transient ``is_compiling()`` flag:
     a hot compiled callable can bypass Python torch wrappers entirely.
     """
-
     sites: list[str] = []
     try:
-        modules = tuple(model.named_modules())
+        modules = model_named_modules(model)
     except Exception:
         modules = (("", model),)
     for module_name, module in modules:
@@ -1406,7 +1406,7 @@ def _fingerprint_model_weights(model: nn.Module) -> str:
     """
 
     entries: list[tuple[str, object, str]] = []
-    for name, param in model.named_parameters():
+    for name, param in model_named_parameters(model):
         if _is_uninitialized_param(param):
             # Lazy modules (nn.LazyLinear etc.) carry UninitializedParameter
             # until the first forward; shape access raises. Fingerprint the
@@ -1969,7 +1969,7 @@ def _reject_opaque_wrappers(model: nn.Module) -> None:
     scripted_module = next(
         (
             (address, module)
-            for address, module in model.named_modules()
+            for address, module in model_named_modules(model)
             if isinstance(module, torch.jit.ScriptModule)
         ),
         None,

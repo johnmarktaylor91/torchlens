@@ -16,6 +16,7 @@ import torch
 
 from torchlens._ir.events import OpEvent
 
+from .._utils._model_walk import model_named_buffers
 from .._utils._record_group_table import record_member
 from .._utils.tensor_utils import safe_copy, tensor_nanequal
 
@@ -208,7 +209,7 @@ def _buffer_alias_snapshots_by_address(
     if model is None or not hasattr(model, "named_buffers"):
         return {}
     snapshots: dict[str, torch.Tensor] = {}
-    for address, tensor in model.named_buffers():
+    for address, tensor in model_named_buffers(model):
         if address in directly_written or not isinstance(tensor, torch.Tensor):
             continue
         snapshots[address] = safe_copy(tensor, detach_tensor=True)

@@ -37,6 +37,7 @@ from ..._ir.op_record import (
 )
 from ..._ir.refs import ParamRef
 from ..._quantities import Bytes
+from ..._utils._model_walk import model_modules, model_parameters, own_named_buffers
 from ..._utils._tensor_label import (
     begin_label_session,
     clear_meta,
@@ -436,10 +437,9 @@ def _prepare_model_session(
     # is visited once; its alias addresses come from this one bounded walk.
     _alias_addresses = shared_module_addresses(model)
 
-    # Use model.modules() + cached module addresses from phase 1, avoiding a
-    # second full DFS with string concatenation and list(named_children()) calls.
+    # One recorded walk per module tree plus the addresses phase 1 cached.
     root_module = capture_root_module(model)  # the owner, on a bound-method root
-    for module in model.modules():
+    for module in model_modules(model):
         is_root = module is root_module
         address = _module_address(module)
         module_type_str = _module_type(module)
@@ -558,7 +558,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     # A param popped from ``_parameters`` mid-forward escapes the re-traversal but
     # never escapes this list (session-scoped strong refs, dropped at cleanup).
     stamped_params: list[nn.Parameter] = []
-    for module in model.modules():
+    for module in model_modules(model):
         address = _module_address(module)
         for param_name, param in module._parameters.items():
             if param is None:
@@ -921,10 +921,10 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
         except Exception as exc:
             unstampable.append(f"{address} ({type(exc).__name__}: {exc})")
 
-    for submodule in model.modules():
+    for submodule in model_modules(model):
         module_addr = _module_address(submodule)
         # Scan registered buffers
-        for buf_name, buf_tensor in submodule.named_buffers(recurse=False):
+        for buf_name, buf_tensor in own_named_buffers(submodule):
             if (
                 isinstance(buf_tensor, torch.Tensor)
                 and not isinstance(buf_tensor, torch.nn.Parameter)
@@ -2072,7 +2072,7 @@ def _restore_session_param_state(trace: "Trace", model: nn.Module) -> None:
         clear_param_meta(param)
     if inventory:
         trace._session_param_inventory = []
-    for param in model.parameters():
+    for param in model_parameters(model):
         restore_param_requires_grad(param)
         clear_param_meta(param)
 
@@ -2169,7 +2169,7 @@ def _undecorate_model_tensors(trace: "Trace", model: nn.Module) -> None:
         trace._session_buffer_identity = {}
     _clear_model_tree_tensor_metadata(model, set())
     # Also clean any tensors from the registered buffer dict (_buffers)
-    for submodule in model.modules():
+    for submodule in model_modules(model):
         for buf_tensor in submodule._buffers.values():
             if buf_tensor is not None:
                 clear_meta(buf_tensor)

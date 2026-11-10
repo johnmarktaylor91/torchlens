@@ -14,6 +14,7 @@ from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._entry_refusals import refuse_if_foreign_workspace
 from ..._ir import BufferWriteEvent
+from ..._utils._model_walk import model_modules, own_named_buffers, own_named_parameters
 from ..._utils._tensor_label import (
     clear_tensor_label,
     get_buffer_address,
@@ -408,7 +409,7 @@ class BufferWriteTracker:
         if model is None:
             return
         self.refresh_index()
-        for module in model.modules():
+        for module in model_modules(model):
             cls = type(module)
             patched = self._patched_classes.get(cls)
             if patched is None:
@@ -453,7 +454,7 @@ class BufferWriteTracker:
         # could not be attributed to its state slot without this index.
         buffer_storage_addresses: dict[int, str] = {}
         for module_address, module in _iter_modules_with_addresses(model):
-            for name, tensor in module.named_buffers(recurse=False):
+            for name, tensor in own_named_buffers(module):
                 if tensor is None or isinstance(tensor, nn.Parameter):
                     continue
                 if _is_uninitialized_param(tensor):
@@ -605,7 +606,7 @@ class BufferWriteTracker:
         param_storage_addresses: dict[int, str] = {}
         with _state.pause_logging():
             for module_address, module in _iter_modules_with_addresses(model):
-                for name, tensor in module.named_parameters(recurse=False):
+                for name, tensor in own_named_parameters(module):
                     if tensor is None:
                         continue
                     if _is_uninitialized_param(tensor):
@@ -868,7 +869,7 @@ class BufferWriteTracker:
             return
         self._reconcile_params(model)
         for module_address, module in _iter_modules_with_addresses(model):
-            for name, tensor in module.named_buffers(recurse=False):
+            for name, tensor in own_named_buffers(module):
                 if tensor is None or isinstance(tensor, nn.Parameter):
                     continue
                 address = f"{module_address}.{name}" if module_address else name
@@ -962,7 +963,7 @@ class BufferWriteTracker:
             return
         with _state.pause_logging():
             for module_address, module in _iter_modules_with_addresses(model):
-                for name, tensor in module.named_parameters(recurse=False):
+                for name, tensor in own_named_parameters(module):
                     if tensor is None:
                         continue
                     address = f"{module_address}.{name}" if module_address else name
@@ -1585,10 +1586,7 @@ def _param_storage_unchanged(tensor: torch.Tensor, before: torch.Tensor) -> bool
 def _iter_modules_with_addresses(model: nn.Module) -> list[tuple[str, nn.Module]]:
     """Return model modules with TorchLens addresses."""
 
-    modules: list[tuple[str, nn.Module]] = []
-    for module in model.modules():
-        modules.append((_module_address_from_meta(module), module))
-    return modules
+    return [(_module_address_from_meta(module), module) for module in model_modules(model)]
 
 
 def _module_address_from_meta(module: nn.Module) -> str:
