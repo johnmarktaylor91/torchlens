@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1767 modules, 711326 lines, 0 modules without a docstring.
+85 packages, 1768 modules, 711619 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45442 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45559 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 19 | 5620 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24192 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24207 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
@@ -90,7 +90,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.repgeom` | Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need only NumPy, Torch and PIL. | 9 | 4057 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 39 | 14664 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2236 |
-| `torchlens.stats` | Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... | 18 | 7246 |
+| `torchlens.stats` | Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... | 19 | 7407 |
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (128 modules, 45442 lines)
+Core data structures for representing a logged forward pass. (128 modules, 45559 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -358,14 +358,14 @@ Core data structures for representing a logged forward pass. (128 modules, 45442
 | `_nonfinite_payloads` | Layer-sequence and out-payload readers behind the nonfinite scan kinds. | 69 |
 | `_op_aten` | Per-op ATen-operation accessor for ''Op'' (''CaptureOptions(aten_ops=True)''). | 46 |
 | `_op_bytes` | Theoretical read-once/write-once byte traffic of one operation record. | 197 |
-| `_op_columns` | Private row-indexed column view over the ''Op'' row store. | 305 |
+| `_op_columns` | Private row-indexed column view over the ''Op'' row store. | 387 |
 | `_op_container_census` | Alias census for container-cell pooling (the single scan over swept cells). | 158 |
 | `_op_cost` | Cost derivations for ''Op'': compute record, MACs, FLOPs, arithmetic intensity. | 124 |
 | `_op_dedup` | Saved-activation dedup helpers for retained payload copies. | 324 |
 | `_op_door_keys` | Row keys behind the trace-level ops door. | 262 |
 | `_op_grad_stream` | Grad-blob streaming for ''Op._log_tensor_grad''. | 41 |
 | `_op_out_read` | Helpers behind the ''Op.out'' read path: absent-value refusals, the mutation-check state and the synthesized-read warning. | 103 |
-| `_op_relations` | Relation views for ''Op'': parents, children, siblings, containers, modules. | 267 |
+| `_op_relations` | Relation views for ''Op'': parents, children, siblings, containers, modules. | 302 |
 | `_op_row_containers` | Trace-side op containers that hold row keys instead of ''Op'' records. | 681 |
 | `_op_row_release` | Direct row release for op removal (the facade-husk shortcut). | 102 |
 | `_op_save` | Tensor save, grad logging, transform validation and copy logic for ''Op''. | 800 |
@@ -950,7 +950,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (19 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (75 modules, 24192 lines)
+Shared helpers used by two or more TorchLens packages. (75 modules, 24207 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -991,7 +991,7 @@ Shared helpers used by two or more TorchLens packages. (75 modules, 24192 lines)
 | `_producer_version` | Parse the torch version a saved artifact recorded (never the live runtime). | 31 |
 | `_quiet_property` | Attribute reads for the tensor search that keep property getters' log records quiet. | 95 |
 | `_raw_pointer_denial` | Structural raw-pointer denial for resolved callables and bundle keywords. | 429 |
-| `_record_group_table` | Concern-group table for the ''Op'' and ''Layer'' record members (pure data). | 676 |
+| `_record_group_table` | Concern-group table for the ''Op'' and ''Layer'' record members (pure data). | 691 |
 | `_render_slots` | Context slots a node-spec callback reads while the renderer calls it. | 27 |
 | `_runnable_alias_resolver` | Runnable torch alias resolution: successors for recorded torch callable paths. | 196 |
 | `_runnable_torch_aliases` | Monotonic torch callable moves for sparse runnable reattachment (a data-only leaf). | 215 |
@@ -2263,7 +2263,7 @@ Extras-gated notebook namespace with no public objects yet. (11 modules, 2236 li
 
 ### `torchlens.stats`
 
-Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... (18 modules, 7246 lines)
+Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... (19 modules, 7407 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2283,7 +2283,8 @@ Streaming statistics for aggregating outputs over a dataloader: stat kernels, pe
 | `_stats_render` | Stats-line renderers: the core grammar over TensorStats. | 248 |
 | `_streaming` | Streaming statistic kernels. | 834 |
 | `_tensor_stats` | The frozen TensorStats record. | 392 |
-| `_trace_tables` | Trace tabular export and decoded-output functions (record rebuild destination). | 678 |
+| `_trace_table_rows` | Rows of ''Trace.to_pandas'': stored ''Op'' fields read a whole column at a time. | 149 |
+| `_trace_tables` | Trace tabular export and decoded-output functions (record rebuild destination). | 690 |
 | `_trajectory` | Logit-lens trajectory statistics in one call (''tl.mechinterp.measure_trajectory''). | 513 |
 
 ### `torchlens.trackers`
