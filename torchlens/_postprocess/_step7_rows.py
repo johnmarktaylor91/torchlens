@@ -66,8 +66,9 @@ class Step7Rows(NamedTuple):
 
 
 class KeyReaders(NamedTuple):
-    """Readers the call-site grouping key needs for an op without a call-site class."""
+    """The capture's call-site classes and the readers the grouping key needs."""
 
+    classes: dict[str, str]
     is_input: Callable[[Any], Any]
     is_output: Callable[[Any], Any]
     equivalence_class: Callable[[Any], Any]
@@ -182,7 +183,6 @@ def call_site_group_key(
     site_key: str,
     func_name: Any,
     read: KeyReaders,
-    classes: dict[str, str],
 ) -> tuple[Any, ...]:
     """The grouping key of one retained non-buffer op under call-site grouping.
 
@@ -197,7 +197,7 @@ def call_site_group_key(
     are keyed by :func:`buffer_group_keys`.
     """
 
-    site_class = classes.get(label)
+    site_class = read.classes.get(label)
     if site_class is not None:
         return ("call_site", site_class)
     if read.is_input(handle) or read.is_output(handle):
@@ -254,29 +254,33 @@ def _call_site_partition(
     retained op's ``func_name`` aligned with ``rows.retained``.
     """
 
-    classes = trace._raw_graph_ws._call_site_classes
     read_buffer = rows.getter("is_buffer")
     read_func = rows.getter("func_name")
     read_index = rows.getter("raw_index")
     read = KeyReaders(
-        rows.getter("is_input"), rows.getter("is_output"), rows.getter("equivalence_class")
+        trace._raw_graph_ws._call_site_classes,
+        rows.getter("is_input"),
+        rows.getter("is_output"),
+        rows.getter("equivalence_class"),
     )
     groups: dict[tuple[Any, ...], list[tuple[Any, str, Any]]] = defaultdict(list)
     keys: dict[str, tuple[Any, ...]] = {}
     buffers: list[tuple[str, Any]] = []
     funcs: list[Any] = [None] * len(site_keys)
-    for index, ((label, handle), site_key) in enumerate(zip(rows.retained, site_keys)):
+    for index, ((label, handle), site_key) in enumerate(zip(rows.retained, site_keys, strict=True)):
         func_name = funcs[index] = read_func(handle)
         # ``buffer_address`` is a facade member, not a column; buffers are few.
         if read_buffer(handle) and trace[label].buffer_address:
             buffers.append((label, handle))
             continue
-        key = call_site_group_key(label, handle, site_key, func_name, read, classes)
+        key = call_site_group_key(label, handle, site_key, func_name, read)
         keys[label] = key
         groups[key].append((read_index(handle), label, handle))
     if buffers:
         nodes = [trace[label] for label, _handle in buffers]
-        for (label, handle), (node, key) in zip(buffers, buffer_group_keys(nodes, keys)):
+        for (label, handle), (node, key) in zip(
+            buffers, buffer_group_keys(nodes, keys), strict=True
+        ):
             groups[key].append((node.raw_index, label, handle))
     return list(groups.values()), funcs
 
@@ -374,7 +378,7 @@ def check_call_site_contract(rows: Step7Rows, classes: dict[str, str], funcs: li
             func_name=func_name,
             group=tuple(read_group(handle) or ()),
         )
-        for (label, handle), func_name in zip(rows.retained, funcs)
+        for (label, handle), func_name in zip(rows.retained, funcs, strict=True)
     ]
     violation = call_site_contract_violation(entries, classes)
     if violation is not None:

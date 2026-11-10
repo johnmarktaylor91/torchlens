@@ -79,11 +79,11 @@ def test_planted_merge_of_two_call_sites_fails_step7(monkeypatch: pytest.MonkeyP
 
     original = step7_rows.call_site_group_key
 
-    def _merging_key(label, handle, site_key, func_name, read, classes):
-        site = classes.get(label, "")
+    def _merging_key(label, handle, site_key, func_name, read):
+        site = read.classes.get(label, "")
         if site.startswith("relu"):
             return ("call_site", "planted-merge")
-        return original(label, handle, site_key, func_name, read, classes)
+        return original(label, handle, site_key, func_name, read)
 
     monkeypatch.setattr(step7_rows, "call_site_group_key", _merging_key)
     _capture_must_breach(_TwoReluLines(), "i")
