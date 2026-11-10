@@ -406,11 +406,17 @@ class OpLabelMap(dict[Any, Any]):
 
     __slots__ = ("__weakref__", "_ordered", "_owner")
 
+    def __new__(cls, owner: OpRows, items: Any = (), *, ordered: bool = False) -> OpLabelMap:
+        """Create the map; an ordered one is an ``OpOrderedLabelMap``."""
+
+        del owner, items
+        return dict.__new__(OpOrderedLabelMap if ordered and cls is OpLabelMap else cls)
+
     def __init__(self, owner: OpRows, items: Any = (), *, ordered: bool = False) -> None:
         """Hold the records of ``items`` through ``owner``; ``ordered`` names the plain type."""
 
         self._owner = owner
-        self._ordered = ordered
+        self._ordered = ordered or type(self) is not OpLabelMap
         pairs = list(items.items()) if isinstance(items, Mapping) else list(items)
         keys = owner.hold_many([record for _label, record in pairs])
         dict.__init__(self, zip((label for label, _record in pairs), keys, strict=True))
@@ -570,6 +576,17 @@ class OpLabelMap(dict[Any, Any]):
         """Pickle as the plain dictionary of records."""
 
         return (OrderedDict if self._ordered else dict), (self.plain(),)
+
+
+class OpOrderedLabelMap(OpLabelMap):
+    """The label map that stands in for an ``OrderedDict`` (its plain form is one).
+
+    A separate type because the plain types were separate: a live trace's
+    all-keys dictionary is ordered and a loaded file's is not, and a reader
+    that tells them apart by type still can.
+    """
+
+    __slots__ = ()
 
 
 def op_rows(trace: Any) -> OpRows:

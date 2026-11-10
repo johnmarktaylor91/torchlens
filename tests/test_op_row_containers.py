@@ -26,7 +26,13 @@ from torchlens._data_classes._state_adapter import plain_state
 
 # The module's dotted name and its class names: this test file's own name ends
 # with the module's bare name, and a pickle of a model defined here carries it.
-_CONTAINER_MARKS = (b"_data_classes._op_row_containers", b"OpSequence", b"OpLabelMap", b"OpRows")
+_CONTAINER_MARKS = (
+    b"_data_classes._op_row_containers",
+    b"OpSequence",
+    b"OpLabelMap",
+    b"OpOrderedLabelMap",
+    b"OpRows",
+)
 _PLAIN_TYPES = (list, dict, OrderedDict)
 # A loaded file's label dictionaries are both plain dictionaries, as before the row keys.
 _LOADED_TYPES = (list, dict, dict)
@@ -312,7 +318,7 @@ def test_pickle_state_pickles_and_saved_files_keep_the_plain_container_types(
     trace = tl.trace(_Tiny(), torch.ones(1, 3))
     assert type(trace._layer_list) is containers.OpSequence
     assert type(trace._layer_dict_main_keys) is containers.OpLabelMap
-    assert type(trace._layer_dict_all_keys) is containers.OpLabelMap
+    assert type(trace._layer_dict_all_keys) is containers.OpOrderedLabelMap
     labels = [op.label for op in trace._layer_list]
     assert _container_types(trace.__getstate__()) == _PLAIN_TYPES
     assert _container_types(plain_state(trace)) == _PLAIN_TYPES
@@ -328,6 +334,7 @@ def test_pickle_state_pickles_and_saved_files_keep_the_plain_container_types(
     files = [bundle] if bundle.is_file() else [path for path in bundle.rglob("*") if path.is_file()]
     assert files and not any(_names_containers(path.read_bytes()) for path in files)
     loaded = tl.load(bundle)
+    assert type(loaded._layer_dict_all_keys) is containers.OpLabelMap
     assert _container_types(loaded.__getstate__()) == _LOADED_TYPES
     assert _container_types(plain_state(loaded)) == _LOADED_TYPES
     assert [op.label for op in loaded._layer_list] == labels
