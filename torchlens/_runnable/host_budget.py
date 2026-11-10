@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import sys
 
+from .._optional_psutil import optional_psutil
+
 
 def _probe_host_memory_budget_bytes() -> int | None:
     """Probe the host allocation budget without memoization.
@@ -73,10 +75,7 @@ def _available_memory_bytes() -> int | None:
         except (OSError, UnicodeError):  # pragma: no cover - missing/malformed Linux procfs
             pass
 
-    try:
-        import psutil
-    except ImportError:
-        psutil = None
+    psutil = optional_psutil()
     if psutil is not None:
         try:
             return int(psutil.virtual_memory().available) + int(psutil.swap_memory().free)
