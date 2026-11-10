@@ -291,6 +291,8 @@ def _flatten_saved_tensors(values: Any) -> list[torch.Tensor]:
     Hot path: a plain tensor or a scalar is decided by its exact class, with no call.
     """
 
+    # Cognitive complexity 17 on purpose: per-op hot path of the autograd section; the
+    # exact-class checks stay inline because a helper per value would cost a call each.
     tensors: list[torch.Tensor] = []
     for value in values:
         cls = value.__class__
@@ -342,7 +344,8 @@ def _saved_tensor_stats(
     ``next_func_call_id()`` while logging is on, so real ops keep their ids.
     """
 
-    # Complexity above 10 on purpose: the per-op hot path of the autograd section.
+    # Cognitive complexity 21 on purpose: per-op hot path of the autograd section; one
+    # context entry per op means the per-tensor reads stay inline in this loop.
     band = dict.fromkeys(_BAND_KEYS, 0)
     tensors = _flatten_saved_tensors(_saved_values(grad_fn))
     total_bytes = tensor_count = 0
