@@ -308,10 +308,24 @@ def test_record_without_a_row_store_is_renamed_at_once() -> None:
 
 
 def _reads(trace: Any) -> tuple[list[tuple[Any, ...]], list[str]]:
-    """Return every op's resolved templates (as ``_snapshot`` gives them) and their reprs."""
+    """Return every op's resolved templates (as ``_snapshot`` gives them) and their displays.
 
-    reprs = [repr(getattr(op.call, name)) for op in trace._layer_list for name in FIELDS]
-    return _snapshot(trace), reprs
+    A template's repr counts its arguments; its card (``str``) prints each
+    parent reference by its display key.
+    """
+
+    texts = []
+    for op in trace._layer_list:
+        for name in FIELDS:
+            template = getattr(op.call, name)
+            texts.append(f"{template!r}\n{template}")
+    return _snapshot(trace), texts
+
+
+def _op_reprs(trace: Any) -> list[str]:
+    """Return every op's repr."""
+
+    return [repr(op) for op in trace._layer_list]
 
 
 def _parent_reads(trace: Any) -> tuple[list[tuple[Any, ...]], list[str]]:
@@ -333,14 +347,29 @@ def test_fork_outliving_its_parent_reads_the_same_templates() -> None:
 
     trace = _trace()
     orphan = trace.fork()
-    alive = _reads(trace.fork())
+    alive_fork = trace.fork()
+    alive = _reads(alive_fork), _op_reprs(alive_fork)
     expected = _parent_reads(trace)
+    parent_ref = orphan._parent_run
+    del trace, alive_fork
+    gc.collect()
+    assert parent_ref() is None
+    assert set(_states(orphan)) == {STATE_DERIVED}
+    assert (_reads(orphan), _op_reprs(orphan)) == alive
+    assert alive[0] == expected
+
+
+def test_fork_outliving_its_parent_reprs_ops_before_any_template_read() -> None:
+    """An orphan fork's op reprs, taken first, match a live fork's."""
+
+    trace = _trace()
+    orphan = trace.fork()
+    alive = _op_reprs(trace.fork())
     parent_ref = orphan._parent_run
     del trace
     gc.collect()
     assert parent_ref() is None
-    assert set(_states(orphan)) == {STATE_DERIVED}
-    assert _reads(orphan) == alive == expected
+    assert _op_reprs(orphan) == alive
 
 
 def test_fork_of_a_fork_outliving_both_reads_the_same_templates() -> None:
