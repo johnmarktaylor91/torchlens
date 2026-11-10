@@ -18,8 +18,9 @@ How calls are attributed (deterministic; no timing):
   call machinery;
 * the function wrapper (``wrapped_func``) opens ``wrapper_outside_emit``;
 * TorchLens code reached from ``model_code`` outside the function wrapper opens
-  ``module_handling`` (the session forward, module entry and exit records);
-  the user forward that ``decorated_forward`` calls returns to ``model_code``;
+  ``module_handling`` (the forward runner, the session forward, module entry
+  and exit records); the user forward that ``decorated_forward`` calls, and a
+  module call (``nn.Module.__call__``) TorchLens makes, return to ``model_code``;
 * the emit (``log_function_output_tensors``) opens ``emit_rest``; inside it the
   first marker of :data:`SECTION_MARKERS` reached opens that section, which
   keeps every call beneath it (the outermost section wins).
@@ -41,6 +42,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -122,8 +125,12 @@ _MODULE_FORWARD = ("backends/torch/model_prep.py", "decorated_forward")
 _OUTPUT = ("backends/torch/_ops_activations.py", "_log_output_tensor_info")
 _LABEL = ("_utils/_tensor_label.py", ("get_tensor_label", "set_tensor_label"))
 
+#: torch's module-call entry points: reached from TorchLens code, they start the
+#: model's own code (the root module call the forward runner makes).
+_MODULE_CALL = ("torch/nn/modules/module.py", ("__call__", "_wrapped_call_impl", "_call_impl"))
+
 # Code kinds the classifier returns.
-_K_OTHER, _K_TL, _K_RUN, _K_WRAP, _K_EMIT, _K_MODFWD = range(6)
+_K_OTHER, _K_TL, _K_RUN, _K_WRAP, _K_EMIT, _K_MODFWD, _K_MODCALL = range(7)
 
 
 def _package_dir() -> str:
@@ -141,6 +148,9 @@ def _make_classifier() -> Callable[[Any], tuple[int, str | None, bool, bool]]:
     def classify(code: Any) -> tuple[int, str | None, bool, bool]:
         filename = os.path.abspath(code.co_filename)
         if not filename.startswith(package):
+            path = filename.replace("\\", "/")
+            if code.co_name in _MODULE_CALL[1] and path.endswith(_MODULE_CALL[0]):
+                return _K_MODCALL, None, False, False
             return _K_OTHER, None, False, False
         name = code.co_name
         path = filename.replace("\\", "/")
@@ -172,8 +182,10 @@ def _next_section(
             return "wrapper_outside_emit"
         if kind == _K_EMIT:
             return "emit_rest"
-        return "module_handling" if kind != _K_OTHER else current
+        return "module_handling" if kind not in (_K_OTHER, _K_MODCALL) else current
     if current == "module_handling":
+        if kind == _K_MODCALL:
+            return "model_code"
         back = frame.f_back
         if kind == _K_OTHER and back is not None and kinds(back.f_code) == _K_MODFWD:
             return "model_code"
@@ -334,25 +346,23 @@ def _counters(names: tuple[str, ...]) -> dict[str, Any]:
     env = dict(os.environ, PYTHONHASHSEED="0")
     env.setdefault("OMP_NUM_THREADS", "1")
     env.setdefault("MKL_NUM_THREADS", "1")
+    # Address-space randomization changes the iteration order of id-hashed sets
+    # between processes, and with it a few calls per trace; turn it off.
+    setarch = shutil.which("setarch")
+    prefix = [setarch, platform.machine(), "-R"] if setarch else []
     models: dict[str, Any] = {}
     for name in names:
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory) / "one.json"
-            command = [
-                sys.executable,
-                str(Path(__file__).resolve()),
-                "--one",
-                name,
-                "--out",
-                str(out),
-            ]
+            script = str(Path(__file__).resolve())
+            command = [*prefix, sys.executable, script, "--one", name, "--out", str(out)]
             done = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
             if out.exists():
                 models[name] = {"floor": json.loads(out.read_text(encoding="utf-8"))}
             else:
                 models[name] = {"error": f"exited {done.returncode}: {done.stderr[-1500:]}"}
         print(f"counted {name}: {'error' if 'error' in models[name] else 'ok'}", file=sys.stderr)
-    return {"tool": "capture_core_floor", "models": models}
+    return {"tool": "capture_core_floor", "address_randomization": not prefix, "models": models}
 
 
 def _compare(first: dict[str, float], second: dict[str, float]) -> list[str]:

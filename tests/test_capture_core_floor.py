@@ -38,18 +38,30 @@ def test_sections_partition_a_plain_forward_and_leave_no_hook() -> None:
 
 
 def test_module_calls_are_attributed_to_module_handling() -> None:
-    record = _counted(cost.ModRelu().eval(), torch.randn(2, 4))
-    calls = record["calls"]
-    assert record["outputs"] >= cost.RELU_CALLS
-    assert calls["module_handling"] > calls["arg_scan"]
-    assert calls["model_code"] > 0
+    x = torch.randn(2, 4)
+    modules = _counted(cost.ModRelu().eval(), x)
+    functions = _counted(cost.FuncRelu(), x)
+    assert modules["outputs"] == functions["outputs"] == cost.RELU_CALLS
+    per_output = cost.RELU_CALLS
+    assert modules["calls"]["module_handling"] > 10 * functions["calls"]["module_handling"]
+    assert functions["calls"]["module_handling"] < 10 * per_output
+    assert modules["hits"]["call_site"] == functions["hits"]["call_site"] == per_output
+    assert modules["calls"]["model_code"] > 0
 
 
-def test_two_counts_of_one_model_are_identical() -> None:
+def test_two_counts_of_one_model_agree() -> None:
+    """In one process the counts agree to the bars' tolerance.
+
+    Separate processes with address randomization off agree exactly; the job
+    runs ``--counters`` twice and ``--compare`` for that.
+    """
+
+    from benchmarks import capture_core_bars as bars_mod
+
     model, x = cost.LoopCell().eval(), torch.randn(2, 16)
-    first = _counted(model, x)
-    second = floor.measure_sections(model, x)
-    assert first == second
+    first = floor.flatten({"models": {"m": {"floor": _counted(model, x)}}})
+    second = floor.flatten({"models": {"m": {"floor": floor.measure_sections(model, x)}}})
+    assert bars_mod.compare(first, second) == []
 
 
 def _document(calls: dict[str, int], hits: dict[str, int], outputs: int = 10) -> dict:
