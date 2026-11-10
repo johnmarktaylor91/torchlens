@@ -59,8 +59,8 @@ class _CallSiteMemo:
 
         #: The ``_code_context_cache`` the values came from; a new one resets the table.
         self.cache = cache
-        #: Site key -> ``(code_context tuple, call-site chain)``.
-        self.sites: dict[Any, tuple[tuple[Any, ...], Any]] = {}
+        #: Site key -> ``(code_context list, call-site chain)``; the list is never handed out.
+        self.sites: dict[Any, tuple[list[Any], Any]] = {}
         #: ``id(ModuleStackFrame)`` -> ``(frame record, ids remainder, plain remainder)``
         #: for each module call met; the record is held so its id is not reused.
         self.entries: dict[int, tuple[Any, int, int]] = {}
@@ -191,37 +191,25 @@ def _set_call_site_fields(self: "Trace", fields_dict: dict[str, Any], func_call_
     workspace = self._raw_graph_ws
     memo = workspace._call_site_memo
     cache = self.__dict__.get("_code_context_cache")
+    key: Any = None
     if memo is None or memo.cache is not cache:
         if cache is None:
             cache = {}
             self._code_context_cache = cache
         memo = _CallSiteMemo(cache)
         workspace._call_site_memo = memo
-        if memo.anchor is None:
-            code_context, chain = _walk_call_site(self, cache)
-            memo.anchor = cache.get(_CODE_CONTEXT_ANCHOR_KEY)
+        if memo.anchor is not None:
             key = _site_key(memo, sys._getframe(1))
-            if key is not None:
-                memo.sites[key] = (tuple(code_context), chain)
-            fields_dict["code_context"] = code_context
+    else:
+        key = _site_key(memo, sys._getframe(1))
+        try:
+            context, chain = memo.sites[key]
+        except KeyError:
+            pass
+        else:
+            fields_dict["code_context"] = [*context]
             workspace._pending_call_site = (func_call_id, chain)
             return
-    key = _site_key(memo, sys._getframe(1))
-    try:
-        context, chain = memo.sites[key]
-    except KeyError:
-        code_context, chain = _walk_call_site(self, cache)
-        if key is not None:
-            memo.sites[key] = (tuple(code_context), chain)
-        fields_dict["code_context"] = code_context
-    else:
-        fields_dict["code_context"] = [*context]
-    workspace._pending_call_site = (func_call_id, chain)
-
-
-def _walk_call_site(self: "Trace", cache: dict[Any, Any]) -> tuple[list[Any], Any]:
-    """The full frame walk: the op's ``code_context`` list and its call-site chain."""
-
     call_site_out: list[Any] = []
     code_context = _get_code_context(
         self.num_context_lines,
@@ -230,7 +218,14 @@ def _walk_call_site(self: "Trace", cache: dict[Any, Any]) -> tuple[list[Any], An
         context_cache=cache,
         call_site_out=call_site_out,
     )
-    return code_context, call_site_out[0]
+    chain = call_site_out[0]
+    if memo.anchor is None:  # the first walk of the capture sets the anchor
+        memo.anchor = cache.get(_CODE_CONTEXT_ANCHOR_KEY)
+        key = _site_key(memo, sys._getframe(1))
+    if key is not None:
+        memo.sites[key] = (code_context, chain)
+    fields_dict["code_context"] = [*code_context]
+    workspace._pending_call_site = (func_call_id, chain)
 
 
 def _predicate_call_site_chain(trace: "Trace") -> tuple[Any, ...]:
