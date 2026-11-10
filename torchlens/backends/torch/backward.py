@@ -22,9 +22,7 @@ import torch
 
 from ... import _state
 from ..._capture import projections
-from ..._capture.peak_memory import (
-    record_backward_peak,
-)
+from ..._capture.peak_memory import record_backward_peak
 from ..._capture.predicates import _evaluate_keep_op
 from ..._capture.projections import sync_recording_grad_records_from_sidecar
 from ..._data_classes._fork_lineage import _is_fork_relative
@@ -52,10 +50,11 @@ from ..._ir.events import (
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
+from ..._utils._detached_activations import detached_saved_activation_label
 from ..._utils._display_bounded import short_dataclass_repr
 from ..._utils._package_frames import is_torchlens_code
 from ..._utils._record_group_table import record_member
-from ..._utils._tensor_label import detached_saved_activation_label, get_tensor_label
+from ..._utils._tensor_label import get_tensor_label
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
     get_autograd_engine_queue_callback,

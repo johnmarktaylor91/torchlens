@@ -423,6 +423,9 @@ happen.
 
 _CAPABILITY_PROBE_STATE = frozenset(
     {
+        # The functorch transform probe, resolved once on first use (a build without
+        # one resolves again each call); never varies afterwards.
+        ("torchlens/backends/torch/_tracing_pass.py", "_FUNCTORCH_PROBE"),
         # Post-T80 census sweep (F42 reconcile): the tl.func-matching wrap
         # universe -- derived once from the installed wrapper layer on first
         # use, never varies while wrapped (F21).
@@ -821,6 +824,9 @@ they carry an epoch/version counter where downstream caches must invalidate.
 
 _PROCESS_CACHES = frozenset(
     {
+        # The last trace asked for its payload-window state and that state (one tuple,
+        # the trace held by weakref): a one-entry front for _COW_STATE_PTRS_CACHE.
+        ("torchlens/backends/torch/wrappers.py", "_COW_LAST_TRACE"),
         # Code objects of the unwrapped Function.apply frame (one per apply slot
         # shape), registered at install so the census can tell a dispatch made by the
         # C++ apply epilogue from one inside the user's forward; process-stable.

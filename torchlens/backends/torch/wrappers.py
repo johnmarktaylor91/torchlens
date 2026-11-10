@@ -37,18 +37,20 @@ from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureNotActiveError
 from ..._utils import _compiled_write_guard
 from ..._utils._compiled_write_guard import materialize_deferred_for_call
+from ..._utils._detached_activations import (
+    _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
+    has_detached_saved_activations,
+    propagate_detached_saved_activation,
+)
 from ..._utils._dispatch_modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ..._utils._hop_entry_compile import compile_disabled
 from ..._utils._tensor_label import (
-    _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
     DescriptorCompatProperty,
     get_tensor_label,
-    has_detached_saved_activations,
     is_decorated_function,
     is_tensor_data_alias,
     mark_decorated_function,
     mark_tensor_data_alias,
-    propagate_detached_saved_activation,
     set_tensor_label,
 )
 from ..._utils._torch_compat import (
@@ -58,7 +60,6 @@ from ..._utils._torch_compat import (
     get_current_function_mode_stack,
     get_device_constructors,
     get_device_context_type,
-    get_functorch_transform_probe,
     get_jit_boolean_dispatch_table,
     get_jit_builtin_table,
     get_optional_torch_namespace,
@@ -113,7 +114,11 @@ from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tens
 from ._output_tensors import _collect_output_tensors
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
 from ._torch_ops_calls import install_torch_ops_call_recorders, uninstall_torch_ops_call_recorders
-from ._tracing_pass import call_inside_tracing_pass, inside_tracing_tensor_pass
+from ._tracing_pass import (
+    call_inside_tracing_pass,
+    inside_functorch_transform as _is_inside_functorch_transform,
+    inside_tracing_tensor_pass,
+)
 from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-split spelling)
     DIRECT_TRANSFORM_SITES,
     TRANSFORM_BUILDER_SITES,
@@ -195,26 +200,9 @@ def _fix_tensor_sequence_slot() -> None:
     fix_tensor_sequence_slot()
 
 
-def _is_inside_functorch_transform() -> bool:
-    """Return True if inside a vmap/grad/etc. functorch transform."""
-    transform_probe = get_functorch_transform_probe()
-    if transform_probe is None:
-        return False
-    return transform_probe() is not None
-
-
-def _is_inside_dynamo_compilation() -> bool:
-    """Return True while Dynamo is tracing the current frame.
-
-    Returns
-    -------
-    bool
-        Whether a ``torch.compile`` region is being traced right now. False when
-        the capability probe is unavailable, so an absent probe degrades to
-        "not compiling" and leaves capture behavior exactly as it was.
-    """
-
-    return dynamo_is_compiling()
+# Dynamo's own probe, called directly (a frame less per logged call); False while Dynamo is
+# unimported or no probe resolved, True when the probe raises (see ``dynamo_is_compiling``).
+_is_inside_dynamo_compilation = dynamo_is_compiling
 
 
 def _warn_dynamo_region_not_logged() -> None:
@@ -540,6 +528,10 @@ def _untyped_storage_key(t: torch.Tensor) -> tuple[int, int, str] | None:
 # (_PORTABLE_STATE_SPEC), and the decision is wrapper-internal state anyway.
 _COW_STATE_PTRS_CACHE: "weakref.WeakKeyDictionary[Any, Any]" = weakref.WeakKeyDictionary()
 _COW_UNSET = object()
+# The last trace asked and its cached state, one tuple swapped whole so a reader never pairs
+# one trace with another's state; weak, so no trace is kept alive. The per-call read of the
+# cache above without the ``suppress`` frames and the weak-dictionary lookup.
+_COW_LAST_TRACE: list[Any] = [(None, _COW_UNSET)]
 
 
 def _cow_payload_state_ptrs(trace: Any) -> Any:
@@ -558,9 +550,12 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
     writers, non-copy save modes) keeps the historical eager clone.
     ``inference_only`` (implied by ``no_grad``) only adds ``no_grad``: eligible.
     """
-    cached: Any = _COW_UNSET
-    with suppress(TypeError):
-        cached = _COW_STATE_PTRS_CACHE.get(trace, _COW_UNSET)
+    last = _COW_LAST_TRACE[0]
+    cached: Any = last[1] if last[0] is not None and last[0]() is trace else _COW_UNSET
+    if cached is _COW_UNSET:
+        with suppress(TypeError):
+            cached = _COW_STATE_PTRS_CACHE.get(trace, _COW_UNSET)
+            _COW_LAST_TRACE[0] = (weakref.ref(trace), cached)
     if cached is not _COW_UNSET:
         return None if _compiled_write_guard.compiled_writes_seen() else cached
     ptrs: Any = None
@@ -590,6 +585,7 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
                 ptrs = None
     with suppress(TypeError):
         _COW_STATE_PTRS_CACHE[trace] = ptrs
+        _COW_LAST_TRACE[0] = (weakref.ref(trace), ptrs)
     return ptrs
 
 
@@ -1440,8 +1436,8 @@ def torch_func_decorator(
         op_marker_tokens = _push_op_markers(trace, func_name, func_call_id)
         func_exec_start = time.time()
         device_memory_before = None
-        if getattr(trace, "track_device_memory", False):
-            # Observe item 15; deferred: cycle _observe.
+        track_device_memory = getattr(trace, "track_device_memory", False)
+        if track_device_memory:  # Observe item 15; deferred: cycle _observe.
             from ..._observe._device_memory import read_before as _dm_read_before
 
             device_memory_before = _dm_read_before(trace)
@@ -1511,7 +1507,7 @@ def torch_func_decorator(
 
                 _record_mode_paused_interior(trace, owner_func_call_id=func_call_id)
         func_exec_duration = time.time() - func_exec_start
-        if device_memory_before is not None or getattr(trace, "track_device_memory", False):
+        if device_memory_before is not None or track_device_memory:
             from ..._observe._device_memory import settle_op_bracket  # deferred: cycle _observe
 
             settle_op_bracket(trace, func_name, func_call_id, device_memory_before)

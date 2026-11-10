@@ -280,7 +280,8 @@ def _buffer_work_needed(plan: CallPlan, trace: Any) -> bool:
         or tracker._pending_lazy_buffer_ids
     ):
         return True
-    if plan.name_could_mutate:
+    # Clearing two empty caches is a no-op, so the clear runs only when one holds an entry.
+    if plan.name_could_mutate and (tracker._storage_key_cache or tracker._storage_range_cache):
         tracker.clear_storage_metadata_cache()
     return False
 
