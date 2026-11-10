@@ -968,12 +968,12 @@ def _register_first_use_state(trace: Any, arg_tensorlike: Iterable[torch.Tensor]
         if get_tensor_label(t) is not None:
             # A current-session op output or registered source: no rung below logs or stamps it.
             continue
-        # The identity ladder + lazy late-index live in
-        # buffer_writes.resolve_or_late_index_buffer_address.
+        # The identity ladder + lazy late-index (buffer_writes.resolve_or_late_index_buffer_address)
+        # never label a tensor, so ``t`` is still unlabeled after it.
         address = resolve_or_late_index_buffer_address(trace, t)
-        if address is not None and get_tensor_label(t) is None:
+        if address is not None:
             log_source_tensor(trace, t, "buffer", address)
-        elif address is None:
+        else:
             # A tensor the forward closes over (SPEC 2 rule 1) becomes a
             # ``constant`` source op on first use; anything not proven
             # pre-forward stays unattributed.
