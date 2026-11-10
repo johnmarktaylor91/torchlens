@@ -111,9 +111,9 @@ def resolve_rung(
     real = _has_real_input(input_args, input_kwargs)
     if real and input_size is not None:
         raise ArgumentConflictError(
-            "Got BOTH a real input and input_shape=. The input ladder's rungs are "
-            "exclusive: a real input (best), input_shape= (your shape, synthesized "
-            "values, disclosed), or nothing (inferred shape, disclosed).",
+            "Got BOTH a real input and input_shape=. Give one of the three: a real "
+            "input (best), input_shape= (your shape, random values, disclosed), or "
+            "nothing (inferred shape, random values, disclosed).",
             code="input_rung_conflict",
             remedy=(
                 "pass the real input alone (drop input_shape=), or drop the real "
