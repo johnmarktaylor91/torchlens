@@ -198,6 +198,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
     """Dump base and head in two fresh processes and print the differences."""
 
     from field_diff_lib.compare import diff, report
+    from field_diff_lib.mask import accept_release_moves
 
     work = Path(args.work).resolve()
     work.mkdir(parents=True, exist_ok=True)
@@ -218,7 +219,10 @@ def cmd_compare(args: argparse.Namespace) -> int:
         for side in ("base", "head"):
             path = work / side / name
             sides.append(json.loads(path.read_text()) if path.exists() else "<absent>")
-        differences[name.removesuffix(".json")] = diff(sides[0], sides[1])
+        dump = name.removesuffix(".json")
+        if not args.no_mask:
+            sides[1] = accept_release_moves(dump, sides[0], sides[1])
+        differences[dump] = diff(sides[0], sides[1])
     total, lines = report(differences, limit=args.limit)
     lines.insert(1, f"base tree {base_tree}; head tree {head_tree}; plant {args.plant}")
     (work / "report.txt").write_text("\n".join(lines) + "\n")
@@ -244,6 +248,9 @@ def cmd_cases(args: argparse.Namespace) -> int:
         print(f"text {text_rule.pattern!r}: {text_rule.reason}")
     for name, reason in mask.NOT_READ.items():
         print(f"not read {name}: {reason}")
+    for name, names in mask.TYPE_TAG_ONLY.items():
+        print(f"type tag only {name} {names}: {mask.TYPE_TAG_ONLY_REASON}")
+    print(f"release order {mask.RELEASE_ORDER}: {mask.RELEASE_ORDER_REASON}")
     for name, what in FAULTS.items():
         print(f"fault {name}: {what}")
     return 0

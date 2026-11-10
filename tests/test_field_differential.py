@@ -32,8 +32,8 @@ from field_diff_lib.faults import FAULTS, PLANT_CASE  # noqa: E402
 from field_diff_lib.mask import Mask  # noqa: E402
 
 #: Entries of the fixed mask, and the digest of their lines (see ``_mask_lines``).
-APPROVED_MASK_ENTRIES = 65
-APPROVED_MASK_DIGEST = "620e49209c059e35"
+APPROVED_MASK_ENTRIES = 68
+APPROVED_MASK_DIGEST = "aa2223e23a499895"
 
 
 def _mask_lines() -> list[str]:
@@ -43,6 +43,13 @@ def _mask_lines() -> list[str]:
     lines += [f"text {rule.pattern} {rule.replacement}" for rule in mask_module.TEXT_RULES]
     read_on = ",".join(mask_module.GEOMETRY_READ_MODELS)
     lines += [f"not-read {name} except {read_on}" for name in mask_module.NOT_READ]
+    tags = ";".join(
+        f"{name}:" + ",".join(f"{head}={base}" for head, base in sorted(names.items()))
+        for name, names in sorted(mask_module.TYPE_TAG_ONLY.items())
+    )
+    lines.append(f"type-tag-only {tags}")
+    classes = ",".join(mask_module.RELEASE_CLASSES)
+    lines.append(f"release-order {mask_module.RELEASE_ORDER} steps/outcome {classes}")
     return sorted(lines)
 
 
@@ -64,6 +71,8 @@ def test_every_mask_entry_states_its_rule_and_reason() -> None:
         assert len(rule.reason) > 10
     for text_rule in mask_module.TEXT_RULES:
         assert len(text_rule.reason) > 10
+    assert len(mask_module.TYPE_TAG_ONLY_REASON) > 10
+    assert len(mask_module.RELEASE_ORDER_REASON) > 10
 
 
 def test_diff_reports_value_type_length_and_missing_key() -> None:
@@ -110,6 +119,88 @@ def test_clock_rule_hides_only_the_reading() -> None:
         ["count", 3],
     ]
     assert mask.apply("backward_durations", [{"__float__": "1.0"}]) == ["<float>"]
+
+
+def test_reading_rule_hides_every_number_and_keeps_presence() -> None:
+    """Backward ``peak_memory`` hides integers and floats; ``None`` and shape still compare."""
+
+    mask = Mask()
+    assert mask.apply("peak_memory", 196608) == "<reading>"
+    assert mask.apply("peak_memory", 0) == "<reading>"
+    assert mask.apply("peak_memory", {"__float__": "1.5"}) == "<reading>"
+    assert mask.apply("peak_memory", None) is None
+    assert mask.apply("peak_memory", [1, None]) == ["<reading>", None]
+    assert mask.apply("forward_peak_memory", 196608) == 196608
+
+
+def test_type_tag_only_reads_the_subclass_as_its_base() -> None:
+    """The four row-key containers compare as their base type; items and other tags still show."""
+
+    mask = Mask()
+    seq = {"__seq__": "OpSequence", "items": [{"__ref__": "Op", "label": "relu_1"}]}
+    assert mask.apply("_layer_list", seq) == [{"__ref__": "Op", "label": "relu_1"}]
+    other = {"__seq__": "SomethingElse", "items": []}
+    assert mask.apply("_layer_list", other) == other
+    assert mask.apply("_other_list", seq) == seq
+    labels = {"__dict__": "OpOrderedLabelMap", "items": [["relu_1", 1]]}
+    assert mask.apply("_layer_dict_all_keys", labels)["__dict__"] == "OrderedDict"
+    assert mask.apply("_layer_dict_all_keys", labels)["items"] == [["relu_1", 1]]
+    plain = {"__dict__": "OpLabelMap", "items": []}
+    assert mask.apply("_layer_dict_main_keys", plain)["__dict__"] == "dict"
+    layers = {"__dict__": "LayerStore", "items": []}
+    assert mask.apply("_layer_logs", layers)["__dict__"] == "OrderedDict"
+    assert mask.apply("_layer_logs", {"__dict__": "dict", "items": []})["__dict__"] == "dict"
+    nested = {"__dict__": "dict", "items": [["_layer_logs", layers]]}
+    assert mask.apply("trace", nested)["items"][0][1]["__dict__"] == "OrderedDict"
+    assert Mask(enabled=False).apply("_layer_list", seq) == seq
+
+
+def _release(**classes: list[str]) -> dict[str, Any]:
+    """Return a canonical release outcome with the given classes (others empty)."""
+
+    items = [[key, classes.get(key, [])] for key in mask_module.RELEASE_CLASSES]
+    return {"__dict__": "dict", "items": [*items, ["watched_by_address", []]]}
+
+
+def _release_log(outcome: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return a one-step sequence-8 log."""
+
+    return [{"step": "fork_held", "outcome": outcome, "warnings": []}]
+
+
+def test_release_order_accepts_only_earlier_release() -> None:
+    """A record freed earlier is accepted; a move toward the collector still fails."""
+
+    name = mask_module.RELEASE_ORDER
+    base = _release(
+        freed_when_trace_dropped=["op"],
+        freed_when_kept_dropped=["layer"],
+        freed_only_by_collector=["param"],
+    )
+    earlier = _release(freed_when_trace_dropped=["layer", "op", "param"])
+    accepted = mask_module.accept_release_moves(name, _release_log(base), _release_log(earlier))
+    assert diff(_release_log(base), accepted) == []
+
+    toward = _release(freed_when_kept_dropped=["layer", "op"], freed_only_by_collector=["param"])
+    kept = mask_module.accept_release_moves(name, _release_log(base), _release_log(toward))
+    assert diff(_release_log(base), kept) != []
+
+    collector = _release(
+        freed_when_trace_dropped=["op"], freed_only_by_collector=["layer", "param"]
+    )
+    assert not mask_module.release_moved_earlier(base, collector)
+    never = _release(freed_when_trace_dropped=["op", "layer"], never_freed=["param"])
+    assert not mask_module.release_moved_earlier(base, never)
+    extra = _release(freed_when_trace_dropped=["layer", "op", "param", "buffer"])
+    assert not mask_module.release_moved_earlier(base, extra)
+    fewer = _release(freed_when_trace_dropped=["layer", "op"])
+    assert not mask_module.release_moved_earlier(base, fewer)
+    address = {**earlier, "items": [*earlier["items"][:-1], ["watched_by_address", ["op"]]]}
+    assert not mask_module.release_moved_earlier(base, address)
+    other = mask_module.accept_release_moves(
+        "sequence-5_forks", _release_log(base), _release_log(earlier)
+    )
+    assert diff(_release_log(base), other) != []
 
 
 def test_identity_rule_keeps_presence_and_shape() -> None:
