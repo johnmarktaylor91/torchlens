@@ -331,7 +331,7 @@ class LayerDictStore(LayerStore):
 
     __slots__ = ()
 
-    plain_type = dict
+    plain_type: ClassVar[type[dict[str, Any]]] = dict
 
 
 #: Every layer store class (``__class__`` membership costs no call).
