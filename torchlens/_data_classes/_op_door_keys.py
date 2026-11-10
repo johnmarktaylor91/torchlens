@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from itertools import repeat
 from typing import Any
 
-from .._errors import AmbiguousOpLookupError
 from .._utils._record_group_table import record_member
 
 OP_KIND = "op"
@@ -29,13 +28,18 @@ _slot = object.__getattribute__
 
 
 class OpTable:
-    """The two side tables one ops door resolves its keys through."""
+    """The two side tables one ops door resolves its keys through.
+
+    ``plain`` is true while every key this door holds is a store row, so a hot
+    read can index ``rows`` directly (the door's lookups do, to add no call).
+    """
 
     def __init__(self, rows: list[Any], detached: dict[int, Any]) -> None:
         """Wrap the row list and the detached dictionary; both are held strongly."""
 
         self.rows = rows
         self.detached = detached
+        self.plain = not detached
 
     def record(self, key: int) -> Any:
         """Return the record behind one key."""
@@ -46,7 +50,7 @@ class OpTable:
         """Return an iterator over the records behind ``keys``, in order."""
 
         rows, detached = self.rows, self.detached
-        if not detached:
+        if self.plain:
             return map(rows.__getitem__, keys)
         return iter([rows[key] if key >= 0 else detached[key] for key in keys])
 
@@ -84,6 +88,7 @@ class OpTable:
                 detached[key] = record
                 ids[id(record)] = key
             keys[position] = key
+        self.plain = ids is None
         return keys
 
     def key_of(self, record: Any) -> int | None:
@@ -118,7 +123,7 @@ def _side_tables(trace: Any) -> tuple[list[Any], dict[int, Any], Any]:
 
     core = getattr(trace, "__dict__", {}).get("_trace_core")
     facades = getattr(core, "_strong_facades", None)
-    if not isinstance(facades, dict):
+    if core is None or not isinstance(facades, dict):
         return [], {}, None
     rows = facades.get(OP_KIND)
     if rows is None:
@@ -208,7 +213,7 @@ def _group_by_layer_aliases(keys: Sequence[int], ops: Iterable[Any]) -> dict[Any
     """
 
     groups: dict[Any, list[int]] = {}
-    for held, op in zip(keys, ops):
+    for held, op in zip(keys, ops, strict=True):
         for alias in {op.layer_label, op.short_layer_label}:
             groups.setdefault(alias, []).append(held)
     return groups
@@ -241,19 +246,6 @@ def _claim_alias(
     claimants = collisions.setdefault(alias, [existing])
     if held not in claimants:
         claimants.append(held)
-
-
-def _refuse_colliding_label(key: Any, claimants: Sequence[Any] | None) -> None:
-    """Raise when one final label names several Ops, rather than guess one."""
-
-    if not claimants:
-        return
-    names = ", ".join(f"{op.label!r} (raw {op._label_raw!r})" for op in claimants[:10])
-    raise AmbiguousOpLookupError(
-        f"Op label {key!r} is claimed by {len(claimants)} different ops: {names}. "
-        "A final label must name exactly one op; this is corrupt labeling, not an "
-        "ambiguous user key."
-    )
 
 
 def _is_counted_op(op: Any) -> bool:

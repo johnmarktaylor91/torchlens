@@ -13,6 +13,8 @@ read, the row list refuses iteration and the reads must still answer.
 from __future__ import annotations
 
 import gc
+import pickle
+import warnings
 from collections.abc import Iterator
 from typing import Any
 
@@ -107,8 +109,12 @@ def test_ops_door_holds_row_keys_and_reads_the_same_records() -> None:
     ops = trace.ops
     rows = list(trace._layer_list)
     single_pass = next(op for op in rows if trace._layer_num_calls.get(op.layer_label, 0) == 1)
-    assert ops[single_pass.short_label] is single_pass  # builds the alias indexes
-    assert ops.resolve_all(single_pass.layer_label) == [single_pass]
+    multi_pass = [op for op in rows if trace._layer_num_calls.get(op.layer_label, 0) > 1]
+    assert ops[single_pass.short_label] is single_pass
+    assert ops._ensure_alias_indexes() is not None
+    # A bare multi-pass layer label is the lookup that builds the layer label index.
+    layer_label = multi_pass[0].layer_label
+    assert ops.resolve_all(layer_label) == [op for op in rows if op.layer_label == layer_label]
     assert ops._resolved_op(single_pass.label) is single_pass
     assert ops._resolved_op(single_pass.label) is single_pass  # the memoized read
     assert len(ops) == len(list(ops)) > 0
@@ -119,6 +125,22 @@ def test_ops_door_holds_row_keys_and_reads_the_same_records() -> None:
     assert all(ops._dict[row.label] is row for row in rows)
     assert all(ops.by_raw_index(row.raw_index) is row for row in rows)
     assert [ops[index] for index in range(len(ops))] == list(ops) == ops.values()
+
+
+def test_reloaded_trace_with_a_backward_capture_keys_its_ops_door_by_row() -> None:
+    # Reloading a backward capture reads an ops door before the trace has its
+    # core; the door the user gets afterwards must still key by store row.
+    trace = _trace()
+    trace.backward(trace.output.sum())
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # tensor hooks are not serialized
+        restored = pickle.loads(pickle.dumps(trace))
+    door = restored.ops
+    rows = list(restored._layer_list)
+    side_table = restored.__dict__["_trace_core"]._strong_facades
+    assert door._table.rows is side_table["op"] and not side_table["op.detached"]
+    assert door._keys and all(type(key) is int and key >= 0 for key in door._keys)
+    assert all(found is row for found, row in zip(door._list, rows, strict=True))
 
 
 def test_held_ops_door_keeps_its_records_after_the_trace_is_gone() -> None:

@@ -20,7 +20,6 @@ from ._op_door_keys import (
     _claim_alias,
     _group_by_layer_aliases,
     _is_counted_op,
-    _refuse_colliding_label,
     hold_ops,
 )
 from .op import Op
@@ -207,6 +206,19 @@ def boundary_label_rows(labels: Sequence[str], resolve: Callable[[str], Any]) ->
     ]
 
 
+def _refuse_colliding_label(key: Any, claimants: Sequence[Op] | None) -> None:
+    """Raise when one final label names several Ops, rather than guess one."""
+
+    if not claimants:
+        return
+    names = ", ".join(f"{op.label!r} (raw {op._label_raw!r})" for op in claimants[:10])
+    raise AmbiguousOpLookupError(
+        f"Op label {key!r} is claimed by {len(claimants)} different ops: {names}. "
+        "A final label must name exactly one op; this is corrupt labeling, not an "
+        "ambiguous user key."
+    )
+
+
 class TraceOpAccessor(Accessor[Op]):
     """Trace-level accessor for type-strict Op lookups.
 
@@ -257,11 +269,10 @@ class TraceOpAccessor(Accessor[Op]):
         # labeling; recording it here makes every lookup of that label refuse
         # instead of silently answering with whichever row came last.
         duplicate_labels: dict[str, list[int]] = {}
-        for held, op in zip(self._keys, members):
+        for held, op in zip(self._keys, members, strict=True):
             label = op.label
-            existing = label_keys.get(label)
-            if existing is not None and existing != held and isinstance(label, str):
-                duplicate_labels.setdefault(label, [existing]).append(held)
+            if label in label_keys and label_keys[label] != held and isinstance(label, str):
+                duplicate_labels.setdefault(label, [label_keys[label]]).append(held)
             label_keys[label] = held
             self._raw_index_lookup[op.raw_index] = held
         self._label_keys = label_keys
@@ -311,7 +322,8 @@ class TraceOpAccessor(Accessor[Op]):
     def _ops(self, keys: Iterable[int]) -> list[Op]:
         """The records behind ``keys``, in order."""
 
-        return list(self._table.records(keys))
+        table = self._table
+        return list(map(table.rows.__getitem__, keys) if table.plain else table.records(keys))
 
     def _counted_keys(self) -> list[int]:
         """The row keys of the counted op rows, in capture order.
@@ -322,13 +334,14 @@ class TraceOpAccessor(Accessor[Op]):
         """
 
         keys = self._keys
-        if not getattr(self, "_counted_view", False):
+        if not self._counted_view:
             return keys
-        cached = getattr(self, "_counted_cache", None)
+        cached = self._counted_cache
         if cached is not None:
             return cached
         table = self._table
-        counted = [held for held, op in zip(keys, table.records(keys)) if _is_counted_op(op)]
+        members = zip(keys, table.records(keys), strict=True)
+        counted = [held for held, op in members if _is_counted_op(op)]
         if keys and getattr(table.record(keys[-1]), "_tracing_finished", False):
             self._counted_cache = counted
         return counted
@@ -336,12 +349,12 @@ class TraceOpAccessor(Accessor[Op]):
     def _counted_ops(self) -> list[Op]:
         """The counted op rows, in capture order."""
 
-        return list(self._table.records(self._counted_keys()))
+        return self._ops(self._counted_keys())
 
     def _refuse_duplicate_label(self, key: Any) -> None:
         """Raise when ``key`` is a member label two rows share."""
 
-        claimed = getattr(self, "_duplicate_labels", {}).get(key)
+        claimed = self._duplicate_labels.get(key)
         if claimed:
             _refuse_colliding_label(key, self._ops(claimed))
 
@@ -351,11 +364,12 @@ class TraceOpAccessor(Accessor[Op]):
         if isinstance(key, int):
             held = self._counted_keys()[key]
         else:
-            self._refuse_duplicate_label(key)
-            found = self._label_keys.get(key)
-            if found is None:
+            if self._duplicate_labels:
+                self._refuse_duplicate_label(key)
+            label_keys = self._label_keys
+            if key not in label_keys:
                 return super().__getitem__(key)
-            held = found
+            held = label_keys[key]
         table = self._table
         return table.rows[held] if held >= 0 else table.detached[held]
 
@@ -450,15 +464,18 @@ class TraceOpAccessor(Accessor[Op]):
             held = self._raw_index_lookup[raw_index]
         except KeyError as exc:
             raise KeyError(f"Op raw_index {raw_index} not found.") from exc
-        return self._table.record(held)
+        table = self._table
+        return table.rows[held] if held >= 0 else table.detached[held]
 
     def _resolve_pass_qualified(self, key: str) -> Op | None:
         """Resolve pass-qualified Op labels without returning parent Layers."""
 
-        self._refuse_duplicate_label(key)
-        found = self._label_keys.get(key)
-        if found is not None:
-            return self._table.record(found)
+        if self._duplicate_labels:
+            self._refuse_duplicate_label(key)
+        label_keys = self._label_keys
+        if key in label_keys:
+            held, table = label_keys[key], self._table
+            return table.rows[held] if held >= 0 else table.detached[held]
         token = split_pass_token(key)
         if token is None:
             return None
@@ -516,7 +533,8 @@ class TraceOpAccessor(Accessor[Op]):
         if index is None:
             scanned = table.records(keys)
             return [op for op in scanned if key in {op.layer_label, op.short_layer_label}]
-        return list(table.records(index.get(key, ())))
+        held = index.get(key, ())
+        return list(map(table.rows.__getitem__, held) if table.plain else table.records(held))
 
     def _ensure_alias_indexes(self) -> _AliasIndexes | None:
         """Build the alias reverse indexes once, or report them unavailable.
@@ -564,7 +582,7 @@ class TraceOpAccessor(Accessor[Op]):
         raw_index: dict[Any, int] = {}
         layer_alias_index: dict[Any, list[int]] = {}
         try:
-            for held, op in zip(self._keys, self._table.records(self._keys)):
+            for held, op in zip(self._keys, self._table.records(self._keys), strict=True):
                 for alias in self._final_aliases(op):
                     _claim_alias(final_index, collisions, alias, held)
                 raw_index.setdefault(op.raw_label, held)
