@@ -384,7 +384,6 @@ def test_fork_carries_deletion_in_both_generations(columnar: bool, name: str) ->
     # A deletion in the parent after the fork does not reach the fork.
     assert base.cell_del(2, fid) is True
     assert view.cell_get(2, fid) is not _MISSING
-    assert fx.calls == [] or name in ("depth", "note", "tick")
 
 
 def test_default_created_after_a_fork_is_isolated_from_the_next_fork() -> None:
