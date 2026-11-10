@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1755 modules, 706541 lines, 0 modules without a docstring.
+85 packages, 1755 modules, 706517 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 139 | 59440 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 139 | 59416 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1479,7 +1479,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (139 modules, 59440 lines)
+Torch backend implementation package for TorchLens capture. (139 modules, 59416 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1611,8 +1611,8 @@ Torch backend implementation package for TorchLens capture. (139 modules, 59440 
 | `identity_shims` | Wrap-state identity shims: keep torch-internal identity checks truthful. | 955 |
 | `instrument` | Model instrumentation entry for the WRAP stage. | 161 |
 | `legacy_ctors` | Capture of legacy tensor constructors: ''torch.<dtype>Tensor(...)'' and ''Variable(t)''. | 309 |
-| `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 2231 |
-| `module_stack` | Manage the torch capture module-call stack. | 92 |
+| `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 2197 |
+| `module_stack` | Manage the torch capture module-call stack. | 102 |
 | `offload_hooks` | Accelerate offload/dispatch hook shims for eager capture. | 214 |
 | `ops` | Log tensors produced by decorated torch operations. | 604 |
 | `param_mutation` | In-place mutation of Parameters during torch capture (receiver policy). | 731 |
