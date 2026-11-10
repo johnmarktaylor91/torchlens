@@ -74,6 +74,7 @@ from ._module_census import (
     bind_layer_conditional_roles,
     module_source_and_hooks,
     op_space_labels,
+    param_totals,
     uncalled_module_addresses,
 )
 from ._multipass_params import pass_param_addresses, union_multipass_params
@@ -223,10 +224,10 @@ def _build_root_module_log(
 
     root_param_dict = {pl.address: pl for pl in self._param_logs}
     root_params = ParamAccessor(root_param_dict)
-    root_num_params = sum(pl.num_params for pl in self._param_logs)
-    root_num_trainable = sum(pl.num_params for pl in self._param_logs if pl.is_trainable)
-    root_num_frozen = sum(pl.num_params for pl in self._param_logs if not pl.is_trainable)
-    root_fsize = Bytes(sum(int(pl.param_memory) for pl in self._param_logs))
+    root_num_params, root_num_trainable, root_num_frozen, root_memory = param_totals(
+        self._param_logs
+    )
+    root_fsize = Bytes(root_memory)
     address_children = _root_address_children(root_meta, mbd)
 
     root_ops: dict[int, ModuleCall] = {}
@@ -573,10 +574,10 @@ def _resolve_call_hierarchy(
 
     call_parent_addr = None
     if ops:
-        first_pass = next(iter(ops.values()))
-        if first_pass.call_parent and first_pass.call_parent != "self:1":
-            call_parent_addr = first_pass.call_parent.rsplit(":", 1)[0]
-        elif first_pass.call_parent == "self:1":
+        first_parent = next(iter(ops.values())).call_parent
+        if first_parent and first_parent != "self:1":
+            call_parent_addr = first_parent.rsplit(":", 1)[0]
+        elif first_parent == "self:1":
             call_parent_addr = "self"
 
     return call_children_all, call_parent_addr

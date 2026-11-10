@@ -6,7 +6,7 @@ conditional records), which sits at the package's file-size cap.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -129,6 +129,22 @@ def module_source_and_hooks(meta: Mapping[str, Any]) -> dict[str, Any]:
         if name in meta:
             facts[name] = meta[name]
     return facts
+
+
+def param_totals(params: Iterable[Any]) -> tuple[int, int, int, int]:
+    """Return the parameter count, trainable count, frozen count and memory of ``params``.
+
+    One pass that reads each parameter's count, trainable flag and memory once.
+    """
+
+    total = trainable = memory = 0
+    for param in params:
+        count = param.num_params
+        total += count
+        if param.is_trainable:
+            trainable += count
+        memory += int(param.param_memory)
+    return total, trainable, total - trainable, memory
 
 
 def _call_io_layers(

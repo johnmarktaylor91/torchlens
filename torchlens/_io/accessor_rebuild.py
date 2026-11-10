@@ -143,8 +143,10 @@ def rebuild_buffer_accessor(trace: Trace) -> None:
     # Only an op with gradient records or a buffer flag has work here.
     for entry in ops_with(trace, "_grad_records", "is_buffer"):
         name_owner_by_row(trace_ref, entry)
-        if record_member(entry, "is_buffer", False) and entry.buffer_address is not None:
-            buffer_versions.setdefault(entry.buffer_address, []).append(entry)
+        if record_member(entry, "is_buffer", False):
+            address = entry.buffer_address
+            if address is not None:
+                buffer_versions.setdefault(address, []).append(entry)
     buffer_dict = {
         address: Buffer(
             address,
