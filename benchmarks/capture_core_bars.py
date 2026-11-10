@@ -95,7 +95,13 @@ def lane_bars() -> tuple[Bar, ...]:
         ),
         _fraction("K", _phase("post.build_lookup_keys"), 10, 342, "build lookup keys 342 to 10"),
         _fraction("I", _phase("post.compaction"), 60, 559, "compaction 400 to 60"),
-        _fraction("E3", "c1.chain1000.emit_total_per_op", 500, emit_today, "emit total to 500"),
+        _fraction(
+            "E3",
+            "c1.chain1000.emit_total_per_op",
+            600,
+            emit_today,
+            "emit total at or under 600 after E1 to E3 and F1 (REPLAN joint bar; PLAN had 500)",
+        ),
         _fraction("S1", _phase("post.remove_orphan_nodes"), 60, 364, "remove orphans 364 to 60"),
         _fraction("S2", _phase("post.group_recurrent_layers"), 50, 133, "recurrence 133 to 50"),
         Bar("Q", "c7.chain1000.to_pandas_per_op", "fraction", 0.50, "to_pandas() to 50%"),
@@ -139,6 +145,52 @@ def lane_bars() -> tuple[Bar, ...]:
             bars.append(Bar("B6", f"c4.{model}.{kind}", "max", 0.0, "C4 to 0 for these kinds"))
     for model in ("resnet18", "gpt2_tiny4"):
         bars.append(Bar("W2", f"c8.{model}.fast_lane_share", "min", 0.95, "C8 at least 95%"))
+    return tuple(bars) + call_time_bars()
+
+
+#: The call-time floor's models (``capture_core_floor.py``).
+FLOOR_MODELS = (*FULL_MODELS, "mod_relu200")
+
+
+def _floor(model: str, section: str) -> str:
+    return f"floor.{model}.{section}_per_output"
+
+
+def call_time_bars() -> tuple[Bar, ...]:
+    """Return the stage 2 call-time lanes' bars (REPLAN section 4) on N0's floor counters.
+
+    A fraction is of N0's baseline; a ruled absolute figure is a ``max``.
+    """
+
+    bars = [
+        Bar("E1", _floor(m, "call_site"), "fraction", 0.35, "call-site calls per output to 35%")
+        for m in ("chain1000", "loopcell100")
+    ]
+    bars += [
+        Bar("E2", _floor("chain1000", "arg_scan"), "fraction", 0.40, "argument scan to 40%"),
+        Bar("E2", _floor("varied200", "arg_scan"), "fraction", 0.55, "argument scan to 55%"),
+        Bar("E3", _floor("chain1000", "autograd"), "fraction", 0.25, "autograd section to 25%"),
+        Bar("F1", _floor("chain1000", "payload"), "max", 77.0, "payload 180 to 77 (ruled reset)"),
+        Bar("A1", _floor("varied200", "autograd"), "fraction", 0.50, "autograd section to 50%"),
+        Bar("W3", _phase("wrapper"), "max", 60.0, "wrapper phase 86 to 60 calls per op"),
+    ]
+    for model in FLOOR_MODELS:
+        bars.append(
+            Bar("E3", _floor(model, "output_facts"), "fraction", 0.60, "output facts to 60%")
+        )
+        bars.append(
+            Bar(
+                "W3",
+                _floor(model, "label_read_stamp"),
+                "fraction",
+                0.50,
+                "label read and stamp to 50%",
+            )
+        )
+    for model, limit in (("varied200", 150.0), ("gpt2_tiny4", 190.0)):
+        bars.append(
+            Bar("MC", _phase("forward.other", model), "max", limit, "forward.other (REPLAN figure)")
+        )
     return tuple(bars)
 
 

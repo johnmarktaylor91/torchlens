@@ -747,6 +747,16 @@
   "c3.chain1000.emit_ingest_cells_per_op": 148.95119760479042
  },
  "lanes": {
+  "A1": [
+   {
+    "counter": "floor.varied200.autograd_per_output",
+    "kind": "fraction",
+    "plan": "autograd section to 50%",
+    "fraction": 0.5,
+    "baseline": 152.3725,
+    "bar": 76.18625
+   }
+  ],
   "B5": [
    {
     "counter": "c4.chain1000.Op",
@@ -1072,6 +1082,24 @@
     "bar": 7889.441909547738
    }
   ],
+  "E1": [
+   {
+    "counter": "floor.chain1000.call_site_per_output",
+    "kind": "fraction",
+    "plan": "call-site calls per output to 35%",
+    "fraction": 0.35,
+    "baseline": 75.142,
+    "bar": 26.299699999999998
+   },
+   {
+    "counter": "floor.loopcell100.call_site_per_output",
+    "kind": "fraction",
+    "plan": "call-site calls per output to 35%",
+    "fraction": 0.35,
+    "baseline": 81.4983388704319,
+    "bar": 28.52441860465116
+   }
+  ],
   "E2": [
    {
     "counter": "c9.chain1000.save_none.argument_bytes_max",
@@ -1107,16 +1135,88 @@
     "plan": "C9 arguments 0",
     "bar": 0.0,
     "baseline": 65536
+   },
+   {
+    "counter": "floor.chain1000.arg_scan_per_output",
+    "kind": "fraction",
+    "plan": "argument scan to 40%",
+    "fraction": 0.4,
+    "baseline": 401.077,
+    "bar": 160.4308
+   },
+   {
+    "counter": "floor.varied200.arg_scan_per_output",
+    "kind": "fraction",
+    "plan": "argument scan to 55%",
+    "fraction": 0.55,
+    "baseline": 412.1475,
+    "bar": 226.681125
    }
   ],
   "E3": [
    {
     "counter": "c1.chain1000.emit_total_per_op",
     "kind": "fraction",
-    "plan": "emit total to 500",
-    "fraction": 0.409165,
+    "plan": "emit total at or under 600 after E1 to E3 and F1 (REPLAN joint bar; PLAN had 500)",
+    "fraction": 0.490998,
     "baseline": 1222.064870259481,
-    "bar": 500.0265426593621
+    "bar": 600.0318511912345
+   },
+   {
+    "counter": "floor.chain1000.autograd_per_output",
+    "kind": "fraction",
+    "plan": "autograd section to 25%",
+    "fraction": 0.25,
+    "baseline": 20.0,
+    "bar": 5.0
+   },
+   {
+    "counter": "floor.chain1000.output_facts_per_output",
+    "kind": "fraction",
+    "plan": "output facts to 60%",
+    "fraction": 0.6,
+    "baseline": 22.0,
+    "bar": 13.2
+   },
+   {
+    "counter": "floor.varied200.output_facts_per_output",
+    "kind": "fraction",
+    "plan": "output facts to 60%",
+    "fraction": 0.6,
+    "baseline": 22.0,
+    "bar": 13.2
+   },
+   {
+    "counter": "floor.loopcell100.output_facts_per_output",
+    "kind": "fraction",
+    "plan": "output facts to 60%",
+    "fraction": 0.6,
+    "baseline": 22.0,
+    "bar": 13.2
+   },
+   {
+    "counter": "floor.resnet18.output_facts_per_output",
+    "kind": "fraction",
+    "plan": "output facts to 60%",
+    "fraction": 0.6,
+    "baseline": 24.17391304347826,
+    "bar": 14.504347826086956
+   },
+   {
+    "counter": "floor.gpt2_tiny4.output_facts_per_output",
+    "kind": "fraction",
+    "plan": "output facts to 60%",
+    "fraction": 0.6,
+    "baseline": 22.571428571428573,
+    "bar": 13.542857142857143
+   },
+   {
+    "counter": "floor.mod_relu200.output_facts_per_output",
+    "kind": "fraction",
+    "plan": "output facts to 60%",
+    "fraction": 0.6,
+    "baseline": 22.0,
+    "bar": 13.2
    }
   ],
   "F": [
@@ -1127,6 +1227,15 @@
     "fraction": 0.045249,
     "baseline": 441.9321357285429,
     "bar": 19.996929218486105
+   }
+  ],
+  "F1": [
+   {
+    "counter": "floor.chain1000.payload_per_output",
+    "kind": "max",
+    "plan": "payload 180 to 77 (ruled reset)",
+    "bar": 77.0,
+    "baseline": 180.0
    }
   ],
   "G": [
@@ -1211,6 +1320,22 @@
     "fraction": 0.4,
     "baseline": 4519.965,
     "bar": 1807.986
+   }
+  ],
+  "MC": [
+   {
+    "counter": "c1.varied200.phase.forward.other",
+    "kind": "max",
+    "plan": "forward.other (REPLAN figure)",
+    "bar": 150.0,
+    "baseline": 303.2860696517413
+   },
+   {
+    "counter": "c1.gpt2_tiny4.phase.forward.other",
+    "kind": "max",
+    "plan": "forward.other (REPLAN figure)",
+    "bar": 190.0,
+    "baseline": 382.3718592964824
    }
   ],
   "P": [
@@ -1361,6 +1486,63 @@
     "plan": "C8 at least 95%",
     "bar": 0.95,
     "baseline": 0.0
+   }
+  ],
+  "W3": [
+   {
+    "counter": "c1.chain1000.phase.wrapper",
+    "kind": "max",
+    "plan": "wrapper phase 86 to 60 calls per op",
+    "bar": 60.0,
+    "baseline": 359.5249500998004
+   },
+   {
+    "counter": "floor.chain1000.label_read_stamp_per_output",
+    "kind": "fraction",
+    "plan": "label read and stamp to 50%",
+    "fraction": 0.5,
+    "baseline": 127.045,
+    "bar": 63.5225
+   },
+   {
+    "counter": "floor.varied200.label_read_stamp_per_output",
+    "kind": "fraction",
+    "plan": "label read and stamp to 50%",
+    "fraction": 0.5,
+    "baseline": 185.17,
+    "bar": 92.585
+   },
+   {
+    "counter": "floor.loopcell100.label_read_stamp_per_output",
+    "kind": "fraction",
+    "plan": "label read and stamp to 50%",
+    "fraction": 0.5,
+    "baseline": 185.61794019933555,
+    "bar": 92.80897009966777
+   },
+   {
+    "counter": "floor.resnet18.label_read_stamp_per_output",
+    "kind": "fraction",
+    "plan": "label read and stamp to 50%",
+    "fraction": 0.5,
+    "baseline": 673.5652173913044,
+    "bar": 336.7826086956522
+   },
+   {
+    "counter": "floor.gpt2_tiny4.label_read_stamp_per_output",
+    "kind": "fraction",
+    "plan": "label read and stamp to 50%",
+    "fraction": 0.5,
+    "baseline": 256.021164021164,
+    "bar": 128.010582010582
+   },
+   {
+    "counter": "floor.mod_relu200.label_read_stamp_per_output",
+    "kind": "fraction",
+    "plan": "label read and stamp to 50%",
+    "fraction": 0.5,
+    "baseline": 417.805,
+    "bar": 208.9025
    }
   ],
   "X": [
