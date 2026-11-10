@@ -25,7 +25,7 @@ SCHEMA = 1
 TOLERANCE = 0.005
 LANDED_HEADROOM = 0.05
 FULL_MODELS = ("chain1000", "varied200", "loopcell100", "resnet18", "gpt2_tiny4")
-SMALL_MODELS = ("one_op", "func_relu200", "mod_relu200", "prep_only_resnet18")
+SMALL_MODELS = ("one_op", "func_relu200", "mod_relu200", "prep_only_resnet18", "cond100")
 EMIT_PHASES = (
     "wrapper.emit",
     "wrapper.emit.make_entry",
@@ -117,6 +117,13 @@ def lane_bars() -> tuple[Bar, ...]:
             0.10,
             "to 10% of baseline, on resnet18 (the only model of the set with buffers)",
         ),
+        Bar(
+            "T4b",
+            _phase("post.mark_conditional_branches", "cond100"),
+            "fraction",
+            0.10,
+            "to 10% of baseline, on cond100 (the only model of the set with a conditional)",
+        ),
         _fraction("T4c", "c1.chain1000.total_per_op", 550, 4875, "total at or under 550"),
     ]
     for model in FULL_MODELS:
@@ -140,8 +147,6 @@ PENDING_BARS = (
     "E1: emit down by the call-site family's share, from lane H2's family table",
     "E2: emit down by the argument family's share, from lane H2's family table",
     "E1: code-context lookups per op to 0 for repeated sites (no counter in this tool)",
-    "T4b: conditional marking to 10% of baseline; no model of the set has a conditional, "
-    "so the step costs a constant 25 calls per trace today and a bar on it measures nothing",
 )
 
 

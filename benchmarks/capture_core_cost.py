@@ -169,6 +169,24 @@ class PrepOnly(nn.Module):
         return x + 1
 
 
+class Cond(nn.Module):
+    """One data-dependent ``if`` per step, so conditional marking has work to do."""
+
+    def __init__(self, steps: int = 100) -> None:
+        super().__init__()
+        self.steps = steps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Step ``x`` down while its sum is positive and up otherwise."""
+
+        for _ in range(self.steps):
+            if x.sum() > 0:
+                x = x - 1.0
+            else:
+                x = x + 1.0
+        return x
+
+
 def _resnet18() -> nn.Module:
     import torchvision
 
@@ -193,8 +211,9 @@ MODEL_BUILDERS: dict[str, Callable[[], tuple[nn.Module, torch.Tensor]]] = {
     "func_relu200": lambda: (FuncRelu(), torch.randn(2, 16)),
     "mod_relu200": lambda: (ModRelu().eval(), torch.randn(2, 16)),
     "prep_only_resnet18": lambda: (PrepOnly(_resnet18()).eval(), torch.randn(1, 3, 8, 8)),
+    "cond100": lambda: (Cond(), torch.randn(2, 16)),
 }
-QUICK_MODELS = ("one_op", "func_relu200", "mod_relu200")
+QUICK_MODELS = ("one_op", "func_relu200", "mod_relu200", "cond100")
 
 
 def build(name: str) -> tuple[nn.Module, torch.Tensor]:

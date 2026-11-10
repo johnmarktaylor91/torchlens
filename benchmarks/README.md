@@ -84,8 +84,8 @@ python benchmarks/save_path_counters.py --out save_counters.json
 ## Capture-core cost counters
 
 `capture_core_cost.py` measures what one `tl.trace` costs in deterministic counts on a
-fixed model set (`chain1000`, `varied200`, `loopcell100`, `resnet18`, `gpt2_tiny4` and four
-small models for the per-trace and per-module costs): Python and C calls per op by phase
+fixed model set (`chain1000`, `varied200`, `loopcell100`, `resnet18`, `gpt2_tiny4` and five
+small models for the per-trace, per-module and conditional costs): Python and C calls per op by phase
 (C1), retained allocation blocks, collector-tracked objects and live record objects (C2,
 C4), op-store cells written by capture, ingest and the passes (C3), calls per module call
 and per trace (C5, C6), calls for `to_pandas()`, `repr(trace)` and `save` (C7), the share
