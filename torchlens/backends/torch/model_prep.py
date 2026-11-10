@@ -48,7 +48,6 @@ from ..._utils._tensor_label import (
     get_tensor_label,
     is_forward_call_decorated,  # noqa: F401  (re-exported for tests)
     mark_tensor_replacement_wrapped,
-    promote_label_to_buffer_source_and_clear_label,
     restore_param_requires_grad,
     set_module_meta,
     set_param_meta,
@@ -73,8 +72,9 @@ from ._model_prep_containers import (
     _register_module_output_container_snapshot,
 )
 from ._module_aliases import _add_shared_module_aliases, shared_module_addresses
-from ._module_arg_stubs import stub_module_call_args
+from ._module_arg_stubs import entry_live_label, input_labels_by_id, stub_module_call_args
 from ._module_boundary_adoption import (
+    _tag_untagged_buffers,
     pre_forward_snapshot_build_data,
     record_module_boundary_adoption,
 )
@@ -957,36 +957,6 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _tag_untagged_buffers(trace: "Trace", module: nn.Module) -> None:
-    """Tag any buffers that lack ``_tl.address`` metadata.
-
-    Called during ``_record_module_entry_metadata`` to catch buffers that were created
-    dynamically (e.g. in ``forward()``) after the initial ``prepare_buffer_tensors``
-    scan. If a buffer already has ``_tl.label_raw`` from being logged as
-    an intermediate tensor, that label is moved to ``_tl.buffer_source`` and cleared
-    so the buffer gets a fresh source-tensor entry on next use.
-
-    Dynamically stamped buffers join ``trace._session_buffer_inventory`` so the
-    inventory-driven cleanup clears them even if they are popped from
-    ``_buffers`` later in the same forward. The stamp routes through
-    ``register_session_buffer_stamp`` so it also joins the session identity
-    registry consulted by the buffer-rung storage-identity belt.
-    """
-
-    for buffer_name, buffer_tensor in module.named_buffers():
-        if get_buffer_address(buffer_tensor) is not None:
-            continue
-        module_addr = _module_address(module)
-        if module_addr == "":
-            address = buffer_name
-        else:
-            address = f"{module_addr}.{buffer_name}"
-        _buffer_writes.register_session_buffer_stamp(trace, buffer_tensor, address)
-        # If this buffer was already logged as an intermediate tensor, save the
-        # previous label as parent and reset so it gets a proper buffer source entry.
-        promote_label_to_buffer_source_and_clear_label(buffer_tensor)
-
-
 def _record_module_entry_build_data(trace: "Trace") -> tuple[float, Any, list[str]]:
     """Return the forward start time, code context and call stack for one entry.
 
@@ -1017,23 +987,19 @@ def _record_module_entry_metadata(
     trace: "Trace",
     module: nn.Module,
     frame: "ModuleStackFrame",
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
+    call: tuple[tuple[Any, ...], dict[str, Any]],
 ) -> tuple[set[str], list[str], float]:
     """Record pre-forward module metadata for exhaustive mode.
 
-    Called immediately before ``orig_forward(*args, **kwargs)`` in the
-    ``module_forward_decorator``. Reads the call's frame (the one record of
-    this module call, pushed on entry and popped on exit), records
-    input-tensor/module-entry annotations, stores raw forward args for module-log
-    construction, and tags dynamically-created buffers.
+    Called right before ``orig_forward`` in ``module_forward_decorator``. Reads the call's
+    frame (pushed on entry, popped on exit), records input-tensor/module-entry annotations,
+    stores raw forward args for module-log construction, tags dynamically-created buffers.
 
     Args:
         trace: The active Trace.
         module: The nn.Module about to execute.
         frame: The frame ``push_frame`` created for this call.
-        args: Positional arguments to forward.
-        kwargs: Keyword arguments to forward.
+        call: ``(args, kwargs)`` of the forward call.
 
     Returns:
         ``(input_tensor_labels, input_tensor_labels_at_entry, forward_start_time)``,
@@ -1041,6 +1007,7 @@ def _record_module_entry_metadata(
         replacement-output recovery and the forward duration.
     """
 
+    args, kwargs = call
     workspace = trace._module_capture_ws
     module_address = "" if frame.address is None else frame.address
     mod_id = frame.module_id
@@ -1063,42 +1030,41 @@ def _record_module_entry_metadata(
     if capture_session is not None:
         capture_session.enter_module_pass(module_call_label_str)
     _register_module_input_container_snapshots(
-        trace,
-        args,
-        kwargs,
-        module_call_label=module_call_label_str,
+        trace, args, kwargs, module_call_label=module_call_label_str
     )
-    should_capture_template = bool(
-        getattr(trace, "is_replayable", False) or trace._options_save_arg_templates
-    )
-    forward_args_template = None
-    forward_kwargs_template = None
-    if should_capture_template:
-        from ._ops_arguments import _build_args_template
+    # Tensor arguments (not Parameters, which are source tensors), each label read once: the
+    # template, the adoption loop and the payload stubs reuse it until a stamp changes.
+    input_tensors = get_arg_tensors_for_resolution(args, kwargs)
+    labels_at_entry = input_labels_by_id(input_tensors)
+    forward_args_template = forward_kwargs_template = None
+    if getattr(trace, "is_replayable", False) or trace._options_save_arg_templates:
+        from ._ops_arguments import module_args_template
 
-        captured_template = _build_args_template(module.forward, args, kwargs)
-        forward_args_template = captured_template
-        forward_kwargs_template = captured_template if kwargs else None
+        forward_args_template = module_args_template(trace, module, call, labels_at_entry)
+        forward_kwargs_template = forward_args_template if kwargs else None
     forward_start_time, code_context, call_stack = _record_module_entry_build_data(trace)
 
-    # Find all tensor arguments (excluding Parameters, which are source tensors).
-    input_tensors = get_arg_tensors_for_resolution(args, kwargs)
     input_tensor_labels = set()
     input_tensor_labels_at_entry = []
     layer_argnames: list[tuple[str, Any]] = []
+    stamps_changed = False
     for t in input_tensors:
         if is_functorch_wrapped_tensor(t):
             continue
+        known = None if stamps_changed else labels_at_entry
+        label, cleared = entry_live_label(t, known, trace.capture_events.live_index.by_raw_label)
+        stamps_changed = stamps_changed or cleared
         # Lazily register buffer tensors that haven't been logged yet. The
         # module-entry gate validates the static stamp through the session belt
         # (current-session object + storage identity), never raw.
-        label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
-        buffer_address = session_validated_buffer_address(trace, t)
-        if label is None and buffer_address is not None:
+        buffer_address = None if label is not None else session_validated_buffer_address(trace, t)
+        if buffer_address is not None:
             log_source_tensor(trace, t, "buffer", buffer_address)
             label = get_tensor_label(t)
+            stamps_changed = True
         if label is None and log_closure_constant_if_known(trace, t):
             label = get_tensor_label(t)
+            stamps_changed = True
         if label is None:
             # An untagged tensor enters a module. A genuine raw
             # ``register_forward_hook`` output replacement is already tagged at
@@ -1113,6 +1079,7 @@ def _record_module_entry_metadata(
                 trace, t, module, parent_labels=[], kind="internal_source"
             )
             label = get_tensor_label(t)
+            stamps_changed = True
             # R16: adoption must not LAUNDER an escape (see the helper).
             record_module_boundary_adoption(trace, t, label, "entry", module_address)
         if label is None:
@@ -1126,14 +1093,15 @@ def _record_module_entry_metadata(
         input_tensor_labels_at_entry.append(label)
 
     # Catch buffers created dynamically (e.g. in forward()) after initial scan.
-    _tag_untagged_buffers(trace, module)
+    stamps_changed = _tag_untagged_buffers(trace, module) or stamps_changed
     # Release at emission: neither the workspace stash nor the
     # enter event may pin live payloads for the rest of the forward. Every
     # consumer on the torch trace path reads shape/dtype facts only, and
     # ``ModuleCall.forward_args`` is nulled before the trace is returned.
     # Stubbing waits until here so the input-adoption loop above has stamped
     # labels the stubs can carry.
-    stub_args, stub_kwargs = stub_module_call_args(args, kwargs, trace)
+    stub_labels = None if stamps_changed else labels_at_entry
+    stub_args, stub_kwargs = stub_module_call_args(args, kwargs, trace, stub_labels)
     workspace.module_forward_args[(module_address, module_call_index)] = (stub_args, stub_kwargs)
     trace.capture_events.append_module_enter(
         ModuleEnterEvent(
@@ -1779,8 +1747,6 @@ def _record_module_exit_metadata(
         if tensor_label is None:
             continue
         if fire_results:
-            from ._ops_interventions import _pop_tensor_live_fire_results
-
             remaining_fire_results = _pop_tensor_live_fire_results(t)
             if remaining_fire_results:
                 any_replaced = any(result.replaced for result in remaining_fire_results)
@@ -1945,7 +1911,7 @@ def module_forward_decorator(
         module_type = type(module).__name__ if frame.module_type is None else frame.module_type
         bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
         try:
-            entry = _record_module_entry_metadata(trace, module, frame, args, kwargs)
+            entry = _record_module_entry_metadata(trace, module, frame, (args, kwargs))
             # Echo narrator slot (module seam, exhaustive tier).
             # Duck-typed session read: the hot path imports nothing.
             echo_session = trace.__dict__.get("_echo_session")

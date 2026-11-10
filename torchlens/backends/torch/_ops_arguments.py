@@ -326,6 +326,88 @@ def _build_args_template(
     )
 
 
+def module_args_template(
+    trace: "Trace",
+    module: torch.nn.Module,
+    call: tuple[tuple[Any, ...], dict[str, Any]],
+    known: dict[int, str | None],
+) -> CapturedArgTemplate:
+    """Build the module call's replay template, as ``_build_args_template`` would.
+
+    Parameters
+    ----------
+    trace:
+        Active trace; its raw-graph workspace memoizes the forward's registry key.
+    module:
+        The module being called; its installed ``forward`` names the function.
+    call:
+        ``(args, kwargs)`` of the call.
+    known:
+        Labels of the call's input tensors by ``id``, read before the template
+        (``input_labels_by_id``). Tensors outside it are read live, exactly
+        as the template builder reads them without a snapshot.
+
+    Returns
+    -------
+    CapturedArgTemplate
+        The template ``_build_args_template(module.forward, args, kwargs)`` returns.
+    """
+
+    args, kwargs = call
+    notes: list[str] = []
+    arg_components = tuple(_classify_arg_component(arg, notes, None, known) for arg in args)
+    kwarg_components = tuple(
+        (str(key), _classify_arg_component(value, notes, None, known))
+        for key, value in kwargs.items()
+    )
+    return CapturedArgTemplate(
+        args=arg_components,
+        kwargs=kwarg_components,
+        func_id=_module_forward_key(module.forward, trace),
+        notes=tuple(notes),
+    )
+
+
+def _module_forward_key(forward: Any, trace: "Trace") -> FunctionRegistryKey:
+    """Return ``_function_registry_key(forward)``, memoized per capture.
+
+    Outside the ``torch`` namespace the key is a function of the callable's
+    ``__module__``, ``__qualname__`` and ``__name__`` alone, and every module of
+    one class carries the same three (the session forward copies them from the
+    bound method). The capture's function-key memo is anchored on the
+    underlying Python function (held, so its id cannot be reused) and stores the
+    three names; a hit whose names differ is re-derived, and each hit returns a NEW
+    key object, as the C-callable memo does.
+    """
+
+    names = (
+        getattr(forward, "__module__", None),
+        getattr(forward, "__qualname__", None),
+        getattr(forward, "__name__", None),
+    )
+    inner = getattr(forward, "__wrapped__", forward)
+    anchor = getattr(inner, "__func__", inner)
+    workspace = _peek_raw_graph_workspace(trace)
+    # Only a Python function anchors an entry: the C-callable memo shares the dict.
+    unnamed = names[1] is None and names[2] is None  # the key would read ``repr``
+    if (
+        workspace is None
+        or type(anchor) is not types.FunctionType
+        or names[0] == "torch"
+        or unnamed
+    ):
+        return _function_registry_key(forward, None, None)
+    memo = workspace._function_key_memo
+    hit = memo.get(id(anchor))
+    if hit is not None and hit[0] is anchor and hit[1][0] == names:
+        namespace, qualname, dispatch_kind, version, import_path = hit[1][1]
+        return FunctionRegistryKey(namespace, qualname, dispatch_kind, version, import_path)
+    key = _derive_function_registry_key(forward)
+    fields = (key.namespace, key.qualname, key.dispatch_kind, key.version, key.import_path)
+    memo[id(anchor)] = (anchor, (names, fields))
+    return key
+
+
 def _arg_location_to_path(location: Any) -> tuple[OutputPathComponent, ...]:
     """Convert a parent-layer arg location to the MVP edge path schema.
 

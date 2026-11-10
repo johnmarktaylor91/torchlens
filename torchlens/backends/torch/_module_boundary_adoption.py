@@ -14,8 +14,14 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
-from ..._utils._tensor_label import get_tensor_label
+from ..._utils._tensor_label import (
+    get_buffer_address,
+    get_module_meta,
+    get_tensor_label,
+    promote_label_to_buffer_source_and_clear_label,
+)
 from ._held_late_index import ROOT_MODEL_KEY
+from .buffer_writes import register_session_buffer_stamp
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -204,3 +210,42 @@ def record_module_boundary_adoption(
         trace.__dict__.setdefault("_module_boundary_adoptions", []).append(record)
     elif id(t) in (build_data.get("forward_outside_tensor_ids_at_entry") or ()):
         trace.__dict__.setdefault("_module_boundary_outside_sources", []).append(record)
+
+
+def _tag_untagged_buffers(trace: "Trace", module: nn.Module) -> bool:
+    """Tag any buffers that lack ``_tl.address`` metadata.
+
+    Called during ``_record_module_entry_metadata`` to catch buffers that were created
+    dynamically (e.g. in ``forward()``) after the initial ``prepare_buffer_tensors``
+    scan. If a buffer already has ``_tl.label_raw`` from being logged as
+    an intermediate tensor, that label is moved to ``_tl.buffer_source`` and cleared
+    so the buffer gets a fresh source-tensor entry on next use.
+
+    Dynamically stamped buffers join ``trace._session_buffer_inventory`` so the
+    inventory-driven cleanup clears them even if they are popped from
+    ``_buffers`` later in the same forward. The stamp routes through
+    ``register_session_buffer_stamp`` so it also joins the session identity
+    registry consulted by the buffer-rung storage-identity belt.
+
+    Returns whether any buffer was stamped. A module with no submodules and no
+    buffers has nothing to walk.
+    """
+
+    if not module._modules and not module._buffers:
+        return False
+    stamped = False
+    for buffer_name, buffer_tensor in module.named_buffers():
+        if get_buffer_address(buffer_tensor) is not None:
+            continue
+        meta = get_module_meta(module)
+        module_addr = "" if meta is None or meta.address is None else meta.address
+        if module_addr == "":
+            address = buffer_name
+        else:
+            address = f"{module_addr}.{buffer_name}"
+        register_session_buffer_stamp(trace, buffer_tensor, address)
+        # If this buffer was already logged as an intermediate tensor, save the
+        # previous label as parent and reset so it gets a proper buffer source entry.
+        promote_label_to_buffer_source_and_clear_label(buffer_tensor)
+        stamped = True
+    return stamped
