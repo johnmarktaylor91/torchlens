@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, NoReturn
 
-from .forgery_validation import _is_int, _refuse
+from .format_errors import ArtifactError
 
 GRAPH_REMEDY = (
     "re-save the artifact from its source capture with one current TorchLens "
@@ -22,8 +22,10 @@ GRAPH_REMEDY = (
 def graph_invalid(message: str, field: str, reason: str) -> NoReturn:
     """Raise the graph-structure refusal (AUD-CODE 3.0b)."""
 
-    _refuse(
-        message,
+    # Same message shape as forgery_validation._refuse; built here so the format-3
+    # reader can refuse without importing forgery_validation (an import cycle).
+    raise ArtifactError(
+        f"{field} is invalid in the loaded artifact: {message}. Remedy: {GRAPH_REMEDY}.",
         code="artifact_graph_structure_invalid",
         field=field,
         reason=reason,
@@ -38,7 +40,7 @@ def refuse_pass_key(label: Any, pass_index: Any) -> None:
     validator, which sees ``num_passes``; this is the type half of the same rule.
     """
 
-    if not _is_int(pass_index):
+    if isinstance(pass_index, bool) or not isinstance(pass_index, int):
         graph_invalid(
             f"op {label!r} carries pass_index={pass_index!r}; pass stamps are 1-based ints "
             "with 1 <= pass_index <= num_passes",
