@@ -12,7 +12,6 @@ reads one of those trace fields. The trace holds no ``Module`` or
 
 from __future__ import annotations
 
-from collections import defaultdict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -21,8 +20,8 @@ from .._data_classes._module_role_hints import (
     multi_output_role_from_path,
     role_hints_for_module_class,
 )
-from .._data_classes._op_column_scan import call_outputs, ops_with
-from .._io._buffer_versions import seal_buffer_versions
+from .._data_classes._op_column_scan import call_outputs
+from .._io._buffer_versions import seal_scan
 from .._ir.workspaces import ModuleCaptureWorkspace, _init_module_hierarchy_data
 from ._module_census import uncalled_module_addresses
 
@@ -142,10 +141,7 @@ def seal_module_facts(trace: Trace, build: Callable[[Any, PendingModules], None]
     metadata = ws.module_metadata
     outputs_by_call = call_outputs(trace)
     _name_output_roles(trace, mbd, metadata, outputs_by_call)
-    input_layers_by_call: dict[str, list[str]] = defaultdict(list)
-    for op in ops_with(trace, "input_to_module_calls"):  # only ops that feed a call
-        for call_label in op._module_context_input_to_module_calls:
-            input_layers_by_call[call_label].append(op.layer_label)
+    input_layers_by_call, buffer_versions = seal_scan(trace)
     root_args, root_summaries = _seal_root_args(trace, ws.root_forward_args)
     state = trace.__dict__
     state["_uncalled_module_addresses"] = uncalled_module_addresses(
@@ -159,7 +155,7 @@ def seal_module_facts(trace: Trace, build: Callable[[Any, PendingModules], None]
         root_summaries=root_summaries,
         outputs_by_call=outputs_by_call,
         input_layers_by_call=input_layers_by_call,
-        buffer_versions=seal_buffer_versions(trace),
+        buffer_versions=buffer_versions,
         module_count=len(mbd["addresses"]) - ("self" in mbd["addresses"]),
         attribute_writes=None,  # the capture's observer bracket fills it
         build=build,
@@ -249,13 +245,25 @@ def _metadata_by_alias(metadata: dict[Any, Any]) -> dict[str, dict[str, Any]]:
 def _called_addresses(mbd: dict[str, Any], metadata: dict[Any, Any]) -> set[str]:
     """Return every address and alias of the modules the build will record."""
 
-    called = set(mbd["addresses"])
-    called.add("self")
-    called.update(metadata.get("self", {}).get("all_addresses", ["self"]))
-    by_alias = _metadata_by_alias(metadata)
-    for address in mbd["addresses"]:
-        if address != "self":
-            called.update(by_alias.get(address, {}).get("all_addresses", [address]))
+    addresses = mbd["addresses"]
+    try:  # every recorded address is a primary key: subscripts only, no call per module
+        called = {
+            alias
+            for address in ["self", *addresses]
+            if address in metadata or address == "self"
+            for alias in (metadata[address]["all_addresses"] if address in metadata else [address])
+        }
+        if [address for address in addresses if address not in metadata]:
+            raise KeyError("alias")
+    except KeyError:  # an alias address or a missing alias list: map aliases first
+        called = set(addresses)
+        called.add("self")
+        called.update(metadata.get("self", {}).get("all_addresses", ["self"]))
+        by_alias = _metadata_by_alias(metadata)
+        for address in addresses:
+            if address != "self":
+                called.update(by_alias.get(address, {}).get("all_addresses", [address]))
+    called.update(addresses)
     return called
 
 
