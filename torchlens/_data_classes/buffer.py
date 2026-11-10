@@ -486,10 +486,10 @@ class BufferAccessor(Accessor["Buffer"]):
                 out["_source_ref"] = None
             return out
         records = self._dict
-        out: dict[str, Any] = {"_dict": records, "_list": list(records.values())}
+        pickled: dict[str, Any] = {"_dict": records, "_list": list(records.values())}
         if "_source_ref" in state:
-            out["_source_ref"] = None
-        return out
+            pickled["_source_ref"] = None
+        return pickled
 
     def __len__(self) -> int:
         """Return the number of buffers."""

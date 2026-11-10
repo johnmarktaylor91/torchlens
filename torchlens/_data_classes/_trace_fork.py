@@ -256,8 +256,10 @@ def _fork_model_field(parent: Trace, field_name: str, value: Any, memo: dict[Any
         # parent's values would make the fork's guard silently skip its
         # first materialize. ``build_fork`` pops these after restore.
         return None
-    if field_name == "_buffer_accessor" and value is not None and "_rows" in value.__dict__:
-        return None  # ``build_fork`` binds a keyed accessor on the fork core
+    if field_name == "_buffer_accessor" and value is not None:
+        state = value.__dict__
+        if "_rows" in state or not state["_dict"]:
+            return None  # ``build_fork`` binds a keyed (or empty) accessor after the field pass
     if field_name in _TRACE_ACCESSOR_CACHE_FIELDS:
         # Memoized accessors hold parent facades (tuple-wrapped, so the
         # default policy would share them); the fork rebuilds lazily.

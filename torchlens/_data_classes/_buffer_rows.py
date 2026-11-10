@@ -148,17 +148,29 @@ def bind_fork_buffers(
     """Give the fork its buffer accessor: keyed by the same rows in the fork's buffer table.
 
     The fork's buffer table is a copy-on-write view over the parent's, with the
-    same rows, so the fork's accessor names the same rows there. A parent
+    same rows, so the fork's accessor names the same rows there. An empty
+    accessor is built new, with the state a copy of it would have. A parent
     accessor that holds its records was copied by the field pass already. As
     that copy did, the fork's accessor names no source trace.
     """
 
-    stored = parent.__dict__.get("_buffer_accessor")
-    if stored is None or "_rows" not in stored.__dict__:
+    try:
+        stored = parent.__dict__["_buffer_accessor"]
+    except KeyError:
+        return
+    if stored is None:
+        return
+    state = stored.__dict__
+    if "_rows" not in state:
+        if not state["_dict"]:
+            empty = _new(BufferAccessor)
+            copied = empty.__dict__
+            copied["_dict"], copied["_list"] = {}, []
+            if "_source_ref" in state:
+                copied["_source_ref"] = None
+            fork.__dict__["_buffer_accessor"] = empty
         return
     if fork_core is None or fork_core.kind_rows.get(KIND) is None:
         fork.__dict__["_buffer_accessor"] = copy_value(stored)
         return
-    fork.__dict__["_buffer_accessor"] = keyed_accessor(
-        dict(stored.__dict__["_rows"]), fork_core, None
-    )
+    fork.__dict__["_buffer_accessor"] = keyed_accessor(dict(state["_rows"]), fork_core, None)
