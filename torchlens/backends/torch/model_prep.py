@@ -988,7 +988,6 @@ def _record_module_entry_metadata(
     module: nn.Module,
     frame: "ModuleStackFrame",
     call: tuple[tuple[Any, ...], dict[str, Any]],
-    key_cache: list[Any],
 ) -> tuple[set[str], list[str], float]:
     """Record pre-forward module metadata for exhaustive mode.
 
@@ -1001,7 +1000,6 @@ def _record_module_entry_metadata(
         module: The nn.Module about to execute.
         frame: The frame ``push_frame`` created for this call.
         call: ``(args, kwargs)`` of the forward call.
-        key_cache: The decorated forward's per-run slots (``module_args_template``).
 
     Returns:
         ``(input_tensor_labels, input_tensor_labels_at_entry, forward_start_time)``,
@@ -1042,7 +1040,7 @@ def _record_module_entry_metadata(
     if getattr(trace, "is_replayable", False) or trace._options_save_arg_templates:
         from ._ops_arguments import module_args_template
 
-        forward_args_template = module_args_template(module, call, labels_at_entry, key_cache)
+        forward_args_template = module_args_template(trace, module, call, labels_at_entry)
         forward_kwargs_template = forward_args_template if kwargs else None
     forward_start_time, code_context, call_stack = _record_module_entry_build_data(trace)
 
@@ -1878,9 +1876,9 @@ def module_forward_decorator(
     """
 
     module_id = id(module)
-    # ``[run nonce, ModuleMeta, forward id, template key]``, filled once per capture run
-    # (a registry entry is only ever removed by ``release_model``, refused mid-capture).
-    meta_of_run: list[Any] = [None, None, None, None]
+    # ``[run nonce, ModuleMeta]``: the registry lookup is paid once per capture
+    # run (an entry is only ever removed by ``release_model``, refused mid-capture).
+    meta_of_run: list[Any] = [None, None]
 
     @wraps(orig_forward)
     def decorated_forward(*args: Any, **kwargs: Any) -> Any:
@@ -1901,7 +1899,7 @@ def module_forward_decorator(
             return _predicate_module_forward(trace, module, orig_forward, args, kwargs)
         run_nonce = trace.capture_events.run_nonce
         if meta_of_run[0] != run_nonce:
-            meta_of_run[:] = [run_nonce, get_module_meta(module), None, None]
+            meta_of_run[:] = [run_nonce, get_module_meta(module)]
         meta = meta_of_run[1]
         # Module-entry fingerprint token, before any of this module's ops; the
         # native twin is ``_call_fingerprint.install_module_token_hooks``. The
@@ -1914,7 +1912,7 @@ def module_forward_decorator(
         module_type = type(module).__name__ if frame.module_type is None else frame.module_type
         bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
         try:
-            entry = _record_module_entry_metadata(trace, module, frame, (args, kwargs), meta_of_run)
+            entry = _record_module_entry_metadata(trace, module, frame, (args, kwargs))
             # Echo narrator slot (module seam, exhaustive tier).
             # Duck-typed session read: the hot path imports nothing.
             echo_session = trace.__dict__.get("_echo_session")

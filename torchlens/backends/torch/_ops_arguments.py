@@ -323,15 +323,17 @@ def _build_args_template(
 
 
 def module_args_template(
+    trace: "Trace",
     module: torch.nn.Module,
     call: tuple[tuple[Any, ...], dict[str, Any]],
     known: dict[int, str | None],
-    key_cache: list[Any],
 ) -> CapturedArgTemplate:
     """Build the module call's replay template, as ``_build_args_template`` would.
 
     Parameters
     ----------
+    trace:
+        Active trace; its raw-graph workspace memoizes the forward's registry key.
     module:
         The module being called; its installed ``forward`` names the function.
     call:
@@ -340,9 +342,6 @@ def module_args_template(
         Labels of the call's input tensors by ``id``, read before the template
         (``input_labels_by_id``). Tensors outside it are read live, exactly
         as the template builder reads them without a snapshot.
-    key_cache:
-        The decorated forward's per-run slots ``[run nonce, meta, forward id,
-        registry key]``; the last two are filled here.
 
     Returns
     -------
@@ -351,9 +350,6 @@ def module_args_template(
     """
 
     args, kwargs = call
-    forward = module.forward
-    if key_cache[2] != id(forward):
-        key_cache[2:] = [id(forward), _function_registry_key(forward, None, None)]
     notes: list[str] = []
     arg_components = tuple(_classify_arg_component(arg, notes, None, known) for arg in args)
     kwarg_components = tuple(
@@ -363,9 +359,35 @@ def module_args_template(
     return CapturedArgTemplate(
         args=arg_components,
         kwargs=kwarg_components,
-        func_id=key_cache[3],
+        func_id=_module_forward_key(module.forward, trace),
         notes=tuple(notes),
     )
+
+
+def _module_forward_key(forward: Any, trace: "Trace") -> FunctionRegistryKey:
+    """Return ``_function_registry_key(forward)``, memoized per capture for bound methods.
+
+    A bound method's key reads only its function's ``__module__``, ``__qualname__``
+    and ``__name__``, so every module of one class shares it. The capture's
+    function-key memo holds the function (its id cannot be reused) and each hit
+    returns a NEW key object, as the C-callable memo does.
+    """
+
+    func = getattr(forward, "__func__", None)
+    workspace = _peek_raw_graph_workspace(trace)
+    if type(forward) is not types.MethodType or type(func) is not types.FunctionType:
+        return _function_registry_key(forward, None, None)
+    if workspace is None:
+        return _derive_function_registry_key(forward)
+    memo = workspace._function_key_memo
+    hit = memo.get(id(func))
+    if hit is None or hit[0] is not func:
+        key = _derive_function_registry_key(forward)
+        hit = (func, (key.namespace, key.qualname, key.dispatch_kind, key.version, key.import_path))
+        memo[id(func)] = hit
+        return key
+    namespace, qualname, dispatch_kind, version, import_path = hit[1]
+    return FunctionRegistryKey(namespace, qualname, dispatch_kind, version, import_path)
 
 
 def _arg_location_to_path(location: Any) -> tuple[OutputPathComponent, ...]:
