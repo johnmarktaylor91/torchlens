@@ -636,7 +636,8 @@ def test_loaded_partial_capture_stays_staging() -> None:
 
     # Fail LATE in postprocess (after layer logs exist) so the partial has
     # reachable ops — the case where an unguarded rehydrate would freeze.
-    with mock.patch.object(finalization, "_build_module_logs", side_effect=RuntimeError("boom")):
+    # (Step 16 seals the module facts; the records themselves build on lookup.)
+    with mock.patch.object(finalization, "_seal_module_logs", side_effect=RuntimeError("boom")):
         with pytest.raises(Exception) as exc_info:
             tl.trace(model, torch.randn(1, 3))
     partial = exc_info.value.partial_trace

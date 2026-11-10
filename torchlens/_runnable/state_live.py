@@ -353,7 +353,7 @@ def attach_attribute_writes(
     """
 
     found = [(path or "self", writes.get(id(module))) for path, module in paths]
-    pending = trace.__dict__.get("_module_pending") if trace is not None else None
+    pending = getattr(trace, "__dict__", {}).get("_module_pending")  # a stub has no state
     if pending is not None:
         pending.attribute_writes = dict(found)
         return
