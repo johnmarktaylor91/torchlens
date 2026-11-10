@@ -4337,14 +4337,14 @@
         "tests/test_run_until_projection_cost.py"
       ],
       "torchlens/_postprocess/_pipeline.py": [
+        "tests/test_field_families.py",
         "tests/test_format3_contract.py",
         "tests/test_format3_reader_fuzz.py",
         "tests/test_format3_reader_safety.py",
         "tests/test_format3_round_trip_fidelity.py",
         "tests/test_format3_writer.py",
         "tests/test_mutation_driver_governance.py",
-        "tests/test_postprocess_executor.py",
-        "tests/test_tlspec_parse_fuzz.py"
+        "tests/test_postprocess_executor.py"
       ],
       "torchlens/_postprocess/_pre_hook_provenance.py": [
         "tests/test_column_passes_finalize.py",
@@ -5524,6 +5524,9 @@
         "tests/test_op_row_release_counters.py",
         "tests/test_relation_views.py"
       ],
+      "torchlens/_trace_core/field_table.py": [
+        "tests/test_field_families.py"
+      ],
       "torchlens/_trace_core/groups.py": [
         "tests/test_capture_row_ingest.py",
         "tests/test_container_pool_counters.py",
@@ -5784,9 +5787,9 @@
         "tests/test_executor_cuda_cache_arming.py",
         "tests/test_numpy_bridge_compat.py",
         "tests/test_observe_kit_device_memory.py",
-        "tests/test_patching_helper_memory.py",
         "tests/test_r36_cuda_hygiene.py",
         "tests/test_rng_cuda_isolation.py",
+        "tests/test_sdpa_probe_forced_backend.py",
         "tests/test_torch_compat.py"
       ],
       "torchlens/_utils/_deferred_warnings.py": [
@@ -5954,7 +5957,7 @@
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
+        "tests/test_sdpa_probe_forced_backend.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],

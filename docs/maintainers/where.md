@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1753 modules, 705835 lines, 0 modules without a docstring.
+85 packages, 1754 modules, 706206 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -39,7 +39,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 16 | 7432 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
-| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4635 |
+| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 17 | 5006 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24112 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
@@ -915,7 +915,7 @@ Live narration for TorchLens captures (the torchsnooper niche, better). (10 modu
 
 ### `torchlens._trace_core`
 
-Private per-trace semantic store substrate (trace_core_design.md). (16 modules, 4635 lines)
+Private per-trace semantic store substrate (trace_core_design.md). (17 modules, 5006 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -926,6 +926,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (16 modules, 
 | `core` | TraceCore: per-trace ownership and cross-domain coordination. | 365 |
 | `eviction_walk` | Payload eviction walk: replace every tensor reachable from a store cell with ''None''. | 302 |
 | `fact_blocks` | Shared-fact column blocks: the FunctionCall / ParamAlias group tables. | 224 |
+| `field_table` | Capture event schema and the stored-field table (pure data). | 371 |
 | `groups` | Label-membership group tables with cached immutable views. | 98 |
 | `label_cells` | Label-structure indexes shared by a trace and its forks, validated exactly. | 300 |
 | `op_store` | Columnar row store backing the ''Op'' facade (the seam). | 1670 |
