@@ -203,10 +203,10 @@ def test_identity_holds_while_a_record_is_held_and_no_longer() -> None:
 
     trace = tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6))
     label = _relu_op(trace).layer_label
-    op, layer = trace[label], trace.layers[label]
-    assert trace[label] is op and trace.ops[label] is op
-    assert trace.layers[label] is layer
+    op, layer = trace.ops[label], trace.layers[label]
+    assert trace.ops[label] is op and next(iter(trace.ops.values())) is not None
+    assert trace.layers[label] is layer and trace[label] is layer
     op_ref, layer_ref = weakref.ref(op), weakref.ref(layer)
     del op, layer
     assert op_ref() is None and layer_ref() is None
-    assert trace[label].func_name == "relu" and trace.layers[label].func_name == "relu"
+    assert trace.ops[label].func_name == "relu" and trace.layers[label].func_name == "relu"

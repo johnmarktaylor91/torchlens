@@ -141,6 +141,8 @@ class Buffer:
         state = dict(state_items(self))
         state["_source_ref"] = None
         state["tlspec_version"] = TLSPEC_VERSION
+        if isinstance(state.get("versions"), list):
+            state["versions"] = list(state["versions"])  # the plain list, not the row-keyed one
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:

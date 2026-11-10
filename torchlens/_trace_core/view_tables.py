@@ -197,7 +197,7 @@ class WeakViews(_Views):
 
         core = self.core_ref()
         store = core.ops if core is not None else None
-        views = list(map(_new, repeat(OP_CLASS[0], len(rows))))
+        views: list[Any] = list(map(_new, repeat(OP_CLASS[0], len(rows))))
         deque(map(_set, views, repeat("_core"), repeat(store)), 0)
         deque(map(_set, views, repeat("_row"), rows), 0)
         self.adopt(rows, views, None)

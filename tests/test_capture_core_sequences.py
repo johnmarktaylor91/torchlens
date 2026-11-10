@@ -289,10 +289,18 @@ def test_a_trace_with_no_record_held_is_freed_by_reference_counting(
 
 
 def test_kept_records_are_freed_when_dropped(steps: dict[str, dict[str, Any]]) -> None:
-    """Records kept past the trace die by reference counting when they are dropped."""
+    """Records kept past the trace die by reference counting when they are dropped.
+
+    A kept ``Op`` or ``Layer`` keeps its trace and the saved activations, so
+    those are freed at the same moment and not when the trace variable goes.
+    """
 
     found = steps["8_release"]
-    every = {"buffer", "layer", "module", "module_call", "op", "param"}
+    every = {"activation", "buffer", "layer", "module", "module_call", "op", "param", "trace"}
+    for scenario in ("op_held", "layer_held"):
+        kept = set(found[scenario]["freed_when_kept_dropped"])
+        assert {"activation", "trace"} <= kept, scenario
+        assert found[scenario]["freed_only_by_collector"] == [], scenario
     for scenario in ("every_door_held", "every_door_held_reversed"):
         assert set(found[scenario]["freed_when_kept_dropped"]) == every, scenario
         assert found[scenario]["freed_only_by_collector"] == [], scenario
@@ -318,9 +326,9 @@ def test_metadata_cycles_are_the_listed_ones(steps: dict[str, dict[str, Any]]) -
         assert holder, scenario
 
 
-def test_chained_read_is_refused_today(steps: dict[str, dict[str, Any]]) -> None:
-    """A record read from a trace nobody holds is refused; lane B5 turns this into a value."""
+def test_chained_read_returns_the_saved_tensor(steps: dict[str, dict[str, Any]]) -> None:
+    """A record read from a trace nobody else holds keeps that trace, so ``.out`` is the tensor."""
 
     outcome = steps["8_release"]["chained_read"]
-    assert _raised(outcome) == "RecordBindingError"
-    assert outcome["code"] == "trace_reference_collected"
+    assert _raised(outcome) is None
+    assert outcome["__tensor__"] == "Tensor"

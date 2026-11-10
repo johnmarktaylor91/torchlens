@@ -12,7 +12,9 @@ object to a record is a trace-owned holder.
 Phase 2 starts at each record and visits the objects only that record reaches
 (its *private state*). An edge from a record, or from its private state, to
 another record is a record-owned holder: the path by which a held ``Buffer``
-keeps an ``Op`` alive, for example.
+keeps an ``Op`` alive, for example. An ``Op`` or ``Layer`` names its trace
+in its ``_owner`` slot; that reference is to the owner of the record, so the
+walk does not follow it out of a record.
 
 A reference-count reconciliation then proves the walk complete: a record
 whose reference count exceeds the edges the walk found is held by something
@@ -400,6 +402,8 @@ class _Walk:
         while queue:
             obj, path = queue.popleft()
             for name, child in strong_edges(obj, self.absorb):
+                if name == "._owner" and isinstance(obj, self.record_classes):
+                    continue  # the trace that owns the record, not state the record owns
                 if isinstance(child, weakref.ReferenceType):
                     self.note_weak(path, name, child)
                 if isinstance(child, self.record_classes):

@@ -108,7 +108,7 @@ def ops(trace: Trace) -> TraceOpAccessor:
     container = trace._layer_list
     cache_entry = trace.__dict__.get(_TRACE_OP_ACCESSOR_ATTR)
     if cache_entry is not None and cache_entry[0] is container and cache_entry[1] == len(container):
-        door = cache_entry[2]
+        door: Any = cache_entry[2]
         handed = door._handed()
         if handed is not None:
             return cast(TraceOpAccessor, handed)
@@ -150,7 +150,7 @@ def layers(trace: Trace) -> LayerAccessor:
     container = trace._layer_logs
     cache_entry = trace.__dict__.get(_TRACE_LAYER_ACCESSOR_ATTR)
     if cache_entry is not None and cache_entry[0] is container and cache_entry[1] == len(container):
-        door = cache_entry[2]
+        door: Any = cache_entry[2]
         handed = door._handed()
         if handed is not None:
             return cast("LayerAccessor", handed)
