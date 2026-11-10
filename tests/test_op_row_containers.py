@@ -24,7 +24,9 @@ import torchlens as tl
 from torchlens._data_classes import _op_row_containers as containers
 from torchlens._data_classes._state_adapter import plain_state
 
-_CONTAINER_MODULE = b"_op_row_containers"
+# The module's dotted name and its class names: this test file's own name ends
+# with the module's bare name, and a pickle of a model defined here carries it.
+_CONTAINER_MARKS = (b"_data_classes._op_row_containers", b"OpSequence", b"OpLabelMap", b"OpRows")
 _PLAIN_TYPES = (list, dict, OrderedDict)
 
 
@@ -284,6 +286,12 @@ class _Tiny(nn.Module):
         return torch.relu(self.fc(x))
 
 
+def _names_containers(data: bytes) -> bool:
+    """Return whether ``data`` names the row-key container module or one of its classes."""
+
+    return any(mark in data for mark in _CONTAINER_MARKS)
+
+
 def _container_types(state: Any) -> tuple[type, type, type]:
     """Return the types of the three op containers in one state dictionary."""
 
@@ -308,7 +316,7 @@ def test_pickle_state_pickles_and_saved_files_keep_the_plain_container_types(
     assert _container_types(plain_state(trace)) == _PLAIN_TYPES
 
     payload = pickle.dumps(trace)
-    assert _CONTAINER_MODULE not in payload
+    assert not _names_containers(payload)
     restored = pickle.loads(payload)
     assert _container_types(restored.__getstate__()) == _PLAIN_TYPES
     assert [op.label for op in restored._layer_list] == labels
@@ -316,7 +324,7 @@ def test_pickle_state_pickles_and_saved_files_keep_the_plain_container_types(
     bundle = tmp_path / "plain_containers.tlspec"
     trace.save(bundle)
     files = [bundle] if bundle.is_file() else [path for path in bundle.rglob("*") if path.is_file()]
-    assert files and all(_CONTAINER_MODULE not in path.read_bytes() for path in files)
+    assert files and not any(_names_containers(path.read_bytes()) for path in files)
     loaded = tl.load(bundle)
     assert _container_types(loaded.__getstate__()) == _PLAIN_TYPES
     assert _container_types(plain_state(loaded)) == _PLAIN_TYPES

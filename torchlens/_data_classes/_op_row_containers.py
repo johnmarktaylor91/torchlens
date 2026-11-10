@@ -339,7 +339,7 @@ class OpSequence(list[Any]):
 
         return list(other) + self._records()
 
-    def __iadd__(self, other: Iterable[Any]) -> Any:
+    def __iadd__(self, other: Any) -> Any:
         """Append every record of ``other`` in place."""
 
         self.extend(other)
