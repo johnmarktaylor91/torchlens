@@ -22,7 +22,6 @@ from typing import Any
 from .._constants import _RAW_LABEL_SUFFIX
 from .._data_classes._op_columns import OpColumns
 from .._data_classes._op_row_containers import op_rows, restart_op_holders
-from .._errors import AmbiguousOpLookupError
 from .._trace_core.cell_states import LazyCell
 from .._trace_core.op_store import OpRowStore
 from .._trace_core.view_tables import PinnedViews
@@ -136,7 +135,10 @@ class _Scan:
         self.write_fids = tuple(fid[name] for name in _WRITES)
         self.columns = OpColumns(store)
         self.relabel = trace._options_mode in _RELABEL_MODES
-        self.num_calls = trace._module_capture_ws.module_build_data["module_num_calls"]
+        try:  # read only for an op that exits a module, as the facade loop reads it
+            self.num_calls = trace._module_capture_ws.module_build_data["module_num_calls"]
+        except (AttributeError, KeyError, TypeError):
+            self.num_calls = None
         self.new_keys: dict[Any, int] = {}
         self.names: dict[str, str] = {}
         self.fx_paths: dict[str, str] = {}
@@ -264,6 +266,8 @@ class _Scan:
         if module is None and relabeled[2]:
             module = relabeled[2][-1]
         names, num_calls, keys = self.names, self.num_calls, []
+        if exits and num_calls is None:
+            return None
         for call in exits:
             try:
                 name = names[call]
@@ -278,30 +282,32 @@ class _Scan:
             cells[f_module] = module
         return keys
 
-    def register(self, keys: list[Any], key: int) -> None:
-        """Register one op's keys as ``_add_lookup_keys_for_layer_entry`` does."""
+    def register(self, keys: list[Any], key: int) -> bool:
+        """Register one op's keys as ``_add_lookup_keys_for_layer_entry`` does.
+
+        Returns ``False``, with nothing registered, when one of the op's exact
+        keys (its raw label, public raw label or label) already names another
+        op; the caller then runs the facade function, which raises the
+        collision error.
+        """
         # One flat loop on purpose (complexity): a helper per key would be a counted call per key.
         trace, new_keys, cells = self.trace, self.new_keys, self.rows[key]
         f_raw, f_label, f_layer, f_short_layer, f_short, f_index = self.fids[:6]
         index, raw, label = cells[f_index], cells[f_raw], cells[f_label]
-        public_raw = raw[:-_SUFFIX_LEN] if raw[-_SUFFIX_LEN:] == _RAW_LABEL_SUFFIX else raw
+        exact = (raw, raw[:-_SUFFIX_LEN] if raw[-_SUFFIX_LEN:] == _RAW_LABEL_SUFFIX else raw, label)
         by_key = trace._lookup_keys_to_layer_num_dict
+        if [1 for k in keys if k in by_key and by_key[k] != index and k in exact]:
+            return False
+        primary = (cells[f_layer], cells[f_short_layer], label, cells[f_short])
         for lookup_key in keys:
             if lookup_key not in by_key:
                 by_key[lookup_key] = index
                 new_keys[lookup_key] = key
             elif by_key[lookup_key] != index:
-                if lookup_key in (raw, public_raw, label):
-                    self.flush()
-                    existing = trace._layer_dict_all_keys[lookup_key]
-                    raise AmbiguousOpLookupError(
-                        f"Exact Op lookup key {lookup_key!r} collides between "
-                        f"{existing.label!r} and {label!r}."
-                    )
                 indices = trace._ambiguous_lookup_keys.setdefault(lookup_key, [by_key[lookup_key]])
                 if index not in indices:
                     indices.append(index)
-                if lookup_key in (cells[f_layer], cells[f_short_layer], label, cells[f_short]):
+                if lookup_key in primary:
                     by_key[lookup_key] = index
                     new_keys[lookup_key] = key
         by_index = trace._layer_num_to_lookup_keys_dict
@@ -309,6 +315,7 @@ class _Scan:
             by_index[index] += keys
         else:
             by_index[index] = keys[:]
+        return True
 
     def flush(self) -> None:
         """Write the keys registered so far into ``trace._layer_dict_all_keys``."""
@@ -396,11 +403,9 @@ def _finish(
     try:
         for position, (record, key) in enumerate(zip(kept, keys)):
             op_keys = scan.keys_of(key, position, total)
-            if op_keys is None:
+            if op_keys is None or not scan.register(op_keys, key):
                 scan.flush()
                 add_keys(trace, record, position, total)
-            else:
-                scan.register(op_keys, key)
     finally:
         scan.flush()
     labels = scan.column("label", keys, str)
