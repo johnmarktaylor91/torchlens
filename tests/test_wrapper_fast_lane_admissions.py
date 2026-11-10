@@ -187,7 +187,7 @@ def test_nested_outer_call_skips_the_shared_fields(monkeypatch: pytest.MonkeyPat
     still spend the same ``func_call_id`` values.
     """
 
-    model = nn.Sequential(nn.ReLU(), nn.BatchNorm1d(3), nn.ReLU())
+    model = nn.Sequential(nn.ReLU(), nn.BatchNorm1d(3).eval(), nn.ReLU())
     built: list[str] = []
     real_build = _ops_exhaustive._build_shared_fields_dict
 
