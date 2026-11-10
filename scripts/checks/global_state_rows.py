@@ -233,6 +233,11 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # a tree that no longer matches sends the model through full preparation.
         ("torchlens/backends/torch/_prepared_tree.py", "_prepared_trees"),
         ("torchlens/_utils/_model_walk.py", "_RECORDED"),
+        # Keyed preparation caches: weak in the model, holding parameters and
+        # modules through weak references, verified against the live model
+        # before each reuse and discarded when any key no longer holds.
+        ("torchlens/backends/torch/_param_prep_plan.py", "_PLANS"),
+        ("torchlens/backends/torch/_scope_facts_cache.py", "_FACTS"),
         ("torchlens/_utils/_tensor_label.py", "_RETIRED_LABEL_SESSION"),
         # F3b's lazy public-impl metadata sync (3c7ed93e): a one-way
         # synced-yet? sentinel flipped on first successful wrap, install-class.
@@ -1049,6 +1054,8 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/_state.py", "_stale_prepared_roots"),
         ("torchlens/backends/torch/_prepared_tree.py", "_prepared_trees"),
         ("torchlens/_utils/_model_walk.py", "_RECORDED"),
+        ("torchlens/backends/torch/_param_prep_plan.py", "_PLANS"),
+        ("torchlens/backends/torch/_scope_facts_cache.py", "_FACTS"),
         # Released-model registry became a WeakSet in fixwave-5 concmem: a
         # release registration must never pin the released model itself.
         ("torchlens/backends/torch/_held_refs.py", "_RELEASED_MODELS"),
@@ -1167,6 +1174,9 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/mlx/external_arrays.py", "__all__"),
         ("torchlens/backends/mlx/settings.py", "__all__"),
         ("torchlens/backends/torch/_session_cleanup.py", "__all__"),
+        ("torchlens/backends/torch/_param_prep_plan.py", "__all__"),
+        ("torchlens/backends/torch/_scope_facts_cache.py", "__all__"),
+        ("torchlens/backends/torch/_session_param_logs.py", "__all__"),
         ("torchlens/_data_substrate/__init__.py", "__all__"),
         ("torchlens/_data_substrate/artifact.py", "__all__"),
         ("torchlens/_data_substrate/digests.py", "__all__"),

@@ -63,13 +63,15 @@ def _new_param_log(
     record_type: type[Param],
     trace: Trace,
     param: nn.Parameter,
-    address: str,
-    module_address: str,
-    name: str,
+    slot: tuple[str, str, str],
     optimized: set[int] | None,
 ) -> Param:
-    """Stamp one unique parameter and build its record (the full walk's step)."""
+    """Stamp one unique parameter and build its record (the full walk's step).
 
+    ``slot`` is ``(address, module_address, name)``.
+    """
+
+    address, module_address, name = slot
     # Lazy modules (nn.LazyLinear etc.) hold UninitializedParameter until the
     # first forward; shape/numel/dtype-kind access raises. Register the
     # identity now with deferred geometry; postprocess step 15 finalizes it.
@@ -130,7 +132,7 @@ def _walk_params(
                 continue
             pid_to_address[id(param)] = param_address
             param_logs[param_address] = _new_param_log(
-                record_type, trace, param, param_address, module_address, name, optimized
+                record_type, trace, param, (param_address, module_address, name), optimized
             )
             stamped.append(param)
     return param_logs, pid_to_address, stamped
