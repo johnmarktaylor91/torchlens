@@ -945,7 +945,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (20 modules, 
 | `overlays` | Sparse versioned row overlays and transactions. | 104 |
 | `payloads` | Identity-preserving payload arena. | 66 |
 | `pools` | Per-trace exact-type intern pools. | 92 |
-| `record_refs` | Records named by row from trace-owned storage. | 606 |
+| `record_refs` | Records named by row from trace-owned storage. | 602 |
 | `record_rows` | Generic store-backed record facades for the non-Op record kinds. | 310 |
 | `relation_views` | Freeze-time conversion of relation staging containers to immutable views. | 542 |
 | `relations` | The canonical edge-occurrence table with CSR indexes. | 162 |
