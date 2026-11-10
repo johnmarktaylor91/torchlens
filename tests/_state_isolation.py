@@ -270,6 +270,7 @@ _CAPABILITY_DEPENDENT_CACHES: tuple[tuple[str, str], ...] = (
     ("torchlens._runnable.state_context", "_fake_tensor_mode_class"),
     ("torchlens._runnable.state_context", "_count_bounded_fake_tensor_mode_class"),
     ("torchlens._utils._autograd_view_nodes", "_aten_view_op_names"),
+    ("torchlens.backends.torch._call_plan", "single_tensor_schema_names"),
 )
 
 

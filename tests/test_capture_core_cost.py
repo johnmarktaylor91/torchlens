@@ -173,7 +173,7 @@ def test_two_measurements_of_one_commit_agree() -> None:
     assert flat["c6.minimal_trace_calls"] == first["models"]["one_op"]["c1"]["total"]
     c8 = first["models"]["one_op"]["c8"]
     assert c8["commit_ops"] >= 1 and c8["wrapper_calls"] >= 1
-    assert c8["fast_lane_calls"] == 0 and c8["fast_lane_share"] == 0.0
+    assert c8["fast_lane_calls"] == 1 and 0.0 < c8["fast_lane_share"] <= 1.0
     assert first["models"]["one_op"]["c4"]["Op"] >= 1
 
 

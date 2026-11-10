@@ -1,0 +1,385 @@
+"""Wrapper fast lane, first version: call plans, per-call admission and the fast commit.
+
+A decorated torch callable gets a :class:`CallPlan` at decoration when its static
+facts allow the fast lane: a C-level callable whose every dispatcher schema is
+out-of-place and returns exactly one tensor, with no ``inplace`` parameter, no
+fused running-statistic write and none of the wrapper's special roles. The
+schema facts come from the ``get_jit_all_schemas`` capability probe
+(``HAS_JIT_SCHEMA_ENUMERATION``); without it no callable gets a plan.
+
+At call time :func:`admit_call` decides, before any bookkeeping side effect,
+whether this call may skip the wrapper's general pre-call work. An admitted
+call still records every call-time fact and still ends in today's emit
+(:func:`commit_fast_call`). A call that is not admitted, or whose output fails
+:func:`output_admitted`, runs the wrapper's general body unchanged.
+"""
+
+from __future__ import annotations
+
+import functools
+import types
+from collections.abc import Callable, Iterable
+from contextlib import nullcontext
+from typing import TYPE_CHECKING, Any
+
+import torch
+
+from ... import _state
+from ..._utils import _torch_compat
+from ..._utils._tensor_label import TensorMeta
+from ..._utils.rng import log_current_autocast_state
+from ..._utils.tensor_utils import arm_deferred_payload_window, disarm_deferred_payload_window
+from ._fused_norm_writes import _FUSED_MUTATOR_NAMES
+from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
+
+if TYPE_CHECKING:
+    from .buffer_writes import BufferWriteTracker
+
+#: Functions of this file that the fast-lane share counter counts: one call per
+#: operation the fast lane carried from admission to its emit.
+FAST_LANE_COUNTER_NAMES: tuple[str, ...] = ("commit_fast_call",)
+
+#: Shared do-nothing context managers for the wrapper's call scaffold.
+NO_PAUSED_MODES = nullcontext(())
+NULL_CONTEXT = nullcontext()
+
+#: The admitted pre-call state: the call's tensor arguments in argument order,
+#: whether today's buffer first-use and snapshot helpers must run, and the
+#: autocast state recorded for the call.
+Admission = tuple[list[torch.Tensor], bool, dict[str, dict[str, Any]]]
+
+_TENSOR = torch.Tensor
+_PARAMETER = torch.nn.Parameter
+_C_CALLABLE_TYPES = (
+    types.BuiltinFunctionType,
+    types.MethodDescriptorType,
+    types.WrapperDescriptorType,
+)
+# Argument types that can hold no tensor. Anything outside this set, a plain
+# tensor, a Parameter or a flat list or tuple of these sends the call to the
+# general body.
+_PLAIN_TYPES = frozenset(
+    {
+        int,
+        float,
+        bool,
+        complex,
+        str,
+        type(None),
+        torch.dtype,
+        torch.device,
+        torch.Size,
+        torch.layout,
+        torch.memory_format,
+    }
+)
+_MODEL_OWNED_KEY = "model_owned_tensor_ids_at_entry"
+_DECLINED = -1
+
+
+class CallPlan:
+    """Decoration-time facts of one wrapped callable that may take the fast lane.
+
+    Parameters
+    ----------
+    name_could_mutate:
+        Whether the buffer-write tracker classifies the callable's name as a
+        possible mutator, which makes today's pre-call snapshot clear the
+        tracker's storage metadata cache. For a planned name that is exactly a
+        trailing underscore (every dunder has one): the in-place naming family
+        gets no plan.
+    """
+
+    __slots__ = ("name_could_mutate",)
+
+    def __init__(self, name_could_mutate: bool) -> None:
+        self.name_could_mutate = name_could_mutate
+
+
+def _schema_suits_fast_lane(schema: Any) -> bool | None:
+    """Return whether one dispatcher schema leaves its operator eligible for the fast lane.
+
+    ``None`` for a schema with no tensor in its arguments or returns (the
+    scalar, string and list overloads TorchScript registers under names such as
+    ``add``): it can never serve a wrapped call that yields a tensor, so it
+    counts neither for nor against the name. Any other schema must return
+    exactly one tensor and write no argument. A keyword-only ``out``
+    destination is allowed here because a call that passes ``out=`` is refused
+    per call.
+    """
+
+    returns = schema.returns
+    arguments = schema.arguments
+    touches_tensor = False
+    for value in (*arguments, *returns):
+        if "Tensor" in str(value.type):
+            touches_tensor = True
+            break
+    if not touches_tensor:
+        return None
+    if len(returns) != 1 or str(returns[0].type) != "Tensor":
+        return False
+    for argument in arguments:
+        alias = argument.alias_info
+        if alias is None or not alias.is_write:
+            continue
+        if not (argument.kwarg_only and argument.name == "out"):
+            return False
+    return True
+
+
+@functools.cache
+def single_tensor_schema_names() -> dict[str, bool]:
+    """Return, per ``aten`` operator name, whether all its overloads suit the fast lane.
+
+    Read once per process from the dispatcher's registered schemas.
+
+    Returns
+    -------
+    dict[str, bool]
+        Operator name to ``True`` when it has a tensor overload and every
+        tensor overload is out-of-place and returns exactly one tensor. Empty
+        when the schema enumeration capability is absent, so no callable gets
+        a plan.
+    """
+
+    names: dict[str, bool] = {}
+    for schema in _torch_compat.get_jit_all_schemas() or ():
+        namespace, _, name = schema.name.partition("::")
+        verdict = _schema_suits_fast_lane(schema) if namespace == "aten" else None
+        if verdict is not None:
+            names[name] = names.get(name, True) and verdict
+    return names
+
+
+def build_call_plan(
+    func: Callable[..., Any],
+    func_name: str,
+    property_accessor: str | None,
+) -> CallPlan | None:
+    """Return the fast-lane plan of a wrapped callable, or ``None`` when it has none.
+
+    Parameters
+    ----------
+    func:
+        The original torch callable.
+    func_name:
+        Name the callable is wrapped under.
+    property_accessor:
+        Accessor kind when ``func`` belongs to a wrapped property, else ``None``.
+
+    Returns
+    -------
+    CallPlan | None
+        The plan, or ``None`` for a Python-level callable, a property accessor,
+        a fused running-statistic writer, a name in the in-place naming family
+        or a name without an all-overloads single-tensor out-of-place schema.
+    """
+
+    if property_accessor is not None or type(func) not in _C_CALLABLE_TYPES:
+        return None
+    if func_name in _FUSED_MUTATOR_NAMES or func_name.startswith("__i"):
+        return None
+    schema_names = single_tensor_schema_names()
+    schema_name = func_name
+    if func_name not in schema_names and func_name.startswith("__") and func_name.endswith("__"):
+        schema_name = func_name[2:-2]
+    if not schema_names.get(schema_name, False):
+        return None
+    return CallPlan(func_name.endswith("_"))
+
+
+def _scan_values(values: Iterable[Any], tensors: list[torch.Tensor]) -> int:
+    """Collect the tensors among flat call values and classify the values.
+
+    Returns
+    -------
+    int
+        ``_DECLINED`` when a value is neither plain, a tensor, a Parameter nor a
+        flat list or tuple of plain values, or when a tensor carries foreign
+        metadata or is a ``Tensor.data`` alias; otherwise ``1`` when a
+        non-Parameter tensor carries a buffer address and ``0`` when none does.
+    """
+
+    stamped = 0
+    for value in values:
+        kind = type(value)
+        if kind is _TENSOR or kind is _PARAMETER:
+            meta = getattr(value, "_tl", None)
+            if meta is not None:
+                if type(meta) is not TensorMeta or meta.data_alias:
+                    return _DECLINED
+                if kind is _TENSOR and meta.address is not None:
+                    stamped = 1
+            tensors += (value,)
+        elif kind is tuple or kind is list:
+            for item in value:
+                if type(item) not in _PLAIN_TYPES:
+                    return _DECLINED
+        elif kind not in _PLAIN_TYPES:
+            return _DECLINED
+    return stamped
+
+
+def _buffer_work_needed(plan: CallPlan, trace: Any) -> bool:
+    """Return whether today's buffer first-use and snapshot helpers must run.
+
+    They are skipped only when the session holds no model-owned tensor table,
+    no registered or pending buffer and no stamped argument, where both helpers
+    resolve nothing. The one effect the snapshot helper has in that state, the
+    storage metadata cache clear for a possibly mutating name, is done here.
+    """
+
+    build_data = trace._module_capture_ws.module_build_data
+    if _MODEL_OWNED_KEY in build_data and build_data[_MODEL_OWNED_KEY]:
+        return True
+    try:
+        tracker: BufferWriteTracker | None = trace._buffer_write_tracker
+    except AttributeError:
+        return False
+    if tracker is None:
+        return False
+    if (
+        tracker.address_to_tensor
+        or tracker.storage_key_to_addresses
+        or tracker._pending_lazy_buffer_ids
+    ):
+        return True
+    if plan.name_could_mutate:
+        tracker.clear_storage_metadata_cache()
+    return False
+
+
+def admit_call(
+    plan: CallPlan, trace: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> Admission | None:
+    """Return the admitted pre-call state of one call, or ``None`` for the general body.
+
+    Runs after the wrapper's tracing-pass, transform and compile-region guards.
+    Every refusal happens before any side effect.
+
+    Parameters
+    ----------
+    plan:
+        The callable's decoration-time plan.
+    trace:
+        Active capture trace.
+    args:
+        Positional arguments of the call.
+    kwargs:
+        Keyword arguments of the call.
+
+    Returns
+    -------
+    Admission | None
+        ``(tensor arguments, buffer helpers must run, autocast state)``, or
+        ``None`` when a session fact or a per-call guard refuses the call.
+    """
+
+    # Hot path (CC above 10 on purpose): one frame per admitted call, guards inline.
+    if (
+        not args
+        or trace._options_mode != "exhaustive"
+        or trace._options_structure_only
+        or (kwargs and ("out" in kwargs or "inplace" in kwargs))
+        or _state._active_hook_plan
+        or _state.diagnostic_observer_armed()
+    ):
+        return None
+    trace_dict = trace.__dict__
+    if "_predicate_save_options" in trace_dict:
+        options = trace_dict["_predicate_save_options"]
+        if options is not None and options.intervene is not None:
+            return None
+    if trace._wrapper_runtime_ws.materialized_lazy_slots is not None or type(args[0]) is _PARAMETER:
+        return None
+    tensors: list[torch.Tensor] = []
+    stamped = _scan_values(args, tensors)
+    if stamped != _DECLINED and kwargs:
+        kwarg_stamped = _scan_values(kwargs.values(), tensors)
+        stamped = _DECLINED if kwarg_stamped == _DECLINED else stamped | kwarg_stamped
+    if stamped == _DECLINED:
+        return None
+    autocast_state = log_current_autocast_state()
+    for device in autocast_state:
+        if autocast_state[device]["enabled"]:
+            return None
+    return tensors, stamped == 1 or _buffer_work_needed(plan, trace), autocast_state
+
+
+def call_admitted(
+    func: Callable[..., Any],
+    wrapped_func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> Any:
+    """Run the original callable of an admitted call, with today's ``TypeError`` redispatch."""
+
+    try:
+        return func(*args, **kwargs)
+    except TypeError as exc:
+        out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+        if out is STILL_DECLINED:
+            raise
+        return out
+
+
+def output_admitted(out: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> bool:
+    """Return whether an admitted call's output may take the fast commit.
+
+    The output must be a plain tensor that is none of the call's arguments and
+    carries no TorchLens metadata, hence no label. Anything else is handed to
+    the wrapper's general post-call handling.
+    """
+
+    if type(out) is not _TENSOR:
+        return False
+    for value in args:
+        if value is out:
+            return False
+    if kwargs:
+        for value in kwargs.values():
+            if value is out:
+                return False
+    return getattr(out, "_tl", None) is None
+
+
+def commit_fast_call(
+    emit: Callable[..., Any],
+    trace: Any,
+    call: tuple[Any, ...],
+    func_call_id: int,
+    cow_state_ptrs: Any,
+) -> Any:
+    """Emit one admitted bottom-level call through today's emit and return its output.
+
+    Parameters
+    ----------
+    emit:
+        Today's output emit (``log_function_output_tensors``), passed in by the
+        wrapper so this module stays outside the capture import cycle.
+    trace:
+        Active capture trace.
+    call:
+        ``(func, func_name, args, kwargs, arg_copies, kwarg_copies, out,
+        exec_ctx)`` of the call.
+    func_call_id:
+        The call's id.
+    cow_state_ptrs:
+        The trace's deferred payload window state, or ``None``.
+
+    Returns
+    -------
+    Any
+        The call's output tensor.
+    """
+
+    if cow_state_ptrs is not None:
+        arm_deferred_payload_window(cow_state_ptrs)
+    try:
+        emit(trace, *call, True, func_call_id)
+    finally:
+        if cow_state_ptrs is not None:
+            disarm_deferred_payload_window()
+    return call[6]

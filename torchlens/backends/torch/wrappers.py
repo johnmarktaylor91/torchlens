@@ -77,7 +77,7 @@ from ..._utils.tensor_utils import (
     disarm_deferred_payload_window,
     print_override,
 )
-from . import _storage_exports, _tracing_pass
+from . import _call_plan, _storage_exports, _tracing_pass
 from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from ._completeness_boundaries import completeness_scope_for_wrapper
 from ._completeness_cross_thread import (
@@ -99,7 +99,7 @@ from ._function_boundary import (
     print_funcs,
     unlogged_wrapper_name,
 )
-from ._fused_norm_writes import fused_call_writes
+from ._fused_norm_writes import _FUSED_MUTATOR_NAMES, fused_call_writes
 from ._logged_arguments import logged_args, logged_receiver_output
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
@@ -1130,6 +1130,7 @@ def torch_func_decorator(
     is_host_constructor = func_name in HOST_CONSTRUCTOR_FUNC_NAMES
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
+    flag = inplace_param_index is not None or func_name in _FUSED_MUTATOR_NAMES
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
     writes_args = mutates_receiver or reconstructs_receiver_output or is_mutating_property_setter
     exports_storage = func_name in _storage_exports.STORAGE_EXPORT_FUNC_NAMES
@@ -1141,25 +1142,6 @@ def torch_func_decorator(
         or is_mutating_property_setter
     )
     force_distinct_return = func_name == "identity"
-    # ``TensorBase.__new__`` is the one wrapped callable whose ORIGINAL refuses
-    # to run under any python TorchDispatchMode when handed a strict Tensor
-    # subclass cls, on EVERY torch version (see pause_own_dispatch_modes);
-    # ``_make_subclass``/``as_subclass`` share the same original limitation but
-    # ONLY on a torch build lacking ``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE`` --
-    # torch's own nested ``__torch_function__`` return-conversion reaches one
-    # of these TWO through the LOGGED path just as often as ``__new__`` (e.g.
-    # ``scratch.sum()`` on a subclass reconstructing via ``as_subclass``
-    # inside the SAME logged call), so they need the identical unconditional
-    # treatment there, narrowed to the torch versions that actually need it.
-    # Every other op pays nothing (dict lookup on a decoration-time constant).
-    _logged_subclass_cls_index = (
-        0
-        if func_name == "__new__"
-        else (
-            None if HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE else _SUBCLASS_CLS_ARG_INDEX.get(func_name)
-        )
-    )
-    constructs_tensor_subclass = _logged_subclass_cls_index is not None
     # FAST-PATH-only gate (direct top-level ``__new__``/``_make_subclass``/
     # ``as_subclass`` calls made with logging disabled -- e.g. a user model or
     # intervention hook constructing a subclass during a replay/validation
@@ -1171,6 +1153,19 @@ def torch_func_decorator(
     _fast_path_subclass_cls_index = (
         None if HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE else _SUBCLASS_CLS_ARG_INDEX.get(func_name)
     )
+    # ``TensorBase.__new__`` is the one wrapped callable whose ORIGINAL refuses
+    # to run under any python TorchDispatchMode when handed a strict Tensor
+    # subclass cls, on EVERY torch version (see pause_own_dispatch_modes);
+    # ``_make_subclass``/``as_subclass`` share the same original limitation but
+    # ONLY on a torch build lacking ``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE`` --
+    # torch's own nested ``__torch_function__`` return-conversion reaches one
+    # of these TWO through the LOGGED path just as often as ``__new__`` (e.g.
+    # ``scratch.sum()`` on a subclass reconstructing via ``as_subclass``
+    # inside the SAME logged call), so they need the identical unconditional
+    # treatment there, narrowed to the torch versions that actually need it.
+    # Every other op pays nothing (dict lookup on a decoration-time constant).
+    _logged_subclass_cls_index = 0 if func_name == "__new__" else _fast_path_subclass_cls_index
+    constructs_tensor_subclass = _logged_subclass_cls_index is not None
     # Decoration-time constant: ``propagate_detached_saved_activation`` is a
     # guaranteed no-op for any name outside the propagation allowlist, but its
     # ARGUMENTS (two tensor collections, each with a BFS fall-back for nested
@@ -1189,6 +1184,12 @@ def torch_func_decorator(
     # TorchLens's synthetic ``identity`` op (Identity modules, pass-through tensors)
     # never occurs in a native forward, so it stays out of the call fingerprint.
     fingerprint_token = None if func_name == "identity" else _state.call_token(func_name)
+    # Fast lane (``_call_plan``): no plan for any callable with a special role here.
+    hazard = writes_args or exports_storage or needs_device_injection or is_unlogged_func
+    hazard = hazard or is_print_func or is_boundary_func or is_host_constructor or mutates_first_arg
+    hazard = hazard or force_distinct_return or constructs_tensor_subclass or is_barcode_transparent
+    hazard = hazard or inplace_param_index is not None or canonical_capture_callable is None
+    plan = None if hazard else _call_plan.build_call_plan(func, func_name, property_accessor)
 
     @wraps(func)
     def wrapped_func(*args: Any, **kwargs: Any) -> Any:
@@ -1212,8 +1213,8 @@ def torch_func_decorator(
             if _COW_GATE.armed and (
                 writes_args
                 or "out" in kwargs
-                or _call_requests_inplace(inplace_param_index, args, kwargs)
-                or fused_call_writes(func_name, args, kwargs)
+                or ((kwargs or flag) and _call_requests_inplace(inplace_param_index, args, kwargs))
+                or (flag and fused_call_writes(func_name, args, kwargs))
             ):
                 _COW_GATE.materialize(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
@@ -1238,9 +1239,7 @@ def torch_func_decorator(
                 fast_collector.exit_event(fast_event, func_name, out, args, property_accessor)
             if is_detached_propagation_func and has_detached_saved_activations():
                 propagate_detached_saved_activation(
-                    func_name,
-                    _collect_tensor_args(args, kwargs),
-                    _collect_output_tensors(out),
+                    func_name, _collect_tensor_args(args, kwargs), _collect_output_tensors(out)
                 )
             return out
 
@@ -1250,7 +1249,7 @@ def torch_func_decorator(
         if active_trace is None or owner_thread_id != current_thread_id:
             return _call_unlogged_off_owner(func, func_name, wrapped_func, args, kwargs)
 
-        trace = cast(Any, active_trace)
+        trace: Any = active_trace
         if exports_storage and not inside_function_apply():
             _storage_exports.note_storage_export(trace, args)
         if has_inplace_signature and not args:
@@ -1282,7 +1281,13 @@ def torch_func_decorator(
         # Lazy-module completion: torch's materialization plumbing on a
         # pending slot receiver passes through unlogged (``_call_lazy_slot_plumbing``;
         # the materialized state registers later), as the region guards above.
-        if args and isinstance(args[0], torch.Tensor) and _is_uninitialized_param(args[0]):
+        fast = _call_plan.admit_call(plan, trace, args, kwargs) if plan is not None else None
+        if (
+            not fast
+            and args
+            and isinstance(args[0], torch.Tensor)
+            and _is_uninitialized_param(args[0])
+        ):
             return _call_lazy_slot_plumbing(trace, func, func_name, args, kwargs)
 
         # Usage stats: count every decorated function call during logging.
@@ -1323,12 +1328,11 @@ def torch_func_decorator(
 
         # Inline tensor extraction — avoids BFS crawl for the common case
         # where args are flat tensors. Falls back to BFS only for nested containers.
-        arg_tensorlike = _collect_tensor_args(args, kwargs)
-        data_alias_inputs = tuple(
-            tensor for tensor in arg_tensorlike if is_tensor_data_alias(tensor)
-        )
+        arg_tensorlike = fast[0] if fast else _collect_tensor_args(args, kwargs)
+        data_alias_inputs = tuple(filter(is_tensor_data_alias, () if fast else arg_tensorlike))
         mutates_data_alias = bool(
-            args
+            not fast
+            and args
             and isinstance(args[0], torch.Tensor)
             and is_tensor_data_alias(args[0])
             and mutates_receiver
@@ -1336,14 +1340,15 @@ def torch_func_decorator(
 
         # Register buffers (and a Parameter materialized from a pending lazy slot
         # earlier in this forward) on first encounter.
-        _register_first_use_state(trace, arg_tensorlike)
+        if not fast or fast[1]:
+            _register_first_use_state(trace, arg_tensorlike)
 
         # Intercept print functions to show TorchLens label info in repr.
         if is_print_func and arg_tensorlike:
             return _call_print_func(trace, func, func_name, args, kwargs)
 
         # Snapshot args before the call in case in-place ops mutate them.
-        receiver_label_before = _receiver_mutation_label(args)
+        receiver_label_before = None if fast else _receiver_mutation_label(args)
         if trace._options_save_args:
             from ._ops_saved_arg_copies import _copy_saved_call_args
 
@@ -1352,7 +1357,9 @@ def torch_func_decorator(
             arg_copies = args
             kwarg_copies = kwargs
 
-        buffer_snapshots = snapshot_buffer_args(trace, func_name, arg_tensorlike, kwargs, args)
+        buffer_snapshots = []
+        if not fast or fast[1]:
+            buffer_snapshots = snapshot_buffer_args(trace, func_name, arg_tensorlike, kwargs, args)
 
         # ---- Storage-rebinding setter pre-call snapshot ----
         # ``t.data = rhs`` rebinds the receiver onto RHS's storage. Whether the
@@ -1379,11 +1386,15 @@ def torch_func_decorator(
         # behind a same-object return. Storage-rebinding ``.data=`` writes no bytes but rides along
         # via its property-setter signature — a spurious materialization is merely a wasted clone,
         # never a correctness risk.
-        if _COW_GATE.armed and (
-            writes_args
-            or "out" in kwargs
-            or _call_requests_inplace(inplace_param_index, args, kwargs)
-            or fused_call_writes(func_name, args, kwargs)
+        if (
+            not fast
+            and _COW_GATE.armed
+            and (
+                writes_args
+                or "out" in kwargs
+                or ((kwargs or flag) and _call_requests_inplace(inplace_param_index, args, kwargs))
+                or (flag and fused_call_writes(func_name, args, kwargs))
+            )
         ):
             _COW_GATE.materialize(arg_tensorlike)
 
@@ -1391,27 +1402,25 @@ def torch_func_decorator(
         # Write a unique barcode BEFORE the call. If any inner wrapped functions
         # execute during this call, they will overwrite it. After the call,
         # matching barcode => this is the bottom-level (leaf) function.
-        func_call_barcode = make_random_barcode()
+        func_call_barcode: Any = object() if fast else make_random_barcode()
         trace._wrapper_runtime_ws.current_func_barcode = func_call_barcode
         rng_states = log_op_rng_states(args, kwargs) if trace._options_save_rng else {}
-        autocast_state = log_current_autocast_state()
+        autocast_state = fast[2] if fast else log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
         register_call_input_container_snapshots(
-            trace,
-            args,
-            kwargs,
-            func_call_id=func_call_id,
-            event_index=func_call_id,
+            trace, args, kwargs, func_call_id=func_call_id, event_index=func_call_id
         )
-        from ...intervention._runtime import snapshot_call_inputs_for_inplace_intervention_site
+        call_input_snapshots = None
+        if not fast:
+            from ...intervention._runtime import snapshot_call_inputs_for_inplace_intervention_site
 
-        call_input_snapshots = snapshot_call_inputs_for_inplace_intervention_site(
-            func_name=func_name,
-            args=args,
-            kwargs=kwargs,
-            trace=trace,
-            func_call_id=func_call_id,
-        )
+            call_input_snapshots = snapshot_call_inputs_for_inplace_intervention_site(
+                func_name=func_name,
+                args=args,
+                kwargs=kwargs,
+                trace=trace,
+                func_call_id=func_call_id,
+            )
         expected_token = None
         pauses_owned_modes = constructs_tensor_subclass and _pauses_for_subclass_conversion(
             func_name, args, _logged_subclass_cls_index
@@ -1436,7 +1445,9 @@ def torch_func_decorator(
             from ..._observe._device_memory import read_before as _dm_read_before
 
             device_memory_before = _dm_read_before(trace)
-        mode_pause = pause_own_dispatch_modes() if pauses_owned_modes else nullcontext(())
+        mode_pause = (
+            pause_own_dispatch_modes() if pauses_owned_modes else _call_plan.NO_PAUSED_MODES
+        )
         paused_modes: tuple[Any, ...] = ()
         frozen_receiver_ctx = (
             _frozen_parameter_receiver_context(
@@ -1445,27 +1456,32 @@ def torch_func_decorator(
                 kwargs,
                 has_inplace_signature or _call_requests_inplace(inplace_param_index, args, kwargs),
             )
-            if args and isinstance(args[0], torch.nn.Parameter)
-            else nullcontext()
+            if not fast and args and isinstance(args[0], torch.nn.Parameter)
+            else _call_plan.NULL_CONTEXT
         )
         try:
-            with mode_pause as paused_modes, frozen_receiver_ctx:
-                logged_edge_ctx: Any = nullcontext()
-                if _diagnostic_edge_armed():
-                    logged_edge_ctx = expected_original_call(
-                        func,
-                        f"torch_func:{func_name}:logged",
-                        func_name=func_name,
-                        func_call_id=func_call_id,
-                        call_barcode=func_call_barcode,
-                    )
-                with logged_edge_ctx as expected_token:
-                    try:
-                        out_orig = func(*args, **kwargs)
-                    except TypeError as exc:
-                        out_orig = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
-                        if out_orig is STILL_DECLINED:
-                            raise
+            if fast:
+                out_orig = _call_plan.call_admitted(func, wrapped_func, func_name, args, kwargs)
+            else:
+                with mode_pause as paused_modes, frozen_receiver_ctx:
+                    logged_edge_ctx: Any = _call_plan.NULL_CONTEXT
+                    if _diagnostic_edge_armed():
+                        logged_edge_ctx = expected_original_call(
+                            func,
+                            f"torch_func:{func_name}:logged",
+                            func_name=func_name,
+                            func_call_id=func_call_id,
+                            call_barcode=func_call_barcode,
+                        )
+                    with logged_edge_ctx as expected_token:
+                        try:
+                            out_orig = func(*args, **kwargs)
+                        except TypeError as exc:
+                            out_orig = redispatch_declined(
+                                exc, wrapped_func, func_name, args, kwargs
+                            )
+                            if out_orig is STILL_DECLINED:
+                                raise
         except torch.cuda.OutOfMemoryError:
             # Observe item 15: the OOM raised BEFORE this op committed -- name
             # the ATTEMPTED call, never the last committed op.
@@ -1488,7 +1504,8 @@ def torch_func_decorator(
         finally:
             # Markers close FIRST so the range covers the user op, not the
             # mode-paused interior bookkeeping recorded below.
-            _pop_op_markers(op_marker_tokens)
+            if op_marker_tokens[0] or op_marker_tokens[1] is not None:
+                _pop_op_markers(op_marker_tokens)
             if paused_modes:
                 from ._aten_capture import _record_mode_paused_interior
 
@@ -1504,11 +1521,16 @@ def torch_func_decorator(
             record_data_alias_mutation(trace)
         return_value = out_orig
         exec_ctx = FuncExecutionContext(
-            time_elapsed=func_exec_duration,
-            rng_states=rng_states,
-            autocast_state=autocast_state,
+            time_elapsed=func_exec_duration, rng_states=rng_states, autocast_state=autocast_state
         )
         is_bottom_level_func = trace._wrapper_runtime_ws.current_func_barcode == func_call_barcode
+        fast_out = fast and is_bottom_level_func and not buffer_snapshots
+        if fast_out and _call_plan.output_admitted(out_orig, args, kwargs):
+            call = (func, func_name, args, kwargs, arg_copies, kwarg_copies, out_orig, exec_ctx)
+            window = _cow_payload_state_ptrs(trace)
+            return _call_plan.commit_fast_call(
+                log_function_output_tensors, trace, call, func_call_id, window
+            )
         if isinstance(out_orig, torch.nn.Parameter):
             # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.
             _adopt_minted_parameter_label(trace, out_orig, args)
@@ -1631,22 +1653,8 @@ def torch_func_decorator(
                 arm_deferred_payload_window(cow_state_ptrs)
             try:
                 # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census.
-                if _state._completeness_witness_mode == "shadow":
-                    with _state.pause_logging():
-                        call_emitted_op = log_function_output_tensors(
-                            trace,
-                            capture_func,
-                            capture_func_name,
-                            log_args,
-                            log_kwargs,
-                            log_arg_copies,
-                            log_kwarg_copies,
-                            out_orig,
-                            exec_ctx,
-                            is_bottom_level_func,
-                            func_call_id,
-                        )
-                else:
+                shadow_witness = _state.completeness_witness_is_shadow()
+                with _state.pause_logging() if shadow_witness else _call_plan.NULL_CONTEXT:
                     call_emitted_op = log_function_output_tensors(
                         trace,
                         capture_func,
@@ -1664,11 +1672,7 @@ def torch_func_decorator(
                 if cow_state_ptrs is not None:
                     disarm_deferred_payload_window()
 
-            _propagate_data_alias_provenance(
-                func_name,
-                data_alias_inputs,
-                output_tensors,
-            )
+            _propagate_data_alias_provenance(func_name, data_alias_inputs, output_tensors)
 
             # Same-object returns are logged against out_orig (a safe_copy with
             # the op's new label). When Python object identity is preserved we
@@ -1804,12 +1808,7 @@ def torch_func_decorator(
 
             record_buffer_writes_here = weightsfree_meta_active(trace)
         if record_buffer_writes_here:
-            record_op_buffer_writes(
-                trace,
-                capture_func_name,
-                buffer_snapshots,
-                producer_label,
-            )
+            record_op_buffer_writes(trace, capture_func_name, buffer_snapshots, producer_label)
 
         if is_barcode_transparent and enclosing_barcode:
             trace._wrapper_runtime_ws.current_func_barcode = enclosing_barcode
