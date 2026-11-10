@@ -66,6 +66,7 @@ class _CallSiteMemo:
         "anchor",
         "cache",
         "entries",
+        "entry_contexts",
         "interns",
         "last_ids",
         "last_record",
@@ -93,6 +94,8 @@ class _CallSiteMemo:
         self.entries: dict[int, tuple[Any, int, int]] = {}
         #: Remainder content -> small int.
         self.interns: dict[Any, int] = {}
+        #: Plain remainder number -> module entry's code context (``_module_entry_site``).
+        self.entry_contexts: dict[int, tuple[Any, ...]] = {}
         #: ``id(ModuleStackFrame)`` -> upper part above that module call (miss path).
         self.uppers: dict[int, Any] = {}
         #: ``(code, co_filename, f_lasti, f_lineno)`` -> ``FuncCallLocation``: the

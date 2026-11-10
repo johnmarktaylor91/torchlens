@@ -19,6 +19,10 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # enclosing value in its finally; the escape-rescue re-run calls it. A
         # survivor would let a later rescue rewind a finished capture's model.
         ("torchlens/_state.py", "_capture_attribute_rewind"),
+        # Tensor-search log mute: the ``Logger.isEnabledFor`` the crawl's mute window
+        # replaced, read while the window is open and put back by unmute() in the
+        # crawl's finally; a survivor would only name the method a later window defers to.
+        ("torchlens/_utils/_log_mute.py", "_replaced"),
         # torch.ops recorder suppression depth: incremented/decremented in the
         # census redispatch's own try/finally; a survivor would silently stop
         # recording user torch.ops calls.

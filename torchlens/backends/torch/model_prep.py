@@ -55,11 +55,7 @@ from ..._utils._tensor_label import (
     set_tensor_label,
 )
 from ..._utils.hashing import make_random_barcode
-from ..._utils.introspection import (
-    _get_code_context,
-    get_arg_tensors_for_resolution,
-    get_vars_of_type_from_obj,
-)
+from ..._utils.introspection import get_arg_tensors_for_resolution, get_vars_of_type_from_obj
 from ..._utils.tensor_utils import (
     get_memory_amount,
     get_memory_amount_from_metadata,
@@ -86,6 +82,7 @@ from ._module_class_metadata import (
     _module_class_metadata_cache,
     _source_start_line,
 )
+from ._module_entry_site import module_entry_code_context
 from ._ops_containers import _walk_output_tensors_with_paths
 from ._ops_finalize import _make_layer_log_entry
 from ._ops_interventions import _pop_tensor_live_fire_results
@@ -963,15 +960,7 @@ def _record_module_entry_build_data(trace: "Trace") -> tuple[float, Any, list[st
     The enter event carries them; ingest rebuilds the module side channel from the journal.
     """
     forward_start_time = time.time()
-    code_context_cache = getattr(trace, "_code_context_cache", None)
-    if code_context_cache is None:
-        code_context_cache = {}
-        trace._code_context_cache = code_context_cache
-    code_context = _get_code_context(
-        num_context_lines=trace.num_context_lines,
-        source_loading_enabled=trace._options_save_source_context,
-        context_cache=code_context_cache,
-    )
+    code_context = module_entry_code_context(trace)
     # Ancestor module calls, root excluded: a plain root is never pushed, and a
     # bound-method root's owner (address ``self``) is dropped here so the
     # containment facts read exactly as under a plain trace of the owner.
