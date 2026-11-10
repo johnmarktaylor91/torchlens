@@ -68,7 +68,7 @@ def test_layer_from_a_chained_trace_keeps_it_and_reprs_live() -> None:
     assert "relu_1" in str(layer)  # the live str adds the value summary to the repr
     assert f"context: {layer}"  # f-string interpolation must not raise
     assert isinstance(layer.source_trace, tl.Trace)
-    assert [parent.label for parent in layer.parents]
+    assert list(layer.parents)  # relation reads answer while the Layer keeps its Trace
 
 
 def test_layer_standalone_pickle_repr_and_accessors_typed() -> None:
