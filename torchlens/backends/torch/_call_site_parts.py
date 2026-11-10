@@ -121,11 +121,12 @@ def module_record(memo: Any, wrapper: FrameType, depth: int) -> tuple[Any, int]:
     if depth:
         lasti = wrapper.f_lasti
         code = wrapper.f_code
-        for boundary, after, before in _BOUNDARY_PUSHED.get(code.co_name, ()):
+        for boundary, after, before in _BOUNDARY_PUSHED[code.co_name]:
             if code is boundary and after < lasti < before:
-                stack = memo.module_ws.exhaustive_module_stack
-                if len(stack) >= depth:
-                    return stack[-depth], depth + 1
+                try:
+                    return memo.module_ws.exhaustive_module_stack[-depth], depth + 1
+                except IndexError:
+                    break
     return wrapper.f_locals.get("frame"), 0
 
 

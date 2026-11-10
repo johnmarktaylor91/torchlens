@@ -35,7 +35,6 @@ from ..._utils._package_frames import _VERDICTS
 from ..._utils.introspection import _CODE_CONTEXT_ANCHOR_KEY, _get_code_context
 from ._call_site_parts import (
     build_from_parts,
-    is_anchor as _is_anchor,
     is_internal as _is_internal,
     module_record,
     seed_locations,
@@ -188,16 +187,28 @@ def _remainder_walk(
         if name in _BOUNDARY_NAMES and code in _BOUNDARY_CODES:
             parent = _module_entry(memo, frame, next_depth)
             return None if parent is None else (plain, ids, parent)
-        if code is anchor_code and _is_anchor(anchor, frame):  # type: ignore[arg-type]
+        if (
+            code is anchor_code
+            and frame.f_lasti == anchor[2]  # type: ignore[index]
+            and frame.f_lineno == anchor[3]  # type: ignore[index]
+            and id(frame) == anchor[0]  # type: ignore[index]
+        ):  # ``_is_anchor``, inlined
             return plain, ids, _AT_ANCHOR
-        if name == "_call_impl" or not _is_internal(code):
+        if name == "_call_impl":
+            internal = False
+        else:
+            try:
+                internal = _VERDICTS[code.co_filename]
+            except KeyError:
+                internal = _is_internal(code)
+        if not internal:
             code_id = id(code)
             pins[code_id] = code
             lasti = frame.f_lasti
             plain = (plain, code_id, lasti)
             if not stateful:
                 if name == "_call_impl":
-                    ids = (ids, code_id, lasti, id(frame.f_locals.get("self")))
+                    ids = (ids, code_id, lasti, id(frame.f_locals["self"]))
                 else:
                     ids = (ids, code_id, lasti)
         frame = frame.f_back
@@ -224,15 +235,19 @@ def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
         name = code.co_name
         if name in _BOUNDARY_NAMES and code in _BOUNDARY_CODES:
             lasti = frame.f_lasti
+            record = None  # the module call's record, while the wrapper holds it pushed
             for boundary, after, before in _BOUNDARY_PUSHED[name]:
                 if code is boundary and after < lasti < before:
                     stack = memo.module_ws.exhaustive_module_stack
-                    if stack and stack[-1] is memo.last_record:
-                        return (key, memo.last_ids)
+                    record = stack[-1] if stack else None
                     break
-            entry = _module_entry(memo, frame, 1)
-            if entry is None:
-                return None
+            if record is not None and record is memo.last_record:
+                return (key, memo.last_ids)
+            entry = None if record is None else memo.entries.get(id(record))
+            if entry is None or entry[0] is not record:  # a module call not met before
+                entry = _module_entry(memo, frame, 1)
+                if entry is None:
+                    return None
             memo.last_record = entry[0]
             memo.last_ids = entry[1]
             return (key, entry[1])
