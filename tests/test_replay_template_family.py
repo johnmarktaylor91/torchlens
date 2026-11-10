@@ -305,3 +305,103 @@ def test_record_without_a_row_store_is_renamed_at_once() -> None:
         args=(ParentRef("relu_1_2"), ParentRef("other"))
     )
     assert double.kwargs_template is None
+
+
+def _reads(trace: Any) -> tuple[list[tuple[Any, ...]], list[str]]:
+    """Return every op's resolved templates (as ``_snapshot`` gives them) and their displays.
+
+    A template's repr counts its arguments; its card (``str``) prints each
+    parent reference by its display key.
+    """
+
+    texts = []
+    for op in trace._layer_list:
+        for name in FIELDS:
+            template = getattr(op.call, name)
+            texts.append(f"{template!r}\n{template}")
+    return _snapshot(trace), texts
+
+
+def _op_reprs(trace: Any) -> list[str]:
+    """Return every op's repr."""
+
+    return [repr(op) for op in trace._layer_list]
+
+
+def _parent_reads(trace: Any) -> tuple[list[tuple[Any, ...]], list[str]]:
+    """Return the parent's own reads: what a fork copied before templates resolved on read.
+
+    Asserts the reads bind display keys, multi-pass ones included, so a
+    comparison against them tests the keys.
+    """
+
+    reads = _reads(trace)
+    keys = [key for *_rest, row_keys in reads[0] for _label, key in row_keys]
+    assert keys and all(key is not None for key in keys)
+    assert any(":" in key for key in keys)
+    return reads
+
+
+def test_fork_outliving_its_parent_reads_the_same_templates() -> None:
+    """A fork's first read after its parent is gone binds the same display keys."""
+
+    trace = _trace()
+    orphan = trace.fork()
+    alive_fork = trace.fork()
+    alive = _reads(alive_fork), _op_reprs(alive_fork)
+    expected = _parent_reads(trace)
+    parent_ref = orphan._parent_run
+    del trace, alive_fork
+    gc.collect()
+    assert parent_ref() is None
+    assert set(_states(orphan)) == {STATE_DERIVED}
+    assert (_reads(orphan), _op_reprs(orphan)) == alive
+    assert alive[0] == expected
+
+
+def test_fork_outliving_its_parent_reprs_ops_before_any_template_read() -> None:
+    """An orphan fork's op reprs, taken first, match a live fork's."""
+
+    trace = _trace()
+    orphan = trace.fork()
+    alive = _op_reprs(trace.fork())
+    parent_ref = orphan._parent_run
+    del trace
+    gc.collect()
+    assert parent_ref() is None
+    assert _op_reprs(orphan) == alive
+
+
+def test_fork_of_a_fork_outliving_both_reads_the_same_templates() -> None:
+    """The second fork binds its own context, so neither ancestor needs to live."""
+
+    trace = _trace()
+    middle = trace.fork()
+    orphan = middle.fork()
+    expected = _parent_reads(trace)
+    refs = (orphan._parent_run, middle._parent_run)
+    del trace, middle
+    gc.collect()
+    assert all(ref() is None for ref in refs)
+    assert _reads(orphan) == expected
+
+
+@pytest.mark.parametrize("how", ("pickle", "deepcopy"))
+def test_fork_outliving_its_parent_pickles_and_copies_display_keys(how: str) -> None:
+    """A pickled or copied orphan fork carries the display keys its parent bound."""
+
+    import copy
+
+    trace = _trace(capture=tl.options.CaptureOptions(replayable=True))
+    orphan = trace.fork()
+    alive_fork = trace.fork()
+    alive = _reads(
+        pickle.loads(pickle.dumps(alive_fork)) if how == "pickle" else copy.deepcopy(alive_fork)
+    )
+    expected = _parent_reads(trace)
+    parent_ref = orphan._parent_run
+    del trace, alive_fork
+    gc.collect()
+    assert parent_ref() is None
+    other = pickle.loads(pickle.dumps(orphan)) if how == "pickle" else copy.deepcopy(orphan)
+    assert _reads(other) == alive == expected

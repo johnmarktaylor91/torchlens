@@ -12,9 +12,12 @@ template nobody reads is never rebuilt and costs no object beyond the raw
 template capture already made.
 
 ``TemplateLabels`` holds the raw-to-final label map and a weak reference to
-the trace, whose all-keys lookup gives the display keys. Pickled (with a
-pending template of a replayable op), it carries the map plus the display
-keys read from the live trace, so the load resolves to the same template.
+the trace, whose all-keys lookup gives the display keys. A fork reads its
+parent's side columns through a context of its own, bound to the fork at fork
+time (``rebound``), so it resolves the same display keys after the parent
+is gone. Pickled (with a pending template of a replayable op), it carries the
+map plus the display keys read from the live trace, so the load resolves to
+the same template.
 """
 
 from __future__ import annotations
@@ -85,6 +88,16 @@ class TemplateLabels:
         """Carry the label map and the display keys, never the trace."""
 
         return TemplateLabels, (self.mapping, self.parent_ref_cls, None, self.display_keys())
+
+    def rebound(self, trace_ref: Any) -> TemplateLabels:
+        """Return this context bound to the trace ``trace_ref`` names (a fork).
+
+        The copy shares the label map and the field cache.
+        """
+
+        bound = TemplateLabels(self.mapping, self.parent_ref_cls, trace_ref, self.keys)
+        bound.field_cache = self.field_cache
+        return bound
 
     def records(self) -> Any:
         """Return the live trace's all-keys lookup, or ``None`` once the trace is gone."""

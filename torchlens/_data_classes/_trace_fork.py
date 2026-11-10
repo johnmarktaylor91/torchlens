@@ -51,7 +51,7 @@ from .._capture.outcome import stamp_forked
 from .._trace_core._fork_copy import _COW_ATOMIC, cow_copy_value
 from .._trace_core.op_store import _MISSING, DetachedOpStore, PooledCell
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
-from .._trace_core.side_columns import PendingCell
+from .._trace_core.side_columns import PendingCell, bind_fork_view
 from .._utils._record_group_table import record_member
 from .._utils.env_flags import closed_bool_env
 from ..intervention._types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
@@ -100,6 +100,9 @@ _TRACE_ACCESSOR_CACHE_FIELDS = frozenset(
         "_module_call_accessor",
     }
 )
+
+#: Trace fields a fork drops after its field pass: both sets above.
+_FORK_DROPPED_FIELDS = _STREAM_DERIVED_GUARD_FIELDS | _TRACE_ACCESSOR_CACHE_FIELDS
 
 # Trace fields written only while their own trace captures and never mutated
 # afterwards: the capture-time edge truth (one ``setdefault`` per op entry in the
@@ -616,10 +619,8 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
         for field_name, value in state_items(parent)
     }
     state_restore(fork, fork_state)
-    for stale_guard_field in _STREAM_DERIVED_GUARD_FIELDS:
-        fork.__dict__.pop(stale_guard_field, None)
-    for accessor_cache_field in _TRACE_ACCESSOR_CACHE_FIELDS:
-        fork.__dict__.pop(accessor_cache_field, None)
+    for dropped_field in _FORK_DROPPED_FIELDS & fork.__dict__.keys():
+        del fork.__dict__[dropped_field]
     # The fork gets exactly ONE fresh DETACHED stream — never the parent's
     # (shared lists let a fork backward corrupt the parent's projection),
     # and never none (a fork remains a supported backward-capture target).
@@ -648,6 +649,7 @@ def build_fork(parent: Trace, *, name: str | None) -> Trace:
     # Phase 3: fill. COW ops rebind their owner weakref and drop session
     # caches in the fork view; detached fallbacks duplicate isolated state.
     if ops_view is not None:
+        bind_fork_view(ops_view, fork_ref)  # template contexts the fork holds, not its parent
         for _parent_op, shell in cow_ops:
             row = _OBJECT_GETATTRIBUTE(shell, "_row")
             ops_view.cell_set(row, _SOURCE_TRACE_REF_FID, fork_ref)
