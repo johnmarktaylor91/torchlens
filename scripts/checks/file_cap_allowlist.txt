@@ -91,7 +91,6 @@ torchlens/_data_classes/cleanup.py::cleanup	137
 torchlens/_data_classes/container.py	1150
 torchlens/_data_classes/field_policy.py::build_record_field_policy_table	68
 torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
-torchlens/_data_classes/grad_fn.py	803
 torchlens/_data_classes/interface.py::_getitem_after_pass	110
 torchlens/_data_classes/layer.py	1537
 torchlens/_data_classes/module.py	2566
@@ -883,7 +882,7 @@ torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wra
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wrapped_builder.wrapped_transform	62
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
-torchlens/backends/torch/backward.py	3805
+torchlens/backends/torch/backward.py	3804
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	94
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	72
