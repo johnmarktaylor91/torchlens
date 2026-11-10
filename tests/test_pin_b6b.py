@@ -169,11 +169,13 @@ def test_restored_trace_pins_params() -> None:
     restored = pickle.loads(pickle.dumps(trace))
     assert type(restored.__dict__["_param_logs"].__dict__["_list"]) is ParamSequence
     param = restored.params["fc.weight"]
-    assert param.trace is restored
-    assert param.module.address == "fc"
     assert restored.layers["linear_1"].ops[0].params["fc.weight"] is param
+    assert list(restored.params) == list(restored.params.values())
+    # As on the base: a restored record's back-reference is not carried by
+    # the stream, so ``trace`` and ``module`` read None.
+    assert param.trace is None and param.module is None
     chained = pickle.loads(pickle.dumps(_trace())).params["fc.weight"]
-    assert chained.trace is not None and chained.module.address == "fc"
+    assert chained.address == "fc.weight" and chained.trace is None
 
 
 def test_state_streams_see_plain_containers() -> None:

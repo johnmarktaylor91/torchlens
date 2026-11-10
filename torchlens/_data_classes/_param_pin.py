@@ -24,6 +24,7 @@ from __future__ import annotations
 import weakref
 from typing import Any
 
+from .._trace_core.op_store import OpRowStore
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from ._op_row_containers import adopt_op_containers
 from ._param_rows import (
@@ -72,7 +73,7 @@ def pin_params(trace: Any) -> None:
     if by_module:
         for address, params in list(by_module.items()):
             by_module[address] = as_sequence(rows, params, memo)
-    if core.ops is not None and core.ops.__class__.__name__ == "OpRowStore":
+    if isinstance(core.ops, OpRowStore):
         _pin_op_cells(core.ops, rows, memo)
     _pin_layer_states(state.get("_layer_logs"), rows, memo)
     for entry in list(core._views.cells.values()):
