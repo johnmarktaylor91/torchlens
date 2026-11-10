@@ -36,8 +36,8 @@ from tools.record_ownership.holders import (
     BEFORE_ACTIVATION,
     HOLDERS,
     KNOWN,
+    SIDE_TABLE,
     STEPS,
-    STRONG_VIEW_TABLE,
     blocking,
     expected,
 )
@@ -98,7 +98,7 @@ def test_paths_to_op_and_layer_convert_before_activation() -> None:
         path: holder.step
         for path, holder in blocking(ACTIVATED_FIRST).items()
         if holder.step not in BEFORE_ACTIVATION
-        and not (holder.step == ACTIVATION and path.startswith(STRONG_VIEW_TABLE))
+        and not (holder.step == ACTIVATION and path.startswith(SIDE_TABLE))
     }
     assert late == {}
 

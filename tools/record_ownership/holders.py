@@ -31,7 +31,8 @@ MODULE_AND_BUFFER_CELLS = "module_and_buffer_cells"
 FORK_AND_SAVED_STATE = "fork_and_saved_state"
 LATER_KINDS = "later_kinds"
 ACTIVATION = "activation"
-STRONG_VIEW_TABLE = "Trace._trace_core:TraceCore._strong_facades"
+# The one strong cache of records: a path may wait for ``ACTIVATION`` only through it.
+SIDE_TABLE = "Trace._trace_core:TraceCore._strong_facades"
 
 STEPS: dict[str, str] = {
     OP_LIST: "the op list, the label dictionaries and the caches of the ops door",
@@ -96,8 +97,8 @@ HOLDERS: dict[str, Holder] = {
     "Trace._op_accessor_cache[*]:TraceOpAccessor._raw_index_lookup{*} -> Op": Holder(
         OP_LIST, but=("fork_cold", "pickle_state")
     ),
-    f"{STRONG_VIEW_TABLE}{{*}}[*] -> Op": Holder(ACTIVATION, but=("pickle_state",)),
-    f"{STRONG_VIEW_TABLE}{{*}}[*] -> Layer": Holder(ACTIVATION, but=("pickle_state",)),
+    f"{SIDE_TABLE}{{*}}[*] -> Op": Holder(ACTIVATION, but=("pickle_state",)),
+    f"{SIDE_TABLE}{{*}}[*] -> Layer": Holder(ACTIVATION, but=("pickle_state",)),
     "Module._facets_cache:FacetView._record -> Module": Holder(
         OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
     ),
