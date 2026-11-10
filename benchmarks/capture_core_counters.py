@@ -75,7 +75,7 @@ _STEP_FILE = "_postprocess/_executor.py"
 Hook = Callable[[Any], None]
 
 
-def _fast_lane_names() -> tuple[str, ...]:
+def fast_lane_names() -> tuple[str, ...]:
     """Return the fast lane's entry function names, as the product declares them."""
 
     try:
@@ -88,7 +88,7 @@ def _fast_lane_names() -> tuple[str, ...]:
 def _classifier() -> Callable[[types.CodeType], tuple[str | None, str | None] | None]:
     """Build the code-object classifier: ``code -> (phase, tag)`` or ``None``."""
 
-    fast_names = _fast_lane_names()
+    fast_names = fast_lane_names()
 
     def classify(code: types.CodeType) -> tuple[str | None, str | None] | None:
         filename = code.co_filename.replace("\\", "/")
