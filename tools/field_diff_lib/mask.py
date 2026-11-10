@@ -34,6 +34,9 @@ part that varies and compares the rest.
     are replaced by ``<id>``; every value under them is walked and compared
     like any other field.
 
+The text rules apply to ``repr`` and ``str`` text and to the message of a
+raised error, which can embed a record's ``repr``.
+
 Names that are not read at all are in ``NOT_READ`` with their reason; the
 name is still recorded, so a field that disappears still shows.
 

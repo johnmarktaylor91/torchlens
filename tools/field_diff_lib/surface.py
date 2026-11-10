@@ -107,6 +107,11 @@ class Reader:
         self.read_geometry = read_geometry
         self.warnings: list[dict[str, Any]] = []
 
+    def _message(self, message: str) -> str:
+        """Normalise a raised error's message; it may embed a record's repr, so the text rules apply."""
+
+        return self.mask.text(self.canon.string(message))
+
     def read(self, obj: Any, attr: str, kind: str, key: str, site: str) -> tuple[Any, Any]:
         """Read ``obj.attr``; return its canonical form and the raw value.
 
@@ -122,7 +127,7 @@ class Reader:
             try:
                 value = getattr(obj, attr)
             except Exception as error:  # noqa: BLE001 - raising is part of the surface
-                value, canonical = None, error_record(error, self.canon.string)
+                value, canonical = None, error_record(error, self._message)
             else:
                 canonical = self.canon.at(site).value(value)
         for warning in caught:
