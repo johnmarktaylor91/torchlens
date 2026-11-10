@@ -1672,13 +1672,12 @@ def _record_module_exit_metadata(
     module: nn.Module,
     frame: "ModuleStackFrame",
     out: Any,
-    input_tensor_labels: set[str],
-    forward_start_time: float,
+    entry: tuple[set[str], list[str], float],
 ) -> tuple[tuple[torch.Tensor, str], ...]:
     """Record post-forward module metadata for exhaustive mode.
 
     Called immediately after ``orig_forward()`` returns in the
-    ``module_forward_decorator`` with the call's frame and entry start time. Creates
+    ``module_forward_decorator`` with the call's frame and its entry facts. Creates
     boundary identity ops for pass-through outputs, recovers replacement outputs,
     and annotates output tensors with module-exit metadata.
 
@@ -1688,6 +1687,7 @@ def _record_module_exit_metadata(
         Exact output tensors and raw labels of boundary Ops inserted for otherwise
         untraceable outputs.
     """
+    input_tensor_labels, _labels_at_entry, forward_start_time = entry
     address = "" if frame.address is None else frame.address
     module_call_index = frame.pass_number
     module_type = type(module).__name__ if frame.module_type is None else frame.module_type
@@ -1946,9 +1946,7 @@ def module_forward_decorator(
         module_type = type(module).__name__ if frame.module_type is None else frame.module_type
         bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
         try:
-            input_tensor_labels, _labels_at_entry, start = _record_module_entry_metadata(
-                trace, module, frame, args, kwargs
-            )
+            entry = _record_module_entry_metadata(trace, module, frame, args, kwargs)
             # Echo narrator slot (module seam, exhaustive tier).
             # Duck-typed session read: the hot path imports nothing.
             echo_session = trace.__dict__.get("_echo_session")
@@ -1986,7 +1984,7 @@ def module_forward_decorator(
                     echo_session.abandon_module_frame()
                 raise
             untraceable_output_boundaries = _record_module_exit_metadata(
-                trace, module, frame, out, input_tensor_labels, start
+                trace, module, frame, out, entry
             )
             if echo_session is not None:
                 echo_session.emit_module_exit(frame.address)
