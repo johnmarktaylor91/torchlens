@@ -42,6 +42,11 @@ def rebuild_trace_accessors(
         Mapping from ``"address:pass"`` labels to ``ModuleCall`` entries.
     """
 
+    # The door is set first: a module whose ``ops`` cell already holds rows
+    # (a second rebuild of the same records) reads its calls through it.
+    _invalidate_trace_module_call_accessor_cache(trace)
+    trace._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
+
     for module_log in module_dict.values():
         module_log._source_trace = trace
         module_log._buffer_accessor = None
@@ -50,9 +55,6 @@ def rebuild_trace_accessors(
             continue
         for module_call in module_ops._dict.values():
             module_call._source_trace = trace
-
-    _invalidate_trace_module_call_accessor_cache(trace)
-    trace._module_logs = ModuleAccessor(module_dict, module_order, pass_dict)
 
     # Adopt Module/ModuleCall rows into the per-trace kind tables. A
     # ``.tlspec`` load rebuilds the module accessor only HERE — after
