@@ -4,6 +4,8 @@
 directly. They are now an ``OpSequence`` and two ``OpLabelMap`` objects that
 store one integer key per entry and hand the record back on read, so code that
 iterates, indexes, appends, inserts or assigns sees the same records as before.
+They subclass ``list`` and ``dict`` with the keys as their own items, which
+keeps ``len`` and membership at built-in speed.
 
 A key is the op's row in the trace core's op store. A record that has no row
 there (a detached single-row copy, or any record of a trace without a core)
@@ -20,7 +22,7 @@ from __future__ import annotations
 import copy
 import weakref
 from collections import OrderedDict
-from collections.abc import Iterable, Iterator, Mapping, MutableMapping, MutableSequence
+from collections.abc import Iterable, Iterator, Mapping
 from itertools import repeat
 from typing import TYPE_CHECKING, Any, cast
 
@@ -33,6 +35,16 @@ CONTAINER_FIELDS = ("_layer_list", "_layer_dict_main_keys", "_layer_dict_all_key
 
 _MISSING: Any = object()
 _slot = object.__getattribute__
+_list_iter = list.__iter__
+_list_get = list.__getitem__
+_list_set = list.__setitem__
+_list_insert = list.insert
+_list_append = list.append
+_dict_iter = dict.__iter__
+_dict_item = dict.__getitem__
+_dict_get = dict.get
+_dict_set = dict.__setitem__
+_dict_values = dict.values
 
 
 def _side_tables(core: Any) -> tuple[list[Any], dict[int, Any]]:
@@ -51,15 +63,28 @@ def _side_tables(core: Any) -> tuple[list[Any], dict[int, Any]]:
 class OpRows:
     """Resolve op row keys to records for one trace's containers."""
 
-    __slots__ = ("__weakref__", "_containers", "_core_ref", "_ids", "_tables", "_trace_ref")
+    __slots__ = (
+        "__weakref__",
+        "_containers",
+        "_core_ref",
+        "_ids",
+        "_last",
+        "_store",
+        "_tables",
+        "_trace_ref",
+    )
 
     def __init__(self, trace: Any = None) -> None:
         """Start unbound: records are cached locally until the trace has a core."""
 
         self._trace_ref = weakref.ref(trace) if trace is not None else None
         self._core_ref: Any = None
+        self._store: Any = None
         self._tables: tuple[list[Any], dict[int, Any]] = ([], {})
         self._ids: dict[int, int] = {}
+        # The row key ``hold`` last returned: a writer that registers one record
+        # under several labels in a row finds its key again without a call.
+        self._last = -1
         self._containers: list[weakref.ref[Any]] = []
 
     def _trace_core(self) -> Any:
@@ -78,14 +103,19 @@ class OpRows:
         """Move every held record to the side tables of the trace's current core."""
 
         core = self._trace_core()
-        if core is None or (self._core_ref is not None and self._core_ref() is core):
+        if core is None:
+            return
+        if self._core_ref is not None and self._core_ref() is core:
+            self._store = core.ops
             return
         live = [
             container for container in (ref() for ref in self._containers) if container is not None
         ]
         contents = [(container, container._records()) for container in live]
         self._core_ref = weakref.ref(core)
+        self._store = core.ops
         self._tables = _side_tables(core)
+        self._last = -1
         self._ids = {id(record): key for key, record in self._tables[1].items()}
         for container, records in contents:
             container._rekey(self.hold_many(records))
@@ -93,27 +123,36 @@ class OpRows:
     def hold(self, record: Any) -> int:
         """Cache ``record`` in the side table and return its key."""
 
-        core = self._core_ref() if self._core_ref is not None else None
-        current = self._trace_core()
-        if current is not None and current is not core:
-            self.bind()
-            core = current
-        rows, detached = self._tables
-        if core is not None:
-            try:
-                store = _slot(record, "_core")
-                row = _slot(record, "_row")
-            except AttributeError:
-                store = None
-            if store is not None and store is core.ops:
-                if row >= len(rows):
-                    rows.extend(repeat(None, row + 1 - len(rows)))
-                held = rows[row]
+        try:
+            store = _slot(record, "_core")
+            row = _slot(record, "_row")
+        except AttributeError:
+            store = None
+        if store is not None:
+            if store is not self._store:
+                self.bind()  # the trace may have gained its core since the last write
+            if store is self._store:
+                rows = self._tables[0]
+                try:
+                    held = rows[row]
+                except IndexError:
+                    size = len(rows)
+                    if row > size:
+                        rows.extend(repeat(None, row - size))
+                    rows.append(record)
+                    self._last = row
+                    return row
                 if held is None:
-                    rows[row] = record
-                    return row
+                    rows[row] = held = record
                 if held is record:
+                    self._last = row
                     return row
+        return self._hold_detached(record)
+
+    def _hold_detached(self, record: Any) -> int:
+        """Cache a record that has no row in the bound store; return its negative key."""
+
+        detached = self._tables[1]
         key = self._ids.get(id(record))
         if key is None:
             key = -1 - len(detached)
@@ -166,92 +205,119 @@ def _copied(records: Iterable[Any], memo: dict[Any, Any]) -> list[Any]:
     return out
 
 
-class OpSequence(MutableSequence[Any]):
-    """A list of ops stored as row keys; reads return the ``Op`` records."""
+class OpSequence(list[Any]):
+    """A list of ops stored as row keys; reads return the ``Op`` records.
 
-    __slots__ = ("__weakref__", "_keys", "_owner")
-    __hash__ = None  # type: ignore[assignment]
+    The list's own items are the integer keys, so ``len`` and deletion run at
+    list speed; every method that hands out or takes items is overridden to
+    speak records.
+    """
+
+    __slots__ = ("__weakref__", "_owner")
 
     def __init__(self, owner: OpRows, records: Iterable[Any] = ()) -> None:
         """Hold ``records`` through ``owner``."""
 
         self._owner = owner
-        self._keys: list[int] = owner.hold_many(records)
+        list.__init__(self, owner.hold_many(records))
         owner.register(self)
+
+    @property
+    def _keys(self) -> list[int]:
+        """Return a copy of the row keys (for tests and diagnostics)."""
+
+        return list(_list_iter(self))
 
     def _records(self) -> list[Any]:
         """Return the records as a plain list."""
 
-        return list(self._owner.records(self._keys))
+        return list(self._owner.records(_list_iter(self)))
 
     def _rekey(self, keys: list[int]) -> None:
         """Replace the keys in place after the owner moved its records.
 
-        In place because a pending ``self._keys.append(hold(...))`` already
-        looked up the list before ``hold`` triggered the move.
+        In place because a pending append already holds this list.
         """
 
-        self._keys[:] = keys
+        _list_set(self, slice(None), keys)
 
-    def __len__(self) -> int:
-        """Return the number of ops."""
+    def _key(self, record: Any) -> int:
+        """Return the key for ``record``, holding it if it is not the one last held."""
 
-        return len(self._keys)
+        owner = self._owner
+        row = owner._last
+        return row if row >= 0 and owner._tables[0][row] is record else owner.hold(record)
 
     def __iter__(self) -> Iterator[Any]:
         """Iterate the records in order."""
 
-        return self._owner.records(self._keys)
+        return self._owner.records(_list_iter(self))
 
     def __reversed__(self) -> Iterator[Any]:
         """Iterate the records in reverse order."""
 
-        return self._owner.records(self._keys[::-1])
+        return self._owner.records(_list_get(self, slice(None, None, -1)))
+
+    def __contains__(self, value: object) -> bool:
+        """Return whether ``value`` is one of the records."""
+
+        return value in self._records()
 
     def __getitem__(self, index: Any) -> Any:
         """Return one record, or a plain list of records for a slice."""
 
-        if isinstance(index, slice):
-            return list(self._owner.records(self._keys[index]))
-        return self._owner.resolve(self._keys[index])
+        key = _list_get(self, index)
+        owner = self._owner
+        if key.__class__ is list:
+            return list(owner.records(key))
+        return owner._tables[0][key] if key >= 0 else owner._tables[1][key]
 
     def __setitem__(self, index: Any, value: Any) -> None:
         """Replace one record or a slice of records."""
 
-        if isinstance(index, slice):
-            self._keys[index] = self._owner.hold_many(value)
+        if index.__class__ is slice:
+            _list_set(self, index, self._owner.hold_many(value))
         else:
-            self._keys[index] = self._owner.hold(value)
+            _list_set(self, index, self._key(value))
 
-    def __delitem__(self, index: Any) -> None:
-        """Drop one position or a slice."""
-
-        del self._keys[index]
-
-    def insert(self, index: int, value: Any) -> None:
+    def insert(self, index: Any, value: Any) -> None:
         """Insert a record before ``index``."""
 
-        self._keys.insert(index, self._owner.hold(value))
+        _list_insert(self, index, self._key(value))
 
     def append(self, value: Any) -> None:
         """Append a record."""
 
-        self._keys.append(self._owner.hold(value))
+        owner = self._owner
+        row = owner._last
+        if row < 0 or owner._tables[0][row] is not value:
+            row = owner.hold(value)
+        _list_append(self, row)
 
     def extend(self, values: Iterable[Any]) -> None:
         """Append every record of ``values``."""
 
-        self._keys.extend(self._owner.hold_many(list(values)))
+        list.extend(self, self._owner.hold_many(list(values)))
 
-    def clear(self) -> None:
-        """Drop every position."""
+    def pop(self, index: Any = -1) -> Any:
+        """Remove and return the record at ``index``."""
 
-        self._keys.clear()
+        return self._owner.resolve(list.pop(self, index))
+
+    def remove(self, value: Any) -> None:
+        """Remove the first position of ``value``."""
+
+        del self[self.index(value)]
 
     def index(self, value: Any, *bounds: Any) -> int:
         """Return the first position of ``value``."""
 
         return self._records().index(value, *bounds)
+
+    def count(self, value: Any) -> int:
+        """Return how many positions hold ``value``."""
+
+        return self._records().count(value)
 
     def copy(self) -> list[Any]:
         """Return a plain list of the records."""
@@ -261,7 +327,7 @@ class OpSequence(MutableSequence[Any]):
     def sort(self, *, key: Any = None, reverse: bool = False) -> None:
         """Sort the records in place."""
 
-        self._keys[:] = self._owner.hold_many(sorted(self, key=key, reverse=reverse))
+        self._rekey(self._owner.hold_many(sorted(self, key=key, reverse=reverse)))
 
     def __add__(self, other: Any) -> list[Any]:
         """Return a plain list: these records followed by ``other``."""
@@ -273,12 +339,39 @@ class OpSequence(MutableSequence[Any]):
 
         return list(other) + self._records()
 
+    def __iadd__(self, other: Iterable[Any]) -> Any:
+        """Append every record of ``other`` in place."""
+
+        self.extend(other)
+        return self
+
+    def __mul__(self, count: Any) -> list[Any]:
+        """Return a plain list of the records repeated ``count`` times."""
+
+        return self._records() * count
+
+    __rmul__ = __mul__
+
     def __eq__(self, other: object) -> bool:
         """Compare as a list of records."""
 
-        if isinstance(other, (list, OpSequence)):
+        if isinstance(other, list):
             return self._records() == list(other)
         return NotImplemented
+
+    def __ne__(self, other: object) -> bool:
+        """Compare as a list of records."""
+
+        if isinstance(other, list):
+            return self._records() != list(other)
+        return NotImplemented
+
+    def _unordered(self, other: Any) -> Any:
+        """Decline an ordering comparison: ops have no order."""
+
+        return NotImplemented
+
+    __lt__ = __le__ = __gt__ = __ge__ = _unordered
 
     def __repr__(self) -> str:
         """Return the list repr of the records."""
@@ -303,11 +396,15 @@ class OpSequence(MutableSequence[Any]):
         return list, (self._records(),)
 
 
-class OpLabelMap(MutableMapping[Any, Any]):
-    """A label dictionary stored as label to row key; reads return the ``Op`` records."""
+class OpLabelMap(dict[Any, Any]):
+    """A label dictionary stored as label to row key; reads return the ``Op`` records.
 
-    __slots__ = ("__weakref__", "_keys", "_ordered", "_owner")
-    __hash__ = None  # type: ignore[assignment]
+    The dictionary's own values are the integer keys, so ``len``, membership
+    and deletion run at dictionary speed; every method that hands out or takes
+    values is overridden to speak records.
+    """
+
+    __slots__ = ("__weakref__", "_ordered", "_owner")
 
     def __init__(self, owner: OpRows, items: Any = (), *, ordered: bool = False) -> None:
         """Hold the records of ``items`` through ``owner``; ``ordered`` names the plain type."""
@@ -316,74 +413,64 @@ class OpLabelMap(MutableMapping[Any, Any]):
         self._ordered = ordered
         pairs = list(items.items()) if isinstance(items, Mapping) else list(items)
         keys = owner.hold_many([record for _label, record in pairs])
-        self._keys: dict[Any, int] = dict(
-            zip((label for label, _record in pairs), keys, strict=True)
-        )
+        dict.__init__(self, zip((label for label, _record in pairs), keys, strict=True))
         owner.register(self)
+
+    @property
+    def _keys(self) -> dict[Any, int]:
+        """Return a copy of the label to row key table (for tests and diagnostics)."""
+
+        return dict(zip(_dict_iter(self), _dict_values(self), strict=True))
 
     def _records(self) -> list[Any]:
         """Return the records in label order."""
 
-        return list(self._owner.records(self._keys.values()))
+        return list(self._owner.records(_dict_values(self)))
 
     def _rekey(self, keys: list[int]) -> None:
         """Replace the keys in place after the owner moved its records."""
 
-        self._keys.update(zip(list(self._keys), keys, strict=True))
+        dict.update(self, zip(list(_dict_iter(self)), keys, strict=True))
 
     def plain(self) -> dict[Any, Any]:
         """Return a plain dictionary (or ``OrderedDict``) from label to record."""
 
-        pairs = zip(self._keys, self._records(), strict=True)
+        pairs = zip(_dict_iter(self), self._records(), strict=True)
         return OrderedDict(pairs) if self._ordered else dict(pairs)
+
+    def __iter__(self) -> Iterator[Any]:
+        """Iterate the labels in insertion order.
+
+        Overridden so ``dict(this)`` and ``{**this}`` read through
+        ``__getitem__`` (records) and never copy the row keys.
+        """
+
+        return _dict_iter(self)
 
     def __getitem__(self, label: Any) -> Any:
         """Return the record registered under ``label``."""
 
-        key = self._keys[label]
+        key = _dict_item(self, label)
         tables = self._owner._tables
         return tables[0][key] if key >= 0 else tables[1][key]
 
     def __setitem__(self, label: Any, record: Any) -> None:
         """Register ``record`` under ``label``."""
 
-        self._keys[label] = self._owner.hold(record)
-
-    def __delitem__(self, label: Any) -> None:
-        """Drop ``label``."""
-
-        del self._keys[label]
-
-    def __iter__(self) -> Iterator[Any]:
-        """Iterate the labels in insertion order."""
-
-        return iter(self._keys)
-
-    def __reversed__(self) -> Iterator[Any]:
-        """Iterate the labels in reverse insertion order."""
-
-        return reversed(self._keys)
-
-    def __len__(self) -> int:
-        """Return the number of labels."""
-
-        return len(self._keys)
-
-    def __contains__(self, label: object) -> bool:
-        """Return whether ``label`` is registered."""
-
-        return label in self._keys
+        owner = self._owner
+        row = owner._last
+        if row < 0 or owner._tables[0][row] is not record:
+            row = owner.hold(record)
+        _dict_set(self, label, row)
 
     def get(self, label: Any, default: Any = None) -> Any:
         """Return the record under ``label``, or ``default``."""
 
-        key = self._keys.get(label)
-        return default if key is None else self._owner.resolve(key)
-
-    def keys(self) -> Any:
-        """Return the labels as a dictionary key view."""
-
-        return self._keys.keys()
+        key = _dict_get(self, label)
+        if key is None:
+            return default
+        tables = self._owner._tables
+        return tables[0][key] if key >= 0 else tables[1][key]
 
     def values(self) -> Any:
         """Return the records in label order, as a list."""
@@ -393,17 +480,57 @@ class OpLabelMap(MutableMapping[Any, Any]):
     def items(self) -> Any:
         """Return (label, record) pairs, as a list."""
 
-        return list(zip(self._keys, self._records(), strict=True))
+        return list(zip(_dict_iter(self), self._records(), strict=True))
 
-    def clear(self) -> None:
-        """Drop every label."""
+    def pop(self, label: Any, *default: Any) -> Any:
+        """Remove ``label`` and return its record, or the default when it is absent."""
 
-        self._keys.clear()
+        key = dict.pop(self, label, None)
+        if key is not None:
+            return self._owner.resolve(key)
+        if default:
+            return default[0]
+        raise KeyError(label)
+
+    def popitem(self) -> tuple[Any, Any]:
+        """Remove and return the last (label, record) pair."""
+
+        label, key = dict.popitem(self)
+        return label, self._owner.resolve(key)
+
+    def setdefault(self, label: Any, default: Any = None) -> Any:
+        """Return the record under ``label``, registering ``default`` first when absent."""
+
+        if label not in self:
+            self[label] = default
+        return self[label]
+
+    def update(self, *others: Any, **labelled: Any) -> None:
+        """Register every (label, record) pair of the arguments."""
+
+        for label, record in dict(*others, **labelled).items():
+            self[label] = record
 
     def copy(self) -> dict[Any, Any]:
         """Return a plain dictionary from label to record."""
 
         return self.plain()
+
+    def __or__(self, other: Any) -> dict[Any, Any]:
+        """Return a plain dictionary: these pairs updated with ``other``."""
+
+        return {**self.plain(), **other}
+
+    def __ror__(self, other: Any) -> dict[Any, Any]:
+        """Return a plain dictionary: ``other`` updated with these pairs."""
+
+        return {**other, **self.plain()}
+
+    def __ior__(self, other: Any) -> Any:
+        """Register every pair of ``other`` in place."""
+
+        self.update(other)
+        return self
 
     def __eq__(self, other: object) -> bool:
         """Compare as a dictionary from label to record."""
@@ -412,6 +539,13 @@ class OpLabelMap(MutableMapping[Any, Any]):
             return self.plain() == other.plain()
         if isinstance(other, Mapping):
             return self.plain() == other
+        return NotImplemented
+
+    def __ne__(self, other: object) -> bool:
+        """Compare as a dictionary from label to record."""
+
+        if isinstance(other, Mapping):
+            return not self == other
         return NotImplemented
 
     def __repr__(self) -> str:
@@ -427,7 +561,7 @@ class OpLabelMap(MutableMapping[Any, Any]):
     def __deepcopy__(self, memo: dict[Any, Any]) -> OpLabelMap:
         """Copy for a fork or a deep copy: the copied trace's records, same labels."""
 
-        pairs = zip(self._keys, _copied(self._records(), memo), strict=True)
+        pairs = zip(_dict_iter(self), _copied(self._records(), memo), strict=True)
         new = OpLabelMap(self._owner.copy_for(memo), pairs, ordered=self._ordered)
         memo[id(self)] = new
         return new
@@ -508,11 +642,11 @@ def adopt_op_containers(trace: Any, rebuild_core: Any = None) -> None:
     state = trace.__dict__
     owner = op_rows(trace)
     plain_list = state.get("_layer_list")
-    if plain_list and isinstance(plain_list, list):
+    if plain_list and type(plain_list) is list:
         state["_layer_list"] = OpSequence(owner, plain_list)
     for name in CONTAINER_FIELDS[1:]:
         plain = state.get(name)
-        if plain and isinstance(plain, dict):
+        if plain and type(plain) in (dict, OrderedDict):
             state[name] = OpLabelMap(owner, plain, ordered=isinstance(plain, OrderedDict))
     owner.bind()
 
