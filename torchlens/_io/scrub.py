@@ -21,7 +21,7 @@ import numpy as np
 import torch
 
 from .._constants import MODEL_LOG_FIELD_ORDER
-from .._data_classes._state_adapter import plain_state, state_items, state_new, state_restore
+from .._data_classes._state_adapter import plain_items, plain_state, state_new, state_restore
 from .._data_classes.trace import Trace, _scrubbed_transform_repr
 from .._output_slot import saved_transformed_output
 from .._utils._display_bounded import RecordTuple, short_dataclass_repr
@@ -237,7 +237,7 @@ def scrub_for_save(
     if not isinstance(scrubbed_model, Trace):
         raise ArtifactError("Portable scrub expected a scrubbed Trace instance.")
 
-    scrubbed_state = {k: v for k, v in state_items(scrubbed_model) if k != "_layer_accessor_cache"}
+    scrubbed_state = {k: v for k, v in plain_items(scrubbed_model) if k != "_layer_accessor_cache"}
     scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
     module_accessor = getattr(trace, "_module_logs", None)
@@ -1115,7 +1115,7 @@ def _state_items_for_scrub(
 
     if isinstance(value, Trace):
         return _trace_state_items_for_scrub(value, spec)
-    return state_items(value)
+    return plain_items(value)
 
 
 def _trace_state_items_for_scrub(

@@ -31,6 +31,13 @@ def finish_state_restore(trace: _T) -> _T:
     return trace
 
 
+def plain_items(obj: Any) -> Iterable[tuple[str, Any]]:
+    """Yield ``state_items(obj)`` with each row-key ``Param`` container in its plain form."""
+
+    for name, value in state_items(obj):
+        yield name, plain_form(value) if value.__class__ in ROW_FORMS else value
+
+
 def state_items(obj: Any) -> Iterable[tuple[str, Any]]:
     """Yield the live state fields stored on an object.
 
