@@ -116,6 +116,9 @@ def _slow_cell_types(name: str, attribute: Any) -> tuple[tuple[type, ...], Any]:
         if kind == "fact":
             return (), _FACT
         return (PooledCell,), _MISSING
+    slow = getattr(type(attribute), "COLUMN_SLOW_CELLS", None)
+    if slow is not None:  # a descriptor that names the raw cells it transforms
+        return slow, _MISSING
     if type(attribute) is property and name in OP_BITSET_VIEW_FIELDS:
         # The overlay reads through the original relation descriptor (PooledCell
         # hydration) and materializes the registered finished-cell encodings.

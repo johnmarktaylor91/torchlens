@@ -342,6 +342,16 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # import by the op containers so the record reference module imports no
         # record container; never mutated by a capture.
         ("torchlens/_trace_core/record_refs.py", "VERSIONS_LIST"),
+        # The backward records as views over trace-held state: the live view
+        # of each state, held weakly (an entry dies with its view, and a view
+        # never keeps another trace's state); the trace fields that hold
+        # records as state; and the GradFn and BackwardPass classes. The last
+        # three are bound once at import by the record classes and never
+        # mutated by a capture.
+        ("torchlens/_data_classes/_record_views.py", "_VIEWS"),
+        ("torchlens/_data_classes/_record_views.py", "TRACE_STATE_FIELDS"),
+        ("torchlens/_data_classes/_grad_fn_views.py", "GRAD_FN"),
+        ("torchlens/_data_classes/_grad_fn_views.py", "BACKWARD_PASS"),
         # First-read source digests for conditional/source attribution (deep-hunt
         # C4, fix/postproc 7a58a021). Deliberately NOT a _PROCESS_CACHES row:
         # clearing it is not correctness-neutral (the pin is the fail-closed

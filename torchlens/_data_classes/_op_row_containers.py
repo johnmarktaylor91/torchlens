@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._trace_core.record_refs import VERSIONS_LIST
 from .._trace_core.view_tables import WeakViews
+from ._record_views import adopt_trace_states, project_trace_states
 
 if TYPE_CHECKING:
     from .op import Op
@@ -676,6 +677,7 @@ def adopt_op_containers(trace: Any, rebuild_core: Any = None) -> None:
         plain = state.get(name)
         if plain and type(plain) in (dict, OrderedDict):
             state[name] = OpLabelMap(owner, plain, ordered=isinstance(plain, OrderedDict))
+    adopt_trace_states(state)
     owner.bind()
 
 
@@ -689,4 +691,4 @@ def project_op_containers(state: dict[str, Any]) -> dict[str, Any]:
         mapping = state.get(name)
         if isinstance(mapping, OpLabelMap):
             state[name] = mapping.plain()
-    return state
+    return project_trace_states(state)

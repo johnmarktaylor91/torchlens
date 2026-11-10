@@ -22,9 +22,7 @@ import torch
 
 from ... import _state
 from ..._capture import projections
-from ..._capture.peak_memory import (
-    record_backward_peak,
-)
+from ..._capture.peak_memory import record_backward_peak
 from ..._capture.predicates import _evaluate_keep_op
 from ..._capture.projections import sync_recording_grad_records_from_sidecar
 from ..._data_classes._fork_lineage import _is_fork_relative
@@ -32,6 +30,7 @@ from ..._data_classes._grad_fn_naming import (
     _grad_fn_label_parts,
     _normalize_grad_fn_type,
 )
+from ..._data_classes._grad_fn_views import grad_fn_store, hold_grad_fn, pass_store
 from ..._data_classes.backward_pass import BackwardPass
 from ..._data_classes.func_call_location import FuncCallLocation, with_source_fingerprint
 from ..._data_classes.grad_fn import GradFn, _paired_pass_op
@@ -1126,7 +1125,7 @@ def _materialize_backward_projections_impl(
         merged_grad_fn_logs: OrderedDict[int, GradFn] = OrderedDict(preserved_grad_fn_logs)
         merged_grad_fn_logs.update(grad_fn_logs)
         grad_fn_logs = merged_grad_fn_logs
-    trace._grad_fn_logs = grad_fn_logs
+    trace._grad_fn_logs = grad_fn_store(grad_fn_logs)
     trace._autograd_grad_fn_order = list(grad_fn_logs)
 
     pass_to_calls: dict[int, list[GradFnCall]] = {}
@@ -1173,7 +1172,7 @@ def _materialize_backward_projections_impl(
         set(starts) | set(ends) | set(pass_to_calls) | op_grad_passes | state.param_grad_passes
     )
     _build_backward_pass_records(trace, state, pass_indices, pass_to_calls, backward_pass_logs)
-    trace._backward_pass_logs = backward_pass_logs
+    trace._backward_pass_logs = pass_store(backward_pass_logs)
     _refresh_backward_pass_counters(trace, state)
 
     for grad_fn_record in trace._grad_fn_logs.values():
@@ -2099,7 +2098,7 @@ def _walk_and_hook_backward_graph(
                 **source_metadata,
             )
             grad_fn_record.trace = trace
-            trace._grad_fn_logs[grad_fn_object_id] = grad_fn_record
+            hold_grad_fn(trace, grad_fn_object_id, grad_fn_record)
             trace._autograd_grad_fn_order.append(grad_fn_object_id)
         else:
             grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
@@ -2271,7 +2270,7 @@ def _emit_discovered_grad_fn(
             **_grad_fn_source_metadata(grad_fn_cls),
         )
         grad_fn_record.trace = trace
-        trace._grad_fn_logs[grad_fn_object_id] = grad_fn_record
+        hold_grad_fn(trace, grad_fn_object_id, grad_fn_record)
         trace._autograd_grad_fn_order.append(grad_fn_object_id)
     else:
         grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]

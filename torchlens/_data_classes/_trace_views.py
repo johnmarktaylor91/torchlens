@@ -27,6 +27,7 @@ from .._trace_core.view_tables import DEAD
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
+from ._op_grad_fn_link import install_op_links
 from ._trace_accessors import (
     _TRACE_LAYER_ACCESSOR_ATTR,
     _TRACE_MODULE_CALL_ACCESSOR_ATTR,
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 __all__: list[str] = []
+install_op_links(Op)
 
 
 class _HandedOps(TraceOpAccessor):
