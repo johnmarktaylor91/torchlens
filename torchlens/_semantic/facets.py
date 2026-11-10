@@ -1108,8 +1108,8 @@ class FacetView(Mapping[FacetKey, Any]):
     (1, 4, 8, 8)"""
 
     _record = RecordSlot("_record")
-    # ``_owner``: the record a handed-out view holds; ``_handed``: see ``_facet_door``.
     __slots__ = ("__dict__", "__weakref__", "_handed", "_owner")
+    __getstate__ = lambda self: self.__dict__  # noqa: E731 - streams carry the state, never the slots
 
     def __init__(self, record: Any) -> None:
         """Create a facet view for a record.

@@ -73,7 +73,7 @@ def _outcome(record: Any, name: str) -> str:
         return f"raises {type(exc).__name__}" + (f":{code}" if code else "")
     if callable(value) and not hasattr(value, "__iter__"):
         return "callable"
-    if isinstance(value, (str, int, float, bool, type(None))):
+    if type(value) in (str, int, bool, type(None)):
         return f"ok {type(value).__name__} {value!r}"
     return f"ok {type(value).__name__}"
 
@@ -86,10 +86,6 @@ def _names(record: Any) -> list[str]:
 
 def _outcomes(record: Any) -> dict[str, str]:
     return {name: _outcome(record, name) for name in _names(record)}
-
-
-def _first_call_label(trace: Any) -> Any:
-    return trace.module_calls.keys()[0]
 
 
 # Every door that hands out a Module or a ModuleCall, each reached in one expression.

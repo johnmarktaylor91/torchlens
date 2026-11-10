@@ -13,7 +13,10 @@ facets computed through either are shared, and a trace nobody holds is still
 freed by reference counting.
 
 A record with no trace to hold (copied or restored on its own, or read while
-the trace is being built) hands out the stored view unchanged.
+the trace is being built) hands out the stored view unchanged. A view's
+``_owner`` slot holds the record of a handed-out view and its ``_handed`` slot
+the weak reference to the view handed out last; neither is part of the state a
+copy or a pickle carries.
 """
 
 from __future__ import annotations

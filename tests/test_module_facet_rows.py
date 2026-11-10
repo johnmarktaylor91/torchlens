@@ -9,6 +9,7 @@ answers with the record the trace hands out.
 
 from __future__ import annotations
 
+import copy
 import gc
 import pickle
 from pathlib import Path
@@ -92,10 +93,10 @@ def test_pickled_views_match_live() -> None:
 
 
 def test_view_refuses_after_its_trace_is_collected() -> None:
-    """A view kept past its trace refuses with the collected-trace code."""
+    """A copied view holds no trace: kept past its trace it refuses with the collected-trace code."""
 
     trace = _trace()
-    view = trace.modules["first"].facets
+    view = copy.copy(trace.modules["first"].facets)
     del trace
     gc.collect()
     with pytest.raises(tl.errors.RecordBindingError) as raised:

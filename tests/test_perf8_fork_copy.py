@@ -563,9 +563,11 @@ def _labels(trace: Any, keep: list[Any]) -> dict[int, Any]:
         labels.setdefault(id(layer), ("layer", label))
     modules = trace.__dict__.get("_module_logs")
     for key, module in modules._dict.items() if modules is not None else ():
+        keep.append(module)
         labels.setdefault(id(module), ("module", key))
         calls = getattr(getattr(module, "calls", None), "_dict", None) or {}
         for call_key, call in calls.items():
+            keep.append(call)
             labels.setdefault(id(call), ("call", key, call_key))
     params = trace.__dict__.get("_param_logs")
     for key, param in params._dict.items() if params is not None else ():

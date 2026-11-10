@@ -30,10 +30,12 @@ from collections.abc import Iterable, Iterator
 from itertools import repeat
 from typing import Any, TypeVar
 
-from .._trace_core.record_refs import ChildAccessorField
+from .._trace_core.record_refs import ChildAccessorField, RowKeys
+from .._trace_core.record_rows import RecordCellField
 from .._trace_core.view_tables import DEAD, DEREF
 
 _ref = weakref.ref
+_DEREF: Any = DEREF
 _new = object.__new__
 _set = object.__setattr__
 _dict_item = dict.__getitem__
@@ -74,7 +76,7 @@ def adopt(records: list[Any]) -> list[dict[str, Any]]:
     is given the trace its state names to hold.
     """
 
-    states = list(map(vars, records))
+    states: list[Any] = list(map(vars, records))
     deque(map(_set, records, repeat("_owner"), _owners(states)), 0)
     _VIEWS.update(zip(map(id, states), map(_ref, records)))
     if len(_VIEWS) > _SWEEP_AT[0]:
@@ -114,7 +116,7 @@ def views_of(states: list[Any], cls: type) -> list[Any]:
     returned as the value it keeps.
     """
 
-    found = list(map(DEREF, map(_VIEWS.get, map(id, states), repeat(DEAD))))
+    found = list(map(_DEREF, map(_VIEWS.get, map(id, states), repeat(DEAD))))
     stale = [
         at
         for at, (view, state) in enumerate(zip(found, states, strict=True))
@@ -129,7 +131,7 @@ def views_of(states: list[Any], cls: type) -> list[Any]:
         missing = [states[at] for at in stale]
         built = _build(missing, cls)  # held until the table is read back below
         # Read back through the table: a state named twice gets one view.
-        fresh = list(map(DEREF, map(_VIEWS.__getitem__, map(id, missing))))
+        fresh = list(map(_DEREF, map(_VIEWS.__getitem__, map(id, missing))))
         for at, view in zip(stale, fresh, strict=True):
             found[at] = view
         del built
@@ -268,7 +270,7 @@ class RecordDict(dict[Any, Any]):
         """Compare as the plain mapping of records."""
 
         if other.__class__ is RecordDict:
-            other = other.plain()  # type: ignore[attr-defined]
+            other = other.plain()
         return bool(self.plain() == other)
 
     def __ne__(self, other: object) -> bool:
@@ -409,7 +411,7 @@ class RecordList(list[Any]):
         """Compare as the plain list of records."""
 
         if other.__class__ is RecordList:
-            other = other.plain()  # type: ignore[attr-defined]
+            other = other.plain()
         return bool(self.plain() == other)
 
     def __ne__(self, other: object) -> bool:
@@ -515,7 +517,7 @@ def handed(stored: _T, owner: Any) -> _T:
     try:
         twin = stored._handed()  # type: ignore[attr-defined]
         if twin._owner is owner:
-            return twin  # type: ignore[no-any-return]
+            return twin
     except (AttributeError, TypeError):
         pass  # none handed out yet, or the one handed out is gone
     if owner is None or stored.__class__ not in _FIELDS:
@@ -524,7 +526,7 @@ def handed(stored: _T, owner: Any) -> _T:
     _set(twin, "__dict__", stored.__dict__)
     _set(twin, "_owner", owner)
     _set(stored, "_handed", _ref(twin))
-    return twin  # type: ignore[no-any-return]
+    return twin
 
 
 class OwnedChildField(ChildAccessorField):
@@ -626,14 +628,61 @@ def _install_accessor(accessor_cls: Any, fields: dict[str, tuple[Any, type]]) ->
         setattr(accessor_cls, method.__name__, method)
 
 
-#: The ``ModuleCall`` class, bound by ``install`` so this module imports no record class.
-_CALL_CLASS: list[type] = []
+#: ``[Module, ModuleCall]``, bound by ``install`` so this module imports no record class.
+_CLASSES: list[type] = []
+
+
+def _records(container: Any) -> list[Any]:
+    """Return the records of a held container (or of the plain one it stands in for)."""
+
+    if container.__class__ is RecordDict:
+        return list(container.values())
+    if container.__class__ is RecordList:
+        return list(container.plain())
+    return list(container.values() if isinstance(container, dict) else container)
+
+
+def reached(accessor: Any, *, in_order: bool = False) -> tuple[list[Any], list[Any]]:
+    """Return the ``Module`` records of a module accessor and the ``ModuleCall`` records they reach.
+
+    The calls are those of the accessor's call index, which is where a module
+    whose ``ops`` cell names rows finds its calls. A module whose cell still
+    holds an accessor adds the calls of that accessor. The loops run in C, so
+    a caller that needs every record pays one cell read per module and a
+    fixed number of calls besides.
+    """
+
+    state = accessor.__dict__
+    modules = _records(state["_list"] if in_order else state["_dict"])
+    calls = _records(state.get("_pass_dict") or ())
+    cells = map(RecordCellField.__get__, repeat(_CLASSES[0].__dict__["ops"]), modules)
+    loose = [cell for cell in cells if cell.__class__ is not RowKeys and cell]
+    if loose:
+        seen = set(map(id, calls))
+        for cell in loose:
+            for call in cell.values():
+                if id(call) not in seen:
+                    seen.add(id(call))
+                    calls.append(call)
+    return modules, calls
+
+
+def rebind(trace: Any) -> None:
+    """Name ``trace`` as the owner of every module and call it holds; drop module facet caches."""
+
+    modules, calls = reached(trace.modules, in_order=True)
+    reference = _ref(trace)
+    module_states = list(map(vars, modules))
+    states = module_states + list(map(vars, calls))
+    deque(map(dict.__setitem__, states, repeat(_TRACE_REF), repeat(reference)), 0)
+    deque(map(dict.pop, module_states, repeat("_facets_cache"), repeat(None)), 0)
+    deque(map(_set, modules + calls, repeat("_owner"), repeat(trace)), 0)
 
 
 def install(module_cls: Any, call_cls: Any, module_accessor: Any, call_accessor: Any) -> None:
     """Install the record holders for ``Module`` and ``ModuleCall`` (import time)."""
 
-    _CALL_CLASS[:] = [call_cls]
+    _CLASSES[:] = [module_cls, call_cls]
     modules, calls = (record_dict, module_cls), (record_dict, call_cls)
     _install_accessor(
         module_accessor,
@@ -652,7 +701,7 @@ def install(module_cls: Any, call_cls: Any, module_accessor: Any, call_accessor:
 def install_trace_calls(accessor_cls: Any) -> None:
     """Install the record holders of the trace-level ``ModuleCall`` accessor (import time)."""
 
-    call_cls = _CALL_CLASS[0]
+    call_cls = _CLASSES[1]
     _install_accessor(
         accessor_cls,
         {

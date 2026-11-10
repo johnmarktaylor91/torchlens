@@ -109,4 +109,5 @@ def test_containers_live_in_the_trace_side_table() -> None:
     module = _keyed_module(trace, "ops")
     calls = module.ops
     table = trace._trace_core._views.cells  # noqa: SLF001
-    assert any(entry[2] is calls for entry in table.values())
+    # ``module.ops`` hands out an accessor that holds the trace over the kept one's state.
+    assert any(entry[2].__dict__ is calls.__dict__ for entry in table.values())

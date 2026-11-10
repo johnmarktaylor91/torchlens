@@ -276,6 +276,21 @@ def _core_of(trace: Any) -> Any:
     return None if trace is None else trace.__dict__.get("_trace_core")
 
 
+#: Record kinds whose objects hold their Trace when read from it.
+_KEEPS_TRACE = frozenset({"Module", "ModuleCall"})
+
+
+def collected_text(record_name: str) -> str:
+    """Return the ``trace_reference_collected`` message for a ``record_name`` record."""
+
+    if record_name in _KEEPS_TRACE:
+        return (
+            f"Trace has been garbage-collected and this {record_name} holds none: a "
+            f"{record_name} read from the Trace keeps it; one copied or restored does not"
+        )
+    return f"Trace has been garbage-collected; a {record_name} does not keep its Trace alive"
+
+
 def _live_trace(ref: Any, record_name: str) -> Any:
     """Return the trace behind ``ref``; refuse when it was never bound or is gone."""
 
@@ -288,7 +303,7 @@ def _live_trace(ref: Any, record_name: str) -> Any:
     trace = ref()
     if trace is None:
         raise RecordBindingError(
-            f"Trace has been garbage-collected; a {record_name} does not keep its Trace alive",
+            collected_text(record_name),
             code="trace_reference_collected",
             remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
         )
@@ -564,7 +579,8 @@ def child_state_items(record: Any) -> Iterator[tuple[str, Any]]:
     child_fields = type(record)._TL_CHILD_FIELDS
     for name, value in record_state_items(record):
         if name in child_fields:
-            value = getattr(record, name)
+            # The stored accessor, never one a record handed out (that one holds the trace).
+            value = ChildAccessorField.__get__(type(record).__dict__[name], record)
         yield name, value
 
 
