@@ -44,7 +44,6 @@ from .._trace_core.op_store import (
     _CSR,
     _FACT,
     _MISSING,
-    _NO_OVERLAY,
     OpRowStore,
     PooledCell,
     _SealedRowMajorOpRowStore,
@@ -264,17 +263,14 @@ class OpColumns:
         if raw is None:
             return [get(row) for row in rows]
         slow_types, sentinel = _slow_cell_types(name, self._attribute(name))
-        slow_by_class: dict[type, bool] = {LazyCell: True}
-        values: list[Any] = []
-        append = values.append
-        for row, value in zip(rows, raw):
-            cls = value.__class__
-            try:
-                slow = slow_by_class[cls]
-            except KeyError:
-                slow = slow_by_class[cls] = issubclass(cls, slow_types)
-            append(get(row) if slow or value is _MISSING or value is sentinel else value)
-        return values
+        # The classes present, then the slow ones among them: one subclass test per
+        # class, not per cell (the facade's ``isinstance`` on each cell).
+        classes = {value.__class__ for value in raw}
+        slow = {cls for cls in classes if cls is LazyCell or issubclass(cls, slow_types)}
+        return [
+            get(row) if value.__class__ in slow or value is _MISSING or value is sentinel else value
+            for row, value in zip(rows, raw)
+        ]
 
     def setter(self, name: str) -> Callable[[int, Any], None]:
         """Return a row-indexed writer for stored field ``name``.
@@ -344,10 +340,11 @@ def _raw_column(store: Any, fid: int, rows: Sequence[int]) -> list[Any] | None:
     overlay = store._overlay
     if overlay:
         n_fields = store.layout.n_fields
-        for index, row in enumerate(rows):
-            value = overlay.get(row * n_fields + fid, _NO_OVERLAY)
-            if value is not _NO_OVERLAY:
-                raw[index] = value
+        hits = overlay.keys() & {row * n_fields + fid for row in rows}
+        if hits:
+            position = {row: index for index, row in enumerate(rows)}
+            for key in hits:
+                raw[position[key // n_fields]] = overlay[key]
     return raw
 
 
