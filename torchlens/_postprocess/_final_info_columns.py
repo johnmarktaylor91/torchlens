@@ -44,7 +44,10 @@ _DURATION = "_cost_duration"
 _ATOMIC_CALL = "_module_context_atomic_module_call"
 _FX_PATH = "_source_fx_path"
 _FX_INDEX = "_source_fx_call_index"
-_Getter = Callable[[Any], Any]
+#: The closure fields: properties over a staging set while the trace builds.
+#: Any other cell class (the compact bitset) is not read here.
+_CLOSURES = ("root_ancestors", "input_ancestors", "output_descendants", "internal_source_ancestors")
+_CLOSURE_CLASSES = frozenset({set, frozenset, type(None)})
 
 #: Columns read by attribute name: ``name -> cell classes the pass accepts``
 #: (``None`` accepts any class the facade returns as stored). An unset cell
@@ -147,48 +150,47 @@ class _Table:
 
 
 @lru_cache(maxsize=8)
-def _facade_layout(op_cls: type) -> tuple[_Getter, _Getter, dict[str, int]] | None:
-    """Return how to reach the rows behind ``op_cls`` facades, or ``None``.
+def _field_ids(op_cls: type, layout: Any) -> dict[str, int] | None:
+    """Return the field id of every column this pass touches, or ``None``.
 
-    The answer is the store reader, the row-id reader and the field id of
-    every column this pass touches. The class is taken from the ops (this
-    module imports nothing from the ``Op`` module, which sits inside the
-    package's import cycle). ``None`` means the class is not the row-store
-    facade (a test double), a name is not one of its stored fields, or a
-    field the per-op loop reads by attribute is written under another one.
+    A field is found through its descriptor on ``op_cls`` (the class is taken
+    from the ops: this module imports nothing from the ``Op`` module, which
+    sits inside the package's import cycle). The closure fields are
+    properties over their original descriptors, so the store layout names
+    their ids. ``None`` means a name is not a stored field, or a field the
+    per-op loop reads by attribute is written under another attribute.
     """
 
-    core, row = getattr(op_cls, "_core", None), getattr(op_cls, "_row", None)
-    if core is None or row is None or any(op_attr(name) != name for name in RENAMED_ATTRS):
+    if any(op_attr(name) != name for name in RENAMED_ATTRS):
         return None
     attrs = {name: name for name in (*_REQUIRED, *_WRITTEN, *RENAMED_ATTRS)}
     attrs.update({name: op_attr(name) for name in RENAMED_MEMBERS})
     fids = {}
     for name, attr in attrs.items():
         fid = getattr(getattr(op_cls, attr, None), "_fid", None)
+        if fid.__class__ is not int and name in _CLOSURES:
+            fid = layout.fid_by_name.get(name)
         if fid.__class__ is not int:
             return None
         fids[name] = fid
-    return core.__get__, row.__get__, fids
+    return fids
 
 
 def _open_table(ops: list[Any]) -> _Table | None:
     """Return the raw rows of ``ops``, or ``None`` when they are not one building store."""
 
-    layout = _facade_layout(ops[0].__class__) if ops else None
-    if layout is None:
-        return None
-    core_get, row_get, fids = layout
     try:
-        stores = list(map(core_get, ops))
-        row_ids = list(map(row_get, ops))
-    except (TypeError, AttributeError):
-        return None  # a test double among the ops
+        op_cls: Any = ops[0].__class__
+        stores = list(map(op_cls._core.__get__, ops))
+        row_ids = list(map(op_cls._row.__get__, ops))
+    except (TypeError, AttributeError, IndexError):
+        return None  # no ops, or test doubles in place of the row-store facade
     store = stores[0]
     if store.__class__ is not OpRowStore or stores.count(store) != len(stores):
         return None
+    fids = _field_ids(op_cls, store.layout)
     rows = store.rows_building()
-    if rows is None or store.frozen or store.dataflow_edges is not None:
+    if fids is None or rows is None or store.frozen or store.dataflow_edges is not None:
         return None
     return _Table(store, ops, row_ids, list(map(rows.__getitem__, row_ids)), fids)
 
@@ -322,7 +324,8 @@ def log_final_info_by_column(
         return False
     try:
         columns = {name: table.read(name, False, classes) for name, classes in _REQUIRED.items()}
-        columns.update({name: table.read(name) for name in (*RENAMED_ATTRS, *RENAMED_MEMBERS)})
+        for name in (*RENAMED_ATTRS, *RENAMED_MEMBERS):
+            columns[name] = table.read(name, True, _CLOSURE_CLASSES if name in _CLOSURES else None)
     except _NotColumnar:
         return False
     if trace._cost_total_activation_memory.__class__ not in (int, Bytes):
