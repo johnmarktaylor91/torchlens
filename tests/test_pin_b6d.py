@@ -12,7 +12,7 @@ import copy
 import gc
 import pickle
 import weakref
-from collections import Counter
+from collections import Counter, OrderedDict
 from collections.abc import Callable
 from typing import Any
 
@@ -23,6 +23,7 @@ from torch import nn
 import torchlens as tl
 from benchmarks.capture_core_counters import retained_after
 from torchlens._data_classes import grad_fn_call as grad_fn_call_module
+from torchlens._data_classes._state_adapter import plain_state
 from torchlens._data_classes.backward_pass import BackwardPass
 from torchlens._data_classes.grad_fn import GradFn
 from torchlens._data_classes.grad_fn_call import GradFnCall
@@ -363,6 +364,32 @@ def test_pickle_state_carries_plain_containers() -> None:
     assert all(type(call) is GradFnCall for call in calls["_list"])
     pass_state = dict(next(iter(passes.values())).__tl_state_items__())
     assert type(pass_state["grad_fn_calls"]) is list
+
+
+def test_plain_state_and_a_restored_trace_keep_ordered_dictionaries() -> None:
+    """``plain_state`` (the save walk's door) and a restored trace's state hold ``OrderedDict``."""
+
+    trace = _trace()
+    for state in (plain_state(trace), _pickled(trace).__getstate__()):
+        for name, kind in (("_grad_fn_logs", GradFn), ("_backward_pass_logs", BackwardPass)):
+            assert type(state[name]) is OrderedDict
+            assert state[name] and all(type(record) is kind for record in state[name].values())
+
+
+def test_a_pass_hands_out_one_call_list_while_it_lives() -> None:
+    """Every read of ``grad_fn_calls`` through a live pass returns the same plain list."""
+
+    trace = _trace()
+    backward_pass = trace.autograd.backward_passes[0]
+    calls = backward_pass.grad_fn_calls
+    assert type(calls) is list and calls
+    assert backward_pass.grad_fn_calls is calls
+    assert trace.autograd.backward_passes[0].grad_fn_calls is calls
+    assert trace.autograd.last_backward_pass.grad_fn_calls is calls
+    kept = calls.pop()
+    assert backward_pass.grad_fn_calls is calls and kept not in backward_pass.grad_fn_calls
+    calls.append(kept)
+    assert backward_pass.grad_fn_calls[-1] is kept
 
 
 def test_a_dropped_trace_with_no_held_record_is_freed() -> None:

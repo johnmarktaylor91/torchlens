@@ -124,19 +124,29 @@ class _CallsField(RecordCellField):
 class _PassCallsField(RecordCellField):
     """``BackwardPass.grad_fn_calls``: the calls are kept as state and read as a plain list.
 
-    The list a read returns is built for that read, with each call keeping
-    the trace it names; the cell itself holds no ``GradFnCall``.
+    The cell itself holds no ``GradFnCall``. The first read through a pass
+    record builds the list, each call keeping the trace it names, and the
+    record keeps that list in its ``_calls`` slot: every later read through
+    the same record returns the same list object, so a write into it is seen
+    by the next read for as long as the pass record lives.
     """
 
     __slots__ = ()
 
     def __get__(self, record: Any, objtype: Any = None) -> Any:
-        """Return the calls as a plain list of records."""
+        """Return the calls as the plain list of records this pass record hands out."""
 
         if record is None:
             return self
         stored = RecordCellField.__get__(self, record, objtype)
-        return stored.plain() if stored.__class__ is StateList else stored
+        if stored.__class__ is not StateList:
+            return stored
+        kept = getattr(record, "_calls", None)
+        if kept is not None and kept[0] is stored:
+            return kept[1]
+        handed = stored.plain()
+        _set(record, "_calls", (stored, handed))
+        return handed
 
     def __set__(self, record: Any, value: Any) -> None:
         """Write the cell, holding a plain list of calls as a ``StateList``."""

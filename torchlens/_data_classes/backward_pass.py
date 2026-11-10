@@ -88,7 +88,8 @@ class BackwardPass:
     ('BackwardPass', 1)
     """
 
-    __slots__ = ("__dict__", "__weakref__", "_owner")  # _owner: the trace a handed-out view holds
+    # _owner: the trace a handed-out view holds; _calls: the call list this view hands out.
+    __slots__ = ("__dict__", "__weakref__", "_calls", "_owner")
     __repr__ = backward_repr
     __str__ = backward_str
 
