@@ -79,6 +79,7 @@ TorchLens runs on Python 3.10 to 3.13 with PyTorch 2.1 or later. Features that r
   - **[Replications](https://github.com/johnmarktaylor91/torchlens/tree/main/examples/replications)**, scripts that re-test published interpretability findings on GPT-2: induction heads, the IOI name movers, causal tracing.
   - **[Recent methods](https://github.com/johnmarktaylor91/torchlens/tree/main/examples/methods)**, run end to end: the [Jacobian lens](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/jacobian_lens_recipe.ipynb), EAP-IG circuit discovery on GPT-2's IOI task, attribution graphs with transcoders, the logit lens on ViT and CLIP, LEACE concept erasure, DAS causal bases.
 - **[Glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md):** definitions for every public function and argument.
+- **[Stable API](reference/stable_api.md):** the names that keep their spelling and meaning across 3.x releases, and what is preview.
 - **[API map](https://johnmarktaylor91.github.io/torchlens/api-map/):** an interactive, searchable map of every public module, class, function, method and argument, rebuilt from the code at each release.
 - **[FAQ](faq.md):** common questions, including what TorchLens deliberately leaves to other tools.
 - **[Also in TorchLens](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/also_in_torchlens.md)**

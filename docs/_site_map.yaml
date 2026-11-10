@@ -23,7 +23,7 @@ sections:
   - id: gallery
     title: Reproduction Gallery
   - id: doors
-    title: Doors
+    title: Where to start
   - id: concepts
     title: Concepts
   - id: relation
@@ -718,6 +718,9 @@ pages:
     section: internal
     move_to: internal/reference/runnable_tlspec_contract.md
     note: internal engineering contract
+  - path: reference/stable_api.md
+    section: reference
+    publish: true
   - path: reference/stats.md
     section: reference
     publish: true
