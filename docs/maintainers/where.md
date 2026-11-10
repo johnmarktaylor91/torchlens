@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 20 | 6316 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 76 | 24265 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 76 | 24266 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 145 | 60788 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 145 | 60787 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -951,7 +951,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (20 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (76 modules, 24265 lines)
+Shared helpers used by two or more TorchLens packages. (76 modules, 24266 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1026,7 +1026,7 @@ Shared helpers used by two or more TorchLens packages. (76 modules, 24265 lines)
 | `fail_open` | The one audited fail-open chokepoint for degrade-not-raise surfaces. | 42 |
 | `hashing` | Barcode generation and graph hash helpers. | 605 |
 | `input_leaves` | Leaf-preserving copies and device moves of grad-tracked model inputs. | 163 |
-| `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1060 |
+| `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1061 |
 | `lazy_state` | Shared detection and enumeration of un-materialized lazy module state. | 168 |
 | `tensor_leaves` | Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload. | 155 |
 | `tensor_utils` | Tensor utilities: NaN-aware comparison, memory calculation, safe_copy, safe device transfer. | 1858 |
@@ -1491,7 +1491,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (145 modules, 60788 lines)
+Torch backend implementation package for TorchLens capture. (145 modules, 60787 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1562,7 +1562,7 @@ Torch backend implementation package for TorchLens capture. (145 modules, 60788 
 | `_ops_argument_fields` | Argument family of the shared op fields: argument scan, slot snapshot and templates. | 235 |
 | `_ops_arguments` | Argument templates, edge uses, and tensor provenance. | 675 |
 | `_ops_autograd` | Autograd saved-tensor statistics and container snapshots. | 444 |
-| `_ops_call_site_fields` | Call-site family of the shared op fields: the code context and the call-site chain. | 358 |
+| `_ops_call_site_fields` | Call-site family of the shared op fields: the code context and the call-site chain. | 357 |
 | `_ops_capture_records` | Ancestor storage, producer policy, and exhaustive record freezing. | 570 |
 | `_ops_container_base` | Exhaustive drafts and foundational output-container helpers. | 509 |
 | `_ops_containers` | Output-container contracts, reconstruction, and tensor walking. | 776 |
