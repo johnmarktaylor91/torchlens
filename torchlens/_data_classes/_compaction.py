@@ -60,12 +60,12 @@ def compact_op_metadata(trace: Trace) -> None:
             share = _pool_core_containers(core, store)
         seen_ops: set[int] = set()
         for op in ops:
+            if store is not None and getattr(op, "_core", None) is store:
+                continue
             op_id = id(op)
             if op_id in seen_ops:
                 continue
             seen_ops.add(op_id)
-            if store is not None and getattr(op, "_core", None) is store:
-                continue
             op._compact_metadata(pool)
     rows = store.rows_building() if store is not None else None
     if rows is not None:

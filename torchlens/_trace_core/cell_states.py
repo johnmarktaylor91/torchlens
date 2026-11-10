@@ -265,7 +265,9 @@ def settle_default_cells(
             elif fid in shared:
                 row[fid] = shared[fid]
             elif fid in fresh or share is None:
-                row[fid] = value.source()
+                # Exact list and dict factories are built by display, not a call.
+                source = value.source
+                row[fid] = [] if source is list else {} if source is dict else source()
             else:
                 made = value.source()
                 cell = share(fid, made)
