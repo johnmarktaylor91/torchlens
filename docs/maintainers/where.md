@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1771 modules, 712164 lines, 0 modules without a docstring.
+85 packages, 1772 modules, 712260 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -41,7 +41,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 20 | 6316 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24192 |
-| `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
+| `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6552 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 757 |
@@ -1033,7 +1033,7 @@ Shared helpers used by two or more TorchLens packages. (75 modules, 24192 lines)
 
 ### `torchlens._utils.rng`
 
-RNG state for reproducible capture and replay, and the host-nondeterminism monitor. (18 modules, 6456 lines)
+RNG state for reproducible capture and replay, and the host-nondeterminism monitor. (19 modules, 6552 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1041,7 +1041,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 | `autocast` | Autocast (and grad/inference mode) state capture and re-entry for replay. | 177 |
 | `call_sites` | Bytecode decoding of a held-reference clock call site (explicit-time argument proofs). | 149 |
 | `channels` | Thread routing and owner-join settlement of monitor channel touches. | 707 |
-| `deep_inventory` | Frame-reachable deep inventory of RNG instances at capture entry. | 363 |
+| `deep_inventory` | Frame-reachable deep inventory of RNG instances at capture entry. | 360 |
 | `digest` | Exact state digests of witnessed RNG instances (NumPy generators, bit generators, ''random''). | 133 |
 | `engine_state` | Python and NumPy global-engine STATE rows (''getstate''/''setstate''/''seed'' surface). | 138 |
 | `explicit_generators` | Pre-call state of ''torch.Generator'' objects passed straight to a random op. | 105 |
@@ -1055,6 +1055,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 | `restore` | The one door for preserving the user's global RNG streams across TorchLens work. | 126 |
 | `seeding` | Seeding every RNG engine from one capture seed, and the seeded-op predicate. | 122 |
 | `streams` | Global RNG stream state: snapshot and restore of every engine TorchLens seeds. | 232 |
+| `walk_memo` | Identity memo for the frame-reachable inventory walk. | 99 |
 
 ### `torchlens._visualization`
 
