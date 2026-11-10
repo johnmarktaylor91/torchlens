@@ -36,17 +36,13 @@ def format_call_arg(value: Any, _depth: int = 0, _in_progress: set[int] | None =
     if isinstance(value, torch.Tensor):
         dtype_name = str(value.dtype).removeprefix("torch.")
         return f"Tensor(shape={tuple(value.shape)}, dtype={dtype_name})"
-    from .._ir.workspaces import ReleasedTensorStub  # deferred: layer lint (no eager upward import)
-
-    if isinstance(value, ReleasedTensorStub):
-        # W1a: a released module-arg payload renders exactly like the
-        # live tensor it replaced -- the summary is shape/dtype-only.
-        return f"Tensor(shape={tuple(value.shape)}, dtype={value.dtype})"
-    if isinstance(value, (bool, int, float, str)) or value is None:
+    if value is None or isinstance(value, (bool, int, float, str)):
         return repr(value)
     if isinstance(value, (list, tuple, dict)):
         if _depth >= DISPLAY_MAX_DEPTH:
             return "<max-depth>"
+        if not value:
+            return "{}" if isinstance(value, dict) else "[]"
         if _in_progress is None:
             _in_progress = set()
         value_id = id(value)
@@ -69,4 +65,11 @@ def format_call_arg(value: Any, _depth: int = 0, _in_progress: set[int] | None =
             )
         finally:
             _in_progress.discard(value_id)
+    # The stub is none of the types above, so it is only looked up for the rest.
+    from .._ir.workspaces import ReleasedTensorStub  # deferred: layer lint (no eager upward import)
+
+    if isinstance(value, ReleasedTensorStub):
+        # W1a: a released module-arg payload renders exactly like the
+        # live tensor it replaced -- the summary is shape/dtype-only.
+        return f"Tensor(shape={tuple(value.shape)}, dtype={value.dtype})"
     return f"<{type(value).__name__}>"

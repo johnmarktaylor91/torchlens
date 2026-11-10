@@ -87,6 +87,46 @@ def bind_layer_conditional_roles(trace: Trace, roles_by_label: Mapping[str, Sequ
         layer._control_flow_in_conditionals = list(roles_by_label.get(layer_label, []))
 
 
+#: ``Module`` constructor arguments copied from the captured metadata, ``None`` when absent.
+_SOURCE_AND_HOOK_NAMES = (
+    "class_source_file",
+    "class_source_line",
+    "init_source_file",
+    "init_source_line",
+    "forward_source_file",
+    "forward_source_line",
+    "class_docstring",
+    "init_signature",
+    "init_docstring",
+    "forward_signature",
+    "forward_docstring",
+    "forward_pre_hooks",
+    "forward_hooks",
+    "backward_pre_hooks",
+    "backward_hooks",
+    "full_backward_pre_hooks",
+    "full_backward_hooks",
+)
+
+
+def module_source_and_hooks(meta: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a module's source and hook facts from its captured metadata.
+
+    Parameters
+    ----------
+    meta:
+        Metadata captured for the module during model preparation.
+
+    Returns
+    -------
+    dict[str, Any]
+        One ``Module`` constructor argument per source or hook fact, ``None``
+        for a fact the metadata does not hold.
+    """
+
+    return {name: meta[name] if name in meta else None for name in _SOURCE_AND_HOOK_NAMES}
+
+
 def _call_io_layers(
     call_label: str,
     pass_layers: list[str],

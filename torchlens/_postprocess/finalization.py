@@ -72,6 +72,7 @@ from ._layer_conditional_merge import _rebuild_conditional_edge_call_indices
 from ._module_census import (
     _call_io_layers,
     bind_layer_conditional_roles,
+    module_source_and_hooks,
     op_space_labels,
     uncalled_module_addresses,
 )
@@ -689,6 +690,8 @@ def _build_module_logs(self: "Trace") -> None:
                 _buffer_layers_by_module[module_addr].append(bl)
 
     # --- Build ModuleLogs for each submodule ---
+    _all_keys = self._layer_dict_all_keys
+    _layer_label_of: dict[str, str] = {}
     for address in mbd["addresses"]:
         if address == "self":
             continue
@@ -698,16 +701,15 @@ def _build_module_logs(self: "Trace") -> None:
         name = address.rsplit(".", 1)[-1] if "." in address else address
         address_parent = address.rsplit(".", 1)[0] if "." in address else "self"
         address_depth = address.count(".") + 1
-        layers_raw = list(mbd["module_layers"].get(address, []))
-        seen = set()
-        layers = []
-        for label in layers_raw:
-            entry = self._layer_dict_all_keys.get(label)
-            if entry is not None:
-                no_pass = entry.layer_label
-                if no_pass not in seen:
-                    seen.add(no_pass)
-                    layers.append(no_pass)
+        layers_seen: dict[str, None] = {}  # insertion-ordered, deduplicated
+        for label in mbd["module_layers"].get(address, []):
+            if label not in _layer_label_of:  # nested modules list the same ops again
+                entry = _all_keys.get(label)
+                if entry is None:
+                    continue
+                _layer_label_of[label] = entry.layer_label
+            layers_seen[_layer_label_of[label]] = None
+        layers = list(layers_seen)
 
         all_addresses = meta.get("all_addresses", [address])
         ops, call_labels_list = _build_submodule_call_logs(
@@ -753,17 +755,7 @@ def _build_module_logs(self: "Trace") -> None:
             cls=meta.get("cls"),
             class_name=meta.get("class_name", mbd["module_types"].get(address, "")),
             class_qualname=meta.get("class_qualname", ""),
-            class_source_file=meta.get("class_source_file"),
-            class_source_line=meta.get("class_source_line"),
-            init_source_file=meta.get("init_source_file"),
-            init_source_line=meta.get("init_source_line"),
-            forward_source_file=meta.get("forward_source_file"),
-            forward_source_line=meta.get("forward_source_line"),
-            class_docstring=meta.get("class_docstring"),
-            init_signature=meta.get("init_signature"),
-            init_docstring=meta.get("init_docstring"),
-            forward_signature=meta.get("forward_signature"),
-            forward_docstring=meta.get("forward_docstring"),
+            **module_source_and_hooks(meta),
             address_parent=address_parent,
             address_children=address_children,
             address_depth=address_depth,
@@ -781,12 +773,6 @@ def _build_module_logs(self: "Trace") -> None:
             param_memory=param_info.memory,
             buffer_layers=param_info.buffer_layers,
             training=mbd["module_training_modes"].get(address, meta.get("training", True)),
-            forward_pre_hooks=meta.get("forward_pre_hooks"),
-            forward_hooks=meta.get("forward_hooks"),
-            backward_pre_hooks=meta.get("backward_pre_hooks"),
-            backward_hooks=meta.get("backward_hooks"),
-            full_backward_pre_hooks=meta.get("full_backward_pre_hooks"),
-            full_backward_hooks=meta.get("full_backward_hooks"),
             custom_attributes=meta.get("custom_attributes", {}),
             custom_methods=meta.get("custom_methods", []),
             _source_trace=self,
