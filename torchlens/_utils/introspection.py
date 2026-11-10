@@ -22,6 +22,7 @@ from ._call_site import _BOUNDARY_CODES
 from ._input_tree import INPUT_TREE_MAX_DEPTH
 from ._package_frames import _VERDICTS as _PACKAGE_VERDICTS, is_torchlens_code
 from ._quiet_property import _QuietPropertyLogs, class_crawl_names, read_attr_quietly
+from ._walk_chain import call_site_chain as _call_site_chain
 
 # Attributes to skip when crawling an object's namespace looking for tensors.
 # Two groups, matched by EXACT name:
@@ -855,53 +856,34 @@ def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
             delattr(obj, field)
 
 
-def _call_site_chain(
-    survivors: list[tuple[FrameType, CodeType, int, int]],
-    boundary: int,
-    context_cache: _CodeContextCache | None,
-    hook_scopes: list[tuple[int, Any]] | tuple[()] = (),
-) -> tuple[Any, ...]:
-    """Return the call-site chain of the first ``boundary`` survivors.
-
-    ``survivors`` runs innermost first (see :func:`_call_site.chain_boundary`). Each
-    ``hook_scopes`` entry (a module whose hook the op runs in, or a stateless
-    module the op runs inside) becomes a module token at its place in the chain.
-    """
-
-    if boundary <= 0:
-        return ()
-    raw_frames: list[tuple[Any, int]] = []
-    scopes = iter(hook_scopes)
-    scope = next(scopes, None)
-    for position, (_frame, code, _lineno, lasti) in enumerate(survivors[:boundary]):
-        while scope is not None and scope[0] <= position:
-            raw_frames.append(_call_site.module_scope_entry(scope[1]))
-            scope = next(scopes, None)
-        raw_frames.append((code, lasti))
-    # A module crossed just inside the boundary (no survivor between it and the
-    # scope's frames, e.g. under a root whose entry is not named ``forward``).
-    while scope is not None and scope[0] <= boundary:
-        raw_frames.append(_call_site.module_scope_entry(scope[1]))
-        scope = next(scopes, None)
-    return _call_site.cached_chain(tuple(raw_frames), context_cache)
-
-
 def build_locations(
     selected: list[tuple[FrameType, CodeType, int, int]],
-    num_context_lines: int,
-    source_loading_enabled: bool,
-    disable_col_offset: bool,
+    options: tuple[int, bool, bool],
     context_cache: _CodeContextCache | None,
+    known: dict[tuple[CodeType, str, int, int], Any] | None = None,
 ) -> list[Any]:
-    """One ``FuncCallLocation`` per kept ``(frame, code, lineno, lasti)``."""
+    """One ``FuncCallLocation`` per kept ``(frame, code, lineno, lasti)``.
+
+    ``options`` is ``(num_context_lines, source_loading_enabled,
+    disable_col_offset)``. ``known`` (the call-site memo's table) maps ``(code, co_filename, f_lasti,
+    f_lineno)`` to a location already built in this capture: reused, and each
+    new one is added.
+    """
     global _FUNC_CALL_LOCATION
     location_type = _FUNC_CALL_LOCATION
     if location_type is None:
         from .._data_classes.func_call_location import FuncCallLocation as location_type
 
         _FUNC_CALL_LOCATION = location_type
+    num_context_lines, source_loading_enabled, disable_col_offset = options
     result = []
-    for frame_ref, code, lineno, _lasti in selected:
+    for frame_ref, code, lineno, lasti in selected:
+        if known is not None:
+            known_key = (code, code.co_filename, lasti, lineno)
+            loc = known.get(known_key)
+            if loc is not None:
+                result.append(loc)
+                continue
         func_name = code.co_name
         loc = location_type(
             file=code.co_filename,
@@ -924,6 +906,8 @@ def build_locations(
             loc._linecache_entry = location_type._cached_source_fingerprint(
                 code.co_filename, num_context_lines, context_cache
             )
+        if known is not None:
+            known[known_key] = loc
         result.append(loc)
     return result
 
@@ -982,11 +966,14 @@ def _get_code_context(
             call-site chain (:func:`torchlens._utils._call_site.canonical_chain`
             of the frames inside the innermost stateful module call), or ``()``
             when no Python frame lies inside it. Grouping (step 7) keys layers on it.
+            An item already in it is the per-capture location table
+            (``build_locations``'s ``known``); read the chain as the last item.
 
     Returns:
         List[FuncCallLocation] ordered outermost to innermost; the last entry
         is the frame that ran the op.
     """
+    locations = call_site_out[0] if call_site_out else None
     anchor: tuple[int, CodeType, int, int] | None = None
     if context_cache is not None:
         anchor = context_cache.get(_CODE_CONTEXT_ANCHOR_KEY)
@@ -1058,22 +1045,17 @@ def _get_code_context(
             cs_frame.f_lineno,
         )
 
+    options = (num_context_lines, source_loading_enabled, disable_col_offset)
     cache_key: _CodeContextCacheKey | None = None
     if context_cache is not None:
-        cache_key = (
-            num_context_lines,
-            source_loading_enabled,
-            disable_col_offset,
-            tuple((code, lineno, lasti) for _frame, code, lineno, lasti in selected),
-        )
+        named = tuple((code, lineno, lasti) for _frame, code, lineno, lasti in selected)
+        cache_key = (*options, named)
         cached = context_cache.get(cache_key)
         if cached is not None:
             return list(cached)
 
     # Locations only for the kept frames (~5-10), on a cache miss.
-    result = build_locations(
-        selected, num_context_lines, source_loading_enabled, disable_col_offset, context_cache
-    )
+    result = build_locations(selected, options, context_cache, locations)
     if context_cache is not None and cache_key is not None:
         context_cache[cache_key] = tuple(result)
     return result

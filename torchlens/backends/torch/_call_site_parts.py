@@ -21,7 +21,7 @@ crossed stateless modules and hooks, and the ``FuncCallLocation`` records of the
 kept frames the code context takes from above the wrapper. The op's result is
 then the same list and chain the full walk returns. The chain is built outermost
 first, so the upper part's share is kept as a state the op's own frames resume
-from. Locations are built once per ``(code, f_lasti, f_lineno)`` in a capture,
+from. Locations are built once per ``(code, co_filename, f_lasti, f_lineno)`` in a capture,
 shared with the full walk (``introspection.build_locations``). No frame is held
 past the call that walks it.
 """
@@ -47,7 +47,6 @@ __all__ = (
     "is_anchor",
     "is_internal",
     "module_record",
-    "seed_locations",
     "stateful",
 )
 
@@ -141,16 +140,6 @@ def stateful(memo: Any, record: Any) -> bool:
     return stateful_ids is None or record.module_id in stateful_ids
 
 
-def seed_locations(memo: Any) -> None:
-    """Index the locations the capture's first full walk built, for reuse by the miss path."""
-
-    known = memo.locations
-    for key, value in memo.cache.items():
-        if type(key) is tuple and len(key) == 4 and type(key[3]) is tuple:
-            for (code, lineno, lasti), location in zip(key[3], value, strict=True):
-                known[(code, lasti, lineno)] = location
-
-
 def _named(kept: list[_Kept]) -> tuple[_Named, ...]:
     """``kept`` frames as the code-context cache key names them."""
 
@@ -163,16 +152,7 @@ def _named(kept: list[_Kept]) -> tuple[_Named, ...]:
 def _locations(memo: Any, kept: list[_Kept], options: tuple[Any, ...]) -> list[Any]:
     """The locations of ``kept`` frames, each built once per capture (``build_locations``)."""
 
-    known = memo.locations
-    result = []
-    for item in kept:
-        _frame, code, lineno, lasti = item
-        location = known.get((code, lasti, lineno))
-        if location is None:
-            location = build_locations([item], *options)[0]
-            known[(code, lasti, lineno)] = location
-        result.append(location)
-    return result
+    return build_locations(kept, options[:3], options[3], memo.locations)
 
 
 def _combine(

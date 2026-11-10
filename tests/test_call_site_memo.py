@@ -12,6 +12,7 @@ the first-time-site cost grows with stack depth.
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 import pytest
@@ -299,3 +300,82 @@ def test_first_time_site_cost_does_not_grow_with_stack_depth() -> None:
         return deep - shallow
 
     assert depth_cost(40) <= depth_cost(10) + 30
+
+
+_PROBE_SOURCE = "def step(probe):\n    return probe()\n"
+_RELU_SOURCE = "import torch\n\n\ndef step(x):\n    return torch.relu(x)\n"
+
+
+def _load_step(path: Any, source: str) -> Any:
+    """``step`` compiled from ``source`` as if it lived in file ``path``."""
+
+    path.write_text(source)
+    namespace: dict[str, Any] = {}
+    exec(compile(source, str(path), "exec"), namespace)
+    return namespace["step"]
+
+
+def _value_equal_pair(tmp_path: Any, source: str) -> tuple[Any, Any]:
+    """Two functions whose code objects are equal by value but come from two files."""
+
+    step_a = _load_step(tmp_path / "file_a.py", source)
+    step_b = _load_step(tmp_path / "file_b.py", source)
+    assert step_a.__code__ == step_b.__code__
+    assert step_a.__code__ is not step_b.__code__
+    assert step_a.__code__.co_filename != step_b.__code__.co_filename
+    return step_a, step_b
+
+
+def test_value_equal_codes_from_two_files_never_share_a_site_key(tmp_path: Any) -> None:
+    """Called from one line, two equal codes from different files get different keys."""
+
+    step_a, step_b = _value_equal_pair(tmp_path, _PROBE_SOURCE)
+    memo = site_module._CallSiteMemo({})
+    keys = []
+    for step in (step_a, step_b):
+        keys.append(step(lambda: site_module._site_key(memo, sys._getframe(1))))
+    assert keys[0] != keys[1]
+
+
+class _TwoFiles(nn.Module):
+    """Runs one op in each of two value-equal functions from different files, from one line."""
+
+    def __init__(self, steps: tuple[Any, Any]) -> None:
+        super().__init__()
+        self.steps = steps
+
+    def forward(self, x: Tensor) -> Tensor:
+        outs = []
+        for step in self.steps:
+            outs.append(step(x))
+        return outs[0] + outs[1]
+
+
+def test_value_equal_codes_from_two_files_get_separate_sites(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each file's op takes its own site key, and the fields equal the full walk's."""
+
+    steps = _value_equal_pair(tmp_path, _RELU_SOURCE)
+    original = site_module._site_key
+    seen: dict[str, set[Any]] = {"a": set(), "b": set()}
+
+    def recording(memo: Any, frame: Any) -> Any:
+        key = original(memo, frame)
+        walk = frame
+        while walk is not None:
+            for name, step in zip("ab", steps, strict=True):
+                if walk.f_code is step.__code__:
+                    seen[name].add(key)
+                    return key
+            walk = walk.f_back
+        return key
+
+    model = _TwoFiles(steps)
+    x = torch.randn(2, 4)
+    monkeypatch.setattr(site_module, "_site_key", recording)
+    served = _projection(_recurse(tl.trace, 0, model, x))
+    assert seen["a"] and seen["b"]
+    assert not seen["a"] & seen["b"]
+    monkeypatch.setattr(site_module, "_CallSiteMemo", _WalkEveryOp)
+    assert served == _projection(_recurse(tl.trace, 0, model, x))

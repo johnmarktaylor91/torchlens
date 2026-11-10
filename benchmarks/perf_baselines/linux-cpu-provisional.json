@@ -5524,10 +5524,10 @@
             "bytes_by_part": {
               "blobs": 2034768,
               "manifest": 10130,
-              "metadata": 221531,
+              "metadata": 219217,
               "other": 0
             },
-            "bytes_written": 2266429,
+            "bytes_written": 2264115,
             "encoder_calls": 2255,
             "files_written": 9,
             "fsync_calls": 14,
@@ -5561,7 +5561,7 @@
           },
           "model": "tinynet",
           "pin_accounts": {
-            "bytes_written": "2266430 -> 2266429 (-1), all in manifest (10131 -> 10130): the manifest stamps torchlens_version, recorded at 2.38.1 and now 3.0.1, one character shorter; earlier: 2266662 -> 2266430 (-232), all in blobs (2035000 -> 2034768; manifest and metadata unchanged): byte-identical payloads share one entry, and in tinynet the output node output_1:1 holds the same float32 [4, 10] bytes as linear_2_12:1, so its entry t13 is no longer stored: -160 data bytes (40 x 4), -68 safetensors header JSON (its 67-byte entry plus one comma), -4 header padding to 8 bytes (1001 + 7 -> 933 + 3)",
+            "bytes_written": "2266429 -> 2264115 (-2314), all in metadata (221531 -> 219217), saved content unchanged: records/func_call_location.json writes one row per distinct FuncCallLocation object, and the call-site walk now builds each location once per (code, file, instruction, line) in a capture and shares it among the op sites whose code context includes that frame, so the table holds 24 rows instead of 43 (13 distinct row values on both): -2295 bytes there and -19 in records/op.json (shorter row indices in its references); with each location reference resolved to its row and timings blanked, every record table equals the earlier save; earlier: 2266430 -> 2266429 (-1), all in manifest (10131 -> 10130): the manifest stamps torchlens_version, recorded at 2.38.1 and now 3.0.1, one character shorter; earlier: 2266662 -> 2266430 (-232), all in blobs (2035000 -> 2034768; manifest and metadata unchanged): byte-identical payloads share one entry, and in tinynet the output node output_1:1 holds the same float32 [4, 10] bytes as linear_2_12:1, so its entry t13 is no longer stored: -160 data bytes (40 x 4), -68 safetensors header JSON (its 67-byte entry plus one comma), -4 header padding to 8 bytes (1001 + 7 -> 933 + 3)",
             "read_opens": "1 -> 9 (+8), same OS-level opens: the envelope digests now stream each of the 8 digested files (9 files less manifest.json) through builtins open; the old Path.read_bytes made the same 8 opens through pathlib's accessor, which on Python 3.10 binds io.open at import and so passes the patched open uncounted. An audit-hook trace of one save shows 60 opens under the bundle on both sides, path by path equal (38 read, 8 write, 14 os.open)"
           },
           "platform": "linux",
