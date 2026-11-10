@@ -3793,14 +3793,6 @@
  },
  {
   "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_robustness.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_runnable/__init__.py",
   "has_default": false,
@@ -4459,6 +4451,14 @@
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_utils/_kernel_probes.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_utils/_model_walk.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -6801,22 +6801,6 @@
  },
  {
   "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/torch/_module_aliases.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/torch/_module_boundary_adoption.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "function",
   "file": "torchlens/backends/torch/_opaque_call_advisory.py",
   "has_default": false,
@@ -7336,14 +7320,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/torch/_session_cleanup.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/backends/torch/_sources_lazy.py",
@@ -7481,22 +7457,6 @@
  },
  {
   "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/torch/bound_root.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/torch/buffer_writes.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/backends/torch/collectives.py",
   "has_default": false,
@@ -7564,7 +7524,7 @@
   "field": "modules",
   "file": "torchlens/backends/torch/model_prep.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -7594,17 +7554,9 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/backends/torch/offload_hooks.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
   "file": "torchlens/backends/torch/prehook_provenance.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 3,
   "via_getattr": false
  },
  {
