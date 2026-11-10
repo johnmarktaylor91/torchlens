@@ -219,7 +219,7 @@ nav:
       - gallery/ioi_circuit.md
       - gallery/jacobian_lens.md
       - gallery/neuro_rdms.md
-  - Doors:
+  - Where to start:
       - doors/agents.md
       - doors/mechinterp.md
       - doors/neuroai.md

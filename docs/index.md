@@ -83,7 +83,7 @@ TorchLens runs on Python 3.10 to 3.13 with PyTorch 2.1 or later. Features that r
 - **[FAQ](faq.md):** common questions, including what TorchLens deliberately leaves to other tools.
 - **[Also in TorchLens](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/also_in_torchlens.md)**
 
-## Doors
+## Where to start, by community
 
 - [Mechanistic interpretability](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/doors/mechinterp.md)
 - [NeuroAI](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/doors/neuroai.md)

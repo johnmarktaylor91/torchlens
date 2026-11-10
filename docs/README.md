@@ -7,7 +7,7 @@
 - Core tasks: [see and inspect](field-guide/see_and_inspect.md),
   [extract features](field-guide/extract_features.md),
   [intervene](field-guide/intervene.md).
-- [Quickstart: the input ladder](quickstart.md).
+- [Quickstart: three ways to give an input](quickstart.md).
 - [Also in TorchLens](also_in_torchlens.md): every feature the README tour does not show, grouped
   by task, one line each.
 
@@ -22,11 +22,11 @@
 - [Capture speed, by kind of use](benchmarks/capture.md): what each way of using TorchLens costs
   against a plain forward, measured, including where it is slow.
 
-## Doors
+## Where to start, by community
 
-Four doors, one per community, in no order of rank:
+Four starting pages, one per community, in no order of rank:
 
-| Door | Start with |
+| Community | Start with |
 | --- | --- |
 | [Mechanistic interpretability](doors/mechinterp.md) | [Intervene](field-guide/intervene.md) on the decoder |
 | [NeuroAI](doors/neuroai.md) | [Extract features](field-guide/extract_features.md) on ResNet-18 |

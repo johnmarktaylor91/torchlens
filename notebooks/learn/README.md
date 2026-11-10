@@ -21,10 +21,10 @@ Each notebook imports `learn_models.py` from its own folder, so open the noteboo
 `notebooks/learn/` (JupyterLab does this when launched as above). Rendered pictures go to a
 temporary directory, nothing is written beside the notebooks.
 
-Rungs: 0 one call; 1 read like a dict; 2 one more keyword on the same call; 3 compose pieces;
+Levels: 0 one call; 1 read like a dict; 2 one more keyword on the same call; 3 compose pieces;
 4 objects for scale and record; 5 extend.
 
-| # | Notebook | Rung | Trigger |
+| # | Notebook | Level | Starting point |
 |---|---|---|---|
 | 00 | `00_quickstart.ipynb` | 0 to 2 | You have a model and want to see inside it |
 | 01 | `01_capture_and_look.ipynb` | 0 | A model in hand |
