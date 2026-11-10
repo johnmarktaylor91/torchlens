@@ -232,6 +232,7 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # weakly by the root and holding its modules through weak references;
         # a tree that no longer matches sends the model through full preparation.
         ("torchlens/backends/torch/_prepared_tree.py", "_prepared_trees"),
+        ("torchlens/_utils/_model_walk.py", "_RECORDED"),
         ("torchlens/_utils/_tensor_label.py", "_RETIRED_LABEL_SESSION"),
         # F3b's lazy public-impl metadata sync (3c7ed93e): a one-way
         # synced-yet? sentinel flipped on first successful wrap, install-class.
@@ -1047,6 +1048,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/_state.py", "_prepared_root_by_module"),
         ("torchlens/_state.py", "_stale_prepared_roots"),
         ("torchlens/backends/torch/_prepared_tree.py", "_prepared_trees"),
+        ("torchlens/_utils/_model_walk.py", "_RECORDED"),
         # Released-model registry became a WeakSet in fixwave-5 concmem: a
         # release registration must never pin the released model itself.
         ("torchlens/backends/torch/_held_refs.py", "_RELEASED_MODELS"),
@@ -1310,6 +1312,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/_op_markers.py", "__all__"),
         ("torchlens/backends/torch/_pinned_graph.py", "__all__"),
         ("torchlens/backends/torch/_prepared_tree.py", "__all__"),
+        ("torchlens/_utils/_model_walk.py", "__all__"),
         ("torchlens/backends/torch/_protocol_redispatch.py", "__all__"),
         ("torchlens/_utils/_tensor_label.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_ctx.py", "__all__"),
