@@ -85,6 +85,10 @@ class _Upper(NamedTuple):
     #: Per ``n``: the chain state after this part's first ``n`` kept frames and
     #: their raw chain entries (``_upper_state``).
     states: dict[int, tuple[list[Any], dict[Any, int], tuple[Any, ...]]]
+    #: The parent wrapper's part when ``scopes`` continues into it, else ``None``.
+    parent: Any
+    #: How many of ``raw`` and of ``scopes`` are this wrapper's own frames and tokens.
+    own: tuple[int, int]
 
 
 def is_anchor(anchor: tuple[int, CodeType, int, int], frame: FrameType) -> bool:
@@ -207,12 +211,27 @@ def _combine(
         first, first_key = _locations(memo, between[:1], options)[0], _named(between[:1])
     else:
         first, first_key = parent.first, parent.first_key
+    linked = None
     if inner < 0:
+        linked = parent
         inner = count + parent.inner if parent.inner >= 0 else -1
         scopes = scopes + [(count + position, entry) for position, entry in parent.scopes]
     outer = 0 if parent.outer is None else count + parent.outer
+    own = (count, len(walked[1]))
     return _Upper(
-        record, raw, forward, inner, outer, scopes, prefix, prefix_key, first, first_key, {}
+        record,
+        raw,
+        forward,
+        inner,
+        outer,
+        scopes,
+        prefix,
+        prefix_key,
+        first,
+        first_key,
+        {},
+        linked,
+        own,
     )
 
 
@@ -261,7 +280,9 @@ def _upper(memo: Any, wrapper: FrameType, depth: int, options: tuple[Any, ...]) 
             between.append((frame, code, frame.f_lineno, frame.f_lasti))
         frame = frame.f_back
     if parent is None:
-        parent = _Upper(None, [], -1, -1, None, [], None, (), anchor_first, anchor_key, {})
+        parent = _Upper(
+            None, [], -1, -1, None, [], None, (), anchor_first, anchor_key, {}, None, (0, 0)
+        )
     upper = _combine(memo, record, (inner, scopes, between, forward), parent, options)
     memo.uppers[id(record)] = upper
     return upper
@@ -309,8 +330,16 @@ def _upper_state(upper: _Upper, count: int) -> tuple[list[Any], dict[Any, int], 
 
     state = upper.states.get(count)
     if state is None:
-        raw = _interleave(upper.raw, upper.scopes, count)
-        state = ([], {}, tuple(raw))
+        own, own_scopes = upper.own
+        if upper.parent is not None and count >= own:
+            # The chain runs outermost first: continue the parent's state with
+            # this wrapper's own frames, so a module call pays only for those.
+            out, position, above = _upper_state(upper.parent, count - own)
+            raw = _interleave(upper.raw, upper.scopes[:own_scopes], own)
+            state = (list(out), dict(position), tuple(raw) + above)
+        else:
+            raw = _interleave(upper.raw, upper.scopes, count)
+            state = ([], {}, tuple(raw))
         _collapse(state[0], state[1], raw)
         upper.states[count] = state
     return state
