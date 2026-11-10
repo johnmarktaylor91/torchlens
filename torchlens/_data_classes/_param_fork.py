@@ -32,6 +32,8 @@ _BY_MODULE = "_param_logs_by_module"
 _TRACE_REF = "_source_trace_ref"
 #: ``__dict__`` names of a ``Param`` view that are not instance extras.
 _NOT_EXTRAS = frozenset({CORE_KEY, ROW_KEY, "_facets_cache", _TRACE_REF})
+#: The ``trace.params`` accessor's ``__dict__`` names the seeded clone knows how to copy.
+_ACCESSOR_CELLS = frozenset({"_dict", "_list", "_rehydrate_on_iter", "_source_ref"})
 
 
 def _forked(rows: Any, container: Any) -> Any:
@@ -57,17 +59,41 @@ def seed_param_memo(parent: Any, fork_core: Any, memo: dict[Any, Any]) -> bool:
     cells = getattr(parent.__dict__.get(_FIELD), "__dict__", None)
     if rows is None or not cells:
         return False
+    if not _ACCESSOR_CELLS.issuperset(cells):
+        return False
     seeds: dict[int, Any] = {}
     by_module = parent.__dict__.get(_BY_MODULE) or {}
     for container in (cells.get("_dict"), cells.get("_list"), *dict.values(by_module)):
         if container.__class__ in (dict, list, tuple) and not container:
+            seeds[id(container)] = container.__class__()
             continue
         copied = _forked(rows, container)
         if copied is None:
             return False
         seeds[id(container)] = copied
+    accessor = parent.__dict__[_FIELD]
+    seeds[id(accessor)] = _forked_accessor(accessor, seeds, memo.get(id(parent)))
     dict.update(memo, seeds)
     return True
+
+
+def _forked_accessor(accessor: Any, seeds: dict[int, Any], fork: Any) -> Any:
+    """Return the fork's ``trace.params`` accessor over the seeded containers.
+
+    Copying the parent's accessor would go through its plain pickle state,
+    which builds a parent view per parameter and copies each one.
+    """
+
+    cls: Any = type(accessor)
+    clone = cls.__new__(cls)
+    cells = clone.__dict__
+    cells.update(accessor.__dict__)
+    for name in ("_dict", "_list"):
+        if name in cells:
+            cells[name] = seeds[id(cells[name])]
+    if cells.get("_source_ref") is not None and fork is not None:
+        cells["_source_ref"] = weakref.ref(fork)
+    return clone
 
 
 def fork_param(value: Any, translator: Any) -> Any:
@@ -103,16 +129,15 @@ def _carry_extras(parent_rows: Any, rows: Any, translator: Any) -> None:
         if state is None or len(state) <= 2:
             continue
         rows.table._pad(row + 1)
-        if states[row] is not None:
-            continue
-        fork_state: dict[str, Any] = {CORE_KEY: store, ROW_KEY: row}
+        fork_state = states[row]
+        if fork_state is None:
+            fork_state = states[row] = {CORE_KEY: store, ROW_KEY: row}
         for key, value in state.items():
-            if key in _NOT_EXTRAS or key in declared:
+            if key in _NOT_EXTRAS or key in declared or key in fork_state:
                 continue
             fork_state[key] = (
                 value if value.__class__ in _COW_ATOMIC else cow_copy_value(value, translator)
             )
-        states[row] = fork_state
 
 
 def pin_fork_params(fork: Any) -> None:
