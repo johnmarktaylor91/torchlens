@@ -434,13 +434,18 @@ def _evicted_capture(model_cls: type[nn.Module], walk: Callable[[Any], None] | N
     try:
         del trace, fork
         gc.collect()
+        # A held record keeps its trace (DESIGN.md section 10 item 1, ruled Mon 9 Nov
+        # 2026): the kept fork Op holds the shared store until it is dropped too.
+        assert store._payload_owner_count == 1, "the held fork Op keeps the store owned"
+        assert kept_op.layer_label, "the retained fork Op stays readable"
+        del kept_op
+        gc.collect()
     finally:
         op_store.OpRowStore._evict_tensor_payloads = original  # type: ignore[method-assign]
     assert store._payload_owner_count == 0
     described = [
         f"{loc}={_describe(container[key], before)}" for loc, container, key in _store_cells(store)
     ]
-    assert kept_op.layer_label, "the retained fork Op stays readable"
     del cells_before
     return described
 
