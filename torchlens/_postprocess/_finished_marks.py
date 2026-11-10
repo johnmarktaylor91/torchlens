@@ -81,9 +81,7 @@ def _column_plan(
     and each field is one the column view serves under its public name.
     """
 
-    if not isinstance(records, dict):
-        return None
-    lookup = column_rows_by_label(ops)
+    lookup = column_rows_by_label(ops) if isinstance(records, dict) else None
     if lookup is None:
         return None
     columns, rows = lookup
@@ -127,15 +125,15 @@ def _mark_plain_rows(ops: dict[str, Any], records: Any, plan: tuple[Any, Any, An
         keywords = cells[kwargs_fid]
         if keywords.__class__ is LazyCell and not keywords.make:
             keywords = keywords.source
-        if template is None and keywords is None:
-            continue
-        members: Any = ()
-        general = keywords is not None or template.__class__.__name__ != "CapturedArgTemplate"
-        if not general:
-            members = template.args
-            general = members.__class__ is not tuple or template.kwargs != ()
-        if not general:
-            for member in members:
+        flat = (
+            keywords is None
+            and template.__class__.__name__ == "CapturedArgTemplate"
+            and template.args.__class__ is tuple
+            and template.kwargs == ()
+        )
+        general = not flat and (template is not None or keywords is not None)
+        if flat:
+            for member in template.args:
                 kind = member.__class__
                 if kind.__name__ != "ParentRef":
                     if kind.__name__ in _INERT_COMPONENTS and kind.__base__ is object:

@@ -122,12 +122,14 @@ def _bound_fids(columns: Any, names: tuple[str, str, str, str, str]) -> tuple[in
 def _value_cells_are_plain(
     raw_rows: list[Any], rows: dict[str, int], fids: tuple[int, ...]
 ) -> bool:
-    """Return whether every distance and lineage cell reads back unchanged.
+    """Return whether every distance is unset and every lineage cell reads back unchanged.
 
-    A distance cell must hold ``None``, an ``int``, or the default-omitted
-    marker of a ``None`` default; a lineage cell must hold a ``set`` or the
-    default-omitted marker whose factory is ``set``. Classes are compared
-    exactly, so a pooled, encoded or derived cell sends the flood to the facade.
+    A distance cell must hold ``None`` or the default-omitted marker of a
+    ``None`` default, so the flood starts from nothing and every minimum it
+    writes stays at or below its maximum; a lineage cell must hold a ``set`` or
+    the default-omitted marker whose factory is ``set``. Classes are compared
+    exactly, so a preset, pooled, encoded or derived cell sends the flood to
+    the facade.
     """
 
     lineage_fid = fids[3]
@@ -135,9 +137,9 @@ def _value_cells_are_plain(
         cells = raw_rows[row]
         for fid in fids[:2]:
             value = cells[fid]
-            if value is None or value.__class__ is int:
-                continue
-            if value.__class__ is not LazyCell or value.make or value.source is not None:
+            if value is not None and (
+                value.__class__ is not LazyCell or value.make or value.source is not None
+            ):
                 return False
         value = cells[lineage_fid]
         if value.__class__ is not set and (
@@ -241,9 +243,7 @@ def _flood_plain_rows(
             targets = cell_get(row, forward_fid)
         low += 1
         high += 1
-        if high < low:
-            low, high = high, low
-        elif high == low:
+        if high == low:
             low = high
         for target_label in targets:
             target_row = rows[target_label]
