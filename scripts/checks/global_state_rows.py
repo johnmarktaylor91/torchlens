@@ -176,6 +176,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # Call-site grouping: the module forward wrapper code object, registered
         # idempotently when submodule forwards are decorated (one constant).
         ("torchlens/_utils/_call_site.py", "_BOUNDARY_CODES"),
+        # The same wrappers by name, and each one's pushed-record instruction
+        # range (read once from its bytecode), filled alongside it.
+        ("torchlens/_utils/_call_site.py", "_BOUNDARY_NAMES"),
+        ("torchlens/_utils/_call_site.py", "_BOUNDARY_PUSHED"),
         # torch.ops call-class recorders: originals captured at wrap_torch, restored
         # and cleared at unwrap_torch; the per-operator wrapper cache is cleared with
         # them; the shared wrapper code object is an install-time constant.

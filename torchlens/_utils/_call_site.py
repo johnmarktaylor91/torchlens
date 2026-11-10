@@ -126,6 +126,35 @@ _CODE_TOKENS: weakref.WeakKeyDictionary[CodeType, tuple[str, str, int, bytes]] =
 )
 
 
+#: Names of the boundary codes, so a frame walk compares a name before it hashes a code.
+_BOUNDARY_NAMES: set[str] = set()
+
+#: Per boundary code name, ``(code, after, before)`` for each registered wrapper
+#: code: a wrapper frame suspended at an offset strictly between ``after`` (where
+#: it stores its ``ModuleStackFrame``) and ``before`` (its first ``pop_frame``)
+#: has pushed its module call's record and not popped it. ``(-1, -1)`` when the
+#: code does not have that shape; the caller then reads the frame's locals.
+_BOUNDARY_PUSHED: dict[str, tuple[tuple[CodeType, int, int], ...]] = {}
+
+
+def _pushed_range(code: CodeType) -> tuple[int, int]:
+    """Offsets bracketing where a wrapper frame holds its pushed module record."""
+
+    after = -1
+    for instruction in dis.get_instructions(code):
+        if after < 0:
+            names = (
+                instruction.argval
+                if isinstance(instruction.argval, tuple)
+                else (instruction.argval,)
+            )
+            if instruction.opname.startswith(("STORE_FAST", "STORE_DEREF")) and "frame" in names:
+                after = instruction.offset
+        elif instruction.argval == "pop_frame":
+            return after, instruction.offset
+    return -1, -1
+
+
 def register_module_boundary_wrapper(factory: Callable[..., Any], inner_name: str) -> None:
     """Mark the wrapper ``factory`` builds (its nested ``inner_name``) as a boundary.
 
@@ -137,6 +166,10 @@ def register_module_boundary_wrapper(factory: Callable[..., Any], inner_name: st
     for const in factory.__code__.co_consts:
         if isinstance(const, CodeType) and const.co_name == inner_name:
             _BOUNDARY_CODES.add(const)
+            known = _BOUNDARY_PUSHED.get(inner_name, ())
+            if all(entry[0] is not const for entry in known):
+                _BOUNDARY_PUSHED[inner_name] = (*known, (const, *_pushed_range(const)))
+            _BOUNDARY_NAMES.add(inner_name)
 
 
 def is_module_boundary_code(code: CodeType) -> bool:
@@ -269,7 +302,27 @@ def module_scope_entry(module: Any) -> tuple[tuple[str, int], int]:
     loop line) while one module called again from one place repeats its place.
     """
 
-    return (("module", id(module)), 0)
+    return module_id_scope_entry(id(module))
+
+
+def module_id_scope_entry(module_id: int) -> tuple[tuple[str, int], int]:
+    """:func:`module_scope_entry` of the module whose ``id`` is ``module_id``."""
+
+    return (("module", module_id), 0)
+
+
+def cached_chain(raw: tuple[Any, ...], context_cache: dict[Any, Any] | None) -> tuple[Any, ...]:
+    """The canonical chain of ``raw`` frames, cached per capture under the raw tuple."""
+
+    cache_key = ("__torchlens_call_site__", raw)
+    if context_cache is not None:
+        cached = context_cache.get(cache_key)
+        if cached is not None:
+            return cached
+    chain = canonical_chain(raw)
+    if context_cache is not None:
+        context_cache[cache_key] = chain
+    return chain
 
 
 def canonical_chain(raw: tuple[tuple[Any, int], ...]) -> tuple[tuple[Any, Any], ...]:

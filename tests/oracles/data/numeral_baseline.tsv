@@ -3388,9 +3388,9 @@ docs-md	docs/maintainers/where.md	1065
 docs-md	docs/maintainers/where.md	107
 docs-md	docs/maintainers/where.md	1076
 docs-md	docs/maintainers/where.md	1078
+docs-md	docs/maintainers/where.md	1079
 docs-md	docs/maintainers/where.md	108
 docs-md	docs/maintainers/where.md	1084
-docs-md	docs/maintainers/where.md	1085
 docs-md	docs/maintainers/where.md	10863
 docs-md	docs/maintainers/where.md	109
 docs-md	docs/maintainers/where.md	1091
@@ -3653,6 +3653,7 @@ docs-md	docs/maintainers/where.md	24
 docs-md	docs/maintainers/where.md	241
 docs-md	docs/maintainers/where.md	24167
 docs-md	docs/maintainers/where.md	242
+docs-md	docs/maintainers/where.md	24239
 docs-md	docs/maintainers/where.md	243
 docs-md	docs/maintainers/where.md	244
 docs-md	docs/maintainers/where.md	245
@@ -3804,6 +3805,7 @@ docs-md	docs/maintainers/where.md	362
 docs-md	docs/maintainers/where.md	364
 docs-md	docs/maintainers/where.md	365
 docs-md	docs/maintainers/where.md	366
+docs-md	docs/maintainers/where.md	367
 docs-md	docs/maintainers/where.md	368
 docs-md	docs/maintainers/where.md	3680
 docs-md	docs/maintainers/where.md	369
@@ -3916,6 +3918,7 @@ docs-md	docs/maintainers/where.md	468
 docs-md	docs/maintainers/where.md	469
 docs-md	docs/maintainers/where.md	47
 docs-md	docs/maintainers/where.md	470
+docs-md	docs/maintainers/where.md	471
 docs-md	docs/maintainers/where.md	475
 docs-md	docs/maintainers/where.md	477
 docs-md	docs/maintainers/where.md	4777
@@ -4032,6 +4035,7 @@ docs-md	docs/maintainers/where.md	602
 docs-md	docs/maintainers/where.md	605
 docs-md	docs/maintainers/where.md	607
 docs-md	docs/maintainers/where.md	608
+docs-md	docs/maintainers/where.md	60814
 docs-md	docs/maintainers/where.md	609
 docs-md	docs/maintainers/where.md	61
 docs-md	docs/maintainers/where.md	610
@@ -4111,6 +4115,7 @@ docs-md	docs/maintainers/where.md	712
 docs-md	docs/maintainers/where.md	712260
 docs-md	docs/maintainers/where.md	712551
 docs-md	docs/maintainers/where.md	712595
+docs-md	docs/maintainers/where.md	712993
 docs-md	docs/maintainers/where.md	714
 docs-md	docs/maintainers/where.md	715
 docs-md	docs/maintainers/where.md	715083
@@ -8802,6 +8807,7 @@ test-docstrings	tests/test_bundle_methods.py	11
 test-docstrings	tests/test_bundle_methods.py	278
 test-docstrings	tests/test_call_fingerprint.py	32
 test-docstrings	tests/test_call_site_contract.py	14
+test-docstrings	tests/test_call_site_memo.py	10
 test-docstrings	tests/test_call_site_memo.py	10,
 test-docstrings	tests/test_call_site_memo.py	30
 test-docstrings	tests/test_call_site_memo.py	40
