@@ -24,6 +24,7 @@ from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
+from ._buffer_rows import fork_module_accessor
 from ._state_adapter import state_new
 
 _OBJECT_SETATTR = object.__setattr__
@@ -255,8 +256,6 @@ class RowTranslator:
             if known is not None:
                 return known
         if "_rows" in accessor.__dict__:
-            from ._buffer_rows import fork_module_accessor
-
             core_ref = self._fork_core_ref
             fork = self._fork_ref() if self._fork_ref is not None else None
             core = core_ref() if core_ref is not None else None
