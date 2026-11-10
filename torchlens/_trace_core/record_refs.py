@@ -69,13 +69,13 @@ class RowKey:
         Value that keyed the record in its door when the key was made.
     """
 
-    __slots__ = ("hint", "kind", "row", "trace_ref")
+    __slots__ = ("hint", "record_kind", "row", "trace_ref")
 
     def __init__(self, trace_ref: Any, kind: str, row: int, hint: Any) -> None:
         """Store the parts of the key."""
 
         self.trace_ref = trace_ref
-        self.kind = kind
+        self.record_kind = kind
         self.row = row
         self.hint = hint
 
@@ -85,16 +85,16 @@ class RowKey:
         trace = self.trace_ref()
         if trace is None:
             return None
-        store, keyed, every = _door(trace, self.kind)
+        store, keyed, every = _door(trace, self.record_kind)
         if store is None:
             return None
         found = None if keyed is None else keyed.get(self.hint)
         if found is not None:
-            bound_store, bound_row = _store_and_row(found, self.kind)
+            bound_store, bound_row = _store_and_row(found, self.record_kind)
             if bound_store is store and bound_row == self.row:
                 return found
         for candidate in every:
-            bound_store, bound_row = _store_and_row(candidate, self.kind)
+            bound_store, bound_row = _store_and_row(candidate, self.record_kind)
             if bound_store is store and bound_row == self.row:
                 return candidate
         return None
@@ -105,7 +105,7 @@ class RowKey:
         found = self.find()
         if found is None:
             raise RecordBindingError(
-                f"The {self.kind} record at row {self.row} is no longer reachable: its Trace "
+                f"The {self.record_kind} record at row {self.row} is no longer reachable: its Trace "
                 "has been garbage-collected or no longer holds that row",
                 code="trace_reference_collected",
                 remedy="keep the Trace (t = tl.trace(...)) in a variable while reading its "
