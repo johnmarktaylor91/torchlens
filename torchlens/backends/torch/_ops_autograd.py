@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -21,6 +22,10 @@ from ..._ir.container_registry import (
 from ..._state import pause_logging
 from ..._utils._tensor_label import (
     get_tensor_label,
+)
+from ..._utils._torch_compat import (
+    get_functorch_wrapped_tensor_checker,
+    saved_tensors_default_hooks_active,
 )
 from ..._utils._torch_symbols import tensor_read, tensor_reads
 from ..._utils.collections import ensure_iterable
@@ -174,6 +179,234 @@ def _classify_saved_storage(trace: Any, tensor: torch.Tensor) -> tuple[str, int 
     return "saved_activation", storage_ptr, storage_nbytes
 
 
+_TENSOR = torch.Tensor
+_PARAMETER = torch.nn.Parameter
+_HEAPTYPE_FLAG = 1 << 9
+"""``Py_TPFLAGS_HEAPTYPE``: a class without it is defined in C, immortal and immutable."""
+_NO_TENSOR_CLASSES = frozenset({type(None), bool, int, float, complex, str})
+"""Exact classes whose saved value holds no tensor (``_collect_tensor_values`` gives ``[]``)."""
+
+_SavedReader = tuple[bool, Any, tuple[str, ...]]
+_SAVED_READER_BY_CLASS: dict[type, _SavedReader] = {}
+"""Saved-attribute reader per C-defined gradient-function class.
+
+Only classes without ``Py_TPFLAGS_HEAPTYPE`` are cached: they live as long as the
+interpreter and their ``__dict__`` cannot change, so the cache holds no gradient
+function, tensor or trace and never goes stale. A Python-defined class (a custom
+``autograd.Function``'s backward node) is scanned on every op, as before.
+"""
+
+
+def _saved_reader(cls: type) -> _SavedReader:
+    """Return how to read the saved values of a gradient function of class ``cls``.
+
+    Parameters
+    ----------
+    cls
+        The gradient function's class.
+
+    Returns
+    -------
+    tuple
+        ``(reads_saved_tensors, getter, names)``: whether a ``saved_tensors`` read can
+        produce anything, an ``attrgetter`` over the ``_saved_*`` names of the class's own
+        ``__dict__`` (``None`` when there are none), and those names in dict order.
+    """
+
+    names = tuple(name for name in cls.__dict__ if name.startswith(_AUTOGRAD_SAVED_ATTR_PREFIX))
+    # A class with no ``saved_tensors`` anywhere, no instance dict and the generic
+    # attribute lookup answers every instance read with the ``()`` default.
+    reads_saved_tensors = (
+        hasattr(cls, "saved_tensors")
+        or cls.__dictoffset__ != 0
+        or cls.__getattribute__ is not object.__getattribute__
+    )
+    getter = operator.attrgetter(*names) if names else None
+    return reads_saved_tensors, getter, names
+
+
+def _read_saved(grad_fn: Any, reader: _SavedReader) -> Any:
+    """Read ``grad_fn``'s saved values through ``reader``, each read best-effort.
+
+    Same values and order as ``_iter_autograd_saved_candidates``'s reads: ``saved_tensors``
+    first, then each ``_saved_*`` attribute; an attribute that raises is skipped.
+    """
+
+    reads_saved_tensors, getter, names = reader
+    values: list[Any] = []
+    if reads_saved_tensors:
+        try:
+            values.extend(getattr(grad_fn, "saved_tensors", ()))
+        except Exception:
+            pass
+    if getter is None:
+        return values
+    try:
+        got = getter(grad_fn)
+    except Exception:
+        # One attribute refused: read them one by one (reads are idempotent).
+        for name in names:
+            try:
+                values.append(getattr(grad_fn, name))
+            except Exception:
+                continue
+        return values
+    if len(names) == 1:
+        values.append(got)
+    elif values:
+        values.extend(got)
+    else:
+        return got
+    return values
+
+
+def _saved_values(grad_fn: Any) -> Any:
+    """Return ``grad_fn``'s readable saved values (hook-packed values are skipped).
+
+    The cheaper form of ``_iter_autograd_saved_candidates``: the ``_saved_*`` names come
+    from :data:`_SAVED_READER_BY_CLASS` and are read in one ``attrgetter`` call. The hook
+    rule is the same: with default saved-tensors hooks installed nothing is read, and when
+    the runtime cannot tell, the reads run under ``pause_logging``.
+    """
+
+    cls = grad_fn.__class__
+    try:
+        reader = _SAVED_READER_BY_CLASS[cls]
+    except KeyError:
+        reader = _saved_reader(cls)
+        if not cls.__flags__ & _HEAPTYPE_FLAG:
+            _SAVED_READER_BY_CLASS[cls] = reader
+    hooks_active = saved_tensors_default_hooks_active()
+    if hooks_active:
+        return ()
+    if hooks_active is None:
+        with pause_logging():
+            return _read_saved(grad_fn, reader)
+    return _read_saved(grad_fn, reader)
+
+
+def _flatten_saved_tensors(values: Any) -> list[torch.Tensor]:
+    """Return the tensors among saved ``values``, in order, as ``_collect_tensor_values`` would.
+
+    Hot path: a plain tensor or a scalar is decided by its exact class, with no call.
+    """
+
+    tensors: list[torch.Tensor] = []
+    for value in values:
+        cls = value.__class__
+        if cls is _TENSOR or cls is _PARAMETER:
+            tensors += (value,)
+            continue
+        if cls in _NO_TENSOR_CLASSES:
+            continue
+        group = value if cls is tuple or cls is list else _collect_tensor_values(value)
+        for item in group:
+            cls = item.__class__
+            if (
+                cls is _TENSOR
+                or cls is _PARAMETER
+                or (cls not in _NO_TENSOR_CLASSES and isinstance(item, _TENSOR))
+            ):
+                tensors += (item,)
+    return _drop_functorch_wrapped(tensors) if tensors else tensors
+
+
+def _drop_functorch_wrapped(tensors: list[torch.Tensor]) -> list[torch.Tensor]:
+    """Return ``tensors`` without functorch wrapper tensors (``is_functorch_wrapped_tensor``).
+
+    The checker is fetched once per op; a check that raises ``RuntimeError`` keeps the tensor.
+    """
+
+    checker = get_functorch_wrapped_tensor_checker()
+    if checker is None:
+        return tensors
+    kept: list[torch.Tensor] = []
+    for tensor in tensors:
+        try:
+            if checker(tensor):
+                continue
+        except RuntimeError:
+            pass
+        kept += (tensor,)
+    return kept
+
+
+def _saved_tensor_stats(
+    trace: Any, grad_fn: Any, seen_data_ptrs: set[int], seen_saved_storages: set[int]
+) -> tuple[tuple[int | None, int | None], dict[str, int]]:
+    """Return one gradient function's saved-tensor ``(bytes, count)`` and saved band.
+
+    Per saved tensor, in order, the values of ``_add_autograd_saved_tensor`` and
+    ``_classify_saved_storage``, read directly under one ``pause_logging`` and
+    ``internal_scalar_read`` entry per op. Each ``data_ptr`` read still consumes its
+    ``next_func_call_id()`` while logging is on, so real ops keep their ids.
+    """
+
+    # Complexity above 10 on purpose: the per-op hot path of the autograd section.
+    band = dict.fromkeys(_BAND_KEYS, 0)
+    tensors = _flatten_saved_tensors(_saved_values(grad_fn))
+    total_bytes = tensor_count = 0
+    if not tensors:
+        return (total_bytes, tensor_count), band
+    param_map = trace.__dict__.get("_param_storage_addresses") or {}
+    buffer_map = trace.__dict__.get("_buffer_storage_addresses") or {}
+    logging_enabled = _st._logging_enabled
+    reads_cls: Any = None
+    reads: tuple[Any, ...] = ()
+    with pause_logging(), internal_scalar_read():
+        for tensor in tensors:
+            try:
+                if logging_enabled:
+                    _st.next_func_call_id()
+                if tensor.__class__ is not reads_cls:
+                    reads = tensor_reads(tensor, *_SAVED_TENSOR_READS)
+                    reads_cls = tensor.__class__
+                data_ptr = reads[0](tensor)
+            except Exception:
+                continue
+            if data_ptr in seen_data_ptrs:
+                continue
+            seen_data_ptrs.add(data_ptr)
+            bytes_added = reads[1](tensor) * reads[2](tensor)
+            total_bytes += bytes_added
+            tensor_count += 1
+            try:
+                storage = reads[3](tensor)
+                storage_ptr = storage.data_ptr()
+                storage_nbytes = int(storage.nbytes())
+            except (RuntimeError, TypeError, NotImplementedError):
+                band["saved_activation"] += bytes_added
+                continue
+            storage_class = (
+                "saved_parameter"
+                if storage_ptr in param_map
+                else "saved_buffer"
+                if storage_ptr in buffer_map
+                else "saved_activation"
+            )
+            band[storage_class] += bytes_added
+            if storage_ptr not in seen_saved_storages:
+                seen_saved_storages.add(storage_ptr)
+                band["newly_saved_bytes"] += storage_nbytes
+                band[_NEWLY_KEY[storage_class]] += storage_nbytes
+    return (total_bytes, tensor_count), band
+
+
+_BAND_KEYS = (
+    "saved_parameter",
+    "saved_buffer",
+    "saved_activation",
+    "newly_saved_bytes",
+    "newly_saved_parameter",
+    "newly_saved_buffer",
+    "newly_saved_activation",
+)
+_NEWLY_KEY = {
+    name: f"newly_{name}" for name in ("saved_parameter", "saved_buffer", "saved_activation")
+}
+_SAVED_TENSOR_READS = ("data_ptr", "numel", "element_size", "untyped_storage")
+
+
 def _partition_output_entries_with_autograd_stats(
     trace: Any, output: Any
 ) -> list[_OutputTensorEntry]:
@@ -232,35 +465,9 @@ def _partition_output_entries_with_autograd_stats(
                 autograd_stats = (0, 0)
             else:
                 seen_grad_fns.add(grad_fn_object_id)
-                total_bytes = 0
-                tensor_count = 0
-                band = {
-                    "saved_parameter": 0,
-                    "saved_buffer": 0,
-                    "saved_activation": 0,
-                    "newly_saved_bytes": 0,
-                    "newly_saved_parameter": 0,
-                    "newly_saved_buffer": 0,
-                    "newly_saved_activation": 0,
-                }
-                for saved_value in _iter_autograd_saved_candidates(grad_fn_handle):
-                    for saved_tensor in _collect_tensor_values(saved_value):
-                        bytes_added, count_added = _add_autograd_saved_tensor(
-                            saved_tensor, seen_data_ptrs
-                        )
-                        total_bytes += bytes_added
-                        tensor_count += count_added
-                        if count_added:
-                            storage_class, storage_ptr, storage_nbytes = _classify_saved_storage(
-                                trace, saved_tensor
-                            )
-                            band[storage_class] += bytes_added
-                            if storage_ptr is not None and storage_ptr not in seen_saved_storages:
-                                seen_saved_storages.add(storage_ptr)
-                                band["newly_saved_bytes"] += storage_nbytes
-                                band[f"newly_{storage_class}"] += storage_nbytes
-                autograd_stats = (total_bytes, tensor_count)
-                autograd_band = band
+                autograd_stats, autograd_band = _saved_tensor_stats(
+                    trace, grad_fn_handle, seen_data_ptrs, seen_saved_storages
+                )
         partitioned_entries.append(
             _OutputTensorEntry(
                 value=maybe_tensor,
@@ -440,5 +647,6 @@ from ._ops_exhaustive import (  # noqa: E402
     _iter_autograd_saved_candidates,
 )
 from .ops import (  # noqa: E402
+    _AUTOGRAD_SAVED_ATTR_PREFIX,
     _OutputTensorEntry,
 )
