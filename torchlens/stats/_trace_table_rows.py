@@ -68,7 +68,7 @@ def table_rows(
         else [cell(op, field) for op in ops]
         for field in fields
     ]
-    return [dict(zip(fields, values)) for values in zip(*columns)]
+    return [dict(zip(fields, values, strict=True)) for values in zip(*columns, strict=True)]
 
 
 def _column_plan(ops: Sequence[Any]) -> tuple[OpColumns, list[int]] | None:

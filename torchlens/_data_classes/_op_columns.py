@@ -269,7 +269,7 @@ class OpColumns:
         slow = {cls for cls in classes if cls is LazyCell or issubclass(cls, slow_types)}
         return [
             get(row) if value.__class__ in slow or value is _MISSING or value is sentinel else value
-            for row, value in zip(rows, raw)
+            for row, value in zip(rows, raw, strict=True)
         ]
 
     def setter(self, name: str) -> Callable[[int, Any], None]:
