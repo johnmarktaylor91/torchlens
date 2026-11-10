@@ -14,6 +14,7 @@ the session state.
 from __future__ import annotations
 
 import gc
+import pickle
 import weakref
 
 import pytest
@@ -21,6 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._errors import RecordBindingError
 from torchlens._utils._record_group_table import record_member
 
 
@@ -262,3 +264,138 @@ def test_identity_holds_while_a_record_is_held_and_no_longer() -> None:
     del op, layer
     assert op_ref() is None and layer_ref() is None
     assert trace.ops[label].func_name == "relu" and trace.layers[label].func_name == "relu"
+
+
+class _DoorNet(nn.Module):
+    """A conv, a batch norm (buffers) and a linear layer called twice (a recurrent layer)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.conv = nn.Conv2d(1, 2, 3)
+        self.bn = nn.BatchNorm2d(2)
+        self.fc = nn.Linear(2, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = torch.relu(self.bn(self.conv(x))).mean((2, 3))
+        for _ in range(2):
+            x = self.fc(x)
+        return x
+
+
+def _door_trace() -> tl.Trace:
+    """Trace ``_DoorNet`` with gradients saved and one backward pass run."""
+
+    torch.manual_seed(0)
+    x = torch.randn(2, 1, 6, 6, requires_grad=True)
+    trace = tl.trace(_DoorNet(), x, capture=tl.options.CaptureOptions(save_grads="all"))
+    loss = trace[trace.output_layers[0]].out.square().mean()
+    trace.backward(loss, retain_graph=True)
+    return trace
+
+
+# Every door that hands out ``Op`` or ``Layer`` views, on the trace and on a record.
+_VIEW_DOORS = {
+    "trace.ops": lambda trace: trace.ops,
+    "trace.compute_ops": lambda trace: trace.compute_ops,
+    "trace.input_ops": lambda trace: trace.input_ops,
+    "trace.output_ops": lambda trace: trace.output_ops,
+    "trace.model_ops": lambda trace: trace.model_ops,
+    "trace.ops_with_params": lambda trace: trace.ops_with_params,
+    "trace.saved_ops": lambda trace: trace.saved_ops,
+    "trace.saved_grad_ops": lambda trace: trace.saved_grad_ops,
+    "trace.ops.compute": lambda trace: trace.ops.compute,
+    "trace.layers": lambda trace: trace.layers,
+    "trace.saved_layers": lambda trace: trace.saved_layers,
+    "trace.layers.compute": lambda trace: trace.layers.compute,
+    "trace.layers.internal_sink": lambda trace: trace.layers.internal_sink,
+    "trace.layers.internal_source": lambda trace: trace.layers.internal_source,
+    "trace.layers.recurrent": lambda trace: trace.layers.recurrent,
+    "trace.layers.saved_grad": lambda trace: trace.layers.saved_grad,
+    "op.ops": lambda trace: trace["relu_1"].ops,
+    "op.input_ops": lambda trace: trace["relu_1"].input_ops,
+    "layer.ops": lambda trace: trace.layers["linear_1"].ops,
+    "module.layers": lambda trace: trace.modules["fc"].layers,
+    "buffer.write_ops": lambda trace: next(iter(trace.buffers.values())).write_ops,
+}
+
+
+def _views_of(handed) -> list:
+    """Return the first few ``Op`` and ``Layer`` views that ``handed`` gives out."""
+
+    items = handed.values() if hasattr(handed, "values") else handed
+    found = []
+    for item in items:
+        if isinstance(item, (tl.Op, tl.Layer)):
+            found.append(item)
+        if len(found) == 3:
+            break
+    return found
+
+
+@pytest.mark.parametrize("door", sorted(_VIEW_DOORS))
+def test_a_view_from_every_door_keeps_its_trace(door) -> None:
+    """What a door hands out, read before the trace is dropped, gives views that keep the trace.
+
+    The views are looked up only after the trace variable is gone and the
+    collector has run, which is what a chained expression does.
+    """
+
+    trace = _door_trace()
+    trace_ref = weakref.ref(trace)
+    handed = _VIEW_DOORS[door](trace)
+    del trace
+    gc.collect()
+    views = _views_of(handed)
+    assert views, f"{door} handed out no Op or Layer view"
+    for view in views:
+        assert view.source_trace is trace_ref()
+        assert isinstance(view.source_trace, tl.Trace)
+
+
+# The op accessors an ``Op`` builds on each read: its parents, and the buffer ops around it.
+_OP_ACCESSORS = {
+    "input_ops": lambda op: op.input_ops,
+    "graph.buffer_source_ops": lambda op: op.graph.buffer_source_ops,
+    "graph.buffer_sink_ops": lambda op: op.graph.buffer_sink_ops,
+}
+
+
+@pytest.mark.parametrize("name", sorted(_OP_ACCESSORS))
+def test_an_accessor_read_from_an_op_keeps_the_trace_and_dropping_it_frees_the_trace(name) -> None:
+    """An accessor an Op hands out keeps the Op's trace, by reference counting only."""
+
+    trace = tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6))
+    trace_ref = weakref.ref(trace)
+    held = _OP_ACCESSORS[name](_relu_op(trace))
+    del trace
+    gc.collect()
+    assert trace_ref() is not None
+    assert all(record.source_trace is trace_ref() for record in held)
+    gc.disable()
+    try:
+        del held
+        assert trace_ref() is None, "the trace outlived the accessor"
+    finally:
+        gc.enable()
+
+
+def test_chained_read_through_an_ops_input_ops_returns_the_parent_tensor() -> None:
+    """``tl.trace(model, x)[label].input_ops[0].out`` works in one expression."""
+
+    torch.manual_seed(0)
+    model, x = _ConvReluNet(), torch.randn(1, 1, 6, 6)
+    out = tl.trace(model, x)[_relu_label()].input_ops[0].out
+    assert isinstance(out, torch.Tensor)
+    assert torch.equal(out, model.conv(x))
+
+
+def test_a_restored_op_refuses_its_input_ops() -> None:
+    """An Op restored on its own holds no trace, so reading its parents through it still refuses."""
+
+    trace = tl.trace(_ConvReluNet(), torch.randn(1, 1, 6, 6))
+    restored = pickle.loads(pickle.dumps(_relu_op(trace)))
+    with pytest.raises(RecordBindingError) as raised:
+        _ = restored.source_trace
+    assert raised.value.fields["code"] == "record_not_bound"
+    with pytest.raises((RecordBindingError, AttributeError)):
+        _ = restored.input_ops

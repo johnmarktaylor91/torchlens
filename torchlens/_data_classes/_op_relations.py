@@ -6,7 +6,7 @@ property per view.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
@@ -24,7 +24,26 @@ __all__ = [
     "input_activations",
     "get_children",
     "get_parents",
+    "kept",
 ]
+
+
+def kept(op: Op, accessor: Any) -> Any:
+    """Return ``accessor`` holding the trace that ``op`` holds.
+
+    An op accessor names its ops by store row and builds each view when it is
+    read. In ``tl.trace(model, x)["relu_1"].input_ops[1]`` the op is a
+    temporary, gone with its trace before the parent is looked up, so the
+    accessor an op hands out keeps the trace the op kept. An op that holds no
+    trace (copied or restored on its own) hands out an accessor that holds
+    none.
+    """
+
+    try:
+        accessor._owner = object.__getattribute__(op, "_owner")
+    except AttributeError:
+        pass
+    return accessor
 
 
 def multi_output_type(op: Op) -> type | str | None:
