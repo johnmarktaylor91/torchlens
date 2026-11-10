@@ -38,24 +38,9 @@ from ._fork_copy import (
     _needs_eager_isolation,
     cow_copy_value,
 )
+from .cell_states import _CSR, _FACT, _MISSING, LazyCell
 from .eviction_walk import _evict_payloads_in_list, _evict_payloads_in_mapping, _EvictTypes
 from .groups import GroupRef, MembershipGroups
-
-#: Unset-cell sentinel; distinct from None (a real storable value).
-_MISSING = object()
-
-#: CSR-backed relation cell sentinel: the value lives in the store's
-#: dataflow edge table; the facade descriptor rematerializes an immutable
-#: tuple view on first access and caches it back through ``cell_set``.
-#: Distinct from ``_MISSING`` so present/absent semantics stay exact —
-#: ``cell_del`` on a ``_CSR`` cell clears to genuinely absent.
-_CSR = object()
-
-#: Shared-fact cell sentinel: the value lives in the store's fact
-#: blocks (the FunctionCall / ParamAlias group tables); the facade
-#: descriptor hydrates the exact public container type for the row on first
-#: access and caches it back. Same present/absent semantics as ``_CSR``.
-_FACT = object()
 
 #: Overlay-miss sentinel local to cell reads.
 _NO_OVERLAY = object()
@@ -129,6 +114,28 @@ class _FrozenColumn:
         self.present[row] = 0
         if not self.packed:
             self.values[row] = None
+
+
+def _set_cell_items(store: Any, row: int) -> Iterator[tuple[str, Any]]:
+    """Yield ``(field_name, value)`` for every set cell in layout order.
+
+    The ``items`` of the row store and of its fork view. ``PooledCell`` cells
+    hydrate to a fresh equal container, compacted singleton-label cells decode
+    to a fresh one-element list and lazy cells answer without a write-back
+    (state streams must never carry an internal encoding); the cell itself is
+    left untouched — pickling a record must not materialize its containers.
+    """
+
+    for fid, name in enumerate(store.layout.names):
+        value = store.cell_get(row, fid, True)
+        if value is not _MISSING:
+            if value.__class__ is PooledCell:
+                value = value.hydrate()
+            elif value.__class__ is LazyCell:
+                value = value.read(store, row, fid, False)
+            elif value.__class__ is str and store.compacted_singleton(row, fid, value):
+                value = [value]
+            yield name, value
 
 
 class OpRowStore:
@@ -373,20 +380,26 @@ class OpRowStore:
         rows.append(cells)
         return row
 
-    def cell_get(self, row: int, fid: int) -> Any:
-        """Return one cell value, or ``_MISSING`` when unset."""
+    def cell_get(self, row: int, fid: int, raw: bool = False) -> Any:
+        """Return one cell value, or ``_MISSING`` when unset (``raw``: lazy cells unanswered)."""
 
         rows = self._rows
         if rows is not None:
-            return rows[row][fid]
-        overlay = self._overlay
-        if overlay:
-            value = overlay.get(row * self.layout.n_fields + fid, _NO_OVERLAY)
-            if value is not _NO_OVERLAY:
-                return value
-        columns = self._columns
-        assert columns is not None
-        return columns[fid].get(row)
+            value = rows[row][fid]
+        else:
+            overlay = self._overlay
+            value = (
+                overlay.get(row * self.layout.n_fields + fid, _NO_OVERLAY)
+                if overlay
+                else _NO_OVERLAY
+            )
+            if value is _NO_OVERLAY:
+                columns = self._columns
+                assert columns is not None
+                value = columns[fid].get(row)
+        if value.__class__ is LazyCell and not raw:
+            return value.read(self, row, fid)
+        return value
 
     def cell_set(self, row: int, fid: int, value: Any) -> None:
         """Write one cell (base while building, overlay after freeze)."""
@@ -411,7 +424,7 @@ class OpRowStore:
                 return False
             row_cells[fid] = _MISSING
             return True
-        if self.cell_get(row, fid) is _MISSING:
+        if self.cell_get(row, fid, True) is _MISSING:
             return False
         key = row * self.layout.n_fields + fid
         columns = self._columns
@@ -479,25 +492,7 @@ class OpRowStore:
         registry = self._compacted_singletons
         return registry is not None and registry.get(row * self.layout.n_fields + fid) is value
 
-    def items(self, row: int) -> Iterator[tuple[str, Any]]:
-        """Yield ``(field_name, value)`` for every set cell in layout order.
-
-        ``PooledCell`` cells hydrate to a fresh equal container, and
-        compacted singleton-label cells decode to a fresh one-element list
-        (state streams must never carry either internal encoding); the cell
-        itself is left untouched — pickling a record must not materialize
-        its containers.
-        """
-
-        names = self.layout.names
-        for fid, name in enumerate(names):
-            value = self.cell_get(row, fid)
-            if value is not _MISSING:
-                if value.__class__ is PooledCell:
-                    value = value.hydrate()
-                elif value.__class__ is str and self.compacted_singleton(row, fid, value):
-                    value = [value]
-                yield name, value
+    items = _set_cell_items
 
     def retained_bytes(self) -> int:
         """Return shallow structural bytes retained by this store.
@@ -923,6 +918,15 @@ def mark_op_row_released(store: Any, row: int) -> None:
         releases.add(row)
 
 
+def _cache_answer(store: Any, row: int, fid: int, value: Any) -> None:
+    """Cache an answered lazy cell: not a step write; its content is the baseline."""
+
+    OpRowStore.cell_set(store, row, fid, value)
+    fingerprint = _cell_content_fingerprint(value)
+    if fingerprint is not None:
+        _AUDIT_FINGERPRINTS[id(store)][1][row * store.layout.n_fields + fid] = fingerprint
+
+
 class _AuditedOpRowStore(OpRowStore):
     """Write-recording twin used ONLY during env-gated step audits.
 
@@ -939,6 +943,7 @@ class _AuditedOpRowStore(OpRowStore):
     """
 
     __slots__ = ()
+    cell_cache = _cache_answer
 
     def cell_set(self, row: int, fid: int, value: Any) -> None:
         """Record the written column id, then perform the write."""
@@ -1018,8 +1023,9 @@ class _CombinedAuditOpRowStore(OpRowStore):
     """
 
     __slots__ = ()
+    cell_cache = _cache_answer
 
-    def cell_get(self, row: int, fid: int) -> Any:
+    def cell_get(self, row: int, fid: int, raw: bool = False) -> Any:
         """Record the read column id, then perform the read.
 
         Reads on rows already marked RELEASED this window (op removal
@@ -1036,7 +1042,7 @@ class _CombinedAuditOpRowStore(OpRowStore):
             collector = _AUDIT_READS.get(store_id)
         if collector is not None and row not in _AUDIT_ROW_RELEASES.get(store_id, _NO_RELEASES):
             collector.add(fid)
-        return OpRowStore.cell_get(self, row, fid)
+        return OpRowStore.cell_get(self, row, fid, raw)
 
     def cell_set(self, row: int, fid: int, value: Any) -> None:
         """Record the write and its content-effectiveness, then write."""
@@ -1242,10 +1248,13 @@ class DetachedOpStore:
 
         return False
 
-    def cell_get(self, row: int, fid: int) -> Any:
-        """Return one cell value, or ``_MISSING`` when unset."""
+    def cell_get(self, row: int, fid: int, raw: bool = False) -> Any:
+        """Return one cell value, or ``_MISSING`` when unset (``raw``: lazy cells unanswered)."""
 
-        return self._cells[fid]
+        value = self._cells[fid]
+        if value.__class__ is LazyCell and not raw:
+            return value.read(self, row, fid)
+        return value
 
     def cell_set(self, row: int, fid: int, value: Any) -> None:
         """Write one cell."""
@@ -1275,6 +1284,8 @@ class DetachedOpStore:
         for fid, name in enumerate(names):
             value = cells[fid]
             if value is not _MISSING:
+                if value.__class__ is LazyCell:
+                    value = value.read(self, row, fid, False)
                 yield name, value
 
     def compacted_singleton(self, row: int, fid: int, value: Any) -> bool:
@@ -1513,34 +1524,37 @@ class OpStoreView:
                 return mapped
         return value
 
-    def cell_get(self, row: int, fid: int) -> Any:
+    def cell_get(self, row: int, fid: int, raw: bool = False) -> Any:
         """Return one cell value with fork-side isolation applied."""
 
         key = row * self.base.layout.n_fields + fid
         value = self._overlay.get(key, _NO_OVERLAY)
-        if value is not _NO_OVERLAY:
-            return value
-        value = self._base_overlay.get(key, _NO_OVERLAY)
         if value is _NO_OVERLAY:
-            base_rows = self._base_rows
-            if base_rows is not None:
-                value = base_rows[row][fid]
-            else:
-                columns = self.base._columns
-                assert columns is not None
-                # ``_FrozenColumn.get`` inline: this is the fork copy path's
-                # per-cell read.
-                column = columns[fid]
-                present = column.present
-                if present is not None and not present[row]:
-                    return _MISSING
-                value = column.values[row]
-                if column.packed:
-                    return value.item()
-        if value.__class__ in _COW_ATOMIC or value is _MISSING:
-            # What ``_isolate`` returns for these, without the call.
-            return value
-        return self._isolate(key, value)
+            value = self._base_overlay.get(key, _NO_OVERLAY)
+            if value is _NO_OVERLAY:
+                base_rows = self._base_rows
+                if base_rows is not None:
+                    value = base_rows[row][fid]
+                else:
+                    columns = self.base._columns
+                    assert columns is not None
+                    # ``_FrozenColumn.get`` inline: this is the fork copy path's
+                    # per-cell read.
+                    column = columns[fid]
+                    present = column.present
+                    if present is not None and not present[row]:
+                        return _MISSING
+                    value = column.values[row]
+                    if column.packed:
+                        return value.item()
+            if value.__class__ in _COW_ATOMIC or value is _MISSING:
+                # What ``_isolate`` returns for these, without the call.
+                return value
+            if value.__class__ is not LazyCell:
+                return self._isolate(key, value)
+        if value.__class__ is LazyCell and not raw:
+            return value.read(self, row, fid)  # answered into this fork's overlay
+        return value
 
     def cell_set(self, row: int, fid: int, value: Any) -> None:
         """Write one cell into the fork overlay."""
@@ -1550,7 +1564,7 @@ class OpStoreView:
     def cell_del(self, row: int, fid: int) -> bool:
         """Tombstone one cell in the fork overlay; report prior presence."""
 
-        if self.cell_get(row, fid) is _MISSING:
+        if self.cell_get(row, fid, True) is _MISSING:
             return False
         self._overlay[row * self.base.layout.n_fields + fid] = _MISSING
         return True
@@ -1578,23 +1592,7 @@ class OpStoreView:
 
         return self.base.compacted_singleton(row, fid, value)
 
-    def items(self, row: int) -> Iterator[tuple[str, Any]]:
-        """Yield ``(field_name, value)`` for every set cell in layout order.
-
-        ``PooledCell`` cells hydrate fresh and compacted singleton-label
-        cells decode fresh (never the internal encoding), matching the
-        base-store ``items`` contract.
-        """
-
-        names = self.base.layout.names
-        for fid, name in enumerate(names):
-            value = self.cell_get(row, fid)
-            if value is not _MISSING:
-                if value.__class__ is PooledCell:
-                    value = value.hydrate()
-                elif value.__class__ is str and self.compacted_singleton(row, fid, value):
-                    value = [value]
-                yield name, value
+    items = _set_cell_items
 
     def isolate_mutable_cells(self) -> None:
         """Eagerly isolate every mutable-container cell into the fork overlay.

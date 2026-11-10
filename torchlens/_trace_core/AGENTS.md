@@ -26,6 +26,16 @@ classes (`Trace`, `Op`, ...) present rows from here as facades. The architecture
   the last owning core dies (tensors in builtin containers become `None`; one `_EvictTypes`
   set per sweep learns the types it may skip without a call).
 
+## cell_states.py
+- The four cell states of every row store: set, default-omitted, derived and deleted
+  (`_MISSING`, defined here with the `_CSR` / `_FACT` encodings). `LazyFields` registers
+  default-capable fields and derived families for one layout and builds the seed row;
+  each registered field holds one shared `LazyCell`, which `cell_get` answers on read
+  (`cell_get(row, fid, True)` reads the stored cell without answering). Deleting a cell in
+  any state leaves `_MISSING`, which never answers a default or a resolver.
+  `cell_state()` reports the state. No product field is registered yet;
+  `tests/test_cell_states.py` is the contract.
+
 ## Relations and views
 - `relations.py`: `EdgeTable` is the canonical dataflow edge-occurrence table (`Edge` rows,
   CSR indexes).
