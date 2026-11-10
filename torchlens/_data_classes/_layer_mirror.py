@@ -29,9 +29,10 @@ def _layer_rep_op(layer: Layer) -> Op | None:
     try:
         row = state["_keys"][1]
         if row >= 0:
-            op = state["_core_ref"]()._strong_facades["op"][row]
+            # A typed local, not ``cast``: no call on the per-read path.
+            op: Op | None = state["_core_ref"]()._strong_facades["op"][row]
             if op is not None:
-                return cast("Op", op)
+                return op
     except (KeyError, IndexError, AttributeError, TypeError):
         pass
     # Slow path: no pass yet, an unkeyed first pass, a dropped view, or a
