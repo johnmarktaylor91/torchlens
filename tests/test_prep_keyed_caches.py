@@ -43,6 +43,8 @@ _FIELDS = (
 class _Block(nn.Module):
     """A linear layer, a scale, a buffer and a stateless activation."""
 
+    offset: torch.Tensor
+
     def __init__(self) -> None:
         """Build the block."""
 
@@ -141,9 +143,11 @@ def test_replayed_plan_draws_the_barcodes_a_full_walk_draws() -> None:
     seeded = tl.options.CaptureOptions(seed=5)
     tl.trace(model, x)
     assert plan_mod._PLANS.get(model) is not None
-    replayed = {p.address: p.barcode for p in tl.trace(model, x, capture=seeded).params}
+    replay_trace = tl.trace(model, x, capture=seeded)
+    replayed = {p.address: p.barcode for p in replay_trace.params}
     plan_mod._PLANS.pop(model, None)
-    full = {p.address: p.barcode for p in tl.trace(model, x, capture=seeded).params}
+    full_trace = tl.trace(model, x, capture=seeded)
+    full = {p.address: p.barcode for p in full_trace.params}
     assert replayed == full
 
 
@@ -210,7 +214,7 @@ def test_parameter_slot_set_to_none_added_or_removed_is_seen() -> None:
 
     model, x = _model()
     tl.trace(model, x)
-    model.head.bias = None
+    model.head.bias = None  # type: ignore[assignment]
     second = tl.trace(model, x)
     assert "head.bias" not in _addresses(second)
     model.a.act.register_parameter("gain", nn.Parameter(torch.ones(1)))
@@ -249,7 +253,7 @@ def test_rebound_forward_is_seen() -> None:
     def doubled(self: _Block, inp: torch.Tensor) -> torch.Tensor:
         return self.act(self.fc(inp) * self.scale + self.offset) * 2
 
-    model.b.forward = types.MethodType(doubled, model.b)
+    model.b.forward = types.MethodType(doubled, model.b)  # type: ignore[method-assign]
     second = tl.trace(model, x)
     (output_op,) = second.output_ops
     assert torch.equal(output_op.out, model(x))
@@ -313,7 +317,7 @@ def test_scope_facts_follow_own_state_and_tree_changes() -> None:
     after = facts_mod.cached_scope_facts(model)
     assert "a.act" in after[1] and after == _reference_facts(model)
 
-    model.a.act.count = None  # a None buffer owns no state
+    model.a.act.count = None  # type: ignore[assignment]  # a None buffer owns no state
     assert "a.act" not in facts_mod.cached_scope_facts(model)[1]
     model.a.act.register_parameter("gain", nn.Parameter(torch.ones(1)))
     assert "a.act" in facts_mod.cached_scope_facts(model)[1]
