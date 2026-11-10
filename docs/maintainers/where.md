@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1755 modules, 706541 lines, 0 modules without a docstring.
+85 packages, 1756 modules, 706847 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26857 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 122 | 42834 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 123 | 43140 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (122 modules, 42834 lines)
+Core data structures for representing a logged forward pass. (123 modules, 43140 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -359,6 +359,7 @@ Core data structures for representing a logged forward pass. (122 modules, 42834
 | `_op_container_census` | Alias census for container-cell pooling (the single scan over swept cells). | 158 |
 | `_op_cost` | Cost derivations for ''Op'': compute record, MACs, FLOPs, arithmetic intensity. | 124 |
 | `_op_dedup` | Saved-activation dedup helpers for retained payload copies. | 324 |
+| `_op_door_keys` | Row keys behind the trace-level ops door. | 262 |
 | `_op_grad_stream` | Grad-blob streaming for ''Op._log_tensor_grad''. | 41 |
 | `_op_out_read` | Helpers behind the ''Op.out'' read path: absent-value refusals, the mutation-check state and the synthesized-read warning. | 103 |
 | `_op_relations` | Relation views for ''Op'': parents, children, siblings, containers, modules. | 267 |
@@ -384,7 +385,7 @@ Core data structures for representing a logged forward pass. (122 modules, 42834
 | `_state_adapter` | Class-agnostic live-state enumeration and restoration helpers. | 122 |
 | `_summary` | Summary helpers for compact formatting of captured call arguments. | 72 |
 | `_template_walk` | Generic walks over replay templates (tuples, lists, dict values, dataclass fields). | 104 |
-| `_trace_accessors` | Trace accessor helpers. | 759 |
+| `_trace_accessors` | Trace accessor helpers. | 791 |
 | `_trace_annotations` | Trace annotation family: user notes and tags on a finished trace. | 405 |
 | `_trace_aten` | Public ATen-operation accessors for ''Trace'' (''CaptureOptions(aten_ops=True)''). | 73 |
 | `_trace_components` | Declared Trace field-to-component ownership map. | 630 |
@@ -405,7 +406,7 @@ Core data structures for representing a logged forward pass. (122 modules, 42834
 | `_trace_pickle_state` | Private initialization and verification-state blocks for Trace persistence. | 60 |
 | `_trace_pristine` | The pristine reading of a Trace, derived from the evidence it carries. | 172 |
 | `_trace_profile` | Trace model-profile helpers. | 190 |
-| `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 218 |
+| `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 230 |
 | `_trace_removal` | Entry removal and parameter-reference release for ''Trace''. | 171 |
 | `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays, and ''append''. | 812 |
 | `_trace_source` | Captured forward-source annotations, independent of live source files. | 45 |
