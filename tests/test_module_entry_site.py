@@ -18,7 +18,10 @@ from torch import Tensor, nn
 
 import torchlens as tl
 from torchlens._utils.introspection import _CODE_CONTEXT_ANCHOR_KEY
-from torchlens.backends.torch import _module_entry_site as entry_module, model_prep
+from torchlens.backends.torch import (
+    _module_entry_site as entry_module,
+    _ops_call_site_fields as site_module,
+)
 
 
 def _recurse(fn: Any, depth: int, *args: Any) -> Any:
@@ -122,44 +125,47 @@ def _cache_projection(cache: dict[Any, Any]) -> dict[Any, Any]:
     return projected
 
 
-def _always_walk(trace: Any) -> list[Any]:
-    """Module entry as before: the full walk every time."""
+class _CountingDict(dict):  # type: ignore[type-arg]
+    """The memo's entry table, counting lookups that return a known context."""
 
-    cache = trace.__dict__.get("_code_context_cache")
-    if cache is None:
-        cache = {}
-        trace._code_context_cache = cache
-    return entry_module._walk(trace, cache)
+    def __init__(self) -> None:
+        super().__init__()
+        self.hits = 0
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        value = super().get(key, default)
+        if value is not None:
+            self.hits += 1
+        return value
 
 
 def _run(
-    model: nn.Module, x: Tensor, depth: int, lookup: Any, monkeypatch: pytest.MonkeyPatch
+    model: nn.Module, x: Tensor, depth: int, walk_every_entry: bool, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[list[Any], dict[Any, Any], int]:
-    """Trace with ``lookup`` as module entry's code-context lookup; return what it read."""
+    """Trace; return module calls' contexts, the code-context cache and entry-table hits.
 
-    caches: list[dict[Any, Any]] = []
-    walks = [0]
-    original_walk = entry_module._walk
+    Nothing is wrapped around the walk itself: a wrapper's frame would sit on the
+    stack the walk reads. ``walk_every_entry`` makes every module entry take the
+    full walk, as before this lookup existed.
+    """
 
-    def counted_walk(trace: Any, cache: dict[Any, Any]) -> list[Any]:
-        walks[0] += 1
-        return original_walk(trace, cache)
+    memos: list[Any] = []
 
-    def recording(trace: Any) -> list[Any]:
-        result = lookup(trace)
-        cache = trace.__dict__["_code_context_cache"]
-        if not any(seen is cache for seen in caches):
-            caches.append(cache)
-        return result
+    class _Recorded(site_module._CallSiteMemo):
+        def __init__(self, cache: dict[Any, Any], module_ws: Any = None) -> None:
+            super().__init__(cache, module_ws)
+            self.entry_contexts = _CountingDict()
+            memos.append(self)
 
-    monkeypatch.setattr(entry_module, "_walk", counted_walk)
-    monkeypatch.setattr(model_prep, "module_entry_code_context", recording)
-    try:
+    with monkeypatch.context() as patch:
+        patch.setattr(site_module, "_CallSiteMemo", _Recorded)
+        if walk_every_entry:
+            patch.setattr(entry_module, "_module_entry", lambda *_args: None)
         trace = _recurse(tl.trace, depth, model, x)
-    finally:
-        monkeypatch.undo()
+    caches = {id(memo.cache): memo.cache for memo in memos}
     assert len(caches) == 1
-    return _module_contexts(trace), _cache_projection(caches[0]), walks[0]
+    hits = sum(memo.entry_contexts.hits for memo in memos)
+    return _module_contexts(trace), _cache_projection(next(iter(caches.values()))), hits
 
 
 @pytest.mark.parametrize("name", sorted(_MODELS))
@@ -170,8 +176,8 @@ def test_module_entry_context_and_cache_equal_the_full_walk(
     torch.manual_seed(0)
     model = _MODELS[name]()
     x = torch.randn(2, 4)
-    served = _run(model, x, harness_depth, entry_module.module_entry_code_context, monkeypatch)
-    walked = _run(model, x, harness_depth, _always_walk, monkeypatch)
+    served = _run(model, x, harness_depth, False, monkeypatch)
+    walked = _run(model, x, harness_depth, True, monkeypatch)
     assert served[0] == walked[0]
     assert served[1] == walked[1]
     assert any(frames for _address, _index, frames in served[0])
@@ -180,13 +186,10 @@ def test_module_entry_context_and_cache_equal_the_full_walk(
 def test_repeated_module_entry_sites_skip_the_walk(monkeypatch: pytest.MonkeyPatch) -> None:
     model = _Looped()
     x = torch.randn(2, 4)
-    _contexts, _cache, served_walks = _run(
-        model, x, 0, entry_module.module_entry_code_context, monkeypatch
-    )
-    _contexts, _cache, all_walks = _run(model, x, 0, _always_walk, monkeypatch)
-    assert served_walks < all_walks
+    served_hits = _run(model, x, 0, False, monkeypatch)[2]
+    assert _run(model, x, 0, True, monkeypatch)[2] == 0
     # Six block calls from one loop line share one entry site (after the first op).
-    assert all_walks - served_walks >= 5
+    assert served_hits >= 5
 
 
 _STEP_SOURCE = "def step(module, x):\n    return module(x)\n"
@@ -225,8 +228,8 @@ def test_value_equal_codes_from_two_files_get_separate_module_entries(
     assert steps[0].__code__ is not steps[1].__code__
     model = _TwoFiles(steps)
     x = torch.randn(2, 4)
-    served = _run(model, x, 0, entry_module.module_entry_code_context, monkeypatch)
-    walked = _run(model, x, 0, _always_walk, monkeypatch)
+    served = _run(model, x, 0, False, monkeypatch)
+    walked = _run(model, x, 0, True, monkeypatch)
     assert served[0] == walked[0]
     assert served[1] == walked[1]
     block_files = {

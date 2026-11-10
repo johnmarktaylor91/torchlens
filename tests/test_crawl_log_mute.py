@@ -158,8 +158,14 @@ def test_a_user_disable_below_warning_is_kept(records: Any) -> None:
 def test_a_trace_whose_forward_raises_after_a_crawl_restores_logging_state(records: Any) -> None:
     before = _logging_state()
     model = _Outer(fail=True)
-    with pytest.raises(RuntimeError, match="forward failed after the crawl"):
+    with pytest.raises(Exception) as raised:  # noqa: PT011 (capture may wrap the error)
         tl.trace(model, torch.randn(2, 4))
+    chain: list[BaseException] = []
+    error: BaseException | None = raised.value
+    while error is not None and error not in chain:
+        chain.append(error)
+        error = error.__cause__ or error.__context__
+    assert any("forward failed after the crawl" in str(e) for e in chain)
     assert _COUNTS["reads"] > 0
     assert records[_CRAWL_LOGGER].records == []
     assert _logging_state() == before
