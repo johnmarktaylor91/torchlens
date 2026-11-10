@@ -1520,10 +1520,10 @@ def torch_func_decorator(
             time_elapsed=func_exec_duration, rng_states=rng_states, autocast_state=autocast_state
         )
         is_bottom_level_func = trace._wrapper_runtime_ws.current_func_barcode == func_call_barcode
-        fast_out = fast and is_bottom_level_func and not buffer_snapshots
+        fast_out = fast if is_bottom_level_func and not buffer_snapshots else None
         if fast_out and _call_plan.output_admitted(out_orig, args, kwargs):
             call = (func, func_name, args, kwargs, arg_copies, kwarg_copies, out_orig, exec_ctx)
-            window = (_cow_payload_state_ptrs(trace), fast[0])
+            window = (_cow_payload_state_ptrs(trace), fast_out[0])
             return _call_plan.commit_fast_call(
                 log_function_output_tensors, trace, call, func_call_id, window
             )

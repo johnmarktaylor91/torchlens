@@ -227,7 +227,7 @@ def build_layer_state(state: dict[str, Any]) -> None:
 
 
 def _merge_layer_state(
-    state: dict[str, Any], arrivals: Any, layer_class: type, reconcile: Any, read: Any
+    state: dict[str, Any], arrivals: Any, layer_class: type[Any], reconcile: Any, read: Any
 ) -> None:
     """Build a pending layer state by the full merge over its passes.
 
@@ -236,7 +236,7 @@ def _merge_layer_state(
     for this layer. The state is replaced only when the merge succeeds.
     """
 
-    accessor = state.get("ops")
+    accessor: Any = state.get("ops")
     scratch: dict[str, Any] = {}
     layer = layer_class.__new__(layer_class)
     layer.__dict__ = scratch
@@ -283,7 +283,7 @@ def _merge_pass(layer: Any, op: Any, read: Any, *, first: bool, keyed: bool) -> 
 def _pass_reader(accessor: Any, passes: list[Any]) -> Any:
     """Return the field reader for a keyed layer's passes: column getters for a long layer."""
 
-    if len(passes) < _COLUMN_READ_PASSES or column_rows_by_label({0: passes[0]}) is None:
+    if len(passes) < _COLUMN_READ_PASSES or column_rows_by_label({"": passes[0]}) is None:
         return _facade_reader
     columns = OpColumns(accessor._store)
     get = {name: columns.getter(name) for name in _READ_FIELDS}
