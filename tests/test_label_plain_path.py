@@ -254,17 +254,12 @@ def test_subclass_keeps_the_general_stamp(monkeypatch: pytest.MonkeyPatch, sessi
 
 def test_async_collective_tensor_is_a_strict_subclass_and_still_delegates(session: Any) -> None:
     """The delegation the plain read skips applies only to a strict tensor subclass."""
-    pytest.importorskip("torch.distributed")
-    import torch.distributed._functional_collectives as funcol
-
+    funcol = pytest.importorskip("torch.distributed._functional_collectives")
     act_cls = funcol.AsyncCollectiveTensor
     assert act_cls is not torch.Tensor and issubclass(act_cls, torch.Tensor)
     inner = torch.randn(3)
     tl_mod.set_tensor_label(inner, "op_3")
-    try:
-        wrapper = act_cls(inner)
-    except Exception as error:  # noqa: BLE001 -- builds that cannot construct one standalone
-        pytest.skip(f"AsyncCollectiveTensor cannot be built here: {error}")
+    wrapper = act_cls(inner)
     assert tl_mod.get_tensor_label(wrapper) == "op_3"
 
 
