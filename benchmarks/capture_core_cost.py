@@ -270,20 +270,26 @@ def _c2_c4(model: nn.Module, x: torch.Tensor, full: bool) -> tuple[dict[str, Any
     return c2, held["kinds"]
 
 
-def _first_read(model: nn.Module, x: torch.Tensor, read: Callable[[Any], Any]) -> int:
-    """Return the calls ``read`` makes on a fresh trace nothing has read."""
+def _first_read(model: nn.Module, x: torch.Tensor, read: Callable[[Any, str], Any]) -> int:
+    """Return the calls ``read`` makes on a fresh trace nothing has read.
 
+    The reader first runs once, uncounted, on another trace: what it costs the
+    process once (lazy imports, compiled-module caches) is not a per-trace cost
+    and differs between a cold and a warm interpreter.
+    """
+
+    read(tl.trace(model, x), "warm")
     trace = tl.trace(model, x)
-    return count_calls(lambda: read(trace))[1]
+    return count_calls(lambda: read(trace, "counted"))[1]
 
 
 def _c7(model: nn.Module, x: torch.Tensor) -> dict[str, int]:
     with quiet_gc(), tempfile.TemporaryDirectory() as directory:
-        target = Path(directory) / "trace.tlspec"
+        folder = Path(directory)
         return {
-            "to_pandas": _first_read(model, x, lambda trace: trace.to_pandas()),
-            "repr": _first_read(model, x, repr),
-            "save": _first_read(model, x, lambda trace: trace.save(target)),
+            "to_pandas": _first_read(model, x, lambda trace, _run: trace.to_pandas()),
+            "repr": _first_read(model, x, lambda trace, _run: repr(trace)),
+            "save": _first_read(model, x, lambda trace, run: trace.save(folder / f"{run}.tlspec")),
         }
 
 
@@ -322,6 +328,8 @@ def measure_model(name: str, wall: bool = True) -> dict[str, Any]:
     warm = tl.trace(model, x)
     record: dict[str, Any] = {"rows": len(warm)}
     del warm
+    if full:
+        tl.trace(model, x, save="none")
     record["c1"], record["c8"] = _c1_c8(model, x)
     record["c2"], record["c4"] = _c2_c4(model, x, full)
     if not full:
