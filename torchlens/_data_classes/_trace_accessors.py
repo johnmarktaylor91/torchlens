@@ -539,7 +539,7 @@ class TraceOpAccessor(Accessor[Op]):
             return [op for op in scanned if key in {op.layer_label, op.short_layer_label}]
         held, rows = index.get(key, ()), table.rows
         if table.plain and rows.__class__ is WeakViews:  # live views cost no call
-            found = list(map(DEREF, map(rows.refs.__getitem__, held)))
+            found: list[Any] = list(map(DEREF, map(rows.refs.__getitem__, held)))
             return found if None not in found else rows.many(held)
         return list(map(rows.__getitem__, held) if table.plain else table.records(held))
 
