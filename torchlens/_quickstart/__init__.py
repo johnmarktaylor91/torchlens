@@ -1,18 +1,18 @@
-"""TorchLens quickstart: one input ladder, one provenance record, one render door.
+"""TorchLens quickstart: input resolution, input provenance and the drawing entry point.
 
-The quickstart package owns the three-rung input ladder shared by ``tl.summary``,
-``tl.draw``, and ``tl.trace``:
+The quickstart package resolves the model input for ``tl.summary``, ``tl.draw``
+and ``tl.trace`` in one of three ways:
 
-- rung 1 (gold): a real input -- TorchLens guesses nothing;
-- rung 2: ``input_shape=`` -- your shape, synthesized values, disclosed;
-- rung 3: nothing -- inferred shape, synthesized values, disclosed or a teach.
+- a real input: TorchLens guesses nothing;
+- ``input_shape=``: your shape with random values, disclosed;
+- nothing: an inferred shape with random values, disclosed, or an error that says why.
 
-Every synthesized input is disclosed in a provenance record that survives
-save/load on the existing ``Trace.provenance.input_preprocessor`` KEEP field, and the
-capability gate refuses derived-semantics claims on synthesized values.
+Every random input is disclosed in a provenance record that survives save and
+load on the ``Trace.provenance.input_preprocessor`` field, and analyses that need
+real data refuse to run on random values.
 
-Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint; the
-stable spellings are the verbs themselves.
+Names in this private package may change; the public entry points are the
+functions themselves.
 """
 
 from __future__ import annotations
