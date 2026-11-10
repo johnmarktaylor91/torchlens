@@ -573,10 +573,12 @@ def _labels(trace: Any, keep: list[Any]) -> dict[int, Any]:
     return labels
 
 
-def _collect_ids(value: Any, out: set[int], depth: int = 0) -> None:
+def _collect_ids(value: Any, out: dict[int, Any], depth: int = 0) -> None:
+    """Record every object reached by id; ``out`` holds each one so its id stays its own."""
+
     if type(value) in _ATOMIC_COPY_TYPES or id(value) in out or depth > 8:
         return
-    out.add(id(value))
+    out[id(value)] = value
     if isinstance(value, dict):
         for key, member in value.items():
             _collect_ids(key, out, depth + 1)
@@ -586,7 +588,9 @@ def _collect_ids(value: Any, out: set[int], depth: int = 0) -> None:
             _collect_ids(member, out, depth + 1)
 
 
-def _normalize(value: Any, labels: dict[int, Any], parent_ids: set[int], depth: int = 0) -> Any:
+def _normalize(
+    value: Any, labels: dict[int, Any], parent_ids: dict[int, Any], depth: int = 0
+) -> Any:
     """Structure with records named, and every other object marked shared or own."""
 
     if id(value) in labels:
@@ -626,7 +630,7 @@ def _fork_picture(parent: Any, fork: Any) -> dict[str, Any]:
     # Records are views a trace builds on lookup, so they are kept too.
     keep: list[Any] = []
     labels = _labels(fork, keep)
-    parent_ids: set[int] = set()
+    parent_ids: dict[int, Any] = {}
     for _name, value in state_items(parent):
         keep.append(value)
         _collect_ids(value, parent_ids)
