@@ -325,9 +325,13 @@ def measure_model(name: str, wall: bool = True) -> dict[str, Any]:
 
     full = name in bars_mod.FULL_MODELS
     model, x = build(name)
+    # A model's first two traces cost more than its later ones (one-off work in
+    # the entry phase on the second, a few dozen calls on the first profiled
+    # one); the counts are steady from the third, so two traces are discarded.
     warm = tl.trace(model, x)
     record: dict[str, Any] = {"rows": len(warm)}
     del warm
+    count_calls(lambda: tl.trace(model, x))
     if full:
         tl.trace(model, x, save="none")
     record["c1"], record["c8"] = _c1_c8(model, x)
