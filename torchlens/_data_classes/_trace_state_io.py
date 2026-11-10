@@ -17,6 +17,7 @@ from .._quantities import Bytes, Duration
 from .._trace_state import TraceState
 from . import _doors, _trace_rehydrate
 from ._aten_display import bind_owner_keys
+from ._layer_state import LayerStore, adopt_restored_layer_logs, trace_state_copy
 from ._op_row_containers import adopt_op_containers, project_op_containers
 from ._trace_pickle_state import _restore_pickled_verification, _sanitize_pickled_verification
 from ._transform_repr import _scrubbed_transform_repr
@@ -313,9 +314,15 @@ def _drop_runtime_only_caches(state: dict[str, Any]) -> None:
     state.pop("_container_ordinals_by_input_func_call_id", None)
 
 
+def initial_layer_logs(trace: Trace) -> dict[str, Any]:
+    """Return a new trace's empty layer store (``Trace.__init__``)."""
+
+    return LayerStore(trace)
+
+
 def trace_getstate(trace: Trace) -> dict[str, Any]:
     """Return pickle state with non-picklable weakref-backed accessors stripped."""
-    state = project_op_containers(trace.__dict__.copy())
+    state = project_op_containers(trace_state_copy(trace))
     state["_pickle_module_accessor_state"] = trace.__dict__.get("_module_logs")
     # Event streams never serialize (FieldPolicy.DROP): strip the stream
     # AND the projection guard derived from it, or a restored trace would
@@ -600,7 +607,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
         trace._module_logs = ModuleAccessor({})
     if "_buffer_accessor" not in trace.__dict__:
         trace._buffer_accessor = None
-    for layer_log in trace._layer_logs.values():
+    for layer_log in adopt_restored_layer_logs(trace).values():
         layer_log.source_trace = trace
         for layer_pass in layer_log.ops.values():
             layer_pass.source_trace = trace

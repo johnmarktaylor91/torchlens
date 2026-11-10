@@ -70,7 +70,7 @@ class _LayerGroup(_RecordGroup):
         if name.startswith("_"):
             raise AttributeError(name)
         layer = self._record
-        ops = layer.__dict__.get("ops")
+        ops = getattr(layer, "ops", None)
         old = _op_member_by_leaf(self._GROUP).get(name)
         if old is not None and ops and len(ops) == 1:
             return getattr(getattr(ops[0], self._GROUP), name)

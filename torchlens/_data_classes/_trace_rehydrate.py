@@ -50,6 +50,7 @@ from .._trace_core import record_rows, relation_views
 from .._trace_core.core import TraceCore
 from .._trace_core.op_store import DetachedOpStore, OpRowStore
 from .._trace_core.record_rows import CORE_KEY, BackwardEpoch
+from ._layer_state import settle_layer_logs
 
 if TYPE_CHECKING:
     from .trace import Trace
@@ -227,4 +228,4 @@ def rehydrate_trace_core(trace: Trace) -> bool:
                     record_rows.detach_record(record)
         trace.__dict__.pop("_trace_core", None)
         return False
-    return True
+    return settle_layer_logs(trace)

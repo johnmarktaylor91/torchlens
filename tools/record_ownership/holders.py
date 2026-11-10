@@ -69,9 +69,6 @@ class Holder:
 
 
 HOLDERS: dict[str, Holder] = {
-    "Trace._trace_core:TraceCore._strong_facades{*}[*] -> Op": Holder(
-        ACTIVATION, but=("pickle_state",)
-    ),
     "Trace._trace_core:TraceCore._strong_facades{*}{*}[*]:ModuleCallAccessor._dict{*} -> ModuleCall": Holder(
         ACTIVATION, but=("pickle_state",)
     ),
@@ -84,17 +81,8 @@ HOLDERS: dict[str, Holder] = {
     "Trace._trace_core:TraceCore._strong_facades{*}{*}[*]:ParamAccessor._list[*] -> Param": Holder(
         ACTIVATION, only=("deepcopied",)
     ),
-    "Layer.ops:OpAccessor._dict{*} -> Op": Holder(LAYER_STATE),
-    "Layer.ops:OpAccessor._list[*] -> Op": Holder(LAYER_STATE),
-    "Trace._layer_accessor_cache[*]:LayerAccessor._dict{*} -> Layer": Holder(
-        LAYER_STATE,
-        but=("facets_read", "fork_cold", "pickle_state", "plain", "readers", "save_none"),
-    ),
-    "Trace._layer_accessor_cache[*]:LayerAccessor._list[*] -> Layer": Holder(
-        LAYER_STATE,
-        but=("facets_read", "fork_cold", "pickle_state", "plain", "readers", "save_none"),
-    ),
-    "Trace._layer_logs{*} -> Layer": Holder(LAYER_STATE, but=("pickle_state",)),
+    f"{SIDE_TABLE}{{*}}[*] -> Op": Holder(ACTIVATION, but=("pickle_state",)),
+    f"{SIDE_TABLE}{{*}}[*] -> Layer": Holder(ACTIVATION, but=("pickle_state",)),
     "Module._facets_cache:FacetView._record -> Module": Holder(
         OP_ROW_CELLS, only=("deepcopied", "facets_read", "pickle_state")
     ),
@@ -165,8 +153,6 @@ HOLDERS: dict[str, Holder] = {
     "GradFn._tl_core:Store.rows[calls]:GradFnCallAccessor._list[*] -> GradFnCall": Holder(
         LATER_KINDS, only=("pickle_state", "pickled")
     ),
-    "Layer.grad_fn -> GradFn": Holder(LATER_KINDS, only=("backward", "pickle_state", "pickled")),
-    "Layer.grad_fn_handle -> GradFn": Holder(LATER_KINDS, only=("pickled",)),
     "Op._core:Store.rows[_param_logs][*] -> Param": Holder(LATER_KINDS, only=("pickle_state",)),
     "Op._core:Store.rows[grad_fn] -> GradFn": Holder(LATER_KINDS, only=("pickle_state",)),
     "Trace._backward_pass_logs{*}:BackwardPass._tl_core:Store.rows[grad_fn_calls][*] -> GradFnCall": Holder(
@@ -206,7 +192,13 @@ HOLDERS: dict[str, Holder] = {
         LATER_KINDS, only=("backward",)
     ),
     "Trace._trace_core:TraceCore.ops:Store.rows[_param_logs][*] -> Param": Holder(
-        LATER_KINDS, but=("pickle_state",)
+        LATER_KINDS, but=("pickle_state", "pickled", "loaded")
+    ),
+    # A restored layer's state shares its first op's parameter list (one list
+    # object); the walk now reaches that list through the trace-held layer
+    # state first, so in these cases it carries this name instead of the row above.
+    "Trace._layer_logs{*}{*}[*] -> Param": Holder(
+        LATER_KINDS, only=("pickled", "deepcopied", "loaded")
     ),
     "Trace._trace_core:TraceCore.ops:Store.rows[grad_fn] -> GradFn": Holder(
         LATER_KINDS, only=("backward", "pickled")
@@ -222,8 +214,6 @@ KNOWN: dict[str, tuple[str, str]] = {
     "op list": ("plain", "Trace._layer_list[*] -> Op"),
     "label dictionary (main keys)": ("plain", "Trace._layer_dict_main_keys{*} -> Op"),
     "label dictionary (all keys)": ("plain", "Trace._layer_dict_all_keys{*} -> Op"),
-    "Layer records": ("plain", "Trace._layer_logs{*} -> Layer"),
-    "Layer op accessors": ("plain", "Layer.ops:OpAccessor._list[*] -> Op"),
     "facet cache": (
         "facets_read",
         "Trace._trace_core:TraceCore.ops:Store.rows[_facets_cache]:FacetView._record -> Op",

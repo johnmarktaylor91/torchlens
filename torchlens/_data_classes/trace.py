@@ -1118,7 +1118,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
 
         # Tensor Tracking - post-processed (populated after _tracing_finished=True):
         self._layer_list, self._layer_dict_main_keys, self._layer_dict_all_keys = op_holders(self)
-        self._layer_logs: dict[str, Layer] = OrderedDict()  # no-pass label -> aggregate Layer
+        self._layer_logs: dict[str, Layer] = _trace_state_io.initial_layer_logs(self)
         self.op_labels: list[str] = []  # pass-qualified labels (e.g. "conv2d_1_1:1")
         self.layer_labels: list[str] = []  # pass-stripped labels (e.g. "conv2d_1_1")
         self._layer_num_calls: dict[str, int] = OrderedDict()  # no-pass label -> pass count

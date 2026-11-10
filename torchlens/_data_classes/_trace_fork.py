@@ -56,6 +56,7 @@ from .._utils.env_flags import closed_bool_env
 from ..intervention._types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
 from ._fork_flat_copy import _FLAT_COPY_DEPTH, _NO_FLAT_COPY, _flat_container_copy
 from ._fork_translation import RowTranslator
+from ._layer_state import install_layer_logs
 from ._op_row_containers import bind_op_containers
 from ._state_adapter import state_items, state_new, state_restore
 from .func_call_location import FuncCallLocation
@@ -507,7 +508,7 @@ def _fill_layer_shells(
             else:
                 shell._graph_equivalent_ops = view
         fork_layer_logs[label] = shell
-    fork._layer_logs = fork_layer_logs
+    install_layer_logs(fork, fork_layer_logs)
 
 
 def build_fork(parent: Trace, *, name: str | None) -> Trace:

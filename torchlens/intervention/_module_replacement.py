@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
+from .._data_classes._layer_state import install_layer_logs
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
 from .._selection.target import TargetSpec
 from .._utils._record_group_table import op_attr
@@ -476,7 +477,7 @@ def _splice_into_containers(
         logs[label] = existing
         if label == site.layer_label:
             logs[replacement.layer_label] = layer
-    trace._layer_logs = logs
+    install_layer_logs(trace, logs)
     trace.output_layers = [
         replacement.layer_label if label == site.layer_label else label
         for label in trace.output_layers

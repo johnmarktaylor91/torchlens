@@ -21,6 +21,7 @@ from collections.abc import Callable, Iterable
 from itertools import zip_longest
 from typing import TYPE_CHECKING, Any, cast
 
+from .._data_classes._layer_state import install_layer_logs
 from .._data_classes._op_columns import column_rows_by_label
 from .._quantities import Bytes
 from .._utils._record_group_table import record_member
@@ -83,7 +84,7 @@ def build_layer_logs(trace: Trace, layer_class: type, reconcile: Callable[..., N
         )
         total = _sum_autograd(layer_logs, reconcile, _column_reader(columns, get, row_of))
     trace._cost_total_autograd_memory = total
-    trace._layer_logs = layer_logs
+    install_layer_logs(trace, layer_logs)
 
 
 def _facade_reader(op: Any, name: str, *default: Any) -> Any:

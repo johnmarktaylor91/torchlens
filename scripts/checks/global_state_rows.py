@@ -327,6 +327,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # the class namespace and are never mutated by a capture.
         ("torchlens/_data_classes/_op_row_release.py", "_ROW_RELEASE_PROPERTIES"),
         ("torchlens/_data_classes/_op_row_release.py", "_OP_FACADE"),
+        # The Layer class layer.py binds once at import so the layer state
+        # module can build Layer views without importing it; never mutated
+        # by a capture.
+        ("torchlens/_data_classes/_layer_state.py", "_LAYER_CLASS"),
         # First-read source digests for conditional/source attribution (deep-hunt
         # C4, fix/postproc 7a58a021). Deliberately NOT a _PROCESS_CACHES row:
         # clearing it is not correctness-neutral (the pin is the fail-closed

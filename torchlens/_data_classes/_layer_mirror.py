@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPLE_VIEW_FIELDS
 from .._utils._record_group_table import LAYER_MOVED_MEMBERS, op_spelling
@@ -17,15 +17,27 @@ def _layer_rep_op(layer: Layer) -> Op | None:
     """Return the representative (first-pass) op backing one Layer's mirrors.
 
     Reads raw ``__dict__`` storage so descriptor bodies never re-enter the
-    attribute protocol. ``OpAccessor._list`` is pass-index sorted, so index 0
-    is the first pass — the op the former ``__init__`` copied from.
+    attribute protocol. The op accessor names its ops by store row, sorted by
+    pass, so the first pair is the first pass: the op the former ``__init__``
+    copied from. The row is read through the trace core's view table.
     """
 
     ops = layer.__dict__.get("ops")
     if ops is None:
         return None
-    item_list = ops.__dict__.get("_list")
-    return item_list[0] if item_list else None
+    state = ops.__dict__
+    try:
+        row = state["_keys"][1]
+        if row >= 0:
+            # A typed local, not ``cast``: no call on the per-read path.
+            op: Op | None = state["_core_ref"]()._strong_facades["op"][row]
+            if op is not None:
+                return op
+    except (KeyError, IndexError, AttributeError, TypeError):
+        pass
+    # Slow path: no pass yet, an unkeyed first pass, a dropped view, or a
+    # saved-shape accessor copy (reading ``_keys`` revives it).
+    return cast("Op", ops._op_at(0)) if getattr(ops, "_keys", None) else None
 
 
 def _layer_mirror_read(layer: Layer, name: str) -> Any:
