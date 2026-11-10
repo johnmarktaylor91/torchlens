@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1775 modules, 713091 lines, 0 modules without a docstring.
+85 packages, 1775 modules, 713105 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 131 | 46219 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 131 | 46233 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (131 modules, 46219 lines)
+Core data structures for representing a logged forward pass. (131 modules, 46233 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -335,7 +335,7 @@ Core data structures for representing a logged forward pass. (131 modules, 46219
 | `_fork_translation` | Fork record translation by kind and row. | 404 |
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
 | `_grad_fn_pass` | Resolve the forward pass one GradFn differentiates. | 41 |
-| `_grad_fn_views` | How a trace holds its backward records: as state, handed out as views. | 248 |
+| `_grad_fn_views` | How a trace holds its backward records: as state, handed out as views. | 258 |
 | `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 179 |
 | `_layer_accessors` | OpAccessor and LayerAccessor: dict-like lookup over ops and layers. | 705 |
 | `_layer_fields` | Layer field descriptors: mirror reads, per-layer shadows, tombstones and grad-fn keys. | 247 |
@@ -382,7 +382,7 @@ Core data structures for representing a logged forward pass. (131 modules, 46219
 | `_record_groups_module_context` | The module_context group of an ''Op'' or ''Layer'': ''op.module_context.call_depth'', ... | 178 |
 | `_record_groups_payload` | The payload group of an ''Op'' or ''Layer'': ''op.payload.transformed_out'', ... | 203 |
 | `_record_groups_source` | The source group of an ''Op'' or ''Layer'': ''op.source.frames'', ''layer.source.fx_path'', ... | 109 |
-| `_record_views` | Records as views over state the trace holds. | 419 |
+| `_record_views` | Records as views over state the trace holds. | 422 |
 | `_removed_members` | Typed refusals for removed public members of the record classes. | 65 |
 | `_repr` | Shared record representation helpers. | 64 |
 | `_runtime_handles` | Shared runtime handle resolution for TorchLens records. | 77 |
@@ -432,7 +432,7 @@ Core data structures for representing a logged forward pass. (131 modules, 46219
 | `_value_state` | Resident-payload probes and bounded value facts for record displays. | 184 |
 | `aten_op` | Primitive-operation records for the ATen profile (persisted, tlspec v8). | 220 |
 | `attribute_write` | The record of one plain module attribute a traced forward wrote. | 66 |
-| `backward_pass` | Per-invocation backward pass records and accessors. | 368 |
+| `backward_pass` | Per-invocation backward pass records and accessors. | 369 |
 | `buffer` | Persistent buffer entities and dict-like accessors. | 493 |
 | `cleanup` | Trace cleanup helpers and post-session teardown. | 964 |
 | `container` | Runtime views over captured TorchLens output containers. | 1161 |
