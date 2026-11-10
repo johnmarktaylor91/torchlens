@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1813 modules, 722431 lines, 0 modules without a docstring.
+85 packages, 1814 modules, 722450 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 22 | 6795 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 80 | 24894 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 81 | 24912 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6578 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 155 | 62896 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 155 | 62897 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -975,7 +975,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (22 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (80 modules, 24894 lines)
+Shared helpers used by two or more TorchLens packages. (81 modules, 24912 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1016,6 +1016,7 @@ Shared helpers used by two or more TorchLens packages. (80 modules, 24894 lines)
 | `_onramp` | Convenience helpers documented at ''torchlens._utils''. | 482 |
 | `_optimizer_hooks` | Optimizer step hooks that still fire after torch 2.1's Dynamo strips them. | 189 |
 | `_package_frames` | Which Python frames belong to TorchLens itself. | 78 |
+| `_payload_alias` | The alias a deferred payload holds in place of an eager copy. | 18 |
 | `_producer_version` | Parse the torch version a saved artifact recorded (never the live runtime). | 31 |
 | `_quiet_property` | Attribute reads for the tensor search that keep property getters' log records quiet. | 97 |
 | `_raw_pointer_denial` | Structural raw-pointer denial for resolved callables and bundle keywords. | 429 |
@@ -1520,7 +1521,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (155 modules, 62896 lines)
+Torch backend implementation package for TorchLens capture. (155 modules, 62897 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1603,7 +1604,7 @@ Torch backend implementation package for TorchLens capture. (155 modules, 62896 
 | `_ops_exhaustive` | Exhaustive event emission and autograd candidate collection. | 612 |
 | `_ops_finalize` | Predicate context evaluation and layer-entry finalization. | 510 |
 | `_ops_freeze_refs` | Exhaustive freeze ref builders, outside the package's largest import cycle. | 347 |
-| `_ops_fresh_alias` | The payload of a fresh plain output on the direct path: the deferred alias or the eager copy. | 178 |
+| `_ops_fresh_alias` | The payload of a fresh plain output on the direct path: the deferred alias or the eager copy. | 179 |
 | `_ops_fresh_budget` | Save-budget admission and reconciliation for the direct payload path. | 126 |
 | `_ops_fresh_payload` | Direct payload path for a fresh plain output under the default save options. | 134 |
 | `_ops_interventions` | Legacy and predicate-mode live interventions. | 806 |

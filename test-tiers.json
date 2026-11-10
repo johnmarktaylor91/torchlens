@@ -4519,6 +4519,7 @@
       "torchlens/_postprocess/_lookup_key_scan.py": [
         "tests/test_buffer_datamodel.py",
         "tests/test_conditional_lifecycle.py",
+        "tests/test_exception_taxonomy.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed2_counters.py",
         "tests/test_replay_template_family.py"
@@ -6421,6 +6422,9 @@
         "tests/test_intervention_phase3.py",
         "tests/test_robustness_pr4.py",
         "tests/test_wrapper_teardown_hygiene.py"
+      ],
+      "torchlens/_utils/_payload_alias.py": [
+        "tests/test_fresh_payload_alias.py"
       ],
       "torchlens/_utils/_producer_version.py": [
         "tests/test_r18i_utils_options.py",
