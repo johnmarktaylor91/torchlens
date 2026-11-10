@@ -551,11 +551,15 @@ def _capture(model_cls: type[nn.Module] = _Stack) -> Any:
     )
 
 
-def _labels(trace: Any) -> dict[int, Any]:
+def _labels(trace: Any, keep: list[Any]) -> dict[int, Any]:
+    """Name the trace's records by id; ``keep`` holds each one so its id stays its own."""
+
     labels: dict[int, Any] = {id(trace): "trace"}
     for op in trace._layer_list:
+        keep.append(op)
         labels[id(op)] = ("op", op.layer_label)
     for label, layer in (trace.__dict__.get("_layer_logs") or {}).items():
+        keep.append(layer)
         labels.setdefault(id(layer), ("layer", label))
     modules = trace.__dict__.get("_module_logs")
     for key, module in modules._dict.items() if modules is not None else ():
@@ -616,12 +620,13 @@ def _normalize(value: Any, labels: dict[int, Any], parent_ids: set[int], depth: 
 def _fork_picture(parent: Any, fork: Any) -> dict[str, Any]:
     """Trace fields, module record cells and Layer shadow dicts of one fork."""
 
-    labels = _labels(fork)
-    parent_ids: set[int] = set()
     # Every value walked stays referenced until the picture is done: a
     # temporary freed mid-walk hands its id to the next one, which the walk
     # would then skip as already seen, hiding that layer's shared members.
+    # Records are views a trace builds on lookup, so they are kept too.
     keep: list[Any] = []
+    labels = _labels(fork, keep)
+    parent_ids: set[int] = set()
     for _name, value in state_items(parent):
         keep.append(value)
         _collect_ids(value, parent_ids)
