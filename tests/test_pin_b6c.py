@@ -108,6 +108,12 @@ _DOORS: dict[str, Callable[[Any], Any]] = {
     "module.ops[position]": lambda t: t.modules["fc"].ops[0],
     "module_call.module": lambda t: t.module_calls["act:2"].module,
     "module.calls[position].module": lambda t: t.modules["fc"].calls[0].module,
+    "trace.root_module": lambda t: t.root_module,
+    "trace.call_tree": lambda t: t.call_tree,
+    "trace.walk_calls()": lambda t: list(t.walk_calls())[-1],
+    "module.call_tree": lambda t: t.modules["fc"].call_tree,
+    "module.walk_descendants()": lambda t: next(t.root_module.walk_descendants()),
+    "module_call.walk_descendants()": lambda t: list(t.call_tree.walk_descendants())[-1],
 }
 
 
