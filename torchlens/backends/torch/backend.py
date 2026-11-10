@@ -36,6 +36,7 @@ from ._completeness_storage import capture_scalar_escape_warning
 from ._held_refs_capture import rebind_held_torch_refs, restore_held_torch_refs
 from ._ops_autograd import _get_autograd_saved_stats_for_tensor
 from ._ops_emission import log_function_output_tensors
+from ._prepared_tree import UNCHANGED, changed_module_tree, record_prepared_tree
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import uninstall_buffer_write_tracker
 from .escape_detection import capture_escape_guard
@@ -184,8 +185,11 @@ class TorchBackend:
         return model
 
     def prepare_model_once(self, model: object) -> object:
-        """Apply one-time torch model preparation."""
+        """Apply one-time torch model preparation, in full when the module tree changed."""
+        tree = changed_module_tree(model)
         _ensure_model_prepared(cast(torch.nn.Module, model))
+        if tree is not UNCHANGED:
+            record_prepared_tree(model, tree)
         return model
 
     def prepare_model_session(self, session: object, model: object) -> object:
