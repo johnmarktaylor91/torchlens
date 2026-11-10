@@ -30,6 +30,11 @@ The source's version is read under ``pause_logging`` with the copy, as the
 deferred alias's own version read already is: it is an attribute read that runs
 no operation, so the internal-read marker the general path wraps it in has
 nothing to mark.
+
+The payload (the deferred alias or the eager copy) comes from
+``_ops_fresh_alias.fresh_payload`` and the save-budget admission and
+reconciliation from ``_ops_fresh_budget``; each module names the general-path
+checks it skips and why they are settled for this output.
 """
 
 from __future__ import annotations
@@ -41,13 +46,10 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ..._data_classes._op_dedup import _IdentityDedupCache
-from ..._save_budget import _RetainedStorageEntry
 from ..._state import pause_logging
-from ..._utils import tensor_utils as _tensor_utils
 from ..._utils._tensor_label import mark_detached_saved_activation
-from ..._utils._torch_compat import tensor_version_or_none
-from ..._utils._torch_symbols import tensor_read
-from ..._utils.tensor_utils import _copy_tensor_payload, _try_defer_payload_alias
+from ._ops_fresh_alias import fresh_payload
+from ._ops_fresh_budget import admit_fresh, commit_fresh
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -83,55 +85,10 @@ def fresh_plain_payload_eligible(
         return None
     if type(cache) is not _IdentityDedupCache:
         return None
-    cached = cache.get(id(t))
-    if cached is not None and cached[0]() is t:
+    key = id(t)
+    if key in cache and cache[key][0]() is t:
         return None
     return cache
-
-
-def _clone_gate(t: torch.Tensor, detach: bool) -> tuple[torch.Tensor, bool]:
-    """Return the payload ``_clone_tensor_payload`` returns for ``t``, and ``t.requires_grad``.
-
-    The same decision as its ``"copy"`` mode with no move: the deferred alias
-    while the payload window is armed and the tensor is eligible, otherwise the
-    eager copy. Callers hold ``pause_logging``.
-    """
-
-    payload = None
-    requires_grad = t.requires_grad
-    if _tensor_utils._DEFER_WINDOW_DEPTH:
-        if detach or not requires_grad or not torch.is_grad_enabled():
-            payload = _try_defer_payload_alias(t)
-        elif _tensor_utils._DEFER_GRAD_ENABLED:
-            payload = _try_defer_payload_alias(t, graph_connected=True)
-    if payload is None:
-        payload = _copy_tensor_payload(t, detach_tensor=detach, save_mode="copy")
-    return payload, requires_grad
-
-
-def _commit_fresh(budget: Any, reservation: Any, raw_out: torch.Tensor, identity: Any) -> None:
-    """Reconcile one admission whose payload is a new storage of exactly the admitted size.
-
-    ``SaveBudget.commit`` would subtract the estimate and charge the same bytes
-    back under a new storage entry, so the totals and the refusal outcome are
-    unchanged and only the entry and its release watcher are added. Any other
-    payload (unreadable, a storage already charged, a size or device that
-    differs) goes through ``commit``.
-    """
-
-    ledger = budget.ledgers.get(identity[0]) if identity is not None else None
-    if (
-        ledger is None
-        or identity[2] != reservation.num_bytes
-        or identity in ledger.retained_storage
-        or raw_out.device != reservation.device
-    ):
-        budget.commit(reservation, (raw_out, None))
-        return
-    ledger.retained_storage[identity] = _RetainedStorageEntry(
-        physical_bytes=reservation.num_bytes, live_refs=1
-    )
-    budget._watch_payload(raw_out, identity[0], identity)
 
 
 def save_fresh_plain_activation(
@@ -146,22 +103,18 @@ def save_fresh_plain_activation(
     shape = tuple(t.shape)
     dtype = t.dtype
     num_bytes = int(prod(shape) * dtype.itemsize)
+    device = t.device
     budget = trace._save_budget_accountant
-    reservation = None
-    if budget is not None:
-        reservation = budget.admit(
-            str(label or fields_dict.get("_label_raw") or "<unlabeled>"), t.device, num_bytes
-        )
-    identity = None
+    admitted = None if budget is None else admit_fresh(budget, device, num_bytes, fields_dict)
     with pause_logging():
-        raw_out, requires_grad = _clone_gate(t, fields_dict["detach_saved_activations"])
-        version = tensor_version_or_none(t)
-        if reservation is not None:
-            try:
-                storage = tensor_read(raw_out, "untyped_storage")(raw_out)
-                identity = (str(raw_out.device), int(storage.data_ptr()), int(storage.nbytes()))
-            except Exception:
-                identity = None
+        detach = fields_dict["detach_saved_activations"]
+        raw_out, identity, requires_grad = fresh_payload(t, detach, num_bytes, admitted is not None)
+        try:
+            # ``tensor_version_or_none``: an exact ``torch.Tensor``'s version is an int,
+            # and an inference tensor's read raises.
+            version: int | None = t._version
+        except (RuntimeError, AttributeError, NotImplementedError, TypeError):
+            version = None
     fields_dict["shape"] = shape
     fields_dict["dtype"] = dtype
     fields_dict["activation_memory"] = num_bytes
@@ -175,7 +128,7 @@ def save_fresh_plain_activation(
     fields_dict["transformed_out_dtype"] = None
     fields_dict["transformed_activation_memory"] = None
     fields_dict["has_saved_activation"] = True
-    if reservation is not None:
-        _commit_fresh(budget, reservation, raw_out, identity)
+    if admitted is not None:
+        commit_fresh(budget, admitted, raw_out, identity, device, num_bytes, fields_dict)
     fields_dict["saved_args"] = None
     fields_dict["saved_kwargs"] = None
