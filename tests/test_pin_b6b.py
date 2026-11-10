@@ -225,6 +225,25 @@ def test_param_row_forms_stay_plain_in_pickle_save_and_plain_state(tmp_path: Any
     ]
 
 
+def test_fork_cells_are_the_forks_row_forms_once_read() -> None:
+    """A fork pins no op cell at fork time; each one reads as the fork's own ``ParamTuple``."""
+
+    from torchlens._data_classes._param_rows import param_rows_of
+
+    trace = _trace()
+    fork = trace.fork()
+    core = fork.__dict__["_trace_core"]
+    rows = param_rows_of(core)
+    fid = core.ops.layout.fid_by_name["_param_logs"]
+    cells = [core.ops.cell_get(row, fid) for row in range(len(core.ops))]
+    held = [cell for cell in cells if cell]
+    assert held and all(type(cell) is ParamTuple and cell._owner is rows for cell in held)
+    states = [s if s.__class__ is dict else s.__dict__ for s in dict.values(fork._layer_logs)]
+    layer_cells = [state["_param_logs"] for state in states if state.get("_param_logs")]
+    assert layer_cells and all(cell._owner is rows for cell in layer_cells)
+    assert all(param.trace is fork for cell in held for param in cell)
+
+
 def test_fork_params_read_the_fork() -> None:
     trace = _trace()
     fork = trace.fork()

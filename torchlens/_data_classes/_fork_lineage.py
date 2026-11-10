@@ -96,4 +96,4 @@ def rebind_fork_owner_refs(trace: Trace) -> None:
         module_log.__dict__.pop("_facets_cache", None)
         for module_call in module_log.calls.values():
             module_call._source_trace = trace
-    pin_params(trace)
+    pin_params(trace, forked=True)

@@ -62,12 +62,15 @@ def _accessor_class() -> type:
     return _ACCESSOR[0]
 
 
-def pin_params(trace: Any) -> None:
+def pin_params(trace: Any, *, forked: bool = False) -> None:
     """Turn ``trace``'s ``Param`` containers into row keys and name it the views' owner.
 
     A stream session still open for these rows ends here: a restored trace may
     keep the plain accessor a state walk built, and the session's plain forms
-    must not keep the trace alive.
+    must not keep the trace alive. A fork (``forked``) skips the op-cell and
+    layer-state walks: those cells are copies of the parent's, which the fork
+    translator makes on first read (``fork_copy``), so a walk would only force
+    every copy at fork time.
     """
 
     core = trace.__dict__.get("_trace_core")
@@ -86,9 +89,10 @@ def pin_params(trace: Any) -> None:
     if by_module:
         for address, params in list(by_module.items()):
             by_module[address] = as_sequence(rows, params, memo)
-    if isinstance(core.ops, OpRowStore):
-        _pin_op_cells(core.ops, rows, memo)
-    _pin_layer_states(state.get("_layer_logs"), rows, memo)
+    if not forked:
+        if isinstance(core.ops, OpRowStore):
+            _pin_op_cells(core.ops, rows, memo)
+        _pin_layer_states(state.get("_layer_logs"), rows, memo)
     cls = _accessor_class()
     for entry in list(core._views.cells.values()):
         if entry.__class__ is tuple and entry[2:] and not entry[3:]:
