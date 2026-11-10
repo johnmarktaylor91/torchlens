@@ -388,11 +388,12 @@ class StoreWriteObserver:
 
 
 SAVED_OUTPUT, ARGUMENT, OTHER, MODEL_OWNED = 0, 1, 2, 3
-CATEGORY_NAMES = ("saved_output", "argument", "other", "model_owned")
+CATEGORY_NAMES = ("saved_output", "argument", "other", "caller_owned")
 _ARGUMENT_TOKENS = frozenset({"arg", "args", "kwarg", "kwargs"})
 _OUTPUT_TOKENS = frozenset(
     {"out", "outs", "output", "outputs", "activation", "activations", "payload", "payloads"}
 )
+_INPUT_TOKENS = frozenset({"input", "inputs"})
 _ATOMIC = frozenset({int, float, str, bool, type(None), bytes, complex})
 _STOP_TYPES = (
     type,
@@ -423,6 +424,8 @@ def _name_rank(name: str) -> int:
         tokens = set(name.strip("_").split("_"))
         if name == "input_activations" or tokens & _ARGUMENT_TOKENS:
             rank = ARGUMENT
+        elif tokens & _INPUT_TOKENS:
+            rank = OTHER
         elif tokens & _OUTPUT_TOKENS:
             rank = SAVED_OUTPUT
         else:
@@ -442,12 +445,27 @@ def _storage_key(tensor: torch.Tensor) -> tuple[Any, int]:
             return ("tensor", id(tensor)), 0
 
 
-def model_owned_keys(model: nn.Module) -> tuple[set[int], set[Any]]:
-    """Return the ids and storage keys of the model's parameters and buffers."""
+def _input_tensors(value: Any) -> list[torch.Tensor]:
+    if isinstance(value, torch.Tensor):
+        return [value]
+    if isinstance(value, dict):
+        value = list(value.values())
+    if isinstance(value, (list, tuple)):
+        return [tensor for item in value for tensor in _input_tensors(item)]
+    return []
+
+
+def caller_owned_keys(model: nn.Module, inputs: Any = ()) -> tuple[set[int], set[Any]]:
+    """Return the ids and storage keys of the tensors the caller owns.
+
+    They are the model's parameters and buffers and the tensors of ``inputs``
+    (the forward's own input, nested in lists, tuples or dicts): the caller
+    holds them whether or not a trace does, so they are not capture cost.
+    """
 
     ids: set[int] = set()
     storages: set[Any] = set()
-    for tensor in list(model.parameters()) + list(model.buffers()):
+    for tensor in [*model.parameters(), *model.buffers(), *_input_tensors(inputs)]:
         ids.add(id(tensor))
         storages.add(_storage_key(tensor)[0])
     return ids, storages
@@ -463,10 +481,11 @@ def held_tensor_bytes(
     and weak references. A tensor's category is that of the outermost named
     hop on the path to it (an op-store field, an attribute, a string key):
     a name with an ``arg`` or ``kwarg`` token (or ``input_activations``) is an
-    argument, one with an ``out``, ``output``, ``activation`` or ``payload``
-    token a saved output, anything else "other". Bytes are counted once per
-    storage, under the strongest claim (saved output, then argument, then
-    other); the model's own parameters and buffers are reported apart.
+    argument, any other name with an ``input`` token "other", one with an
+    ``out``, ``output``, ``activation`` or ``payload`` token a saved output,
+    anything else "other". Bytes are counted once per storage, under the
+    strongest claim (saved output, then argument, then other); the tensors the
+    caller owns (see :func:`caller_owned_keys`) are reported apart.
 
     Returns
     -------
@@ -599,8 +618,10 @@ class TensorBytesObserver:
     ``dense``; after that every ``stride``-th; the end of the forward always.
     """
 
-    def __init__(self, model: nn.Module, dense: int = 64, stride: int = 16) -> None:
-        self._model_ids, self._model_storages = model_owned_keys(model)
+    def __init__(
+        self, model: nn.Module, inputs: Any = (), *, dense: int = 64, stride: int = 16
+    ) -> None:
+        self._model_ids, self._model_storages = caller_owned_keys(model, inputs)
         self._dense = dense
         self._stride = stride
         self.boundaries = 0

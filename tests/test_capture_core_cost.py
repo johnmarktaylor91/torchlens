@@ -22,10 +22,10 @@ from benchmarks import capture_core_bars as bars_mod, capture_core_cost as cost
 from benchmarks.capture_core_counters import (
     StoreWriteObserver,
     TensorBytesObserver,
+    caller_owned_keys,
     count_calls,
     count_phases,
     held_tensor_bytes,
-    model_owned_keys,
 )
 
 
@@ -207,6 +207,7 @@ def test_store_write_observer_sees_capture_ingest_and_pass_writes() -> None:
 
 def test_held_tensor_bytes_classifies_by_the_outermost_name() -> None:
     saved, argument, shared, loose = (torch.zeros(n) for n in (2, 4, 8, 16))
+    own_input, input_copy = torch.zeros(32), torch.zeros(64)
     owner = nn.Linear(3, 3)
     root = {
         "out": saved,
@@ -214,13 +215,16 @@ def test_held_tensor_bytes_classifies_by_the_outermost_name() -> None:
         "transformed_out": shared,
         "layout": (loose, owner.weight),
         "module": owner,
+        "kwargs": {"x": own_input[:8]},
+        "_output_attribution_input_tensors": (own_input, input_copy),
     }
-    totals, holders, truncated = held_tensor_bytes(root, *model_owned_keys(owner))
+    owned = caller_owned_keys(owner, {"x": [own_input]})
+    totals, holders, truncated = held_tensor_bytes(root, *owned)
     assert not truncated
     assert totals["saved_output"] == (2 + 8) * 4
     assert totals["argument"] == 4 * 4
-    assert totals["other"] == 16 * 4
-    assert totals["model_owned"] == 9 * 4
+    assert totals["other"] == (16 + 64) * 4
+    assert totals["caller_owned"] == (9 + 32) * 4
     assert holders["argument"] == {"saved_args": 16}
     assert holders["saved_output"] == {"out": 8, "transformed_out": 32}
 
@@ -228,7 +232,7 @@ def test_held_tensor_bytes_classifies_by_the_outermost_name() -> None:
 def test_tensor_bytes_observer_samples_every_op_boundary_of_a_short_forward() -> None:
     model, x = cost.Chain(4), torch.zeros(4)
     tl.trace(model, x)
-    observer = TensorBytesObserver(model)
+    observer = TensorBytesObserver(model, x)
     count_phases(lambda: tl.trace(model, x), *observer.hooks())
     report = observer.report()
     assert report["boundaries"] >= 4

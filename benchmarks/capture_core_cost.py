@@ -225,7 +225,7 @@ def _c3_c9(model: nn.Module, x: torch.Tensor) -> tuple[dict[str, Any], dict[str,
     c9: dict[str, Any] = {}
     writes = StoreWriteObserver()
     for mode, kwargs in (("default", {}), ("save_none", {"save": "none"})):
-        held = TensorBytesObserver(model)
+        held = TensorBytesObserver(model, x)
         call_hooks, return_hooks = held.hooks()
         if mode == "default":
             write_calls, write_returns = writes.hooks()
