@@ -215,7 +215,8 @@ def _flood_plain_rows(
     Mirrors :func:`_flood_graph_from_input_or_output_nodes` read for read and
     write for write. A cell that is not an ``int`` is an unset distance; a
     default-omitted lineage or relation cell is answered by the store exactly
-    where the facade would read it.
+    where the facade would read it. A tie is written as the facade body writes
+    it, so equal distances keep sharing one ``int`` object.
     """
 
     # Complexity: one hot loop with field access inlined on purpose; a call per
@@ -242,14 +243,16 @@ def _flood_plain_rows(
         high += 1
         if high < low:
             low, high = high, low
+        elif high == low:
+            low = high
         for target_label in targets:
             target_row = rows[target_label]
             target = raw_rows[target_row]
             current = target[min_fid]
-            if current.__class__ is not int or low < current:
+            if current.__class__ is not int or low <= current:
                 target[min_fid] = low
             current = target[max_fid]
-            if current.__class__ is not int or high > current:
+            if current.__class__ is not int or high >= current:
                 target[max_fid] = high
             target[marker_fid] = True
             reached = target[lineage_fid]
