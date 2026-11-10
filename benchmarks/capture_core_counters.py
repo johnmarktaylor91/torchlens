@@ -246,6 +246,25 @@ def _settled_count(objects: list[Any]) -> tuple[int, int]:
     return len(objects) - dead, dead
 
 
+def _settle_label_session() -> None:
+    """Release the retired label session, as the next trace's start would.
+
+    Between traces TorchLens keeps the last capture's label session (a weak
+    inventory of stamped objects and a storage alias index) so the next
+    capture can sweep stamps that outlived it; the next capture's start
+    sweeps and drops it, whether or not the earlier trace is still held. The
+    alias index is keyed by storage address and keeps one bucket per address
+    it saw, so its size follows the allocator, not the model: whole
+    ``WeakIdKeyDictionary`` buckets came and went between runs of one commit.
+    Doing that sweep before each snapshot keeps the session out of both, so
+    ``objects`` counts what the result keeps, not what the last trace left.
+    """
+
+    from torchlens._utils._tensor_label import sweep_retired_label_stamps
+
+    sweep_retired_label_stamps()
+
+
 def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
     """Run ``fn`` and report what its result keeps alive.
 
@@ -272,9 +291,14 @@ def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
     between runs of one commit. They keep nothing alive. A weak reference with a
     live referent is counted like any other object, so one the trace keeps
     still raises ``objects``.
+
+    Each side first releases the retired label session (see
+    :func:`_settle_label_session`), which TorchLens itself releases at the
+    next trace's start; an object the result holds is still counted.
     """
 
     kinds = record_kinds()
+    _settle_label_session()
     gc.collect()
     gc.collect()
     before = gc.get_objects()
@@ -283,6 +307,7 @@ def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
     del before
     blocks_before = sys.getallocatedblocks()
     result = fn()
+    _settle_label_session()
     gc.collect()
     gc.collect()
     blocks_after = sys.getallocatedblocks()

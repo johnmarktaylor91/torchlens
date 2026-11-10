@@ -17,6 +17,7 @@ import weakref
 import pytest
 import torch
 from torch import nn
+from torch.utils.weak import WeakIdKeyDictionary
 
 import torchlens as tl
 from benchmarks import capture_core_bars as bars_mod, capture_core_cost as cost
@@ -29,6 +30,7 @@ from benchmarks.capture_core_counters import (
     held_tensor_bytes,
     retained_after,
 )
+from torchlens._utils import _tensor_label as labels
 
 
 def _synthetic(scale: float = 1.0) -> dict:
@@ -215,6 +217,55 @@ def test_c2_rises_when_a_trace_keeps_a_live_weak_reference() -> None:
     planted, with_ref = retained_after(lambda: (tl.trace(model, x), weakref.ref(model, _ignore)))
     del planted
     assert with_ref["objects"] - without["objects"] == 1
+
+
+def _small_traced_model() -> tuple[nn.Module, torch.Tensor]:
+    """A small model and input, traced once so later traces are warm."""
+
+    model = nn.Sequential(nn.Linear(3, 3), nn.ReLU()).eval()
+    x = torch.randn(2, 3)
+    tl.trace(model, x)
+    return model, x
+
+
+def test_c2_counts_a_weak_id_key_dictionary_the_trace_keeps() -> None:
+    model, x = _small_traced_model()
+    _, alone = retained_after(lambda: None)
+    _, one = retained_after(WeakIdKeyDictionary)
+    plain, without = retained_after(lambda: (tl.trace(model, x), None))
+    del plain
+    planted, with_dict = retained_after(lambda: (tl.trace(model, x), WeakIdKeyDictionary()))
+    del planted
+    own_objects = one["objects"] - alone["objects"]
+    assert own_objects > 1
+    assert with_dict["objects"] - without["objects"] == own_objects
+
+
+def _trace_leaving_buckets(model: nn.Module, x: torch.Tensor, extra: int) -> object:
+    """Trace, then add ``extra`` empty alias buckets to the session it retired."""
+
+    trace = tl.trace(model, x)
+    retired = labels._RETIRED_LABEL_SESSION
+    assert retired is not None
+    for key in range(extra):
+        # Negative keys: no storage address collides with them.
+        retired.by_storage_ptr[-1 - key] = WeakIdKeyDictionary()
+    return trace
+
+
+def test_c2_leaves_out_the_label_session_a_trace_leaves_behind() -> None:
+    # The alias index of the last trace's label session is released by the
+    # next trace's start and its size follows the allocator; neither the
+    # session left before the window nor the one the measured trace leaves
+    # moves the count.
+    model, x = _small_traced_model()
+    counts = []
+    for before, after in ((0, 0), (3, 0), (0, 2)):
+        _trace_leaving_buckets(model, x, before)
+        trace, held = retained_after(lambda after=after: _trace_leaving_buckets(model, x, after))
+        del trace
+        counts.append(held["objects"])
+    assert counts[1] == counts[0] and counts[2] == counts[0], counts
 
 
 def test_phase_counter_attributes_calls_and_leaves_no_profile_hook() -> None:
