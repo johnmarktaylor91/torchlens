@@ -70,29 +70,30 @@ class _Inner(nn.Module):
         return x + cache.tensor
 
 
-class _Outer(nn.Module):
-    """Builds a fresh opaque argument per forward and remembers it weakly."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.inner = _Inner()
-        self.refs: list[weakref.ref[_Holder]] = []
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        holder = _Holder(x * 2)
-        self.refs.append(weakref.ref(holder))
-        return self.inner(x, cache=holder)
-
-
 def test_trace_does_not_keep_the_opaque_argument_alive() -> None:
     """A default trace keeps the summary but not the opaque object or its tensor."""
 
-    model = _Outer()
-    trace = tl.trace(model, torch.ones(4))
+    # The weak references live in this closure, not on the model, so they are
+    # seen whichever model object the capture runs.
+    refs: list[weakref.ref[_Holder]] = []
+
+    class _Outer(nn.Module):
+        """Builds a fresh opaque argument per forward and remembers it weakly."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.inner = _Inner()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            holder = _Holder(x * 2)
+            refs.append(weakref.ref(holder))
+            return self.inner(x, cache=holder)
+
+    trace = tl.trace(_Outer(), torch.ones(4))
     gc.collect()
 
-    assert model.refs, "the forward ran"
-    assert all(ref() is None for ref in model.refs)
+    assert refs, "the forward ran"
+    assert all(ref() is None for ref in refs)
     inner = next(module for module in trace.modules if str(module.address) == "inner")
     summaries = [inner.calls.get(key).forward_kwargs_summary for key in inner.calls]
     assert summaries and all(summary == "{cache: <_Holder>}" for summary in summaries)
