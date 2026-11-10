@@ -49,17 +49,19 @@ class _Tangled(nn.Module):
         """Build the tangled tree."""
 
         super().__init__()
-        self.block = nn.Sequential(nn.Linear(3, 3), nn.BatchNorm1d(3))
-        self.alias = self.block[0]
+        first = nn.Linear(3, 3)
+        self.block = nn.Sequential(first, nn.BatchNorm1d(3))
+        self.alias = first
         self.empty: nn.Module | None = None
         self.register_module("nothing", None)
         self.tied = nn.Linear(3, 3)
-        self.tied.weight = self.block[0].weight
+        self.tied.weight = first.weight
         shared = torch.ones(3)
         self.register_buffer("one", shared)
         self.register_buffer("same", shared)
         self.register_buffer("missing", None)
-        self.inner = nn.ModuleDict({"a": nn.ReLU(), "b": nn.Sequential(self.alias)})
+        self.chain = nn.Sequential(self.alias)
+        self.inner = nn.ModuleDict({"a": nn.ReLU(), "b": self.chain})
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Use every branch once."""
@@ -163,10 +165,11 @@ def test_helpers_equal_torch_walks_and_stay_equal_on_reuse(build: Any) -> None:
 def test_a_class_that_walks_its_own_way_gets_the_live_walk() -> None:
     """A tree with an overridden walk method or module ``__eq__`` is never served from the record."""
 
-    hidden = nn.Sequential(nn.Linear(2, 2), _OwnWalk(nn.ReLU(), nn.Tanh()))
+    own = _OwnWalk(nn.ReLU(), nn.Tanh())
+    hidden = nn.Sequential(nn.Linear(2, 2), own)
     _assert_same(hidden)
     assert "1" not in [name for name, _module in walk.model_named_modules(hidden)]
-    hidden[1].append(nn.Sigmoid())
+    own.append(nn.Sigmoid())
     _assert_same(hidden)
 
     twins = nn.Sequential(_EqualsAll(), _EqualsAll())
@@ -190,7 +193,7 @@ def test_every_tree_change_is_walked_afresh() -> None:
     _assert_same(model)
     model.inner["c"] = model.inner.pop("a")
     _assert_same(model)
-    model.inner["b"].append(model.tied)
+    model.chain.append(model.tied)
     _assert_same(model)
     model.nothing = nn.ReLU()
     _assert_same(model)
@@ -217,8 +220,8 @@ def test_the_record_keeps_nothing_alive() -> None:
     model = _Scaled()
     walk.model_named_parameters(model)
     walk.model_named_modules(model, remove_duplicate=False)
-    refs = [weakref.ref(model), weakref.ref(model.fc), weakref.ref(model.fc.weight)]
-    refs.append(weakref.ref(model.scale))
+    refs: list[weakref.ref[Any]] = [weakref.ref(model), weakref.ref(model.fc)]
+    refs += [weakref.ref(model.fc.weight), weakref.ref(model.scale)]
     del model
     gc.collect()
     assert all(ref() is None for ref in refs)

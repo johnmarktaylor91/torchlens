@@ -120,7 +120,9 @@ def _stock_walks(key: tuple[Any, ...]) -> bool:
         for name, stock in zip(_WALK_METHODS, _STOCK, strict=True):
             if getattr(cls, name, None) is not stock:
                 return False
-        if cls.__eq__ is not object.__eq__ or cls.__hash__ is not object.__hash__:
+        if getattr(cls, "__eq__") is not object.__eq__ or (
+            getattr(cls, "__hash__") is not object.__hash__
+        ):
             # torch's walk de-duplicates through a set of modules.
             return False
     return True
