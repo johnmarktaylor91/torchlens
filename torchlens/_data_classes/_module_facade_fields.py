@@ -150,7 +150,8 @@ def call_boundaries(calls: Any) -> tuple[list[str], list[str], list[str], list[s
             sides = (row[_IN_OPS], row[_IN_LAYERS], row[_OUT_OPS], row[_OUT_LAYERS])
         else:
             sides = (call.input_ops, call.input_layers, call.output_ops, call.output_layers)
-        for labels, union in zip(sides, (input_ops, input_layers, output_ops, output_layers)):
+        unions = (input_ops, input_layers, output_ops, output_layers)
+        for labels, union in zip(sides, unions, strict=True):
             for label in labels:
                 if label not in union:
                     union += (label,)

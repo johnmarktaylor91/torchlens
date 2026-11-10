@@ -124,7 +124,11 @@ def module_source_and_hooks(meta: Mapping[str, Any]) -> dict[str, Any]:
         for a fact the metadata does not hold.
     """
 
-    return {name: meta[name] if name in meta else None for name in _SOURCE_AND_HOOK_NAMES}
+    facts: dict[str, Any] = dict.fromkeys(_SOURCE_AND_HOOK_NAMES)
+    for name in _SOURCE_AND_HOOK_NAMES:
+        if name in meta:
+            facts[name] = meta[name]
+    return facts
 
 
 def _call_io_layers(
