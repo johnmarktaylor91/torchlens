@@ -205,7 +205,7 @@ def build_layer_state(state: dict[str, Any]) -> None:
     del state["ops"], state[PENDING]
     state["in_conditionals"] = () if views else []
     state["terminal_bool_for"] = None
-    state["is_in_conditional_body"] = False
+    state["_is_in_conditional_body"] = False
     state["conditional_role_stacks"] = ([],) if views else [[]]
     state["conditional_branch_stack_ops"] = {(): [number]}
     state["conditional_arm_children"] = {}

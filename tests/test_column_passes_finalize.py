@@ -24,7 +24,7 @@ from torchlens._data_classes._layer_state import PENDING
 from torchlens._data_classes.op import Op
 from torchlens._postprocess import _column_passes_finalize, finalization
 from torchlens._postprocess._layer_row_scan import RowScan
-from torchlens._trace_core.op_store import _MISSING
+from torchlens._trace_core.op_store import _MISSING, PooledCell
 from torchlens._utils._record_group_table import record_member
 
 _ADDRESS = re.compile(r"0x[0-9a-fA-F]+")
@@ -88,6 +88,12 @@ def _canon(value: Any) -> str:
     return _ADDRESS.sub("0x", repr(value))
 
 
+def _unpooled(cell: Any) -> Any:
+    """Return the value a stored cell holds, reading through a shared pooled cell."""
+
+    return cell.prototype if cell.__class__ is PooledCell else cell
+
+
 def _snapshot(trace: Any) -> dict[str, Any]:
     """Return the state step 15.5 builds: layers, the per-op cells, the autograd total."""
 
@@ -107,7 +113,7 @@ def _snapshot(trace: Any) -> dict[str, Any]:
     for name in ("is_constant", "annotations"):
         fid = store.layout.fid_by_name[name]
         cells[name] = [
-            _canon(store.cell_get(object.__getattribute__(op, "_row"), fid))
+            _canon(_unpooled(store.cell_get(object.__getattribute__(op, "_row"), fid)))
             for op in trace._layer_list
         ]
     return {
