@@ -99,9 +99,13 @@ def handed(stored: Any, trace: Any) -> Any:
 
 
 def trace_buffers(trace: Trace) -> BufferAccessor:
-    """Body of ``Trace.buffers``: the stored accessor, handed out so it keeps the trace."""
+    """Body of ``Trace.buffers``: the stored accessor, handed out so it keeps the trace.
 
-    return handed(trace.__dict__.get("_buffer_accessor"), trace)
+    The attribute read (not the instance dictionary) runs the deferred module
+    build on a trace whose module records are still pending.
+    """
+
+    return handed(getattr(trace, "_buffer_accessor", None), trace)
 
 
 def _in_scope(module_address: str, address: str) -> bool:
