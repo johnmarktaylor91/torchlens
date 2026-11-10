@@ -1442,7 +1442,7 @@ def torch_func_decorator(
         is_bottom_level_func = trace._wrapper_runtime_ws.current_func_barcode == func_call_barcode
         if fast and is_bottom_level_func:
             call = (func, func_name, args, kwargs, arg_copies, kwarg_copies, out_orig, exec_ctx)
-            window = _cow_payload_state_ptrs(trace)
+            window = (_cow_payload_state_ptrs(trace), fast[0])
             fast_out = commit_admitted(trace, call, func_call_id, window, buffer_snapshots)
             if fast_out is not DECLINED:
                 return fast_out

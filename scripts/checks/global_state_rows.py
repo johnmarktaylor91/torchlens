@@ -917,6 +917,11 @@ _PROCESS_CACHES = frozenset(
         ("torchlens/_state.py", "_dynamic_arg_specs"),
         ("torchlens/_state.py", "_naming_counters"),
         ("torchlens/_training_validation.py", "_NON_GRAD_DTYPES"),
+        # Fast-lane argument-scan verdict per call shape (function name, argument
+        # types, keyword names): proven once against the spec path, bounded by
+        # the call shapes a process sees, holds no tensors; a dynamic-spec verdict
+        # is re-proved when ``_state._dynamic_arg_specs`` replaces its spec.
+        ("torchlens/backends/torch/_ops_argument_fields.py", "_FAST_SHAPES"),
         ("torchlens/backends/torch/backward.py", "_BACKWARD_GRAD_FN_REGISTRY"),
         # Model-state root-matching boundaries, same lifecycle as the registry
         # above: evicted by the owning trace's slot callback and by cleanup().
