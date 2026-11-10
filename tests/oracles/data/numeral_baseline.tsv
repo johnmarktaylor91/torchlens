@@ -3477,7 +3477,7 @@ docs-md	docs/maintainers/where.md	146
 docs-md	docs/maintainers/where.md	14664
 docs-md	docs/maintainers/where.md	1468
 docs-md	docs/maintainers/where.md	147
-docs-md	docs/maintainers/where.md	1479
+docs-md	docs/maintainers/where.md	1475
 docs-md	docs/maintainers/where.md	148
 docs-md	docs/maintainers/where.md	149
 docs-md	docs/maintainers/where.md	15
@@ -3540,7 +3540,7 @@ docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	174
 docs-md	docs/maintainers/where.md	1748
 docs-md	docs/maintainers/where.md	175
-docs-md	docs/maintainers/where.md	1755
+docs-md	docs/maintainers/where.md	1756
 docs-md	docs/maintainers/where.md	176
 docs-md	docs/maintainers/where.md	1767
 docs-md	docs/maintainers/where.md	177
@@ -3575,6 +3575,7 @@ docs-md	docs/maintainers/where.md	1942
 docs-md	docs/maintainers/where.md	195
 docs-md	docs/maintainers/where.md	196
 docs-md	docs/maintainers/where.md	197
+docs-md	docs/maintainers/where.md	19735
 docs-md	docs/maintainers/where.md	1975
 docs-md	docs/maintainers/where.md	1986
 docs-md	docs/maintainers/where.md	199
@@ -4083,6 +4084,7 @@ docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	7066
 docs-md	docs/maintainers/where.md	706679
+docs-md	docs/maintainers/where.md	706999
 docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	711
@@ -6472,6 +6474,7 @@ package-docstrings	torchlens/_postprocess/__init__.py	256
 package-docstrings	torchlens/_postprocess/_column_passes_finalize.py	15.5
 package-docstrings	torchlens/_postprocess/_column_passes_finalize.py	52
 package-docstrings	torchlens/_postprocess/_column_passes_graph.py	15
+package-docstrings	torchlens/_postprocess/_finished_marks.py	17
 package-docstrings	torchlens/_postprocess/_ingest_contract.py	12
 package-docstrings	torchlens/_postprocess/_ingest_contract.py	2026
 package-docstrings	torchlens/_postprocess/_ingest_contract.py	5.2
@@ -8852,6 +8855,7 @@ test-docstrings	tests/test_collapse_power_patterns.py	10
 test-docstrings	tests/test_collapse_power_perf.py	16
 test-docstrings	tests/test_collapse_power_perf.py	201
 test-docstrings	tests/test_collapse_power_perf.py	24,165
+test-docstrings	tests/test_column_passes_depths_finished.py	17
 test-docstrings	tests/test_column_passes_finalize.py	15.5
 test-docstrings	tests/test_compat_report.py	13
 test-docstrings	tests/test_compile_set_stance.py	2.6
