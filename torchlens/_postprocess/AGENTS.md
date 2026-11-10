@@ -33,6 +33,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_multipass_params.py` | 14 support | Parameter union for a layer whose passes consume different parameters (split from `finalization.py`) |
 | `_lazy_param_geometry.py` | 15 support | Finalize deferred geometry for lazy-at-prep params (R43 split from `finalization.py`) |
 | `_column_passes_finalize.py` | 15.5 | Step 15.5 body (aggregate `Layer` build) over the `OpColumns` view, its facade body as the fallback, and the conditional merge and view helpers both share; `finalization._build_layer_logs` delegates to it (split from `finalization.py`) |
+| `_finished_marks.py` | 17 | Step 17 body: per-op finished flag and template display keys written on the raw rows of a building store, the facade body as the fallback; `finalization._set_tracing_finished` delegates to it |
 | `saved_summary.py` | 11 support | Saved-output summary refresh helpers (`_refresh_fast_saved_summary`) |
 | `source_provenance.py` | 11, 11.5 | Provenance disclosure warning (`_warn_unattributed_tensor_args`) and source variable names (`_populate_var_names`) |
 | `incremental.py` | fastlog enrichment | Adds module path strings to sparse recordings (`Recording.enrich`) |
@@ -65,7 +66,7 @@ step 17.5 (the contracted container-adoption + workspace-drop seam).
 | 1 | `add_output_layers` | `_add_output_layers` | Create dedicated output nodes (skips unattributable outputs) |
 | 2 | `find_output_ancestors` | `_find_output_ancestors` | Mark nodes connected to model output |
 | 3 | `remove_orphan_nodes` | `_remove_orphan_nodes` | Drop unconnected raw nodes |
-| 4 | `mark_layer_depths` | `_mark_layer_depths` | Optional input/output distance metadata |
+| 4 | `mark_layer_depths` | `_mark_layer_depths` (`_layer_depths.py`: raw-row column body, facade body as the fallback) | Optional input/output distance metadata |
 | 5 | `mark_conditional_branches` | `_mark_conditional_branches` | AST/bool/event/edge conditional attribution |
 | 6 | `fix_buffer_layers` | `_fix_buffer_layers` | Reconnect buffers; merge only re-logged reads of one recorded buffer version |
 | 7 | `group_recurrent_layers` | `_detect_and_label_loops` or `_group_by_shared_params` | Recurrent grouping |
@@ -82,7 +83,7 @@ step 17.5 (the contracted container-adoption + workspace-drop seam).
 | 15.5 | `build_layer_logs` | `_build_layer_logs` (body in `_column_passes_finalize.build_layer_logs`) | Build aggregate LayerLogs |
 | 16 | `build_module_logs` | `_build_module_logs` | Build ModuleLogs |
 | 16.5 | `hash_graph_shape` | `compute_graph_shape_hash` | Hash graph shape before pass-finished behavior changes |
-| 17 | `mark_tracing_finished` | `_set_tracing_finished` | Switch Trace to user-facing behavior |
+| 17 | `mark_tracing_finished` | `_set_tracing_finished` (body in `_finished_marks.mark_ops_finished`) | Switch Trace to user-facing behavior |
 | 17.5 | `adopt_containers_and_drop_workspaces` | executor `_run_adopt_containers_and_drop_workspaces` | Adopt container records; drop the three per-phase workspaces |
 | 18 | `finalize_streamed_bundle` | `_finalize_streamed_bundle` | Finalize streamed out bundle |
 | 19 | `evict_streamed_outs` | `_evict_streamed_outs` | Optional in-memory out eviction |

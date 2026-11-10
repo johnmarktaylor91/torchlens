@@ -53,7 +53,6 @@ from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._ir.workspaces import _init_module_hierarchy_data
 from .._quantities import Bytes, Duration, Flops
-from .._utils._display_constructor import bind_template_keys
 from .._utils._record_group_table import layer_attr, op_attr, record_member, record_storage_attr
 from .._utils._tensor_label import clear_meta
 from .._utils.hashing import sha256_file
@@ -67,6 +66,7 @@ from ._conditional_records import (
     _roles_by_label,
     roles_held_by_pass,
 )
+from ._finished_marks import mark_ops_finished
 from ._layer_conditional_merge import _rebuild_conditional_edge_call_indices
 from ._module_census import (
     _call_io_layers,
@@ -1146,11 +1146,7 @@ def _set_tracing_finished(self: "Trace") -> None:
     true between exhaustive and fast passes so fast postprocessing can use the
     exhaustive pass's populated lookup dictionaries.
     """
-    for layer_label in self._layer_dict_main_keys:
-        tensor = self._layer_dict_main_keys[layer_label]
-        tensor._tracing_finished = True
-        bind_template_keys(tensor._call_args_template, self._layer_dict_all_keys)
-        bind_template_keys(tensor._call_kwargs_template, self._layer_dict_all_keys)
+    mark_ops_finished(self)
     self._tracing_finished = True
 
 
