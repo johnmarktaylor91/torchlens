@@ -20,8 +20,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes._layer_state import PENDING
 from torchlens._data_classes.op import Op
 from torchlens._postprocess import _column_passes_finalize, finalization
+from torchlens._postprocess._layer_row_scan import RowScan
 from torchlens._trace_core.op_store import _MISSING
 from torchlens._utils._record_group_table import record_member
 
@@ -242,3 +244,61 @@ def test_column_reader_matches_getattr_semantics() -> None:
         assert read(op, "no_such_field", "fallback") == "fallback"
     for op in unset:
         assert read(op, "transformed_out_shape", None) is None
+
+
+def _trace_plain() -> Any:
+    """Trace the model with no conditional: its layers are built on first lookup."""
+
+    torch.manual_seed(0)
+    model, x = _MODELS["tied_shrinking"]()
+    return tl.trace(model, x)
+
+
+def _pending_labels(trace: Any) -> list[str]:
+    """Return the labels of the layers whose state is not built yet."""
+
+    logs = trace._layer_logs
+    return [label for label in logs if PENDING in dict.__getitem__(logs, label)]
+
+
+def test_layers_stay_pending_until_looked_up() -> None:
+    """A finished trace holds unbuilt layers; a lookup builds that layer only."""
+
+    trace = _trace_plain()
+    pending = _pending_labels(trace)
+    assert len(pending) > 1
+    layer = trace._layer_logs[pending[0]]
+    assert PENDING not in layer.__dict__
+    assert _pending_labels(trace) == pending[1:]
+
+
+def test_first_lookup_order_does_not_change_the_layers() -> None:
+    """Layers looked up first-to-last and last-to-first hold the same state."""
+
+    forward, backward = _trace_plain(), _trace_plain()
+    labels = list(forward._layer_logs)
+    for label in labels:
+        forward._layer_logs[label]
+    for label in reversed(labels):
+        backward._layer_logs[label]
+    assert _snapshot(forward) == _snapshot(backward)
+
+
+def test_first_lookup_matches_a_build_inside_the_step(isolated_patch: pytest.MonkeyPatch) -> None:
+    """A layer built on its first lookup equals the layer step 15.5 would have built."""
+
+    real_run = RowScan.run
+
+    def run_then_build_all(scan: RowScan) -> None:
+        """Run the scan, then ask the step to build every layer itself."""
+
+        real_run(scan)
+        scan.eager = True
+
+    isolated_patch.setattr(RowScan, "run", run_then_build_all)
+    built_in_step = _trace_plain()
+    isolated_patch.undo()
+    assert not _pending_labels(built_in_step)
+    on_lookup = _trace_plain()
+    assert _pending_labels(on_lookup)
+    assert _snapshot(on_lookup) == _snapshot(built_in_step)
