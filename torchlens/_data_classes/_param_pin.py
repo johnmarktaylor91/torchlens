@@ -26,9 +26,11 @@ import weakref
 from typing import Any
 
 from .._trace_core.op_store import OpRowStore
+from .._trace_core.record_refs import bind_own_children
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from ._op_row_containers import adopt_op_containers
 from ._param_rows import (
+    _PARAM,
     PARAM_KIND,
     ROW_FORMS,
     ParamMap,
@@ -43,17 +45,20 @@ _new = object.__new__
 _FIELD = "_param_logs"
 _BY_MODULE = "_param_logs_by_module"
 
-#: The ``ParamAccessor`` class, bound on first use so this module imports no record class.
+#: The ``ParamAccessor`` class, bound by ``param.py`` at import so this module imports no record class.
 _ACCESSOR: list[type] = []
+
+
+def bind_param_classes(param_class: type, accessor_class: type) -> None:
+    """Bind the ``Param`` and ``ParamAccessor`` classes; ``param.py`` calls this once at import."""
+
+    _PARAM[:] = [param_class]
+    _ACCESSOR[:] = [accessor_class]
 
 
 def _accessor_class() -> type:
     """Return the ``ParamAccessor`` class."""
 
-    if not _ACCESSOR:
-        from .param import ParamAccessor
-
-        _ACCESSOR.append(ParamAccessor)
     return _ACCESSOR[0]
 
 
@@ -306,3 +311,6 @@ def fork_copy(value: Any, translator: Any) -> Any:
     if value.__class__ is ParamMap:
         return as_map(rows, value)
     return rows.forked(value)
+
+
+bind_own_children(own_children)

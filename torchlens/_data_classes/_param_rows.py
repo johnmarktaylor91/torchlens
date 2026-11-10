@@ -44,18 +44,8 @@ _list_iter = list.__iter__
 _tuple_iter = tuple.__iter__
 _tuple_get = tuple.__getitem__
 
-#: The ``Param`` class, bound on first use so this module imports no record class.
+#: The ``Param`` class, bound by ``param.py`` at import so this module imports no record class.
 _PARAM: list[type] = []
-
-
-def _param_class() -> type:
-    """Return the ``Param`` class."""
-
-    if not _PARAM:
-        from .param import Param
-
-        _PARAM.append(Param)
-    return _PARAM[0]
 
 
 class ParamTable:
@@ -121,7 +111,7 @@ class ParamTable:
         state = self.states[row]
         if state is None:
             state = self.states[row] = {CORE_KEY: self.store, ROW_KEY: row}
-        view = _new(_param_class())
+        view = _new(_PARAM[0])
         view.__dict__ = state
         reference = self.owner_ref
         _set(view, "_owner", reference() if reference is not None else None)

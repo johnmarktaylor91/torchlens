@@ -40,7 +40,7 @@ from .._quantities import Bytes
 from .._utils._display_errors import short_name_message
 from ._accessor_base import Accessor
 from ._lookup_kinds import converted, param_for_key
-from ._param_pin import param_index, param_key as param_key
+from ._param_pin import bind_param_classes, param_index, param_key as param_key
 from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .op import GradientRecord, GradientRecordAccessor
@@ -1062,3 +1062,6 @@ class ParamAccessor(Accessor["Param"]):
 
         rows = [_param_log_to_row(param_log) for param_log in self._list]
         return pd.DataFrame(rows, columns=PARAM_LOG_FIELD_ORDER)
+
+
+bind_param_classes(Param, ParamAccessor)

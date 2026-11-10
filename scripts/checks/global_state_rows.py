@@ -331,11 +331,11 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # module can build Layer views without importing it; never mutated
         # by a capture.
         ("torchlens/_data_classes/_layer_state.py", "_LAYER_CLASS"),
-        # The Param and ParamAccessor classes the param row modules bind on
-        # first use so they import no record class, and the fork translator's
-        # class -> copier table for row-key param containers, filled at import,
-        # and the pin function the module child field binds on first use;
-        # none is mutated by a capture.
+        # The Param and ParamAccessor classes param.py binds once at import
+        # so the param row modules import no record class, the fork
+        # translator's class -> copier table for row-key param containers,
+        # filled at import, and the pin function the param pin module binds
+        # into the module child field at import; none is mutated by a capture.
         ("torchlens/_data_classes/_param_rows.py", "_PARAM"),
         ("torchlens/_data_classes/_param_pin.py", "_ACCESSOR"),
         ("torchlens/_trace_core/record_refs.py", "_OWN_CHILDREN"),

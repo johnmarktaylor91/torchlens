@@ -562,17 +562,19 @@ def _door_identities(mapping: Any, kind: str, store: Any) -> dict[Any, Any]:
     }
 
 
-#: ``own_children`` from the param pin module, bound on first use (no import cycle).
+#: ``own_children`` from the param pin module, bound there at import (no import cycle).
 _OWN_CHILDREN: list[Any] = []
+
+
+def bind_own_children(own_children: Any) -> None:
+    """Bind the param pin module's ``own_children``; that module calls this once at import."""
+
+    _OWN_CHILDREN[:] = [own_children]
 
 
 def _owned(trace: Any, kind: str, accessor: Any) -> Any:
     """Return a module's built child accessor, its ``Param`` containers held by row."""
 
-    if not _OWN_CHILDREN:
-        from .._data_classes._param_pin import own_children
-
-        _OWN_CHILDREN.append(own_children)
     return _OWN_CHILDREN[0](trace, kind, accessor)
 
 
