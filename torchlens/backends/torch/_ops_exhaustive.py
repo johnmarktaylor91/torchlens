@@ -104,7 +104,7 @@ def _emit_exhaustive_operation_events(
             func_call_id,
         )
 
-    output_entries = _partition_output_entries_with_autograd_stats(self, out_orig)
+    output_entries = _output_entries_with_autograd_stats(self, out_orig)
     _register_call_output_container_snapshot(
         self,
         out_orig,
@@ -583,7 +583,7 @@ from ._ops_arguments import (  # noqa: E402
     _build_edge_use_records,
 )
 from ._ops_autograd import (  # noqa: E402
-    _partition_output_entries_with_autograd_stats,
+    _output_entries_with_autograd_stats,
     _register_call_output_container_snapshot,
 )
 from ._ops_capture_records import (  # noqa: E402

@@ -758,9 +758,9 @@ def _pop_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...
         attached = bool(fire_results)
     except Exception:
         fire_results = ()
-    from . import _ops_interventions as intervention_state
-
-    fallback = intervention_state._take_out_of_band_fire_results(tensor)
+    # Skip the take when the out-of-band table is empty (the usual case): it
+    # would return ``()``.
+    fallback = _take_out_of_band_fire_results(tensor) if _OUT_OF_BAND_FIRE_RESULTS else ()
     if not fire_results:
         fire_results = fallback
     if attached:

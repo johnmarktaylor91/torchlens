@@ -71,6 +71,9 @@ def pop_same_object_mutation(t: Any) -> bool | None:
     True
     """
 
+    # Most outputs carry no TorchLens namespace: answer them before the checked lookup.
+    if getattr(t, "_tl", None) is None:
+        return None
     meta = get_tensor_meta(t)
     if meta is None:
         return None

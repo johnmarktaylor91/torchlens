@@ -841,7 +841,7 @@ torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrappe
 torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	146
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	68
 torchlens/backends/torch/_module_class_metadata.py::_get_class_metadata	97
-torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	302
+torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	298
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
 torchlens/backends/torch/_ops_activations.py::_save_activation_fields	194
 torchlens/backends/torch/_ops_arguments.py::_build_edge_use_records	68

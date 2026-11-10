@@ -28,6 +28,7 @@ from ..._utils.tensor_utils import (
     is_functorch_wrapped_tensor,
 )
 from ._completeness_origins import internal_scalar_read
+from ._user_grad_fn import raw_grad_fn
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -38,6 +39,7 @@ __all__ = (
     "_add_autograd_saved_tensor",
     "_get_autograd_saved_stats_by_output",
     "_partition_output_entries_with_autograd_stats",
+    "_output_entries_with_autograd_stats",
     "_register_call_output_container_snapshot",
     "register_call_input_container_snapshots",
     "_container_leaf_occurrences_from_entries",
@@ -172,6 +174,29 @@ def _classify_saved_storage(trace: Any, tensor: torch.Tensor) -> tuple[str, int 
     if storage_ptr in buffer_map:
         return "saved_buffer", storage_ptr, storage_nbytes
     return "saved_activation", storage_ptr, storage_nbytes
+
+
+def _output_entries_with_autograd_stats(trace: Any, output: Any) -> list[_OutputTensorEntry]:
+    """Return the output entries of one call, as the partition below builds them.
+
+    A single plain tensor with no autograd node (no saved tensors to count, so no
+    statistics and no band) gets its one entry without the generic output walk;
+    every other output goes through
+    :func:`_partition_output_entries_with_autograd_stats`. The ``grad_fn`` read is
+    the C getset original: unwitnessed and unfingerprinted, as the partition's
+    marked read arranges.
+    """
+
+    if type(output) is not torch.Tensor or raw_grad_fn(output) is not None:
+        return _partition_output_entries_with_autograd_stats(trace, output)
+    trace_fields = trace.__dict__
+    if "_autograd_seen_saved_storages" not in trace_fields:
+        trace_fields["_autograd_seen_saved_storages"] = set()
+    return [
+        _OutputTensorEntry(
+            value=output, container_path=(), container_spec=None, autograd_stats=(None, None)
+        )
+    ]
 
 
 def _partition_output_entries_with_autograd_stats(
