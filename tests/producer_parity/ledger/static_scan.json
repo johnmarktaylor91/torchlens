@@ -1164,7 +1164,7 @@
   "field": "parents",
   "file": "torchlens/_data_classes/_op_relations.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -10109,6 +10109,14 @@
   "file": "torchlens/stats/_tensor_stats.py",
   "has_default": false,
   "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/stats/_trace_table_rows.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {

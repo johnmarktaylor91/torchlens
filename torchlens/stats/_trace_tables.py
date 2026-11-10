@@ -5,7 +5,8 @@ Bodies of the ``Trace`` export verbs (``to_pandas``, ``decode_output``,
 method per verb that forwards to these functions.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from functools import partial
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, cast
 
@@ -24,6 +25,7 @@ from .._data_classes.interface import _format_conditional_branch_stack
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
 from .._utils._record_group_table import record_member
 from .._utils.collections import _path_component_key
+from ._trace_table_rows import table_rows
 
 
 def _output_role_from_container_path(path: Any) -> str | None:
@@ -406,6 +408,41 @@ _TO_PANDAS_COLUMN_TYPES: dict[str, type] = {
 }
 
 
+#: ``to_pandas`` columns computed by :func:`_table_cell` itself, never read as stored columns.
+def _decoded_output_cell(trace: "Trace", layer_entry: Any) -> Any:
+    """The decoded output summary on an output op, ``None`` elsewhere."""
+
+    if bool(getattr(layer_entry, "is_output", False)):
+        return _decoded_output_summary(trace)
+    return None
+
+
+# Table columns that are not plain stored reads: each is computed op by op.
+_TABLE_CELL_READERS: dict[str, Callable[["Trace", Any], Any]] = {
+    "conditional_branch_stack": lambda trace, entry: _format_conditional_branch_stack(
+        entry.control_flow.branch_stack
+    ),
+    # The table keeps its layer_type column; an Op names it type.
+    "layer_type": lambda trace, entry: entry.type,
+    "grad": lambda trace, entry: getattr(entry, "grad"),
+    "num_saved_grads": lambda trace, entry: len(getattr(entry, "_grad_records", ())),
+    "output_role": lambda trace, entry: _output_role_from_container_path(
+        getattr(entry, "container_path", ())
+    ),
+    "decoded_output_summary": _decoded_output_cell,
+}
+_PER_OP_TABLE_FIELDS: frozenset[str] = frozenset(_TABLE_CELL_READERS)
+
+
+def _table_cell(trace: "Trace", layer_entry: Any, field_name: str) -> Any:
+    """Return one ``to_pandas`` cell of ``layer_entry`` read through the facade."""
+
+    reader = _TABLE_CELL_READERS.get(field_name)
+    if reader is not None:
+        return reader(trace, layer_entry)
+    return record_member(layer_entry, field_name)
+
+
 def to_pandas(trace: "Trace", include_decoded_output_summary: bool = False) -> "pd.DataFrame":
     """Body of ``Trace.to_pandas``; the method docstring is the contract."""
     from .._runnable import refuse_poisoned_trace  # deferred: cycle _runnable (layering follow-up)
@@ -462,34 +499,14 @@ def to_pandas(trace: "Trace", include_decoded_output_summary: bool = False) -> "
         )
     )
 
-    model_df_dictlist: list[dict[str, Any]] = []
-    for layer_entry, _layers in ops_with_layers_kept(trace):  # layer lookups meet live views
-        layer_dict: dict[str, Any] = {}
-        for field_name in fields_for_df:
-            if field_name == "conditional_branch_stack":
-                layer_dict[field_name] = _format_conditional_branch_stack(
-                    layer_entry.control_flow.branch_stack
-                )
-            elif field_name == "layer_type":
-                # The table keeps its layer_type column; an Op names it type.
-                layer_dict[field_name] = layer_entry.type
-            elif field_name == "grad":
-                layer_dict[field_name] = getattr(layer_entry, "grad")
-            elif field_name == "num_saved_grads":
-                layer_dict[field_name] = len(getattr(layer_entry, "_grad_records", ()))
-            elif field_name == "output_role":
-                layer_dict[field_name] = _output_role_from_container_path(
-                    getattr(layer_entry, "container_path", ())
-                )
-            elif field_name == "decoded_output_summary":
-                layer_dict[field_name] = (
-                    _decoded_output_summary(trace)
-                    if bool(getattr(layer_entry, "is_output", False))
-                    else None
-                )
-            else:
-                layer_dict[field_name] = record_member(layer_entry, field_name)
-        model_df_dictlist.append(layer_dict)
+    # Keep every Layer view alive while the table is built, so layer lookups meet live views.
+    ops_and_layers = list(ops_with_layers_kept(trace))
+    model_df_dictlist = table_rows(
+        [op for op, _layers in ops_and_layers],
+        fields_for_df,
+        partial(_table_cell, trace),
+        _PER_OP_TABLE_FIELDS,
+    )
     model_df = pd.DataFrame(model_df_dictlist)
 
     for column_name, column_type in _TO_PANDAS_COLUMN_TYPES.items():
