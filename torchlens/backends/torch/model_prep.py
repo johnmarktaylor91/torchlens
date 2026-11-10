@@ -73,7 +73,7 @@ from ._model_prep_containers import (
     _register_module_output_container_snapshot,
 )
 from ._module_aliases import _add_shared_module_aliases, shared_module_addresses
-from ._module_arg_stubs import stub_module_arg_payloads
+from ._module_arg_stubs import stub_module_call_args
 from ._module_boundary_adoption import (
     pre_forward_snapshot_build_data,
     record_module_boundary_adoption,
@@ -1133,8 +1133,7 @@ def _record_module_entry_metadata(
     # ``ModuleCall.forward_args`` is nulled before the trace is returned.
     # Stubbing waits until here so the input-adoption loop above has stamped
     # labels the stubs can carry.
-    stub_args = stub_module_arg_payloads(args)
-    stub_kwargs = stub_module_arg_payloads(kwargs)
+    stub_args, stub_kwargs = stub_module_call_args(args, kwargs, trace)
     workspace.module_forward_args[(module_address, module_call_index)] = (stub_args, stub_kwargs)
     trace.capture_events.append_module_enter(
         ModuleEnterEvent(

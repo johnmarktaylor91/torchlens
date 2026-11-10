@@ -36,12 +36,14 @@ def format_call_arg(value: Any, _depth: int = 0, _in_progress: set[int] | None =
     if isinstance(value, torch.Tensor):
         dtype_name = str(value.dtype).removeprefix("torch.")
         return f"Tensor(shape={tuple(value.shape)}, dtype={dtype_name})"
-    from .._ir.workspaces import ReleasedTensorStub  # deferred: layer lint (no eager upward import)
+    from .._ir import workspaces as _ws  # deferred: layer lint (no eager upward import)
 
-    if isinstance(value, ReleasedTensorStub):
+    if isinstance(value, _ws.ReleasedTensorStub):
         # W1a: a released module-arg payload renders exactly like the
         # live tensor it replaced -- the summary is shape/dtype-only.
         return f"Tensor(shape={tuple(value.shape)}, dtype={value.dtype})"
+    if isinstance(value, _ws.ReleasedObjectStub):  # renders as the object it replaced
+        return f"<{value.type_name}>"
     if isinstance(value, (bool, int, float, str)) or value is None:
         return repr(value)
     if isinstance(value, (list, tuple, dict)):
