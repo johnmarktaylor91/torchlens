@@ -144,16 +144,16 @@ HOLDERS: dict[str, Holder] = {
         OP_ROW_CELLS, only=("backward", "pickled")
     ),
     "Module._tl_core:Store.rows[ops]:ModuleCallAccessor._dict{*} -> ModuleCall": Holder(
-        MODULE_AND_BUFFER_CELLS, only=("pickle_state",)
+        MODULE_AND_BUFFER_CELLS, only=("fork", "fork_cold", "pickle_state")
     ),
     "Module._tl_core:Store.rows[ops]:ModuleCallAccessor._list[*] -> ModuleCall": Holder(
-        MODULE_AND_BUFFER_CELLS, only=("pickle_state",)
+        MODULE_AND_BUFFER_CELLS, only=("fork", "fork_cold", "pickle_state")
     ),
     "Module._tl_core:Store.rows[params]:ParamAccessor._dict{*} -> Param": Holder(
-        MODULE_AND_BUFFER_CELLS, only=("pickle_state",)
+        MODULE_AND_BUFFER_CELLS, only=("fork", "fork_cold", "pickle_state")
     ),
     "Module._tl_core:Store.rows[params]:ParamAccessor._list[*] -> Param": Holder(
-        MODULE_AND_BUFFER_CELLS, only=("pickle_state",)
+        MODULE_AND_BUFFER_CELLS, only=("fork", "fork_cold", "pickle_state")
     ),
     "Trace._trace_core:TraceCore.kind_rows{buffer}:Store.overlay[versions][*] -> Op": Holder(
         MODULE_AND_BUFFER_CELLS, only=("fork", "fork_cold")

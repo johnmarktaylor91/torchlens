@@ -279,7 +279,7 @@ class RowTranslator:
                 return op
         # No fork door holds an Op for this row (it was removed from the
         # fork). An Op is its view and row, so a new one reads the same.
-        shell = state_new(op_cls)
+        shell: Any = state_new(op_cls)
         _OBJECT_SETATTR(shell, "_core", view)
         _OBJECT_SETATTR(shell, "_row", row)
         return shell
