@@ -118,9 +118,10 @@ def _call_io_layers(
     pass_output_layers = []
     pass_output_ops = []
     pass_outputs = []
+    ops = self.ops if pass_layers else None  # one door for the whole call
     for op_label in pass_layers:
         try:
-            te = self.ops[op_label]
+            te = ops[op_label]  # type: ignore[index]
         except (KeyError, TypeError):
             continue
         # ``input_to_module_calls`` is the authoritative
