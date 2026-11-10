@@ -233,9 +233,16 @@ def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
         and a dict with ``blocks`` (``sys.getallocatedblocks`` delta),
         ``objects`` (collector-tracked object delta) and ``kinds`` (live record
         objects per class name, delta), all after a full collection.
+
+    Each side collects twice. The collector stops tracking a tuple that holds
+    only untracked items, but in one pass it can visit an outer tuple before
+    its inner ones, so a single pass leaves some key tuples tracked depending
+    on when the automatic collections inside ``fn`` happened. The second pass
+    settles them, so ``objects`` does not move with allocation timing.
     """
 
     kinds = record_kinds()
+    gc.collect()
     gc.collect()
     before = gc.get_objects()
     objects_before = len(before)
@@ -243,6 +250,7 @@ def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
     del before
     blocks_before = sys.getallocatedblocks()
     result = fn()
+    gc.collect()
     gc.collect()
     blocks_after = sys.getallocatedblocks()
     after = gc.get_objects()
