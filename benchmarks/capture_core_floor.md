@@ -27,8 +27,8 @@
 - Attribution: inside the emit, the first marker reached opens its section and keeps every call beneath it (the outermost section wins). A nested wrapper call made by the payload's copy counts as payload.
 - A lane that moves a section's work into a new function adds that function's name to the section's markers in `SECTION_MARKERS` in the same change. Names match in any module of the `torchlens` package, so moving a function between modules needs no change.
 - `capture_core_cost.py --check` runs `check_markers`: a section whose markers fired at the baseline and fire no more fails, because its counter would read low while the work moved to `emit_rest`.
-- Bars: a lane bar names a counter above, for example `floor.chain1000.call_site_per_output` at 35% of its baseline. The baselines are in `perf_baselines/capture_core_bars.json` under `baseline`, measured on the stage 1 train (see the N0 lane result for the commit; the C1 to C9 baselines in that file are from an earlier commit).
-- Two counts of one commit are identical (`python benchmarks/capture_core_floor.py --compare a.json b.json` requires exact equality).
+- Bars: a lane bar names a counter above, for example `floor.chain1000.call_site_per_output` at 35% of its baseline. The baselines are in `perf_baselines/capture_core_bars.json` under `baseline`, measured at commit ff8c7700df48de07b9abd7e42880f4f2fc3aa019 with `--counters` (the C1 to C9 baselines in that file are from the earlier commit named in its `base_commit`).
+- Two counts of one commit agree to within a few calls per trace (`python benchmarks/capture_core_floor.py --compare a.json b.json` lists every counter that differs and fails one beyond the bars' 0.5% tolerance). `--counters` runs each model in a fresh interpreter with `PYTHONHASHSEED=0` and address randomization off; what still varies is whether the allocator hands a new tensor a storage address already in the label stamp's alias index (`_register_storage_alias`), which moves 1 to 7 calls in a trace of 1.4 to 2.7 million.
 
 ## Wall time
 

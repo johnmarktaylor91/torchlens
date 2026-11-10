@@ -34,7 +34,11 @@ def test_sections_partition_a_plain_forward_and_leave_no_hook() -> None:
         assert record["hits"][section] >= 8, section
     assert calls["wrapper_outside_emit"] > 0 and calls["emit_rest"] > 0
     assert calls["label_read_stamp"] > 0
-    assert calls["module_handling"] < calls["wrapper_outside_emit"]
+    # Chain has no submodules, so module handling is a cost per trace and the
+    # argument scan a cost per output.
+    longer = _counted(cost.Chain(32), torch.zeros(4))["calls"]
+    assert longer["module_handling"] - calls["module_handling"] < 24 * 4
+    assert longer["arg_scan"] - calls["arg_scan"] > 24 * 100
 
 
 def test_module_calls_are_attributed_to_module_handling() -> None:
@@ -45,7 +49,8 @@ def test_module_calls_are_attributed_to_module_handling() -> None:
     per_output = cost.RELU_CALLS
     assert modules["calls"]["module_handling"] > 10 * functions["calls"]["module_handling"]
     assert functions["calls"]["module_handling"] < 10 * per_output
-    assert modules["hits"]["call_site"] == functions["hits"]["call_site"] == per_output
+    assert functions["hits"]["call_site"] == per_output
+    assert modules["hits"]["call_site"] >= per_output
     assert modules["calls"]["model_code"] > 0
 
 

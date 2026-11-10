@@ -346,8 +346,11 @@ def _counters(names: tuple[str, ...]) -> dict[str, Any]:
     env = dict(os.environ, PYTHONHASHSEED="0")
     env.setdefault("OMP_NUM_THREADS", "1")
     env.setdefault("MKL_NUM_THREADS", "1")
-    # Address-space randomization changes the iteration order of id-hashed sets
-    # between processes, and with it a few calls per trace; turn it off.
+    # Address-space randomization off makes heap addresses repeat between
+    # processes. The allocator can still hand a new tensor a storage address
+    # that is in the label stamp's alias index in one run and not the next,
+    # which moves a few calls per trace (``_register_storage_alias``); the
+    # comparison reports those and passes them within the bars' tolerance.
     setarch = shutil.which("setarch")
     prefix = [setarch, platform.machine(), "-R"] if setarch else []
     models: dict[str, Any] = {}
@@ -365,14 +368,18 @@ def _counters(names: tuple[str, ...]) -> dict[str, Any]:
     return {"tool": "capture_core_floor", "address_randomization": not prefix, "models": models}
 
 
-def _compare(first: dict[str, float], second: dict[str, float]) -> list[str]:
-    """Return every floor counter that differs at all between two runs."""
+def _compare(first: dict[str, float], second: dict[str, float]) -> tuple[list[str], list[str]]:
+    """Return the counters that differ at all, and those beyond the bars' tolerance."""
 
-    return [
-        f"{name}: {first.get(name)} against {second.get(name)}"
-        for name in sorted(set(first) | set(second))
-        if first.get(name) != second.get(name)
-    ]
+    from benchmarks import capture_core_bars as bars_mod
+
+    differ = []
+    for name in sorted(set(first) | set(second)):
+        a, b = first.get(name), second.get(name)
+        if a != b:
+            relative = abs(a - b) / max(abs(a), abs(b)) if a is not None and b is not None else 1.0
+            differ.append(f"{name}: {a} against {b} (relative {relative:.2g})")
+    return differ, bars_mod.compare(first, second)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -393,9 +400,10 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.compare:
         a, b = (flatten(json.loads(p.read_text(encoding="utf-8"))) for p in args.compare)
-        differences = _compare(a, b)
-        print("\n".join(differences) if differences else f"identical: {len(a)} counters")
-        return 1 if differences or not a else 0
+        differ, beyond = _compare(a, b)
+        print(f"{len(a)} counters; {len(differ)} differ; {len(beyond)} beyond the tolerance")
+        print("\n".join(differ + [f"BEYOND {line}" for line in beyond]))
+        return 1 if beyond or not a else 0
     names = tuple(args.models.split(","))
     if args.one:
         document: dict[str, Any] = _measure_one(args.one)
