@@ -102,7 +102,7 @@ def _rebuild_template_record(
     except AttributeError:  # a field this instance does not carry
         items = [getattr(value, name, _ABSENT) for name in names]
     updates = {}
-    for name, item in zip(names, items):
+    for name, item in zip(names, items, strict=False):  # a one-name reader reads twice
         if item is _ABSENT:
             continue
         item_cls = item.__class__
@@ -110,9 +110,9 @@ def _rebuild_template_record(
             updates[name] = item
         elif item_cls is parent_ref_cls:
             label = item.parent_label
-            updates[name] = parent_ref_cls(
-                mapping[label] if label in mapping else label, item._capture_layout
-            )
+            if label in mapping:
+                label = mapping[label]
+            updates[name] = parent_ref_cls(label, item._capture_layout)
         else:
             updates[name] = _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
     return replace(value, **updates)
@@ -138,9 +138,9 @@ def _rename_template_sequence(
         item_cls = item.__class__
         if item_cls is parent_ref_cls:
             label = item.parent_label
-            items[index] = parent_ref_cls(
-                mapping[label] if label in mapping else label, item._capture_layout
-            )
+            if label in mapping:
+                label = mapping[label]
+            items[index] = parent_ref_cls(label, item._capture_layout)
         elif item_cls is not str and item_cls not in _ATOMIC_CLASSES:
             items[index] = _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
     return items
@@ -181,26 +181,19 @@ def _rename_template_parent_refs(
     )
     if plan is not None:
         return _rebuild_template_record(value, plan, mapping, parent_ref_cls, cache)
+    # No plan: a subclass of the ladder's classes, or a leaf that is no dataclass.
     if isinstance(value, parent_ref_cls):
-        return replace(value, parent_label=mapping.get(value.parent_label, value.parent_label))
-    if isinstance(value, (tuple, list)):
+        value = replace(value, parent_label=mapping.get(value.parent_label, value.parent_label))
+    elif isinstance(value, (tuple, list)):
         items = [
             _rename_template_parent_refs(item, mapping, parent_ref_cls, cache) for item in value
         ]
-        return tuple(items) if isinstance(value, tuple) else items
-    if isinstance(value, dict):
-        return {
+        value = tuple(items) if isinstance(value, tuple) else items
+    elif isinstance(value, dict):
+        value = {
             key: _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
             for key, item in value.items()
         }
-    names = dataclass_field_names(value, cache)
-    if names is not None:
-        updates = {}
-        for name in names:
-            item = getattr(value, name, _ABSENT)
-            if item is not _ABSENT:
-                updates[name] = _rename_template_parent_refs(item, mapping, parent_ref_cls, cache)
-        value = replace(value, **updates)
     return value
 
 
@@ -225,12 +218,14 @@ def _rebuild_label_record(
     except AttributeError:  # a field this instance does not carry
         items = [getattr(value, name, _ABSENT) for name in names]
     updates = {}
-    for name, item in zip(names, items):
+    for name, item in zip(names, items, strict=False):  # a one-name reader reads twice
         if item is _ABSENT:
             continue
         item_cls = item.__class__
         if item_cls is str:
-            updates[name] = mapping[item] if item in mapping else item
+            if item in mapping:
+                item = mapping[item]
+            updates[name] = item
         elif item_cls in _ATOMIC_CLASSES or (item_cls is tuple and not item):
             updates[name] = item
         elif name in _LABEL_FIELDS and isinstance(item, str):
@@ -282,18 +277,7 @@ def _rename_label_dataclass(
             )
             for key, item in value.items()
         }
-    names = dataclass_field_names(value, cache)
-    if names is not None:
-        updates = {}
-        for name in names:
-            field_value = getattr(value, name, _ABSENT)
-            if field_value is _ABSENT:
-                continue
-            if name in _LABEL_FIELDS and isinstance(field_value, str):
-                updates[name] = mapping.get(field_value, field_value)
-            else:
-                updates[name] = _rename_label_dataclass(field_value, mapping, cache)
-        return replace(value, **updates)
+    # No plan and no container: a leaf that is no dataclass.
     if isinstance(value, str):
         return mapping.get(value, value)
     return value

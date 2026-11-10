@@ -22,7 +22,6 @@ passes of the same trace, so none of them is a derived cell.
 from __future__ import annotations
 
 from collections.abc import Callable, Collection
-from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from .._quantities import Bytes, Duration
@@ -64,6 +63,12 @@ _REQUIRED: dict[str, frozenset[type] | None] = {
 }
 #: Columns only written, by attribute name.
 _WRITTEN = ("is_input", "is_output", "_graph_is_buffer", "step_index", _FX_PATH, _FX_INDEX)
+#: Every column the pass reaches by attribute name, then by member name.
+_BY_ATTR = (*_REQUIRED, *_WRITTEN, *RENAMED_ATTRS)
+_FX_COLUMNS = ("modules", _FX_PATH, _FX_INDEX)
+#: Whether the per-op loop writes each field it reads by attribute under that
+#: same attribute; the raw pass writes the cell it read, so it needs this.
+_WRITTEN_IN_PLACE = all(op_attr(name) == name for name in RENAMED_ATTRS)
 
 
 class _NotColumnar(Exception):
@@ -149,35 +154,40 @@ class _Table:
                 raise _NotColumnar(fid)
 
 
-@lru_cache(maxsize=8)
-def _field_ids(op_cls: type, layout: Any) -> dict[str, int] | None:
-    """Return the field id of every column this pass touches, or ``None``.
+def _field_ids(
+    op_cls: Any, layout: Any, by_attr: tuple[str, ...], by_member: tuple[str, ...]
+) -> dict[str, int] | None:
+    """Return the field id of each named column, or ``None`` when one is not stored.
 
-    A field is found through its descriptor on ``op_cls`` (the class is taken
-    from the ops: this module imports nothing from the ``Op`` module, which
-    sits inside the package's import cycle). The closure fields are
-    properties over their original descriptors, so the store layout names
-    their ids. ``None`` means a name is not a stored field, or a field the
-    per-op loop reads by attribute is written under another attribute.
+    A column named by attribute is found through its descriptor on ``op_cls``
+    (the class is taken from the ops: this module imports nothing from the
+    ``Op`` module, which sits inside the package's import cycle). A column
+    named by member is found in the store layout, which lists the member
+    names in field order; that also covers the closure fields, whose
+    attributes are properties over their original descriptors.
     """
 
-    if any(op_attr(name) != name for name in RENAMED_ATTRS):
-        return None
-    attrs = {name: name for name in (*_REQUIRED, *_WRITTEN, *RENAMED_ATTRS)}
-    attrs.update({name: op_attr(name) for name in RENAMED_MEMBERS})
     fids = {}
-    for name, attr in attrs.items():
-        fid = getattr(getattr(op_cls, attr, None), "_fid", None)
-        if fid.__class__ is not int and name in _CLOSURES:
-            fid = layout.fid_by_name.get(name)
+    for name in by_attr:
+        fid = getattr(getattr(op_cls, name, None), "_fid", None)
         if fid.__class__ is not int:
             return None
         fids[name] = fid
+    member_fids = layout.fid_by_name
+    for name in by_member:
+        if name not in member_fids:
+            return None
+        fids[name] = member_fids[name]
     return fids
 
 
-def _open_table(ops: list[Any]) -> _Table | None:
-    """Return the raw rows of ``ops``, or ``None`` when they are not one building store."""
+def _open_table(
+    ops: list[Any], by_attr: tuple[str, ...], by_member: tuple[str, ...]
+) -> _Table | None:
+    """Return the raw rows of ``ops``, or ``None`` when they are not one building store.
+
+    ``by_attr`` and ``by_member`` name the columns the caller will read or write.
+    """
 
     try:
         op_cls: Any = ops[0].__class__
@@ -188,7 +198,7 @@ def _open_table(ops: list[Any]) -> _Table | None:
     store = stores[0]
     if store.__class__ is not OpRowStore or stores.count(store) != len(stores):
         return None
-    fids = _field_ids(op_cls, store.layout)
+    fids = _field_ids(op_cls, store.layout, by_attr, by_member)
     rows = store.rows_building()
     if fids is None or rows is None or store.frozen or store.dataflow_edges is not None:
         return None
@@ -238,7 +248,7 @@ def _write_roles_and_steps(trace: Trace, table: _Table, kinds: list[str]) -> Non
     f_input, f_output, f_buffer = fids["is_input"], fids["is_output"], fids["_graph_is_buffer"]
     f_step = fids["step_index"]
     next_step = 1
-    for row, kind in zip(table.rows, kinds):
+    for row, kind in zip(table.rows, kinds, strict=True):
         is_input = row[f_input] = kind == "input"
         is_output = row[f_output] = kind == "output"
         is_buffer = row[f_buffer] = kind == "buffer"
@@ -258,11 +268,11 @@ def _log_module_facts(
 ) -> None:
     """Tally module containment and write each atomic module call as ``address:pass``."""
 
-    for op, calls in zip(table.ops, columns["modules"]):
+    for op, calls in zip(table.ops, columns["modules"], strict=True):
         if calls:
             _log_module_hierarchy_info_for_layer(trace, op, shadow_sets)
     fid = table.fids[_ATOMIC_CALL]
-    for row, call in zip(table.rows, columns[_ATOMIC_CALL]):
+    for row, call in zip(table.rows, columns[_ATOMIC_CALL], strict=True):
         if call is not None:
             row[fid] = ":".join([str(part) for part in call])
 
@@ -275,7 +285,7 @@ def _tally(trace: Trace, columns: dict[str, list[Any]]) -> None:
     """
 
     kinds = columns["type"]
-    memory = [cell for cell, kind in zip(columns[_MEMORY], kinds) if kind != "output"]
+    memory = [cell for cell, kind in zip(columns[_MEMORY], kinds, strict=True) if kind != "output"]
     if memory:
         trace._cost_total_activation_memory = _fold(
             trace._cost_total_activation_memory, memory, Bytes, int
@@ -285,7 +295,7 @@ def _tally(trace: Trace, columns: dict[str, list[Any]]) -> None:
     )
     seen: dict[Any, None] = {}
     layers_with_params = 0
-    for label, barcodes in zip(columns["layer_label"], columns["_param_barcodes"]):
+    for label, barcodes in zip(columns["layer_label"], columns["_param_barcodes"], strict=True):
         if barcodes and label not in seen:
             layers_with_params += 1
         seen[label] = None
@@ -319,7 +329,7 @@ def log_final_info_by_column(
         caller runs the per-op loop.
     """
 
-    table = _open_table(list(trace))
+    table = _open_table(list(trace), _BY_ATTR, RENAMED_MEMBERS) if _WRITTEN_IN_PLACE else None
     if table is None:
         return False
     try:
@@ -333,7 +343,7 @@ def log_final_info_by_column(
     if trace._cost_func_calls_duration.__class__ not in (int, float, Duration):
         return False
     _write_roles_and_steps(trace, table, columns["type"])
-    rename_label_columns(trace, table.rows, table.fids, columns, parent_ref_cls, project_views)
+    rename_label_columns(trace, table, columns, parent_ref_cls, project_views)
     _log_module_facts(trace, table, columns, shadow_sets)
     _tally(trace, columns)
     return True
@@ -358,7 +368,7 @@ def ops_inside_modules(trace: Trace) -> list[Any]:
     """
 
     ops = list(trace)
-    table = _open_table(ops)
+    table = _open_table(ops, _FX_COLUMNS, ())
     if table is None:
         return ops
     try:
@@ -366,8 +376,8 @@ def ops_inside_modules(trace: Trace) -> list[Any]:
     except _NotColumnar:
         return ops
     f_path, f_index = table.fids[_FX_PATH], table.fids[_FX_INDEX]
-    for row, calls in zip(table.rows, modules):
+    for row, calls in zip(table.rows, modules, strict=True):
         if not calls:
             row[f_path] = None
             row[f_index] = 0
-    return [op for op, calls in zip(ops, modules) if calls]
+    return [op for op, calls in zip(ops, modules, strict=True) if calls]

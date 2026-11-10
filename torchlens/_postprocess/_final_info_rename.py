@@ -60,7 +60,7 @@ RENAMED_MEMBERS = (
 def _rename_containers(rows: _Rows, fid: int, column: list[Any], lookup: _Lookup) -> None:
     """Rename one column of label containers: a new container of the same type per cell."""
 
-    for row, labels in zip(rows, column):
+    for row, labels in zip(rows, column, strict=True):
         if not labels:
             continue
         cls = labels.__class__
@@ -79,7 +79,7 @@ def _rename_equivalent_ops(rows: _Rows, fid: int, column: list[Any], lookup: _Lo
     """
 
     renamed_by_id: dict[int, Any] = {}
-    for row, group, identity in zip(rows, column, map(id, column)):
+    for row, group, identity in zip(rows, column, map(id, column), strict=True):
         if not group:
             continue
         if identity in renamed_by_id:
@@ -98,7 +98,7 @@ def _rename_recurrent_ops(
     """
 
     renamed_by_member: dict[Any, list[str]] = {}
-    for row, group, raw_label in zip(rows, column, raw_labels):
+    for row, group, raw_label in zip(rows, column, raw_labels, strict=True):
         if not group:
             continue
         cls = group.__class__
@@ -119,7 +119,7 @@ def _rename_buffer_sources(
 ) -> None:
     """Rename the one label each buffer's ``buffer_source`` holds."""
 
-    for row, label in zip(rows, column):
+    for row, label in zip(rows, column, strict=True):
         if label is None:
             continue
         if (label.__class__ is str or isinstance(label, str)) and label in mapping:
@@ -145,7 +145,7 @@ def _rename_arg_positions(column: list[Any], mapping: dict[str, str]) -> None:
 def _rename_out_versions(rows: _Rows, fid: int, column: list[Any], mapping: dict[str, str]) -> None:
     """Rename the child-label keys of every ``out_versions_by_child`` dict."""
 
-    for row, versions in zip(rows, column):
+    for row, versions in zip(rows, column, strict=True):
         if versions:
             row[fid] = {mapping[child]: version for child, version in versions.items()}
 
@@ -176,6 +176,7 @@ def _rename_conditional_children(
         columns["conditional_then_children"],
         columns["conditional_elif_children"],
         columns["conditional_else_children"],
+        strict=True,
     ):
         if arms is None:
             if elifs:
@@ -203,22 +204,21 @@ def _rename_replay_columns(
     cache: dict[Any, Any] = {}
     for name in ("_edge_uses", "edits"):
         fid = fids[name]
-        for row, records in zip(rows, columns[name]):
+        for row, records in zip(rows, columns[name], strict=True):
             if records:
                 row[fid] = list(
                     map(_rename_label_dataclass, records, repeat(mapping), repeat(cache))
                 )
     for name in ("args_template", "kwargs_template"):
         fid = fids[name]
-        for row, template in zip(rows, columns[name]):
+        for row, template in zip(rows, columns[name], strict=True):
             if template is not None:
                 row[fid] = _rename_template_parent_refs(template, mapping, parent_ref_cls, cache)
 
 
 def rename_label_columns(
     trace: Trace,
-    rows: _Rows,
-    fids: dict[str, int],
+    table: Any,
     columns: dict[str, list[Any]],
     parent_ref_cls: type[Any],
     project_views: _ProjectViews,
@@ -229,10 +229,9 @@ def rename_label_columns(
     ----------
     trace:
         Trace being postprocessed; supplies the three raw-to-final mappings.
-    rows:
-        Each op's list of cells, in op order.
-    fids:
-        Field id by column name.
+    table:
+        The ops as raw rows: ``rows`` is each op's list of cells in op order,
+        ``fids`` the field id by column name.
     columns:
         The columns named in ``RENAMED_ATTRS`` and ``RENAMED_MEMBERS`` plus
         ``_label_raw``, each read in op order before any write.
@@ -242,6 +241,7 @@ def rename_label_columns(
         Projects the then, elif and else views of a ``conditional_arm_children``.
     """
 
+    rows, fids = table.rows, table.fids
     mapping = trace._raw_to_final_layer_labels
     layer_mapping = trace._raw_to_final_parent_layer_labels
     op_lookup = trace._raw_to_final_op_labels.__getitem__
