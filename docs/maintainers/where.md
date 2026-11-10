@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1755 modules, 706541 lines, 0 modules without a docstring.
+85 packages, 1757 modules, 707332 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26857 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 122 | 42834 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 124 | 43625 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (122 modules, 42834 lines)
+Core data structures for representing a logged forward pass. (124 modules, 43625 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -335,10 +335,12 @@ Core data structures for representing a logged forward pass. (122 modules, 42834
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
 | `_grad_fn_pass` | Resolve the forward pass one GradFn differentiates. | 41 |
 | `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 179 |
-| `_layer_accessors` | OpAccessor and LayerAccessor: dict-like lookup over ops and layers. | 410 |
-| `_layer_mirror` | Layer mirror reads: the representative op behind a Layer and its mirrored values. | 71 |
+| `_layer_accessors` | OpAccessor and LayerAccessor: dict-like lookup over ops and layers. | 653 |
+| `_layer_fields` | Layer field descriptors: mirror reads, per-layer shadows, tombstones and grad-fn keys. | 237 |
+| `_layer_mirror` | Layer mirror reads: the representative op behind a Layer and its mirrored values. | 82 |
 | `_layer_sites` | Layer-level site accessors: ''layer_site_key'', ''site_peers'', ''shape_summary''. | 174 |
 | `_layer_spec` | Layer mirror-field spec table and stored-state order (pure schema data). | 228 |
+| `_layer_state` | Trace-held Layer state: one state mapping per layer, with Layer views on demand. | 407 |
 | `_layer_views` | Layer view functions: per-pass aggregation and graph unions moved off ''Layer''. | 329 |
 | `_lookup_keys` | Shared lookup-key validation helpers for ''Trace'' access paths. | 131 |
 | `_lookup_kinds` | Cross-kind key resolution shared by the TorchLens indexing doors. | 399 |
@@ -401,17 +403,17 @@ Core data structures for representing a logged forward pass. (122 modules, 42834
 | `_trace_intervention_records` | Intervention spec state and history records of a ''Trace''. | 275 |
 | `_trace_inventory` | Trace-level inventory builders: structural sites table and bill of materials. | 247 |
 | `_trace_missing_attrs` | The canonical refusal for an attribute a ''Trace'' does not have. | 163 |
-| `_trace_output` | The model-return doors of a Trace (''trace.output'', ''trace.transformed_output''). | 89 |
+| `_trace_output` | The model-return doors of a Trace (''trace.output'', ''trace.transformed_output''). | 96 |
 | `_trace_pickle_state` | Private initialization and verification-state blocks for Trace persistence. | 60 |
 | `_trace_pristine` | The pristine reading of a Trace, derived from the evidence it carries. | 172 |
 | `_trace_profile` | Trace model-profile helpers. | 190 |
-| `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 218 |
+| `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 219 |
 | `_trace_removal` | Entry removal and parameter-reference release for ''Trace''. | 171 |
 | `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays, and ''append''. | 812 |
 | `_trace_source` | Captured forward-source annotations, independent of live source files. | 45 |
 | `_trace_source_introspection` | Source-model introspection fallbacks for ''Trace'''s ''_source_*'' fields. | 67 |
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 140 |
-| `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 690 |
+| `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 691 |
 | `_trace_stats_grad_fn_site` | Pure helpers behind the Trace grad-fn site and fire-timing rollups. | 177 |
 | `_trace_views` | Trace group-view and field-derived accessor functions. | 757 |
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
@@ -434,7 +436,7 @@ Core data structures for representing a logged forward pass. (122 modules, 42834
 | `grad_fn_call` | Per-pass runtime data for autograd grad_fn_handle nodes. | 395 |
 | `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 451 |
 | `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 60 |
-| `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1663 |
+| `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1547 |
 | `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2587 |
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3302 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1084 |

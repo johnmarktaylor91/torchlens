@@ -1036,7 +1036,7 @@
   "field": "source_trace",
   "file": "torchlens/_data_classes/_layer_accessors.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
