@@ -54,6 +54,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_trace_fork.py` | M11 copy-on-write fork builder (COW shells over `OpStoreView`s) |
 | `_compaction.py` | Freeze-seam Op metadata pooling (M11 fold) + M14 duplicate/empty container-cell pooling (`PooledCell`, hydrate-on-read) + singleton label-list compaction (bare str + identity-gated store registry, kind tables only) |
 | `_op_columns.py` | Private row-indexed column view over the `Op` row store (`OpColumns`: bound per-field getters and setters, one Python call per access on a building store; special cells delegate to the facade attribute) for postprocess passes |
+| `_op_column_scan.py` | Call-free scans of the building `Op` row store for passes that act on few ops (`ops_with`: the ops whose raw cell may hold a value; `op_labels`); every other store shape gets the facade loop |
 | `_layer_spec.py` | `_LAYER_MIRROR_SPEC` and the Layer mirror-field spec (split out of `layer.py`) |
 | `_layer_accessors.py` | `OpAccessor`/`LayerAccessor` dict-like lookup (split out of `layer.py`; re-exported there) |
 | `_schema_bindings.py` | GENERATED per-field `StorageBinding` axes — DO NOT EDIT; regenerate with `tools/generate_record_schema.py` |
