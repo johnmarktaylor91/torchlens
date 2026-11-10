@@ -321,11 +321,18 @@ def release_moved_earlier(base: Any, head: Any) -> bool:
 def accept_release_moves(name: str, base: Any, head: Any) -> Any:
     """Return ``head`` with each release step that only moved objects earlier set to ``base``'s.
 
-    Applies to the ``RELEASE_ORDER`` dump only; every other dump is returned
-    unchanged, and so is any step that differs in another way.
+    Applies to the ``RELEASE_ORDER`` dump only (its ``{"steps": [...]}`` form or
+    the bare step list); every other dump is returned unchanged, and so is any
+    step that differs in another way.
     """
 
-    if name != RELEASE_ORDER or not isinstance(base, list) or not isinstance(head, list):
+    if name != RELEASE_ORDER:
+        return head
+    if isinstance(base, dict) and isinstance(head, dict):
+        if not isinstance(base.get("steps"), list) or not isinstance(head.get("steps"), list):
+            return head
+        return {**head, "steps": accept_release_moves(name, base["steps"], head["steps"])}
+    if not isinstance(base, list) or not isinstance(head, list):
         return head
     base_steps = {
         step.get("step"): step for step in base if isinstance(step, dict) and "step" in step

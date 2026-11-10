@@ -197,6 +197,14 @@ def test_release_order_accepts_only_earlier_release() -> None:
     assert not mask_module.release_moved_earlier(base, fewer)
     address = {**earlier, "items": [*earlier["items"][:-1], ["watched_by_address", ["op"]]]}
     assert not mask_module.release_moved_earlier(base, address)
+    dumped = mask_module.accept_release_moves(
+        name, {"steps": _release_log(base)}, {"steps": _release_log(earlier)}
+    )
+    assert diff({"steps": _release_log(base)}, dumped) == []
+    dumped_toward = mask_module.accept_release_moves(
+        name, {"steps": _release_log(base)}, {"steps": _release_log(toward)}
+    )
+    assert diff({"steps": _release_log(base)}, dumped_toward) != []
     other = mask_module.accept_release_moves(
         "sequence-5_forks", _release_log(base), _release_log(earlier)
     )
