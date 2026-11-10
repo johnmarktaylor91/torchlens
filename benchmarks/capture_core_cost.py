@@ -16,6 +16,8 @@ C7   calls per op for ``to_pandas()``, ``repr(trace)`` and ``save``, each on a
 C8   share of op commits that took the wrapper fast lane
 C9   tensor bytes the trace holds at op boundaries of the forward, at peak,
      split into saved outputs and argument tensors
+FL   calls per function output in each call-time section of the forward
+     (``capture_core_floor.py``; names in ``capture_core_floor.md``)
 ==== ==========================================================================
 
 Every model is traced once to warm caches before it is measured, so "a trace"
@@ -62,7 +64,10 @@ from _hermetic_counters import quiet_gc  # noqa: E402
 from torch import nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
-from benchmarks import capture_core_bars as bars_mod  # noqa: E402
+from benchmarks import (  # noqa: E402
+    capture_core_bars as bars_mod,
+    capture_core_floor as floor,
+)
 from benchmarks.capture_core_counters import (  # noqa: E402
     StoreWriteObserver,
     TensorBytesObserver,
@@ -340,11 +345,15 @@ def measure_model(name: str, wall: bool = True) -> dict[str, Any]:
         record.pop("c2")
         if name == "prep_only_resnet18":
             record["prepared_modules"] = sum(1 for _ in model.body.modules())
+        if name in floor.FLOOR_MODELS:
+            record["floor"] = floor.measure_sections(model, x)
         return record
     record["c3"], record["c9"] = _c3_c9(model, x)
     record["c7"] = _c7(model, x)
     if wall:
         record["wall"] = _wall(model, x)
+    # Last, so the extra counted trace cannot touch the counters above.
+    record["floor"] = floor.measure_sections(model, x)
     return record
 
 
@@ -455,6 +464,12 @@ def _write(path: Path, document: dict[str, Any]) -> None:
     path.write_text(json.dumps(document, indent=1, sort_keys=False) + "\n", encoding="utf-8")
 
 
+def _flatten(document: dict[str, Any]) -> dict[str, float]:
+    """Return the phase counters and the call-time section counters of a measurement."""
+
+    return {**bars_mod.flatten(document), **floor.flatten(document)}
+
+
 def _report(label: str, problems: list[str]) -> int:
     if problems:
         print(f"{label}: {len(problems)} problem(s)")
@@ -490,7 +505,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = _parser().parse_args(argv)
     if args.compare:
-        first, second = (bars_mod.flatten(_load(path)) for path in args.compare)
+        first, second = (_flatten(_load(path)) for path in args.compare)
         return _report("repeat comparison", bars_mod.compare(first, second))
     if args.measurement is not None:
         document = _load(args.measurement)
@@ -507,7 +522,7 @@ def main(argv: list[str] | None = None) -> int:
     status = 0
     errors = [f"{n}: {r['error']}" for n, r in document["models"].items() if "error" in r]
     status |= _report("measurement", errors)
-    flat = bars_mod.flatten(document)
+    flat = _flatten(document)
     if args.write_bars:
         _write(args.bars, bars_mod.build_bars(document, args.base_commit))
         print(f"wrote {args.bars.name}")
@@ -516,7 +531,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"landed {args.tighten} in {args.bars.name}")
     if args.check:
         label = "bars" if args.lane is None else f"bars (lane {args.lane})"
-        status |= _report(label, bars_mod.check(flat, _load(args.bars), args.lane))
+        bar_file = _load(args.bars)
+        problems = bars_mod.check(flat, bar_file, args.lane)
+        status |= _report(label, problems + floor.check_markers(flat, bar_file["baseline"]))
     if args.out is None and not (args.check or args.write_bars or args.tighten):
         json.dump(document, sys.stdout, indent=1)
         print()
