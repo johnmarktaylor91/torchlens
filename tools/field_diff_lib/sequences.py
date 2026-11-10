@@ -477,6 +477,10 @@ def _bulk(trace: Any, roots: list[tuple[str, str]]) -> dict[str, Any]:
         except Exception as error:  # noqa: BLE001 - a refusing facet read is an outcome
             facets[str(op.label)] = error_record(error, canon.string)
     result["facets"] = facets
+    name = str(getattr(trace, "name", ""))
+    for key in ("repr", "str"):
+        if name and isinstance(result[key], str):
+            result[key] = result[key].replace(name, "<trace>")
     return result
 
 
@@ -485,6 +489,7 @@ def seq_facets_bulk(tl: Any, log: Log, scratch: str) -> None:
 
     reference = snap(fresh(tl)[2], log.roots)
     control = paths(reference, snap(fresh(tl)[2], log.roots))
+    bulk_control = paths(_bulk(fresh(tl)[2], log.roots), _bulk(fresh(tl)[2], log.roots))
     bulk_first = fresh(tl)[2]
     bulk_before = _bulk(bulk_first, log.roots)
     fields_after_bulk = snap(bulk_first, log.roots)
@@ -492,7 +497,11 @@ def seq_facets_bulk(tl: Any, log: Log, scratch: str) -> None:
     fields_before_bulk = snap(fields_first, log.roots)
     bulk_after = _bulk(fields_first, log.roots)
     log.note("control.varies_between_two_fresh_traces", summary(control))
-    log.note("bulk.before_vs_after_field_reads", sorted(paths(bulk_before, bulk_after))[:50])
+    log.note("control.bulk_varies_between_two_fresh_traces", sorted(bulk_control)[:50])
+    log.note(
+        "bulk.before_vs_after_field_reads",
+        sorted(paths(bulk_before, bulk_after) - bulk_control)[:50],
+    )
     log.note(
         "fields.before_vs_after_bulk",
         summary(paths(fields_before_bulk, fields_after_bulk) - control),

@@ -32,8 +32,8 @@ from field_diff_lib.faults import FAULTS, PLANT_CASE  # noqa: E402
 from field_diff_lib.mask import Mask  # noqa: E402
 
 #: Entries of the fixed mask, and the digest of their lines (see ``_mask_lines``).
-APPROVED_MASK_ENTRIES = 64
-APPROVED_MASK_DIGEST = "aa9b801bce40f3bd"
+APPROVED_MASK_ENTRIES = 65
+APPROVED_MASK_DIGEST = "82a2e59262c0b1d3"
 
 
 def _mask_lines() -> list[str]:
@@ -160,9 +160,9 @@ def test_named_and_text_rules_reach_inside_values() -> None:
     assert masked["label"] == "relu_1_2"
     assert masked["timings"]["items"] == [["total_s", "<float>"]]
     assert masked["cost"]["repr"] == "TraceCost of m: <duration> compute, 192 B"
-    assert mask.text("captured  19.0 ms (18.5 ms of it logging)") == (
-        "captured  <duration> (<duration> of it logging)"
-    )
+    share = "captured  <duration> and its logging share"
+    assert mask.text("captured  19.0 ms (18.5 ms of it logging)") == share
+    assert mask.text("captured  19.0 ms, almost all logging") == share
 
 
 def test_disabled_mask_changes_nothing() -> None:

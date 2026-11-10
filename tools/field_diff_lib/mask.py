@@ -12,9 +12,9 @@ part that varies and compares the rest.
     ``None``, counts, keys and container lengths are still compared, so a
     reading that stops being taken still shows.
 ``identity``
-    every integer (and every string of digits) inside the value is a memory
-    address or a thread identity and is replaced by ``<id>``. Presence and
-    container shape are still compared. Equality between two addresses is
+    every integer (and every string of digits, and every float a table made
+    of one) inside the value is a memory address or a thread identity and is
+    replaced by ``<id>``. Presence and container shape are still compared. Equality between two addresses is
     not: an address is reused once its object is freed, so two unrelated
     short-lived objects share an address in one run and not in the next.
     Which fields hold the same live tensor, and which tensors share storage,
@@ -200,12 +200,17 @@ MASK: tuple[MaskRule, ...] = (
     ),
 )
 
-#: Substitutions inside ``repr`` and ``str`` text.
+#: Substitutions inside ``repr`` and ``str`` text, applied in this order.
 TEXT_RULES: tuple[TextRule, ...] = (
     TextRule(
         r"\b\d+(?:\.\d+)? (?:ns|us|µs|ms|s|min)\b",
         "<duration>",
         "clock reading printed in a summary line",
+    ),
+    TextRule(
+        r"<duration>(?:, almost all logging| \(<duration> of it logging\))",
+        "<duration> and its logging share",
+        "wording chosen from the ratio of two clock readings",
     ),
 )
 
@@ -270,8 +275,10 @@ class Mask:
         if isinstance(value, list):
             return [self._by_rule(rule, member) for member in value]
         if isinstance(value, dict):
-            if rule == "clock" and "__float__" in value:
-                return "<float>"
+            if "__float__" in value and rule in ("clock", "identity"):
+                if rule == "clock":
+                    return "<float>"
+                return value if value["__float__"] == "nan" else "<id>"
             return {
                 key: entry if _is_tag(key, entry) else self._by_rule(rule, entry)
                 for key, entry in value.items()
