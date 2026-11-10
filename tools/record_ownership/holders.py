@@ -30,6 +30,7 @@ OP_ROW_CELLS = "op_row_cells"
 MODULE_AND_BUFFER_CELLS = "module_and_buffer_cells"
 FORK_AND_SAVED_STATE = "fork_and_saved_state"
 LATER_KINDS = "later_kinds"
+ACTIVATION = "activation"
 
 STEPS: dict[str, str] = {
     OP_LIST: "the op list, the label dictionaries and the caches of the ops door",
@@ -38,12 +39,16 @@ STEPS: dict[str, str] = {
     MODULE_AND_BUFFER_CELLS: "module cells (calls, params) and buffer versions",
     FORK_AND_SAVED_STATE: "fork translation, copy-on-write overlays and pickled state",
     LATER_KINDS: "holders of the kinds activated after Op and Layer",
+    ACTIVATION: "the side table that keeps records alive until they are handed out weakly",
 }
 
 BEFORE_ACTIVATION = frozenset(
     {OP_LIST, LAYER_STATE, OP_ROW_CELLS, MODULE_AND_BUFFER_CELLS, FORK_AND_SAVED_STATE}
 )
 ACTIVATED_FIRST = ("Op", "Layer")
+# The one holder activation itself removes: the trace core's side table of
+# records, which the converted holders resolve their row keys through.
+SIDE_TABLE = "Trace._trace_core:TraceCore._strong_facades"
 
 
 @dataclass(frozen=True)
@@ -68,30 +73,8 @@ HOLDERS: dict[str, Holder] = {
     "Trace._layer_dict_all_keys{*} -> Op": Holder(OP_LIST, but=("pickle_state",)),
     "Trace._layer_dict_main_keys{*} -> Op": Holder(OP_LIST, but=("pickle_state",)),
     "Trace._layer_list[*] -> Op": Holder(OP_LIST, but=("pickle_state",)),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._alias_indexes:_AliasIndexes.final{*} -> Op": Holder(
-        OP_LIST, only=("alias_lookup",)
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._alias_indexes:_AliasIndexes.layer{*}[*] -> Op": Holder(
-        OP_LIST, only=("alias_lookup",)
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._alias_indexes:_AliasIndexes.raw{*} -> Op": Holder(
-        OP_LIST, only=("alias_lookup",)
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._counted_cache[*] -> Op": Holder(
-        OP_LIST, but=("fork_cold", "pickle_state")
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._dict{*} -> Op": Holder(
-        OP_LIST, but=("fork_cold", "pickle_state")
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._layer_label_index{*}[*] -> Op": Holder(
-        OP_LIST,
-        but=("alias_lookup", "facets_read", "fork_cold", "pickle_state", "plain", "save_none"),
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._list[*] -> Op": Holder(
-        OP_LIST, but=("fork_cold", "pickle_state")
-    ),
-    "Trace._op_accessor_cache[*]:TraceOpAccessor._raw_index_lookup{*} -> Op": Holder(
-        OP_LIST, but=("fork_cold", "pickle_state")
+    "Trace._trace_core:TraceCore._strong_facades{*}[*] -> Op": Holder(
+        ACTIVATION, but=("fork_cold", "pickle_state")
     ),
     "Layer.ops:OpAccessor._dict{*} -> Op": Holder(LAYER_STATE),
     "Layer.ops:OpAccessor._list[*] -> Op": Holder(LAYER_STATE),

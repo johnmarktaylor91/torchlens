@@ -150,7 +150,7 @@ def test_validation_fails_on_a_misresolving_label(trace: tl.Trace) -> None:
     ops = _fresh_ops(trace)
     indexes = ops._ensure_alias_indexes()
     assert indexes is not None
-    indexes.final[later.layer_label] = earlier
+    indexes.final[later.layer_label] = indexes.final[earlier.label]  # the row key of earlier
     with pytest.raises(
         MetadataInvariantError, match="resolves through trace.ops to a different op"
     ):
@@ -164,7 +164,7 @@ def test_validation_fails_on_a_dangling_label(trace: tl.Trace) -> None:
     ops = _fresh_ops(trace)
     indexes = ops._ensure_alias_indexes()
     assert indexes is not None
-    del ops._dict[later.label]
+    del ops._label_keys[later.label]
     for alias in (later.label, later.short_label, later._label_raw, later.layer_label):
         indexes.final.pop(alias, None)
     indexes.layer.pop(later.layer_label, None)
