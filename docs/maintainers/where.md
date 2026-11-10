@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1772 modules, 712291 lines, 0 modules without a docstring.
+85 packages, 1772 modules, 712310 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45418 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 128 | 45437 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (128 modules, 45418 lines)
+Core data structures for representing a logged forward pass. (128 modules, 45437 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -366,7 +366,7 @@ Core data structures for representing a logged forward pass. (128 modules, 45418
 | `_op_door_keys` | Row keys behind the trace-level ops door. | 263 |
 | `_op_grad_stream` | Grad-blob streaming for ''Op._log_tensor_grad''. | 41 |
 | `_op_out_read` | Helpers behind the ''Op.out'' read path: absent-value refusals, the mutation-check state and the synthesized-read warning. | 104 |
-| `_op_relations` | Relation views for ''Op'': parents, children, siblings, containers, modules. | 267 |
+| `_op_relations` | Relation views for ''Op'': parents, children, siblings, containers, modules. | 286 |
 | `_op_row_containers` | Trace-side op containers that hold row keys instead of ''Op'' records. | 692 |
 | `_op_row_release` | Direct row release for op removal (the facade-husk shortcut). | 107 |
 | `_op_save` | Tensor save, grad logging, transform validation and copy logic for ''Op''. | 800 |
