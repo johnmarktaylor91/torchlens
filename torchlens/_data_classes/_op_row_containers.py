@@ -125,9 +125,18 @@ class OpRows:
             if store is self._store:
                 rows = self._tables[0]
                 if rows.__class__ is WeakViews:
-                    # Never a plain read here: it would build a record for the
-                    # row, and the one being held would lose its row to it.
-                    held = cast("WeakViews", rows).claim(row, record)
+                    # ``WeakViews.claim`` written out: this runs once per op of
+                    # every fork, so it makes no call while the row's view is
+                    # alive. Never a plain read here: it would build a record
+                    # for the row, and the one being held would lose its row.
+                    weak: Any = rows
+                    try:
+                        held = weak.refs[row]()
+                    except IndexError:
+                        weak.pad(row + 1)
+                        held = None
+                    if held is None:
+                        weak[row] = held = record
                 else:
                     try:
                         held = rows[row]
