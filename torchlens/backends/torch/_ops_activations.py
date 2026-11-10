@@ -1,6 +1,7 @@
 """Output tensor metadata and activation persistence."""
 
 from collections.abc import Callable
+from math import prod
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -29,6 +30,7 @@ from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
 from ..._utils.tensor_utils import (
+    get_memory_amount,
     get_memory_amount_from_metadata,
     safe_copy,
     safe_to,
@@ -36,7 +38,7 @@ from ..._utils.tensor_utils import (
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
 from ._same_object_handoff import pop_same_object_mutation, reference_payload_source
-from ._user_grad_fn import pop_user_grad_fn, recorded_op_grad_fn
+from ._user_grad_fn import pop_op_grad_fn
 from .tensor_tracking import (
     _append_module_suffix_to_equivalence_class,
     _get_equivalence_class,
@@ -149,6 +151,42 @@ def _metadata_shape(t: torch.Tensor, op_label: str | None = None) -> tuple[int, 
                 },
             ),
         ) from error
+
+
+_STRIDED = torch.strided
+
+
+def _read_output_shape_dtype_memory(
+    t: torch.Tensor, op_label: str
+) -> tuple[tuple[int, ...], torch.dtype, int]:
+    """Return an output's shape, dtype and physical bytes, read directly in one call.
+
+    The same reads, in the same order, as :func:`_metadata_shape` followed by
+    ``get_memory_amount_from_metadata``: a nested tensor, or one whose shape read
+    fails, takes ``_metadata_shape``'s typed refusal; a meta tensor counts 0 bytes;
+    a sparse layout counts its component bytes; a dense strided tensor counts
+    elements times item size. Inline because it runs once per logged output.
+    """
+
+    try:
+        nested = t.is_nested
+    except AttributeError:
+        nested = False
+    try:
+        shape = None if nested else tuple(t.shape)
+    except RuntimeError:
+        shape = None
+    if shape is None:
+        shape = _metadata_shape(t, op_label=op_label)  # raises the typed refusal
+    dtype = t.dtype
+    try:
+        if t.device.type == "meta":
+            return shape, dtype, 0
+        if t.layout is not _STRIDED:
+            return shape, dtype, get_memory_amount(t)
+        return shape, dtype, int(prod(shape) * dtype.itemsize)
+    except Exception:
+        return shape, dtype, get_memory_amount(t)
 
 
 def _log_output_tensor_info(
@@ -325,11 +363,9 @@ def _log_output_tensor_info(
     # members are logged against a safe copy whose ``grad_fn`` is TorchLens's
     # own ``CloneBackward`` node. The wrapper stamped the USER op's live
     # autograd node on the copy; that snapshot is the operation's metadata.
-    user_grad_fn = pop_user_grad_fn(t)
     # TorchLens bookkeeping ``grad_fn`` read (same receiver aliasing note
-    # as the ``_version`` read above).
-    with internal_scalar_read():
-        op_grad_fn = recorded_op_grad_fn(user_grad_fn, t)
+    # as the ``_version`` read above): never witnessed, never fingerprinted.
+    op_grad_fn = pop_op_grad_fn(t)
     grad_fn_cls = type(op_grad_fn) if op_grad_fn is not None else None
     fields_dict["grad_fn_class_name"] = None if grad_fn_cls is None else grad_fn_cls.__name__
     fields_dict["grad_fn_class_qualname"] = (
@@ -405,15 +441,13 @@ def _log_output_tensor_info(
     fields_dict["has_saved_args"] = False
     fields_dict["saved_args"] = None
     fields_dict["saved_kwargs"] = None
-    fields_dict["shape"] = _metadata_shape(t, op_label=fields_dict.get("_label_raw"))
-    fields_dict["transformed_out_shape"] = None
-    fields_dict["dtype"] = t.dtype
-    fields_dict["transformed_out_dtype"] = None
-    fields_dict["activation_memory"] = get_memory_amount_from_metadata(
-        t,
+    (
         fields_dict["shape"],
         fields_dict["dtype"],
-    )
+        fields_dict["activation_memory"],
+    ) = _read_output_shape_dtype_memory(t, _label_raw)
+    fields_dict["transformed_out_shape"] = None
+    fields_dict["transformed_out_dtype"] = None
     fields_dict["transformed_activation_memory"] = None
     fields_dict["visualizer_path"] = None
     # Not measured is None, never a fabricated 0 (observe item 15); the

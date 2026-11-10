@@ -46,6 +46,8 @@ _USER_GRAD_FN_ATTR = "tl_user_grad_fn"
 _TENSORBASE_CLS = require_tensorbase_class(get_tensorbase_class())
 _VIEW_BASE_OF = _TENSORBASE_CLS._base.__get__
 _REQUIRES_GRAD_OF = _TENSORBASE_CLS.requires_grad.__get__
+raw_grad_fn = _TENSORBASE_CLS.grad_fn.__get__
+_TENSOR = torch.Tensor
 
 # Bound on the view-chain walk below (view chains are short; the bound only keeps
 # a malformed graph from looping).
@@ -89,6 +91,29 @@ def pop_user_grad_fn(t: torch.Tensor) -> Any:
         with suppress(AttributeError):
             delattr(t, _USER_GRAD_FN_ATTR)
     return user_grad_fn
+
+
+def pop_op_grad_fn(t: torch.Tensor) -> Any:
+    """Pop ``t``'s stamp and return the autograd handle its op record carries.
+
+    One call for :func:`pop_user_grad_fn` then :func:`recorded_op_grad_fn`, with the
+    same result. An unstamped plain ``torch.Tensor`` reads ``grad_fn`` through the C
+    getset original (no TorchLens frame, no witnessed fact, no fingerprint entry: what
+    the ``internal_scalar_read`` marker otherwise arranges); a subclass, whose read may
+    run its own ``__torch_function__``, keeps the marked read.
+    """
+
+    user_grad_fn = getattr(t, _USER_GRAD_FN_ATTR, None)
+    if user_grad_fn is None:
+        if type(t) is _TENSOR:
+            return raw_grad_fn(t)
+        with internal_scalar_read():
+            return t.grad_fn
+    try:
+        delattr(t, _USER_GRAD_FN_ATTR)
+    except AttributeError:
+        pass
+    return None if user_grad_fn is NO_USER_GRAD_FN else user_grad_fn
 
 
 def recorded_op_grad_fn(user_grad_fn: Any, t: torch.Tensor) -> Any:

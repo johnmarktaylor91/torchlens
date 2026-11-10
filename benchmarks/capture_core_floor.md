@@ -10,8 +10,8 @@
 |---|---|---|
 | `arg_scan_per_output` | argument scan, parents, versions, parameters, slot map, source resolution, argument summaries | `_extract_arg_tensors_and_params`, `get_arg_tensors_for_resolution`, `split_non_tensor_args`, `_bind_call_alias_labels`, `_repin_rebound_receiver`, `resolve_or_late_index_buffer_address`, `log_source_tensor`, `log_closure_constant_if_known`, `snapshot_arg_slots`, `parents_from_slots`, `_set_arg_template_fields`, `_build_graph_relationship_fields`, `_build_param_fields`, `witness_from_slots`, `extract_salient_args` |
 | `call_site_per_output` | call-site capture | `_set_call_site_fields`, `_get_code_context` |
-| `autograd_per_output` | the output walk and autograd saved-tensor statistics | `_partition_output_entries_with_autograd_stats` |
-| `output_facts_per_output` | shape, memory, gradient function, in-place and edit facts of each output | `_metadata_shape`, `get_memory_amount_from_metadata`, `recorded_op_grad_fn`, `pop_user_grad_fn`, `pop_same_object_mutation`, `_pop_tensor_live_fire_results`, `_label_version_baseline` |
+| `autograd_per_output` | the output walk and autograd saved-tensor statistics | `_output_entries_with_autograd_stats`, `_partition_output_entries_with_autograd_stats` |
+| `output_facts_per_output` | shape, memory, gradient function, in-place and edit facts of each output | `_read_output_shape_dtype_memory`, `pop_op_grad_fn`, `_metadata_shape`, `get_memory_amount_from_metadata`, `recorded_op_grad_fn`, `pop_user_grad_fn`, `pop_same_object_mutation`, `_pop_tensor_live_fire_results`, `_label_version_baseline` |
 | `payload_per_output` | the saved payload: copy, save budget, duplicate checks | `_save_activation_fields`, `_stream_activation_fields`, `_save_call_args_fields` |
 | `emit_rest_per_output` | the rest of the emit (`log_function_output_tensors`): fields dict, row, commit, equivalence classes | (the emit itself) |
 | `wrapper_outside_emit_per_output` | the function wrapper (`wrapped_func`) outside the emit: admission, the operation, label handling, nested wrapper calls | (the wrapper itself) |
