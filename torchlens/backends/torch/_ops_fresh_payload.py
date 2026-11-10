@@ -44,7 +44,7 @@ from ..._data_classes._op_dedup import _IdentityDedupCache
 from ..._save_budget import _RetainedStorageEntry
 from ..._state import pause_logging
 from ..._utils import tensor_utils as _tensor_utils
-from ..._utils._tensor_label import mark_detached_saved_activation
+from ..._utils._detached_activations import mark_detached_saved_activation
 from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils._torch_symbols import tensor_read
 from ..._utils.tensor_utils import _copy_tensor_payload, _try_defer_payload_alias
