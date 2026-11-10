@@ -138,6 +138,11 @@ def test_build_keyed_save_counters_hold_exactly(
         )
     first, _ = measured
     expected = pinned["counters"]
+    # Metadata bytes count one func_call_location row per distinct location object. The
+    # call-site walk builds each location once per (code, file, instruction, line) in a capture
+    # and shares it among the op sites that include that frame, so tinynet writes 24 location
+    # rows, not 43, with the same row values and the same resolved references
+    # (2266429 -> 2264115; full account in the pin's ``pin_accounts``).
     assert {key: first[key] for key in BUILD_KEYED_COUNTERS} == {
         key: expected[key] for key in BUILD_KEYED_COUNTERS
     }
