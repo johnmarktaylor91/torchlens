@@ -33,6 +33,7 @@ from .._data_classes._module_role_hints import (
     multi_output_role_from_path,
     role_hints_for_module_class,
 )
+from .._data_classes._op_column_scan import op_labels, ops_with
 from .._data_classes._state_adapter import state_items
 from .._data_classes._summary import format_call_arg
 from .._data_classes.layer import Layer
@@ -64,7 +65,7 @@ from ._conditional_records import (
     _ordered_branch_kinds,
     _resolve_conditional_bool_op,
     _roles_by_label,
-    roles_held_by_pass,
+    rebind_op_conditional_roles,
 )
 from ._finished_marks import mark_ops_finished
 from ._layer_conditional_merge import _rebuild_conditional_edge_call_indices
@@ -316,7 +317,7 @@ def _synthesized_root_call(
         address="self",
         call_index=1,
         label="self:1",
-        ops=[op.label for op in self._layer_list],  # Op space, as on every other call
+        ops=op_labels(self),  # Op space, as on every other call
         input_layers=_layer_space_labels(self, self.input_layers),
         output_layers=_layer_space_labels(self, self.output_layers),
         output_ops=op_space_labels(self, self.output_layers),
@@ -656,9 +657,7 @@ def _build_module_logs(self: "Trace") -> None:
     # tens of thousands of ModuleCalls; scanning every Op once per call is
     # quadratic and dominates validation postprocessing.
     _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
-    for te in self._layer_list:
-        # Iterate the fed-call fact directly; the old
-        # ``module_call_stack`` emptiness guard was an enter-lane proxy.
+    for te in ops_with(self, "input_to_module_calls"):  # only ops that feed a call
         for call_label in te._module_context_input_to_module_calls:
             _pass_input_layers_by_call[call_label].append(te.layer_label)
 
@@ -958,11 +957,10 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer", read: Any = getattr) -
 
 
 def _build_layer_logs(self: "Trace") -> None:
-    """Step 15.5: Build aggregate Layer objects from per-pass Op entries.
+    """Step 15.5: group per-pass Op entries into aggregate Layers, built on first lookup.
 
-    Groups layer_list entries by layer_label and creates a Layer for
-    each unique layer. For single-pass layers, the Layer is a thin wrapper
-    delegating attribute access to the sole Op.
+    Groups layer_list entries by layer_label; each Layer is built the first time
+    it is looked up. A single-pass Layer is a thin wrapper over its sole Op.
 
     MERGE RULES for multi-pass layers:
     1. has_input_ancestor: OR across ops (True if ANY pass has an input ancestor).
@@ -985,13 +983,15 @@ def _build_layer_logs(self: "Trace") -> None:
     Note: output_of_modules/output_of_module_calls are NOT updated during merge
     (same structural position implies same modules).
     """
-    _column_passes_finalize.build_layer_logs(self, Layer, _reconcile_multipass_layer_fields)
+    rebound = _column_passes_finalize.build_layer_logs(
+        self, Layer, _reconcile_multipass_layer_fields
+    )
     _rebuild_conditional_edge_call_indices(self)
-    _build_conditional_records(self)
+    _build_conditional_records(self, rebound)
 
 
-def _build_conditional_records(self: "Trace") -> None:
-    """Build the public ConditionalAccessor from conditional postprocess data."""
+def _build_conditional_records(self: "Trace", rebound: bool = False) -> None:
+    """Build the public ConditionalAccessor (``rebound``: the ops' roles are already reset)."""
 
     conditionals: list[Conditional] = []
     event_by_id = {event.id: event for event in self._graph_conditional_records}
@@ -1120,21 +1120,11 @@ def _build_conditional_records(self: "Trace") -> None:
         conditionals.append(conditional)
 
     roles_by_label = _roles_by_label(conditionals, role_labels_by_cond_arm, ConditionalRoleRef)
-    for layer in self._layer_list:
-        layer._control_flow_in_conditionals = roles_held_by_pass(
-            layer, roles_by_label.get(layer.layer_label, []), arm_stack_entries
+    if not rebound:
+        rebind_op_conditional_roles(
+            self, roles_by_label, arm_stack_entries, event_by_id, conditional_id_by_event_id
         )
-        if (
-            layer.terminal_conditional_id is not None
-            and layer.terminal_conditional_id in event_by_id
-        ):
-            layer._control_flow_terminal_bool_for = (
-                conditional_id_by_event_id[layer.terminal_conditional_id],
-                0,
-            )
-        else:
-            layer._control_flow_terminal_bool_for = None
-    bind_layer_conditional_roles(self, roles_by_label)
+        bind_layer_conditional_roles(self, roles_by_label)
 
     self._graph_conditionals = ConditionalAccessor(conditionals)
 
