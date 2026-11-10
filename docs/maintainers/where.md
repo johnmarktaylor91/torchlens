@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1772 modules, 712345 lines, 0 modules without a docstring.
+85 packages, 1774 modules, 712606 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 145 | 60217 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 147 | 60478 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1490,7 +1490,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (145 modules, 60217 lines)
+Torch backend implementation package for TorchLens capture. (147 modules, 60478 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1569,7 +1569,9 @@ Torch backend implementation package for TorchLens capture. (145 modules, 60217 
 | `_ops_exhaustive` | Exhaustive event emission and autograd candidate collection. | 612 |
 | `_ops_finalize` | Predicate context evaluation and layer-entry finalization. | 510 |
 | `_ops_freeze_refs` | Exhaustive freeze ref builders, outside the package's largest import cycle. | 347 |
-| `_ops_fresh_payload` | Direct payload path for a fresh plain output under the default save options. | 181 |
+| `_ops_fresh_alias` | The payload of a fresh plain output on the direct path: the deferred alias or the eager copy. | 178 |
+| `_ops_fresh_budget` | Save-budget admission and reconciliation for the direct payload path. | 130 |
+| `_ops_fresh_payload` | Direct payload path for a fresh plain output under the default save options. | 134 |
 | `_ops_interventions` | Legacy and predicate-mode live interventions. | 806 |
 | `_ops_payload_stream` | Forward-time disk streaming of predicate-selected op payloads. | 46 |
 | `_ops_predicate_events` | Predicate event records and graph relationship fields. | 739 |
