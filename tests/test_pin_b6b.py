@@ -193,6 +193,38 @@ def test_state_streams_see_plain_containers() -> None:
     assert pickle.dumps(trace) == pickle.dumps(trace)
 
 
+_ROW_FORM_NAMES = (b"ParamTuple", b"ParamSequence", b"ParamMap", b"_param_rows")
+
+
+def test_param_row_forms_stay_plain_in_pickle_save_and_plain_state(tmp_path: Any) -> None:
+    """An op's ``ParamTuple`` cell is a plain ``tuple`` of ``Param`` in every stream."""
+
+    from torchlens._data_classes._state_adapter import plain_state
+
+    trace = _trace()
+    ops = [op for op in trace._layer_list if op._param_logs]
+    assert ops and all(type(op._param_logs) is ParamTuple for op in ops)
+    for op in ops:
+        for state in (op.__getstate__(), plain_state(op)):
+            assert type(state["_param_logs"]) is tuple
+            assert all(type(p) is Param for p in state["_param_logs"])
+    payload = pickle.dumps(trace)
+    assert not any(name in payload for name in _ROW_FORM_NAMES)
+    restored = pickle.loads(payload)
+    assert [p.address for p in restored._layer_list[1]._param_logs] == [
+        p.address for p in trace._layer_list[1]._param_logs
+    ]
+    bundle = tmp_path / "plain_param_forms.tlspec"
+    trace.save(bundle)
+    files = [bundle] if bundle.is_file() else [f for f in bundle.rglob("*") if f.is_file()]
+    assert files and not any(name in f.read_bytes() for f in files for name in _ROW_FORM_NAMES)
+    loaded = tl.load(bundle)
+    loaded_ops = [op for op in loaded._layer_list if op._param_logs]
+    assert [[p.address for p in op._param_logs] for op in loaded_ops] == [
+        [p.address for p in op._param_logs] for op in ops
+    ]
+
+
 def test_fork_params_read_the_fork() -> None:
     trace = _trace()
     fork = trace.fork()
