@@ -13,11 +13,19 @@ import copy
 import gc
 import pickle
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any
 
 import pytest
+import torch
+from torch import nn
 
+import torchlens as tl
 from torchlens._data_classes import _op_row_containers as containers
+from torchlens._data_classes._state_adapter import plain_state
+
+_CONTAINER_MODULE = b"_op_row_containers"
+_PLAIN_TYPES = (list, dict, OrderedDict)
 
 
 class _Record:
@@ -259,3 +267,57 @@ def test_restart_and_clear_give_a_new_list_object() -> None:
     restarted = trace._layer_list
     containers.clear_op_holders(trace)
     assert trace._layer_list is not restarted and len(all_keys) == 0
+
+
+class _Tiny(nn.Module):
+    """A linear layer and a relu: the smallest model with several ops."""
+
+    def __init__(self) -> None:
+        """Build the one layer."""
+
+        super().__init__()
+        self.fc = nn.Linear(3, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the layer, then relu."""
+
+        return torch.relu(self.fc(x))
+
+
+def _container_types(state: Any) -> tuple[type, type, type]:
+    """Return the types of the three op containers in one state dictionary."""
+
+    return (
+        type(state["_layer_list"]),
+        type(state["_layer_dict_main_keys"]),
+        type(state["_layer_dict_all_keys"]),
+    )
+
+
+def test_pickle_state_pickles_and_saved_files_keep_the_plain_container_types(
+    tmp_path: Path,
+) -> None:
+    """Pickle state, a pickle round trip and a save and load hold list, dict and OrderedDict."""
+
+    trace = tl.trace(_Tiny(), torch.ones(1, 3))
+    assert type(trace._layer_list) is containers.OpSequence
+    assert type(trace._layer_dict_main_keys) is containers.OpLabelMap
+    assert type(trace._layer_dict_all_keys) is containers.OpLabelMap
+    labels = [op.label for op in trace._layer_list]
+    assert _container_types(trace.__getstate__()) == _PLAIN_TYPES
+    assert _container_types(plain_state(trace)) == _PLAIN_TYPES
+
+    payload = pickle.dumps(trace)
+    assert _CONTAINER_MODULE not in payload
+    restored = pickle.loads(payload)
+    assert _container_types(restored.__getstate__()) == _PLAIN_TYPES
+    assert [op.label for op in restored._layer_list] == labels
+
+    bundle = tmp_path / "plain_containers.tlspec"
+    trace.save(bundle)
+    files = [bundle] if bundle.is_file() else [path for path in bundle.rglob("*") if path.is_file()]
+    assert files and all(_CONTAINER_MODULE not in path.read_bytes() for path in files)
+    loaded = tl.load(bundle)
+    assert _container_types(loaded.__getstate__()) == _PLAIN_TYPES
+    assert _container_types(plain_state(loaded)) == _PLAIN_TYPES
+    assert [op.label for op in loaded._layer_list] == labels
