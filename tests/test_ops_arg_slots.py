@@ -286,7 +286,7 @@ def test_one_label_read_per_tensor_slot(
 _PINNED_LABEL_READS = (
     ("inplace_mlp", _InplaceMLP, (2, 8), 64),
     ("buffer", _BufferModel, (2, 3, 6, 6), 120),
-    ("nested_args", _NestedArgsModel, (3, 4), 92),
+    ("nested_args", _NestedArgsModel, (3, 4), 81),
 )
 
 

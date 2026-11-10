@@ -342,9 +342,8 @@ def admit_call(
         if autocast_state[device]["enabled"]:
             return None
     buffer_work = (stamped & 1) == 1 or _buffer_work_needed(plan, trace)
-    if buffer_work and stamped & _LISTED:
-        return None
-    return tensors, buffer_work, autocast_state
+    # A listed buffer needs the buffer helpers, which read today's argument order.
+    return None if buffer_work and stamped & _LISTED else (tensors, buffer_work, autocast_state)
 
 
 def call_admitted(
