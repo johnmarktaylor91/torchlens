@@ -35,7 +35,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
-import torchlens.backends.torch._ops_shared_fields as _shared_fields
+import torchlens.backends.torch._ops_argument_fields as _argument_fields
 import torchlens.backends.torch.wrappers as _wrappers
 from torchlens._utils import tensor_utils as _tu
 from torchlens._utils.arg_handling import copy_arg_tree
@@ -345,7 +345,7 @@ def _swapping_slot_snapshot(real: Any) -> Any:
         swapped[pair[1]] = dataclasses.replace(
             second, label=first.label, session_parent_labels=first.session_parent_labels
         )
-        workspace = _shared_fields._peek_raw_graph_workspace(trace)
+        workspace = _argument_fields._peek_raw_graph_workspace(trace)
         context = workspace._pending_arg_slots
         by_key = {(slot.kind, slot.key): slot for slot in swapped}
         workspace._pending_arg_slots = type(context)(call.args, call.kwargs, tuple(swapped), by_key)
@@ -370,8 +370,8 @@ def test_capture_time_swap_of_exported_storages_fails(
     model = _PlantedSwapForeignFills(route)
     torch.manual_seed(0)
     x = torch.randn(5)
-    real = _shared_fields.snapshot_arg_slots
-    monkeypatch.setattr(_shared_fields, "snapshot_arg_slots", _swapping_slot_snapshot(real))
+    real = _argument_fields.snapshot_arg_slots
+    monkeypatch.setattr(_argument_fields, "snapshot_arg_slots", _swapping_slot_snapshot(real))
     try:
         with _payload_clone_mode(defer=defer):
             trace = tl.trace(

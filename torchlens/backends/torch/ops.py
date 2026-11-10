@@ -193,6 +193,7 @@ from ...recording._types import (
 from . import module_stack as _mstack
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
+from ._ops_descriptive_fields import TRANSFORM_FUNC_NAMES
 from ._param_fingerprint import param_fingerprint
 from ._same_object_handoff import pop_same_object_mutation, set_same_object_mutation
 from .aliasing import (
@@ -452,23 +453,6 @@ _CAPTURE_PRODUCER_POLICIES: dict[CaptureProducerMode, CaptureProducerPolicy] = {
 _AUTOGRAD_SAVED_ATTR_PREFIX = "_saved_"
 _UNSUPPORTED_OUTPUT_CONTAINER_WARNED: set[str] = set()
 _LIVE_FIRE_RESULTS_ATTR = "_tl_live_fire_results"
-TRANSFORM_FUNC_NAMES = frozenset(
-    {
-        "vmap",
-        "grad",
-        "grad_and_value",
-        "jacrev",
-        "jacfwd",
-        "hessian",
-        "vjp",
-        "jvp",
-        "linearize",
-        "vjpfn",
-        "jvpfn",
-        "linearizefn",
-    }
-)
-"""Function names reserved for torch.func transform boundary ops."""
 
 
 @dataclass(slots=True)

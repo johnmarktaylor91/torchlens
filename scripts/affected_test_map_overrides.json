@@ -1490,6 +1490,14 @@
       ],
       "why": "capture: per-test line coverage; these files execute 259 body lines between them, the static list executed 164"
     },
+    "torchlens/backends/torch/_ops_argument_fields.py": {
+      "tests": [
+        "tests/test_completeness_witness.py",
+        "tests/test_set_buffer_provenance.py",
+        "tests/test_ops_arg_slots.py"
+      ],
+      "why": "capture: the argument scan, slot snapshot and source resolution split out of _ops_shared_fields; the shared-fields coverage rows that exercise them"
+    },
     "torchlens/backends/torch/_ops_shared_fields.py": {
       "tests": [
         "tests/test_completeness_witness.py",
