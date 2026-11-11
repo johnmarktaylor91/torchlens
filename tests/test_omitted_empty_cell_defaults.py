@@ -24,7 +24,6 @@ from torchlens._postprocess._materialize import _empty_module_output_fields
 from torchlens._postprocess._row_ingest import _OMIT_EMPTY_JOIN_FIELDS
 from torchlens._trace_core.cell_states import STATE_DEFAULT, LazyCell
 from torchlens.backends.torch._ops_row_cells import (
-    _CALL_OMIT_EMPTY_CELLS,
     _OMIT_EMPTY_DICT_CELLS,
     _OMIT_EMPTY_LIST_CELLS,
     _plan_for,
@@ -60,13 +59,20 @@ def _empty_function_ref() -> Any:
     )
 
 
+class _EveryName(dict[str, str]):
+    """A cell-dict field map: every field name maps to itself."""
+
+    def __missing__(self, key: str) -> str:
+        """Return ``key``, so the writer can write any of its cells."""
+
+        return key
+
+
 def _writer_values() -> dict[str, Any]:
     """Return the value each removed writer wrote for an op with nothing to record."""
 
     written: dict[str, Any] = {}
-    _write_function_ref_cells(
-        written, {name: name for name in _CALL_OMIT_EMPTY_CELLS}, _empty_function_ref()
-    )
+    _write_function_ref_cells(written, _EveryName(), _empty_function_ref())
     values = {name: written[name] for name in ("non_tensor_kwargs", "func_config")}
     # ``_fill_core_graph`` builds ``internal_source_parents`` as a fresh list and
     # the join builds the three param cells as list comprehensions.
