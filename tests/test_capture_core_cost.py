@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import weakref
+from collections.abc import Callable
 
 import pytest
 import torch
@@ -200,8 +201,27 @@ def _ignore(_ref: object) -> None:
     """Weak-reference callback; a reference with a callback is never shared."""
 
 
+def _warm_c2_instrument(fn: Callable[[], object] = lambda: None) -> None:
+    """Run ``retained_after`` once, unmeasured, so its one-time state exists.
+
+    The first ``retained_after`` call in a process takes its "before" snapshot
+    and then scans it. The scan's ``isinstance`` check reads ``__class__`` on
+    ``torch.distributed.reduce_op``, which emits a deprecation FutureWarning,
+    and ``warnings`` loads ``capture_core_counters.py`` into ``linecache``.
+    That cache entry, one ``(size, mtime, lines, name)``
+    tuple and its list of lines, is made once per process, belongs to no trace
+    and no test, and lands after the "before" snapshot, so the first
+    measurement of a process counts two objects later ones do not. Whether a
+    test is first depends on how its file is split across workers; warming
+    here makes every measurement in the test a later one.
+    """
+
+    _result, _held = retained_after(fn)
+
+
 def test_c2_counts_a_kept_weak_reference_only_while_its_referent_lives() -> None:
     alive = _Referent()
+    _warm_c2_instrument()
     _, empty = retained_after(lambda: [])
     _, live = retained_after(lambda: [weakref.ref(alive)])
     _, dead = retained_after(lambda: [weakref.ref(_Referent())])
@@ -214,6 +234,7 @@ def test_c2_rises_when_a_trace_keeps_a_live_weak_reference() -> None:
     model = nn.Sequential(nn.Linear(3, 3), nn.ReLU()).eval()
     x = torch.randn(2, 3)
     tl.trace(model, x)
+    _warm_c2_instrument()
     plain, without = retained_after(lambda: (tl.trace(model, x), None))
     del plain
     # Without a callback CPython hands back the model's existing weak reference.
@@ -233,6 +254,7 @@ def _small_traced_model() -> tuple[nn.Module, torch.Tensor]:
 
 def test_c2_counts_a_weak_id_key_dictionary_the_trace_keeps() -> None:
     model, x = _small_traced_model()
+    _warm_c2_instrument()
     _, alone = retained_after(lambda: None)
     _, one = retained_after(WeakIdKeyDictionary)
     plain, without = retained_after(lambda: (tl.trace(model, x), None))
@@ -260,15 +282,18 @@ def test_c2_leaves_out_the_label_session_a_trace_leaves_behind() -> None:
     # The alias index of the last trace's label session is released by the
     # next trace's start and its size follows the allocator; neither the
     # session left before the window nor the one the measured trace leaves
-    # moves the count.
+    # moves the count. A warm-up capture through the instrument comes first: its
+    # first call in a process counts its own linecache entry (two objects, see
+    # _warm_c2_instrument). The last two plain traces show nothing accumulates.
     model, x = _small_traced_model()
+    _warm_c2_instrument(lambda: _trace_leaving_buckets(model, x, 0))
     counts = []
-    for before, after in ((0, 0), (3, 0), (0, 2)):
+    for before, after in ((0, 0), (3, 0), (0, 2), (0, 0), (0, 0)):
         _trace_leaving_buckets(model, x, before)
         trace, held = retained_after(lambda after=after: _trace_leaving_buckets(model, x, after))
         del trace
         counts.append(held["objects"])
-    assert counts[1] == counts[0] and counts[2] == counts[0], counts
+    assert counts == [counts[0]] * 5, counts
 
 
 def test_phase_counter_attributes_calls_and_leaves_no_profile_hook() -> None:
