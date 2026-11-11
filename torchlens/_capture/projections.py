@@ -828,7 +828,7 @@ def commit_op(trace: Any, draft: OpDraft) -> LiveOpView | None:
         trace.capture_events.append_thin(record, *pending.labels)
     if draft.pipeline != "exhaustive":
         return None
-    grad_fn_handle = draft.grad_fn_handle  # type: ignore[attr-defined]
+    grad_fn_handle = draft.fields_dict["grad_fn_handle"]  # type: ignore[attr-defined]
     if grad_fn_handle is not None:
         trace.capture_events.grad_fn_handles_by_label_raw[record.label_raw] = grad_fn_handle
     return LiveOpView(trace, record)

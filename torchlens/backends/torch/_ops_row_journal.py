@@ -64,50 +64,24 @@ def _row_journal_for(trace: Trace, layout: OpStoreLayout) -> _RowJournal:
     return journal
 
 
-class _SnapshotIndex:
-    """The parent events the commit saw, in place of ``trace.capture_events.live_index``.
+_OUTPUT_REQUIRES_GRAD: list[Any] = [None, False]
+"""(weak ref to an op output, its ``requires_grad``), read in the exhaustive emit.
 
-    The deferred row build resolves parent labels here, so it reads the events
-    the eager commit read even after an amendment replaced one in the live
-    index. ``capture_events`` and ``live_index`` answer the index itself, so it
-    also stands in for the trace argument of the edge-use builder.
-    """
-
-    __slots__ = ("events", "trace_ref")
-
-    def __init__(self, events: dict[str, Any], trace_ref: Any) -> None:
-        """Bind the parent label -> event snapshot and the trace's weak reference."""
-
-        self.events = events
-        self.trace_ref = trace_ref
-
-    @property
-    def capture_events(self) -> _SnapshotIndex:
-        """Answer the index itself (the edge-use builder reads ``trace.capture_events``)."""
-
-        return self
-
-    @property
-    def live_index(self) -> _SnapshotIndex:
-        """Answer the index itself (the builders read ``capture_events.live_index``)."""
-
-        return self
-
-    def require_event(self, label_raw: str) -> Any:
-        """Return the snapshot event for ``label_raw``, else the live index's answer."""
-
-        event = self.events.get(label_raw)
-        if event is None:
-            return self.trace_ref().capture_events.live_index.require_event(label_raw)
-        return event
+``_emit_exhaustive_operation_events`` reads the output's ``requires_grad`` inside
+its internal-read marker block and parks it here; the commit uses it when the
+draft's tensor is that output, else reads it under its own marker.
+"""
 
 
-class _PendingRow(dict):  # type: ignore[type-arg]
+class _PendingRow(dict[str, Any]):
     """A deferred exhaustive commit: the hot reads as dict items, the rest on settle.
 
     The items are the values the row and residual would answer for the names
     read on every op; :meth:`read` adds the lazily built ones; :meth:`settle`
     writes the row and residual from the snapshot once and binds them to a handle.
+    It also stands in for ``trace.capture_events.live_index`` (and the trace
+    argument of the edge-use builder): parent labels resolve to the events the
+    commit saw, even after an amendment replaced one in the live index.
     """
 
     __slots__ = (
@@ -115,14 +89,13 @@ class _PendingRow(dict):  # type: ignore[type-arg]
         "fields",
         "fire_results",
         "module_stack",
-        "box",
         "function",
         "params",
         "requires_grad",
         "device",
         "handle_id",
         "_options_save_mode",
-        "index",
+        "events",
         "layout",
         "edge_uses",
         "labels",
@@ -130,16 +103,50 @@ class _PendingRow(dict):  # type: ignore[type-arg]
         "output",
         "built",
     )
+    trace_ref: Any
+    fields: dict[str, Any]
+    fire_results: Any
+    module_stack: Any
+    function: Any
+    params: Any
+    requires_grad: bool
+    device: str
+    handle_id: str
+    _options_save_mode: Any
+    events: dict[str, Any]
+    layout: Any
+    edge_uses: Any
+    labels: tuple[str, list[str]]
+    side: Any
+    output: Any
+    built: Any
+
+    @property
+    def capture_events(self) -> _PendingRow:
+        """Answer the row itself (the edge-use builder reads ``trace.capture_events``)."""
+
+        return self
+
+    @property
+    def live_index(self) -> _PendingRow:
+        """Answer the row itself (the builders read ``capture_events.live_index``)."""
+
+        return self
+
+    def require_event(self, label_raw: str) -> Any:
+        """Return the commit's event for parent ``label_raw``, else the live index's answer."""
+
+        event = self.events.get(label_raw)
+        if event is None:
+            return self.trace_ref().capture_events.live_index.require_event(label_raw)
+        return event
 
     def function_ref(self) -> Any:
-        """Return the op's function-call ref, resolving a first output's ref once."""
+        """Return the op's function-call ref, built once (a first output's, deferred)."""
 
         function = self.function
         if function is None:
             function = self.function = _function_call_ref_from_fields(self.fields)
-            box = self.box
-            if box and box[0] is self:
-                box[0] = function
         return function
 
     def side_refs(self) -> Any:
@@ -205,7 +212,7 @@ class _PendingRow(dict):  # type: ignore[type-arg]
         if type(edge_uses) is not tuple:
             edge_uses = tuple(
                 edge_uses(
-                    self.index,
+                    self,
                     fields["parent_arg_positions"],
                     fields["_label_raw"],
                     fields["func_call_id"],
@@ -228,7 +235,7 @@ class _PendingRow(dict):  # type: ignore[type-arg]
         store = journal.store
         row = store._rows[
             _ops_row_cells.write_draft_row(
-                store, trace, fields, self.fire_results, function, self.index.require_event
+                store, trace, fields, self.fire_results, function, self.require_event
             )
         ]
         if "parent_arg_positions" in self:
@@ -245,52 +252,49 @@ def commit_row_record(
     """Commit one exhaustive draft as a deferred row handle (row written on first need).
 
     Reads now what ``_op_record_from_log`` reads off live state: a shallow copy of
-    the fields, the output's ``requires_grad`` (under the internal read marker),
-    device and ``id``, the parameter refs, the save mode and the parent events.
-    A sibling output resolves its function-call ref now through the shared call
-    box; a first output parks its pending row there (a sibling commit forces it).
-    ``layout`` is the op store layout; ``edge_uses`` is the draft's edge-use
-    tuple, or ``_ops_arguments._build_edge_use_records`` to build it on settle.
+    the fields, the output's ``requires_grad``, device and ``id``, the parameter
+    refs, the save mode and the parent events. A sibling output resolves its
+    function-call ref through the shared call box; a first output parks its
+    pending row there. ``edge_uses`` is the draft's edge-use tuple, or
+    ``_ops_arguments._build_edge_use_records`` to build it on settle.
     """
 
-    trace, fields = draft.trace, dict(draft.fields_dict)
-    tensor = draft.tensor
-    with internal_scalar_read():
-        requires_grad = bool(tensor.requires_grad)
-    trace_ref = weakref.ref(trace)
+    trace, fields, tensor = draft.trace, dict(draft.fields_dict), draft.tensor
+    pending = _PendingRow()
+    parked = _OUTPUT_REQUIRES_GRAD
+    if parked[0] is not None and parked[0]() is tensor:
+        pending.requires_grad = bool(parked[1])
+    else:
+        with internal_scalar_read():
+            pending.requires_grad = bool(tensor.requires_grad)
     parents = fields["parents"] = list(fields["parents"])
-    by_label = trace.capture_events.live_index.by_raw_label
-    found = tuple(map(by_label.get, parents))
+    found = tuple(map(trace.capture_events.live_index.by_raw_label.get, parents))
     if None in found:
         for label in parents:
             trace.capture_events.live_index.require_event(label)
     versions = fields["out_versions_by_child"]
     fields["out_versions_by_child"] = dict(versions) if versions else {}
-    pending = _PendingRow()
-    pending.trace_ref = trace_ref
+    pending.trace_ref = weakref.ref(trace)
     pending.fields = fields
     pending.fire_results = draft.fire_results
     pending.module_stack = draft.module_stack
     pending.params = _param_refs_from_fields(fields) if fields["parent_params"] else ()
-    pending.requires_grad = requires_grad
     pending.device = str(tensor.device)
     pending.handle_id = str(id(tensor))
     pending._options_save_mode = trace._options_save_mode
-    pending.index = _SnapshotIndex(dict(zip(parents, found)), trace_ref)
+    pending.events = dict(zip(parents, found))
     pending.layout = layout
     pending.edge_uses = edge_uses
     pending.side = pending.output = pending.built = pending.function = None
-    box = draft.call_ref_box
-    pending.box = box
+    box: Any = draft.call_ref_box
     if box:
         if box[0].__class__ is _PendingRow:
-            box[0].function_ref()
+            box[0] = box[0].function_ref()
         pending.function = _resolve_call_function_ref(fields, box)
     elif box is not None:
         box += (pending,)
-    label = fields["_label_raw"]
-    pending.labels = (label, parents)
-    _fill_thin_items(pending, fields, label)
+    pending.labels = (fields["_label_raw"], parents)
+    _fill_items(pending, fields)
     handle = _new_object(_RowOpRecord)
     handle._journal = handle._row = handle._rest = handle._record = handle._parents = None
     handle._patch = {}
@@ -299,14 +303,15 @@ def commit_row_record(
     return handle
 
 
-def _fill_thin_items(pending: _PendingRow, fields: dict[str, Any], label: str) -> None:
+def _fill_items(pending: _PendingRow, fields: dict[str, Any]) -> None:
     """Store the hot reads' values as ``pending``'s items, as the row would answer them.
 
     The ancestry sets become frozensets here, so a later in-place change to a
     field set reaches neither the answers nor the row written from the snapshot.
     """
 
-    pending["label_raw"] = label
+    pending["label_raw"] = fields["_label_raw"]
+    pending["raw_index"] = fields["raw_index"]
     pending["func_call_id"] = fields["func_call_id"]
     pending["kind"] = "source" if fields["is_input"] or fields["is_buffer"] else "op"
     inputs = fields["input_ancestors"] = frozenset(fields["input_ancestors"])

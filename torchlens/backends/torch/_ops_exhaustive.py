@@ -1,5 +1,6 @@
 """Exhaustive event emission and autograd candidate collection."""
 
+import weakref
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -28,6 +29,7 @@ from ..._utils.tensor_utils import (
 )
 from ._completeness_origins import internal_scalar_read
 from ._ops_freeze_refs import _module_frames_from_fields
+from ._ops_row_journal import _OUTPUT_REQUIRES_GRAD
 from ._user_grad_fn import stamp_user_grad_fn
 from .aliasing import (
     detect_torch_alias_contract,
@@ -249,11 +251,11 @@ def _emit_exhaustive_operation_events(
             if _should_keep_alias_mutation_contract(self)
             else detect_torch_output_alias_contract
         )
-        # Mutation/alias detection compares pre-call input copies against post-call
-        # values (``tensor_nanequal`` -> ``torch.equal`` / ``torch.allclose``), a
-        # capture-internal read that returns a Python ``bool``; mark it so the
-        # completeness witness does not record it as a user host escape.
+        # Mutation/alias detection (``tensor_nanequal`` -> ``torch.equal`` /
+        # ``torch.allclose``) and the commit's output ``requires_grad`` are internal
+        # reads; mark them so the completeness witness records no user host escape.
         with internal_scalar_read():
+            _OUTPUT_REQUIRES_GRAD[:] = (weakref.ref(out_tensor), out_tensor.requires_grad)
             fields_dict_onetensor["backend_semantics"] = detect_backend_semantics(
                 shared_func_event_input,
                 backend_grad_handle=fields_dict_onetensor["grad_fn_handle"],
