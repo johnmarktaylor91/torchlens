@@ -73,6 +73,13 @@ _SKIPPED_FOREIGN_NEW: dict[str, type] = {}
 #: Classes already warned about, so a repeated ``wrap_torch`` warns once.
 _WARNED_FOREIGN_NEW: set[str] = set()
 
+#: The resolved roster whose every class passed the layout probe at the last
+#: install of this wrapper epoch (``None`` before it and after an uninstall).
+#: An install that resolves the identical roster (each row the same class
+#: object, which this tuple keeps alive) reuses those verdicts instead of
+#: re-probing; any other roster is a cache miss and is probed in full.
+_PROBED_ROSTER: tuple[tuple[str, type], ...] | None = None
+
 
 def _legacy_func_name(namespace_name: str, class_name: str) -> str:
     """Return the recorded op name for one roster row.
@@ -90,10 +97,9 @@ def _legacy_func_name(namespace_name: str, class_name: str) -> str:
     return prefixes.get(namespace_name, "") + class_name
 
 
-def _resolve_class(namespace_name: str, class_name: str) -> type | None:
+def _class_in(namespace: Any, class_name: str) -> type | None:
     """Return the live roster class, or ``None`` when this torch lacks it."""
 
-    namespace = _torch_compat.get_optional_torch_namespace(namespace_name)
     if namespace is None:
         return None
     cls = getattr(namespace, class_name, None)
@@ -146,14 +152,58 @@ def _build_new_impl(cls: type, func_name: str, c_tp_new: int | None = None) -> C
 
 
 def _resolve_roster() -> list[tuple[str, type]]:
-    """Return ``(func_name, class)`` for every roster row this torch provides."""
+    """Return ``(func_name, class)`` for every roster row this torch provides.
 
+    Each namespace is resolved once per call (every row of one namespace reads
+    the same object, so the result equals resolving it per row).
+    """
+
+    namespaces: dict[str, Any] = {}
     resolved: list[tuple[str, type]] = []
     for namespace_name, class_name in LEGACY_TENSOR_CONSTRUCTOR_SITES:
-        cls = _resolve_class(namespace_name, class_name)
+        if namespace_name not in namespaces:
+            namespaces[namespace_name] = _torch_compat.get_optional_torch_namespace(namespace_name)
+        cls = _class_in(namespaces[namespace_name], class_name)
         if cls is not None:
             resolved.append((_legacy_func_name(namespace_name, class_name), cls))
     return resolved
+
+
+def _same_roster(roster: list[tuple[str, type]], probed: tuple[tuple[str, type], ...]) -> bool:
+    """Return whether ``roster`` holds exactly the rows of ``probed``, class by identity."""
+
+    return len(roster) == len(probed) and all(
+        name == probed_name and cls is probed_cls
+        for (name, cls), (probed_name, probed_cls) in zip(roster, probed, strict=True)
+    )
+
+
+def _roster_layouts_verified(roster: list[tuple[str, type]]) -> bool:
+    """Probe ``roster``'s layouts unless this epoch already verified the identical roster.
+
+    A drifted layout is a torch-capability degradation: it flips
+    ``HAS_LEGACY_CONSTRUCTOR_NEW_PATCH`` and returns False. A roster that
+    differs from the verified one (a class rebound, a namespace changed) is
+    only a cache miss: it is probed in full and, when it passes, verified.
+    """
+
+    global _PROBED_ROSTER
+    probed = _PROBED_ROSTER
+    if probed is not None and _same_roster(roster, probed):
+        return True
+    verdicts = probe_type_new_slot_patches([cls for _name, cls in roster])
+    drifted = [name for (name, _cls), ok in zip(roster, verdicts, strict=True) if not ok]
+    if drifted:
+        _PROBED_ROSTER = None
+        _torch_compat.mark_torch_capability_missing(
+            "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH",
+            "the CPython type layout of "
+            f"{', '.join(drifted)} does not match TorchLens's mirror, so legacy tensor "
+            "constructors (torch.FloatTensor(...), Variable(...)) are not captured.",
+        )
+        return False
+    _PROBED_ROSTER = tuple(roster)
+    return True
 
 
 def _foreign_new_in_effect(cls: type, record: _InstalledLegacyConstructor | None) -> bool:
@@ -240,8 +290,10 @@ def install_legacy_constructor_wrappers() -> None:
     A no-op when ``HAS_LEGACY_CONSTRUCTOR_NEW_PATCH`` is False (non-CPython or
     an unexpected type layout); legacy constructors then stay uncaptured, as
     before, and validation completeness reports them. Every class's layout is
-    re-probed before anything is written: one failure flips the flag through
-    ``mark_torch_capability_missing`` and patches nothing. A class on which
+    probed before anything is written: one failure flips the flag through
+    ``mark_torch_capability_missing`` and patches nothing. Within one wrapper
+    epoch an install whose roster is the identical, already-verified one reuses
+    those verdicts (:func:`_roster_layouts_verified`). A class on which
     another tool's Python-level ``__new__`` is in effect (found in the MRO
     dicts) is skipped with a one-time ``TorchLensWarning`` (code
     ``legacy_constructor_uncaptured``) and listed by
@@ -252,15 +304,7 @@ def install_legacy_constructor_wrappers() -> None:
     if not _torch_compat.HAS_LEGACY_CONSTRUCTOR_NEW_PATCH:
         return
     roster = _resolve_roster()
-    verdicts = probe_type_new_slot_patches([cls for _name, cls in roster])
-    drifted = [name for (name, _cls), ok in zip(roster, verdicts, strict=True) if not ok]
-    if drifted:
-        _torch_compat.mark_torch_capability_missing(
-            "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH",
-            "the CPython type layout of "
-            f"{', '.join(drifted)} does not match TorchLens's mirror, so legacy tensor "
-            "constructors (torch.FloatTensor(...), Variable(...)) are not captured.",
-        )
+    if not _roster_layouts_verified(roster):
         return
     _SKIPPED_FOREIGN_NEW.clear()
     for func_name, cls in roster:
@@ -278,6 +322,8 @@ def uninstall_legacy_constructor_wrappers() -> None:
     recorded original is put back then, exactly as a reinstall would.
     """
 
+    global _PROBED_ROSTER
+    _PROBED_ROSTER = None
     for key, record in list(_INSTALLED.items()):
         if restore_new_override(record.patch):
             del _INSTALLED[key]
