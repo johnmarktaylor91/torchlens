@@ -38,6 +38,7 @@ from ._fork_copy import (
     _needs_eager_isolation,
     cow_copy_value,
 )
+from .alias_registry import ALIAS_CELL_CLASSES as _ALIAS_CELL_CLASSES
 from .cell_states import _CSR, _FACT, _MISSING, LazyCell, default_answer
 from .eviction_walk import _evict_payloads_in_list, _evict_payloads_in_mapping, _EvictTypes
 from .groups import GroupRef, MembershipGroups
@@ -149,6 +150,7 @@ class OpRowStore:
 
     __slots__ = (
         "__weakref__",
+        "_alias_sites",
         "_columns",
         "_compacted_singletons",
         "_cow_shared",
@@ -178,6 +180,7 @@ class OpRowStore:
         self._overlay: dict[int, Any] = {}
         self._n_rows = 0
         self._sealed = False
+        self._alias_sites: dict[tuple[int, int], Any] = {}  # alias_registry
         # Sticky flag set by the first OpStoreView taken over this store
         # (copy-on-write fork). Once shared, deletes must stop releasing object
         # column cells IN PLACE — a fork reads the same column backing —
@@ -196,15 +199,12 @@ class OpRowStore:
         # ``_SealedRowMajorOpRowStore`` at freeze so post-seal container
         # writes register here.
         self._mutable_keys: dict[int, Any] | None = None
-        # Cached per-store sweep plan derived from ``_mutable_keys``:
-        # flat parallel arrays of pre-resolved (key, allocation/copy) work so
-        # the per-fork sweep is a tight guard+copy loop with no per-cell
-        # backing fetch or classification. Built lazily with the index;
-        # sealed row-major maintenance hooks drop it on any post-seal cell
-        # REBINDING that could stale it (columnar cell bindings are immutable
-        # once ``_cow_shared``). In-place mutation of a held container fires
-        # no hook on either seal shape, so plan entries alias the observed
-        # values and execution re-checks them (``_build_sweep_plan``).
+        # Cached per-store sweep plan from ``_mutable_keys``: flat arrays of
+        # pre-resolved (key, allocation/copy) work for a tight per-fork
+        # guard+copy loop. Built with the index; sealed row-major hooks drop it
+        # on any post-seal cell REBINDING (columnar bindings are immutable once
+        # ``_cow_shared``). In-place mutation fires no hook, so plan entries
+        # alias the observed values and execution re-checks them.
         self._sweep_plan: tuple[Any, ...] | None = None
         # The dataflow family: bound at the freeze-time relation
         # conversion (same EdgeTable object registered in the owning
@@ -215,14 +215,11 @@ class OpRowStore:
         # The shared-fact blocks (FunctionCall / ParamAlias group
         # tables), bound by the same freeze-time conversion.
         self.fact_blocks: Any = None
-        # Singleton-label compaction registry (kind tables only):
-        # ``row * n_fields + fid -> the exact str object`` the freeze-seam
-        # compaction stored in place of a one-element label list. Decode is
-        # gated on OBJECT IDENTITY (``registry[key] is cell_value``), so a
-        # later user write of any OTHER object to the cell self-invalidates
-        # the entry without write-path hooks; entries are never popped
-        # (identity-guarded stale entries are harmless, and the str is
-        # already retained by the cell/hydrated list, so no extra pinning).
+        # Singleton-label compaction registry (kind tables only): ``row *
+        # n_fields + fid -> the exact str`` the freeze-seam compaction stored
+        # in place of a one-element label list. Decode is gated on OBJECT
+        # IDENTITY, so a later write of any other object self-invalidates the
+        # entry; entries are never popped (stale ones are harmless, no pinning).
         self._compacted_singletons: dict[int, str] | None = None
         # Count of live owning TraceCores (the capture's own core plus one
         # per fork core viewing this base). When the LAST owner is
@@ -408,6 +405,8 @@ class OpRowStore:
         rows = self._rows
         if rows is not None:
             rows[row][fid] = value
+            if value.__class__ in _ALIAS_CELL_CLASSES and not self._sealed:
+                self._alias_sites[(row, fid)] = value
         else:
             self._overlay[row * self.layout.n_fields + fid] = value
 
@@ -546,6 +545,7 @@ class OpRowStore:
             self._sealed = True
             return
         self._sealed = True
+        self._alias_sites = {}
         if self._n_rows < _TRANSPOSE_MIN_ROWS:
             # Sealed row-major cells keep mutating IN PLACE on later writes,
             # so the sealed twin tracks post-seal container writes for the

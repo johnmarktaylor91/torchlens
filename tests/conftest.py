@@ -34,6 +34,14 @@ import torch
 from support import r1_venue  # noqa: F401
 
 from torchlens import _state
+from torchlens._data_classes import _op_alias_oracle, _op_container_census
+
+# Completeness check of the write-time alias registry: every freeze-seam pooling
+# in the suite also runs the former full census and asserts the alias decisions
+# agree (``torchlens/_data_classes/_op_alias_oracle.py``). TORCHLENS_ALIAS_ORACLE=0
+# turns it off.
+if os.environ.get("TORCHLENS_ALIAS_ORACLE", "1") != "0":
+    _op_container_census.ALIAS_ORACLE = _op_alias_oracle.assert_registry_matches_census
 
 
 def _bind_tests_package() -> None:
