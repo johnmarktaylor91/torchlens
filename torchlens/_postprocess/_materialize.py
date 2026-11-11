@@ -790,13 +790,14 @@ def _equivalent_ops_by_label(
         if isinstance(label_raw, str) and isinstance(address, str):
             buffer_address_by_label[label_raw] = address
     for event in op_events:
-        buffer_address = buffer_address_by_label.get(event.label_raw)
+        label = event.label_raw
+        buffer_address = buffer_address_by_label.get(label)
         key = (
             f"buffer:{buffer_address}"
             if event.kind == "source" and event.layer_type == "buffer" and buffer_address
-            else _base_equivalence_class(event) or event.label_raw
+            else _base_equivalence_class(event) or label
         )
-        groups[key].add(event.label_raw)
+        groups[key].add(label)
     return dict(groups), {label_raw: group for group in groups.values() for label_raw in group}
 
 
