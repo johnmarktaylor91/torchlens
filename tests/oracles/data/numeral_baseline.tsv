@@ -3550,6 +3550,7 @@ docs-md	docs/maintainers/where.md	180
 docs-md	docs/maintainers/where.md	181
 docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1825
+docs-md	docs/maintainers/where.md	1826
 docs-md	docs/maintainers/where.md	183
 docs-md	docs/maintainers/where.md	1838
 docs-md	docs/maintainers/where.md	184
@@ -3628,9 +3629,9 @@ docs-md	docs/maintainers/where.md	223
 docs-md	docs/maintainers/where.md	2236
 docs-md	docs/maintainers/where.md	224
 docs-md	docs/maintainers/where.md	225
-docs-md	docs/maintainers/where.md	22523
 docs-md	docs/maintainers/where.md	226
 docs-md	docs/maintainers/where.md	2263
+docs-md	docs/maintainers/where.md	22678
 docs-md	docs/maintainers/where.md	227
 docs-md	docs/maintainers/where.md	228
 docs-md	docs/maintainers/where.md	229
@@ -3663,7 +3664,7 @@ docs-md	docs/maintainers/where.md	2496
 docs-md	docs/maintainers/where.md	25
 docs-md	docs/maintainers/where.md	250
 docs-md	docs/maintainers/where.md	251
-docs-md	docs/maintainers/where.md	25112
+docs-md	docs/maintainers/where.md	25133
 docs-md	docs/maintainers/where.md	252
 docs-md	docs/maintainers/where.md	253
 docs-md	docs/maintainers/where.md	254
@@ -3767,7 +3768,6 @@ docs-md	docs/maintainers/where.md	333
 docs-md	docs/maintainers/where.md	334
 docs-md	docs/maintainers/where.md	336
 docs-md	docs/maintainers/where.md	338
-docs-md	docs/maintainers/where.md	339
 docs-md	docs/maintainers/where.md	34
 docs-md	docs/maintainers/where.md	340
 docs-md	docs/maintainers/where.md	3414
@@ -3865,6 +3865,7 @@ docs-md	docs/maintainers/where.md	422
 docs-md	docs/maintainers/where.md	423
 docs-md	docs/maintainers/where.md	424
 docs-md	docs/maintainers/where.md	425
+docs-md	docs/maintainers/where.md	427
 docs-md	docs/maintainers/where.md	4271
 docs-md	docs/maintainers/where.md	428
 docs-md	docs/maintainers/where.md	4286
@@ -3991,6 +3992,7 @@ docs-md	docs/maintainers/where.md	566
 docs-md	docs/maintainers/where.md	567
 docs-md	docs/maintainers/where.md	569
 docs-md	docs/maintainers/where.md	5690
+docs-md	docs/maintainers/where.md	57
 docs-md	docs/maintainers/where.md	570
 docs-md	docs/maintainers/where.md	571
 docs-md	docs/maintainers/where.md	572
@@ -4041,7 +4043,7 @@ docs-md	docs/maintainers/where.md	631
 docs-md	docs/maintainers/where.md	632
 docs-md	docs/maintainers/where.md	634
 docs-md	docs/maintainers/where.md	635
-docs-md	docs/maintainers/where.md	63549
+docs-md	docs/maintainers/where.md	63550
 docs-md	docs/maintainers/where.md	638
 docs-md	docs/maintainers/where.md	639
 docs-md	docs/maintainers/where.md	64
@@ -4102,7 +4104,7 @@ docs-md	docs/maintainers/where.md	718
 docs-md	docs/maintainers/where.md	72
 docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	723
-docs-md	docs/maintainers/where.md	724427
+docs-md	docs/maintainers/where.md	724604
 docs-md	docs/maintainers/where.md	725
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
@@ -4203,7 +4205,6 @@ docs-md	docs/maintainers/where.md	91
 docs-md	docs/maintainers/where.md	910
 docs-md	docs/maintainers/where.md	913
 docs-md	docs/maintainers/where.md	914
-docs-md	docs/maintainers/where.md	915
 docs-md	docs/maintainers/where.md	9170
 docs-md	docs/maintainers/where.md	92
 docs-md	docs/maintainers/where.md	9245
@@ -6495,6 +6496,7 @@ package-docstrings	torchlens/_postprocess/_ingest_contract.py	2026
 package-docstrings	torchlens/_postprocess/_ingest_contract.py	5.2
 package-docstrings	torchlens/_postprocess/_ingest_contract.py	9.1
 package-docstrings	torchlens/_postprocess/_ingest_contract.py	9.3.
+package-docstrings	torchlens/_postprocess/_label_columns.py	11
 package-docstrings	torchlens/_postprocess/_label_rename.py	10
 package-docstrings	torchlens/_postprocess/_layer_conditional_merge.py	15.5.
 package-docstrings	torchlens/_postprocess/_layer_row_scan.py	15.5
@@ -6529,16 +6531,11 @@ package-docstrings	torchlens/_postprocess/finalization.py	20
 package-docstrings	torchlens/_postprocess/finalization.py	64
 package-docstrings	torchlens/_postprocess/finalization.py	78
 package-docstrings	torchlens/_postprocess/graph_traversal.py	5.0
-package-docstrings	torchlens/_postprocess/labeling.py	1,3
-package-docstrings	torchlens/_postprocess/labeling.py	10
 package-docstrings	torchlens/_postprocess/labeling.py	11
-package-docstrings	torchlens/_postprocess/labeling.py	12
 package-docstrings	torchlens/_postprocess/labeling.py	15
 package-docstrings	torchlens/_postprocess/labeling.py	16
-package-docstrings	torchlens/_postprocess/labeling.py	300
 package-docstrings	torchlens/_postprocess/labeling.py	31
 package-docstrings	torchlens/_postprocess/labeling.py	33.8
-package-docstrings	torchlens/_postprocess/labeling.py	3_12
 package-docstrings	torchlens/_postprocess/labeling.py	4.41
 package-docstrings	torchlens/_postprocess/labeling.py	512
 package-docstrings	torchlens/_postprocess/labeling.py	524

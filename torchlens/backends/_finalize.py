@@ -598,7 +598,7 @@ def _apply_recurrence_relabel_epilogue(
     layer is multi-pass (``_raw_to_final_layer_labels`` /
     ``final_lookup_label``) -- never the unconditionally-qualified op label.
     Torch's own ``input_layers``/``output_layers``/``buffer_layers`` rename
-    (``_rename_model_history_layer_names``) instead always uses the bare
+    (``_rename_model_history_layer_names``, ``_rename_output_layers``) always uses the bare
     ``layer_label`` unconditionally, but ONLY because torch always wraps the
     real computation in single-pass input/output pseudo-ops, so the two
     mappings coincide there in practice; torch never exercises the
