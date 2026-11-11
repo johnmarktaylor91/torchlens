@@ -75,4 +75,4 @@ def register_arg_position_keys(trace: Any, column: list[Any]) -> None:
                 ((str, second_kind), ("m", ("d", second_members))),
             ),
         )
-        table[id(positions)] = (positions, key, (id(first), id(second)), TOKEN_EXACT)
+        table[id(positions)] = (positions, key, TOKEN_EXACT)

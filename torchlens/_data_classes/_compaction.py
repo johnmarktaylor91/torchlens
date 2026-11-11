@@ -76,18 +76,33 @@ def compact_op_metadata(trace: Trace) -> None:
 
 
 def _take_container_tokens(trace: Any) -> ContainerTokens | None:
-    """Take the trace's write-time container tokens, leaving ``False`` behind.
+    """Take the trace core's write-time container tokens (``None`` once taken).
 
-    The writers' table lives on the trace's runtime workspace until this
-    freeze; afterwards no snapshot registers under the trace again.
+    The workspace drop handed them to ``core.pool.tokens``
+    (:func:`hand_off_container_tokens`); this freeze is their last reader.
     """
 
-    workspace = getattr(trace, "_wrapper_runtime_ws", None)
+    core = trace.__dict__.get("_trace_core")
+    pool = getattr(core, "pool", None)
+    tokens = getattr(pool, "tokens", None)
+    if tokens is not None:
+        pool.tokens = None
+    return tokens
+
+
+def hand_off_container_tokens(trace: Any, workspace: Any) -> None:
+    """Move the runtime workspace's token table to the trace core's pool.
+
+    Called where the capture workspaces drop. ``False`` is left on the
+    workspace so a snapshot logged after this registers nothing.
+    """
+
     table = getattr(workspace, "container_tokens", None)
-    if workspace is None:
-        return None
-    workspace.container_tokens = False
-    return ContainerTokens(table) if table else None
+    if workspace is not None:
+        workspace.container_tokens = False
+    core = trace.__dict__.get("_trace_core")
+    if table and core is not None:
+        core.pool.tokens = ContainerTokens(table)
 
 
 def _pool_core_containers(

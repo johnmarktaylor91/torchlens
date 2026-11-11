@@ -443,7 +443,7 @@ def admit_call(
         stamped = _DECLINED if kwarg_stamped == _DECLINED else stamped | kwarg_stamped
     if stamped == _DECLINED:
         return None
-    autocast_state = log_current_autocast_state()
+    autocast_state = log_current_autocast_state(trace)
     for device in autocast_state:
         if autocast_state[device]["enabled"]:
             return None

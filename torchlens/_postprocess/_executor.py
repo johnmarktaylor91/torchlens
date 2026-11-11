@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._data_classes._compaction import hand_off_container_tokens
 from .._utils import _cuda_probe, hashing as _hashing, tensor_utils as _tensor_utils
 from .._utils.display import _vtimed
 from . import (
@@ -280,6 +281,7 @@ def _run_adopt_containers_and_drop_workspaces(ctx: StepContext) -> None:
 
     trace = ctx.trace
     wrapper_ws = trace.__dict__.get("_wrapper_runtime_ws")
+    hand_off_container_tokens(trace, wrapper_ws)
     if wrapper_ws is not None:
         registry = getattr(wrapper_ws, "container_registry", None)
         if registry is not None:

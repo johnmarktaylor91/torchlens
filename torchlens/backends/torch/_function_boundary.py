@@ -614,7 +614,7 @@ def open_boundary_call(trace: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
         witness_mark=len(witness_state.events) if witness_state is not None else 0,
         capture_start_time=time.time(),
         rng_states=log_current_rng_states(torch_only=True) if save_rng else {},
-        autocast_state=log_current_autocast_state(),
+        autocast_state=log_current_autocast_state(trace),
         arg_labels=_snapshot_arg_labels(args, kwargs),
     )
 

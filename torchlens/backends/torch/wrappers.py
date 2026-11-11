@@ -1321,7 +1321,7 @@ def torch_func_decorator(
         func_call_barcode: Any = object() if fast else make_random_barcode()
         trace._wrapper_runtime_ws.current_func_barcode = func_call_barcode
         rng_states = log_op_rng_states(args, kwargs) if trace._options_save_rng else {}
-        autocast_state = fast[2] if fast else log_current_autocast_state()
+        autocast_state = fast[2] if fast else log_current_autocast_state(trace)
         func_call_id = _state.next_func_call_id()
         register_call_input_container_snapshots(
             trace, args, kwargs, func_call_id=func_call_id, event_index=func_call_id

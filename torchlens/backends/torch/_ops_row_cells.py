@@ -38,7 +38,7 @@ from ..._ir.op_record import FACET_DEFAULTS
 from ..._ir.op_record_scatter import _resolve_dtype, _write_function_ref_cells
 from ..._trace_core.cell_states import LazyFields
 from ..._trace_core.op_store import _MISSING
-from ..._utils.container_tokens import TOKEN_EXACT, TOKEN_INERT, register_active
+from ..._utils.container_tokens import TOKEN_EXACT, TOKEN_INERT, register
 from ._ops_freeze_refs import _copy_parent_arg_positions, _resolve_call_function_ref
 
 if TYPE_CHECKING:
@@ -145,7 +145,9 @@ _EMPTY_DICT_CELLS: tuple[str, ...] = (
 )
 
 
-def _fill_transform(row: Any, f: Any, fields_dict: Mapping[str, Any], annotations: Any) -> None:
+def _fill_transform(
+    row: Any, f: Any, trace: Any, fields_dict: Mapping[str, Any], annotations: Any
+) -> None:
     """Write the transform cells, mirroring the freeze's facet presence and config split."""
 
     user_config = dict(fields_dict.get("transform_config") or {})
@@ -183,7 +185,7 @@ def _fill_transform(row: Any, f: Any, fields_dict: Mapping[str, Any], annotation
     elif bare and not inner:
         # The common cell ``{"_tl_annotations": {}}``: its content key is a
         # constant, so the freeze's pooling reads it instead of walking.
-        register_active(user_config, _BARE_TRANSFORM_CONFIG_KEY, (id(inner),), _BARE_FLAGS)
+        register(trace, user_config, _BARE_TRANSFORM_CONFIG_KEY, _BARE_FLAGS)
     row[f["is_transform"]] = is_transform
     row[f["transform_kind"]] = kind
     row[f["transform_chain"]] = chain
@@ -357,7 +359,7 @@ def _fill_row(
 
     _fill_core_graph(row, f, trace, fields_dict)
     _fill_output(row, f, fields_dict)
-    _fill_transform(row, f, fields_dict, _fill_facets(row, f, fields_dict, fire_results))
+    _fill_transform(row, f, trace, fields_dict, _fill_facets(row, f, fields_dict, fire_results))
 
 
 def _arg_keys_default() -> defaultdict[Any, list[Any]]:

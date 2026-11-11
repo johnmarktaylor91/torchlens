@@ -58,11 +58,12 @@ def make_content_key(container_pool_key: Callable[..., Any], tokens: Any = None)
             return walked_key(value, id_counts)
         # The caller already refused an aliased ``value``; the full walk would
         # also refuse it when a nested container is aliased.
-        for oid in entry[2]:
+        for nested in value.values():
+            oid = id(nested)
             if oid in id_counts and id_counts[oid] > 1:
                 return None
         token = entry[1]
-        if entry[3] & 1:  # TOKEN_EXACT: the writer stated the content key itself
+        if entry[2] & 1:  # TOKEN_EXACT: the writer stated the content key itself
             if TOKEN_DEBUG:
                 _check_token_key(value, token, walked_key(value, id_counts))
             return token
@@ -92,4 +93,4 @@ def members_inert(tokens: Any, value: Any) -> bool:
     """Return whether ``value`` is registered in ``tokens`` with no poolable member."""
 
     entry = tokens.by_id.get(id(value))
-    return entry is not None and entry[0] is value and bool(entry[3] & 2)
+    return entry is not None and entry[0] is value and bool(entry[2] & 2)
