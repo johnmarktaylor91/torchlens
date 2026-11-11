@@ -159,6 +159,11 @@ _SCOPED_CAPTURE_STATE = frozenset(
         ("torchlens/_utils/tensor_utils.py", "_DEFER_PENDING"),
         ("torchlens/_utils/tensor_utils.py", "_DEFER_STATE_PTRS"),
         ("torchlens/_utils/tensor_utils.py", "_DEFER_WINDOW_DEPTH"),
+        # Exhaustive emit's (weak ref to the op output, its requires_grad) slot:
+        # overwritten by every emit and read by that op's commit only when the
+        # weak ref still names the draft's tensor, so a survivor can never stand
+        # in for a later op's read; it holds no strong reference.
+        ("torchlens/backends/torch/_ops_row_journal.py", "_OUTPUT_REQUIRES_GRAD"),
     }
 )
 """Per-capture state: set during one capture and cleared or restored on exit.

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import gc
+import warnings
 import weakref
 from collections.abc import Iterator
 from typing import Any
@@ -28,6 +29,7 @@ from torchlens._ir.op_record import OpRecord, OpRecordAttributeError, record_wit
 from torchlens._ir.refs import journal_record
 from torchlens.backends.torch import _ops_row_journal
 from torchlens.backends.torch._ops_container_base import _op_record_from_log
+from torchlens.errors import TraceCaptureError
 
 
 class _TinyTransformer(nn.Module):
@@ -347,3 +349,98 @@ def test_residual_released_after_materialization(commit_spy: _CommitSpy) -> None
         assert alive == [], f"{len(alive)} of {len(commit_spy.residuals)} residuals alive"
     finally:
         trace.cleanup()
+
+
+_KEPT_LEAVES: list[torch.Tensor] = []
+"""The leaf ``_InPlaceLeafModel`` creates, kept where the transform can reach it."""
+
+
+class _InPlaceLeafModel(nn.Module):
+    """A factory leaf, scaled in place (the in-place op's output is the leaf), then added."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Create a leaf with ``torch.ones``, keep it, scale it in place and add it."""
+
+        leaf = torch.ones(3)
+        _KEPT_LEAVES.append(leaf)
+        leaf.mul_(2.0)
+        return x + leaf
+
+
+def test_activation_transform_flip_keeps_op_output_requires_grad() -> None:
+    """A transform flipping an op output's live ``requires_grad`` leaves the op's record unchanged.
+
+    The record's output ``requires_grad`` is the op output's own flag, read on the
+    output when the op returns. The transform receives a saved copy, so it reaches
+    the live output through the kept leaf: the in-place ``mul_`` returns the leaf
+    itself, and its transform (the first one after the leaf is kept) flips the
+    leaf's flag after that read and before the commit. The ``mul_`` record keeps
+    the op-output value.
+    """
+
+    model = _InPlaceLeafModel().eval()
+    flips: list[bool] = []
+
+    def flip_leaf(tensor: torch.Tensor) -> torch.Tensor:
+        """Flip the kept leaf's ``requires_grad`` once, at the first save after it is kept."""
+
+        if _KEPT_LEAVES and not flips and _KEPT_LEAVES[0].is_leaf:
+            leaf = _KEPT_LEAVES[0]
+            flips.append(leaf.requires_grad)
+            leaf.requires_grad_(not leaf.requires_grad)
+        return tensor
+
+    _KEPT_LEAVES.clear()
+    trace = tl.trace(
+        model,
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(activation_transform=flip_leaf),
+    )
+    try:
+        assert flips == [False], f"transform flipped {flips}"
+        assert _KEPT_LEAVES[0].requires_grad is True
+        records = [journal_record(event) for event in trace.op_events]
+        scaled = [record for record in records if "mul" in record.layer_type]
+        assert len(scaled) == 1, [record.layer_type for record in records]
+        assert scaled[0].output.tensor.requires_grad is False
+        ones = [record for record in records if record.layer_type == "ones"]
+        assert len(ones) == 1, [record.layer_type for record in records]
+        assert ones[0].output.tensor.requires_grad is False
+    finally:
+        trace.cleanup()
+        _KEPT_LEAVES.clear()
+
+
+class _ScrubInterrupt(BaseException):
+    """BaseException standing in for KeyboardInterrupt."""
+
+
+class _RaiseAfterOps(nn.Module):
+    """Model that commits two ops, then raises the parametrized error."""
+
+    def __init__(self, error: BaseException) -> None:
+        super().__init__()
+        self.fc = nn.Linear(3, 4)
+        self.error = error
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: D102
+        torch.relu(self.fc(x))
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    ("error", "raised"),
+    [(_ScrubInterrupt("interrupted"), _ScrubInterrupt), (RuntimeError("boom"), TraceCaptureError)],
+    ids=["interrupt", "error"],
+)
+def test_failed_capture_scrub_settles_pending_rows(
+    error: BaseException, raised: type[BaseException]
+) -> None:
+    """The failed-capture scrub drops ``capture_events`` first; pending rows still settle."""
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(raised):
+            tl.trace(_RaiseAfterOps(error).eval(), torch.ones(1, 3))
+    failed = [str(w.message) for w in caught if "also failed while handling" in str(w.message)]
+    assert failed == []

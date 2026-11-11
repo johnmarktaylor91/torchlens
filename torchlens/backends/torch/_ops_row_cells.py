@@ -337,13 +337,19 @@ def _fill_output(row: Any, f: Any, fields_dict: Mapping[str, Any]) -> None:
         row[f["grad_fn_class_name"]] = semantics.grad_fn_class_name
 
 
-def _fill_core_graph(row: Any, f: Any, trace: Trace, fields_dict: Mapping[str, Any]) -> None:
-    """Write the core, graph, template and module cells."""
+def _fill_core_graph(
+    row: Any, f: Any, trace: Trace, fields_dict: Mapping[str, Any], require_event: Any = None
+) -> None:
+    """Write the core, graph, template and module cells.
+
+    ``require_event`` resolves a parent label (default: the live index's).
+    """
 
     layer_type = fields_dict["type"]
     parents = list(fields_dict["parents"])
     modules = tuple(fields_dict["modules"])
-    require_event = trace.capture_events.live_index.require_event
+    if require_event is None:
+        require_event = trace.capture_events.live_index.require_event
     row[f["_label_raw"]] = fields_dict["_label_raw"]
     row[f["_layer_label_raw"]] = fields_dict["_layer_label_raw"]
     row[f["step_index"]] = fields_dict["step_index"] or 0
@@ -401,6 +407,18 @@ def _fill_row(
     """
 
     _fill_core_graph(row, f, trace, fields_dict)
+    _fill_rest(row, f, trace, fields_dict, fire_results)
+
+
+def _fill_rest(
+    row: Any,
+    f: Any,
+    trace: Trace,
+    fields_dict: Mapping[str, Any],
+    fire_results: tuple[FireResult, ...],
+) -> None:
+    """Write the output, facet and transform cells (``_fill_row`` after the core graph)."""
+
     _fill_output(row, f, fields_dict)
     _fill_transform(row, f, trace, fields_dict, _fill_facets(row, f, fields_dict, fire_results))
 
@@ -493,8 +511,7 @@ def _plan_for(layout: OpStoreLayout) -> _RowPlan:
 def write_draft_row(
     store: Any,
     trace: Trace,
-    fields_dict: Mapping[str, Any],
-    fire_results: tuple[FireResult, ...],
+    draft: Any,
     function: FunctionCallRef,
 ) -> int:
     """Append one exhaustive draft's row to ``store`` and return its index.
@@ -511,10 +528,10 @@ def write_draft_row(
         A building ``OpRowStore`` (or any store with ``layout`` and ``adopt_row``).
     trace
         Active capture trace (the ``source_trace`` cell and the live index).
-    fields_dict
-        The final exhaustive draft, as passed to ``_op_record_from_log``.
-    fire_results
-        Intervention results for this op.
+    draft
+        The op's commit snapshot: ``fields`` (the final exhaustive draft, as
+        passed to ``_op_record_from_log``), ``fire_results`` (its intervention
+        results) and ``require_event`` (the parent-label resolver).
     function
         The op's resolved (shared) function-call ref.
 
@@ -531,7 +548,9 @@ def write_draft_row(
     template = plan.template
     row = template.copy()
     fids = plan.fids
-    _fill_row(row, fids, trace, fields_dict, fire_results)
+    fields_dict = draft.fields
+    _fill_core_graph(row, fids, trace, fields_dict, draft.require_event)
+    _fill_rest(row, fids, trace, fields_dict, draft.fire_results)
     _write_function_ref_cells(row, fids, function)
     fid, marker = plan.var_names
     row[fid] = marker  # the function-ref writer's fresh empty list

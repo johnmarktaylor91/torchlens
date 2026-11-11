@@ -6051,3 +6051,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 0a513ce8ee279f0bb060d8a8f7e28215b31638b8
 recorded: 2026-11-11T12:35:17Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: T1B thin indexed record
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 210b109aadbb9a89d06b67a9b1a308acbaa4cc91
+recorded: 2026-11-11T14:41:08Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: T3 materialize adopts the event columns
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0a2af56809f17a318ab2aaf39476864db3be18b9
+recorded: 2026-11-11T18:32:27Z

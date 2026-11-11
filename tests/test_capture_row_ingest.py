@@ -28,7 +28,7 @@ from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER
 from torchlens._ir import _row_journal, op_record_scatter
 from torchlens._postprocess import _materialize
 from torchlens._trace_core.op_store import _MISSING, OpRowStore
-from torchlens.backends.torch import _ops_container_base
+from torchlens.backends.torch import _ops_container_base, _ops_row_journal
 
 
 class _ResidualMlp(nn.Module):
@@ -138,15 +138,16 @@ def test_default_capture_ingests_capture_rows_without_record_rebuilds(
             module, attribute, _counting(counts, attribute, getattr(module, attribute))
         )
     handle_rows: list[list[Any]] = []
-    original_handle = _row_journal._RowJournal.handle
+    original_build = _ops_row_journal._PendingRow._build
 
-    def recording_handle(self: Any, row_index: int, rest: Any) -> Any:
-        """Record each committed capture row list, then build the handle."""
+    def recording_build(self: Any) -> Any:
+        """Record each capture row list a deferred commit writes, then return it."""
 
-        handle_rows.append(self.store._rows[row_index])
-        return original_handle(self, row_index, rest)
+        built = original_build(self)
+        handle_rows.append(built[1])
+        return built
 
-    monkeypatch.setattr(_row_journal._RowJournal, "handle", recording_handle)
+    monkeypatch.setattr(_ops_row_journal._PendingRow, "_build", recording_build)
     adopted: list[tuple[OpRowStore, list[Any]]] = []
     original_adopt = OpRowStore.adopt_row
 
