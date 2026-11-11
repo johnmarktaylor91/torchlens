@@ -214,10 +214,11 @@ def _registry_container_cells(
             continue
         any_swept = True
         sites = None if fids is None else getattr(store, "_alias_sites", None)
+        acc = (id_counts, expanded_ids, cell_sites, singleton_sites)
         if sites is None:
-            _census_store(store, rows, fids, (id_counts, expanded_ids, cell_sites, singleton_sites))
+            _census_store(store, rows, fids, acc)
             continue
-        _registry_store_sites(rows, fids, sites, id_counts, expanded_ids, cell_sites)
+        _registry_store_sites(rows, fids, sites, acc)
     result = (id_counts, cell_sites, singleton_sites) if any_swept else None
     if ALIAS_ORACLE is not None:
         ALIAS_ORACLE(stores, result)
@@ -225,14 +226,15 @@ def _registry_container_cells(
 
 
 def _registry_store_sites(
-    rows: list[list[Any]],
-    fids: Any,
-    sites: dict[tuple[int, int], Any],
-    id_counts: dict[int, int],
-    expanded_ids: set[int],
-    cell_sites: list[_CellSite],
+    rows: list[list[Any]], fids: Any, sites: dict[tuple[int, int], Any], acc: tuple[Any, ...]
 ) -> None:
-    """Count one op store's candidate cells and registered cells; collect its sites."""
+    """Count one op store's candidate cells and registered cells; collect its sites.
+
+    ``acc`` is the census accumulator tuple (see :func:`_census_store`); this
+    store adds no singleton sites.
+    """
+
+    id_counts, expanded_ids, cell_sites, _singleton_sites = acc
 
     empty_keys = _EMPTY_CONTAINER_POOL_KEYS
     sanctioned = frozenset(fids)
