@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1814 modules, 722450 lines, 0 modules without a docstring.
+85 packages, 1814 modules, 722532 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 55 | 22408 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 55 | 22416 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15068 |
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 22 | 6795 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 81 | 24912 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 81 | 24952 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6578 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 155 | 62897 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 155 | 62931 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -744,14 +744,14 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (55 modules, 22408 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (55 modules, 22416 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 340 |
 | `_ast_predicates` | Statement and expression predicates for the conditional AST indexer. | 162 |
 | `_branch_attribution` | Frame-level conditional branch attribution for one op's call stack. | 157 |
-| `_branch_source` | Source text readers and source-range predicates for the conditional AST indexer. | 179 |
+| `_branch_source` | Source text readers and source-range predicates for the conditional AST indexer. | 187 |
 | `_buffer_addresses` | Buffer-address resolution for postprocess step 0. | 297 |
 | `_buffer_source_wiring` | Step 6 buffer-source wiring and buffer value comparison for ''control_flow''. | 124 |
 | `_call_site_contract` | The call-site grouping contract (''callsite_v1'', ''callsite_v2'') and its in-memory evidence. | 133 |
@@ -975,7 +975,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (22 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (81 modules, 24912 lines)
+Shared helpers used by two or more TorchLens packages. (81 modules, 24952 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1040,7 +1040,7 @@ Shared helpers used by two or more TorchLens packages. (81 modules, 24912 lines)
 | `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 281 |
 | `_torch_structseq` | Repr-independent discovery of ''torch.return_types'' structseq field names. | 74 |
 | `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 455 |
-| `_type_new_slot` | CPython ''tp_new'' patching for torch's immutable legacy tensor-constructor types. | 466 |
+| `_type_new_slot` | CPython ''tp_new'' patching for torch's immutable legacy tensor-constructor types. | 506 |
 | `_type_sequence_slot` | CPython ''sq_item'' slot repair for ''torch.Tensor'' (a stdlib-only ctypes leaf). | 94 |
 | `_unchecked_kernel_denial` | Structural denial of torch kernels that skip their own memory bounds checks. | 120 |
 | `_uninit_alloc` | Uninitialized-memory value-source family: ONE closed table. | 226 |
@@ -1521,7 +1521,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (155 modules, 62897 lines)
+Torch backend implementation package for TorchLens capture. (155 modules, 62931 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1634,7 +1634,7 @@ Torch backend implementation package for TorchLens capture. (155 modules, 62897 
 | `_same_object_handoff` | Transient handoffs from the op wrapper to activation logging for same-object returns. | 140 |
 | `_scope_facts_cache` | The stateful-module scope facts, kept per unchanged model and verified before reuse. | 100 |
 | `_script_boundary` | TorchScript call boundary: a ''torch.jit.ScriptFunction'' called from an eager forward. | 253 |
-| `_session_cleanup` | Session-end tensor metadata cleanup for torch capture. | 781 |
+| `_session_cleanup` | Session-end tensor metadata cleanup for torch capture. | 793 |
 | `_session_forwards` | Session-scoped ''forward'' wrappers for non-root submodules. | 299 |
 | `_session_param_logs` | One capture's ''Param'' records and parameter stamps. | 214 |
 | `_session_param_release` | Session-end release of the parameter state a capture's preparation stamped. | 54 |
@@ -1658,7 +1658,7 @@ Torch backend implementation package for TorchLens capture. (155 modules, 62897 
 | `arg_names` | Argument-name introspection for wrapped torch callables (''_state._arg_names''). | 93 |
 | `backend` | Torch implementation of the capture backend Protocol. | 793 |
 | `backward` | Capture torch backward execution and autograd graph metadata. | 3802 |
-| `belt` | The mechanical BELT: protocol-invisible stale-reference coverage. | 608 |
+| `belt` | The mechanical BELT: protocol-invisible stale-reference coverage. | 629 |
 | `bound_root` | TL-authored synthetic root for bound-method capture. | 202 |
 | `buffer_writes` | Registered-buffer write capture for the torch backend. | 1765 |
 | `collectives` | Collective boundary capture for explicit ''torch.distributed'' python calls. | 840 |
@@ -1668,7 +1668,7 @@ Torch backend implementation package for TorchLens capture. (155 modules, 62897 
 | `funcol` | Functional-collective (funcol) boundary capture + plane-W completion authority. | 1012 |
 | `identity_shims` | Wrap-state identity shims: keep torch-internal identity checks truthful. | 955 |
 | `instrument` | Model instrumentation entry for the WRAP stage. | 161 |
-| `legacy_ctors` | Capture of legacy tensor constructors: ''torch.<dtype>Tensor(...)'' and ''Variable(t)''. | 309 |
+| `legacy_ctors` | Capture of legacy tensor constructors: ''torch.<dtype>Tensor(...)'' and ''Variable(t)''. | 310 |
 | `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 2019 |
 | `module_stack` | Manage the torch capture module-call stack. | 102 |
 | `offload_hooks` | Accelerate offload/dispatch hook shims for eager capture. | 215 |
