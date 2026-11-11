@@ -330,13 +330,14 @@ def _chain(
     scopes: list[tuple[int, Any]],
     boundary: int,
     upper: _Upper,
-    cache: dict[Any, Any],
+    memo: Any,
 ) -> tuple[Any, ...]:
     """The op's call-site chain (``introspection._call_site_chain``), per op only its own frames.
 
     The chain runs outermost first, so the upper part's share is a saved state
     the op's own frames continue from. It is cached under the same raw-frames
-    key the full walk uses (``_call_site.cached_chain``).
+    key the full walk uses (``_call_site.cached_chain``); the key is left on
+    ``memo.chain_key`` for the site table's template (``_call_site_join``).
     """
 
     count = len(lower)
@@ -345,6 +346,8 @@ def _chain(
     if boundary >= count:
         saved_out, saved_position, upper_raw = _upper_state(upper, boundary - count)
     key = ("__torchlens_call_site__", tuple(lower_raw) + upper_raw)
+    memo.chain_key = key
+    cache = memo.cache
     chain = cache.get(key)
     if chain is None:
         out: list[Any] = []
@@ -406,8 +409,11 @@ def build_from_parts(
     ``frame`` is the frame below which nothing is the user's (the caller of the
     call-site step). ``None`` when the op runs outside any module call, or a
     wrapper on the way holds no module stack frame: the full walk applies.
+    ``memo.chain_key`` is the chain's raw-frames cache key, ``None`` when the
+    chain is empty.
     """
 
+    memo.chain_key = None
     anchor = memo.anchor
     anchor_code = anchor[1] if anchor is not None else None
     lower: list[_Kept] = []
@@ -447,5 +453,5 @@ def build_from_parts(
     inner = count + upper.inner if upper.inner >= 0 else -1
     boundary = chain_boundary(inner, count + upper.outer, last_forward)  # type: ignore[operator]
     raw_kept = [(code, lasti) for _frame, code, _lineno, lasti in lower]
-    chain = _chain(raw_kept, scopes, boundary, upper, memo.cache) if boundary > 0 else ()
+    chain = _chain(raw_kept, scopes, boundary, upper, memo) if boundary > 0 else ()
     return _context(memo, (lower, tuple(named)), forward, upper, options), chain
