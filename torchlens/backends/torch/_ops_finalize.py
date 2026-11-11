@@ -197,10 +197,9 @@ def _make_layer_log_entry(
     fire_results = tuple(fields_dict.pop("fire_results")) if "fire_results" in fields_dict else ()
     layer_nums_to_save: Any = self._layer_nums_to_save
     raw_index: int = fields_dict["raw_index"]
-    options = (
-        trace_dict["_predicate_save_options"] if "_predicate_save_options" in trace_dict else None
-    )
-    if options is None or options.keep_op is None:
+    if "_predicate_save_options" not in trace_dict or (
+        (options := trace_dict["_predicate_save_options"]) is None or options.keep_op is None
+    ):
         predicate_spec, predicate_ctx = None, None
     else:
         predicate_spec, predicate_ctx = _evaluate_trace_save_predicate(self, fields_dict, t)
@@ -208,9 +207,9 @@ def _make_layer_log_entry(
         save_this_activation = (layer_nums_to_save == "all") or (raw_index in layer_nums_to_save)
     else:
         save_this_activation = predicate_spec.save_out
-    session = trace_dict["_capture_session"] if "_capture_session" in trace_dict else None
-    if session is not None and (
-        type(session) is CaptureSession or isinstance(session, CaptureSession)
+    if "_capture_session" in trace_dict and (
+        type(session := trace_dict["_capture_session"]) is CaptureSession
+        or isinstance(session, CaptureSession)
     ):
         profile = session.plan.retention_profile
         # ``escrow_candidate`` acts only under one of these two retention kinds.
