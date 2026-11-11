@@ -347,3 +347,49 @@ def test_residual_released_after_materialization(commit_spy: _CommitSpy) -> None
         assert alive == [], f"{len(alive)} of {len(commit_spy.residuals)} residuals alive"
     finally:
         trace.cleanup()
+
+
+class _LeafOutputModel(nn.Module):
+    """A factory op whose leaf output the model keeps, then adds to the input."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Create a leaf with ``torch.ones``, keep it on the module and add it."""
+
+        leaf = torch.ones(3)
+        self.__dict__["leaf"] = leaf
+        return x + leaf
+
+
+def test_activation_transform_flip_keeps_op_output_requires_grad() -> None:
+    """A transform flipping a leaf output's ``requires_grad`` leaves the op's record unchanged.
+
+    The record's output ``requires_grad`` is the op output's own flag, read on the
+    output when the op returns. The transform runs while the op's entry is saved,
+    after that read and before the commit; it flips the live leaf, so the next op
+    sees the flipped flag while the ``ones`` record keeps the op-output value.
+    """
+
+    model = _LeafOutputModel().eval()
+    flips: list[bool] = []
+
+    def flip_leaf(tensor: torch.Tensor) -> torch.Tensor:
+        """Flip the kept leaf's ``requires_grad`` once, when the ``ones`` output is saved."""
+
+        leaf = model.__dict__.get("leaf")
+        if leaf is not None and not flips and leaf.is_leaf and tuple(tensor.shape) == (3,):
+            flips.append(leaf.requires_grad)
+            leaf.requires_grad_(not leaf.requires_grad)
+        return tensor
+
+    trace = tl.trace(model, torch.randn(2, 3), activation_transform=flip_leaf)
+    try:
+        assert flips == [False], f"transform flipped {flips}"
+        assert model.__dict__["leaf"].requires_grad is True
+        records = [journal_record(event) for event in trace.op_events]
+        by_type = {record.layer_type: record for record in records}
+        assert {"ones", "add"} <= set(by_type), sorted(by_type)
+        assert by_type["ones"].output.tensor.requires_grad is False
+        assert by_type["add"].output.tensor.requires_grad is True
+    finally:
+        trace.cleanup()
+        model.__dict__.pop("leaf", None)
