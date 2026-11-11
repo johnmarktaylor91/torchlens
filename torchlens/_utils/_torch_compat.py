@@ -53,7 +53,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 from ..errors._base import TorchLensWarning, transparent_contextmanager
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
-from ._torch_symbols import HAS_PER_BACKEND_SEED, shadowed_torch_submodule, torch_attr
+from ._torch_symbols import TORCH_SEED_CODE_PLAN, shadowed_torch_submodule, torch_attr
 
 __all__ = [
     "torch_structseq_field_names",
@@ -1171,6 +1171,18 @@ def _probe_meta_item_guard() -> bool:
     return bool(_real_op_probe_leaf().probe_meta_item_guard())
 
 
+def _per_backend_seed_plan() -> tuple[tuple[str, ...], bool] | None:
+    """Return torch's seed plan, or ``None`` when its privateuse1 seed call has no binding."""
+    bound = callable(getattr(torch.random, "_seed_custom_device", None))
+    plan = TORCH_SEED_CODE_PLAN
+    return None if plan is not None and plan[1] and not bound else plan
+
+
+def seed_custom_device(seed: int) -> None:
+    """Seed privateuse1 as ``torch.manual_seed`` does, resolving torch's binding at call time."""
+    torch.random._seed_custom_device(seed)
+
+
 HAS_VARIABLE_FUNCTIONS: bool = _probe_attribute_paths("HAS_VARIABLE_FUNCTIONS")
 HAS_TORCH_VF: bool = _probe_attribute_paths("HAS_TORCH_VF")
 HAS_TORCH_FUNC: bool = _probe_attribute_paths("HAS_TORCH_FUNC")
@@ -1189,6 +1201,8 @@ HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_attribute_paths("HAS_ACCUMULATE_GRAD_CL
 HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK_ID")
 HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
 HAS_LEN_TORCH_DISPATCH_STACK: bool = _probe_attribute_paths("HAS_LEN_TORCH_DISPATCH_STACK")
+TORCH_SEED_PLAN = _per_backend_seed_plan()
+HAS_PER_BACKEND_SEED: bool = TORCH_SEED_PLAN is not None  # else capture calls torch.manual_seed
 HAS_MODULE_NAMED_MEMBERS: bool = _probe_attribute_paths("HAS_MODULE_NAMED_MEMBERS")
 HAS_ORIGINAL_VIEW_TRACKING: bool = _probe_attribute_paths("HAS_ORIGINAL_VIEW_TRACKING")
 HAS_VIEW_FUNC_UNSAFE: bool = _probe_attribute_paths("HAS_VIEW_FUNC_UNSAFE")

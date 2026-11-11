@@ -11,10 +11,11 @@ Every compiled backend gets the same call, in the same order, with the same bad-
 guard.
 
 The backend list is read from torch's own seeding code (the names its code object
-references), never from ``torch.__version__``, by the probe in ``_torch_symbols`` (kept
-there so ``_torch_compat`` publishes the flag without importing this module). When that
-code names anything the probe does not know, ``HAS_PER_BACKEND_SEED`` is ``False`` and
-:func:`manual_seed_compiled_backends` calls ``torch.manual_seed`` itself.
+references), never from ``torch.__version__``, by the probe in ``_torch_symbols``;
+``_torch_compat`` checks the privateuse1 seed binding and owns the call to it. When that
+code names anything the probe does not know, or a privateuse1 seed call with no binding,
+``HAS_PER_BACKEND_SEED`` is ``False`` and :func:`manual_seed_compiled_backends` calls
+``torch.manual_seed`` itself.
 """
 
 from __future__ import annotations
@@ -24,11 +25,12 @@ from types import ModuleType
 
 import torch
 
-from ._torch_symbols import (  # noqa: F401 - re-exported
-    _SEED_CALLS,
+from ._torch_compat import (  # noqa: F401 - re-exported
     HAS_PER_BACKEND_SEED,
     TORCH_SEED_PLAN as _SEED_PLAN,
+    seed_custom_device,
 )
+from ._torch_symbols import _SEED_CALLS  # noqa: F401 - re-exported
 
 # Compiled-in verdicts, filled on first use; tests set entries to simulate other builds.
 BACKEND_COMPILED: dict[str, bool] = {}
@@ -78,5 +80,5 @@ def manual_seed_compiled_backends(seed: int) -> None:
         if _backend_compiled(name, module) and not module._is_in_bad_fork():
             getattr(module, _SEED_CALLS[name])(seed)
     if seeds_custom_device:
-        torch.random._seed_custom_device(seed)
+        seed_custom_device(seed)
     torch.default_generator.manual_seed(seed)
