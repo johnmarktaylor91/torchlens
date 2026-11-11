@@ -32,6 +32,7 @@ from .._trace_state import TraceState
 from .._utils._record_group_table import record_member
 from .._utils._torch_compat import tensor_has_named_dims
 from .._utils.hashing import compute_graph_shape_hash
+from ..backends.torch._graph_pins import release_superseded_pins
 from ..backends.torch.backward import _BACKWARD_TRACE_SLOTS, _register_forward_grad_fn
 from ..options import ReplayOptions, merge_replay_options
 from ._helper_fingerprint import refuse_changed_staged_helpers
@@ -260,9 +261,8 @@ def _adopt_rerun_backward_graph(trace: Trace, new_log: Trace) -> None:
         return
     new_log._refresh_projection_target_ref = weakref.ref(trace)
     _RERUN_GRAPH_SOURCES[trace] = new_log
-    # The redirected hooks pass the one-owner-per-label check against the
-    # result's map, so the result adopts the rerun capture's hook ownership
-    # (the map the state swap left names the previous capture's tensors).
+    # Unpin the superseded pass, then adopt the rerun capture's hook ownership.
+    release_superseded_pins(trace)
     for key in ("_tl_grad_hook_owner_by_label", "_tl_backward_hooked_tensor_keys"):
         if key in new_log.__dict__:
             trace.__dict__[key] = new_log.__dict__[key]

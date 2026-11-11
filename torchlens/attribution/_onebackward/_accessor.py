@@ -28,6 +28,7 @@ from typing import Any
 from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._utils._record_group_table import record_member
 from ..._utils._torch_compat import get_gradient_edge_support
+from ...backends.torch._graph_pins import pin_epoch
 from ._errors import ReadError
 
 __all__ = [
@@ -173,10 +174,13 @@ def _validity_token(trace: Any) -> tuple[Any, ...]:
     refs = trace.__dict__.get("_backward_gradfn_refs")
     cleaned = bool(trace.__dict__.get("_tl_cleaned_up", False))
     # cleanup() deletes the pass counter; the cleaned flag carries that change.
+    # A refresh unpins the superseded pass and pins the new one: the list can
+    # keep its length with different nodes, so the release epoch is in the token.
     return (
         0 if cleaned else int(trace._num_backward_passes),
         None if refs is None else len(refs),
         cleaned,
+        pin_epoch(trace),
     )
 
 

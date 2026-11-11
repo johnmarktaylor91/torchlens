@@ -21,6 +21,7 @@ from .._utils._record_group_table import op_attr
 from .._utils._tensor_label import get_tensor_label, set_tensor_label
 from .._utils.display import user_stacklevel
 from .._utils.tensor_utils import safe_copy
+from ..backends.torch._graph_pins import reset_backward_rebind_state
 from ..backends.torch.backward import _register_forward_grad_fn
 from ..backends.torch.tensor_tracking import _add_rebound_gradient_hook
 from ..errors._runnable import BufferSinkRoutingError
@@ -703,8 +704,7 @@ class RefreshProjector:
         payloads, so registering them would bind dead autograd state.
         """
 
-        self.target.__dict__["_tl_backward_hooked_tensor_keys"] = set()
-        self.target.__dict__["_tl_grad_hook_owner_by_label"] = {}
+        reset_backward_rebind_state(self.target)  # unpins the superseded pass
         for layer in self.target._layer_list:
             if raw_labels is not None and layer._layer_label_raw not in raw_labels:
                 continue
