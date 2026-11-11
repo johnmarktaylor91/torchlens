@@ -32,7 +32,6 @@ from ..._capture.predicates import (
     build_op_record_context,
 )
 from ..._capture.projections import (
-    LiveOpView,
     _build_record_context,
     active_recording_state_or_none,
     append_projected_event,
@@ -42,9 +41,6 @@ from ..._capture.session import capture_session_for
 from ..._capture.stop import evaluate_halt_stop
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes.internal_types import FuncExecutionContext
-from ..._data_classes.op import (
-    Op,
-)
 from ..._errors import UserTransformError
 from ..._ir.events import (
     FunctionCallRef,
@@ -332,12 +328,12 @@ def _build_graph_relationship_fields(
     self: "Trace",
     fields_dict: dict[str, Any],
     parent_layer_labels: list[str],
-    parent_layer_entries: list[Op],
+    parent_layer_entries: list[Any],
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     out_orig: Any,
 ) -> None:
-    """Populate graph structure fields: parents, children, ancestors, buffer/IO flags."""
+    """Populate graph structure fields from the parents' indexed journal records (no views)."""
     # ``out=`` destinations are pre-allocated tensors the op writes into: their
     # producers (``empty``/``empty_like``/...) are genuine parents of this op.
     # Tuple/list destinations (``torch.sort(x, out=(v, i))``, topk, kthvalue,
@@ -360,10 +356,7 @@ def _build_graph_relationship_fields(
             parent_layer_labels = [*parent_layer_labels, out_kwarg_label]
             parent_layer_entries = [
                 *parent_layer_entries,
-                cast(
-                    Op,
-                    LiveOpView(self, self.capture_events.live_index.require_event(out_kwarg_label)),
-                ),
+                self.capture_events.live_index.require_event(out_kwarg_label),
             ]
     parent_arg_positions = _locate_parent_tensors_in_args(self, parent_layer_entries, args, kwargs)
     input_ancestors, internal_source_ancestors = _get_ancestors_from_parents(parent_layer_entries)

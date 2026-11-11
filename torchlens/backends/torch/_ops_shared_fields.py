@@ -9,12 +9,8 @@ from ..._capture._arg_snapshot import split_non_tensor_args
 from ..._capture.arg_positions import (
     _normalize_func_name,
 )
-from ..._capture.projections import LiveOpView
 from ..._capture.salient_args import extract_salient_args
 from ..._data_classes.internal_types import FuncExecutionContext
-from ..._data_classes.op import (
-    Op,
-)
 from ..._ir.events import (
     OutputVersionEvent,
 )
@@ -61,13 +57,14 @@ def _build_shared_fields_dict(
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     func_call_id: int,
-) -> tuple[dict[str, Any], list[Op], list[torch.Tensor], dict[str, int]]:
+) -> tuple[dict[str, Any], list[Any], list[torch.Tensor], dict[str, int]]:
     """Build the fields shared by every output tensor of one call (function, parents, module).
 
     Per-tensor fields (shape, label, equivalence type) are added in ``_log_output_tensor_info``.
     Each field family has its own module: arguments (``_ops_argument_fields``), call site
     (``_ops_call_site_fields``) and the callable's descriptors (``_ops_descriptive_fields``).
-    Returns ``(fields_dict, parent_layer_entries, arg_tensors, parent_param_ops)``.
+    Returns ``(fields_dict, parent_records, arg_tensors, parent_param_ops)``; ``parent_records``
+    are the parents' indexed journal records (no live views: their reads go to the record).
     """
     # Canonical layer_type: lowercase with underscores stripped (e.g. "conv2d").
     layer_type = _normalize_func_name(func_name)
@@ -79,10 +76,8 @@ def _build_shared_fields_dict(
         arg_tensors, arg_parameters, parent_layer_labels = _scan_call_arguments(
             self, call, layer_type
         )
-        parent_layer_entries = [
-            cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
-            for label in parent_layer_labels
-        ]
+        require_event = self.capture_events.live_index.require_event
+        parent_records = [require_event(label) for label in parent_layer_labels]
 
         fields_dict: dict[str, Any] = {}
 
@@ -115,7 +110,7 @@ def _build_shared_fields_dict(
         fields_dict["func_non_tensor_args"] = non_tensor_args + list(non_tensor_kwargs.values())
 
         _build_graph_relationship_fields(
-            self, fields_dict, parent_layer_labels, parent_layer_entries, args, kwargs, out_orig
+            self, fields_dict, parent_layer_labels, parent_records, args, kwargs, out_orig
         )
         parent_param_ops = _build_param_fields(self, fields_dict, arg_parameters)
         # Module nesting. The module-I/O placeholders (``module_call_stack``,
@@ -138,7 +133,7 @@ def _build_shared_fields_dict(
             layer_type, func_name, args, kwargs, param_shapes
         )
 
-        return fields_dict, parent_layer_entries, arg_tensors, parent_param_ops
+        return fields_dict, parent_records, arg_tensors, parent_param_ops
     finally:
         if bound_aliases:
             _restore_call_alias_labels(bound_aliases)
@@ -163,7 +158,7 @@ def _classify_new_tensor_in_trace(
 def _tag_tensor_and_track_variations(
     self: "Trace",
     out: torch.Tensor,
-    new_layer_entry: Op,
+    child_record: Any,
     fields_dict_onetensor: dict[str, Any],
     arg_copies: tuple[Any, ...],
     kwarg_copies: dict[str, Any],
@@ -177,6 +172,8 @@ def _tag_tensor_and_track_variations(
     saved out, the pre-mutation value is recorded in
     ``out_versions_by_child``.  This is critical for validation replay,
     which needs the actual input values each child operation saw; ``live_args`` and ``live_kwargs`` feed its foreign-write marks.
+    ``child_record`` is the op's committed journal record; its fields are read off the record
+    with the expressions the live view's getters use, so no view is built.
     """
     out_label = fields_dict_onetensor["_label_raw"]
     set_tensor_label(out, out_label)
@@ -186,14 +183,15 @@ def _tag_tensor_and_track_variations(
     _record_label_version_snapshot(out)
     _add_tensor_backward_hook(self, out, out_label)
 
-    child_event = self.capture_events.live_index.require_event(new_layer_entry._label_raw)
-    for parent_label in new_layer_entry.parents:
-        parent_event = self.capture_events.live_index.require_event(parent_label)
+    require_event = self.capture_events.live_index.require_event
+    child_event = require_event(child_record.label_raw)
+    for parent_label in [edge.parent_label_raw for edge in child_record.parents]:
+        parent_event = require_event(parent_label)
         contract = child_event.backend_semantics
         parent_tensor_contents = _get_parent_output_version_snapshot(
             self,
             parent_label,
-            new_layer_entry._call_parent_arg_positions,
+            child_record.parent_arg_positions,
             contract.mutated_input_positions,
             contract.aliased_output_inputs,
             parent_event.output.has_saved_activation,
@@ -205,7 +203,7 @@ def _tag_tensor_and_track_variations(
             self.capture_events.append_output_version(
                 OutputVersionEvent(
                     parent_raw_label=parent_label,
-                    child_raw_label=new_layer_entry._label_raw,
+                    child_raw_label=child_record.label_raw,
                     child_output_path=tuple(fields_dict_onetensor["container_path"]),
                     payload=parent_tensor_contents,
                     transform_state=fields_dict_onetensor["activation_transform"],
@@ -213,14 +211,14 @@ def _tag_tensor_and_track_variations(
                 )
             )
             _mark_foreign_written_snapshot(
-                self, parent_label, new_layer_entry, contract, (live_args, live_kwargs)
+                self, parent_label, child_record, contract, (live_args, live_kwargs)
             )
 
 
 def _mark_foreign_written_snapshot(
     self: "Trace",
     parent_label: str,
-    child_entry: Op,
+    child_record: Any,
     contract: Any,
     live_call: tuple[tuple[Any, ...], dict[str, Any]],
 ) -> None:
@@ -229,16 +227,16 @@ def _mark_foreign_written_snapshot(
     Runs only after a snapshot was stored, so the live-call tuple is never built on the
     ordinary per-op path (the per-op pins in tests/test_capture_row_commit_cost.py).
     """
-    positions = child_entry._call_parent_arg_positions
+    positions = child_record.parent_arg_positions
     contract_positions = (*contract.mutated_input_positions, *contract.aliased_output_inputs)
     if not parent_label_has_alias_contract(parent_label, positions, contract_positions):
         note_foreign_written_snapshot(
-            self, parent_label, child_entry._label_raw, positions, live_call
+            self, parent_label, child_record.label_raw, positions, live_call
         )
         if _VIEW_MUTATION_RELABELS:
             note_alias_rebound_snapshot(
                 self,
-                (parent_label, child_entry._label_raw),
+                (parent_label, child_record.label_raw),
                 positions,
                 live_call,
                 _VIEW_MUTATION_RELABELS,

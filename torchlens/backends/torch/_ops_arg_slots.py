@@ -36,7 +36,6 @@ from ..._utils._tensor_label import (
 )
 
 if TYPE_CHECKING:
-    from ..._data_classes.op import Op
     from ..._data_classes.trace import Trace
     from ..._ir.workspaces import RawGraphWorkspace
 
@@ -242,17 +241,20 @@ def parents_from_slots(
 
 
 def parent_arg_positions_from_slots(
-    slots: tuple[_ArgSlot, ...], parent_entries: list[Op]
+    slots: tuple[_ArgSlot, ...], parent_records: list[Any]
 ) -> dict[str, dict[Any, str]]:
-    """Map each parent label to its argument positions, emitted parent by parent."""
+    """Map each parent label to its argument positions, emitted parent by parent.
+
+    ``parent_records`` are the parents' indexed journal records (read by ``label_raw``).
+    """
 
     positions: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
     slots_by_label: dict[str, list[_ArgSlot]] = {}
     for slot in slots:
         if slot.label is not None:
             slots_by_label.setdefault(slot.label, []).append(slot)
-    for entry in parent_entries:
-        label = entry._label_raw
+    for record in parent_records:
+        label = record.label_raw
         for slot in slots_by_label.get(label, ()):
             positions[slot.kind][slot.key] = label
     return positions
