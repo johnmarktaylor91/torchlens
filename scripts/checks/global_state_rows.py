@@ -763,6 +763,9 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Model-state gradient-hook handles keyed weakly by their owning trace;
         # cleanup() pops and removes them, and entries die with the trace.
         ("torchlens/backends/torch/tensor_tracking.py", "_OWNED_STATE_GRAD_HOOK_HANDLES"),
+        # Pin-release epochs keyed weakly by their owning trace (one int per
+        # refreshed trace, read by the one-backward edge-index token); dies with it.
+        ("torchlens/backends/torch/_graph_pins.py", "_PIN_EPOCHS"),
         ("torchlens/backends/torch/wrappers.py", "_COW_STATE_PTRS_CACHE"),
         ("torchlens/_capture/structure_only.py", "_DISCHARGE_REGISTRY"),
         ("torchlens/_data_classes/_compaction.py", "_COMPACTED_TRACES"),
@@ -1207,6 +1210,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/backends/torch/_module_class_metadata.py", "_source_line_cache"),
         ("torchlens/backends/torch/tensor_tracking.py", "_IMPLICIT_BACKWARD_TASK_IDS"),
         ("torchlens/backends/torch/tensor_tracking.py", "_OWNED_STATE_GRAD_HOOK_HANDLES"),
+        ("torchlens/backends/torch/_graph_pins.py", "_PIN_EPOCHS"),
         ("torchlens/backends/torch/wrappers.py", "_COW_STATE_PTRS_CACHE"),
         ("torchlens/_capture/structure_only.py", "_DISCHARGE_REGISTRY"),
         ("torchlens/_data_classes/_compaction.py", "_COMPACTED_TRACES"),
@@ -1252,6 +1256,7 @@ failures.
 
 _STATIC_EXPORT_LISTS = frozenset(
     {
+        ("torchlens/backends/torch/_graph_pins.py", "__all__"),
         ("torchlens/errors/_quiet.py", "__all__"),
         ("torchlens/__init__.py", "__all__"),
         ("torchlens/_capture/_trace_capture_error.py", "__all__"),

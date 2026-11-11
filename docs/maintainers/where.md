@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1825 modules, 724384 lines, 0 modules without a docstring.
+85 packages, 1826 modules, 724490 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -53,7 +53,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 253 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
-| `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
+| `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3885 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 20 | 7066 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 13 | 9170 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 157 | 63510 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 158 | 63612 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1368,12 +1368,12 @@ Attribution graphs: direct linear effects between transcoder features, errors, t
 
 ### `torchlens.attribution._onebackward`
 
-One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... (11 modules, 3881 lines)
+One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... (11 modules, 3885 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 46 |
-| `_accessor` | Site -> ''(autograd node, output slot)'' accessor (M(reads) item 0). | 373 |
+| `_accessor` | Site -> ''(autograd node, output slot)'' accessor (M(reads) item 0). | 377 |
 | `_edge_plumbing` | Edge-grain plumbing bought NOW for the deferred EAP stage (item 7). | 255 |
 | `_engine` | The one-backward product engine. | 310 |
 | `_errors` | Typed errors for the one-backward read surface. | 69 |
@@ -1530,7 +1530,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (157 modules, 63510 lines)
+Torch backend implementation package for TorchLens capture. (158 modules, 63612 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1581,6 +1581,7 @@ Torch backend implementation package for TorchLens capture. (157 modules, 63510 
 | `_grad_fn_pairing` | Pair autograd ''GradFn'' nodes with the forward ops whose outputs they belong to. | 95 |
 | `_grad_fn_source` | Best-effort source metadata for autograd grad-fn classes. | 115 |
 | `_gradfn_markers` | Grad_fn-fire marker sink helpers. | 147 |
+| `_graph_pins` | Release the autograd pins a trace holds for a forward pass it no longer records. | 102 |
 | `_held_late_index` | Late buffer indexing for pre-forward model-owned tensors the held scan leaves unnamed. | 185 |
 | `_held_plain_holders` | Tensors held on plain (non-Module) objects that a module holds. | 92 |
 | `_held_refs` | Held torch-function reference normalization for ''release_model''. | 231 |
