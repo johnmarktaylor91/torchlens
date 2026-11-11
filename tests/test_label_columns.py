@@ -117,12 +117,33 @@ def _trace(name: str, recurrence: bool = True) -> Any:
     return tl.trace(model, torch.randn(*shape), capture=capture)
 
 
+def _by_position(value: Any, positions: dict[str, str]) -> Any:
+    """``value`` with each raw label replaced by its op's position.
+
+    Raw labels carry a per-trace counter, so two traces of one model spell
+    them differently; positions make the two traces comparable.
+    """
+
+    if isinstance(value, str):
+        return positions.get(value, value)
+    if isinstance(value, dict):
+        return {
+            _by_position(key, positions): _by_position(item, positions)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple, set, frozenset)):
+        items = [_by_position(item, positions) for item in value]
+        return sorted(items, key=repr) if isinstance(value, (set, frozenset)) else items
+    return value
+
+
 def _snapshot(trace: Any) -> dict[str, Any]:
     """Every op's label values and the trace's label-valued fields."""
 
+    positions = {op._label_raw: f"#op{index}" for index, op in enumerate(trace)}
     ops = [{field: getattr(op, field) for field in _OP_FIELDS} for op in trace]
     fields = {field: getattr(trace, field) for field in _TRACE_FIELDS}
-    return {"ops": ops, "trace": fields}
+    return _by_position({"ops": ops, "trace": fields}, positions)
 
 
 def _trace_both_ways(
@@ -159,7 +180,7 @@ def test_column_pass_equals_facade_pass(
 
 
 def test_later_passes_inherit_the_first_pass_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every pass of one layer shares the layer label and the first pass's indices."""
+    """Every pass of one layer shares the layer label, type and type index."""
 
     by_column, _by_facade, outcomes = _trace_both_ways(monkeypatch, "cell")
     assert outcomes == [True]
@@ -167,7 +188,8 @@ def test_later_passes_inherit_the_first_pass_numbers(monkeypatch: pytest.MonkeyP
     assert multi, "the cell model must have later passes"
     for op in multi:
         first = by_column[f"{op.layer_label}:1"]
-        assert (op.type_index, op.step_index) == (first.type_index, first.step_index)
+        assert (op.type, op.type_index) == (first.type, first.type_index)
+        assert first.layer_label == op.layer_label
         assert op.label == f"{op.layer_label}:{op.pass_number}"
 
 
