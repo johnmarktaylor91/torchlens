@@ -60,6 +60,8 @@ __all__ = (
 #: off the top of the stack (before the anchor exists).
 _AT_ANCHOR = "anchor"
 _AT_TOP = "top"
+#: The slot pattern of a key naming one module (``slots((m,))[1]``).
+_ONE_SLOT = (0,)
 #: Tags of an interned remainder: the innermost module call is stateful (the
 #: chain ends there) or stateless (crossed; its module is a chain token).
 _STATEFUL = "stateful"
@@ -234,17 +236,13 @@ def _remainder_walk(
 
 
 def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
-    """The site key of the op being recorded, walking up from ``frame``.
-
-    Frames by code, file and offset (equal codes from two files never share a
-    site), modules by slot with their ids in ``memo.mods``; ``None`` sends the
-    op to the full walk.
-    """
+    """The op's site key from ``frame`` up: frames by code, file and offset (equal codes
+    from two files never share a site), modules by slot (ids in ``memo.mods``); ``None``: full walk."""
 
     anchor = memo.anchor
     anchor_code = anchor[1] if anchor is not None else None
     key: Any = None
-    lower: list[int] | None = None  # modules of ``_call_impl`` frames below the wrapper
+    lower: tuple[int, ...] | None = None  # ``_call_impl`` modules below the wrapper
     tail: Any = _AT_TOP
     upper: tuple[int, ...] = ()
     while frame is not None:
@@ -279,7 +277,7 @@ def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
             break
         if name == "_call_impl":
             key = (key, code, code.co_filename, frame.f_lasti)
-            lower = [*(lower or ()), id(frame.f_locals["self"])]  # rare: a hook's module
+            lower = (*(lower or ()), id(frame.f_locals["self"]))
         else:
             filename = code.co_filename
             try:
@@ -292,11 +290,14 @@ def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
     if lower is None:
         memo.mods = upper
         return (key, tail)
-    return _with_lower(memo, (key, tail), lower, upper)
+    if upper or lower[1:]:
+        return _with_lower(memo, (key, tail), lower, upper)
+    memo.mods = lower  # one module, no call: ``_with_lower`` gives the same key
+    return (key, tail, _ONE_SLOT)
 
 
 def _with_lower(
-    memo: _CallSiteMemo, key: tuple[Any, Any], lower: list[int], upper: tuple[int, ...]
+    memo: _CallSiteMemo, key: tuple[Any, Any], lower: tuple[int, ...], upper: tuple[int, ...]
 ) -> tuple[Any, ...]:
     """``key`` with the slots of the modules below the wrapper and above it (a hook's module)."""
 
