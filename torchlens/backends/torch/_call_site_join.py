@@ -93,7 +93,7 @@ def join(
     key = (raw_key[0], tuple(raw))
     cached = cache.get(key)
     if cached is not None:
-        return cached  # type: ignore[no-any-return]
+        return cached
     out = list(chain)
     for index, slot in chain_positions:
         out[index] = ((_MODULE, modules[slot]), 0)

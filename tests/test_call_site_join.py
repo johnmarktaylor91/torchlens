@@ -118,9 +118,11 @@ def test_the_cache_holds_what_building_every_op_writes(
     torch.manual_seed(0)
     model = _MODELS[name]()
     x = torch.randn(2, 4)
-    served = _cache_view(tl.trace(model, x))
-    monkeypatch.setattr(site_module, "_CallSiteMemo", _BuildEveryOp)
-    assert served == _cache_view(tl.trace(model, x))
+    views = []
+    for memo_class in (site_module._CallSiteMemo, _BuildEveryOp):  # one caller frame for both
+        monkeypatch.setattr(site_module, "_CallSiteMemo", memo_class)
+        views.append(_cache_view(tl.trace(model, x)))
+    assert views[0] == views[1]
 
 
 def test_distinct_modules_on_one_code_path_build_one_site(
@@ -159,9 +161,9 @@ def test_equal_and_distinct_modules_on_one_code_path_never_share_a_key(
         key = original(memo, frame)
         stack = memo.module_ws.exhaustive_module_stack
         ids = {frame_record.module_id for frame_record in stack}
-        if id(model.alone) in ids and len(stack) >= 4:
+        if id(model.alone) in ids and len(stack) >= 3:  # the root module is never pushed
             keys["alone"].add(key)
-        elif {id(model.first), id(model.second)} <= ids and len(stack) >= 4:
+        elif {id(model.first), id(model.second)} <= ids and len(stack) >= 3:
             keys["pair"].add(key)
         return key
 
