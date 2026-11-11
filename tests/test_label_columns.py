@@ -121,7 +121,9 @@ def _trace(name: str, recurrence: bool = True, model: nn.Module | None = None) -
         model = _build(name)
     torch.manual_seed(0)
     inputs = torch.randn(*_MODELS[name][1])
-    capture = tl.options.CaptureOptions(recurrence_detection=recurrence)
+    # A fixed capture seed fixes the barcode stream, so the parameter barcodes
+    # minted at model prep (part of the equivalence-class keys) repeat across traces.
+    capture = tl.options.CaptureOptions(recurrence_detection=recurrence, seed=0)
     return tl.trace(model, inputs, capture=capture)
 
 
@@ -174,8 +176,8 @@ def _trace_both_ways(
 ) -> tuple[Any, Any, list[bool]]:
     """Trace ``name`` through the column pass and through the facade pass.
 
-    Both passes trace ONE model instance, so instance-derived values (the
-    parameter hashes in the equivalence-class keys) are equal as they are.
+    Both passes trace ONE model instance with one fixed capture seed, so the
+    parameter barcodes in the equivalence-class keys are equal as they are.
     """
 
     model = _build(name)
