@@ -202,18 +202,23 @@ def _ignore(_ref: object) -> None:
 
 
 def _warm_c2_instrument(fn: Callable[[], object] = lambda: None) -> None:
-    """Run ``retained_after`` once, unmeasured, so its one-time state exists.
+    """Run ``fn`` once through ``retained_after``, unmeasured, so one-time state exists.
 
-    The first ``retained_after`` call in a process takes its "before" snapshot
-    and then scans it. The scan's ``isinstance`` check reads ``__class__`` on
-    ``torch.distributed.reduce_op``, which emits a deprecation FutureWarning,
-    and ``warnings`` loads ``capture_core_counters.py`` into ``linecache``.
-    That cache entry, one ``(size, mtime, lines, name)``
-    tuple and its list of lines, is made once per process, belongs to no trace
-    and no test, and lands after the "before" snapshot, so the first
-    measurement of a process counts two objects later ones do not. Whether a
-    test is first depends on how its file is split across workers; warming
-    here makes every measurement in the test a later one.
+    Python caches a source file's lines in ``linecache`` the first time
+    anything formats a traceback or a warning that passes through it, and the
+    first such event with ``capture_core_counters.py`` on the stack happens
+    inside the first measurement of a process: two objects (one
+    ``(size, mtime, lines, name)`` tuple in ``linecache.cache`` and its list of
+    lines) that belong to no trace and no test, made once and never again.
+    Two events do it. Every capture seeds torch at entry; ``torch.manual_seed``
+    queues the lazy CUDA seed with ``traceback.format_stack()``, so the first
+    ``tl.trace`` run inside ``retained_after`` caches the instrument's file.
+    Where warnings are printed (not under pytest's recording), the instrument's
+    object scan reads ``__class__`` on ``torch.distributed.reduce_op``, whose
+    deprecation warning caches it first. Whether a test is first in its process
+    depends on how its file is split across workers, so a test that compares
+    two measurements warms with the same kind of call it measures: a capture
+    when it measures captures.
     """
 
     _result, _held = retained_after(fn)
@@ -234,7 +239,7 @@ def test_c2_rises_when_a_trace_keeps_a_live_weak_reference() -> None:
     model = nn.Sequential(nn.Linear(3, 3), nn.ReLU()).eval()
     x = torch.randn(2, 3)
     tl.trace(model, x)
-    _warm_c2_instrument()
+    _warm_c2_instrument(lambda: tl.trace(model, x))
     plain, without = retained_after(lambda: (tl.trace(model, x), None))
     del plain
     # Without a callback CPython hands back the model's existing weak reference.
@@ -254,7 +259,7 @@ def _small_traced_model() -> tuple[nn.Module, torch.Tensor]:
 
 def test_c2_counts_a_weak_id_key_dictionary_the_trace_keeps() -> None:
     model, x = _small_traced_model()
-    _warm_c2_instrument()
+    _warm_c2_instrument(lambda: tl.trace(model, x))
     _, alone = retained_after(lambda: None)
     _, one = retained_after(WeakIdKeyDictionary)
     plain, without = retained_after(lambda: (tl.trace(model, x), None))
@@ -282,9 +287,10 @@ def test_c2_leaves_out_the_label_session_a_trace_leaves_behind() -> None:
     # The alias index of the last trace's label session is released by the
     # next trace's start and its size follows the allocator; neither the
     # session left before the window nor the one the measured trace leaves
-    # moves the count. A warm-up capture through the instrument comes first: its
-    # first call in a process counts its own linecache entry (two objects, see
-    # _warm_c2_instrument). The last two plain traces show nothing accumulates.
+    # moves the count. A warm-up capture through the instrument comes first: the
+    # first capture measured in a process counts the instrument's own linecache
+    # entry (two objects, see _warm_c2_instrument). The last two plain traces
+    # show that nothing accumulates from one trace to the next.
     model, x = _small_traced_model()
     _warm_c2_instrument(lambda: _trace_leaving_buckets(model, x, 0))
     counts = []
