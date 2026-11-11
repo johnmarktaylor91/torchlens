@@ -180,37 +180,13 @@ def probe_type_new_slot_patch(cls: Any) -> bool:
     if sys.implementation.name != "cpython" or not isinstance(cls, type):
         return False
     try:
-        return _layout_matches(cls) and _reference_mirror_verified()
+        return (
+            all(_layout_matches(ref) for ref in (cls, _InheritedNewProbe, _PythonNewProbe))
+            and _tp_new_slot_verified()
+        )
     except (AttributeError, TypeError, ValueError, OSError):
         # A non-CPython-shaped object or an unreadable field: degrade to False.
         return False
-
-
-#: Set once the reference classes have matched the mirror and its ``tp_new`` field.
-_REFERENCE_MIRROR_VERIFIED: list[bool] = []
-
-
-def _reference_mirror_verified() -> bool:
-    """Return whether the private reference classes match the mirror, checked once.
-
-    The reference classes are private to this module and never patched, and the
-    mirror's field offsets are fixed for the interpreter, so a pass holds for the
-    process; only a pass is remembered (a failure is re-checked, and flips the
-    capability flag at its caller anyway). Every install re-probes each roster
-    class (39 on torch 2.x) on every capture, so the reference half of the probe
-    ran 39 times per capture before.
-    """
-
-    if _REFERENCE_MIRROR_VERIFIED:
-        return True
-    verified = (
-        _layout_matches(_InheritedNewProbe)
-        and _layout_matches(_PythonNewProbe)
-        and _tp_new_slot_verified()
-    )
-    if verified:
-        _REFERENCE_MIRROR_VERIFIED.append(True)
-    return verified
 
 
 def has_python_new_trampoline(cls: type) -> bool:
