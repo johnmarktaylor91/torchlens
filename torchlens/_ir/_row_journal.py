@@ -28,6 +28,7 @@ from collections.abc import Iterable
 from dataclasses import replace as dataclass_replace
 from typing import Any, cast
 
+from .._trace_core.cell_states import LazyCell
 from .events import ArgTemplateRef, ParentEdge
 from .op_record import (
     AncestryFacet,
@@ -671,7 +672,9 @@ def _optional_facets(row: list[Any], fids: dict[str, int], rest: _RowResidual) -
     modules = tuple(row[fids["modules"]])
     qualname = row[fids["grad_fn_class_qualname"]]
     bool_value = row[fids["bool_value"]]
-    annotations = dict(row[fids["annotations"]])
+    cell = row[fids["annotations"]]
+    # An empty annotations cell stays default-omitted; its default is a fresh dict.
+    annotations = cell.source() if cell.__class__ is LazyCell else dict(cell)
     is_edited = row[fids["is_edited"]]
     fire_results = rest.fire_results
     present_control = rest.is_scalar_bool is not None or bool_value is not None

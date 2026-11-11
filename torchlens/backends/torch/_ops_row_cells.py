@@ -137,6 +137,18 @@ _EMPTY_DICT_CELLS: tuple[str, ...] = (
     "conditional_elif_children",
     "conditional_arm_children",
 )
+#: Sanctioned (poolable) container cells a writer fills only when non-empty; an
+#: empty one stays default-omitted and settles onto the shared pooled empty cell.
+#: Each default is the exact empty value its writer used to write (the emit, or
+#: the ingest join for ``out_versions_by_child`` and ``parent_param_ops``).
+_OMITTED_EMPTY_CELLS: tuple[tuple[str, type], ...] = (
+    ("annotations", dict),
+    ("edits", list),
+    ("var_names", list),
+    ("func_rng_states", dict),
+    ("out_versions_by_child", dict),
+    ("parent_param_ops", dict),
+)
 
 
 def _fill_transform(row: Any, f: Any, fields_dict: Mapping[str, Any], annotations: Any) -> None:
@@ -211,16 +223,16 @@ def _fill_facets(
     row[f["bool_value"]] = bool_value
     row[f["grad_fn_class_qualname"]] = qualname
     row[f["is_edited"]] = is_edited
-    row[f["edits"]] = (
-        [
+    if fire_results:
+        edits = [
             result.fire_record
             for result in fire_results
             if getattr(result, "fire_record", None) is not None
         ]
-        if fire_results
-        else []
-    )
-    row[f["annotations"]] = annotations
+        if edits:
+            row[f["edits"]] = edits
+    if annotations:
+        row[f["annotations"]] = annotations
     input_ancestors = fields_dict["input_ancestors"]
     internal_source_ancestors = fields_dict["internal_source_ancestors"]
     root_ancestors = fields_dict["root_ancestors"]
@@ -342,6 +354,7 @@ def _fill_row(
     adds them first. The empty containers are not written here either: the
     layout row starts them default-omitted (the store answers a fresh one on
     first read) and the dict form adds them through ``_fill_empty_containers``.
+    The same holds for an empty ``edits`` or ``annotations`` cell.
     """
 
     _fill_core_graph(row, f, trace, fields_dict)
@@ -362,6 +375,8 @@ def _fill_empty_containers(cells: dict[str, Any]) -> None:
         cells[name] = []
     for name in _EMPTY_DICT_CELLS:
         cells[name] = {}
+    cells["edits"] = []
+    cells["annotations"] = {}
     cells["output_descendants"] = set()
     cells["module_entry_arg_keys"] = _arg_keys_default()
 
@@ -369,8 +384,9 @@ def _fill_empty_containers(cells: dict[str, Any]) -> None:
 def _default_fields(layout: OpStoreLayout) -> LazyFields:
     """Register the constant-valued cells of an exhaustive draft as defaults.
 
-    The scalar constants are shared immutable defaults; the empty containers
-    and ``_grad_records`` (which ingest used to seed) are per-row factories.
+    The scalar constants are shared immutable defaults; the empty containers,
+    ``_grad_records`` (which ingest used to seed) and the sanctioned cells of
+    ``_OMITTED_EMPTY_CELLS`` are per-row factories.
     A constant that ingest converts in place (the byte quantities of
     ``INIT_BYTES_FIELDS``) is not registered: the capture writes its value.
     """
@@ -385,13 +401,20 @@ def _default_fields(layout: OpStoreLayout) -> LazyFields:
         fields.register_default(name, factory=dict)
     fields.register_default("output_descendants", factory=set)
     fields.register_default("module_entry_arg_keys", factory=_arg_keys_default)
+    for name, factory in _OMITTED_EMPTY_CELLS:
+        fields.register_default(name, factory=factory)
     return fields
 
 
 class _RowPlan:
-    """One layout's field ids and its row template of default-omitted cells."""
+    """One layout's field ids and its row template of default-omitted cells.
 
-    __slots__ = ("layout", "fids", "template")
+    ``var_names`` and ``rng`` are ``(field id, default marker)`` of the two
+    call cells the shared function-ref writer fills, which an empty value puts
+    back to default-omitted.
+    """
+
+    __slots__ = ("layout", "fids", "rng", "template", "var_names")
 
     def __init__(self, layout: OpStoreLayout) -> None:
         """Bind ``layout`` and build its template (unset fields stay ``_MISSING``)."""
@@ -403,6 +426,10 @@ class _RowPlan:
             if name in INIT_BYTES_FIELDS:
                 template[self.fids[name]] = value
         self.template = template
+        fid = self.fids["var_names"]
+        self.var_names = (fid, template[fid])
+        fid = self.fids["func_rng_states"]
+        self.rng = (fid, template[fid])
 
 
 #: Row plans by layout identity (the layout is kept by the plan, so ids are not reused).
@@ -460,6 +487,14 @@ def write_draft_row(
     fids = plan.fids
     _fill_row(row, fids, trace, fields_dict, fire_results)
     _write_function_ref_cells(row, fids, function)
+    fid, marker = plan.var_names
+    row[fid] = marker  # the function-ref writer's fresh empty list
+    # The call's RNG snapshot is one dict shared by every output of the call: a
+    # multi-output op keeps the object, so the alias census still sees it.
+    rng = function.func_rng_states
+    if rng.__class__ is dict and not rng and not fields_dict["in_multi_output"]:
+        fid, marker = plan.rng
+        row[fid] = marker
     return int(store.adopt_row(row))
 
 
