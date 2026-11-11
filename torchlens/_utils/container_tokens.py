@@ -30,7 +30,10 @@ TOKEN_INERT = 2
 def token_table(trace: Any) -> dict[int, Any] | None:
     """Return ``trace``'s registration table, creating it; ``None`` once handed off."""
 
-    workspace = getattr(trace, "_wrapper_runtime_ws", None)
+    try:
+        workspace = trace._wrapper_runtime_ws
+    except AttributeError:  # dropped with the capture workspaces
+        return None
     if workspace is None:
         return None
     table = workspace.container_tokens
@@ -47,7 +50,10 @@ def register(trace: Any, container: Any, token: Hashable, flags: int) -> None:
     Called once per emit, so the table lookup is inlined (no ``token_table`` call).
     """
 
-    workspace = getattr(trace, "_wrapper_runtime_ws", None)
+    try:
+        workspace = trace._wrapper_runtime_ws
+    except AttributeError:  # dropped with the capture workspaces
+        return
     if workspace is None:
         return
     table = workspace.container_tokens
