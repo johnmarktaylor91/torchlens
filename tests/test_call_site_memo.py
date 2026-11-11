@@ -379,3 +379,23 @@ def test_value_equal_codes_from_two_files_get_separate_sites(
     assert not seen["a"] & seen["b"]
     monkeypatch.setattr(site_module, "_CallSiteMemo", _WalkEveryOp)
     assert served == _projection(_recurse(tl.trace, 0, model, x))
+
+
+@pytest.mark.parametrize("memo", [site_module._CallSiteMemo, _BuildEveryOp, _WalkEveryOp])
+def test_value_equal_codes_from_two_files_name_their_own_files(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch, memo: type
+) -> None:
+    """Each file's op's code context names its own file, on every lookup path.
+
+    Code equality ignores ``co_filename``: the two ops' kept frames are equal by
+    value, line and offset, so a whole-context cache key without the files would
+    serve the second op the first file's context.
+    """
+
+    steps = _value_equal_pair(tmp_path, _RELU_SOURCE)
+    monkeypatch.setattr(site_module, "_CallSiteMemo", memo)
+    rows = _projection(_recurse(tl.trace, 0, _TwoFiles(steps), torch.randn(2, 4)))
+    innermost = [f[-1] for _label, _index, f in rows if f and f[-1][2] == "step"]
+    files = sorted(file for file, *_rest in innermost)
+    assert files == sorted(step.__code__.co_filename for step in steps)
+    assert len({(line, col) for _file, line, _name, _qualname, col in innermost}) == 1
