@@ -381,7 +381,11 @@ def test_activation_transform_flip_keeps_op_output_requires_grad() -> None:
             leaf.requires_grad_(not leaf.requires_grad)
         return tensor
 
-    trace = tl.trace(model, torch.randn(2, 3), activation_transform=flip_leaf)
+    trace = tl.trace(
+        model,
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(activation_transform=flip_leaf),
+    )
     try:
         assert flips == [False], f"transform flipped {flips}"
         assert model.__dict__["leaf"].requires_grad is True
