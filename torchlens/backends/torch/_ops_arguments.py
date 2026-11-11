@@ -11,7 +11,6 @@ from ..._ir.container import (
 )
 from ..._save_budget import _retained_storage_identities
 from ..._state import pause_logging
-from ..._utils._internal_read import internal_scalar_read
 from ..._utils._tensor_label import (
     get_live_tensor_label,
     get_param_meta,
@@ -21,7 +20,6 @@ from ..._utils._tensor_label import (
     session_label_storage_intact,
     session_meta_is_anchored,
 )
-from ..._utils._tensor_layout import CaptureLayout, layout_of
 from ..._utils._tl_collective import _async_collective_elem
 from ..._utils.tensor_utils import (
     safe_copy,
@@ -37,6 +35,7 @@ from ...intervention._types import (
     ParentRef,
     Unsupported,
 )
+from ._args_template_cache import TemplateParts, capture_layout, planned_args_template
 from ._ops_arg_slots import _peek_raw_graph_workspace, arg_slot_labels
 from ._ops_saved_arg_copies import (
     _copy_saved_arg_tree,
@@ -165,20 +164,6 @@ def _literal_value_supported(value: Any) -> bool:
     )
 
 
-def _capture_layout(value: Any) -> CaptureLayout | None:
-    """Record a parent argument's non-contiguous layout for faithful replay.
-
-    ``stride()`` / ``storage_offset()`` are witnessed metadata surfaces, so this
-    bookkeeping read runs under ``pause_logging`` plus ``internal_scalar_read``
-    (the sanctioned pattern for TorchLens's own reads during capture).
-    """
-
-    if not isinstance(value, torch.Tensor):
-        return None
-    with pause_logging(), internal_scalar_read():
-        return layout_of(value)
-
-
 #: Exact builtin types whose instances take no attributes, so carry no TorchLens stamp:
 #: their label read is always ``None`` and the template walk skips it.
 _UNSTAMPABLE_TYPES = frozenset(
@@ -236,7 +221,7 @@ def _classify_arg_component(
         else:
             label = get_live_tensor_label(value, trace.capture_events.live_index.by_raw_label)
     if isinstance(label, str):
-        return ParentRef(label, _capture_layout=_capture_layout(value))
+        return ParentRef(label, _capture_layout=capture_layout(value))
     if isinstance(value, torch.Tensor):
         return _unlabeled_tensor_literal(value)
     if _literal_value_supported(value):
@@ -307,8 +292,11 @@ def _build_args_template(
         Replay template for the function call.
     """
 
-    notes: list[str] = []
     known = arg_slot_labels(trace, args, kwargs)
+    planned = planned_args_template(_TEMPLATE_PARTS, func, args, kwargs, trace, func_name, known)
+    if planned is not None:
+        return planned
+    notes: list[str] = []
     arg_components = tuple(_classify_arg_component(arg, notes, trace, known) for arg in args)
     # A list, not a generator: an empty result is then the shared ``()``, not a
     # private empty tuple per op (3.10 resizes a generator's tuple to a new block).
@@ -518,6 +506,10 @@ def _session_validated_parameter(trace: "Trace", value: torch.Tensor) -> bool:
         True when the prep stamp resolves session-validly for this object.
     """
 
+    workspace = _peek_raw_graph_workspace(trace)
+    validated = None if workspace is None else workspace._validated_params
+    if validated is not None and validated.get(id(value)) is value:
+        return True
     param_meta = get_param_meta(value)
     if param_meta is None or not param_meta.param_address:
         return False
@@ -526,6 +518,11 @@ def _session_validated_parameter(trace: "Trace", value: torch.Tensor) -> bool:
     if param_logs is None or addr not in param_logs:
         return False
     if getattr(param_logs[addr], "_param_ref", None) is value:
+        # Remembered for the rest of this capture (see ``_validated_params``): the
+        # prep stamp and the session's parameter logs are written at session entry,
+        # where the keyed parameter plan is verified, and stay fixed until cleanup.
+        if validated is not None:
+            validated[id(value)] = value
         return True
     # Offload rebind rung: accelerate offload hooks REPLACE the
     # prep-stamped meta parameter with a fresh real-valued object at every
@@ -754,4 +751,17 @@ def _project_saved_args_bytes(t_args: Any, t_kwargs: Any) -> dict[Any, int]:
 # imports its siblings once every definition above exists.
 from .ops import (  # noqa: E402
     _SAFE_TENSOR_PROPERTY_NAMES,
+)
+
+_TEMPLATE_PARTS = TemplateParts(
+    classify=_classify_arg_component,
+    capture_layout=capture_layout,
+    unlabeled_literal=_unlabeled_tensor_literal,
+    registry_key=_function_registry_key,
+    is_permanent_c_callable=_is_permanent_c_callable,
+    safe_property_names=_SAFE_TENSOR_PROPERTY_NAMES,
+    literal_value=LiteralValue,
+    parent_ref=ParentRef,
+    template=CapturedArgTemplate,
+    key_type=FunctionRegistryKey,
 )
