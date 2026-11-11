@@ -1,7 +1,7 @@
-"""Selective-depth Op clones: the output-node copy and ``Op._copy_with_shallow_fields``.
+"""Selective-depth Op clones (``Op._copy_with_shallow_fields``) and the output-node field sets.
 
-Moved out of ``_op_save`` (which re-exports both functions) so the output-node copy can
-skip reading the derived fields the Op constructor discards.
+Moved out of ``_op_save`` (which re-exports the copy). The output-node copy itself is
+``_op_output_copy._copy_for_output``; it reads the field sets declared here.
 """
 
 from __future__ import annotations
@@ -168,27 +168,6 @@ def _copy_op_field_value(value: Any) -> Any:
     ):
         return value
     return copy.deepcopy(value)
-
-
-def _copy_for_output(op: Op, *, _store: Any = None) -> Op:
-    """Clone this op for immediate conversion into a synthetic output node.
-
-    Parameters
-    ----------
-    op:
-        The op record this function reads and writes.
-    _store:
-        Optional owning row store for the synthesized node.
-
-    Returns
-    -------
-    Op
-        Clone whose soon-to-be-replaced fields avoid unnecessary deep copies.
-    """
-
-    return _copy_with_shallow_fields(
-        op, _OUTPUT_NODE_REPLACED_FIELDS, _store=_store, unread=_OUTPUT_COPY_UNREAD_DERIVED_FIELDS
-    )
 
 
 def _copy_with_shallow_fields(

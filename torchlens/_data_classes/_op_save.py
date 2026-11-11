@@ -30,11 +30,11 @@ from .._utils.tensor_utils import (
 )
 from ._op_bytes import activation_bytes
 from ._op_copy import (  # noqa: F401 - op.py reads them here
-    _copy_for_output,
     _copy_with_shallow_fields,
 )
 from ._op_dedup import _dedup_cached_identity_out, _dedup_saved_activation_out
 from ._op_grad_stream import stream_grad_blobs
+from ._op_output_copy import _copy_for_output  # noqa: F401 - op.py reads it here
 from ._op_transforms import (
     apply_transform,
     train_mode_tripwire_armed,
