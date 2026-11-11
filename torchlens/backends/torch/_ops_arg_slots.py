@@ -246,13 +246,20 @@ def parent_arg_positions_from_slots(
 ) -> dict[str, dict[Any, str]]:
     """Map each parent label to its argument positions, emitted parent by parent."""
 
+    return slot_positions_by_label(slots, [entry._label_raw for entry in parent_entries])
+
+
+def slot_positions_by_label(
+    slots: tuple[_ArgSlot, ...], parent_labels: list[str]
+) -> dict[str, dict[Any, str]]:
+    """Map each parent label to its argument positions, emitted label by label."""
+
     positions: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
     slots_by_label: dict[str, list[_ArgSlot]] = {}
     for slot in slots:
         if slot.label is not None:
             slots_by_label.setdefault(slot.label, []).append(slot)
-    for entry in parent_entries:
-        label = entry._label_raw
+    for label in parent_labels:
         for slot in slots_by_label.get(label, ()):
             positions[slot.kind][slot.key] = label
     return positions

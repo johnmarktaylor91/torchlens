@@ -293,7 +293,7 @@ def _build_args_template(
     """
 
     known = arg_slot_labels(trace, args, kwargs)
-    planned = planned_args_template(_TEMPLATE_PARTS, func, args, kwargs, trace, func_name, known)
+    planned = planned_args_template(_TEMPLATE_PARTS, (func, func_name, args, kwargs), trace, known)
     if planned is not None:
         return planned
     notes: list[str] = []

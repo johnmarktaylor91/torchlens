@@ -108,13 +108,16 @@ def _components(
     branches: tuple[int, ...],
     values: Any,
     notes: list[str],
-    trace: "Trace",
-    known: dict[int, str | None] | None,
+    scope: tuple["Trace", dict[int, str | None] | None],
 ) -> tuple[Any, ...]:
-    """Classify ``values`` along their planned branches, as ``_classify_arg_component`` does."""
+    """Classify ``values`` along their planned branches, as ``_classify_arg_component`` does.
 
+    ``scope`` is the active trace and the op's snapshot labels by tensor id.
+    """
+
+    trace, known = scope
     out: list[Any] = []
-    for branch, value in zip(branches, values):  # noqa: B905  (equal lengths by the plan key)
+    for branch, value in zip(branches, values, strict=True):
         if branch == _LITERAL:
             out += (parts.literal_value(value),)
             continue
@@ -134,19 +137,18 @@ def _components(
 
 def planned_args_template(
     parts: TemplateParts,
-    func: Callable[..., Any],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
+    call: tuple[Callable[..., Any], str | None, tuple[Any, ...], dict[str, Any]],
     trace: "Trace | None",
-    func_name: str | None,
     known: dict[int, str | None] | None,
 ) -> Any:
     """Return the call's replay template through its layout's plan, or ``None``.
 
-    ``None`` (build it the general way) when the capture holds no raw-graph workspace.
-    The result equals ``_build_args_template(func, args, kwargs, trace, func_name=...)``.
+    ``call`` is ``(func, func_name, args, kwargs)``. ``None`` (build it the general
+    way) when the capture holds no raw-graph workspace. The result equals
+    ``_build_args_template(func, args, kwargs, trace, func_name=...)``.
     """
 
+    func, func_name, args, kwargs = call
     workspace = _peek_raw_graph_workspace(trace)
     if workspace is None or trace is None:
         return None
@@ -168,13 +170,14 @@ def planned_args_template(
         plans[layout] = plan
     _, fields, arg_branches, kwarg_plan = plan
     notes: list[str] = []
-    arg_components = _components(parts, arg_branches, args, notes, trace, known)
+    scope = (trace, known)
+    arg_components = _components(parts, arg_branches, args, notes, scope)
     kwarg_components: tuple[tuple[str, Any], ...] = ()
     if kwargs:
         names = tuple([name for name, _ in kwarg_plan])
         branches = tuple([branch for _, branch in kwarg_plan])
-        values = _components(parts, branches, kwargs.values(), notes, trace, known)
-        kwarg_components = tuple(zip(names, values))  # noqa: B905
+        values = _components(parts, branches, kwargs.values(), notes, scope)
+        kwarg_components = tuple(zip(names, values, strict=True))
     return parts.template(
         args=arg_components,
         kwargs=kwarg_components,

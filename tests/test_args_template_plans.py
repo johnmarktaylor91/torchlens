@@ -8,7 +8,9 @@ memo is hidden behind a workspace view with an empty dict per read); the templat
 parents, argument positions and parameter edges must be equal op for op. The subjects
 cover a repeated tensor-plus-int chain, linear layers with parameter literals, the
 same callable at two argument layouts, keyword arguments, nested lists, non-contiguous
-parents (the layout record) and an in-place parameter mutation mid-forward.
+parents (the layout record) and an in-place parameter mutation mid-forward. Parent
+argument positions read from the capture-time parent events must match the reads
+through the parent op views.
 """
 
 from __future__ import annotations
@@ -21,7 +23,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.backends.torch import _args_template_cache, _ops_arguments
+from torchlens.backends.torch import (
+    _args_template_cache,
+    _ops_arguments,
+    _ops_predicate_events,
+)
 from torchlens.intervention._types import CapturedArgTemplate, LiteralTensor, ParentRef
 
 
@@ -142,8 +148,8 @@ def _fields(model_cls: type[nn.Module], shape: tuple[int, ...]) -> list[tuple[An
             tuple(op.call.unattributed_tensor_args),
             _norm_template(op.call.args_template),
             _norm_template(op.call.kwargs_template),
-            sorted(op.parent_param_ops.values()),
-            [tuple(param.shape) for param in op.parent_params],
+            sorted(op.graph.parent_param_ops.values()),
+            [tuple(param.shape) for param in op.graph.parent_params],
         )
         for index, op in enumerate(trace.ops)
     ]
@@ -169,7 +175,7 @@ def _assert_same(name: str, left: list[tuple[Any, ...]], right: list[tuple[Any, 
     assert len(left) == len(right), name
     diffs = [
         (a[0], index)
-        for a, b in zip(left, right)
+        for a, b in zip(left, right, strict=True)
         for index in range(1, len(a))
         if a[index] != b[index]
     ]
@@ -229,6 +235,22 @@ def test_validated_parameter_memo_changes_nothing(
         patch.setattr(_ops_arguments, "_peek_raw_graph_workspace", memo_free)
         unremembered = _fields(model_cls, shape)
     _assert_same(name, unremembered, remembered)
+
+
+@pytest.mark.parametrize(("name", "model_cls", "shape"), _SUBJECTS, ids=[s[0] for s in _SUBJECTS])
+def test_parent_event_reads_equal_view_reads(
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    model_cls: type[nn.Module],
+    shape: tuple[int, ...],
+) -> None:
+    """Reading parent events directly gives the same positions and ancestors as the views."""
+
+    direct = _fields(model_cls, shape)
+    with monkeypatch.context() as patch:
+        patch.setattr(_ops_predicate_events, "current_arg_slots", lambda *_args: None)
+        through_views = _fields(model_cls, shape)
+    _assert_same(name, through_views, direct)
 
 
 def _has_layout(component: Any) -> bool:
