@@ -392,7 +392,7 @@ def _build_graph_relationship_fields(
 
 
 def _parent_graph_reads(
-    self: "Trace", parent_entries: list[Op], args: tuple[Any, ...], kwargs: dict[str, Any]
+    self: "Trace", parent_entries: list[Any], args: tuple[Any, ...], kwargs: dict[str, Any]
 ) -> tuple[dict[str, dict[Any, str]], set[str], set[str]]:
     """Return the parents' argument positions, input ancestors and internal-source ancestors.
 
