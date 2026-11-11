@@ -28,7 +28,7 @@ import textwrap
 import pytest
 import torch
 
-from torchlens._utils import _cuda_probe, rng as tl_rng
+from torchlens._utils import _cuda_probe, _torch_seed_backends, rng as tl_rng
 from torchlens._utils.rng import streams as rng_streams
 
 # Markers are additive: a file-level smoke pytestmark would keep the heavy tests
@@ -361,6 +361,10 @@ def test_seeding_degrades_when_accelerator_seed_leg_fails(
         raise IndexError("tuple index out of range")
 
     monkeypatch.setattr(torch.cuda, "manual_seed_all", _explode)
+    # Seeding skips the lazy seed of a backend this torch build does not compile in, so
+    # the simulated broken CUDA leg is a COMPILED CUDA backend on every host.
+    monkeypatch.setitem(_torch_seed_backends.BACKEND_COMPILED, "cuda", True)
+    monkeypatch.setattr(torch.cuda, "_is_in_bad_fork", lambda: False)
 
     with pytest.warns(UserWarning, match="Could not seed torch accelerator RNG"):
         tl_rng.set_random_seed(1234)

@@ -626,6 +626,8 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_TENSOR_SEQUENCE_SLOT_FIX": True,
         # Legacy tensor-constructor capture: CPython type-layout probe.
         "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH": True,
+        # Per-backend capture seeding: torch's seeding code names only known backends.
+        "HAS_PER_BACKEND_SEED": True,
         # r-b7 R42-1/6: the six ambient execution-context HAS_* flags and the
         # HAS_AUTOCAST_DEVICE_TYPE_ARG alias are RETIRED — every control they
         # guarded is a public torch surface older than the 2.1 floor, so the

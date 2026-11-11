@@ -39,7 +39,6 @@ from __future__ import annotations
 
 import contextlib
 import importlib
-import importlib.machinery
 import inspect
 import sys
 import types
@@ -53,6 +52,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning, transparent_contextmanager
 from ._module_call_dispatch import probe_module_call_dispatch_frame
+from ._torch_seed_backends import HAS_PER_BACKEND_SEED  # noqa: F401 - published capability flag
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
@@ -531,7 +531,7 @@ def _probe_script_function_call_hook() -> bool:
 
 def _probe_flash_attention_4_interface() -> bool:
     """Return whether flash-attn-4 ships ``flash_attn.cute.interface`` (located, never imported)."""
-    find = importlib.machinery.PathFinder.find_spec
+    find = PathFinder.find_spec
     with contextlib.suppress(ImportError, ValueError):
         spec = importlib.util.find_spec("flash_attn")
         for name in ("cute", "interface"):
@@ -749,7 +749,6 @@ def _probe_transformer_activation_fastpath_flag() -> bool:
 
 def _probe_attention_causal_bias() -> bool:
     """Return whether ``torch.nn.attention.bias.CausalBias`` is discoverable (see the leaf)."""
-
     return bool(_real_op_probe_leaf().probe_attention_causal_bias())
 
 
@@ -1490,6 +1489,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
     "HAS_NUMPY_BRIDGE",
+    "HAS_PER_BACKEND_SEED",
 )
 
 
