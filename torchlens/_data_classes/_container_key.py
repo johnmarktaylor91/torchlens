@@ -57,7 +57,8 @@ def make_content_key(container_pool_key: Callable[..., Any], tokens: Any = None)
             return walked_key(value, id_counts)
         # The caller already refused an aliased ``value``; the full walk would
         # also refuse it when a nested container is aliased.
-        for oid in entry[2]:
+        for nested in value.values():
+            oid = id(nested)
             if oid in id_counts and id_counts[oid] > 1:
                 return None
         token = entry[1]

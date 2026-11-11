@@ -9,8 +9,9 @@ design's proof needs:
   hit re-walks the cell and raises if the walked key is not the token's key;
   real captures (grad, no-grad, inference mode, CPU autocast) pass it;
 * the check fires on a token whose content changed;
-* the registry belongs to one trace: two traces share no registry and no
-  registered object, and the freeze drops it.
+* the registry belongs to one trace: it moves to that trace's
+  ``TraceCore.pool`` when the capture workspaces drop, two traces share no
+  registry and no registered object, and the freeze drops it.
 """
 
 from __future__ import annotations
@@ -47,7 +48,7 @@ class _Mlp(nn.Module):
 
 
 def _spy_tokens(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Any, ContainerTokens | None]]:
-    """Record each compaction's taken registry and the workspace's state after."""
+    """Record each compaction's trace and the registry it took from the core's pool."""
 
     taken: list[tuple[Any, ContainerTokens | None]] = []
     original: Callable[[Any], ContainerTokens | None] = _compaction._take_container_tokens
@@ -56,7 +57,7 @@ def _spy_tokens(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Any, ContainerTok
         """Call the real take and keep what it returned."""
 
         tokens = original(trace)
-        taken.append((trace._wrapper_runtime_ws, tokens))
+        taken.append((trace, tokens))
         return tokens
 
     monkeypatch.setattr(_compaction, "_take_container_tokens", spy)
@@ -100,9 +101,9 @@ def test_token_debug_check_passes_on_real_captures(
     taken = _spy_tokens(monkeypatch)
     trace = _capture(mode)
     assert taken, "the freeze never took the registry"
-    workspace, tokens = taken[0]
+    traced, tokens = taken[0]
     assert tokens is not None and len(tokens) > 0
-    assert workspace.container_tokens is False
+    assert traced._trace_core.pool.tokens is None
     assert hits, "no autocast cell was keyed by its token"
     states = [op.func_autocast_state for op in trace._layer_list]
     assert all(isinstance(state, dict) for state in states)
@@ -116,10 +117,7 @@ def test_token_debug_check_raises_on_changed_content() -> None:
     first = {"__execution__": {"enabled": False, "dtype": None}}
     second = {"__execution__": {"enabled": True, "dtype": None}}
     token = (True, False)
-    tokens = ContainerTokens(
-        {id(first): (first, token, (id(first["__execution__"]),))}
-        | {id(second): (second, token, (id(second["__execution__"]),))}
-    )
+    tokens = ContainerTokens({id(first): (first, token), id(second): (second, token)})
     id_counts = {id(first): 1, id(second): 1}
     id_counts.update({id(first["__execution__"]): 1, id(second["__execution__"]): 1})
     content_key = _container_key.make_content_key(_container_pool_key, tokens)
@@ -138,7 +136,7 @@ def test_token_key_refuses_a_nested_alias() -> None:
 
     inner = {"enabled": False, "dtype": None}
     outer = {"__execution__": inner}
-    tokens = ContainerTokens({id(outer): (outer, ("t",), (id(inner),))})
+    tokens = ContainerTokens({id(outer): (outer, ("t",))})
     content_key = _container_key.make_content_key(_container_pool_key, tokens)
     assert content_key(outer, {id(outer): 1, id(inner): 2}) is None
     assert content_key(outer, {id(outer): 1, id(inner): 1}) is not None
@@ -158,4 +156,4 @@ def test_two_traces_share_no_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     first_objects = {id(entry[0]) for entry in first.by_id.values()}
     second_objects = {id(entry[0]) for entry in second.by_id.values()}
     assert first_objects.isdisjoint(second_objects)
-    assert all(workspace.container_tokens is False for workspace, _ in taken)
+    assert all(traced._trace_core.pool.tokens is None for traced, _ in taken)

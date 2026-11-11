@@ -13,7 +13,6 @@ from typing import Any, cast
 
 import torch
 
-from ... import _state
 from .._torch_compat import (
     AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED,
     autocast_get_dtype,
@@ -29,11 +28,21 @@ _IS_ENABLED: Any = torch.is_autocast_enabled if AUTOCAST_DEVICE_TYPE_ARG_SUPPORT
 _GET_DTYPE: Any = torch.get_autocast_dtype if AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED else None
 
 
-def log_current_autocast_state() -> dict[str, dict[str, Any]]:
+def log_current_autocast_state(trace: Any = None) -> dict[str, dict[str, Any]]:
     """Capture the current ``torch.amp.autocast`` enabled/dtype state.
 
     Checked for each device in :data:`_AUTOCAST_DEVICES`.  If a device
     doesn't support autocast queries, it is silently skipped.
+
+    Args:
+        trace: The capturing trace, when the caller has it. The snapshot is then
+            registered with a content token in the trace's runtime workspace
+            (``container_tokens``): the token holds every value the snapshot is
+            built from, in build order, so two snapshots are equal exactly when
+            their tokens are, and the freeze's container pooling keys the
+            snapshot by it instead of walking it (``_trace_core.pools.ContainerTokens``).
+            Nothing registers without a trace, on the torch 2.1 to 2.3 path, or
+            once the trace's freeze has taken the table.
 
     Returns:
         Dict mapping device name to ``{"enabled": bool, "dtype": torch.dtype}``.
@@ -65,32 +74,18 @@ def log_current_autocast_state() -> dict[str, dict[str, Any]]:
             continue
         state[device] = {"enabled": enabled, "dtype": dtype}
         token += (device, enabled, dtype)
-    _register_token(state, token)
+    if trace is not None:
+        try:
+            workspace = trace._wrapper_runtime_ws
+        except AttributeError:
+            return state
+        table = workspace.container_tokens
+        if table is None:
+            table = workspace.container_tokens = {}
+        elif table is False:
+            return state
+        table[id(state)] = (state, token)
     return state
-
-
-def _register_token(state: dict[str, dict[str, Any]], token: tuple[Any, ...]) -> None:
-    """Register a fresh snapshot's content token with the capturing trace.
-
-    The token holds every value the snapshot was built from, in build order,
-    so two snapshots are equal exactly when their tokens are; the freeze's
-    container pooling keys the snapshot by it instead of walking it
-    (``_trace_core.pools.ContainerTokens``). With no capturing trace, or after
-    that trace's compaction, nothing is registered.
-    """
-
-    trace = _state._active_trace
-    if trace is None:
-        return
-    workspace = trace._wrapper_runtime_ws
-    table = workspace.container_tokens
-    if table is None:
-        table = workspace.container_tokens = {}
-    elif table is False:
-        return
-    # The device sub-dicts are the containers nested in the snapshot; the
-    # pooling checks their ids against the alias census as a full walk would.
-    table[id(state)] = (state, token, tuple(map(id, state.values())))
 
 
 def _legacy_device_states(state: dict[str, dict[str, Any]]) -> None:

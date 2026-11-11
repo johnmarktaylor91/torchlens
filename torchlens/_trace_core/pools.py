@@ -17,13 +17,17 @@ from typing import Any
 class InternPool:
     """Interning table mapping values to dense int ids and back."""
 
-    __slots__ = ("_by_key", "_values")
+    __slots__ = ("_by_key", "_values", "tokens")
 
     def __init__(self) -> None:
         """Create an empty pool."""
 
         self._by_key: dict[Hashable, int] = {}
         self._values: list[Any] = []
+        #: The trace's write-time container tokens (:class:`ContainerTokens`),
+        #: handed over when the capture workspaces drop and taken by the
+        #: freeze's compaction; ``None`` before and after.
+        self.tokens: ContainerTokens | None = None
 
     def __len__(self) -> int:
         """Return the number of distinct interned values."""
@@ -105,32 +109,29 @@ class ContainerTokens:
     rest reuse it, so every cell ends with the same key, and the same pooled
     cell, as a full walk would give it. The alias census still runs, so a
     registered container that is shared with another cell is still never
-    pooled; ``nested_ids`` carries the ids of the fresh containers nested in
-    it, which the full walk would have checked against the census too.
+    pooled, and the containers nested in a registered one are checked against
+    the census as the full walk checks them.
 
     Registered containers hold only members the immutable pool can never
     replace (``bool``, ``None``, ``torch.dtype`` singletons and nested dicts of
     those), so the member sweep skips them as well.
 
     Lifetime: the writers fill one plain table per trace's runtime workspace
-    (``WrapperRuntimeWorkspace.container_tokens``); that trace's compaction
-    wraps it here, uses it and drops it. It is never shared between traces or
-    held by the process.
+    (``WrapperRuntimeWorkspace.container_tokens``); when the workspaces drop it
+    moves, wrapped here, to that trace's ``TraceCore.pool.tokens``, and the
+    freeze's compaction takes it from there and drops it. It is never shared
+    between traces or held by the process.
     """
 
     __slots__ = ("by_id", "keys")
 
-    def __init__(
-        self, by_id: dict[int, tuple[Any, Hashable, tuple[int, ...]]] | None = None
-    ) -> None:
+    def __init__(self, by_id: dict[int, tuple[Any, Hashable]] | None = None) -> None:
         """Wrap the writers' registration table (a fresh empty one by default)."""
 
-        #: ``id(container) -> (container, token, nested_ids)``, filled by the
+        #: ``id(container) -> (container, token)``, filled by the
         #: writers as a plain dict; holding the container keeps its id from
         #: being reused while it is registered.
-        self.by_id: dict[int, tuple[Any, Hashable, tuple[int, ...]]] = (
-            {} if by_id is None else by_id
-        )
+        self.by_id: dict[int, tuple[Any, Hashable]] = {} if by_id is None else by_id
         #: ``token -> content key`` cache filled at compaction.
         self.keys: dict[Hashable, Any] = {}
 
