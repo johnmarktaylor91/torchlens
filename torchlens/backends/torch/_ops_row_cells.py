@@ -324,13 +324,19 @@ def _fill_output(row: Any, f: Any, fields_dict: Mapping[str, Any]) -> None:
         row[f["grad_fn_class_name"]] = semantics.grad_fn_class_name
 
 
-def _fill_core_graph(row: Any, f: Any, trace: Trace, fields_dict: Mapping[str, Any]) -> None:
-    """Write the core, graph, template and module cells."""
+def _fill_core_graph(
+    row: Any, f: Any, trace: Trace, fields_dict: Mapping[str, Any], require_event: Any = None
+) -> None:
+    """Write the core, graph, template and module cells.
+
+    ``require_event`` resolves a parent label (default: the live index's).
+    """
 
     layer_type = fields_dict["type"]
     parents = list(fields_dict["parents"])
     modules = tuple(fields_dict["modules"])
-    require_event = trace.capture_events.live_index.require_event
+    if require_event is None:
+        require_event = trace.capture_events.live_index.require_event
     row[f["_label_raw"]] = fields_dict["_label_raw"]
     row[f["_layer_label_raw"]] = fields_dict["_layer_label_raw"]
     row[f["step_index"]] = fields_dict["step_index"] or 0
@@ -375,6 +381,7 @@ def _fill_row(
     trace: Trace,
     fields_dict: Mapping[str, Any],
     fire_results: tuple[FireResult, ...],
+    require_event: Any = None,
 ) -> None:
     """Write every per-op cell of one exhaustive draft but its function cells into ``row``.
 
@@ -387,7 +394,7 @@ def _fill_row(
     The same holds for an empty ``edits`` or ``annotations`` cell.
     """
 
-    _fill_core_graph(row, f, trace, fields_dict)
+    _fill_core_graph(row, f, trace, fields_dict, require_event)
     _fill_output(row, f, fields_dict)
     _fill_transform(row, f, trace, fields_dict, _fill_facets(row, f, fields_dict, fire_results))
 
@@ -483,6 +490,7 @@ def write_draft_row(
     fields_dict: Mapping[str, Any],
     fire_results: tuple[FireResult, ...],
     function: FunctionCallRef,
+    require_event: Any = None,
 ) -> int:
     """Append one exhaustive draft's row to ``store`` and return its index.
 
@@ -504,6 +512,8 @@ def write_draft_row(
         Intervention results for this op.
     function
         The op's resolved (shared) function-call ref.
+    require_event
+        Parent-label resolver; ``None`` reads the trace's live index.
 
     Returns
     -------
@@ -518,7 +528,7 @@ def write_draft_row(
     template = plan.template
     row = template.copy()
     fids = plan.fids
-    _fill_row(row, fids, trace, fields_dict, fire_results)
+    _fill_row(row, fids, trace, fields_dict, fire_results, require_event)
     _write_function_ref_cells(row, fids, function)
     fid, marker = plan.var_names
     row[fid] = marker  # the function-ref writer's fresh empty list

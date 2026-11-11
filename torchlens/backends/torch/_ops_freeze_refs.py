@@ -75,12 +75,25 @@ def _tensor_ref_from_fields(tensor: torch.Tensor, fields_dict: dict[str, Any]) -
     # for a user autograd read on a registered buffer/param receiver.
     with internal_scalar_read():
         _requires_grad = bool(tensor.requires_grad)
+    return _tensor_ref_from_facts(fields_dict, _requires_grad, str(tensor.device), str(id(tensor)))
+
+
+def _tensor_ref_from_facts(
+    fields_dict: dict[str, Any], requires_grad: bool, device: str, handle_id: str
+) -> TensorRef:
+    """Build the output tensor ref from the three live-tensor facts read at commit.
+
+    ``_tensor_ref_from_fields`` reads ``requires_grad``, the device and the
+    tensor's ``id`` and calls this; the deferred row commit reads the same three
+    at commit and calls it later, so both build the same ref.
+    """
+
     return TensorRef(
         label_raw=fields_dict["_label_raw"],
         shape=fields_dict["shape"],
         dtype=str(fields_dict["dtype"]),
-        device=str(tensor.device),
-        requires_grad=_requires_grad,
+        device=device,
+        requires_grad=requires_grad,
         memory=fields_dict["activation_memory"],
         payload=fields_dict["out"],
         blob_ref=(
@@ -88,7 +101,7 @@ def _tensor_ref_from_fields(tensor: torch.Tensor, fields_dict: dict[str, Any]) -
             if fields_dict.get("_pending_blob_id") is not None
             else None
         ),
-        backend_handle_id=str(id(tensor)),
+        backend_handle_id=handle_id,
     )
 
 
@@ -242,6 +255,18 @@ def _exhaustive_freeze_refs(
     """
 
     tensor_ref = _tensor_ref_from_fields(tensor, fields_dict)
+    return (tensor_ref, *_exhaustive_side_refs(fields_dict, module_stack))
+
+
+def _exhaustive_side_refs(
+    fields_dict: dict[str, Any], module_stack: tuple[ModuleFrame, ...] | None
+) -> tuple[tuple[ModuleFrame, ...], Any, BackendSemantics]:
+    """Return the module frames, transformed-output ref and backend semantics.
+
+    The refs of ``_exhaustive_freeze_refs`` that read no live tensor, so the
+    deferred row commit builds them from its field snapshot with the same code.
+    """
+
     if module_stack is None:
         module_stack = _module_frames_from_fields(fields_dict)
     transformed_ref = (
@@ -279,7 +304,7 @@ def _exhaustive_freeze_refs(
             bytes_delta_at_call=fields_dict["bytes_delta_at_call"],
             bytes_peak_at_call=fields_dict["bytes_peak_at_call"],
         )
-    return tensor_ref, module_stack, transformed_ref, backend_semantics
+    return module_stack, transformed_ref, backend_semantics
 
 
 def _exhaustive_output_ref(

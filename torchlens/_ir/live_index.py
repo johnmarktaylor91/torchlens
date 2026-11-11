@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import warnings
 from bisect import bisect_left
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..errors._base import TorchLensWarning
 from .events import ModuleFrame, _bounded_record_repr
 
 
@@ -74,6 +76,25 @@ class LiveIndex:
         self.labels.append(label)
         for edge in event.parents:
             children = self.children_by_parent[edge.parent_label_raw]
+            if label not in children:
+                children.append(label)
+
+    def append_labels(self, event: Any, label: str, parents: list[str]) -> None:
+        """Index one event whose raw label and parent labels the caller holds.
+
+        Equal to :meth:`append` for an event whose ``label_raw`` is ``label``
+        and whose parent edges name ``parents`` in order, without reading them
+        off the event (a deferred row handle answers both from its snapshot).
+        """
+
+        if label in self.by_raw_label:
+            self.append(event)
+            return
+        self.by_raw_label[label] = event
+        self.labels.append(label)
+        children_by_parent = self.children_by_parent
+        for parent in parents:
+            children = children_by_parent[parent]
             if label not in children:
                 children.append(label)
 
@@ -360,3 +381,26 @@ class LiveIndex:
         self.children_by_parent.clear()
         self.module_entry_counts.clear()
         self.module_entries_by_label.clear()
+
+
+def disclose_op_count(threshold: int) -> None:
+    """Warn once that a capture journal reached ``threshold`` op records.
+
+    Capture-side op-count disclosure: the save budget bounds retained
+    activation BYTES only, so a million-op forward with nothing saved grew op
+    records unbounded with no torchlens-side signal until the OOM killer fired.
+    This is a disclosure, not a ceiling (huge captures stay legal), fired
+    exactly once per journal at the threshold crossing (one int compare per op
+    on the hot path). ``stacklevel`` names the journal append's caller.
+    """
+
+    warnings.warn(
+        f"TorchLens has recorded {threshold} ops in "
+        "this forward and capture is still running. Op records grow "
+        "memory per op regardless of save=; a very deep or long-loop "
+        "forward can exhaust host RAM. Consider tracing a smaller "
+        "submodule, reducing loop iterations, or using "
+        "tl.record(model, x, save=...) for sparse recording.",
+        TorchLensWarning,
+        stacklevel=3,
+    )

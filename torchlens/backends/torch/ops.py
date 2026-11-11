@@ -517,23 +517,17 @@ class ExhaustiveOpDraft:
     def freeze(self) -> Any:
         """Commit the final draft ONCE as a row-backed journal handle (capture C2b).
 
-        The op store layout and the edge-use records come from modules inside the
+        The op store layout and the edge-use builder come from modules inside the
         package's largest import cycle, so they are read here and passed to the
         commit, whose module imports no cycle module.
         """
 
-        fields_dict = self.fields_dict
-        edge_uses = tuple(
-            fields_dict["_edge_uses"]
-            or _build_edge_use_records(
-                self.trace,
-                fields_dict["parent_arg_positions"],
-                fields_dict["_label_raw"],
-                fields_dict["func_call_id"],
-                func_name=fields_dict.get("func_name"),
-            )
+        edge_uses = self.fields_dict["_edge_uses"]
+        return _ops_row_journal.commit_row_record(
+            self,
+            _OP_STORE_LAYOUT,
+            tuple(edge_uses) if edge_uses else _build_edge_use_records,
         )
-        return _ops_row_journal.commit_row_record(self, _OP_STORE_LAYOUT, edge_uses)
 
 
 # Canonical set lives in ``torchlens._utils._callable_safety`` so this capture-side

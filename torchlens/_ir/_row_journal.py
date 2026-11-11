@@ -16,6 +16,10 @@ straight from the row and the residual. The full record is built on demand,
 once, by :func:`_record_from_row`, the single inverse of the commit; after that
 the handle delegates to the cached record and drops its row and residual.
 
+A handle may start deferred (``_pending``): the commit keeps a field snapshot and
+the few live facts, answers the hot reads from it, and writes the row and the
+residual from that snapshot on the first other read (``_pending.settle``).
+
 Amendments never write into the row: folding a patch onto a handle returns a
 new handle over the same row whose overlay holds the patched facet paths, so
 the raw journal lane stays append-only and the fold is applied exactly once,
@@ -155,6 +159,7 @@ class _RowJournal:
         handle._patch = {}
         handle._record = None
         handle._parents = None
+        handle._pending = None
         handle.seq = 0
         return handle
 
@@ -167,7 +172,7 @@ class _RowOpRecord:
     delegates to it from then on.
     """
 
-    __slots__ = ("_journal", "_row", "_rest", "_patch", "_record", "_parents", "seq")
+    __slots__ = ("_journal", "_row", "_rest", "_patch", "_record", "_parents", "_pending", "seq")
 
     def __init__(
         self, journal: _RowJournal, row: list[Any], rest: _RowResidual, patch: dict[str, Any]
@@ -180,6 +185,7 @@ class _RowOpRecord:
         self._patch = patch
         self._record: OpRecord | None = None
         self._parents: tuple[ParentEdge, ...] | None = None
+        self._pending: Any = None
         self.seq = 0
 
     def __repr__(self) -> str:
@@ -197,6 +203,8 @@ class _RowOpRecord:
 
         record = self._record
         if record is None:
+            if self._pending is not None:
+                self._pending.settle(self)
             record = _record_from_row(self)
             self._record = record
             self._row = None
@@ -215,6 +223,8 @@ class _RowOpRecord:
         any other overlay, which ingest reads through the record path instead.
         """
 
+        if self._pending is not None:
+            self._pending.settle(self)
         row = self._row
         if row is None or not _ROW_TAKE_PATHS.issuperset(self._patch):
             return None
@@ -230,6 +240,8 @@ class _RowOpRecord:
         overlay. Runs before ingest rewrites the row's overlay cells.
         """
 
+        if self._pending is not None:
+            self._pending.settle(self)
         record = cast(OpRecord, taken._record)
         if self._patch != taken._patch:
             record = _without_overlay(self, record, taken._patch)
@@ -245,6 +257,8 @@ class _RowOpRecord:
 
         if self._record is not None:
             return record_with_path_updates(self._record, items)
+        if self._pending is not None:
+            self._pending.settle(self)
         patch = dict(self._patch)
         patch.update(items)
         folded = _RowOpRecord(self._journal, self._row, self._rest, patch)  # type: ignore[arg-type]
@@ -260,6 +274,8 @@ class _RowOpRecord:
         record = self._record
         if record is not None:
             return getattr(record, name)
+        if self._pending is not None:
+            self._pending.settle(self)
         getter = _FAST_READS.get(name)
         if getter is None or not _overlay_known(self._patch):
             if name not in _RECORD_NAMES:
@@ -538,6 +554,9 @@ def _derived_fast_property(name: str, read: Any) -> property | None:
             record = handle._record
             if record is not None:
                 return getattr(record, name)
+            pending = handle._pending
+            if pending is not None:
+                return pending[name] if name in pending else pending.read(handle, name)
             if handle._patch:
                 return _patched_read(handle, name)
             return frozenset(handle._row[handle._journal.fids[frozen_cell]])  # type: ignore[index]
@@ -581,6 +600,9 @@ def _fast_property(name: str, read: Any) -> property:
             record = handle._record
             if record is not None:
                 return getattr(record, name)
+            pending = handle._pending
+            if pending is not None:
+                return pending[name] if name in pending else pending.read(handle, name)
             if handle._patch:
                 return _patched_read(handle, name)
             return handle._row[handle._journal.fids[cell_name]]  # type: ignore[index]
@@ -594,6 +616,9 @@ def _fast_property(name: str, read: Any) -> property:
             record = handle._record
             if record is not None:
                 return getattr(record, name)
+            pending = handle._pending
+            if pending is not None:
+                return pending[name] if name in pending else pending.read(handle, name)
             if handle._patch:
                 return _patched_read(handle, name)
             return getattr(handle._rest, rest_slot)
@@ -606,6 +631,9 @@ def _fast_property(name: str, read: Any) -> property:
         record = handle._record
         if record is not None:
             return getattr(record, name)
+        pending = handle._pending
+        if pending is not None:
+            return pending[name] if name in pending else pending.read(handle, name)
         if handle._patch:
             return _patched_read(handle, name)
         return read(handle)

@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import itertools
-import warnings
 from collections import deque
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any
 
-from ..errors._base import TorchLensWarning
 from .events import (
     BackwardCoverageGap,
     BackwardPassEnd,
@@ -33,7 +31,7 @@ from .events import (
     _bounded_record_str,
     _ModePausedInteriorEvent,
 )
-from .live_index import LiveIndex
+from .live_index import LiveIndex, disclose_op_count
 from .op_record import (
     OpAmendment,
     OpRecord,
@@ -836,24 +834,20 @@ class CaptureEvents:
             object.__setattr__(event, "seq", seq)
         self.op_events.append(event)
         if len(self.op_events) == OP_COUNT_DISCLOSURE_THRESHOLD:
-            # Capture-side op-count disclosure: the save budget
-            # bounds retained activation BYTES only, so a million-op forward
-            # with nothing saved grew op records unbounded with no
-            # torchlens-side signal until the OOM killer fired. This is a
-            # disclosure, not a ceiling -- huge captures stay legal -- fired
-            # exactly once per journal at the threshold crossing (one int
-            # compare per op on the hot path).
-            warnings.warn(
-                f"TorchLens has recorded {OP_COUNT_DISCLOSURE_THRESHOLD} ops in "
-                "this forward and capture is still running. Op records grow "
-                "memory per op regardless of save=; a very deep or long-loop "
-                "forward can exhaust host RAM. Consider tracing a smaller "
-                "submodule, reducing loop iterations, or using "
-                "tl.record(model, x, save=...) for sparse recording.",
-                TorchLensWarning,
-                stacklevel=2,
-            )
+            disclose_op_count(OP_COUNT_DISCLOSURE_THRESHOLD)
         self.live_index.append(event)
+
+    def append_thin(self, event: Any, label: str, parents: list[str]) -> None:
+        """``append`` for a deferred row handle, given its raw label and parent labels."""
+        if self.amendments_sealed:
+            self._refuse_sealed_append("op_events")
+        self.event_seq += 1
+        event.seq = self.event_seq
+        lane = self.op_events
+        lane.append(event)
+        if len(lane) == OP_COUNT_DISCLOSURE_THRESHOLD:
+            disclose_op_count(OP_COUNT_DISCLOSURE_THRESHOLD)
+        self.live_index.append_labels(event, label, parents)
 
     def append_module_prep(self, event: ModulePrepEvent) -> None:
         """Append a module-prep sibling event, stamping the global seq."""

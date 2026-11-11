@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
 
+from .._ir._row_journal import _RowOpRecord
 from .._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
@@ -815,18 +816,16 @@ class SparseOpDraft:
 
 
 def commit_op(trace: Any, draft: OpDraft) -> LiveOpView | None:
-    """The ONE commit tail: freeze -> atomic append (+ exhaustive stages).
-
-    Freeze constructs the journal record ONCE from the final draft (the
-    decomposed producer is the only producer since P7); append is the single
-    sequencing authority. The
-    two post-tail stages (grad-handle side index, ``LiveOpView``) exist only
-    on the exhaustive pipeline per ``COMMIT_STAGE_MATRIX`` — the sparse
-    pipeline returns ``None`` and pays neither.
-    """
+    """The ONE commit tail: freeze, then the one sequencing append, then (exhaustive
+    only, per ``COMMIT_STAGE_MATRIX``) the grad-handle side index and ``LiveOpView``.
+    A deferred row handle is appended with its raw label and parent labels."""
 
     record = draft.freeze()
-    trace.capture_events.append(record)
+    pending = record._pending if record.__class__ is _RowOpRecord else None
+    if pending is None:
+        trace.capture_events.append(record)
+    else:
+        trace.capture_events.append_thin(record, *pending.labels)
     if draft.pipeline != "exhaustive":
         return None
     grad_fn_handle = draft.grad_fn_handle  # type: ignore[attr-defined]

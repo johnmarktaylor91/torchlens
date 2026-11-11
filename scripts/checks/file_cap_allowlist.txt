@@ -40,7 +40,7 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	171
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	119
 torchlens/_capture/prepare/door.py	1119
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	117
-torchlens/_capture/projections.py	1468
+torchlens/_capture/projections.py	1467
 torchlens/_capture/projections.py::_build_record_context	80
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	66
 torchlens/_capture/projections.py::_record_from_record_context	93
@@ -269,7 +269,7 @@ torchlens/_io/streaming.py::BundleStreamWriter.publish_staged	71
 torchlens/_io/streaming.py::BundleStreamWriter.stage_for_settlement	82
 torchlens/_io/streaming.py::BundleStreamWriter.submit_blob	78
 torchlens/_io/tlspec.py::_TlSpecWriter.write_bundle	116
-torchlens/_ir/capture_events.py	1224
+torchlens/_ir/capture_events.py	1218
 torchlens/_ir/capture_events.py::CaptureEvents._copy_for_replay	119
 torchlens/_ir/capture_events.py::CaptureEvents.append_amendment	69
 torchlens/_ir/capture_events.py::CaptureEvents.concat	187
