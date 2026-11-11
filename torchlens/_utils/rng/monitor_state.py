@@ -101,46 +101,39 @@ def _suppress_active_monitor_marks() -> Iterator[None]:
         yield
 
 
-def _skip_retired_hooks(candidate: Any, predecessor_attr: str) -> Any:
-    """Return the first chain link that is not a torn-down monitor's hook.
+def _skip_retired_hooks(candidate: Any) -> Any:
+    """Return the first chain link that is not a torn-down (or freed) monitor's hook.
 
     A non-LIFO overlap used to restore an already-retired window's hook into a
     profile slot; the sys slot self-heals on its next event, but the
     ``threading`` registration only seeds NEW threads, so a dead hook parked
     there never fires again on the main thread and taxes (and misclassifies
-    into) every later capture. Walking each candidate's owning monitor lets the
-    restore skip straight to the newest LIVE link.
+    into) every later capture. Each hook names its owning monitor weakly and its
+    own predecessor, so the restore skips straight to the newest LIVE link.
     """
 
     seen: set[int] = set()
     while candidate is not None and id(candidate) not in seen:
         seen.add(id(candidate))
-        owner = getattr(candidate, "_tl_owner", None)
-        if owner is None or not getattr(owner, "_hooks_retired", False):
+        owner_ref = getattr(candidate, "_tl_owner_ref", None)
+        if owner_ref is None:
+            break  # not a monitor hook
+        owner = owner_ref()
+        if owner is not None and not getattr(owner, "_hooks_retired", False):
             break
-        # Key the predecessor off WHICH of the owner's two hooks this link IS,
-        # not off the slot being restored: a thread spawned during a previous
-        # window carries that window's THREADING hook even when the slot under
-        # restore is the sys slot, and following the slot's attr handed it the
-        # dead owner's sys predecessor instead of the threading chain
-        if candidate is getattr(owner, "_threading_hook", None):
-            candidate = getattr(owner, "_previous_threading_profile", None)
-        elif candidate is getattr(owner, "_sys_hook", None):
-            candidate = getattr(owner, "_previous_sys_profile", None)
-        else:
-            candidate = getattr(owner, predecessor_attr, None)
+        candidate = getattr(candidate, "_tl_predecessor", None)
     return candidate
 
 
 def _retired_hook_event(
-    monitor: host_nondeterminism_monitor,
-    threading_slot: bool,
+    own: Any,
+    setter: Any,
     predecessor: Any,
     frame: Any,
     event: str,
     arg: Any,
 ) -> None:
-    """Handle one profile event reaching a hook whose window is already over.
+    """Handle one profile event reaching a hook whose window is over (or whose monitor is freed).
 
     ``threading.setprofile`` only seeds NEW threads, so a worker started in-window keeps
     the hook as its thread-local profile function forever: a permanent per-call tax, and
@@ -148,17 +141,15 @@ def _retired_hook_event(
     discarded result. A non-LIFO overlap can likewise hand the hook back to the process.
     Self-uninstall on the first event after teardown, but ONLY when this hook is the one
     currently installed on this thread: while it is merely a LINK in a live successor's
-    chain, uninstalling would tear down that successor's window too. The hook is named
-    through the monitor's weak handle, never through its own closure, so a finished
-    window carries no self-cycle.
+    chain, uninstalling would tear down that successor's window too. ``own`` is a weak
+    handle to the hook and ``setter`` the held pre-patch ``sys.setprofile`` (a LIVE later
+    window may have its swap-detection wrapper on the module attr), so neither the hook
+    nor its monitor is kept alive by this path.
     """
 
     try:
-        own_hook = monitor._threading_hook if threading_slot else monitor._sys_hook
+        own_hook = own()
         if own_hook is not None and _sys_module.getprofile() is own_hook:
-            # Held original: a LIVE later window may have its swap-detection wrapper
-            # on the module attr, and this dead-window self-uninstall must not flag it.
-            setter = monitor._orig_sys_setprofile or _sys_module.setprofile
             setter(predecessor)
     except Exception:
         pass
@@ -168,3 +159,18 @@ def _retired_hook_event(
         except Exception:
             pass
     return None
+
+
+def _install_spawned_thread_hook(owner: Any) -> None:
+    """Install the window's threading hook on a raw ``_thread`` spawn, if the window is open.
+
+    ``owner`` is a weak handle, so a raw thread running past the window keeps neither the
+    monitor nor a strong local naming it (the target runs after this frame returns). The
+    held pre-patch ``sys.setprofile`` is used: the module attr may hold a (this or a later)
+    window's swap-detection wrapper.
+    """
+
+    monitor = owner()
+    hook = None if monitor is None else monitor._threading_hook
+    if monitor is not None and hook is not None and not monitor._torn_down:
+        (monitor._orig_sys_setprofile or _sys_module.setprofile)(hook)

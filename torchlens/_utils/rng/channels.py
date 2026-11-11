@@ -337,13 +337,19 @@ class _OwnerSyncSession:
     call-event layer consults to leave attribution to the wrapper.
     """
 
-    __slots__ = ("monitor", "stamps", "lock", "_depth")
+    __slots__ = ("_monitor_ref", "stamps", "lock", "_depth")
 
     def __init__(self, monitor: host_nondeterminism_monitor) -> None:
-        self.monitor = monitor
+        self._monitor_ref = weakref.ref(monitor)
         self.stamps: weakref.WeakKeyDictionary[Any, set[int]] = weakref.WeakKeyDictionary()
         self.lock = _threading_module.Lock()
         self._depth = _threading_module.local()
+
+    @property
+    def monitor(self) -> host_nondeterminism_monitor | None:
+        """The window's monitor, held WEAKLY: a thread blocked in a wait wrapper keeps no window."""
+
+        return self._monitor_ref()
 
     @property
     def depth(self) -> int:
@@ -434,34 +440,47 @@ def _wait_wrapper(
 ) -> Any:
     """Build the counterpart-resolving wrapper for one wait primitive."""
 
-    monitor = session.monitor
-
     def wrapper(self_primitive: Any, *args: Any, **kwargs: Any) -> Any:
-        """Run the wait; inside the capture's thread universe, classify its counterpart."""
+        """Run the wait; inside the capture's thread universe, classify its counterpart.
 
-        if not _in_thread_universe(monitor) or monitor._suppress_self_marks:
+        No strong monitor reference lives in this frame across the (possibly unbounded) wait:
+        the monitor is resolved weakly before and after it.
+        """
+
+        if not _session_classifies_this_thread(session):
             return original(self_primitive, *args, **kwargs)
         session.depth += 1
         try:
             return original(self_primitive, *args, **kwargs)
         finally:
             session.depth -= 1
-            try:
-                classify_owner_wait(
-                    session,
-                    OwnerWait(
-                        display,
-                        self_primitive,
-                        condition_path,
-                        _sys_module._getframe(1),
-                        args,
-                        kwargs,
-                    ),
-                )
-            except Exception:  # noqa: BLE001 - a classifier fault degrades to uncertainty, never breaks the wait
-                monitor._flag_uncertain("owner_sync_classifier_error")
+            _classify_finished_wait(
+                session,
+                OwnerWait(
+                    display, self_primitive, condition_path, _sys_module._getframe(1), args, kwargs
+                ),
+            )
 
     return wrapper
+
+
+def _session_classifies_this_thread(session: _OwnerSyncSession) -> bool:
+    """Whether the session's monitor is alive and this thread's waits are classified."""
+
+    monitor = session.monitor
+    return monitor is not None and _in_thread_universe(monitor) and not monitor._suppress_self_marks
+
+
+def _classify_finished_wait(session: _OwnerSyncSession, wait: OwnerWait) -> None:
+    """Classify one finished wait unless the monitor was freed while it blocked."""
+
+    monitor = session.monitor
+    if monitor is None:
+        return
+    try:
+        classify_owner_wait(session, wait)
+    except Exception:  # noqa: BLE001 - a classifier fault degrades to uncertainty, never breaks the wait
+        monitor._flag_uncertain("owner_sync_classifier_error")
 
 
 def _wait_initiator(frame: Any) -> tuple[Any, bool]:
@@ -558,6 +577,8 @@ def classify_owner_wait(session: _OwnerSyncSession, wait: OwnerWait) -> None:
     """
 
     monitor = session.monitor
+    if monitor is None:
+        return
     display = wait.display
     initiator, producer_wait = _wait_initiator(wait.caller_frame)
     if producer_wait or _torchlens_initiated(monitor, initiator):
