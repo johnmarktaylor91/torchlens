@@ -17,13 +17,17 @@ from typing import Any
 class InternPool:
     """Interning table mapping values to dense int ids and back."""
 
-    __slots__ = ("_by_key", "_values")
+    __slots__ = ("_by_key", "_values", "tokens")
 
     def __init__(self) -> None:
         """Create an empty pool."""
 
         self._by_key: dict[Hashable, int] = {}
         self._values: list[Any] = []
+        #: The trace's write-time container tokens (:class:`ContainerTokens`),
+        #: handed over when the capture workspaces drop and taken by the
+        #: freeze's compaction; ``None`` before and after.
+        self.tokens: ContainerTokens | None = None
 
     def __len__(self) -> int:
         """Return the number of distinct interned values."""
@@ -90,3 +94,48 @@ class ClosurePool:
         """Return a FRESH mutable set for one closure id."""
 
         return set(self._closures[closure_id])
+
+
+class ContainerTokens:
+    """Write-time content tokens of fresh container cells, owned by one trace.
+
+    A writer that builds a fresh exact ``dict`` from a few scalar reads it
+    already makes registers it here with a token: an immutable value equal
+    for two containers exactly when their contents are equal, and fixed from
+    the write to the freeze (nothing mutates a registered container). The
+    freeze's container pooling then keys a registered cell by its token
+    instead of walking its content (:mod:`torchlens._data_classes._container_key`):
+    the first cell of each token computes the real content key once and the
+    rest reuse it, so every cell ends with the same key, and the same pooled
+    cell, as a full walk would give it. The alias census still runs, so a
+    registered container that is shared with another cell is still never
+    pooled, and the containers nested in a registered one are checked against
+    the census as the full walk checks them.
+
+    Registered containers hold only members the immutable pool can never
+    replace (``bool``, ``None``, ``torch.dtype`` singletons and nested dicts of
+    those), so the member sweep skips them as well.
+
+    Lifetime: the writers fill one plain table per trace's runtime workspace
+    (``WrapperRuntimeWorkspace.container_tokens``); when the workspaces drop it
+    moves, wrapped here, to that trace's ``TraceCore.pool.tokens``, and the
+    freeze's compaction takes it from there and drops it. It is never shared
+    between traces or held by the process.
+    """
+
+    __slots__ = ("by_id", "keys")
+
+    def __init__(self, by_id: dict[int, tuple[Any, Hashable]] | None = None) -> None:
+        """Wrap the writers' registration table (a fresh empty one by default)."""
+
+        #: ``id(container) -> (container, token)``, filled by the
+        #: writers as a plain dict; holding the container keeps its id from
+        #: being reused while it is registered.
+        self.by_id: dict[int, tuple[Any, Hashable]] = {} if by_id is None else by_id
+        #: ``token -> content key`` cache filled at compaction.
+        self.keys: dict[Hashable, Any] = {}
+
+    def __len__(self) -> int:
+        """Return the number of registered containers."""
+
+        return len(self.by_id)

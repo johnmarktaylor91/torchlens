@@ -28,11 +28,21 @@ _IS_ENABLED: Any = torch.is_autocast_enabled if AUTOCAST_DEVICE_TYPE_ARG_SUPPORT
 _GET_DTYPE: Any = torch.get_autocast_dtype if AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED else None
 
 
-def log_current_autocast_state() -> dict[str, dict[str, Any]]:
+def log_current_autocast_state(trace: Any = None) -> dict[str, dict[str, Any]]:
     """Capture the current ``torch.amp.autocast`` enabled/dtype state.
 
     Checked for each device in :data:`_AUTOCAST_DEVICES`.  If a device
     doesn't support autocast queries, it is silently skipped.
+
+    Args:
+        trace: The capturing trace, when the caller has it. The snapshot is then
+            registered with a content token in the trace's runtime workspace
+            (``container_tokens``): the token holds every value the snapshot is
+            built from, in build order, so two snapshots are equal exactly when
+            their tokens are, and the freeze's container pooling keys the
+            snapshot by it instead of walking it (``_trace_core.pools.ContainerTokens``).
+            Nothing registers without a trace, on the torch 2.1 to 2.3 path, or
+            once the trace's freeze has taken the table.
 
     Returns:
         Dict mapping device name to ``{"enabled": bool, "dtype": torch.dtype}``.
@@ -52,13 +62,29 @@ def log_current_autocast_state() -> dict[str, dict[str, Any]]:
         _legacy_device_states(state)
         return state
     get_dtype = _GET_DTYPE
+    execution = state["__execution__"]
+    token: tuple[Any, ...] = (execution["grad_enabled"], execution["inference_mode"])
     for device in _AUTOCAST_DEVICES:
         try:
             # torch>=2.4: the same two calls the version-neutral shim makes.
-            state[device] = {"enabled": bool(is_enabled(device)), "dtype": get_dtype(device)}
+            enabled = bool(is_enabled(device))
+            dtype = get_dtype(device)
         except (RuntimeError, TypeError):
             # Device doesn't support autocast queries (e.g. no CUDA).
-            pass
+            continue
+        state[device] = {"enabled": enabled, "dtype": dtype}
+        token += (device, enabled, dtype)
+    if trace is not None:
+        try:
+            workspace = trace._wrapper_runtime_ws
+        except AttributeError:
+            return state
+        table = workspace.container_tokens
+        if table is None:
+            table = workspace.container_tokens = {}
+        elif table is False:
+            return state
+        table[id(state)] = (state, token)
     return state
 
 

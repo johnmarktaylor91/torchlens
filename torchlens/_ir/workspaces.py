@@ -215,3 +215,9 @@ class WrapperRuntimeWorkspace:
     #: the tensors ``admit_call`` collected; the scan clears it on reading, and it
     #: is ``None`` outside that emit.
     fast_scan: Any = None
+    #: Write-time content tokens of this forward's fresh container snapshots,
+    #: ``id(container) -> (container, token)`` (the table that
+    #: ``_trace_core.pools.ContainerTokens`` wraps): created by the first snapshot
+    #: that registers one, handed to the trace core's pool when the workspaces
+    #: drop (``False`` is left so nothing registers after).
+    container_tokens: Any = None

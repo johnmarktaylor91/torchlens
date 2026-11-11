@@ -99,6 +99,7 @@ from ..intervention.errors import DirectActivationWriteWarning
 from . import _doors, _familiar_names, _labels, _op_cost, _op_relations, _op_save, _removed_members
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
+from ._container_key import make_content_key
 from ._layer_accessors import OpAccessor
 from ._op_aten import OpAtenMixin
 from ._op_container_census import (  # noqa: F401  (re-exported for the pooling tests)
@@ -612,7 +613,7 @@ def _container_member_key(
 
 
 def _pool_container_cells(
-    stores: list[tuple[Any, Any]], container_pool: dict[Any, PooledCell]
+    stores: list[tuple[Any, Any]], container_pool: dict[Any, PooledCell], content_key: Any = None
 ) -> None:
     """Pool duplicate/empty immutable-content container cells across stores.
 
@@ -625,13 +626,14 @@ def _pool_container_cells(
         the store) -- pooling always precedes the physical freeze.
     container_pool:
         Pass-local ``content key -> PooledCell`` table shared across stores,
-        so equal content pools trace-wide.
+        so equal content pools trace-wide; ``content_key`` keys a cell (``_container_key``).
     """
 
     census = _census_container_cells(stores)
     if census is None:
         return
     id_counts, cell_sites, singleton_sites = census
+    content_key = content_key or make_content_key(_container_pool_key)
     # A cell whose own id is aliased is skipped before its key is built: that
     # id is the first one the key walk visits, so the alias guard would refuse
     # it anyway. Empty exact dict/list/set cells arrive with their key.
@@ -641,11 +643,8 @@ def _pool_container_cells(
         if id_counts[id(value)] > 1:
             continue
         if key is None:
-            visited_ids: list[int] = []
-            key = _container_pool_key(value, 0, visited_ids)
+            key = content_key(value, id_counts)
             if key is None:
-                continue
-            if any(id_counts[oid] > 1 for oid in visited_ids):
                 continue
         candidates.append((row_cells, fid, value, key))
         key_counts[key] = key_counts.get(key, 0) + 1

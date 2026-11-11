@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any
 from .._quantities import Duration
 from .._trace_core.cell_states import LazyCell, settle_default_cells
 from .._trace_core.op_store import _MISSING, PooledCell
+from .._trace_core.pools import ContainerTokens
+from ._container_key import is_registered, make_content_key
 from ._op_container_census import _EMPTY_CONTAINER_POOL_KEYS
 
 if TYPE_CHECKING:
@@ -51,13 +53,14 @@ def compact_op_metadata(trace: Trace) -> None:
     if ops and trace not in _COMPACTED_TRACES:
         _COMPACTED_TRACES.add(trace)
         pool: dict[Any, Any] = {}
+        tokens = _take_container_tokens(trace)
         if store is not None:
             # Core-backed ops pool in ONE column-major sweep over the row
             # cells (same ladder, same skips as the per-op walk) without
             # paying the attribute protocol per field.
-            _compact_store_rows(store, pool)
+            _compact_store_rows(store, pool, tokens)
         if core is not None:
-            share = _pool_core_containers(core, store)
+            share = _pool_core_containers(core, store, tokens)
         seen_ops: set[int] = set()
         for op in ops:
             if store is not None and getattr(op, "_core", None) is store:
@@ -72,7 +75,38 @@ def compact_op_metadata(trace: Trace) -> None:
         settle_default_cells(rows, share)
 
 
-def _pool_core_containers(core: Any, store: Any) -> Callable[[int, Any], Any]:
+def _take_container_tokens(trace: Any) -> ContainerTokens | None:
+    """Take the trace core's write-time container tokens (``None`` once taken).
+
+    The workspace drop handed them to ``core.pool.tokens``
+    (:func:`hand_off_container_tokens`); this freeze is their last reader.
+    """
+
+    pool = getattr(trace.__dict__.get("_trace_core"), "pool", None)
+    if pool is None:
+        return None
+    tokens, pool.tokens = pool.tokens, None
+    return tokens
+
+
+def hand_off_container_tokens(trace: Any, workspace: Any) -> None:
+    """Move the runtime workspace's token table to the trace core's pool.
+
+    Called where the capture workspaces drop. ``False`` is left on the
+    workspace so a snapshot logged after this registers nothing.
+    """
+
+    table = getattr(workspace, "container_tokens", None)
+    if workspace is not None:
+        workspace.container_tokens = False
+    core = trace.__dict__.get("_trace_core")
+    if table and core is not None:
+        core.pool.tokens = ContainerTokens(table)
+
+
+def _pool_core_containers(
+    core: Any, store: Any, tokens: ContainerTokens | None = None
+) -> Callable[[int, Any], Any]:
     """Pool whole container cells of a core's stores; return the default-cell hook.
 
     Whole-cell container pooling (the memory slice): duplicate and empty
@@ -102,7 +136,8 @@ def _pool_core_containers(core: Any, store: Any) -> Callable[[int, Any], Any]:
     for kind_store in core.kind_rows.values():
         container_stores.append((kind_store, None))
     if container_stores:
-        _pool_container_cells(container_stores, container_pool)
+        content_key = make_content_key(_container_pool_key, tokens)
+        _pool_container_cells(container_stores, container_pool, content_key)
     sanctioned = frozenset(pooled_fids)
 
     def share(fid: int, value: Any) -> Any:
@@ -123,7 +158,9 @@ def _pool_core_containers(core: Any, store: Any) -> Callable[[int, Any], Any]:
     return share
 
 
-def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
+def _compact_store_rows(
+    store: Any, pool: dict[Any, Any], tokens: ContainerTokens | None = None
+) -> None:
     """Pool repeated immutable metadata across a whole building-phase store.
 
     Column-major equivalent of ``Op._compact_metadata`` (same class ladder,
@@ -139,6 +176,9 @@ def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
     pool:
         Pass-local ``pool key -> canonical instance`` table shared with any
         remaining per-op walks of the same trace.
+    tokens:
+        The trace's write-time container tokens. A registered dict is skipped:
+        its members are values the pool can never replace (``ContainerTokens``).
     """
 
     # Imported lazily, as in ``compact_op_metadata``, so loading this module never loads ``op``.
@@ -169,6 +209,8 @@ def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
                 elif pooled is not value:
                     row_cells[fid] = pooled
             elif cls is list or cls is set or cls is dict:
+                if cls is dict and tokens is not None and is_registered(tokens, value):
+                    continue
                 _pool_container_members(value, pool, 0)
             elif cls is tuple or cls is frozenset:
                 pooled = _pool_value(value, pool)
