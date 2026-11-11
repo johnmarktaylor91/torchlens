@@ -1,4 +1,4 @@
-"""Second set of wrapper fast-lane admission rules, and the torchvision flag.
+"""Second set of wrapper fast-lane admission rules, the nested-call exit and the torchvision flag.
 
 Each admission test names one rule of ``backends/torch/_call_plan.py``: the call
 it describes either takes the fast commit or must run the wrapper's general
@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch import _call_plan
+from torchlens.backends.torch import _call_plan, _ops_exhaustive
 
 
 class _Forward(nn.Module):
@@ -178,6 +178,33 @@ def test_tensor_list_holding_a_buffer_runs_the_general_body(
     names, trace = _fast_names(monkeypatch, body, owned=True)
     assert "cat" not in names
     _assert_same_capture(monkeypatch, body, trace, owned=True)
+
+
+def test_nested_outer_call_skips_the_shared_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``nn.ReLU`` calls ``F.relu`` then ``torch.relu``: only the inner call builds fields.
+
+    ``F.batch_norm`` saves tensors for backward, so its skipped outer emission must
+    still spend the same ``func_call_id`` values.
+    """
+
+    model = nn.Sequential(nn.ReLU(), nn.BatchNorm1d(3).eval(), nn.ReLU())
+    built: list[str] = []
+    real_build = _ops_exhaustive._build_shared_fields_dict
+
+    def spy(trace: Any, func: Any, func_name: str, *rest: Any) -> Any:
+        built.append(func_name)
+        return real_build(trace, func, func_name, *rest)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(_ops_exhaustive, "_build_shared_fields_dict", spy)
+        trace = tl.trace(model, torch.randn(2, 3))
+    assert built == ["relu", "batch_norm", "relu"]
+    with monkeypatch.context() as patch:
+        patch.setattr(_ops_exhaustive, "_nested_call_logged_output", lambda _out: False)
+        reference = tl.trace(model, torch.randn(2, 3))
+    assert [(op.label, tuple(op.parents), op.func_name, op.call.call_id) for op in trace.ops] == [
+        (op.label, tuple(op.parents), op.func_name, op.call.call_id) for op in reference.ops
+    ]
 
 
 def test_torchvision_covered_by_the_first_decoration_is_not_decorated_again() -> None:
