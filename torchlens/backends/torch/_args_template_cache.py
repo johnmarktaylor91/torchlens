@@ -199,17 +199,20 @@ def capture_layout(value: Any) -> CaptureLayout | None:
     answer, ``None`` for a plain strided tensor that is empty or row-major
     contiguous, is read first through the C base class's own accessors, which
     TorchLens never patches (its observers shadow them on ``torch.Tensor``), so
-    no wrapper runs and the two contexts are entered only for a strided read.
+    no wrapper runs. Those originals are still reached with logging paused, so the
+    escape detector treats them as TorchLens's own read; ``internal_scalar_read`` is
+    entered only for a strided read, which goes through the shadowed surfaces.
     """
 
     if type(value) not in _PLAIN_TENSOR_TYPES:
         return None
     if _BASE_READS is not None:
         layout, numel, is_contiguous = _BASE_READS
-        if layout.__get__(value) != torch.strided:
-            return None
-        if numel(value) == 0 or is_contiguous(value):
-            return None
+        with pause_logging():
+            if layout.__get__(value) != torch.strided:
+                return None
+            if numel(value) == 0 or is_contiguous(value):
+                return None
     with pause_logging(), internal_scalar_read():
         return layout_of(value)
 
