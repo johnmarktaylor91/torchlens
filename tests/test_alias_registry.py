@@ -122,7 +122,7 @@ def test_shallow_copy_registers_both_cells() -> None:
             object.__setattr__(self, "_row", row)
 
     shared = ["s"]
-    store = _store([[_MISSING, shared, ()], [_MISSING, shared, ()]])
+    store = _store([[_MISSING, shared, "label"], [_MISSING, shared, "label"]])
     source, clone = _Row(store, 0), _Row(store, 1)
     assert register_shared_cells(source, clone) is clone
     assert store._alias_sites == {(0, 1): shared, (1, 1): shared}
