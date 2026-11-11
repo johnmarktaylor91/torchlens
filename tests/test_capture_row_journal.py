@@ -349,38 +349,46 @@ def test_residual_released_after_materialization(commit_spy: _CommitSpy) -> None
         trace.cleanup()
 
 
-class _LeafOutputModel(nn.Module):
-    """A factory op whose leaf output the model keeps, then adds to the input."""
+_KEPT_LEAVES: list[torch.Tensor] = []
+"""The leaf ``_InPlaceLeafModel`` creates, kept where the transform can reach it."""
+
+
+class _InPlaceLeafModel(nn.Module):
+    """A factory leaf, scaled in place (the in-place op's output is the leaf), then added."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Create a leaf with ``torch.ones``, keep it on the module and add it."""
+        """Create a leaf with ``torch.ones``, keep it, scale it in place and add it."""
 
         leaf = torch.ones(3)
-        self.__dict__["leaf"] = leaf
+        _KEPT_LEAVES.append(leaf)
+        leaf.mul_(2.0)
         return x + leaf
 
 
 def test_activation_transform_flip_keeps_op_output_requires_grad() -> None:
-    """A transform flipping a leaf output's ``requires_grad`` leaves the op's record unchanged.
+    """A transform flipping an op output's live ``requires_grad`` leaves the op's record unchanged.
 
     The record's output ``requires_grad`` is the op output's own flag, read on the
-    output when the op returns. The transform runs while the op's entry is saved,
-    after that read and before the commit; it flips the live leaf, so the next op
-    sees the flipped flag while the ``ones`` record keeps the op-output value.
+    output when the op returns. The transform receives a saved copy, so it reaches
+    the live output through the kept leaf: the in-place ``mul_`` returns the leaf
+    itself, and its transform (the first one after the leaf is kept) flips the
+    leaf's flag after that read and before the commit. The ``mul_`` record keeps
+    the op-output value.
     """
 
-    model = _LeafOutputModel().eval()
+    model = _InPlaceLeafModel().eval()
     flips: list[bool] = []
 
     def flip_leaf(tensor: torch.Tensor) -> torch.Tensor:
-        """Flip the kept leaf's ``requires_grad`` once, when the ``ones`` output is saved."""
+        """Flip the kept leaf's ``requires_grad`` once, at the first save after it is kept."""
 
-        leaf = model.__dict__.get("leaf")
-        if leaf is not None and not flips and leaf.is_leaf and tuple(tensor.shape) == (3,):
+        if _KEPT_LEAVES and not flips and _KEPT_LEAVES[0].is_leaf:
+            leaf = _KEPT_LEAVES[0]
             flips.append(leaf.requires_grad)
             leaf.requires_grad_(not leaf.requires_grad)
         return tensor
 
+    _KEPT_LEAVES.clear()
     trace = tl.trace(
         model,
         torch.randn(2, 3),
@@ -388,12 +396,14 @@ def test_activation_transform_flip_keeps_op_output_requires_grad() -> None:
     )
     try:
         assert flips == [False], f"transform flipped {flips}"
-        assert model.__dict__["leaf"].requires_grad is True
+        assert _KEPT_LEAVES[0].requires_grad is True
         records = [journal_record(event) for event in trace.op_events]
-        by_type = {record.layer_type: record for record in records}
-        assert {"ones", "add"} <= set(by_type), sorted(by_type)
-        assert by_type["ones"].output.tensor.requires_grad is False
-        assert by_type["add"].output.tensor.requires_grad is True
+        scaled = [record for record in records if "mul" in record.layer_type]
+        assert len(scaled) == 1, [record.layer_type for record in records]
+        assert scaled[0].output.tensor.requires_grad is False
+        ones = [record for record in records if record.layer_type == "ones"]
+        assert len(ones) == 1, [record.layer_type for record in records]
+        assert ones[0].output.tensor.requires_grad is False
     finally:
         trace.cleanup()
-        model.__dict__.pop("leaf", None)
+        _KEPT_LEAVES.clear()
