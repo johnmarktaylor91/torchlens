@@ -29,6 +29,7 @@ from torchlens._ir.op_record import OpRecord, OpRecordAttributeError, record_wit
 from torchlens._ir.refs import journal_record
 from torchlens.backends.torch import _ops_row_journal
 from torchlens.backends.torch._ops_container_base import _op_record_from_log
+from torchlens.errors import TraceCaptureError
 
 
 class _TinyTransformer(nn.Module):
@@ -428,14 +429,18 @@ class _RaiseAfterOps(nn.Module):
 
 
 @pytest.mark.parametrize(
-    "error", [_ScrubInterrupt("interrupted"), RuntimeError("boom")], ids=["interrupt", "error"]
+    ("error", "raised"),
+    [(_ScrubInterrupt("interrupted"), _ScrubInterrupt), (RuntimeError("boom"), TraceCaptureError)],
+    ids=["interrupt", "error"],
 )
-def test_failed_capture_scrub_settles_pending_rows(error: BaseException) -> None:
+def test_failed_capture_scrub_settles_pending_rows(
+    error: BaseException, raised: type[BaseException]
+) -> None:
     """The failed-capture scrub drops ``capture_events`` first; pending rows still settle."""
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        with pytest.raises(type(error)):
+        with pytest.raises(raised):
             tl.trace(_RaiseAfterOps(error).eval(), torch.ones(1, 3))
     failed = [str(w.message) for w in caught if "also failed while handling" in str(w.message)]
     assert failed == []
