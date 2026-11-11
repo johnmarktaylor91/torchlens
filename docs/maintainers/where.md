@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1816 modules, 722709 lines, 0 modules without a docstring.
+85 packages, 1818 modules, 722968 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26873 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 141 | 49249 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 142 | 49443 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -39,7 +39,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 17 | 7536 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
-| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 22 | 6795 |
+| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 23 | 6860 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 82 | 25064 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6582 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
@@ -315,7 +315,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (141 modules, 49249 lines)
+Core data structures for representing a logged forward pass. (142 modules, 49443 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -362,11 +362,12 @@ Core data structures for representing a logged forward pass. (141 modules, 49249
 | `_moe_views` | Lazy routing doors shared by Op, Module and Trace, without stored fields. | 88 |
 | `_nonfinite` | Shared non-finite activation scan behind a revalidated per-log memo. | 826 |
 | `_nonfinite_payloads` | Layer-sequence and out-payload readers behind the nonfinite scan kinds. | 69 |
+| `_op_alias_oracle` | Test-only completeness check: the alias registry against the full census. | 91 |
 | `_op_aten` | Per-op ATen-operation accessor for ''Op'' (''CaptureOptions(aten_ops=True)''). | 46 |
 | `_op_bytes` | Theoretical read-once/write-once byte traffic of one operation record. | 197 |
 | `_op_column_scan` | Call-free scans of the ''Op'' row store for passes that act on few ops. | 200 |
 | `_op_columns` | Private row-indexed column view over the ''Op'' row store. | 390 |
-| `_op_container_census` | Alias census for container-cell pooling (the single scan over swept cells). | 158 |
+| `_op_container_census` | Alias counts for container-cell pooling: the registry read and the census oracle. | 261 |
 | `_op_copy` | Selective-depth Op clones: the output-node copy and ''Op._copy_with_shallow_fields''. | 253 |
 | `_op_cost` | Cost derivations for ''Op'': compute record, MACs, FLOPs, arithmetic intensity. | 124 |
 | `_op_dedup` | Saved-activation dedup helpers for retained payload copies. | 324 |
@@ -947,13 +948,14 @@ Live narration for TorchLens captures (the torchsnooper niche, better). (10 modu
 
 ### `torchlens._trace_core`
 
-Private per-trace semantic store substrate (trace_core_design.md). (22 modules, 6795 lines)
+Private per-trace semantic store substrate (trace_core_design.md). (23 modules, 6860 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Private per-trace semantic store substrate (trace_core_design.md). | 34 |
 | `_content_fingerprint` | Order-canonical content fingerprints for the op store's write audit. | 76 |
 | `_fork_copy` | Structural value copies for fork-side isolation of shared row-store cells. | 159 |
+| `alias_registry` | Write-time alias registry for the freeze-seam container pooling. | 65 |
 | `cell_states` | Cell states of the row stores: stored, default-omitted, derived and deleted. | 392 |
 | `columns` | Typed chunked column builders and frozen columns. | 167 |
 | `core` | TraceCore: per-trace ownership and cross-domain coordination. | 364 |
