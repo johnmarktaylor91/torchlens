@@ -13,6 +13,7 @@ from typing import Any, cast
 
 import torch
 
+from ... import _state
 from .._torch_compat import (
     AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED,
     autocast_get_dtype,
@@ -52,14 +53,44 @@ def log_current_autocast_state() -> dict[str, dict[str, Any]]:
         _legacy_device_states(state)
         return state
     get_dtype = _GET_DTYPE
+    execution = state["__execution__"]
+    token: tuple[Any, ...] = (execution["grad_enabled"], execution["inference_mode"])
     for device in _AUTOCAST_DEVICES:
         try:
             # torch>=2.4: the same two calls the version-neutral shim makes.
-            state[device] = {"enabled": bool(is_enabled(device)), "dtype": get_dtype(device)}
+            enabled = bool(is_enabled(device))
+            dtype = get_dtype(device)
         except (RuntimeError, TypeError):
             # Device doesn't support autocast queries (e.g. no CUDA).
-            pass
+            continue
+        state[device] = {"enabled": enabled, "dtype": dtype}
+        token += (device, enabled, dtype)
+    _register_token(state, token)
     return state
+
+
+def _register_token(state: dict[str, dict[str, Any]], token: tuple[Any, ...]) -> None:
+    """Register a fresh snapshot's content token with the capturing trace.
+
+    The token holds every value the snapshot was built from, in build order,
+    so two snapshots are equal exactly when their tokens are; the freeze's
+    container pooling keys the snapshot by it instead of walking it
+    (``_trace_core.pools.ContainerTokens``). With no capturing trace, or after
+    that trace's compaction, nothing is registered.
+    """
+
+    trace = _state._active_trace
+    if trace is None:
+        return
+    workspace = trace._wrapper_runtime_ws
+    table = workspace.container_tokens
+    if table is None:
+        table = workspace.container_tokens = {}
+    elif table is False:
+        return
+    # The device sub-dicts are the containers nested in the snapshot; the
+    # pooling checks their ids against the alias census as a full walk would.
+    table[id(state)] = (state, token, tuple(map(id, state.values())))
 
 
 def _legacy_device_states(state: dict[str, dict[str, Any]]) -> None:
