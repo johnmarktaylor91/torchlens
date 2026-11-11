@@ -300,6 +300,9 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # clearing: an evicted id means a recycled id reads as new, never as swept.
         ("torchlens/backends/torch/belt.py", "_swept_ids_live"),
         ("torchlens/backends/torch/belt.py", "_swept_module_ids"),
+        # Id tuple of the last all-swept sys.modules snapshot: reset to None by
+        # every eviction callback and at the same belt reset site.
+        ("torchlens/backends/torch/belt.py", "_all_swept_ids"),
         # Windows probe-file cleanup queue: temp paths whose removal the OS refused
         # (a handle still open), retried on the next probe removal and once at
         # interpreter exit; the flag records that the atexit retry is registered.
