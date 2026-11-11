@@ -395,7 +395,7 @@ def test_value_equal_codes_from_two_files_name_their_own_files(
     steps = _value_equal_pair(tmp_path, _RELU_SOURCE)
     monkeypatch.setattr(site_module, "_CallSiteMemo", memo)
     rows = _projection(_recurse(tl.trace, 0, _TwoFiles(steps), torch.randn(2, 4)))
-    innermost = [frames[-1] for _label, _index, frames in rows if frames[-1][2] == "step"]
+    innermost = [f[-1] for _label, _index, f in rows if f and f[-1][2] == "step"]
     files = sorted(file for file, *_rest in innermost)
     assert files == sorted(step.__code__.co_filename for step in steps)
     assert len({(line, col) for _file, line, _name, _qualname, col in innermost}) == 1
