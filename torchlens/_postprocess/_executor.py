@@ -131,7 +131,7 @@ def _run_group_recurrent_layers(ctx: StepContext) -> None:
 
 
 def _run_map_final_labels(ctx: StepContext) -> None:
-    """Build the raw-label to final-label map."""
+    """Assign final labels by column and remap the trace-level label references."""
 
     with _vtimed(ctx.trace, "  Step 8: Map labels", bucket="map_final_labels"):
         labeling._map_raw_labels_to_final_labels(ctx.trace)
@@ -142,13 +142,6 @@ def _run_log_final_layer_info(ctx: StepContext) -> None:
 
     with _vtimed(ctx.trace, "  Step 9: Log final info", bucket="log_final_layer_info"):
         labeling._log_final_info_for_layers(ctx.trace)
-
-
-def _run_rename_layer_references(ctx: StepContext) -> None:
-    """Rename global label references to their final names."""
-
-    with _vtimed(ctx.trace, "  Step 10: Rename labels", bucket="rename_layer_references"):
-        labeling._rename_model_history_layer_names(ctx.trace)
 
 
 def _run_build_lookup_keys(ctx: StepContext) -> None:

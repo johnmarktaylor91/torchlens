@@ -1,20 +1,21 @@
-"""Steps 8-11: Label mapping, final info logging, renaming, cleanup, and lookup keys.
+"""Steps 8, 9 and 11: Label mapping, final info logging, renaming, and lookup keys.
 
 Step 8 (_map_raw_labels_to_final_labels): Assigns human-readable labels to each
-    tensor. Label format: ``{layer_type}_{type_num}_{total_num}:{pass_index}`` for
-    regular layers, or ``{layer_type}_{type_num}:{pass_index}`` for input/output/buffer.
-    The ``:{pass_index}`` suffix is omitted when the layer has a single pass. For multi-pass
+    tensor by column (``_label_columns``). Label format:
+    ``{layer_type}_{type_num}_{total_num}:{pass_index}`` for regular layers, or
+    ``{layer_type}_{type_num}:{pass_index}`` for input/output/buffer. The
+    ``:{pass_index}`` suffix is omitted when the layer has a single pass. For multi-pass
     layers (pass > 1), layer_type and type_index are INHERITED from the first
-    pass to guarantee label consistency within recurrent_ops groups.
+    pass to guarantee label consistency within recurrent_ops groups. Its tail
+    remaps the Trace-level label references (``_rename_model_history_layer_names``).
 
 Step 9 (_log_final_info_for_layers): Logs operation numbers, module hierarchy,
     param/size tallies, and structural flags. Populates _module_build_data dicts
     that Step 11 and Step 16 depend on. MUST run before Step 11 because
     _add_lookup_keys_for_layer_entry needs module_num_calls data.
 
-Step 10 (_rename_model_history_layer_names):
-    Renames all raw labels (e.g., "cos_3_raw") to final labels in both Trace-level
-    fields and Op fields.
+Step 9 also renames all raw labels (e.g., "cos_3_raw") to final labels in the Op
+    fields and, after numbering the outputs, in ``output_layers``.
 
 Step 11 (_build_lookup_keys_and_finalize_retained_layers): Builds lookup key mappings (integer
     index, label, module path, buffer/input/output address), and logs retained layer metadata.
@@ -33,6 +34,7 @@ from .._utils._record_group_table import op_attr, record_member
 from ..intervention._types import ParentRef
 from ._conditional_child_rename import _rename_children_by_cond, _rename_conditional_child_views
 from ._final_info_columns import log_final_info_by_column, ops_inside_modules
+from ._label_columns import map_labels_by_column, map_labels_by_facade
 from ._label_rename import _rename_label_dataclass
 from ._lookup_key_scan import scan_lookup_keys
 from ._module_containment import _log_module_hierarchy_info_for_layer
@@ -43,85 +45,23 @@ if TYPE_CHECKING:
 
 
 def _map_raw_labels_to_final_labels(self: "Trace") -> None:
-    """Step 8: Build the raw-to-final label mapping for all tensors.
+    """Step 8: assign every op's final labels and remap the trace-level references.
 
-    Iterates through all tensors in order and assigns each a human-readable label.
-    Label format conventions:
-    - Regular layers: ``{layer_type}_{type_num}_{total_num}:{call_index}``
-      e.g., ``conv2d_3_12:2`` (3rd conv2d overall, 12th layer total, pass 2)
-    - Input/output/buffer: ``{layer_type}_{type_num}:{call_index}``
-      e.g., ``input_1:1`` (total_num is always 0 for these types)
-    - When num_calls == 1, the ``:call_index`` suffix is omitted in
-      the default ``layer_label`` (but ``label`` always includes it).
-
-    For multi-pass layers (call_index > 1), ``layer_type`` AND ``type_index``
-    are INHERITED from the first pass's tensor to guarantee that all members of
-    a recurrent_ops group share the same ``layer_label``. Using
-    the entry's own layer_type would cause label mismatches when ops have
-    different layer types (e.g., SSD300 train with getitem ops {1,3} gap).
-
-    Stores the bidirectional mapping in ``self._raw_to_final_layer_labels`` and
-    ``self._final_to_raw_layer_labels``.
+    Label format: ``{layer_type}_{type_num}_{total_num}:{pass}`` for regular
+    layers and ``{layer_type}_{type_num}:{pass}`` for input, output and buffer
+    layers (``label``); ``layer_label`` drops the pass. A later pass inherits
+    the type and both numbers of its group's first pass, so every member of a
+    recurrence group shares one ``layer_label``. The integer parts and the
+    strings are written by column (``_label_columns``), through the facade when
+    the trace is not columnar. The maps land in ``self._raw_to_final_*`` and
+    ``self._final_to_raw_layer_labels``; the trace-level label references are
+    remapped from them here, except ``output_layers``, which step 9 still reads
+    by raw label and remaps itself.
     """
-    raw_to_final_layer_labels = {}
-    raw_to_final_parent_layer_labels = {}
-    raw_to_final_op_labels = {}
-    final_to_raw_layer_labels = {}
-    layer_type_counter: defaultdict[str, int] = defaultdict(lambda: 1)
-    layer_total_counter = 1  # Sequential counter for non-input/buffer/output layers.
-    for tensor_log_entry in self:
-        layer_type = record_type(tensor_log_entry)
-        pass_index = tensor_log_entry.pass_number
-        if pass_index == 1:
-            # First pass: assign new type_num and total_num.
-            type_index = layer_type_counter[layer_type]
-            layer_type_counter[layer_type] += 1
-            if layer_type in ["input", "buffer"]:
-                step_index = 0  # Input/buffer don't get a total order number.
-            else:
-                step_index = layer_total_counter
-                layer_total_counter += 1
 
-        else:
-            # Pass > 1: INHERIT layer_type and numbers from the first pass.
-            # This ensures all ops of the same layer share layer_label.
-            # Raw slot read: the public read is copy-on-read, and copying a
-            # 512-element group list just to index its head is pure waste.
-            first_pass_tensor = self[tensor_log_entry._slot("recurrent_ops")[0]]
-            layer_type = record_type(first_pass_tensor)
-            type_index = first_pass_tensor.type_index
-            if layer_type in ["input", "buffer"]:
-                step_index = 0
-            else:
-                step_index = first_pass_tensor.step_index
-        tensor_log_entry.type_index = type_index
-        tensor_log_entry.step_index = step_index
-
-        if layer_type not in ["input", "output", "buffer"]:
-            tensor_log_entry.label = f"{layer_type}_{type_index}_{step_index}:{pass_index}"
-            tensor_log_entry.layer_label = f"{layer_type}_{type_index}_{step_index}"
-        else:
-            tensor_log_entry.label = f"{layer_type}_{type_index}:{pass_index}"
-            tensor_log_entry.layer_label = f"{layer_type}_{type_index}"
-
-        tensor_log_entry.short_label = f"{layer_type}_{type_index}:{pass_index}"
-        tensor_log_entry.short_layer_label = f"{layer_type}_{type_index}"
-        final_lookup_label = (
-            tensor_log_entry.layer_label
-            if tensor_log_entry.num_passes == 1
-            else tensor_log_entry.label
-        )
-        raw_to_final_layer_labels[tensor_log_entry._label_raw] = final_lookup_label
-        raw_to_final_parent_layer_labels[tensor_log_entry._label_raw] = tensor_log_entry.layer_label
-        raw_to_final_op_labels[tensor_log_entry._label_raw] = tensor_log_entry.label
-        final_to_raw_layer_labels[final_lookup_label] = tensor_log_entry._label_raw
-    self._raw_to_final_layer_labels = raw_to_final_layer_labels
-    self._raw_to_final_parent_layer_labels = raw_to_final_parent_layer_labels
-    self._raw_to_final_op_labels = raw_to_final_op_labels
-    self._backward_projection_event_count = None
-    self._backward_projection_revision = None
-    self._backward_projection_fold_state = None
-    self._final_to_raw_layer_labels = final_to_raw_layer_labels
+    if not map_labels_by_column(self):
+        map_labels_by_facade(self)
+    _rename_model_history_layer_names(self)
 
 
 def _log_final_info_for_layers(self: "Trace") -> None:
@@ -370,9 +310,20 @@ def _compute_fx_qualpaths(self: "Trace") -> None:
 
 
 def _finalize_output_compute_indexs(self: "Trace") -> None:
-    """Assign step_index to output layers (deferred until total is known)."""
+    """Assign step_index to output layers (deferred until total is known), then remap their labels.
+
+    ``output_layers`` holds raw labels until here (the lookup during the pass is by raw label).
+    """
     for layer in self.output_layers:
         self[layer].step_index = self._num_ops
+    _rename_output_layers(self)
+
+
+def _rename_output_layers(self: "Trace") -> None:
+    """Remap ``output_layers`` from raw labels to final layer labels, once step 9 has read them."""
+
+    raw_layer_dict = self._raw_graph_ws.raw_layer_dict
+    self.output_layers = [raw_layer_dict[label].layer_label for label in self.output_layers]
 
 
 def _build_module_hierarchy_dicts(self: "Trace") -> None:
@@ -784,9 +735,10 @@ def _module_call_label(module_call: Any) -> str:
 
 
 def _rename_model_history_layer_names(self: "Trace") -> None:
-    """Step 10: Rename raw labels to final labels in all Trace-level fields.
+    """Remap raw labels to final labels in the Trace-level fields (tail of step 8).
 
-    Updates list fields (input_layers, output_layers, etc.), dict fields
+    Updates list fields (input_layers, buffer_layers, etc.; ``output_layers``
+    is remapped at the end of step 9), dict fields
     (layers_with_params, op_equivalence_classes), conditional branch
     edges, and module layer argument names. Creates NEW container objects
     (no shared-set corruption) — see set() constructor in op_equivalence_classes
@@ -794,7 +746,6 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     """
     layer_list_fields_to_rename = [
         "input_layers",
-        "output_layers",
         "buffer_layers",
     ]
     for field in layer_list_fields_to_rename:
