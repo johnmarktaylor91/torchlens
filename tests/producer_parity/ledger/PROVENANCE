@@ -6043,3 +6043,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: cbd68b353945d665d80e7856893a558bb81be8a8
 recorded: 2026-11-11T06:38:53Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: T1B thin indexed record
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 210b109aadbb9a89d06b67a9b1a308acbaa4cc91
+recorded: 2026-11-11T14:41:08Z

@@ -561,14 +561,6 @@
  },
  {
   "ambiguous": false,
-  "field": "grad_fn_handle",
-  "file": "torchlens/_capture/projections.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
   "field": "has_internal_source_ancestor",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
@@ -7060,7 +7052,7 @@
   "field": "fire_results",
   "file": "torchlens/backends/torch/_ops_row_cells.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -7184,8 +7176,64 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "function",
+  "file": "torchlens/backends/torch/_ops_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "has_internal_source_ancestor",
+  "file": "torchlens/backends/torch/_ops_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "input_ancestors",
+  "file": "torchlens/backends/torch/_ops_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "internal_source_ancestors",
+  "file": "torchlens/backends/torch/_ops_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "module_stack",
+  "file": "torchlens/backends/torch/_ops_row_journal.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/backends/torch/_ops_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/backends/torch/_ops_row_journal.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "root_ancestors",
   "file": "torchlens/backends/torch/_ops_row_journal.py",
   "has_default": false,
   "sites": 1,
