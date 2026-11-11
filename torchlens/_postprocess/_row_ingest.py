@@ -253,8 +253,9 @@ def _write_join_cells(row: list[Any], join_cells: Mapping[str, object], plan: Ro
     omit_empty = plan.omit_empty_fids
     override = _NO_OVERRIDE
     for name, value in join_cells.items():
-        fid = fid_by_name.get(name)
-        if fid is not None:
+        # Membership plus subscript, not ``.get``: this loop runs per join cell per op.
+        if name in fid_by_name:
+            fid = fid_by_name[name]
             if fid in omit:
                 if (
                     not value

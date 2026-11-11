@@ -7,7 +7,6 @@ import time
 from collections import Counter, defaultdict, deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from math import prod
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -33,7 +32,7 @@ from .._data_classes._module_role_hints import (
 )
 from .._ir.workspaces import _init_module_hierarchy_data
 from .._utils._display_bounded import short_dataclass_repr
-from .._utils._tensor_label import get_buffer_address, get_tensor_label, get_tensor_meta
+from .._utils._tensor_label import get_tensor_label
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils._torch_symbols import _resolve_dtype
 from .._utils.display import _record_phase_timing
@@ -44,6 +43,7 @@ from ._buffer_addresses import (
     _recorded_buffer_address,
 )
 from ._ingest_contract import IngestInputs, JournalView, Step0Result
+from ._join_parts import address_and_buffer_source, param_join_cells
 from ._primitive_profile import _materialize_forward_primitive_profile
 from ._row_ingest import (
     RowIngestPlan,
@@ -351,6 +351,7 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
 
     local_registrations: dict[str, Any] = {}
     for event in op_events:
+        label = event.label_raw
         row = capture_rows.get(id(event)) if plan is not None else None
         record, extras, fields_dict = _record_cells(event, row, plan, inputs.owning_trace)
         _apply_join_cells(
@@ -359,15 +360,15 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
             extras,
             journal,
             op_event_labels,
-            children_by_parent.get(event.label_raw, []),
-            equivalent_ops_by_label.get(event.label_raw, {event.label_raw}),
-            buffer_addresses_by_label.get(event.label_raw),
+            children_by_parent.get(label, []),
+            equivalent_ops_by_label.get(label, {label}),
+            buffer_addresses_by_label.get(label),
             buffer_alias_snapshots,
-            module_input_fields.get(event.label_raw, _empty_module_input_fields()),
-            module_output_fields.get(event.label_raw, _empty_module_output_fields()),
-            buffer_write_fields.get(event.label_raw, {}),
-            input_io_roles.get(event.label_raw),
-            output_versions.get(event.label_raw, {}),
+            module_input_fields.get(label, _empty_module_input_fields()),
+            module_output_fields.get(label, _empty_module_output_fields()),
+            buffer_write_fields.get(label, {}),
+            input_io_roles.get(label),
+            output_versions.get(label, {}),
             op_events_by_label,
             inputs.param_logs,
             registered_buffer_names,
@@ -379,7 +380,7 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
             else adopt_capture_row(row, fields_dict, op_store, Op, plan)  # type: ignore[arg-type]
         )
         inputs.timing_sink("object_construction_op", time.perf_counter() - start)
-        local_registrations[event.label_raw] = op_log
+        local_registrations[label] = op_log
     _drop_missing_buffer_sources(local_registrations)
     return Step0Result(
         raw_log_registrations=tuple(local_registrations.items()),
@@ -491,18 +492,7 @@ def _apply_join_cells(
             f"{event.label_raw}: backend aliasing semantics are unknown. "
             "Replay and validation require an explicit alias contract."
         )
-    params = tuple(event.params)
-    param_logs = _param_logs_for_event(param_logs_registry, params)
-    resolved_param_addresses = {log.address for log in param_logs}
-    resolved_params = tuple(param for param in params if param.address in resolved_param_addresses)
-    resolved_parent_params = [
-        parent_param
-        for param, parent_param in zip(params, event.parent_params, strict=False)
-        if param.address in resolved_param_addresses
-    ]
-    parent_param_ops = {param.barcode: event.pass_index for param in resolved_params}
-    param_shapes = [param.shape for param in resolved_params]
-    parent_params = resolved_parent_params
+    param_cells = param_join_cells(param_logs_registry, event)
     grad_fn_handle = journal.grad_fn_handles_by_label_raw.get(event.label_raw)
     # Index-first single ownership; the adapter-carried compat channel keeps
     # detached legacy streams whole until the OpEvent field is removed.
@@ -518,13 +508,16 @@ def _apply_join_cells(
     # not registered state, but it still has a meaningful display address (its
     # attribute path, e.g. ``child.q``). Using the recorded address here is what
     # makes a NESTED plain-attribute buffer show its full path rather than the
-    # containing module's address that ``_event_address`` would otherwise return,
+    # containing module's address that the source-event address fallback would otherwise return,
     # and it is authoritative -- the value/shape heuristics never reach it (see
     # ``_buffer_addresses_by_label``). ``backend_address`` is decoupled to the
     # registered-only value and applied post-construction in
     # ``materialize_log_from_fields`` (None for a non-registered buffer, as a
     # tensor outside the declared state universe should have).
-    resolved_address = buffer_address or _recorded_buffer_address(event) or _event_address(event)
+    recorded_buffer_address = _recorded_buffer_address(event)
+    resolved_address, buffer_source = address_and_buffer_source(
+        event, tensor.payload, buffer_address or recorded_buffer_address, op_event_labels
+    )
     tensor_payload = _event_tensor_payload(event, resolved_address, buffer_alias_snapshots)
     fields_dict.update(
         {
@@ -539,22 +532,14 @@ def _apply_join_cells(
             },
             "grad_fn_object_id": None if grad_handle is None else id(grad_handle),
             "grad_fn_handle": grad_handle,
-            "parent_params": parent_params,
-            "_param_barcodes": [param.barcode for param in resolved_params],
-            "parent_param_ops": parent_param_ops,
-            "_param_logs": param_logs,
-            "param_shapes": param_shapes,
-            "num_params": sum(prod(shape) for shape in param_shapes if shape is not None),
-            "num_params_trainable": sum(log.num_params for log in param_logs if log.is_trainable),
-            "num_params_frozen": sum(log.num_params for log in param_logs if not log.is_trainable),
-            "param_memory": sum(int(log.param_memory) for log in param_logs),
+            **param_cells,
             "equivalent_ops": equivalent_ops,
             "children": children,
             "has_children": bool(children),
             "_edge_uses": _edge_use_records_from_event(event, op_events_by_label),
             "io_role": _event_io_role(event, input_io_role),
             "address": resolved_address,
-            "buffer_source": _event_buffer_source(event, op_event_labels),
+            "buffer_source": buffer_source,
         }
     )
     if isinstance(tensor.blob_ref, PortableBlobRef):
@@ -589,7 +574,6 @@ def _apply_join_cells(
     # inherits. Verdicts and replay fingerprints are byte-unchanged: no runnable-load
     # / param_source / resolver consumer reads an op node's ``backend_address`` (the
     # only reader is the string-when-present metadata invariant, satisfied either way).
-    recorded_buffer_address = _recorded_buffer_address(event)
     if buffer_address is not None:
         fields_dict["_materialized_backend_address"] = buffer_address
     elif recorded_buffer_address is not None:
@@ -655,9 +639,10 @@ def _children_by_parent(
 
     children: dict[str, list[str]] = defaultdict(list)
     for event in op_events:
+        label = event.label_raw
         for edge in event.parents:
-            if event.label_raw not in children[edge.parent_label_raw]:
-                children[edge.parent_label_raw].append(event.label_raw)
+            if label not in children[edge.parent_label_raw]:
+                children[edge.parent_label_raw].append(label)
     for event in buffer_write_events:
         producer_label_raw = getattr(event, "producer_label_raw", None)
         version_label_raw = getattr(event, "version_label_raw", None)
@@ -1615,78 +1600,6 @@ def _input_io_roles(raw_graph_workspace: Any, op_events: list[OpEvent]) -> dict[
     if len(input_events) == 1:
         return {input_events[0].label_raw: "input.input"}
     return {event.label_raw: f"input.{index}" for index, event in enumerate(input_events)}
-
-
-def _param_logs_for_event(param_logs_registry: Any, params: tuple[object, ...]) -> list[Any]:
-    """Resolve event parameter refs to existing Trace ``Param`` logs.
-
-    Parameters
-    ----------
-    param_logs_registry
-        The trace's ``param_logs`` registry (declared input).
-    params
-        Parameter refs carried by an operation event.
-
-    Returns
-    -------
-    list[object]
-        Param logs in event parameter order when resolvable.
-    """
-
-    param_logs: list[Any] = []
-    for param in params:
-        address = getattr(param, "address", None)
-        if address is not None and address in param_logs_registry:
-            param_logs.append(param_logs_registry[address])
-    return param_logs
-
-
-def _event_address(event: OpEvent) -> str | None:
-    """Return the raw address field for source-like events.
-
-    Parameters
-    ----------
-    event
-        Operation event being materialized.
-
-    Returns
-    -------
-    str | None
-        Buffer/input address when carried by module context, otherwise ``None``.
-    """
-
-    buffer_address = get_buffer_address(event.output.tensor.payload)
-    if buffer_address is not None:
-        return buffer_address
-    record_context = getattr(event, "record_context", None)
-    input_output_address = getattr(record_context, "input_output_address", None)
-    if isinstance(input_output_address, str):
-        return input_output_address
-    if event.module_stack:
-        return event.module_stack[-1].address
-    return None
-
-
-def _event_buffer_source(event: OpEvent, op_event_labels: set[str]) -> str | None:
-    """Return the promoted source label for a buffer event.
-
-    Parameters
-    ----------
-    event
-        Operation event being materialized.
-    op_event_labels
-        Raw labels present in the materialized event stream.
-
-    Returns
-    -------
-    str | None
-        Raw producer label for a promoted buffer, when tensor metadata carries it.
-    """
-
-    tensor_meta = get_tensor_meta(event.output.tensor.payload)
-    if tensor_meta is None or tensor_meta.buffer_source not in op_event_labels:
-        return None
-    return tensor_meta.buffer_source
 
 
 def _event_io_role(event: OpEvent, input_io_role: str | None) -> str | None:
