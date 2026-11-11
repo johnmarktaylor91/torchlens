@@ -182,8 +182,9 @@ def test_single_output_empty_cells_settle_pooled(split_trace: Any) -> None:
         cells = [_raw(op, name) for op in singles]
         assert all(cell.__class__ is PooledCell for cell in cells), (name, cells)
         assert len({id(cell) for cell in cells}) == 1, name
+        hydrated = cells[0].hydrate()
+        assert not hydrated and type(hydrated) is type(_WRITER_EMPTY_VALUES[name]())
     for op in singles:
-        assert op.func_rng_states == {} and type(op.func_rng_states) is dict
         assert op.var_names == [] and op.edits == [] and op.annotations == {}
 
 
