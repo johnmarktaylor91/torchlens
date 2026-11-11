@@ -134,13 +134,26 @@ def _hooked_waiter(ready: threading.Event, release: threading.Event, observed: l
     release.wait()
 
 
+def _wait_until_blocked(release: threading.Event) -> None:
+    """Return once a thread is parked in ``release.wait()`` (on the condition's waiter list).
+
+    A helper frame on purpose: on CPython 3.10 every profile event copies its frame's
+    locals into a cached dict, so a builtin call made in-window by the frame that holds
+    the monitor would leave a stale reference to it there (an interpreter artifact).
+    """
+
+    while not release._cond._waiters:
+        time.sleep(0.001)
+
+
 def test_rng_monitor_window_is_freed_with_an_in_window_thread() -> None:
     """A thread started inside the window is observed, then keeps no monitor alive.
 
     The thread carries the window's threading profile hook and is blocked inside a
     class-patched ``Event.wait`` when the last reference goes; neither may hold the
     monitor, while the thread runs or after it exits. Ordering is explicit (events and the
-    condition's waiter list), so no scheduler timing is involved.
+    condition's waiter list), so no scheduler timing is involved. The window's body makes no
+    builtin call in this frame (see :func:`_wait_until_blocked`).
     """
 
     model = _Stack().eval()
@@ -154,8 +167,7 @@ def test_rng_monitor_window_is_freed_with_an_in_window_thread() -> None:
         with monitor:
             worker.start()
             ready.wait()
-            while not release._cond._waiters:  # the worker is blocked in the patched wait
-                time.sleep(0.001)
+            _wait_until_blocked(release)  # the worker is parked in the patched wait
             model(x)
         assert observed == [True], "the in-window thread did not carry the window's hook"
         assert worker.ident in monitor._in_window_thread_idents
