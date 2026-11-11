@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1816 modules, 722709 lines, 0 modules without a docstring.
+85 packages, 1817 modules, 722951 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26873 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 141 | 49249 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 142 | 49432 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 155 | 62944 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 155 | 63003 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -315,7 +315,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (141 modules, 49249 lines)
+Core data structures for representing a logged forward pass. (142 modules, 49432 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -367,13 +367,14 @@ Core data structures for representing a logged forward pass. (141 modules, 49249
 | `_op_column_scan` | Call-free scans of the ''Op'' row store for passes that act on few ops. | 200 |
 | `_op_columns` | Private row-indexed column view over the ''Op'' row store. | 390 |
 | `_op_container_census` | Alias census for container-cell pooling (the single scan over swept cells). | 158 |
-| `_op_copy` | Selective-depth Op clones: the output-node copy and ''Op._copy_with_shallow_fields''. | 253 |
+| `_op_copy` | Selective-depth Op clones (''Op._copy_with_shallow_fields'') and the output-node field sets. | 232 |
 | `_op_cost` | Cost derivations for ''Op'': compute record, MACs, FLOPs, arithmetic intensity. | 124 |
 | `_op_dedup` | Saved-activation dedup helpers for retained payload copies. | 324 |
 | `_op_door_keys` | Row keys behind the trace-level ops door. | 263 |
 | `_op_grad_fn_link` | The ''Op'' cells that link an op to its ''GradFn'' record, held as keys. | 95 |
 | `_op_grad_stream` | Grad-blob streaming for ''Op._log_tensor_grad''. | 41 |
 | `_op_out_read` | Helpers behind the ''Op.out'' read path: absent-value refusals, the mutation-check state and the synthesized-read warning. | 104 |
+| `_op_output_copy` | The output-node copy: build a synthetic output node from its parent op's row. | 204 |
 | `_op_relations` | Relation views for ''Op'': parents, children, siblings, containers, modules. | 321 |
 | `_op_row_containers` | Trace-side op containers that hold row keys instead of ''Op'' records. | 697 |
 | `_op_row_release` | Direct row release for op removal (the facade-husk shortcut). | 107 |
@@ -1523,7 +1524,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (155 modules, 62944 lines)
+Torch backend implementation package for TorchLens capture. (155 modules, 63003 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1660,7 +1661,7 @@ Torch backend implementation package for TorchLens capture. (155 modules, 62944 
 | `arg_names` | Argument-name introspection for wrapped torch callables (''_state._arg_names''). | 93 |
 | `backend` | Torch implementation of the capture backend Protocol. | 793 |
 | `backward` | Capture torch backward execution and autograd graph metadata. | 3802 |
-| `belt` | The mechanical BELT: protocol-invisible stale-reference coverage. | 629 |
+| `belt` | The mechanical BELT: protocol-invisible stale-reference coverage. | 642 |
 | `bound_root` | TL-authored synthetic root for bound-method capture. | 202 |
 | `buffer_writes` | Registered-buffer write capture for the torch backend. | 1765 |
 | `collectives` | Collective boundary capture for explicit ''torch.distributed'' python calls. | 840 |
@@ -1670,7 +1671,7 @@ Torch backend implementation package for TorchLens capture. (155 modules, 62944 
 | `funcol` | Functional-collective (funcol) boundary capture + plane-W completion authority. | 1012 |
 | `identity_shims` | Wrap-state identity shims: keep torch-internal identity checks truthful. | 955 |
 | `instrument` | Model instrumentation entry for the WRAP stage. | 161 |
-| `legacy_ctors` | Capture of legacy tensor constructors: ''torch.<dtype>Tensor(...)'' and ''Variable(t)''. | 310 |
+| `legacy_ctors` | Capture of legacy tensor constructors: ''torch.<dtype>Tensor(...)'' and ''Variable(t)''. | 356 |
 | `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 2019 |
 | `module_stack` | Manage the torch capture module-call stack. | 102 |
 | `offload_hooks` | Accelerate offload/dispatch hook shims for eager capture. | 215 |
