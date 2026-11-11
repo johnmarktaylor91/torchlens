@@ -53,7 +53,7 @@ def clear_parent_params(ops: list[Any]) -> None:
             op._graph_parent_params = []
         return
     rows, fid = shared
-    for op, row in zip(ops, map(_object_getattribute, ops, repeat("_row"))):
+    for op, row in zip(ops, map(_object_getattribute, ops, repeat("_row")), strict=True):
         cell = rows[row][fid]
         if cell.__class__ is not LazyCell or cell.state != STATE_DEFAULT:
             op._graph_parent_params = []
