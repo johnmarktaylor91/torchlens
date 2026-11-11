@@ -210,11 +210,14 @@ _member_map: dict[int, Any] | None = None
 _swept_module_ids: dict[int, Callable[[], Any | None]] = {}
 """Module identities already swept this wrapper epoch (weak where possible)."""
 
-_all_swept_ids: tuple[int, ...] | None = None
-"""``sys.modules`` value ids at the last pre-filter that found all in ``_swept_ids_live``.
+_all_swept_entries: list[Any] | None = None
+"""``sys.modules`` values at the last pre-filter that found all their ids in ``_swept_ids_live``.
 
 Reset to ``None`` by every eviction and by the epoch reset: while it is set, the
-live set has only grown since, so an equal id tuple is still a subset of it.
+live set has only grown since, and the list keeps each entry alive (so no id in
+it can be reused), so an identical list of values is still all swept. An entry
+removed from ``sys.modules`` stays alive until the next pre-filter or epoch
+reset drops this list.
 """
 
 _swept_ids_live: set[int] = set()
@@ -472,8 +475,8 @@ def _evict_live_id(entry_id: int) -> Callable[[Any], None]:
 
     def _evict(_ref: Any) -> None:
         """Discard the captured id when its referent is finalized."""
-        global _all_swept_ids
-        _all_swept_ids = None
+        global _all_swept_entries
+        _all_swept_entries = None
         _swept_ids_live.discard(entry_id)
 
     return _evict
@@ -508,16 +511,25 @@ _ENTRY_VALUE = operator.itemgetter(1)
 """Reads the module out of a ``sys.modules`` item without running Python bytecode."""
 
 
+def _same_entries(entries: list[Any], swept: list[Any] | None) -> bool:
+    """Return whether ``entries`` are the objects of ``swept``, in order, by identity."""
+
+    return (
+        swept is not None and len(entries) == len(swept) and all(map(operator.is_, entries, swept))
+    )
+
+
 def _unswept_module_items() -> list[tuple[str, Any]]:
     """Return the ``sys.modules`` entries this wrapper epoch has not swept yet.
 
     Every id in ``_swept_ids_live`` is an entry this epoch's sweep already
     scanned AND that is provably still the same object (death callbacks evict
-    dead ids, so a reused id reads as new). The id tuple and ``issuperset``
-    execute no Python bytecode, so the nothing-new check is atomic under the
-    GIL like the ``list(sys.modules.items())`` snapshot; an id tuple equal to
-    the last all-swept one skips the set test (it runs on every capture, and
-    building a set of every module id costs more than the tuple compare). When
+    dead ids, so a reused id reads as new). The value list, the id tuple and
+    ``issuperset`` execute no Python bytecode, so the nothing-new check is
+    atomic under the GIL like the ``list(sys.modules.items())`` snapshot; a
+    value list identical (entry by entry, by identity) to the last all-swept
+    one skips the id test (it runs on every capture, and comparing the values
+    by identity costs about half of building an id per entry). When
     something is new, only the
     entries outside the live set are returned, in ``sys.modules`` order: the
     snapshot keeps every entry alive while it is filtered, so no id in it can
@@ -525,14 +537,15 @@ def _unswept_module_items() -> list[tuple[str, Any]]:
     re-checking every module already swept.
     """
 
-    global _all_swept_ids
-    # Equal to the last all-swept id tuple with no eviction since: still all
-    # swept (set membership only grew), decided by one C-level tuple compare.
-    entry_ids_now = tuple(map(id, sys.modules.values()))
-    if entry_ids_now == _all_swept_ids:
+    global _all_swept_entries
+    # The same values as the last all-swept list with no eviction since: still
+    # all swept (set membership only grew), decided by an ``operator.is_`` check
+    # per entry (no ``__eq__`` call, no int built per entry).
+    entries_now = list(sys.modules.values())
+    if _same_entries(entries_now, _all_swept_entries):
         return []
-    if _swept_ids_live.issuperset(entry_ids_now):
-        _all_swept_ids = entry_ids_now
+    if _swept_ids_live.issuperset(map(id, entries_now)):
+        _all_swept_entries = entries_now
         return []
     items = list(sys.modules.items())
     entry_ids = map(id, map(_ENTRY_VALUE, items))
@@ -623,7 +636,7 @@ def restore_belt_references() -> None:
         except (KeyError, TypeError):
             continue
     _ledger.clear()
-    global _all_swept_ids
-    _all_swept_ids = None
+    global _all_swept_entries
+    _all_swept_entries = None
     _swept_module_ids.clear()
     _swept_ids_live.clear()
