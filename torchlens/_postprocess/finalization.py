@@ -73,6 +73,7 @@ from ._module_census import (
 )
 from ._module_pending import PendingModules, ensure_modules_built, seal_module_facts
 from ._multipass_params import pass_param_addresses, union_multipass_params
+from ._parent_params_clear import clear_parent_params
 from ._pre_hook_provenance import _pre_hook_provenance_for_call
 from ._root_module_log import (
     _recorded_root_calls,
@@ -195,8 +196,7 @@ def _finalize_param_logs(self: "Trace") -> None:
     # _param_logs and func are still needed by validation.
 
     # Clear actual Parameter tensor references from Op entries to save memory.
-    for layer_entry in self._layer_list:
-        layer_entry._graph_parent_params = []
+    clear_parent_params(self._layer_list)
 
 
 def _build_root_module_log(

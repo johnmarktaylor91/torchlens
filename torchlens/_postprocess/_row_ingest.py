@@ -51,6 +51,10 @@ _OMITTED_EMPTY_JOIN_CELLS: tuple[tuple[str, type], ...] = (
     ("parent_param_ops", dict),
     ("module_entry_arg_keys", defaultdict),
 )
+#: Join cells left default-omitted when the join's value is empty and the capture
+#: row still holds the default: each value is a fresh list built for this op, and
+#: the freeze settles an equal fresh list per row.
+_OMIT_EMPTY_JOIN_FIELDS = ("parent_params", "_param_barcodes", "param_shapes", "output_of_modules")
 
 
 def hand_off_capture_rows(
@@ -137,6 +141,7 @@ class RowIngestPlan:
         "keys",
         "none_fids",
         "omit_empty",
+        "omit_empty_fids",
         "order_fids",
         "pending_fids",
         "source_trace_ref",
@@ -157,6 +162,7 @@ class RowIngestPlan:
             if name in fid_by_name and name not in _PENDING_FIELDS
         )
         self.none_fids = (fid_by_name["out_ref"], fid_by_name["grad_ref"])
+        self.omit_empty_fids = frozenset(fid_by_name[name] for name in _OMIT_EMPTY_JOIN_FIELDS)
         self.grad_records = fid_by_name["_grad_records"]
         self.construction_done = fid_by_name["_construction_done"]
         self.source_trace_ref = fid_by_name["_source_trace_ref"]
@@ -238,22 +244,26 @@ def _write_join_cells(row: list[Any], join_cells: Mapping[str, object], plan: Ro
     go to their backing cells. An empty sanctioned container of
     ``_OMITTED_EMPTY_JOIN_CELLS`` is not written over the row's default marker,
     which answers the same empty value (``module_entry_arg_keys`` a
-    ``defaultdict(list)``).
+    ``defaultdict(list)``). Nor is an empty ``_OMIT_EMPTY_JOIN_FIELDS``
+    value written over the row's default-omitted cell.
     """
 
     fid_by_name = plan.fid_by_name
     omit = plan.omit_empty
+    omit_empty = plan.omit_empty_fids
     override = _NO_OVERRIDE
     for name, value in join_cells.items():
         fid = fid_by_name.get(name)
         if fid is not None:
-            if (
-                fid in omit
-                and not value
-                and value.__class__ is omit[fid]
-                and row[fid].__class__ is LazyCell
-                and (value.__class__ is dict or getattr(value, "default_factory", None) is list)
-            ):
+            if fid in omit:
+                if (
+                    not value
+                    and value.__class__ is omit[fid]
+                    and row[fid].__class__ is LazyCell
+                    and (value.__class__ is dict or getattr(value, "default_factory", None) is list)
+                ):
+                    continue
+            elif fid in omit_empty and not value and row[fid].__class__ is LazyCell:
                 continue
             row[fid] = value
         elif name == "_materialized_backend_address":
