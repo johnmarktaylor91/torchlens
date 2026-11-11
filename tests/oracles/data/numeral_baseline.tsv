@@ -4047,6 +4047,7 @@ docs-md	docs/maintainers/where.md	629
 docs-md	docs/maintainers/where.md	62957
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	63003
+docs-md	docs/maintainers/where.md	63096
 docs-md	docs/maintainers/where.md	631
 docs-md	docs/maintainers/where.md	632
 docs-md	docs/maintainers/where.md	634
@@ -4116,6 +4117,7 @@ docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	722924
 docs-md	docs/maintainers/where.md	722968
 docs-md	docs/maintainers/where.md	722951
+docs-md	docs/maintainers/where.md	722861
 docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	723289
 docs-md	docs/maintainers/where.md	725
@@ -8811,6 +8813,7 @@ test-docstrings	tests/test_bundle_methods.py	11
 test-docstrings	tests/test_bundle_methods.py	278
 test-docstrings	tests/test_call_fingerprint.py	32
 test-docstrings	tests/test_call_site_contract.py	14
+test-docstrings	tests/test_call_site_join.py	200
 test-docstrings	tests/test_call_site_memo.py	10
 test-docstrings	tests/test_call_site_memo.py	10,
 test-docstrings	tests/test_call_site_memo.py	30
