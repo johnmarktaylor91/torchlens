@@ -750,7 +750,6 @@
   "c1.chain1000.phase.post.mark_tracing_finished": 0.04925149700598802,
   "c1.chain1000.phase.post.remove_orphan_nodes": 14.840419161676648,
   "c1.chain1000.phase.wrapper": 57.8747005988024,
-  "c1.chain1000.phase.wrapper.emit.commit_op": 13.645808383233533,
   "c1.chain1000.phase.wrapper.emit.shared_fields": 220.3931137724551,
   "c1.chain1000.total_per_op": 1721.7778443113773,
   "c1.gpt2_tiny4.phase.forward.other": 190.0,
