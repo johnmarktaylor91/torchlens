@@ -13,6 +13,7 @@ import torch
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._quantities import Bytes, Duration, Flops
+from .._trace_core.alias_registry import register_shared_cells
 from .._trace_core.op_store import row_clone_scope
 from .._utils._record_group_table import op_attr
 
@@ -236,12 +237,11 @@ def _copy_with_shallow_fields(
         "container_spec",
     } | extra_shallow_fields
 
-    # The whole-schema getattr loop is a ROW-CLONE read, not a set of
-    # per-column dependencies: under a combined step audit these reads
-    # are tagged category (d) via the clone scope (design-ppdag-v3
-    # §2.4d) — legal on row-creating steps, a finding elsewhere. The
-    # scope is one dict lookup when no audit is armed; clone WRITES
-    # bypass interception entirely (adopt_row).
+    # The whole-schema getattr loop is a ROW-CLONE read: under a combined step
+    # audit these reads are tagged category (d) via the clone scope (legal on
+    # row-creating steps, a finding elsewhere; one dict lookup when no audit is
+    # armed). Clone WRITES bypass interception (adopt_row), so the shared
+    # shallow cells are registered with the alias registry below.
     with row_clone_scope(object.__getattribute__(op, "_core")):
         for field in LAYER_PASS_LOG_FIELD_ORDER:
             if field in unread:
@@ -250,4 +250,4 @@ def _copy_with_shallow_fields(
                 fields_dict[field] = _copy_op_field_value(getattr(op, op_attr(field), None))
             else:
                 fields_dict[field] = getattr(op, op_attr(field), None)
-    return type(op)(fields_dict, _store=_store)
+    return register_shared_cells(op, type(op)(fields_dict, _store=_store))

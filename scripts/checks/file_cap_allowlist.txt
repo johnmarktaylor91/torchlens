@@ -473,7 +473,7 @@ torchlens/_state.py	1392
 torchlens/_trace_core/core.py::TraceCore.fork	61
 torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98
 torchlens/_trace_core/op_store.py	1668
-torchlens/_trace_core/op_store.py::OpRowStore.__init__	72
+torchlens/_trace_core/op_store.py::OpRowStore.__init__	67
 torchlens/_trace_core/relation_views.py::freeze_op_relation_views	136
 torchlens/_trace_core/relation_views.py::freeze_trace_relation_views	71
 torchlens/_trace_selector_helpers.py::_make_layers_to_save_predicate	76

@@ -103,8 +103,8 @@ from ._container_key import make_content_key
 from ._layer_accessors import OpAccessor
 from ._op_aten import OpAtenMixin
 from ._op_container_census import (  # noqa: F401  (re-exported for the pooling tests)
-    _census_container_cells,
     _count_container_ids,
+    _registry_container_cells,
 )
 from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importers)
     _dedup_cached_identity_out,
@@ -629,7 +629,7 @@ def _pool_container_cells(
         so equal content pools trace-wide; ``content_key`` keys a cell (``_container_key``).
     """
 
-    census = _census_container_cells(stores)
+    census = _registry_container_cells(stores)
     if census is None:
         return
     id_counts, cell_sites, singleton_sites = census
