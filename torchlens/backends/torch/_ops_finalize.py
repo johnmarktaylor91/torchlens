@@ -1,19 +1,21 @@
 """Predicate context evaluation and layer-entry finalization."""
 
 import contextlib
+import time
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._capture.plan import RetentionKind
 from ..._capture.predicates import (
     _evaluate_keep_op,
 )
 from ..._capture.projections import (
     commit_op,
 )
-from ..._capture.session import capture_session_for
+from ..._capture.session import CaptureSession
 from ..._capture.stop import stop_directive_for_trace
 from ..._data_classes._nonfinite import record_op_nonfinite
 from ..._data_classes.op import (
@@ -28,7 +30,7 @@ from ..._selection.selectors import (
     BaseSelector,
 )
 from ..._state import pause_logging
-from ..._utils.display import _timed_phase
+from ..._utils.display import _record_phase_timing
 from ..._utils.tensor_utils import (
     fp8_widen_for_numeric_ops,
     safe_copy,
@@ -189,44 +191,52 @@ def _make_layer_log_entry(
     if t_kwargs is None:
         t_kwargs = {}
 
-    fire_results = tuple(fields_dict.pop("fire_results", ()))
-
-    layer_nums_to_save = cast(Any, self._layer_nums_to_save)
-    raw_index = cast(int, fields_dict["raw_index"])
-    predicate_spec, predicate_ctx = _evaluate_trace_save_predicate(self, fields_dict, t)
+    # Each guard reads, without a call, the fact its function checks first, so the
+    # predicate, escrow and tail functions run only where a session fact asks for them.
+    trace_dict = self.__dict__
+    fire_results = tuple(fields_dict.pop("fire_results")) if "fire_results" in fields_dict else ()
+    layer_nums_to_save: Any = self._layer_nums_to_save
+    raw_index: int = fields_dict["raw_index"]
+    if "_predicate_save_options" not in trace_dict or (
+        (options := trace_dict["_predicate_save_options"]) is None or options.keep_op is None
+    ):
+        predicate_spec, predicate_ctx = None, None
+    else:
+        predicate_spec, predicate_ctx = _evaluate_trace_save_predicate(self, fields_dict, t)
     if predicate_spec is None:
         save_this_activation = (layer_nums_to_save == "all") or (raw_index in layer_nums_to_save)
     else:
         save_this_activation = predicate_spec.save_out
-    capture_session = capture_session_for(self)
-    if capture_session is not None:
-        capture_session.escrow_candidate(
-            raw_index,
-            t,
-            retain_activation=not save_this_activation,
-            raw_label=fields_dict.get("_label_raw"),
-        )
+    if "_capture_session" in trace_dict and (
+        type(session := trace_dict["_capture_session"]) is CaptureSession
+        or isinstance(session, CaptureSession)
+    ):
+        profile = session.plan.retention_profile
+        # ``escrow_candidate`` acts only under one of these two retention kinds.
+        if (
+            profile.activation_kind is RetentionKind.ACTIVATION and not save_this_activation
+        ) or profile.gradient_kind is RetentionKind.GRADIENT_REFERENCE:
+            session.escrow_candidate(
+                raw_index,
+                t,
+                retain_activation=not save_this_activation,
+                raw_label=fields_dict.get("_label_raw"),
+            )
     if save_this_activation:
-        if predicate_spec is None or predicate_ctx is None:
-            with _timed_phase(self, "clone_save_activation_fields"):
+        save_started = time.perf_counter()
+        try:
+            if predicate_spec is None or predicate_ctx is None:
                 _save_activation_fields(
-                    self,
-                    fields_dict,
-                    t,
-                    t_args,
-                    t_kwargs,
-                    activation_transform,
+                    self, fields_dict, t, t_args, t_kwargs, activation_transform
                 )
-        else:
-            with _timed_phase(self, "clone_save_activation_fields"):
+            else:
                 _save_predicate_activation_fields(
-                    self,
-                    fields_dict,
-                    t,
-                    predicate_spec,
-                    predicate_ctx,
-                    activation_transform,
+                    self, fields_dict, t, predicate_spec, predicate_ctx, activation_transform
                 )
+        finally:
+            _record_phase_timing(
+                self, "clone_save_activation_fields", time.perf_counter() - save_started
+            )
     if predicate_spec is not None and self._options_save_args and not fields_dict["has_saved_args"]:
         # Admit BEFORE the clones allocate.
         arg_reservations = _admit_saved_args_budget(self, fields_dict, t_args, t_kwargs)
@@ -236,27 +246,7 @@ def _make_layer_log_entry(
             key: _recursive_safe_copy(value) for key, value in t_kwargs.items()
         }
         _commit_saved_args_budget(self, fields_dict, arg_reservations)
-    # Seal this record's capture-time (slot -> producer) truth on the
-    # Trace, keyed by raw label. The witness (``dropped_edge_tensor_args``) is
-    # stamped at CAPTURE, so an edge dropped DOWNSTREAM of it -- anywhere in the
-    # 20-step postprocess pipeline or later -- was invisible whenever the
-    # payload was trivial. The post-pipeline metadata invariant
-    # (``validation/_invariants.py::_check_capture_edges_survive_postprocess``)
-    # reconciles the final graph against this sealed truth. Runtime-only
-    # bookkeeping (same class as ``_validation_orphan_candidate_index``): never
-    # persisted, absent on loaded traces.
-    _capture_edge_truth = self.__dict__.setdefault("_capture_parent_edge_truth", {})
-    _positions = fields_dict["parent_arg_positions"]
-    _capture_edge_truth[fields_dict["_label_raw"]] = (
-        tuple(("args", key, label) for key, label in _positions["args"].items())
-        + tuple(("kwargs", key, label) for key, label in _positions["kwargs"].items())
-        + tuple(
-            ("parent", None, label)
-            for label in fields_dict["parents"]
-            if label not in _positions["args"].values()
-            and label not in _positions["kwargs"].values()
-        )
-    )
+    _seal_parent_edge_truth(trace_dict, fields_dict)
     # The ONE commit tail (freeze -> atomic append) plus the two declared
     # exhaustive-only post-tail stages (grad-handle index, LiveOpView) —
     # see capture.projections.COMMIT_STAGE_MATRIX.
@@ -271,15 +261,64 @@ def _make_layer_log_entry(
             call_ref_box=call_ref_box,
         ),
     )
-    _settle_lookback_and_aten_values(self, predicate_ctx, save_this_activation, fields_dict, t)
-    _record_nonfinite_if_requested(self, t, new_entry)
+    if (predicate_ctx is not None and not save_this_activation) or (
+        self._options_aten_ops == "values"
+    ):
+        _settle_lookback_and_aten_values(self, predicate_ctx, save_this_activation, fields_dict, t)
+    if "track_nonfinite" in trace_dict and trace_dict["track_nonfinite"]:
+        _record_nonfinite_if_requested(self, t, new_entry)
     # Echo narrator slot: exactly once per committed op, after the
     # commit and the nonfinite recording, BEFORE the raise_on_nan settlement
     # so the minting op is the last narrated line when the tripwire trips.
-    _emit_op_echo(self, fields_dict, t, predicate_ctx, fire_results)
-    _raise_if_nonfinite_requested(self, t, new_entry)
+    if "_echo_session" in trace_dict and trace_dict["_echo_session"] is not None:
+        _emit_op_echo(self, fields_dict, t, predicate_ctx, fire_results)
+    if self._options_on_nonfinite:
+        _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry
+
+
+def _seal_parent_edge_truth(trace_dict: dict[str, Any], fields_dict: dict[str, Any]) -> None:
+    """Seal one record's capture-time (slot -> producer) truth on the trace, by raw label.
+
+    The witness (``dropped_edge_tensor_args``) is stamped at CAPTURE, so an edge
+    dropped DOWNSTREAM of it -- anywhere in the postprocess pipeline or later --
+    was invisible whenever the payload was trivial. The post-pipeline metadata
+    invariant (``validation/_invariants_topology.py``,
+    ``_check_capture_edges_survive_postprocess``) reconciles the final graph
+    against this sealed truth. Runtime-only bookkeeping (same class as
+    ``_validation_orphan_candidate_index``): never persisted, absent on loaded
+    traces.
+
+    The tuple is the argument slots in order, then the keyword slots, then each
+    parent found in neither, as before; the comprehensions and the loop only
+    avoid a generator resume per element.
+
+    Args:
+        trace_dict: The trace's instance ``__dict__``.
+        fields_dict: The op's field values (``parent_arg_positions``, ``parents``,
+            ``_label_raw``).
+    """
+
+    try:
+        edge_truth = trace_dict["_capture_parent_edge_truth"]
+    except KeyError:
+        edge_truth = trace_dict.setdefault("_capture_parent_edge_truth", {})
+    positions = fields_dict["parent_arg_positions"]
+    arg_positions = positions["args"]
+    kwarg_positions = positions["kwargs"]
+    edges = [("args", key, label) for key, label in arg_positions.items()]
+    if kwarg_positions:
+        edges += [("kwargs", key, label) for key, label in kwarg_positions.items()]
+    parents = fields_dict["parents"]
+    if parents:
+        arg_labels = arg_positions.values()
+        for label in parents:
+            if label not in arg_labels and (
+                not kwarg_positions or label not in kwarg_positions.values()
+            ):
+                edges += (("parent", None, label),)
+    edge_truth[fields_dict["_label_raw"]] = tuple(edges)
 
 
 def _settle_lookback_and_aten_values(

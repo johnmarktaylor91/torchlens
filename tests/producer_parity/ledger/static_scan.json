@@ -3225,6 +3225,22 @@
  },
  {
   "ambiguous": false,
+  "field": "step_index",
+  "file": "torchlens/_postprocess/_label_columns.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "type_index",
+  "file": "torchlens/_postprocess/_label_columns.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/_postprocess/_layer_row_scan.py",
   "has_default": false,
@@ -3701,22 +3717,6 @@
   "file": "torchlens/_postprocess/labeling.py",
   "has_default": false,
   "sites": 6,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "step_index",
-  "file": "torchlens/_postprocess/labeling.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "type_index",
-  "file": "torchlens/_postprocess/labeling.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {

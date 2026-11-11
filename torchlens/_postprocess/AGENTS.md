@@ -72,9 +72,8 @@ step 17.5 (the contracted container-adoption + workspace-drop seam).
 | 5 | `mark_conditional_branches` | `_mark_conditional_branches` | AST/bool/event/edge conditional attribution |
 | 6 | `fix_buffer_layers` | `_fix_buffer_layers` | Reconnect buffers; merge only re-logged reads of one recorded buffer version |
 | 7 | `group_recurrent_layers` | `_detect_and_label_loops` or `_group_by_shared_params` | Recurrent grouping |
-| 8 | `map_final_labels` | `_map_raw_labels_to_final_labels` | Build raw-to-final label map |
-| 9 | `log_final_layer_info` | `_log_final_info_for_layers` | Write final layer/module fields |
-| 10 | `rename_layer_references` | `_rename_model_history_layer_names` | Rename global refs (field reorder removed — scrub order is now deterministic) |
+| 8 | `map_final_labels` | `_map_raw_labels_to_final_labels` (`_label_columns.py`: integer label parts and strings by column, facade body as the fallback; tail `_rename_model_history_layer_names` remaps the trace-level references) | Final labels and raw-to-final label maps |
+| 9 | `log_final_layer_info` | `_log_final_info_for_layers` | Write final layer/module fields; remap `output_layers` after numbering the outputs |
 | 11 | `build_lookup_keys` | `_build_lookup_keys_and_finalize_retained_layers` | Build lookup keys and finalize retained layer lists |
 | 11.5 | `populate_source_var_names` | `_populate_var_names` | Resolve source assignment names through `ast_branches.py` |
 | 11.75 | `resolve_deferred_retention` | executor `_run_resolve_deferred_retention` | Resolve deferred retention decisions through the attached `CaptureSession` (saves selected payloads; runs only when a capture session is attached) |
