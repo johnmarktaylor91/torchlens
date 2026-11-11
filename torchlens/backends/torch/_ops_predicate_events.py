@@ -32,7 +32,6 @@ from ..._capture.predicates import (
     build_op_record_context,
 )
 from ..._capture.projections import (
-    LiveOpView,
     _build_record_context,
     active_recording_state_or_none,
     append_projected_event,
@@ -42,9 +41,6 @@ from ..._capture.session import capture_session_for
 from ..._capture.stop import evaluate_halt_stop
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes.internal_types import FuncExecutionContext
-from ..._data_classes.op import (
-    Op,
-)
 from ..._errors import UserTransformError
 from ..._ir.events import (
     FunctionCallRef,
@@ -333,12 +329,12 @@ def _build_graph_relationship_fields(
     self: "Trace",
     fields_dict: dict[str, Any],
     parent_layer_labels: list[str],
-    parent_layer_entries: list[Op],
+    parent_layer_entries: list[Any],
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     out_orig: Any,
 ) -> None:
-    """Populate graph structure fields: parents, children, ancestors, buffer/IO flags."""
+    """Populate graph structure fields from the parents' indexed journal records (no views)."""
     # ``out=`` destinations are pre-allocated tensors the op writes into: their
     # producers (``empty``/``empty_like``/...) are genuine parents of this op.
     # Tuple/list destinations (``torch.sort(x, out=(v, i))``, topk, kthvalue,
@@ -361,10 +357,7 @@ def _build_graph_relationship_fields(
             parent_layer_labels = [*parent_layer_labels, out_kwarg_label]
             parent_layer_entries = [
                 *parent_layer_entries,
-                cast(
-                    Op,
-                    LiveOpView(self, self.capture_events.live_index.require_event(out_kwarg_label)),
-                ),
+                self.capture_events.live_index.require_event(out_kwarg_label),
             ]
     parent_arg_positions, input_ancestors, internal_source_ancestors = _parent_graph_reads(
         self, parent_layer_entries, args, kwargs
@@ -392,34 +385,27 @@ def _build_graph_relationship_fields(
 
 
 def _parent_graph_reads(
-    self: "Trace", parent_entries: list[Any], args: tuple[Any, ...], kwargs: dict[str, Any]
+    self: "Trace", parent_records: list[Any], args: tuple[Any, ...], kwargs: dict[str, Any]
 ) -> tuple[dict[str, dict[Any, str]], set[str], set[str]]:
     """Return the parents' argument positions, input ancestors and internal-source ancestors.
 
-    Values of ``_locate_parent_tensors_in_args`` and ``_get_ancestors_from_parents``. A
-    parent built during capture is a ``LiveOpView``, whose every attribute read resolves
-    through the view's projection; when every parent is one and the op's argument slots
-    were snapshotted, the backing events are read directly (the view projects
-    ``_label_raw``, ``input_ancestors`` and ``internal_source_ancestors`` from these same
-    event fields). Otherwise the general derivations run.
+    ``parent_records`` are the parents' indexed journal records. When the op's argument
+    slots were snapshotted, the positions come from the slots and the ancestor sets are
+    unions of the records' fields, the same values ``_locate_parent_tensors_in_args`` and
+    ``_get_ancestors_from_parents`` return; otherwise those derivations run.
     """
 
-    events = [
-        object.__getattribute__(entry, "_record")
-        for entry in parent_entries
-        if type(entry) is LiveOpView
-    ]
-    slots = current_arg_slots(self, args, kwargs) if parent_entries else None
-    if slots is None or len(events) != len(parent_entries):
-        input_ancestors, internal_source_ancestors = _get_ancestors_from_parents(parent_entries)
-        positions = _locate_parent_tensors_in_args(self, parent_entries, args, kwargs)
+    slots = current_arg_slots(self, args, kwargs) if parent_records else None
+    if slots is None:
+        input_ancestors, internal_source_ancestors = _get_ancestors_from_parents(parent_records)
+        positions = _locate_parent_tensors_in_args(self, parent_records, args, kwargs)
         return positions, input_ancestors, internal_source_ancestors
     input_ancestors = set()
     internal_source_ancestors = set()
-    for event in events:
-        input_ancestors.update(event.input_ancestors)
-        internal_source_ancestors.update(event.internal_source_ancestors)
-    positions = slot_positions_by_label(slots, [event.label_raw for event in events])
+    for record in parent_records:
+        input_ancestors.update(record.input_ancestors)
+        internal_source_ancestors.update(record.internal_source_ancestors)
+    positions = slot_positions_by_label(slots, [record.label_raw for record in parent_records])
     return positions, input_ancestors, internal_source_ancestors
 
 

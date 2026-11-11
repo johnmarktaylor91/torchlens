@@ -1244,11 +1244,11 @@ def _log_tensor_grad(
 
 def _locate_parent_tensors_in_args(
     self: "Trace",
-    parent_log_entries: list[Op],
+    parent_log_entries: list[Any],
     args: tuple[Any, ...],
     kwargs: dict[Any, Any],
 ) -> dict[str, dict[Any, str]]:
-    """Map each parent tensor to its position in the function's args/kwargs.
+    """Map each parent tensor (its indexed journal record) to its position in args/kwargs.
 
     Two levels of nesting: ``args[i]`` maps to key ``i``, ``args[i][j]`` to ``(i, j)``.
     Stored as the child's ``parent_arg_positions``; ``_get_parent_contents`` reads
@@ -1265,7 +1265,7 @@ def _locate_parent_tensors_in_args(
         return parent_arg_positions_from_slots(slots, parent_log_entries)
 
     positions_by_label: dict[str, dict[str, list[Any]]] = {
-        parent_entry._label_raw: {"args": [], "kwargs": []} for parent_entry in parent_log_entries
+        parent_record.label_raw: {"args": [], "kwargs": []} for parent_record in parent_log_entries
     }
 
     for arg_type, arg_struct in (("args", args), ("kwargs", kwargs)):
@@ -1294,8 +1294,8 @@ def _locate_parent_tensors_in_args(
 
     # Preserve the historical insertion order: positions were emitted parent by
     # parent, even though finding them required rescanning every argument each time.
-    for parent_entry in parent_log_entries:
-        parent_label = parent_entry._label_raw
+    for parent_record in parent_log_entries:
+        parent_label = parent_record.label_raw
         for arg_type in ("args", "kwargs"):
             for position in positions_by_label[parent_label][arg_type]:
                 tensor_all_arg_positions[arg_type][position] = parent_label
@@ -1304,12 +1304,12 @@ def _locate_parent_tensors_in_args(
 
 
 def _get_ancestors_from_parents(
-    parent_entries: list[Op],
+    parent_entries: list[Any],
 ) -> tuple[set[str], set[str]]:
     """Utility function to get the ancestors of a tensor based on those of its parent tensors.
 
     Args:
-        parent_entries: list of parent entries
+        parent_entries: the parents' indexed journal records
 
     Returns:
         List of input ancestors and internally initialized ancestors.
@@ -1317,9 +1317,9 @@ def _get_ancestors_from_parents(
     input_ancestors = set()
     internal_source_ancestors = set()
 
-    for parent_entry in parent_entries:
-        input_ancestors.update(parent_entry.input_ancestors)
-        internal_source_ancestors.update(parent_entry._graph_internal_source_ancestors)
+    for parent_record in parent_entries:  # set(...) as the live view's getter returns it
+        input_ancestors.update(set(parent_record.input_ancestors))
+        internal_source_ancestors.update(set(parent_record.internal_source_ancestors))
     return input_ancestors, internal_source_ancestors
 
 

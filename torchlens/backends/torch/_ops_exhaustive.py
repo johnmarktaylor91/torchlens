@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ..._capture.projections import LiveOpView
 from ..._capture.stop import evaluate_halt_stop
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._data_classes.op import (
@@ -149,15 +148,7 @@ def _emit_exhaustive_operation_events(
     # entry against a minted safe copy so the live input keeps its label.
     # out= destinations are excluded -- the op genuinely WROTE into them, so
     # the live destination must keep advancing to this op's label.
-    out_kwarg_value = kwargs.get("out") if isinstance(kwargs, dict) else None
-    if isinstance(out_kwarg_value, torch.Tensor):
-        out_destination_ids: frozenset[int] = frozenset((id(out_kwarg_value),))
-    elif isinstance(out_kwarg_value, (list, tuple)):
-        out_destination_ids = frozenset(
-            id(item) for item in out_kwarg_value if isinstance(item, torch.Tensor)
-        )
-    else:
-        out_destination_ids = frozenset()
+    out_destination_ids = _out_destination_ids(kwargs)
 
     # ``torch._foreach_*`` semantics are ZIPPED: output ``i`` is computed from
     # member ``i`` of each tensor-list argument (plus any whole-call scalar or
@@ -306,13 +297,15 @@ def _emit_exhaustive_operation_events(
                 call_ref_box=call_ref_box,
             ),
         )
-        new_tensor_label = new_layer_entry._label_raw
+        # The committed record backs the returned view; its reads go to the record directly.
+        new_record = object.__getattribute__(new_layer_entry, "_record")
+        new_tensor_label = new_record.label_raw
 
         _classify_new_tensor_in_trace(self, fields_dict, new_tensor_label)
         _tag_tensor_and_track_variations(
             self,
             out_tensor,
-            new_layer_entry,
+            new_record,
             fields_dict_onetensor,
             arg_copies,
             kwarg_copies,
@@ -343,6 +336,17 @@ def _emit_exhaustive_operation_events(
         if options is not None and options.halt is not None:
             halt_ctx = _build_trace_predicate_context(self, fields_dict_onetensor, out_tensor)
             evaluate_halt_stop(self, halt_ctx, options, frontier_output=out_tensor)
+
+
+def _out_destination_ids(kwargs: Any) -> frozenset[int]:
+    """Return the ids of the call's ``out=`` destination tensors (empty without ``out=``)."""
+
+    out_kwarg_value = kwargs.get("out") if isinstance(kwargs, dict) else None
+    if isinstance(out_kwarg_value, torch.Tensor):
+        return frozenset((id(out_kwarg_value),))
+    if isinstance(out_kwarg_value, (list, tuple)):
+        return frozenset(id(item) for item in out_kwarg_value if isinstance(item, torch.Tensor))
+    return frozenset()
 
 
 def _project_foreach_member_parent_fields(
@@ -412,10 +416,8 @@ def _project_foreach_member_parent_fields(
         kept_labels.append(label)
     if kept_labels == original_parents:
         return
-    kept_entries = [
-        cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
-        for label in kept_labels
-    ]
+    require_event = self.capture_events.live_index.require_event
+    kept_entries = [require_event(label) for label in kept_labels]
     _build_graph_relationship_fields(
         self, fields_dict_onetensor, kept_labels, kept_entries, args, kwargs, out_orig
     )

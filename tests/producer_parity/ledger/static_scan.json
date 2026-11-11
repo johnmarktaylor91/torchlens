@@ -6836,7 +6836,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/torch/_ops_arg_slots.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -6893,6 +6893,14 @@
   "file": "torchlens/backends/torch/_ops_emission.py",
   "has_default": false,
   "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/torch/_ops_exhaustive.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -7201,7 +7209,23 @@
  },
  {
   "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/torch/_ops_shared_fields.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "output",
+  "file": "torchlens/backends/torch/_ops_shared_fields.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
   "file": "torchlens/backends/torch/_ops_shared_fields.py",
   "has_default": false,
   "sites": 2,
@@ -7624,11 +7648,27 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "internal_source_ancestors",
+  "file": "torchlens/backends/torch/tensor_tracking.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/backends/torch/tensor_tracking.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/torch/tensor_tracking.py",
+  "has_default": false,
+  "sites": 2,
   "via_getattr": false
  },
  {
