@@ -7,7 +7,7 @@ left unwritten: the freeze settles the same fresh empty list into it.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from itertools import repeat
 from typing import Any
 
 from .._trace_core.cell_states import STATE_DEFAULT, LazyCell
@@ -17,25 +17,28 @@ __all__ = ("clear_parent_params",)
 _object_getattribute = object.__getattribute__
 
 
-def _holds_default(op: Any, fid_cache: dict[int, int]) -> bool:
-    """Return whether ``op``'s building-store ``parent_params`` cell is default-omitted."""
+def _shared_building_rows(ops: list[Any]) -> tuple[list[list[Any]], int] | None:
+    """Return the building rows and ``parent_params`` field id when every op shares one store.
 
+    The slot reads go through ``map`` so they add no per-op Python call.
+    """
+
+    if not ops:
+        return None
     try:
-        store = _object_getattribute(op, "_core")
-        row = _object_getattribute(op, "_row")
+        store_ids = set(map(id, map(_object_getattribute, ops, repeat("_core"))))
     except AttributeError:
-        return False
+        return None
+    if len(store_ids) != 1:
+        return None
+    store = _object_getattribute(ops[0], "_core")
     rows = store.rows_building() if store is not None else None
     if rows is None:
-        return False
-    fid = fid_cache.get(id(store))
-    if fid is None:
-        fid = fid_cache[id(store)] = store.layout.fid_by_name["parent_params"]
-    cell = rows[row][fid]
-    return cell.__class__ is LazyCell and cell.state == STATE_DEFAULT
+        return None
+    return rows, store.layout.fid_by_name["parent_params"]
 
 
-def clear_parent_params(ops: Iterable[Any]) -> None:
+def clear_parent_params(ops: list[Any]) -> None:
     """Write an empty ``parent_params`` list into every op that may hold one.
 
     Parameters
@@ -44,7 +47,13 @@ def clear_parent_params(ops: Iterable[Any]) -> None:
         The trace's ops (``Trace._layer_list``).
     """
 
-    fid_cache: dict[int, int] = {}
-    for op in ops:
-        if not _holds_default(op, fid_cache):
+    shared = _shared_building_rows(ops)
+    if shared is None:
+        for op in ops:
+            op._graph_parent_params = []
+        return
+    rows, fid = shared
+    for op, row in zip(ops, map(_object_getattribute, ops, repeat("_row"))):
+        cell = rows[row][fid]
+        if cell.__class__ is not LazyCell or cell.state != STATE_DEFAULT:
             op._graph_parent_params = []
