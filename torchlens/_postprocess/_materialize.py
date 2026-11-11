@@ -295,7 +295,6 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
         list(journal.module_exit_events),
     )
     op_events = _op_events_in_raw_order(list(journal.op_events))
-    output_version_lane = journal.output_version_events
     input_labels = input_layer_labels(op_events, inputs.input_layers_initial)
     capture_rows = inputs.capture_rows
     plan = RowIngestPlan(op_store.layout) if capture_rows else None
@@ -346,7 +345,7 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
         op_event_labels,
         structure_only=bool(inputs.scatter_options.get("structure_only", False)),
     )
-    output_versions = _output_versions_by_parent(output_version_lane)
+    output_versions = _output_versions_by_parent(journal.output_version_events)
     registered_buffer_names = set(inputs.buffer_initial_values or {})
 
     local_registrations: dict[str, Any] = {}
