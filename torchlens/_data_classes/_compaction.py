@@ -82,11 +82,10 @@ def _take_container_tokens(trace: Any) -> ContainerTokens | None:
     (:func:`hand_off_container_tokens`); this freeze is their last reader.
     """
 
-    core = trace.__dict__.get("_trace_core")
-    pool = getattr(core, "pool", None)
-    tokens = getattr(pool, "tokens", None)
-    if tokens is not None:
-        pool.tokens = None
+    pool = getattr(trace.__dict__.get("_trace_core"), "pool", None)
+    if pool is None:
+        return None
+    tokens, pool.tokens = pool.tokens, None
     return tokens
 
 

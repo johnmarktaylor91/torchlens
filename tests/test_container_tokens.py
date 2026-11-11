@@ -105,7 +105,7 @@ def test_token_debug_check_passes_on_real_captures(
     assert tokens is not None and len(tokens) > 0
     assert traced._trace_core.pool.tokens is None
     assert hits, "no autocast cell was keyed by its token"
-    states = [op.func_autocast_state for op in trace._layer_list]
+    states = [op.call.autocast_state for op in trace._layer_list]
     assert all(isinstance(state, dict) for state in states)
     if mode == "autocast":
         assert any(state.get("cpu", {}).get("enabled") for state in states)
