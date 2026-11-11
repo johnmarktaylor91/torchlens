@@ -32,8 +32,8 @@ from field_diff_lib.faults import FAULTS, PLANT_CASE  # noqa: E402
 from field_diff_lib.mask import Mask  # noqa: E402
 
 #: Entries of the fixed mask, and the digest of their lines (see ``_mask_lines``).
-APPROVED_MASK_ENTRIES = 71
-APPROVED_MASK_DIGEST = "7ff90018e342992e"
+APPROVED_MASK_ENTRIES = 72
+APPROVED_MASK_DIGEST = "b99af388732d79a2"
 
 
 def _mask_lines() -> list[str]:
@@ -54,6 +54,8 @@ def _mask_lines() -> list[str]:
         f"release-later {name} steps " + ",".join(sorted(steps))
         for name, steps in mask_module.RELEASE_LATER_CLASSES.items()
     ]
+    counts = ";".join(f"{name}:{bucket}" for name, bucket in sorted(mask_module.COUNT_ONLY.items()))
+    lines.append(f"count-only {counts}")
     return sorted(lines)
 
 
@@ -78,6 +80,7 @@ def test_every_mask_entry_states_its_rule_and_reason() -> None:
     assert len(mask_module.TYPE_TAG_ONLY_REASON) > 10
     assert len(mask_module.RELEASE_ORDER_REASON) > 10
     assert len(mask_module.RELEASE_LATER_REASON) > 10
+    assert len(mask_module.COUNT_ONLY_REASON) > 10
 
 
 def test_diff_reports_value_type_length_and_missing_key() -> None:

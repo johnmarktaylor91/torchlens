@@ -61,6 +61,13 @@ This list is fixed by capture-core lane H3 and approved once. A later lane
 may not add to it: a new difference between base and head is a finding.
 Lead's capture-core stage 1 rulings (Mon 9 Nov 2026) added the backward
 ``peak_memory`` entry, the ``TYPE_TAG_ONLY`` entry and the ``RELEASE_ORDER`` entry.
+
+``COUNT_ONLY`` names the two private bookkeeping counts the nested-call exit
+lowers: the run count of one capture phase in ``_phase_timings`` and the
+number of entries in ``_code_context_cache``. It compares base with head
+(``count_only.py``): every other bucket, field and value is still compared, and
+every cache entry head holds must equal base's entry under the same key. A
+ruling of Tue 10 Nov 2026 added it.
 """
 
 from __future__ import annotations
@@ -256,6 +263,18 @@ TYPE_TAG_ONLY: dict[str, dict[str, str]] = {
 TYPE_TAG_ONLY_REASON = (
     "capture-core replaced these containers by subclasses that hold row keys and hand out"
     " the same records in the same order; pickle, saves and plain_state keep the base class"
+)
+
+#: Private trace fields where only a count may be lower on head: field to the bucket whose
+#: run count may drop (``""`` for the cache, where only the number of entries may drop).
+COUNT_ONLY: dict[str, str] = {
+    "_phase_timings": "ctx_build_shared_fields",
+    "_code_context_cache": "",
+}
+COUNT_ONLY_REASON = (
+    "a higher-level call whose one tensor output a nested call already logged skips its"
+    " emission, so that phase runs fewer times and the code-context cache holds fewer"
+    " entries; neither is a capture result"
 )
 
 #: The sequence dump compared by release order, and its classes from earliest to latest.

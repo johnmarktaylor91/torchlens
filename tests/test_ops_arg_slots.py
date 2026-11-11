@@ -285,10 +285,11 @@ def test_one_label_read_per_tensor_slot(
 #: same traces read 91, 186 and 159 labels: every derivation read each tensor again.
 #: The receiver-write fast lane and the registration ladder's labeled-argument skip took
 #: ``inplace_mlp`` from 64 to 57 and ``buffer`` from 120 to 118; the merged held-record
-#: lanes measure 50 and 110.
+#: lanes measure 50 and 110. The nested-call exit skips the outer ``F.batch_norm`` emission,
+#: whose label reads take ``buffer`` from 110 to 103.
 _PINNED_LABEL_READS = (
     ("inplace_mlp", _InplaceMLP, (2, 8), 50),
-    ("buffer", _BufferModel, (2, 3, 6, 6), 110),
+    ("buffer", _BufferModel, (2, 3, 6, 6), 103),
     ("nested_args", _NestedArgsModel, (3, 4), 70),
 )
 
