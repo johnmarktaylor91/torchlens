@@ -70,6 +70,7 @@ from ...recording._halt import StopSignal
 from ...recording._types import (
     CaptureSpec,
 )
+from ._ops_arg_slots import current_arg_slots, slot_positions_by_label
 from .tensor_tracking import (
     _get_ancestors_from_parents,
     _locate_parent_tensors_in_args,
@@ -365,8 +366,9 @@ def _build_graph_relationship_fields(
                     LiveOpView(self, self.capture_events.live_index.require_event(out_kwarg_label)),
                 ),
             ]
-    parent_arg_positions = _locate_parent_tensors_in_args(self, parent_layer_entries, args, kwargs)
-    input_ancestors, internal_source_ancestors = _get_ancestors_from_parents(parent_layer_entries)
+    parent_arg_positions, input_ancestors, internal_source_ancestors = _parent_graph_reads(
+        self, parent_layer_entries, args, kwargs
+    )
 
     # Only the keys the freeze (``_op_record_from_log``) reads are written. The
     # graph placeholders postprocess sets (children, output and distance flags,
@@ -387,6 +389,38 @@ def _build_graph_relationship_fields(
 
     in_multi_output = issubclass(type(out_orig), (list, tuple, dict, set))
     fields_dict["in_multi_output"] = in_multi_output
+
+
+def _parent_graph_reads(
+    self: "Trace", parent_entries: list[Any], args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> tuple[dict[str, dict[Any, str]], set[str], set[str]]:
+    """Return the parents' argument positions, input ancestors and internal-source ancestors.
+
+    Values of ``_locate_parent_tensors_in_args`` and ``_get_ancestors_from_parents``. A
+    parent built during capture is a ``LiveOpView``, whose every attribute read resolves
+    through the view's projection; when every parent is one and the op's argument slots
+    were snapshotted, the backing events are read directly (the view projects
+    ``_label_raw``, ``input_ancestors`` and ``internal_source_ancestors`` from these same
+    event fields). Otherwise the general derivations run.
+    """
+
+    events = [
+        object.__getattribute__(entry, "_record")
+        for entry in parent_entries
+        if type(entry) is LiveOpView
+    ]
+    slots = current_arg_slots(self, args, kwargs) if parent_entries else None
+    if slots is None or len(events) != len(parent_entries):
+        input_ancestors, internal_source_ancestors = _get_ancestors_from_parents(parent_entries)
+        positions = _locate_parent_tensors_in_args(self, parent_entries, args, kwargs)
+        return positions, input_ancestors, internal_source_ancestors
+    input_ancestors = set()
+    internal_source_ancestors = set()
+    for event in events:
+        input_ancestors.update(event.input_ancestors)
+        internal_source_ancestors.update(event.internal_source_ancestors)
+    positions = slot_positions_by_label(slots, [event.label_raw for event in events])
+    return positions, input_ancestors, internal_source_ancestors
 
 
 def _extract_through_dynamic_spec(

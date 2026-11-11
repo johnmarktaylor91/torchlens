@@ -100,6 +100,14 @@ class RawGraphWorkspace:
     #: registry key derived for a C callable this capture (``_function_registry_key``),
     #: so ops of one function derive it once. Internal and never persisted.
     _function_key_memo: dict[int, tuple[Any, tuple[Any, ...]]] = field(default_factory=dict)
+    #: ``(id(callable), func name, argument layout)`` -> ``(callable, key fields or
+    #: None, slot plan)`` of the replay argument templates built this capture
+    #: (``backends.torch._args_template_cache``). Internal and never persisted.
+    _args_template_plans: dict[tuple[Any, ...], tuple[Any, ...]] = field(default_factory=dict)
+    #: ``id(parameter)`` -> parameter, for every prepared Parameter this capture's
+    #: session validated through its parameter log (``_session_validated_parameter``).
+    #: Internal and never persisted: it goes away with the workspace.
+    _validated_params: dict[int, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
