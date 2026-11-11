@@ -17,6 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes import _op_copy
+from torchlens._utils._record_group_table import op_attr
 
 _COMPARED_FIELDS = tuple(sorted(_op_copy._OUTPUT_COPY_UNREAD_DERIVED_FIELDS)) + ("arg_expressions",)
 
@@ -66,11 +67,12 @@ def _same(left: Any, right: Any) -> bool:
 
 
 def _output_fields(trace: Any) -> dict[tuple[str, str], Any]:
-    """Freeze the compared fields of every output op."""
+    """Freeze the compared fields of every output op, read as the copy reads them."""
 
     return {
-        (str(label), field): _frozen(getattr(trace[label], field))
-        for label in trace.output_layers
+        (str(op.label), field): _frozen(getattr(op, op_attr(field), None))
+        for op in trace.ops
+        if op.is_output
         for field in _COMPARED_FIELDS
     }
 
