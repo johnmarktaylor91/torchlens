@@ -34,6 +34,7 @@ from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
 from ..._utils.tensor_utils import SaveMode, safe_copy
 from ...recording._types import CaptureSpec
 from ._completeness_origins import internal_scalar_read
+from ._graph_pins import _STATE_BOUNDARY_GRAD_FNS
 from ._ops_arg_slots import current_arg_slots, parent_arg_positions_from_slots
 from ._parent_arg_containers import _is_supported_parent_arg_container, _iter_arg_container_items
 
@@ -51,13 +52,6 @@ _IMPLICIT_BACKWARD_TASK_IDS: weakref.WeakKeyDictionary[Any, int] = weakref.WeakK
 _OWNED_STATE_GRAD_HOOK_HANDLES: weakref.WeakKeyDictionary[Any, list[Any]] = (
     weakref.WeakKeyDictionary()
 )
-
-
-# Model-state grad-fn nodes (a mutated prepared Parameter's capture-pass history),
-# keyed by id to the owning trace's backward-registry slot reference (evicted with
-# that slot and by cleanup). Later forwards chain onto them, so root matching treats
-# them as boundaries (``_defer_at_state_boundary``).
-_STATE_BOUNDARY_GRAD_FNS: dict[int, weakref.ReferenceType[Any]] = {}
 
 
 def _register_state_boundary_grad_fn(trace: Any, grad_fn_handle: Any) -> None:

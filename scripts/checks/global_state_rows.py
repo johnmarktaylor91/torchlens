@@ -700,7 +700,7 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # L9 runtime journals are keyed by the owning Trace and contain only
         # timing/token/finalization bookkeeping. They must disappear with
         # that Trace and never become process-lifetime caches.
-        ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
+        ("torchlens/backends/torch/_graph_pins.py", "_BACKWARD_TRACE_SLOTS"),
         # Backward-ready rerun results -> the rerun capture whose tensor grad
         # hooks route to them; weak on the result, dies with it.
         ("torchlens/intervention/_rerun.py", "_RERUN_GRAPH_SOURCES"),
@@ -768,6 +768,9 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Model-state gradient-hook handles keyed weakly by their owning trace;
         # cleanup() pops and removes them, and entries die with the trace.
         ("torchlens/backends/torch/tensor_tracking.py", "_OWNED_STATE_GRAD_HOOK_HANDLES"),
+        # Pin-release epochs keyed weakly by their owning trace (one int per
+        # refreshed trace, read by the one-backward edge-index token); dies with it.
+        ("torchlens/backends/torch/_graph_pins.py", "_PIN_EPOCHS"),
         ("torchlens/backends/torch/wrappers.py", "_COW_STATE_PTRS_CACHE"),
         ("torchlens/_capture/structure_only.py", "_DISCHARGE_REGISTRY"),
         ("torchlens/_data_classes/_compaction.py", "_COMPACTED_TRACES"),
@@ -1001,10 +1004,10 @@ _PROCESS_CACHES = frozenset(
         # the call shapes a process sees, holds no tensors; a dynamic-spec verdict
         # is re-proved when ``_state._dynamic_arg_specs`` replaces its spec.
         ("torchlens/backends/torch/_ops_argument_fields.py", "_FAST_SHAPES"),
-        ("torchlens/backends/torch/backward.py", "_BACKWARD_GRAD_FN_REGISTRY"),
+        ("torchlens/backends/torch/_graph_pins.py", "_BACKWARD_GRAD_FN_REGISTRY"),
         # Model-state root-matching boundaries, same lifecycle as the registry
         # above: evicted by the owning trace's slot callback and by cleanup().
-        ("torchlens/backends/torch/tensor_tracking.py", "_STATE_BOUNDARY_GRAD_FNS"),
+        ("torchlens/backends/torch/_graph_pins.py", "_STATE_BOUNDARY_GRAD_FNS"),
         ("torchlens/backends/torch/completeness_witness.py", "_FRAMEWORK_FILENAME_VERDICTS"),
         ("torchlens/backends/torch/_module_class_metadata.py", "_module_class_metadata_cache"),
         ("torchlens/backends/torch/ops.py", "_CAPTURE_PRODUCER_POLICIES"),
@@ -1155,7 +1158,7 @@ _WEAKLY_HELD = frozenset(
         # Released-model registry became a WeakSet in fixwave-5 concmem: a
         # release registration must never pin the released model itself.
         ("torchlens/backends/torch/_held_refs.py", "_RELEASED_MODELS"),
-        ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
+        ("torchlens/backends/torch/_graph_pins.py", "_BACKWARD_TRACE_SLOTS"),
         ("torchlens/intervention/_rerun.py", "_RERUN_GRAPH_SOURCES"),
         ("torchlens/backends/torch/backward.py", "_CHECKPOINT_TOKEN_STATE"),
         ("torchlens/backends/torch/_fire_timing.py", "_FIRE_TIMING_STAMPS"),
@@ -1212,6 +1215,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/backends/torch/_module_class_metadata.py", "_source_line_cache"),
         ("torchlens/backends/torch/tensor_tracking.py", "_IMPLICIT_BACKWARD_TASK_IDS"),
         ("torchlens/backends/torch/tensor_tracking.py", "_OWNED_STATE_GRAD_HOOK_HANDLES"),
+        ("torchlens/backends/torch/_graph_pins.py", "_PIN_EPOCHS"),
         ("torchlens/backends/torch/wrappers.py", "_COW_STATE_PTRS_CACHE"),
         ("torchlens/_capture/structure_only.py", "_DISCHARGE_REGISTRY"),
         ("torchlens/_data_classes/_compaction.py", "_COMPACTED_TRACES"),
@@ -1257,6 +1261,7 @@ failures.
 
 _STATIC_EXPORT_LISTS = frozenset(
     {
+        ("torchlens/backends/torch/_graph_pins.py", "__all__"),
         ("torchlens/errors/_quiet.py", "__all__"),
         ("torchlens/__init__.py", "__all__"),
         ("torchlens/_capture/_trace_capture_error.py", "__all__"),
