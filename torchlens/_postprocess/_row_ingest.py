@@ -132,6 +132,7 @@ class RowIngestPlan:
         "pending_fids",
         "source_trace_ref",
         "unset_fids",
+        "values",
     )
 
     def __init__(self, layout: Any) -> None:
@@ -152,6 +153,8 @@ class RowIngestPlan:
         self.source_trace_ref = fid_by_name["_source_trace_ref"]
         self.is_in_conditional_body = fid_by_name["_is_in_conditional_body"]
         self.unset_fids: tuple[int, ...] | None = None
+        #: This ingest's write-time intern table for ``seed_op_values`` (one trace).
+        self.values: dict[Any, Any] = {}
 
     def seed_unset(self, row: list[Any]) -> None:
         """Seed ``None`` into the op fields the capture row leaves unset.
@@ -205,7 +208,7 @@ def adopt_capture_row(
             row[fid] = None
     for fid in plan.none_fids:
         row[fid] = None
-    seed_op_values(row, plan.keys)
+    seed_op_values(row, plan.keys, plan.values)
     if override is not _NO_OVERRIDE:
         row[plan.keys.backend_address] = override
     if row[plan.grad_records] is _MISSING:

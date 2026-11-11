@@ -149,10 +149,8 @@ def _compact_store_rows(
 ) -> None:
     """Pool repeated immutable metadata across a whole building-phase store.
 
-    Column-major equivalent of ``Op._compact_metadata`` (same class ladder,
-    same ``_UNPOOLED_SLOTS`` skips, same container-member handling) operating
-    directly on the row cells, so a core-backed trace pools without paying
-    the per-attribute descriptor protocol.
+    Column-major equivalent of ``Op._compact_metadata`` (same class ladder, same
+    ``_UNPOOLED_SLOTS`` skips, same container-member handling) on the row cells.
 
     Parameters
     ----------
@@ -175,8 +173,11 @@ def _compact_store_rows(
         return
     pooled_classes = _POOLED_CLASSES
     pool_get = pool.get
+    helpers = (pooled_classes, _pool_container_members, _pool_value)
     for fid, name in enumerate(store.layout.names):
         if name in _UNPOOLED_SLOTS:
+            continue
+        if name in _BY_OBJECT_FIELDS and _sweep_by_object(rows, fid, pool, tokens, helpers):
             continue
         for row_cells in rows:
             value = row_cells[fid]
@@ -184,9 +185,7 @@ def _compact_store_rows(
                 continue
             cls = value.__class__
             if cls is bool or cls is int or cls is LazyCell or cls is float:
-                # Nothing below pools these: plain numbers are not pooled
-                # values and a default-omitted cell holds no value yet.
-                continue
+                continue  # plain numbers never pool; a default-omitted cell holds no value
             if cls in pooled_classes and (cls is not Duration or not value):
                 key = (cls, value.hex()) if cls is Duration else (cls, value)
                 pooled = pool_get(key)
@@ -204,3 +203,88 @@ def _compact_store_rows(
                     row_cells[fid] = pooled
             elif isinstance(value, dict):
                 _pool_container_members(value, pool, 0)
+
+
+#: Op fields whose cells repeat a few value objects (part C1: row ingest interns
+#: the quantities and references; the strings come from shared sources). The
+#: sweep visits each distinct object of these columns once instead of each cell.
+_BY_OBJECT_FIELDS = frozenset(
+    {
+        "dtype_ref",
+        "device_ref",
+        "activation_memory",
+        "gradient_memory",
+        "param_memory",
+        "flops_forward",
+        "flops_backward",
+        "func_duration",
+        "dtype",
+        "output_device",
+        "resolver_status",
+        "func_name",
+        "func_qualname",
+        "type",
+        "equivalence_class",
+    }
+)
+
+
+def _sweep_by_object(
+    rows: list[list[Any]],
+    fid: int,
+    pool: dict[Any, Any],
+    tokens: ContainerTokens | None,
+    helpers: tuple[Any, Any, Any],
+) -> bool:
+    """Sweep one column once per distinct cell object; ``False`` leaves it to the per-cell loop.
+
+    Equal to the per-cell sweep: objects are visited in the order of their
+    first cell, so the pool evolves as it would, and visiting one object again
+    changes nothing (its pooled twin, or its members' twins, are already in the
+    pool and pool entries never change), so every cell holding it gets the same
+    replacement as its first cell. Columns with mostly distinct objects return
+    ``False`` (nothing to save).
+    """
+
+    column = [row_cells[fid] for row_cells in rows]
+    distinct = dict(zip(map(id, column), column))
+    if len(distinct) * 2 > len(column):
+        return False
+    for value in distinct.values():
+        pooled = _pooled_cell(value, pool, tokens, helpers)
+        if pooled is not value:
+            for row_cells in rows:
+                if row_cells[fid] is value:
+                    row_cells[fid] = pooled
+    return True
+
+
+def _pooled_cell(
+    value: Any, pool: dict[Any, Any], tokens: ContainerTokens | None, helpers: tuple[Any, Any, Any]
+) -> Any:
+    """Apply the per-cell sweep's ladder to one cell value; return what the cell should hold.
+
+    ``helpers`` is ``op.py``'s ``(_POOLED_CLASSES, _pool_container_members, _pool_value)``.
+    """
+
+    pooled_classes, pool_container_members, pool_value = helpers
+    if value is None or value is _MISSING:
+        return value
+    cls = value.__class__
+    if cls is bool or cls is int or cls is LazyCell or cls is float:
+        return value
+    if cls in pooled_classes and (cls is not Duration or not value):
+        key = (cls, value.hex()) if cls is Duration else (cls, value)
+        pooled = pool.get(key)
+        if pooled is None:
+            pool[key] = value
+            return value
+        return pooled
+    if cls is list or cls is set or cls is dict:
+        if not (cls is dict and tokens is not None and members_inert(tokens, value)):
+            pool_container_members(value, pool, 0)
+    elif cls is tuple or cls is frozenset:
+        return pool_value(value, pool)
+    elif isinstance(value, dict):
+        pool_container_members(value, pool, 0)
+    return value
