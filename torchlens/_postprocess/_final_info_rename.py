@@ -18,6 +18,7 @@ from collections.abc import Callable
 from itertools import repeat
 from typing import TYPE_CHECKING, Any
 
+from .._trace_core.cell_states import LazyCell
 from ._conditional_child_rename import _rename_children_by_cond, _rename_elif_children
 from ._label_rename import _rename_label_dataclass
 from ._replay_template_cells import carry_templates, template_labels
@@ -163,7 +164,8 @@ def _rename_conditional_children(
     An op that carries ``conditional_arm_children`` gets it renamed and its
     then, elif and else views projected from the renamed value (an empty one
     projects three empty views); an op without it gets each view that is set
-    renamed on its own.
+    renamed on its own. An empty arm or elif dict still default-omitted is left
+    so: its default answers the same empty dict.
     """
 
     lookup = mapping.__getitem__
@@ -187,7 +189,11 @@ def _rename_conditional_children(
             if other:
                 row[f_else] = list(map(lookup, other))
         elif arms.__class__ is dict and not arms:
-            row[f_arm], row[f_then], row[f_elif], row[f_else] = {}, [], {}, []
+            row[f_then], row[f_else] = [], []
+            if row[f_arm].__class__ is not LazyCell:
+                row[f_arm] = {}
+            if row[f_elif].__class__ is not LazyCell:
+                row[f_elif] = {}
         else:
             renamed = row[f_arm] = _rename_children_by_cond(arms, mapping)
             row[f_then], row[f_elif], row[f_else] = project_views(renamed)

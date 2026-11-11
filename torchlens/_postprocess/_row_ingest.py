@@ -31,6 +31,7 @@ from .._ir._op_row_seed import layout_keys, seed_op_values
 from .._ir._row_journal import _ROW_TAKE_PATHS, _RowOpRecord
 from .._ir.op_record_scatter import _write_overlay_cells
 from .._ir.refs import journal_record
+from .._trace_core.cell_states import LazyCell
 from .._trace_core.op_store import _MISSING
 
 __all__: tuple[str, ...] = ()
@@ -43,6 +44,13 @@ _PENDING_FIELDS = (
     "_pending_transformed_grad_blob_id",
 )
 _NO_OVERRIDE = object()
+#: Sanctioned join cells left default-omitted when empty, with the exact class of
+#: the empty value the join writes (and the row's default answers).
+_OMITTED_EMPTY_JOIN_CELLS: tuple[tuple[str, type], ...] = (
+    ("out_versions_by_child", dict),
+    ("parent_param_ops", dict),
+    ("module_entry_arg_keys", defaultdict),
+)
 
 
 def hand_off_capture_rows(
@@ -128,6 +136,7 @@ class RowIngestPlan:
         "is_in_conditional_body",
         "keys",
         "none_fids",
+        "omit_empty",
         "order_fids",
         "pending_fids",
         "source_trace_ref",
@@ -152,6 +161,7 @@ class RowIngestPlan:
         self.construction_done = fid_by_name["_construction_done"]
         self.source_trace_ref = fid_by_name["_source_trace_ref"]
         self.is_in_conditional_body = fid_by_name["_is_in_conditional_body"]
+        self.omit_empty = {fid_by_name[name]: cls for name, cls in _OMITTED_EMPTY_JOIN_CELLS}
         self.unset_fids: tuple[int, ...] | None = None
         #: This ingest's write-time intern table for ``seed_op_values`` (one trace).
         self.values: dict[Any, Any] = {}
@@ -225,14 +235,26 @@ def _write_join_cells(row: list[Any], join_cells: Mapping[str, object], plan: Ro
 
     Names that are not store fields are ``Op`` properties and are dropped, as
     construction drops them; ``source_trace`` and ``is_in_conditional_body``
-    go to their backing cells.
+    go to their backing cells. An empty sanctioned container of
+    ``_OMITTED_EMPTY_JOIN_CELLS`` is not written over the row's default marker,
+    which answers the same empty value (``module_entry_arg_keys`` a
+    ``defaultdict(list)``).
     """
 
     fid_by_name = plan.fid_by_name
+    omit = plan.omit_empty
     override = _NO_OVERRIDE
     for name, value in join_cells.items():
         fid = fid_by_name.get(name)
         if fid is not None:
+            if (
+                fid in omit
+                and not value
+                and value.__class__ is omit[fid]
+                and row[fid].__class__ is LazyCell
+                and (value.__class__ is dict or getattr(value, "default_factory", None) is list)
+            ):
+                continue
             row[fid] = value
         elif name == "_materialized_backend_address":
             override = value

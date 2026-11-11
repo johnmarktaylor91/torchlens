@@ -180,7 +180,8 @@ class RowScan:
         Leaves the cells as the layer build and the rebind left them, and
         notes in ``simple`` each op whose layer state needs no merge. Stops at
         the first op that makes the scan eager: the caller's rebind then
-        resets the fields itself.
+        resets the fields itself. A default-omitted ``conditional_arm_children``
+        or ``annotations`` cell (its default an empty dict) counts as empty.
         """
         # One flat loop on purpose (complexity): a helper would add a counted call per op.
         rows, simple = self.rows, self.simple
@@ -205,13 +206,17 @@ class RowScan:
                 and not stack
                 and entry.__class__ is list
                 and not entry
-                and row[f_arms].__class__ is dict
-                and not row[f_arms]
+                and (
+                    (row[f_arms].__class__ is dict and not row[f_arms])
+                    or (row[f_arms].__class__ is LazyCell and row[f_arms].source is dict)
+                )
                 and (
                     terminal is None or (terminal.__class__ is LazyCell and terminal.source is None)
                 )
-                and row[f_notes].__class__ is dict
-                and "collective" not in row[f_notes]
+                and (
+                    (row[f_notes].__class__ is dict and "collective" not in row[f_notes])
+                    or (row[f_notes].__class__ is LazyCell and row[f_notes].source is dict)
+                )
                 and row[f_full].__class__ is str
                 and (row[f_memory] is None or row[f_memory].__class__ is Bytes)
                 and (row[f_count] is None or row[f_count].__class__ is int)
