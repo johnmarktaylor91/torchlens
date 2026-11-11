@@ -62,7 +62,7 @@ def with_arg_position_keys(store: Any, tokens: ContainerTokens | None) -> Contai
     fid = names.index("parent_arg_positions")
     if tokens is None:
         tokens = ContainerTokens()
-    register_arg_position_keys(tokens.by_id, [row_cells[fid] for row_cells in rows])
+    register_arg_position_keys(tokens.by_id, [row_cells[fid] for row_cells in rows or ()])
     return tokens
 
 
