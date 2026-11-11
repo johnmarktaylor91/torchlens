@@ -291,6 +291,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # Classes the last install skipped over a foreign Python __new__
         # (rebuilt on every install).
         ("torchlens/backends/torch/legacy_ctors.py", "_SKIPPED_FOREIGN_NEW"),
+        # Roster whose layouts the last install of this wrapper epoch verified:
+        # set by wrap_torch's install, reused only for the identical roster,
+        # cleared by unwrap_torch.
+        ("torchlens/backends/torch/legacy_ctors.py", "_PROBED_ROSTER"),
         ("torchlens/backends/torch/belt.py", "_ledger"),
         ("torchlens/backends/torch/belt.py", "_member_map"),
         ("torchlens/backends/torch/belt.py", "_report"),
@@ -300,9 +304,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # clearing: an evicted id means a recycled id reads as new, never as swept.
         ("torchlens/backends/torch/belt.py", "_swept_ids_live"),
         ("torchlens/backends/torch/belt.py", "_swept_module_ids"),
-        # Id tuple of the last all-swept sys.modules snapshot: reset to None by
-        # every eviction callback and at the same belt reset site.
-        ("torchlens/backends/torch/belt.py", "_all_swept_ids"),
+        # Value list of the last all-swept sys.modules snapshot (compared by
+        # identity): reset to None by every eviction callback and at the same belt
+        # reset site.
+        ("torchlens/backends/torch/belt.py", "_all_swept_entries"),
         # Per-build verdicts of which lazy-seed accelerators torch was compiled with,
         # filled once on first capture seeding (a build constant, never invalidated).
         ("torchlens/_utils/_torch_seed_backends.py", "BACKEND_COMPILED"),
@@ -879,6 +884,10 @@ they carry an epoch/version counter where downstream caches must invalidate.
 
 _PROCESS_CACHES = frozenset(
     {
+        # Output-node copy read plan per (Op class, shared fields, unread fields):
+        # descriptors and attribute names derived from the class and the field
+        # order constant, so an entry never goes stale.
+        ("torchlens/_data_classes/_op_output_copy.py", "_PLANS"),
         # The last trace asked for its payload-window state and that state (one tuple,
         # the trace held by weakref): a one-entry front for _COW_STATE_PTRS_CACHE.
         ("torchlens/backends/torch/wrappers.py", "_COW_LAST_TRACE"),
