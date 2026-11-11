@@ -96,7 +96,8 @@ def test_bad_fork_backend_is_skipped_like_torch(
 ) -> None:
     """A compiled backend in a bad fork is skipped by both torch and the replay."""
 
-    monkeypatch.setitem(sb.BACKEND_COMPILED, "cuda", True)
+    for name in ("cuda", "xpu", "mtia"):
+        monkeypatch.setitem(sb.BACKEND_COMPILED, name, True)
     monkeypatch.setattr(torch.cuda, "_is_in_bad_fork", lambda: True)
     expected = _torch_calls(seed_calls, 5)
     assert "cuda" not in {name for name, _ in expected}
@@ -104,10 +105,10 @@ def test_bad_fork_backend_is_skipped_like_torch(
     assert seed_calls == expected
 
 
-def test_real_compiled_probe_matches_torch_build() -> None:
+def test_real_compiled_probe_matches_torch_build(monkeypatch: pytest.MonkeyPatch) -> None:
     """The cached verdicts follow each backend's own ``_is_compiled`` probe."""
 
-    sb.BACKEND_COMPILED.clear()
+    monkeypatch.setattr(sb, "BACKEND_COMPILED", {})
     for name in ("cuda", "xpu", "mtia"):
         module = getattr(torch, name)
         assert sb._backend_compiled(name, module) is bool(module._is_compiled())

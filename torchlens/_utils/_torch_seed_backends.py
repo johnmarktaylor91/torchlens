@@ -118,5 +118,5 @@ def manual_seed_compiled_backends(seed: int) -> None:
         if _backend_compiled(name, module) and not module._is_in_bad_fork():
             getattr(module, _SEED_CALLS[name])(seed)
     if seeds_custom_device:
-        torch.random._seed_custom_device(seed)  # type: ignore[attr-defined]
+        torch.random._seed_custom_device(seed)
     torch.default_generator.manual_seed(seed)
