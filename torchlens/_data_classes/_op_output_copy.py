@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
-from .._ir.refs import DeviceRef, DtypeRef
 from .._quantities import Bytes, Duration, Flops
 from .._trace_core.op_store import _MISSING, row_clone_scope
 from .._utils._record_group_table import op_attr
@@ -34,9 +33,10 @@ from . import _op_copy
 if TYPE_CHECKING:
     from .op import Op
 
-#: Exact classes shared as they are (the ``_op_copy`` immutable set plus the two
-#: frozen, string-only reference dataclasses). A subclass of any of them takes
-#: the ``_copy_op_field_value`` path, as before.
+#: Exact classes shared as they are (the ``_op_copy`` immutable set). A subclass
+#: of any of them takes the ``_copy_op_field_value`` path, as before. A frozen
+#: dataclass whose every field holds one of these exact classes (the dtype and
+#: device references) is immutable too and is shared as well.
 _SHARED_CLASSES = frozenset(
     {
         str,
@@ -50,8 +50,6 @@ _SHARED_CLASSES = frozenset(
         Bytes,
         Duration,
         Flops,
-        DtypeRef,
-        DeviceRef,
     }
 )
 _FLAT_CONTAINER_CLASSES = frozenset({list, set})
@@ -131,22 +129,36 @@ def _field_plan(
     return plan
 
 
+def _is_frozen_shared_record(value: Any, value_class: type) -> bool:
+    """Return whether ``value`` is a frozen dataclass of shared-class members only."""
+
+    params = getattr(value_class, "__dataclass_params__", None)
+    if params is None or not params.frozen:
+        return False
+    return all(
+        getattr(value, name, _MISSING).__class__ in _SHARED_CLASSES
+        for name in value_class.__dataclass_fields__  # type: ignore[attr-defined]
+    )
+
+
 def _independent_value(value: Any) -> Any:
     """Return ``value`` or a copy of it that shares no container with it."""
 
     value_class = value.__class__
-    if value_class in _SHARED_CLASSES:
-        return value
     shared_classes = _SHARED_CLASSES
-    if value_class in _FLAT_CONTAINER_CLASSES:
-        if all(member.__class__ in shared_classes for member in value):
-            return value_class(value)
-    elif value_class is dict:
-        if all(
-            key.__class__ in shared_classes and item.__class__ in shared_classes
-            for key, item in value.items()
-        ):
-            return dict(value)
+    if value_class in shared_classes:
+        return value
+    if value_class in _FLAT_CONTAINER_CLASSES and all(
+        member.__class__ in shared_classes for member in value
+    ):
+        return value_class(value)
+    if value_class is dict and all(
+        key.__class__ in shared_classes and item.__class__ in shared_classes
+        for key, item in value.items()
+    ):
+        return dict(value)
+    if _is_frozen_shared_record(value, value_class):
+        return value
     return _op_copy._copy_op_field_value(value)
 
 
