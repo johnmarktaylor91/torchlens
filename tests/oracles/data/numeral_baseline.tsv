@@ -10287,6 +10287,7 @@ test-docstrings	tests/test_trace_attr_ownership.py	50
 test-docstrings	tests/test_trace_core_substrate.py	1.0
 test-docstrings	tests/test_trace_core_substrate.py	11
 test-docstrings	tests/test_trace_field_invariant.py	10
+test-docstrings	tests/test_trace_lifetime.py	3.10
 test-docstrings	tests/test_track_collector_embedding_budget.py	21
 test-docstrings	tests/test_track_explorer_gate_rows.py	124
 test-docstrings	tests/test_track_explorer_gate_rows.py	128,
