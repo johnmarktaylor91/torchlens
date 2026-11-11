@@ -18,6 +18,7 @@ forming them on first read would move that work, not remove it.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from .._record_type import record_type
@@ -57,12 +58,13 @@ def label_parts(
     out_kinds = list(kinds)
     type_indices = [0] * count
     step_indices = [0] * count
-    type_counter: dict[str, int] = {}
+    # A missing type starts at 0; the default factory runs in C, so no call per op.
+    type_counter: defaultdict[str, int] = defaultdict(int)
     next_step = 1
     for index, kind, pass_number, group in zip(range(count), kinds, passes, groups, strict=True):
         if pass_number == 1:
-            type_index = type_counter[kind] if kind in type_counter else 1
-            type_counter[kind] = type_index + 1
+            type_counter[kind] += 1
+            type_index = type_counter[kind]
             if kind in _UNNUMBERED:
                 step_index = 0
             else:
@@ -70,7 +72,7 @@ def label_parts(
                 next_step += 1
         else:
             head_label = group[0] if group else None
-            head = position[head_label] if head_label in position else count
+            head = position.get(head_label, count)
             if head >= index:
                 raise _NotColumnar("recurrent_ops")
             kind = out_kinds[index] = out_kinds[head]
@@ -108,21 +110,16 @@ def map_labels_by_column(trace: Trace) -> bool:
         out_kinds, type_indices, step_indices = label_parts(kinds, passes, raws, groups)
     except _NotColumnar:
         return False
-    _write_labels(trace, table, out_kinds, type_indices, step_indices, passes, num_passes, raws)
+    _write_labels(trace, table, (out_kinds, type_indices, step_indices, passes, num_passes, raws))
     return True
 
 
-def _write_labels(
-    trace: Trace,
-    table: Any,
-    kinds: list[str],
-    type_indices: list[int],
-    step_indices: list[int],
-    passes: list[int],
-    num_passes: list[int],
-    raws: list[Any],
-) -> None:
-    """Write the label cells of every row and set the trace's four label maps."""
+def _write_labels(trace: Trace, table: Any, columns: tuple[list[Any], ...]) -> None:
+    """Write the label cells of every row and set the trace's four label maps.
+
+    ``columns`` holds, in op order, each op's label type, type index, step
+    index, pass number, pass count and raw label.
+    """
 
     fids = table.fids
     f_type, f_step = fids["type_index"], fids["step_index"]
@@ -133,7 +130,7 @@ def _write_labels(
     to_op: dict[Any, str] = {}
     to_raw: dict[str, Any] = {}
     for row, kind, type_index, step_index, pass_number, passes_of_layer, raw in zip(
-        table.rows, kinds, type_indices, step_indices, passes, num_passes, raws, strict=True
+        table.rows, *columns, strict=True
     ):
         row[f_type] = type_index
         row[f_step] = step_index
