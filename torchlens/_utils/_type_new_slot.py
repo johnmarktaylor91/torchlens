@@ -21,7 +21,7 @@ from __future__ import annotations
 import ctypes
 import sys
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -177,16 +177,56 @@ def probe_type_new_slot_patch(cls: Any) -> bool:
         :func:`_tp_new_slot_verified`.
     """
 
-    if sys.implementation.name != "cpython" or not isinstance(cls, type):
-        return False
+    return probe_type_new_slot_patches((cls,))[0]
+
+
+_PROBE_ERRORS = (AttributeError, TypeError, ValueError, OSError)
+
+
+def _reference_layout_verified() -> bool:
+    """Return whether the reference classes' layouts and ``tp_new`` field check out."""
+
     try:
         return (
-            all(_layout_matches(ref) for ref in (cls, _InheritedNewProbe, _PythonNewProbe))
+            all(_layout_matches(ref) for ref in (_InheritedNewProbe, _PythonNewProbe))
             and _tp_new_slot_verified()
         )
-    except (AttributeError, TypeError, ValueError, OSError):
-        # A non-CPython-shaped object or an unreadable field: degrade to False.
+    except _PROBE_ERRORS:
         return False
+
+
+def probe_type_new_slot_patches(classes: Sequence[Any]) -> list[bool]:
+    """Return :func:`probe_type_new_slot_patch` for each class, in order.
+
+    The reference-class half of the probe reads only the reference classes, so
+    one batch evaluates it once (on the first class whose own layout matches)
+    instead of once per class; every verdict equals the single-class probe's.
+
+    Parameters
+    ----------
+    classes:
+        Classes to patch, in roster order.
+
+    Returns
+    -------
+    list[bool]
+        One verdict per class.
+    """
+
+    if sys.implementation.name != "cpython":
+        return [False for _cls in classes]
+    references: bool | None = None
+    verdicts = []
+    for cls in classes:
+        try:
+            own = isinstance(cls, type) and _layout_matches(cls)
+        except _PROBE_ERRORS:
+            # A non-CPython-shaped object or an unreadable field: degrade to False.
+            own = False
+        if own and references is None:
+            references = _reference_layout_verified()
+        verdicts.append(own and bool(references))
+    return verdicts
 
 
 def has_python_new_trampoline(cls: type) -> bool:

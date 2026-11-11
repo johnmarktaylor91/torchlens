@@ -92,6 +92,10 @@ _NAMESPACE_INERT_TYPES = frozenset(
         float,
         bool,
         type(None),
+        torch.dtype,
+        torch.layout,
+        torch.memory_format,
+        torch.qscheme,
     }
 )
 
