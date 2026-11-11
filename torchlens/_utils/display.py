@@ -117,8 +117,12 @@ def _record_phase_timing(trace: "Trace", bucket: str, elapsed_s: float) -> None:
         Elapsed wall-clock seconds.
     """
 
-    timings = trace.__dict__.setdefault("_phase_timings", {})
-    bucket_stats = timings.setdefault(bucket, {"total_s": 0.0, "count": 0})
+    try:
+        # Per-op path: the bucket exists after its first sample (no call needed).
+        bucket_stats = trace.__dict__["_phase_timings"][bucket]
+    except KeyError:
+        timings = trace.__dict__.setdefault("_phase_timings", {})
+        bucket_stats = timings.setdefault(bucket, {"total_s": 0.0, "count": 0})
     bucket_stats["total_s"] += elapsed_s
     bucket_stats["count"] += 1
 
