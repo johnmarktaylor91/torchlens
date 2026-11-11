@@ -394,7 +394,6 @@ def _fill_row(
     trace: Trace,
     fields_dict: Mapping[str, Any],
     fire_results: tuple[FireResult, ...],
-    require_event: Any = None,
 ) -> None:
     """Write every per-op cell of one exhaustive draft but its function cells into ``row``.
 
@@ -407,7 +406,19 @@ def _fill_row(
     The same holds for an empty ``edits`` or ``annotations`` cell.
     """
 
-    _fill_core_graph(row, f, trace, fields_dict, require_event)
+    _fill_core_graph(row, f, trace, fields_dict)
+    _fill_rest(row, f, trace, fields_dict, fire_results)
+
+
+def _fill_rest(
+    row: Any,
+    f: Any,
+    trace: Trace,
+    fields_dict: Mapping[str, Any],
+    fire_results: tuple[FireResult, ...],
+) -> None:
+    """Write the output, facet and transform cells (``_fill_row`` after the core graph)."""
+
     _fill_output(row, f, fields_dict)
     _fill_transform(row, f, trace, fields_dict, _fill_facets(row, f, fields_dict, fire_results))
 
@@ -500,10 +511,8 @@ def _plan_for(layout: OpStoreLayout) -> _RowPlan:
 def write_draft_row(
     store: Any,
     trace: Trace,
-    fields_dict: Mapping[str, Any],
-    fire_results: tuple[FireResult, ...],
+    draft: Any,
     function: FunctionCallRef,
-    require_event: Any = None,
 ) -> int:
     """Append one exhaustive draft's row to ``store`` and return its index.
 
@@ -519,14 +528,12 @@ def write_draft_row(
         A building ``OpRowStore`` (or any store with ``layout`` and ``adopt_row``).
     trace
         Active capture trace (the ``source_trace`` cell and the live index).
-    fields_dict
-        The final exhaustive draft, as passed to ``_op_record_from_log``.
-    fire_results
-        Intervention results for this op.
+    draft
+        The op's commit snapshot: ``fields`` (the final exhaustive draft, as
+        passed to ``_op_record_from_log``), ``fire_results`` (its intervention
+        results) and ``require_event`` (the parent-label resolver).
     function
         The op's resolved (shared) function-call ref.
-    require_event
-        Parent-label resolver; ``None`` reads the trace's live index.
 
     Returns
     -------
@@ -541,7 +548,9 @@ def write_draft_row(
     template = plan.template
     row = template.copy()
     fids = plan.fids
-    _fill_row(row, fids, trace, fields_dict, fire_results, require_event)
+    fields_dict = draft.fields
+    _fill_core_graph(row, fids, trace, fields_dict, draft.require_event)
+    _fill_rest(row, fids, trace, fields_dict, draft.fire_results)
     _write_function_ref_cells(row, fids, function)
     fid, marker = plan.var_names
     row[fid] = marker  # the function-ref writer's fresh empty list

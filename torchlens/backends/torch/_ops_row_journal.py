@@ -64,6 +64,9 @@ def _row_journal_for(trace: Trace, layout: OpStoreLayout) -> _RowJournal:
     return journal
 
 
+_SIDE_REF_SLOTS = {"module_stack": 0, "backend_semantics": 2}
+"""Lazy names answered from ``side_refs()`` (frames, transformed-output ref, semantics) by slot."""
+
 _OUTPUT_REQUIRES_GRAD: list[Any] = [None, False]
 """(weak ref to an op output, its ``requires_grad``), read in the exhaustive emit.
 
@@ -183,11 +186,8 @@ class _PendingRow(dict[str, Any]):
         if name == "output":
             value = self[name] = self.output_ref()
             return value
-        if name == "module_stack":
-            value = self[name] = self.side_refs()[0]
-            return value
-        if name == "backend_semantics":
-            value = self[name] = self.side_refs()[2]
+        if name in _SIDE_REF_SLOTS:
+            value = self[name] = self.side_refs()[_SIDE_REF_SLOTS[name]]
             return value
         if name == "function":
             value = self[name] = self.function_ref()
@@ -236,11 +236,7 @@ class _PendingRow(dict[str, Any]):
         rest.is_scalar_bool = fields["is_scalar_bool"]
         rest.fire_results = self.fire_results
         store = journal.store
-        row = store._rows[
-            _ops_row_cells.write_draft_row(
-                store, trace, fields, self.fire_results, function, self.require_event
-            )
-        ]
+        row = store._rows[_ops_row_cells.write_draft_row(store, trace, self, function)]
         if "parent_arg_positions" in self:
             # The copy the handle already answered is the row's cell, as at an eager commit.
             row[journal.fids["parent_arg_positions"]] = self["parent_arg_positions"]
@@ -285,7 +281,7 @@ def commit_row_record(
     pending.device = str(tensor.device)
     pending.handle_id = str(id(tensor))
     pending._options_save_mode = trace._options_save_mode
-    pending.events = dict(zip(parents, found))
+    pending.events = dict(zip(parents, found, strict=True))
     pending.layout = layout
     pending.edge_uses = edge_uses
     pending.side = pending.output = pending.built = pending.function = None
@@ -297,7 +293,8 @@ def commit_row_record(
     pending.labels = (fields["_label_raw"], parents)
     _fill_items(pending, fields)
     handle = _new_object(_RowOpRecord)
-    handle._journal = handle._row = handle._rest = handle._record = handle._parents = None
+    handle._row = handle._rest = handle._record = handle._parents = None
+    handle._journal = None  # type: ignore[assignment]  # bound when the pending row settles
     handle._patch = {}
     handle._pending = pending
     handle.seq = 0
@@ -328,6 +325,7 @@ def _fill_items(pending: _PendingRow, fields: dict[str, Any]) -> None:
     pending["internal_source_ancestors"] = internal
     pending["root_ancestors"] = roots
     pending["has_internal_source_ancestor"] = has_internal
-    semantics = fields["backend_semantics"] if "backend_semantics" in fields else None
-    if semantics is not None:
-        pending["backend_semantics"] = semantics
+    if "backend_semantics" in fields:
+        semantics = fields["backend_semantics"]
+        if semantics is not None:
+            pending["backend_semantics"] = semantics
