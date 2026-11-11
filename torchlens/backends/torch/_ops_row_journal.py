@@ -291,8 +291,6 @@ def commit_row_record(
     pending.side = pending.output = pending.built = pending.function = None
     box: Any = draft.call_ref_box
     if box:
-        if box[0].__class__ is _PendingRow:
-            box[0] = box[0].function_ref()
         pending.function = _resolve_call_function_ref(fields, box)
     elif box is not None:
         box += (pending,)

@@ -219,18 +219,22 @@ def _function_call_ref_from_fields(fields_dict: dict[str, Any]) -> FunctionCallR
 
 def _resolve_call_function_ref(
     fields_dict: dict[str, Any],
-    call_ref_box: list[FunctionCallRef] | None,
+    call_ref_box: list[Any] | None,
 ) -> FunctionCallRef:
     """Return the (shared) function-call ref for one output event.
 
     The first output of a wrapped call builds the ref and parks it in
     ``call_ref_box``; sibling outputs reuse it verbatim when their per-output
     facts match, otherwise derive via ``dataclasses.replace`` (container
-    fields stay shared by reference either way).
+    fields stay shared by reference either way). A deferred first output parks
+    its pending row in the box instead; the first sibling swaps in that row's
+    ref (built once, the object the row itself answers).
     """
 
     if call_ref_box:
         shared = call_ref_box[0]
+        if shared.__class__ is not FunctionCallRef:
+            shared = call_ref_box[0] = shared.function_ref()
         overrides = {
             name: fields_dict[name]
             for name in _FUNCTION_REF_PER_OUTPUT_FIELDS
