@@ -206,7 +206,8 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 4200 -> 3900: the GradFn membership, graph-relation and growth-fold
     # helpers moved to _grad_fn_membership.py, _grad_fn_graph.py and
     # _grad_fn_growth.py (3871 measured).
-    "torchlens/backends/torch/backward.py": 3900,
+    # 3900 -> 3800: the grad-fn pin tables moved to _graph_pins.py (3795 measured).
+    "torchlens/backends/torch/backward.py": 3800,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
     # 3850 -> 3900: L9 adds the two DROP-gated backward-residuals fields
