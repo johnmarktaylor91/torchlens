@@ -14,13 +14,14 @@ import weakref
 from typing import Any
 
 from ... import _state
-from ..._utils._model_walk import module_tree_key, same_module_tree
+from ..._utils._model_walk import kept_tree_key, module_tree_key, same_module_tree
 
 #: Returned by :func:`changed_module_tree` when the recorded tree still holds.
 UNCHANGED: Any = object()
 
 #: Model -> the tree key its last one-time preparation ran over. Weak in the
-#: model, and the key holds modules weakly, so nothing here keeps a model alive.
+#: model, and the kept key holds modules and classes weakly, so nothing here
+#: keeps a model alive.
 _prepared_trees: weakref.WeakKeyDictionary[Any, tuple[Any, ...]] = weakref.WeakKeyDictionary()
 
 
@@ -48,7 +49,7 @@ def record_prepared_tree(model: Any, tree: tuple[Any, ...] | None) -> None:
     if tree is None:
         _prepared_trees.pop(model, None)
     else:
-        _prepared_trees[model] = tree
+        _prepared_trees[model] = kept_tree_key(tree)
 
 
 __all__ = ["UNCHANGED", "changed_module_tree", "module_tree_key", "record_prepared_tree"]

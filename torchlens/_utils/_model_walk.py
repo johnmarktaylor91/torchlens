@@ -32,7 +32,7 @@ from torch import nn
 
 from ._torch_compat import get_module_named_members
 
-#: Root module -> its recorded walk. Weak in the root; the value holds modules weakly.
+#: Root module -> its recorded walk. Weak in the root; the value holds modules and classes weakly.
 _RECORDED: weakref.WeakKeyDictionary[nn.Module, tuple[Any, ...]] = weakref.WeakKeyDictionary()
 
 #: The walk methods a class must inherit unchanged from ``nn.Module`` for the record to stand in.
@@ -93,6 +93,8 @@ def same_module_tree(old: tuple[Any, ...], new: tuple[Any, ...]) -> bool:
 
     Modules are compared by identity, never with ``==``: a module class with
     its own ``__eq__`` cannot make a replaced module read as the old one.
+    ``old`` may be a kept key (:func:`kept_tree_key`), whose classes are weak
+    references; each is compared by identity with the class ``new`` holds.
     """
 
     if len(old) != len(new):
@@ -102,15 +104,31 @@ def same_module_tree(old: tuple[Any, ...], new: tuple[Any, ...]) -> bool:
         right = new[index]
         if left is right:
             continue
-        if type(left) is weakref.ref and type(right) is weakref.ref:
+        if type(left) is weakref.ref:
             target = left()
-            if target is None or target is not right():
+            if type(right) is weakref.ref:
+                right = right()
+            if target is None or target is not right:
                 return False
             continue
         if type(left) is str and type(right) is str and left == right:
             continue
         return False
     return True
+
+
+def kept_tree_key(key: tuple[Any, ...]) -> tuple[Any, ...]:
+    """Return ``key`` with each module class held through a weak reference, for keeping.
+
+    A cache on the model keeps the key in its value, and a class in it would
+    keep the model alive: the class's methods reach the namespace the class was
+    defined in (a script's or notebook's globals), which usually holds the model,
+    so the weak key would be held by its own value, with every trace and saved
+    activation that namespace reaches. :func:`same_module_tree` compares a kept
+    key with a fresh one, so only the kept copy pays for the weak references.
+    """
+
+    return tuple([weakref.ref(item) if isinstance(item, type) else item for item in key])
 
 
 def _stock_walks(key: tuple[Any, ...]) -> bool:
@@ -137,18 +155,20 @@ def _stock_walks(key: tuple[Any, ...]) -> bool:
 def _record(model: nn.Module, key: tuple[Any, ...]) -> tuple[Any, ...]:
     """Walk ``model`` live and record the walk under ``key``.
 
-    The record is ``(key, eligible, names, refs, path_names, path_refs)``; the
-    last four are empty when a class in the tree walks its own way, so later
-    reads of the same tree go straight to the live walk.
+    The record is ``(key, eligible, names, refs, path_names, path_refs)``, with
+    the key kept through :func:`kept_tree_key` so the record holds nothing
+    strongly; the last four are empty when a class in the tree walks its own
+    way, so later reads of the same tree go straight to the live walk.
     """
 
+    kept = kept_tree_key(key)
     if not _stock_walks(key):
-        record: tuple[Any, ...] = (key, False, (), (), (), ())
+        record: tuple[Any, ...] = (kept, False, (), (), (), ())
     else:
         named = tuple(model.named_modules())
         every_path = tuple(model.named_modules(remove_duplicate=False))
         record = (
-            key,
+            kept,
             True,
             tuple(name for name, _module in named),
             tuple(weakref.ref(module) for _name, module in named),
@@ -327,6 +347,7 @@ def _own_members(module: nn.Module, registry: str, method: str) -> tuple[tuple[s
 
 __all__ = [
     "current_tree_record",
+    "kept_tree_key",
     "model_modules",
     "model_named_buffers",
     "model_named_modules",

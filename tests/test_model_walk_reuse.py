@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._utils import _model_walk as walk
+from torchlens._utils import _detached_activations as detached, _model_walk as walk
 
 
 class _Scaled(nn.Module):
@@ -225,6 +225,55 @@ def test_the_record_keeps_nothing_alive() -> None:
     del model
     gc.collect()
     assert all(ref() is None for ref in refs)
+
+
+#: A script that defines its model class and keeps the model in the same namespace,
+#: as a notebook, a ``runpy`` run or the example bank does.
+_SCRIPT = """
+import torch
+from torch import nn
+
+
+class Toy(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(4, 8)
+        self.fc2 = nn.Linear(8, 2)
+
+    def forward(self, x):
+        return self.fc2(torch.relu(self.fc1(x)))
+
+
+model = Toy()
+"""
+
+
+def test_a_script_model_is_freed_with_its_traces_and_detached_activations() -> None:
+    """The kept tree keys hold classes weakly, so a script's model dies with its namespace.
+
+    The class's methods reach the namespace that holds the model. A kept key
+    holding the class strongly kept the model (the weak key of each model
+    cache), the namespace, its traces and their retained detached activations
+    alive for good, and the live detached activations then sent every later
+    out-of-capture tensor call through the wrappers' lineage propagation.
+    """
+
+    namespace: dict[str, Any] = {}
+    exec(compile(_SCRIPT, "<script>", "exec"), namespace)
+    before = {id(key) for key in detached._DETACHED_SAVED_ACTIVATIONS.keys()}
+    options = tl.options.CaptureOptions(detach_saved_activations=True)
+    namespace["cut"] = tl.trace(namespace["model"], torch.randn(3, 4), capture=options)
+    refs: list[weakref.ref[Any]] = [weakref.ref(namespace["model"]), weakref.ref(namespace["Toy"])]
+    retained = [
+        weakref.ref(key)
+        for key in detached._DETACHED_SAVED_ACTIVATIONS.keys()
+        if id(key) not in before
+    ]
+    assert retained, "the detached trace marked no retained activation"
+    del namespace
+    gc.collect()
+    assert [ref() is None for ref in refs] == [True, True]
+    assert all(ref() is None for ref in retained)
 
 
 def _traced_output(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
