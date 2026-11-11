@@ -107,14 +107,37 @@ _TRACE_FIELDS = (
 )
 
 
-def _trace(name: str, recurrence: bool = True) -> Any:
-    """Trace one model of ``_MODELS`` on a fixed input."""
+def _build(name: str) -> nn.Module:
+    """One seeded instance of a model of ``_MODELS``, in eval mode."""
 
-    model_cls, shape = _MODELS[name]
     torch.manual_seed(0)
-    model = model_cls().eval()
+    return _MODELS[name][0]().eval()
+
+
+def _trace(name: str, recurrence: bool = True, model: nn.Module | None = None) -> Any:
+    """Trace one model of ``_MODELS`` (a fresh instance unless given) on a fixed input."""
+
+    if model is None:
+        model = _build(name)
+    torch.manual_seed(0)
+    inputs = torch.randn(*_MODELS[name][1])
     capture = tl.options.CaptureOptions(recurrence_detection=recurrence)
-    return tl.trace(model, torch.randn(*shape), capture=capture)
+    return tl.trace(model, inputs, capture=capture)
+
+
+def _repr_without_trace_name(trace: Any) -> str:
+    """``repr(trace)`` with the trace name in its identity line replaced.
+
+    The default name carries a per-trace counter (``_noparamloop_1``, then
+    ``_noparamloop_2``), so it is the one value two traces of one model
+    instance spell differently. Only the ``Trace <name>`` prefix of the
+    repr's first line is replaced; every other character is compared.
+    """
+
+    text = repr(trace)
+    prefix = f"Trace {trace.name}"
+    assert text.startswith(prefix), text
+    return "Trace <name>" + text[len(prefix) :]
 
 
 def _by_position(value: Any, positions: dict[str, str]) -> Any:
@@ -149,8 +172,13 @@ def _snapshot(trace: Any) -> dict[str, Any]:
 def _trace_both_ways(
     monkeypatch: pytest.MonkeyPatch, name: str, recurrence: bool = True
 ) -> tuple[Any, Any, list[bool]]:
-    """Trace ``name`` through the column pass and through the facade pass."""
+    """Trace ``name`` through the column pass and through the facade pass.
 
+    Both passes trace ONE model instance, so instance-derived values (the
+    parameter hashes in the equivalence-class keys) are equal as they are.
+    """
+
+    model = _build(name)
     outcomes: list[bool] = []
     column_pass = _label_columns.map_labels_by_column
 
@@ -160,9 +188,9 @@ def _trace_both_ways(
         return outcome
 
     monkeypatch.setattr(labeling, "map_labels_by_column", spy)
-    by_column = _trace(name, recurrence)
+    by_column = _trace(name, recurrence, model)
     monkeypatch.setattr(labeling, "map_labels_by_column", lambda _trace: False)
-    by_facade = _trace(name, recurrence)
+    by_facade = _trace(name, recurrence, model)
     return by_column, by_facade, outcomes
 
 
@@ -176,7 +204,7 @@ def test_column_pass_equals_facade_pass(
     by_column, by_facade, outcomes = _trace_both_ways(monkeypatch, name, recurrence)
     assert outcomes == [True], "the column pass must run on a building store"
     assert _snapshot(by_column) == _snapshot(by_facade)
-    assert repr(by_column) == repr(by_facade)
+    assert _repr_without_trace_name(by_column) == _repr_without_trace_name(by_facade)
 
 
 def test_later_passes_inherit_the_first_pass_numbers(monkeypatch: pytest.MonkeyPatch) -> None:

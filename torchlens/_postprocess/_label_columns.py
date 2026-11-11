@@ -72,7 +72,11 @@ def label_parts(
                 next_step += 1
         else:
             head_label = group[0] if group else None
-            head = position.get(head_label, count)
+            # Subscript, not ``position.get``: no call per later-pass op.
+            try:
+                head = position[head_label]
+            except KeyError:
+                raise _NotColumnar("recurrent_ops") from None
             if head >= index:
                 raise _NotColumnar("recurrent_ops")
             kind = out_kinds[index] = out_kinds[head]
