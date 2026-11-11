@@ -4690,9 +4690,9 @@
         "tests/test_trace_core_substrate.py"
       ],
       "torchlens/_postprocess/_primitive_profile.py": [
+        "tests/producer_parity/test_fastlog_late_buffer_probe.py",
         "tests/producer_parity/test_p1_record_types.py",
         "tests/test_backward_intervention.py",
-        "tests/test_backward_p1_triggers.py",
         "tests/test_capture_row_ingest.py",
         "tests/test_checkpoint_invocation_tokens.py",
         "tests/test_implicit_boundary_tightening.py",
@@ -9878,9 +9878,9 @@
       ],
       "torchlens/backends/torch/_autograd_grad_boundary.py": [
         "tests/test_autograd_grad_boundary.py",
+        "tests/test_autograd_grad_replay_order.py",
         "tests/test_autograd_grad_view_write_replay.py",
         "tests/test_backward_intervention.py",
-        "tests/test_backward_p1_triggers.py",
         "tests/test_checkpoint_invocation_tokens.py",
         "tests/test_implicit_boundary_tightening.py",
         "tests/test_saved_tensors_hooks_capture.py",
@@ -9906,8 +9906,8 @@
         "tests/test_wrapper_teardown_hygiene.py"
       ],
       "torchlens/backends/torch/_backward_markers.py": [
+        "tests/test_aten_values.py",
         "tests/test_backward_intervention.py",
-        "tests/test_backward_p1_triggers.py",
         "tests/test_checkpoint_invocation_tokens.py",
         "tests/test_flops2_backward_attribution.py",
         "tests/test_flops4_multiroot_markers.py",
@@ -10285,6 +10285,16 @@
         "tests/test_grad_fn_fire_timing.py",
         "tests/test_implicit_boundary_tightening.py",
         "tests/test_saved_tensors_hooks_capture.py",
+        "tests/test_wrapper_teardown_hygiene.py"
+      ],
+      "torchlens/backends/torch/_graph_pins.py": [
+        "tests/test_backward_intervention.py",
+        "tests/test_backward_p1_triggers.py",
+        "tests/test_checkpoint_invocation_tokens.py",
+        "tests/test_gc.py",
+        "tests/test_implicit_boundary_tightening.py",
+        "tests/test_onebackward_frozen.py",
+        "tests/test_onebackward_refusals.py",
         "tests/test_wrapper_teardown_hygiene.py"
       ],
       "torchlens/backends/torch/_held_late_index.py": [
