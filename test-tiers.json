@@ -4457,6 +4457,7 @@
       "torchlens/_postprocess/_conditional_child_rename.py": [
         "tests/test_buffer_datamodel.py",
         "tests/test_conditional_lifecycle.py",
+        "tests/test_label_columns.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed2_counters.py",
         "tests/test_replay_template_family.py"
@@ -4484,19 +4485,13 @@
         "tests/test_buffer_datamodel.py",
         "tests/test_conditional_lifecycle.py",
         "tests/test_exception_taxonomy.py",
+        "tests/test_label_columns.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed2_counters.py",
         "tests/test_replay_template_family.py"
       ],
       "torchlens/_postprocess/_final_info_rename.py": [
-        "tests/test_capture_fields_dict_prune.py",
-        "tests/test_capture_overhead_counters.py",
-        "tests/test_postprocess_executor.py",
-        "tests/test_postprocess_gc_pause.py",
-        "tests/test_postprocess_r14a_regressions.py",
-        "tests/test_postprocess_retention_epilogue.py",
-        "tests/test_postprocess_speed2_counters.py",
-        "tests/test_postprocess_speed_counters.py"
+        "tests/test_label_columns.py"
       ],
       "torchlens/_postprocess/_finished_marks.py": [
         "tests/test_column_passes_depths_finished.py",
@@ -4527,9 +4522,28 @@
         "tests/test_omitted_empty_cell_defaults.py",
         "tests/test_sanctioned_empty_omission.py"
       ],
+      "torchlens/_postprocess/_join_parts.py": [
+        "tests/producer_parity/test_fastlog_late_buffer_probe.py",
+        "tests/producer_parity/test_p1_record_types.py",
+        "tests/producer_parity/test_p2_consumer_migration.py",
+        "tests/test_backend_constants_rule.py",
+        "tests/test_capture_row_ingest.py",
+        "tests/test_capture_unification_p0.py",
+        "tests/test_omitted_empty_cell_defaults.py",
+        "tests/test_sanctioned_empty_omission.py"
+      ],
+      "torchlens/_postprocess/_label_columns.py": [
+        "tests/test_buffer_datamodel.py",
+        "tests/test_conditional_lifecycle.py",
+        "tests/test_label_columns.py",
+        "tests/test_postprocess_executor.py",
+        "tests/test_postprocess_speed2_counters.py",
+        "tests/test_replay_template_family.py"
+      ],
       "torchlens/_postprocess/_label_rename.py": [
         "tests/test_buffer_datamodel.py",
         "tests/test_conditional_lifecycle.py",
+        "tests/test_label_columns.py",
         "tests/test_label_rename_reference.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed2_counters.py",
@@ -4565,6 +4579,7 @@
         "tests/test_buffer_datamodel.py",
         "tests/test_conditional_lifecycle.py",
         "tests/test_exception_taxonomy.py",
+        "tests/test_label_columns.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed2_counters.py",
         "tests/test_replay_template_family.py"
@@ -4591,6 +4606,7 @@
       "torchlens/_postprocess/_module_containment.py": [
         "tests/test_buffer_datamodel.py",
         "tests/test_conditional_lifecycle.py",
+        "tests/test_label_columns.py",
         "tests/test_module_containment_equality.py",
         "tests/test_module_containment_save_load.py",
         "tests/test_postprocess_executor.py",
@@ -4659,8 +4675,8 @@
         "tests/test_format3_contract.py",
         "tests/test_format3_reader_fuzz.py",
         "tests/test_format3_reader_safety.py",
-        "tests/test_format3_round_trip_fidelity.py",
         "tests/test_format3_writer.py",
+        "tests/test_label_columns.py",
         "tests/test_mutation_driver_governance.py",
         "tests/test_postprocess_executor.py"
       ],
@@ -4695,6 +4711,7 @@
       "torchlens/_postprocess/_replay_template_cells.py": [
         "tests/test_buffer_datamodel.py",
         "tests/test_conditional_lifecycle.py",
+        "tests/test_label_columns.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed2_counters.py",
         "tests/test_replay_template_family.py"
@@ -4826,6 +4843,7 @@
         "tests/test_buffer_datamodel.py",
         "tests/test_conditional_lifecycle.py",
         "tests/test_executor_cuda_cache_arming.py",
+        "tests/test_label_columns.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed2_counters.py",
         "tests/test_replay_template_family.py"
@@ -6222,9 +6240,9 @@
       "torchlens/_utils/_detached_activations.py": [
         "tests/test_capture_guard_transactionality.py",
         "tests/test_completeness_witness.py",
-        "tests/test_decoration.py",
         "tests/test_implicit_boundary_tightening.py",
         "tests/test_legacy_tensor_constructors.py",
+        "tests/test_model_walk_reuse.py",
         "tests/test_scoped_patching_escape_detection.py",
         "tests/test_wrap_state_compat.py",
         "tests/test_wrapper_teardown_hygiene.py"
@@ -11639,8 +11657,8 @@
       "torchlens/bundle/_labels.py": [
         "tests/test_bundle_draw.py",
         "tests/test_bundle_harness.py",
-        "tests/test_bundle_relations.py",
         "tests/test_compare_gate_lattice.py",
+        "tests/test_label_columns.py",
         "tests/test_observe_kit_labels.py",
         "tests/test_op_label_resolution.py",
         "tests/test_rolled_pass_label_placement.py",
