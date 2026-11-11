@@ -52,9 +52,8 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning, transparent_contextmanager
 from ._module_call_dispatch import probe_module_call_dispatch_frame
-from ._torch_seed_backends import HAS_PER_BACKEND_SEED  # noqa: F401 - published capability flag
 from ._torch_structseq import torch_structseq_field_names
-from ._torch_symbols import shadowed_torch_submodule, torch_attr
+from ._torch_symbols import HAS_PER_BACKEND_SEED, shadowed_torch_submodule, torch_attr
 
 __all__ = [
     "torch_structseq_field_names",
@@ -109,6 +108,7 @@ __all__ = [
     "HAS_TENSORBASE_CLASS",
     "HAS_VARIABLE_FUNCTIONS_CLASS",
     "HAS_FP8_DTYPES",
+    "HAS_PER_BACKEND_SEED",
     "HAS_PIPELINING",
     "HAS_SET_STANCE",
     "HAS_CUDA_GRAPHS",
