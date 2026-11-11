@@ -249,7 +249,7 @@ def _write_join_cells(row: list[Any], join_cells: Mapping[str, object], plan: Ro
                 and not value
                 and value.__class__ is omit[fid]
                 and row[fid].__class__ is LazyCell
-                and (value.__class__ is dict or value.default_factory is list)
+                and (value.__class__ is dict or getattr(value, "default_factory", None) is list)
             ):
                 continue
             row[fid] = value

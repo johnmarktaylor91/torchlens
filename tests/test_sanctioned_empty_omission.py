@@ -163,7 +163,7 @@ def _call_groups(trace: Any) -> dict[int, list[Any]]:
 
     groups: dict[int, list[Any]] = defaultdict(list)
     for op in trace._layer_list:
-        groups[op.func_call_id].append(op)
+        groups[op.call.call_id].append(op)
     return groups
 
 
@@ -213,7 +213,7 @@ def test_boundary_siblings_keep_their_shared_rng_dict(monkeypatch: pytest.Monkey
         )
     try:
         ops = [op for op in trace._layer_list if op.func_name == FOREIGN_FUNCTION_FUNC_NAME]
-        assert len(ops) == 2 and len({op.func_call_id for op in ops}) == 1
+        assert len(ops) == 2 and len({op.call.call_id for op in ops}) == 1
         cells = [_raw(op, "func_rng_states") for op in ops]
         assert cells[0].__class__ is dict and not cells[0], cells
         assert cells[0] is cells[1]
