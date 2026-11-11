@@ -57,12 +57,9 @@ _COL_OFFSET_CACHE_SIZE_CAP = 100_000
 _col_offset_cache_warned = False
 _AddressPath = list[tuple[str, Any]]
 _SearchEntry = tuple[Any, Any, _AddressPath]
-_CodeContextCacheKey: TypeAlias = tuple[
-    int,
-    bool,
-    bool,
-    tuple[tuple[CodeType, int, int], ...],
-]
+# ``(*options, ((code, lineno, lasti), ...))``; an entry whose codes equal another file's
+# codes (code equality ignores ``co_filename``) also ends with each frame's file.
+_CodeContextCacheKey: TypeAlias = tuple[Any, ...]
 _CodeContextCache: TypeAlias = dict[Any, tuple[Any, ...]]
 
 # Key of the per-capture call-site anchor in a ``context_cache`` (made fresh per
@@ -714,27 +711,6 @@ def _extend_search_stack_from_item(
             )
 
 
-def get_attr_values_from_tensor_list(tensor_list: list[torch.Tensor], field_name: str) -> list[Any]:
-    """Collect a named attribute from each tensor that has it.
-
-    Used for generic tensor attribute scans where tensors may or may not carry
-    the requested attribute.
-
-    Args:
-        tensor_list: List of tensors to inspect.
-        field_name: Attribute name to look up on each tensor.
-
-    Returns:
-        List of attribute values (tensors without the attribute are skipped).
-    """
-    marks = []
-    for tensor in tensor_list:
-        mark = getattr(tensor, field_name, None)
-        if mark is not None:
-            marks.append(mark)
-    return marks
-
-
 def nested_getattr(obj: Any, attr: str) -> Any:
     """Resolve a dot-separated attribute path on an object.
 
@@ -841,20 +817,6 @@ def iter_accessible_attributes(
         yield attr_name, attr
 
 
-def remove_attributes_with_prefix(obj: Any, prefix: str) -> None:
-    """Remove all attributes from ``obj`` whose names start with ``prefix``.
-
-    This is a generic utility for caller-owned dynamic attributes.
-
-    Args:
-        obj: Object from which to remove attributes.
-        prefix: String prefix that marks fields to remove.
-    """
-    for field in dir(obj):
-        if field.startswith(prefix):
-            delattr(obj, field)
-
-
 def build_locations(
     selected: list[tuple[FrameType, CodeType, int, int]],
     options: tuple[int, bool, bool],
@@ -920,57 +882,51 @@ def _get_code_context(
 ) -> list[Any]:
     """Build a list of FuncCallLocation objects for the current call stack.
 
-    Filters out torchlens internals and ``_call_impl`` frames, keeping only
-    user-visible frames starting from the ``trace`` call site
-    through the model's ``forward`` method and any deeper user calls.
+    Filters out torchlens internals and ``_call_impl`` frames, keeping only user-visible
+    frames from the ``trace`` call site through the model's ``forward`` method and any
+    deeper user calls. Uses ``sys._getframe()`` instead of ``inspect.stack()`` to avoid
+    per-frame source file I/O; ``FuncCallLocation`` loads source lazily via ``linecache``.
 
-    Uses ``sys._getframe()`` instead of ``inspect.stack()`` to avoid
-    expensive per-frame source file I/O.  Source context is loaded lazily
-    by ``FuncCallLocation`` on first access via ``linecache``.
-
-    The walk is a single innermost-to-outermost pass that keeps only
-    surviving (non-internal, non-``_call_impl``) frames. The context is then
-    read from the survivor list outermost first, like a traceback: the first
-    survivor above the outermost ``forward``-named survivor (the call site:
-    the user's ``trace`` line, or the nearest wrapper above the root
-    ``forward``, such as a decorator) comes first, then the outermost
-    ``forward`` and every deeper survivor, so the innermost frame -- the line
+    The walk is a single innermost-to-outermost pass that keeps only surviving
+    (non-internal, non-``_call_impl``) frames. The context is then read from the survivor
+    list outermost first, like a traceback: the first survivor above the outermost
+    ``forward``-named survivor (the call site: the user's ``trace`` line, or the nearest
+    wrapper above the root ``forward``, such as a decorator) comes first, then the
+    outermost ``forward`` and every deeper survivor, so the innermost frame -- the line
     that ran the op -- is always the LAST entry.
 
-    When a ``context_cache`` is supplied, the walk also maintains a
-    per-capture *anchor* -- the identity of the call-site frame -- under
-    :data:`_CODE_CONTEXT_ANCHOR_KEY`. The call-site frame is suspended at the
-    ``trace(...)`` call for the entire capture and every code-context request
-    happens (transitively) beneath it, so it is alive at every lookup: an
-    ``id`` + code-object + ``f_lasti`` + ``f_lineno`` match therefore proves
-    object identity, and because a live frame's caller chain is immutable and
-    contained no ``forward``-named survivor at anchor establishment, nothing
-    above the anchor can influence the result. The walk then stops at the
-    anchor instead of traversing the (potentially deep) harness stack above
-    the call site. The stored anchor holds ints plus an immutable code object,
-    never the frame, so no locals (and no activation tensors) are pinned.
+    When a ``context_cache`` is supplied, the walk also maintains a per-capture *anchor*
+    -- the identity of the call-site frame -- under :data:`_CODE_CONTEXT_ANCHOR_KEY`. The
+    call-site frame is suspended at the ``trace(...)`` call for the entire capture and
+    every code-context request happens (transitively) beneath it, so it is alive at every
+    lookup: an ``id`` + code-object + ``f_lasti`` + ``f_lineno`` match therefore proves
+    object identity, and because a live frame's caller chain is immutable and contained no
+    ``forward``-named survivor at anchor establishment, nothing above the anchor can
+    influence the result. The walk then stops at the anchor instead of traversing the
+    (potentially deep) harness stack above the call site. The stored anchor holds ints
+    plus an immutable code object, never the frame, so no locals (and no activation
+    tensors) are pinned.
 
     Args:
-        num_context_lines: Number of source lines to show on each side of
-            the call line.  The total context window is
-            ``2 * num_context_lines + 1``.
-        source_loading_enabled: Whether each ``FuncCallLocation`` should
-            lazily load source text and function metadata on demand.
-        disable_col_offset: If True, skip bytecode inspection for column
-            offsets and store None for ``col_offset``.
-        context_cache: Optional per-capture cache keyed by filtered frame
-            identity. When supplied, repeated operations at the same call
-            stack reuse the lightweight location objects.
-        call_site_out: When supplied, the same walk also appends the op's
-            call-site chain (:func:`torchlens._utils._call_site.canonical_chain`
-            of the frames inside the innermost stateful module call), or ``()``
-            when no Python frame lies inside it. Grouping (step 7) keys layers on it.
-            An item already in it is the per-capture location table
-            (``build_locations``'s ``known``); read the chain as the last item.
+        num_context_lines: Source lines shown on each side of the call line; the total
+            context window is ``2 * num_context_lines + 1``.
+        source_loading_enabled: Whether each ``FuncCallLocation`` should lazily load
+            source text and function metadata on demand.
+        disable_col_offset: If True, skip bytecode inspection for column offsets and
+            store None for ``col_offset``.
+        context_cache: Optional per-capture cache keyed by filtered frame identity.
+            When supplied, repeated operations at the same call stack reuse the
+            lightweight location objects.
+        call_site_out: When supplied, the same walk also appends the op's call-site
+            chain (:func:`torchlens._utils._call_site.canonical_chain` of the frames inside
+            the innermost stateful module call), or ``()`` when no Python frame lies
+            inside it. Grouping (step 7) keys layers on it. An item already in it is the
+            per-capture location table (``build_locations``'s ``known``); read the chain
+            as the last item.
 
     Returns:
-        List[FuncCallLocation] ordered outermost to innermost; the last entry
-        is the frame that ran the op.
+        List[FuncCallLocation] ordered outermost to innermost; the last entry is the
+        frame that ran the op.
     """
     locations = call_site_out[0] if call_site_out else None
     anchor: tuple[int, CodeType, int, int] | None = None
@@ -982,8 +938,7 @@ def _get_code_context(
     survivors: list[tuple[FrameType, CodeType, int, int]] = []
     append_survivor = survivors.append
     last_forward_pos = -1
-    # Survivor counts when the innermost / outermost module forward wrapper
-    # frame was passed: the call-site chain boundaries.
+    # Survivor counts at the innermost / outermost module forward wrapper: the chain bounds.
     inner_boundary_pos = -1
     outer_boundary_pos = -1
     # Modules whose ``_call_impl`` sits inside the innermost module call (the op
@@ -1005,8 +960,7 @@ def _get_code_context(
             and frame.f_lasti == anchor[2]
             and frame.f_lineno == anchor[3]
         ):
-            # Verified call-site frame: the stack above it is capture-constant
-            # and was forward-free at anchor establishment.
+            # Verified call-site frame: the stack above it is capture-constant and forward-free.
             anchor_frame = frame
             break
         name = code.co_name
@@ -1033,9 +987,8 @@ def _get_code_context(
         survivors, last_forward_pos, anchor_frame
     )
     if call_site is not None and context_cache is not None and anchor is None:
-        # Establish the anchor: ``call_site`` is the first survivor above the
-        # OUTERMOST ``forward`` frame, so no ``forward``-named survivor exists
-        # anywhere above it -- the invariant the early-stop relies on.
+        # Establish the anchor: ``call_site`` is the first survivor above the OUTERMOST
+        # ``forward`` frame, so no ``forward``-named survivor exists anywhere above it.
         cs_frame = call_site[0]
         context_cache[_CODE_CONTEXT_ANCHOR_KEY] = (
             id(cs_frame),
@@ -1051,7 +1004,15 @@ def _get_code_context(
         cache_key = (*options, named)
         cached = context_cache.get(cache_key)
         if cached is not None:
-            return list(cached)
+            for loc, (_frame, code, _lineno, _lasti) in zip(cached, selected, strict=True):
+                if loc.file != code.co_filename:  # a value-equal code from another file
+                    cache_key = (*cache_key, tuple(c.co_filename for _f, c, _l, _a in selected))
+                    break
+            else:
+                return list(cached)
+            cached = context_cache.get(cache_key)  # the collider's own entry, keyed by its files
+            if cached is not None:
+                return list(cached)
 
     # Locations only for the kept frames (~5-10), on a cache miss.
     result = build_locations(selected, options, context_cache, locations)
