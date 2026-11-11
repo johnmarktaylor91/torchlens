@@ -272,6 +272,36 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
             assert name in row.details
 
 
+@pytest.mark.heavy  # two doctor probe walks; one alone crossed the 7s smoke budget
+def test_every_torch_has_flag_is_visible_in_both_report_paths() -> None:
+    """Every ``HAS_*`` flag in ``_torch_compat`` reaches both diagnostic paths.
+
+    ``tl.report.doctor()`` (environment only) and ``tl.report.doctor(model,
+    inputs)`` (the model compatibility report, formerly ``compat.report``)
+    both read ``_torch_compat.get_torch_capability_snapshot``: each carries the
+    ``torch_capabilities`` row and returns every flag, with its live value,
+    from ``capability_snapshot()``.
+    """
+
+    from torchlens._utils import _torch_compat as tc
+
+    has_flags = {name for name in vars(tc) if name.startswith("HAS_")}
+    assert "HAS_PER_BACKEND_SEED" in has_flags
+    torch_snapshot = tc.get_torch_capability_snapshot()
+    assert has_flags <= set(torch_snapshot)
+    environment = tl.report.doctor()
+    model_compat = tl.report.doctor(nn.Linear(3, 4), torch.randn(2, 3))
+    assert environment.model_type is None and model_compat.model_type is not None
+    for report in (environment, model_compat):
+        report.check("torch_capabilities")
+        snapshot = report.capability_snapshot()
+        assert not has_flags - set(snapshot), sorted(has_flags - set(snapshot))
+        assert {name: snapshot[name] for name in has_flags} == {
+            name: torch_snapshot[name] for name in has_flags
+        }
+        assert snapshot["HAS_PER_BACKEND_SEED"] is bool(tc.HAS_PER_BACKEND_SEED)
+
+
 # Kept: sole branch coverage of report/_doctor.py.
 @pytest.mark.heavy  # doctor probe walk crossed the 7s smoke budget at T55 (7.2s cpu)
 def test_doctor_report_repr_is_bounded() -> None:
