@@ -18,12 +18,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes import _compaction
 from torchlens._data_classes.op import _OP_STORE_LAYOUT
 from torchlens._ir.op_record_scatter import _write_function_ref_cells
 from torchlens._postprocess._materialize import _empty_module_output_fields
 from torchlens._postprocess._row_ingest import _OMIT_EMPTY_JOIN_FIELDS
-from torchlens._trace_core.cell_states import STATE_DEFAULT, LazyCell
-from torchlens._trace_core.relation_views import OP_TUPLE_VIEW_FIELDS
+from torchlens._trace_core.cell_states import STATE_DEFAULT, LazyCell, settle_default_cells
 from torchlens.backends.torch._ops_row_cells import (
     _OMIT_EMPTY_DICT_CELLS,
     _OMIT_EMPTY_LIST_CELLS,
@@ -111,28 +111,32 @@ class _ParamFree(nn.Module):
 @pytest.mark.parametrize(
     "model", [_ParamFree(), nn.Sequential(nn.Linear(4, 4), nn.ReLU())], ids=["free", "linear"]
 )
-def test_settled_cells_are_fresh_per_row(model: nn.Module) -> None:
-    """After the freeze every omitted cell reads back as the writer's value would.
+def test_settled_cells_are_fresh_per_row(model: nn.Module, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Right after the freeze settles the defaults, every omitted cell holds its own container.
 
-    Relation fields in ``OP_TUPLE_VIEW_FIELDS`` freeze to interned tuple views
-    (all empties share one tuple, as before the omission); every other omitted
-    cell keeps its own container of the writer's type.
+    The check runs at the settle step: later freeze steps turn relation fields
+    into interned views and move call facts to the shared call record, on the
+    base as well, so raw cells read after the seal are not comparable.
     """
 
+    settled: list[list[Any]] = []
+
+    def settle_and_keep(rows: Any, share: Any = None) -> None:
+        settle_default_cells(rows, share)
+        settled.extend(list(row) for row in rows)
+
+    monkeypatch.setattr(_compaction, "settle_default_cells", settle_and_keep)
     torch.manual_seed(0)
-    trace = tl.trace(model, torch.randn(2, 4))
-    store = trace.__dict__["_trace_core"].ops
+    tl.trace(model, torch.randn(2, 4))
+    assert settled
     fid_by_name = _OP_STORE_LAYOUT.fid_by_name
     expected = _writer_values()
     for name in sorted(set(_OMITTED)):
         fid = fid_by_name[name]
-        frozen_view = name in OP_TUPLE_VIEW_FIELDS
-        expected_type = tuple if frozen_view else type(expected[name])
         empties = []
-        for row in range(len(store)):
-            value = store.cell_get(row, fid)
-            assert type(value) is expected_type, (name, row, type(value))
+        for row, cells in enumerate(settled):
+            value = cells[fid]
+            assert type(value) is type(expected[name]), (name, row, type(value))
             if not value:
                 empties.append(value)
-        if not frozen_view:
-            assert len({id(value) for value in empties}) == len(empties), name
+        assert len({id(value) for value in empties}) == len(empties), name
