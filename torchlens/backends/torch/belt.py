@@ -504,16 +504,17 @@ def _unswept_module_items() -> list[tuple[str, Any]]:
 
     Every id in ``_swept_ids_live`` is an entry this epoch's sweep already
     scanned AND that is provably still the same object (death callbacks evict
-    dead ids, so a reused id reads as new). ``set(map(id, ...))`` executes no
-    Python bytecode, so the nothing-new check is atomic under the GIL like the
-    ``list(sys.modules.items())`` snapshot. When something is new, only the
+    dead ids, so a reused id reads as new). ``issuperset(map(id, ...))``
+    executes no Python bytecode, so the nothing-new check is atomic under the
+    GIL like the ``list(sys.modules.items())`` snapshot, and it builds no set of
+    every module id (it runs on every capture). When something is new, only the
     entries outside the live set are returned, in ``sys.modules`` order: the
     snapshot keeps every entry alive while it is filtered, so no id in it can
     be reused, and the sweep does work for the new entries alone instead of
     re-checking every module already swept.
     """
 
-    if not set(map(id, sys.modules.values())) - _swept_ids_live:
+    if _swept_ids_live.issuperset(map(id, sys.modules.values())):
         return []
     items = list(sys.modules.items())
     entry_ids = map(id, map(_ENTRY_VALUE, items))
