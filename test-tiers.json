@@ -826,7 +826,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_output_copy_unread_fields.py"
       ],
       "torchlens/_data_classes/_accessor_base.py": [
         "tests/test_collapse_optimizer.py",
@@ -1172,7 +1172,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_output_copy_unread_fields.py"
       ],
       "torchlens/_data_classes/_moe_views.py": [
         "tests/surface_oracle/test_surface_oracle.py",
@@ -1246,6 +1246,11 @@
         "tests/test_op_row_release_counters.py",
         "tests/test_postprocess_speed2_counters.py"
       ],
+      "torchlens/_data_classes/_op_copy.py": [
+        "tests/test_capture_targets.py",
+        "tests/test_output_copy_unread_fields.py",
+        "tests/test_receptive_field_reference_tripwire.py"
+      ],
       "torchlens/_data_classes/_op_cost.py": [
         "tests/test_accessor_alias_index.py",
         "tests/test_capture_row_ingest.py",
@@ -1284,7 +1289,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_output_copy_unread_fields.py"
       ],
       "torchlens/_data_classes/_op_grad_stream.py": [
         "tests/test_capture_targets.py",
@@ -1631,7 +1636,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_output_copy_unread_fields.py"
       ],
       "torchlens/_data_classes/_trace_docs_output.py": [
         "tests/backend_conformance/test_capability_truth.py",
@@ -1641,7 +1646,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_output_copy_unread_fields.py"
       ],
       "torchlens/_data_classes/_trace_docs_stats.py": [
         "tests/backend_conformance/test_capability_truth.py",
@@ -1651,7 +1656,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_output_copy_unread_fields.py"
       ],
       "torchlens/_data_classes/_trace_docs_validation.py": [
         "tests/backend_conformance/test_capability_truth.py",
@@ -1661,7 +1666,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_output_copy_unread_fields.py"
       ],
       "torchlens/_data_classes/_trace_field_spec.py": [
         "tests/test_auto_collapse_atomic_spans.py",
@@ -1791,7 +1796,7 @@
         "tests/test_container_pool_counters.py",
         "tests/test_label_names_resolve.py",
         "tests/test_labels_vocabulary.py",
-        "tests/test_op_row_containers.py"
+        "tests/test_output_copy_unread_fields.py"
       ],
       "torchlens/_data_classes/_trace_removal.py": [
         "tests/test_auto_collapse_atomic_spans.py",
@@ -6614,6 +6619,11 @@
       "torchlens/_utils/_torch_compat_table.py": [
         "tests/test_torch_compat_table.py"
       ],
+      "torchlens/_utils/_torch_seed_backends.py": [
+        "tests/test_per_backend_seed.py",
+        "tests/test_rng_cuda_isolation.py",
+        "tests/test_tlspec_runnable_r65_torch_rng.py"
+      ],
       "torchlens/_utils/_torch_structseq.py": [
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
@@ -6628,11 +6638,11 @@
         "tests/test_format3_linalg_recipe_keys.py",
         "tests/test_ignored_torch_capture.py",
         "tests/test_internal_call_fastpath.py",
+        "tests/test_per_backend_seed.py",
         "tests/test_r36_cuda_hygiene.py",
         "tests/test_sec_load_sweep.py",
         "tests/test_sec_raw_pointer_family.py",
-        "tests/test_tlspec_runnable_resolver.py",
-        "tests/test_torch_compat.py"
+        "tests/test_tlspec_runnable_resolver.py"
       ],
       "torchlens/_utils/_type_new_slot.py": [
         "tests/test_capability_probe_lifecycle.py",
@@ -6665,13 +6675,13 @@
         "tests/test_tlspec_unpickler_first_party_rce.py"
       ],
       "torchlens/_utils/_uninit_alloc.py": [
+        "tests/test_per_backend_seed.py",
         "tests/test_rng_cuda_isolation.py",
         "tests/test_silent_swallow_seals.py",
         "tests/test_tlspec_alloc_preflight_fake.py",
         "tests/test_tlspec_runnable_r35_admission_context.py",
         "tests/test_tlspec_runnable_r53_uninit_alloc.py",
         "tests/test_tlspec_runnable_r61_alloc_projection.py",
-        "tests/test_tlspec_runnable_r65_torch_rng.py",
         "tests/test_tlspec_uninit_consumer_r55.py"
       ],
       "torchlens/_utils/_walk_chain.py": [
@@ -6963,10 +6973,10 @@
       "torchlens/_utils/rng/seeding.py": [
         "tests/test_capture_failure_reporting.py",
         "tests/test_fast_run_faithfulness.py",
+        "tests/test_per_backend_seed.py",
         "tests/test_rng_cuda_isolation.py",
         "tests/test_selection_reach_seeding.py",
         "tests/test_tlspec_runnable_r65_torch_rng.py",
-        "tests/test_tlspec_runnable_slice_literal.py",
         "tests/test_validation.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
