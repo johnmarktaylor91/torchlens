@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1825 modules, 724706 lines, 0 modules without a docstring.
+85 packages, 1825 modules, 724710 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 157 | 63767 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 157 | 63771 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1530,7 +1530,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (157 modules, 63767 lines)
+Torch backend implementation package for TorchLens capture. (157 modules, 63771 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1624,7 +1624,7 @@ Torch backend implementation package for TorchLens capture. (157 modules, 63767 
 | `_ops_predicates` | Predicate output replacement and backend semantics. | 549 |
 | `_ops_retention` | Save budgets, predicate payloads, and lookback retention. | 755 |
 | `_ops_row_cells` | Row-direct op cells: the exhaustive draft straight to store cells (capture C2a). | 630 |
-| `_ops_row_journal` | Exhaustive commit into the row-backed capture journal (capture C2b). | 331 |
+| `_ops_row_journal` | Exhaustive commit into the row-backed capture journal (capture C2b). | 335 |
 | `_ops_saved_arg_copies` | Saved-argument copies for ''save_args'' captures, and validation's by-reference aliases. | 219 |
 | `_ops_shared_fields` | Shared operation fields and tensor variation tracking. | 425 |
 | `_output_tensors` | Output tensor extraction shared by the torch wrapper families. | 42 |
