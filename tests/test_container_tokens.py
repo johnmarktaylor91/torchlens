@@ -25,6 +25,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes import _compaction, _container_key
+from torchlens._data_classes._arg_position_keys import register_arg_position_keys
 from torchlens._data_classes.op import _container_pool_key
 from torchlens._trace_core.pools import ContainerTokens
 
@@ -117,7 +118,7 @@ def test_token_debug_check_raises_on_changed_content() -> None:
     first = {"__execution__": {"enabled": False, "dtype": None}}
     second = {"__execution__": {"enabled": True, "dtype": None}}
     token = (True, False)
-    tokens = ContainerTokens({id(first): (first, token), id(second): (second, token)})
+    tokens = ContainerTokens({id(first): (first, token, 2), id(second): (second, token, 2)})
     id_counts = {id(first): 1, id(second): 1}
     id_counts.update({id(first["__execution__"]): 1, id(second["__execution__"]): 1})
     content_key = _container_key.make_content_key(_container_pool_key, tokens)
@@ -136,7 +137,7 @@ def test_token_key_refuses_a_nested_alias() -> None:
 
     inner = {"enabled": False, "dtype": None}
     outer = {"__execution__": inner}
-    tokens = ContainerTokens({id(outer): (outer, ("t",))})
+    tokens = ContainerTokens({id(outer): (outer, ("t",), 2)})
     content_key = _container_key.make_content_key(_container_pool_key, tokens)
     assert content_key(outer, {id(outer): 1, id(inner): 2}) is None
     assert content_key(outer, {id(outer): 1, id(inner): 1}) is not None
@@ -157,3 +158,68 @@ def test_two_traces_share_no_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     second_objects = {id(entry[0]) for entry in second.by_id.values()}
     assert first_objects.isdisjoint(second_objects)
     assert all(traced._trace_core.pool.tokens is None for traced, _ in taken)
+
+
+@pytest.mark.parametrize("mode", ["grad", "autocast"])
+def test_exact_tokens_cover_transform_config_and_arg_positions(
+    monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """The emit and the rename pass register exact keys, and every one walks equal.
+
+    ``TOKEN_DEBUG`` re-walks each registered cell at the freeze and raises on a
+    difference; the registered entries carry ``TOKEN_EXACT`` and are keyed by the
+    real content key, so the pooling result equals the full walk's.
+    """
+
+    monkeypatch.setattr(_container_key, "TOKEN_DEBUG", True)
+    taken = _spy_tokens(monkeypatch)
+    _capture(mode)
+    _, tokens = taken[0]
+    assert tokens is not None
+    exact = [entry for entry in tokens.by_id.values() if entry[2] & 1]
+    kinds = {next(iter(entry[0])) for entry in exact}
+    assert "_tl_annotations" in kinds, "no transform_config cell registered"
+    assert "args" in kinds, "no parent_arg_positions cell registered"
+    for entry in exact:
+        assert entry[1] == _container_pool_key(entry[0], 0, [])
+
+
+def test_exact_token_mismatch_raises() -> None:
+    """An exact token that is not the content key fails the debug check."""
+
+    cell = {"args": {0: "relu_1_1"}, "kwargs": {}}
+    wrong = ("d", ())
+    nested = (id(cell["args"]), id(cell["kwargs"]))
+    tokens = ContainerTokens({id(cell): (cell, wrong, 1)})
+    id_counts = {id(cell): 1, nested[0]: 1, nested[1]: 1}
+    content_key = _container_key.make_content_key(_container_pool_key, tokens)
+    old = _container_key.TOKEN_DEBUG
+    _container_key.TOKEN_DEBUG = True
+    try:
+        with pytest.raises(RuntimeError, match="container token key mismatch"):
+            content_key(cell, id_counts)
+    finally:
+        _container_key.TOKEN_DEBUG = old
+    assert content_key(cell, {**id_counts, nested[0]: 2}) is None
+
+
+def test_arg_position_keys_equal_the_walk() -> None:
+    """The rename pass's stated key is the walk's key; unkeyable dicts stay unregistered."""
+
+    keyed = [
+        {"args": {0: "a_1_1", 2: "b_2_1"}, "kwargs": {"other": "c_3_1"}},
+        {"args": {}, "kwargs": {}},
+        {"kwargs": {"x": "a_1_1"}, "args": {1: "d_4_1"}},
+    ]
+    unkeyed = [
+        {"args": {(0, 1): "a_1_1"}, "kwargs": {}},
+        {"args": {0: None}, "kwargs": {}},
+        {"args": {0: "a_1_1"}},
+        {"args": [("a_1_1",)], "kwargs": {}},
+    ]
+    table: dict[int, Any] = {}
+    register_arg_position_keys(table, [*keyed, *unkeyed, {}])
+    assert set(table) == {id(cell) for cell in keyed}
+    for cell in keyed:
+        assert table[id(cell)][1] == _container_pool_key(cell, 0, [])
+        assert table[id(cell)][2] == 1

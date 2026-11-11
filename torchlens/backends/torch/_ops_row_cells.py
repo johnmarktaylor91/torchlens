@@ -38,6 +38,7 @@ from ..._ir.op_record import FACET_DEFAULTS
 from ..._ir.op_record_scatter import _resolve_dtype, _write_function_ref_cells
 from ..._trace_core.cell_states import LazyFields
 from ..._trace_core.op_store import _MISSING
+from ..._utils.container_tokens import TOKEN_EXACT, TOKEN_INERT, register
 from ._ops_freeze_refs import _copy_parent_arg_positions, _resolve_call_function_ref
 
 if TYPE_CHECKING:
@@ -53,6 +54,11 @@ __all__ = ("op_row_cells", "write_draft_row", "write_op_row")
 #: only immutable values off them, or copies the mutable ones, so one instance
 #: per process stands in for the instance the scatter builds per absent facet.
 _TRANSFORM_DEFAULT = FACET_DEFAULTS["transform"]()
+#: ``op.py`` ``_container_pool_key`` of ``{"_tl_annotations": {}}`` (checked in
+#: tests by the container tokens' debug walk).
+_BARE_TRANSFORM_CONFIG_KEY = ("d", (((str, "_tl_annotations"), ("m", ("d", ()))),))
+#: Exact key, and no member the immutable pool could replace.
+_BARE_FLAGS = TOKEN_EXACT | TOKEN_INERT
 _ANCESTRY_DEFAULT = FACET_DEFAULTS["ancestry"]()
 _CONTROL_DEFAULT = FACET_DEFAULTS["control"]()
 _AUTOGRAD_DEFAULT = FACET_DEFAULTS["autograd"]()
@@ -139,7 +145,9 @@ _EMPTY_DICT_CELLS: tuple[str, ...] = (
 )
 
 
-def _fill_transform(row: Any, f: Any, fields_dict: Mapping[str, Any], annotations: Any) -> None:
+def _fill_transform(
+    row: Any, f: Any, trace: Any, fields_dict: Mapping[str, Any], annotations: Any
+) -> None:
     """Write the transform cells, mirroring the freeze's facet presence and config split."""
 
     user_config = dict(fields_dict.get("transform_config") or {})
@@ -170,9 +178,14 @@ def _fill_transform(row: Any, f: Any, fields_dict: Mapping[str, Any], annotation
         fn_qualname = default.transform_fn_qualname
         fn_source = default.transform_fn_source
         fn_code_location = default.fn_code_location
-    user_config["_tl_annotations"] = dict(annotations)
+    bare = not user_config
+    inner = user_config["_tl_annotations"] = dict(annotations)
     if fn_code_location is not None:
         user_config["fn_code_location"] = fn_code_location
+    elif bare and not inner:
+        # The common cell ``{"_tl_annotations": {}}``: its content key is a
+        # constant, so the freeze's pooling reads it instead of walking.
+        register(trace, user_config, _BARE_TRANSFORM_CONFIG_KEY, _BARE_FLAGS)
     row[f["is_transform"]] = is_transform
     row[f["transform_kind"]] = kind
     row[f["transform_chain"]] = chain
@@ -346,7 +359,7 @@ def _fill_row(
 
     _fill_core_graph(row, f, trace, fields_dict)
     _fill_output(row, f, fields_dict)
-    _fill_transform(row, f, fields_dict, _fill_facets(row, f, fields_dict, fire_results))
+    _fill_transform(row, f, trace, fields_dict, _fill_facets(row, f, fields_dict, fire_results))
 
 
 def _arg_keys_default() -> defaultdict[Any, list[Any]]:

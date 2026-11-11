@@ -18,6 +18,7 @@ from .._torch_compat import (
     autocast_get_dtype,
     autocast_is_enabled,
 )
+from ..container_tokens import TOKEN_INERT
 
 _AUTOCAST_DEVICES = ("cpu", "cuda")
 
@@ -84,7 +85,7 @@ def log_current_autocast_state(trace: Any = None) -> dict[str, dict[str, Any]]:
             table = workspace.container_tokens = {}
         elif table is False:
             return state
-        table[id(state)] = (state, token)
+        table[id(state)] = (state, token, TOKEN_INERT)
     return state
 
 
