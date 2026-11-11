@@ -198,6 +198,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
     """Dump base and head in two fresh processes and print the differences."""
 
     from field_diff_lib.compare import diff, report
+    from field_diff_lib.count_only import accept_count_only
     from field_diff_lib.mask import accept_release_moves
 
     work = Path(args.work).resolve()
@@ -221,7 +222,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
             sides.append(json.loads(path.read_text()) if path.exists() else "<absent>")
         dump = name.removesuffix(".json")
         if not args.no_mask:
-            sides[1] = accept_release_moves(dump, sides[0], sides[1])
+            sides[1] = accept_count_only(sides[0], accept_release_moves(dump, sides[0], sides[1]))
         differences[dump] = diff(sides[0], sides[1])
     total, lines = report(differences, limit=args.limit)
     lines.insert(1, f"base tree {base_tree}; head tree {head_tree}; plant {args.plant}")
@@ -251,6 +252,8 @@ def cmd_cases(args: argparse.Namespace) -> int:
     for name, names in mask.TYPE_TAG_ONLY.items():
         print(f"type tag only {name} {names}: {mask.TYPE_TAG_ONLY_REASON}")
     print(f"release order {mask.RELEASE_ORDER}: {mask.RELEASE_ORDER_REASON}")
+    for name, bucket in mask.COUNT_ONLY.items():
+        print(f"count only {name} {bucket!r}: {mask.COUNT_ONLY_REASON}")
     for name, steps in mask.RELEASE_LATER_CLASSES.items():
         print(f"release later {name} in steps {sorted(steps)}: {mask.RELEASE_LATER_REASON}")
     for name, what in FAULTS.items():
