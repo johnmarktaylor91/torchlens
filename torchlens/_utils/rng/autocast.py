@@ -13,12 +13,12 @@ from typing import Any, cast
 
 import torch
 
-from ... import _state
 from .._torch_compat import (
     AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED,
     autocast_get_dtype,
     autocast_is_enabled,
 )
+from ..container_tokens import TOKEN_INERT, register_active
 
 _AUTOCAST_DEVICES = ("cpu", "cuda")
 
@@ -65,32 +65,11 @@ def log_current_autocast_state() -> dict[str, dict[str, Any]]:
             continue
         state[device] = {"enabled": enabled, "dtype": dtype}
         token += (device, enabled, dtype)
-    _register_token(state, token)
+    # Every value the snapshot was built from, in build order: two snapshots
+    # are equal exactly when their tokens are (``_utils.container_tokens``);
+    # the device sub-dicts are the containers nested in it.
+    register_active(state, token, tuple(map(id, state.values())), TOKEN_INERT)
     return state
-
-
-def _register_token(state: dict[str, dict[str, Any]], token: tuple[Any, ...]) -> None:
-    """Register a fresh snapshot's content token with the capturing trace.
-
-    The token holds every value the snapshot was built from, in build order,
-    so two snapshots are equal exactly when their tokens are; the freeze's
-    container pooling keys the snapshot by it instead of walking it
-    (``_trace_core.pools.ContainerTokens``). With no capturing trace, or after
-    that trace's compaction, nothing is registered.
-    """
-
-    trace = _state._active_trace
-    if trace is None:
-        return
-    workspace = trace._wrapper_runtime_ws
-    table = workspace.container_tokens
-    if table is None:
-        table = workspace.container_tokens = {}
-    elif table is False:
-        return
-    # The device sub-dicts are the containers nested in the snapshot; the
-    # pooling checks their ids against the alias census as a full walk would.
-    table[id(state)] = (state, token, tuple(map(id, state.values())))
 
 
 def _legacy_device_states(state: dict[str, dict[str, Any]]) -> None:

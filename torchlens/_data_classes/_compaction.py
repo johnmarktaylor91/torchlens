@@ -18,7 +18,7 @@ from .._quantities import Duration
 from .._trace_core.cell_states import LazyCell, settle_default_cells
 from .._trace_core.op_store import _MISSING, PooledCell
 from .._trace_core.pools import ContainerTokens
-from ._container_key import is_registered, make_content_key
+from ._container_key import make_content_key, members_inert
 from ._op_container_census import _EMPTY_CONTAINER_POOL_KEYS
 
 if TYPE_CHECKING:
@@ -163,8 +163,8 @@ def _compact_store_rows(
         Pass-local ``pool key -> canonical instance`` table shared with any
         remaining per-op walks of the same trace.
     tokens:
-        The trace's write-time container tokens. A registered dict is skipped:
-        its members are values the pool can never replace (``ContainerTokens``).
+        The trace's write-time container tokens. A dict registered as inert is
+        skipped: its members are values the pool can never replace (``ContainerTokens``).
     """
 
     # Imported lazily, as in ``compact_op_metadata``, so loading this module never loads ``op``.
@@ -195,7 +195,7 @@ def _compact_store_rows(
                 elif pooled is not value:
                     row_cells[fid] = pooled
             elif cls is list or cls is set or cls is dict:
-                if cls is dict and tokens is not None and is_registered(tokens, value):
+                if cls is dict and tokens is not None and members_inert(tokens, value):
                     continue
                 _pool_container_members(value, pool, 0)
             elif cls is tuple or cls is frozenset:

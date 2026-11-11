@@ -4,8 +4,9 @@
 through a ``content_key(value, id_counts)`` callable. :func:`make_content_key`
 builds it: without a token registry it is the full content walk with the
 alias guard; with one (``_trace_core.pools.ContainerTokens``) a registered
-cell reuses the content key its token's first cell computed, so the walk runs
-once per distinct token instead of once per cell. Either way the returned key
+cell either returns the exact content key its writer stated (``TOKEN_EXACT``)
+or reuses the content key its token's first cell computed, so the walk runs
+at most once per distinct token instead of once per cell. Either way the returned key
 is the cell's real content key, or ``None`` when the cell must not pool.
 Standard library only.
 """
@@ -61,6 +62,10 @@ def make_content_key(container_pool_key: Callable[..., Any], tokens: Any = None)
             if oid in id_counts and id_counts[oid] > 1:
                 return None
         token = entry[1]
+        if entry[3] & 1:  # TOKEN_EXACT: the writer stated the content key itself
+            if TOKEN_DEBUG:
+                _check_token_key(value, token, walked_key(value, id_counts))
+            return token
         if token in keys:
             key = keys[token]
             if TOKEN_DEBUG:
@@ -83,8 +88,8 @@ def _check_token_key(value: Any, cached: Any, walked: Any) -> None:
         )
 
 
-def is_registered(tokens: Any, value: Any) -> bool:
-    """Return whether ``value`` is a container registered in ``tokens``."""
+def members_inert(tokens: Any, value: Any) -> bool:
+    """Return whether ``value`` is registered in ``tokens`` with no poolable member."""
 
     entry = tokens.by_id.get(id(value))
-    return entry is not None and entry[0] is value
+    return entry is not None and entry[0] is value and bool(entry[3] & 2)

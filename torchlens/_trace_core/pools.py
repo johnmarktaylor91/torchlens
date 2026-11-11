@@ -108,9 +108,11 @@ class ContainerTokens:
     pooled; ``nested_ids`` carries the ids of the fresh containers nested in
     it, which the full walk would have checked against the census too.
 
-    Registered containers hold only members the immutable pool can never
-    replace (``bool``, ``None``, ``torch.dtype`` singletons and nested dicts of
-    those), so the member sweep skips them as well.
+    A writer that can state the content key itself registers it as the token
+    with the ``TOKEN_EXACT`` flag; the pooling then returns it as is and walks
+    nothing. A container registered with ``TOKEN_INERT`` holds only members the
+    immutable pool can never replace (``bool``, ``None``, ``torch.dtype``
+    singletons and nested dicts of those), so the member sweep skips it too.
 
     Lifetime: the writers fill one plain table per trace's runtime workspace
     (``WrapperRuntimeWorkspace.container_tokens``); that trace's compaction
@@ -121,14 +123,14 @@ class ContainerTokens:
     __slots__ = ("by_id", "keys")
 
     def __init__(
-        self, by_id: dict[int, tuple[Any, Hashable, tuple[int, ...]]] | None = None
+        self, by_id: dict[int, tuple[Any, Hashable, tuple[int, ...], int]] | None = None
     ) -> None:
         """Wrap the writers' registration table (a fresh empty one by default)."""
 
-        #: ``id(container) -> (container, token, nested_ids)``, filled by the
-        #: writers as a plain dict; holding the container keeps its id from
-        #: being reused while it is registered.
-        self.by_id: dict[int, tuple[Any, Hashable, tuple[int, ...]]] = (
+        #: ``id(container) -> (container, token, nested_ids, flags)``, filled by
+        #: the writers (``_utils.container_tokens``) as a plain dict; holding the
+        #: container keeps its id from being reused while it is registered.
+        self.by_id: dict[int, tuple[Any, Hashable, tuple[int, ...], int]] = (
             {} if by_id is None else by_id
         )
         #: ``token -> content key`` cache filled at compaction.
