@@ -256,7 +256,11 @@ def _clear_module_namespace_tensor_metadata(
             for name, item in namespace.items()
             if type(item) not in _NAMESPACE_INERT_TYPES
             and not issubclass(type(item), type)
-            and not _is_isinstance_hostile_deprecation_shim(item)
+            # Shim test inline by name first: it is the check's first conjunct.
+            and (
+                type(item).__name__ != "_reduce_op"
+                or not _is_isinstance_hostile_deprecation_shim(item)
+            )
             and isinstance(
                 item,
                 (torch.Tensor, dict, list, tuple, set, frozenset, deque),
@@ -348,7 +352,7 @@ def _clear_container_tree_tensor_metadata(
         Mutates reachable tensors in place by removing TorchLens metadata.
     """
 
-    if _is_isinstance_hostile_deprecation_shim(value):
+    if type(value).__name__ == "_reduce_op" and _is_isinstance_hostile_deprecation_shim(value):
         return
     if isinstance(value, torch.Tensor):
         if not isinstance(value, torch.nn.Parameter):
