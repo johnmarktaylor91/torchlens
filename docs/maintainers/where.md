@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1816 modules, 722693 lines, 0 modules without a docstring.
+85 packages, 1816 modules, 722709 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 22 | 6795 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 82 | 25048 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 82 | 25064 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6582 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
@@ -976,7 +976,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (22 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (82 modules, 25048 lines)
+Shared helpers used by two or more TorchLens packages. (82 modules, 25064 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1037,9 +1037,9 @@ Shared helpers used by two or more TorchLens packages. (82 modules, 25048 lines)
 | `_tensor_layout` | Capture-time argument layouts for saved-DAG replay. | 98 |
 | `_tensor_search_last_level` | The tensor search's last breadth-first level: match items, never expand them. | 47 |
 | `_tl_collective` | Unwrap a functional-collective async tensor for TorchLens tensor metadata. | 39 |
-| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4257 |
+| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4271 |
 | `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 282 |
-| `_torch_seed_backends` | Per-backend torch seeding with ''torch.manual_seed'''s exact effect on compiled backends. | 82 |
+| `_torch_seed_backends` | Per-backend torch seeding with ''torch.manual_seed'''s exact effect on compiled backends. | 84 |
 | `_torch_structseq` | Repr-independent discovery of ''torch.return_types'' structseq field names. | 74 |
 | `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 507 |
 | `_type_new_slot` | CPython ''tp_new'' patching for torch's immutable legacy tensor-constructor types. | 506 |
