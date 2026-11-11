@@ -115,6 +115,7 @@ from ._gradfn_markers import (
     _exit_gradfn_marker,
     _gradfn_marker_list,
 )
+from ._graph_pins import _BACKWARD_GRAD_FN_REGISTRY, _BACKWARD_TRACE_SLOTS
 from .escape_detection import expected_original_call
 from .tensor_tracking import (
     _IMPLICIT_BACKWARD_TASK_IDS,
@@ -129,7 +130,6 @@ from .tensor_tracking import (
     _trace_grad_save_mode,
 )
 
-_BACKWARD_GRAD_FN_REGISTRY: dict[int, weakref.ReferenceType[Any]] = {}
 _ORIGINAL_AUTOGRAD_BACKWARD: Callable[..., Any] | None = None
 _ORIGINAL_AUTOGRAD_GRAD: Callable[..., Any] | None = None
 # Exact installed patch objects: teardown restores a slot only when it still
@@ -301,13 +301,6 @@ def _strong_grad_fn_refs(trace: Any) -> list[Any]:
 
     return trace.__dict__.setdefault("_backward_gradfn_refs", [])
 
-
-_BACKWARD_TRACE_SLOTS: weakref.WeakKeyDictionary[Any, tuple[weakref.ReferenceType[Any], set[int]]]
-_BACKWARD_TRACE_SLOTS = weakref.WeakKeyDictionary()
-"""Per-trace registration slot: its ONE self-evicting weakref plus its owned keys.
-
-Values hold the trace only WEAKLY, so this table never pins its own keys.
-"""
 
 _PENDING_BACKWARD_FINALIZE: weakref.WeakKeyDictionary[Any, bool] = weakref.WeakKeyDictionary()
 """Traces whose implicit-close FINALIZE step (D2H fence + projection) is owed.

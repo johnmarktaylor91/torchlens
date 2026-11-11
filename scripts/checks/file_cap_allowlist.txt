@@ -881,7 +881,7 @@ torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wra
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wrapped_builder.wrapped_transform	62
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
-torchlens/backends/torch/backward.py	3802
+torchlens/backends/torch/backward.py	3795
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	94
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	72
@@ -942,7 +942,7 @@ torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
 torchlens/backends/torch/sources.py::log_source_tensor_predicate	120
 torchlens/backends/torch/structure_only_belt.py::structure_only_forward_boundary	129
-torchlens/backends/torch/tensor_tracking.py	1601
+torchlens/backends/torch/tensor_tracking.py	1595
 torchlens/backends/torch/tensor_tracking.py::_add_tensor_backward_hook	83
 torchlens/backends/torch/tensor_tracking.py::_build_grad_payloads	61
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137

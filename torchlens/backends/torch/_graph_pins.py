@@ -10,6 +10,9 @@ alive, with the gradient hooks on it (already disowned by the reset owner
 map), for the trace's lifetime. A rerun's graph adoption (``intervention._rerun``)
 re-registers the same way. ``release_superseded_pins`` clears them before the
 new pass registers.
+
+The pin tables live here, imported by ``backward`` and ``tensor_tracking``, so
+this module imports nothing from torchlens.
 """
 
 from __future__ import annotations
@@ -18,6 +21,22 @@ import weakref
 from typing import Any
 
 __all__ = ["pin_epoch", "release_superseded_pins", "reset_backward_rebind_state"]
+
+_BACKWARD_GRAD_FN_REGISTRY: dict[int, weakref.ReferenceType[Any]] = {}
+"""Registered grad-fn node id -> its owning trace's slot weakref (``backward``)."""
+
+_BACKWARD_TRACE_SLOTS: weakref.WeakKeyDictionary[Any, tuple[weakref.ReferenceType[Any], set[int]]]
+_BACKWARD_TRACE_SLOTS = weakref.WeakKeyDictionary()
+"""Per-trace registration slot: its ONE self-evicting weakref plus its owned keys.
+
+Values hold the trace only WEAKLY, so this table never pins its own keys.
+"""
+
+# Model-state grad-fn nodes (a mutated prepared Parameter's capture-pass history),
+# keyed by id to the owning trace's backward-registry slot reference (evicted with
+# that slot and by cleanup). Later forwards chain onto them, so root matching treats
+# them as boundaries (``tensor_tracking._defer_at_state_boundary``).
+_STATE_BOUNDARY_GRAD_FNS: dict[int, weakref.ReferenceType[Any]] = {}
 
 _PIN_EPOCHS: weakref.WeakKeyDictionary[Any, int] = weakref.WeakKeyDictionary()
 """Per-trace count of pin releases, keyed weakly; dies with the trace."""
@@ -68,7 +87,7 @@ def release_superseded_pins(trace: Any) -> None:
 
     Every pinned node and registry key the trace owns goes, except its
     model-state boundary nodes (later forwards chain onto those;
-    ``_register_state_boundary_grad_fn``); the trace's pin epoch advances.
+    ``tensor_tracking._register_state_boundary_grad_fn``); the trace's pin epoch advances.
     The caller registers the new pass's nodes afterwards.
 
     Parameters
@@ -76,9 +95,6 @@ def release_superseded_pins(trace: Any) -> None:
     trace:
         Trace whose forward record a new pass replaces.
     """
-
-    from .backward import _BACKWARD_GRAD_FN_REGISTRY, _BACKWARD_TRACE_SLOTS
-    from .tensor_tracking import _STATE_BOUNDARY_GRAD_FNS
 
     slot = _BACKWARD_TRACE_SLOTS.get(trace)
     trace_ref = None if slot is None else slot[0]
