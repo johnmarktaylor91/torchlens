@@ -99,7 +99,7 @@ class _PendingRow(dict[str, Any]):
         "handle_id",
         "_options_save_mode",
         "events",
-        "layout",
+        "journal",
         "edge_uses",
         "labels",
         "side",
@@ -117,7 +117,7 @@ class _PendingRow(dict[str, Any]):
     handle_id: str
     _options_save_mode: Any
     events: dict[str, Any]
-    layout: Any
+    journal: _RowJournal
     edge_uses: Any
     labels: tuple[str, list[str]]
     side: Any
@@ -209,7 +209,7 @@ class _PendingRow(dict[str, Any]):
 
         trace = self.trace_ref()
         fields = self.fields
-        journal = _row_journal_for(trace, self.layout)
+        journal = self.journal
         function = self.function_ref()
         edge_uses = self.edge_uses
         if type(edge_uses) is not tuple:
@@ -267,10 +267,14 @@ def commit_row_record(
         with internal_scalar_read():
             pending.requires_grad = bool(tensor.requires_grad)
     parents = fields["parents"] = list(fields["parents"])
-    found = tuple(map(trace.capture_events.live_index.by_raw_label.get, parents))
+    events = trace.capture_events
+    found = tuple(map(events.live_index.by_raw_label.get, parents))
     if None in found:
-        for label in parents:
-            trace.capture_events.live_index.require_event(label)
+        found = tuple(map(events.live_index.require_event, parents))
+    # Bound now: a failed capture's scrub settles rows after dropping capture_events.
+    journal = events.row_journal
+    if journal is None:
+        journal = _row_journal_for(trace, layout)
     versions = fields["out_versions_by_child"]
     fields["out_versions_by_child"] = dict(versions) if versions else {}
     pending.trace_ref = weakref.ref(trace)
@@ -282,7 +286,7 @@ def commit_row_record(
     pending.handle_id = str(id(tensor))
     pending._options_save_mode = trace._options_save_mode
     pending.events = dict(zip(parents, found, strict=True))
-    pending.layout = layout
+    pending.journal = journal
     pending.edge_uses = edge_uses
     pending.side = pending.output = pending.built = pending.function = None
     box: Any = draft.call_ref_box

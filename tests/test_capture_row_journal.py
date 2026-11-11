@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import gc
+import warnings
 import weakref
 from collections.abc import Iterator
 from typing import Any
@@ -407,3 +408,34 @@ def test_activation_transform_flip_keeps_op_output_requires_grad() -> None:
     finally:
         trace.cleanup()
         _KEPT_LEAVES.clear()
+
+
+class _ScrubInterrupt(BaseException):
+    """BaseException standing in for KeyboardInterrupt."""
+
+
+class _RaiseAfterOps(nn.Module):
+    """Model that commits two ops, then raises the parametrized error."""
+
+    def __init__(self, error: BaseException) -> None:
+        super().__init__()
+        self.fc = nn.Linear(3, 4)
+        self.error = error
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: D102
+        torch.relu(self.fc(x))
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    "error", [_ScrubInterrupt("interrupted"), RuntimeError("boom")], ids=["interrupt", "error"]
+)
+def test_failed_capture_scrub_settles_pending_rows(error: BaseException) -> None:
+    """The failed-capture scrub drops ``capture_events`` first; pending rows still settle."""
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(type(error)):
+            tl.trace(_RaiseAfterOps(error).eval(), torch.ones(1, 3))
+    failed = [str(w.message) for w in caught if "also failed while handling" in str(w.message)]
+    assert failed == []
