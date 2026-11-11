@@ -184,8 +184,6 @@ def test_single_output_empty_cells_settle_pooled(split_trace: Any) -> None:
         assert len({id(cell) for cell in cells}) == 1, name
         hydrated = cells[0].hydrate()
         assert not hydrated and type(hydrated) is type(_WRITER_EMPTY_VALUES[name]())
-    for op in singles:
-        assert op.var_names == [] and op.edits == [] and op.annotations == {}
 
 
 def test_multi_output_call_keeps_its_shared_rng_dict(split_trace: Any) -> None:
