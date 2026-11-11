@@ -18,7 +18,6 @@ from collections.abc import Callable
 from itertools import repeat
 from typing import TYPE_CHECKING, Any
 
-from ._arg_position_tokens import register_arg_position_keys
 from ._conditional_child_rename import _rename_children_by_cond, _rename_elif_children
 from ._label_rename import _rename_label_dataclass
 from ._replay_template_cells import carry_templates, template_labels
@@ -255,7 +254,6 @@ def rename_label_columns(
     )
     _rename_buffer_sources(rows, fids["buffer_source"], columns["buffer_source"], mapping)
     _rename_arg_positions(columns["parent_arg_positions"], mapping)
-    register_arg_position_keys(trace, columns["parent_arg_positions"])
     name = "out_versions_by_child"
     _rename_out_versions(rows, fids[name], columns[name], mapping)
     _rename_conditional_children(rows, fids, columns, layer_mapping, project_views)

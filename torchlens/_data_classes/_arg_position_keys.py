@@ -1,10 +1,12 @@
-"""Exact content keys for ``parent_arg_positions``, stated by the rename pass.
+"""Exact content keys for ``parent_arg_positions``, stated at the freeze.
 
-Step 9 renames every ``parent_arg_positions`` dict to final labels in place;
-nothing writes into one afterwards. Right after it, :func:`register_arg_position_keys`
-states each dict's content key and registers it with the trace's container
-tokens (``_utils.container_tokens``, ``TOKEN_EXACT``), so the freeze's
-container pooling reads the key instead of walking the dict.
+Step 9 renames every ``parent_arg_positions`` dict to final labels in place,
+and nothing writes into one afterwards. The freeze's compaction then calls
+:func:`register_arg_position_keys`, which states each dict's content key from
+its two sections and registers it with the trace's container tokens
+(``TOKEN_EXACT``), so the container pooling reads the key instead of walking
+the dict. It runs at the freeze rather than in step 9 so step 9's cost does
+not grow.
 
 The key is exactly what ``op.py``'s ``_container_pool_key`` returns for the
 dict: ``("d", ((kind_key, ("m", ("d", members))), ...))`` with each member
@@ -13,15 +15,16 @@ key that way (a location that is not exactly ``int`` or ``str``, a label that
 is not exactly ``str``, a section that is not an exact ``dict``, a section name
 that is not exactly ``str``, or more members than the walk's budget) is left
 unregistered and walked as before. The container tokens' debug check
-(``_data_classes._container_key.TOKEN_DEBUG``) re-walks every registered dict
-in tests and raises on any difference.
+(``_container_key.TOKEN_DEBUG``) re-walks every registered dict in tests and
+raises on any difference.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from .._utils.container_tokens import TOKEN_EXACT, token_table
+from .._trace_core.pools import ContainerTokens
+from .._utils.container_tokens import TOKEN_EXACT
 
 #: Members the content walk keys before refusing (``op.py``
 #: ``_CONTAINER_KEY_MAX_MEMBERS``, 1024) less the two section entries.
@@ -45,12 +48,27 @@ def _section_members(section: Any) -> Any:
     return tuple(members)
 
 
-def register_arg_position_keys(trace: Any, column: list[Any]) -> None:
-    """Register the exact content key of every renamed ``parent_arg_positions`` dict."""
+def with_arg_position_keys(store: Any, tokens: ContainerTokens | None) -> ContainerTokens | None:
+    """Return ``tokens`` (created when ``None``) with ``store``'s arg-position keys added.
 
-    table = token_table(trace)
-    if table is None:
-        return
+    ``store`` is the building-phase op store; a frozen store or one without the
+    column returns ``tokens`` unchanged.
+    """
+
+    rows = store.rows_building() if store is not None else None
+    names = store.layout.names if rows else ()
+    if "parent_arg_positions" not in names:
+        return tokens
+    fid = names.index("parent_arg_positions")
+    if tokens is None:
+        tokens = ContainerTokens()
+    register_arg_position_keys(tokens.by_id, [row_cells[fid] for row_cells in rows])
+    return tokens
+
+
+def register_arg_position_keys(table: dict[int, Any], column: list[Any]) -> None:
+    """Register in ``table`` the exact content key of every ``parent_arg_positions`` dict."""
+
     for positions in column:
         if positions.__class__ is not dict or not positions:
             continue

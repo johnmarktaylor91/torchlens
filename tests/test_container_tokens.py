@@ -17,7 +17,6 @@ design's proof needs:
 from __future__ import annotations
 
 from collections.abc import Callable
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -26,8 +25,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes import _compaction, _container_key
+from torchlens._data_classes._arg_position_keys import register_arg_position_keys
 from torchlens._data_classes.op import _container_pool_key
-from torchlens._postprocess._arg_position_tokens import register_arg_position_keys
 from torchlens._trace_core.pools import ContainerTokens
 
 
@@ -107,7 +106,7 @@ def test_token_debug_check_passes_on_real_captures(
     assert tokens is not None and len(tokens) > 0
     assert traced._trace_core.pool.tokens is None
     assert hits, "no autocast cell was keyed by its token"
-    states = [op.func_autocast_state for op in trace._layer_list]
+    states = [op.call.autocast_state for op in trace._layer_list]
     assert all(isinstance(state, dict) for state in states)
     if mode == "autocast":
         assert any(state.get("cpu", {}).get("enabled") for state in states)
@@ -218,9 +217,8 @@ def test_arg_position_keys_equal_the_walk() -> None:
         {"args": {0: "a_1_1"}},
         {"args": [("a_1_1",)], "kwargs": {}},
     ]
-    trace = SimpleNamespace(_wrapper_runtime_ws=SimpleNamespace(container_tokens=None))
-    register_arg_position_keys(trace, [*keyed, *unkeyed, {}])
-    table = trace._wrapper_runtime_ws.container_tokens
+    table: dict[int, Any] = {}
+    register_arg_position_keys(table, [*keyed, *unkeyed, {}])
     assert set(table) == {id(cell) for cell in keyed}
     for cell in keyed:
         assert table[id(cell)][1] == _container_pool_key(cell, 0, [])

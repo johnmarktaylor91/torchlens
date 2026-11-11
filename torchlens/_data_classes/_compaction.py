@@ -18,6 +18,7 @@ from .._quantities import Duration
 from .._trace_core.cell_states import LazyCell, settle_default_cells
 from .._trace_core.op_store import _MISSING, PooledCell
 from .._trace_core.pools import ContainerTokens
+from ._arg_position_keys import with_arg_position_keys
 from ._container_key import make_content_key, members_inert
 from ._op_container_census import _EMPTY_CONTAINER_POOL_KEYS
 
@@ -53,7 +54,7 @@ def compact_op_metadata(trace: Trace) -> None:
     if ops and trace not in _COMPACTED_TRACES:
         _COMPACTED_TRACES.add(trace)
         pool: dict[Any, Any] = {}
-        tokens = _take_container_tokens(trace)
+        tokens = with_arg_position_keys(store, _take_container_tokens(trace))
         if store is not None:
             # Core-backed ops pool in ONE column-major sweep over the row
             # cells (same ladder, same skips as the per-op walk) without
@@ -85,7 +86,7 @@ def _take_container_tokens(trace: Any) -> ContainerTokens | None:
     core = trace.__dict__.get("_trace_core")
     pool = getattr(core, "pool", None)
     tokens = getattr(pool, "tokens", None)
-    if tokens is not None:
+    if pool is not None and tokens is not None:
         pool.tokens = None
     return tokens
 
@@ -262,7 +263,7 @@ def _sweep_by_object(
     """
 
     column = [row_cells[fid] for row_cells in rows]
-    distinct = dict(zip(map(id, column), column))
+    distinct = dict(zip(map(id, column), column, strict=True))
     if len(distinct) * 2 > len(column):
         return False
     for value in distinct.values():

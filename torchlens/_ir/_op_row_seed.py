@@ -152,7 +152,7 @@ def _seed_interned(values: Any, keys: OpSeedKeys, cache: dict[Any, Any]) -> None
 
     if values[keys.dtype_ref] is None:
         source = values[keys.dtype]
-        key = ("dtype", source.__class__, source)
+        key: Any = ("dtype", source.__class__, source)
         try:
             values[keys.dtype_ref] = cache[key]
         except (KeyError, TypeError):
