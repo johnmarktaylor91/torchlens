@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1825 modules, 724428 lines, 0 modules without a docstring.
+85 packages, 1825 modules, 724427 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 23 | 6911 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 83 | 25126 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 83 | 25112 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6609 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 157 | 63536 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 157 | 63549 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -982,7 +982,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (23 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (83 modules, 25126 lines)
+Shared helpers used by two or more TorchLens packages. (83 modules, 25112 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1057,7 +1057,7 @@ Shared helpers used by two or more TorchLens packages. (83 modules, 25126 lines)
 | `alias_footprint` | THE one absolute-byte three-valued alias/overlap engine. | 293 |
 | `arg_handling` | Argument copying, normalization, and input validation for model forward calls. | 1005 |
 | `collections` | Iterable helpers: type checks, list/dict manipulation, nested indexing. | 178 |
-| `container_tokens` | Writer side of the trace's write-time container tokens. | 58 |
+| `container_tokens` | Writer side of the trace's write-time container tokens. | 44 |
 | `display` | Human-readable formatting, print overrides, and environment detection. | 790 |
 | `env_flags` | Closed-vocabulary parsing for torchlens-owned boolean environment knobs. | 258 |
 | `facade` | Shared five-step lazy-facade resolution for TorchLens namespaces. | 386 |
@@ -1530,7 +1530,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (157 modules, 63536 lines)
+Torch backend implementation package for TorchLens capture. (157 modules, 63549 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1623,7 +1623,7 @@ Torch backend implementation package for TorchLens capture. (157 modules, 63536 
 | `_ops_predicate_events` | Predicate event records and graph relationship fields. | 765 |
 | `_ops_predicates` | Predicate output replacement and backend semantics. | 549 |
 | `_ops_retention` | Save budgets, predicate payloads, and lookback retention. | 755 |
-| `_ops_row_cells` | Row-direct op cells: the exhaustive draft straight to store cells (capture C2a). | 598 |
+| `_ops_row_cells` | Row-direct op cells: the exhaustive draft straight to store cells (capture C2a). | 611 |
 | `_ops_row_journal` | Exhaustive commit into the row-backed capture journal (capture C2b). | 118 |
 | `_ops_saved_arg_copies` | Saved-argument copies for ''save_args'' captures, and validation's by-reference aliases. | 219 |
 | `_ops_shared_fields` | Shared operation fields and tensor variation tracking. | 425 |
