@@ -453,3 +453,55 @@ def tensor_reads(tensor: Any, *names: str) -> tuple[Callable[[Any], Any], ...]:
         seen = _RESOLVED[name]
         resolved += (seen[1] if seen[0] is attr else _resolve(name, attr, bound[1]),)
     return resolved
+
+
+# --- torch seeding symbols ------------------------------------------------------------
+# Which accelerator seed calls ``torch.manual_seed`` makes, read from the names its code
+# object references (never a version parse). ``_torch_seed_backends`` replays the calls;
+# ``_torch_compat`` publishes ``HAS_PER_BACKEND_SEED`` in the capability snapshot.
+# Seed entry point per accelerator module, as torch's own seeding code calls it.
+_SEED_CALLS: dict[str, str] = {
+    "cuda": "manual_seed_all",
+    "mps": "manual_seed",
+    "xpu": "manual_seed_all",
+    "mtia": "manual_seed_all",
+}
+# Every name torch's seeding code may reference for this module to replay it exactly.
+_KNOWN_SEED_CODE_NAMES: frozenset[str] = frozenset(
+    {"int", "hasattr", "torch", "default_generator", "_seed_custom_device", "_is_in_bad_fork"}
+    | set(_SEED_CALLS)
+    | set(_SEED_CALLS.values())
+    | {f"torch.{name}" for name in _SEED_CALLS}
+)
+
+
+def _torch_seed_code_names() -> tuple[str, ...] | None:
+    """Return the names ``torch.manual_seed``'s implementation references, or ``None``."""
+
+    code = getattr(getattr(torch.random, "manual_seed", None), "__code__", None)
+    names: tuple[str, ...] | None = getattr(code, "co_names", None)
+    # Newer torch delegates the whole body to one private implementation function.
+    if names is not None and len(names) == 1 and names[0].startswith("_manual_seed"):
+        inner = getattr(getattr(torch.random, names[0], None), "__code__", None)
+        names = getattr(inner, "co_names", None)
+    return names
+
+
+def _probe_seed_plan() -> tuple[tuple[str, ...], bool] | None:
+    """Return ``(accelerators in torch's order, seeds privateuse1)`` or ``None`` to fall back."""
+
+    names = _torch_seed_code_names()
+    if names is None or "default_generator" not in names:
+        return None
+    if not set(names) <= _KNOWN_SEED_CODE_NAMES:
+        return None
+    if "_seed_custom_device" in names and not callable(
+        getattr(torch.random, "_seed_custom_device", None)
+    ):
+        return None
+    return tuple(name for name in names if name in _SEED_CALLS), "_seed_custom_device" in names
+
+
+TORCH_SEED_PLAN = _probe_seed_plan()
+HAS_PER_BACKEND_SEED: bool = TORCH_SEED_PLAN is not None
+"""Whether capture seeding replays ``torch.manual_seed`` per backend (else it calls it)."""

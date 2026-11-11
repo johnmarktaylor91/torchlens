@@ -241,6 +241,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
         "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
         absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1"),
     ),
+    _row("HAS_PER_BACKEND_SEED", measured=False),  # added after the matrix run
     _row("HAS_PIPELINING"),
     _row("HAS_REDUCE_TUPLE_DIM", absent_on=("2.1.2",)),
     _row("HAS_REV_VIEW_FUNC_UNSAFE", absent_on=("2.1.2", "2.2.2")),

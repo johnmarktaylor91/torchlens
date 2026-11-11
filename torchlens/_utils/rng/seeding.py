@@ -14,6 +14,7 @@ import warnings as _warnings_module
 import numpy as np
 import torch
 
+from .._torch_seed_backends import manual_seed_compiled_backends
 from .._uninit_alloc import _SEEDED_RNG_NAMESPACES
 from ..hashing import seed_barcode_rng
 from . import streams
@@ -61,8 +62,11 @@ def aten_qualname_is_seeded_rng(namespace: str | None, qualname: str | None) -> 
 def _seed_torch_engines(seed: int) -> None:
     """Seed torch's CPU and accelerator generators, degrading on a broken stack.
 
-    ``torch.manual_seed`` seeds the accelerator engines (every visible CUDA
-    device, MPS, XPU) BEFORE the CPU default generator, so a CUDA runtime that
+    The seed has ``torch.manual_seed``'s exact effect on every backend compiled into
+    this torch build (:func:`manual_seed_compiled_backends`; only the lazy seed of an
+    uncompiled backend, which can never run, is skipped). Like ``torch.manual_seed`` it
+    seeds the accelerator engines (every visible CUDA device, MPS, XPU) BEFORE the CPU
+    default generator, so a CUDA runtime that
     claims initialization but cannot serve its generators (first observed on
     real H200 hardware as an ``IndexError`` from
     ``torch.cuda.default_generators``) aborted a pure-CPU capture with the CPU
@@ -77,7 +81,7 @@ def _seed_torch_engines(seed: int) -> None:
         Seed value to set.
     """
     try:
-        torch.manual_seed(seed)
+        manual_seed_compiled_backends(seed)
     except Exception as exc:  # noqa: BLE001 - any broken-accelerator failure mode
         torch.default_generator.manual_seed(seed)
         _warnings_module.warn(

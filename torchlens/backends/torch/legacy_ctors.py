@@ -38,7 +38,7 @@ from ..._utils._type_new_slot import (
     install_new_override,
     is_c_new_entry,
     original_new_caller,
-    probe_type_new_slot_patch,
+    probe_type_new_slot_patches,
     recover_c_new_from_bases,
     reinstate_original_new,
     restore_new_override,
@@ -252,7 +252,8 @@ def install_legacy_constructor_wrappers() -> None:
     if not _torch_compat.HAS_LEGACY_CONSTRUCTOR_NEW_PATCH:
         return
     roster = _resolve_roster()
-    drifted = [name for name, cls in roster if not probe_type_new_slot_patch(cls)]
+    verdicts = probe_type_new_slot_patches([cls for _name, cls in roster])
+    drifted = [name for (name, _cls), ok in zip(roster, verdicts, strict=True) if not ok]
     if drifted:
         _torch_compat.mark_torch_capability_missing(
             "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH",

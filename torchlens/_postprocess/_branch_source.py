@@ -11,6 +11,7 @@ entry) stays unreadable, and its branches are not recorded.
 from __future__ import annotations
 
 import linecache
+import re
 import tokenize
 from typing import TypeAlias
 
@@ -70,6 +71,10 @@ def read_interactive_source(filename: str) -> str | None:
     return "".join(lines)
 
 
+#: Characters ``str.splitlines`` breaks on that the CPython parser does not.
+_NON_PARSER_BREAKS = re.compile("[\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")
+
+
 def split_source_lines(source: str) -> list[str]:
     """Split source into lines exactly as the CPython parser does.
 
@@ -88,6 +93,9 @@ def split_source_lines(source: str) -> list[str]:
         offsets index correctly.
     """
 
+    if _NON_PARSER_BREAKS.search(source) is None:
+        # Every ``splitlines`` break is then a parser terminator: same lines.
+        return source.splitlines(keepends=True)
     lines: list[str] = []
     pending = ""
     for part in source.splitlines(keepends=True):

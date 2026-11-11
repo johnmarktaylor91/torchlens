@@ -210,6 +210,13 @@ _member_map: dict[int, Any] | None = None
 _swept_module_ids: dict[int, Callable[[], Any | None]] = {}
 """Module identities already swept this wrapper epoch (weak where possible)."""
 
+_all_swept_ids: tuple[int, ...] | None = None
+"""``sys.modules`` value ids at the last pre-filter that found all in ``_swept_ids_live``.
+
+Reset to ``None`` by every eviction and by the epoch reset: while it is set, the
+live set has only grown since, so an equal id tuple is still a subset of it.
+"""
+
 _swept_ids_live: set[int] = set()
 """Ids of swept modules PROVABLY still alive, for the O(new) sweep pre-filter.
 
@@ -465,6 +472,8 @@ def _evict_live_id(entry_id: int) -> Callable[[Any], None]:
 
     def _evict(_ref: Any) -> None:
         """Discard the captured id when its referent is finalized."""
+        global _all_swept_ids
+        _all_swept_ids = None
         _swept_ids_live.discard(entry_id)
 
     return _evict
@@ -504,16 +513,26 @@ def _unswept_module_items() -> list[tuple[str, Any]]:
 
     Every id in ``_swept_ids_live`` is an entry this epoch's sweep already
     scanned AND that is provably still the same object (death callbacks evict
-    dead ids, so a reused id reads as new). ``set(map(id, ...))`` executes no
-    Python bytecode, so the nothing-new check is atomic under the GIL like the
-    ``list(sys.modules.items())`` snapshot. When something is new, only the
+    dead ids, so a reused id reads as new). The id tuple and ``issuperset``
+    execute no Python bytecode, so the nothing-new check is atomic under the
+    GIL like the ``list(sys.modules.items())`` snapshot; an id tuple equal to
+    the last all-swept one skips the set test (it runs on every capture, and
+    building a set of every module id costs more than the tuple compare). When
+    something is new, only the
     entries outside the live set are returned, in ``sys.modules`` order: the
     snapshot keeps every entry alive while it is filtered, so no id in it can
     be reused, and the sweep does work for the new entries alone instead of
     re-checking every module already swept.
     """
 
-    if not set(map(id, sys.modules.values())) - _swept_ids_live:
+    global _all_swept_ids
+    # Equal to the last all-swept id tuple with no eviction since: still all
+    # swept (set membership only grew), decided by one C-level tuple compare.
+    entry_ids_now = tuple(map(id, sys.modules.values()))
+    if entry_ids_now == _all_swept_ids:
+        return []
+    if _swept_ids_live.issuperset(entry_ids_now):
+        _all_swept_ids = entry_ids_now
         return []
     items = list(sys.modules.items())
     entry_ids = map(id, map(_ENTRY_VALUE, items))
@@ -604,5 +623,7 @@ def restore_belt_references() -> None:
         except (KeyError, TypeError):
             continue
     _ledger.clear()
+    global _all_swept_ids
+    _all_swept_ids = None
     _swept_module_ids.clear()
     _swept_ids_live.clear()

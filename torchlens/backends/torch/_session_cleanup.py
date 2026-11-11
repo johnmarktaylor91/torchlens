@@ -78,6 +78,8 @@ _WALK_SEQUENCE_TYPES = (list, tuple, set, frozenset, deque)
 # Exact types a module namespace holds that can never be a tensor or a
 # container: skipping them by ``type()`` avoids the ``isinstance`` (and the
 # reduce_op shim check) for the bulk of ``torch``'s ~2k names on every sweep.
+# The walks also skip any class (``issubclass(type(item), type)``, metaclass
+# instances such as the legacy ``torch.FloatTensor`` types) the same way.
 _NAMESPACE_INERT_TYPES = frozenset(
     {
         types.BuiltinFunctionType,
@@ -90,6 +92,10 @@ _NAMESPACE_INERT_TYPES = frozenset(
         float,
         bool,
         type(None),
+        torch.dtype,
+        torch.layout,
+        torch.memory_format,
+        torch.qscheme,
     }
 )
 
@@ -253,7 +259,12 @@ def _clear_module_namespace_tensor_metadata(
             name
             for name, item in namespace.items()
             if type(item) not in _NAMESPACE_INERT_TYPES
-            and not _is_isinstance_hostile_deprecation_shim(item)
+            and not issubclass(type(item), type)
+            # Shim test inline by name first: it is the check's first conjunct.
+            and (
+                type(item).__name__ != "_reduce_op"
+                or not _is_isinstance_hostile_deprecation_shim(item)
+            )
             and isinstance(
                 item,
                 (torch.Tensor, dict, list, tuple, set, frozenset, deque),
@@ -345,7 +356,7 @@ def _clear_container_tree_tensor_metadata(
         Mutates reachable tensors in place by removing TorchLens metadata.
     """
 
-    if _is_isinstance_hostile_deprecation_shim(value):
+    if type(value).__name__ == "_reduce_op" and _is_isinstance_hostile_deprecation_shim(value):
         return
     if isinstance(value, torch.Tensor):
         if not isinstance(value, torch.nn.Parameter):
@@ -362,14 +373,15 @@ def _clear_container_tree_tensor_metadata(
         items = [item for pair in value.items() for item in pair]
     else:
         items = list(value)
-    # Inline scalar-leaf skip: module-namespace container trees are dominated
-    # by strings (``torch.__all__`` alone is ~1400), and each full call here
-    # costs more than the check (a measured walk cost). EXACT
-    # type() membership on purpose: isinstance() reads ``__class__`` on a
-    # non-matching type, which the reduce_op deprecation shim answers with a
+    # Inline inert-leaf skip (strings, as in ``torch.__all__``; classes and
+    # builtins, as in ``__builtins__``): this descent returns at once for each,
+    # and a full call costs more than the check. EXACT type() membership and
+    # ``issubclass(type(item), type)`` read the real type slot: isinstance()
+    # reads ``__class__``, which the reduce_op shim answers with a
     # FutureWarning; subclasses fall through to the guarded recursion.
     for item in items:
-        if item is None or type(item) in (str, bytes, int, float, bool):
+        item_type = type(item)
+        if item_type in _NAMESPACE_INERT_TYPES or issubclass(item_type, type):
             continue
         _clear_container_tree_tensor_metadata(item, seen, depth + 1, visit)
 
