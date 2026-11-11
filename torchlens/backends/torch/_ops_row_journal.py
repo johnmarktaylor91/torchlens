@@ -183,6 +183,9 @@ class _PendingRow(dict[str, Any]):
         if name == "output":
             value = self[name] = self.output_ref()
             return value
+        if name == "module_stack":
+            value = self[name] = self.side_refs()[0]
+            return value
         if name == "backend_semantics":
             value = self[name] = self.side_refs()[2]
             return value
