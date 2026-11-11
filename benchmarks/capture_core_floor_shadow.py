@@ -18,6 +18,12 @@ parents, parameters, source resolution), ``call_site``, ``module_stack``,
 ``forward_outside`` is the forward less today's emit less the observations:
 the wrapper, module handling and the model's own code.
 
+The shadow emit replaces today's emit at every attribute of a loaded TorchLens
+module bound to it (:func:`swap_emit`): the function wrapper calls it through
+``wrappers``, but the fast lane passes ``_ops_emission``'s own global to
+``_call_plan.commit_fast_call``, and other entry points hold their own imported
+names. Patching one binding leaves the others' calls unmeasured.
+
 Every per-output figure divides by the function outputs of a production trace
 (calls of ``_log_output_tensor_info``). The minimum over ``repeats`` traces is
 reported. This is the instrument of stage 2 REPLAN sections 2 and 3, adapted
@@ -29,6 +35,7 @@ from __future__ import annotations
 
 import gc
 import platform
+import sys
 import time
 import traceback
 import warnings
@@ -116,6 +123,7 @@ class _Probe:
         self.closure_constant, self.source = log_closure_constant_if_known, log_source_tensor
         self.real_run_forward = run._run_forward
         self.real_emit = wrappers.log_function_output_tensors
+        self.bound_shadow_emit = self.shadow_emit  # one object, so the swap back finds it
         self.forward_times: list[float] = []
         self.sections = [0.0] * len(OBSERVATION_SECTIONS)
         self.split = [0.0, 0.0]  # observations, today's emit
@@ -299,7 +307,8 @@ class _Probe:
 
         self.run._run_forward = self.timed_run_forward
         if shadow:
-            self.wrappers.log_function_output_tensors = self.shadow_emit
+            swapped = swap_emit(self.real_emit, self.bound_shadow_emit)
+            self.notes["emit_bindings"] = ", ".join(swapped)
         rows = []
         try:
             for _ in range(repeats):
@@ -314,8 +323,34 @@ class _Probe:
                 rows.append((forward, self.split[0], self.split[1], list(self.sections), total))
         finally:
             self.run._run_forward = self.real_run_forward
-            self.wrappers.log_function_output_tensors = self.real_emit
+            swap_emit(self.bound_shadow_emit, self.real_emit)
         return rows
+
+
+def emit_bindings(emit: Any) -> list[tuple[Any, str]]:
+    """Every ``(module, attribute)`` of a loaded TorchLens module whose value is ``emit``."""
+
+    found: list[tuple[Any, str]] = []
+    for module in list(sys.modules.values()):
+        name = getattr(module, "__name__", None)
+        namespace = getattr(module, "__dict__", None)
+        if not isinstance(name, str) or not isinstance(namespace, dict):
+            continue
+        if name == "torchlens" or name.startswith("torchlens."):
+            found.extend((module, key) for key, value in list(namespace.items()) if value is emit)
+    return found
+
+
+def swap_emit(current: Any, replacement: Any) -> list[str]:
+    """Rebind every TorchLens module attribute bound to ``current`` to ``replacement``.
+
+    Returns the ``module.attribute`` names rebound, sorted.
+    """
+
+    bindings = emit_bindings(current)
+    for module, key in bindings:
+        setattr(module, key, replacement)
+    return sorted(f"{module.__name__}.{key}" for module, key in bindings)
 
 
 def _bare(model: Any, x: Any, repeats: int) -> float:
