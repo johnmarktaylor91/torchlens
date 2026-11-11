@@ -354,7 +354,7 @@ torchlens/_postprocess/finalization.py::_build_conditional_records	137
 torchlens/_postprocess/finalization.py::_build_module_logs	174
 torchlens/_postprocess/finalization.py::_build_root_module_log	101
 torchlens/_postprocess/finalization.py::_build_submodule_call_logs	93
-torchlens/_postprocess/finalization.py::_finalize_param_logs	71
+torchlens/_postprocess/finalization.py::_finalize_param_logs	70
 torchlens/_postprocess/finalization.py::_finalize_streamed_bundle	67
 torchlens/_postprocess/finalization.py::_reconcile_multipass_layer_fields	77
 torchlens/_postprocess/finalization.py::_reuse_streamed_blob_ids	79

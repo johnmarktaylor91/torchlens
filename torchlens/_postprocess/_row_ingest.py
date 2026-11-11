@@ -31,6 +31,7 @@ from .._ir._op_row_seed import layout_keys, seed_op_values
 from .._ir._row_journal import _ROW_TAKE_PATHS, _RowOpRecord
 from .._ir.op_record_scatter import _write_overlay_cells
 from .._ir.refs import journal_record
+from .._trace_core.cell_states import LazyCell
 from .._trace_core.op_store import _MISSING
 
 __all__: tuple[str, ...] = ()
@@ -43,6 +44,10 @@ _PENDING_FIELDS = (
     "_pending_transformed_grad_blob_id",
 )
 _NO_OVERRIDE = object()
+#: Join cells left default-omitted when the join's value is empty and the capture
+#: row still holds the default: each value is a fresh list built for this op, and
+#: the freeze settles an equal fresh list per row.
+_OMIT_EMPTY_JOIN_FIELDS = ("parent_params", "_param_barcodes", "param_shapes", "output_of_modules")
 
 
 def hand_off_capture_rows(
@@ -128,6 +133,7 @@ class RowIngestPlan:
         "is_in_conditional_body",
         "keys",
         "none_fids",
+        "omit_empty_fids",
         "order_fids",
         "pending_fids",
         "source_trace_ref",
@@ -147,6 +153,7 @@ class RowIngestPlan:
             if name in fid_by_name and name not in _PENDING_FIELDS
         )
         self.none_fids = (fid_by_name["out_ref"], fid_by_name["grad_ref"])
+        self.omit_empty_fids = frozenset(fid_by_name[name] for name in _OMIT_EMPTY_JOIN_FIELDS)
         self.grad_records = fid_by_name["_grad_records"]
         self.construction_done = fid_by_name["_construction_done"]
         self.source_trace_ref = fid_by_name["_source_trace_ref"]
@@ -222,14 +229,18 @@ def _write_join_cells(row: list[Any], join_cells: Mapping[str, object], plan: Ro
 
     Names that are not store fields are ``Op`` properties and are dropped, as
     construction drops them; ``source_trace`` and ``is_in_conditional_body``
-    go to their backing cells.
+    go to their backing cells. An empty ``_OMIT_EMPTY_JOIN_FIELDS`` value is
+    not written over the row's default-omitted cell.
     """
 
     fid_by_name = plan.fid_by_name
+    omit_empty = plan.omit_empty_fids
     override = _NO_OVERRIDE
     for name, value in join_cells.items():
         fid = fid_by_name.get(name)
         if fid is not None:
+            if fid in omit_empty and not value and row[fid].__class__ is LazyCell:
+                continue
             row[fid] = value
         elif name == "_materialized_backend_address":
             override = value

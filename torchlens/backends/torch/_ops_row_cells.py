@@ -137,6 +137,23 @@ _EMPTY_DICT_CELLS: tuple[str, ...] = (
     "conditional_elif_children",
     "conditional_arm_children",
 )
+#: Cells the capture writes only when non-empty: an empty one stays default-omitted
+#: and the freeze settles a fresh literal per row, as every writer here built one.
+#: ``internal_source_parents`` and the two dict cells are written at the call;
+#: the param cells are written by ingest's join (see ``_row_ingest``).
+_OMIT_EMPTY_LIST_CELLS: tuple[str, ...] = (
+    "internal_source_parents",
+    "parent_params",
+    "_param_barcodes",
+    "param_shapes",
+)
+_OMIT_EMPTY_DICT_CELLS: tuple[str, ...] = ("non_tensor_kwargs", "func_config")
+#: The cells above that the call writes (``write_draft_row`` restores an empty one).
+_CALL_OMIT_EMPTY_CELLS: tuple[str, ...] = (
+    "internal_source_parents",
+    "non_tensor_kwargs",
+    "func_config",
+)
 
 
 def _fill_transform(row: Any, f: Any, fields_dict: Mapping[str, Any], annotations: Any) -> None:
@@ -379,9 +396,9 @@ def _default_fields(layout: OpStoreLayout) -> LazyFields:
     for name, value in _SCALAR_CONSTANT_CELLS:
         if name not in INIT_BYTES_FIELDS:
             fields.register_default(name, value)
-    for name in (*_EMPTY_LIST_CELLS, "_grad_records"):
+    for name in (*_EMPTY_LIST_CELLS, *_OMIT_EMPTY_LIST_CELLS, "_grad_records"):
         fields.register_default(name, factory=list)
-    for name in _EMPTY_DICT_CELLS:
+    for name in (*_EMPTY_DICT_CELLS, *_OMIT_EMPTY_DICT_CELLS):
         fields.register_default(name, factory=dict)
     fields.register_default("output_descendants", factory=set)
     fields.register_default("module_entry_arg_keys", factory=_arg_keys_default)
@@ -391,13 +408,14 @@ def _default_fields(layout: OpStoreLayout) -> LazyFields:
 class _RowPlan:
     """One layout's field ids and its row template of default-omitted cells."""
 
-    __slots__ = ("layout", "fids", "template")
+    __slots__ = ("layout", "fids", "template", "omit_empty")
 
     def __init__(self, layout: OpStoreLayout) -> None:
         """Bind ``layout`` and build its template (unset fields stay ``_MISSING``)."""
 
         self.layout = layout
         self.fids = layout.fid_by_name
+        self.omit_empty = tuple(self.fids[name] for name in _CALL_OMIT_EMPTY_CELLS)
         template = _default_fields(layout).seed_row()
         for name, value in _SCALAR_CONSTANT_CELLS:
             if name in INIT_BYTES_FIELDS:
@@ -431,7 +449,8 @@ def write_draft_row(
     The row holds exactly what ``write_op_row(store, op_row_cells(...))`` holds
     for the same draft and the same resolved call ref, written straight into a
     copy of the layout's template (no intermediate cell dicts), except that the
-    constant-valued cells stay default-omitted: the store answers them on read.
+    constant-valued cells and the empty ``_CALL_OMIT_EMPTY_CELLS`` stay
+    default-omitted: the store answers them on read.
 
     Parameters
     ----------
@@ -456,10 +475,14 @@ def write_draft_row(
     plan = _PLANS.get(id(layout))
     if plan is None or plan.layout is not layout:
         plan = _plan_for(layout)
-    row = plan.template.copy()
+    template = plan.template
+    row = template.copy()
     fids = plan.fids
     _fill_row(row, fids, trace, fields_dict, fire_results)
     _write_function_ref_cells(row, fids, function)
+    for fid in plan.omit_empty:
+        if not row[fid]:
+            row[fid] = template[fid]
     return int(store.adopt_row(row))
 
 
