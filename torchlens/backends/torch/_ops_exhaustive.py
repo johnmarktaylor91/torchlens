@@ -85,7 +85,7 @@ def _emit_exhaustive_operation_events(
     """
     if not is_bottom_level_func and _nested_call_logged_output(out_orig):
         # The skipped body's one func_call_id consumer: the id sequence stays the same.
-        _partition_output_entries_with_autograd_stats(self, out_orig)
+        _output_entries_with_autograd_stats(self, out_orig)
         return
     with _timed_phase(self, "ctx_build_shared_fields"):
         (
