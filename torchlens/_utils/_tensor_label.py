@@ -13,7 +13,7 @@ from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from .. import _state
-from ._internal_read import internal_scalar_read
+from ._internal_read import IdKeyRegistry, internal_scalar_read
 from ._torch_compat import get_tensorbase_class
 
 __all__ = [
@@ -253,10 +253,9 @@ class TorchLensTLCollisionError(AttributeError):
 # lifetime == key-object lifetime, identical to the former attribute. Modules'
 # metadata is permanent/cross-session; a process-wide registry preserves that.
 # --------------------------------------------------------------------------- #
-# Values are ModuleMeta / ParamMeta respectively (WeakIdKeyDictionary is not
-# typing-subscriptable, so the value type is documented rather than annotated).
-_MODULE_REGISTRY: WeakIdKeyDictionary = WeakIdKeyDictionary()
-_PARAM_REGISTRY: WeakIdKeyDictionary = WeakIdKeyDictionary()
+# Values: ModuleMeta / ParamMeta (documented, not annotated); reads cached by identity.
+_MODULE_REGISTRY: WeakIdKeyDictionary = IdKeyRegistry()
+_PARAM_REGISTRY: WeakIdKeyDictionary = IdKeyRegistry()
 
 
 # --------------------------------------------------------------------------- #

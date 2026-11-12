@@ -161,6 +161,7 @@ def _run(
         patch.setattr(site_module, "_CallSiteMemo", _Recorded)
         if walk_every_entry:
             patch.setattr(entry_module, "_module_entry", lambda *_args: None)
+            patch.setattr(entry_module, "_nested", lambda *_args: None)
         trace = _recurse(tl.trace, depth, model, x)
     caches = {id(memo.cache): memo.cache for memo in memos}
     assert len(caches) == 1
@@ -186,6 +187,8 @@ def test_module_entry_context_and_cache_equal_the_full_walk(
 def test_repeated_module_entry_sites_skip_the_walk(monkeypatch: pytest.MonkeyPatch) -> None:
     model = _Looped()
     x = torch.randn(2, 4)
+    # The memo's table is under test: without this, nested calls take the incremental path.
+    monkeypatch.setattr(entry_module, "_nested", lambda *_args: None)
     served_hits = _run(model, x, 0, False, monkeypatch)[2]
     assert _run(model, x, 0, True, monkeypatch)[2] == 0
     # Six block calls from one loop line share one entry site (after the first op).
