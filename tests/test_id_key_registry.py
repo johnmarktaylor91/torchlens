@@ -154,6 +154,10 @@ def test_registry_reads_match_uncached_between_captures() -> None:
     _assert_registries_match(model)
 
 
+#: What ``_MutatesRegistry.forward`` saw (module level: the capture may run a copy of the model).
+_SEEN: list[tuple[str, bool]] = []
+
+
 class _MutatesRegistry(nn.Module):
     """Removes, re-adds, replaces and adds registry entries in the middle of its forward."""
 
@@ -161,7 +165,6 @@ class _MutatesRegistry(nn.Module):
         super().__init__()
         self.a = nn.Linear(3, 3)
         self.b = nn.Linear(3, 3)
-        self.seen: list[tuple[str, bool]] = []
         self.strays = [nn.Parameter(torch.ones(1))]  # in a list: not one of the model's parameters
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -169,26 +172,27 @@ class _MutatesRegistry(nn.Module):
         y = self.a(x)
         meta = modules.get(self.b)
         removed = modules.pop(self.b, None)
-        self.seen.append(("removed", modules.get(self.b) is _uncached(modules, self.b)))
+        _SEEN.append(("removed", modules.get(self.b) is _uncached(modules, self.b)))
         if removed is not None:
             modules[self.b] = copy.copy(removed)  # replaced by a copy
-        self.seen.append(("replaced", modules.get(self.b) is _uncached(modules, self.b)))
+        _SEEN.append(("replaced", modules.get(self.b) is _uncached(modules, self.b)))
         if meta is not None:
             modules[self.b] = meta  # the capture's own object back
         stray = self.strays[0]
         params[stray] = _tensor_label.ParamMeta()
-        self.seen.append(("added", params.get(stray) is _uncached(params, stray)))
+        _SEEN.append(("added", params.get(stray) is _uncached(params, stray)))
         del params[stray]
-        self.seen.append(("dropped", params.get(stray) is _uncached(params, stray)))
-        self.seen.append(("restored", modules.get(self.b) is _uncached(modules, self.b)))
+        _SEEN.append(("dropped", params.get(stray) is _uncached(params, stray)))
+        _SEEN.append(("restored", modules.get(self.b) is _uncached(modules, self.b)))
         return self.b(y)
 
 
 def test_registry_reads_match_uncached_within_a_capture() -> None:
+    _SEEN.clear()
     model, x = _MutatesRegistry(), torch.randn(2, 3)
     tl.trace(model, x)
     tl.trace(model, x)
-    assert model.seen and all(ok for _name, ok in model.seen), model.seen
+    assert len(_SEEN) >= 5 and all(ok for _name, ok in _SEEN), _SEEN
     _assert_registries_match(model)
 
 
