@@ -40,8 +40,7 @@ from ..backends._replay_adapters import (
     ADAPTER_BACKENDS,
     RECIPE_FORMAT_VERSION,
     OpRecipe,
-    ReplayAdapterUnavailable,
-    ReplayRecipeError,
+    ReplayRefusal,
     decode_recipe,
     encode_recipe,
     get_adapter,
@@ -228,7 +227,7 @@ def _section_for_save(trace: Any, backend: str) -> Mapping[str, Any] | None:
         return None if section is None or section.problem else section.document
     try:
         adapter = get_adapter(backend)
-    except ReplayAdapterUnavailable:
+    except ReplayRefusal:
         return None
     return build_section(trace, adapter, backend)
 
@@ -329,11 +328,10 @@ def _decode_all(
 ) -> dict[str, OpRecipe]:
     """Decode every recipe, keyed by its first output slot; refuses on the first bad one."""
 
+    # decode_recipe refuses a recipe without output slots, so slot 0 exists.
     recipes: dict[str, OpRecipe] = {}
-    for position, data in enumerate(encoded):
+    for data in encoded:
         recipe = decode_recipe(data, backend=backend, allowlist=allowlist)
-        if not recipe.output_slots:
-            raise ReplayRecipeError("slots", f"recipe {position} has no output slot")
         recipes[recipe.output_slots[0]] = recipe
     return recipes
 
@@ -394,14 +392,14 @@ def _bind(trace: Any, section: LoadedReplayRecipes) -> ValidationStatus | None:
     backend = section.backend
     try:
         adapter = get_adapter(backend)
-    except ReplayAdapterUnavailable as exc:
+    except ReplayRefusal as exc:
         return _unavailable(trace, backend, f"no replay adapter is installed ({exc}).")
     allowlist = _allowlist(adapter)
     if allowlist is None:
         return _unavailable(trace, backend, "the replay adapter declares no op allowlist.")
     try:
         recipes = _decode_all(section.document["recipes"], backend=backend, allowlist=allowlist)
-    except ReplayRecipeError as exc:
+    except ReplayRefusal as exc:
         return _unavailable(trace, backend, f"a saved replay recipe was refused: {exc}.")
     # Complexity: bind_recipes is adapter code reading loaded payloads; a raise
     # leaves no capture list, so the trace reports unavailable with the cause.
