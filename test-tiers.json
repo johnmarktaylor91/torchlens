@@ -10811,7 +10811,8 @@
         "tests/test_omitted_empty_cell_defaults.py",
         "tests/test_op_row_cells.py",
         "tests/test_row_direct_import_cycle.py",
-        "tests/test_sanctioned_empty_omission.py"
+        "tests/test_sanctioned_empty_omission.py",
+        "tests/test_thin_emit_soundness.py"
       ],
       "torchlens/backends/torch/_ops_row_journal.py": [
         "tests/test_capture_fields_dict_prune.py",
