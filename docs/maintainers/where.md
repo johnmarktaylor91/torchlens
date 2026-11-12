@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1838 modules, 727090 lines, 0 modules without a docstring.
+85 packages, 1839 modules, 727204 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -15,7 +15,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1560 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26872 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 57 | 26986 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4778 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 145 | 50039 |
@@ -225,7 +225,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (56 modules, 26872 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (57 modules, 26986 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -270,6 +270,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `compute_record` | The two-term compute record: true MACs, never flops // 2. | 526 |
 | `config` | Internal grouped capture configuration for spine orchestration. | 9 |
 | `flops` | FLOPs (Floating Point Operations) computation module for TorchLens. | 1942 |
+| `gc_hold` | Hold off the cyclic garbage collector's automatic runs for the length of one capture. | 107 |
 | `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 769 |
 | `peak_memory` | Host peak-memory instrumentation helpers (brainpipe). | 407 |
 | `plan` | Compiled, backend-neutral capture intent for the unification spine. | 270 |
@@ -277,7 +278,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `preflight` | Address preflight: price a selective-save spelling BEFORE the forward (leverage B9). | 300 |
 | `projections` | Fastlog projections over unified capture events. | 1467 |
 | `projectors` | Sibling projections over a sealed capture run core. | 938 |
-| `run` | Forward-pass control for the RUN stage: ''run_and_log_inputs_through_model''. | 761 |
+| `run` | Forward-pass control for the RUN stage: ''run_and_log_inputs_through_model''. | 768 |
 | `run_entry` | Run entry for the RUN stage: one capture forward from slot claim to ''Trace''. | 677 |
 | `salient_args` | Registry of salient argument extractors for common PyTorch operations. | 523 |
 | `session` | Run-owned capture state and legacy compatibility adapters. | 1279 |
