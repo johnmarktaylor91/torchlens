@@ -629,7 +629,7 @@ def commit_admitted(
         if snapshots and type(out) is not _TENSOR:
             return DECLINED
         result = _call_plan.commit_fast_call(
-            log_function_output_tensors, trace, call, func_call_id, window
+            log_function_output_tensors, trace, call, func_call_id, window, bound_thin_emit()
         )
         if snapshots:
             record_op_buffer_writes(trace, call[1], snapshots, get_tensor_label(out))
@@ -661,8 +661,10 @@ def _commit_same_object(
     receiver = call[6]
     logged = same_object_logging_copy(receiver, trace, was_inplace)
     _stamp_same_object(logged, receiver, was_inplace)
+    copy_call = (*call[:6], logged, call[7])
+    thin = bound_thin_emit()
     _call_plan.commit_fast_call(
-        log_function_output_tensors, trace, (*call[:6], logged, call[7]), func_call_id, window
+        log_function_output_tensors, trace, copy_call, func_call_id, window, thin
     )
     out_label = get_tensor_label(logged)
     if out_label is not None:
@@ -777,6 +779,7 @@ from ._ops_capture_records import (  # noqa: E402
     _stamp_same_object,
     get_capture_producer_policy,
 )
+from ._ops_exhaustive import bound_thin_emit  # noqa: E402
 from ._ops_interventions import (  # noqa: E402
     _apply_live_hooks_to_outputs_legacy,
     _hook_plan_reaches_op_door,

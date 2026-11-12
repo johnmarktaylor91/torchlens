@@ -20,6 +20,7 @@ from ._call_layout import planned_slot_call, split_call_arguments
 from ._completeness_origins import internal_scalar_read
 from ._ops_function_family import NAME_FAMILY, name_family
 from ._storage_exports import note_alias_rebound_snapshot, note_foreign_written_snapshot
+from ._thin_settle import SHARED_CALL_DEFAULTS
 from .aliasing import (
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,
@@ -76,16 +77,12 @@ def _build_shared_fields_dict(
         require_event = self.capture_events.live_index.require_event
         parent_records = [require_event(label) for label in parent_layer_labels]
 
-        fields_dict: dict[str, Any] = {}
-
-        # General info
-        fields_dict["type"] = layer_type
+        # General info; the call-wide constants come from the defaults table.
+        fields_dict: dict[str, Any] = {"type": layer_type}
         fields_dict["detach_saved_activations"] = self._options_detach_saved_activations
         fields_dict["output_device"] = self._options_output_device
-        fields_dict["_construction_done"] = False
+        fields_dict.update(SHARED_CALL_DEFAULTS)
         _set_arg_template_fields(self, fields_dict, call)
-        fields_dict["container_path"] = ()
-        fields_dict["container_spec"] = None
         # Whether this op saves gradients; the per-gradient placeholders come from the op
         # defaults (the freeze never reads them).
         fields_dict["save_grads"] = self._options_save_grads not in (None, False)
