@@ -10755,7 +10755,7 @@
         "tests/test_intervention_phase4c.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_surgery_visuals_realism.py",
-        "tests/test_thin_emit_soundness.py"
+        "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/backends/torch/_ops_payload_stream.py": [
         "tests/test_save_budget.py",
