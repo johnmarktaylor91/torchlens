@@ -165,7 +165,11 @@ def find_output_ancestors(trace: Trace) -> bool:
 
 
 def _propagate_output_reach(trace: Trace, store: Any, rows: dict[str, int]) -> None:
-    """Run step 2's reverse sweep over the validated raw cells of ``store``."""
+    """Run step 2's reverse sweep over the validated raw cells of ``store``.
+
+    One flat loop on purpose (complexity 11): splitting the per-edge marker
+    answers into a helper adds a Python call per edge, the cost this pass removes.
+    """
 
     cells = store._rows
     f_children = _fid(store, "children")

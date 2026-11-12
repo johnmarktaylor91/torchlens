@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 import torch
 
@@ -90,36 +90,58 @@ def _fix_by_column(trace: Trace) -> bool:
     labels = list(trace.buffer_layers)
     if not labels:
         return True
-    if trace.__dict__.get("capture_events") is not None or not _out_reads_inert(trace):
-        return False
-    raw = trace._raw_graph_ws.raw_layer_dict
-    if not raw.keys() >= set(labels):
-        return False
-    view = seal_rows(labels, list(map(raw.__getitem__, labels)))
+    view = _buffer_rows(trace, labels)
     if view is None:
         return False
-    store, rows = view
-    buffer_rows = [rows[label] for label in labels]
-    sources = plain_column(store, "buffer_source", buffer_rows)
-    addresses = plain_column(store, "address", buffer_rows)
-    if sources is None or addresses is None or not _unwired(sources[0], sources[1]):
+    store, buffer_rows = view
+    address_values = _distinct_addresses(store, buffer_rows)
+    if address_values is None or not _tensor_outs(store, buffer_rows):
         return False
-    if not addresses[1] <= {str, LazyCell} or not immutable_markers(addresses[0]):
-        return False
-    address_values = _answered(addresses[0])
-    if None in address_values or len(set(address_values)) != len(labels):
-        return False
-    f_out = int(store.layout.fid_by_name["out"])
     cells = store._rows
-    out_classes = {cells[row][f_out].__class__ for row in buffer_rows}
-    if not all(issubclass(cls, torch.Tensor) for cls in out_classes):
-        return False
     f_pass = int(store.layout.fid_by_name["buffer_pass"])
     num_calls = trace._buffer_num_calls
     for row, address in zip(buffer_rows, address_values, strict=True):
         cells[row][f_pass] = 1
         num_calls[address] = 1
     return True
+
+
+def _buffer_rows(trace: Trace, labels: list[str]) -> tuple[Any, list[int]] | None:
+    """Return the plain row store and the buffer rows, or ``None`` to decline."""
+
+    if trace.__dict__.get("capture_events") is not None or not _out_reads_inert(trace):
+        return None
+    raw = trace._raw_graph_ws.raw_layer_dict
+    if not raw.keys() >= set(labels):
+        return None
+    view = seal_rows(labels, list(map(raw.__getitem__, labels)))
+    if view is None:
+        return None
+    return view.store, [view.rows[label] for label in labels]
+
+
+def _distinct_addresses(store: Any, buffer_rows: list[int]) -> list[str] | None:
+    """Return each buffer's address when none has a source and all are distinct strings."""
+
+    sources = plain_column(store, "buffer_source", buffer_rows)
+    addresses = plain_column(store, "address", buffer_rows)
+    if sources is None or addresses is None or not _unwired(sources[0], sources[1]):
+        return None
+    if not addresses[1] <= {str, LazyCell} or not immutable_markers(addresses[0]):
+        return None
+    values = _answered(addresses[0])
+    if set(map(type, values)) != {str} or len(set(values)) != len(buffer_rows):
+        return None
+    return cast("list[str]", values)
+
+
+def _tensor_outs(store: Any, buffer_rows: list[int]) -> bool:
+    """Whether every buffer's raw ``out`` cell holds a tensor (the facade returns it as is)."""
+
+    f_out = int(store.layout.fid_by_name["out"])
+    cells = store._rows
+    out_classes = {cells[row][f_out].__class__ for row in buffer_rows}
+    return all(issubclass(cls, torch.Tensor) for cls in out_classes)
 
 
 def _fix_by_facade(trace: Trace, helpers: MergeHelpers) -> None:
