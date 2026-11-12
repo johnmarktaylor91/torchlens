@@ -36,7 +36,7 @@ from ._replay_context import (
     _fresh_replay_run_ctx,
     _replay_site_key,
 )
-from ._replay_finish import finish_replay
+from ._replay_finish import ReplaySummary, finish_replay
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -88,15 +88,20 @@ def check_native_value(trace: Trace, slot: str, original: Any, result: Any) -> N
         )
 
 
-def _fire_entry(
-    trace: Trace,
-    adapter: Any,
-    entry: NormalizedHookEntry,
-    value: Any,
-    ctx: Any,
-    guard: Any,
-) -> Any:
-    """Apply one edit entry to a backend value and return the result."""
+@dataclass(frozen=True)
+class BackendReplay:
+    """One finished-trace replay on a non-PyTorch trace, as the engine received it."""
+
+    log: Trace
+    adapter: Any
+    origins: Sequence[Op]
+    hook_entries: Sequence[NormalizedHookEntry]
+    strict: bool
+    preserve_origins: bool
+
+
+def _refuse_entry(trace: Trace, adapter: Any, entry: NormalizedHookEntry) -> None:
+    """Refuse an edit the backend engine cannot apply (a gradient edit, an unported helper)."""
 
     if entry.signal == "backward":
         raise refuse(
@@ -105,39 +110,61 @@ def _fire_entry(
             remedy="apply gradient edits with tl.grad sites on a fresh capture",
         )
     helper = entry.helper_spec
+    if helper is None or helper.name in {"zero_ablate", "patch_from"}:
+        return
+    if getattr(adapter, "apply_helper", None) is None:
+        raise refuse(
+            f"the {helper.name!r} helper has no replay application on the "
+            f"{trace_backend(trace)} backend yet",
+            "backend_replay_helper_unsupported",
+            remedy="write the edit as a callable on the backend's arrays: "
+            "fork.do(site, lambda out, ctx: ...)",
+        )
+
+
+def _fire_entry(request: BackendReplay, entry: NormalizedHookEntry, value: Any, ctx: Any) -> Any:
+    """Apply one edit entry to a backend value and return the result.
+
+    ``zero_ablate`` becomes the adapter's ``zeros_like``; another built-in
+    helper goes to the adapter's optional ``apply_helper``; a callable (and
+    ``patch_from``, whose normalized callable returns the donor value) runs
+    under the hook reentrancy guard with logging paused.
+    """
+
+    trace, adapter = request.log, request.adapter
+    _refuse_entry(trace, adapter, entry)
+    helper = entry.helper_spec
     if helper is not None and helper.name == "zero_ablate":
         return adapter.zeros_like(value)
     if helper is not None and helper.name != "patch_from":
-        apply_helper = getattr(adapter, "apply_helper", None)
-        if apply_helper is None:
-            raise refuse(
-                f"the {helper.name!r} helper has no replay application on the "
-                f"{trace_backend(trace)} backend yet",
-                "backend_replay_helper_unsupported",
-                remedy="write the edit as a callable on the backend's arrays: "
-                "fork.do(site, lambda out, ctx: ...)",
-            )
-        return apply_helper(trace, helper, value)
-    with guard, pause_logging():
-        result = entry.normalized_callable(value, ctx=ctx)
+        return adapter.apply_helper(trace, helper, value)
+    with ctx.guard, pause_logging():
+        result = entry.normalized_callable(value, ctx=ctx.hook)
     return value if result is None else result
 
 
+@dataclass(frozen=True)
+class _FireContext:
+    """The hook context of one fire and the reentrancy guard to hold around it."""
+
+    hook: Any
+    guard: Any
+
+
 def apply_site_edits(
-    trace: Trace,
-    adapter: Any,
+    request: BackendReplay,
+    services: ReplayServices,
     site: Op,
     value: Any,
     entries: Sequence[NormalizedHookEntry],
-    services: ReplayServices,
 ) -> tuple[Any, list[Any]]:
     """Fire the edits aimed at one site in order; return the value and fire records."""
 
-    run_ctx = _ensure_replay_run_ctx(trace)
+    run_ctx = _ensure_replay_run_ctx(request.log)
     current, records = value, []
     for entry in entries:
         original = current
-        ctx = services.make_context(
+        hook_ctx = services.make_context(
             name=services.hook_name(entry),
             timing="post",
             signal="forward",
@@ -147,8 +174,8 @@ def apply_site_edits(
             kwargs={},
         )
         previous_notes = tuple(run_ctx.get("ledger_notes", ()))
-        current = _fire_entry(trace, adapter, entry, current, ctx, services.guard)
-        check_native_value(trace, _replay_site_key(site), original, current)
+        current = _fire_entry(request, entry, current, _FireContext(hook_ctx, services.guard))
+        check_native_value(request.log, _replay_site_key(site), original, current)
         records.append(
             services.fire_record(
                 entry,
@@ -162,27 +189,24 @@ def apply_site_edits(
 
 
 def build_walk(
-    trace: Trace,
-    adapter: Any,
-    origins: Sequence[Op],
-    hook_targets: Mapping[str, Sequence[NormalizedHookEntry]],
+    request: BackendReplay,
     services: ReplayServices,
-    *,
-    preserve_origins: bool,
+    hook_targets: Mapping[str, Sequence[NormalizedHookEntry]],
 ) -> ReplayWalk:
-    """Assemble the walk for one replay of ``trace``."""
+    """Assemble the walk for one replay of ``request.log``."""
 
-    sites = trace._layer_dict_all_keys
+    sites = request.log._layer_dict_all_keys
 
     def edit(step: ReplayStep, slot: str, value: Any) -> tuple[Any, list[Any]]:
         entries = hook_targets.get(slot, ())
-        return apply_site_edits(trace, adapter, sites[slot], value, entries, services)
+        return apply_site_edits(request, services, sites[slot], value, entries)
 
-    held = {_replay_site_key(o): o.out for o in origins} if preserve_origins else {}
+    origins = request.origins
+    held = {_replay_site_key(o): o.out for o in origins} if request.preserve_origins else {}
     edited = frozenset(hook_targets) | frozenset(_replay_site_key(o) for o in origins)
     return ReplayWalk(
-        trace=trace,
-        adapter=adapter,
+        trace=request.log,
+        adapter=request.adapter,
         payload=lambda slot: sites[slot].out,
         edit=edit,
         edited_slots=edited,
@@ -211,45 +235,27 @@ def _record_host_digests(log: Trace, adapter: Any, labels: Sequence[str]) -> Non
         run_ctx[REPLAY_CAPTURE_DIGESTS_KEY] = {**known, **fresh}
 
 
-def run_backend_replay(
-    log: Trace,
-    adapter: Any,
-    origins: Sequence[Op],
-    hook_entries: Sequence[NormalizedHookEntry],
-    strict: bool,
-    preserve_origins: bool,
-    services: ReplayServices,
-) -> Trace:
+def run_backend_replay(request: BackendReplay, services: ReplayServices) -> Trace:
     """Replay a non-PyTorch trace's cone through its adapter and commit the result.
 
     Mirrors the PyTorch engine's ``_run_replay``: a fresh run context, the
-    cone in execution order, the engine's own transactional commit of
-    values and fire records, then the same ``replay`` operation row and
+    cone in execution order, the engine's own transactional commit of values
+    and fire records, then the same ``replay`` operation row and
     replay-propagated state. Nothing is written when any step refuses.
     """
 
+    log, adapter = request.log, request.adapter
     started_at = time.monotonic()
     run_ctx = _fresh_replay_run_ctx(log)
     run_ctx["differentiable"] = False
     log.last_run = run_ctx
-    cone, _, _ = _replay_cone_and_maps(log, origins)
-    hook_targets = services.hook_targets(log, hook_entries, strict=strict)
-    walk = propagate(
-        build_walk(
-            log, adapter, origins, hook_targets, services, preserve_origins=preserve_origins
-        ),
-        trace_steps(log, adapter, cone),
-    )
+    cone, _, _ = _replay_cone_and_maps(log, request.origins)
+    hook_targets = services.hook_targets(log, request.hook_entries, strict=request.strict)
+    walk = propagate(build_walk(request, services, hook_targets), trace_steps(log, adapter, cone))
     _record_host_digests(log, adapter, tuple(walk.overlay))
     services.commit(log, walk.overlay, walk.records)
-    finish_replay(
-        log,
-        origins,
-        [services.hook_name(entry) for entry in hook_entries],
-        strict=strict,
-        cone=cone,
-        started_at=started_at,
-        record_params=services.record_params,
-    )
+    hook_names = tuple(services.hook_name(entry) for entry in request.hook_entries)
+    summary = ReplaySummary(tuple(request.origins), hook_names, tuple(cone), request.strict)
+    finish_replay(log, summary, started_at, services.record_params)
     log.last_run = {**log.last_run, "backend": trace_backend(log)}
     return log

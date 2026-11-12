@@ -52,8 +52,8 @@ def _make_adapter() -> ModuleType:
         return SimpleNamespace(output_slots=(op.label,), parent_labels=tuple(op.parents))
 
     def forward(trace: Any, op: Any, parent_values: Sequence[Any]) -> tuple[Any, ...]:
-        keys = [_replay_site_key(trace._layer_dict_all_keys[p]) for p in op.parents]
-        overlay = dict(zip(keys, parent_values))
+        keys = {p: _replay_site_key(trace._layer_dict_all_keys[p]) for p in op.parents}
+        overlay = dict(zip(keys.values(), parent_values))
         args, kwargs = _reconstruct_args_from_template(
             _template_for_site(op),
             op,
@@ -61,7 +61,7 @@ def _make_adapter() -> ModuleType:
             overlay,
             strict=False,
             differentiable_frontier=None,
-            label_keys={key: (key,) for key in keys},
+            label_keys={label: (key,) for label, key in keys.items()},
         )
         with torch.no_grad():
             return (op.func(*args, **kwargs),)

@@ -36,7 +36,7 @@ from ..errors._base import TorchLensError
 from ..options import ReplayOptions, merge_replay_options
 from ._audit import _hook_name, _replay_fire_record
 from ._backend_adapter_lookup import backend_adapter, differentiable_replay_cone
-from ._backend_replay_run import ReplayServices, run_backend_replay
+from ._backend_replay_run import BackendReplay, ReplayServices, run_backend_replay
 from ._edge_substitution import require_depth1_arg_path
 from ._param_fingerprint import (
     changed_param_scope,
@@ -60,7 +60,7 @@ from ._replay_context import (
     _record_capture_digest,
     _replay_site_key,
 )
-from ._replay_finish import finish_replay
+from ._replay_finish import ReplaySummary, finish_replay
 from ._replay_grad_clear import _clear_op_gradient_projection, _clear_param_gradient_projection
 from ._replay_sites import (
     _buffer_thread_candidate,
@@ -457,9 +457,8 @@ def _run_replay(
     """
 
     if (adapter := backend_adapter(log)) is not None:  # a non-PyTorch trace: its adapter replays
-        return run_backend_replay(
-            log, adapter, origins, hook_entries, strict, preserve_origins, _BACKEND_SERVICES
-        )
+        request = BackendReplay(log, adapter, origins, hook_entries, strict, preserve_origins)
+        return run_backend_replay(request, _BACKEND_SERVICES)
     started_at = time.monotonic()
     # A replay is its own run: its context starts fresh (only the capture-digest
     # ledger and the trace seed carry), never the previous run's hook scratch or
@@ -547,16 +546,9 @@ def _run_replay(
             _commit_member(member, tensor, state)
 
     _commit_replay_updates(log, state.pending_updates, state.pending_records)
-    return finish_replay(
-        log,
-        origins,
-        [_hook_name(entry) for entry in hook_entries],
-        strict=strict,
-        cone=cone,
-        started_at=started_at,
-        record_params=record_changed_params,
-        differentiable_frontier=differentiable_frontier,
-    )
+    hook_names = tuple(_hook_name(entry) for entry in hook_entries)
+    summary = ReplaySummary(tuple(origins), hook_names, tuple(cone), strict)
+    return finish_replay(log, summary, started_at, record_changed_params, differentiable_frontier)
 
 
 def _warn_if_direct_writes_will_be_overlaid(log: Trace) -> None:

@@ -10,14 +10,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
+from ..backends import _replay_adapters
 from ..backends._backend_names import TORCH_BACKEND_NAME
 from ._replay_cone import cone_of_effect
 from .errors import ReplayPreconditionError
-
-try:
-    from ..backends import _replay_adapters
-except ImportError:  # the adapter package has not landed on this branch yet
-    _replay_adapters = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -33,8 +29,6 @@ def trace_backend(trace: Trace) -> str:
 def _lookup_adapter(backend: str) -> Any | None:
     """Return the replay adapter module for ``backend``, or None when none is built."""
 
-    if _replay_adapters is None:
-        return None
     try:
         return _replay_adapters.get_adapter(backend)
     except _replay_adapters.ReplayAdapterUnavailable:

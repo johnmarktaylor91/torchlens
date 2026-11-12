@@ -9,6 +9,7 @@ record and the ``replay`` operation row.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._trace_state import TraceState
@@ -20,16 +21,22 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 
+@dataclass(frozen=True)
+class ReplaySummary:
+    """What one replay did: its origins, hook names, cone and strictness."""
+
+    origins: Sequence[Op]
+    hook_names: Sequence[str]
+    cone: Sequence[Op]
+    strict: bool
+    errors_non_fatal: int = 0
+
+
 def finish_replay(
     log: Trace,
-    origins: Sequence[Op],
-    hook_names: Sequence[str],
-    *,
-    strict: bool,
-    cone: Sequence[Op],
+    summary: ReplaySummary,
     started_at: float,
     record_params: Callable[[Trace], None],
-    errors_non_fatal: int = 0,
     differentiable_frontier: dict[str, Any] | None = None,
 ) -> Trace:
     """Write the replay's state, summary and operation row after its commit.
@@ -39,9 +46,10 @@ def finish_replay(
     package's import cycle.
     """
 
-    origin_labels = tuple(_disclosure_label(origin) for origin in origins)
-    hook_names = tuple(hook_names)
-    cone_labels = tuple(_disclosure_label(site) for site in cone)
+    origin_labels = tuple(_disclosure_label(origin) for origin in summary.origins)
+    hook_names = tuple(summary.hook_names)
+    cone_labels = tuple(_disclosure_label(site) for site in summary.cone)
+    strict, errors_non_fatal = summary.strict, summary.errors_non_fatal
     log.state = TraceState.REPLAY_PROPAGATED
     log._out_recipe_revision = getattr(log, "_spec_revision", 0)
     log.last_run = {
