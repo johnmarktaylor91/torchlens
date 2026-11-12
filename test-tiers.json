@@ -618,9 +618,9 @@
         "tests/test_capture_cache_atomic_commit.py",
         "tests/test_chunk_size.py",
         "tests/test_exception_taxonomy.py",
+        "tests/test_fxd_fixed_floor_soundness.py",
         "tests/test_grind_b4_lane_p.py",
-        "tests/test_leverage_div_preflight_cache.py",
-        "tests/test_r58_capture_cache_rce.py"
+        "tests/test_leverage_div_preflight_cache.py"
       ],
       "torchlens/_capture/prepare/resolve.py": [
         "tests/test_backward_intervention.py",
@@ -698,9 +698,9 @@
         "tests/test_capopts_truth_batchnorm_warn.py",
         "tests/test_capture_instrument.py",
         "tests/test_capture_memory_guard.py",
-        "tests/test_capture_settlement.py",
         "tests/test_defaults.py",
-        "tests/test_exception_taxonomy.py"
+        "tests/test_exception_taxonomy.py",
+        "tests/test_fxd_fixed_floor_soundness.py"
       ],
       "torchlens/_capture/stop.py": [
         "tests/test_capopts_truth_stop_after.py",
@@ -3798,6 +3798,7 @@
         "tests/test_tlspec_envelope_state_contract.py"
       ],
       "torchlens/_legacy_ctor_sites.py": [
+        "tests/test_fxd_fixed_floor_soundness.py",
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_wrap_torch_warm_cache.py"
       ],
@@ -6249,6 +6250,16 @@
         "tests/test_sdpa_probe_forced_backend.py",
         "tests/test_torch_compat.py"
       ],
+      "torchlens/_utils/_dataclass_replace.py": [
+        "tests/test_capopts_truth_batchnorm_warn.py",
+        "tests/test_capopts_truth_cache_key.py",
+        "tests/test_capture_cache_atomic_commit.py",
+        "tests/test_exception_taxonomy.py",
+        "tests/test_fxd_fixed_floor_soundness.py",
+        "tests/test_grind_b4_lane_p.py",
+        "tests/test_leverage_div_preflight_cache.py",
+        "tests/test_r58_capture_cache_rce.py"
+      ],
       "torchlens/_utils/_deferred_warnings.py": [
         "tests/test_capture_failure_reporting.py",
         "tests/test_debug_findings_source_lines.py",
@@ -6720,6 +6731,7 @@
         "tests/test_torch_compat_table.py"
       ],
       "torchlens/_utils/_torch_seed_backends.py": [
+        "tests/test_fxd_fixed_floor_soundness.py",
         "tests/test_per_backend_seed.py",
         "tests/test_rng_cuda_isolation.py",
         "tests/test_tlspec_runnable_r65_torch_rng.py"
@@ -6746,7 +6758,7 @@
       ],
       "torchlens/_utils/_type_new_slot.py": [
         "tests/test_capability_probe_lifecycle.py",
-        "tests/test_distributed_c0_core.py",
+        "tests/test_fxd_fixed_floor_soundness.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_numpy_bridge_compat.py",
@@ -10909,7 +10921,7 @@
         "tests/test_validation_script_threshold_ladder.py"
       ],
       "torchlens/backends/torch/_session_cleanup.py": [
-        "tests/test_fastlog/test_dispatch_smoke.py",
+        "tests/test_fxd_fixed_floor_soundness.py",
         "tests/test_grouping_call_sites.py",
         "tests/test_model_prep_hardening.py",
         "tests/test_namespace_scan_soundness.py",
@@ -11226,8 +11238,8 @@
         "tests/test_capture_guard_transactionality.py",
         "tests/test_completeness_witness.py",
         "tests/test_decoration.py",
+        "tests/test_fxd_fixed_floor_soundness.py",
         "tests/test_legacy_tensor_constructors.py",
-        "tests/test_release_model.py",
         "tests/test_scoped_patching_escape_detection.py",
         "tests/test_wrap_state_compat.py",
         "tests/test_wrap_torch_warm_cache.py"

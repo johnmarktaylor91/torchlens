@@ -4522,6 +4522,14 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/_utils/_torch_seed_backends.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
   "file": "torchlens/_utils/_torch_symbols.py",
   "has_default": false,
   "sites": 1,
