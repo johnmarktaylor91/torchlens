@@ -385,10 +385,6 @@ snapshotted before this policy runs (``facet_recipes`` record)."""
 
 JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="JAX",
-    input_kwargs_message=(
-        "JAX backend preview supports positional args only. Pass keyword values as "
-        "explicit params/input leaves or declared static positional args."
-    ),
     full_save_message="JAX backend preview is full-save only; save shaping is unsupported.",
     rejected_truthy_messages={
         "activation_transform": (
