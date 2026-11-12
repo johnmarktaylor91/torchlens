@@ -36,12 +36,12 @@ def _get_hash_from_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
         return "no_args"
     # Every token is an f-string (an exact ``str``), so equal token tuples encode to the
     # same JSON payload and the same digest: the memo answers the digest of the tokens.
-    key = tuple(args_to_hash)
-    barcode = _ARG_HASH_DIGESTS.get(key)
+    tokens = tuple(args_to_hash)
+    barcode = _ARG_HASH_DIGESTS.get(tokens)
     if barcode is None:
         if len(_ARG_HASH_DIGESTS) >= _ARG_HASH_DIGESTS_MAX:
             _ARG_HASH_DIGESTS.clear()
-        barcode = _ARG_HASH_DIGESTS[key] = make_short_barcode_from_input(args_to_hash)
+        barcode = _ARG_HASH_DIGESTS[tokens] = make_short_barcode_from_input(args_to_hash)
     return barcode
 
 
