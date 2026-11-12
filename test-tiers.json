@@ -6265,9 +6265,9 @@
         "tests/test_call_site_contract.py",
         "tests/test_call_site_join.py",
         "tests/test_call_site_memo.py",
+        "tests/test_call_site_runs.py",
         "tests/test_capture_targets.py",
         "tests/test_grouping_call_sites.py",
-        "tests/test_module_entry_site.py",
         "tests/test_r18h_introspect_hash.py"
       ],
       "torchlens/_utils/_callable_safety.py": [
@@ -6593,11 +6593,11 @@
         "tests/test_backward_intervention.py",
         "tests/test_call_site_join.py",
         "tests/test_call_site_memo.py",
+        "tests/test_call_site_runs.py",
         "tests/test_global_state_child_process_guard.py",
         "tests/test_implicit_boundary_tightening.py",
         "tests/test_intervention_phase3.py",
-        "tests/test_robustness_pr4.py",
-        "tests/test_wrapper_teardown_hygiene.py"
+        "tests/test_robustness_pr4.py"
       ],
       "torchlens/_utils/_payload_alias.py": [
         "tests/test_fresh_payload_alias.py"
@@ -10078,14 +10078,23 @@
       "torchlens/backends/torch/_call_site_join.py": [
         "tests/test_call_site_join.py",
         "tests/test_call_site_memo.py",
+        "tests/test_call_site_runs.py",
         "tests/test_conditional_integration.py",
         "tests/test_module_entry_site.py"
       ],
       "torchlens/backends/torch/_call_site_parts.py": [
         "tests/test_call_site_join.py",
         "tests/test_call_site_memo.py",
+        "tests/test_call_site_runs.py",
         "tests/test_conditional_integration.py",
         "tests/test_module_entry_incremental.py",
+        "tests/test_module_entry_site.py"
+      ],
+      "torchlens/backends/torch/_call_site_runs.py": [
+        "tests/test_call_site_join.py",
+        "tests/test_call_site_memo.py",
+        "tests/test_call_site_runs.py",
+        "tests/test_conditional_integration.py",
         "tests/test_module_entry_site.py"
       ],
       "torchlens/backends/torch/_callable_location.py": [
@@ -10642,10 +10651,10 @@
         "tests/test_argpos_hardening.py",
         "tests/test_call_site_join.py",
         "tests/test_call_site_memo.py",
+        "tests/test_call_site_runs.py",
         "tests/test_conditional_integration.py",
         "tests/test_module_entry_site.py",
         "tests/test_r28_validation_identity_witness.py",
-        "tests/test_r29_capval_hardening.py",
         "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/backends/torch/_ops_capture_records.py": [

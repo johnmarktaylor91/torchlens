@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1840 modules, 727486 lines, 0 modules without a docstring.
+85 packages, 1841 modules, 727610 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64768 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 162 | 64892 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1541,7 +1541,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (161 modules, 64768 lines)
+Torch backend implementation package for TorchLens capture. (162 modules, 64892 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1561,6 +1561,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64768 
 | `_call_plan` | Wrapper fast lane, first version: call plans, per-call admission and the fast commit. | 561 |
 | `_call_site_join` | Join a cached call site's code part with the current op's modules. | 102 |
 | `_call_site_parts` | Build a first-time call site from the module call's upper part plus the op's own frames. | 457 |
+| `_call_site_runs` | Skip a known run of TorchLens frames in the per-op site-key walk. | 105 |
 | `_callable_location` | Lazy source location of the user callable a transform boundary op wraps. | 50 |
 | `_compiled_callable_sites` | The per-capture scan for Dynamo-compiled callables held as plain module attributes. | 99 |
 | `_completeness_audited` | Audited expected-opaque boundaries of the aten-dispatch completeness witness. | 129 |
@@ -1620,7 +1621,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64768 
 | `_ops_argument_fields` | Argument family of the shared op fields: argument scan, slot snapshot and templates. | 401 |
 | `_ops_arguments` | Argument templates, edge uses, and tensor provenance. | 799 |
 | `_ops_autograd` | Autograd saved-tensor statistics and container snapshots. | 680 |
-| `_ops_call_site_fields` | Call-site family of the shared op fields: the code context and the call-site chain. | 404 |
+| `_ops_call_site_fields` | Call-site family of the shared op fields: the code context and the call-site chain. | 423 |
 | `_ops_capture_records` | Ancestor storage, producer policy, and exhaustive record freezing. | 570 |
 | `_ops_container_base` | Exhaustive drafts and foundational output-container helpers. | 509 |
 | `_ops_containers` | Output-container contracts, reconstruction, and tensor walking. | 776 |
