@@ -60,15 +60,20 @@ def _dump(trace: Any) -> dict[str, Any]:
 
 @pytest.fixture
 def thin(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, int]]:
-    """Count thin hits and fast-lane commits; restore the process's thin setting after."""
+    """Count thin hits and fast-lane commits; restore the process's thin setting after.
+
+    Thin hits are counted from a profile hook on the bound thin emit's returns,
+    not by wrapping it: a wrapper defined here is user code to the call-site
+    walk, so it would add a source frame to thin rows only.
+    """
 
     counts = {"thin": 0, "fast": 0}
-    real_thin = _ops_exhaustive.bound_thin_emit()
+    thin_code = _ops_exhaustive.bound_thin_emit().__code__
+    previous_profile = sys.getprofile()
 
-    def counted_thin(trace: Any, call: tuple[Any, ...], func_call_id: int) -> bool:
-        served = real_thin(trace, call, func_call_id)
-        counts["thin"] += served
-        return served
+    def count_thin_returns(frame: Any, event: str, arg: Any) -> None:
+        if event == "return" and frame.f_code is thin_code:
+            counts["thin"] += bool(arg)
 
     real_fast = _call_plan.commit_fast_call
 
@@ -76,11 +81,14 @@ def thin(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, int]]:
         counts["fast"] += 1
         return real_fast(*args)
 
-    monkeypatch.setitem(_ops_exhaustive._BOUND_THIN, "thin", counted_thin)
     monkeypatch.setattr(_call_plan, "commit_fast_call", counted_fast)
     previous = _thin_emit.thin_emit_enabled()
-    yield counts
-    _thin_emit.set_thin_emit_enabled(previous)
+    sys.setprofile(count_thin_returns)
+    try:
+        yield counts
+    finally:
+        sys.setprofile(previous_profile)
+        _thin_emit.set_thin_emit_enabled(previous)
 
 
 def _capture(build: Build, x: torch.Tensor, on: bool, **kwargs: Any) -> tuple[Any, nn.Module]:
@@ -311,13 +319,13 @@ def test_requires_grad_flip_before_the_record_build(
     """Flipping params and outputs before ingest reaches thin rows no more than today's rows."""
 
     outputs: list[torch.Tensor] = []
-    real_thin = _ops_exhaustive._BOUND_THIN["thin"]
+    counted_fast = _call_plan.commit_fast_call
 
-    def keeping_thin(trace: Any, call: tuple[Any, ...], func_call_id: int) -> bool:
-        outputs.append(call[6])
-        return real_thin(trace, call, func_call_id)
+    def keeping_fast(*args: Any) -> Any:
+        outputs.append(args[2][6])  # the call's output; both paths pass through here
+        return counted_fast(*args)
 
-    monkeypatch.setitem(_ops_exhaustive._BOUND_THIN, "thin", keeping_thin)
+    monkeypatch.setattr(_call_plan, "commit_fast_call", keeping_fast)
     models: list[nn.Module] = []
 
     def flip() -> None:
@@ -335,7 +343,7 @@ def test_requires_grad_flip_before_the_record_build(
         models.append(nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2)))
         x = torch.randn(2, 3)
         dumps.append(_dump(tl.trace(models[-1], x, capture=tl.options.CaptureOptions(seed=SEED))))
-        assert outputs  # the bound emit sees every fast commit, served or not
+        assert outputs  # every fast commit passes here, served thin or not
     assert diff(dumps[1], dumps[0]) == []
 
 
