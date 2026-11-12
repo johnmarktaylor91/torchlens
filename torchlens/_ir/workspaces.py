@@ -108,6 +108,10 @@ class RawGraphWorkspace:
     #: session validated through its parameter log (``_session_validated_parameter``).
     #: Internal and never persisted: it goes away with the workspace.
     _validated_params: dict[int, Any] = field(default_factory=dict)
+    #: ``(func name, argument types[, keyword names, keyword types])`` -> the argument
+    #: layout plan of the calls with that layout (``backends.torch._call_layout``).
+    #: Internal and never persisted: it goes away with the workspace.
+    _call_layouts: dict[tuple[Any, ...], Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

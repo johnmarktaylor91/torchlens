@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..._capture._arg_snapshot import split_non_tensor_args
 from ..._capture.salient_args import extract_salient_args
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._ir.events import (
@@ -17,8 +16,8 @@ from ..._utils._tensor_label import set_tensor_label
 from ..._utils.tensor_utils import (
     tensor_nanequal,
 )
+from ._call_layout import planned_slot_call, split_call_arguments
 from ._completeness_origins import internal_scalar_read
-from ._ops_arg_slots import _SlotCall
 from ._ops_function_family import NAME_FAMILY, name_family
 from ._storage_exports import note_alias_rebound_snapshot, note_foreign_written_snapshot
 from .aliasing import (
@@ -67,10 +66,10 @@ def _build_shared_fields_dict(
     # Canonical layer_type: lowercase with underscores stripped (e.g. "conv2d").
     layer_type = (NAME_FAMILY.get(func_name) or name_family(func_name))[0]
     # Non-tensor args (metadata, equivalence hashing) are op-time snapshots.
-    non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
+    call = planned_slot_call(self, func, func_name, args, kwargs)
+    non_tensor_args, non_tensor_kwargs = split_call_arguments(call, _check_if_tensor_arg)
     bound_aliases = _bind_call_alias_labels(args, kwargs) if _VIEW_MUTATION_RELABELS else ()
     try:
-        call = _SlotCall(func, func_name, args, kwargs)
         arg_tensors, arg_parameters, parent_layer_labels = _scan_call_arguments(
             self, call, layer_type
         )

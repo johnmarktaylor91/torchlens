@@ -30,6 +30,7 @@ from ..._utils._tensor_label import (
 )
 from ..._utils._tl_collective import _async_collective_elem
 from ..._utils.introspection import get_arg_tensors_for_resolution
+from ._call_layout import planned_tensor_items
 from ._ops_arg_slots import (
     _ArgSlot,
     _LabelRead,
@@ -76,7 +77,7 @@ def _scan_call_arguments(
     runtime = self._wrapper_runtime_ws
     fast, runtime.fast_scan = runtime.fast_scan, None
     scanned = (
-        _fast_lane_arg_tensors(layer_type, args, kwargs, fast[1])
+        _fast_lane_arg_tensors(layer_type, args, kwargs, fast[1], call.layout)
         if fast is not None and fast[0] is args
         else None
     )
@@ -118,6 +119,7 @@ def _fast_lane_arg_tensors(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     admitted: list[torch.Tensor],
+    layout: Any = None,
 ) -> tuple[list[torch.Tensor], list[torch.nn.Parameter], list[torch.Tensor]] | None:
     """Return a fast-lane call's ``(arg tensors, parameters, tensors to resolve)``.
 
@@ -126,15 +128,21 @@ def _fast_lane_arg_tensors(
     The spec lookup is replaced by one check of the call's shape (argument and
     keyword types) against shapes whose spec extraction matched this list once;
     a new shape runs the spec path, compares and remembers the shape when equal.
+    ``layout`` is the call's flat layout plan, whose guard key holds the same types.
     Returns ``None`` when the caller must run the spec path (a new or unproven
     shape, or a variadic transform).
     """
 
+    # A call's flat layout plan carries these types, under the same guard key.
     shape = (
-        layer_type,
-        tuple(map(type, args)),
-        tuple(kwargs) if kwargs else (),
-        tuple(map(type, kwargs.values())) if kwargs else (),
+        (layer_type, *layout.types)
+        if layout is not None
+        else (
+            layer_type,
+            tuple(map(type, args)),
+            tuple(kwargs) if kwargs else (),
+            tuple(map(type, kwargs.values())) if kwargs else (),
+        )
     )
     known = _FAST_SHAPES.get(shape)
     if known is not None and (known[0] or _st._dynamic_arg_specs.get(layer_type) is known[1]):
@@ -259,14 +267,17 @@ def snapshot_arg_slots(
     recorder and the witness) and returns them in walk order.
     """
 
-    items = list(_tensor_items(call))
+    layout = call.layout
+    items = list(_tensor_items(call)) if layout is None else planned_tensor_items(call, layout)
     workspace = _peek_raw_graph_workspace(trace)
     if not items or workspace is None:
         return ()
     templates_on = templates_requested(trace)
+    # A flat layout without an ``out`` keyword has no ``out=`` destination.
+    out_ids = _out_destination_ids(call.kwargs) if layout is None or layout.has_out else set()
     scope = _SnapshotScope(
         live=trace.capture_events.live_index.by_raw_label,
-        clear_ids=frozenset({id(t) for t in arg_tensors} | _out_destination_ids(call.kwargs)),
+        clear_ids=frozenset({id(t) for t in arg_tensors} | out_ids),
         visited_ids=frozenset(id(v) for _, _, v, seen in items if seen and templates_on),
     )
     facts: dict[int, tuple[Any, ...]] = {}

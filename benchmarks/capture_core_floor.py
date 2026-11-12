@@ -83,6 +83,8 @@ SECTION_MARKERS: dict[str, tuple[str, ...]] = {
         "_fast_lane_arg_tensors",
         "get_arg_tensors_for_resolution",
         "split_non_tensor_args",
+        "planned_slot_call",
+        "split_call_arguments",
         "_bind_call_alias_labels",
         "_repin_rebound_receiver",
         "resolve_or_late_index_buffer_address",
