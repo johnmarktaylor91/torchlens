@@ -151,15 +151,50 @@ def _build_new_impl(cls: type, func_name: str, c_tp_new: int | None = None) -> C
     return legacy_new
 
 
+#: Roster rows grouped by namespace, in roster order, each with its recorded op
+#: name: a pure function of the constant roster, so it is computed once.
+_ROSTER_BY_NAMESPACE: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = tuple(
+    (
+        namespace_name,
+        tuple(
+            (class_name, _legacy_func_name(namespace_name, class_name))
+            for row_namespace, class_name in LEGACY_TENSOR_CONSTRUCTOR_SITES
+            if row_namespace == namespace_name
+        ),
+    )
+    for namespace_name in dict.fromkeys(name for name, _cls in LEGACY_TENSOR_CONSTRUCTOR_SITES)
+)
+#: The grouped walk equals the roster walk only when each namespace's rows are
+#: contiguous in the roster; otherwise :func:`_resolve_roster` walks row by row.
+_ROSTER_ROWS_GROUPED_IN_ORDER = [
+    (namespace_name, class_name)
+    for namespace_name, rows in _ROSTER_BY_NAMESPACE
+    for class_name, _func_name in rows
+] == list(LEGACY_TENSOR_CONSTRUCTOR_SITES)
+
+
 def _resolve_roster() -> list[tuple[str, type]]:
     """Return ``(func_name, class)`` for every roster row this torch provides.
 
     Each namespace is resolved once per call (every row of one namespace reads
-    the same object, so the result equals resolving it per row).
+    the same object, so the result equals resolving it per row). Every class is
+    read live from its namespace on every call, so a rebound or removed class is
+    seen at once.
     """
 
+    if _ROSTER_ROWS_GROUPED_IN_ORDER:
+        resolved: list[tuple[str, type]] = []
+        for namespace_name, rows in _ROSTER_BY_NAMESPACE:
+            namespace = _torch_compat.get_optional_torch_namespace(namespace_name)
+            if namespace is None:
+                continue
+            for class_name, func_name in rows:
+                cls = getattr(namespace, class_name, None)
+                if isinstance(cls, type):
+                    resolved.append((func_name, cls))
+        return resolved
     namespaces: dict[str, Any] = {}
-    resolved: list[tuple[str, type]] = []
+    resolved = []
     for namespace_name, class_name in LEGACY_TENSOR_CONSTRUCTOR_SITES:
         if namespace_name not in namespaces:
             namespaces[namespace_name] = _torch_compat.get_optional_torch_namespace(namespace_name)
@@ -307,7 +342,12 @@ def install_legacy_constructor_wrappers() -> None:
     if not _roster_layouts_verified(roster):
         return
     _SKIPPED_FOREIGN_NEW.clear()
+    installed = _INSTALLED
     for func_name, cls in roster:
+        # ``_install_one``'s first test, inline: our patch is live, nothing to do.
+        record = installed.get(id(cls))
+        if record is not None and cls.__dict__.get("__new__") is record.patch.installed_new:
+            continue
         _install_one(func_name, cls)
 
 
