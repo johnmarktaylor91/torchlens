@@ -25,6 +25,17 @@ relu_trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=tl.
 relu_trace.backward(relu_trace[relu_trace.output_layers[0]].out.sum())
 ```
 
+`loss` can also be a callable that maps the model's return value to the scalar, with the
+meaning `loss_fn=` has in validation. Every backend that supports backward accepts it:
+
+```python
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
+trace.backward(lambda out: out.sum())
+```
+
+PyTorch calls it once on `trace.output`, so a forked or converted trace without a live forward
+return refuses it with `output_not_stored`; pass the loss tensor there instead.
+
 `save_grads=True` saves all observed op gradients. `False` or `None` observes backward structure
 without retaining gradient tensors. Predicate expressions use the same forward selector language,
 plus backward selectors such as `tl.grad_fn(...)` (by class name, or `label=` for a label substring),

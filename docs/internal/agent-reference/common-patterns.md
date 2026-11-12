@@ -38,6 +38,9 @@ tl.release_model(model)  # restore whole-model pickle / torch.save serializabili
 # Trace.output is memory only. A loaded/unpickled or derived trace refuses with
 # output_not_stored; stop_after= before the model returns gives output_capture_stopped.
 
+# Trace.backward(loss) takes the loss tensor, or a callable of Trace.output with loss_fn's
+# meaning, wherever backward is supported: trace.backward(lambda out: out.sum()).
+
 # Steered rerun: a module-targeted staged spec reruns through the guarded fast engine
 # (native forward + hooks, close to plain-forward cost); any typed refusal falls back
 # to the capture engine and says why.

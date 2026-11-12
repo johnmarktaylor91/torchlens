@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import torch
-
 from ..._capture.outcome import require_capture_capability
 from ..._capture.structure_only import require_structure_only_capability
 from ..._errors import PayloadUnavailableError
@@ -94,8 +92,14 @@ def _require_live_replay(trace: Any) -> None:
     _refuse_stats_capture(trace, "live_replay")
 
 
-def backward(trace: Trace, loss: torch.Tensor, **backward_kwargs: Any) -> Trace:
-    """Body of ``Trace.backward``; the method carries the documented contract."""
+def backward(trace: Trace, loss: Any, **backward_kwargs: Any) -> Trace:
+    """Body of ``Trace.backward``; the method carries the documented contract.
+
+    ``loss`` is the scalar to differentiate, or a callable mapping the model's
+    return value (``trace.output``) to it, with ``loss_fn``'s meaning. PyTorch
+    evaluates the callable here on the live output; a native backend receives
+    the callable itself, because its framework differentiates the function.
+    """
     # N3: the backward projection assumes a structurally complete captured
     # forward graph; HALTED stays allowed (the autograd graph of a halted
     # capture IS the captured prefix).
@@ -106,6 +110,8 @@ def backward(trace: Trace, loss: torch.Tensor, **backward_kwargs: Any) -> Trace:
     spec = get_backend_spec(trace._provenance_backend)
     refuse_backward_capture_unsupported(spec)
     surface = cast(Any, require_capability_implementation(spec, "backward_capture"))
+    if callable(loss) and spec.name == "torch":
+        loss = loss(trace.output)
     return cast("Trace", surface.trace_backward(trace, loss, **backward_kwargs))
 
 
