@@ -3724,7 +3724,7 @@
   "field": "raw_index",
   "file": "torchlens/_postprocess/labeling.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 1,
   "via_getattr": false
  },
  {
