@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 SlotKey = tuple[str, Any]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class _SlotCall:
     """The wrapped call whose arguments the shared-fields builder derives from."""
 
@@ -55,7 +55,7 @@ class _SlotCall:
     layout: Any = None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class _ArgSlot:
     """What the shared-fields derivations read about one tensor argument slot.
 
@@ -77,7 +77,7 @@ class _ArgSlot:
     param_validated: bool
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class _SlotContext:
     """The current op's slots, keyed for the derivations that cannot take them directly."""
 
@@ -87,7 +87,7 @@ class _SlotContext:
     by_key: dict[SlotKey, _ArgSlot]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class _SnapshotScope:
     """Per-op inputs of the snapshot: live labels and which tensors get cleared."""
 
@@ -151,7 +151,7 @@ def _out_destination_ids(kwargs: dict[str, Any]) -> set[int]:
     return set()
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class _LabelRead:
     """One argument tensor's metadata and label reads, taken once per op."""
 

@@ -62,6 +62,16 @@ __all__ = (
     "snapshot_arg_slots",
 )
 
+# ``isinstance(value, torch.nn.Parameter)`` runs the Parameter metaclass's Python
+# ``__instancecheck__``: true for a Parameter, or for any tensor with a truthy
+# ``_is_param``, else the ordinary type test. The per-tensor sites below decide the
+# two exact types the scan meets (an exact Tensor subclasses nothing, so only its
+# flag counts) and keep ``isinstance`` for every other type: the same answer.
+_PARAMETER = torch.nn.Parameter
+_TENSOR = torch.Tensor
+#: Exact types that are never an ``AsyncCollectiveTensor`` (a strict Tensor subclass).
+_PLAIN_TENSOR_TYPES = frozenset({_TENSOR, _PARAMETER})
+
 
 def _scan_call_arguments(
     self: "Trace", call: _SlotCall, layer_type: str
@@ -89,7 +99,16 @@ def _scan_call_arguments(
         arg_tensors, arg_parameters, tensors_to_resolve = scanned
     # Inline, not a helper: once per op (tests/test_capture_row_commit_cost.py pins calls).
     for tensor in tensors_to_resolve:
-        if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
+        kind = type(tensor)
+        if (
+            kind is _PARAMETER
+            or (
+                getattr(tensor, "_is_param", False)
+                if kind is _TENSOR
+                else isinstance(tensor, _PARAMETER)
+            )
+            or get_tensor_label(tensor) is not None
+        ):
             continue
         if func_name in _RECEIVER_REBIND_NAMES and _repin_rebound_receiver(self, args, tensor):
             continue
@@ -214,7 +233,8 @@ def _unvalidated_provenance(
 ) -> bool:
     """Return ``_tensor_has_known_provenance`` past its prepared-Parameter rung."""
 
-    if _async_collective_elem(value) is not None:
+    # An exact Tensor or Parameter is never an AsyncCollectiveTensor (a strict subclass).
+    if type(value) not in _PLAIN_TENSOR_TYPES and _async_collective_elem(value) is not None:
         return _tensor_has_known_provenance(trace, value)
     meta = read.meta
     if meta is None:
@@ -234,7 +254,12 @@ def _object_facts(trace: "Trace", value: Any, scope: _SnapshotScope) -> tuple[An
     Returns the trailing :class:`_ArgSlot` fields, from ``label`` on.
     """
 
-    is_param = isinstance(value, torch.nn.Parameter)
+    kind = type(value)
+    is_param = kind is _PARAMETER or (
+        bool(getattr(value, "_is_param", False))
+        if kind is _TENSOR
+        else isinstance(value, _PARAMETER)
+    )
     meta = get_tensor_meta(value)
     gate_label = mutated_parameter_label(value) if is_param else get_tensor_label(value)
     live_label = gate_label if gate_label is not None and gate_label in scope.live else None
@@ -299,7 +324,7 @@ def _set_arg_template_fields(
     """Seed the replay argument templates and the portable function identity of one call."""
     if templates_requested(self):
         captured_template = _build_args_template(
-            call.func, call.args, call.kwargs, self, func_name=call.func_name
+            call.func, call.args, call.kwargs, self, func_name=call.func_name, layout=call.layout
         )
         fields_dict["args_template"] = captured_template
         fields_dict["kwargs_template"] = captured_template if call.kwargs else None
