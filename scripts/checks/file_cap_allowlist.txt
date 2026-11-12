@@ -447,7 +447,7 @@ torchlens/_selection/values.py	1171
 torchlens/_selection/values.py::_resolve_table_element_grain	65
 torchlens/_selection/values.py::_table_rows_by_label	65
 torchlens/_semantic/_norm_reconstruction.py::reconstruct_norm	96
-torchlens/_semantic/facets.py	1879
+torchlens/_semantic/facets.py	1871
 torchlens/_semantic/facets.py::FacetView._compute	85
 torchlens/_semantic/facets.py::register	67
 torchlens/_semantic/logit_lens.py	1393
