@@ -621,47 +621,6 @@ def saved_tensors_default_hooks_active() -> bool | None:
         return None
 
 
-def _probe_code_positions() -> bool:
-    """Return whether code objects expose PEP 657 fine-grained positions.
-
-    ``co_positions()`` (CPython 3.11+) yields per-instruction column offsets.
-    Conditional-branch attribution uses them to tell same-line ternary /
-    ``IfExp`` arms apart; without them the branch indexer degrades to
-    line-only matching, which deliberately FAILS CLOSED (un-attributed, never
-    mis-attributed) on same-line arms. Probe the capability behaviorally.
-
-    Returns
-    -------
-    bool
-        ``True`` when per-instruction position introspection is available.
-    """
-
-    positions = getattr(_probe_code_positions.__code__, "co_positions", None)
-    if not callable(positions):
-        return False
-    try:
-        next(iter(positions()), None)
-    except (TypeError, ValueError):
-        return False
-    return True
-
-
-def _probe_code_qualname() -> bool:
-    """Return whether code objects expose ``co_qualname`` (CPython 3.11+).
-
-    Frame-to-scope resolution for branch attribution prefers qualified names;
-    without them, same-named nested functions resolve by name plus first line
-    only and ambiguous matches fail closed.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``co_qualname`` is available on code objects.
-    """
-
-    return isinstance(getattr(_probe_code_qualname.__code__, "co_qualname", None), str)
-
-
 def _probe_saved_tensors_hooks_patchable() -> bool:
     """Return whether the saved-tensors-hooks context class accepts an init patch (see the leaf)."""
 
@@ -1244,8 +1203,8 @@ HAS_FUNCTION_APPLY_SLOT: bool = isinstance(
 ROLL_TENSOR_SHIFTS_SUPPORTED: bool = _probe_roll_tensor_shifts()
 HAS_SAVED_TENSORS_HOOK_INTROSPECTION: bool = _probe_saved_tensors_hook_introspection()
 HAS_SAVED_TENSORS_HOOKS_PATCHABLE: bool = _probe_saved_tensors_hooks_patchable()
-HAS_CODE_POSITIONS: bool = _probe_code_positions()
-HAS_CODE_QUALNAME: bool = _probe_code_qualname()
+HAS_CODE_POSITIONS: bool = _real_op_probe_leaf().probe_code_positions()
+HAS_CODE_QUALNAME: bool = _real_op_probe_leaf().probe_code_qualname()
 #: ``Module.__call__`` frames that call ``forward`` (see ``_module_call_dispatch``).
 _FORWARD_CALLERS = tuple(getattr(torch.nn.Module, n, None) for n in ("_call_impl", "_slow_forward"))
 HAS_MODULE_CALL_DISPATCH_FRAME: bool = probe_module_call_dispatch_frame(_FORWARD_CALLERS)
