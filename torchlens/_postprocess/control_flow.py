@@ -37,6 +37,8 @@ if TYPE_CHECKING:
 
 
 _BRANCH_CONTEXT_KINDS = BRANCH_CONTEXT_KINDS
+#: ``(trace, plan)`` of the step-5 pass in progress, so phase 5e reuses its columns.
+_ACTIVE_PLANS: list[tuple[Any, Any]] = []
 
 
 def _mark_conditional_branches(self: Trace) -> None:
@@ -51,14 +53,9 @@ def _mark_conditional_branches(self: Trace) -> None:
     5. Attribute executed ops and forward edges to conditional branch arms.
     6. Rebuild compatibility views derived from primary structures.
 
-    Performance fast-path: when no terminal scalar bools were captured, the
-    model has no conditional branches the pipeline can attribute, so we skip
-    the AST file indexing, per-bool classification, and per-op
-    ``attribute_op()`` work. All Trace-level conditional collections are
-    already initialized empty in :meth:`Trace.__init__`, and per-layer
-    conditional fields are initialized to their empty defaults during
-    capture (see ``_capture/output_tensors.py``). The fast-path is verified
-    against the slow-path defaults via ``tests/test_perf_bundle.py``.
+    Fast path: with no terminal scalar bools there is nothing to attribute, and
+    the empty defaults set at capture are already the result (checked against
+    the slow path by ``tests/test_perf_bundle.py``).
     """
 
     proven_labels = host_escape_bool_source_labels(self)
@@ -71,15 +68,9 @@ def _mark_conditional_branches(self: Trace) -> None:
 
     bools = _terminal_bools(self, plan)
     classes = classify_terminal_bools(bools, host_escape_bool_consumer_locations(self))
-    # Defensive guard: if no terminal bool produced a structural conditional
-    # key, attribution will produce zero edges, matching the fast-skip output.
-    # This invariant makes bool-detector drift fail explicitly instead of
-    # silently making the fast-path miss work.
+    # Bool-detector drift must fail explicitly, not let the fast path silently
+    # miss work; a real raise because ``python -O`` strips asserts.
     if not classes.classifications and classes.conditional_keys:
-        # A real raise, not an assert: the whole point of this guard is to make
-        # bool-detector drift fail EXPLICITLY, and `python -O` strips asserts --
-        # which would restore exactly the silent fast-path miss it exists to
-        # prevent.
         raise RuntimeError(
             "Internally-terminated bool layers were absent but "
             f"{len(classes.conditional_keys)} conditional key(s) were produced; the "
@@ -95,7 +86,11 @@ def _mark_conditional_branches(self: Trace) -> None:
     branch_bool_labels = [label for label, _frames in bools if classes.classifications[label]]
     # Reset and flood bodies (column view, facade fallback) live in ``_column_passes_graph``.
     _column_passes_graph.reset_and_flood_if_edges(self, branch_bool_labels, plan=plan)
-    _attribute_branches_forward(self, events_by_key)
+    _ACTIVE_PLANS.append((self, plan))
+    try:
+        _attribute_branches_forward(self, events_by_key)
+    finally:
+        del _ACTIVE_PLANS[-1]
     _column_passes_graph.materialize_derived_views(self, plan=plan)
 
 
@@ -331,7 +326,8 @@ def _attribute_branches_forward(
 
     Every non-orphan op gets its own conditional branch stack (each distinct
     frame-position stack is translated once per pass) and empty arm children;
-    then every forward edge entering an arm is recorded.
+    then every forward edge entering an arm is recorded. Called inside step 5,
+    it reuses the pass's columns; called alone, it binds its own.
 
     Parameters
     ----------
@@ -341,7 +337,10 @@ def _attribute_branches_forward(
         Structural-to-dense conditional event lookup created in phase 5c.
     """
 
-    plan = _column_passes_graph.step5_columns(self)
+    if _ACTIVE_PLANS and _ACTIVE_PLANS[-1][0] is self:
+        plan = _ACTIVE_PLANS[-1][1]
+    else:
+        plan = _column_passes_graph.step5_columns(self)
     _column_passes_graph.assign_conditional_branch_stacks(
         self, events_by_key, _translate_conditional_stack, plan=plan
     )
