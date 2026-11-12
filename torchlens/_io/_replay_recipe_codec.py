@@ -313,11 +313,9 @@ def loaded_section(trace: Any) -> LoadedReplayRecipes | None:
 
 
 def _allowlist(adapter: Any) -> frozenset[str] | None:
-    """The adapter's closed op allowlist (``ALLOWLIST`` or ``op_allowlist()``)."""
+    """The adapter's closed op allowlist (the contract's module-level ``ALLOWLIST``)."""
 
     allowlist = getattr(adapter, "ALLOWLIST", None)
-    if allowlist is None and callable(getattr(adapter, "op_allowlist", None)):
-        allowlist = adapter.op_allowlist()
     return None if allowlist is None else frozenset(allowlist)
 
 
