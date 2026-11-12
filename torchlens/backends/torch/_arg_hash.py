@@ -28,9 +28,9 @@ def _get_hash_from_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
     """
     args_to_hash: list[Any] = []
     for a, arg in enumerate(args):
-        _append_arg_hash(arg, f"pos{a}", args_to_hash)
+        _append_top_arg_hash(arg, f"pos{a}", args_to_hash)
     for key, arg in kwargs.items():
-        _append_arg_hash(arg, f"kw_{key}", args_to_hash)
+        _append_top_arg_hash(arg, f"kw_{key}", args_to_hash)
 
     if len(args_to_hash) == 0:
         return "no_args"
@@ -43,6 +43,27 @@ def _get_hash_from_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
             _ARG_HASH_DIGESTS.clear()
         barcode = _ARG_HASH_DIGESTS[tokens] = make_short_barcode_from_input(args_to_hash)
     return barcode
+
+
+_PLAIN_SCALAR_TYPES = frozenset((int, float, bool, type(None)))
+"""Exact leaf types whose token is ``f"{prefix}_{arg}"`` (their ``str`` holds no address)."""
+
+
+def _append_top_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any]) -> None:
+    """Append one top-level argument's tokens, as :func:`_append_arg_hash` appends them.
+
+    An exact tensor takes its tensor token and a plain scalar its leaf token
+    directly (the branches :func:`_append_arg_hash` reaches for them at depth 0);
+    every other value goes through :func:`_append_arg_hash`.
+    """
+
+    arg_type = type(arg)
+    if arg_type is torch.Tensor:
+        args_to_hash.append(_tensor_hash_token(prefix, arg))
+    elif arg_type in _PLAIN_SCALAR_TYPES:
+        args_to_hash.append(f"{prefix}_{arg}")
+    else:
+        _append_arg_hash(arg, prefix, args_to_hash)
 
 
 _ARG_HASH_DIGESTS: dict[tuple[str, ...], str] = {}
