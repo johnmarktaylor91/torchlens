@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1841 modules, 727635 lines, 0 modules without a docstring.
+85 packages, 1841 modules, 727644 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 23 | 6911 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 85 | 25396 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 85 | 25405 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6633 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
@@ -991,7 +991,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (23 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (85 modules, 25396 lines)
+Shared helpers used by two or more TorchLens packages. (85 modules, 25405 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1021,7 +1021,7 @@ Shared helpers used by two or more TorchLens packages. (85 modules, 25396 lines)
 | `_foreign_data_replay` | Replay of a resolved foreign data round trip (the ''foreigndata'' op). | 85 |
 | `_hop_entry_compile` | Higher-order-operator entry compiles during a forced-eager capture. | 587 |
 | `_input_tree` | Input-tree bounds, refusals and the inert instance-state inspector. | 257 |
-| `_internal_read` | The explicit marker for TorchLens-internal scalar reads during capture. | 179 |
+| `_internal_read` | The explicit marker for TorchLens-internal scalar reads during capture. | 188 |
 | `_kernel_probes` | Capability probes that run one real tensor op (or one non-importing lookup) each (a torch-only leaf). | 715 |
 | `_lazy_import_warm` | Import the modules a process's first capture would otherwise load in-window. | 59 |
 | `_log_mute` | Mute log records at WARNING and below for one tensor-search crawl, without cache clears. | 62 |

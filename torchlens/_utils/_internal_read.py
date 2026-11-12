@@ -112,10 +112,12 @@ class IdKeyRegistry(WeakIdKeyDictionary):
         self._reads: dict[int, tuple[weakref.ref[Any], Any]] = {}
 
     def _remember(self, key: Any, value: Any) -> None:
+        """Cache ``value`` for ``key``, dropping the entry when ``key`` is collected."""
         key_id = id(key)
         reads = self._reads
 
         def forget(ref: weakref.ref[Any], key_id: int = key_id) -> None:
+            """Drop the cached read for ``key_id`` if it still belongs to ``ref``."""
             entry = reads.get(key_id)
             if entry is not None and entry[0] is ref:
                 del reads[key_id]
@@ -123,9 +125,11 @@ class IdKeyRegistry(WeakIdKeyDictionary):
         reads[key_id] = (weakref.ref(key, forget), value)
 
     def _forget(self, key: Any) -> None:
+        """Drop any cached read for ``key``."""
         self._reads.pop(id(key), None)
 
     def get(self, key: Any, default: Any = None) -> Any:
+        """Return the value for ``key``, or ``default``; serve repeat reads from the cache."""
         entry = self._reads.get(id(key))
         if entry is not None and entry[0]() is key:
             return entry[1]
@@ -156,22 +160,27 @@ class IdKeyRegistry(WeakIdKeyDictionary):
         super().__delitem__(key)
 
     def pop(self, key: Any, *args: Any) -> Any:
+        """Remove ``key`` and return its value, invalidating its cached read."""
         self._forget(key)
         return super().pop(key, *args)
 
     def setdefault(self, key: Any, default: Any = None) -> Any:
+        """Insert ``default`` for a missing ``key`` and return the stored value."""
         self._forget(key)
         return super().setdefault(key, default)
 
     def update(self, *args: Any, **kwargs: Any) -> None:
+        """Update from a mapping or pairs, clearing the read cache."""
         self._reads.clear()
         super().update(*args, **kwargs)
 
     def popitem(self) -> Any:
+        """Remove and return an arbitrary ``(key, value)`` pair, clearing the read cache."""
         self._reads.clear()
         return super().popitem()
 
     def clear(self) -> None:
+        """Remove every entry and clear the read cache."""
         self._reads.clear()
         super().clear()
 
