@@ -90,9 +90,9 @@ class IdKeyRegistry(WeakIdKeyDictionary):
         self._forget(key)
         return super().setdefault(key, default)
 
-    def update(self, dict: Any = None, **kwargs: Any) -> None:  # noqa: A002 - the base's name
+    def update(self, *args: Any, **kwargs: Any) -> None:
         self._reads.clear()
-        super().update(dict, **kwargs)
+        super().update(*args, **kwargs)
 
     def popitem(self) -> Any:
         self._reads.clear()
