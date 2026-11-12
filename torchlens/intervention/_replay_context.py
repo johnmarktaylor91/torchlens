@@ -12,7 +12,7 @@ the engine.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -141,11 +141,7 @@ def _fresh_replay_run_ctx(log: Trace) -> dict[str, Any]:
 
 
 def _record_capture_digest(
-    site: Op,
-    known_digests: Mapping[str, str],
-    new_digests: dict[str, str],
-    *,
-    digest: Callable[[Any], str] | None = None,
+    site: Op, known_digests: Mapping[str, str], new_digests: dict[str, str]
 ) -> None:
     """Record a site's capture-truth out digest the FIRST time replay overwrites it.
 
@@ -162,9 +158,6 @@ def _record_capture_digest(
     current = site.out
     if isinstance(current, torch.Tensor):
         new_digests[site_key] = tensor_content_digest(current)
-    elif digest is not None and current is not None:
-        # A backend replay digests its framework's values through the adapter.
-        new_digests[site_key] = digest(current)
 
 
 REPLAY_CAPTURE_DIGESTS_KEY = "replay_capture_digests"

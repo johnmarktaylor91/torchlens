@@ -23,7 +23,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends import _intervention_evidence as evidence
-from torchlens.intervention import _backend_replay
+from torchlens.intervention import _backend_adapter_lookup, _backend_replay
 from torchlens.intervention._replay import _reconstruct_args_from_template, _template_for_site
 from torchlens.intervention._replay_context import _replay_site_key
 from torchlens.intervention._replay_sites import _unmet_log_precondition
@@ -79,7 +79,7 @@ def _make_adapter() -> ModuleType:
 def fake_backend(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     adapter = _make_adapter()
     monkeypatch.setattr(
-        _backend_replay, "_lookup_adapter", lambda name: adapter if name == "fake" else None
+        _backend_adapter_lookup, "_lookup_adapter", lambda name: adapter if name == "fake" else None
     )
     return adapter
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from .._trace_state import TraceState
 from ._backend_names import TORCH_BACKEND_NAME
 
 #: Trace attribute a non-torch capture sets once its intervention evidence is written.
@@ -83,8 +84,6 @@ def stamp_capture_evidence(
     edited_labels:
         Labels of the ops whose recorded value an edit replaced.
     """
-
-    from .._trace_state import TraceState  # deferred: backends sit above the trace state
 
     for label in edited_labels:
         trace._layer_dict_all_keys[label]._internal_set("is_edited", True)

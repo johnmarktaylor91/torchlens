@@ -17,6 +17,7 @@ import torch
 from .._utils._record_group_table import record_member
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
 from ..backends._backend_names import TORCH_BACKEND_NAME
+from ._backend_adapter_lookup import backend_adapter
 from ._replay_cone import _disclosure_label
 from ._replay_context import _replay_site_key
 from .errors import ReplayPreconditionError
@@ -148,8 +149,6 @@ def _unmet_log_precondition(log: Trace) -> str | None:
     ):
         backend = str(log._provenance_backend or TORCH_BACKEND_NAME)
         if backend != TORCH_BACKEND_NAME:
-            from ._backend_replay import backend_adapter  # deferred: import cycle
-
             if backend_adapter(log) is not None:
                 # Replayed op by op through the backend's replay adapter
                 # (intervention/_backend_replay.py), which refuses per op.

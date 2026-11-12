@@ -34,9 +34,12 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from .._utils._record_group_table import record_member
-from ..backends._backend_names import TORCH_BACKEND_NAME
+from ._backend_adapter_lookup import backend_adapter, trace_backend
 from ._replay_context import _replay_site_key
+from ._replay_sites import _is_passthrough_replacement, _is_source_record
 from .errors import ReplayPreconditionError
 
 if TYPE_CHECKING:
@@ -50,39 +53,6 @@ RERUN_REMEDY = (
 
 #: Built-in helpers the driver applies with contract functions alone.
 _NEUTRAL_HELPERS = frozenset({"zero_ablate"})
-
-
-def trace_backend(trace: Trace) -> str:
-    """Return the trace's backend name (``torch`` when unset)."""
-
-    return str(getattr(trace, "_provenance_backend", None) or TORCH_BACKEND_NAME)
-
-
-def _lookup_adapter(backend: str) -> Any | None:
-    """Return the replay adapter module for ``backend``, or None when none is built."""
-
-    try:
-        from ..backends import _replay_adapters
-    except ImportError:  # the adapter package has not landed on this branch
-        return None
-    try:
-        return _replay_adapters.get_adapter(backend)
-    except _replay_adapters.ReplayAdapterUnavailable:
-        return None
-
-
-def backend_adapter(trace: Trace) -> Any | None:
-    """Return the replay adapter for a non-PyTorch trace, else None.
-
-    PyTorch traces replay through their own engine and get None, as does a
-    backend whose adapter module is not built yet (the caller keeps its
-    refusal for those).
-    """
-
-    backend = trace_backend(trace)
-    if backend == TORCH_BACKEND_NAME:
-        return None
-    return _lookup_adapter(backend)
 
 
 def refuse(message: str, code: str, *, remedy: str = RERUN_REMEDY) -> ReplayPreconditionError:
@@ -128,8 +98,6 @@ def _is_guard(site: Op) -> bool:
 
 def _step_for_site(trace: Trace, adapter: Any, site: Op) -> ReplayStep:
     """Describe one cone site as a replay step, refusing an op the adapter cannot replay."""
-
-    from ._replay_sites import _is_passthrough_replacement, _is_source_record
 
     key = _replay_site_key(site)
     guard = _is_guard(site)
@@ -285,8 +253,6 @@ def propagate(walk: ReplayWalk, steps: Sequence[ReplayStep]) -> ReplayWalk:
 
 def host_digest(adapter: Any, value: Any) -> str:
     """Return the sha256 of a backend value's host bytes (shape and dtype not included)."""
-
-    import numpy as np
 
     host = np.ascontiguousarray(np.asarray(adapter.to_host(value)))
     return hashlib.sha256(host.reshape(-1).view(np.uint8).data).hexdigest()

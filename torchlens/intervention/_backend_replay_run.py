@@ -6,16 +6,20 @@ aimed at each site (the same normalized hook entries the PyTorch engine fires,
 with the same fire records), refuses a donor value that belongs to another
 framework, and commits the walk through the PyTorch engine's own transactional
 commit so both engines leave the same evidence.
+
+The PyTorch engine passes its commit and hook primitives in as
+:class:`ReplayServices`; importing them here would pull this module into the
+intervention package's import cycle.
 """
 
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._state import pause_logging
-from ._audit import _hook_name, _replay_fire_record
 from ._backend_replay import (
     ReplayStep,
     ReplayWalk,
@@ -26,14 +30,37 @@ from ._backend_replay import (
     trace_steps,
 )
 from ._replay_cone import _replay_cone_and_maps
-from ._replay_context import _ensure_replay_run_ctx, _fresh_replay_run_ctx, _replay_site_key
-from ._runtime import HOOK_REENTRANCY_GUARD
-from .hooks import make_hook_context
+from ._replay_context import (
+    REPLAY_CAPTURE_DIGESTS_KEY,
+    _ensure_replay_run_ctx,
+    _fresh_replay_run_ctx,
+    _replay_site_key,
+)
+from ._replay_finish import finish_replay
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
     from .hooks import NormalizedHookEntry
+
+
+@dataclass(frozen=True)
+class ReplayServices:
+    """The PyTorch replay engine's primitives the backend engine reuses.
+
+    ``commit`` is the transactional commit of values and fire records;
+    ``make_context``, ``hook_name`` and ``fire_record`` build a hook's context,
+    name and fire record exactly as the PyTorch engine does; ``guard`` is the
+    hook reentrancy guard; ``record_params`` stamps the changed parameters.
+    """
+
+    commit: Callable[[Trace, Mapping[str, Any], Mapping[str, Sequence[Any]]], None]
+    make_context: Callable[..., Any]
+    hook_name: Callable[[Any], str]
+    fire_record: Callable[..., Any]
+    guard: Any
+    record_params: Callable[[Trace], None]
+    hook_targets: Callable[..., Mapping[str, Sequence[Any]]]
 
 
 def _framework_of(value: Any) -> str:
@@ -62,7 +89,12 @@ def check_native_value(trace: Trace, slot: str, original: Any, result: Any) -> N
 
 
 def _fire_entry(
-    trace: Trace, adapter: Any, entry: NormalizedHookEntry, value: Any, ctx: Any
+    trace: Trace,
+    adapter: Any,
+    entry: NormalizedHookEntry,
+    value: Any,
+    ctx: Any,
+    guard: Any,
 ) -> Any:
     """Apply one edit entry to a backend value and return the result."""
 
@@ -86,7 +118,7 @@ def _fire_entry(
                 "fork.do(site, lambda out, ctx: ...)",
             )
         return apply_helper(trace, helper, value)
-    with HOOK_REENTRANCY_GUARD, pause_logging():
+    with guard, pause_logging():
         result = entry.normalized_callable(value, ctx=ctx)
     return value if result is None else result
 
@@ -97,6 +129,7 @@ def apply_site_edits(
     site: Op,
     value: Any,
     entries: Sequence[NormalizedHookEntry],
+    services: ReplayServices,
 ) -> tuple[Any, list[Any]]:
     """Fire the edits aimed at one site in order; return the value and fire records."""
 
@@ -104,8 +137,8 @@ def apply_site_edits(
     current, records = value, []
     for entry in entries:
         original = current
-        ctx = make_hook_context(
-            name=_hook_name(entry),
+        ctx = services.make_context(
+            name=services.hook_name(entry),
             timing="post",
             signal="forward",
             op=site,
@@ -114,10 +147,10 @@ def apply_site_edits(
             kwargs={},
         )
         previous_notes = tuple(run_ctx.get("ledger_notes", ()))
-        current = _fire_entry(trace, adapter, entry, current, ctx)
+        current = _fire_entry(trace, adapter, entry, current, ctx, services.guard)
         check_native_value(trace, _replay_site_key(site), original, current)
         records.append(
-            _replay_fire_record(
+            services.fire_record(
                 entry,
                 site,
                 replaced=current is not original,
@@ -133,6 +166,7 @@ def build_walk(
     adapter: Any,
     origins: Sequence[Op],
     hook_targets: Mapping[str, Sequence[NormalizedHookEntry]],
+    services: ReplayServices,
     *,
     preserve_origins: bool,
 ) -> ReplayWalk:
@@ -141,7 +175,8 @@ def build_walk(
     sites = trace._layer_dict_all_keys
 
     def edit(step: ReplayStep, slot: str, value: Any) -> tuple[Any, list[Any]]:
-        return apply_site_edits(trace, adapter, sites[slot], value, hook_targets.get(slot, ()))
+        entries = hook_targets.get(slot, ())
+        return apply_site_edits(trace, adapter, sites[slot], value, entries, services)
 
     held = {_replay_site_key(o): o.out for o in origins} if preserve_origins else {}
     edited = frozenset(hook_targets) | frozenset(_replay_site_key(o) for o in origins)
@@ -155,60 +190,66 @@ def build_walk(
     )
 
 
+def _record_host_digests(log: Trace, adapter: Any, labels: Sequence[str]) -> None:
+    """Digest each site's captured value before the commit first overwrites it.
+
+    The commit records a capture digest only for PyTorch tensors; this records
+    the same ledger entry for backend values (sha256 of their host bytes), so
+    validation after the edit still has the capture truth. Already recorded
+    sites keep their first digest.
+    """
+
+    run_ctx = _ensure_replay_run_ctx(log)
+    known = run_ctx.get(REPLAY_CAPTURE_DIGESTS_KEY)
+    known = known if isinstance(known, dict) else {}
+    sites = log._layer_dict_all_keys
+    fresh = {
+        label: host_digest(adapter, sites[label].out) for label in labels if label not in known
+    }
+    if fresh:
+        # Rebind, never mutate: the run context may be shared with a fork.
+        run_ctx[REPLAY_CAPTURE_DIGESTS_KEY] = {**known, **fresh}
+
+
 def run_backend_replay(
     log: Trace,
     adapter: Any,
     origins: Sequence[Op],
-    *,
-    hook_targets: Mapping[str, Sequence[NormalizedHookEntry]],
     hook_entries: Sequence[NormalizedHookEntry],
     strict: bool,
     preserve_origins: bool,
+    services: ReplayServices,
 ) -> Trace:
     """Replay a non-PyTorch trace's cone through its adapter and commit the result.
 
     Mirrors the PyTorch engine's ``_run_replay``: a fresh run context, the
-    cone in execution order, a transactional commit of values and fire
-    records, then the same ``replay`` operation row and replay-propagated
-    state. Nothing is written when any step refuses.
+    cone in execution order, the engine's own transactional commit of
+    values and fire records, then the same ``replay`` operation row and
+    replay-propagated state. Nothing is written when any step refuses.
     """
-
-    from . import _replay as replay_module  # deferred: _replay imports this module
 
     started_at = time.monotonic()
     run_ctx = _fresh_replay_run_ctx(log)
     run_ctx["differentiable"] = False
     log.last_run = run_ctx
     cone, _, _ = _replay_cone_and_maps(log, origins)
+    hook_targets = services.hook_targets(log, hook_entries, strict=strict)
     walk = propagate(
-        build_walk(log, adapter, origins, hook_targets, preserve_origins=preserve_origins),
+        build_walk(
+            log, adapter, origins, hook_targets, services, preserve_origins=preserve_origins
+        ),
         trace_steps(log, adapter, cone),
     )
-    replay_module._commit_replay_updates(
-        log,
-        walk.overlay,
-        walk.records,
-        digest=lambda value: host_digest(adapter, value),
-    )
-    replay_module._finish_replay(
+    _record_host_digests(log, adapter, tuple(walk.overlay))
+    services.commit(log, walk.overlay, walk.records)
+    finish_replay(
         log,
         origins,
-        hook_entries,
+        [services.hook_name(entry) for entry in hook_entries],
         strict=strict,
         cone=cone,
         started_at=started_at,
-        differentiable_frontier=None,
+        record_params=services.record_params,
     )
     log.last_run = {**log.last_run, "backend": trace_backend(log)}
     return log
-
-
-def refuse_differentiable(log: Trace) -> None:
-    """Refuse a differentiable replay, which keeps a PyTorch autograd graph."""
-
-    raise refuse(
-        f"a differentiable replay keeps a PyTorch autograd graph; the {trace_backend(log)} "
-        "backend replays a finished trace without one",
-        "backend_replay_not_differentiable",
-        remedy="drop differentiable=True; derive gradients on a fresh capture",
-    )

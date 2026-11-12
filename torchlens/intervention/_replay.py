@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -26,7 +26,6 @@ from .._ir.container import (
 from .._quantities import Bytes
 from .._runnable import refuse_poisoned_trace
 from .._selection.resolver import _label_index_scope
-from .._trace_state import TraceState
 from .._utils._record_group_table import record_member
 from .._utils._tensor_layout import relay_to_layout
 from .._utils.display import delayed_progress_bar
@@ -36,8 +35,8 @@ from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
 from ..errors._base import TorchLensError
 from ..options import ReplayOptions, merge_replay_options
 from ._audit import _hook_name, _replay_fire_record
-from ._backend_replay import backend_adapter
-from ._backend_replay_run import refuse_differentiable, run_backend_replay
+from ._backend_adapter_lookup import backend_adapter, differentiable_replay_cone
+from ._backend_replay_run import ReplayServices, run_backend_replay
 from ._edge_substitution import require_depth1_arg_path
 from ._param_fingerprint import (
     changed_param_scope,
@@ -61,6 +60,7 @@ from ._replay_context import (
     _record_capture_digest,
     _replay_site_key,
 )
+from ._replay_finish import finish_replay
 from ._replay_grad_clear import _clear_op_gradient_projection, _clear_param_gradient_projection
 from ._replay_sites import (
     _buffer_thread_candidate,
@@ -81,7 +81,7 @@ from ._replay_values import (
     refresh_output_derivatives,
     rollback_snapshot,
 )
-from ._runtime import _execute_hook
+from ._runtime import HOOK_REENTRANCY_GUARD, _execute_hook
 from ._spec import is_gradient_site
 from ._types import (
     CapturedArgTemplate,
@@ -243,9 +243,7 @@ def _run_differentiable_replay(
         New Trace containing the replayed outputs and fresh backward sidecar.
     """
 
-    if backend_adapter(log) is not None:
-        refuse_differentiable(log)
-    source_cone = cone_of_effect(log, origins)
+    source_cone = differentiable_replay_cone(log, origins)
     replay_log = log._fork_trace(name=_differentiable_replay_name(log))
     log._record_operation(
         "fork",
@@ -458,18 +456,9 @@ def _run_replay(
         Mutated model log.
     """
 
-    adapter = backend_adapter(log)
-    if adapter is not None:
-        if differentiable_frontier is not None:
-            refuse_differentiable(log)
+    if (adapter := backend_adapter(log)) is not None:  # a non-PyTorch trace: its adapter replays
         return run_backend_replay(
-            log,
-            adapter,
-            origins,
-            hook_targets=_hook_targets_by_label(log, hook_entries, strict=strict),
-            hook_entries=hook_entries,
-            strict=strict,
-            preserve_origins=preserve_origins,
+            log, adapter, origins, hook_entries, strict, preserve_origins, _BACKEND_SERVICES
         )
     started_at = time.monotonic()
     # A replay is its own run: its context starts fresh (only the capture-digest
@@ -558,62 +547,16 @@ def _run_replay(
             _commit_member(member, tensor, state)
 
     _commit_replay_updates(log, state.pending_updates, state.pending_records)
-    _finish_replay(
+    return finish_replay(
         log,
         origins,
-        hook_entries,
+        [_hook_name(entry) for entry in hook_entries],
         strict=strict,
         cone=cone,
         started_at=started_at,
+        record_params=record_changed_params,
         differentiable_frontier=differentiable_frontier,
     )
-    return log
-
-
-def _finish_replay(
-    log: Trace,
-    origins: Sequence[Op],
-    hook_entries: Sequence[NormalizedHookEntry],
-    *,
-    strict: bool,
-    cone: Sequence[Op],
-    started_at: float,
-    differentiable_frontier: dict[str, Any] | None,
-) -> None:
-    """Write the evidence every replay leaves after its commit.
-
-    Shared by the PyTorch engine and the backend adapter engine: the
-    replay-propagated state, the run summary in ``last_run``, the changed
-    parameter record and the ``replay`` operation row.
-    """
-
-    errors_non_fatal = 0
-    log.state = TraceState.REPLAY_PROPAGATED
-    log._out_recipe_revision = getattr(log, "_spec_revision", 0)
-    log.last_run = {
-        **_ensure_replay_run_ctx(log),
-        "engine": "replay",
-        "timestamp": started_at,
-        "started_at": started_at,
-        "origins": tuple(_disclosure_label(origin) for origin in origins),
-        "hooks": tuple(_hook_name(entry) for entry in hook_entries),
-        "strict": strict,
-        "errors_non_fatal": errors_non_fatal,
-        "cone": tuple(_disclosure_label(site) for site in cone),
-    }
-    record_changed_params(log)
-    log._record_operation(
-        "replay",
-        engine="replay",
-        origins=tuple(_disclosure_label(origin) for origin in origins),
-        hooks=tuple(_hook_name(entry) for entry in hook_entries),
-        strict=strict,
-        cone=tuple(_disclosure_label(site) for site in cone),
-        errors_non_fatal=errors_non_fatal,
-    )
-    log._has_direct_writes = False
-    if differentiable_frontier is not None:
-        log._replay_frontier = dict(differentiable_frontier)
 
 
 def _warn_if_direct_writes_will_be_overlaid(log: Trace) -> None:
@@ -1201,8 +1144,6 @@ def _commit_replay_updates(
     log: Trace,
     pending_updates: Mapping[str, torch.Tensor],
     pending_records: Mapping[str, Sequence[FireRecord]],
-    *,
-    digest: Callable[[Any], str] | None = None,
 ) -> None:
     """Commit replay out updates, rolling back if final writes fail.
 
@@ -1221,9 +1162,6 @@ def _commit_replay_updates(
         Replacement outs keyed by layer label.
     pending_records:
         Hook fire records keyed by layer label.
-    digest:
-        Content digest for non-tensor outs (a backend adapter's host bytes);
-        ``None`` digests torch tensors only.
     """
 
     snapshots: dict[str, dict[str, Any]] = {}
@@ -1235,7 +1173,7 @@ def _commit_replay_updates(
     try:
         for label, tensor in pending_updates.items():
             site = log._layer_dict_all_keys[label]
-            _record_capture_digest(site, known_digests, new_digests, digest=digest)
+            _record_capture_digest(site, known_digests, new_digests)
             snapshots[label] = rollback_snapshot(site)
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
@@ -1288,9 +1226,7 @@ def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:
 
     site._internal_set("out", tensor)
     site._internal_set("transformed_out", None)
-    if isinstance(tensor, torch.Tensor):
-        # A backend replay keeps every recorded layout (it refuses a changed
-        # one), so only a torch out needs its metadata re-read.
+    if isinstance(tensor, torch.Tensor):  # other backends keep their recorded metadata
         _set_saved_out_metadata(site, tensor)
 
 
@@ -1686,3 +1622,14 @@ __all__ = [
     "_replay_container_path",
     "_slice_output_by_path",
 ]
+
+
+_BACKEND_SERVICES = ReplayServices(  # this engine's primitives the backend engine reuses
+    _commit_replay_updates,
+    make_hook_context,
+    _hook_name,
+    _replay_fire_record,
+    HOOK_REENTRANCY_GUARD,
+    record_changed_params,
+    _hook_targets_by_label,
+)
