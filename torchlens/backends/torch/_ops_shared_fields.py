@@ -20,7 +20,7 @@ from ._call_layout import planned_slot_call, split_call_arguments
 from ._completeness_origins import internal_scalar_read
 from ._ops_function_family import NAME_FAMILY, name_family
 from ._storage_exports import note_alias_rebound_snapshot, note_foreign_written_snapshot
-from ._thin_settle import SHARED_CALL_DEFAULTS
+from ._thin_settle import SHARED_CALL_DEFAULTS, settle_non_tensor_args
 from .aliasing import (
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,
@@ -55,14 +55,14 @@ def _build_shared_fields_dict(
     out_orig: Any,
     exec_ctx: FuncExecutionContext,
     func_call_id: int,
+    defer: bool = False,
 ) -> tuple[dict[str, Any], list[Any], list[torch.Tensor], dict[str, int]]:
     """Build the fields shared by every output tensor of one call (function, parents, module).
 
-    Per-tensor fields (shape, label, equivalence type) are added in ``_log_output_tensor_info``.
-    Each field family has its own module: arguments (``_ops_argument_fields``), call site
-    (``_ops_call_site_fields``) and the callable's descriptors (``_ops_descriptive_fields``).
-    Returns ``(fields_dict, parent_records, arg_tensors, parent_param_ops)``; ``parent_records``
-    are the parents' indexed journal records (no live views: their reads go to the record).
+    Per-tensor fields are added in ``_log_output_tensor_info``; each family has its own module.
+    Returns ``(fields_dict, parent_records, arg_tensors, parent_param_ops)``. ``defer`` (the
+    thin emit) leaves the settle families out: the defaults, the callable's descriptors and
+    ``func_non_tensor_args``, which ``_thin_record`` fills at settle with the same builders.
     """
     # Canonical layer_type: lowercase with underscores stripped (e.g. "conv2d").
     layer_type = (NAME_FAMILY.get(func_name) or name_family(func_name))[0]
@@ -81,7 +81,8 @@ def _build_shared_fields_dict(
         fields_dict: dict[str, Any] = {"type": layer_type}
         fields_dict["detach_saved_activations"] = self._options_detach_saved_activations
         fields_dict["output_device"] = self._options_output_device
-        fields_dict.update(SHARED_CALL_DEFAULTS)
+        if not defer:
+            fields_dict.update(SHARED_CALL_DEFAULTS)
         _set_arg_template_fields(self, fields_dict, call)
         # Whether this op saves gradients; the per-gradient placeholders come from the op
         # defaults (the freeze never reads them).
@@ -102,7 +103,8 @@ def _build_shared_fields_dict(
         fields_dict["num_kwargs"] = num_kwargs
         fields_dict["non_tensor_pos_args"] = non_tensor_args
         fields_dict["non_tensor_kwargs"] = non_tensor_kwargs
-        fields_dict["func_non_tensor_args"] = non_tensor_args + list(non_tensor_kwargs.values())
+        if not defer:
+            fields_dict["func_non_tensor_args"] = settle_non_tensor_args(fields_dict)
 
         _build_graph_relationship_fields(
             self, fields_dict, parent_layer_labels, parent_records, args, kwargs, out_orig
@@ -113,15 +115,13 @@ def _build_shared_fields_dict(
         modules = _snapshot_exhaustive_module_stack(self)
         fields_dict["module"] = modules[-1] if modules else None
         fields_dict["modules"] = modules
-        _set_descriptive_fields(fields_dict, func, func_name)
-        (
-            fields_dict["unattributed_tensor_args"],
-            fields_dict["dropped_edge_tensor_args"],
-        ) = witness_from_slots(
-            self, call, fields_dict["parent_arg_positions"], fields_dict["parent_params"]
-        )
-
-        # Function config — lightweight hyperparameter extraction, always on.
+        if not defer:
+            _set_descriptive_fields(fields_dict, func, func_name)
+        positions, params = fields_dict["parent_arg_positions"], fields_dict["parent_params"]
+        unattributed, dropped = witness_from_slots(self, call, positions, params)
+        fields_dict["unattributed_tensor_args"] = unattributed
+        fields_dict["dropped_edge_tensor_args"] = dropped
+        # Function config: lightweight hyperparameter extraction, always on.
         param_shapes: list[tuple[int, ...]] | None = fields_dict.get("param_shapes")
         fields_dict["func_config"] = extract_salient_args(
             layer_type, func_name, args, kwargs, param_shapes

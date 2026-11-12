@@ -30,6 +30,7 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ._completeness_origins import internal_scalar_read
+from ._ops_descriptive_fields import _set_descriptive_fields
 from ._ops_freeze_refs import _module_frames_from_fields
 from ._ops_row_journal import _OUTPUT_REQUIRES_GRAD
 from ._thin_emit import ThinHelpers, make_thin_emit
@@ -391,6 +392,7 @@ def bound_thin_emit() -> Callable[[Any, tuple[Any, ...], int], bool]:
                 _build_edge_use_records,
                 CaptureSession,
                 _OP_STORE_LAYOUT,
+                _set_descriptive_fields,
             )
         )
     return thin

@@ -21,7 +21,13 @@ from collections.abc import Callable
 from types import MappingProxyType
 from typing import Any
 
-__all__ = ("SHARED_CALL_DEFAULTS", "OUTPUT_CALL_DEFAULTS", "plain_session")
+__all__ = (
+    "SHARED_CALL_DEFAULTS",
+    "OUTPUT_CALL_DEFAULTS",
+    "fill_settle_fields",
+    "plain_session",
+    "settle_non_tensor_args",
+)
 
 SHARED_CALL_DEFAULTS: MappingProxyType[str, Any] = MappingProxyType(
     {
@@ -77,3 +83,33 @@ def plain_session(trace: Any, keep_alias_contract: Callable[[Any], bool]) -> boo
         or trace._options_on_nonfinite
         or keep_alias_contract(trace)
     )
+
+
+def settle_non_tensor_args(fields: dict[str, Any]) -> list[Any]:
+    """Return ``func_non_tensor_args``: the op-time positional then keyword non-tensor values.
+
+    The one expression both paths use: today's emit at the call, a thin row at its settle,
+    from the same snapshots (``non_tensor_pos_args``, ``non_tensor_kwargs``).
+    """
+
+    return fields["non_tensor_pos_args"] + list(fields["non_tensor_kwargs"].values())
+
+
+def fill_settle_fields(fields: dict[str, Any], describe: Callable[..., Any]) -> None:
+    """Fill a thin row's settle families into its fields, as today's emit wrote them at the call.
+
+    ``describe`` is ``_ops_descriptive_fields._set_descriptive_fields`` (a pure function
+    of the callable and its name). The defaults tables fill only the names the call left
+    unwritten: the save, the fire results and the container path the call recorded stay.
+    """
+
+    describe(fields, fields["func"], fields["func_name"])
+    fields["func_non_tensor_args"] = settle_non_tensor_args(fields)
+    for table in (SHARED_CALL_DEFAULTS, OUTPUT_CALL_DEFAULTS):
+        for name, value in table.items():
+            if name not in fields and name not in _COMMIT_POPPED:
+                fields[name] = value
+
+
+_COMMIT_POPPED = frozenset({"fire_results"})
+"""Default names the commit removes from the fields (the row holds them on the side)."""

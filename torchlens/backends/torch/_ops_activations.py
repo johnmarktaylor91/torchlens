@@ -399,10 +399,10 @@ def _log_output_tensor_info(
         fields_dict["is_scalar_bool"] = False
         fields_dict["bool_value"] = None
 
-    # General info; the per-output constants come from the defaults table.
     fields_dict["_label_raw"] = _label_raw
     fields_dict["raw_index"] = raw_index
-    fields_dict.update(OUTPUT_CALL_DEFAULTS)
+    if "_construction_done" in fields_dict:  # else deferred: a thin row's settle takes the table
+        fields_dict.update(OUTPUT_CALL_DEFAULTS)
 
     # Other labeling info. The final labels, ``recurrent_ops``, ``num_passes``,
     # ``lookup_keys`` and ``source_trace`` are set by postprocess, not stored here.

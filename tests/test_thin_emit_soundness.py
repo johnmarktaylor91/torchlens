@@ -397,3 +397,53 @@ def test_thin_modules_import_nothing_from_the_capture_cycle() -> None:
                     if isinstance(parent, ast.If)
                 )
                 assert in_type_block or module in allowed, (name, module)
+
+
+def test_fill_settle_fields_takes_the_builders_and_keeps_call_values() -> None:
+    """The settle fill writes today's descriptors and defaults, never over a call-time value."""
+
+    from torchlens.backends.torch._ops_descriptive_fields import _set_descriptive_fields
+
+    fields: dict[str, Any] = {
+        "func": torch.relu,
+        "func_name": "relu",
+        "non_tensor_pos_args": [1],
+        "non_tensor_kwargs": {"a": 2},
+        "out": "saved",
+        "container_path": (0,),
+    }
+    _thin_settle.fill_settle_fields(fields, _set_descriptive_fields)
+    expected: dict[str, Any] = {}
+    _set_descriptive_fields(expected, torch.relu, "relu")
+    assert {name: fields[name] for name in expected} == expected
+    assert fields["func_non_tensor_args"] == [1, 2]
+    assert fields["out"] == "saved" and fields["container_path"] == (0,)
+    assert fields["step_index"] is None and fields["_construction_done"] is False
+    assert "fire_results" not in fields
+
+
+def test_thin_rows_fill_the_settle_families_on_first_need(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A thin row holds no settle family until a read needs one; the fill runs once per row."""
+
+    from torchlens.backends.torch import _thin_record
+
+    seen: list[tuple[bool, bool, bool]] = []
+    real_fill = _thin_record._ThinRow._fill
+
+    def spy(row: Any) -> None:
+        if row.describe is not None:
+            fields = row.fields
+            seen.append(
+                (
+                    "func_qualname" in fields,
+                    "step_index" in fields,
+                    "func_non_tensor_args" in fields,
+                )
+            )
+        real_fill(row)
+        assert row.describe is None
+        assert type(row.device) is str and type(row.handle_id) is str
+
+    monkeypatch.setattr(_thin_record._ThinRow, "_fill", spy)
+    tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU(), nn.Tanh()), torch.randn(2, 3))
+    assert seen and all(entry == (False, False, False) for entry in seen)

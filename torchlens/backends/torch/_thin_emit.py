@@ -68,6 +68,7 @@ class ThinHelpers(NamedTuple):
     build_edge_use_records: Callable[..., Any]
     capture_session_type: type
     op_store_layout: Any
+    describe: Callable[..., Any]
 
 
 def thin_emit_enabled() -> bool:
@@ -112,7 +113,7 @@ def make_thin_emit(helpers: ThinHelpers) -> Callable[[Any, tuple[Any, ...], int]
         started = perf()
         try:
             fields, _, _, parent_param_ops = build(
-                trace, func, func_name, args, kwargs, out, exec_ctx, func_call_id
+                trace, func, func_name, args, kwargs, out, exec_ctx, func_call_id, True
             )
         finally:
             _record_phase(trace, perf() - started)
@@ -122,6 +123,8 @@ def make_thin_emit(helpers: ThinHelpers) -> Callable[[Any, tuple[Any, ...], int]
             raise RuntimeError("thin emit: a bare tensor output gave a container entry")
         module_stack = frames_of(trace, fields["modules"])
         fields["container_path"] = entry.container_path
+        # The two defaults the alias semantics read at the call; the rest fill at settle.
+        fields["bytes_delta_at_call"] = fields["bytes_peak_at_call"] = None
         log_info(trace, out, 0, args, kwargs, parent_param_ops, fields, entry.autograd_stats, False)
         # The exhaustive emit's internal reads (``requires_grad``, the alias storage reads).
         with internal_scalar_read():
@@ -129,13 +132,17 @@ def make_thin_emit(helpers: ThinHelpers) -> Callable[[Any, tuple[Any, ...], int]
             fields["backend_semantics"] = plain_output_alias_semantics(args, kwargs, out, fields)
         fire_results = pop_fire(out)
         if fire_results:
-            fields["fire_results"] = fire_results
+            fire_results = tuple(fire_results)
             fields["is_edited"] = any(result.replaced for result in fire_results)
         if entry.autograd_band is not None:
             bands = trace.__dict__.setdefault("_autograd_saved_bands", {})
             bands[fields["_label_raw"]] = entry.autograd_band
         handle = commit(
-            trace, out, fields, (arg_copies, kwarg_copies), (module_stack, requires_grad)
+            trace,
+            out,
+            fields,
+            (arg_copies, kwarg_copies),
+            (module_stack, requires_grad, fire_results or ()),
         )
         if fields["is_internal_source"]:  # ``_classify_new_tensor_in_trace``
             trace.internal_source_ops.append(fields["_label_raw"])

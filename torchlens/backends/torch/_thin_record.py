@@ -7,6 +7,8 @@ serves (one bare tensor output in a plain session) the fields dictionary is the
 call's own (``_build_shared_fields_dict`` returns a fresh one and nothing writes to
 it after the commit), so the commit :func:`make_commit` binds holds it in the
 pending row by reference and appends the handle, with no draft, no copy and no view.
+The settle families the thin builders leave out are filled by the row on first need
+(:class:`_ThinRow`).
 
 The pending row is the protocol every handle reader already uses (``name in row``,
 ``row[name]``, ``row.read(handle, name)``, ``row.settle(handle)``, ``row.labels``),
@@ -30,6 +32,7 @@ from ..._ir._row_journal import _new_object, _RowOpRecord
 from ..._utils.display import _record_phase_timing
 from ._ops_freeze_refs import _param_refs_from_fields
 from ._ops_row_journal import _fill_items, _PendingRow, _row_journal_for
+from ._thin_settle import fill_settle_fields
 
 if TYPE_CHECKING:
     import torch
@@ -48,26 +51,26 @@ def make_commit(helpers: ThinHelpers) -> _Commit:
     save_fields = helpers.save_activation_fields
     seal_edges = helpers.seal_parent_edge_truth
     session_type = helpers.capture_session_type
-    append = _appender(helpers.build_edge_use_records, helpers.op_store_layout)
+    append = _appender(helpers.build_edge_use_records, helpers.op_store_layout, helpers.describe)
 
     def commit_thin(
         trace: Trace,
         tensor: torch.Tensor,
         fields: dict[str, Any],
         copies: tuple[tuple[Any, ...], dict[str, Any]],
-        facts: tuple[Any, bool],
+        facts: tuple[Any, bool, tuple[Any, ...]],
     ) -> _RowOpRecord:
         """Save the output, seal its edge truth and append its deferred row; return the handle.
 
         The steps ``_make_layer_log_entry`` takes for a call in a plain session, in its
         order: the save decision, the retention escrow, the saved value copy, the
         parent edge truth, then the commit. ``copies`` is ``(arg_copies,
-        kwarg_copies)``; ``facts`` is ``(module_stack, requires_grad)``, the output's
-        ``requires_grad`` read by the caller inside its internal-read block.
+        kwarg_copies)``; ``facts`` is ``(module_stack, requires_grad, fire_results)``, the
+        output's ``requires_grad`` read by the caller inside its internal-read block and the
+        call's fire results (the thin emit keeps them out of ``fields``).
         """
 
         trace_dict = trace.__dict__
-        fire_results = tuple(fields.pop("fire_results"))
         raw_index: int = fields["raw_index"]
         layer_nums_to_save: Any = trace._layer_nums_to_save
         save_this = (layer_nums_to_save == "all") or (raw_index in layer_nums_to_save)
@@ -86,7 +89,7 @@ def make_commit(helpers: ThinHelpers) -> _Commit:
                     trace, "clone_save_activation_fields", time.perf_counter() - save_started
                 )
         seal_edges(trace_dict, fields)
-        module_stack, requires_grad = facts
+        module_stack, requires_grad, fire_results = facts
         handle = append(trace, fields, tensor, (fire_results, module_stack), requires_grad)
         grad_fn_handle = fields["grad_fn_handle"]
         if grad_fn_handle is not None:
@@ -113,8 +116,63 @@ def _escrow_candidate(
         )
 
 
-def _appender(edge_use_builder: Any, layout: Any) -> _Commit:
-    """Return the row append bound to the edge-use builder and the op store layout."""
+class _ThinRow(_PendingRow):
+    """A thin call's pending row: today's pending row, with the settle families filled late.
+
+    The thin emit leaves out of ``fields`` what no call-time step reads: the defaults
+    tables, the callable's descriptors and ``func_non_tensor_args``
+    (:func:`._thin_settle.fill_settle_fields`). Every reader of ``fields`` past the hot
+    items (the lazy refs, a settling read, the settle itself) fills them first, with
+    the same builders and tables today's emit uses at the call. ``device`` and
+    ``handle_id`` are kept as the device object and the integer id until then.
+    """
+
+    __slots__ = ("describe",)
+    describe: Any
+
+    def _fill(self) -> None:
+        """Fill the settle families and the commit's strings once."""
+
+        describe = self.describe
+        if describe is not None:
+            self.describe = None
+            fill_settle_fields(self.fields, describe)
+            self.device = str(self.device)
+            self.handle_id = str(self.handle_id)
+
+    def function_ref(self) -> Any:
+        """Return the op's function-call ref (``_PendingRow.function_ref``), filled first."""
+
+        self._fill()
+        return _PendingRow.function_ref(self)
+
+    def side_refs(self) -> Any:
+        """Return the op's side refs (``_PendingRow.side_refs``), filled first."""
+
+        self._fill()
+        return _PendingRow.side_refs(self)
+
+    def output_ref(self) -> Any:
+        """Return the op's output ref (``_PendingRow.output_ref``), filled first."""
+
+        self._fill()
+        return _PendingRow.output_ref(self)
+
+    def read(self, handle: _RowOpRecord, name: str) -> Any:
+        """Answer a read the items lack (``_PendingRow.read``), filled first."""
+
+        self._fill()
+        return _PendingRow.read(self, handle, name)
+
+    def settle(self, handle: _RowOpRecord) -> None:
+        """Write the row and residual once (``_PendingRow.settle``), filled first."""
+
+        self._fill()
+        _PendingRow.settle(self, handle)
+
+
+def _appender(edge_use_builder: Any, layout: Any, describe: Any) -> _Commit:
+    """Return the row append bound to the edge-use builder, the op store layout and ``describe``."""
 
     def append_row(
         trace: Trace,
@@ -131,7 +189,8 @@ def _appender(edge_use_builder: Any, layout: Any) -> _Commit:
         journal are bound now.
         """
 
-        pending = _PendingRow()
+        pending = _ThinRow()
+        pending.describe = describe
         parents = fields["parents"] = list(fields["parents"])
         events = trace.capture_events
         found = tuple(map(events.live_index.by_raw_label.get, parents))
@@ -147,8 +206,8 @@ def _appender(edge_use_builder: Any, layout: Any) -> _Commit:
         pending.fire_results, pending.module_stack = side
         pending.params = _param_refs_from_fields(fields) if fields["parent_params"] else ()
         pending.requires_grad = bool(requires_grad)
-        pending.device = str(tensor.device)
-        pending.handle_id = str(id(tensor))
+        pending.device = tensor.device
+        pending.handle_id = id(tensor)
         pending._options_save_mode = trace._options_save_mode
         pending.events = dict(zip(parents, found, strict=True))
         pending.journal = journal
