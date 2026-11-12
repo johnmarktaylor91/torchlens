@@ -17,7 +17,7 @@ from .._validation_shared import ops_by_label
 from ..mlx import wrappers as w
 from ..mlx._capture_records import _is_mlx_array, _ReplaySlot
 from ..mlx._replay_args import _saved_payload
-from ._contract import ReplayRecipeError
+from ._contract import ReplayRefusal
 
 BACKEND = "mlx"
 
@@ -126,7 +126,7 @@ def _resolve(identity: str) -> tuple[Any, type | None]:
         return _original(cls, "__call__"), cls
     owner, names = _owners()[kind]
     if name not in names:
-        raise ReplayRecipeError("unknown_op", f"op identity {identity!r} is not allowlisted")
+        raise ReplayRefusal("unknown_op", f"op identity {identity!r} is not allowlisted")
     return _original(owner, name), None
 
 
@@ -172,7 +172,7 @@ def _label_of(op: Any) -> str:
         return str(labels[0])
     label = getattr(op, "_label_raw", None) or getattr(op, "label", None)
     if not isinstance(label, str):
-        raise ValueError(f"MLX replay cannot read a label from {type(op).__name__}.")
+        raise ReplayRefusal("unknown_label", f"no label on {type(op).__name__}")
     return label
 
 
@@ -188,7 +188,7 @@ def _capture_for(trace: Any, op: Any) -> Any:
         alias = getattr(ops.get(label), "_label_raw", None)
         capture = _capture_index(trace).get(alias) if isinstance(alias, str) else None
     if capture is None:
-        raise ValueError(f"MLX replay has no capture for op {label!r}.")
+        raise ReplayRefusal("unknown_label", "no replay capture recorded", op_label=label)
     return capture
 
 
@@ -292,14 +292,14 @@ def _bind_values(
     def leaf(node: Any, label: str | None, path: tuple[Any, ...]) -> Any:
         if label is None:
             if isinstance(node, _ReplaySlot):
-                raise ValueError("MLX replay template slot has no recorded parent label.")
+                raise ReplayRefusal("slots", "template slot has no recorded parent label")
             return node
         value = next(values, missing)
         if value is missing:
-            raise ValueError(f"MLX replay got too few parent values for {capture.op_name!r}.")
+            raise ReplayRefusal("arity", f"too few parent values for {capture.op_name!r}")
         return value
 
     args, kwargs = _walk_call(capture, leaf, lambda node, path: node)
     if next(values, missing) is not missing:
-        raise ValueError(f"MLX replay got too many parent values for {capture.op_name!r}.")
+        raise ReplayRefusal("arity", f"too many parent values for {capture.op_name!r}")
     return args, kwargs

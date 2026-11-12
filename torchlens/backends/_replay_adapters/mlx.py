@@ -25,6 +25,7 @@ from typing import Any
 
 from ..mlx._capture_records import _iter_output_arrays, _payloads_close
 from ..mlx._replay_args import _saved_payload
+from ._contract import ReplayRefusal
 from ._mlx_ops import (
     _RANDOM_LAYERS,
     _bind_values,
@@ -78,7 +79,7 @@ def can_replay(trace: Any, op: Any) -> str | None:
         return None
     try:
         capture = _capture_for(trace, op)
-    except ValueError as exc:
+    except ReplayRefusal as exc:
         return f"no replay capture recorded: {exc}"
     return _capture_refusal(capture)
 
@@ -109,7 +110,7 @@ def _apply_appliers(capture: Any, outputs: list[Any]) -> list[Any]:
     declared = dict(capture.interventions)
     appliers = dict(capture.appliers)
     if set(declared) != set(appliers) or any(i < 0 or i >= len(outputs) for i in declared):
-        raise ValueError("MLX replay: declared interventions have no matching applier.")
+        raise ReplayRefusal("slots", "declared interventions have no matching applier")
     for index, apply in appliers.items():
         outputs[index] = apply(outputs[index])
     return outputs
@@ -126,19 +127,19 @@ def forward(trace: Any, op: Any, parent_values: Sequence[Any]) -> tuple[Any, ...
 
     if _is_input(trace, op):
         if parent_values:
-            raise ValueError("MLX replay: an input op takes no parent values.")
+            raise ReplayRefusal("arity", "an input op takes no parent values")
         return (_input_payload(trace, op),)
     capture = _capture_for(trace, op)
     if capture.func is None:
         if parent_values:
-            raise ValueError("MLX replay: a constant leaf takes no parent values.")
+            raise ReplayRefusal("arity", "a constant leaf takes no parent values")
         return (_saved_payload(trace, _ops_by_label(trace), capture.labels_raw[0]),)
     args, kwargs = _bind_values(capture, parent_values)
     outputs = list(_iter_output_arrays(capture.func(*args, **kwargs)))
     if len(outputs) != len(capture.labels_raw):
-        raise ValueError(
-            f"MLX replay of {capture.op_name!r} produced {len(outputs)} arrays "
-            f"for {len(capture.labels_raw)} labels."
+        raise ReplayRefusal(
+            "arity",
+            f"{capture.op_name!r} produced {len(outputs)} arrays for {len(capture.labels_raw)} slots",
         )
     if capture.interventions:
         outputs = _apply_appliers(capture, outputs)
@@ -173,7 +174,7 @@ def vjp(
     values = list(parent_values)
     outputs = forward(trace, op, values)
     if len(cotangents) != len(outputs):
-        raise ValueError(f"MLX vjp needs {len(outputs)} cotangents, got {len(cotangents)}.")
+        raise ReplayRefusal("arity", f"vjp needs {len(outputs)} cotangents, got {len(cotangents)}")
     in_idx = [i for i, v in enumerate(values) if _differentiable(v)]
     out_idx = [i for i, v in enumerate(outputs) if _differentiable(v)]
     if not in_idx or not out_idx:

@@ -20,7 +20,7 @@ from typing import Any
 from .._finalize import normalize_op_module_calls
 from ..mlx._capture_records import REPLAY_SLOT, MLXOpCapture, _ReplaySlot
 from ..mlx.validation import _constant_source_labels
-from ._contract import InputOccurrence, OpRecipe, ReplayRecipeError
+from ._contract import InputOccurrence, OpRecipe, ReplayRefusal
 from ._mlx_ops import (
     _RANDOM_LAYERS,
     BACKEND,
@@ -434,11 +434,11 @@ class _Binder:
             return {k: self._item(v) for k, v in body.items()}
         return _special_value(kind, body, self.error)
 
-    def error(self, detail: str) -> ReplayRecipeError:
+    def error(self, detail: str) -> ReplayRefusal:
         """A refusal naming this recipe's op."""
 
         slots = self.rec.output_slots
-        return ReplayRecipeError("shape", detail, op_label=slots[0] if slots else None)
+        return ReplayRefusal("shape", detail, op_label=slots[0] if slots else None)
 
 
 def _special_value(kind: str, body: Any, error: Callable[[str], Exception]) -> Any:
@@ -481,7 +481,7 @@ def _capture_from_recipe(rec: OpRecipe, params: Mapping[str, Any]) -> Any:
     """One ``MLXOpCapture`` rebuilt from a recipe (refused when inconsistent)."""
 
     if rec.backend != BACKEND or rec.op_identity not in op_allowlist():
-        raise ReplayRecipeError("unknown_op", f"{rec.backend}:{rec.op_identity} is not allowlisted")
+        raise ReplayRefusal("unknown_op", f"{rec.backend}:{rec.op_identity} is not allowlisted")
     func, _cls = _resolve(rec.op_identity)
     binder = _Binder(rec, params)
     attrs = rec.attrs

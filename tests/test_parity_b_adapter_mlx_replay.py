@@ -22,7 +22,7 @@ import torchlens as tl  # noqa: E402
 from tests.conformance._rosters.mlx import CONFIG_BUILT  # noqa: E402
 from torchlens.backends._replay_adapters import (  # noqa: E402
     OpRecipe,
-    ReplayRecipeError,
+    ReplayRefusal,
     ReplaySession,
     ReplayStep,
     _mlx_ops as ops_mod,
@@ -239,7 +239,7 @@ def test_missing_parameter_payload_is_refused() -> None:
     recipes = _recipes(trace)
     captures = list(trace._mlx_op_captures)
     trace._replay_param_payloads = {}
-    with pytest.raises(ReplayRecipeError, match="no parameter payload"):
+    with pytest.raises(ReplayRefusal, match="no parameter payload"):
         adapter.bind_recipes(trace, recipes)
     assert list(trace._mlx_op_captures) == captures
 
@@ -252,10 +252,10 @@ def test_corrupt_recipes_are_refused() -> None:
     label, rec = next((k, r) for k, r in recipes.items() if r.inputs)
     data = encode_recipe(rec)
     data["op_identity"] = "core.not_an_mlx_op"
-    with pytest.raises(ReplayRecipeError, match="allowlist"):
+    with pytest.raises(ReplayRefusal, match="allowlist"):
         decode_recipe(data, backend="mlx", allowlist=adapter.op_allowlist())
     dropped = OpRecipe(**{**rec.__dict__, "inputs": rec.inputs[:-1]})
-    with pytest.raises(ReplayRecipeError, match="occurrences"):
+    with pytest.raises(ReplayRefusal, match="occurrences"):
         adapter.bind_recipes(trace, {**recipes, label: dropped})
 
 
