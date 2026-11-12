@@ -4466,6 +4466,15 @@
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_postprocess_speed_counters.py"
       ],
+      "torchlens/_postprocess/_conditional_bools.py": [
+        "tests/test_column_passes_graph.py",
+        "tests/test_conditional_branches.py",
+        "tests/test_conditional_scalar_escape_advisory.py",
+        "tests/test_conditional_step5.py",
+        "tests/test_perf_bundle.py",
+        "tests/test_postprocess_executor.py",
+        "tests/test_postprocess_speed_counters.py"
+      ],
       "torchlens/_postprocess/_conditional_child_rename.py": [
         "tests/test_buffer_datamodel.py",
         "tests/test_conditional_lifecycle.py",
@@ -4473,6 +4482,16 @@
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_speed2_counters.py",
         "tests/test_replay_template_family.py"
+      ],
+      "torchlens/_postprocess/_conditional_columns.py": [
+        "tests/test_column_passes_graph.py",
+        "tests/test_conditional_branches.py",
+        "tests/test_conditional_scalar_escape_advisory.py",
+        "tests/test_conditional_step5.py",
+        "tests/test_perf_bundle.py",
+        "tests/test_postprocess_executor.py",
+        "tests/test_postprocess_r14a_regressions.py",
+        "tests/test_postprocess_speed_counters.py"
       ],
       "torchlens/_postprocess/_conditional_records.py": [
         "tests/test_column_passes_depths_finished.py",
