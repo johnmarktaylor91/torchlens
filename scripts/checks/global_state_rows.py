@@ -896,6 +896,10 @@ _PROCESS_CACHES = frozenset(
         # descriptors and attribute names derived from the class and the field
         # order constant, so an entry never goes stale.
         ("torchlens/_data_classes/_op_output_copy.py", "_PLANS"),
+        # dataclasses.replace plan per dataclass: its field table object, the init
+        # field names and a getter; re-planned whenever the class's field table is a
+        # different object, so an entry never goes stale.
+        ("torchlens/_utils/_dataclass_replace.py", "_PLANS"),
         # The last trace asked for its payload-window state and that state (one tuple,
         # the trace held by weakref): a one-entry front for _COW_STATE_PTRS_CACHE.
         ("torchlens/backends/torch/wrappers.py", "_COW_LAST_TRACE"),

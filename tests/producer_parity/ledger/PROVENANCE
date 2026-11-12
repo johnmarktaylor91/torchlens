@@ -6094,8 +6094,8 @@ recorded: 2026-11-12T09:28:02Z
 ---
 generator: scripts/regen_ledgers.py (producer static half)
 flag: none (deterministic ledger step)
-reason: T1F: plain single-output emit and bare-output alias check
+reason: fixed-floor soundness tests and replace helper
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 3d67b76c2b8db70d1d4122b3ac7e5626cc55f975
-recorded: 2026-11-12T15:51:19+00:00
+source: 7eeda69d5c7d8dd7ffd92b9dd3f463623f0010c5
+recorded: 2026-11-12T12:41:35+00:00
