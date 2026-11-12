@@ -18,7 +18,6 @@ import types
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from itertools import compress
-from operator import itemgetter
 from types import ModuleType
 from typing import Any, TypeAlias
 
@@ -253,14 +252,16 @@ def _clear_module_namespace_tensor_metadata(
         # lets the stamped tensor escape the clear, so every walk type-inspects every
         # item afresh. The inert-type and class tests are decided once per distinct
         # ``type(item)`` and applied in C; only items of the remaining types reach Python.
-        items = tuple(namespace.items())
-        kinds = set(map(type, map(itemgetter(1), items))) - _NAMESPACE_INERT_TYPES
-        live = {kind for kind in kinds if not issubclass(kind, type)}
+        # Two flat snapshots (no pair per item); a size change between them re-pairs.
+        names, values = tuple(namespace), tuple(namespace.values())
+        if len(names) != len(values):
+            pairs = tuple(namespace.items())
+            names, values = tuple(k for k, _ in pairs), tuple(v for _, v in pairs)
+        value_types = tuple(map(type, values))
+        live = {k for k in set(value_types) - _NAMESPACE_INERT_TYPES if not issubclass(k, type)}
         slot_names = tuple(
             name
-            for name, item in compress(
-                items, map(live.__contains__, map(type, map(itemgetter(1), items)))
-            )
+            for name, item in compress(zip(names, values), map(live.__contains__, value_types))
             # Shim test inline by name first: it is the check's first conjunct.
             if (
                 type(item).__name__ != "_reduce_op"

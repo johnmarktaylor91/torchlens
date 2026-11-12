@@ -3,7 +3,8 @@
 Cuts covered:
 
 * the module-namespace container descent decides its inert-type and class tests once
-  per distinct item type (``_session_cleanup._clear_container_tree_tensor_metadata``);
+  per distinct item type (``_session_cleanup._clear_container_tree_tensor_metadata``),
+  and the namespace scan reads names and values as two flat snapshots;
 * the capture door's state copies use ``replace_fields`` (``dataclasses.replace``
   without the per-call field scan);
 * the legacy constructor install resolves its roster from precomputed rows and skips
@@ -136,6 +137,77 @@ def test_container_descent_shares_the_seen_set_with_the_reference() -> None:
     sc._clear_container_tree_tensor_metadata(tree, seen_cut, 0, got.append)
     assert [id(t) for t in got] == [id(t) for t in expected]
     assert seen_cut == seen_ref
+
+
+# --- module namespace scan -----------------------------------------------------------
+
+
+def _reference_namespace(value: types.ModuleType, seen: set[int], depth: int, visit: Any) -> None:
+    """The module-namespace scan reading one ``(name, value)`` pair per item, as before."""
+
+    if id(value) in seen or depth >= 12:
+        return
+    seen.add(id(value))
+    items = tuple(vars(value).items())
+    kinds = {type(item) for _, item in items} - sc._NAMESPACE_INERT_TYPES
+    live = {kind for kind in kinds if not issubclass(kind, type)}
+    for name, item in items:
+        if type(item) not in live or sc._is_isinstance_hostile_deprecation_shim(item):
+            continue
+        if not isinstance(item, (torch.Tensor, *_CONTAINERS)):
+            continue
+        item = vars(value).get(name)
+        if isinstance(item, torch.Tensor) and not isinstance(item, nn.Parameter):
+            visit(item)
+        elif isinstance(item, _CONTAINERS):
+            sc._clear_container_tree_tensor_metadata(item, seen, depth + 1, visit)
+
+
+def _namespace_visits(walk: Any, module: types.ModuleType, depth: int = 0) -> tuple[Any, ...]:
+    """Return the tensor ids ``walk`` visits in ``module`` and the seen set it leaves."""
+
+    seen: set[int] = set()
+    got: list[Any] = []
+    if walk is _reference_namespace:
+        walk(module, seen, depth, got.append)
+    else:
+        walk(module, seen, depth, got.append, got.append)
+    return [id(t) for t in got], seen
+
+
+def test_namespace_scan_matches_the_paired_scan_after_every_kind_of_change() -> None:
+    """Replacing a value at constant size, adding and deleting names: same visits, same order."""
+
+    mod = types.ModuleType("fxd_namespace_probe")
+    mod.stash = 5
+    mod.names = ["a"] * 30
+    mod.cls, mod.fn, mod.param = nn.Linear, len, nn.Parameter(torch.ones(1))
+    mod.sub, mod.obj = _StrSub("s"), _Holder()
+    walk = sc._clear_module_namespace_tensor_metadata
+    for mutate in (
+        lambda: None,
+        lambda: setattr(mod, "stash", torch.ones(1)),  # constant size, value replaced
+        lambda: setattr(mod, "stash", [torch.ones(2)]),
+        lambda: setattr(mod, "late", (torch.ones(3), {"k": torch.ones(4)})),
+        lambda: delattr(mod, "names"),
+        lambda: setattr(mod, "stash", 7),
+    ):
+        mutate()
+        assert _namespace_visits(walk, mod) == _namespace_visits(_reference_namespace, mod)
+    assert _namespace_visits(walk, mod, 12) == _namespace_visits(_reference_namespace, mod, 12)
+    empty = types.ModuleType("fxd_empty_probe")
+    empty.__dict__.clear()
+    assert _namespace_visits(walk, empty) == ([], {id(empty)})
+
+
+def test_namespace_scan_matches_the_paired_scan_on_real_modules() -> None:
+    """``torch`` and ``math``: the namespaces a forward really names."""
+
+    import math
+
+    walk = sc._clear_module_namespace_tensor_metadata
+    for module in (torch, math, sc):
+        assert _namespace_visits(walk, module) == _namespace_visits(_reference_namespace, module)
 
 
 _STASH_MODULE = types.ModuleType("fxd_stash_module")
