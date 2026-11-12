@@ -20,8 +20,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
+from typing import Any
 
-from .._utils.display import _record_phase_timing, _vtimed
+from .._utils.display import _vtimed
 from ..errors._validation import MetadataInvariantError
 from . import _executor as ex
 from ._executor import StepContext
@@ -588,6 +589,21 @@ def _check_step_postcondition(ctx: StepContext, step: PipelineStep) -> None:
         )
 
 
+def _record_step_timing(trace: Any, bucket: str, elapsed_s: float) -> None:
+    """Accumulate one step-timing sample (the effect of ``_record_phase_timing``).
+
+    A step bucket gets one sample per capture, so it is looked up with ``get``
+    rather than the per-op path's ``try`` that raises a ``KeyError`` on a first sample.
+    """
+
+    timings = trace.__dict__.setdefault("_phase_timings", {})
+    bucket_stats = timings.get(bucket)
+    if bucket_stats is None:
+        bucket_stats = timings.setdefault(bucket, {"total_s": 0.0, "count": 0})
+    bucket_stats["total_s"] += elapsed_s
+    bucket_stats["count"] += 1
+
+
 def run_pipeline(ctx: StepContext) -> None:
     """Execute ``PIPELINE`` in order, skipping steps whose gate is false.
 
@@ -616,6 +632,6 @@ def run_pipeline(ctx: StepContext) -> None:
             try:
                 step.run(ctx)
             finally:
-                _record_phase_timing(trace, name, perf_counter() - start)
+                _record_step_timing(trace, name, perf_counter() - start)
         if step.postcondition is not None:
             _check_step_postcondition(ctx, step)

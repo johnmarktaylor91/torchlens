@@ -28,7 +28,8 @@ from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._quantities import Bytes, Duration, Flops
 from .._trace_core.alias_registry import register_shared_cells
 from .._trace_core.cell_states import LazyCell
-from .._trace_core.op_store import _MISSING, OpRowStore, PooledCell, row_clone_scope
+from .._trace_core.groups import GroupRef
+from .._trace_core.op_store import _CSR, _FACT, _MISSING, OpRowStore, PooledCell, row_clone_scope
 from .._utils._record_group_table import op_attr
 from . import _op_copy
 from ._op_row_release import _OP_FACADE
@@ -83,8 +84,12 @@ _ALWAYS_SHARED_FIELDS = frozenset(
 #: pinned equal by the tests); they keep going through ``getattr``.
 _INTERCEPTED_READ_FIELDS = frozenset({"grad", "out"})
 
-#: Raw cells a plain field descriptor transforms on read (lazy answer, pooled hydrate).
-_TRANSFORMED_CELLS = frozenset({LazyCell, PooledCell})
+#: Raw cell classes a generated field descriptor may transform on read (lazy answer,
+#: pooled hydrate, group view). A cell of one of these exact classes, or one of the
+#: two sentinels below (CSR dataflow, shared fact), is read through the descriptor;
+#: every other set cell is what each generated descriptor returns unchanged.
+_TRANSFORMED_CELLS = frozenset({LazyCell, PooledCell, GroupRef})
+_TRANSFORMED_SENTINELS = (_CSR, _FACT)
 
 #: ``(op class, shared fields, unread fields)`` -> per-field read plan.
 _PLANS: dict[tuple[type, frozenset[str], frozenset[str]], tuple[tuple[Any, ...], ...]] = {}
@@ -110,9 +115,10 @@ def _field_plan(
     A field whose attribute is a data descriptor on ``cls`` (and not an
     intercepted read) is read by calling the descriptor, which is what
     ``getattr`` does for it after ``Op.__getattribute__``; every other field
-    is read with ``getattr``. ``fid`` is the column id of a plain generated
-    row-cell descriptor (whose read is the raw cell unless that cell is unset,
-    lazy or pooled), else ``None``.
+    is read with ``getattr``. ``fid`` is the column id of a generated row-cell
+    descriptor (``_OP_FACADE``'s field classes: plain, relation, group, dataflow
+    and fact fields), whose read is the raw cell unless that cell is unset, of a
+    ``_TRANSFORMED_CELLS`` class or a ``_TRANSFORMED_SENTINELS`` sentinel; else ``None``.
     """
 
     key = (cls, shared, unread)
@@ -131,7 +137,7 @@ def _field_plan(
         )
         if not is_data_descriptor or field in _INTERCEPTED_READ_FIELDS:
             descriptor = None
-        plain = descriptor_type.__name__ == "_OpField" and bool(_OP_FACADE)
+        plain = descriptor is not None and bool(_OP_FACADE)
         plain = plain and descriptor_type in _OP_FACADE[0][3]
         fid = descriptor._fid if descriptor is not None and plain else None
         rows.append((field, descriptor, attr, field in shared, fid))
@@ -206,13 +212,15 @@ def _read_parent_fields(op: Op, plan: tuple[tuple[Any, ...], ...]) -> dict[str, 
     cls = type(op)
     cells = _plain_cells(op)
     shared_classes = _SHARED_CLASSES
+    transformed = _TRANSFORMED_CELLS
+    csr, fact = _TRANSFORMED_SENTINELS
     fields_dict: dict[str, Any] = {}
     for field, descriptor, attr, shared, fid in plan:
         if cells is not None and fid is not None:
             value = cells[fid]
             if value is _MISSING:
                 value = None
-            elif value.__class__ in _TRANSFORMED_CELLS:
+            elif value.__class__ in transformed or value is csr or value is fact:
                 value = _descriptor_read(descriptor, op, cls)
         elif descriptor is None:
             value = getattr(op, attr, None)

@@ -752,7 +752,7 @@ def validate_amendment(amendment: OpAmendment) -> None:
             f"registry set {schema_paths} (exact-set, ordered)"
         )
     for (path, value), (_, allowed_types) in zip(amendment.patch, schema, strict=True):
-        if any(path.startswith(prefix) for prefix in _UNPATCHABLE_PREFIXES):
+        if path.startswith(_UNPATCHABLE_PREFIXES):
             raise AmendmentValidationError(f"identity field {path!r} is unpatchable")
         if allowed_types == (object,):
             continue

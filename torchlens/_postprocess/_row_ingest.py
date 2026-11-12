@@ -130,6 +130,42 @@ def _settle_aliases(
         _write_overlay_cells(row, taken._journal.fids, record)
 
 
+#: The last layout's field-id tables: ``(layout, its names, its fid map, tables)``.
+#: ``OpStoreLayout`` is immutable (slots set once from a names tuple), so the tables
+#: are a function of that object; they are reused only while the layout, its names
+#: tuple and its fid map are the very objects they were computed from.
+_LAYOUT_TABLES: list[tuple[Any, Any, Any, tuple[Any, ...]]] = []
+
+
+def _layout_tables(layout: Any) -> tuple[Any, ...]:
+    """Return the immutable field-id tables of ``layout`` (see ``RowIngestPlan``)."""
+
+    fid_by_name: Mapping[str, int] = layout.fid_by_name
+    if _LAYOUT_TABLES:
+        cached_layout, names, fids, tables = _LAYOUT_TABLES[0]
+        if cached_layout is layout and names is layout.names and fids is fid_by_name:
+            return tables
+    tables = (
+        fid_by_name,
+        layout_keys(fid_by_name),
+        tuple(fid_by_name[name] for name in _PENDING_FIELDS),
+        tuple(
+            fid_by_name[name]
+            for name in LAYER_PASS_LOG_FIELD_ORDER
+            if name in fid_by_name and name not in _PENDING_FIELDS
+        ),
+        (fid_by_name["out_ref"], fid_by_name["grad_ref"]),
+        frozenset(fid_by_name[name] for name in _OMIT_EMPTY_JOIN_FIELDS),
+        fid_by_name["_grad_records"],
+        fid_by_name["_construction_done"],
+        fid_by_name["_source_trace_ref"],
+        fid_by_name["_is_in_conditional_body"],
+        tuple((fid_by_name[name], cls) for name, cls in _OMITTED_EMPTY_JOIN_CELLS),
+    )
+    _LAYOUT_TABLES[:] = [(layout, layout.names, fid_by_name, tables)]
+    return tables
+
+
 class RowIngestPlan:
     """The field ids row ingest writes, resolved once per ingest from the store layout."""
 
@@ -152,22 +188,20 @@ class RowIngestPlan:
     def __init__(self, layout: Any) -> None:
         """Resolve the field ids of ``layout`` (an ``OpStoreLayout``)."""
 
-        fid_by_name: Mapping[str, int] = layout.fid_by_name
-        self.fid_by_name = fid_by_name
-        self.keys = layout_keys(fid_by_name)
-        self.pending_fids = tuple(fid_by_name[name] for name in _PENDING_FIELDS)
-        self.order_fids = tuple(
-            fid_by_name[name]
-            for name in LAYER_PASS_LOG_FIELD_ORDER
-            if name in fid_by_name and name not in _PENDING_FIELDS
-        )
-        self.none_fids = (fid_by_name["out_ref"], fid_by_name["grad_ref"])
-        self.omit_empty_fids = frozenset(fid_by_name[name] for name in _OMIT_EMPTY_JOIN_FIELDS)
-        self.grad_records = fid_by_name["_grad_records"]
-        self.construction_done = fid_by_name["_construction_done"]
-        self.source_trace_ref = fid_by_name["_source_trace_ref"]
-        self.is_in_conditional_body = fid_by_name["_is_in_conditional_body"]
-        self.omit_empty = {fid_by_name[name]: cls for name, cls in _OMITTED_EMPTY_JOIN_CELLS}
+        (
+            self.fid_by_name,
+            self.keys,
+            self.pending_fids,
+            self.order_fids,
+            self.none_fids,
+            self.omit_empty_fids,
+            self.grad_records,
+            self.construction_done,
+            self.source_trace_ref,
+            self.is_in_conditional_body,
+            omit_empty,
+        ) = _layout_tables(layout)
+        self.omit_empty = dict(omit_empty)
         self.unset_fids: tuple[int, ...] | None = None
         #: This ingest's write-time intern table for ``seed_op_values`` (one trace).
         self.values: dict[Any, Any] = {}
