@@ -133,6 +133,84 @@ def detect_torch_output_alias_contract(
     )
 
 
+def plain_output_alias_semantics(
+    args: tuple[Any, ...],
+    kwargs: Mapping[str, Any],
+    raw_output: torch.Tensor,
+    fields: Mapping[str, Any],
+) -> BackendSemantics:
+    """Return :func:`detect_torch_output_alias_contract`'s answer for one bare tensor output.
+
+    The call's raw output is the single tensor ``raw_output``, so the output walk
+    yields that tensor alone: an input aliases it when it is the same object or
+    shares its storage pointer. The output's pointer is read once, under one
+    logging pause, and each comparison consumes the function-call ids the
+    per-pair check consumes (none for the same object, one when the output's
+    storage read fails, else two). ``fields`` is the op's fields dict; the
+    autograd and memory facts come from the keys the generic caller passes.
+    """
+
+    positions: list[tuple[object, torch.Tensor]] = []
+    for index, value in enumerate(args):
+        if isinstance(value, torch.Tensor):
+            positions.append((index, value))
+        elif isinstance(value, (Mapping, list, tuple)):
+            positions.extend(_iter_tensor_positions(index, value))
+    for key, value in kwargs.items():
+        if isinstance(value, torch.Tensor):
+            positions.append((key, value))
+        elif isinstance(value, (Mapping, list, tuple)):
+            positions.extend(_iter_tensor_positions(key, value))
+    return BackendSemantics(
+        backend_grad_handle=fields["grad_fn_handle"],
+        grad_fn_class_name=fields["grad_fn_class_name"],
+        autograd_memory=fields["autograd_memory"],
+        num_autograd_tensors=fields["num_autograd_tensors"],
+        mutated_input_positions=(),
+        aliased_output_inputs=_bare_output_aliases(raw_output, positions) if positions else (),
+        unknown_aliasing=False,
+        bytes_delta_at_call=fields["bytes_delta_at_call"],
+        bytes_peak_at_call=fields["bytes_peak_at_call"],
+    )
+
+
+def _bare_output_aliases(
+    raw_output: torch.Tensor, positions: list[tuple[object, torch.Tensor]]
+) -> tuple[object, ...]:
+    """Return the positions whose tensor is ``raw_output`` or shares its storage pointer."""
+
+    aliased: list[object] = []
+    logging_enabled = _state.active_capture()[1]
+    output_ptr: Any = None
+    with _state.pause_logging():
+        for position, tensor in positions:
+            if tensor is raw_output:
+                aliased.append(position)
+                continue
+            if logging_enabled:
+                _state.next_func_call_id()
+            if output_ptr is None:
+                try:
+                    output_ptr = tensor_read(raw_output, "untyped_storage")(raw_output).data_ptr()
+                except RuntimeError:
+                    output_ptr = _NO_POINTER
+            if output_ptr is _NO_POINTER:
+                continue
+            if logging_enabled:
+                _state.next_func_call_id()
+            try:
+                input_ptr = tensor_read(tensor, "untyped_storage")(tensor).data_ptr()
+            except RuntimeError:
+                continue
+            if input_ptr == output_ptr:
+                aliased.append(position)
+    return tuple(aliased)
+
+
+_NO_POINTER = object()
+"""The output pointer of a bare output whose storage read raised (no input aliases it)."""
+
+
 def _flatten_input_tensors(
     args: tuple[Any, ...],
     kwargs: Mapping[str, Any],

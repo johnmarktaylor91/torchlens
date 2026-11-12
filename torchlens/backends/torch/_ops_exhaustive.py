@@ -34,6 +34,7 @@ from ._user_grad_fn import stamp_user_grad_fn
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
+    plain_output_alias_semantics,
 )
 from .tensor_tracking import (
     _add_tensor_backward_hook,
@@ -106,6 +107,10 @@ def _emit_exhaustive_operation_events(
         )
 
     output_entries = _output_entries_with_autograd_stats(self, out_orig)
+    if plain_single_output(self, out_orig, output_entries, is_bottom_level_func):
+        call = (args, kwargs, arg_copies, kwarg_copies)  # the loop below, specialized
+        emit_plain_output(self, call, output_entries[0], fields_dict, parent_param_ops)
+        return
     _register_call_output_container_snapshot(
         self,
         out_orig,
@@ -232,21 +237,7 @@ def _emit_exhaustive_operation_events(
             keep_alias_contract,
         )
         if i == 0 and getattr(self, "track_device_memory", False):
-            # Re-key the call-level device-memory sample (observe item 15) to
-            # the committed raw label and project it onto the legacy flat
-            # fields: bytes_delta_at_call = the single-device allocated
-            # delta; bytes_peak_at_call = the absolute high-water after the
-            # call ONLY when this call observed an advance.
-            samples_store = self.__dict__.get("_device_memory_samples")
-            if isinstance(samples_store, dict):
-                call_samples = samples_store.pop(f"call:{func_call_id}", None)
-                if call_samples is not None:  # deferred import: cycle _observe
-                    from ..._observe._device_memory import flat_field_projection
-
-                    samples_store[fields_dict_onetensor["_label_raw"]] = call_samples
-                    delta_value, peak_value = flat_field_projection(call_samples)
-                    fields_dict_onetensor["bytes_delta_at_call"] = delta_value
-                    fields_dict_onetensor["bytes_peak_at_call"] = peak_value
+            _project_call_device_memory(self, func_call_id, fields_dict_onetensor)
         detect_backend_semantics = (
             detect_torch_alias_contract
             if keep_alias_contract
@@ -336,6 +327,127 @@ def _emit_exhaustive_operation_events(
         if options is not None and options.halt is not None:
             halt_ctx = _build_trace_predicate_context(self, fields_dict_onetensor, out_tensor)
             evaluate_halt_stop(self, halt_ctx, options, frontier_output=out_tensor)
+
+
+# The exhaustive emit of one bare tensor output in a plain session: a call whose raw
+# output is one exact tensor (one entry, no container) in a session asking for none of the
+# per-op extras runs the generic per-output loop's steps for it, in order and through the
+# same helpers, without the branches that cannot apply (safe copy, foreach projection,
+# edge uses, receiver relabel, halt); the output alias check is the bare-output one.
+
+
+def plain_single_output(
+    trace: "Trace", out_orig: Any, output_entries: list[Any], is_bottom_level_func: bool
+) -> bool:
+    """Return whether the call has one loggable bare tensor output and a plain session.
+
+    The output is one exact ``torch.Tensor`` with one entry and no container,
+    and ``_output_should_be_logged`` accepts it (an output it rejects takes the
+    generic loop). The session facts are read per call, as the generic emit reads
+    them, so a session that switches one on mid-forward takes the generic loop
+    from that call.
+    """
+
+    if (
+        type(out_orig) is not torch.Tensor
+        or len(output_entries) != 1
+        or output_entries[0].container_spec is not None
+    ):
+        return False
+    trace_dict = trace.__dict__
+    return not (
+        getattr(trace, "track_device_memory", False)
+        or trace_dict.get("_predicate_save_options") is not None
+        or trace._options_aten_ops == "values"
+        or trace_dict.get("track_nonfinite")
+        or trace_dict.get("_echo_session") is not None
+        or trace._options_on_nonfinite
+        or _should_keep_alias_mutation_contract(trace)
+    ) and _output_should_be_logged(out_orig, is_bottom_level_func)
+
+
+def emit_plain_output(
+    trace: "Trace",
+    call: tuple[tuple[Any, ...], dict[str, Any], tuple[Any, ...], dict[str, Any]],
+    output_entry: Any,
+    fields_dict: dict[str, Any],
+    parent_param_ops: dict[str, int],
+) -> None:
+    """Log the call's one bare tensor output, as the generic per-output loop logs it.
+
+    ``call`` is ``(args, kwargs, arg_copies, kwarg_copies)``; the dispatch has
+    already checked the output is loggable.
+    """
+
+    args, kwargs, arg_copies, kwarg_copies = call
+    out_tensor = output_entry.value
+    event_module_stack = _module_frames_from_fields(fields_dict)
+    fields_dict["container_path"] = output_entry.container_path
+    fields_dict["container_spec"] = None
+    _log_output_tensor_info(
+        trace,
+        out_tensor,
+        0,
+        args,
+        kwargs,
+        parent_param_ops,
+        fields_dict,
+        output_entry.autograd_stats,
+        False,
+    )
+    # The generic loop's internal reads (``requires_grad``, the alias storage reads).
+    with internal_scalar_read():
+        _OUTPUT_REQUIRES_GRAD[:] = (weakref.ref(out_tensor), out_tensor.requires_grad)
+        fields_dict["backend_semantics"] = plain_output_alias_semantics(
+            args, kwargs, out_tensor, fields_dict
+        )
+    fire_results = _pop_tensor_live_fire_results(out_tensor)
+    if fire_results:
+        fields_dict["fire_results"] = fire_results
+        fields_dict["is_edited"] = any(result.replaced for result in fire_results)
+    if output_entry.autograd_band is not None:
+        trace.__dict__.setdefault("_autograd_saved_bands", {})[fields_dict["_label_raw"]] = (
+            output_entry.autograd_band
+        )
+    entry = _make_layer_log_entry(
+        trace,
+        out_tensor,
+        fields_dict=fields_dict,
+        t_args=arg_copies,
+        t_kwargs=kwarg_copies,
+        activation_transform=trace._options_activation_transform,
+        event_module_stack=event_module_stack,
+        call_ref_box=[],
+    )
+    new_record = object.__getattribute__(entry, "_record")
+    if fields_dict["is_internal_source"]:  # ``_classify_new_tensor_in_trace``
+        trace.internal_source_ops.append(new_record.label_raw)
+    _tag_tensor_and_track_variations(
+        trace, out_tensor, new_record, fields_dict, arg_copies, kwarg_copies, args, kwargs
+    )
+
+
+def _project_call_device_memory(
+    self: "Trace", func_call_id: int, fields_dict: dict[str, Any]
+) -> None:
+    """Re-key the call's device-memory sample to the op's raw label and project it.
+
+    The call-level sample (observe item 15) moves to the committed raw label and
+    projects onto the legacy flat fields: ``bytes_delta_at_call`` is the
+    single-device allocated delta; ``bytes_peak_at_call`` is the absolute
+    high-water after the call only when this call observed an advance.
+    """
+
+    samples_store = self.__dict__.get("_device_memory_samples")
+    if isinstance(samples_store, dict):
+        call_samples = samples_store.pop(f"call:{func_call_id}", None)
+        if call_samples is not None:  # deferred import: cycle _observe
+            from ..._observe._device_memory import flat_field_projection
+
+            samples_store[fields_dict["_label_raw"]] = call_samples
+            delta_value, peak_value = flat_field_projection(call_samples)
+            fields_dict["bytes_delta_at_call"] = delta_value
+            fields_dict["bytes_peak_at_call"] = peak_value
 
 
 def _loggable_outputs(output_entries: Any, is_bottom_level_func: bool) -> tuple[int, bool | None]:
