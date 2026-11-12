@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1834 modules, 726023 lines, 0 modules without a docstring.
+85 packages, 1836 modules, 726245 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 62 | 23477 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 64 | 23699 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15068 |
@@ -749,7 +749,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (62 modules, 23477 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (64 modules, 23699 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -768,7 +768,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (6
 | `_conditional_child_rename` | Conditional child-label renaming for ''labeling._replace_layer_names_for_layer_entry''. | 84 |
 | `_conditional_columns` | Step 5 as a column algorithm over the building op store's integer rows. | 484 |
 | `_conditional_records` | Leaf helpers of ''finalization._build_conditional_records''. | 277 |
-| `_executor` | Postprocess step adapters: ''StepContext'' and one function per pipeline step. | 427 |
+| `_executor` | Postprocess step adapters: ''StepContext'' and one function per pipeline step. | 471 |
 | `_final_info_columns` | Step 9 by column: the per-op part of final layer info over the building rows. | 391 |
 | `_final_info_rename` | Step 9 by column: raw-to-final label renaming over the building rows. | 267 |
 | `_finished_marks` | Step 17 body: mark every final op finished. | 79 |
@@ -791,7 +791,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (6
 | `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 150 |
 | `_output_payload` | Whether a model-output row rides its producer's retained payload (HONESTY 13-R1). | 153 |
 | `_parent_params_clear` | Clear the Parameter tensor references ops hold once param finalization is done. | 59 |
-| `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 599 |
+| `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 621 |
 | `_pre_hook_provenance` | Pre-hook provenance of one module call, with raw producer labels finalized. | 70 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 400 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 407 |
@@ -804,10 +804,12 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (6
 | `_site_join` | Site-key JOIN (guarded, witness-corroborated, verdict-tiered) and the | 294 |
 | `_site_key` | Re-export shim: the site-key minter moved to :mod:'torchlens._data_classes._site_key'. | 34 |
 | `_step7_rows` | Step 7 over op rows: site keys, call-site grouping, pass numbers and the contract. | 385 |
+| `_step_views` | Per-op field reads for the finishing steps, one column at a time. | 114 |
 | `_streamed_tensor_types` | Wire tensor identity and dtype lookup for streamed-reference finalization. | 51 |
+| `_undecorate` | Step 12 body: strip TorchLens tensor metadata from every saved tensor. | 61 |
 | `ast_branches` | AST indexing for boolean-context classification and branch attribution. | 2202 |
 | `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 782 |
-| `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1427 |
+| `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1408 |
 | `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 744 |
 | `incremental` | Opt-in incremental enrichments for fastlog recordings. | 87 |
 | `labeling` | Steps 8, 9 and 11: Label mapping, final info logging, renaming, and lookup keys. | 866 |
