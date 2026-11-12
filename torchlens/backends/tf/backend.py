@@ -6,7 +6,6 @@ import random
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from functools import partial
 from typing import Any, Literal, cast
 
 from ... import _state
@@ -16,7 +15,7 @@ from ..._data_classes.param import ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
 from ..._ir.capture_events import CaptureEvents
-from ..._output_slot import returned
+from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     _STATIC_SELECTOR_KINDS,
@@ -49,7 +48,9 @@ from .._options import (
     resolve_optional_capture_field,
 )
 from ..registry import BackendUnsupportedError, get_backend_spec
+from ._halt import refuse_static_halt
 from .funcgraph import capture_static_funcgraph
+from .interventions import finish_halt, run_wired_session, wire_eager_session
 from .modules import TFModuleTree, discover_tf_module_tree, tf_param_logs
 from .op_callback_capture import TFEagerCaptureSession, warm_up_tf_callable
 
@@ -217,12 +218,13 @@ class TFBackend:
         grad_options = default_if_missing(grad_options, None)
         intervene = default_if_missing(intervene, None)
         save_predicate = _pop_tf_save_predicate({"save": save})
-        facet_recipes = _reject_unimplemented_intervention_options(extra_kwargs)
+        halt = pop_stop_directive(extra_kwargs)
+        facet_recipes = pop_facet_recipes(extra_kwargs)
         _reject_extra_kwargs(extra_kwargs)
-        if intervene is not None and grad_options is not None:
+        if (intervene is not None or halt is not None) and grad_options is not None:
             raise BackendUnsupportedError(
-                "tf backend does not combine intervene= with grad_options=; the "
-                "derived-gradient replay reruns the un-intervened forward and would "
+                "tf backend does not combine intervene= or stop_after= with grad_options=; "
+                "the derived-gradient replay reruns the full un-intervened forward and would "
                 "always refuse on output divergence. Capture the two surfaces in "
                 "separate traces."
             )
@@ -263,6 +265,7 @@ class TFBackend:
                     "wrap layer cannot substitute into. Trace an eager-executable "
                     "callable instead."
                 )
+            refuse_static_halt(halt, plan.reason)
             trace = self._new_trace(
                 model=model,
                 output_device=output_device,
@@ -369,27 +372,7 @@ class TFBackend:
             save_payloads=True,
             save_predicate=save_predicate,
         )
-        intervention_plan = None
-        if intervene is not None:
-            from .interventions import (
-                apply_tf_module_intervention,
-                audit_tf_site_reachability,
-                normalize_tf_interventions,
-                tf_intervention_wrap,
-            )
-
-            intervention_plan = normalize_tf_interventions(intervene, tf)
-            if intervention_plan.module_sites and module_tree is None:
-                raise BackendUnsupportedError(
-                    "tf module-boundary interventions (tl.module/tl.in_module "
-                    "conditions) require object-module attribution; this capture "
-                    "entry discovered no Keras/tf.Module tree."
-                )
-            # The session calls the hook as (frame, module_type, output,
-            # module_stack): the substitution's own trailing parameters.
-            session.module_exit_hook = partial(
-                apply_tf_module_intervention, intervention_plan, session, tf, trace
-            )
+        wiring = wire_eager_session(tf, trace, session, intervene, halt, module_tree)
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
         # Admission-locked publication: a raw save/restore swap here silently
@@ -398,12 +381,7 @@ class TFBackend:
         # restore, wedging later admissions. Concurrent capture now refuses
         # typed, matching the torch-vs-torch contract.
         with _state.publish_active_trace(trace):
-            if intervention_plan is not None:
-                with tf_intervention_wrap(tf, intervention_plan, session):
-                    result = session.run()
-                audit_tf_site_reachability(intervention_plan, session)
-            else:
-                result = session.run()
+            result = run_wired_session(tf, session, wiring)
         if save_predicate is not None and session.save_predicate_match_count == 0:
             # TF gates retention per-op (the shared post-finalization resolver
             # never runs here), so the zero-match disclosure fires from the
@@ -412,10 +390,12 @@ class TFBackend:
             warn_zero_match_save_predicate("tf")
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
 
-        trace._output_slot = returned(result.output)
+        signal = result.stop_signal
+        trace._output_slot = stopped(signal.reason) if signal else returned(result.output)
         trace.transformed_output = (
             output_transform(result.output) if callable(output_transform) else None
         )
+        finish_halt(trace, wiring, signal)
         trace.capture_events = result.events
         trace._tf_unresolved_producers = result.unresolved_producers
         trace._tf_init_op_labels = result.init_op_labels
@@ -924,37 +904,6 @@ class TFBackend:
             return True
         generic_function_type = getattr(tf.types.experimental, "GenericFunction", None)
         return bool(generic_function_type is not None and isinstance(value, generic_function_type))
-
-
-def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> Any:
-    """Refuse ``stop_after=`` and pop the facet recipes the tf preview attaches.
-
-    The ``can_intervene`` flag admits ``intervene=`` and ``stop_after=`` through the
-    shared option gate, so the unimplemented ``stop_after=`` refuses typed here in the
-    capture path instead of in the policy tables (where a True flag would classify it
-    as a self-contradictory registration). ``facets=`` is backend-neutral (the
-    ``facet_recipes`` record): its value is popped here and snapshotted onto the
-    finished trace.
-
-    Parameters
-    ----------
-    kwargs
-        Extra public kwargs forwarded to the TensorFlow backend.
-
-    Returns
-    -------
-    Any
-        The facet recipes to attach, or ``None`` when none were requested.
-    """
-
-    halt_value = pop_stop_directive(kwargs)
-    if halt_value is not None:
-        raise BackendUnsupportedError(
-            "tf backend interventions support intervene= only; trace(stop_after=...) needs "
-            "partial-forward finalization semantics the tf preview does not "
-            "implement. Use the PyTorch backend for stop_after."
-        )
-    return pop_facet_recipes(kwargs)
 
 
 def _reject_extra_kwargs(kwargs: dict[str, Any]) -> None:

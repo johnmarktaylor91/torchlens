@@ -162,3 +162,63 @@ __all__ = [
     "get_tf_capability_snapshot",
     "mark_tf_capability_missing",
 ]
+
+
+#: TensorFlow's generated op-wrapper modules. Every Python-issued eager op runs
+#: through one of these functions, so wrapping them presents nearly every op to
+#: the intervention layer (op callbacks themselves are read-only).
+_GEN_OP_MODULE_NAMES = (
+    "tensorflow.python.ops.gen_math_ops",
+    "tensorflow.python.ops.gen_nn_ops",
+    "tensorflow.python.ops.gen_array_ops",
+    "tensorflow.python.ops.gen_image_ops",
+    "tensorflow.python.ops.gen_linalg_ops",
+    "tensorflow.python.ops.gen_special_math_ops",
+)
+
+#: Internal TensorFlow op modules that re-export generated wrappers by name.
+_OP_NAMESPACE_MODULE_NAMES = (
+    "tensorflow.python.ops.math_ops",
+    "tensorflow.python.ops.array_ops",
+    "tensorflow.python.ops.nn_ops",
+    "tensorflow.python.ops.nn_impl",
+)
+
+
+def _import_present(names: tuple[str, ...]) -> tuple[Any, ...]:
+    """Import each named private TensorFlow module that exists (feature detection)."""
+
+    modules = []
+    for name in names:
+        try:
+            modules.append(importlib.import_module(name))
+        except ImportError:
+            continue
+    return tuple(modules)
+
+
+def get_tf_gen_op_modules() -> tuple[Any, ...]:
+    """Return the generated op-wrapper modules this TensorFlow provides.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Imported ``gen_*_ops`` modules; empty when TensorFlow lays them out
+        differently. Nothing degrades silently then: the curated public entry
+        points still apply, and the fail-closed reachability audit refuses a
+        site whose ops no wrapper presented.
+    """
+
+    return _import_present(_GEN_OP_MODULE_NAMES)
+
+
+def get_tf_op_namespace_modules() -> tuple[Any, ...]:
+    """Return internal op modules that hold direct references to generated wrappers.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Imported internal op modules that exist in this TensorFlow.
+    """
+
+    return _import_present(_OP_NAMESPACE_MODULE_NAMES)

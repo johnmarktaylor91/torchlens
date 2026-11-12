@@ -21,14 +21,18 @@ from ..._ir.events import (
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DtypeRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ...recording._halt import StopSignal
 from ...recording._types import CaptureSpec
+from ._callback_attrs import _attrs_to_public_dict, _attrs_to_raw_dict, _normalize_op_type
 from ._tensor_probe import (
     _bool_value,
     _classify_source_tensor,
+    _is_scalar_bool_tensor,
     _is_scalar_bool_tensor_ref,
     _is_tf_tensor,
     _iter_tf_tensors,
     _nbytes_from_tensor,
+    _scalar_bool_value,
     _shape_tuple,
     _tensor_ref_key,
 )
@@ -175,6 +179,8 @@ class TFCaptureResult:
         Captured op histogram.
     op_captures
         Per-output callback records used by replay validation.
+    stop_signal
+        The ``stop_after`` halt that ended the forward early, or ``None``.
     """
 
     output: Any
@@ -184,10 +190,20 @@ class TFCaptureResult:
     init_op_labels: tuple[str, ...]
     op_type_counts: dict[str, int]
     op_captures: tuple[TFOpCapture, ...]
+    stop_signal: StopSignal | None = None
 
 
 class TFEagerCaptureSession:
-    """Stateful TensorFlow eager op-callback capture session."""
+    """Stateful TensorFlow eager op-callback capture session.
+
+    The capture entry may set two per-callback observers on an instance:
+    ``output_hook`` sees each callback's recorded ``(label_raw, context, tensor)``
+    batch after its events are appended (halt, value-dependent edits), and
+    ``code_context_fn`` returns the user frames that ran the op (source lines).
+    """
+
+    output_hook: Callable[[list[tuple[str, RecordContext, Any]]], None] | None = None
+    code_context_fn: Callable[[], tuple[Any, ...]] = tuple
 
     def __init__(
         self,
@@ -285,15 +301,21 @@ class TFEagerCaptureSession:
                 graph=graph,
             )
 
+        stop_signal: StopSignal | None = None
         callback_module.add_op_callback(callback)
         try:
             with patched_tf_module_stack(
                 self.module_tree, self.tf, self.module_stack, returns_hook(self)
             ):
                 output = self.callable_obj(*self.args, **self.kwargs)
+        except StopSignal as signal:
+            # stop_after: the frontier op's events were appended before the raise,
+            # so the captured prefix ends at it; post-frontier user code never ran.
+            stop_signal, output = signal, signal.frontier_output
         finally:
             callback_module.remove_op_callback(callback)
         return TFCaptureResult(
+            stop_signal=stop_signal,
             output=output,
             events=self.events,
             source_records=tuple(self.source_records),
@@ -348,6 +370,7 @@ class TFEagerCaptureSession:
         if not output_tensors:
             return
         labels = self.events.reserve_label_block(op_type_text.lower(), len(output_tensors))
+        recorded: list[tuple[str, RecordContext, Any]] = []
         for output_index, (label, output) in enumerate(zip(labels, output_tensors, strict=True)):
             record_context = self._record_context(
                 label=label,
@@ -376,25 +399,40 @@ class TFEagerCaptureSession:
                 record_context=record_context,
             )
             self.events.append(event)
-            op_capture = TFOpCapture(
-                label_raw=label.label_raw,
-                op_type=op_type_text,
-                attrs=_attrs_to_raw_dict(attrs),
-                output_index=output_index,
-                inputs=input_captures,
-                output_tensor=output,
-            )
-            self.op_captures.append(op_capture)
-            if self.output_tap is not None:
-                self.output_tap(
-                    op_capture,
-                    tuple(f"{frame.address}:{frame.call_index}" for frame in self.module_stack),
+            self._record_op_capture(
+                TFOpCapture(
+                    label_raw=label.label_raw,
+                    op_type=op_type_text,
+                    attrs=_attrs_to_raw_dict(attrs),
+                    output_index=output_index,
+                    inputs=input_captures,
+                    output_tensor=output,
                 )
-            ref_key = _tensor_ref_key(output)
-            if ref_key is not None:
-                self.producer_by_ref[ref_key] = label.label_raw
-            if op_type_text in _INIT_OP_TYPES:
-                self.init_op_labels.append(label.label_raw)
+            )
+            recorded.append((label.label_raw, record_context, output))
+        if self.output_hook is not None:
+            self.output_hook(recorded)
+
+    def _record_op_capture(self, op_capture: TFOpCapture) -> None:
+        """Keep one output's replay record and index its tensor's producer label.
+
+        Parameters
+        ----------
+        op_capture
+            Replay record for one callback output.
+        """
+
+        self.op_captures.append(op_capture)
+        if self.output_tap is not None:
+            self.output_tap(
+                op_capture,
+                tuple(f"{frame.address}:{frame.call_index}" for frame in self.module_stack),
+            )
+        ref_key = _tensor_ref_key(op_capture.output_tensor)
+        if ref_key is not None:
+            self.producer_by_ref[ref_key] = op_capture.label_raw
+        if op_capture.op_type in _INIT_OP_TYPES:
+            self.init_op_labels.append(op_capture.label_raw)
 
     def _event_for_output(
         self,
@@ -468,7 +506,7 @@ class TFEagerCaptureSession:
                 func_name=op_type_text,
                 func_qualname=op_type_text,
                 func_call_id=label.raw_index,
-                code_context=(),
+                code_context=self.code_context_fn(),
                 func_duration=None,
                 flops_forward=None,
                 flops_backward=None,
@@ -627,9 +665,8 @@ class TFEagerCaptureSession:
             parent_labels_raw=tuple(parent.parent_label_raw for parent in parents),
             is_output_parent=False,
             backend_requires_isolation=False,
-            is_scalar_bool=_shape_tuple(output) == ()
-            and "bool" in str(getattr(output, "dtype", "")),
-            bool_value=None,
+            is_scalar_bool=_is_scalar_bool_tensor(output),
+            bool_value=_scalar_bool_value(output),
         )
 
     def _should_save_payload(self, record_context: RecordContext) -> bool:
@@ -997,75 +1034,6 @@ def _source_function_ref(kind: str, raw_index: int) -> FunctionCallRef:
         is_inplace=False,
         func_config=(),
     )
-
-
-def _normalize_op_type(op_type: Any) -> str:
-    """Normalize TensorFlow callback op type to text.
-
-    Parameters
-    ----------
-    op_type
-        Raw callback op type.
-
-    Returns
-    -------
-    str
-        Normalized operation type.
-    """
-
-    if isinstance(op_type, bytes):
-        return op_type.decode("utf-8", errors="replace")
-    return str(op_type)
-
-
-def _attrs_to_public_dict(attrs: tuple[Any, ...] | dict[str, Any]) -> dict[str, str]:
-    """Convert TensorFlow attrs into a compact serializable diagnostic mapping.
-
-    Parameters
-    ----------
-    attrs
-        Raw callback attrs.
-
-    Returns
-    -------
-    dict[str, str]
-        Stringified attributes.
-    """
-
-    if isinstance(attrs, dict):
-        return {str(key): repr(value) for key, value in attrs.items()}
-    if isinstance(attrs, tuple):
-        return {str(index): repr(value) for index, value in enumerate(attrs)}
-    return {}
-
-
-def _attrs_to_raw_dict(attrs: tuple[Any, ...] | dict[str, Any]) -> dict[str, Any]:
-    """Convert TensorFlow callback attrs into a raw replay mapping.
-
-    Parameters
-    ----------
-    attrs
-        Raw callback attrs.
-
-    Returns
-    -------
-    dict[str, Any]
-        Attribute mapping preserving runtime values for raw-op replay.
-    """
-
-    if isinstance(attrs, dict):
-        return {str(key): value for key, value in attrs.items()}
-    if isinstance(attrs, tuple):
-        result: dict[str, Any] = {}
-        iterator = iter(attrs)
-        for key in iterator:
-            try:
-                value = next(iterator)
-            except StopIteration:
-                break
-            result[str(key)] = value
-        return result
-    return {}
 
 
 def _snapshot_tensor(tensor: Any) -> object | None:

@@ -230,3 +230,48 @@ def _bool_value(payload: object | None) -> bool | None:
     if isinstance(payload, bool):
         return payload
     return None
+
+
+def _is_scalar_bool_tensor(tensor: Any) -> bool:
+    """Return whether a live TensorFlow tensor is a scalar bool.
+
+    Parameters
+    ----------
+    tensor
+        Eager TensorFlow tensor.
+
+    Returns
+    -------
+    bool
+        True for scalar bool tensors.
+    """
+
+    return _shape_tuple(tensor) == () and "bool" in str(getattr(tensor, "dtype", ""))
+
+
+def _scalar_bool_value(tensor: Any) -> bool | None:
+    """Return a live scalar bool tensor's concrete value (eager values are concrete).
+
+    ``.numpy()`` on an eager tensor issues no TensorFlow op, so this is safe inside
+    an op callback. Non-scalar or non-bool tensors return ``None``, as on torch.
+
+    Parameters
+    ----------
+    tensor
+        Eager TensorFlow tensor.
+
+    Returns
+    -------
+    bool | None
+        The scalar's value, or ``None``.
+    """
+
+    if not _is_scalar_bool_tensor(tensor):
+        return None
+    numpy_method = getattr(tensor, "numpy", None)
+    if not callable(numpy_method):
+        return None
+    try:
+        return _bool_value(np.asarray(numpy_method()))
+    except Exception:
+        return None
