@@ -259,7 +259,17 @@ def _sharing(cache: dict[Any, Any]) -> tuple[Any, ...]:
     return tuple(shape)
 
 
-def _cache(cache: dict[Any, Any]) -> dict[Any, Any]:
+def _named(obj: Any, modules: dict[int, str]) -> Any:
+    """``obj`` with each module id (each run builds its own model) replaced by the module's name."""
+
+    if isinstance(obj, (tuple, list)):
+        return type(obj)(_named(item, modules) for item in obj)
+    if type(obj) is int and obj in modules:
+        return ("module", modules[obj])
+    return obj
+
+
+def _cache(cache: dict[Any, Any], modules: dict[int, str]) -> dict[Any, Any]:
     projected: dict[Any, Any] = {}
     for key, value in cache.items():
         if key == entry_module._ENTRY_SITES_KEY:
@@ -267,9 +277,9 @@ def _cache(cache: dict[Any, Any]) -> dict[Any, Any]:
         if key == _CODE_CONTEXT_ANCHOR_KEY:
             projected[key] = value[1:]
         elif isinstance(value, tuple) and all(hasattr(v, "line_number") for v in value):
-            projected[key] = _frames(value)
+            projected[_named(key, modules)] = _frames(value)
         else:
-            projected[key] = value
+            projected[_named(key, modules)] = _named(value, modules)
     return projected
 
 
@@ -314,8 +324,8 @@ def _run(
             for index, call in enumerate(module.ops.values())
         ],
         "ops": [(op.label, _frames(op.source.frames)) for op in trace.ops.values()],
-        "layers": [layer.label for layer in trace.layers.values()],
-        "cache": _cache(cache),
+        "layers": [(layer.layer_label, layer.num_passes) for layer in trace.layers.values()],
+        "cache": _cache(cache, {id(m): name for name, m in model.named_modules()}),
         "sharing": _sharing(cache),
         "hits": hits[0],
     }
