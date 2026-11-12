@@ -217,7 +217,9 @@ def _classify_arg_component(
     if known is not None and (id(value) in known or _label_free(value)):
         label = known.get(id(value))
     # A Parameter mutated in place earlier in the pass replays from its mutation op.
-    elif not isinstance(value, torch.nn.Parameter) or mutated_parameter_label(value) is not None:
+    elif (
+        type(value) is not torch.nn.Parameter and not isinstance(value, torch.nn.Parameter)
+    ) or mutated_parameter_label(value) is not None:
         if trace is None:
             label = get_tensor_label(value)
         else:
@@ -240,7 +242,7 @@ def _classify_arg_component(
 def _unlabeled_tensor_literal(value: torch.Tensor) -> LiteralTensor:
     """Template a tensor argument that has no live parent label as a literal."""
 
-    if isinstance(value, torch.nn.Parameter):
+    if type(value) is torch.nn.Parameter or isinstance(value, torch.nn.Parameter):
         # snapshot the model-prep barcode NOW (model provably alive) --
         # session cleanup strips the weak registry meta before a deferred save,
         # so the template itself must carry the capture-time identity.
@@ -272,6 +274,7 @@ def _build_args_template(
     trace: "Trace | None" = None,
     *,
     func_name: str | None = None,
+    layout: Any = None,
 ) -> CapturedArgTemplate:
     """Build a replay template from original function args and kwargs.
 
@@ -287,6 +290,10 @@ def _build_args_template(
         Original keyword args.
     trace
         Active trace used to reject stale parent labels.
+    layout
+        The call's flat ``CallLayout`` (selected for this callable, name and exact
+        argument types), which then holds the template plan; ``None`` looks the
+        plan up by the call's layout key.
 
     Returns
     -------
@@ -295,7 +302,8 @@ def _build_args_template(
     """
 
     known = arg_slot_labels(trace, args, kwargs)
-    planned = planned_args_template(_TEMPLATE_PARTS, (func, func_name, args, kwargs), trace, known)
+    call = (func, func_name, args, kwargs)
+    planned = planned_args_template(_TEMPLATE_PARTS, call, trace, known, layout)
     if planned is not None:
         return planned
     notes: list[str] = []

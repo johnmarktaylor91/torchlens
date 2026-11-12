@@ -61,6 +61,9 @@ class CallLayout:
     mutates_receiver: bool | None = None
     #: The guard key's type part, ``(argument types, keyword names, keyword types)``.
     types: tuple[Any, ...] = ((), (), ())
+    #: The replay template plan of this layout (``_args_template_cache``), built on
+    #: first use; the layout's guard is the template plan's key.
+    template_plan: tuple[Any, ...] | None = None
 
 
 def _is_flat_type(value_type: type) -> bool:

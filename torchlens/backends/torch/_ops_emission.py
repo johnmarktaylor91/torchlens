@@ -560,8 +560,8 @@ def _planned_witness(
     recorded_parent_labels: set[str] | None = None
     for slot in layout.tensor_slots:
         value = args[slot[1]] if slot[0] == "args" else kwargs[slot[1]]
-        fact = slot_fact(facts, slot, value)
-        if fact is None or not fact.known_provenance:
+        fact = facts.get(slot)  # ``slot_fact`` inline: the snapshot slot of this very value
+        if fact is None or fact.value_id != id(value) or not fact.known_provenance:
             return None
         if fact.param_unmutated:
             if fact.param_validated and not any(value is p for p in recorded_parent_params):

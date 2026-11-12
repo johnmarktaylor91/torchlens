@@ -140,34 +140,40 @@ def planned_args_template(
     call: tuple[Callable[..., Any], str | None, tuple[Any, ...], dict[str, Any]],
     trace: "Trace | None",
     known: dict[int, str | None] | None,
+    holder: Any = None,
 ) -> Any:
     """Return the call's replay template through its layout's plan, or ``None``.
 
     ``call`` is ``(func, func_name, args, kwargs)``. ``None`` (build it the general
     way) when the capture holds no raw-graph workspace. The result equals
-    ``_build_args_template(func, args, kwargs, trace, func_name=...)``.
+    ``_build_args_template(func, args, kwargs, trace, func_name=...)``. A flat call's
+    ``CallLayout`` (``holder``) keeps the plan: its guard is the plan's key.
     """
 
     func, func_name, args, kwargs = call
-    workspace = _peek_raw_graph_workspace(trace)
-    if workspace is None or trace is None:
+    if holder is not None and trace is not None:
+        plan = holder.template_plan
+        if plan is None:
+            plan = holder.template_plan = _new_plan(parts, func, func_name, trace, (args, kwargs))
+    elif (workspace := _peek_raw_graph_workspace(trace)) is None or trace is None:
         return None
-    layout: tuple[Any, ...] = (
-        (
-            id(func),
-            func_name,
-            tuple(map(type, args)),
-            tuple(kwargs),
-            tuple(map(type, kwargs.values())),
+    else:
+        layout: tuple[Any, ...] = (
+            (
+                id(func),
+                func_name,
+                tuple(map(type, args)),
+                tuple(kwargs),
+                tuple(map(type, kwargs.values())),
+            )
+            if kwargs
+            else (id(func), func_name, tuple(map(type, args)))
         )
-        if kwargs
-        else (id(func), func_name, tuple(map(type, args)))
-    )
-    plans = workspace._args_template_plans
-    plan = plans.get(layout)
-    if plan is None or plan[0] is not func:
-        plan = _new_plan(parts, func, func_name, trace, (args, kwargs))
-        plans[layout] = plan
+        plans = workspace._args_template_plans
+        plan = plans.get(layout)
+        if plan is None or plan[0] is not func:
+            plan = _new_plan(parts, func, func_name, trace, (args, kwargs))
+            plans[layout] = plan
     _, fields, arg_branches, kwarg_plan = plan
     notes: list[str] = []
     scope = (trace, known)

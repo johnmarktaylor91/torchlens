@@ -6,6 +6,7 @@ changing how a call's arguments are scanned edits this module alone.
 :func:`_scan_call_arguments` runs inside the shared-fields builder's alias binding.
 """
 
+import operator
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -62,6 +63,18 @@ __all__ = (
     "snapshot_arg_slots",
 )
 
+# ``isinstance(value, torch.nn.Parameter)`` runs the Parameter metaclass's Python
+# ``__instancecheck__``: true for a Parameter, or for any tensor with a truthy
+# ``_is_param``, else the ordinary type test. The per-tensor sites below decide the
+# two exact types the scan meets (an exact Tensor subclasses nothing, so only its
+# flag counts) and keep ``isinstance`` for every other type: the same answer.
+_PARAMETER = torch.nn.Parameter
+_TENSOR = torch.Tensor
+#: Exact types that are never an ``AsyncCollectiveTensor`` (a strict Tensor subclass).
+_PLAIN_TENSOR_TYPES = frozenset({_TENSOR, _PARAMETER})
+#: The tensor of a ``(kind, key, tensor, template_visited)`` slot item.
+_ITEM_VALUE = operator.itemgetter(2)
+
 
 def _scan_call_arguments(
     self: "Trace", call: _SlotCall, layer_type: str
@@ -89,7 +102,16 @@ def _scan_call_arguments(
         arg_tensors, arg_parameters, tensors_to_resolve = scanned
     # Inline, not a helper: once per op (tests/test_capture_row_commit_cost.py pins calls).
     for tensor in tensors_to_resolve:
-        if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
+        kind = type(tensor)
+        if (
+            kind is _PARAMETER
+            or (
+                getattr(tensor, "_is_param", False)
+                if kind is _TENSOR
+                else isinstance(tensor, _PARAMETER)
+            )
+            or get_tensor_label(tensor) is not None
+        ):
             continue
         if func_name in _RECEIVER_REBIND_NAMES and _repin_rebound_receiver(self, args, tensor):
             continue
@@ -214,7 +236,8 @@ def _unvalidated_provenance(
 ) -> bool:
     """Return ``_tensor_has_known_provenance`` past its prepared-Parameter rung."""
 
-    if _async_collective_elem(value) is not None:
+    # An exact Tensor or Parameter is never an AsyncCollectiveTensor (a strict subclass).
+    if type(value) not in _PLAIN_TENSOR_TYPES and _async_collective_elem(value) is not None:
         return _tensor_has_known_provenance(trace, value)
     meta = read.meta
     if meta is None:
@@ -234,7 +257,12 @@ def _object_facts(trace: "Trace", value: Any, scope: _SnapshotScope) -> tuple[An
     Returns the trailing :class:`_ArgSlot` fields, from ``label`` on.
     """
 
-    is_param = isinstance(value, torch.nn.Parameter)
+    kind = type(value)
+    is_param = kind is _PARAMETER or (
+        bool(getattr(value, "_is_param", False))
+        if kind is _TENSOR
+        else isinstance(value, _PARAMETER)
+    )
     meta = get_tensor_meta(value)
     gate_label = mutated_parameter_label(value) if is_param else get_tensor_label(value)
     live_label = gate_label if gate_label is not None and gate_label in scope.live else None
@@ -272,23 +300,34 @@ def snapshot_arg_slots(
     workspace = _peek_raw_graph_workspace(trace)
     if not items or workspace is None:
         return ()
-    templates_on = templates_requested(trace)
+    # Built with C-level set and map calls, not comprehensions: once per op.
+    clear_ids = set(map(id, arg_tensors))
     # A flat layout without an ``out`` keyword has no ``out=`` destination.
-    out_ids = _out_destination_ids(call.kwargs) if layout is None or layout.has_out else set()
-    scope = _SnapshotScope(
-        live=trace.capture_events.live_index.by_raw_label,
-        clear_ids=frozenset({id(t) for t in arg_tensors} | out_ids),
-        visited_ids=frozenset(id(v) for _, _, v, seen in items if seen and templates_on),
-    )
+    if layout is None or layout.has_out:
+        clear_ids |= _out_destination_ids(call.kwargs)
+    if not templates_requested(trace):
+        visited_ids: set[int] = set()
+    elif layout is None:
+        visited_ids = {id(value) for _, _, value, seen in items if seen}
+    else:
+        # Every tensor of a flat call is a top-level value the template walk reaches.
+        visited_ids = set(map(id, map(_ITEM_VALUE, items)))
+    scope = _SnapshotScope(trace.capture_events.live_index.by_raw_label, clear_ids, visited_ids)
     facts: dict[int, tuple[Any, ...]] = {}
-    slots = []
+    slot_list = []
+    by_key = {}
+    labels: dict[int, str | None] = {}
     for kind, key, value, _visited in items:
-        if id(value) not in facts:
-            facts[id(value)] = _object_facts(trace, value, scope)
-        slots.append(_ArgSlot(kind, key, id(value), *facts[id(value)]))
-    by_key = {(slot.kind, slot.key): slot for slot in slots}
-    workspace._pending_arg_slots = _SlotContext(call.args, call.kwargs, tuple(slots), by_key)
-    return tuple(slots)
+        value_facts = facts.get(id(value))
+        if value_facts is None:
+            value_facts = facts[id(value)] = _object_facts(trace, value, scope)
+            labels[id(value)] = value_facts[0]
+        slot = _ArgSlot(kind, key, id(value), *value_facts)
+        slot_list.append(slot)
+        by_key[(kind, key)] = slot
+    slots = tuple(slot_list)
+    workspace._pending_arg_slots = _SlotContext(call.args, call.kwargs, slots, by_key, labels)
+    return slots
 
 
 def _set_arg_template_fields(
@@ -299,7 +338,7 @@ def _set_arg_template_fields(
     """Seed the replay argument templates and the portable function identity of one call."""
     if templates_requested(self):
         captured_template = _build_args_template(
-            call.func, call.args, call.kwargs, self, func_name=call.func_name
+            call.func, call.args, call.kwargs, self, func_name=call.func_name, layout=call.layout
         )
         fields_dict["args_template"] = captured_template
         fields_dict["kwargs_template"] = captured_template if call.kwargs else None

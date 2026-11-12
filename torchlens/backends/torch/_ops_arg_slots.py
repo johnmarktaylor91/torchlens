@@ -21,7 +21,7 @@ derivation reads; nothing between the snapshot and the witness relabels an argum
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -85,6 +85,8 @@ class _SlotContext:
     kwargs: dict[str, Any]
     slots: tuple[_ArgSlot, ...]
     by_key: dict[SlotKey, _ArgSlot]
+    #: Each slot tensor's ``label`` by object id (read-only for its readers).
+    labels: dict[int, str | None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,8 +94,8 @@ class _SnapshotScope:
     """Per-op inputs of the snapshot: live labels and which tensors get cleared."""
 
     live: Mapping[str, Any]
-    clear_ids: frozenset[int]
-    visited_ids: frozenset[int]
+    clear_ids: AbstractSet[int]
+    visited_ids: AbstractSet[int]
 
 
 def _peek_raw_graph_workspace(trace: Trace | None) -> RawGraphWorkspace | None:
@@ -189,8 +191,12 @@ def _session_parent_labels(read: _LabelRead, live: Mapping[str, Any]) -> tuple[s
 def _current_context(trace: Trace | None, args: Any, kwargs: Any) -> _SlotContext | None:
     """Return the slot context recorded for exactly this call's arguments, if any."""
 
-    workspace = _peek_raw_graph_workspace(trace)
-    context = None if workspace is None else workspace._pending_arg_slots
+    # ``_peek_raw_graph_workspace`` inline (three reads per op): no trace, no
+    # workspace or a workspace already popped all read as "no context".
+    try:
+        context = trace._raw_graph_ws._pending_arg_slots  # type: ignore[union-attr]
+    except AttributeError:
+        return None
     if context is None or context.args is not args or context.kwargs is not kwargs:
         return None
     return context
@@ -271,10 +277,13 @@ def slot_positions_by_label(
 
 
 def arg_slot_labels(trace: Trace | None, args: Any, kwargs: Any) -> dict[int, str | None] | None:
-    """Return the current op's snapshot labels by tensor id, or ``None`` to read live."""
+    """Return the current op's snapshot labels by tensor id, or ``None`` to read live.
+
+    The dict is the context's own: callers read it and never change it.
+    """
 
     context = _current_context(trace, args, kwargs)
-    return None if context is None else {slot.value_id: slot.label for slot in context.slots}
+    return None if context is None else context.labels
 
 
 def retire_arg_slots(trace: Trace) -> None:
