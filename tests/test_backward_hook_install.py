@@ -150,7 +150,9 @@ def test_handle_free_route_shares_the_dict_in_registration_order(routes: tuple[s
     keys = list(y._backward_hooks)
     assert keys == sorted(keys)
     assert len(keys) == len(routes)
-    assert all(key == hook_id for key, hook_id in zip(keys, ids) if hook_id is not None)
+    assert all(
+        key == hook_id for key, hook_id in zip(keys, ids, strict=True) if hook_id is not None
+    )
     y.sum().backward()
     assert order == [f"{route}{index}" for index, route in enumerate(routes)]
     assert torch.equal(x.grad, torch.full_like(x, 2.0))
