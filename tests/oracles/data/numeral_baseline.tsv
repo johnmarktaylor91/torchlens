@@ -3793,7 +3793,6 @@ docs-md	docs/maintainers/where.md	359
 docs-md	docs/maintainers/where.md	36
 docs-md	docs/maintainers/where.md	360
 docs-md	docs/maintainers/where.md	361
-docs-md	docs/maintainers/where.md	362
 docs-md	docs/maintainers/where.md	364
 docs-md	docs/maintainers/where.md	365
 docs-md	docs/maintainers/where.md	366
@@ -3839,6 +3838,7 @@ docs-md	docs/maintainers/where.md	4.4
 docs-md	docs/maintainers/where.md	4.7
 docs-md	docs/maintainers/where.md	40
 docs-md	docs/maintainers/where.md	400
+docs-md	docs/maintainers/where.md	401
 docs-md	docs/maintainers/where.md	402
 docs-md	docs/maintainers/where.md	403
 docs-md	docs/maintainers/where.md	404
@@ -4044,8 +4044,8 @@ docs-md	docs/maintainers/where.md	638
 docs-md	docs/maintainers/where.md	639
 docs-md	docs/maintainers/where.md	64
 docs-md	docs/maintainers/where.md	642
-docs-md	docs/maintainers/where.md	64354
 docs-md	docs/maintainers/where.md	644
+docs-md	docs/maintainers/where.md	64653
 docs-md	docs/maintainers/where.md	647
 docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	649
@@ -4101,7 +4101,7 @@ docs-md	docs/maintainers/where.md	72
 docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	725
-docs-md	docs/maintainers/where.md	726701
+docs-md	docs/maintainers/where.md	727000
 docs-md	docs/maintainers/where.md	728
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
@@ -4126,7 +4126,7 @@ docs-md	docs/maintainers/where.md	76
 docs-md	docs/maintainers/where.md	760
 docs-md	docs/maintainers/where.md	761
 docs-md	docs/maintainers/where.md	762
-docs-md	docs/maintainers/where.md	765
+docs-md	docs/maintainers/where.md	766
 docs-md	docs/maintainers/where.md	767
 docs-md	docs/maintainers/where.md	768
 docs-md	docs/maintainers/where.md	769
@@ -7401,6 +7401,7 @@ package-docstrings	torchlens/backends/torch/_module_boundary_adoption.py	16
 package-docstrings	torchlens/backends/torch/_ops_emission.py	1..6
 package-docstrings	torchlens/backends/torch/_ops_emission.py	100.
 package-docstrings	torchlens/backends/torch/_ops_emission.py	31
+package-docstrings	torchlens/backends/torch/_ops_exhaustive.py	15
 package-docstrings	torchlens/backends/torch/_ops_finalize.py	80
 package-docstrings	torchlens/backends/torch/_ops_predicate_events.py	31
 package-docstrings	torchlens/backends/torch/_quantized_flops.py	43
@@ -9658,6 +9659,7 @@ test-docstrings	tests/test_perf_method.py	128
 test-docstrings	tests/test_perf_method.py	256
 test-docstrings	tests/test_perf_method.py	33
 test-docstrings	tests/test_perf_ownership.py	28
+test-docstrings	tests/test_plain_emit_soundness.py	400
 test-docstrings	tests/test_postprocess_executor.py	21
 test-docstrings	tests/test_postprocess_executor.py	5.5,
 test-docstrings	tests/test_postprocess_r14a_regressions.py	52
