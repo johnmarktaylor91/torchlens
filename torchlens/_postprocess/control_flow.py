@@ -7,6 +7,9 @@ Step 5 (_mark_conditional_branches) runs a six-phase conditional pipeline:
     5d. Backward-flood IF edges from branch-participating bools only.
     5e. Attribute executed ops to THEN/ELIF/ELSE/FALLTHROUGH arms across every forward edge.
     5f. Materialize derived compatibility views from primary structures.
+Phases 5a and 5b and the event linking of 5c run over plain lists
+(``_conditional_bools``); every per-op loop has a column body over the building
+store's integer rows (``_conditional_columns``) and a facade fallback.
 Step 6 (_fix_buffer_layers): Connects buffer sources, merges re-logged reads of
     one buffer version (same module, same parent, same recorded version), and
     assigns buffer pass numbers.
@@ -23,79 +26,81 @@ from ..backends.torch._completeness_escape_state import (
     host_escape_bool_consumer_locations,
     host_escape_bool_source_labels,
 )
-from . import _buffer_fixup, _column_passes_graph, ast_branches
+from . import _buffer_fixup, _column_passes_graph, _conditional_columns, ast_branches
 from ._branch_attribution import _translate_conditional_stack
 from ._buffer_source_wiring import _buffer_values_identical
+from ._conditional_bools import BRANCH_CONTEXT_KINDS, classify_terminal_bools, link_bools_to_events
 
 if TYPE_CHECKING:
-    from .._data_classes.trace import ConditionalEvent, Trace
+    from .._data_classes.trace import Trace
+    from ._conditional_columns import StepColumns
 
 
-_BRANCH_CONTEXT_KINDS = frozenset({"if_test", "elif_test", "ifexp"})
+_BRANCH_CONTEXT_KINDS = BRANCH_CONTEXT_KINDS
 
 
 def _mark_conditional_branches(self: Trace) -> None:
     """Step 5: Classify bools, materialize events, and attribute conditional edges.
 
-    The public Step 5 entry point delegates to six internal phases:
+    The phases, in order:
 
     1. Build AST file indexes for all files touched by terminal scalar bools.
     2. Classify terminal bools and collect observed structural conditional keys.
-    3. Materialize dense ``ConditionalEvent`` records from those keys.
+    3. Materialize dense ``ConditionalEvent`` records and link the bools to them.
     4. Backward-flood IF edges from branch-participating bools only.
     5. Attribute executed ops and forward edges to conditional branch arms.
     6. Rebuild compatibility views derived from primary structures.
 
-    Performance fast-path: when no terminal scalar bools were captured, the
-    model has no conditional branches the pipeline can attribute, so we skip
-    the AST file indexing, per-bool classification, and per-op
-    ``attribute_op()`` work. All Trace-level conditional collections are
-    already initialized empty in :meth:`Trace.__init__`, and per-layer
-    conditional fields are initialized to their empty defaults during
-    capture (see ``_capture/output_tensors.py``). The fast-path is verified
-    against the slow-path defaults via ``tests/test_perf_bundle.py``.
+    Fast path: with no terminal scalar bools there is nothing to attribute, and
+    the empty defaults set at capture are already the result (checked against
+    the slow path by ``tests/test_perf_bundle.py``).
     """
 
-    _seed_proven_bool_consumers(self)
+    proven_labels = host_escape_bool_source_labels(self)
+    if not proven_labels and _can_fast_skip_step5(self):
+        return  # seeding adds nothing without a proven host-consumed bool
+    plan = _column_passes_graph.step5_columns(self)
+    _seed_proven_bool_consumers(self, proven_labels, plan)
     if _can_fast_skip_step5(self):
         return
 
-    file_indexes = _build_file_indexes(self)
-    conditional_keys, bool_classifications = _classify_bool_layers(self)
-    # Defensive guard: if no terminal bool produced a structural conditional
-    # key, attribution will produce zero edges, matching the fast-skip output.
-    # This invariant makes bool-detector drift fail explicitly instead of
-    # silently making the fast-path miss work.
-    if not bool_classifications and conditional_keys:
-        # A real raise, not an assert: the whole point of this guard is to make
-        # bool-detector drift fail EXPLICITLY, and `python -O` strips asserts --
-        # which would restore exactly the silent fast-path miss it exists to
-        # prevent.
+    bools = _terminal_bools(self, plan)
+    classes = classify_terminal_bools(bools, host_escape_bool_consumer_locations(self))
+    # Bool-detector drift must fail explicitly, not let the fast path silently
+    # miss work; a real raise because ``python -O`` strips asserts.
+    if not classes.classifications and classes.conditional_keys:
         raise RuntimeError(
             "Internally-terminated bool layers were absent but "
-            f"{len(conditional_keys)} conditional key(s) were produced; the "
+            f"{len(classes.conditional_keys)} conditional key(s) were produced; the "
             "fast-skip precondition is stale. This means the bool detector and "
             "the conditional-key builder disagree, so conditional attribution "
             "would silently diverge from the fast-path output."
         )
     events_by_key = _materialize_conditional_records(
-        self,
-        file_indexes,
-        conditional_keys,
-        bool_classifications,
+        self, classes.file_indexes, classes.conditional_keys
     )
-    _mark_conditional_branches_if_backward_flood(self, bool_classifications)
-    _attribute_branches_forward(self, events_by_key)
-    _materialize_derived_views(self)
+    first_ids = link_bools_to_events(classes.classifications, events_by_key)
+    _store_bool_results(self, plan, bools, classes.outputs, first_ids)
+    branch_bool_labels = [label for label, _frames in bools if classes.classifications[label]]
+    # Reset and flood bodies (column view, facade fallback) live in ``_column_passes_graph``.
+    _column_passes_graph.reset_and_flood_if_edges(self, branch_bool_labels, plan=plan)
+    _attribute_branches_forward(self, events_by_key, plan)
+    _column_passes_graph.materialize_derived_views(self, plan=plan)
 
 
-def _seed_proven_bool_consumers(self: Trace) -> None:
+def _seed_proven_bool_consumers(
+    self: Trace, proven_labels: frozenset[str], plan: StepColumns | None
+) -> None:
     """Add captured tensor-to-host bool consumers to Step 5's candidate list.
 
     Parameters
     ----------
     self:
         Trace being postprocessed.
+    proven_labels:
+        Raw labels the capture-time ``__bool__`` observer saw consumed on the host.
+    plan:
+        The trace's step-5 columns, or ``None`` for the facade body.
 
     Notes
     -----
@@ -113,7 +118,9 @@ def _seed_proven_bool_consumers(self: Trace) -> None:
     predicate witness family.
     """
 
-    proven_labels = host_escape_bool_source_labels(self)
+    if plan is not None:
+        _conditional_columns.seed_proven_bools(self, plan, proven_labels)
+        return
     # Shadow set over the list[str] ledger: the per-label list scan was
     # O(k^2) in terminated-bool count.
     seen_terminated_bool_labels = set(self.internally_terminated_bool_ops)
@@ -134,7 +141,7 @@ def _can_fast_skip_step5(self: Trace) -> bool:
 
     The slow path's only branch-attributing inputs are the Trace's
     ``internally_terminated_bool_ops``: if no terminal scalar bool was
-    captured, ``_iter_terminal_scalar_bool_labels`` yields nothing, so
+    captured, ``_terminal_bools`` returns nothing, so
     every downstream collection (events, edges, per-layer arm children)
     would resolve to its empty default. Skipping the slow path is then
     semantically equivalent to running it.
@@ -159,187 +166,80 @@ def _can_fast_skip_step5(self: Trace) -> bool:
     return not self._graph_conditional_edge_call_indices
 
 
-def _build_file_indexes(
-    self: Trace,
-) -> dict[str, ast_branches.FileIndex | None]:
-    """Phase 5a: Build cached AST indexes for files touched by terminal bools.
+def _terminal_bools(self: Trace, plan: StepColumns | None) -> list[tuple[str, Any]]:
+    """Return ``(raw label, captured frames)`` per terminal scalar bool, in raw order.
 
     Parameters
     ----------
     self:
         Model log being postprocessed.
+    plan:
+        The trace's step-5 columns, or ``None`` for the facade body.
 
     Returns
     -------
-    Dict[str, Optional[ast_branches.FileIndex]]
-        Mapping from filename to the cached AST index, or ``None`` when the
-        file could not be parsed or loaded.
+    list[tuple[str, Any]]
+        One pair per non-orphan scalar bool in ``internally_terminated_bool_ops``,
+        ordered by first-seen execution order in the model log.
     """
 
-    file_indexes: dict[str, ast_branches.FileIndex | None] = {}
-    consumer_locations = host_escape_bool_consumer_locations(self)
-    for bool_label in _iter_terminal_scalar_bool_labels(self):
-        bool_layer = self[bool_label]
-        for filename, _line_number in consumer_locations.get(bool_label, ()):
-            if filename not in file_indexes:
-                file_indexes[filename] = ast_branches.get_file_index(filename)
-        for frame in bool_layer._source_frames:
-            if frame.file in file_indexes:
-                continue
-            file_indexes[frame.file] = ast_branches.get_file_index(frame.file)
-    return file_indexes
+    if plan is not None:
+        return _conditional_columns.terminal_bools(self, plan)
+    terminal_bool_labels = set(self.internally_terminated_bool_ops)
+    return [
+        (layer_label, self[layer_label]._source_frames)
+        for layer_label in self._raw_graph_ws.raw_layer_labels_list
+        if layer_label in terminal_bool_labels
+        and self[layer_label]._control_flow_is_scalar_bool
+        and not getattr(self[layer_label], "_graph_is_orphan", False)
+    ]
 
 
-def _classify_bool_layers(
+def _store_bool_results(
     self: Trace,
-) -> tuple[list[ast_branches.ConditionalKey], dict[str, list[ast_branches.BoolClassification]]]:
-    """Phase 5b: Classify terminal scalar bools and collect observed conditionals.
+    plan: StepColumns | None,
+    bools: list[tuple[str, Any]],
+    outputs: list[tuple[str, str | None, bool]],
+    first_ids: dict[str, int | None],
+) -> None:
+    """Write each terminal bool's classification and its first linked event id.
 
-    Every witnessed consumer location of a bool is classified — not just the
-    first non-``"unknown"`` one. A bool consumed by ``assert``/``while`` and
-    LATER by an ``if`` test is still a conditional bool (order independence),
-    and one bool gating several ``if`` statements yields one classification
-    per gated conditional (1:N predicate reuse). The runtime frame fallback
-    (column-precise) runs only when no consumer location produced a
-    branch-participating classification.
-
-    Parameters
-    ----------
-    self:
-        Model log being postprocessed.
-
-    Returns
-    -------
-    Tuple[List[ast_branches.ConditionalKey], Dict[str, List[ast_branches.BoolClassification]]]
-        First-seen ordered conditional keys plus, per raw bool layer label, the
-        deduplicated list of branch-participating classifications (empty when
-        the bool participates in no conditional).
+    ``terminal_conditional_id`` keeps its historical 1:1 shape by pointing at the
+    FIRST linked event; the complete 1:N linkage lives on each event's
+    ``bool_layers``.
     """
 
-    bool_classifications: dict[str, list[ast_branches.BoolClassification]] = {}
-    ordered_conditional_keys: dict[ast_branches.ConditionalKey, None] = {}
-    consumer_locations = host_escape_bool_consumer_locations(self)
-
-    for bool_label in _iter_terminal_scalar_bool_labels(self):
-        bool_layer = self[bool_label]
-        observed: list[ast_branches.BoolClassification] = []
-        for filename, line_number in consumer_locations.get(bool_label, ()):
-            location_classification = ast_branches.classify_bool(filename, line_number, None)
-            if location_classification.kind != "unknown":
-                observed.append(location_classification)
-
-        branch_classifications = _dedup_branch_classifications(observed)
-
-        frame_classification: ast_branches.BoolClassification | None = None
-        for frame in reversed(bool_layer._source_frames):
-            frame_candidate = ast_branches.classify_bool(
-                frame.file,
-                frame.line_number,
-                frame.col_offset,
-            )
-            if frame_candidate.kind == "unknown":
-                continue
-            frame_classification = frame_candidate
-            break
-
-        if not branch_classifications:
-            if frame_classification is not None:
-                observed.append(frame_classification)
-                branch_classifications = _dedup_branch_classifications([frame_classification])
-        elif (
-            frame_classification is not None
-            and frame_classification.kind in _BRANCH_CONTEXT_KINDS
-            and frame_classification.conditional_key is not None
-            and frame_classification.conditional_key
-            not in {c.conditional_key for c in branch_classifications}
-        ):
-            # Creation-site conflict: the bool op was created inside the test
-            # span of one conditional while the witnessed consumer line
-            # attributes it to a DIFFERENT conditional. Line-only runtime
-            # attribution is misreporting one of the two (e.g. a formatter-
-            # wrapped multi-line nested ternary, where the interpreter
-            # reports the inner ternary's line for the outer test's
-            # ``__bool__``). Linking either key could cross-wire a foreign
-            # bool into a conditional's public record, so fail closed for
-            # this bool instead of guessing.
-            observed = []
-            branch_classifications = []
-
-        if branch_classifications:
-            primary = branch_classifications[0]
-        elif observed:
-            primary = observed[0]
-        else:
-            primary = ast_branches.BoolClassification("unknown", None, None, None)
-
-        bool_layer._control_flow_context_kind = primary.kind
-        bool_layer._control_flow_wrapper_kind = primary.wrapper_kind
-        bool_layer._control_flow_is_terminal_conditional_bool = bool(branch_classifications)
-        bool_layer.terminal_conditional_id = None
-        bool_classifications[bool_label] = branch_classifications
-
-        for classification in branch_classifications:
-            assert classification.conditional_key is not None  # mypy narrowing
-            ordered_conditional_keys.setdefault(classification.conditional_key, None)
-
-    return list(ordered_conditional_keys.keys()), bool_classifications
-
-
-def _dedup_branch_classifications(
-    classifications: list[ast_branches.BoolClassification],
-) -> list[ast_branches.BoolClassification]:
-    """Return the branch-participating classifications, deduplicated in order.
-
-    Parameters
-    ----------
-    classifications:
-        Classification results from consumer locations or runtime frames.
-
-    Returns
-    -------
-    List[ast_branches.BoolClassification]
-        Classifications whose kind is branch-participating and whose
-        conditional key is present, deduplicated by
-        ``(conditional_key, branch_test_kind)`` preserving first-seen order.
-    """
-
-    deduplicated: list[ast_branches.BoolClassification] = []
-    seen: set[tuple[ast_branches.ConditionalKey, str | None]] = set()
-    for classification in classifications:
-        if (
-            classification.kind not in _BRANCH_CONTEXT_KINDS
-            or classification.conditional_key is None
-        ):
-            continue
-        identity_key = (classification.conditional_key, classification.branch_test_kind)
-        if identity_key in seen:
-            continue
-        seen.add(identity_key)
-        deduplicated.append(classification)
-    return deduplicated
+    labels = [label for label, _frames in bools]
+    if plan is not None:
+        _conditional_columns.store_bool_results(plan, labels, outputs, first_ids)
+    else:
+        for label, (kind, wrapper_kind, is_conditional) in zip(labels, outputs, strict=True):
+            bool_layer = self[label]
+            bool_layer._control_flow_context_kind = kind
+            bool_layer._control_flow_wrapper_kind = wrapper_kind
+            bool_layer._control_flow_is_terminal_conditional_bool = is_conditional
+        for label, first_id in first_ids.items():
+            self[label].terminal_conditional_id = first_id
+    for label in labels:
+        assert not hasattr(self[label], "_bool_conditional_key")
 
 
 def _materialize_conditional_records(
     self: Trace,
     file_indexes: dict[str, ast_branches.FileIndex | None],
     conditional_keys: list[ast_branches.ConditionalKey],
-    bool_classifications: dict[str, list[ast_branches.BoolClassification]],
 ) -> dict[ast_branches.ConditionalKey, ConditionalEvent]:
-    """Phase 5c: Materialize dense conditional events and translate bool keys.
+    """Phase 5c: Materialize dense conditional events.
 
-    One bool may gate several conditionals (predicate reuse), so every
-    branch-participating classification links its bool to the matching event.
-    The scalar ``terminal_conditional_id`` keeps its historical 1:1 shape by
-    pointing at the FIRST linked event; the complete 1:N linkage lives on each
-    event's ``bool_layers``. Three postprocess-internal annotations are stashed
-    on each event for finalization's public record builder:
-    ``_arm_bool_indices`` (branch kind -> indices into ``bool_layers`` whose
-    runtime consumption evaluated THAT arm's test; indices survive the
-    raw-to-final label rename that rewrites ``bool_layers`` in place),
-    ``_arm_test_structures`` (branch kind -> ``"bare"``/``"negated"``/
-    ``"compound"`` bool-value semantics of the arm's test expression), and
-    ``_bool_layers_raw`` (index-aligned RAW labels so finalization resolves
-    the exact per-pass evaluating op of rolled multi-pass bools).
+    Three postprocess-internal annotations are stashed on each event for
+    finalization's public record builder: ``_arm_bool_indices`` (branch kind ->
+    indices into ``bool_layers`` whose runtime consumption evaluated THAT arm's
+    test; indices survive the raw-to-final label rename that rewrites
+    ``bool_layers`` in place), ``_arm_test_structures`` (branch kind ->
+    ``"bare"``/``"negated"``/``"compound"`` bool-value semantics of the arm's
+    test expression), and ``_bool_layers_raw`` (index-aligned RAW labels so
+    finalization resolves the exact per-pass evaluating op of rolled multi-pass
+    bools). ``_conditional_bools.link_bools_to_events`` fills the first and third.
 
     Parameters
     ----------
@@ -349,8 +249,6 @@ def _materialize_conditional_records(
         Cached AST file indexes from phase 5a.
     conditional_keys:
         Ordered structural conditional keys observed in phase 5b.
-    bool_classifications:
-        Per-bool branch-participating classifications keyed by raw layer label.
 
     Returns
     -------
@@ -411,105 +309,19 @@ def _materialize_conditional_records(
         if parent_conditional_key is not None and parent_conditional_key in events_by_key:
             event.parent_conditional_id = events_by_key[parent_conditional_key].id
 
-    # Position/membership shadows: the list `not in` / `.index`
-    # trio made this loop O(k^2) per conditional over its terminal bool ops
-    # (a bool inside a hot unrolled loop shares one structural key). The
-    # shadows keep `bool_layers`/`_arm_bool_indices` byte-identical --
-    # first-occurrence index, insertion order preserved.
-    bool_positions_by_event: dict[int, dict[str, int]] = {}
-    arm_seen_by_event: dict[int, dict[str, set[int]]] = {}
-    for bool_label, classifications in bool_classifications.items():
-        bool_layer = self[bool_label]
-        bool_layer.terminal_conditional_id = None
-        for classification in classifications:
-            bool_conditional_key: ast_branches.ConditionalKey | None = (
-                classification.conditional_key
-            )
-            if bool_conditional_key is None or bool_conditional_key not in events_by_key:
-                continue
-            event = events_by_key[bool_conditional_key]
-            if bool_layer.terminal_conditional_id is None:
-                bool_layer.terminal_conditional_id = event.id
-            positions = bool_positions_by_event.get(event.id)
-            if positions is None:
-                positions = {}
-                for index, label in enumerate(event.bool_layers):
-                    positions.setdefault(label, index)
-                bool_positions_by_event[event.id] = positions
-            bool_index = positions.get(bool_label)
-            if bool_index is None:
-                bool_index = len(event.bool_layers)
-                positions[bool_label] = bool_index
-                event.bool_layers.append(bool_label)
-                getattr(event, "_bool_layers_raw").append(bool_label)
-            arm_kind = classification.branch_test_kind or "then"
-            arm_bool_indices: dict[str, list[int]] = getattr(event, "_arm_bool_indices")
-            arm_indices = arm_bool_indices.setdefault(arm_kind, [])
-            arm_seen = arm_seen_by_event.setdefault(event.id, {}).get(arm_kind)
-            if arm_seen is None:
-                arm_seen = set(arm_indices)
-                arm_seen_by_event[event.id][arm_kind] = arm_seen
-            if bool_index not in arm_seen:
-                arm_seen.add(bool_index)
-                arm_indices.append(bool_index)
-
-    for bool_label in _iter_terminal_scalar_bool_labels(self):
-        assert not hasattr(self[bool_label], "_bool_conditional_key")
-
     return events_by_key
-
-
-def _mark_conditional_branches_if_backward_flood(
-    self: Trace,
-    bool_classifications: dict[str, list[ast_branches.BoolClassification]],
-) -> None:
-    """Phase 5d: Backward-flood IF edges from branch-participating bools only.
-
-    Parameters
-    ----------
-    self:
-        Model log being postprocessed.
-    bool_classifications:
-        Per-bool branch-participating classifications keyed by raw layer label.
-    """
-
-    branch_bool_labels = [
-        bool_label
-        for bool_label in _iter_terminal_scalar_bool_labels(self)
-        if bool_classifications[bool_label]
-        and self[bool_label]._control_flow_is_terminal_conditional_bool
-    ]
-    # Reset and flood bodies (column view, facade fallback) live in ``_column_passes_graph``.
-    _column_passes_graph.reset_and_flood_if_edges(self, branch_bool_labels)
 
 
 def _attribute_branches_forward(
     self: Trace,
     events_by_key: dict[ast_branches.ConditionalKey, ConditionalEvent],
+    plan: StepColumns | None = None,
 ) -> None:
     """Phase 5e: Attribute executed ops and forward edges to conditional arms.
 
-    Parameters
-    ----------
-    self:
-        Model log being postprocessed.
-    events_by_key:
-        Structural-to-dense conditional event lookup created in phase 5c.
-    """
-
-    _assign_conditional_branch_stacks(self, events_by_key)
-    _column_passes_graph.attribute_forward_edges(self)
-
-
-def _assign_conditional_branch_stacks(
-    self: Trace,
-    events_by_key: dict[ast_branches.ConditionalKey, ConditionalEvent],
-) -> None:
-    """Give every non-orphan op its conditional branch stack and reset its arm children.
-
-    Ops from the same call site carry the same frame positions, and the
-    attribution reads nothing else from a frame, so each distinct stack is
-    attributed once per pass; every op still gets its own list.
+    Every non-orphan op gets its own conditional branch stack (each distinct
+    frame-position stack is translated once per pass) and empty arm children;
+    then every forward edge entering an arm is recorded.
 
     Parameters
     ----------
@@ -517,48 +329,16 @@ def _assign_conditional_branch_stacks(
         Model log being postprocessed.
     events_by_key:
         Structural-to-dense conditional event lookup created in phase 5c.
+    plan:
+        Step 5's bound columns; ``None`` binds them here (a call outside step 5).
     """
 
+    if plan is None:
+        plan = _column_passes_graph.step5_columns(self)
     _column_passes_graph.assign_conditional_branch_stacks(
-        self, events_by_key, _translate_conditional_stack
+        self, events_by_key, _translate_conditional_stack, plan=plan
     )
-
-
-def _materialize_derived_views(self: Trace) -> None:
-    """Phase 5f: Rebuild compatibility views derived from primary conditional data.
-
-    Parameters
-    ----------
-    self:
-        Model log being postprocessed.
-    """
-
-    _column_passes_graph.materialize_derived_views(self)
-
-
-def _iter_terminal_scalar_bool_labels(self: Trace) -> list[str]:
-    """Return terminal scalar bool labels in deterministic execution order.
-
-    Parameters
-    ----------
-    self:
-        Model log being postprocessed.
-
-    Returns
-    -------
-    List[str]
-        Raw tensor labels for terminal scalar bool layers, ordered by first-seen
-        execution order in the model log.
-    """
-
-    terminal_bool_labels = set(self.internally_terminated_bool_ops)
-    return [
-        layer_label
-        for layer_label in self._raw_graph_ws.raw_layer_labels_list
-        if layer_label in terminal_bool_labels
-        and self[layer_label]._control_flow_is_scalar_bool
-        and not getattr(self[layer_label], "_graph_is_orphan", False)
-    ]
+    _column_passes_graph.attribute_forward_edges(self, plan=plan)
 
 
 def _build_conditional_record_lookup(

@@ -881,7 +881,7 @@ def classify_bool(filename: str, line: int, col: int | None = None) -> BoolClass
             # a same-line nested ternary): the deepest-first pick would silently
             # cross-wire the outer bool into the inner conditional. Fail closed;
             # the column-carrying code-context fallback in phase 5b of
-            # ``control_flow._classify_bool_layers`` disambiguates precisely.
+            # ``_conditional_bools.classify_terminal_bools`` disambiguates precisely.
             return BoolClassification("unknown", None, None, None)
         if branch_consumers and any(
             consumer.kind not in _BRANCH_CONSUMER_KINDS

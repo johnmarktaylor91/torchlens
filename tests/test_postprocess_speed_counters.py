@@ -96,8 +96,8 @@ def test_branch_stacks_are_private_per_op(monkeypatch: pytest.MonkeyPatch) -> No
     seen: dict[str, list[int]] = {"ids": [], "nonempty": []}
     real = control_flow._attribute_branches_forward
 
-    def recording(self: Any, events_by_key: Any) -> None:
-        real(self, events_by_key)
+    def recording(self: Any, events_by_key: Any, plan: Any = None) -> None:
+        real(self, events_by_key, plan)
         for label in self._raw_graph_ws.raw_layer_labels_list:
             layer = self[label]
             if record_member(layer, "is_orphan", False):
