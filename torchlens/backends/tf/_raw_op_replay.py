@@ -96,6 +96,7 @@ def _raw_op_dispatch() -> dict[str, Callable[[TFOpCapture, Sequence[Any]], Any]]
         ),
         "Tanh": lambda item, args: _raw(item).Tanh(x=args[0]),
         "Transpose": lambda item, args: _raw(item).Transpose(x=args[0], perm=args[1]),
+        "ZerosLike": lambda item, args: _raw(item).ZerosLike(x=args[0]),
     }
 
 
