@@ -194,6 +194,8 @@ def test_template_plans_equal_general_classifier(
     planned = _fields(model_cls, shape)
     with monkeypatch.context() as patch:
         patch.setattr(_ops_arguments, "planned_args_template", lambda *_args: None)
+        # The capture observes templates through the plan lookup directly.
+        patch.setattr(_args_template_cache, "_plan_of", lambda *_args: None)
         general = _fields(model_cls, shape)
     _assert_same(name, general, planned)
 

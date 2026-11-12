@@ -34,6 +34,7 @@ import torch.nn.functional as F
 
 import torchlens as tl
 from torchlens.backends.torch import (
+    _args_template_cache,
     _ops_arg_slots,
     _ops_argument_fields,
     _ops_arguments,
@@ -182,9 +183,17 @@ def _reference_paths(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         """Look the plan up in the capture's keyed table, never on the layout."""
         return keyed_plan(parts, call, trace, known)
 
+    keyed_lookup: Callable[..., Any] = _args_template_cache._plan_of
+
+    def keyed_plan_only(parts: Any, call: Any, trace: Any, _holder: Any) -> Any:
+        """The capture's own plan lookup, through the keyed table only."""
+        return keyed_lookup(parts, call, trace, None)
+
     with monkeypatch.context() as patch:
         patch.setattr(_ops_arguments, "planned_args_template", keyed_only)
         patch.setattr(_ops_arguments, "arg_slot_labels", _reference_labels)
+        patch.setattr(_args_template_cache, "_plan_of", keyed_plan_only)
+        patch.setattr(_ops_argument_fields, "arg_slot_labels", _reference_labels)
         patch.setattr(_ops_argument_fields, "_TENSOR", _NeverExact)
         patch.setattr(_ops_argument_fields, "_PLAIN_TENSOR_TYPES", frozenset())
         patch.setattr(_ops_predicate_events, "_validated_params", lambda _trace: None)
