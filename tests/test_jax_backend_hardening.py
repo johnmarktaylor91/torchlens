@@ -1252,15 +1252,13 @@ def test_jax_builtin_output_pytree_container_reconstructs() -> None:
     np.testing.assert_allclose(np.asarray(rebuilt["b"][1]), np.asarray(x + 3))
 
 
-def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
+def test_jax_end_to_end_interventions_flip_applies_the_edit() -> None:
     """Review probe, live: interventions=True flipped in place on the registered JAX
-    spec must refuse typed at trace() — never return a trace with the
+    spec must apply the edit at trace() -- never return a trace with the
     intervention silently ignored.
     """
 
     import jax.numpy as jnp
-
-    from torchlens.errors import BackendCapabilityConformanceError
 
     def model(x: Any) -> Any:
         """Return a tanh-projected input.
@@ -1281,12 +1279,13 @@ def test_jax_end_to_end_bare_interventions_flip_refuses_typed() -> None:
     spec = tl.backends.spec("jax")
     object.__setattr__(spec.capabilities, "can_intervene", True)
     try:
-        with pytest.raises(BackendCapabilityConformanceError):
-            tl.trace(
-                cast(Any, model),
-                jnp.ones((1, 4)),
-                backend="jax",
-                intervene=tl.when(tl.func("tanh"), tl.zero_ablate()),
-            )
+        trace = tl.trace(
+            cast(Any, model),
+            jnp.ones((1, 4)),
+            backend="jax",
+            intervene=tl.when(tl.func("tanh"), tl.zero_ablate()),
+        )
+        np.testing.assert_allclose(np.asarray(trace[trace.output_layers[0]].out), 0.0)
+        assert trace.validate_forward_pass([])
     finally:
         object.__setattr__(spec.capabilities, "can_intervene", False)
