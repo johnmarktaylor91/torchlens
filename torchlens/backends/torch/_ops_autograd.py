@@ -574,15 +574,17 @@ def _output_entries_with_autograd_stats(trace: Any, output: Any) -> list[_Output
         return _partition_output_entries_with_autograd_stats(trace, output)
     grad_fn = raw_grad_fn(output)
     trace_fields = trace.__dict__
-    seen_saved_storages = trace_fields.get("_autograd_seen_saved_storages")
-    if seen_saved_storages is None:
-        seen_saved_storages = trace_fields["_autograd_seen_saved_storages"] = set()
     if grad_fn is None:
+        if "_autograd_seen_saved_storages" not in trace_fields:
+            trace_fields["_autograd_seen_saved_storages"] = set()
         return [
             _OutputTensorEntry(
                 value=output, container_path=(), container_spec=None, autograd_stats=(None, None)
             )
         ]
+    seen_saved_storages = trace_fields.get("_autograd_seen_saved_storages")
+    if seen_saved_storages is None:
+        seen_saved_storages = trace_fields["_autograd_seen_saved_storages"] = set()
     stats, band = _saved_tensor_stats(trace, grad_fn, set(), seen_saved_storages)
     return [
         _OutputTensorEntry(
