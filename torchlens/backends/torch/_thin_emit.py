@@ -137,13 +137,8 @@ def make_thin_emit(helpers: ThinHelpers) -> Callable[[Any, tuple[Any, ...], int]
         if entry.autograd_band is not None:
             bands = trace.__dict__.setdefault("_autograd_saved_bands", {})
             bands[fields["_label_raw"]] = entry.autograd_band
-        handle = commit(
-            trace,
-            out,
-            fields,
-            (arg_copies, kwarg_copies),
-            (module_stack, requires_grad, fire_results or ()),
-        )
+        facts = (module_stack, requires_grad, fire_results or ())
+        handle = commit(trace, out, fields, (arg_copies, kwarg_copies), facts)
         if fields["is_internal_source"]:  # ``_classify_new_tensor_in_trace``
             trace.internal_source_ops.append(fields["_label_raw"])
         tag(trace, out, handle, fields, arg_copies, kwarg_copies, args, kwargs)
