@@ -6428,16 +6428,6 @@
         "tests/test_scoped_patching_escape_detection.py",
         "tests/test_wrap_state_compat.py"
       ],
-      "torchlens/_utils/_id_key_registry.py": [
-        "tests/test_deepcopy_capture_identity.py",
-        "tests/test_id_key_registry.py",
-        "tests/test_internals.py",
-        "tests/test_label_plain_path.py",
-        "tests/test_release_model.py",
-        "tests/test_tl_lifecycle.py",
-        "tests/test_tl_meta.py",
-        "tests/test_tlspec_runnable_r83_label_anchoring.py"
-      ],
       "torchlens/_utils/_input_tree.py": [
         "tests/test_backward_validation_walker_guards.py",
         "tests/test_input_boundary_guards.py",
@@ -6451,8 +6441,8 @@
       "torchlens/_utils/_internal_read.py": [
         "tests/test_completeness_witness.py",
         "tests/test_deferred_payload_clone.py",
+        "tests/test_id_key_registry.py",
         "tests/test_label_plain_path.py",
-        "tests/test_legacy_tensor_constructors.py",
         "tests/test_r36_cuda_hygiene.py",
         "tests/test_tl_meta.py",
         "tests/test_torchnative_markers.py",
@@ -6707,13 +6697,13 @@
       ],
       "torchlens/_utils/_tensor_label.py": [
         "tests/test_deepcopy_capture_identity.py",
+        "tests/test_id_key_registry.py",
         "tests/test_internals.py",
         "tests/test_label_plain_path.py",
         "tests/test_release_model.py",
         "tests/test_tl_lifecycle.py",
         "tests/test_tl_meta.py",
-        "tests/test_tlspec_runnable_r83_label_anchoring.py",
-        "tests/test_tlspec_runnable_r85_storage_integrity.py"
+        "tests/test_tlspec_runnable_r83_label_anchoring.py"
       ],
       "torchlens/_utils/_tensor_layout.py": [
         "tests/test_autograd_grad_view_write_replay.py",
@@ -6737,9 +6727,9 @@
       ],
       "torchlens/_utils/_tl_collective.py": [
         "tests/test_deepcopy_capture_identity.py",
+        "tests/test_id_key_registry.py",
         "tests/test_internals.py",
         "tests/test_label_plain_path.py",
-        "tests/test_ops_arg_slots.py",
         "tests/test_release_model.py",
         "tests/test_tl_lifecycle.py",
         "tests/test_tl_meta.py",
@@ -9706,7 +9696,7 @@
         "tests/test_alias_registry.py",
         "tests/test_container_registry_p1.py",
         "tests/test_container_registry_p2.py",
-        "tests/test_registry_facet_snapshot.py",
+        "tests/test_id_key_registry.py",
         "tests/test_report_family_registry.py",
         "tests/test_rf_registry_lifecycle.py"
       ],
@@ -16764,7 +16754,6 @@
         "torchlens/_selection/selection.py": "registry-callsites",
         "torchlens/_semantic/facets.py": "registry-callsites",
         "torchlens/_trace_core/alias_registry.py": "registry-name",
-        "torchlens/_utils/_id_key_registry.py": "registry-name",
         "torchlens/_utils/facade.py": "import-wiring",
         "torchlens/_utils/rng/registry.py": "registry-name",
         "torchlens/_visualization/renderer_registry.py": "registry-name",
