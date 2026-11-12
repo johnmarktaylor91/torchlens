@@ -19,6 +19,7 @@ from torch import nn
 # an import-time value binding never sees mark_torch_capability_missing flips.
 from . import _call_site, _torch_compat
 from ._call_site import _BOUNDARY_CODES
+from ._code_context_key import context_cache_lookup
 from ._input_tree import INPUT_TREE_MAX_DEPTH
 from ._package_frames import _VERDICTS as _PACKAGE_VERDICTS, is_torchlens_code
 from ._quiet_property import _QuietPropertyLogs, class_crawl_names, read_attr_quietly
@@ -1000,18 +1001,9 @@ def _get_code_context(
     cache_key: _CodeContextCacheKey | None = None
     if context_cache is not None:
         named = tuple((code, lineno, lasti) for _frame, code, lineno, lasti in selected)
-        cache_key = (*options, named)
-        cached = context_cache.get(cache_key)
+        cache_key, cached = context_cache_lookup(named, options, context_cache)
         if cached is not None:
-            for loc, (_frame, code, _lineno, _lasti) in zip(cached, selected, strict=True):
-                if loc.file != code.co_filename:  # a value-equal code from another file
-                    cache_key = (*cache_key, tuple(c.co_filename for _f, c, _l, _a in selected))
-                    break
-            else:
-                return list(cached)
-            cached = context_cache.get(cache_key)  # the collider's own entry, keyed by its files
-            if cached is not None:
-                return list(cached)
+            return list(cached)
 
     # Locations only for the kept frames (~5-10), on a cache miss.
     result = build_locations(selected, options, context_cache, locations)
