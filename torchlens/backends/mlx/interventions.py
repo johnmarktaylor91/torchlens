@@ -634,7 +634,12 @@ def _match_live_sites(
         if with_values:
             record_ctx = _value_record_context(record_ctx)
         if plan is not None and selector_matches_capture_context(plan.selector, record_ctx):
-            _record_edit(backend, trace, plan, found, index, leaf, entry)
+            replacement, fire_result = _apply_edit(backend, plan, leaf, entry)
+            trace._mlx_intervene_fired = True
+            found.replacements[id(leaf)] = replacement
+            found.fire_results_by_site[index] = (fire_result,)
+            found.slots.append((index, plan.applier.identity))
+            found.appliers.append((index, plan.applier.apply))
         if (
             halt_selector is not None
             and found.halt_label is None
@@ -644,32 +649,25 @@ def _match_live_sites(
     return found
 
 
-def _record_edit(
-    backend: Any,
-    trace: Any,
-    plan: Any,
-    found: _LiveSiteMatches,
-    index: int,
-    leaf: Any,
-    entry: Any,
-) -> None:
-    """Apply the plan to one matched leaf and record its fire result and slot."""
+def _apply_edit(backend: Any, plan: Any, leaf: Any, entry: Any) -> tuple[Any, FireResult]:
+    """Apply the plan to one matched leaf.
+
+    Returns
+    -------
+    tuple[Any, FireResult]
+        The replacement array and the fire result recorded for the leaf's site.
+    """
 
     replacement = backend._apply_mlx_intervention(plan, leaf)
-    trace._mlx_intervene_fired = True
-    found.replacements[id(leaf)] = replacement
-    found.fire_results_by_site[index] = (
-        FireResult(
-            plan_id="mlx_intervene",
-            site_label=entry.label_raw,
-            fired_at_capture_index=entry.raw_index,
-            pre_hook_shape=backend._shape(leaf),
-            post_hook_shape=backend._shape(replacement),
-            pre_hook_dtype=backend._dtype(leaf),
-            post_hook_dtype=backend._dtype(replacement),
-            replaced=True,
-            fire_record=None,
-        ),
+    fire_result = FireResult(
+        plan_id="mlx_intervene",
+        site_label=entry.label_raw,
+        fired_at_capture_index=entry.raw_index,
+        pre_hook_shape=backend._shape(leaf),
+        post_hook_shape=backend._shape(replacement),
+        pre_hook_dtype=backend._dtype(leaf),
+        post_hook_dtype=backend._dtype(replacement),
+        replaced=True,
+        fire_record=None,
     )
-    found.slots.append((index, plan.applier.identity))
-    found.appliers.append((index, plan.applier.apply))
+    return replacement, fire_result

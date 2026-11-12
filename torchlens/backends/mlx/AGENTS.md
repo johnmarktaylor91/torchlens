@@ -49,8 +49,9 @@ It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
 ## _source_frames.py
 - `mlx_code_context()` fills `Op.code_context` like the torch walk: TorchLens
   frames skipped, call site first, the op's frame last. The model boundary is
-  the registered `MLXBackend.capture_trace` frame (`register_model_call_frame`
-  at backend import), not a `forward` name. Records are cached in
+  the `MLXBackend.capture_trace` frame, matched by code name and the sibling
+  `backend.py` path (`_is_anchor`; rename either and update it), not a
+  `forward` name. Records are cached in
   `trace._code_context_cache` and adopted into the trace core at finalize
   (`adopt_code_context_records`).
 - Curated MLX-native helper appliers (`_MLX_SUPPORTED_HELPER_NAMES`):

@@ -89,11 +89,7 @@ from ._param_tree import (
     _iter_parameter_tree,
     _iter_trainable_parameter_tree,
 )
-from ._source_frames import (
-    adopt_code_context_records,
-    mlx_code_context,
-    register_model_call_frame,
-)
+from ._source_frames import adopt_code_context_records, mlx_code_context
 from ._tap_observers import (
     _is_float_mlx_array,
     _MLXIntermediateCandidate,
@@ -2256,10 +2252,6 @@ class MLXBackend:
         if size is not None and itemsize is not None:
             return int(size) * int(itemsize)
         return None
-
-
-# Frames below capture_trace ran inside the model (Op.code_context boundary).
-register_model_call_frame(MLXBackend.capture_trace)
 
 
 def mlx_param_logs(tree: MLXModuleTree, trace: Trace) -> dict[str, Param]:

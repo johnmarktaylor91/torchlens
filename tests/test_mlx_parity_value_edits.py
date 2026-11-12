@@ -18,11 +18,11 @@ from typing import Any
 
 import numpy as np
 import pytest
+import torch
 
 pytestmark = [pytest.mark.backend_mlx, pytest.mark.rare]
 
 mlx = pytest.importorskip("mlx")
-torch = pytest.importorskip("torch")
 import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 

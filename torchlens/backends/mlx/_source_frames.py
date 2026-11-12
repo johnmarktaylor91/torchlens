@@ -18,9 +18,8 @@ empty context, as on torch.
 
 from __future__ import annotations
 
-import inspect
+import os
 import sys
-from collections.abc import Callable
 from types import CodeType, FrameType
 from typing import Any
 
@@ -31,22 +30,16 @@ from ..._utils.introspection import _get_code_qualname, _get_col_offset
 
 _Survivor = tuple[FrameType, CodeType, int, int]
 
-#: The code object of the frame that calls the model
-#: (``MLXBackend.capture_trace``), registered by the backend module at import.
-_ANCHOR_CODE: list[CodeType] = []
+#: The frame that calls the model is ``MLXBackend.capture_trace`` in the
+#: sibling ``backend.py``; matching by name and file needs no import of it.
+_ANCHOR_NAME = "capture_trace"
+_ANCHOR_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend.py")
 
 
-def register_model_call_frame(func: Callable[..., Any]) -> None:
-    """Register the function whose frame calls the model.
+def _is_anchor(code: CodeType) -> bool:
+    """Whether ``code`` is the capture frame that calls the model."""
 
-    Parameters
-    ----------
-    func
-        The capture entry that calls the model directly; decorators are
-        unwrapped so the registered code is the one on the stack.
-    """
-
-    _ANCHOR_CODE[:] = [inspect.unwrap(func).__code__]
+    return code.co_name == _ANCHOR_NAME and code.co_filename == _ANCHOR_FILE
 
 
 def _model_frames(start: FrameType | None) -> tuple[list[_Survivor], FrameType | None]:
@@ -59,14 +52,11 @@ def _model_frames(start: FrameType | None) -> tuple[list[_Survivor], FrameType |
         or ``None`` when the walk never reached it (no capture is running).
     """
 
-    if not _ANCHOR_CODE:
-        return [], None
-    anchor = _ANCHOR_CODE[0]
     survivors: list[_Survivor] = []
     frame = start
     while frame is not None:
         code = frame.f_code
-        if code is anchor:
+        if _is_anchor(code):
             return survivors, frame
         if not is_torchlens_code(code):
             survivors.append((frame, code, frame.f_lineno, frame.f_lasti))
@@ -131,7 +121,7 @@ def _location(survivor: _Survivor, num_lines: int, load_source: bool, cache: dic
 
     frame, code, lineno, _lasti = survivor
     func_name = code.co_name
-    loc = FuncCallLocation(
+    loc: Any = FuncCallLocation(  # runtime-only _linecache_entry, as the torch walk
         file=code.co_filename,
         line_number=lineno,
         func_name=func_name,
