@@ -4,7 +4,8 @@
 call site (the ``tl.trace`` line) and the last frame is the line that ran the
 operation. These tests pin both ends on MLX for a module model, a nested
 module, and a plain-function model, and check that ``save_source_context`` and
-the context line count are honored and survive a save and load.
+the context line count are honored, and that file names and line numbers
+survive a save and load.
 """
 
 from __future__ import annotations
@@ -70,10 +71,9 @@ def _function_model(x: mx.array) -> mx.array:
 def _line_of(marker: str) -> int:
     """Return the line number of the source line carrying ``marker``."""
 
-    lines, start = inspect.getsourcelines(inspect.getmodule(_line_of))
-    for offset, text in enumerate(lines):
+    for number, text in enumerate(Path(__file__).read_text().splitlines(), start=1):
         if text.rstrip().endswith(f"# {marker}"):
-            return start + offset
+            return number
     raise AssertionError(f"marker {marker} not found")
 
 
@@ -125,7 +125,11 @@ def test_mlx_plain_function_model_records_its_lines() -> None:
 
 
 def test_mlx_source_context_text_and_line_count() -> None:
-    """save_source_context snapshots the text; source_context_lines sizes it."""
+    """save_source_context snapshots the text; source_context_lines sizes it.
+
+    As on torch, ``source_context_lines`` counts lines on each side of the call
+    line, so 3 keeps a 7-line window.
+    """
 
     trace = tl.trace(
         _Net(),
@@ -137,7 +141,7 @@ def test_mlx_source_context_text_and_line_count() -> None:
     assert frame.source_loading_enabled is True
     assert "mx.tanh(h * 2.0)" in frame.call_line
     assert frame.code_context is not None
-    assert len(frame.code_context) == frame.num_context_lines == 3
+    assert len(frame.code_context) == frame.num_context_lines == 2 * 3 + 1
     assert MLXBackend().validate_trace(trace).passed
 
 
@@ -145,9 +149,10 @@ def test_mlx_source_frames_survive_save_and_load(tmp_path: Path) -> None:
     """Saved bundles carry the frames: file and line survive the round trip."""
 
     trace = tl.trace(_Net(), mx.ones((1, 4)), backend="mlx")
-    expected = [(f.file, f.line_number) for f in _op(trace, "relu").source.frames]
+    # A saved bundle keeps each frame's file name, not the absolute path.
+    expected = [(Path(f.file).name, f.line_number) for f in _op(trace, "relu").source.frames]
     bundle = tmp_path / "mlx_source.tlspec"
     trace.save(bundle)
     loaded = tl.load(bundle)
-    got = [(f.file, f.line_number) for f in _op(loaded, "relu").source.frames]
+    got = [(Path(f.file).name, f.line_number) for f in _op(loaded, "relu").source.frames]
     assert got == expected

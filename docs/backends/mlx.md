@@ -72,17 +72,17 @@ keeps; both behave as on PyTorch and survive `save` / `load`.
 predicate, or a callable taking the op context:
 
 ```python
-def gate_is_true(ctx):
-    return ctx.is_scalar_bool and ctx.bool_value is True
+def wide_relu(ctx):
+    return ctx.layer_type == "relu" and ctx.shape[-1] >= 8
 
-trace = tl.trace(model, x, backend="mlx", intervene=tl.when(gate_is_true, tl.zero_ablate()))
-partial = tl.trace(model, x, backend="mlx", stop_after=lambda ctx: ctx.is_scalar_bool)
+trace = tl.trace(model, x, backend="mlx", intervene=tl.when(tl.where(wide_relu), tl.zero_ablate()))
+partial = tl.trace(model, x, backend="mlx", stop_after=lambda ctx: ctx.layer_type == "gelu")
 ```
 
-MLX is lazy, so the context's value fields are filled only when a condition reads values. When
-a `tl.where` predicate or a callable is present, a 0-d boolean output is evaluated at the op to
-give `bool_value`; that run loses MLX graph fusion at those ops and stays realize-once
-everywhere else. A static selector, and a plain capture, evaluate nothing during the forward.
+The context is the one PyTorch's live capture gives a condition: the op's type, function
+name, label, shape, dtype and module fields are filled, and `ctx.is_scalar_bool` and
+`ctx.bool_value` are `None` during the forward on both backends. Nothing is evaluated at the
+op, so a run with a value-dependent condition keeps MLX graph fusion and stays realize-once.
 `ctx.tensor_requires_grad` has no MLX value (arrays carry no gradient flag; gradients come
 from function transforms), so reading it raises `MLXValueUnavailableError`. An exploratory
 callable `stop_after` that never fires warns with `stop_after_never_fired_callable` and

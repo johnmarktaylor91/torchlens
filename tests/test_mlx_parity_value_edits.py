@@ -1,10 +1,10 @@
 """Value-dependent edit and stop conditions on MLX match torch on a twin model.
 
 A value-dependent condition is a ``tl.where`` predicate or a bare callable in
-``tl.when`` or ``stop_after``. MLX evaluates lazily, so the predicate context's
-value fields (``is_scalar_bool``, ``bool_value``) are filled only when such a
-condition is present, and only a 0-d boolean output is evaluated at the op.
-Plain and static-label captures evaluate nothing during the forward.
+``tl.when`` or ``stop_after``. The condition sees the same context on both
+backends: metadata fields are real, and the value fields ``is_scalar_bool`` and
+``bool_value`` are ``None`` during the forward, as on torch's live capture path.
+MLX evaluates nothing at the op for such a condition.
 
 Each test runs the same condition on a torch model and an MLX model with
 identical weights, compares the edited outputs, and checks that the MLX trace
@@ -115,51 +115,41 @@ def test_metadata_predicate_edit_matches_torch_and_validates() -> None:
     assert MLXBackend().validate_trace(mlx_trace).passed
 
 
-def test_scalar_bool_value_edit_matches_torch_and_validates() -> None:
-    """A bare callable reading bool_value flips the gate on both backends."""
+def test_value_fields_read_none_on_both_backends() -> None:
+    """is_scalar_bool and bool_value are None at every scalar op, on both backends."""
 
-    def gate_is_true(ctx: Any) -> bool:
-        return bool(ctx.is_scalar_bool and ctx.bool_value is True)
+    seen: dict[str, list[tuple[Any, Any]]] = {"torch": [], "mlx": []}
 
-    torch_trace, mlx_trace = _both(
-        torch={"intervene": tl.when(gate_is_true, tl.replace_with(torch.tensor(False)))},
-        mlx={"intervene": tl.when(gate_is_true, tl.replace_with(mx.array(False)))},
-    )
-    baseline = _final(tl.trace(_MLXFlagNet(), mx.ones((1, 4)), backend="mlx"))
+    def recorder(name: str) -> Any:
+        def condition(ctx: Any) -> bool:
+            if tuple(ctx.shape) == ():
+                seen[name].append((ctx.is_scalar_bool, ctx.bool_value))
+            return bool(ctx.is_scalar_bool and ctx.bool_value is True)
 
-    np.testing.assert_allclose(_final(mlx_trace), _final(torch_trace), rtol=1e-5, atol=1e-6)
-    assert not np.allclose(_final(mlx_trace), baseline)
-    edited = [op for op in mlx_trace._layer_list if op.is_edited]
-    assert len(edited) == 1
-    assert tuple(edited[0].shape) == ()
-    assert MLXBackend().validate_trace(mlx_trace).passed
-
-
-def test_scalar_bool_condition_that_reads_false_does_not_fire() -> None:
-    """bool_value is the real value: a condition on False matches nothing on either."""
-
-    def gate_is_false(ctx: Any) -> bool:
-        return bool(ctx.is_scalar_bool and ctx.bool_value is False)
+        return condition
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)  # zero-match notice
         torch_trace, mlx_trace = _both(
-            torch={"intervene": tl.when(gate_is_false, tl.zero_ablate())},
-            mlx={"intervene": tl.when(gate_is_false, tl.zero_ablate())},
+            torch={"intervene": tl.when(recorder("torch"), tl.zero_ablate())},
+            mlx={"intervene": tl.when(recorder("mlx"), tl.zero_ablate())},
         )
-    assert not any(op.is_edited for op in mlx_trace._layer_list)
+    assert seen["torch"] and set(seen["torch"]) == {(None, None)}
+    assert seen["mlx"] and set(seen["mlx"]) == {(None, None)}
     assert not any(op.is_edited for op in torch_trace._layer_list)
+    assert not any(op.is_edited for op in mlx_trace._layer_list)
     np.testing.assert_allclose(_final(mlx_trace), _final(torch_trace), rtol=1e-5, atol=1e-6)
+    assert MLXBackend().validate_trace(mlx_trace).passed
 
 
 @pytest.mark.parametrize("wrap", [False, True], ids=["callable", "tl_where"])
 def test_value_dependent_stop_matches_torch(wrap: bool) -> None:
-    """stop_after on the scalar boolean halts before the second linear on both."""
+    """A metadata stop condition halts after the relu, before the second linear, on both."""
 
-    def at_gate(ctx: Any) -> bool:
-        return bool(ctx.is_scalar_bool)
+    def at_relu(ctx: Any) -> bool:
+        return ctx.layer_type == "relu"
 
-    site = tl.where(at_gate) if wrap else at_gate
+    site = tl.where(at_relu) if wrap else at_relu
     torch_trace, mlx_trace = _both(torch={"stop_after": site}, mlx={"stop_after": site})
 
     assert torch_trace.is_stopped is True
@@ -168,35 +158,49 @@ def test_value_dependent_stop_matches_torch(wrap: bool) -> None:
     assert MLXBackend().validate_trace(mlx_trace).passed
 
 
-def test_unfired_callable_stop_warns_like_torch() -> None:
-    """An exploratory callable stop that never fires warns and records the site."""
+def _warning_codes(caught: list[Any]) -> list[Any]:
+    """Return the TorchLens warning codes among caught warnings."""
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        trace = tl.trace(
-            _MLXFlagNet(), mx.ones((1, 4)), backend="mlx", stop_after=lambda ctx: False
-        )
-    assert trace.is_stopped is False
-    codes = [
+    return [
         getattr(entry.message, "fields", {}).get("code")
         for entry in caught
         if isinstance(entry.message, TorchLensWarning)
     ]
-    assert "stop_after_never_fired_callable" in codes
-    assert trace.annotations["unmatched_capture_selectors"][-1]["slot"] == "stop_after"
+
+
+def test_unfired_callable_stop_warns_like_torch() -> None:
+    """A callable stop on a value field never fires: both backends warn and record it."""
+
+    def at_true_gate(ctx: Any) -> bool:
+        return bool(ctx.is_scalar_bool)
+
+    traces = {}
+    for name, model, x, kwargs in (
+        ("torch", _TorchFlagNet(), torch.ones(1, 4), {}),
+        ("mlx", _MLXFlagNet(), mx.ones((1, 4)), {"backend": "mlx"}),
+    ):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            traces[name] = tl.trace(model, x, stop_after=at_true_gate, **kwargs)
+        assert "stop_after_never_fired_callable" in _warning_codes(caught), name
+    for trace in traces.values():
+        assert trace.is_stopped is False
+        assert trace.annotations["unmatched_capture_selectors"][-1]["slot"] == "stop_after"
 
 
 def test_unfired_tl_where_stop_refuses_like_torch() -> None:
-    """A selector-shaped stop that never fires refuses with torch's code."""
+    """A selector-shaped stop that never fires refuses with the same code on both."""
 
-    with pytest.raises(InvalidArgumentError) as info:
-        tl.trace(
-            _MLXFlagNet(),
-            mx.ones((1, 4)),
-            backend="mlx",
-            stop_after=tl.where(lambda ctx: False),
-        )
-    assert info.value.fields["code"] == "stop_after_never_fired"
+    site = tl.where(lambda ctx: bool(ctx.is_scalar_bool))
+    codes = []
+    for model, x, kwargs in (
+        (_TorchFlagNet(), torch.ones(1, 4), {}),
+        (_MLXFlagNet(), mx.ones((1, 4)), {"backend": "mlx"}),
+    ):
+        with pytest.raises(InvalidArgumentError) as info:
+            tl.trace(model, x, stop_after=site, **kwargs)
+        codes.append(info.value.fields["code"])
+    assert codes == ["stop_after_never_fired", "stop_after_never_fired"]
 
 
 def test_requires_grad_field_stays_unavailable_on_mlx() -> None:
@@ -215,8 +219,8 @@ def test_requires_grad_field_stays_unavailable_on_mlx() -> None:
     assert any(isinstance(err, MLXValueUnavailableError) for err in chain)
 
 
-def test_static_and_plain_captures_read_no_values(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without a value-dependent condition the value reader never runs."""
+def test_static_and_plain_captures_build_no_value_contexts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a value-dependent condition no value context is built."""
 
     from torchlens.backends.mlx import interventions
 

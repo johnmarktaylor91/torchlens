@@ -549,15 +549,15 @@ def _emit_module_leaf(trace: Any, backend: Any, plan: Any, tensor: Any) -> Any:
 # applier slot the replay oracle re-applies; a matched stop site names the halt
 # frontier.
 #
-# Value-dependent conditions (``tl.where`` predicates and bare callables) read
-# the predicate context's value fields. MLX evaluates lazily, so those fields
-# are filled only when such a condition is present: a scalar boolean output is
-# evaluated at the op (``bool_value``), which breaks MLX's graph fusion at that
-# point for this run. Static-label conditions keep the deferred-value context
-# and evaluate nothing, so plain and static captures stay realize-once.
-# ``tensor_requires_grad`` stays deferred on both paths: MLX arrays carry no
-# per-array gradient flag (gradients come from function transforms), so there
-# is no value to report.
+# Value-dependent conditions (``tl.where`` predicates and bare callables) see
+# the same predicate context as on torch's live capture path: shape, dtype,
+# labels and module fields are real, and the value fields ``is_scalar_bool``
+# and ``bool_value`` are ``None`` (torch's ``_build_record_context`` leaves them
+# unset during the forward). Nothing is evaluated at the op, so a run with a
+# value-dependent condition stays realize-once and keeps MLX's graph fusion.
+# ``tensor_requires_grad`` stays deferred: MLX arrays carry no per-array
+# gradient flag (gradients come from function transforms), so reading it
+# raises ``MLXValueUnavailableError`` instead of guessing.
 
 
 @dataclass
@@ -577,34 +577,23 @@ def _reads_values(selector: Any) -> bool:
     return selector is not None and selector_contains_kind(selector, "predicate")
 
 
-def _value_record_context(backend: Any, ctx: RecordContext, leaf: Any) -> RecordContext:
-    """Fill the value fields of a predicate context for one MLX output leaf.
+def _value_record_context(ctx: RecordContext) -> RecordContext:
+    """Give a predicate context torch's live value fields.
 
     Parameters
     ----------
-    backend
-        Active MLX backend (shape and dtype readers).
     ctx
         Deferred-value context from ``build_record_context``.
-    leaf
-        The output array the context describes.
 
     Returns
     -------
     RecordContext
-        ``ctx`` with real ``is_scalar_bool`` and ``bool_value``, following the
-        torch rule: a 0-d boolean output reports its value, anything else
-        reports ``False`` and ``None``.
+        ``ctx`` with ``is_scalar_bool`` and ``bool_value`` set to ``None``, as on
+        torch's live capture path, so a predicate that reads them sees the same
+        values on both backends and no array is evaluated.
     """
 
-    is_scalar_bool = backend._shape(leaf) == () and str(backend._dtype(leaf)).endswith("bool")
-    bool_value: bool | None = None
-    if is_scalar_bool:
-        # The one evaluation this condition costs: the emit path holds the
-        # capture-depth guard, so the read is never logged as a model op.
-        with _state.pause_logging():
-            bool_value = bool(leaf.item())
-    return replace(ctx, is_scalar_bool=is_scalar_bool, bool_value=bool_value)
+    return replace(ctx, is_scalar_bool=None, bool_value=None)
 
 
 def _match_live_sites(
@@ -643,7 +632,7 @@ def _match_live_sites(
     for index, (leaf, entry) in enumerate(zip(outputs, reserved, strict=True)):
         record_ctx = backend.build_record_context(trace, entry, func_event_input, leaf)
         if with_values:
-            record_ctx = _value_record_context(backend, record_ctx, leaf)
+            record_ctx = _value_record_context(record_ctx)
         if plan is not None and selector_matches_capture_context(plan.selector, record_ctx):
             _record_edit(backend, trace, plan, found, index, leaf, entry)
         if (

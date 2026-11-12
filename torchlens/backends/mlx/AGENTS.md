@@ -39,11 +39,12 @@ It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
   kinds plus `predicate` (`tl.where` and bare callables, wrapped by
   `_as_selector()`); module selectors mixed with anything else still refuse.
 - `_match_live_sites()` matches each wrapped call's output leaves against the
-  edit plan and stop selector. Only when one of them holds a `predicate` does
-  `_value_record_context()` fill `is_scalar_bool` / `bool_value`, evaluating
-  0-d bool leaves at the op (one fusion break per such op, that run only).
-  Plain and static-label captures must stay realize-once: never read values on
-  that path. `tensor_requires_grad` stays deferred (MLX has no per-array flag).
+  edit plan and stop selector. When one of them holds a `predicate`,
+  `_value_record_context()` sets `is_scalar_bool` / `bool_value` to `None`,
+  matching torch's live capture contexts. Never evaluate an array in this path:
+  every capture stays realize-once. `tensor_requires_grad` stays deferred (MLX
+  has no per-array flag). If torch's live contexts start carrying values, change
+  both backends together.
 
 ## _source_frames.py
 - `mlx_code_context()` fills `Op.code_context` like the torch walk: TorchLens
