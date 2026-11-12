@@ -124,8 +124,9 @@ class _ThinRow(_PendingRow):
     (:func:`._thin_settle.fill_settle_fields`). The first lazy ref or settle fills them,
     with the same builders and tables today's emit uses at the call, then the row
     becomes a plain ``_PendingRow`` (the same slots), so later reads pay nothing extra.
-    The light reads ``_PendingRow.read`` answers from the hot fields (``parents``,
-    ``parent_arg_positions``) never fill. ``device`` and ``handle_id`` are kept as the
+    The reads that need no settle family never fill: ``parents`` and
+    ``parent_arg_positions`` (``_PendingRow.read``) and the side refs a module exit reads
+    (the thin emit writes ``transformed_out``, the one default they read). ``device`` and ``handle_id`` are kept as the
     device object and the integer id until the fill. ``describe`` is a class attribute
     of the per-commit subclass :func:`_appender` makes.
     """
@@ -146,12 +147,6 @@ class _ThinRow(_PendingRow):
 
         self._fill()
         return _PendingRow.function_ref(self)
-
-    def side_refs(self) -> Any:
-        """Return the op's side refs (``_PendingRow.side_refs``), filled first."""
-
-        self._fill()
-        return _PendingRow.side_refs(self)
 
     def output_ref(self) -> Any:
         """Return the op's output ref (``_PendingRow.output_ref``), filled first."""

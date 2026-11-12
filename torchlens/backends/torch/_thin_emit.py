@@ -98,9 +98,8 @@ def make_thin_emit(helpers: ThinHelpers) -> Callable[[Any, tuple[Any, ...], int]
         """Log one admitted call (``call`` as ``commit_fast_call`` takes it), or return False.
 
         False, with no side effect, unless the call is a plain single output in a plain
-        exhaustive session. The fast-lane gate paid for the rest of today's check:
-        ``admit_call`` admits only exhaustive, not structure-only calls, and an exact
-        tensor without TorchLens metadata is loggable and never a lazy parameter.
+        exhaustive session. The fast-lane gate paid for the rest of today's check (exhaustive
+        calls only; an exact tensor without metadata is loggable, never a lazy parameter).
         """
 
         out = call[6]
@@ -123,7 +122,8 @@ def make_thin_emit(helpers: ThinHelpers) -> Callable[[Any, tuple[Any, ...], int]
             raise RuntimeError("thin emit: a bare tensor output gave a container entry")
         module_stack = frames_of(trace, fields["modules"])
         fields["container_path"] = entry.container_path
-        # The two defaults the alias semantics read at the call; the rest fill at settle.
+        # Defaults read before the row fills (alias semantics, module-exit side refs).
+        fields["transformed_out"] = None
         fields["bytes_delta_at_call"] = fields["bytes_peak_at_call"] = None
         log_info(trace, out, 0, args, kwargs, parent_param_ops, fields, entry.autograd_stats, False)
         # The exhaustive emit's internal reads (``requires_grad``, the alias storage reads).
