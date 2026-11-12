@@ -6,6 +6,7 @@ changing how a call's arguments are scanned edits this module alone.
 :func:`_scan_call_arguments` runs inside the shared-fields builder's alias binding.
 """
 
+import operator
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -71,6 +72,8 @@ _PARAMETER = torch.nn.Parameter
 _TENSOR = torch.Tensor
 #: Exact types that are never an ``AsyncCollectiveTensor`` (a strict Tensor subclass).
 _PLAIN_TENSOR_TYPES = frozenset({_TENSOR, _PARAMETER})
+#: The tensor of a ``(kind, key, tensor, template_visited)`` slot item.
+_ITEM_VALUE = operator.itemgetter(2)
 
 
 def _scan_call_arguments(
@@ -297,23 +300,34 @@ def snapshot_arg_slots(
     workspace = _peek_raw_graph_workspace(trace)
     if not items or workspace is None:
         return ()
-    templates_on = templates_requested(trace)
+    # Built with C-level set and map calls, not comprehensions: once per op.
+    clear_ids = set(map(id, arg_tensors))
     # A flat layout without an ``out`` keyword has no ``out=`` destination.
-    out_ids = _out_destination_ids(call.kwargs) if layout is None or layout.has_out else set()
-    scope = _SnapshotScope(
-        live=trace.capture_events.live_index.by_raw_label,
-        clear_ids=frozenset({id(t) for t in arg_tensors} | out_ids),
-        visited_ids=frozenset(id(v) for _, _, v, seen in items if seen and templates_on),
-    )
+    if layout is None or layout.has_out:
+        clear_ids |= _out_destination_ids(call.kwargs)
+    if not templates_requested(trace):
+        visited_ids: set[int] = set()
+    elif layout is None:
+        visited_ids = {id(value) for _, _, value, seen in items if seen}
+    else:
+        # Every tensor of a flat call is a top-level value the template walk reaches.
+        visited_ids = set(map(id, map(_ITEM_VALUE, items)))
+    scope = _SnapshotScope(trace.capture_events.live_index.by_raw_label, clear_ids, visited_ids)
     facts: dict[int, tuple[Any, ...]] = {}
-    slots = []
+    slot_list = []
+    by_key = {}
+    labels: dict[int, str | None] = {}
     for kind, key, value, _visited in items:
-        if id(value) not in facts:
-            facts[id(value)] = _object_facts(trace, value, scope)
-        slots.append(_ArgSlot(kind, key, id(value), *facts[id(value)]))
-    by_key = {(slot.kind, slot.key): slot for slot in slots}
-    workspace._pending_arg_slots = _SlotContext(call.args, call.kwargs, tuple(slots), by_key)
-    return tuple(slots)
+        value_facts = facts.get(id(value))
+        if value_facts is None:
+            value_facts = facts[id(value)] = _object_facts(trace, value, scope)
+            labels[id(value)] = value_facts[0]
+        slot = _ArgSlot(kind, key, id(value), *value_facts)
+        slot_list.append(slot)
+        by_key[(kind, key)] = slot
+    slots = tuple(slot_list)
+    workspace._pending_arg_slots = _SlotContext(call.args, call.kwargs, slots, by_key, labels)
+    return slots
 
 
 def _set_arg_template_fields(

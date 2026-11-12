@@ -490,23 +490,26 @@ def _build_param_fields(
 ) -> dict[str, int]:
     """Populate parameter-involvement fields. Returns parent_param_ops dict.
 
-    Session-leak defense: a parameter resolves by
-    address ONLY when the address maps in THIS session AND the recorded log's
-    live object IS the value (exact identity, never ``==``). Without the check, a foreign
-    parameter carrying a stale leaked stamp whose address collided with one of
-    THIS model's own parameters resolved into this trace's ``param_logs`` with
-    no object check, so the save bound the call's tensor slot to the model's own
-    (different-valued) state and replay staged the WRONG values as VERIFIED.
-    Unresolved parameters fall through unprovenanced (the honest path: break
-    marker via ``_tensor_has_known_provenance``).
+    Session-leak defense: a parameter resolves by address ONLY when the address maps in
+    THIS session AND the recorded log's live object IS the value (exact identity, never
+    ``==``). Without the check, a foreign parameter carrying a stale leaked stamp whose
+    address collided with one of THIS model's own parameters resolved into this trace's
+    ``param_logs`` with no object check, so the save bound the call's tensor slot to the
+    model's own (different-valued) state and replay staged the WRONG values as VERIFIED.
+    Unresolved parameters fall through unprovenanced (the honest path: break marker via
+    ``_tensor_has_known_provenance``).
     """
     resolved_parameters: list[torch.nn.Parameter] = []
+    validated = _validated_params(self) if arg_parameters else None
     for param in arg_parameters:
         if _is_uninitialized_param(param):
             # A still-uninitialized lazy parameter reachable at op time can
             # only be initialization machinery (e.g. a sibling param during a
             # lazy module's materialize sweep); it has no shape/storage yet
             # and cannot be a real compute input.
+            continue
+        if validated is not None and validated.get(id(param)) is param:
+            resolved_parameters.append(param)  # the checks below, made once per capture
             continue
         param_meta = get_param_meta(param)
         addr = None if param_meta is None else param_meta.param_address
@@ -540,6 +543,20 @@ def _build_param_fields(
     fields_dict["parent_params"] = resolved_parameters
     fields_dict["param_shapes"] = [tuple(param.shape) for param in resolved_parameters]
     return parent_param_ops
+
+
+def _validated_params(trace: "Trace") -> dict[int, Any] | None:
+    """Return the capture's validated-parameter memo, or ``None`` outside a capture.
+
+    A parameter in it was validated by ``_session_validated_parameter``: its prep
+    address maps, by exact key, to a log of this session whose ``_param_ref`` is that
+    very object, which is what ``_build_param_fields`` checks before it resolves one.
+    """
+
+    try:
+        return trace._raw_graph_ws._validated_params
+    except AttributeError:
+        return None
 
 
 @dataclass(frozen=True, slots=True)
