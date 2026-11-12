@@ -1645,10 +1645,8 @@ def register_op_rule(
 # ============================================================================
 
 
-#: Tiers of a function's forward-FLOPs plan. Only ``SPECIALTY`` reads the call's
-#: arguments (shapes, dtypes and non-tensor values, so a recorded stand-in with
-#: ``shape`` and ``dtype`` gives the same count); ``CUSTOM`` hands them to a user rule
-#: and must see the live call.
+#: Forward-FLOPs plan tiers. Only SPECIALTY reads the call's arguments (shapes, dtypes,
+#: non-tensor values); CUSTOM hands them to a user rule, which must see the live call.
 TIER_UNKNOWN, TIER_CUSTOM, TIER_ZERO, TIER_ELEMENTWISE, TIER_SPECIALTY = range(5)
 FlopsPlan = tuple[int, object]
 _UNKNOWN_PLAN: FlopsPlan = (TIER_UNKNOWN, None)
@@ -1658,10 +1656,9 @@ _ZERO_PLAN: FlopsPlan = (TIER_ZERO, None)
 def forward_flops_plan(func_name: str | None) -> FlopsPlan:
     """Return the per-function constant part of the forward FLOPs: ``(tier, payload)``.
 
-    First match wins: a registered custom rule, ZERO_FLOPS_OPS and the zero-arithmetic
-    constructions (0), ELEMENTWISE_FLOPS (payload: cost per output element),
-    SPECIALTY_HANDLERS (payload: the shape handler), else unknown (``None``, never a
-    guess). Read live, so a rule registered later applies to the next call.
+    First match wins: a custom rule, ZERO_FLOPS_OPS and the zero-arithmetic
+    constructions, ELEMENTWISE_FLOPS (payload: cost per output element),
+    SPECIALTY_HANDLERS (payload: the handler), else unknown. Read live each call.
     """
     if func_name is None:
         return _UNKNOWN_PLAN
@@ -1684,25 +1681,28 @@ def compute_forward_flops(
     saved_args: CapturedArgs,
     saved_kwargs: dict[str, object],
 ) -> int | None:
-    """Forward FLOPs of one call: its function's plan resolved on the call's values.
+    """Forward FLOPs of one call: ``forward_flops_plan`` resolved on the call's values.
 
-    ``saved_args`` and ``saved_kwargs`` may be the live arguments or their recorded
-    form (``_capture._recorded_tensor.record_call_values``) for every tier but
-    ``TIER_CUSTOM``. Returns 0 for zero-cost ops and ``None`` for an unknown op.
+    The plan's lookups run inline, in its order. ``saved_args`` and ``saved_kwargs`` may
+    be the live arguments or their recorded form (``_recorded_tensor``) for every tier
+    but ``TIER_CUSTOM``. Returns 0 for zero-cost ops and ``None`` for an unknown op.
     """
-    tier, payload = forward_flops_plan(func_name)
-    if tier == TIER_ELEMENTWISE:
-        return None if output_shape is None else cast(int, payload) * _numel(output_shape)
-    if tier == TIER_ZERO:
+    if func_name is None:
+        return None
+    if _CUSTOM_OP_RULES:
+        custom = _CUSTOM_OP_RULES.get(func_name)
+        if custom is not None:
+            return custom[0](output_shape, param_shapes, saved_args, saved_kwargs)
+    if func_name in ZERO_FLOPS_OPS or func_name in ZERO_ARITHMETIC_CONSTRUCTIONS:
         return 0
-    if tier == TIER_SPECIALTY:
-        args = _with_operand_kwargs(func_name, saved_args, saved_kwargs)
-        return cast(_FlopsHandler, payload)(output_shape, param_shapes, args)
-    if tier == TIER_CUSTOM:
-        return cast(Callable[..., int | None], payload)(
-            output_shape, param_shapes, saved_args, saved_kwargs
-        )
-    return None
+    cost = ELEMENTWISE_FLOPS.get(func_name)
+    if cost is not None:
+        return None if output_shape is None else cost * _numel(output_shape)
+    handler = SPECIALTY_HANDLERS.get(func_name)
+    if handler is None:
+        return None
+    args = _with_operand_kwargs(func_name, saved_args, saved_kwargs)
+    return handler(output_shape, param_shapes, args)
 
 
 def compute_backward_flops(

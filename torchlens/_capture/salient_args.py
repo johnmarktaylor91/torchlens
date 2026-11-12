@@ -52,6 +52,10 @@ def _register(*layer_types: str) -> Callable[[Extractor], Extractor]:
 # ---------------------------------------------------------------------------
 
 
+#: Marks a function name the decoration registry holds no argument names for.
+_NO_NAMES: Any = object()
+
+
 def _build_arg_name_map(
     func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any]
 ) -> SalientArgs:
@@ -61,16 +65,13 @@ def _build_arg_name_map(
     If argnames aren't available, returns just kwargs.
     """
     normalized_func_name = func_name.strip("_")
-    argnames = _st._arg_names.get(
-        normalized_func_name,
-        _ARG_NAME_FALLBACKS.get(normalized_func_name, ()),
-    )
+    argnames = _st._arg_names.get(normalized_func_name, _NO_NAMES)
+    if argnames is _NO_NAMES:
+        argnames = _ARG_NAME_FALLBACKS.get(normalized_func_name, ())
     result = dict(kwargs)
-    for i, val in enumerate(args):
-        if i < len(argnames):
-            name = argnames[i]
-            if name not in result:  # kwargs take precedence
-                result[name] = val
+    for name, val in zip(argnames, args):
+        if name not in result:  # kwargs take precedence
+            result[name] = val
     return result
 
 
@@ -80,15 +81,13 @@ def _to_simple(val: Any) -> Any:
     Converts torch.Tensor (or its recorded form) to its shape tuple, recursively
     handles lists/tuples. Passes through int, float, str, bool, None.
     """
-    if isinstance(val, torch.Tensor):
+    if isinstance(val, (torch.Tensor, RecordedTensor)):
         return tuple(val.shape)
     if isinstance(val, (list, tuple)):
         converted = tuple(_to_simple(v) for v in val)
         return converted
     if isinstance(val, torch.dtype):
         return str(val)
-    if type(val) is RecordedTensor:
-        return val.shape
     return val
 
 

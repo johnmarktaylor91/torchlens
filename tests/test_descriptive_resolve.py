@@ -102,7 +102,7 @@ def spied() -> Iterator[dict[str, list[tuple]]]:
     seen: dict[str, list[tuple]] = {"salient": [], "flops": [], "descriptive": []}
     orig_salient = salient_mod.extract_salient_args
     orig_flops = flops_mod.compute_forward_flops
-    orig_resolve = desc_mod.resolve_descriptive
+    orig_set = desc_mod._set_descriptive_fields
 
     def salient_spy(layer_type, func_name, args, kwargs, param_shapes=None):
         result = orig_salient(layer_type, func_name, args, kwargs, param_shapes)
@@ -119,15 +119,16 @@ def spied() -> Iterator[dict[str, list[tuple]]]:
         seen["flops"].append(((func_name, output_shape, shapes, *rec), result))
         return result
 
-    def resolve_spy(family, func_name):
-        result = orig_resolve(family, func_name)
-        seen["descriptive"].append(((family, func_name), result))
-        return result
+    def set_spy(fields_dict, func, func_name):
+        orig_set(fields_dict, func, func_name)
+        family = desc_mod.observe_descriptive(func, func_name)
+        written = tuple(fields_dict[key] for key in desc_mod.DESCRIPTIVE_FIELDS)
+        seen["descriptive"].append(((family, func_name), written))
 
     patched = (
         _patch_everywhere(orig_salient, salient_spy)
         + _patch_everywhere(orig_flops, flops_spy)
-        + _patch_everywhere(orig_resolve, resolve_spy)
+        + _patch_everywhere(orig_set, set_spy)
     )
     try:
         yield seen
@@ -239,3 +240,26 @@ def test_forward_flops_plan_reads_custom_rules_live() -> None:
         assert flops_mod.compute_forward_flops(name, (2,), [], (), {}) == 11
     finally:
         del flops_mod._CUSTOM_OP_RULES[name]
+
+
+def test_forward_flops_plan_matches_the_inline_dispatch_for_every_table_entry() -> None:
+    """The plan names the tier the call's dispatch takes, for every name in every table."""
+
+    names = (
+        set(flops_mod.ZERO_FLOPS_OPS)
+        | set(flops_mod.ZERO_ARITHMETIC_CONSTRUCTIONS)
+        | set(flops_mod.ELEMENTWISE_FLOPS)
+        | set(flops_mod.SPECIALTY_HANDLERS)
+    )
+    for name in sorted(names):
+        tier, payload = flops_mod.forward_flops_plan(name)
+        assert tier in (flops_mod.TIER_ZERO, flops_mod.TIER_ELEMENTWISE, flops_mod.TIER_SPECIALTY)
+        if tier == flops_mod.TIER_ZERO:
+            assert flops_mod.compute_forward_flops(name, (2, 3), [], (), {}) == 0, name
+        elif tier == flops_mod.TIER_ELEMENTWISE:
+            assert flops_mod.compute_forward_flops(name, (2, 3), [], (), {}) == payload * 6, name
+            assert flops_mod.compute_forward_flops(name, None, [], (), {}) is None, name
+        else:
+            assert payload is flops_mod.SPECIALTY_HANDLERS[name], name
+    assert flops_mod.forward_flops_plan(None) == (flops_mod.TIER_UNKNOWN, None)
+    assert flops_mod.compute_forward_flops(None, (2,), [], (), {}) is None

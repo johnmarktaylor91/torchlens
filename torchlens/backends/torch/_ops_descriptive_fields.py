@@ -92,18 +92,26 @@ def _set_descriptive_fields(
 ) -> None:
     """Record the callable's qualified name, argument names and transform descriptors.
 
-    The values are :func:`resolve_descriptive` over :func:`observe_descriptive`; keys
-    keep the order the per-op code wrote them in.
+    Writes the values ``resolve_descriptive(observe_descriptive(func, func_name),
+    func_name)`` returns, inline so the call pays no intermediate tuples; keys keep the
+    order the per-op code wrote them in.
     """
 
-    (
-        fields_dict["func_qualname"],
-        fields_dict["arg_names"],
-        fields_dict["is_transform"],
-        fields_dict["transform_kind"],
-        fields_dict["transform_chain"],
-        fields_dict["transform_config"],
-        fields_dict["transform_fn_name"],
-        fields_dict["transform_fn_qualname"],
-        fields_dict["transform_fn_source"],
-    ) = resolve_descriptive(observe_descriptive(func, func_name), func_name)
+    family = CALLABLE_FAMILY.get(func_name)
+    if family is None or family[0] is not func:
+        family = callable_family(func, func_name)
+    _, qualname, is_transform, kind, chain, fn_name, fn_qualname, fn_source, config = family
+    fields_dict["func_qualname"] = qualname
+    arg_names = _st._arg_names.get(func_name)
+    if arg_names is None:
+        arg_names = (
+            () if func_name.startswith("__") else _st._arg_names.get(func_name.strip("_"), ())
+        )
+    fields_dict["arg_names"] = arg_names
+    fields_dict["is_transform"] = is_transform
+    fields_dict["transform_kind"] = kind
+    fields_dict["transform_chain"] = chain
+    fields_dict["transform_config"] = {} if config is NO_CONFIG else snapshot_mutable_arg(config)
+    fields_dict["transform_fn_name"] = fn_name
+    fields_dict["transform_fn_qualname"] = fn_qualname
+    fields_dict["transform_fn_source"] = fn_source
