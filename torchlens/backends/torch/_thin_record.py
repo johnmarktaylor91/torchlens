@@ -207,7 +207,7 @@ def _appender(edge_use_builder: Any, layout: Any, describe: Any) -> _Commit:
         pending.params = _param_refs_from_fields(fields) if fields["parent_params"] else ()
         pending.requires_grad = bool(requires_grad)
         pending.device = tensor.device
-        pending.handle_id = id(tensor)
+        pending.handle_id = id(tensor)  # type: ignore[assignment]  # a str from the fill on
         pending._options_save_mode = trace._options_save_mode
         pending.events = dict(zip(parents, found, strict=True))
         pending.journal = journal
