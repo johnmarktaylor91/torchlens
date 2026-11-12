@@ -87,13 +87,7 @@ from ._capture_helpers import (
     paddle_layer_type,
 )
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
-from .constants_rule import (
-    PADDLE_CONSTANT_OP,
-    constant_labels,
-    find_closure_tensors,
-    is_constant_capture,
-    is_literal_producer_capture,
-)
+from .constants_rule import constant_labels, is_constant_capture, is_literal_producer_capture
 from .derived_grads import (
     _is_float_dtype_text,
     _is_float_paddle_tensor,
@@ -112,6 +106,8 @@ from .model_prep import (
     prepare_model_once,
     prepare_model_session,
 )
+from .source_frames import paddle_code_context
+from .source_leaves import PaddleSourceLeaves, record_source_leaves
 from .tensor_store import PaddleTensorLabelStore
 from .validation_decisions import (
     OUTCOME_EXEMPTED,
@@ -300,9 +296,9 @@ class PaddleBackend:
         self.tensor_store = PaddleTensorLabelStore()
         self._param_address_by_id: dict[int, str] = {}
         self._param_write_guard = ParameterWriteGuard()
-        # Tensors proven to exist before the forward (constants rule): held
-        # strongly for the capture so their ids cannot be reused.
-        self._closure_tensors: dict[int, Any] = {}
+        # Registered buffers and proven closure constants (``source_leaves``):
+        # held strongly for the capture so their ids cannot be reused.
+        self._source_leaves = PaddleSourceLeaves()
 
     def capture_trace(
         self,
@@ -530,11 +526,8 @@ class PaddleBackend:
             else {}
         )
         self._param_write_guard = ParameterWriteGuard.capture(model, self._param_address_by_id)
-        self._closure_tensors = find_closure_tensors(
-            model,
-            self.paddle.Tensor,
-            getattr(getattr(self.paddle, "nn", None), "Layer", None),
-            exclude_ids=self._param_address_by_id,
+        self._source_leaves = PaddleSourceLeaves.capture(
+            model, self.paddle, self._param_address_by_id
         )
         # R07: the try owns the wrap call itself -- a raise anywhere between
         # wrapper install and the forward (source labeling) used to strand the
@@ -559,6 +552,7 @@ class PaddleBackend:
                 f"{PARAMETER_WRITE_MARKER}: {address}"
                 for address in self._param_write_guard.written_addresses(trace)
             )
+            trace._paddle_capture_gap_markers.extend(self._source_leaves.written_markers(trace))
             if halt_signal is not None:
                 trace.is_stopped = True
                 trace.stop_reason = trace._graph_stop_frontier = halt_signal.reason
@@ -593,7 +587,7 @@ class PaddleBackend:
         finally:
             self._param_address_by_id = {}
             self._param_write_guard = ParameterWriteGuard()
-            self._closure_tensors = {}
+            self._source_leaves = PaddleSourceLeaves()
             # Independently-owned resources: a raising hook cleanup must not
             # leave the process-global Paddle wrappers installed.
             try:
@@ -1120,7 +1114,7 @@ class PaddleBackend:
         if events is None:
             events = CaptureEvents()
             trace.capture_events = events
-        self._record_closure_constants(trace, events, args, kwargs)
+        record_source_leaves(self, trace, events, args, kwargs, PaddleOpCapture)
         reserved = events.reserve_label_block(paddle_layer_type(op_name), len(outputs))
         func_call_id = events.func_call_id_counter + 1
         events.func_call_id_counter = func_call_id
@@ -1248,84 +1242,6 @@ class PaddleBackend:
                     )
                     raise StopSignal(site.label_raw, frontier_output=final_output)
         return final_output
-
-    def _record_closure_constants(
-        self,
-        trace: Trace,
-        events: CaptureEvents,
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-    ) -> None:
-        """Record each proven closure constant among an op's inputs (SPEC 2 rule 1).
-
-        A tensor leaf qualifies only when it has no label, is not a registered
-        parameter of the captured tree, and was found before the forward by
-        the reachability walk. It becomes a parentless ``constant`` source op
-        with a saved payload, labelled like any op, so the consuming op lists
-        it as a parent. Every other unlabeled leaf stays a capture gap.
-        """
-
-        if not self._closure_tensors:
-            return
-        leaves = (
-            *self._iter_tensors_with_paths(args, root=("args",)),
-            *self._iter_tensors_with_paths(kwargs, root=("kwargs",)),
-        )
-        for _path, tensor in leaves:
-            if self._closure_tensors.get(id(tensor)) is not tensor:
-                continue
-            if self.tensor_store.get_label(tensor) is not None:
-                continue
-            if id(tensor) in self._param_address_by_id:
-                continue
-            self._emit_constant(trace, events, tensor)
-
-    def _emit_constant(self, trace: Trace, events: CaptureEvents, tensor: object) -> None:
-        """Append one closure-constant op event and its validation record."""
-
-        site = events.reserve_label_block(PADDLE_CONSTANT_OP, 1)[0]
-        func_call_id = events.func_call_id_counter + 1
-        events.func_call_id_counter = func_call_id
-        event = self._build_event(
-            session=trace,
-            kind="op",
-            reserved=site,
-            func_event_input=FunctionEventInput(
-                func=None,
-                func_name=PADDLE_CONSTANT_OP,
-                func_qualname=None,
-                args=(),
-                kwargs={},
-                raw_output=tensor,
-                arg_copies=None,
-                kwarg_copies=None,
-                module_stack=tuple(getattr(trace, "_paddle_module_stack", ())),
-                is_bottom_level_func=True,
-                func_call_id=func_call_id,
-                expected_output_count=1,
-            ),
-            output=tensor,
-            parents=(),
-            parent_arg_positions={"args": {}, "kwargs": {}},
-            edge_uses=(),
-            policy=self._capture_policy(trace),
-            is_input=False,
-            container_path=(),
-        )
-        trace._paddle_op_captures.append(
-            PaddleOpCapture(
-                func=None,
-                op_name=PADDLE_CONSTANT_OP,
-                label_raw=site.label_raw,
-                args_template=(),
-                kwargs_template={},
-                tensor_inputs=(),
-                output_leaf_paths=((),),
-                producer_labels=frozenset(),
-            )
-        )
-        events.extend((event,))
-        self.tensor_store.set_label(tensor, site.label_raw)
 
     def build_record_context(
         self,
@@ -1578,7 +1494,7 @@ class PaddleBackend:
                 func_name=func_event_input.func_name,
                 func_qualname=func_event_input.func_qualname,
                 func_call_id=func_event_input.func_call_id,
-                code_context=(),
+                code_context=paddle_code_context(session, kind),
                 func_duration=None,
                 flops_forward=None,
                 flops_backward=None,

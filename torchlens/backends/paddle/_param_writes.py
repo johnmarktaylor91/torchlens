@@ -84,6 +84,17 @@ class ParameterWriteGuard:
                 snapshots[id(param)] = (address, param, _host_copy(param, None))
         return cls(snapshots)
 
+    @classmethod
+    def of_tensors(cls, entries: Mapping[int, tuple[str, Any]]) -> ParameterWriteGuard:
+        """Fingerprint named tensors (registered buffers) before the forward."""
+
+        return cls(
+            {
+                key: (address, tensor, _host_copy(tensor, None))
+                for key, (address, tensor) in entries.items()
+            }
+        )
+
     def was_written(self, param: Any, trace: Any) -> bool:
         """Return whether ``param`` differs from its pre-forward value.
 
