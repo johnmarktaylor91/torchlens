@@ -21,8 +21,10 @@ from ..._literals import (
 )
 from ..._postprocess._grouping_stamp import validate_grouping_knob
 from ..._postprocess._selective_save import (
+    apply_backend_post_plan,
     apply_static_label_save_policy,
     reject_selector_outside_kinds,
+    split_backend_post_options,
 )
 from ..._selection.selectors import BaseSelector
 from ..._trace_selector_helpers import (
@@ -708,4 +710,7 @@ def _dispatch_trace(
     _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
     _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
     _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
-    return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
+    # Non-torch: value-dependent/lookback save= and save shaping run on the finished capture.
+    post_plan = split_backend_post_options(public_trace_kwargs, str(resolved_spec.name))
+    trace = resolved_spec.capture_trace(**public_trace_kwargs)
+    return cast("Trace", apply_backend_post_plan(trace, post_plan, str(resolved_spec.name)))
