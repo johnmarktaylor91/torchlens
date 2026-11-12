@@ -1,9 +1,9 @@
 """Graduation criteria as checkable items (SPEC section 5).
 
-Six ``GraduationItem`` rows turn the maintainer's bar for a stable backend
-into predicates over the backend's scorecard, the torch reference scorecard
-and the repository. The report is advisory: it never changes ``maturity``
-(only a recorded maintainer decision does), it is embedded in the scorecard
+Six ``GraduationItem`` rows turn the bar for a complete backend into
+predicates over the backend's scorecard, the torch reference scorecard and
+the repository. The report is evidence, not a label: no backend carries a
+maturity label (retired 2026-11-12), the report is embedded in the scorecard
 record, and ``python -m tests.conformance.scorecard --backend <b>
 --graduation`` prints it.
 """
@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ._cases import TIER_C1, TIER_C2
+from ._protocol_cases import C1_REFUSAL_OPTION_PREFIX, C1_REFUSAL_PREFIX
 
 if TYPE_CHECKING:
     from ._scorecard import PreviewScorecard
@@ -140,9 +141,7 @@ def _g1(card: PreviewScorecard, reference: PreviewScorecard | None) -> Graduatio
             own.setdefault(cell.case_id, set()).add(cell.state)
         torch_passed = {cell.case_id for cell in reference.cells if cell.state == "passed"}
         missing = sorted(
-            case_id
-            for case_id in torch_passed
-            if case_id not in own or not own[case_id] <= {"passed", "unsupported"}
+            case_id for case_id in torch_passed if not _covered(case_id, own, card.capabilities)
         )
         if missing:
             problems.append(f"torch-passed cells not passed or unsupported here: {missing[:4]}")
@@ -156,6 +155,23 @@ def _g1(card: PreviewScorecard, reference: PreviewScorecard | None) -> Graduatio
         True,
         f"{len(cells)} per-change cells passed or typed-unsupported; torch's cells covered",
     )
+
+
+def _covered(case_id: str, own: dict[str, set[str]], capabilities: dict[str, str]) -> bool:
+    """Whether the backend covers one cell torch passed.
+
+    The backend's own cell must be passed or typed-unsupported. A torch refusal
+    cell (``c1_refusal_<flag>``, torch refusing a capability it lacks) is also
+    covered when the backend supports that capability: a backend with the
+    capability has no refusal to test, so the cell is absent, not missing.
+    """
+
+    states = own.get(case_id)
+    if states is not None:
+        return states <= {"passed", "unsupported"}
+    if case_id.startswith(C1_REFUSAL_PREFIX) and not case_id.startswith(C1_REFUSAL_OPTION_PREFIX):
+        return capabilities.get(case_id[len(C1_REFUSAL_PREFIX) :]) == "supported"
+    return False
 
 
 def _g2(card: PreviewScorecard) -> GraduationItem:

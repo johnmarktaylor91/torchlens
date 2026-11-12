@@ -114,13 +114,12 @@ def test_clean_c2_record_on_an_installed_framework_reads_pass(shipped: dict[str,
                 ("C2", "c2_roundtrip_completes", "mlp", "passed", ""),
             ),
             highest_tier="C2",
-            extra={"maturity": "stable"},
         ),
     )
     row = next(r for r in backend_scorecard_rows() if r.key == f"{ROW_KEY_PREFIX}torch")
     assert row.status == "pass"
     assert row.severity == "ok"
-    assert "stable; 3/3 cells passed, 0 unsupported, 0 failed" in row.details
+    assert row.details.startswith("3/3 cells passed, 0 unsupported, 0 failed;")
     assert row.suggestion == ""
     cards = {card.backend: card for card in backend_scorecards()}
     assert cards["torch"].highest_tier == "C2"
@@ -141,7 +140,7 @@ def test_absent_framework_reads_scope_with_the_install_extra(shipped: dict[str, 
         None,
     )
     if absent is None:
-        pytest.skip("every preview framework with an extra is installed here")
+        pytest.skip("every non-torch framework with an extra is installed here")
     shipped["_write"](  # type: ignore[operator]
         absent,
         _record(
@@ -202,8 +201,43 @@ def test_malformed_or_non_object_record_is_treated_as_absent(shipped: dict[str, 
     assert row.status == "not_tested"
 
 
+@pytest.mark.parametrize("backend", ["torch", "jax", "tf", "mlx", "paddle", "tinygrad"])
+def test_failed_cells_warn_the_same_on_every_backend(
+    shipped: dict[str, Path], backend: str
+) -> None:
+    """A failed cell reads ``known_broken`` at ``warning`` on torch and every other backend.
+
+    The row text starts with the cell counts, never with a label word.
+    """
+
+    shipped["_write"](  # type: ignore[operator]
+        backend,
+        _record(
+            backend,
+            cells=(
+                ("C0", "c0_protocol_complete", "", "passed", ""),
+                ("C1", "c1_reference_parity", "mlp", "failed", "planted"),
+            ),
+            highest_tier="C0",
+        ),
+    )
+    row = next(r for r in backend_scorecard_rows() if r.key == f"{ROW_KEY_PREFIX}{backend}")
+    assert row.status == "known_broken"
+    assert row.severity == "warning"
+    assert row.details.startswith("1/2 cells passed, 0 unsupported, 1 failed;")
+
+
+def test_shipped_records_never_turn_the_doctor_report_red() -> None:
+    """No row built from the scorecards shipped in the package has ``error`` severity."""
+
+    severities = {row.key: row.severity for row in backend_scorecard_rows()}
+    assert severities, "no backend_scorecard rows"
+    assert "error" not in severities.values(), severities
+
+
 def test_scorecard_from_record_tolerates_later_versions_and_missing_optionals() -> None:
-    """Extra (v2) keys load; missing counts and tier default; cells become ScorecardCell."""
+    """Extra keys load (a v2 record's retired ``maturity`` too); missing counts and tier
+    default; cells become ScorecardCell."""
 
     card = scorecard_from_record(
         {

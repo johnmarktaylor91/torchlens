@@ -68,7 +68,6 @@ def _row_for_spec(spec: Any) -> DoctorCheck:
     record = read_shipped_scorecard(spec.name)
     framework = _framework_requirement(spec)
     installed = framework._installed_version() if framework is not None else None
-    maturity = str(_record_value(record, "maturity") or getattr(spec, "maturity", "preview"))
     counts = _counts(record)
     status = _status_for(record, counts, installed=installed)
     extra = getattr(framework, "extra", "") if framework is not None else ""
@@ -76,9 +75,9 @@ def _row_for_spec(spec: Any) -> DoctorCheck:
         key=f"{ROW_KEY_PREFIX}{spec.name}",
         label=f"{spec.name} backend scorecard",
         status=status,
-        severity=_severity_for(status, maturity),
+        severity=_severity_for(status),
         is_detected=installed is not None,
-        details=_details(record, counts, maturity, framework, installed),
+        details=_details(record, counts, framework, installed),
         suggestion=_suggestion(record, status, installed, spec.name, extra),
     )
 
@@ -140,20 +139,25 @@ def _status_for(
     return "not_tested" if counts["not_run"] > 0 else "scope"
 
 
-def _severity_for(status: str, maturity: str) -> Severity:
-    """Row severity: a stable backend's failures are errors, a preview's warnings."""
+def _severity_for(status: str) -> Severity:
+    """Row severity, the same for every backend.
+
+    A clean record is ``ok``. Failed conformance cells are a ``warning``, never
+    an ``error``: the record is a measurement shipped with the release, not a
+    check of the user's environment, so a known failing cell must not turn the
+    user's doctor report red. Everything else is ``info``.
+    """
 
     if status == "pass":
         return "ok"
     if status == "known_broken":
-        return "error" if maturity == "stable" else "warning"
+        return "warning"
     return "info"
 
 
 def _details(
     record: dict[str, Any] | None,
     counts: dict[str, int],
-    maturity: str,
     framework: Any | None,
     installed: str | None,
 ) -> str:
@@ -176,7 +180,7 @@ def _details(
         else (f"tested through {tested_through}" if tested_through else "none")
     )
     return (
-        f"{maturity}; {cells}; pinned {pinned if pinned is not None else 'unpinned'}, "
+        f"{cells}; pinned {pinned if pinned is not None else 'unpinned'}, "
         f"installed {installed if installed is not None else 'absent'}, "
         f"supported [{minimum}, {upper})"
     )
