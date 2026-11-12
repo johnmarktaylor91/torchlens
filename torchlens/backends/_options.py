@@ -514,7 +514,6 @@ MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "activation_transform",
             "detach_saved_activations",
             "save_args",
-            "save_source_context",
             "save_rng",
             "backward_ready",
             "transform",

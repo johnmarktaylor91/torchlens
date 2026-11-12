@@ -5,9 +5,9 @@ holding ``mx.compile`` or traced-transform attributes whose interiors are never
 logged, and an intervention selector that matched no site. Each one is
 disclosed with a ``UserWarning`` (the compiled-attribute case also marks the
 trace unverified). A ``stop_after`` selector that never fired refuses typed
-(``stop_after_never_fired``), as on torch. The backend module calls these from
-``capture_trace``; the warning stack level points at that method's caller, as
-it did inline.
+(``stop_after_never_fired``), as on torch; an unfired callable is recorded.
+The backend module calls these from ``capture_trace``; the warning stack level
+points at that method's caller, as it did inline.
 """
 
 from __future__ import annotations
@@ -52,7 +52,8 @@ def _disclose_compiled_attributes(trace: Trace, compiled_attribute_paths: Sequen
 def _disclose_unfired_selectors(
     trace: Trace,
     intervention_plan: object | None,
-    halt_selector: object | None,
+    stop_site: object | None,
+    resolved_stop: object | None,
     *,
     halted: bool,
 ) -> None:
@@ -64,8 +65,12 @@ def _disclose_unfired_selectors(
         Trace just captured; its ``_mlx_intervene_fired`` flag is consumed.
     intervention_plan
         Resolved intervention plan, or ``None`` when none was requested.
-    halt_selector
-        Resolved ``stop_after`` selector, or ``None`` when none was requested.
+    stop_site
+        The requested ``stop_after`` site (a selector or a callable), or
+        ``None`` when none was requested.
+    resolved_stop
+        The selector the site resolved to: the site itself for a selector, a
+        ``tl.where`` wrapper for a callable.
     halted
         Whether the forward stopped at the ``stop_after`` selector.
     """
@@ -81,7 +86,7 @@ def _disclose_unfired_selectors(
             stacklevel=3,
         )
     if not halted:
-        # Same never-fired policy as torch. MLX admits only a static selector
-        # as the stop_after site (``interventions.resolve``), so an unfired one
-        # refuses typed (``stop_after_never_fired``), never a silent full forward.
-        settle_unfired_stop_after(trace, halt_selector, selector_shaped=True)
+        # Same never-fired policy as torch: an unfired selector refuses typed
+        # (``stop_after_never_fired``), never a silent full forward; an unfired
+        # callable is exploratory and is recorded in the trace annotations.
+        settle_unfired_stop_after(trace, stop_site, selector_shaped=stop_site is resolved_stop)

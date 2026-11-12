@@ -754,12 +754,12 @@ torchlens/backends/jax/modules.py::_walk_equinox_modules	79
 torchlens/backends/jax/modules.py::_walk_nnx_modules	76
 torchlens/backends/jax/modules.py::equinox_param_logs	74
 torchlens/backends/jax/modules.py::nnx_param_logs	62
-torchlens/backends/mlx/backend.py	2496
+torchlens/backends/mlx/backend.py	2475
 torchlens/backends/mlx/backend.py::MLXBackend._attach_derived_grads	158
 torchlens/backends/mlx/backend.py::MLXBackend._build_event	129
 torchlens/backends/mlx/backend.py::MLXBackend._records_for_intermediate_mlx_grads	91
 torchlens/backends/mlx/backend.py::MLXBackend.capture_trace	230
-torchlens/backends/mlx/backend.py::MLXBackend.emit_mlx_operation	173
+torchlens/backends/mlx/backend.py::MLXBackend.emit_mlx_operation	141
 torchlens/backends/mlx/backend.py::MLXBackend.validate_trace	66
 torchlens/backends/mlx/backend.py::_find_mlx_compiled_attributes	84
 torchlens/backends/mlx/interventions.py::_resolve_helper_applier	63
