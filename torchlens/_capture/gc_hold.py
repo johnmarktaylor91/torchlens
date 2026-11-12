@@ -43,8 +43,6 @@ from __future__ import annotations
 import gc
 import threading
 
-__all__ = ["HOLD_GEN0_THRESHOLD", "hold_collector", "release_collector"]
-
 #: Generation-0 threshold while a capture runs (CPython's default is 700).
 #: Applied only when the collector is enabled and the user's own threshold is
 #: lower and nonzero (zero means automatic collection is off).
