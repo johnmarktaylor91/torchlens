@@ -43,7 +43,7 @@ def test_jax_protocol_object_is_complete_and_declares_registered_codes() -> None
     proto = _protocol()
     assert isinstance(proto, BackendProtocol)
     assert protocol_problems(proto, expected_name="jax") == ()
-    assert proto.maturity == "preview"
+    assert not hasattr(proto, "maturity")
     assert proto.materialization == "eager"
     assert proto.framework._consistency_problems() == ()
     assert proto.framework.pinned is not None

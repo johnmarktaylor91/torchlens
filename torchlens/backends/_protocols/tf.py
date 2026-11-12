@@ -1,4 +1,4 @@
-"""TensorFlow preview ``BackendProtocol`` (delegating; eager)."""
+"""TensorFlow ``BackendProtocol`` (delegating; eager)."""
 
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ TF_FRAMEWORK = FrameworkRequirement(
 )
 
 #: Test-only dependencies of the TensorFlow ecosystem roster rows: installed by
-#: the nightly preview leg only, never by a pyproject extra or the per-change
+#: the nightly backend leg only, never by a pyproject extra or the per-change
 #: leg. The pins test holds the nightly install to it.
 TF_ECOSYSTEM_TEST_REQUIREMENTS: tuple[str, ...] = ("keras-hub>=0.21,<1",)
 
-#: Refusal codes the TensorFlow preview raises today (a subset of the registry).
+#: Refusal codes the TensorFlow backend raises today (a subset of the registry).
 TF_REFUSAL_CODES: tuple[str, ...] = (
     "trace_option_unsupported",
     "explicit_seed_unsupported",
@@ -43,12 +43,11 @@ TF_REFUSAL_CODES: tuple[str, ...] = (
 
 
 class TFProtocol(SpecBackedProtocol):
-    """The TensorFlow preview's protocol object."""
+    """The TensorFlow backend's protocol object."""
 
     def __init__(self) -> None:
         super().__init__(
             name="tf",
-            maturity="preview",
             framework=TF_FRAMEWORK,
             materialization="eager",
             trace_options=TF_TRACE_OPTIONS,

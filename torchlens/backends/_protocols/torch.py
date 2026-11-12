@@ -32,7 +32,7 @@ def replay_ready_capture() -> Any:
     """The ``CaptureOptions`` the protocol's capture uses when the caller passes none.
 
     Torch's replay validation re-executes each op from its saved arguments
-    and RNG state, which a default ``tl.trace`` does not record (the preview
+    and RNG state, which a default ``tl.trace`` does not record (the other
     backends record what their replay needs by default).
     """
 
@@ -45,7 +45,6 @@ class TorchProtocol(SpecBackedProtocol):
     def __init__(self) -> None:
         super().__init__(
             name="torch",
-            maturity="stable",
             framework=TORCH_FRAMEWORK,
             materialization="eager",
             trace_options=TORCH_TRACE_OPTIONS,

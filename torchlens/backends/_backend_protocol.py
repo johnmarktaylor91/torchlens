@@ -7,7 +7,7 @@ the realize-once hook for lazy frameworks and the closed refusal-code
 registry. It is deliberately small. The 37-method orchestration adapter in
 ``_protocol.py`` (``CaptureBackend``) stays torch's internal seam until the
 capture-pipeline rebuild makes torch implement this protocol natively; today
-torch satisfies it through a delegating adapter and the preview backends
+torch satisfies it through a delegating adapter and the other backends
 through delegating shells, so nothing about any backend's capture changes by
 registering one.
 
@@ -43,11 +43,9 @@ from ._errors import BackendUnsupportedError
 
 __tl_layer__ = "L2"
 
-Maturity = Literal["preview", "stable"]
-
 #: ``registry.get_backend_spec``, bound by the registry at import. The shells
 #: read specs through this hook so this leaf never imports the registry that
-#: imports it (``protocol_problems``, ``MATURITIES``).
+#: imports it (``protocol_problems``).
 _spec_lookup: Callable[[str], Any] | None = None
 
 
@@ -59,10 +57,6 @@ def _install_spec_lookup(lookup: Callable[[str], Any]) -> None:
 
 
 Materialization = Literal["eager", "lazy"]
-
-#: The launch labels a backend may carry. Only a recorded maintainer decision
-#: flips one; no code computes it (``graduation_report`` is advisory).
-MATURITIES: frozenset[str] = frozenset({"preview", "stable"})
 
 #: Whether op outputs are concrete when a wrapped call returns (``eager``) or
 #: deferred until an evaluation (``lazy``); lazy backends obey realize-once.
@@ -293,7 +287,6 @@ class BackendProtocol(Protocol):
     """
 
     name: str
-    maturity: str
     framework: FrameworkRequirement
     materialization: str
 
@@ -345,7 +338,6 @@ class BackendProtocol(Protocol):
 #: Runtime attributes a registered protocol object must expose.
 BACKEND_PROTOCOL_MEMBERS: tuple[str, ...] = (
     "name",
-    "maturity",
     "framework",
     "materialization",
     "capabilities",
@@ -385,8 +377,6 @@ def protocol_problems(candidate: Any, *, expected_name: str | None = None) -> tu
         return tuple(problems)
     if expected_name is not None and candidate.name != expected_name:
         problems.append(f"name {candidate.name!r} differs from the spec name {expected_name!r}")
-    if candidate.maturity not in MATURITIES:
-        problems.append(f"maturity {candidate.maturity!r} is not one of {sorted(MATURITIES)}")
     if candidate.materialization not in MATERIALIZATIONS:
         problems.append(
             f"materialization {candidate.materialization!r} is not one of "
@@ -412,8 +402,6 @@ class SpecBackedProtocol:
     ----------
     name:
         Registered backend name.
-    maturity:
-        Launch label.
     framework:
         The framework requirement.
     materialization:
@@ -428,14 +416,12 @@ class SpecBackedProtocol:
         self,
         *,
         name: str,
-        maturity: str,
         framework: FrameworkRequirement,
         materialization: str,
         trace_options: Iterable[str],
         refusal_codes: Iterable[str],
     ) -> None:
         self.name = name
-        self.maturity = maturity
         self.framework = framework
         self.materialization = materialization
         self._trace_options = tuple(trace_options)

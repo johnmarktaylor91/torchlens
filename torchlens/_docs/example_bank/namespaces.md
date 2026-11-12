@@ -91,10 +91,10 @@ Look up the registered capture backends and the torch backend's spec.
 ```python
 names = [s.name for s in tl.backends.specs()]
 print("torch" in names)
-print(tl.backends.spec("torch").maturity)
+print(tl.backends.spec("torch").protocol().materialization)
 # Output:
 # True
-# stable
+# eager
 ```
 
 ## Interventions and comparisons

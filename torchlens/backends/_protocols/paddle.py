@@ -1,4 +1,4 @@
-"""Paddle preview ``BackendProtocol`` shell (delegating; eager dygraph)."""
+"""Paddle ``BackendProtocol`` shell (delegating; eager dygraph)."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ from typing import Any
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
 from .._trace_options import PADDLE_TRACE_OPTIONS
 
-# Refusal codes the Paddle preview raises, each spelled once. Every
+# Refusal codes the Paddle backend raises, each spelled once. Every
 # ``BackendUnsupportedError`` raised inside ``torchlens.backends.paddle`` passes
 # one of these as ``code=``. They live in this import-light shell (not the
 # Paddle package) because registration validates ``refusal_codes()`` while the
 # package cannot be imported yet.
 
-#: An option (or option combination) the preview does not implement.
+#: An option (or option combination) the Paddle backend does not implement.
 PADDLE_REFUSAL_OPTION = "trace_option_unsupported"
-#: ``random_seed=`` on the preview.
+#: ``random_seed=`` on the Paddle backend.
 PADDLE_REFUSAL_SEED = "explicit_seed_unsupported"
 #: A ``module_identity_mode`` outside the declared tuple, or one the root cannot honour.
 PADDLE_REFUSAL_IDENTITY_MODE = "module_identity_mode_unsupported"
@@ -78,12 +78,11 @@ PADDLE_FRAMEWORK = FrameworkRequirement(
 
 
 class PaddleProtocol(SpecBackedProtocol):
-    """The Paddle preview's protocol object."""
+    """The Paddle backend's protocol object."""
 
     def __init__(self) -> None:
         super().__init__(
             name="paddle",
-            maturity="preview",
             framework=PADDLE_FRAMEWORK,
             materialization="eager",
             trace_options=PADDLE_TRACE_OPTIONS,

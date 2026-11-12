@@ -1,15 +1,16 @@
-"""A backend's ``maturity`` label can never outrun its evidence.
+"""No backend carries a maturity label; the graduation evidence stays.
 
-``maturity`` is a recorded maintainer decision (only JMT flips it), stored
-once on the backend's protocol object and mirrored by its ``BackendSpec``.
-These tests pin the evidence side: a backend registered ``"stable"`` ships a
-scorecard whose six graduation items are all met, so the label cannot claim
-more than the conformance suite measured. Torch, the reference, is the one
-stable backend today and must pass.
+The ``preview``/``stable`` label (``BackendSpec.maturity``) was retired on
+2026-11-12 (maintainer ruling). Each backend's shipped scorecard keeps its six
+graduation items as evidence of how far the conformance suite has measured it.
+These tests pin both halves: the label is gone from every spec, protocol
+object and shipped record, every shipped record still embeds the six items,
+and torch, the reference, must meet all six.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from typing import Any
 
@@ -17,6 +18,7 @@ import pytest
 
 from tests.conformance._graduation import GraduationItem
 from tests.conformance._scorecard import PreviewScorecard, shipped_scorecard
+from torchlens.backends._scorecard_rows import shipped_scorecard_path
 from torchlens.backends.registry import registered_backend_specs
 
 #: The graduation item ids (SPEC section 5), in report order.
@@ -27,8 +29,8 @@ def _registered_specs() -> tuple[Any, ...]:
     return tuple(spec for spec in registered_backend_specs() if spec.protocol is not None)
 
 
-def stable_label_problems(backend: str, card: PreviewScorecard | None) -> list[str]:
-    """Why a ``stable`` label is not backed by ``card`` (empty when it is).
+def graduation_problems(backend: str, card: PreviewScorecard | None) -> list[str]:
+    """Why ``card`` does not show ``backend`` meeting every graduation item (empty when it does).
 
     Parameters
     ----------
@@ -44,12 +46,10 @@ def stable_label_problems(backend: str, card: PreviewScorecard | None) -> list[s
     """
 
     if card is None:
-        return [f"{backend} is stable but ships no scorecard.json"]
+        return [f"{backend} ships no scorecard.json"]
     problems: list[str] = []
     if card.backend != backend:
         problems.append(f"scorecard names backend {card.backend!r}, not {backend!r}")
-    if card.maturity != "stable":
-        problems.append(f"scorecard records maturity {card.maturity!r}, not 'stable'")
     items = {item.id: item for item in card.graduation}
     for item_id in GRADUATION_ITEM_IDS:
         item = items.get(item_id)
@@ -60,13 +60,27 @@ def stable_label_problems(backend: str, card: PreviewScorecard | None) -> list[s
     return problems
 
 
-def test_torch_is_the_registered_stable_reference() -> None:
-    """Torch is registered stable and every preview is registered preview."""
+def test_no_spec_protocol_or_shipped_record_carries_a_maturity_label() -> None:
+    """The retired label is absent from every spec, protocol object and shipped record."""
 
-    labels = {spec.name: spec.maturity for spec in _registered_specs()}
-    assert labels["torch"] == "stable"
-    previews = {name for name in ("tf", "jax", "mlx", "paddle", "tinygrad") if name in labels}
-    assert {labels[name] for name in previews} <= {"preview"}
+    specs = _registered_specs()
+    assert {"torch", "jax", "tf", "mlx", "paddle", "tinygrad"} <= {spec.name for spec in specs}
+    for spec in specs:
+        assert not hasattr(spec, "maturity"), spec.name
+        assert not hasattr(spec.protocol(), "maturity"), spec.name
+        path = shipped_scorecard_path(spec.name)
+        if path.is_file():
+            assert "maturity" not in json.loads(path.read_text(encoding="utf-8")), spec.name
+
+
+def test_every_shipped_scorecard_embeds_the_six_graduation_items() -> None:
+    """Each backend's shipped record keeps G1 to G6, in order, as evidence."""
+
+    for spec in _registered_specs():
+        card = shipped_scorecard(spec.name)
+        assert card is not None, f"{spec.name} ships no scorecard.json"
+        assert card.backend == spec.name
+        assert [item.id for item in card.graduation] == list(GRADUATION_ITEM_IDS), spec.name
 
 
 @pytest.mark.xfail(
@@ -78,13 +92,11 @@ def test_torch_is_the_registered_stable_reference() -> None:
         "the random_forward cells"
     ),
 )
-def test_every_stable_backend_has_all_graduation_items_met() -> None:
-    """A ``stable`` backend's shipped scorecard meets G1 to G6 (torch included)."""
+def test_the_torch_reference_meets_every_graduation_item() -> None:
+    """Torch's shipped scorecard meets G1 to G6."""
 
-    stable = [spec.name for spec in _registered_specs() if spec.maturity == "stable"]
-    assert "torch" in stable
-    problems = {name: stable_label_problems(name, shipped_scorecard(name)) for name in stable}
-    assert not any(problems.values()), problems
+    problems = graduation_problems("torch", shipped_scorecard("torch"))
+    assert not problems, problems
 
 
 def _record(**graduation_met: bool) -> PreviewScorecard:
@@ -97,7 +109,6 @@ def _record(**graduation_met: bool) -> PreviewScorecard:
         cells=(),
         counts={},
         highest_tier="C2",
-        maturity="stable",
         graduation=tuple(
             GraduationItem(id=item_id, met=graduation_met.get(item_id, True), detail="planted")
             for item_id in GRADUATION_ITEM_IDS
@@ -106,18 +117,21 @@ def _record(**graduation_met: bool) -> PreviewScorecard:
 
 
 @pytest.mark.parametrize("item_id", GRADUATION_ITEM_IDS)
-def test_one_unmet_item_breaks_the_stable_label(item_id: str) -> None:
+def test_one_unmet_item_is_reported_by_id(item_id: str) -> None:
     """Anti-vacuity: each planted unmet item is caught, by id."""
 
-    problems = stable_label_problems("torch", _record(**{item_id: False}))
+    problems = graduation_problems("torch", _record(**{item_id: False}))
     assert len(problems) == 1 and item_id in problems[0]
 
 
-def test_missing_items_and_missing_records_break_the_stable_label() -> None:
-    """A record without items, or no record at all, never backs ``stable``."""
+def test_missing_items_missing_records_and_wrong_backend_are_reported() -> None:
+    """A record without items, no record at all, or another backend's record is a problem."""
 
     record = _record()
     record = replace(record, graduation=record.graduation[:-1])
-    assert stable_label_problems("torch", record) == ["graduation item G6 is missing"]
-    assert stable_label_problems("torch", None) == ["torch is stable but ships no scorecard.json"]
-    assert len(stable_label_problems("torch", replace(_record(), maturity="preview"))) == 1
+    assert graduation_problems("torch", record) == ["graduation item G6 is missing"]
+    assert graduation_problems("torch", None) == ["torch ships no scorecard.json"]
+    assert graduation_problems("torch", replace(_record(), backend="jax")) == [
+        "scorecard names backend 'jax', not 'torch'"
+    ]
+    assert graduation_problems("torch", _record()) == []

@@ -329,7 +329,6 @@ def test_scorecard_command_writes_checks_and_grades(tmp_path: Path, monkeypatch:
             (cell,),
             {"passed": 1, "denominator": 1},
             "C0",
-            maturity="preview",
             graduation=(GraduationItem("G1", False, "stub"),),
         )
     )
