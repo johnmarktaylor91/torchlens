@@ -37,6 +37,7 @@ from torch import nn
 PHASE_MARKERS: tuple[tuple[str, str, str], ...] = (
     ("backends/torch/wrappers.py", "wrapped_func", "wrapper"),
     ("backends/torch/_ops_emission.py", "log_function_output_tensors", "wrapper.emit"),
+    ("backends/torch/_thin_emit.py", "thin_emit", "wrapper.emit"),
     ("backends/torch/_ops_finalize.py", "_make_layer_log_entry", "wrapper.emit.make_entry"),
     (
         "backends/torch/_ops_shared_fields.py",
