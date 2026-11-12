@@ -70,6 +70,9 @@ class _Cone:
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
+#: ``fields["code"]`` of every refusal this provider raises (PROPOSED NAME).
+_REFUSAL_CODE = "gradient_replay_unavailable"
+
 
 def _refusing(probe: Callable[_P, _R]) -> Callable[_P, _R]:
     """Convert the cone replay's internal refusal into the public typed refusal.
@@ -78,7 +81,7 @@ def _refusing(probe: Callable[_P, _R]) -> Callable[_P, _R]:
     records, an op that cannot be replayed or does not reproduce the capture, a
     non-floating endpoint, no reachable input, a row sweep over its limit) is one
     condition for a caller: this trace cannot answer a gradient probe. It surfaces
-    as one :class:`ReceptiveFieldUnavailableError` with the specific message.
+    as one coded :class:`ReceptiveFieldUnavailableError` with the specific message.
     """
 
     @functools.wraps(probe)
@@ -86,7 +89,7 @@ def _refusing(probe: Callable[_P, _R]) -> Callable[_P, _R]:
         try:
             return probe(*args, **kwargs)
         except ReplayRefusal as exc:
-            raise ReceptiveFieldUnavailableError(str(exc)) from exc
+            raise ReceptiveFieldUnavailableError(str(exc), code=_REFUSAL_CODE) from exc
 
     return refusing
 
@@ -253,7 +256,7 @@ def receptive_for_unit(
     Raises
     ------
     ReceptiveFieldUnavailableError
-        When the backend has no
+        With code ``gradient_replay_unavailable`` when the backend has no
         cone-replay module, an endpoint has no floating payload, an op on the
         cone cannot be replayed, or replay does not reproduce the capture.
     """
