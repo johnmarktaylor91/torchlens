@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1843 modules, 728052 lines, 0 modules without a docstring.
+85 packages, 1843 modules, 728047 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 164 | 65325 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 164 | 65320 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1541,7 +1541,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (164 modules, 65325 lines)
+Torch backend implementation package for TorchLens capture. (164 modules, 65320 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1668,7 +1668,7 @@ Torch backend implementation package for TorchLens capture. (164 modules, 65325 
 | `_state_bytes` | Byte views of tensor state: the whole-storage snapshot and the byte-exact state compare. | 102 |
 | `_storage_exports` | Copy out pending payload aliases before a tensor's storage is handed to the host zero-copy. | 291 |
 | `_storage_overlap` | Storage-overlap geometry for mutation-label propagation (pure, no capture state). | 191 |
-| `_thin_emit` | The thin emit: one plain admitted call, its observations, its tensor effects, one append. | 190 |
+| `_thin_emit` | The thin emit: one plain admitted call, its observations, its tensor effects, one append. | 185 |
 | `_thin_record` | The thin record: one plain admitted call's commit as a deferred journal row. | 228 |
 | `_thin_settle` | The thin record path's settle side: the per-call defaults table and the plain-session facts. | 115 |
 | `_tl` | Compatibility path for the tensor-label metadata helpers (now ''torchlens._utils._tensor_label''). | 77 |

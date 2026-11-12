@@ -151,7 +151,7 @@
         "tests/test_distribution_outputs.py",
         "tests/test_intervention_phase4b.py",
         "tests/test_mutable_arg_snapshot.py",
-        "tests/test_paddle_equality_capture.py"
+        "tests/test_thin_emit_soundness.py"
       ],
       "torchlens/_capture/_cook_facts.py": [
         "tests/test_rerun_refresh_moves_values.py",
@@ -10681,12 +10681,12 @@
         "tests/test_validation.py"
       ],
       "torchlens/backends/torch/_ops_descriptive_fields.py": [
-        "tests/test_call_layout_plans.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_livecheck_module_exit_only.py",
-        "tests/test_op_row_cells.py",
+        "tests/test_plain_emit_soundness.py",
         "tests/test_r28_validation_identity_witness.py",
         "tests/test_r29_capval_hardening.py",
+        "tests/test_thin_emit_soundness.py",
         "tests/test_valmem5_saved_value_aliases.py",
         "tests/test_view_write_call_alias_edges.py"
       ],
