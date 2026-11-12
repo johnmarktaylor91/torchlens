@@ -193,22 +193,13 @@ def _bare_output_aliases(
             if logging_enabled:
                 draw()
             if output_ptr is None:
-                try:
-                    output_ptr = read(raw_output).data_ptr()
-                except RuntimeError:
-                    output_ptr = _NO_POINTER
+                output_ptr = _storage_pointer(raw_output, read)
             if output_ptr is _NO_POINTER:
                 continue
             if logging_enabled:
                 draw()
-            try:
-                if tensor.__class__ is output_class:
-                    input_ptr = read(tensor).data_ptr()
-                else:
-                    input_ptr = tensor_read(tensor, "untyped_storage")(tensor).data_ptr()
-            except RuntimeError:
-                continue
-            if input_ptr == output_ptr:
+            same_class = tensor.__class__ is output_class
+            if _storage_pointer(tensor, read if same_class else None) == output_ptr:
                 aliased += (position,)
     return aliased
 
@@ -240,20 +231,24 @@ def _aliased_input_positions(
                     break
                 if logging_enabled:
                     draw()
-                output_ptr = pointers.get(id(output))
-                if output_ptr is None:
-                    output_ptr = pointers[id(output)] = _storage_pointer(output, None)
+                output_ptr = _cached_pointer(pointers, output)
                 if output_ptr is _NO_POINTER:
                     continue
                 if logging_enabled:
                     draw()
-                input_ptr = pointers.get(id(tensor))
-                if input_ptr is None:
-                    input_ptr = pointers[id(tensor)] = _storage_pointer(tensor, None)
-                if input_ptr == output_ptr:
+                if _cached_pointer(pointers, tensor) == output_ptr:
                     aliased.append(position)
                     break
     return tuple(aliased)
+
+
+def _cached_pointer(pointers: dict[int, Any], tensor: torch.Tensor) -> Any:
+    """Return ``tensor``'s storage pointer, reading it only on its first request in a call."""
+
+    pointer = pointers.get(id(tensor))
+    if pointer is None:
+        pointer = pointers[id(tensor)] = _storage_pointer(tensor, None)
+    return pointer
 
 
 def _storage_pointer(tensor: torch.Tensor, read: Any) -> Any:
