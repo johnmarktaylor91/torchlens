@@ -254,9 +254,7 @@ class TorchLensTLCollisionError(AttributeError):
 # lifetime == key-object lifetime, identical to the former attribute. Modules'
 # metadata is permanent/cross-session; a process-wide registry preserves that.
 # --------------------------------------------------------------------------- #
-# Values are ModuleMeta / ParamMeta respectively (WeakIdKeyDictionary is not
-# typing-subscriptable, so the value type is documented rather than annotated).
-# ``IdKeyRegistry`` is that dictionary with an identity-checked read cache.
+# Values: ModuleMeta / ParamMeta (documented, not annotated); reads cached by identity.
 _MODULE_REGISTRY: WeakIdKeyDictionary = IdKeyRegistry()
 _PARAM_REGISTRY: WeakIdKeyDictionary = IdKeyRegistry()
 
