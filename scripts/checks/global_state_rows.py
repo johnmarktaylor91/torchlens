@@ -892,6 +892,10 @@ they carry an epoch/version counter where downstream caches must invalidate.
 
 _PROCESS_CACHES = frozenset(
     {
+        # Facet snapshot provenance id of the last recipe tuple: reused only while the
+        # recipes' public records are the very same objects in the same order (frozen,
+        # strings and a bool only), so an entry never goes stale.
+        ("torchlens/_semantic/_facet_provenance.py", "_LAST_PROVENANCE"),
         # Output-node copy read plan per (Op class, shared fields, unread fields):
         # descriptors and attribute names derived from the class and the field
         # order constant, so an entry never goes stale.
