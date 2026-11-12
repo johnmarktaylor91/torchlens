@@ -514,6 +514,20 @@ def _multi_output_admitted(out: Any, args: tuple[Any, ...], kwargs: dict[str, An
     return True
 
 
+_THIN_EMIT: list[Any] = [None]
+"""The thin emit (``_thin_emit.thin_emit``), bound on the first fast call: its module is
+inside the capture import cycle this module stays outside of."""
+
+
+def _load_thin_emit() -> Callable[..., bool]:
+    """Bind and return the thin emit, which serves an admitted plain call or declines it."""
+
+    from ._thin_emit import thin_emit
+
+    _THIN_EMIT[0] = thin_emit
+    return thin_emit
+
+
 def commit_fast_call(
     emit: Callable[..., Any],
     trace: Any,
@@ -521,7 +535,10 @@ def commit_fast_call(
     func_call_id: int,
     window: tuple[Any, list[torch.Tensor]],
 ) -> Any:
-    """Emit one admitted bottom-level call through today's emit and return its output.
+    """Emit one admitted bottom-level call and return its output.
+
+    A plain single output in a plain session goes to the thin emit
+    (:func:`._thin_emit.thin_emit`); every other call goes to today's emit.
 
     Parameters
     ----------
@@ -553,7 +570,8 @@ def commit_fast_call(
     runtime = trace._wrapper_runtime_ws
     runtime.fast_scan = (call[2], tensors)
     try:
-        emit(trace, *call, True, func_call_id)
+        if not (_THIN_EMIT[0] or _load_thin_emit())(trace, call, func_call_id):
+            emit(trace, *call, True, func_call_id)
     finally:
         runtime.fast_scan = None
         if cow_state_ptrs is not None:
