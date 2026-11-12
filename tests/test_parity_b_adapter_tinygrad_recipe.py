@@ -10,10 +10,11 @@ import pytest
 
 import torchlens as tl
 from torchlens.backends._replay_adapters import (
-    ReplayRecipeError,
+    ReplayRefusal,
     decode_recipe,
     encode_recipe,
     get_adapter,
+    validate_recipe,
 )
 
 pytest.importorskip("tinygrad")
@@ -41,6 +42,7 @@ def _round_tripped_recipes(trace: Any) -> dict[str, Any]:
         recipe = adapter.recipe(trace, op)
         if recipe is None:
             continue
+        validate_recipe(recipe)
         text = json.dumps(encode_recipe(recipe))
         decoded = decode_recipe(json.loads(text), backend="tinygrad", allowlist=adapter.ALLOWLIST)
         assert decoded == recipe
@@ -104,9 +106,9 @@ def test_bind_refuses_missing_foreign_and_corrupt_recipes() -> None:
         {**recipes, label: replace(item, attrs={**item.attrs, "n_src": 0})},
     ]
     for bad in cases:
-        with pytest.raises(ReplayRecipeError):
+        with pytest.raises(ReplayRefusal):
             adapter.bind_recipes(trace, bad)
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         decode_recipe(
             {**encode_recipe(item), "op_identity": "tinygrad.uop.CUSTOM"},
             backend="tinygrad",

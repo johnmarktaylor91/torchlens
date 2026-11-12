@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.backends._replay_adapters import get_adapter
+from torchlens.backends._replay_adapters import ReplaySession, ReplayStep, get_adapter
 
 pytest.importorskip("tinygrad")
 from tinygrad import Tensor  # noqa: E402
@@ -182,3 +182,21 @@ def test_random_op_is_refused_with_a_reason() -> None:
     reason = adapter.can_replay(trace, op)
     assert reason is not None and "random" in reason
     assert adapter.recipe(trace, op) is None
+
+
+@pytest.mark.parametrize("row", ROWS, ids=lambda row: row.family)
+def test_session_chain_replays_every_roster_op_from_replayed_parents(row: Any) -> None:
+    """Through ``ReplaySession`` each op takes its parents' replayed values; all match."""
+
+    model, value = row.builder()
+    trace = _capture(model, value)
+    initial, steps = {}, []
+    for op in trace._layer_list:
+        recipe = adapter.recipe(trace, op)
+        if recipe is None:
+            initial[op.label] = op.out
+        else:
+            steps.append(ReplayStep.from_recipe(op, recipe))
+    values = ReplaySession(adapter, trace, steps, initial=initial).run()
+    for op in trace._layer_list:
+        assert adapter.close(op.out, values[op.label]), op.label

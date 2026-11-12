@@ -37,7 +37,7 @@ from ..tinygrad._raw_labels import _final_to_raw_labels
 from ..tinygrad._rules import CONSTANT_KIND_ANNOTATION, RNG_UOP_NAMES
 from ..tinygrad._uop_graph import _uop_name
 from ..tinygrad.backend import _payloads_close, _saved_single_output, _source_matches_payload
-from ._contract import InputOccurrence, OpRecipe, ReplayRecipeError
+from ._contract import InputOccurrence, OpRecipe, ReplayRefusal
 
 __tl_layer__ = "L2"
 
@@ -399,7 +399,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     """Rebuild ``trace.tinygrad_uop_captures`` from recipes and the trace's saved payloads.
 
     Every op that is not an input source needs a recipe; a missing, foreign,
-    unlisted or inconsistent recipe raises :class:`ReplayRecipeError` before
+    unlisted or inconsistent recipe raises :class:`ReplayRefusal` before
     the trace is changed.
     """
 
@@ -411,7 +411,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
         by_raw[raw] = TinygradUOpCapture(*_capture_fields(item, raw, ops_by_raw, final_to_raw))
     for raw, op in ops_by_raw.items():
         if raw not in by_raw and getattr(op, "parents", ()):
-            raise ReplayRecipeError("slots", "op has no recipe", op_label=op.label)
+            raise ReplayRefusal("slots", "op has no recipe", op_label=op.label)
     trace.tinygrad_uop_captures = tuple(by_raw[raw] for raw in ops_by_raw if raw in by_raw)
 
 
@@ -421,14 +421,14 @@ def _check_recipe(
     """The raw label ``item`` binds to, after its identity and slots are checked."""
 
     if item.backend != BACKEND:
-        raise ReplayRecipeError("backend", f"recipe is for {item.backend!r}", op_label=label)
+        raise ReplayRefusal("backend", f"recipe is for {item.backend!r}", op_label=label)
     if item.op_identity not in ALLOWLIST:
-        raise ReplayRecipeError("unknown_op", f"{item.op_identity!r} is unlisted", op_label=label)
+        raise ReplayRefusal("unknown_op", f"{item.op_identity!r} is unlisted", op_label=label)
     if item.output_slots != (label,):
-        raise ReplayRecipeError("slots", "a tinygrad op has exactly its own slot", op_label=label)
+        raise ReplayRefusal("slots", "a tinygrad op has exactly its own slot", op_label=label)
     raw = final_to_raw.get(label)
     if raw is None or raw not in ops_by_raw:
-        raise ReplayRecipeError("slots", "no op in the trace has this label", op_label=label)
+        raise ReplayRefusal("slots", "no op in the trace has this label", op_label=label)
     return raw
 
 
@@ -441,14 +441,14 @@ def _capture_fields(
     payload = _saved(ops_by_raw[raw])
     if item.op_identity == SAVED_VALUE_IDENTITY:
         if item.inputs:
-            raise ReplayRecipeError("shape", "a saved value has no inputs", op_label=label)
+            raise ReplayRefusal("shape", "a saved value has no inputs", op_label=label)
         return (raw, payload.uop, str(item.attrs.get("uop_op", "")), (), (), payload)
     occurrences = []
     for occurrence in item.inputs:
         path = occurrence.arg_path
         parent_raw = final_to_raw.get(occurrence.parent_label)
         if len(path) != 1 or type(path[0]) is not int or parent_raw not in ops_by_raw:
-            raise ReplayRecipeError("shape", "bad parent occurrence", op_label=label)
+            raise ReplayRefusal("shape", "bad parent occurrence", op_label=label)
         occurrences.append((path[0], parent_raw))
     uop = _rebuild_uop(item, occurrences, ops_by_raw)
     occurrences.sort()
@@ -472,7 +472,7 @@ def _rebuild_uop(
     name = item.op_identity.removeprefix(_UOP_IDENTITY_PREFIX)
     n_src = attrs.get("n_src")
     if attrs.get("uop_op") != name or type(n_src) is not int or n_src < 0:
-        raise ReplayRecipeError("shape", "attrs disagree with the op identity", op_label=label)
+        raise ReplayRefusal("shape", "attrs disagree with the op identity", op_label=label)
     src: list[Any] = [None] * n_src
     try:
         for path, tree in item.literals:
@@ -492,9 +492,7 @@ def _rebuild_uop(
             _decode_ops(name), _decode_dtype(attrs["dtype"]), tuple(src), _decode_arg(attrs["arg"])
         )
     except (_NotData, KeyError, TypeError, AttributeError) as error:
-        raise ReplayRecipeError(
-            "shape", f"cannot rebuild the UOp: {error}", op_label=label
-        ) from error
+        raise ReplayRefusal("shape", f"cannot rebuild the UOp: {error}", op_label=label) from error
 
 
 # --- structural encoding -------------------------------------------------------
