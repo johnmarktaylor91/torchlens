@@ -68,8 +68,8 @@ def _sealed_store(ops: Any, records: Any, trace: Trace) -> Any:
         return None
     plain = OpRowStore if store._rows is None else _SealedRowMajorOpRowStore
     applies = (
-        getattr(records, "_owner", None) is owner
-        and owner._store is store
+        owner._store is store
+        and getattr(records, "_owner", None) is owner
         and store._sealed
         and store.__class__ is plain
         and not store._cow_shared
