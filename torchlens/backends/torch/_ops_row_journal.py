@@ -194,9 +194,9 @@ class _PendingRow(dict[str, Any]):
             value = self[name] = self.function_ref()
             return value
         if name in ANCESTRY_NAMES:
-            self.resolve_ancestry()
-            return self[name]
-        self.settle(handle)
+            self.resolve_ancestry()  # the answer is an item now, so the read stays deferred
+        else:
+            self.settle(handle)
         return getattr(handle, name)
 
     def resolve_ancestry(self) -> None:
