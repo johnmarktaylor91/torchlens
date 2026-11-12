@@ -1,9 +1,16 @@
 """Structural argument hash for the equivalence class of a parameter-free op.
 
-Moved out of ``tensor_tracking`` unchanged, plus a bounded memo of the final digest:
-the tokens are exact strings, so equal token tuples have the same digest.
+Moved out of ``tensor_tracking`` unchanged, then split into an observation and a
+resolver (lane FQ). :func:`observe_arg_inputs` records each top-level argument at the
+call: an immutable value (an exact tensor's shape, an exact ``int``, ``float``,
+``bool``, ``None``, ``str``, dtype or device) by reference, and anything else as
+today's tokens computed at the call, so a mutable argument changed after the call
+keeps its call-time class. :func:`resolve_arg_hash` is a pure function of that record
+and may run after the call. The digest memo is keyed on the record: two equal records
+give the same tokens, so they have the same digest.
 """
 
+from math import copysign
 from typing import Any
 
 import torch
@@ -11,7 +18,7 @@ import torch
 from ..._utils.hashing import make_short_barcode_from_input
 from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
 
-__all__ = ("_get_hash_from_args",)
+__all__ = ("_get_hash_from_args", "observe_arg_inputs", "resolve_arg_hash")
 
 
 def _get_hash_from_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
@@ -26,48 +33,112 @@ def _get_hash_from_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
         A short deterministic hash string, or ``"no_args"`` if no non-tensor
         arguments are present.
     """
-    args_to_hash: list[Any] = []
-    for a, arg in enumerate(args):
-        _append_top_arg_hash(arg, f"pos{a}", args_to_hash)
-    for key, arg in kwargs.items():
-        _append_top_arg_hash(arg, f"kw_{key}", args_to_hash)
+    return resolve_arg_hash(observe_arg_inputs(args, kwargs))
 
-    if len(args_to_hash) == 0:
+
+# Record entry kinds. Every entry starts with its kind and its argument's prefix, so
+# entries of different kinds never compare equal and the record is a sound memo key.
+_SHAPE = 0  # (kind, prefix, shape): an exact tensor
+_PLAIN = 1  # (kind, prefix, value, type): an exact int, bool or None
+_FLOAT = 2  # (kind, prefix, value, sign): an exact float; the sign tells 0.0 from -0.0
+_LEAF = 3  # (kind, prefix, value, type): an exact str, dtype or device
+_TOKENS = 4  # (kind, token, ...): tokens computed at the call
+
+_PLAIN_TYPES = frozenset((int, bool, type(None)))
+"""Exact leaf types whose token is ``f"{prefix}_{arg}"``; equal values of one type print alike."""
+
+_LEAF_TYPES = frozenset((str, torch.dtype, torch.device))
+"""Exact immutable types whose token is :func:`_leaf_arg_token`; equal values print alike."""
+
+_POS_PREFIXES = tuple(f"pos{index}" for index in range(32))
+
+
+def observe_arg_inputs(args: tuple[Any, ...], kwargs: dict[str, Any]) -> tuple[Any, ...]:
+    """Record the call's arguments for :func:`resolve_arg_hash`, in argument order.
+
+    Immutable values are held by reference; every other value is held as the tokens
+    :func:`_append_arg_hash` computes for it now. A value that yields no token (a
+    parameter) adds no entry, so the record is empty exactly when the tokens are.
+    """
+
+    record: list[Any] = []
+    for index, arg in enumerate(args):
+        prefix = _POS_PREFIXES[index] if index < 32 else f"pos{index}"
+        _observe_top_arg(arg, prefix, record)
+    for key, arg in kwargs.items():
+        _observe_top_arg(arg, f"kw_{key}", record)
+    return tuple(record)
+
+
+def _observe_top_arg(arg: Any, prefix: str, record: list[Any]) -> None:
+    """Append the record entry of one top-level argument (none for a parameter)."""
+
+    arg_type = type(arg)
+    if arg_type is torch.Tensor:
+        # An exact tensor is never a lazy one: torch's lazy test is an isinstance check
+        # against the uninitialized mixin, which only its subclasses carry, and a
+        # materialized one has become an initialized tensor.
+        record.append((_SHAPE, prefix, arg.shape))
+    elif arg_type in _PLAIN_TYPES:
+        record.append((_PLAIN, prefix, arg, arg_type))
+    elif arg_type is float:
+        record.append((_FLOAT, prefix, arg, copysign(1.0, arg)))
+    elif arg_type in _LEAF_TYPES:
+        record.append((_LEAF, prefix, arg, arg_type))
+    else:
+        tokens: list[Any] = [_TOKENS]
+        _append_arg_hash(arg, prefix, tokens)
+        if len(tokens) > 1:
+            record.append(tuple(tokens))
+
+
+def _record_tokens(record: tuple[Any, ...]) -> list[str]:
+    """Return the hash tokens of a record: the tokens the generic walk appends."""
+
+    tokens: list[str] = []
+    for entry in record:
+        kind = entry[0]
+        if kind == _SHAPE:
+            tokens.append(f"{entry[1]}_tensor{entry[2]}")
+        elif kind in (_PLAIN, _FLOAT):
+            tokens.append(f"{entry[1]}_{entry[2]}")
+        elif kind == _LEAF:
+            tokens.append(_leaf_arg_token(entry[2], entry[1]))
+        else:
+            tokens.extend(entry[1:])
+    return tokens
+
+
+def resolve_arg_hash(record: tuple[Any, ...]) -> str:
+    """Return the argument hash of a record from :func:`observe_arg_inputs`.
+
+    A pure function of the record, so it gives the call-time hash whenever it runs.
+    """
+
+    if not record:
         return "no_args"
-    # Every token is an f-string (an exact ``str``), so equal token tuples encode to the
-    # same JSON payload and the same digest: the memo answers the digest of the tokens.
-    tokens = tuple(args_to_hash)
-    barcode = _ARG_HASH_DIGESTS.get(tokens)
+    barcode = _ARG_HASH_DIGESTS.get(record)
     if barcode is None:
         if len(_ARG_HASH_DIGESTS) >= _ARG_HASH_DIGESTS_MAX:
             _ARG_HASH_DIGESTS.clear()
-        barcode = _ARG_HASH_DIGESTS[tokens] = make_short_barcode_from_input(args_to_hash)
+        barcode = _ARG_HASH_DIGESTS[record] = make_short_barcode_from_input(_record_tokens(record))
     return barcode
-
-
-_PLAIN_SCALAR_TYPES = frozenset((int, float, bool, type(None)))
-"""Exact leaf types whose token is ``f"{prefix}_{arg}"`` (their ``str`` holds no address)."""
 
 
 def _append_top_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any]) -> None:
     """Append one top-level argument's tokens, as :func:`_append_arg_hash` appends them.
 
-    An exact tensor takes its tensor token and a plain scalar its leaf token
-    directly (the branches :func:`_append_arg_hash` reaches for them at depth 0);
-    every other value goes through :func:`_append_arg_hash`.
+    The tokens come from the argument's record entry, so this is the observation and
+    the resolver applied to one argument.
     """
 
-    arg_type = type(arg)
-    if arg_type is torch.Tensor:
-        args_to_hash.append(_tensor_hash_token(prefix, arg))
-    elif arg_type in _PLAIN_SCALAR_TYPES:
-        args_to_hash.append(f"{prefix}_{arg}")
-    else:
-        _append_arg_hash(arg, prefix, args_to_hash)
+    record: list[Any] = []
+    _observe_top_arg(arg, prefix, record)
+    args_to_hash.extend(_record_tokens(tuple(record)))
 
 
-_ARG_HASH_DIGESTS: dict[tuple[str, ...], str] = {}
-"""Argument-hash tokens to their barcode (a pure function of the tokens), bounded."""
+_ARG_HASH_DIGESTS: dict[tuple[Any, ...], str] = {}
+"""Argument records to their barcode (a pure function of the record), bounded."""
 
 _ARG_HASH_DIGESTS_MAX = 4096
 

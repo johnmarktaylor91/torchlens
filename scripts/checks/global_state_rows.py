@@ -1022,8 +1022,9 @@ _PROCESS_CACHES = frozenset(
         # objects; a hit is checked by identity). Bounded by the names a process wraps.
         ("torchlens/backends/torch/_ops_function_family.py", "CALLABLE_FAMILY"),
         ("torchlens/backends/torch/_ops_function_family.py", "NAME_FAMILY"),
-        # Argument-hash digest per token tuple (exact strings, a pure function of the
-        # tokens); holds no tensors and is cleared when it reaches its bound.
+        # Argument-hash digest per argument record (shapes, exact immutable scalars and
+        # call-time token strings; a pure function of the record); holds no tensors and
+        # is cleared when it reaches its bound.
         ("torchlens/backends/torch/_arg_hash.py", "_ARG_HASH_DIGESTS"),
         ("torchlens/backends/torch/_graph_pins.py", "_BACKWARD_GRAD_FN_REGISTRY"),
         # Model-state root-matching boundaries, same lifecycle as the registry
