@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1832 modules, 725629 lines, 0 modules without a docstring.
+85 packages, 1832 modules, 725634 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 60 | 23083 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 60 | 23088 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15068 |
@@ -749,7 +749,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (60 modules, 23083 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (60 modules, 23088 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -758,7 +758,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (6
 | `_branch_attribution` | Frame-level conditional branch attribution for one op's call stack. | 157 |
 | `_branch_source` | Source text readers and source-range predicates for the conditional AST indexer. | 187 |
 | `_buffer_addresses` | Buffer-address resolution for postprocess step 0. | 297 |
-| `_buffer_fixup` | Step 6 body: connect buffer sources, merge re-logged reads, number buffer passes. | 203 |
+| `_buffer_fixup` | Step 6 body: connect buffer sources, merge re-logged reads, number buffer passes. | 208 |
 | `_buffer_source_wiring` | Step 6 buffer-source wiring and buffer value comparison for ''control_flow''. | 124 |
 | `_call_site_contract` | The call-site grouping contract (''callsite_v1'', ''callsite_v2'') and its in-memory evidence. | 133 |
 | `_column_passes` | Postprocess pass bodies that read and write ''Op'' fields through column views. | 76 |
