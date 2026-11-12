@@ -74,7 +74,7 @@ class _TorchTwin(torch.nn.Module):
 def _np(value: Any) -> np.ndarray:
     """A payload from either backend as a numpy array."""
 
-    if hasattr(value, "detach"):
+    if hasattr(value, "cpu"):
         return value.detach().cpu().numpy()
     return np.asarray(value.numpy())
 
@@ -363,7 +363,7 @@ def _keyword_block(x: Any, *, scale: Any, shift: Any = None) -> Any:
     return out + shift if shift is not None else out
 
 
-@pytest.mark.parametrize("route", ["input_kwargs", "forward_kwargs"])
+@pytest.mark.parametrize("route", ["mixed", "keyword_only"])
 def test_keyword_inputs_capture_and_validate(route: str) -> None:
     """Tensor keyword inputs become trace inputs and the trace validates."""
 
@@ -373,10 +373,10 @@ def test_keyword_inputs_capture_and_validate(route: str) -> None:
         Tensor(np.ones(4, np.float32)),
     )
     kwargs = {"scale": scale, "shift": shift}
-    if route == "input_kwargs":
+    if route == "mixed":
         trace = tl.trace(_keyword_block, x, backend="tinygrad", input_kwargs=kwargs)
     else:
-        trace = tl.trace(_keyword_block, x, backend="tinygrad", **kwargs)
+        trace = tl.trace(_keyword_block, (), backend="tinygrad", input_kwargs={"x": x, **kwargs})
 
     inputs = [op for op in trace._layer_list if op.is_input]
     assert len(inputs) == 3

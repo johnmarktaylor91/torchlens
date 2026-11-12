@@ -19,13 +19,14 @@ edit that changes shape or dtype.
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from ..._ir.intervention import FireResult
 from ..._ir.op_record import OpAmendment, amend_module_exit_intervention
+from ...intervention._zero_fire import settle_capture_zero_fire
+from .._options import is_missing
 from ..registry import BackendUnsupportedError, get_backend_spec, require_capability_implementation
 
 if TYPE_CHECKING:
@@ -264,7 +265,8 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
         raise refuse_edit("the capability table declares can_intervene=False.", code=EDIT_REFUSAL)
     resolve = require_capability_implementation(spec, "can_intervene")
     plan = cast(TinygradEditPlan, cast(Any, resolve)(intervene, halt))
-    if call.get("grad_options") is not None:
+    grad_options = call.get("grad_options")
+    if grad_options is not None and not is_missing(grad_options):
         raise refuse_edit(
             "grad_options cannot be combined with trace(intervene=...); capture derived "
             "gradients in a separate plain trace.",
@@ -274,11 +276,10 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
     planned = _run_session(backend, call, planning)
     sites = _planned_sites(planned, plan.selector, planning.calls)
     if not sites:
-        warnings.warn(
+        settle_capture_zero_fire(
             f"Capture-time intervention selector {plan.selector!r} matched zero sites on "
             "the tinygrad forward; no intervention fired.",
-            UserWarning,
-            stacklevel=4,
+            selector=repr(plan.selector),
         )
         return planned
     _refuse_lazy_random_draws(planned)

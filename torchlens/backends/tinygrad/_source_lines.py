@@ -16,7 +16,7 @@ import os
 import sys
 from collections.abc import Mapping, Sequence
 from types import CodeType, FrameType
-from typing import Any
+from typing import Any, cast
 
 from ..._data_classes.func_call_location import FuncCallLocation
 from ..._utils._package_frames import is_torchlens_code
@@ -183,7 +183,8 @@ class SourceLineRecorder:
         if load:
             location._ensure_source_loaded()
         else:
-            location._linecache_entry = FuncCallLocation._cached_source_fingerprint(
+            # A runtime-only cell with no declared annotation (see with_source_fingerprint).
+            cast(Any, location)._linecache_entry = FuncCallLocation._cached_source_fingerprint(
                 code.co_filename, self.num_context_lines, self._fingerprints
             )
         self._locations[key] = location
