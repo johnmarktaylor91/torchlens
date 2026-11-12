@@ -10,7 +10,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._ir.events import BackwardPassEnd, BackwardPassStart, OpGradObserved
-from torchlens.backends.torch import _tensor_grad_hook as grad_hook_mod, backward as backward_mod
+from torchlens.backends.torch import backward as backward_mod, tensor_tracking as tracking_mod
 from torchlens.backends.torch.backward import (
     _BACKWARD_GRAD_FN_REGISTRY,
     _close_implicit_backward_pass_if_open,
@@ -216,7 +216,7 @@ def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
 
     monkeypatch.setattr(torch.Tensor, "register_hook", forwarding_register_hook)
     # Plain tensors take TorchLens's direct install, which never calls the method.
-    original_plain_install = grad_hook_mod.register_plain_tensor_hook
+    original_plain_install = tracking_mod.add_plain_tensor_hook
 
     def counting_plain_install(tensor: torch.Tensor, hook: Any) -> Any:
         """Forward to TorchLens's direct install after counting."""
@@ -224,7 +224,7 @@ def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
         register_hook_calls.append(getattr(hook, "__name__", type(hook).__name__))
         return original_plain_install(tensor, hook)
 
-    monkeypatch.setattr(grad_hook_mod, "register_plain_tensor_hook", counting_plain_install)
+    monkeypatch.setattr(tracking_mod, "add_plain_tensor_hook", counting_plain_install)
     torch.manual_seed(0)
     model = _PlainBackwardModel()
     x = torch.randn(3, 4, requires_grad=True)

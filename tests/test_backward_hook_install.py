@@ -19,9 +19,11 @@ import pytest
 import torch
 from torch import nn
 from torch.overrides import TorchFunctionMode
+from torch.utils.hooks import RemovableHandle
 
 import torchlens as tl
 from torchlens.backends.torch._tensor_grad_hook import (
+    add_plain_tensor_hook,
     register_plain_tensor_hook,
     register_tensor_grad_hook,
     takes_plain_hook_install,
@@ -74,6 +76,14 @@ def test_torch_register_hook_body_is_the_one_the_direct_install_repeats() -> Non
     assert [line for line in body if line][-1] == "return handle"
 
 
+def test_removable_handle_id_counter_is_the_one_the_handle_free_route_advances() -> None:
+    """``RemovableHandle`` still keys hooks from its class counter, advanced by one per handle."""
+
+    source = inspect.getsource(RemovableHandle.__init__)
+    assert "self.id = RemovableHandle.next_id" in source
+    assert "RemovableHandle.next_id += 1" in source
+
+
 def test_plain_install_refuses_like_torch() -> None:
     """A tensor outside autograd gets torch's own error from both routes."""
 
@@ -81,7 +91,9 @@ def test_plain_install_refuses_like_torch() -> None:
         torch.zeros(3).register_hook(lambda grad: grad)
     with pytest.raises(RuntimeError) as plain_error:
         register_plain_tensor_hook(torch.zeros(3), lambda grad: grad)
-    assert str(plain_error.value) == str(torch_error.value)
+    with pytest.raises(RuntimeError) as add_error:
+        add_plain_tensor_hook(torch.zeros(3), lambda grad: grad)
+    assert str(plain_error.value) == str(torch_error.value) == str(add_error.value)
 
 
 @pytest.mark.parametrize("plain_first", [True, False])
@@ -107,6 +119,57 @@ def test_both_routes_share_one_dict_in_registration_order(plain_first: bool) -> 
     assert torch.equal(x.grad, torch.full_like(x, 2.0))
 
 
+def _register_by_route(y: torch.Tensor, route: str, hook: Callable[..., object]) -> int | None:
+    """Register ``hook`` on ``y`` by ``route``; return the handle id, or None for ``add``."""
+
+    if route == "add":
+        assert add_plain_tensor_hook(y, hook)
+        return None
+    handle = register_plain_tensor_hook(y, hook) if route == "plain" else y.register_hook(hook)
+    return handle.id
+
+
+@pytest.mark.parametrize(
+    "routes",
+    [
+        ("plain", "torch", "add", "torch", "add"),
+        ("torch", "add", "plain", "add", "torch"),
+        ("add", "add", "torch", "plain", "torch"),
+    ],
+)
+def test_handle_free_route_shares_the_dict_in_registration_order(routes: tuple[str, ...]) -> None:
+    """Hooks from every route take increasing keys in one dict and fire in registration order."""
+
+    x = torch.randn(4, requires_grad=True)
+    y = x * 2
+    order: list[str] = []
+    ids = [
+        _register_by_route(y, route, _recording_hook(order, f"{route}{index}"))
+        for index, route in enumerate(routes)
+    ]
+    keys = list(y._backward_hooks)
+    assert keys == sorted(keys)
+    assert len(keys) == len(routes)
+    assert all(key == hook_id for key, hook_id in zip(keys, ids) if hook_id is not None)
+    y.sum().backward()
+    assert order == [f"{route}{index}" for index, route in enumerate(routes)]
+    assert torch.equal(x.grad, torch.full_like(x, 2.0))
+
+
+def test_a_handle_removes_only_its_own_hook_beside_handle_free_hooks() -> None:
+    """A torch handle's ``remove()`` leaves the hooks the handle-free route added."""
+
+    x = torch.randn(4, requires_grad=True)
+    y = x * 2
+    order: list[str] = []
+    assert add_plain_tensor_hook(y, _recording_hook(order, "add0"))
+    handle = y.register_hook(_recording_hook(order, "torch1"))
+    assert add_plain_tensor_hook(y, _recording_hook(order, "add2"))
+    handle.remove()
+    y.sum().backward()
+    assert order == ["add0", "add2"]
+
+
 @pytest.mark.parametrize("leaf", [True, False])
 def test_plain_install_passes_its_return_on(leaf: bool) -> None:
     """The hook's return replaces the gradient, on a leaf and on an op output."""
@@ -114,8 +177,9 @@ def test_plain_install_passes_its_return_on(leaf: bool) -> None:
     x = torch.randn(4, requires_grad=True)
     hooked = x if leaf else x * 1
     register_plain_tensor_hook(hooked, lambda grad: grad * 3)
+    assert add_plain_tensor_hook(hooked, lambda grad: grad * 5)
     (hooked * x.detach()).sum().backward()
-    assert torch.equal(x.grad, x.detach() * 3)
+    assert torch.equal(x.grad, x.detach() * 15)
 
 
 class _Sub(torch.Tensor):
@@ -129,8 +193,11 @@ def test_subclass_and_function_mode_keep_torchs_register_hook() -> None:
     sub = (x * 2).as_subclass(_Sub)
     assert takes_plain_hook_install(x * 2)
     assert not takes_plain_hook_install(sub)
+    assert not add_plain_tensor_hook(sub, lambda grad: grad)
+    assert sub._backward_hooks is None
     with TorchFunctionMode():
         assert not takes_plain_hook_install(x * 2)
+        assert not add_plain_tensor_hook(x * 2, lambda grad: grad)
     order: list[str] = []
 
     def no_slot_prehook(*_args: object) -> object:

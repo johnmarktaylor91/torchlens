@@ -16,8 +16,14 @@ counter, so hook order, firing and removal are torch's.
 torch change to it fails loudly instead of drifting. Any other tensor keeps the
 marked, paused ``register_hook``.
 
-Imports stay outside the capture modules' import cycle: ``tensor_tracking``
-imports this module and passes in ``backward``'s node pre-hook registrar.
+Capture keeps no handle for the hooks it never removes one by one:
+:func:`add_plain_tensor_hook` takes the key from torch's ``RemovableHandle`` id
+counter without building the handle object.
+
+The fire path's fork-redirect and label-owner lookups and the payload-copy slot walk
+live here too. Imports stay outside the capture modules' import cycle:
+``tensor_tracking`` imports this module and passes in ``backward``'s node pre-hook
+registrar.
 """
 
 from __future__ import annotations
@@ -29,6 +35,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch.utils.hooks import RemovableHandle
 
+from ... import _state
+from ..._data_classes._fork_lineage import _is_fork_relative
 from ..._state import pause_logging
 from ..._utils._internal_read import internal_scalar_read
 from ..._utils._torch_compat import get_tensorbase_class
@@ -38,7 +46,10 @@ if TYPE_CHECKING:
     from ..._capture.session import LiveGradientReference
 
 __all__ = (
+    "_foreign_label_owner",
+    "_fork_redirect_target",
     "_logged_copy_source_slot",
+    "add_plain_tensor_hook",
     "raw_grad_fn",
     "raw_requires_grad",
     "register_plain_tensor_hook",
@@ -69,6 +80,21 @@ def takes_plain_hook_install(t: Any) -> bool:
     return type(t) is _TENSOR and not _HAS_TORCH_FUNCTION_UNARY(t)
 
 
+def _plain_hooks_dict(t: torch.Tensor) -> OrderedDict[int, Any]:
+    """Return ``t``'s gradient hook dict, creating and attaching it as torch does."""
+
+    if not raw_requires_grad(t):
+        raise RuntimeError("cannot register a hook on a tensor that doesn't require gradient")
+    hooks = _HOOKS_OF(t)
+    if hooks is None:
+        hooks = OrderedDict()
+        _SET_HOOKS(t, hooks)
+        grad_fn = raw_grad_fn(t)
+        if grad_fn is not None:
+            grad_fn._register_hook_dict(t)
+    return hooks
+
+
 def register_plain_tensor_hook(
     t: torch.Tensor, hook: Callable[[torch.Tensor | None], torch.Tensor | None]
 ) -> RemovableHandle:
@@ -92,18 +118,42 @@ def register_plain_tensor_hook(
         ``t`` does not require gradient (torch's own refusal).
     """
 
-    if not raw_requires_grad(t):
-        raise RuntimeError("cannot register a hook on a tensor that doesn't require gradient")
-    hooks = _HOOKS_OF(t)
-    if hooks is None:
-        hooks = OrderedDict()
-        _SET_HOOKS(t, hooks)
-        grad_fn = raw_grad_fn(t)
-        if grad_fn is not None:
-            grad_fn._register_hook_dict(t)
+    hooks = _plain_hooks_dict(t)
     handle = RemovableHandle(hooks)
     hooks[handle.id] = hook
     return handle
+
+
+def add_plain_tensor_hook(
+    t: Any, hook: Callable[[torch.Tensor | None], torch.Tensor | None]
+) -> bool:
+    """Put ``hook`` on a plain ``t`` like :func:`register_plain_tensor_hook`, keeping no handle.
+
+    Same dict, same position and a key from the same ``RemovableHandle`` id counter, so
+    order and firing are unchanged; only the handle object is skipped, for hooks capture
+    never removes one by one (they go with the tensor).
+
+    Parameters
+    ----------
+    t:
+        Tensor to hook.
+    hook:
+        Gradient hook, called with the tensor's gradient.
+
+    Returns
+    -------
+    bool
+        False, registering nothing, when ``t`` must take ``register_hook`` instead
+        (:func:`takes_plain_hook_install` is false for it).
+    """
+
+    if type(t) is not _TENSOR or _HAS_TORCH_FUNCTION_UNARY(t):
+        return False
+    hooks = _plain_hooks_dict(t)
+    hook_id = RemovableHandle.next_id
+    RemovableHandle.next_id = hook_id + 1
+    hooks[hook_id] = hook
+    return True
 
 
 def register_tensor_grad_hook(
@@ -144,6 +194,30 @@ def register_tensor_grad_hook(
         if isinstance(site, torch.Tensor):
             return site.register_hook(hook)
         return register_slot_prehook(site.grad_fn, site.output_nr, hook)
+
+
+def _fork_redirect_target(active_trace: Any) -> Any:
+    """Return the fork relative whose managed backward is running, else ``active_trace``."""
+
+    managed_trace = _state._active_trace
+    if (
+        active_trace is not None
+        and managed_trace is not None
+        and managed_trace is not active_trace
+        and getattr(managed_trace, "_tl_active_backward_bracket", False)
+        and _is_fork_relative(active_trace, managed_trace)
+    ):
+        return managed_trace
+    return active_trace
+
+
+def _foreign_label_owner(trace: Any, tensor_label: str, hooked_tensor_id: int) -> bool:
+    """Whether ``trace``'s grad-hook owner map gives ``tensor_label`` to another tensor."""
+
+    owner_map = trace.__dict__.get("_tl_grad_hook_owner_by_label")
+    return (
+        owner_map is not None and owner_map.get(tensor_label, hooked_tensor_id) != hooked_tensor_id
+    )
 
 
 # TorchLens's own payload copies: identity-gradient nodes with one graph edge.

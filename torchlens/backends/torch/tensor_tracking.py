@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state
-from ..._data_classes._fork_lineage import _is_fork_relative
 from ..._data_classes._trace_grad_sites import apply_gradient_site_edits
 from ..._data_classes.op import Op
 from ..._ir.events import BackwardPassStart, OpGradObserved
@@ -40,7 +39,10 @@ from ._ops_arg_slots import current_arg_slots, parent_arg_positions_from_slots
 from ._parent_arg_containers import _is_supported_parent_arg_container, _iter_arg_container_items
 from ._tensor_grad_hook import (
     _TENSOR,
+    _foreign_label_owner,
+    _fork_redirect_target,
     _logged_copy_source_slot,
+    add_plain_tensor_hook,
     raw_grad_fn,
     raw_requires_grad,
     register_tensor_grad_hook,
@@ -436,9 +438,8 @@ def _install_tensor_grad_hook(
     if hook_key in hooked_tensors:
         return
     hooked_tensors.add(hook_key)
-    # One shared fire function; the partial binds the label this registration is for
-    # (a tensor's label moves on with in-place ops) and a weak reference to Trace,
-    # which prevents a Trace -> tensor -> hook -> Trace reference cycle.
+    # One shared fire function bound to this registration's label (a label moves on with
+    # in-place ops) and a weak reference to Trace (no Trace -> tensor -> hook cycle).
     hook = functools.partial(
         _record_hooked_gradient,
         weakref.ref(trace),
@@ -446,9 +447,12 @@ def _install_tensor_grad_hook(
         hooked_tensor_id,
         owning_backward_only,
     )
-    handle = register_tensor_grad_hook(site, hook, _backward_module._register_slot_gradient_prehook)
+    slot_prehook = _backward_module._register_slot_gradient_prehook
     if owning_backward_only:
+        handle = register_tensor_grad_hook(site, hook, slot_prehook)
         _OWNED_STATE_GRAD_HOOK_HANDLES.setdefault(trace, []).append(handle)
+    elif not add_plain_tensor_hook(site, hook):
+        register_tensor_grad_hook(site, hook, slot_prehook)
 
 
 def _record_hooked_gradient(
@@ -555,30 +559,6 @@ def _hooked_gradient_target(
     ):
         return None
     return active_trace, edits_live
-
-
-def _fork_redirect_target(active_trace: Any) -> Any:
-    """Return the fork relative whose managed backward is running, else ``active_trace``."""
-
-    managed_trace = _state._active_trace
-    if (
-        active_trace is not None
-        and managed_trace is not None
-        and managed_trace is not active_trace
-        and getattr(managed_trace, "_tl_active_backward_bracket", False)
-        and _is_fork_relative(active_trace, managed_trace)
-    ):
-        return managed_trace
-    return active_trace
-
-
-def _foreign_label_owner(trace: Any, tensor_label: str, hooked_tensor_id: int) -> bool:
-    """Whether ``trace``'s grad-hook owner map gives ``tensor_label`` to another tensor."""
-
-    owner_map = trace.__dict__.get("_tl_grad_hook_owner_by_label")
-    return (
-        owner_map is not None and owner_map.get(tensor_label, hooked_tensor_id) != hooked_tensor_id
-    )
 
 
 def _ensure_backward_event_stream(trace: "Trace") -> Any:

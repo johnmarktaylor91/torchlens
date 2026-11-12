@@ -939,7 +939,7 @@ torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
 torchlens/backends/torch/sources.py::log_source_tensor_predicate	120
 torchlens/backends/torch/structure_only_belt.py::structure_only_forward_boundary	129
-torchlens/backends/torch/tensor_tracking.py	1451
+torchlens/backends/torch/tensor_tracking.py	1431
 torchlens/backends/torch/tensor_tracking.py::_add_tensor_backward_hook	82
 torchlens/backends/torch/tensor_tracking.py::_build_grad_payloads	61
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
