@@ -123,7 +123,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
     "tinygrad": {
         "backward_capture": False,
         "fastlog": False,
-        "can_intervene": False,
+        "can_intervene": True,
         "rng_replay": False,
         "has_streaming": False,
         "structure_only_capture": False,

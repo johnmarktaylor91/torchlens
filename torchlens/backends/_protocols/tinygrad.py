@@ -51,6 +51,9 @@ class TinygradProtocol(SpecBackedProtocol):
                 "tinygrad_input_required",
                 "live_payloads_required",
                 "mid_capture_execution_unsupported",
+                "interventions_unsupported",
+                "backward_capture_unsupported",
+                "intervention_with_derived_grads_unsupported",
             ),
         )
 
