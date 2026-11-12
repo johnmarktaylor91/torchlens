@@ -513,8 +513,8 @@ expert contributions from routing indices alone.
   `backend_address`, and `resolver_status`.
 - BACKEND PROTOCOL: every backend, torch included, fills `tl.backends.BackendProtocol`
   (`BackendSpec.protocol()` returns it; `torchlens/backends/_protocols/<name>.py`). Members:
-  `name`, `maturity` (`"stable"` for torch, `"preview"` for tf, jax, mlx, paddle, tinygrad;
-  `BackendSpec.maturity` is the single source), `framework` (`tl.backends.FrameworkRequirement`:
+  `name` (no backend carries a maturity label; `BackendSpec.maturity` was removed and the
+  feature table in `docs/backends.md` states what each supports), `framework` (`tl.backends.FrameworkRequirement`:
   distributions, `[minimum, below)`, `tested_through`, CI `pinned`, install `extra`),
   `materialization` (`"eager"` or `"lazy"`; lazy backends realize once), `capabilities()`,
   `runtime_available()`, `can_handle`, `capture`, `reference_output` (no TorchLens wrapper
@@ -535,7 +535,7 @@ expert contributions from routing indices alone.
   `python -m tests.conformance.scorecard --backend <name> --graduation` prints the
   advisory six-item graduation report. Per-backend pages: `docs/backends/<name>.md`.
 - TensorFlow is available as `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16
-  preview when `keras.backend.backend() == "tensorflow"`. The shipped path is eager live capture
+  backend when `keras.backend.backend() == "tensorflow"`. The shipped path is eager live capture
   with `op_callbacks` as the primary mechanism: real values, real taken-branch control flow,
   op-level records, and Keras/`tf.Module` module stacks. The graph-only FuncGraph static path is
   implemented for compiled/SavedModel entries (opaque regions stay honestly unverified).
@@ -545,8 +545,8 @@ expert contributions from routing indices alone.
   through a two-level writable layer (module-boundary substitution + curated tf.nn/tf.math
   functional wrap) with FAIL-CLOSED site reachability — a selector matching callback-captured
   ops the wrap layer never saw refuses typed. `stop_after=`/`recipes=`, true backward capture, and
-  value-dependent predicates remain deferred like sibling preview gaps.
-- The Paddle preview supports live forward `trace(intervene=...)` and `trace(stop_after=...)` (eager
+  value-dependent predicates remain deferred like the other backends' gaps.
+- The Paddle backend supports live forward `trace(intervene=...)` and `trace(stop_after=...)` (eager
   dygraph: the wrapper holds each concrete output before the caller sees it). The intervened op
   keeps its real identity with the replacement payload plus hook-minted `FireRecord`s; the replay
   oracle uses a narrow corroborated user-intervention carve-out, so a replacement value presented
@@ -555,7 +555,7 @@ expert contributions from routing indices alone.
   may be value-dependent (real `tensor_requires_grad`/`is_scalar_bool`/`bool_value` in the ctx);
   `recipes=` attaches facet recipes; `grad_options` cannot combine with `intervene=`/`stop_after=`.
   Value-dependent `save=`, streaming, fastlog, and rng_replay stay refused on paddle.
-- All four eager previews (tf/mlx/tinygrad/paddle) group recurrent calls into multi-pass layers
+- All four eager non-PyTorch backends (tf/mlx/tinygrad/paddle) group recurrent calls into multi-pass layers
   through the same neutral grouper torch and JAX use (`layer_label:pass` labels, `pass_number`/
   `num_passes`, `recurrent_ops`; `recurrence_detection=False` opts back into the historical
   single-pass layout). The stored `recurrence_detection` flag is the EFFECTIVE value — the TF
@@ -863,7 +863,7 @@ expert contributions from routing indices alone.
   `wrap_torch(patch_policy=, patch_modules=)` no-op kwargs are removed. Full contract:
   `docs/migration/scoped_detached_patching.md`.
 - `torchlens._io` and `torchlens.io` own portable `.tlspec` save/load helpers. Manifest
-  schema v2 is backend-aware; non-torch preview bundles may be audit-only or metadata-only.
+  schema v2 is backend-aware; non-torch bundles may be audit-only or metadata-only.
   Files saved by torchlens 2.x: a manifest stamp or Trace state stamp older than the current
   `tlspec_version`, a pickled 2.x module path, or the 2.16 ModelLog format refuses at
   `tl.load` with the typed `tl.errors.ArtifactTooOldError` ("saved by torchlens 2.x"; the
@@ -1522,7 +1522,7 @@ expert contributions from routing indices alone.
   `plugins` (entry-point discovery that NEVER executes third-party code at discovery; kill
   switch). A file saved by torchlens 2.x refuses at `tl.load` with one typed error.
   `tests/conformance/` (a test-side harness, not shipped in the wheel) holds the C0-C2 packs and the
-  preview-backend scorecard builder; the shipped records stay in `torchlens/backends/<name>/scorecard.json`.
+  backend scorecard builder; the shipped records stay in `torchlens/backends/<name>/scorecard.json`.
 - LIVE NARRATION (DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns

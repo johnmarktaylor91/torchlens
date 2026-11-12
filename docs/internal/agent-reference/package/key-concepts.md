@@ -42,7 +42,7 @@ subscript/slice/augmented writes, `del`, and mutating list methods; a new writer
 until consciously ledgered.
 grad-fn handles live only in the journal side index (`grad_fn_handles_by_label_raw`).
 The legacy `OpEvent` torch producer and its dual-path env switch were
-deleted; preview backends keep emitting compat `OpEvent`s until and adapt at the
+deleted; the non-PyTorch backends keep emitting compat `OpEvent`s until and adapt at the
 one ingest boundary (`op_record_from_event`), with `PATH_TO_FLAT` as the amendment fold
 guard and `_clone_op_event_for_replay` record-shape-aware, all retained-with-schedule.
 
@@ -73,9 +73,9 @@ documented exhaustively in `docs/reference/runnable_tlspec_contract.md`. Additio
 stages as one alias-group allocation) and `context_field_invalid` (parse-time closed-vocabulary
 context refusal); zero-tensor-leaf and instance-stateful container outputs refuse at save with
 `output_container_contract_missing` via the one per-kind capability table.
-Non-torch preview backends use `payload_policy="array_payloads"` when their codecs can materialize
+Non-torch backends use `payload_policy="array_payloads"` when their codecs can materialize
 payloads; Paddle bf16 payloads carry logical dtype metadata because NumPy transports them as
-`uint16`. TensorFlow preview payloads also use `array_payloads` for dense numeric/bool forward
+`uint16`. TensorFlow payloads also use `array_payloads` for dense numeric/bool forward
 arrays and preserve `tf.bfloat16` logical dtype metadata.
 Intervention specs can be saved at audit, executable-with-callables, or portable levels.
 

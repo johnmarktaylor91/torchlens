@@ -79,7 +79,7 @@ summarizes findings.
 ### Capability snapshot accessor
 
 `report.capability_snapshot()` returns the full `flag -> available` mapping of named
-`HAS_*` capabilities, including optional preview backends. The `torch_capabilities` row
+`HAS_*` capabilities, including the optional non-PyTorch backends. The `torch_capabilities` row
 shows a grouped summary and names missing, unprobed, and optional capabilities; graceful
 degradations remain visible. Optional absences and lazy probes that have not run do not
 imply a failure.

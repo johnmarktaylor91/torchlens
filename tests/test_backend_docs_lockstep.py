@@ -3,7 +3,7 @@
 Every registered backend's ``docs/backends/<name>.md`` carries a ``## Tutorial`` section;
 its python fences run in one namespace under the backend's framework marker, when the
 backend's runtime is available here. The docs-versus-code lockstep this file used to hold
-(the pages' sections, the maturity table in ``docs/backends.md`` and the can and cannot
+(the pages' sections, the backend table in ``docs/backends.md`` and the can and cannot
 tables against the shipped scorecards) reads no runtime and moved to
 ``scripts/checks/backend_docs_lockstep.py``, run by ``scripts/checks/run_all.py``.
 """

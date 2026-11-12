@@ -110,7 +110,7 @@ aliased hook registrations emit exactly one observation per logical output per p
 
 **CAPABILITY HONESTY.** Emission conformance is required of every backend;
 optional drivers map 1:1 to declared capability flags, which are the only capability
-truth — never inferred from method presence. Preview streams join the single-writer and
+truth — never inferred from method presence. The non-PyTorch backends' streams join the single-writer and
 journal-seq disciplines in the ports phase; until then the journal-seq invariant is
 enforced for the torch backend.
 
@@ -133,18 +133,18 @@ contract.
 | Clause | Status |
 |---|---|
 | One run, one owner | Shipped (phases 2-3: registries deleted, `_EVENT_STREAMS` deleted, typed refusal). |
-| One journal, one order | Shipped for the torch backend (one writer-stamped seq across every lane; journal-seq invariant + mutation tests). Preview lanes: ports phase. |
+| One journal, one order | Shipped for the torch backend (one writer-stamped seq across every lane; journal-seq invariant + mutation tests). Non-PyTorch backend lanes: ports phase. |
 | Append-only | Shipped for backward (failed walks keep evidence) AND forward: the typed `OpAmendment` lane (nine exact-set families, lane-local seq domain, single writer `append_amendment`, one reducer `amended_op_records()`) landed with the producer decomposition; `replace_op_event` deleted. |
 | Identity separation | Shipped as stated; node-uid substitution deferred while dossier-#2 conservative pinning holds. |
-| Core/facet | SHIPPED: decomposed `OpRecord` (`OpCore` + typed facets) is the ONE torch producer (dual-path transition P3-P6; legacy producer, `_op_event_from_log`, `_event_from_record`, and the `TORCHLENS_CAPTURE_PRODUCER` switch deleted in P7). Previews adapt at the one ingest boundary until. |
+| Core/facet | SHIPPED: decomposed `OpRecord` (`OpCore` + typed facets) is the ONE torch producer (dual-path transition P3-P6; legacy producer, `_op_event_from_log`, `_event_from_record`, and the `TORCHLENS_CAPTURE_PRODUCER` switch deleted in P7). The non-PyTorch backends adapt at the one ingest boundary until. |
 | Handle-free durable records | Shipped: records trace-backref-free from birth; grad-fn handles live ONLY in the journal side index (`grad_fn_handles_by_label_raw`) — records never carry a handle attribute (single ownership). |
-| One commit transaction | Shipped for torch: ONE commit tail (`commit_op`: freeze -> atomic append) at every exhaustive and sparse site, stage matrix conformance-tested; preview conformance rides the ports phase. |
+| One commit transaction | Shipped for torch: ONE commit tail (`commit_op`: freeze -> atomic append) at every exhaustive and sparse site, stage matrix conformance-tested; conformance for the non-PyTorch backends rides the ports phase. |
 | Edits are records | Shipped (`InterventionAppliedEvent`, kind vocabulary cleaned, side ledger deleted, carve-out journal-backed). |
 | Merge law | Shipped (`concat` + total `LANE_MERGE_POLICIES` + total `_LANE_APPENDERS`, fail-closed on unwired lanes; chronological clone merge; recorder and failed-fastlog snapshot splices routed through `concat`). |
 | Single writer | Shipped (writer methods; direct lane appends routed, including the failed-fastlog snapshot; invariant enforces counter consistency). |
 | Honest lifecycle | Shipped (detached-stream baselines, phases 2-3 + fix rounds). |
 | Backward bracketing and coverage | Shipped (exact bracketing, nesting, typed coverage gaps, fail-closed validation). |
-| No false backward | Standing (previews inert; `_check_non_torch_backward_inert`). |
+| No false backward | Standing (the non-PyTorch backends are inert; `_check_non_torch_backward_inert`). |
 | Pure projection | Shipped (single-write projections, multiset reconciliation, one-owner-per-label). |
 | Capability honesty | Standing declaration; ports/conformance suite is the parity-sprint deliverable. |
 | Two oracles, neither weakened | Standing doctrine; eligibility classifier replaced the 0.80 coverage tolerance. |

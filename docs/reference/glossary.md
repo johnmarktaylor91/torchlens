@@ -2358,7 +2358,7 @@ experimental and may change in any release.
 Every backend, torch included, implements one interface, `tl.backends.BackendProtocol`. Its capability
 table is declared in `BackendCapabilities` and measured by the shared conformance suite; the
 measured result ships as a scorecard record per backend and shows in `tl.report.doctor()`. The
-backends guide (`docs/backends.md`) carries the maturity table and links one page per backend
+backends guide (`docs/backends.md`) carries the feature table and links one page per backend
 (`docs/backends/<name>.md`: a tutorial, a can and cannot table and the framework requirement).
 
 **tl.backends.BackendProtocol**: The one interface every backend implements to produce traces (`typing.Protocol`, runtime-checkable).
@@ -2367,7 +2367,7 @@ the member list. The older `CaptureBackend` orchestration adapter stays torch's 
 capture seam; it is not the backend interface.
 
 - Identity members: `name` (the registered name: `"torch"`, `"tf"`, `"jax"`, `"mlx"`,
-  `"paddle"`, `"tinygrad"`), `maturity`, `framework` (a `FrameworkRequirement`),
+  `"paddle"`, `"tinygrad"`), `framework` (a `FrameworkRequirement`),
   `materialization`, `capabilities()` (the declared `BackendCapabilities`),
   `runtime_available()` (`None`, or the refusal code `runtime_missing` /
   `runtime_version_unsupported`; never raises).
@@ -2383,18 +2383,10 @@ capture seam; it is not the backend interface.
 - Declarations: `trace_options()` and `refusal_codes()` (a subset of
   `tl.backends.REFUSAL_CODES`).
 
-**BackendSpec.protocol** and **BackendSpec.maturity**: `BackendSpec.protocol` is the lazy factory (`Callable[[], BackendProtocol] | None`) that returns
-the backend's protocol object. `BackendSpec.maturity` is the backend's launch label, the single
-source `tl.report.doctor()` and the docs read.
-
-**maturity** (`"preview"` | `"stable"`): A backend's launch label, on `BackendSpec.maturity` and `BackendProtocol.maturity`. Torch is
-`"stable"`; tf, jax, mlx, paddle and tinygrad are `"preview"`.
-
-- Changing it: only a recorded maintainer decision changes it, as a one-line change to the
-  backend's registration plus the docs table. No code computes it, and `graduation_report` is
-  advisory.
-- Rule: a backend registered `"stable"` must have every graduation item met in its shipped
-  scorecard; `tests/test_backend_maturity.py` checks this.
+**BackendSpec.protocol**: The lazy factory (`Callable[[], BackendProtocol] | None`) that returns
+the backend's protocol object. No backend carries a maturity label (the `preview`/`stable` label
+and `BackendSpec.maturity` were removed): what a backend supports is stated by the feature
+table in `docs/backends.md`, its page and its shipped scorecard.
 
 **materialization** (`"eager"` | `"lazy"`): Whether a backend's op outputs are concrete values when the wrapped call returns (`"eager"`:
 torch, tf, jax, paddle) or deferred until an evaluation (`"lazy"`: mlx, tinygrad).
@@ -2414,8 +2406,8 @@ backend.
 - `distributions`: installed distribution names that version the framework, in lookup order.
 - `minimum`: the inclusive floor.
 - `below`: the exclusive ceiling, or `None` when none is declared.
-- `tested_through`: the highest version the backend's suite has run on; a preview sets `below`
-  or this.
+- `tested_through`: the highest version the backend's suite has run on; a non-PyTorch backend
+  sets `below` or this.
 - `pinned`: the exact version the per-change CI leg installs, or `None` while the leg is
   unpinned.
 - `extra`: the pyproject extra that installs the framework; `""` for a base dependency.
@@ -2432,7 +2424,7 @@ code outside the registry fails the backend's `c0_refusal_codes_registered` cell
 | `backward_capture_unsupported`, `fastlog_unsupported`, `interventions_unsupported`, `rng_replay_unsupported`, `streaming_unsupported`, `structure_only_capture_unsupported`, `validation_replay_unsupported`, `payload_materialization_unsupported`, `intermediate_derived_grads_unsupported` | the matching `BackendCapabilities` flag is `False` and the capability was requested; one code per flag |
 | `trace_option_unsupported` | a trace option outside the backend's `trace_options()` |
 | `module_identity_mode_unsupported`, `save_level_unsupported` | the requested mode or level is outside the backend's declared set |
-| `explicit_seed_unsupported` | `seed=` on a preview backend |
+| `explicit_seed_unsupported` | `seed=` on a backend that cannot seed its framework's random numbers |
 | `runtime_missing`, `runtime_version_unsupported` | the framework is not importable, or its version is outside the supported range |
 | `foreign_tensor_input` | an input leaf belongs to another framework |
 | `constant_unrealizable` | a closure or literal constant has no readable buffer; the message names the constant op |
@@ -2461,7 +2453,7 @@ entry. The suite checks membership, so the list may be a superset of what one ba
 - Shared, with meanings: `replay_mismatch` (re-executing the op from its saved inputs did not
   reproduce its saved output), `parent_payload_missing` (a payload the replay needs is absent:
   the op's own saved output or a parent's), `no_replayable_function` (no callable can
-  re-execute the op: none was recorded for a computational op, or a preview backend could not
+  re-execute the op: none was recorded for a computational op, or a non-PyTorch backend could not
   rebuild or re-invoke the saved call).
 - Shared, explained below: `constant_producer_leaf`, `constant_parent_payload`,
   `user_intervention_replacement`, `effectful_region`, `perturbation_insensitive`,
@@ -2497,7 +2489,7 @@ output of a recorded op (a closure tensor built outside the traced call) is reco
 source op with `func_name="constant"`, no parents and a saved payload; the op that read it lists
 it as a parent.
 
-- Labels follow the backend's label convention (`constant_<n>` on the previews; torch numbers
+- Labels follow the backend's label convention (`constant_<n>` on the non-PyTorch backends; torch numbers
   it like its other source ops).
 - Literal producers: an op with no tensor parents whose arguments are all literals (a `fill` or
   `ones` inside the forward) keeps its own `func_name`, has zero parents and a saved payload.
@@ -2513,8 +2505,10 @@ package (no framework is imported and nothing executes).
 - Statuses: `pass` when the record's highest tier is the durable tier with no failed cell,
   `known_broken` when any cell failed, `scope` when the framework is not installed here,
   `not_tested` when no record ships.
+- Severity: the same on every backend: `ok` for `pass`, `warning` for `known_broken` (a shipped
+  measurement, never a fault in the user's environment), `info` otherwise.
 - Details read:
-  `"<maturity>; <passed>/<denominator> cells passed, <unsupported> unsupported, <failed> failed; pinned <pinned>, installed <version or absent>, supported [<minimum>, <below>)"`.
+  `"<passed>/<denominator> cells passed, <unsupported> unsupported, <failed> failed; pinned <pinned>, installed <version or absent>, supported [<minimum>, <below>)"`.
 - Suggestion: names the install extra when the framework is absent, otherwise the first failed
   cell.
 
@@ -2556,8 +2550,8 @@ makes it `unsupported`; an untyped exception, a wrong value or a trace marked
   `trace_options()`.
 - Tier 2 (durable): `c2_payload_values_equal`, `c2_validation_after_load`.
 
-**Per-backend namespaces**: `tl.backends.torch` is the stable PyTorch eager backend (`docs/backends/torch.md`); the other
-five are preview backends.
+**Per-backend namespaces**: `tl.backends.torch` is the PyTorch eager backend (`docs/backends/torch.md`), the reference; the
+other five have fewer features than PyTorch (see the table in `docs/backends.md`).
 
 - `tl.backends.tf` (`GradOptions`, `TFBackend`; `docs/backends/tf.md`).
 - `tl.backends.jax` (`GradOptions`, `JAXBackend`; `docs/backends/jax.md`).

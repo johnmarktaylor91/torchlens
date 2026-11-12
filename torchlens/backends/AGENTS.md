@@ -14,9 +14,11 @@ Register a `BackendSpec` in `registry.py`/`default_specs.py` with:
   backend, importing no backend package, so registration can validate them at
   import time). Registration checks the object against
   `BACKEND_PROTOCOL_MEMBERS`.
-- `maturity=`: `"preview"` or `"stable"`. Only a recorded maintainer decision
-  flips it; `tests/test_backend_maturity.py` pins that a `stable` backend's
-  shipped scorecard meets every graduation item.
+- No maturity label: a spec states what the backend supports through its
+  capabilities and the feature table in `docs/backends.md`. The shipped
+  `scorecard.json` embeds the six graduation items as evidence only;
+  `tests/test_backend_maturity.py` pins that no spec, protocol or record
+  carries a label.
 - `capabilities=`: `BackendCapabilities`, the only source of capability truth.
   A `False` flag owes a typed refusal with the code from
   `refusal_code_for_capability(flag)`; the suite's `c1_refusal_<flag>` cells
@@ -62,9 +64,9 @@ Registration validates the adapter's attributes when `capture_backend` is
 supplied. A static, callback-based or self-looping backend leaves
 `capture_backend=None` and keeps its standalone `capture_trace` honest.
 
-## Preview backends
+## Non-PyTorch backends
 
-Five preview backends (`maturity="preview"`) live beside `torch/`, each filling
+Five non-PyTorch backends live beside `torch/`, each filling
 the backend protocol with `capture_backend=None`, with per-directory
 implementation guides:
 
@@ -78,7 +80,7 @@ implementation guides:
   (`paddle/AGENTS.md`).
 - `tinygrad/` - UOp-snapshot capture of an eager forward (`tinygrad/AGENTS.md`).
 
-Shared preview plumbing: `_finalize.py` / `_recurrence.py` (single-pass trace
+Shared plumbing for the non-PyTorch backends: `_finalize.py` / `_recurrence.py` (single-pass trace
 finalization and the neutral recurrence grouper), `_options.py` (per-backend
 kwarg and trace-option refusal policies), and `_selective_save.py` /
 `_validation_shared.py`. `_intervention_evidence.py` names the backends whose
