@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 import re
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from .._utils._record_group_table import record_member
 from ._common import _op_label
@@ -25,6 +25,9 @@ _JAX_DIMENSIONS = re.compile(
     r"(ConvDimensionNumbers\((?:[^()]|\([^()]*\))*\)|\((?:[^()]|\([^()]*\))*\))"
 )
 _JAX_OUT_SPEC = re.compile(r"\bout_spec\s*=\s*(\([^)]*\))")
+#: Frameworks whose spatial ops have one fixed channel layout and record none per op
+#: (MLX convolutions and pools are channels-last; tinygrad's are NCHW).
+_FIXED_CHANNEL_AXIS: Final[dict[str, str]] = {"mlx": "last", "tinygrad": "first"}
 
 
 def _literal(value: Any) -> Any:
@@ -143,26 +146,29 @@ def _tinygrad_conv_return(trace: Trace, op: Op) -> bool:
     return False
 
 
+def _recorded_axis(op: Op, ndim: int) -> int | None:
+    """Return the channel axis named by the op's own recorded layout metadata.
+
+    TF records ``data_format`` in its eager/static attrs, Paddle in its call
+    kwargs and JAX as ``dimension_numbers`` in its primitive params; each key
+    is read only where its framework records it.
+    """
+
+    axis = _format_axis(_tf_format(op), ndim)
+    return axis if axis is not None else _jax_axis(_jax_dimensions(op), ndim)
+
+
 def _own_layout_axis(trace: Trace, op: Op, ndim: int) -> tuple[bool, int | None]:
     """Return whether this op fixes a spatial layout, and its evidenced axis."""
 
-    backend = str(trace._provenance_backend)
-    spatial = _spatial_name(str(getattr(op, "func_name", "") or ""))
-    if backend == "tinygrad" and _tinygrad_conv_return(trace, op):
+    if _tinygrad_conv_return(trace, op):
         return True, 1
-    if not spatial:
+    if not _spatial_name(str(getattr(op, "func_name", "") or "")):
         return False, None
-    if backend == "mlx":
-        return True, ndim - 1
-    if backend == "tinygrad":
-        return True, 1
-    if backend == "tf":
-        return True, _format_axis(_tf_format(op), ndim)
-    if backend == "paddle":
-        return True, _format_axis(_call_layout(op, "data_format"), ndim)
-    if backend == "jax":
-        return True, _jax_axis(_jax_dimensions(op), ndim)
-    return True, None
+    fixed = _FIXED_CHANNEL_AXIS.get(str(trace._provenance_backend))
+    if fixed is not None:
+        return True, 1 if fixed == "first" else ndim - 1
+    return True, _recorded_axis(op, ndim)
 
 
 def backend_unit_axis(trace: Trace, op: Op, out: Any, memo: dict[str, int]) -> int | None:

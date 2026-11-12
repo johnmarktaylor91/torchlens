@@ -711,6 +711,6 @@ def _dispatch_trace(
     _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
     _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
     # Non-torch: value-dependent/lookback save= and save shaping run on the finished capture.
-    post_plan = split_backend_post_options(public_trace_kwargs, str(resolved_spec.name))
+    post_plan = split_backend_post_options(public_trace_kwargs, resolved_spec)
     trace = resolved_spec.capture_trace(**public_trace_kwargs)
-    return cast("Trace", apply_backend_post_plan(trace, post_plan, str(resolved_spec.name)))
+    return cast("Trace", apply_backend_post_plan(trace, post_plan, resolved_spec))

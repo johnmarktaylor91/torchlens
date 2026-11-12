@@ -9,10 +9,11 @@ payloads, so the same steps run here, in the same order, on every saved op:
 
 - ``output_device``: a round trip through the backend's payload codec
   (``to_numpy`` then ``from_numpy(map_location=device)``);
-- ``detach_saved_activations``: ``.detach()`` on frameworks whose arrays carry
-  autograd history (Paddle, tinygrad); JAX, TensorFlow and MLX arrays carry no
-  autograd graph, so their saved payloads already meet torch's documented
-  "detached from autograd history" semantics and this is an exact no-op;
+- ``detach_saved_activations``: ``.detach()`` on payloads whose arrays carry
+  autograd history and expose it (Paddle, tinygrad); JAX, TensorFlow and MLX
+  arrays carry no autograd graph and have no ``detach``, so their saved
+  payloads already meet torch's documented "detached from autograd history"
+  semantics and this is an exact no-op;
 - ``activation_transform``: ``apply_transform`` with torch's arguments,
   filling ``transformed_out`` and its shape, dtype and memory.
 
@@ -26,15 +27,12 @@ from __future__ import annotations
 __tl_layer__ = "L3"
 
 from collections.abc import Callable
-from typing import Any, Final
+from typing import Any
 
 from .._data_classes._op_transforms import apply_transform
 from .._io.payload_codec import get_payload_codec
 from .._quantities import Bytes
 from .._utils._record_group_table import record_member
-
-#: Frameworks whose arrays carry autograd history that ``.detach()`` removes.
-_DETACHING_BACKENDS: Final[frozenset[str]] = frozenset({"paddle", "tinygrad"})
 
 
 def apply_save_shaping(
@@ -63,7 +61,7 @@ def apply_save_shaping(
         codec = get_payload_codec(backend_name)
         for op in trace._layer_list:
             if record_member(op, "has_saved_activation", False) and op.out is not None:
-                _shape_op(op, plan, codec, backend_name, set_field)
+                _shape_op(op, plan, codec, set_field)
     _stamp_trace_options(trace, plan)
 
 
@@ -77,15 +75,13 @@ def reshapes_payloads(plan: Any) -> bool:
     )
 
 
-def _shape_op(
-    op: Any, plan: Any, codec: Any, backend_name: str, set_field: Callable[[Any, str, Any], None]
-) -> None:
+def _shape_op(op: Any, plan: Any, codec: Any, set_field: Callable[[Any, str, Any], None]) -> None:
     """Move, detach and transform one op's saved payload like torch's save path."""
 
     raw = op.out
     if plan.output_device != "same":
         raw = _to_device(raw, plan.output_device, codec)
-    if plan.detach_saved_activations and backend_name in _DETACHING_BACKENDS:
+    if plan.detach_saved_activations and callable(getattr(raw, "detach", None)):
         raw = raw.detach()
     set_field(op, "out", raw)
     if plan.activation_transform is None:

@@ -215,15 +215,15 @@ def needs_post_save_predicate(save: Any) -> bool:
     return first_selector_kind_outside(save, allowed=POST_SAVE_SELECTOR_KINDS) is None
 
 
-def split_backend_post_options(kwargs: dict[str, Any], backend_name: str) -> BackendPostPlan | None:
+def split_backend_post_options(kwargs: dict[str, Any], spec: Any) -> BackendPostPlan | None:
     """Move options a finished non-torch capture applies out of the dispatch bundle.
 
     Parameters
     ----------
     kwargs
         Mutable public dispatch bundle (see :func:`._post_plan.split_post_options`).
-    backend_name
-        Resolved backend name; torch keeps every option at capture time.
+    spec
+        Resolved backend spec; torch keeps every option at capture time.
 
     Returns
     -------
@@ -233,10 +233,10 @@ def split_backend_post_options(kwargs: dict[str, Any], backend_name: str) -> Bac
 
     save = kwargs.get("save")
     post_save = save if needs_post_save_predicate(save) else None
-    return split_post_options(kwargs, backend_name, post_save=post_save)
+    return split_post_options(kwargs, str(spec.name), post_save=post_save)
 
 
-def apply_backend_post_plan(trace: Any, plan: BackendPostPlan | None, backend_name: str) -> Any:
+def apply_backend_post_plan(trace: Any, plan: BackendPostPlan | None, spec: Any) -> Any:
     """Apply a post-processing plan to a finished full-save non-torch trace.
 
     Parameters
@@ -245,8 +245,8 @@ def apply_backend_post_plan(trace: Any, plan: BackendPostPlan | None, backend_na
         Finished trace returned by the backend.
     plan
         Plan from :func:`split_backend_post_options`, or ``None``.
-    backend_name
-        Backend name used in diagnostics and to choose the payload codec.
+    spec
+        Resolved backend spec; its name labels diagnostics and picks the payload codec.
 
     Returns
     -------
@@ -256,6 +256,7 @@ def apply_backend_post_plan(trace: Any, plan: BackendPostPlan | None, backend_na
 
     if plan is None:
         return trace
+    backend_name = str(spec.name)
     apply_static_label_save_policy(
         trace,
         plan.save,
