@@ -33,6 +33,7 @@ from ..._utils.tensor_utils import (
     is_functorch_wrapped_tensor,
 )
 from ._completeness_origins import internal_scalar_read
+from ._functorch_check import functorch_wrapped_check
 from ._user_grad_fn import raw_grad_fn
 
 if TYPE_CHECKING:
@@ -243,23 +244,14 @@ def _read_saved(grad_fn: Any, reader: _SavedReader) -> Any:
     """
 
     reads_saved_tensors, getter, names = reader
-    values: list[Any] = []
-    if reads_saved_tensors:
-        try:
-            values.extend(getattr(grad_fn, "saved_tensors", ()))
-        except Exception:
-            pass
+    values = _read_saved_tensors(grad_fn) if reads_saved_tensors else []
     if getter is None:
         return values
     try:
         got = getter(grad_fn)
     except Exception:
         # One attribute refused: read them one by one (reads are idempotent).
-        for name in names:
-            try:
-                values.append(getattr(grad_fn, name))
-            except Exception:
-                continue
+        values.extend(value for _name, value in _read_each(grad_fn, names) if value is not _REFUSED)
         return values
     if len(names) == 1:
         values.append(got)
@@ -268,6 +260,31 @@ def _read_saved(grad_fn: Any, reader: _SavedReader) -> Any:
     else:
         return got
     return values
+
+
+_REFUSED = object()
+"""Stands for the value of a ``_saved_*`` attribute whose read raised."""
+
+
+def _read_saved_tensors(grad_fn: Any) -> list[Any]:
+    """Return ``grad_fn.saved_tensors`` as a list; empty when absent or when the read raises."""
+
+    try:
+        return list(getattr(grad_fn, "saved_tensors", ()))
+    except Exception:
+        return []
+
+
+def _read_each(grad_fn: Any, names: tuple[str, ...]) -> list[tuple[str, Any]]:
+    """Return ``(name, value)`` per name, in order; ``_REFUSED`` for a read that raised."""
+
+    pairs: list[tuple[str, Any]] = []
+    for name in names:
+        try:
+            pairs.append((name, getattr(grad_fn, name)))
+        except Exception:
+            pairs.append((name, _REFUSED))
+    return pairs
 
 
 def _saved_values(grad_fn: Any) -> Any:
@@ -305,20 +322,12 @@ def _learn_reader(cls: type, grad_fn: Any, reader: _SavedReader) -> list[Any]:
     """
 
     reads_saved_tensors, _getter, names = reader
-    values: list[Any] = []
-    if reads_saved_tensors:
-        try:
-            values.extend(getattr(grad_fn, "saved_tensors", ()))
-        except Exception:
-            pass
+    values = _read_saved_tensors(grad_fn) if reads_saved_tensors else []
     kept: list[str] = []
-    for name in names:
-        try:
-            value = getattr(grad_fn, name)
-        except Exception:
+    for name, value in _read_each(grad_fn, names):
+        if value is _REFUSED:
             kept.append(name)
-            continue
-        if not _never_holds_tensor(value):
+        elif not _never_holds_tensor(value):
             kept.append(name)
             values.append(value)
     getter = operator.attrgetter(*kept) if kept else None
@@ -341,7 +350,7 @@ def _flatten_saved_tensors(values: Any, trace: Any = None) -> list[torch.Tensor]
     """Return the tensors among saved ``values``, in order, as ``_collect_tensor_values`` would.
 
     Hot path: a plain tensor or a scalar is decided by its exact class, with no call.
-    ``trace`` keys the functorch checker's resolution (once per trace; ``None`` resolves it).
+    ``trace`` gives the capture run whose functorch checker is reused (``None`` resolves it).
     """
 
     # Cognitive complexity 17 on purpose: per-op hot path of the autograd section; the
@@ -366,35 +375,21 @@ def _flatten_saved_tensors(values: Any, trace: Any = None) -> list[torch.Tensor]
     return _drop_functorch_wrapped(tensors, trace) if tensors else tensors
 
 
-_FUNCTORCH_RESOLVED: tuple[int | None, Any] = (None, None)
-"""``(id of the trace that resolved last, checker)``; swapped as one tuple."""
-
-
-def _functorch_checker(trace: Any) -> Any:
-    """Return torch's functorch wrapped-tensor checker, resolved once per trace.
-
-    The same resolution as ``get_functorch_wrapped_tensor_checker`` (which runs the
-    capability probe on every call), reused for the rest of the trace that resolved it,
-    as ``_functorch_check.functorch_wrapped_check`` does per capture run.
-    """
-
-    global _FUNCTORCH_RESOLVED
-    key, checker = _FUNCTORCH_RESOLVED
-    if trace is not None and key == id(trace):
-        return checker
-    checker = get_functorch_wrapped_tensor_checker()
-    _FUNCTORCH_RESOLVED = (None if trace is None else id(trace), checker)
-    return checker
-
-
 def _drop_functorch_wrapped(tensors: list[torch.Tensor], trace: Any = None) -> list[torch.Tensor]:
     """Return ``tensors`` without functorch wrapper tensors (``is_functorch_wrapped_tensor``).
 
-    The checker is fetched once per trace; a check that raises ``RuntimeError`` keeps the
-    tensor.
+    Inside a capture run the checker is ``functorch_wrapped_check``'s, resolved once per run;
+    without one (``trace`` is ``None`` or has no ``capture_events``) it is resolved here. A
+    check that raises ``RuntimeError`` keeps the tensor.
     """
 
-    checker = _functorch_checker(trace)
+    events = None if trace is None else trace.__dict__.get("capture_events")
+    if events is not None:
+        check = functorch_wrapped_check(events.run_nonce)
+        if check is None:
+            return tensors
+        return [tensor for tensor in tensors if not check(tensor)]
+    checker = get_functorch_wrapped_tensor_checker()
     if checker is None:
         return tensors
     kept: list[torch.Tensor] = []
