@@ -1,0 +1,215 @@
+"""Finished-trace edits on each non-PyTorch backend, through its real replay adapter.
+
+For every backend whose framework is installed and whose adapter module has
+landed, a small branching function (a repeated parent ``a * a`` and a fan-out
+of ``a``) is captured once clean. Editing the rectifier's output on a fork must
+then equal a fresh capture of the same function with the edit written into its
+code, a no-op edit must reproduce every payload exactly, the edited trace must
+pass the replay check, and corrupting a downstream payload must fail it. On
+Paddle, which supports live ``intervene=``, the edited fork must also equal a
+live capture with the same edit.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
+import numpy as np
+import pytest
+
+import torchlens as tl
+from torchlens.backends._replay_adapters import has_adapter
+from torchlens.intervention._backend_replay import verify_backend_replay
+
+_X = np.asarray([[-1.5, -0.5, 0.25, 1.0], [0.5, 1.5, -2.0, 0.75]], dtype=np.float32)
+
+Builder = Callable[[Callable[[Any], Any]], Callable[[Any], Any]]
+
+
+def _jax() -> tuple[Builder, Any]:
+    import jax
+    import jax.numpy as jnp
+
+    def build(edit: Callable[[Any], Any]) -> Callable[[Any], Any]:
+        def chain(v: Any) -> Any:
+            a = v + 1.0
+            return edit(jax.nn.relu(a * a - 2.0)) + a
+
+        return chain
+
+    return build, jnp.asarray(_X)
+
+
+def _tf() -> tuple[Builder, Any]:
+    import tensorflow as tf
+
+    def build(edit: Callable[[Any], Any]) -> Callable[[Any], Any]:
+        def chain(v: Any) -> Any:
+            a = v + 1.0
+            return edit(tf.nn.relu(a * a - 2.0)) + a
+
+        return chain
+
+    return build, tf.constant(_X)
+
+
+def _mlx() -> tuple[Builder, Any]:
+    import mlx.core as mx
+
+    def build(edit: Callable[[Any], Any]) -> Callable[[Any], Any]:
+        def chain(v: Any) -> Any:
+            a = v + 1.0
+            return edit(mx.maximum(a * a - 2.0, 0.0)) + a
+
+        return chain
+
+    return build, mx.array(_X)
+
+
+def _paddle() -> tuple[Builder, Any]:
+    import paddle
+
+    def build(edit: Callable[[Any], Any]) -> Callable[[Any], Any]:
+        def chain(v: Any) -> Any:
+            a = v + 1.0
+            return edit(paddle.nn.functional.relu(a * a - 2.0)) + a
+
+        return chain
+
+    return build, paddle.to_tensor(_X)
+
+
+def _tinygrad() -> tuple[Builder, Any]:
+    from tinygrad import Tensor
+
+    def build(edit: Callable[[Any], Any]) -> Callable[[Any], Any]:
+        def chain(v: Any) -> Any:
+            a = v + 1.0
+            return edit((a * a - 2.0).relu()) + a
+
+        return chain
+
+    return build, Tensor(_X)
+
+
+_BACKENDS = {
+    "jax": ("jax", _jax),
+    "tf": ("tensorflow", _tf),
+    "mlx": ("mlx.core", _mlx),
+    "paddle": ("paddle", _paddle),
+    "tinygrad": ("tinygrad", _tinygrad),
+}
+
+_MARKS = {
+    "jax": pytest.mark.backend_jax,
+    "tf": pytest.mark.tf_backend,
+    "mlx": pytest.mark.backend_mlx,
+    "paddle": pytest.mark.backend_paddle,
+    "tinygrad": pytest.mark.backend_tinygrad,
+}
+
+pytestmark = pytest.mark.parametrize(
+    "backend", [pytest.param(name, marks=_MARKS[name]) for name in sorted(_BACKENDS)]
+)
+
+
+def _setup(backend: str) -> tuple[Builder, Any, Any]:
+    module, factory = _BACKENDS[backend]
+    pytest.importorskip(module)
+    if not has_adapter(backend):
+        pytest.skip(f"the {backend} replay adapter has not landed on this branch")
+    from torchlens.backends._replay_adapters import get_adapter
+
+    build, value = factory()
+    return build, value, get_adapter(backend)
+
+
+def _identity(value: Any) -> Any:
+    return value
+
+
+def _capture(backend: str, build: Builder, value: Any, edit: Callable[[Any], Any]) -> Any:
+    return tl.trace(build(edit), value, backend=backend)
+
+
+def _rectifier(trace: Any) -> Any:
+    """The rectifier op: the edit site, with consumers downstream."""
+
+    names = ("relu", "maximum")
+    return next(
+        op
+        for op in trace._layer_list
+        if any(name in str(op.func_name).lower() for name in names) and op.parents
+    )
+
+
+def _output(trace: Any) -> Any:
+    outputs = [op for op in trace._layer_list if getattr(op, "is_output", False)]
+    return (outputs or list(trace._layer_list))[-1].out
+
+
+def _host(adapter: Any, value: Any) -> np.ndarray:
+    return np.asarray(adapter.to_host(value))
+
+
+def _double(out: Any, *, ctx: Any) -> Any:
+    return out * 2.0
+
+
+def test_noop_edit_reproduces_every_payload(backend: str) -> None:
+    build, value, adapter = _setup(backend)
+    clean = _capture(backend, build, value, _identity)
+    before = {op.label: _host(adapter, op.out) for op in clean._layer_list}
+    edited = clean.fork().do(_rectifier(clean).label, lambda out, *, ctx: out)
+    for op in edited._layer_list:
+        assert np.array_equal(_host(adapter, op.out), before[op.label]), op.label
+
+
+def test_edited_fork_equals_capture_of_edited_code(backend: str) -> None:
+    build, value, adapter = _setup(backend)
+    clean = _capture(backend, build, value, _identity)
+    edited = clean.fork().do(_rectifier(clean).label, _double)
+    reference = _capture(backend, build, value, lambda r: r * 2.0)
+    assert edited.last_run["backend"] == backend
+    assert np.array_equal(_host(adapter, _output(edited)), _host(adapter, _output(reference)))
+    assert not np.array_equal(_host(adapter, _output(edited)), _host(adapter, _output(clean)))
+
+
+def test_zero_ablate_equals_capture_of_zeroed_code(backend: str) -> None:
+    build, value, adapter = _setup(backend)
+    clean = _capture(backend, build, value, _identity)
+    edited = clean.fork().do(_rectifier(clean).label, tl.zero_ablate())
+    reference = _capture(backend, build, value, lambda r: r * 0.0)
+    assert np.array_equal(_host(adapter, _output(edited)), _host(adapter, _output(reference)))
+
+
+def test_edited_fork_passes_the_replay_check(backend: str) -> None:
+    build, value, _ = _setup(backend)
+    clean = _capture(backend, build, value, _identity)
+    edited = clean.fork().do(_rectifier(clean).label, _double)
+    assert verify_backend_replay(edited) == []
+    assert edited.is_pristine is False
+
+
+def test_corrupted_downstream_payload_fails_the_replay_check(backend: str) -> None:
+    build, value, adapter = _setup(backend)
+    clean = _capture(backend, build, value, _identity)
+    edited = clean.fork().do(_rectifier(clean).label, _double)
+    site = _rectifier(edited)
+    child = edited._layer_dict_all_keys[next(iter(site.children))]
+    child._internal_set("out", child.out + 1.0)
+    assert child.label in verify_backend_replay(edited)
+
+
+def test_live_intervene_matches_where_supported(backend: str) -> None:
+    if backend != "paddle":
+        pytest.skip(f"{backend} has no live intervene= to compare against")
+    build, value, adapter = _setup(backend)
+    clean = _capture(backend, build, value, _identity)
+    func = str(_rectifier(clean).func_name)
+    live = tl.trace(
+        build(_identity), value, backend=backend, intervene=tl.when(tl.func(func), tl.zero_ablate())
+    )
+    edited = clean.fork().do(tl.func(func), tl.zero_ablate())
+    assert np.array_equal(_host(adapter, _output(edited)), _host(adapter, _output(live)))

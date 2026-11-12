@@ -31,7 +31,7 @@ def _lookup_adapter(backend: str) -> Any | None:
 
     try:
         return _replay_adapters.get_adapter(backend)
-    except _replay_adapters.ReplayAdapterUnavailable:
+    except _replay_adapters.ReplayRefusal:
         return None
 
 

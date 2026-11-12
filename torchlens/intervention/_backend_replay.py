@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from .._utils._record_group_table import record_member
+from ..backends._replay_adapters import ReplayRefusal
 from ._backend_adapter_lookup import backend_adapter, trace_backend
 from ._replay_context import _replay_site_key
 from ._replay_sites import _is_passthrough_replacement, _is_source_record
@@ -107,7 +108,10 @@ def _step_for_site(trace: Trace, adapter: Any, site: Op) -> ReplayStep:
     if _is_source_record(site) or not tuple(getattr(site, "parents", ()) or ()):
         return ReplayStep(site, (key,), (), "source", guard)
     reason = adapter.can_replay(trace, site)
-    recipe = None if reason is not None else adapter.recipe(trace, site)
+    try:
+        recipe = None if reason is not None else adapter.recipe(trace, site)
+    except ReplayRefusal as exc:  # the adapter's internal signal becomes this coded refusal
+        recipe, reason = None, str(exc)
     if recipe is None:
         raise refuse(
             f"{key!r} cannot be replayed on the {trace_backend(trace)} backend: "
@@ -181,7 +185,12 @@ def _step_outputs(walk: ReplayWalk, step: ReplayStep) -> tuple[Any, ...]:
         # exactly, so an edit that changes nothing reproduces the trace bit for bit.
         return tuple(walk.payload(slot) for slot in step.slots)
     parents = tuple(walk.value(parent) for parent in step.occurrences)
-    outputs = tuple(walk.adapter.forward(walk.trace, step.op, parents))
+    try:
+        outputs = tuple(walk.adapter.forward(walk.trace, step.op, parents))
+    except ReplayRefusal as exc:
+        raise refuse(
+            f"{step.slots[0]!r} cannot be replayed: {exc}", "backend_replay_op_unreplayable"
+        ) from exc
     if len(outputs) != len(step.slots):
         raise refuse(
             f"replaying {step.slots[0]!r} returned {len(outputs)} values for "
