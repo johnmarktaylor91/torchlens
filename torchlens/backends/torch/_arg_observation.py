@@ -43,7 +43,13 @@ from ._ops_arg_slots import (
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-__all__ = ("plain_slot_facts", "slot_parent_labels", "snapshot_flat_slots", "validated_parameter")
+__all__ = (
+    "READS_HANDOFF",
+    "plain_slot_facts",
+    "slot_parent_labels",
+    "snapshot_flat_slots",
+    "validated_parameter",
+)
 
 _PARAMETER = torch.nn.Parameter
 #: The tensor of a ``(kind, key, tensor, template_visited)`` slot item.
@@ -51,6 +57,10 @@ _ITEM_VALUE = operator.itemgetter(2)
 _TENSOR = torch.Tensor
 #: The facts of a plain tensor without TorchLens metadata (``_object_facts`` result).
 _UNSTAMPED: tuple[Any, ...] = (None, False, (), False, False, False)
+#: ``(id(call), gated labels)`` the builder's resolve loop read for the call it is about
+#: to snapshot, with no source logged since; the snapshot takes and clears it. The
+#: labels map tensor ids to strings, so a left-over entry holds no tensor.
+READS_HANDOFF: list[tuple[int, dict[int, str] | None] | None] = [None]
 #: The witness's slot facts when the op has no snapshot (read only).
 _NO_FACTS: Mapping[Any, Any] = {}
 

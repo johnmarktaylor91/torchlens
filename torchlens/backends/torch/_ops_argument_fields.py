@@ -30,7 +30,7 @@ from ..._utils._tensor_label import (
 )
 from ..._utils._tl_collective import _async_collective_elem
 from ..._utils.introspection import get_arg_tensors_for_resolution
-from ._arg_observation import slot_parent_labels, snapshot_flat_slots
+from ._arg_observation import READS_HANDOFF, slot_parent_labels, snapshot_flat_slots
 from ._call_layout import planned_tensor_items
 from ._ops_arg_slots import (
     _ArgSlot,
@@ -124,7 +124,8 @@ def _scan_call_arguments(
         else:
             log_closure_constant_if_known(self, tensor)
 
-    slots = snapshot_arg_slots(self, call, arg_tensors, reads)
+    READS_HANDOFF[0] = (id(call), reads)  # read by the snapshot of this very call
+    slots = snapshot_arg_slots(self, call, arg_tensors)
     parents = slot_parent_labels(self, slots, arg_tensors)
     return (
         arg_tensors,
@@ -292,17 +293,16 @@ def _object_facts(trace: "Trace", value: Any, scope: _SnapshotScope) -> tuple[An
 
 
 def snapshot_arg_slots(
-    trace: "Trace",
-    call: _SlotCall,
-    arg_tensors: list[torch.Tensor],
-    reads: dict[int, str] | None = None,
+    trace: "Trace", call: _SlotCall, arg_tensors: list[torch.Tensor]
 ) -> tuple[_ArgSlot, ...]:
     """Walk the call's arguments once and record every tensor slot's derivation reads.
 
     Records the slots as the current op's context (read by the parent-position
-    recorder and the witness) and returns them in walk order. ``reads`` holds gated
-    labels the caller read with no source logged since (flat calls reuse them).
+    recorder and the witness) and returns them in walk order. A flat call reuses
+    the gated labels the resolve loop handed over for it (``READS_HANDOFF``).
     """
+
+    handed, READS_HANDOFF[0] = READS_HANDOFF[0], None
 
     layout = call.layout
     items = list(_tensor_items(call)) if layout is None else planned_tensor_items(call, layout)
@@ -310,6 +310,7 @@ def snapshot_arg_slots(
     if not items or workspace is None:
         return ()
     if layout is not None:
+        reads = handed[1] if handed is not None and handed[0] == id(call) else None
         flat = snapshot_flat_slots(
             trace, workspace, call, (items, arg_tensors, reads), _object_facts
         )

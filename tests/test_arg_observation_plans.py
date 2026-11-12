@@ -365,5 +365,7 @@ def test_flat_calls_take_the_planned_snapshot(monkeypatch: pytest.MonkeyPatch) -
     tl.trace(_Varied(), torch.randn(2, 6))
     assert left and not any(left)
     left.clear()
-    tl.trace(_Unusual(), torch.randn(2, 4))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # the flagged tensor has no provenance
+        tl.trace(_Unusual(), torch.randn(2, 4))
     assert any(left)
