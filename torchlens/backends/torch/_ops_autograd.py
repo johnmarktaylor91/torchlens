@@ -196,7 +196,15 @@ Only classes without ``Py_TPFLAGS_HEAPTYPE`` are cached: they live as long as th
 interpreter and their ``__dict__`` cannot change, so the cache holds no gradient
 function, tensor or trace and never goes stale. A Python-defined class (a custom
 ``autograd.Function``'s backward node) is scanned on every op, as before.
+
+The cached names are only those that can hold a tensor. Each ``_saved_*`` attribute of a
+C class is a getter over one C++ field of fixed type, so a value read once as a number, a
+string or a non-empty tuple of numbers (sizes, strides, scalars, flags) shows a field that
+never holds a tensor; such names are dropped at the class's first read. A ``None``, an
+empty tuple, a tensor or a read that raises keeps the name.
 """
+_NUMBER_CLASSES = frozenset({bool, int, float, complex})
+_FIXED_NON_TENSOR_CLASSES = _NUMBER_CLASSES | {str}
 
 
 def _saved_reader(cls: type) -> _SavedReader:
@@ -272,25 +280,68 @@ def _saved_values(grad_fn: Any) -> Any:
     """
 
     cls = grad_fn.__class__
-    try:
-        reader = _SAVED_READER_BY_CLASS[cls]
-    except KeyError:
-        reader = _saved_reader(cls)
-        if not cls.__flags__ & _HEAPTYPE_FLAG:
-            _SAVED_READER_BY_CLASS[cls] = reader
+    reader = _SAVED_READER_BY_CLASS.get(cls)
     hooks_active = saved_tensors_default_hooks_active()
     if hooks_active:
         return ()
+    if reader is None:
+        reader = _saved_reader(cls)
+        if not cls.__flags__ & _HEAPTYPE_FLAG:
+            if hooks_active is None:
+                with pause_logging():
+                    return _learn_reader(cls, grad_fn, reader)
+            return _learn_reader(cls, grad_fn, reader)
     if hooks_active is None:
         with pause_logging():
             return _read_saved(grad_fn, reader)
     return _read_saved(grad_fn, reader)
 
 
-def _flatten_saved_tensors(values: Any) -> list[torch.Tensor]:
+def _learn_reader(cls: type, grad_fn: Any, reader: _SavedReader) -> list[Any]:
+    """Read ``grad_fn``'s saved values name by name and cache the reader of its tensor names.
+
+    Same values and order as :func:`_read_saved` for the tensors among them; the names whose
+    value shows a field that never holds a tensor are left out of the cached reader.
+    """
+
+    reads_saved_tensors, _getter, names = reader
+    values: list[Any] = []
+    if reads_saved_tensors:
+        try:
+            values.extend(getattr(grad_fn, "saved_tensors", ()))
+        except Exception:
+            pass
+    kept: list[str] = []
+    for name in names:
+        try:
+            value = getattr(grad_fn, name)
+        except Exception:
+            kept.append(name)
+            continue
+        if not _never_holds_tensor(value):
+            kept.append(name)
+            values.append(value)
+    getter = operator.attrgetter(*kept) if kept else None
+    _SAVED_READER_BY_CLASS[cls] = (reads_saved_tensors, getter, tuple(kept))
+    return values
+
+
+def _never_holds_tensor(value: Any) -> bool:
+    """Return whether ``value`` shows a C++ saved field of a type that holds no tensor."""
+
+    cls = value.__class__
+    if cls in _FIXED_NON_TENSOR_CLASSES:
+        return True
+    if cls is not tuple and cls is not list:
+        return False
+    return bool(value) and all(item.__class__ in _NUMBER_CLASSES for item in value)
+
+
+def _flatten_saved_tensors(values: Any, trace: Any = None) -> list[torch.Tensor]:
     """Return the tensors among saved ``values``, in order, as ``_collect_tensor_values`` would.
 
     Hot path: a plain tensor or a scalar is decided by its exact class, with no call.
+    ``trace`` keys the functorch checker's resolution (once per trace; ``None`` resolves it).
     """
 
     # Cognitive complexity 17 on purpose: per-op hot path of the autograd section; the
@@ -312,16 +363,38 @@ def _flatten_saved_tensors(values: Any) -> list[torch.Tensor]:
                 or (cls not in _NO_TENSOR_CLASSES and isinstance(item, _TENSOR))
             ):
                 tensors += (item,)
-    return _drop_functorch_wrapped(tensors) if tensors else tensors
+    return _drop_functorch_wrapped(tensors, trace) if tensors else tensors
 
 
-def _drop_functorch_wrapped(tensors: list[torch.Tensor]) -> list[torch.Tensor]:
-    """Return ``tensors`` without functorch wrapper tensors (``is_functorch_wrapped_tensor``).
+_FUNCTORCH_RESOLVED: tuple[int | None, Any] = (None, None)
+"""``(id of the trace that resolved last, checker)``; swapped as one tuple."""
 
-    The checker is fetched once per op; a check that raises ``RuntimeError`` keeps the tensor.
+
+def _functorch_checker(trace: Any) -> Any:
+    """Return torch's functorch wrapped-tensor checker, resolved once per trace.
+
+    The same resolution as ``get_functorch_wrapped_tensor_checker`` (which runs the
+    capability probe on every call), reused for the rest of the trace that resolved it,
+    as ``_functorch_check.functorch_wrapped_check`` does per capture run.
     """
 
+    global _FUNCTORCH_RESOLVED
+    key, checker = _FUNCTORCH_RESOLVED
+    if trace is not None and key == id(trace):
+        return checker
     checker = get_functorch_wrapped_tensor_checker()
+    _FUNCTORCH_RESOLVED = (None if trace is None else id(trace), checker)
+    return checker
+
+
+def _drop_functorch_wrapped(tensors: list[torch.Tensor], trace: Any = None) -> list[torch.Tensor]:
+    """Return ``tensors`` without functorch wrapper tensors (``is_functorch_wrapped_tensor``).
+
+    The checker is fetched once per trace; a check that raises ``RuntimeError`` keeps the
+    tensor.
+    """
+
+    checker = _functorch_checker(trace)
     if checker is None:
         return tensors
     kept: list[torch.Tensor] = []
@@ -349,7 +422,7 @@ def _saved_tensor_stats(
     # Cognitive complexity 21 on purpose: per-op hot path of the autograd section; one
     # context entry per op means the per-tensor reads stay inline in this loop.
     band = dict.fromkeys(_BAND_KEYS, 0)
-    tensors = _flatten_saved_tensors(_saved_values(grad_fn))
+    tensors = _flatten_saved_tensors(_saved_values(grad_fn), trace)
     total_bytes = tensor_count = 0
     if not tensors:
         return (total_bytes, tensor_count), band
@@ -489,22 +562,35 @@ def _partition_output_entries_with_autograd_stats(
 def _output_entries_with_autograd_stats(trace: Any, output: Any) -> list[_OutputTensorEntry]:
     """Return the output entries of one call, as the partition below builds them.
 
-    A single plain tensor with no autograd node (no saved tensors to count, so no
-    statistics and no band) gets its one entry without the generic output walk;
-    every other output goes through
+    A single plain tensor gets its one entry without the generic output walk (the walk
+    yields exactly ``(output, (), None)`` for it), with the statistics and band of its
+    autograd node when it has one; every other output goes through
     :func:`_partition_output_entries_with_autograd_stats`. The ``grad_fn`` read is
     the C getset original: unwitnessed and unfingerprinted, as the partition's
     marked read arranges.
     """
 
-    if type(output) is not torch.Tensor or raw_grad_fn(output) is not None:
+    if type(output) is not torch.Tensor:
         return _partition_output_entries_with_autograd_stats(trace, output)
+    grad_fn = raw_grad_fn(output)
     trace_fields = trace.__dict__
-    if "_autograd_seen_saved_storages" not in trace_fields:
-        trace_fields["_autograd_seen_saved_storages"] = set()
+    seen_saved_storages = trace_fields.get("_autograd_seen_saved_storages")
+    if seen_saved_storages is None:
+        seen_saved_storages = trace_fields["_autograd_seen_saved_storages"] = set()
+    if grad_fn is None:
+        return [
+            _OutputTensorEntry(
+                value=output, container_path=(), container_spec=None, autograd_stats=(None, None)
+            )
+        ]
+    stats, band = _saved_tensor_stats(trace, grad_fn, set(), seen_saved_storages)
     return [
         _OutputTensorEntry(
-            value=output, container_path=(), container_spec=None, autograd_stats=(None, None)
+            value=output,
+            container_path=(),
+            container_spec=None,
+            autograd_stats=stats,
+            autograd_band=band,
         )
     ]
 
