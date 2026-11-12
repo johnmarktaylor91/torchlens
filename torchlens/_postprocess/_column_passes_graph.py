@@ -21,8 +21,9 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from .._utils._record_group_table import record_member
+from . import _conditional_columns
 from ._branch_attribution import _code_context_position_key
-from ._column_passes import _column_lookup, _row_or_refuse
+from ._column_passes import _column_lookup
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -37,14 +38,8 @@ __all__ = (
     "get_gained_branch_entries",
     "materialize_derived_views",
     "reset_and_flood_if_edges",
+    "step5_columns",
 )
-
-
-def _row(trace: Trace, rows: dict[str, int], label: str) -> int:
-    """Return ``label``'s row; an unknown label raises ``trace[label]``'s refusal."""
-
-    row = rows.get(label)
-    return _row_or_refuse(trace, rows, label) if row is None else row
 
 
 def _graph_lookup(trace: Trace) -> Any:
@@ -54,6 +49,16 @@ def _graph_lookup(trace: Trace) -> Any:
     """
 
     return _column_lookup(trace)
+
+
+#: Default of the step-5 ``plan`` arguments: bind the columns on entry.
+_UNBOUND: Any = object()
+
+
+def step5_columns(trace: Trace) -> _conditional_columns.StepColumns | None:
+    """Return the trace's step-5 columns, or ``None`` when the facade bodies apply."""
+
+    return _conditional_columns.bind(trace, _graph_lookup(trace))
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +218,9 @@ def flood_kept_siblings(trace: Trace, added: list[str], seen: set[str], view: Fl
 # ---------------------------------------------------------------------------
 
 
-def reset_and_flood_if_edges(trace: Trace, branch_bool_labels: list[str]) -> None:
+def reset_and_flood_if_edges(
+    trace: Trace, branch_bool_labels: list[str], *, plan: Any = _UNBOUND
+) -> None:
     """Phase 5d: reset per-op IF state, then backward-flood IF edges from branch bools.
 
     Parameters
@@ -222,70 +229,19 @@ def reset_and_flood_if_edges(trace: Trace, branch_bool_labels: list[str]) -> Non
         Trace being postprocessed.
     branch_bool_labels:
         Branch-participating terminal bool labels, in execution order.
+    plan:
+        The trace's :func:`step5_columns` (``None`` runs the facade body);
+        bound here when not given.
     """
 
     trace._graph_conditional_branch_edges = []
-    lookup = _graph_lookup(trace)
-    if lookup is None:
+    if plan is _UNBOUND:
+        plan = step5_columns(trace)
+    if plan is None:
         _reset_and_flood_if_edges_facade(trace, branch_bool_labels)
         return
-    columns, rows = lookup
-    _reset_if_state_column(columns, rows)
-    _flood_if_edges_column(trace, columns, rows, branch_bool_labels)
-
-
-def _reset_if_state_column(columns: Any, rows: dict[str, int]) -> None:
-    """Clear every non-orphan op's IF entry children and conditional-body flag."""
-
-    is_orphan = columns.getter("is_orphan", False)
-    put_entry_children = columns.setter("conditional_entry_children")
-    # ``Op.is_in_conditional_body`` is a property whose setter stores this slot.
-    put_in_body = columns.setter("_is_in_conditional_body")
-    for row in rows.values():  # ``Trace.__iter__`` order during the pass
-        if is_orphan(row):
-            continue
-        put_entry_children(row, [])
-        put_in_body(row, False)
-
-
-def _flood_if_edges_column(
-    trace: Trace, columns: Any, rows: dict[str, int], branch_bool_labels: list[str]
-) -> None:
-    """Column body of the backward IF-edge flood from the branch bools.
-
-    Cognitive complexity is over 15 on purpose (hot path): the row lookups
-    are inlined so the per-op loop makes no Python call the facade avoids.
-    """
-
-    entry_children = columns.getter("conditional_entry_children")
-    put_in_body = columns.setter("_is_in_conditional_body")
-    parents = columns.getter("parents")
-    has_output_descendant = columns.getter("has_output_descendant")
-    nodes_seen: set[str] = set()
-    node_stack = branch_bool_labels.copy()
-    while node_stack:
-        node_label = node_stack.pop()
-        row = rows.get(node_label)
-        if row is None:
-            row = _row(trace, rows, node_label)
-        if node_label in nodes_seen:
-            continue
-        for parent_label in parents(row):
-            parent_row = rows.get(parent_label)
-            if parent_row is None:
-                parent_row = _row(trace, rows, parent_label)
-            if has_output_descendant(parent_row):
-                entry_children(parent_row).append(node_label)
-                put_in_body(parent_row, False)
-                nodes_seen.add(parent_label)
-                trace._graph_conditional_branch_edges.append((parent_label, node_label))
-            else:
-                if parent_label in nodes_seen:
-                    continue
-                put_in_body(parent_row, True)
-                node_stack.append(parent_label)
-
-        nodes_seen.add(node_label)
+    _conditional_columns.reset_if_state(plan)
+    _conditional_columns.flood_if_edges(trace, plan, branch_bool_labels)
 
 
 def _reset_and_flood_if_edges_facade(trace: Trace, branch_bool_labels: list[str]) -> None:
@@ -329,6 +285,8 @@ def assign_conditional_branch_stacks(
     trace: Trace,
     events_by_key: dict[Any, Any],
     translate: Callable[[Any, dict[Any, Any]], list[tuple[int, str]]],
+    *,
+    plan: Any = _UNBOUND,
 ) -> None:
     """Give every non-orphan op its conditional branch stack and reset its arm children.
 
@@ -345,35 +303,17 @@ def assign_conditional_branch_stacks(
     translate:
         ``control_flow._translate_conditional_stack``, passed by the caller so a
         patch of that module attribute is honored.
+    plan:
+        The trace's :func:`step5_columns` (``None`` runs the facade body);
+        bound here when not given.
     """
 
-    lookup = _graph_lookup(trace)
-    if lookup is None:
+    if plan is _UNBOUND:
+        plan = step5_columns(trace)
+    if plan is None:
         _assign_conditional_branch_stacks_facade(trace, events_by_key, translate)
         return
-    columns, rows = lookup
-    is_orphan = columns.getter("is_orphan", False)
-    code_context_of = columns.getter("code_context")
-    put_stack = columns.setter("conditional_branch_stack")
-    stack_of = columns.getter("conditional_branch_stack")
-    put_depth = columns.setter("conditional_branch_depth")
-    put_arm_children = columns.setter("conditional_arm_children")
-    translated_by_stack: dict[tuple[tuple[Any, ...], ...], list[tuple[int, str]]] = {}
-    for layer_label in trace._raw_graph_ws.raw_layer_labels_list:
-        row = rows.get(layer_label)
-        if row is None:
-            row = _row(trace, rows, layer_label)
-        if is_orphan(row):
-            continue
-        code_context = code_context_of(row)
-        stack_key = _code_context_position_key(code_context)
-        translated = translated_by_stack.get(stack_key)
-        if translated is None:
-            translated = translate(code_context, events_by_key)
-            translated_by_stack[stack_key] = translated
-        put_stack(row, list(translated))
-        put_depth(row, len(stack_of(row)))
-        put_arm_children(row, {})
+    _conditional_columns.assign_branch_stacks(plan, events_by_key, translate)
 
 
 def _assign_conditional_branch_stacks_facade(
@@ -428,7 +368,7 @@ def get_gained_branch_entries(
     return child_stack[shared_prefix_len:]
 
 
-def attribute_forward_edges(trace: Trace) -> None:
+def attribute_forward_edges(trace: Trace, *, plan: Any = _UNBOUND) -> None:
     """Phase 5e body: attribute every forward edge that enters a conditional arm.
 
     Records the entered arm's child on the parent, the raw entry edge per
@@ -439,69 +379,23 @@ def attribute_forward_edges(trace: Trace) -> None:
     ----------
     trace:
         Trace being postprocessed, after :func:`assign_conditional_branch_stacks`.
+    plan:
+        The trace's :func:`step5_columns` (``None`` runs the facade body);
+        bound here when not given.
     """
 
-    entry_edges: dict[tuple[int, str], list[tuple[str, str]]] = defaultdict(list)
-    call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
-    lookup = _graph_lookup(trace)
-    if lookup is None:
-        _attribute_forward_edges_facade(trace, entry_edges, call_indices)
-    else:
-        _attribute_forward_edges_column(trace, lookup, entry_edges, call_indices)
-    trace._graph_conditional_arm_entry_edges = dict(entry_edges)
-    trace._graph_conditional_edge_call_indices = dict(call_indices)
-
-
-def _attribute_forward_edges_column(
-    trace: Trace,
-    lookup: Any,
-    entry_edges: dict[tuple[int, str], list[tuple[str, str]]],
-    call_indices: dict[tuple[str, str, int, str], list[int]],
-) -> None:
-    """Column body of :func:`attribute_forward_edges`.
-
-    Cognitive complexity is over 15 on purpose (hot path, once per edge): the
-    row lookups and the empty-stack skip are inlined rather than called.
-    """
-
-    columns, rows = lookup
-    is_orphan = columns.getter("is_orphan", False)
-    children = columns.getter("children")
-    stack_of = columns.getter("conditional_branch_stack")
-    arm_children_of = columns.getter("conditional_arm_children")
-    label_raw_of = columns.getter("_label_raw")
-    pass_number_of = columns.getter("pass_number")
-    for parent_label in trace._raw_graph_ws.raw_layer_labels_list:
-        parent_row = rows.get(parent_label)
-        if parent_row is None:
-            parent_row = _row(trace, rows, parent_label)
-        if is_orphan(parent_row):
-            continue
-        for child_label in children(parent_row):
-            child_row = rows.get(child_label)
-            if child_row is None:
-                child_row = _row(trace, rows, child_label)
-            if is_orphan(child_row):
-                continue
-            child_stack = stack_of(child_row)
-            if not child_stack:  # an empty child stack gains nothing
-                continue
-            gained = get_gained_branch_entries(stack_of(parent_row), child_stack)
-            for conditional_id, branch_kind in gained:
-                arm_children_of(parent_row).setdefault(conditional_id, {}).setdefault(
-                    branch_kind, []
-                ).append(child_label)
-                entry_edges[(conditional_id, branch_kind)].append(
-                    (label_raw_of(parent_row), label_raw_of(child_row))
-                )
-                call_indices[
-                    (
-                        label_raw_of(parent_row).split(":", 1)[0],
-                        label_raw_of(child_row).split(":", 1)[0],
-                        conditional_id,
-                        branch_kind,
-                    )
-                ].append(pass_number_of(child_row))
+    if plan is _UNBOUND:
+        plan = step5_columns(trace)
+    if plan is not None:
+        entry_edges, call_indices = _conditional_columns.attribute_edges(trace, plan)
+        trace._graph_conditional_arm_entry_edges = entry_edges
+        trace._graph_conditional_edge_call_indices = call_indices
+        return
+    entry_edges_by_arm: dict[tuple[int, str], list[tuple[str, str]]] = defaultdict(list)
+    call_indices_by_edge: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
+    _attribute_forward_edges_facade(trace, entry_edges_by_arm, call_indices_by_edge)
+    trace._graph_conditional_arm_entry_edges = dict(entry_edges_by_arm)
+    trace._graph_conditional_edge_call_indices = dict(call_indices_by_edge)
 
 
 def _attribute_forward_edges_facade(
@@ -585,47 +479,32 @@ def _else_children(arm_children: dict[int, dict[str, list[str]]]) -> list[str]:
     )
 
 
-def materialize_derived_views(trace: Trace) -> None:
+def materialize_derived_views(trace: Trace, *, plan: Any = _UNBOUND) -> None:
     """Phase 5f: Rebuild compatibility views derived from primary conditional data.
 
     Parameters
     ----------
     trace:
         Trace being postprocessed.
+    plan:
+        The trace's :func:`step5_columns` (``None`` runs the facade body);
+        bound here when not given.
     """
 
+    # A one-entry list is already its sorted distinct view.
     trace._graph_conditional_edge_call_indices = {
-        key: sorted(set(call_indexs))
+        key: sorted(set(call_indexs)) if call_indexs[1:] else call_indexs[:]
         for key, call_indexs in trace._graph_conditional_edge_call_indices.items()
     }
-    lookup = _graph_lookup(trace)
-    if lookup is None:
-        for layer_label in trace._raw_graph_ws.raw_layer_labels_list:
-            layer = trace[layer_label]
-            if record_member(layer, "is_orphan", False):
-                continue
-            layer._control_flow_then_children = _then_children(layer.control_flow.arm_children)
-            layer._control_flow_elif_children = _elif_children(layer.control_flow.arm_children)
-            layer._control_flow_else_children = _else_children(layer.control_flow.arm_children)
+    if plan is _UNBOUND:
+        plan = step5_columns(trace)
+    if plan is not None:
+        _conditional_columns.derive_arm_views(plan)
         return
-    columns, rows = lookup
-    is_orphan = columns.getter("is_orphan", False)
-    arm_children_of = columns.getter("conditional_arm_children")
-    put_then = columns.setter("conditional_then_children")
-    put_elif = columns.setter("conditional_elif_children")
-    put_else = columns.setter("conditional_else_children")
     for layer_label in trace._raw_graph_ws.raw_layer_labels_list:
-        row = rows.get(layer_label)
-        if row is None:
-            row = _row(trace, rows, layer_label)
-        if is_orphan(row):
+        layer = trace[layer_label]
+        if record_member(layer, "is_orphan", False):
             continue
-        arm_children = arm_children_of(row)
-        if not arm_children:  # what the three builders return for no arms, fresh per op
-            put_then(row, [])
-            put_elif(row, {})
-            put_else(row, [])
-            continue
-        put_then(row, _then_children(arm_children))
-        put_elif(row, _elif_children(arm_children))
-        put_else(row, _else_children(arm_children))
+        layer._control_flow_then_children = _then_children(layer.control_flow.arm_children)
+        layer._control_flow_elif_children = _elif_children(layer.control_flow.arm_children)
+        layer._control_flow_else_children = _else_children(layer.control_flow.arm_children)

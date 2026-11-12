@@ -343,9 +343,8 @@ torchlens/_postprocess/_recurrence.py::relabel_edge_metadata	73
 torchlens/_postprocess/ast_branches.py	2202
 torchlens/_postprocess/ast_branches.py::_ScopeIndexer._build_if_record	65
 torchlens/_postprocess/ast_branches.py::classify_bool	87
-torchlens/_postprocess/control_flow.py	1045
-torchlens/_postprocess/control_flow.py::_classify_bool_layers	93
-torchlens/_postprocess/control_flow.py::_materialize_conditional_records	138
+torchlens/_postprocess/control_flow.py	832
+torchlens/_postprocess/control_flow.py::_materialize_conditional_records	86
 torchlens/_postprocess/control_flow.py::_merge_buffer_entries	150
 torchlens/_postprocess/control_flow.py::_merge_same_version_buffers	68
 torchlens/_postprocess/control_flow.py::_repropagate_ancestry_after_buffer_wiring	64
