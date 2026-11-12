@@ -30,6 +30,7 @@ from ..._utils._tensor_label import (
     get_param_meta,
     get_tensor_label,
 )
+from ._call_layout import planned_tensor_items
 from ._ops_arg_slots import (
     _ArgSlot,
     _current_context,
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "READS_HANDOFF",
-    "plain_slot_facts",
+    "plain_facts",
     "slot_parent_labels",
     "snapshot_flat_slots",
     "validated_parameter",
@@ -63,6 +64,10 @@ _UNSTAMPED: tuple[Any, ...] = (None, False, (), False, False, False)
 READS_HANDOFF: list[tuple[int, dict[int, str] | None] | None] = [None]
 #: The witness's slot facts when the op has no snapshot (read only).
 _NO_FACTS: Mapping[Any, Any] = {}
+
+
+#: ``(call, arg tensors, live labels)`` of the flat call being snapshotted.
+_FlatFrame = tuple[_SlotCall, list[torch.Tensor], Mapping[str, Any]]
 
 
 def validated_parameter(trace: Trace, value: torch.Tensor) -> bool:
@@ -90,50 +95,26 @@ def validated_parameter(trace: Trace, value: torch.Tensor) -> bool:
     return _session_validated_parameter(trace, value)
 
 
-class _StaleScope:
-    """The clear-set test of the general read, built only when a stale label needs it."""
-
-    __slots__ = ("_call", "_arg_tensors", "_templates", "_ids")
-
-    def __init__(self, call: _SlotCall, arg_tensors: list[torch.Tensor], templates: bool) -> None:
-        self._call, self._arg_tensors, self._templates = call, arg_tensors, templates
-        self._ids: set[int] | None = None
-
-    def clears(self, value: Any) -> bool:
-        """Return ``_object_facts``'s ``in_clear_set`` for a non-Parameter slot tensor."""
-
-        # Every tensor of a flat call is a template-visited slot.
-        if self._templates:
-            return True
-        if self._ids is None:
-            self._ids = set(map(id, self._arg_tensors))
-            if self._call.layout.has_out:
-                self._ids |= _out_destination_ids(self._call.kwargs)
-        return id(value) in self._ids
-
-
-def _stamped_tensor_facts(
-    trace: Trace,
-    value: Any,
-    meta: TensorMeta,
-    label: str | None,
-    live: Mapping[str, Any],
-    stale: _StaleScope,
+def _stale_stamped_facts(
+    trace: Trace, value: Any, meta: TensorMeta, label: str | None, frame: _FlatFrame
 ) -> tuple[Any, ...]:
-    """Return the facts of a plain tensor whose raw label this session stamped.
+    """Return the facts of a stamped plain tensor whose label is withheld or not live.
 
     ``label`` is the gated label read; the stamp is anchored to the active session,
     so its storage read is ``label is not None``. Same steps as ``_object_facts``.
     """
 
+    call, arg_tensors, live = frame
     source = meta.buffer_source
-    if label is not None and label in live:
-        if source is None or source == label or source not in live:
-            return (label, True, (label,), bool(meta.data_alias), False, False)
-        return (label, True, (label, source), bool(meta.data_alias), False, False)
     intact = label is not None
     data_alias = bool(meta.data_alias and intact)
-    if stale.clears(value):
+    # ``_object_facts``'s clear set: every tensor of a flat call is template-visited.
+    clears = (
+        _templates_requested(trace)
+        or any(tensor is value for tensor in arg_tensors)
+        or (call.layout.has_out and id(value) in _out_destination_ids(call.kwargs))
+    )
+    if clears:
         clear_tensor_label(value)
         data_alias = False
     known = (
@@ -143,93 +124,106 @@ def _stamped_tensor_facts(
     return (None, known, parents, data_alias, False, False)
 
 
-def plain_slot_facts(
-    trace: Trace,
-    call: _SlotCall,
-    items: list[tuple[str, Any, Any, bool]],
-    arg_tensors: list[torch.Tensor],
-    reads: dict[int, str] | None,
-) -> tuple[dict[int, tuple[Any, ...]], list[Any]]:
-    """Read the slot facts of a flat call's plain tensors and prepared Parameters.
+def plain_facts(
+    trace: Trace, value: Any, token: int | None, reads: dict[int, str] | None, frame: _FlatFrame
+) -> tuple[Any, ...] | None:
+    """Return a plain tensor's or prepared Parameter's slot facts, else ``None``.
 
-    Returns ``(facts by tensor id, tensors left to the general read)``. ``reads``
-    holds the gated labels the builder's resolve loop just read (no source was
-    logged since), so a tensor's label is read once per op.
+    ``None`` leaves the tensor to the general read (``_object_facts``). ``token`` is
+    the active label session's; ``reads`` holds the gated labels the builder's resolve
+    loop just read (no source was logged since), so a tensor's label is read once.
     """
 
-    live = trace.capture_events.live_index.by_raw_label
-    session = _labels._ACTIVE_LABEL_SESSION
-    token = None if session is None else session.token
-    facts: dict[int, tuple[Any, ...]] = {}
-    pending: list[Any] = []
-    stale: _StaleScope | None = None
-    for item in items:
-        value = item[2]
-        vid = id(value)
-        if vid in facts:
-            continue
-        kind = value.__class__
-        meta = getattr(value, "_tl", None)
-        if kind is _PARAMETER:
-            if meta is None:
-                ok = validated_parameter(trace, value)
-                facts[vid] = (None, ok, (), False, True, ok)
-                continue
-        elif kind is _TENSOR and not getattr(value, "_is_param", False):
-            if meta is None:
-                facts[vid] = _UNSTAMPED
-                continue
-            if (
-                meta.__class__ is TensorMeta
-                and token is not None
-                and meta.label_session == token
-                and meta.label_raw is not None
-            ):
-                label = reads.get(vid) if reads is not None else None
-                if label is None:
-                    label = get_tensor_label(value)
-                if stale is None:
-                    stale = _StaleScope(call, arg_tensors, _templates_requested(trace))
-                facts[vid] = _stamped_tensor_facts(trace, value, meta, label, live, stale)
-                continue
-        pending.append(value)
-    return facts, pending
+    kind = value.__class__
+    meta = getattr(value, "_tl", None)
+    if kind is _PARAMETER:
+        if meta is not None:
+            return None
+        ok = validated_parameter(trace, value)
+        return (None, ok, (), False, True, ok)
+    if kind is not _TENSOR or getattr(value, "_is_param", False):
+        return None
+    if meta is None:
+        return _UNSTAMPED
+    if (
+        meta.__class__ is not TensorMeta
+        or token is None
+        or meta.label_session != token
+        or meta.label_raw is None
+    ):
+        return None
+    label = reads.get(id(value)) if reads is not None else None
+    if label is None:
+        label = get_tensor_label(value)
+    live = frame[2]
+    if label is None or label not in live:
+        return _stale_stamped_facts(trace, value, meta, label, frame)
+    source = meta.buffer_source
+    if source is None or source == label or source not in live:
+        return (label, True, (label,), bool(meta.data_alias), False, False)
+    return (label, True, (label, source), bool(meta.data_alias), False, False)
 
 
 def snapshot_flat_slots(
     trace: Trace,
     workspace: Any,
     call: _SlotCall,
-    inputs: tuple[list[tuple[str, Any, Any, bool]], list[torch.Tensor], dict[int, str] | None],
+    inputs: tuple[list[torch.Tensor], dict[int, str] | None],
     object_facts: Callable[[Trace, Any, _SnapshotScope], tuple[Any, ...]],
 ) -> tuple[_ArgSlot, ...] | None:
     """``snapshot_arg_slots`` for a flat call: planned facts, the general read for the rest.
 
-    ``inputs`` is ``(slot items, arg tensors, resolve-loop label reads)``;
-    ``object_facts`` is the general per-object read, given the general scope.
+    Walks the layout's tensor slots (``planned_tensor_items`` order). ``inputs`` is
+    ``(arg tensors, resolve-loop label reads)``; ``object_facts`` is the general
+    per-object read, given the general scope. ``None`` sends the call to the general
+    walk (the reference tests patch this function so).
     """
 
-    items, arg_tensors, reads = inputs
-    facts, pending = plain_slot_facts(trace, call, items, arg_tensors, reads)
-    if pending:
-        clear_ids = set(map(id, arg_tensors))
-        if call.layout.has_out:
-            clear_ids |= _out_destination_ids(call.kwargs)
-        visited = set(map(id, map(_ITEM_VALUE, items))) if _templates_requested(trace) else set()
-        scope = _SnapshotScope(trace.capture_events.live_index.by_raw_label, clear_ids, visited)
-        for value in pending:
-            if id(value) not in facts:
-                facts[id(value)] = object_facts(trace, value, scope)
+    arg_tensors, reads = inputs
+    args, kwargs = call.args, call.kwargs
+    live = trace.capture_events.live_index.by_raw_label
+    session = _labels._ACTIVE_LABEL_SESSION
+    token = None if session is None else session.token
+    frame = (call, arg_tensors, live)
+    facts: dict[int, tuple[Any, ...]] = {}
+    scope: _SnapshotScope | None = None
     slot_list = []
     by_key = {}
-    for kind, key, value, _visited in items:
-        slot = _ArgSlot(kind, key, id(value), *facts[id(value)])
+    for slot_key in call.layout.tensor_slots:
+        kind, key = slot_key
+        value = args[key] if kind == "args" else kwargs[key]
+        value_id = id(value)
+        value_facts = facts.get(value_id)
+        if value_facts is None:
+            value_facts = plain_facts(trace, value, token, reads, frame)
+            if value_facts is None:
+                if scope is None:
+                    scope = _general_scope(trace, call, arg_tensors, live)
+                value_facts = object_facts(trace, value, scope)
+            facts[value_id] = value_facts
+        slot = _ArgSlot(kind, key, value_id, *value_facts)
         slot_list.append(slot)
-        by_key[(kind, key)] = slot
+        by_key[slot_key] = slot
     slots = tuple(slot_list)
     labels = {value_id: value_facts[0] for value_id, value_facts in facts.items()}
-    workspace._pending_arg_slots = _SlotContext(call.args, call.kwargs, slots, by_key, labels)
+    workspace._pending_arg_slots = _SlotContext(args, kwargs, slots, by_key, labels)
     return slots
+
+
+def _general_scope(
+    trace: Trace, call: _SlotCall, arg_tensors: list[torch.Tensor], live: Mapping[str, Any]
+) -> _SnapshotScope:
+    """Return the scope ``snapshot_arg_slots`` builds for a flat call's general reads."""
+
+    clear_ids = set(map(id, arg_tensors))
+    if call.layout.has_out:
+        clear_ids |= _out_destination_ids(call.kwargs)
+    visited = (
+        set(map(id, map(_ITEM_VALUE, planned_tensor_items(call, call.layout))))
+        if _templates_requested(trace)
+        else set()
+    )
+    return _SnapshotScope(live, clear_ids, visited)
 
 
 def slot_parent_labels(

@@ -284,11 +284,3 @@ def arg_slot_labels(trace: Trace | None, args: Any, kwargs: Any) -> dict[int, st
 
     context = _current_context(trace, args, kwargs)
     return None if context is None else context.labels
-
-
-def retire_arg_slots(trace: Trace) -> None:
-    """Drop the current op's slot context once its last derivation has read it."""
-
-    workspace = _peek_raw_graph_workspace(trace)
-    if workspace is not None:
-        workspace._pending_arg_slots = None

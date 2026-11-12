@@ -305,17 +305,18 @@ def snapshot_arg_slots(
     handed, READS_HANDOFF[0] = READS_HANDOFF[0], None
 
     layout = call.layout
+    if layout is not None and layout.tensor_slots:
+        workspace = _peek_raw_graph_workspace(trace)
+        if workspace is None:
+            return ()
+        reads = handed[1] if handed is not None and handed[0] == id(call) else None
+        flat = snapshot_flat_slots(trace, workspace, call, (arg_tensors, reads), _object_facts)
+        if flat is not None:
+            return flat
     items = list(_tensor_items(call)) if layout is None else planned_tensor_items(call, layout)
     workspace = _peek_raw_graph_workspace(trace)
     if not items or workspace is None:
         return ()
-    if layout is not None:
-        reads = handed[1] if handed is not None and handed[0] == id(call) else None
-        flat = snapshot_flat_slots(
-            trace, workspace, call, (items, arg_tensors, reads), _object_facts
-        )
-        if flat is not None:
-            return flat
     # Built with C-level set and map calls, not comprehensions: once per op.
     clear_ids = set(map(id, arg_tensors)) | _out_destination_ids(call.kwargs)
     visited_ids = (

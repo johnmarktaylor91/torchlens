@@ -1,7 +1,7 @@
 """Planned argument observation records what the general observation records.
 
 A flat call's slot snapshot reads the facts of plain stamped tensors and prepared
-Parameters through ``_arg_observation.plain_slot_facts`` (reusing the resolve loop's
+Parameters through ``_arg_observation.plain_facts`` (reusing the resolve loop's
 label reads), a Parameter's first sight resolves its prep address with one dict read,
 the parent labels come from the snapshot's label dict and the witness is the planned
 one. Each subject is traced as shipped and with every one of those replaced by its
@@ -351,16 +351,16 @@ def test_planned_parameter_check_equals_full_check(monkeypatch: pytest.MonkeyPat
 def test_flat_calls_take_the_planned_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
     """A flat call's plain tensors and Parameters get planned facts; others the general read."""
 
-    left: list[int] = []
-    real = _arg_observation.plain_slot_facts
+    left: list[bool] = []
+    real = _arg_observation.plain_facts
 
     def counting(*args: Any) -> Any:
-        """Record how many tensors each flat call leaves to the general read."""
-        facts, pending = real(*args)
-        left.append(len(pending))
-        return facts, pending
+        """Record whether each tensor is left to the general read."""
+        facts = real(*args)
+        left.append(facts is None)
+        return facts
 
-    monkeypatch.setattr(_arg_observation, "plain_slot_facts", counting)
+    monkeypatch.setattr(_arg_observation, "plain_facts", counting)
     torch.manual_seed(0)
     tl.trace(_Varied(), torch.randn(2, 6))
     assert left and not any(left)

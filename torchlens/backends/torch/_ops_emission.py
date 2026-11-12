@@ -18,7 +18,7 @@ from ..._utils._tensor_label import (
     session_meta_is_anchored,
     set_tensor_label,
 )
-from ._ops_arg_slots import arg_slot_facts, receiver_data_alias, retire_arg_slots, slot_fact
+from ._ops_arg_slots import arg_slot_facts, receiver_data_alias, slot_fact
 from ._user_grad_fn import grad_fn_read_refused
 from ._view_writeback import (
     data_alias_write_reaches_base,
@@ -526,7 +526,13 @@ def witness_from_slots(
             recorded_parent_params,
         )
     finally:
-        retire_arg_slots(trace)
+        # Retire the op's slot context: its last derivation has read it (once per op).
+        try:
+            workspace = trace._raw_graph_ws
+        except AttributeError:
+            workspace = None
+        if workspace is not None:
+            workspace._pending_arg_slots = None
 
 
 #: Returned by :func:`commit_admitted` when the call needs the general post-call body.
