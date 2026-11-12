@@ -8,7 +8,7 @@ call's own (``_build_shared_fields_dict`` returns a fresh one and nothing writes
 it after the commit), so the commit :func:`make_commit` binds holds it in the
 pending row by reference and appends the handle, with no draft, no copy and no view.
 The settle families the thin builders leave out are filled by the row on first need
-(:class:`_ThinRow`).
+(:class:`_ThinRow`), which then becomes a plain pending row.
 
 The pending row is the protocol every handle reader already uses (``name in row``,
 ``row[name]``, ``row.read(handle, name)``, ``row.settle(handle)``, ``row.labels``),
@@ -25,7 +25,7 @@ from __future__ import annotations
 import time
 import weakref
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from ..._capture.plan import RetentionKind
 from ..._ir._row_journal import _new_object, _RowOpRecord
@@ -121,24 +121,25 @@ class _ThinRow(_PendingRow):
 
     The thin emit leaves out of ``fields`` what no call-time step reads: the defaults
     tables, the callable's descriptors and ``func_non_tensor_args``
-    (:func:`._thin_settle.fill_settle_fields`). Every reader of ``fields`` past the hot
-    items (the lazy refs, a settling read, the settle itself) fills them first, with
-    the same builders and tables today's emit uses at the call. ``device`` and
-    ``handle_id`` are kept as the device object and the integer id until then.
+    (:func:`._thin_settle.fill_settle_fields`). The first lazy ref or settle fills them,
+    with the same builders and tables today's emit uses at the call, then the row
+    becomes a plain ``_PendingRow`` (the same slots), so later reads pay nothing extra.
+    The light reads ``_PendingRow.read`` answers from the hot fields (``parents``,
+    ``parent_arg_positions``) never fill. ``device`` and ``handle_id`` are kept as the
+    device object and the integer id until the fill. ``describe`` is a class attribute
+    of the per-commit subclass :func:`_appender` makes.
     """
 
-    __slots__ = ("describe",)
-    describe: Any
+    __slots__ = ()
+    describe: ClassVar[Callable[..., Any]]
 
     def _fill(self) -> None:
-        """Fill the settle families and the commit's strings once."""
+        """Fill the settle families and the commit's strings, then become a plain pending row."""
 
-        describe = self.describe
-        if describe is not None:
-            self.describe = None
-            fill_settle_fields(self.fields, describe)
-            self.device = str(self.device)
-            self.handle_id = str(self.handle_id)
+        fill_settle_fields(self.fields, self.describe)
+        self.device = str(self.device)
+        self.handle_id = str(self.handle_id)
+        self.__class__ = _PendingRow
 
     def function_ref(self) -> Any:
         """Return the op's function-call ref (``_PendingRow.function_ref``), filled first."""
@@ -158,12 +159,6 @@ class _ThinRow(_PendingRow):
         self._fill()
         return _PendingRow.output_ref(self)
 
-    def read(self, handle: _RowOpRecord, name: str) -> Any:
-        """Answer a read the items lack (``_PendingRow.read``), filled first."""
-
-        self._fill()
-        return _PendingRow.read(self, handle, name)
-
     def settle(self, handle: _RowOpRecord) -> None:
         """Write the row and residual once (``_PendingRow.settle``), filled first."""
 
@@ -173,6 +168,10 @@ class _ThinRow(_PendingRow):
 
 def _appender(edge_use_builder: Any, layout: Any, describe: Any) -> _Commit:
     """Return the row append bound to the edge-use builder, the op store layout and ``describe``."""
+
+    row_type = type(
+        "_BoundThinRow", (_ThinRow,), {"__slots__": (), "describe": staticmethod(describe)}
+    )
 
     def append_row(
         trace: Trace,
@@ -189,8 +188,7 @@ def _appender(edge_use_builder: Any, layout: Any, describe: Any) -> _Commit:
         journal are bound now.
         """
 
-        pending = _ThinRow()
-        pending.describe = describe
+        pending = row_type()
         parents = fields["parents"] = list(fields["parents"])
         events = trace.capture_events
         found = tuple(map(events.live_index.by_raw_label.get, parents))

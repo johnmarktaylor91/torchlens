@@ -426,24 +426,26 @@ def test_thin_rows_fill_the_settle_families_on_first_need(monkeypatch: pytest.Mo
     """A thin row holds no settle family until a read needs one; the fill runs once per row."""
 
     from torchlens.backends.torch import _thin_record
+    from torchlens.backends.torch._ops_row_journal import _PendingRow
 
-    seen: list[tuple[bool, bool, bool]] = []
+    seen: list[tuple[int, bool, bool, bool]] = []
     real_fill = _thin_record._ThinRow._fill
 
     def spy(row: Any) -> None:
-        if row.describe is not None:
-            fields = row.fields
-            seen.append(
-                (
-                    "func_qualname" in fields,
-                    "step_index" in fields,
-                    "func_non_tensor_args" in fields,
-                )
+        fields = row.fields
+        seen.append(
+            (
+                id(row),
+                "func_qualname" in fields,
+                "step_index" in fields,
+                "func_non_tensor_args" in fields,
             )
+        )
         real_fill(row)
-        assert row.describe is None
+        assert type(row) is _PendingRow
         assert type(row.device) is str and type(row.handle_id) is str
 
     monkeypatch.setattr(_thin_record._ThinRow, "_fill", spy)
     tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU(), nn.Tanh()), torch.randn(2, 3))
-    assert seen and all(entry == (False, False, False) for entry in seen)
+    assert seen and all(entry[1:] == (False, False, False) for entry in seen)
+    assert len({entry[0] for entry in seen}) == len(seen)
