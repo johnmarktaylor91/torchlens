@@ -21,6 +21,7 @@ from ..._data_classes.op import (
     validate_train_mode_transform_output,
 )
 from ..._robustness import UnsupportedTensorVariantError
+from ..._utils._call_site import call_site_class
 from ..._utils._detached_activations import (
     mark_detached_saved_activation,
 )
@@ -38,11 +39,7 @@ from ..._utils.tensor_utils import (
 )
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
-from ._equivalence_resolve import (
-    observe_call_site_key,
-    pending_chain,
-    resolve_call_site_class,
-)
+from ._equivalence_resolve import observe_call_site_key
 from ._ops_fresh_payload import fresh_plain_payload_eligible, save_fresh_plain_activation
 from ._ops_function_family import NAME_FAMILY, name_family
 from ._same_object_handoff import pop_same_object_mutation, reference_payload_source
@@ -79,19 +76,24 @@ def _call_site_equivalence_class(
     first-appearance index in this capture, so equal keys get equal classes
     and the string is deterministic for the same model code. Returns None when
     the chain is empty or belongs to a different wrapped call. The key is the
-    observation (:func:`~._equivalence_resolve.observe_call_site_key`); numbering
-    it is the resolver, which must run in op order.
+    observation (:func:`~._equivalence_resolve.observe_call_site_key`), read while
+    this call's chain is pending; numbering it (``call_site_class``) is the
+    resolver, which must run in op order.
     """
 
     ws = trace._raw_graph_ws
+    pending = ws._pending_call_site
+    if pending is None or pending[0] != fields_dict["func_call_id"]:
+        return None
+    slot = i if fields_dict["in_multi_output"] else None
     key = observe_call_site_key(
-        pending_chain(ws._pending_call_site, fields_dict["func_call_id"]),
+        pending[1],
         fields_dict["modules"],
         trace._module_capture_ws.stateful_module_addresses,
         fields_dict["func_name"],
-        i if fields_dict["in_multi_output"] else None,
+        slot,
     )
-    return None if key is None else resolve_call_site_class(ws._call_site_index, key, layer_type)
+    return None if key is None else call_site_class(ws._call_site_index, key, layer_type, slot)
 
 
 def _metadata_shape(t: torch.Tensor, op_label: str | None = None) -> tuple[int, ...]:
