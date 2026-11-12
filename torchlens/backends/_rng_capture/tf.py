@@ -183,7 +183,7 @@ class _Recorder:
     def _legacy(self, draw: RngDraw, attr: dict[str, Any], outputs: tuple[Any, ...]) -> RngDraw:
         """Attach ``(seed, seed2, position)`` and advance the kernel position."""
 
-        seed, seed2 = int(attr.get("seed", 0)), int(attr.get("seed2", 0))
+        seed, seed2 = int(attr.get("seed") or 0), int(attr.get("seed2") or 0)
         if seed == 0 and seed2 == 0:
             return replace(draw, reason=REASON_UNSEEDED)
         kernel = (draw.op_name, seed, seed2, attr.get("dtype"), attr.get("T"), attr.get("Tout"))
@@ -206,17 +206,19 @@ class _Recorder:
         """Wrap one generated stateful op function to read its state first."""
 
         op_type = dict(STATEFUL_FUNCTIONS)[name]
+        signature = inspect.signature(original)
 
-        def wrapper(resource: Any, algorithm: Any, *args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             """Read the generator state, then run the kernel."""
 
             tf = _tf()
+            resource, algorithm = tuple(signature.bind(*args, **kwargs).arguments.values())[:2]
             with _state.pause_logging():
                 state = np.array(tf.raw_ops.ReadVariableOp(resource=resource, dtype=tf.int64))
             entry = (op_type, state, int(np.array(algorithm)))
             self.pending.append(entry)
             try:
-                return original(resource, algorithm, *args, **kwargs)
+                return original(*args, **kwargs)
             finally:
                 if entry in self.pending:
                     self.pending.remove(entry)
