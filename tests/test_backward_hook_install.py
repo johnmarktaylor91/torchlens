@@ -174,18 +174,31 @@ def test_a_handle_removes_only_its_own_hook_beside_handle_free_hooks() -> None:
 
 @pytest.mark.parametrize("leaf", [True, False])
 def test_plain_install_passes_its_return_on(leaf: bool) -> None:
-    """The hook's return replaces the gradient, on a leaf and on an op output."""
+    """The hook's return replaces the gradient, on a leaf and on an op output, in order."""
 
     x = torch.randn(4, requires_grad=True)
     hooked = x if leaf else x * 1
     register_plain_tensor_hook(hooked, lambda grad: grad * 3)
     assert add_plain_tensor_hook(hooked, lambda grad: grad * 5)
     (hooked * x.detach()).sum().backward()
-    assert torch.equal(x.grad, x.detach() * 15)
+    assert torch.equal(x.grad, x.detach() * 3 * 5)
 
 
 class _Sub(torch.Tensor):
     """A tensor subclass: it keeps torch's ``register_hook`` call."""
+
+
+class _PassThroughMode(TorchFunctionMode):
+    """An active torch function mode that runs every function unchanged."""
+
+    def __torch_function__(
+        self,
+        func: Callable[..., object],
+        types: object,
+        args: tuple[object, ...] = (),
+        kwargs: dict[str, object] | None = None,
+    ) -> object:
+        return func(*args, **(kwargs or {}))
 
 
 def test_subclass_and_function_mode_keep_torchs_register_hook() -> None:
@@ -197,7 +210,7 @@ def test_subclass_and_function_mode_keep_torchs_register_hook() -> None:
     assert not takes_plain_hook_install(sub)
     assert not add_plain_tensor_hook(sub, lambda grad: grad)
     assert sub._backward_hooks is None
-    with TorchFunctionMode():
+    with _PassThroughMode():
         assert not takes_plain_hook_install(x * 2)
         assert not add_plain_tensor_hook(x * 2, lambda grad: grad)
     order: list[str] = []
@@ -228,6 +241,15 @@ def _double(grad: torch.Tensor) -> torch.Tensor:
     return grad * 2
 
 
+def _hook_output_with(hook: Callable[[torch.Tensor], torch.Tensor]) -> Callable[..., None]:
+    """Return a forward hook that registers ``hook`` on the output and returns None."""
+
+    def forward_hook(_module: nn.Module, _inputs: object, output: torch.Tensor) -> None:
+        output.register_hook(hook)
+
+    return forward_hook
+
+
 def test_capture_hook_fires_before_a_user_hook_registered_later_in_forward() -> None:
     """TorchLens's hook, registered at the op, sees the gradient before the user's hook edits it."""
 
@@ -253,9 +275,7 @@ def test_capture_hook_fires_before_a_user_hook_registered_later_in_forward() -> 
         calls.append(1)
         return grad * 2
 
-    user_handle = model.lin.register_forward_hook(
-        lambda _module, _inputs, output: output.register_hook(double_and_count)
-    )
+    user_handle = model.lin.register_forward_hook(_hook_output_with(double_and_count))
     trace = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
     user_handle.remove()
     model.zero_grad()
@@ -271,9 +291,7 @@ def test_capture_hook_fires_before_a_user_hook_registered_later_in_forward() -> 
 def _weight_grad_with_doubling_hook(model: _LinearTanh, x: torch.Tensor) -> torch.Tensor:
     """Return the eager weight gradient with the linear output's gradient doubled."""
 
-    handle = model.lin.register_forward_hook(
-        lambda _module, _inputs, output: output.register_hook(_double)
-    )
+    handle = model.lin.register_forward_hook(_hook_output_with(_double))
     model(x).sum().backward()
     handle.remove()
     weight_grad = model.lin.weight.grad
