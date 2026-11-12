@@ -99,7 +99,7 @@ def _rebuild_events(
     ``raw_label`` and ``parent_labels`` use raw labels, ``label`` the final one.
     """
 
-    raw_of = {op.label: _raw_label(op) for op in trace._layer_list}
+    raw_of = _raw_label_index(trace)
     events: list[_Event] = []
     history: list[Any] = []
     for index, op in enumerate(trace._layer_list):
@@ -112,6 +112,21 @@ def _rebuild_events(
         if kind == "op":
             history.append(ctx)
     return events
+
+
+def _raw_label_index(trace: Any) -> dict[str, str]:
+    """Map each op's final label, with and without its ``:pass`` suffix, to its raw label.
+
+    ``Op.parents`` names parents without the pass suffix that ``Op.label`` carries.
+    """
+
+    index: dict[str, str] = {}
+    for op in trace._layer_list:
+        raw = _raw_label(op)
+        label = str(op.label)
+        index[label] = raw
+        index.setdefault(label.rsplit(":", 1)[0], raw)
+    return index
 
 
 def _raw_label(op: Any) -> str:
@@ -137,7 +152,7 @@ def _op_data(op: Any, raw_of: dict[str, str]) -> dict[str, Any]:
 
     return {
         "label": op.label,
-        "raw_label": raw_of[op.label],
+        "raw_label": raw_of[str(op.label)],
         "raw_index": record_member(op, "raw_index", None),
         "type": record_member(op, "type", None),
         "type_index": record_member(op, "type_index", None),
