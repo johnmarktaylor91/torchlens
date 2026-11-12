@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1840 modules, 727486 lines, 0 modules without a docstring.
+85 packages, 1841 modules, 727660 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -15,7 +15,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1560 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 57 | 26986 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 58 | 27103 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4778 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 145 | 50044 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64768 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64825 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -225,7 +225,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (57 modules, 26986 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (58 modules, 27103 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -255,6 +255,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `_plan_check` | The audit-only plan checker (face 4). | 282 |
 | `_record_indexes` | The public lookup indexes of a Recording, built core by core. | 50 |
 | `_record_stores` | Record-store building blocks for fastlog projections. | 116 |
+| `_recorded_tensor` | Recorded form of a call's arguments for the descriptive resolvers. | 112 |
 | `_retention` | Selector classification for deferred capture retention. | 67 |
 | `_run_setup` | Request resolution and Trace setup for the RUN stage entry. | 443 |
 | `_run_state` | Per-pass bookkeeping shared by the RUN stage's skeleton and its exit arms. | 59 |
@@ -269,7 +270,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `arg_positions` | O(1) tensor/parameter extraction from torch function arguments via lookup table. | 2638 |
 | `compute_record` | The two-term compute record: true MACs, never flops // 2. | 526 |
 | `config` | Internal grouped capture configuration for spine orchestration. | 9 |
-| `flops` | FLOPs (Floating Point Operations) computation module for TorchLens. | 1942 |
+| `flops` | FLOPs (Floating Point Operations) computation module for TorchLens. | 1934 |
 | `gc_hold` | Hold off the cyclic garbage collector's automatic runs for the length of one capture. | 107 |
 | `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 769 |
 | `peak_memory` | Host peak-memory instrumentation helpers (brainpipe). | 407 |
@@ -280,7 +281,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `projectors` | Sibling projections over a sealed capture run core. | 938 |
 | `run` | Forward-pass control for the RUN stage: ''run_and_log_inputs_through_model''. | 768 |
 | `run_entry` | Run entry for the RUN stage: one capture forward from slot claim to ''Trace''. | 677 |
-| `salient_args` | Registry of salient argument extractors for common PyTorch operations. | 523 |
+| `salient_args` | Registry of salient argument extractors for common PyTorch operations. | 536 |
 | `session` | Run-owned capture state and legacy compatibility adapters. | 1279 |
 | `stages` | Private hand-off records between the four capture stages. | 190 |
 | `stop` | Unified internal stop directives for capture-spine boundaries. | 393 |
@@ -1541,7 +1542,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (161 modules, 64768 lines)
+Torch backend implementation package for TorchLens capture. (161 modules, 64825 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1624,7 +1625,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64768 
 | `_ops_capture_records` | Ancestor storage, producer policy, and exhaustive record freezing. | 570 |
 | `_ops_container_base` | Exhaustive drafts and foundational output-container helpers. | 509 |
 | `_ops_containers` | Output-container contracts, reconstruction, and tensor walking. | 776 |
-| `_ops_descriptive_fields` | Descriptive family of the shared op fields: names and transform descriptors of the callable. | 60 |
+| `_ops_descriptive_fields` | Descriptive family of the shared op fields: names and transform descriptors of the callable. | 117 |
 | `_ops_emission` | Output logging, event emission, and live-hook dispatch. | 792 |
 | `_ops_exhaustive` | Exhaustive event emission and autograd candidate collection. | 760 |
 | `_ops_finalize` | Predicate context evaluation and layer-entry finalization. | 549 |
