@@ -578,7 +578,6 @@ def _positional_inplace_index(func: Any) -> int | None:
 
 
 def _call_writes_tensor_args(
-    writes_args: bool,
     flag: Any,
     inplace_param_index: int | None,
     func_name: str,
@@ -604,11 +603,10 @@ def _call_writes_tensor_args(
     writes no bytes but rides along via its property-setter signature; a spurious
     materialization is merely a wasted clone, never a correctness risk. The
     logging-off path runs the same test, so pending aliases stay zero-copy for the
-    process lifetime.
+    process lifetime. Callers test the signature's own ``writes_args`` first.
     """
     return bool(
-        writes_args
-        or "out" in kwargs
+        "out" in kwargs
         or ((kwargs or flag) and _call_requests_inplace(inplace_param_index, args, kwargs))
         or (flag and fused_call_writes(func_name, args, kwargs))
     )
@@ -1095,8 +1093,9 @@ def torch_func_decorator(
             # the fast path carries the SAME pre-execution interception as the logging path: any
             # call that can write through a tensor argument first copies out pending aliases on
             # those storages. Disarmed cost is one flag check (Dynamo-guardable: _DeferGate).
-            if _COW_GATE.armed and _call_writes_tensor_args(
-                writes_args, flag, inplace_param_index, func_name, args, kwargs
+            if _COW_GATE.armed and (
+                writes_args
+                or _call_writes_tensor_args(flag, inplace_param_index, func_name, args, kwargs)
             ):
                 _COW_GATE.materialize(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
@@ -1260,8 +1259,9 @@ def torch_func_decorator(
         if (
             (not fast or writes_args or flag)
             and _COW_GATE.armed
-            and _call_writes_tensor_args(
-                writes_args, flag, inplace_param_index, func_name, args, kwargs
+            and (
+                writes_args
+                or _call_writes_tensor_args(flag, inplace_param_index, func_name, args, kwargs)
             )
         ):
             _COW_GATE.materialize(arg_tensorlike)
