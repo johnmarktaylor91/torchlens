@@ -728,67 +728,41 @@ def run_and_log_inputs_through_model(
 
     hold_collector()
     try:
-        return _run_held(
-            self,
-            model,
-            input_args,
-            input_kwargs,
-            layers_to_save,
-            grad_layers_to_save,
-            seed,
-            postprocess,
-            reservation_resume,
+        backend, seed = _begin_capture(self, model, input_args, input_kwargs, seed)
+        _resolve_save_selectors(self, layers_to_save, grad_layers_to_save)
+        run = _RunState(
+            backend=backend,
+            model=model,
+            input_args=input_args,
+            input_kwargs=input_kwargs,
+            seed=seed,
+            postprocess=postprocess,
+            reservation_resume=reservation_resume,
         )
+        _claim_slot_and_seed(self, run, reservation_resume)
+        try:
+            _fetch_inputs(self, run)
+            _attach_sessions(self, run, layers_to_save, grad_layers_to_save)
+            _instrument_model(self, run)
+            _snapshot_runnable_state(self, run)
+            outputs = _run_forward(self, run)
+            return _completed_arm(self, run, outputs)
+        except StopSignal as halt_exc:
+            run.exc_info = sys.exc_info()
+            return _halted_arm(self, run, halt_exc)
+        except Exception as e:
+            run.exc_info = sys.exc_info()
+            _failed_arm(self, run, e)
+            # Unreachable (the arm is ``NoReturn``: ``finalize_failed`` re-raises
+            # ``e`` itself). Kept because the blind-except ratchet reads
+            # a broad handler as legitimate only when the handler re-raises; the
+            # explicit raise is what keeps these two handlers out of its count.
+            raise e
+        except BaseException as interrupt_exc:
+            run.exc_info = sys.exc_info()
+            _interrupted_arm(self, run, interrupt_exc)
+            raise  # unreachable, kept for the blind-except ratchet (see above)
+        finally:
+            _finish_run(self, run)
     finally:
         release_collector()
-
-
-def _run_held(
-    self: "Trace",
-    model: object,
-    input_args: Any | list[Any],
-    input_kwargs: dict[Any, Any] | None,
-    layers_to_save: str | list[str | int] | None,
-    grad_layers_to_save: str | list[str | int] | None,
-    seed: int | None,
-    postprocess: bool,
-    reservation_resume: object | None,
-) -> Any:
-    """The RUN skeleton itself, called with the collector held."""
-
-    backend, seed = _begin_capture(self, model, input_args, input_kwargs, seed)
-    _resolve_save_selectors(self, layers_to_save, grad_layers_to_save)
-    run = _RunState(
-        backend=backend,
-        model=model,
-        input_args=input_args,
-        input_kwargs=input_kwargs,
-        seed=seed,
-        postprocess=postprocess,
-        reservation_resume=reservation_resume,
-    )
-    _claim_slot_and_seed(self, run, reservation_resume)
-    try:
-        _fetch_inputs(self, run)
-        _attach_sessions(self, run, layers_to_save, grad_layers_to_save)
-        _instrument_model(self, run)
-        _snapshot_runnable_state(self, run)
-        outputs = _run_forward(self, run)
-        return _completed_arm(self, run, outputs)
-    except StopSignal as halt_exc:
-        run.exc_info = sys.exc_info()
-        return _halted_arm(self, run, halt_exc)
-    except Exception as e:
-        run.exc_info = sys.exc_info()
-        _failed_arm(self, run, e)
-        # Unreachable (the arm is ``NoReturn``: ``finalize_failed`` re-raises
-        # ``e`` itself). Kept because the blind-except ratchet reads
-        # a broad handler as legitimate only when the handler re-raises; the
-        # explicit raise is what keeps these two handlers out of its count.
-        raise e
-    except BaseException as interrupt_exc:
-        run.exc_info = sys.exc_info()
-        _interrupted_arm(self, run, interrupt_exc)
-        raise  # unreachable, kept for the blind-except ratchet (see above)
-    finally:
-        _finish_run(self, run)
