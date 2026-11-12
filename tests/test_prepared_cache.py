@@ -229,6 +229,15 @@ def test_replaced_parameter_gets_fresh_wrappers() -> None:
         assert _SEEN[1] is not _SEEN[0]
         assert torch.equal(trace.ops[-1].out, model.head(model.b(model.a(x))))
         assert any(p.address == "head.weight" for p in trace.params)
+        model.a.fc.register_parameter("extra", nn.Parameter(torch.zeros(1)))
+        added = tl.trace(model, x)
+        assert _SEEN[2] is not _SEEN[1]
+        assert any(p.address == "a.fc.extra" for p in added.params)
+        del model.a.fc.extra
+        tl.trace(model, x)
+        assert _SEEN[3] is not _SEEN[2]
+        tl.trace(model, x)
+        assert _SEEN[4] is _SEEN[3]
     _assert_untouched(model)
 
 

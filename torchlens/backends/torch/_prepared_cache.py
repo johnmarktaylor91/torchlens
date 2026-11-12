@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any
 
 from torch import nn
 
-from ..._utils._model_walk import current_tree_record, model_parameters
+from ..._utils._model_walk import current_tree_record
 from ._scope_facts_cache import cached_scope_facts
 
 if TYPE_CHECKING:
@@ -47,13 +47,15 @@ class _KeptPreparation:
 
     ``installed`` holds ``(module, prior, wrapper, class_forward)`` per wrapped
     submodule, as the session install recorded them plus the class ``forward``
-    seen at install. ``tree_record`` and ``params`` are the identity key.
+    seen at install. ``tree_record`` and ``params`` are the identity key;
+    ``params`` holds, per module (root included), its ``_parameters`` mapping
+    and the parameter objects it held.
     """
 
     model_ref: weakref.ref[nn.Module]
     depth: int = 0
     tree_record: Any = None
-    params: tuple[nn.Parameter, ...] = ()
+    params: tuple[tuple[Any, tuple[Any, ...]], ...] = ()
     installed: list[tuple[nn.Module, Any, Any, Any]] = field(default_factory=list)
     no_instance: Any = None
 
@@ -68,12 +70,38 @@ def _class_forward(module: nn.Module) -> Any:
     return getattr(type(module), "forward", None)
 
 
-def _same_params(kept: tuple[nn.Parameter, ...], live: tuple[nn.Parameter, ...]) -> bool:
-    """Return whether two parameter tuples hold the same objects in the same order."""
+def _slot_modules(model: nn.Module, kept: _KeptPreparation) -> list[nn.Module]:
+    """Return the root followed by every kept submodule, the order ``params`` uses."""
 
-    if len(kept) != len(live):
-        return False
-    return all(kept[index] is live[index] for index in range(len(kept)))
+    return [model, *(entry[0] for entry in kept.installed)]
+
+
+def _param_slots(model: nn.Module, kept: _KeptPreparation) -> tuple[Any, ...]:
+    """Return ``(registry, parameters)`` for the root and every kept submodule."""
+
+    slots = []
+    for module in _slot_modules(model, kept):
+        registry = module.__dict__.get("_parameters")
+        slots.append((registry, tuple(registry.values()) if registry is not None else ()))
+    return tuple(slots)
+
+
+def _same_params(kept: _KeptPreparation, model: nn.Module) -> bool:
+    """Return whether every module holds the same registry and parameter objects, in order.
+
+    A module's parameters are what its ``_parameters`` registry holds, so this
+    sees a parameter replaced, added or removed anywhere in the tree.
+    """
+
+    for module, (registry, params) in zip(_slot_modules(model, kept), kept.params, strict=True):
+        live = module.__dict__.get("_parameters")
+        if live is not registry or (live is not None and len(live) != len(params)):
+            return False
+        if live is not None:
+            for held, now in zip(params, live.values(), strict=True):
+                if held is not now:
+                    return False
+    return True
 
 
 def _kept_still_valid(kept: _KeptPreparation, model: nn.Module) -> bool:
@@ -86,7 +114,7 @@ def _kept_still_valid(kept: _KeptPreparation, model: nn.Module) -> bool:
     record = current_tree_record(model)
     if record is None or record is not kept.tree_record:
         return False
-    if not _same_params(kept.params, model_parameters(model)):
+    if not _same_params(kept, model):
         return False
     for module, prior, _wrapper, class_forward in kept.installed:
         if module.__dict__.get("forward", kept.no_instance) is not prior:
@@ -144,7 +172,7 @@ def install_session_forwards(
         for module, prior, wrapper in trace._module_capture_ws.session_forward_wrappers
     ]
     kept.tree_record = record
-    kept.params = model_parameters(model)
+    kept.params = _param_slots(model, kept)
     kept.no_instance = no_instance
 
 
