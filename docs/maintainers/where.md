@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1828 modules, 725092 lines, 0 modules without a docstring.
+85 packages, 1830 modules, 725487 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 58 | 22712 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 60 | 23107 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15068 |
@@ -749,7 +749,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (58 modules, 22712 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (60 modules, 23107 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -762,8 +762,10 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `_call_site_contract` | The call-site grouping contract (''callsite_v1'', ''callsite_v2'') and its in-memory evidence. | 133 |
 | `_column_passes` | Postprocess pass bodies that read and write ''Op'' fields through column views. | 76 |
 | `_column_passes_finalize` | Step 15.5 (aggregate ''Layer'' records): a pending state per layer, built on first lookup. | 494 |
-| `_column_passes_graph` | Column-view bodies of the graph passes: step 3's orphan flood and step 5's arms. | 631 |
+| `_column_passes_graph` | Column-view bodies of the graph passes: step 3's orphan flood and step 5's arms. | 510 |
+| `_conditional_bools` | Step 5's per-bool work over plain lists: classification and event linking. | 246 |
 | `_conditional_child_rename` | Conditional child-label renaming for ''labeling._replace_layer_names_for_layer_entry''. | 84 |
+| `_conditional_columns` | Step 5 as a column algorithm over the building op store's integer rows. | 484 |
 | `_conditional_records` | Leaf helpers of ''finalization._build_conditional_records''. | 277 |
 | `_executor` | Postprocess step adapters: ''StepContext'' and one function per pipeline step. | 427 |
 | `_final_info_columns` | Step 9 by column: the per-op part of final layer info over the building rows. | 391 |
@@ -802,7 +804,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `_step7_rows` | Step 7 over op rows: site keys, call-site grouping, pass numbers and the contract. | 385 |
 | `_streamed_tensor_types` | Wire tensor identity and dtype lookup for streamed-reference finalization. | 51 |
 | `ast_branches` | AST indexing for boolean-context classification and branch attribution. | 2202 |
-| `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 1045 |
+| `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 831 |
 | `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1427 |
 | `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 739 |
 | `incremental` | Opt-in incremental enrichments for fastlog recordings. | 87 |

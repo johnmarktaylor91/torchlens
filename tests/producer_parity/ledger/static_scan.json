@@ -3210,6 +3210,14 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/_postprocess/_conditional_bools.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/_postprocess/_conditional_records.py",
   "has_default": false,
   "sites": 1,
@@ -3612,7 +3620,7 @@
   "field": "kind",
   "file": "torchlens/_postprocess/control_flow.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 1,
   "via_getattr": false
  },
  {
