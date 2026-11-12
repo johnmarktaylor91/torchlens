@@ -20,6 +20,7 @@ paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
 from tests.conformance._rosters import paddle as paddle_roster  # noqa: E402
+from torchlens._utils._record_group_table import record_member  # noqa: E402
 from torchlens.backends._replay_adapters import get_adapter  # noqa: E402
 from torchlens.backends._validation_shared import ops_by_label  # noqa: E402
 
@@ -115,7 +116,9 @@ def _seed_outputs(model: Any, args: tuple[Any, ...]) -> tuple[list[Any], list[An
 def _output_labels(trace: Any, outs: list[Any]) -> list[str]:
     """Raw labels of the trace ops whose saved payloads are the model outputs, in order."""
 
-    finals = [op for op in trace._layer_list if op.is_output_parent or op.is_final_output]
+    finals = [op for op in trace._layer_list
+              if record_member(op, "is_output_parent", False)
+              or record_member(op, "is_final_output", False)]  # fmt: skip
     labels = []
     for out in outs:
         host = out.numpy()

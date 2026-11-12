@@ -25,6 +25,8 @@ from torchlens.backends._replay_adapters import (  # noqa: E402
     encode_recipe,
     get_adapter,
 )
+from torchlens.backends.paddle.validation import _ops_by_label as ops_by_label  # noqa: E402
+from torchlens.backends.paddle.validation_decisions import public_label  # noqa: E402
 from torchlens.backends.registry import get_backend_spec  # noqa: E402
 
 pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
@@ -137,8 +139,7 @@ def test_tampered_recipe_fails_validation_naming_the_op(family: str) -> None:
     adapter.bind_recipes(trace, recipes)
     status = _validate(trace)
     assert status.state == "failed"
-    op = next(op for op in trace._layer_list if op._label_raw == key)
-    assert {op.label, key} & set(_failed_labels(status)), status.decisions
+    assert public_label(key, ops_by_label(trace)) in _failed_labels(status), status.decisions
 
 
 def test_missing_recipe_fails_validation_naming_the_op() -> None:
@@ -151,8 +152,7 @@ def test_missing_recipe_fails_validation_naming_the_op() -> None:
     adapter.bind_recipes(trace, recipes)
     status = _validate(trace)
     assert status.state == "failed"
-    op = next(op for op in trace._layer_list if op._label_raw == dropped)
-    assert {op.label, dropped} & set(_failed_labels(status)), status.decisions
+    assert public_label(dropped, ops_by_label(trace)) in _failed_labels(status), status.decisions
 
 
 def test_missing_parameter_value_fails_closed() -> None:

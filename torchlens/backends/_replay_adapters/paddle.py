@@ -32,6 +32,7 @@ from typing import Any
 import numpy as np
 
 from ... import _state
+from ..._utils._record_group_table import record_member
 from ..paddle import wrappers
 from ..paddle._param_writes import PARAMETER_WRITE_MARKER
 from ..paddle.backend import PaddleOpCapture, TensorLeafCapture
@@ -149,11 +150,11 @@ def _site_for_capture(trace: Any, capture: Any) -> _Site | None:
         return None
     if len(paths) == 1:
         return _Site(capture, (first_label,), paths)
-    call_id = getattr(first, "func_call_id", None)
+    call_id = record_member(first, "func_call_id", None)
     by_path = {
-        tuple(getattr(op, "container_path", ()) or ()): str(op._label_raw)
+        tuple(record_member(op, "container_path", ()) or ()): str(op._label_raw)
         for op in ops
-        if call_id is not None and getattr(op, "func_call_id", None) == call_id
+        if call_id is not None and record_member(op, "func_call_id", None) == call_id
     }
     if any(path not in by_path for path in paths):
         return None
@@ -276,7 +277,7 @@ def _dropout_is_random(capture: Any) -> bool:
 
 def can_replay(trace: Any, op: Any) -> str | None:
     """``None``, or why this op cannot be replayed through the Paddle validator's replay."""
-    if bool(getattr(op, "is_input", False)):
+    if bool(record_member(op, "is_input", False)):
         return _REASON_INPUT
     site = _site(trace, op)
     if site is None:
@@ -704,7 +705,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     captures: list[Any] = []
     for op in _ops(trace):
         label = getattr(op, "_label_raw", None)
-        if not isinstance(label, str) or bool(getattr(op, "is_input", False)):
+        if not isinstance(label, str) or bool(record_member(op, "is_input", False)):
             continue
         if label in by_first:
             captures.append(_bind_one(trace, by_first[label]))
