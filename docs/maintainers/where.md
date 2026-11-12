@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1835 modules, 726300 lines, 0 modules without a docstring.
+85 packages, 1835 modules, 726511 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64310 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64521 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1536,12 +1536,12 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (161 modules, 64310 lines)
+Torch backend implementation package for TorchLens capture. (161 modules, 64521 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Torch backend implementation package for TorchLens capture. | 5 |
-| `_arg_hash` | Structural argument hash for the equivalence class of a parameter-free op. | 160 |
+| `_arg_hash` | Structural argument hash for the equivalence class of a parameter-free op. | 181 |
 | `_args_template_cache` | Per-capture plans of the replay argument template, keyed on the call's argument layout. | 232 |
 | `_aten_capture` | ATen-profile recorder and observer-gap bridge for ''CaptureOptions(aten_ops=True)''. | 797 |
 | `_autograd_grad_boundary` | Shared facts about the in-forward autograd boundary ops. | 499 |
@@ -1621,7 +1621,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64310 
 | `_ops_containers` | Output-container contracts, reconstruction, and tensor walking. | 776 |
 | `_ops_descriptive_fields` | Descriptive family of the shared op fields: names and transform descriptors of the callable. | 60 |
 | `_ops_emission` | Output logging, event emission, and live-hook dispatch. | 792 |
-| `_ops_exhaustive` | Exhaustive event emission and autograd candidate collection. | 648 |
+| `_ops_exhaustive` | Exhaustive event emission and autograd candidate collection. | 760 |
 | `_ops_finalize` | Predicate context evaluation and layer-entry finalization. | 549 |
 | `_ops_freeze_refs` | Exhaustive freeze ref builders, outside the package's largest import cycle. | 376 |
 | `_ops_fresh_alias` | The payload of a fresh plain output on the direct path: the deferred alias or the eager copy. | 179 |
@@ -1675,7 +1675,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64310 
 | `_weightsfree_ctx` | The capture-owned factory-device slot. | 78 |
 | `_weightsfree_transparency` | The decomposition-transparency belt. | 121 |
 | `_wrappers_refusals` | Typed refusals raised from the torch function wrapper's logged call path. | 106 |
-| `aliasing` | Torch alias and mutation contract detection. | 431 |
+| `aliasing` | Torch alias and mutation contract detection. | 509 |
 | `arg_names` | Argument-name introspection for wrapped torch callables (''_state._arg_names''). | 93 |
 | `backend` | Torch implementation of the capture backend Protocol. | 793 |
 | `backward` | Capture torch backward execution and autograd graph metadata. | 3795 |
