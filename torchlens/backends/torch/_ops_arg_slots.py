@@ -50,6 +50,9 @@ class _SlotCall:
     func_name: str
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
+    #: The call's flat argument layout plan (``_call_layout.CallLayout``), or ``None``
+    #: when the call is not flat or the capture keeps no plans.
+    layout: Any = None
 
 
 @dataclass(frozen=True, slots=True)
