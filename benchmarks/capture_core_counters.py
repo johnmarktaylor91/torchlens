@@ -312,6 +312,36 @@ def _settle_label_session() -> None:
     sweep_retired_label_stamps()
 
 
+#: Full collections after which a still-changing tracked count is an instrument error.
+_MAX_SETTLE_PASSES = 16
+
+
+def _collect_to_fixed_point() -> None:
+    """Collect until a full collection leaves the tracked-object count unchanged.
+
+    A pass untracks every tuple and dict whose items are all untracked when it
+    reaches them, so a pass that changes nothing leaves nothing for the next
+    one: the count is then a fixed point, the same whatever order allocation
+    left the objects in.
+
+    Raises
+    ------
+    RuntimeError
+        If the count still changes after ``_MAX_SETTLE_PASSES`` collections
+        (something allocates while the snapshot settles).
+    """
+
+    gc.collect()
+    tracked = len(gc.get_objects())
+    for _ in range(_MAX_SETTLE_PASSES):
+        gc.collect()
+        now = len(gc.get_objects())
+        if now == tracked:
+            return
+        tracked = now
+    raise RuntimeError(f"tracked objects still changing after {_MAX_SETTLE_PASSES} collections")
+
+
 def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
     """Run ``fn`` and report what its result keeps alive.
 
@@ -325,11 +355,14 @@ def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
         and ``kinds`` (live record objects per class name, delta), all after a
         full collection.
 
-    Each side collects twice. The collector stops tracking a tuple that holds
-    only untracked items, but in one pass it can visit an outer tuple before
-    its inner ones, so a single pass leaves some key tuples tracked depending
-    on when the automatic collections inside ``fn`` happened. The second pass
-    settles them, so ``objects`` does not move with allocation timing.
+    Each side collects until a pass changes nothing (see
+    :func:`_collect_to_fixed_point`). The collector stops tracking a tuple that
+    holds only untracked items, but in one pass it can visit an outer tuple
+    before its inner ones, so each pass settles one more level of nesting, in
+    an order set by allocation history. A fixed count of passes leaves some
+    nested key tuples tracked depending on that history (the call-site cache's
+    keys are three levels deep); collecting to the fixed point settles all of
+    them, so ``objects`` does not move with allocation timing.
 
     A weak reference whose referent has died is not counted on either side.
     The collector clears such a reference but the reference object lives on
@@ -346,8 +379,7 @@ def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
 
     kinds = record_kinds()
     _settle_label_session()
-    gc.collect()
-    gc.collect()
+    _collect_to_fixed_point()
     before = gc.get_objects()
     objects_before, dead_before = _settled_count(before)
     kinds_before = _kind_census(before, kinds)
@@ -355,8 +387,7 @@ def retained_after(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any]]:
     blocks_before = sys.getallocatedblocks()
     result = fn()
     _settle_label_session()
-    gc.collect()
-    gc.collect()
+    _collect_to_fixed_point()
     blocks_after = sys.getallocatedblocks()
     after = gc.get_objects()
     objects_after, dead_after = _settled_count(after)

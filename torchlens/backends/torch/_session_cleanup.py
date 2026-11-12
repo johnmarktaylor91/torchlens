@@ -17,6 +17,8 @@ import sys
 import types
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from itertools import compress
+from operator import itemgetter
 from types import ModuleType
 from typing import Any, TypeAlias
 
@@ -246,22 +248,21 @@ def _clear_module_namespace_tensor_metadata(
     seen.add(obj_id)
     namespace = getattr(value, "__dict__", None)
     if isinstance(namespace, dict):
-        # No slot memo: a memo invalidated on ``len(namespace)`` only would
-        # miss REPLACING a value at a constant length (``mod.stash = 5``
-        # becoming ``mod.stash = tensor``), keep the stale slot list, and let
-        # the stamped tensor escape the session clear -- provenance laundering across
-        # sessions. No cheaper
-        # invalidation is sound: detecting a new tensor/container slot
-        # requires type-inspecting every item, which IS the rebuild, so
-        # the filter runs fresh each walk (one isinstance pass per
-        # reachable module namespace per session end).
+        # No slot memo: one invalidated on ``len(namespace)`` misses REPLACING a value
+        # at constant length (``mod.stash = 5`` becoming ``mod.stash = tensor``) and
+        # lets the stamped tensor escape the clear, so every walk type-inspects every
+        # item afresh. The inert-type and class tests are decided once per distinct
+        # ``type(item)`` and applied in C; only items of the remaining types reach Python.
+        items = tuple(namespace.items())
+        kinds = set(map(type, map(itemgetter(1), items))) - _NAMESPACE_INERT_TYPES
+        live = {kind for kind in kinds if not issubclass(kind, type)}
         slot_names = tuple(
             name
-            for name, item in namespace.items()
-            if type(item) not in _NAMESPACE_INERT_TYPES
-            and not issubclass(type(item), type)
+            for name, item in compress(
+                items, map(live.__contains__, map(type, map(itemgetter(1), items)))
+            )
             # Shim test inline by name first: it is the check's first conjunct.
-            and (
+            if (
                 type(item).__name__ != "_reduce_op"
                 or not _is_isinstance_hostile_deprecation_shim(item)
             )

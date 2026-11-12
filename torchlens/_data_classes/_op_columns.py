@@ -80,11 +80,11 @@ def _bound_facade() -> tuple[type, Any, frozenset[str], Any]:
 
     if not _OP_FACADE:
         raise RuntimeError("the Op facade is not bound; import torchlens first")
-    op_class, op_vars, slot_names, _field_classes = _OP_FACADE[0]
+    op_class, op_vars, _slot_names, _field_classes, slot_set = _OP_FACADE[0]
     # The facade's module is imported by the time it binds; the import
     # machinery is only the fallback, not a per-read cost.
     module = sys.modules.get(op_class.__module__) or importlib.import_module(op_class.__module__)
-    return op_class, op_vars, frozenset(slot_names), module
+    return op_class, op_vars, slot_set, module
 
 
 def _slow_cell_types(name: str, attribute: Any) -> tuple[tuple[type, ...], Any]:

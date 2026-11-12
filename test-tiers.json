@@ -10931,9 +10931,9 @@
         "tests/test_fastlog/test_dispatch_smoke.py",
         "tests/test_grouping_call_sites.py",
         "tests/test_model_prep_hardening.py",
+        "tests/test_namespace_scan_soundness.py",
         "tests/test_record_overhead_counters.py",
         "tests/test_session_prep_cost_cuts.py",
-        "tests/test_tl_lifecycle.py",
         "tests/test_torch_func_transforms.py",
         "tests/test_wrong_trace_cache_cluster.py"
       ],
@@ -12073,7 +12073,7 @@
         "tests/test_checks_kit_provocations.py",
         "tests/test_checks_kit_scan.py",
         "tests/test_checks_kit_session.py",
-        "tests/test_render_ir_region_scan_linearity.py"
+        "tests/test_namespace_scan_soundness.py"
       ],
       "torchlens/debug/_checks/_session.py": [
         "tests/real_model/test_hon_checks_lr_scheduler.py",
@@ -12646,6 +12646,7 @@
       ],
       "torchlens/export/_model_explorer/_namespace.py": [
         "tests/test_modelexplorer_export.py",
+        "tests/test_namespace_scan_soundness.py",
         "tests/test_postprocessing_namespace.py"
       ],
       "torchlens/export/_model_explorer/_options.py": [

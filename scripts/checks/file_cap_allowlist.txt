@@ -359,8 +359,8 @@ torchlens/_postprocess/finalization.py::_reuse_streamed_blob_ids	79
 torchlens/_postprocess/graph_traversal.py::_add_output_layers	274
 torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	63
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	129
-torchlens/_postprocess/labeling.py	866
-torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	100
+torchlens/_postprocess/labeling.py	854
+torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	88
 torchlens/_postprocess/labeling.py::_log_final_info_for_layers	76
 torchlens/_postprocess/labeling.py::_rename_model_history_layer_names	130
 torchlens/_postprocess/labeling.py::_replace_layer_names_for_layer_entry	155
@@ -505,12 +505,12 @@ torchlens/_utils/display.py::warn_parallel	101
 torchlens/_utils/facade.py::resolve_facade_attr	118
 torchlens/_utils/hashing.py::compute_graph_shape_hash	105
 torchlens/_utils/hashing.py::compute_raw_event_shape_hash	73
-torchlens/_utils/introspection.py	1021
+torchlens/_utils/introspection.py	1020
 torchlens/_utils/introspection.py::_extend_search_stack_from_item	89
 torchlens/_utils/introspection.py::_get_code_context	146
 torchlens/_utils/introspection.py::_search_stack_for_vars_of_type	70
 torchlens/_utils/introspection.py::get_arg_tensors_for_resolution	74
-torchlens/_utils/introspection.py::get_vars_of_type_from_obj	78
+torchlens/_utils/introspection.py::get_vars_of_type_from_obj	77
 torchlens/_utils/rng/call_sites.py::_call_site_time_arg_proof	74
 torchlens/_utils/rng/deep_inventory.py::_deep_inventory_frame_reachable	321
 torchlens/_utils/rng/digest.py::_digest_rng_instance	61

@@ -271,15 +271,15 @@ def get_vars_of_type_from_obj(
     found_addresses: list[Any] = []
     found_addresses_full: list[_AddressPath] = []
     found_ids: set[int] = set()
-    # R30: memoize expansions whenever results are deduplicated (allow_repeats=False).
-    expanded_ids: set[int] | None = (
-        set() if (depth_exceeded_paths is not None or not allow_repeats) else None
-    )
-    # BFS, one level per iteration; the last is matched, not expanded, unless the frontier is read.
     expand_last = depth_exceeded_paths is not None
+    # R30: memoize expansions whenever results are deduplicated (allow_repeats=False).
+    expanded_ids: set[int] | None = set() if expand_last or not allow_repeats else None
+    # BFS by level; the last is matched, not expanded, unless the frontier is read. Stop when empty.
     with warnings.catch_warnings(), _QuietPropertyLogs():
         warnings.simplefilter("ignore")
         for _ in range(search_depth if expand_last else search_depth - 1):
+            if not this_stack:
+                break
             this_stack = _search_stack_for_vars_of_type(
                 this_stack,
                 which_type,
@@ -299,8 +299,7 @@ def get_vars_of_type_from_obj(
         depth_exceeded_paths.extend(str(address) for _, address, _ in this_stack)
 
     if return_addresses:
-        # The three accumulators are appended together in lockstep by the walker,
-        # so they pair exactly.
+        # The walker appends the three accumulators in lockstep, so they pair exactly.
         return list(zip(found_items, found_addresses, found_addresses_full, strict=True))
     else:
         return found_items
