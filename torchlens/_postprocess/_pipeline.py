@@ -19,7 +19,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from time import perf_counter
 
+from .._utils.display import _record_phase_timing, _vtimed
 from ..errors._validation import MetadataInvariantError
 from . import _executor as ex
 from ._executor import StepContext
@@ -49,9 +51,9 @@ class PipelineStep:
         Trace attributes the step reads (its own writes excluded).
     writes:
         Trace attributes the step assigns, mutates in place or drops. The
-        per-step timing bucket in ``_phase_timings`` (written by ``_vtimed``
-        for every timed step; its text is the persisted bucket key) is not
-        listed.
+        per-step timing bucket in ``_phase_timings`` (written by
+        ``run_pipeline`` for every timed step; the step name is the persisted
+        bucket key) is not listed.
     should_run:
         Gate evaluated EXACTLY ONCE per step per run, in pipeline order
         (executor invariant, counting-tested).
@@ -589,11 +591,31 @@ def _check_step_postcondition(ctx: StepContext, step: PipelineStep) -> None:
 def run_pipeline(ctx: StepContext) -> None:
     """Execute ``PIPELINE`` in order, skipping steps whose gate is false.
 
-    After each step that runs, its postcondition (when it declares one) is
-    checked by ``_check_step_postcondition``.
+    A gate other than ``_always`` is evaluated once per step. Each timed step
+    (``_executor.STEP_DESCRIPTIONS``) records its elapsed time in the trace's
+    ``_phase_timings`` under the step name, also when it raises; in verbose
+    mode it prints its progress line through ``_vtimed``. After each step that
+    runs, its postcondition (when it declares one) is checked by
+    ``_check_step_postcondition``.
     """
 
+    trace = ctx.trace
+    verbose = trace._options_verbose
+    timed = ex.STEP_DESCRIPTIONS
     for step in PIPELINE:
-        if step.should_run(ctx):
+        if step.should_run is not _always and not step.should_run(ctx):
+            continue
+        name = step.name
+        if name not in timed:
             step.run(ctx)
+        elif verbose:
+            with _vtimed(trace, ex.step_description(name, ctx), bucket=name):
+                step.run(ctx)
+        else:
+            start = perf_counter()
+            try:
+                step.run(ctx)
+            finally:
+                _record_phase_timing(trace, name, perf_counter() - start)
+        if step.postcondition is not None:
             _check_step_postcondition(ctx, step)
