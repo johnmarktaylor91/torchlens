@@ -3370,12 +3370,12 @@
         "tests/test_tlspec_parse_fuzz.py"
       ],
       "torchlens/_io/paths.py": [
+        "tests/test_arg_scan_reference_paths.py",
         "tests/test_io_bundle.py",
         "tests/test_io_durability_bounds.py",
         "tests/test_io_platform_save_paths.py",
         "tests/test_io_secio_hardening.py",
         "tests/test_io_security.py",
-        "tests/test_pluck_fast_path.py",
         "tests/test_rf_ext_path.py",
         "tests/test_tlspec_runnable_r75_envelope_path.py"
       ],
@@ -3682,8 +3682,8 @@
         "tests/test_intervention_phase3.py",
         "tests/test_intervention_phase4b.py",
         "tests/test_ir_basic.py",
-        "tests/test_livecheck_module_exit_only.py",
         "tests/test_out_versions_by_child.py",
+        "tests/test_plain_emit_soundness.py",
         "tests/test_r20i_ir_livelane.py"
       ],
       "torchlens/_ir/live_index.py": [
@@ -6871,11 +6871,11 @@
         "tests/test_tuple_subclass_ctor_guard.py"
       ],
       "torchlens/_utils/collections.py": [
-        "tests/test_autograd_grad_replay_order.py",
         "tests/test_autograd_grad_view_write_replay.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_internals.py",
         "tests/test_livecheck_module_exit_only.py",
+        "tests/test_plain_emit_soundness.py",
         "tests/test_w051_episode_binding.py",
         "tests/test_w051_episode_chain_positions.py",
         "tests/test_w051_honesty_hf_default_config.py"
@@ -9939,9 +9939,11 @@
         "tests/test_capture_int_param_and_storage.py",
         "tests/test_implicit_boundary_tightening.py",
         "tests/test_param_ref_pairing.py",
-        "tests/test_parameter_inplace_mutation.py"
+        "tests/test_parameter_inplace_mutation.py",
+        "tests/test_plain_emit_soundness.py"
       ],
       "torchlens/backends/torch/_args_template_cache.py": [
+        "tests/test_arg_scan_reference_paths.py",
         "tests/test_args_template_plans.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_valmem3_saved_arg_offload.py",
@@ -10032,10 +10034,10 @@
         "tests/test_validation_script_threshold_ladder.py"
       ],
       "torchlens/backends/torch/_call_layout.py": [
+        "tests/test_arg_scan_reference_paths.py",
         "tests/test_call_layout_plans.py",
         "tests/test_capture_unification_p4.py",
         "tests/test_forward_replay_untracked_writes.py",
-        "tests/test_livecheck_module_exit_only.py",
         "tests/test_ops_arg_slots.py",
         "tests/test_r28_validation_identity_witness.py",
         "tests/test_r29_capval_hardening.py",
@@ -10574,9 +10576,9 @@
         "tests/test_w3_capture_hardening.py"
       ],
       "torchlens/backends/torch/_ops_arg_slots.py": [
+        "tests/test_arg_scan_reference_paths.py",
         "tests/test_argpos_hardening.py",
         "tests/test_args_template_plans.py",
-        "tests/test_backward_grad_integrity.py",
         "tests/test_call_layout_plans.py",
         "tests/test_forward_replay_untracked_writes.py",
         "tests/test_implicit_boundary_tightening.py",
@@ -10584,12 +10586,12 @@
         "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/backends/torch/_ops_argument_fields.py": [
+        "tests/test_arg_scan_reference_paths.py",
         "tests/test_call_layout_plans.py",
         "tests/test_completeness_witness.py",
         "tests/test_forward_replay_untracked_writes.py",
         "tests/test_ops_arg_slots.py",
         "tests/test_r28_validation_identity_witness.py",
-        "tests/test_r29_capval_hardening.py",
         "tests/test_set_buffer_provenance.py",
         "tests/test_valmem5_saved_value_aliases.py"
       ],
@@ -10700,8 +10702,8 @@
         "tests/test_omitted_empty_cell_defaults.py",
         "tests/test_op_row_cells.py",
         "tests/test_param_ref_pairing.py",
-        "tests/test_sanctioned_empty_omission.py",
-        "tests/test_w3_capture_hardening.py"
+        "tests/test_plain_emit_soundness.py",
+        "tests/test_sanctioned_empty_omission.py"
       ],
       "torchlens/backends/torch/_ops_fresh_alias.py": [
         "tests/test_fresh_payload_alias.py",
@@ -10792,7 +10794,7 @@
         "tests/test_capture_row_journal.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_livecheck_module_exit_only.py",
-        "tests/test_op_row_cells.py",
+        "tests/test_plain_emit_soundness.py",
         "tests/test_row_direct_import_cycle.py",
         "tests/test_w3_capture_hardening.py"
       ],
@@ -10837,9 +10839,9 @@
         "tests/test_tlspec_runnable_output_honesty.py"
       ],
       "torchlens/backends/torch/_param_fingerprint.py": [
+        "tests/test_arg_scan_reference_paths.py",
         "tests/test_args_template_plans.py",
         "tests/test_capture_unification_p3a.py",
-        "tests/test_conditional_integration.py",
         "tests/test_gc.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_op_row_cells.py",
@@ -11094,12 +11096,12 @@
         "tests/test_wrap_state_compat.py"
       ],
       "torchlens/backends/torch/_user_grad_fn.py": [
-        "tests/test_call_layout_plans.py",
         "tests/test_capture_core_floor_shadow.py",
         "tests/test_capture_targets.py",
         "tests/test_fresh_payload_path.py",
         "tests/test_inplace_view_grad_fn_rebase.py",
         "tests/test_inplace_view_sibling_rebind_guards.py",
+        "tests/test_plain_emit_soundness.py",
         "tests/test_valmem5_saved_value_aliases.py",
         "tests/test_w3_capture_hardening.py"
       ],
@@ -11152,7 +11154,7 @@
         "tests/test_internals.py",
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_out_versions_by_child.py",
-        "tests/test_scoped_patching_escape_detection.py",
+        "tests/test_plain_emit_soundness.py",
         "tests/test_tlspec_runnable_r29_aliasing.py",
         "tests/test_validation.py",
         "tests/test_wrap_state_compat.py"
@@ -12110,13 +12112,13 @@
       ],
       "torchlens/debug/_checks/_scan.py": [
         "tests/test_alias_scan_scaling.py",
+        "tests/test_arg_scan_reference_paths.py",
         "tests/test_checks_kit_events.py",
         "tests/test_checks_kit_nonfinite.py",
         "tests/test_checks_kit_param_checks.py",
         "tests/test_checks_kit_provocations.py",
         "tests/test_checks_kit_scan.py",
-        "tests/test_checks_kit_session.py",
-        "tests/test_namespace_scan_soundness.py"
+        "tests/test_checks_kit_session.py"
       ],
       "torchlens/debug/_checks/_session.py": [
         "tests/real_model/test_hon_checks_lr_scheduler.py",
