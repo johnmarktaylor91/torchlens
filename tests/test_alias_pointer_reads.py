@@ -346,18 +346,21 @@ def _patch_references(patch: pytest.MonkeyPatch) -> None:
 
 
 def _sequence(trace: Any) -> bytes:
-    """The persisted ``func_call_id`` of every op, in order, as JSON bytes."""
+    """The persisted call id of every op, in order, as JSON bytes."""
 
-    return json.dumps([op.func_call_id for op in trace.ops]).encode()
+    return json.dumps([op.call.call_id for op in trace.ops]).encode()
 
 
 def _aliases(trace: Any) -> bytes:
     """Each op event's call id and alias answer, in order, as JSON bytes."""
 
-    rows = [
-        [event.function.func_call_id, repr(event.backend_semantics.aliased_output_inputs)]
-        for event in trace._capture_events.op_events
-    ]
+    rows = []
+    for event in trace._capture_events.amended_op_records():
+        function = getattr(event, "function", None)
+        call_id = event.func_call_id if function is None else function.func_call_id
+        semantics = event.backend_semantics
+        aliased = None if semantics is None else semantics.aliased_output_inputs
+        rows.append([call_id, repr(aliased)])
     return json.dumps(rows).encode()
 
 
@@ -385,4 +388,4 @@ def test_persisted_func_call_ids_are_byte_identical(
     ids = json.loads(head[0])
     assert len(ids) > 20 and all(isinstance(i, int) for i in ids)
     assert max(ids) - min(ids) + 1 > len(set(ids))  # the alias checks drew ids between ops
-    assert any(row[1] != "()" for row in json.loads(head[2]))
+    assert any(row[1] not in ("()", "None") for row in json.loads(head[2]))
