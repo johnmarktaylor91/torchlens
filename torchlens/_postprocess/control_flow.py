@@ -37,8 +37,6 @@ if TYPE_CHECKING:
 
 
 _BRANCH_CONTEXT_KINDS = BRANCH_CONTEXT_KINDS
-#: ``(trace, plan)`` of the step-5 pass in progress, so phase 5e reuses its columns.
-_ACTIVE_PLANS: list[tuple[Any, Any]] = []
 
 
 def _mark_conditional_branches(self: Trace) -> None:
@@ -86,11 +84,7 @@ def _mark_conditional_branches(self: Trace) -> None:
     branch_bool_labels = [label for label, _frames in bools if classes.classifications[label]]
     # Reset and flood bodies (column view, facade fallback) live in ``_column_passes_graph``.
     _column_passes_graph.reset_and_flood_if_edges(self, branch_bool_labels, plan=plan)
-    _ACTIVE_PLANS.append((self, plan))
-    try:
-        _attribute_branches_forward(self, events_by_key)
-    finally:
-        del _ACTIVE_PLANS[-1]
+    _attribute_branches_forward(self, events_by_key, plan)
     _column_passes_graph.materialize_derived_views(self, plan=plan)
 
 
@@ -321,13 +315,13 @@ def _materialize_conditional_records(
 def _attribute_branches_forward(
     self: Trace,
     events_by_key: dict[ast_branches.ConditionalKey, ConditionalEvent],
+    plan: StepColumns | None = None,
 ) -> None:
     """Phase 5e: Attribute executed ops and forward edges to conditional arms.
 
     Every non-orphan op gets its own conditional branch stack (each distinct
     frame-position stack is translated once per pass) and empty arm children;
-    then every forward edge entering an arm is recorded. Called inside step 5,
-    it reuses the pass's columns; called alone, it binds its own.
+    then every forward edge entering an arm is recorded.
 
     Parameters
     ----------
@@ -335,11 +329,11 @@ def _attribute_branches_forward(
         Model log being postprocessed.
     events_by_key:
         Structural-to-dense conditional event lookup created in phase 5c.
+    plan:
+        Step 5's bound columns; ``None`` binds them here (a call outside step 5).
     """
 
-    if _ACTIVE_PLANS and _ACTIVE_PLANS[-1][0] is self:
-        plan = _ACTIVE_PLANS[-1][1]
-    else:
+    if plan is None:
         plan = _column_passes_graph.step5_columns(self)
     _column_passes_graph.assign_conditional_branch_stacks(
         self, events_by_key, _translate_conditional_stack, plan=plan
