@@ -1,8 +1,8 @@
 """Argument templates, edge uses, and tensor provenance."""
 
-import sys
 import types
 from collections.abc import Callable, Iterator
+from importlib import import_module
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -428,8 +428,7 @@ def _warm_edge_semantics() -> None:
     import would walk the finders' frames, so it is warmed here at window arm instead.
     """
 
-    if _EDGE_SEMANTICS_MODULE not in sys.modules:
-        from ...intervention import _edge_semantics  # noqa: F401
+    import_module(_EDGE_SEMANTICS_MODULE)
 
 
 monitor_state.register_warmup(_warm_edge_semantics)
