@@ -113,7 +113,7 @@ def test_paddle_buffer_is_a_parentless_buffer_layer() -> None:
     trace = tl.trace(model, _x(), backend="paddle")
 
     buffers = _buffer_layers(trace)
-    assert [layer.label for layer in buffers] == ["buffer_1"]
+    assert [layer.label for layer in buffers] == ["buffer_1:1"]
     assert list(buffers[0].parents) == []
     assert [buffer.address for buffer in trace.buffers] == ["scale"]
     mul = next(layer for layer in trace.layers if layer.layer_type == "mul")

@@ -32,22 +32,34 @@ __all__ = ["paddle_code_context"]
 
 _Survivor = tuple[FrameType, CodeType, int, int]
 
-#: Code objects of Paddle's layer call machinery, filled on first use.
-_MACHINERY_CODES: set[CodeType] = set()
+#: Function names of Paddle's layer call machinery in the module defining
+#: ``paddle.nn.Layer`` (the analogue of torch's ``_call_impl``).
+_MACHINERY_NAMES = frozenset({"__call__", "_dygraph_call_func"})
+
+#: ``co_filename`` of the module defining ``paddle.nn.Layer``, filled on first use.
+_LAYER_FILE: list[str] = []
 
 
-def _machinery_codes() -> set[CodeType]:
-    """Return the code objects of ``paddle.nn.Layer``'s call machinery."""
+def _layer_file() -> str:
+    """Return the source file of the module that defines ``paddle.nn.Layer``.
 
-    if not _MACHINERY_CODES:
+    Frames are matched by file and function name, not by code object: a
+    capture may patch ``Layer.__call__``, so the attribute is not the code
+    object the original call machinery runs.
+    """
+
+    if not _LAYER_FILE:
         import paddle
 
-        layer = paddle.nn.Layer
-        for name in ("__call__", "_dygraph_call_func"):
-            code = getattr(getattr(layer, name, None), "__code__", None)
-            if isinstance(code, CodeType):
-                _MACHINERY_CODES.add(code)
-    return _MACHINERY_CODES
+        module = sys.modules[paddle.nn.Layer.__module__]
+        _LAYER_FILE.append(str(getattr(module, "__file__", "") or ""))
+    return _LAYER_FILE[0]
+
+
+def _is_machinery(code: CodeType, layer_file: str) -> bool:
+    """Return whether ``code`` is Paddle's layer call machinery."""
+
+    return code.co_name in _MACHINERY_NAMES and code.co_filename == layer_file
 
 
 def _walk(frame: FrameType | None) -> tuple[list[_Survivor], int]:
@@ -60,7 +72,7 @@ def _walk(frame: FrameType | None) -> tuple[list[_Survivor], int]:
         before the outermost TorchLens block), or ``-1`` when there is none.
     """
 
-    skip = _machinery_codes()
+    layer_file = _layer_file()
     survivors: list[_Survivor] = []
     root_pos = -1
     in_torchlens = False
@@ -70,7 +82,7 @@ def _walk(frame: FrameType | None) -> tuple[list[_Survivor], int]:
             if survivors and not in_torchlens:
                 root_pos = len(survivors) - 1
             in_torchlens = True
-        elif code not in skip:
+        elif not _is_machinery(code, layer_file):
             in_torchlens = False
             survivors.append((frame, code, frame.f_lineno, frame.f_lasti))
         frame = frame.f_back
@@ -84,7 +96,9 @@ def _location(
 
     frame, code, lineno, _lasti = survivor
     func_name = code.co_name
-    location = FuncCallLocation(
+    # ``Any``: ``_linecache_entry`` is a runtime-only row cell with no declared
+    # annotation (as ``func_call_location.with_source_fingerprint`` types it).
+    location: Any = FuncCallLocation(
         file=code.co_filename,
         line_number=lineno,
         func_name=func_name,
