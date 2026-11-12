@@ -33,7 +33,8 @@ def _original(owner: Any, name: str) -> Any:
     attr = inspect.getattr_static(owner, name, None)
     if isinstance(attr, property):
         attr = attr.fget
-    if getattr(attr, "__qualname__", "").endswith(_WRAPPER_QUALNAME_TAIL):
+    qualname = getattr(attr, "__qualname__", None)
+    if isinstance(qualname, str) and qualname.endswith(_WRAPPER_QUALNAME_TAIL):
         attr = getattr(attr, "__wrapped__", attr)
     return attr
 
@@ -77,13 +78,15 @@ def _function_index() -> dict[int, str]:
     """``id(original callable) -> identity`` over the function-like ops (cached)."""
 
     if not _FUNCTION_INDEX:
+        # Built whole, then published: a failure mid-build must not leave a
+        # partial index that silently refuses later ops as unlisted.
+        index: dict[int, str] = {}
         for kind, (owner, names) in _owners().items():
-            if owner is None:
-                continue
-            for name in names:
+            for name in names if owner is not None else ():
                 func = _original(owner, name)
                 if func is not None:
-                    _FUNCTION_INDEX.setdefault(id(func), f"{kind}.{name}")
+                    index.setdefault(id(func), f"{kind}.{name}")
+        _FUNCTION_INDEX.update(index)
     return _FUNCTION_INDEX
 
 

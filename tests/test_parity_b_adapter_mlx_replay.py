@@ -221,7 +221,7 @@ def test_recipe_round_trip_passes_unchanged_validator(family: str, keep_inventor
 def test_bound_captures_still_catch_a_corrupt_payload() -> None:
     """A rebound trace is not vacuous: a corrupted saved output fails validation."""
 
-    trace, _model, _x = _trace("mlp")
+    trace, _model, _x = _trace("mod_mlp")
     recipes = _recipes(trace)
     trace._replay_param_payloads = adapter.live_param_payloads(trace)
     trace._mlx_op_captures = []
@@ -235,7 +235,7 @@ def test_bound_captures_still_catch_a_corrupt_payload() -> None:
 def test_missing_parameter_payload_is_refused() -> None:
     """Binding without a parameter payload refuses the recipe before replay."""
 
-    trace, _model, _x = _trace("mlp")
+    trace, _model, _x = _trace("mod_mlp")
     recipes = _recipes(trace)
     captures = list(trace._mlx_op_captures)
     trace._replay_param_payloads = {}
@@ -247,7 +247,7 @@ def test_missing_parameter_payload_is_refused() -> None:
 def test_corrupt_recipes_are_refused() -> None:
     """Unknown identities and skeletons that disagree with inputs are refused."""
 
-    trace, _model, _x = _trace("chain_branch")
+    trace, _model, _x = _trace("fn_chain_branch")
     recipes = _recipes(trace)
     label, rec = next((k, r) for k, r in recipes.items() if r.inputs)
     data = encode_recipe(rec)
