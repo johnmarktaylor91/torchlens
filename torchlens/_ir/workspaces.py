@@ -227,6 +227,10 @@ class WrapperRuntimeWorkspace:
     #: the tensors ``admit_call`` collected; the scan clears it on reading, and it
     #: is ``None`` outside that emit.
     fast_scan: Any = None
+    #: ``(id(call), gated labels)`` the argument scan read for the call it is about to
+    #: snapshot, with no source logged since; the snapshot takes and clears it. The
+    #: labels map tensor ids to strings, so a left-over entry holds no tensor.
+    arg_reads: Any = None
     #: Write-time content tokens of this forward's fresh container snapshots,
     #: ``id(container) -> (container, token, flags)`` (the table that
     #: ``_trace_core.pools.ContainerTokens`` wraps): created by the first snapshot

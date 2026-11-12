@@ -206,7 +206,9 @@ def _reference(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     with monkeypatch.context() as patch:
         patch.setattr(_ops_argument_fields, "snapshot_flat_slots", lambda *_args: None)
         patch.setattr(
-            _arg_observation, "validated_parameter", _ops_arguments._session_validated_parameter
+            _arg_observation,
+            "validated_parameter",
+            lambda trace, value, _checks: _ops_arguments._session_validated_parameter(trace, value),
         )
         patch.setattr(_ops_argument_fields, "slot_parent_labels", _ops_arg_slots.parents_from_slots)
         patch.setattr(_ops_emission, "_planned_witness", lambda *_args: None)
@@ -333,9 +335,9 @@ def test_planned_parameter_check_equals_full_check(monkeypatch: pytest.MonkeyPat
     full = _ops_arguments._session_validated_parameter
     answers: list[tuple[bool, bool]] = []
 
-    def both(trace: Any, value: torch.Tensor) -> bool:
+    def both(trace: Any, value: torch.Tensor, checks: Any) -> bool:
         """Answer with the planned check, then the full one from a cold cache."""
-        planned = real(trace, value)
+        planned = real(trace, value, checks)
         trace._raw_graph_ws._validated_params.pop(id(value), None)
         answers.append((planned, full(trace, value)))
         return planned

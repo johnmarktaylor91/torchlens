@@ -30,7 +30,7 @@ from ..._utils._tensor_label import (
 )
 from ..._utils._tl_collective import _async_collective_elem
 from ..._utils.introspection import get_arg_tensors_for_resolution
-from ._arg_observation import READS_HANDOFF, slot_parent_labels, snapshot_flat_slots
+from ._arg_observation import FlatChecks, slot_parent_labels, snapshot_flat_slots
 from ._call_layout import planned_tensor_items
 from ._ops_arg_slots import (
     _ArgSlot,
@@ -125,7 +125,7 @@ def _scan_call_arguments(
         else:
             log_closure_constant_if_known(self, tensor)
 
-    READS_HANDOFF[0] = (id(call), reads)  # read by the snapshot of this very call
+    runtime.arg_reads = (id(call), reads)  # read by the snapshot of this very call
     slots = snapshot_arg_slots(self, call, arg_tensors)
     parents = slot_parent_labels(self, slots, arg_tensors)
     return (
@@ -300,10 +300,11 @@ def snapshot_arg_slots(
 
     Records the slots as the current op's context (read by the parent-position
     recorder and the witness) and returns them in walk order. A flat call reuses
-    the gated labels the resolve loop handed over for it (``READS_HANDOFF``).
+    the gated labels the resolve loop handed over for it (the runtime's ``arg_reads``).
     """
 
-    handed, READS_HANDOFF[0] = READS_HANDOFF[0], None
+    runtime = trace._wrapper_runtime_ws
+    handed, runtime.arg_reads = runtime.arg_reads, None
 
     layout = call.layout
     if layout is not None and layout.tensor_slots:
@@ -311,7 +312,7 @@ def snapshot_arg_slots(
         if workspace is None:
             return ()
         reads = handed[1] if handed is not None and handed[0] == id(call) else None
-        flat = snapshot_flat_slots(trace, workspace, call, (arg_tensors, reads), _object_facts)
+        flat = snapshot_flat_slots(trace, workspace, call, (arg_tensors, reads), _FLAT_CHECKS)
         if flat is not None:
             return flat
     items = list(_tensor_items(call)) if layout is None else planned_tensor_items(call, layout)
@@ -401,6 +402,7 @@ def _repin_rebound_receiver(self: "Trace", args: tuple[Any, ...], tensor: torch.
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ..._data_classes.param import ParamAccessor  # noqa: E402
 from ._ops_arguments import (  # noqa: E402
     _args_template_of,
     _function_registry_key,
@@ -409,4 +411,9 @@ from ._ops_arguments import (  # noqa: E402
 )
 from ._ops_predicate_events import (  # noqa: E402
     _extract_arg_tensors_and_params,
+)
+
+#: The flat snapshot's reads from this package's cyclic modules.
+_FLAT_CHECKS = FlatChecks(
+    _object_facts, _session_validated_parameter, session_validated_buffer_address, ParamAccessor
 )

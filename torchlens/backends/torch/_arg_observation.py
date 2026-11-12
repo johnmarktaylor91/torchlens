@@ -17,12 +17,15 @@ from __future__ import annotations
 
 import operator
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import torch
 
-from ..._data_classes.param import ParamAccessor
 from ..._utils import _tensor_label as _labels
+from ..._utils._mutation_names import (
+    _SETTER_MUTATION_FUNC_NAMES,
+    _is_inplace_augmented_assignment_dunder,
+)
 from ..._utils._tensor_label import (
     TensorMeta,
     clear_tensor_label,
@@ -41,13 +44,14 @@ from ._ops_arg_slots import (
     new_arg_slot,
     new_slot_context,
     parents_from_slots,
+    templates_requested,
 )
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
 __all__ = (
-    "READS_HANDOFF",
+    "FlatChecks",
     "plain_facts",
     "slot_parent_labels",
     "snapshot_flat_slots",
@@ -60,19 +64,32 @@ _ITEM_VALUE = operator.itemgetter(2)
 _TENSOR = torch.Tensor
 #: The facts of a plain tensor without TorchLens metadata (``_object_facts`` result).
 _UNSTAMPED: tuple[Any, ...] = (None, False, (), False, False, False)
-#: ``(id(call), gated labels)`` the builder's resolve loop read for the call it is about
-#: to snapshot, with no source logged since; the snapshot takes and clears it. The
-#: labels map tensor ids to strings, so a left-over entry holds no tensor.
-READS_HANDOFF: list[tuple[int, dict[int, str] | None] | None] = [None]
 #: The witness's slot facts when the op has no snapshot (read only).
 _NO_FACTS: Mapping[Any, Any] = {}
 
 
-#: ``(call, arg tensors, live labels)`` of the flat call being snapshotted.
-_FlatFrame = tuple[_SlotCall, list[torch.Tensor], Mapping[str, Any]]
+class FlatChecks(NamedTuple):
+    """The reads the flat snapshot takes from this package's cyclic modules.
+
+    The caller passes them in, so this module imports none of those modules and
+    stays out of their import cycle.
+    """
+
+    #: The general per-object read (``_ops_argument_fields._object_facts``).
+    object_facts: Callable[[Trace, Any, _SnapshotScope], tuple[Any, ...]]
+    #: ``_ops_arguments._session_validated_parameter``.
+    session_validated_parameter: Callable[[Trace, torch.Tensor], bool]
+    #: ``buffer_writes.session_validated_buffer_address``.
+    session_validated_buffer_address: Callable[[Trace, Any], Any]
+    #: ``_data_classes.param.ParamAccessor``.
+    param_accessor: type
 
 
-def validated_parameter(trace: Trace, value: torch.Tensor) -> bool:
+#: ``(call, arg tensors, live labels, checks)`` of the flat call being snapshotted.
+_FlatFrame = tuple[_SlotCall, list[torch.Tensor], Mapping[str, Any], FlatChecks]
+
+
+def validated_parameter(trace: Trace, value: torch.Tensor, checks: FlatChecks) -> bool:
     """Return ``_session_validated_parameter(trace, value)``, with a cheaper first sight.
 
     A prepared Parameter's first read in a capture resolves its prep address in the
@@ -88,13 +105,17 @@ def validated_parameter(trace: Trace, value: torch.Tensor) -> bool:
         return True
     param_meta = get_param_meta(value)
     param_logs = trace._param_logs
-    if param_meta is not None and validated is not None and type(param_logs) is ParamAccessor:
+    if (
+        param_meta is not None
+        and validated is not None
+        and type(param_logs) is checks.param_accessor
+    ):
         addr = param_meta.param_address
         entry = param_logs._dict.get(addr) if isinstance(addr, str) and addr else None
         if entry is not None and getattr(entry, "_param_ref", None) is value:
             validated[id(value)] = value
             return True
-    return _session_validated_parameter(trace, value)
+    return checks.session_validated_parameter(trace, value)
 
 
 def _stale_stamped_facts(
@@ -106,13 +127,13 @@ def _stale_stamped_facts(
     so its storage read is ``label is not None``. Same steps as ``_object_facts``.
     """
 
-    call, arg_tensors, live = frame
+    call, arg_tensors, live, checks = frame
     source = meta.buffer_source
     intact = label is not None
     data_alias = bool(meta.data_alias and intact)
     # ``_object_facts``'s clear set: every tensor of a flat call is template-visited.
     clears = (
-        _templates_requested(trace)
+        templates_requested(trace)
         or any(tensor is value for tensor in arg_tensors)
         or (call.layout.has_out and id(value) in _out_destination_ids(call.kwargs))
     )
@@ -120,7 +141,8 @@ def _stale_stamped_facts(
         clear_tensor_label(value)
         data_alias = False
     known = (
-        meta.address is not None and session_validated_buffer_address(trace, value) is not None
+        meta.address is not None
+        and checks.session_validated_buffer_address(trace, value) is not None
     ) or bool(intact and source is not None and source in live)
     parents = (source,) if intact and source is not None and source in live else ()
     return (None, known, parents, data_alias, False, False)
@@ -141,7 +163,7 @@ def plain_facts(
     if kind is _PARAMETER:
         if meta is not None:
             return None
-        ok = validated_parameter(trace, value)
+        ok = validated_parameter(trace, value, frame[3])
         return (None, ok, (), False, True, ok)
     if kind is not _TENSOR or getattr(value, "_is_param", False):
         return None
@@ -171,13 +193,13 @@ def snapshot_flat_slots(
     workspace: Any,
     call: _SlotCall,
     inputs: tuple[list[torch.Tensor], dict[int, str] | None],
-    object_facts: Callable[[Trace, Any, _SnapshotScope], tuple[Any, ...]],
+    checks: FlatChecks,
 ) -> tuple[_ArgSlot, ...] | None:
     """``snapshot_arg_slots`` for a flat call: planned facts, the general read for the rest.
 
     Walks the layout's tensor slots (``planned_tensor_items`` order). ``inputs`` is
-    ``(arg tensors, resolve-loop label reads)``; ``object_facts`` is the general
-    per-object read, given the general scope. ``None`` sends the call to the general
+    ``(arg tensors, resolve-loop label reads)``; ``checks.object_facts`` is the
+    general per-object read, given the general scope. ``None`` sends the call to the general
     walk (the reference tests patch this function so).
     """
 
@@ -186,7 +208,7 @@ def snapshot_flat_slots(
     live = trace.capture_events.live_index.by_raw_label
     session = _labels._ACTIVE_LABEL_SESSION
     token = None if session is None else session.token
-    frame = (call, arg_tensors, live)
+    frame = (call, arg_tensors, live, checks)
     facts: dict[int, tuple[Any, ...]] = {}
     labels: dict[int, str | None] = {}
     scope: _SnapshotScope | None = None
@@ -202,7 +224,7 @@ def snapshot_flat_slots(
             if value_facts is None:
                 if scope is None:
                     scope = _general_scope(trace, call, arg_tensors, live)
-                value_facts = object_facts(trace, value, scope)
+                value_facts = checks.object_facts(trace, value, scope)
             facts[value_id] = value_facts
             labels[value_id] = value_facts[0]
         slot = new_arg_slot(kind, key, value_id, value_facts)
@@ -223,7 +245,7 @@ def _general_scope(
         clear_ids |= _out_destination_ids(call.kwargs)
     visited = (
         set(map(id, map(_ITEM_VALUE, planned_tensor_items(call, call.layout))))
-        if _templates_requested(trace)
+        if templates_requested(trace)
         else set()
     )
     return _SnapshotScope(live, clear_ids, visited)
@@ -314,12 +336,3 @@ def _planned_witness(
         if recorded_parent_labels.isdisjoint(provenance_labels):
             return None
     return (), ()
-
-
-# Late imports: the split modules of this package import one another (cycles), so each
-# imports its siblings once every definition above exists.
-from ._ops_arg_slots import templates_requested as _templates_requested  # noqa: E402
-from ._ops_arguments import _session_validated_parameter  # noqa: E402
-from ._ops_capture_records import _is_inplace_augmented_assignment_dunder  # noqa: E402
-from .buffer_writes import session_validated_buffer_address  # noqa: E402
-from .ops import _SETTER_MUTATION_FUNC_NAMES  # noqa: E402
