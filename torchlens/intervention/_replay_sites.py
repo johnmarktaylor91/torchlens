@@ -148,6 +148,12 @@ def _unmet_log_precondition(log: Trace) -> str | None:
     ):
         backend = str(log._provenance_backend or TORCH_BACKEND_NAME)
         if backend != TORCH_BACKEND_NAME:
+            from ._backend_replay import backend_adapter  # deferred: import cycle
+
+            if backend_adapter(log) is not None:
+                # Replayed op by op through the backend's replay adapter
+                # (intervention/_backend_replay.py), which refuses per op.
+                return None
             return (
                 f"the {backend} preview backend cannot edit or patch a finished trace: replay "
                 "needs per-op argument templates, which only PyTorch captures record; stage "
