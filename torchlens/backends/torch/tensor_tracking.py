@@ -452,7 +452,7 @@ def _install_tensor_grad_hook(
 
 
 def _record_hooked_gradient(
-    trace_ref: weakref.ReferenceType[Trace],
+    trace_ref: "weakref.ReferenceType[Trace]",
     tensor_label: str,
     hooked_tensor_id: int,
     owning_backward_only: bool,
@@ -498,11 +498,11 @@ def _record_hooked_gradient(
 
 
 def _hooked_gradient_target(
-    trace_ref: weakref.ReferenceType[Trace],
+    trace_ref: "weakref.ReferenceType[Trace]",
     tensor_label: str,
     hooked_tensor_id: int,
     owning_backward_only: bool,
-) -> tuple[Trace, bool] | None:
+) -> "tuple[Trace, bool] | None":
     """Return the trace a hooked gradient records into and whether edits run, or ``None``.
 
     ``None`` drops the fire: a non-owner alias, an active fork probe, a
