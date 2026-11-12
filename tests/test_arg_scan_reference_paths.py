@@ -21,6 +21,7 @@ on either side of the column path's op threshold.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -244,15 +245,26 @@ def _op_fields(trace: Any) -> list[tuple[Any, ...]]:
     ]
 
 
-def _trace(model_cls: type[nn.Module], shape: tuple[int, ...], replayable: bool = False) -> Any:
-    """Trace a fresh ``model_cls`` on a fixed-seed input (a replayable capture if asked)."""
+def _trace(
+    model_cls: type[nn.Module], shape: tuple[int, ...], replayable: bool = False
+) -> tuple[Any, list[str]]:
+    """Trace a fresh ``model_cls`` on a fixed-seed input (a replayable capture if asked).
+
+    Returns the trace and the texts of the warnings the capture raised (the closure
+    constant and the unattributed tensor raise the missing-provenance warning), so a
+    caller can compare them across the two paths.
+    """
 
     torch.manual_seed(0)
     model = model_cls()
-    if not replayable:
-        return tl.trace(model, torch.randn(*shape))
-    options = tl.options.CaptureOptions(replayable=True)
-    return tl.trace(model, torch.randn(*shape), capture=options)
+    capture = tl.options.CaptureOptions(replayable=True) if replayable else None
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        if capture is None:
+            trace = tl.trace(model, torch.randn(*shape))
+        else:
+            trace = tl.trace(model, torch.randn(*shape), capture=capture)
+    return trace, sorted(str(item.message) for item in caught)
 
 
 def _assert_same(name: str, left: list[tuple[Any, ...]], right: list[tuple[Any, ...]]) -> None:
@@ -279,10 +291,11 @@ def test_scan_shortcuts_equal_reference_paths(
 ) -> None:
     """Every op's scan-derived fields match the reference paths, live."""
 
-    shipped = _op_fields(_trace(model_cls, shape, replayable))
+    shipped, shipped_warnings = _trace(model_cls, shape, replayable)
     with _reference_paths(monkeypatch):
-        reference = _op_fields(_trace(model_cls, shape, replayable))
-    _assert_same(name, reference, shipped)
+        reference, reference_warnings = _trace(model_cls, shape, replayable)
+    _assert_same(name, _op_fields(reference), _op_fields(shipped))
+    assert shipped_warnings == reference_warnings
 
 
 @pytest.mark.parametrize(
@@ -304,9 +317,9 @@ def test_scan_shortcuts_equal_reference_paths_after_load(
         path = tmp_path / f"{label}.tlspec"
         if reference:
             with _reference_paths(monkeypatch):
-                _trace(model_cls, shape, replayable=True).save(path)
+                _trace(model_cls, shape, replayable=True)[0].save(path)
         else:
-            _trace(model_cls, shape, replayable=True).save(path)
+            _trace(model_cls, shape, replayable=True)[0].save(path)
         loaded.append(_op_fields(tl.load(path)))
     _assert_same(name, loaded[1], loaded[0])
 
