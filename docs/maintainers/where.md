@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1769 modules, 708519 lines, 0 modules without a docstring.
+85 packages, 1771 modules, 708833 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -54,11 +54,11 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7552 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7550 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9645 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
-| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
+| `torchlens.backends.paddle` | Paddle backend preview. | 16 | 6911 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8577 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 11 | 4583 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59358 |
@@ -1332,7 +1332,7 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7552 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7550 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1353,7 +1353,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (24 modules
 | `_intervention_evidence` | Which backends write the intervention evidence a Trace's pristine reading uses. | 31 |
 | `_invariants` | Run the metadata-invariant tripwire from a backend's validate path. | 23 |
 | `_module_returns` | Recorded module returns: how a preview backend hands module-call outputs to the finalizer. | 234 |
-| `_options` | Shared backend trace-option defaulting and rejection helpers. | 790 |
+| `_options` | Shared backend trace-option defaulting and rejection helpers. | 788 |
 | `_protocol` | Backend Protocol for unified TorchLens capture. | 354 |
 | `_root_frames` | The root call's frame in preview op module stacks. | 76 |
 | `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 206 |
@@ -1426,24 +1426,26 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6951 lines)
 
 ### `torchlens.backends.paddle`
 
-Paddle backend preview. (14 modules, 6595 lines)
+Paddle backend preview. (16 modules, 6911 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Paddle backend preview. | 7 |
 | `_capture_helpers` | Private helpers the Paddle backend's capture path calls (file cap split). | 124 |
-| `_param_writes` | Paddle parameter-write guard for the preview capture. | 106 |
-| `backend` | Technical-preview Paddle implementation of the capture backend Protocol. | 2734 |
+| `_param_writes` | Paddle parameter-write guard for the preview capture. | 117 |
+| `backend` | Technical-preview Paddle implementation of the capture backend Protocol. | 2650 |
 | `capabilities` | Registry-backed capability exports for the Paddle backend preview. | 38 |
-| `constants_rule` | The shared constants rule, Paddle side (closure constants and literal producers). | 261 |
+| `constants_rule` | The shared constants rule, Paddle side (closure constants and literal producers). | 262 |
 | `conv_layers` | Layer-level capture of Paddle ''Conv1D'', ''Conv2D'' and ''Conv3D''. | 154 |
 | `derived_grads` | Derived-gradient leaf helpers for the technical-preview Paddle backend. | 302 |
 | `interventions` | Live intervention runtime for the technical-preview Paddle backend. | 569 |
 | `model_prep` | Paddle model preparation helpers for technical-preview capture. | 412 |
+| `source_frames` | The user source lines of one Paddle op (''Op.source.frames''), recorded like torch. | 164 |
+| `source_leaves` | Pre-forward source leaves of a Paddle capture: registered buffers and closure constants. | 221 |
 | `tensor_store` | External metadata store for Paddle tensors. | 114 |
 | `validation` | Replay-validation helpers for the technical-preview Paddle backend. | 698 |
 | `validation_decisions` | Per-op validation decisions for the Paddle preview backend. | 280 |
-| `wrappers` | Paddle function-call interception for technical-preview capture. | 796 |
+| `wrappers` | Paddle function-call interception for technical-preview capture. | 799 |
 
 ### `torchlens.backends.tf`
 

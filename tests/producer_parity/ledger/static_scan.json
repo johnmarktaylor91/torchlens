@@ -6188,7 +6188,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/paddle/backend.py",
   "has_default": false,
-  "sites": 14,
+  "sites": 12,
   "via_getattr": false
  },
  {
@@ -6325,6 +6325,14 @@
   "file": "torchlens/backends/paddle/interventions.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/paddle/source_leaves.py",
+  "has_default": false,
+  "sites": 3,
   "via_getattr": false
  },
  {
