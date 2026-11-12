@@ -26,6 +26,16 @@ from typing import Any
 
 import numpy as np
 
+from ... import _state
+from .._validation_shared import ops_by_label
+from ..tf._raw_op_replay import _replay_raw_op
+from ..tf.op_callback_capture import TFInputCapture, TFOpCapture, TFUnresolvedProducer
+from ..tf.validation import (
+    _CONTROL_REGION_OPS,
+    _EFFECT_DENIED_OPS,
+    _payloads_close,
+    _tensor_to_numpy,
+)
 from ._contract import InputOccurrence, OpRecipe, ReplayRecipeError, validate_recipe
 
 BACKEND = "tf"
@@ -85,13 +95,10 @@ def _index(trace: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     the tuple and so invalidates the entry.
     """
 
-    from .._validation_shared import ops_by_label  # deferred: startup cost
-
     captures = getattr(trace, "_tf_op_captures", ())
     entry = _INDEX_CACHE.get(id(trace))
     if entry is not None and entry[0]() is trace and entry[1] is captures:
         return entry[2], entry[3]
-    from ..tf.op_callback_capture import TFOpCapture  # deferred: startup cost
 
     ops = dict(ops_by_label(trace))
     by_raw = {c.label_raw: c for c in captures if isinstance(c, TFOpCapture)}
@@ -152,8 +159,6 @@ def _no_capture_reason(record: Any) -> str:
 
 def _type_reason(op_type: str) -> str | None:
     """Reason a TensorFlow op type is not replayable, or ``None``."""
-
-    from ..tf.validation import _CONTROL_REGION_OPS, _EFFECT_DENIED_OPS  # deferred: startup cost
 
     if op_type.startswith(_RANDOM_PREFIXES):
         return _RANDOM_REASON
@@ -259,8 +264,6 @@ def _require_replayable(trace: Any, op: Any) -> Any:
 def _is_capture(value: Any) -> bool:
     """Whether ``value`` is a TensorFlow callback capture."""
 
-    from ..tf.op_callback_capture import TFOpCapture  # deferred: startup cost
-
     return isinstance(value, TFOpCapture)
 
 
@@ -287,9 +290,6 @@ def _assemble_inputs(capture: Any, parent_values: Sequence[Any]) -> list[Any]:
 
 def _dispatch(capture: Any, inputs: list[Any]) -> Any:
     """Run the validator's kernel for ``capture``, or this module's extra kernel."""
-
-    from ... import _state  # deferred: startup cost
-    from ..tf._raw_op_replay import _replay_raw_op  # deferred: startup cost
 
     if capture.op_type in _VALIDATOR_KERNEL_OPS:
         return _replay_raw_op(capture, inputs)
@@ -357,15 +357,11 @@ def add(left: Any, right: Any) -> Any:
 def to_host(value: Any) -> np.ndarray:
     """Host NumPy copy of a TensorFlow value (the validator's own conversion)."""
 
-    from ..tf.validation import _tensor_to_numpy  # deferred: startup cost
-
     return np.array(_tensor_to_numpy(value), copy=True)
 
 
 def close(expected: Any, actual: Any) -> bool:
     """The TensorFlow validator's payload comparison, imported unchanged."""
-
-    from ..tf.validation import _payloads_close  # deferred: startup cost
 
     return bool(_payloads_close(actual, expected))
 
@@ -392,8 +388,6 @@ def _literal_array(tensor: Any) -> np.ndarray | None:
     if dtype is not None and getattr(dtype, "name", "") in {"resource", "variant"}:
         return None
     try:
-        from ..tf.validation import _tensor_to_numpy  # deferred: startup cost
-
         array = _tensor_to_numpy(tensor)
     except Exception:  # noqa: BLE001 - a graph tensor has no value; that is the answer
         return None
@@ -523,8 +517,6 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
 
     import tensorflow as tf  # deferred: optional dependency
 
-    from ..tf.op_callback_capture import TFOpCapture, TFUnresolvedProducer  # deferred: startup cost
-
     ops, _ = _index(trace)
     order = {id(op): position for position, op in enumerate(_ordered_ops(ops))}
     rebuilt: list[tuple[int, Any]] = []
@@ -593,8 +585,6 @@ def _checked_record(ops: Mapping[str, Any], label: str, item: OpRecipe) -> tuple
 
 def _rebuilt_inputs(tf: Any, ops: Mapping[str, Any], item: OpRecipe) -> tuple[Any, ...]:
     """Callback input records from a recipe's occurrences, sources and literals."""
-
-    from ..tf.op_callback_capture import TFInputCapture  # deferred: startup cost
 
     label = item.output_slots[0]
     roles = {int(index): (kind, role) for index, kind, role in item.attrs["input_sources"]}
