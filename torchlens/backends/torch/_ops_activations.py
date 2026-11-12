@@ -202,15 +202,13 @@ def _log_output_tensor_info(
     parent_param_ops: dict[str, int],
     fields_dict: dict[str, Any],
     autograd_saved_stats: tuple[int | None, int | None],
+    keep_alias_contract: bool,
 ) -> None:
     """Populate per-tensor fields that differ across outputs of a single function call.
 
-    This includes:
-      - Counter-based label generation (``_label_raw``).
-      - Operation equivalence type assignment (used by loop detection to
-        identify structurally identical operations across forward-pass iterations).
-      - FLOPs computation.
-      - Shape, dtype, and memory size.
+    This includes the counter-based label (``_label_raw``), the operation equivalence type
+    (loop detection uses it to match structurally identical operations across passes),
+    FLOPs, and shape, dtype and memory size.
 
     Label format: ``"{layer_type}_{type_num}_{realtime_num}_raw"``
       - ``layer_type``: normalized function name (e.g. "conv2d")
@@ -224,6 +222,7 @@ def _log_output_tensor_info(
         kwargs: Keyword args to the function.
         parent_param_ops: Dict mapping param barcodes to their current pass number.
         fields_dict: Per-tensor fields dict to populate (mutated in place).
+        keep_alias_contract: ``_should_keep_alias_mutation_contract(self)``, read once per call.
     """
     layer_type = fields_dict["type"]
     indiv_param_barcodes = list(parent_param_ops.keys())
@@ -306,7 +305,7 @@ def _log_output_tensor_info(
     # call's mutation verdict on it (signature incl. ``inplace=True``, refined by the
     # live receiver's version counter). Consume it so it never leaks onto the copy.
     same_object_mutation = pop_same_object_mutation(t)
-    if not _should_keep_alias_mutation_contract(self):
+    if not keep_alias_contract:  # _should_keep_alias_mutation_contract(self), once per call
         # Default forward-only capture: preserve the historical label-based flag exactly (no
         # runnable replay consumes it, so identity returns are harmless and goldens stay unchanged).
         fields_dict["is_inplace"] = prior_label is not None
@@ -780,7 +779,6 @@ def _retention_device(tensor: torch.Tensor, configured: Any) -> torch.device:
 from ._ops_capture_records import (  # noqa: E402
     _is_inplace_augmented_assignment_dunder,
     _label_version_baseline,
-    _should_keep_alias_mutation_contract,
 )
 from ._ops_retention import (  # noqa: E402
     _admit_save_budget,

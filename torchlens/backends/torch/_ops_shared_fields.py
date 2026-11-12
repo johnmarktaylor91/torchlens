@@ -1,7 +1,7 @@
 """Shared operation fields and tensor variation tracking."""
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -87,9 +87,8 @@ def _build_shared_fields_dict(
         _set_arg_template_fields(self, fields_dict, call)
         fields_dict["container_path"] = ()
         fields_dict["container_spec"] = None
-        # Whether this op saves gradients. The per-gradient placeholders (``grad``,
-        # ``grad_shape``, ``gradient_memory`` and their ``transformed_`` forms) are not
-        # written: the freeze never reads them and the op defaults supply them.
+        # Whether this op saves gradients; the per-gradient placeholders come from the op
+        # defaults (the freeze never reads them).
         fields_dict["save_grads"] = self._options_save_grads not in (None, False)
 
         # Function call info
@@ -100,9 +99,11 @@ def _build_shared_fields_dict(
         fields_dict["func_duration"] = exec_ctx.time_elapsed
         fields_dict["func_rng_states"] = exec_ctx.rng_states
         fields_dict["func_autocast_state"] = exec_ctx.autocast_state
-        fields_dict["num_args_total"] = len(args) + len(kwargs)
-        fields_dict["num_pos_args"] = len(args)
-        fields_dict["num_kwargs"] = len(kwargs)
+        num_pos_args = len(args)
+        num_kwargs = len(kwargs)
+        fields_dict["num_args_total"] = num_pos_args + num_kwargs
+        fields_dict["num_pos_args"] = num_pos_args
+        fields_dict["num_kwargs"] = num_kwargs
         fields_dict["non_tensor_pos_args"] = non_tensor_args
         fields_dict["non_tensor_kwargs"] = non_tensor_kwargs
         fields_dict["func_non_tensor_args"] = non_tensor_args + list(non_tensor_kwargs.values())
@@ -111,9 +112,8 @@ def _build_shared_fields_dict(
             self, fields_dict, parent_layer_labels, parent_records, args, kwargs, out_orig
         )
         parent_param_ops = _build_param_fields(self, fields_dict, arg_parameters)
-        # Module nesting. The module-I/O placeholders (``module_call_stack``,
-        # ``input_to_module_calls``, ``output_of_modules`` and the rest) are not written:
-        # the freeze never reads them and postprocess derives them from the records.
+        # Module nesting; the module-I/O placeholders are not written: the freeze never
+        # reads them and postprocess derives them from the records.
         modules = _snapshot_exhaustive_module_stack(self)
         fields_dict["module"] = modules[-1] if modules else None
         fields_dict["modules"] = modules
@@ -126,7 +126,7 @@ def _build_shared_fields_dict(
         )
 
         # Function config — lightweight hyperparameter extraction, always on.
-        param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("param_shapes"))
+        param_shapes: list[tuple[int, ...]] | None = fields_dict.get("param_shapes")
         fields_dict["func_config"] = extract_salient_args(
             layer_type, func_name, args, kwargs, param_shapes
         )
