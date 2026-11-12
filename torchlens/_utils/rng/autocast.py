@@ -43,10 +43,8 @@ def log_current_autocast_state(trace: Any = None) -> dict[str, dict[str, Any]]:
             their tokens are, and the freeze's container pooling keys the
             snapshot by it instead of walking it (``_trace_core.pools.ContainerTokens``).
             Nothing registers without a trace, on the torch 2.1 to 2.3 path, or
-            once the trace's freeze has taken the table. A snapshot equal to one
-            already registered under the same trace is that registered object
-            (the freeze pools equal snapshots into one object anyway); the state
-            itself is read live on every call.
+            once the trace's freeze has taken the table. An equal snapshot under the same
+            trace is the registered object; the state itself is read live on every call.
 
     Returns:
         Dict mapping device name to ``{"enabled": bool, "dtype": torch.dtype}``.
@@ -69,29 +67,49 @@ def log_current_autocast_state(trace: Any = None) -> dict[str, dict[str, Any]]:
             # Device doesn't support autocast queries (e.g. no CUDA).
             continue
         token += (device, enabled, dtype)
-    table = _token_table(trace)
+    table: Any = None
+    if trace is not None:
+        try:
+            workspace = trace._wrapper_runtime_ws
+        except AttributeError:
+            pass
+        else:
+            table = workspace.container_tokens
+            if table is None:
+                table = workspace.container_tokens = {}
+            elif table is False:
+                table = None
     if table is not None:
-        # The trace already holds a snapshot with this content: hand it out again. The
-        # table entry proves the remembered snapshot was registered under THIS trace
-        # (the table holds it, so its id is not reused while the entry exists).
-        kept = _KEPT_SNAPSHOTS.get(token)
-        if kept is not None:
-            entry = table.get(id(kept))
-            if entry is not None and entry[0] is kept:
+        # Subscripts, not calls (C1 counts calls): reuse the snapshot THIS trace's table holds.
+        try:
+            kept, kept_id = _KEPT_SNAPSHOTS[token]
+        except KeyError:
+            pass
+        else:
+            if kept_id in table and table[kept_id][0] is kept:
                 return kept
-    state = _execution_only_state(grad_enabled, inference_mode)
+    return _new_snapshot(token, table)
+
+
+def _new_snapshot(
+    token: tuple[Any, ...], table: dict[int, Any] | None
+) -> dict[str, dict[str, Any]]:
+    """Build the snapshot ``token`` describes; register and remember it when ``table`` is given."""
+
+    state = _execution_only_state(token[0], token[1])
     for index in range(2, len(token), 3):
         state[token[index]] = {"enabled": token[index + 1], "dtype": token[index + 2]}
     if table is not None:
-        table[id(state)] = (state, token, TOKEN_INERT)
-        _KEPT_SNAPSHOTS[token] = state
+        state_id = id(state)
+        table[state_id] = (state, token, TOKEN_INERT)
+        _KEPT_SNAPSHOTS[token] = (state, state_id)
     return state
 
 
-#: The latest registered snapshot per content token. A snapshot is only handed out again
-#: under the trace whose token table holds it; the tokens are few (execution mode and the
-#: per-device autocast settings), so the map stays small.
-_KEPT_SNAPSHOTS: dict[tuple[Any, ...], dict[str, dict[str, Any]]] = {}
+#: The latest registered snapshot per content token, with its id. A snapshot is only handed
+#: out again under the trace whose token table holds it; the tokens are few (execution mode
+#: and the per-device autocast settings), so the map stays small.
+_KEPT_SNAPSHOTS: dict[tuple[Any, ...], tuple[dict[str, dict[str, Any]], int]] = {}
 
 
 def _execution_only_state(grad_enabled: bool, inference_mode: bool) -> dict[str, dict[str, Any]]:
@@ -110,23 +128,6 @@ def _execution_only_state(grad_enabled: bool, inference_mode: bool) -> dict[str,
             "inference_mode": inference_mode,
         }
     }
-
-
-def _token_table(trace: Any) -> dict[int, Any] | None:
-    """Return ``trace``'s container-token table, creating it; ``None`` when nothing registers."""
-
-    if trace is None:
-        return None
-    try:
-        workspace = trace._wrapper_runtime_ws
-    except AttributeError:
-        return None
-    table = workspace.container_tokens
-    if table is None:
-        table = workspace.container_tokens = {}
-    elif table is False:
-        return None
-    return table
 
 
 def _legacy_device_states(state: dict[str, dict[str, Any]]) -> None:
