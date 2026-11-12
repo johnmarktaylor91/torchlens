@@ -234,4 +234,4 @@ def test_jax_module_root_rejects_foreign_params() -> None:
                 grad_options=GradOptions(params={"w": jnp.ones(2)}, loss_fn=_loss)
             ),
         )
-    assert excinfo.value.code == "grad_options_unsupported"
+    assert excinfo.value.code == "trace_option_unsupported"

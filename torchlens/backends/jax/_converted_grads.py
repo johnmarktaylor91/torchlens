@@ -50,8 +50,13 @@ def _jaxpr_function(
     param_positions: dict[int, str],
     static_argnums: tuple[int, ...],
     output_treedef: Any,
+    module_root: bool,
 ) -> Callable[..., Any]:
-    """Return ``fn(params, *args, other_consts)`` evaluating the captured jaxpr."""
+    """Return ``fn(params, *args, other_consts)`` evaluating the captured jaxpr.
+
+    For a function root ``params`` is the jaxpr's first dynamic argument; for a
+    module root it fills the constants matched to module parameters.
+    """
 
     import jax
     from jax import core as jax_core
@@ -68,7 +73,8 @@ def _jaxpr_function(
         dynamic = tuple(
             value for index, value in enumerate(positional) if index + 1 not in static_argnums
         )
-        flat = jax_core.eval_jaxpr(closed_jaxpr.jaxpr, consts, *jax.tree.leaves(dynamic))
+        leaves = jax.tree.leaves(dynamic if module_root else (params, *dynamic))
+        flat = jax_core.eval_jaxpr(closed_jaxpr.jaxpr, consts, *leaves)
         return jax.tree.unflatten(output_treedef, flat)
 
     return converted
@@ -86,28 +92,10 @@ def converted_gradient_view(
 ) -> tuple[Callable[..., Any], list[Any], Any, tuple[int, ...]] | None:
     """Return the explicit-leaf gradient view, or ``None`` for the plain raw path.
 
-    Parameters
-    ----------
-    model:
-        The user callable (function root) or module root.
-    args:
-        Normalized positional capture arguments.
-    closed_jaxpr:
-        The captured closed jaxpr (module returns already stripped).
-    module_tree:
-        The attributed module tree for a module root, else ``None``.
-    grad_options:
-        Public ``GradOptions``.
-    static_argnums:
-        Declared static positional indexes of the capture.
-    captured_output:
-        The captured raw output, whose pytree structure the view returns.
-
-    Returns
-    -------
-    tuple | None
-        ``(fn, fn_args, grad_options, fn_static_argnums)`` with ``fn_args`` being
-        ``[params, *inputs, other_consts]``; ``None`` for the plain raw path.
+    ``closed_jaxpr`` is the captured jaxpr (module returns stripped), ``module_tree``
+    the attributed tree of a module root (else ``None``) and ``captured_output``
+    the raw output whose pytree structure the view returns. The result is
+    ``(fn, [params, *inputs, other_consts], grad_options, fn_static_argnums)``.
     """
 
     consts = tuple(getattr(closed_jaxpr, "consts", ()))
@@ -119,7 +107,8 @@ def converted_gradient_view(
             raise BackendUnsupportedError(
                 "JAX module-root derived gradients read the parameters from the module "
                 "itself; pass GradOptions(params=model) or params=None.",
-                code="grad_options_unsupported",
+                code="trace_option_unsupported",
+                option="grad_options",
             )
         params: Any = {address: consts[index] for index, address in param_positions.items()}
         positional = list(args)
@@ -131,7 +120,9 @@ def converted_gradient_view(
     import jax
 
     treedef = jax.tree.structure(captured_output)
-    fn = _jaxpr_function(closed_jaxpr, param_positions, shifted_static, treedef)
+    fn = _jaxpr_function(
+        closed_jaxpr, param_positions, shifted_static, treedef, module_tree is not None
+    )
     view_options = replace(grad_options, params=params, intermediate_grads=False)
     return fn, [params, *positional, others], view_options, shifted_static
 
