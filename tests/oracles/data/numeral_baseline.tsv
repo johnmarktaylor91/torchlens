@@ -3501,6 +3501,7 @@ docs-md	docs/maintainers/where.md	1547
 docs-md	docs/maintainers/where.md	155
 docs-md	docs/maintainers/where.md	1551
 docs-md	docs/maintainers/where.md	1555
+docs-md	docs/maintainers/where.md	1557
 docs-md	docs/maintainers/where.md	156
 docs-md	docs/maintainers/where.md	1560
 docs-md	docs/maintainers/where.md	1563
@@ -4058,7 +4059,7 @@ docs-md	docs/maintainers/where.md	6537
 docs-md	docs/maintainers/where.md	656
 docs-md	docs/maintainers/where.md	66
 docs-md	docs/maintainers/where.md	660
-docs-md	docs/maintainers/where.md	6609
+docs-md	docs/maintainers/where.md	6633
 docs-md	docs/maintainers/where.md	667
 docs-md	docs/maintainers/where.md	668
 docs-md	docs/maintainers/where.md	67
@@ -4092,7 +4093,6 @@ docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	7066
-docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	711
 docs-md	docs/maintainers/where.md	712
@@ -4104,7 +4104,8 @@ docs-md	docs/maintainers/where.md	72
 docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	725
-docs-md	docs/maintainers/where.md	725092
+docs-md	docs/maintainers/where.md	725116
+docs-md	docs/maintainers/where.md	728
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
 docs-md	docs/maintainers/where.md	731
@@ -10286,6 +10287,7 @@ test-docstrings	tests/test_trace_attr_ownership.py	50
 test-docstrings	tests/test_trace_core_substrate.py	1.0
 test-docstrings	tests/test_trace_core_substrate.py	11
 test-docstrings	tests/test_trace_field_invariant.py	10
+test-docstrings	tests/test_trace_lifetime.py	3.10
 test-docstrings	tests/test_track_collector_embedding_budget.py	21
 test-docstrings	tests/test_track_explorer_gate_rows.py	124
 test-docstrings	tests/test_track_explorer_gate_rows.py	128,

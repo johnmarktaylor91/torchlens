@@ -17,6 +17,7 @@ from __future__ import annotations
 import pickle
 import random
 import time
+import weakref
 
 import numpy as np
 import pytest
@@ -200,7 +201,8 @@ def test_call_site_time_arg_proof_skips_interposed_call_bookkeeping(
 
 def test_skip_retired_hooks_follows_the_dead_links_own_chain() -> None:
     """A dead THREADING hook found while restoring the sys slot must resolve
-    through the dead owner's threading predecessor, not the sys one."""
+    through that hook's own (threading) predecessor, never the slot's chain --
+    whether its owning monitor is retired or already freed."""
 
     class _DeadOwner:
         pass
@@ -211,22 +213,17 @@ def test_skip_retired_hooks_follows_the_dead_links_own_chain() -> None:
     def sentinel_threading_predecessor(frame, event, arg):
         return None
 
-    def sentinel_sys_predecessor(frame, event, arg):
-        return None
-
     owner = _DeadOwner()
     owner._hooks_retired = True
-    owner._threading_hook = dead_threading_hook
-    owner._sys_hook = None
-    owner._previous_threading_profile = sentinel_threading_predecessor
-    owner._previous_sys_profile = sentinel_sys_predecessor
-    dead_threading_hook._tl_owner = owner
+    dead_threading_hook._tl_owner_ref = weakref.ref(owner)
+    dead_threading_hook._tl_predecessor = sentinel_threading_predecessor
 
-    resolved = _skip_retired_hooks(dead_threading_hook, "_previous_sys_profile")
+    resolved = _skip_retired_hooks(dead_threading_hook)
     assert resolved is sentinel_threading_predecessor, (
-        "restoring the sys slot through a dead threading hook resolved the "
-        "dead owner's SYS predecessor instead of its threading chain"
+        "restoring through a dead threading hook did not resolve its own threading predecessor"
     )
+    del owner  # the owning monitor freed by refcount: the link is just as dead
+    assert _skip_retired_hooks(dead_threading_hook) is sentinel_threading_predecessor
 
 
 class _TinyNet(nn.Module):
