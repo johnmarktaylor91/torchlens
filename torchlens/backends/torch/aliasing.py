@@ -180,7 +180,7 @@ def _bare_output_aliases(
     """Return the positions whose tensor is ``raw_output`` or shares its storage pointer."""
 
     aliased: list[object] = []
-    logging_enabled = _state._logging_enabled
+    logging_enabled = _state.active_capture()[1]
     output_ptr: Any = None
     with _state.pause_logging():
         for position, tensor in positions:

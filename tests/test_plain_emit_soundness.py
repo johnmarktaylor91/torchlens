@@ -201,10 +201,7 @@ def test_loops(monkeypatch: pytest.MonkeyPatch) -> None:
 class _Cond(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = x * 3
-        if y.sum() > 0:
-            y = y - 1
-        else:
-            y = y + 1
+        y = y - 1 if y.sum() > 0 else y + 1
         if (y > 100).any():
             y = y * 0
         return y.relu()

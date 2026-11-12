@@ -851,7 +851,7 @@ torchlens/backends/torch/_ops_emission.py::_emit_operation_events	62
 torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions	170
 torchlens/backends/torch/_ops_emission.py::apply_live_hooks_to_outputs	78
 torchlens/backends/torch/_ops_emission.py::log_function_output_tensors	68
-torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	281
+torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	272
 torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	72
 torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	114

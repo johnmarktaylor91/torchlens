@@ -107,18 +107,9 @@ def _emit_exhaustive_operation_events(
         )
 
     output_entries = _output_entries_with_autograd_stats(self, out_orig)
-    if plain_single_output(self, out_orig, output_entries):  # the loop below, specialized
-        emit_plain_output(
-            self,
-            args,
-            kwargs,
-            arg_copies,
-            kwarg_copies,
-            output_entries[0],
-            fields_dict,
-            parent_param_ops,
-            is_bottom_level_func,
-        )
+    if plain_single_output(self, out_orig, output_entries, is_bottom_level_func):
+        call = (args, kwargs, arg_copies, kwarg_copies)  # the loop below, specialized
+        emit_plain_output(self, call, output_entries[0], fields_dict, parent_param_ops)
         return
     _register_call_output_container_snapshot(
         self,
@@ -345,12 +336,16 @@ def _emit_exhaustive_operation_events(
 # edge uses, receiver relabel, halt); the output alias check is the bare-output one.
 
 
-def plain_single_output(trace: "Trace", out_orig: Any, output_entries: list[Any]) -> bool:
-    """Return whether the call has one bare tensor output and a plain session.
+def plain_single_output(
+    trace: "Trace", out_orig: Any, output_entries: list[Any], is_bottom_level_func: bool
+) -> bool:
+    """Return whether the call has one loggable bare tensor output and a plain session.
 
-    The output is one exact ``torch.Tensor`` with one entry and no container.
-    The session facts are read per call, as the generic emit reads them, so a
-    session that switches one on mid-forward takes the generic loop from that call.
+    The output is one exact ``torch.Tensor`` with one entry and no container,
+    and ``_output_should_be_logged`` accepts it (an output it rejects takes the
+    generic loop). The session facts are read per call, as the generic emit reads
+    them, so a session that switches one on mid-forward takes the generic loop
+    from that call.
     """
 
     if (
@@ -368,26 +363,25 @@ def plain_single_output(trace: "Trace", out_orig: Any, output_entries: list[Any]
         or trace_dict.get("_echo_session") is not None
         or trace._options_on_nonfinite
         or _should_keep_alias_mutation_contract(trace)
-    )
+    ) and _output_should_be_logged(out_orig, is_bottom_level_func)
 
 
 def emit_plain_output(
     trace: "Trace",
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    arg_copies: tuple[Any, ...],
-    kwarg_copies: dict[str, Any],
+    call: tuple[tuple[Any, ...], dict[str, Any], tuple[Any, ...], dict[str, Any]],
     output_entry: Any,
     fields_dict: dict[str, Any],
     parent_param_ops: dict[str, int],
-    is_bottom_level_func: bool,
 ) -> None:
-    """Log the call's one bare tensor output, as the generic per-output loop logs it."""
+    """Log the call's one bare tensor output, as the generic per-output loop logs it.
 
+    ``call`` is ``(args, kwargs, arg_copies, kwarg_copies)``; the dispatch has
+    already checked the output is loggable.
+    """
+
+    args, kwargs, arg_copies, kwarg_copies = call
     out_tensor = output_entry.value
     event_module_stack = _module_frames_from_fields(fields_dict)
-    if not _output_should_be_logged(out_tensor, is_bottom_level_func):
-        return
     fields_dict["container_path"] = output_entry.container_path
     fields_dict["container_spec"] = None
     _log_output_tensor_info(
