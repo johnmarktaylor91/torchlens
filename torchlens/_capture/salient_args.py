@@ -18,6 +18,7 @@ from typing import Any
 import torch
 
 from .. import _state as _st
+from ._recorded_tensor import RecordedTensor
 
 # ---------------------------------------------------------------------------
 # Registry: normalized_layer_type -> extractor function
@@ -76,8 +77,8 @@ def _build_arg_name_map(
 def _to_simple(val: Any) -> Any:
     """Ensure val is a simple Python type, never a tensor.
 
-    Converts torch.Tensor to its shape tuple, recursively handles
-    lists/tuples. Passes through int, float, str, bool, None.
+    Converts torch.Tensor (or its recorded form) to its shape tuple, recursively
+    handles lists/tuples. Passes through int, float, str, bool, None.
     """
     if isinstance(val, torch.Tensor):
         return tuple(val.shape)
@@ -86,6 +87,8 @@ def _to_simple(val: Any) -> Any:
         return converted
     if isinstance(val, torch.dtype):
         return str(val)
+    if type(val) is RecordedTensor:
+        return val.shape
     return val
 
 
@@ -115,7 +118,7 @@ def _conv(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
     result: SalientArgs = {}
     weight = named.get("weight")
-    if isinstance(weight, torch.Tensor):
+    if isinstance(weight, (torch.Tensor, RecordedTensor)):
         # Read the weight argument itself: a computed weight (prune's
         # weight_orig * weight_mask, a functional conv over a plain tensor)
         # is not a parent parameter, and the bias then sits first in
@@ -494,6 +497,11 @@ def extract_salient_args(
 ) -> SalientArgs:
     """Extract salient hyperparameters for a logged operation.
 
+    The extractor is the layer type's per-function constant part; it resolves over
+    the call's non-tensor values and tensor shapes, so ``args`` and ``kwargs`` may be
+    the live arguments or their recorded form
+    (``_recorded_tensor.record_call_values``) with the same result.
+
     Parameters
     ----------
     layer_type:
@@ -521,3 +529,9 @@ def extract_salient_args(
     except Exception:
         # Never crash logging for salient args extraction failure.
         return {}
+
+
+def salient_reads_args(layer_type: str) -> bool:
+    """Whether the function config of ``layer_type`` reads the call's arguments."""
+
+    return layer_type in _EXTRACTORS

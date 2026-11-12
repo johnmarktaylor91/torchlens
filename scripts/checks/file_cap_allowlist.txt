@@ -27,7 +27,7 @@ torchlens/_capture/_structure_only_entry.py::_refuse_structure_only_conflicts	68
 torchlens/_capture/_weightsfree_admission.py::_absorbed_ambient_device_context	67
 torchlens/_capture/arg_positions.py	2638
 torchlens/_capture/arg_positions.py::_cache_dynamic_spec	96
-torchlens/_capture/flops.py	1942
+torchlens/_capture/flops.py	1934
 torchlens/_capture/flops.py::_einsum_flops	93
 torchlens/_capture/predicates.py::build_op_record_context	107
 torchlens/_capture/preflight.py::_escrow_remedy	69
