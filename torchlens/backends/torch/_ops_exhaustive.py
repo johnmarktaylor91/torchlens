@@ -363,8 +363,8 @@ def plain_single_output(
     )
 
 
-_BOUND_THIN: list[Any] = [None]
-"""The thin emit bound to this package's helpers, built on first use."""
+_BOUND_THIN: dict[str, Any] = {}
+"""The thin emit bound to this package's helpers (key ``"thin"``), built on first use."""
 
 
 def bound_thin_emit() -> Callable[[Any, tuple[Any, ...], int], bool]:
@@ -375,9 +375,9 @@ def bound_thin_emit() -> Callable[[Any, tuple[Any, ...], int], bool]:
     ``_call_plan.commit_fast_call``.
     """
 
-    thin = _BOUND_THIN[0]
+    thin = _BOUND_THIN.get("thin")
     if thin is None:
-        thin = _BOUND_THIN[0] = make_thin_emit(
+        thin = _BOUND_THIN["thin"] = make_thin_emit(
             ThinHelpers(
                 _build_shared_fields_dict,
                 _output_entries_with_autograd_stats,

@@ -89,29 +89,24 @@ def make_thin_emit(helpers: ThinHelpers) -> Callable[[Any, tuple[Any, ...], int]
 
     commit = make_commit(helpers)
     frames_of = _frame_binder()
-    (build, entries_of, log_info, pop_fire, tag, exhaustive_emit, keep_alias) = helpers[:7]
+    (build, entries_of, log_info, pop_fire, tag, exhaustive, keep_alias) = helpers[:7]
     enabled = _ENABLED
     perf = time.perf_counter
 
     def thin_emit(trace: Trace, call: tuple[Any, ...], func_call_id: int) -> bool:
-        """Log one admitted bottom-level call through the thin path, or return False untouched.
+        """Log one admitted call (``call`` as ``commit_fast_call`` takes it), or return False.
 
-        ``call`` is ``(func, func_name, args, kwargs, arg_copies, kwarg_copies, out,
-        exec_ctx)``. Returns False, with no side effect, when the call is not a plain
-        single output in a plain exhaustive session; the caller then runs today's emit.
-        The fast-lane gate already paid for the rest of today's plain-output check: an
-        admitted call is exhaustive and not structure-only (``admit_call``), and an
-        exact ``torch.Tensor`` output without TorchLens metadata (``output_admitted``,
-        or the same-object commit's fresh copy) is loggable and never a lazy parameter.
+        False, with no side effect, unless the call is a plain single output in a plain
+        exhaustive session. The fast-lane gate paid for the rest of today's check:
+        ``admit_call`` admits only exhaustive, not structure-only calls, and an exact
+        tensor without TorchLens metadata is loggable and never a lazy parameter.
         """
 
         out = call[6]
         if type(out) is not _TENSOR or not enabled[0]:
             return False
         policy = trace.__dict__.get("_capture_producer_policy")
-        if policy is None or policy.emit is not exhaustive_emit:
-            return False
-        if not plain_session(trace, keep_alias):
+        if getattr(policy, "emit", None) is not exhaustive or not plain_session(trace, keep_alias):
             return False
         func, func_name, args, kwargs, arg_copies, kwarg_copies, _, exec_ctx = call
         started = perf()
@@ -137,10 +132,11 @@ def make_thin_emit(helpers: ThinHelpers) -> Callable[[Any, tuple[Any, ...], int]
             fields["fire_results"] = fire_results
             fields["is_edited"] = any(result.replaced for result in fire_results)
         if entry.autograd_band is not None:
-            trace.__dict__.setdefault("_autograd_saved_bands", {})[fields["_label_raw"]] = (
-                entry.autograd_band
-            )
-        handle = commit(trace, out, fields, (arg_copies, kwarg_copies), module_stack, requires_grad)
+            bands = trace.__dict__.setdefault("_autograd_saved_bands", {})
+            bands[fields["_label_raw"]] = entry.autograd_band
+        handle = commit(
+            trace, out, fields, (arg_copies, kwarg_copies), (module_stack, requires_grad)
+        )
         if fields["is_internal_source"]:  # ``_classify_new_tensor_in_trace``
             trace.internal_source_ops.append(fields["_label_raw"])
         tag(trace, out, handle, fields, arg_copies, kwarg_copies, args, kwargs)

@@ -629,7 +629,7 @@ def commit_admitted(
         if snapshots and type(out) is not _TENSOR:
             return DECLINED
         result = _call_plan.commit_fast_call(
-            log_function_output_tensors, trace, call, func_call_id, window, bound_thin_emit()
+            (log_function_output_tensors, bound_thin_emit()), trace, call, func_call_id, window
         )
         if snapshots:
             record_op_buffer_writes(trace, call[1], snapshots, get_tensor_label(out))
@@ -662,10 +662,8 @@ def _commit_same_object(
     logged = same_object_logging_copy(receiver, trace, was_inplace)
     _stamp_same_object(logged, receiver, was_inplace)
     copy_call = (*call[:6], logged, call[7])
-    thin = bound_thin_emit()
-    _call_plan.commit_fast_call(
-        log_function_output_tensors, trace, copy_call, func_call_id, window, thin
-    )
+    emits = (log_function_output_tensors, bound_thin_emit())
+    _call_plan.commit_fast_call(emits, trace, copy_call, func_call_id, window)
     out_label = get_tensor_label(logged)
     if out_label is not None:
         if was_inplace:

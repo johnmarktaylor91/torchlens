@@ -76,7 +76,7 @@ def thin(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, int]]:
         counts["fast"] += 1
         return real_fast(*args)
 
-    monkeypatch.setitem(_ops_exhaustive._BOUND_THIN, 0, counted_thin)
+    monkeypatch.setitem(_ops_exhaustive._BOUND_THIN, "thin", counted_thin)
     monkeypatch.setattr(_call_plan, "commit_fast_call", counted_fast)
     previous = _thin_emit.thin_emit_enabled()
     yield counts
@@ -311,13 +311,13 @@ def test_requires_grad_flip_before_the_record_build(
     """Flipping params and outputs before ingest reaches thin rows no more than today's rows."""
 
     outputs: list[torch.Tensor] = []
-    real_thin = _ops_exhaustive._BOUND_THIN[0]
+    real_thin = _ops_exhaustive._BOUND_THIN["thin"]
 
     def keeping_thin(trace: Any, call: tuple[Any, ...], func_call_id: int) -> bool:
         outputs.append(call[6])
         return real_thin(trace, call, func_call_id)
 
-    monkeypatch.setitem(_ops_exhaustive._BOUND_THIN, 0, keeping_thin)
+    monkeypatch.setitem(_ops_exhaustive._BOUND_THIN, "thin", keeping_thin)
     models: list[nn.Module] = []
 
     def flip() -> None:

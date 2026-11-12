@@ -197,7 +197,8 @@ def test_nested_outer_call_skips_the_shared_fields(monkeypatch: pytest.MonkeyPat
 
     with monkeypatch.context() as patch:
         patch.setattr(_ops_exhaustive, "_build_shared_fields_dict", spy)
-        patch.setitem(_ops_exhaustive._BOUND_THIN, 0, None)  # the thin emit rebinds the spy
+        # The thin emit binds its helpers once: drop the binding so it rebinds the spy.
+        patch.delitem(_ops_exhaustive._BOUND_THIN, "thin", raising=False)
         trace = tl.trace(model, torch.randn(2, 3))
     assert built == ["relu", "batch_norm", "relu"]
     with monkeypatch.context() as patch:

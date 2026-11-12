@@ -515,12 +515,11 @@ def _multi_output_admitted(out: Any, args: tuple[Any, ...], kwargs: dict[str, An
 
 
 def commit_fast_call(
-    emit: Callable[..., Any],
+    emits: tuple[Callable[..., Any], Callable[[Any, tuple[Any, ...], int], bool] | None],
     trace: Any,
     call: tuple[Any, ...],
     func_call_id: int,
     window: tuple[Any, list[torch.Tensor]],
-    thin: Callable[[Any, tuple[Any, ...], int], bool] | None = None,
 ) -> Any:
     """Emit one admitted bottom-level call and return its output.
 
@@ -529,9 +528,11 @@ def commit_fast_call(
 
     Parameters
     ----------
-    emit:
-        Today's output emit (``log_function_output_tensors``), passed in by the
-        wrapper so this module stays outside the capture import cycle.
+    emits:
+        ``(emit, thin)``: today's output emit (``log_function_output_tensors``)
+        and the bound thin emit (``_thin_emit.make_thin_emit``) or ``None``, passed
+        in by the wrapper so this module stays outside the capture import cycle;
+        ``None`` sends every call to ``emit``.
     trace:
         Active capture trace.
     call:
@@ -544,9 +545,6 @@ def commit_fast_call(
         (or ``None``), and the call's tensor arguments as :func:`admit_call`
         collected them, which the emit's argument scan reuses instead of scanning
         the arguments again.
-    thin:
-        The bound thin emit (``_thin_emit.make_thin_emit``), passed in by the
-        wrapper for the same reason as ``emit``; ``None`` sends every call to ``emit``.
 
     Returns
     -------
@@ -554,6 +552,7 @@ def commit_fast_call(
         The call's output: a tensor, or a tuple or list of tensors.
     """
 
+    emit, thin = emits
     cow_state_ptrs, tensors = window
     if cow_state_ptrs is not None:
         arm_deferred_payload_window(cow_state_ptrs)

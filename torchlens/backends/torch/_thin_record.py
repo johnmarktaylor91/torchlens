@@ -55,16 +55,15 @@ def make_commit(helpers: ThinHelpers) -> _Commit:
         tensor: torch.Tensor,
         fields: dict[str, Any],
         copies: tuple[tuple[Any, ...], dict[str, Any]],
-        module_stack: Any,
-        requires_grad: bool,
+        facts: tuple[Any, bool],
     ) -> _RowOpRecord:
         """Save the output, seal its edge truth and append its deferred row; return the handle.
 
         The steps ``_make_layer_log_entry`` takes for a call in a plain session, in its
         order: the save decision, the retention escrow, the saved value copy, the
         parent edge truth, then the commit. ``copies`` is ``(arg_copies,
-        kwarg_copies)``; ``requires_grad`` is the output's, read by the caller inside
-        its internal-read block.
+        kwarg_copies)``; ``facts`` is ``(module_stack, requires_grad)``, the output's
+        ``requires_grad`` read by the caller inside its internal-read block.
         """
 
         trace_dict = trace.__dict__
@@ -87,6 +86,7 @@ def make_commit(helpers: ThinHelpers) -> _Commit:
                     trace, "clone_save_activation_fields", time.perf_counter() - save_started
                 )
         seal_edges(trace_dict, fields)
+        module_stack, requires_grad = facts
         handle = append(trace, fields, tensor, (fire_results, module_stack), requires_grad)
         grad_fn_handle = fields["grad_fn_handle"]
         if grad_fn_handle is not None:

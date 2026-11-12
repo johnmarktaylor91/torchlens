@@ -836,7 +836,7 @@ torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrappe
 torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	146
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	68
 torchlens/backends/torch/_module_class_metadata.py::_get_class_metadata	97
-torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	295
+torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	277
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
 torchlens/backends/torch/_ops_activations.py::_save_activation_fields	193
 torchlens/backends/torch/_ops_arguments.py::_build_edge_use_records	68
@@ -866,7 +866,7 @@ torchlens/backends/torch/_ops_predicates.py::_predicate_backend_semantics	98
 torchlens/backends/torch/_ops_retention.py::_build_trace_predicate_context	80
 torchlens/backends/torch/_ops_retention.py::_copy_lookback_payload	76
 torchlens/backends/torch/_ops_retention.py::_save_predicate_activation_fields	91
-torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	89
+torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	85
 torchlens/backends/torch/_ops_shared_fields.py::_get_parent_output_version_snapshot	75
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	107
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	71
