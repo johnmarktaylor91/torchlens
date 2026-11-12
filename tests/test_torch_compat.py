@@ -478,6 +478,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # affected modules' own training flag instead). Build-dependent, so mirror
         # the live post-snapshot capability.
         "HAS_MHA_FASTPATH_SWITCH": tc.HAS_MHA_FASTPATH_SWITCH,
+        # Capture's direct tensor grad-hook install: torch's parts, method body and a
+        # scratch probe must all match ``register_hook``; otherwise capture keeps
+        # ``register_hook``. Mirror the live post-snapshot value.
+        "HAS_DIRECT_TENSOR_HOOK_INSTALL": tc.HAS_DIRECT_TENSOR_HOOK_INSTALL,
         "HAS_REDUCE_TUPLE_DIM": tc.HAS_REDUCE_TUPLE_DIM,
         # CPU Half-dtype kernel coverage (addmm/layer_norm/nextafter) and
         # Float8 empty-fill under deterministic mode both postdate the torch

@@ -641,6 +641,10 @@ _CAPABILITY_PROBE_STATE = frozenset(
         # as every other row in this class.
         ("torchlens/_utils/_torch_compat.py", "HAS_MHA_FASTPATH_SWITCH"),
         ("torchlens/_utils/_torch_compat.py", "_MHA_FASTPATH_SWITCH_PROBED"),
+        # The direct tensor grad-hook install, latched at first capture; same shape.
+        ("torchlens/_utils/_torch_compat.py", "HAS_DIRECT_TENSOR_HOOK_INSTALL"),
+        ("torchlens/_utils/_torch_compat.py", "_DIRECT_TENSOR_HOOK_PROBED"),
+        ("torchlens/_utils/_torch_compat.py", "_DIRECT_TENSOR_HOOK_FNS"),
     }
 )
 """Feature-detection memos for the running torch build.

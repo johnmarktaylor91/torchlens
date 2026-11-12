@@ -4,17 +4,18 @@
 the small hook that calls the shared fire function; :func:`register_tensor_grad_hook` puts it on the
 tensor (or, for a tensor written in place again since its op, on that op's node).
 
-A plain ``torch.Tensor`` with no ``__torch_function__`` override active takes
-:func:`register_plain_tensor_hook`: the steps of ``torch.Tensor.register_hook``
-through the C class's getsets. ``register_hook`` itself is Python and reads
-``requires_grad``, ``_backward_hooks`` and ``grad_fn`` through ``torch.Tensor``,
-where capture wraps and shadows those names, so it had to be marked and paused
-and each read ran a TorchLens frame. The hook lands in the same
-``_backward_hooks`` dict, keyed by a ``RemovableHandle`` id from torch's own
-counter, so hook order, firing and removal are torch's.
-``tests/test_backward_hook_install.py`` pins the body of torch's method so a
-torch change to it fails loudly instead of drifting. Any other tensor keeps the
-marked, paused ``register_hook``.
+A plain ``torch.Tensor`` with no ``__torch_function__`` override active takes the
+direct install from ``_torch_compat.get_direct_tensor_hook_install``: the steps of
+``torch.Tensor.register_hook`` through the C class's getsets. ``register_hook``
+itself is Python and reads ``requires_grad``, ``_backward_hooks`` and ``grad_fn``
+through ``torch.Tensor``, where capture wraps and shadows those names, so it had to
+be marked and paused and each read ran a TorchLens frame. The hook lands in the
+same ``_backward_hooks`` dict, keyed by a ``RemovableHandle`` id from torch's own
+counter, so hook order, firing and removal are torch's. The compat module admits
+the direct install once, at first capture, behind ``HAS_DIRECT_TENSOR_HOOK_INSTALL``
+(torch's parts, its method body and a probe on scratch tensors must all match);
+when the flag is false, and for any other tensor, capture keeps the marked, paused
+``register_hook`` with real handles, as before.
 
 Capture keeps no handle for the hooks it never removes one by one:
 :func:`add_plain_tensor_hook` takes the key from torch's ``RemovableHandle`` id
@@ -28,22 +29,22 @@ registrar.
 
 from __future__ import annotations
 
-from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 import torch
-from torch.utils.hooks import RemovableHandle
 
 from ... import _state
 from ..._data_classes._fork_lineage import _is_fork_relative
 from ..._state import pause_logging
 from ..._utils._internal_read import internal_scalar_read
-from ..._utils._torch_compat import get_tensorbase_class
+from ..._utils._torch_compat import get_direct_tensor_hook_install, get_tensorbase_class
 from .._entry_refusals import require_tensorbase_class
 
 if TYPE_CHECKING:
     from ..._capture.session import LiveGradientReference
+    from ..._utils._tensor_hook_install import DirectTensorHookInstall
 
 __all__ = (
     "_foreign_label_owner",
@@ -61,56 +62,53 @@ __all__ = (
 # frame, log no op and record no witnessed input fact (capture wraps and shadows
 # these names on ``torch.Tensor``, never on the C class).
 _TENSORBASE_CLS = require_tensorbase_class(get_tensorbase_class())
-_HOOKS_OF = _TENSORBASE_CLS._backward_hooks.__get__
-_SET_HOOKS = _TENSORBASE_CLS._backward_hooks.__set__
 raw_grad_fn = _TENSORBASE_CLS.grad_fn.__get__
 raw_requires_grad = _TENSORBASE_CLS.requires_grad.__get__
-_HAS_TORCH_FUNCTION_UNARY = torch._C._has_torch_function_unary
-_TENSOR = torch.Tensor
+
+
+@contextmanager
+def _internal_torch_calls() -> Iterator[None]:
+    """Pause logging and mark scalar reads internal, as for every TorchLens-internal torch call."""
+
+    with pause_logging(), internal_scalar_read():
+        yield
+
+
+def _direct_install() -> DirectTensorHookInstall | None:
+    """Return the compat module's direct install, or ``None`` when capture must use ``register_hook``."""
+
+    return get_direct_tensor_hook_install(guard=_internal_torch_calls)
 
 
 def takes_plain_hook_install(t: Any) -> bool:
-    """Return whether ``t`` may take :func:`register_plain_tensor_hook`.
+    """Return whether ``t`` takes the direct install.
 
-    A plain ``torch.Tensor`` with no active ``__torch_function__`` override:
-    ``register_hook`` would dispatch to the override first, so such a tensor (and
-    every subclass) keeps the ``register_hook`` call.
+    True for a plain ``torch.Tensor`` with no active ``__torch_function__`` override
+    while ``HAS_DIRECT_TENSOR_HOOK_INSTALL`` holds: ``register_hook`` would dispatch to
+    an override first, so such a tensor (and every subclass) keeps the call.
     """
 
-    return type(t) is _TENSOR and not _HAS_TORCH_FUNCTION_UNARY(t)
-
-
-def _plain_hooks_dict(t: torch.Tensor) -> OrderedDict[int, Any]:
-    """Return ``t``'s gradient hook dict, creating and attaching it as torch does."""
-
-    if not raw_requires_grad(t):
-        raise RuntimeError("cannot register a hook on a tensor that doesn't require gradient")
-    hooks = _HOOKS_OF(t)
-    if hooks is None:
-        hooks = OrderedDict()
-        _SET_HOOKS(t, hooks)
-        grad_fn = raw_grad_fn(t)
-        if grad_fn is not None:
-            grad_fn._register_hook_dict(t)
-    return hooks
+    direct = _direct_install()
+    return direct is not None and direct.takes_plain(t)
 
 
 def register_plain_tensor_hook(
     t: torch.Tensor, hook: Callable[[torch.Tensor | None], torch.Tensor | None]
-) -> RemovableHandle:
+) -> Any:
     """Register ``hook`` on ``t`` as ``torch.Tensor.register_hook`` does.
 
     Parameters
     ----------
     t:
-        Plain tensor (:func:`takes_plain_hook_install` is true for it).
+        Plain tensor.
     hook:
         Gradient hook, called with the tensor's gradient.
 
     Returns
     -------
-    RemovableHandle
-        Torch's handle; ``remove()`` takes the hook out of the dict.
+    Any
+        Torch's ``RemovableHandle``; ``remove()`` takes the hook out of the dict.
+        Without the direct install this is ``register_hook``'s own handle.
 
     Raises
     ------
@@ -118,10 +116,11 @@ def register_plain_tensor_hook(
         ``t`` does not require gradient (torch's own refusal).
     """
 
-    hooks = _plain_hooks_dict(t)
-    handle = RemovableHandle(hooks)
-    hooks[handle.id] = hook
-    return handle
+    direct = _direct_install()
+    if direct is not None:
+        return direct.register(t, hook)
+    with _internal_torch_calls():
+        return t.register_hook(hook)
 
 
 def add_plain_tensor_hook(
@@ -147,13 +146,8 @@ def add_plain_tensor_hook(
         (:func:`takes_plain_hook_install` is false for it).
     """
 
-    if type(t) is not _TENSOR or _HAS_TORCH_FUNCTION_UNARY(t):
-        return False
-    hooks = _plain_hooks_dict(t)
-    hook_id = RemovableHandle.next_id
-    RemovableHandle.next_id = hook_id + 1
-    hooks[hook_id] = hook
-    return True
+    direct = _direct_install()
+    return direct is not None and direct.add(t, hook)
 
 
 def register_tensor_grad_hook(
@@ -182,15 +176,16 @@ def register_tensor_grad_hook(
         The handle; ``remove()`` takes the hook off.
     """
 
-    if isinstance(site, torch.Tensor) and takes_plain_hook_install(site):
+    direct = _direct_install() if isinstance(site, torch.Tensor) else None
+    if direct is not None and direct.takes_plain(site):
         # torch's own ``register_hook`` steps through the C getsets: no TorchLens
         # frame and no torch call, so there is nothing to mark or pause.
-        return register_plain_tensor_hook(site, hook)
+        return direct.register(site, hook)
     # torch's ``register_hook`` reads ``self.grad_fn`` internally, and the tensor can
     # be the user's registered state receiver (an in-place op output), so the read is
     # marked internal. Paused like every TorchLens-internal torch call (Critical
     # Invariant 2): the user's forward never makes this call, so it must not count.
-    with pause_logging(), internal_scalar_read():
+    with _internal_torch_calls():
         if isinstance(site, torch.Tensor):
             return site.register_hook(hook)
         return register_slot_prehook(site.grad_fn, site.output_nr, hook)

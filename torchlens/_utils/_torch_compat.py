@@ -51,6 +51,7 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning, transparent_contextmanager
+from . import _tensor_hook_install  # defines only; probed at first capture
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import TORCH_SEED_CODE_PLAN, shadowed_torch_submodule, torch_attr
@@ -108,6 +109,7 @@ __all__ = [
     "HAS_TENSORBASE_CLASS",
     "HAS_VARIABLE_FUNCTIONS_CLASS",
     "HAS_FP8_DTYPES",
+    "HAS_DIRECT_TENSOR_HOOK_INSTALL",
     "HAS_PER_BACKEND_SEED",
     "HAS_PIPELINING",
     "HAS_SET_STANCE",
@@ -941,6 +943,7 @@ def _force_real_op_probes() -> None:
     get_eval_batch_norm_mean_residual_support(force_probe=True)
     get_cpu_float8_deterministic_fill_support(force_probe=True)
     get_sparse_spsolve_cuda_support(force_probe=True)
+    get_direct_tensor_hook_install(force_probe=True)
 
 
 def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
@@ -1035,6 +1038,38 @@ def get_mha_fastpath_switch_support(*, force_probe: bool = False) -> bool:
         HAS_MHA_FASTPATH_SWITCH = _probe_mha_fastpath_switch()
         _MHA_FASTPATH_SWITCH_PROBED = True
     return HAS_MHA_FASTPATH_SWITCH
+
+
+def get_direct_tensor_hook_install(
+    *, force_probe: bool = False, guard: Callable[[], Any] = contextlib.nullcontext
+) -> Any:
+    """Return capture's direct tensor grad-hook install, or ``None`` for ``Tensor.register_hook``.
+
+    Parameters
+    ----------
+    force_probe:
+        Probe again even when latched (diagnostic surfaces).
+    guard:
+        Context the one-time probe runs in (capture passes its paused internal-read bracket).
+
+    Returns
+    -------
+    Any
+        The leaf's install while ``HAS_DIRECT_TENSOR_HOOK_INSTALL`` holds (probed at first use).
+    """
+
+    global HAS_DIRECT_TENSOR_HOOK_INSTALL, _DIRECT_TENSOR_HOOK_PROBED, _DIRECT_TENSOR_HOOK_FNS
+    if not _DIRECT_TENSOR_HOOK_PROBED or force_probe:
+        slots = vars(get_tensorbase_class() or object)
+        with guard():
+            _DIRECT_TENSOR_HOOK_FNS = _tensor_hook_install.detect(
+                (slots.get("_backward_hooks"), slots.get("grad_fn"), slots.get("requires_grad")),
+                _resolve_attribute_path("torch:_C._has_torch_function_unary"),
+                _resolve_attribute_path("torch.utils.hooks:RemovableHandle"),
+            )
+        HAS_DIRECT_TENSOR_HOOK_INSTALL = _DIRECT_TENSOR_HOOK_FNS is not None
+        _DIRECT_TENSOR_HOOK_PROBED = True
+    return _DIRECT_TENSOR_HOOK_FNS if HAS_DIRECT_TENSOR_HOOK_INSTALL else None
 
 
 def _probe_deterministic_fill_flag() -> bool:
@@ -1226,6 +1261,9 @@ HAS_MPS_MEMORY_QUERY: bool = _probe_attribute_paths("HAS_MPS_MEMORY_QUERY")
 HAS_SPARSE_INVARIANT_CHECK: bool = _probe_attribute_paths("HAS_SPARSE_INVARIANT_CHECK")
 HAS_MHA_FASTPATH_SWITCH: bool = False
 _MHA_FASTPATH_SWITCH_PROBED: bool = False
+HAS_DIRECT_TENSOR_HOOK_INSTALL: bool = False  # lazy: get_direct_tensor_hook_install()
+_DIRECT_TENSOR_HOOK_PROBED: bool = False
+_DIRECT_TENSOR_HOOK_FNS: Any = None
 HAS_REDUCE_TUPLE_DIM: bool = False
 _REDUCE_TUPLE_DIM_PROBED: bool = False
 HAS_CPU_HALF_KERNELS: bool = False
@@ -1462,6 +1500,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
     "HAS_NUMPY_BRIDGE",
+    "HAS_DIRECT_TENSOR_HOOK_INSTALL",
     "HAS_PER_BACKEND_SEED",
 )
 
@@ -1489,6 +1528,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_NUMPY_BRIDGE_PROBED": ("HAS_NUMPY_BRIDGE",),
     "_TORCH_CPP_EXTENSION_PROBED": ("HAS_TORCH_CPP_EXTENSION",),
     "_MHA_FASTPATH_SWITCH_PROBED": ("HAS_MHA_FASTPATH_SWITCH",),
+    "_DIRECT_TENSOR_HOOK_PROBED": ("HAS_DIRECT_TENSOR_HOOK_INSTALL", "_DIRECT_TENSOR_HOOK_FNS"),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": ("HAS_FUNCOL_GROUP_RESOLUTION", "_FUNCOL_GROUP_RESOLVERS"),
     "_FUNCOL_WAIT_INTERPOSITION_PROBED": (
         "HAS_FUNCOL_WAIT_INTERPOSITION",

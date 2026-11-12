@@ -488,7 +488,7 @@ torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
 torchlens/_utils/_tensor_label.py	1713
-torchlens/_utils/_torch_compat.py	4263
+torchlens/_utils/_torch_compat.py	4262
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	79
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
 torchlens/_utils/_torch_compat.py::probe_c10d_capabilities	73
