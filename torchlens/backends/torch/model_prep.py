@@ -84,6 +84,7 @@ from ._ops_containers import _walk_output_tensors_with_paths
 from ._ops_finalize import _make_layer_log_entry
 from ._ops_interventions import _pop_tensor_live_fire_results
 from ._predicate_forward import _predicate_module_forward
+from ._prepared_cache import install_session_forwards as _install_forwards
 from ._quantized_flops import estimate_quantized_module_forward_flops
 from ._replacement_op_fields import _next_untagged_tensor_label
 from ._replacement_template import _replacement_template_fields
@@ -423,13 +424,13 @@ def _prepare_model_session(
     begin_label_session()
     _state._dir_cache.clear()
     trace._module_capture_ws.exhaustive_module_stack = []
-    _install_session_forward_wrappers(trace, model)
+    _install_forwards(
+        trace, model, _install_session_forward_wrappers, _restore_session_forward_wrappers
+    )
     record_model_identity(trace, model)
 
-    # Track seen module ids to detect shared modules (same module at multiple addresses).
-    _seen_module_ids: dict[int, str] = {}
-    # model.modules() de-duplicates, so a module registered under a second name
-    # is visited once; its alias addresses come from this one bounded walk.
+    _seen_module_ids: dict[int, str] = {}  # finds a module shared at several addresses
+    # A module registered under several names is visited once; its aliases, from one walk.
     _alias_addresses = shared_module_addresses(model)
 
     # One recorded walk per module tree plus the addresses phase 1 cached.
@@ -1926,10 +1927,6 @@ def _cleanup_model_session(
     finally:
         # Restore requires_grad and remove session-scoped param attributes
         restore_session_param_state(trace, model)
-
-    # Session-scoped module tracking data lives in Trace dicts (not on
-    # modules), so no per-module cleanup iteration is needed — the dicts
-    # are GC'd with the Trace.
 
     # Clean tensor labels from model tensors (buffers, etc.)
     _undecorate_model_tensors(trace, model)
