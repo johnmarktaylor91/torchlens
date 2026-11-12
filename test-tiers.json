@@ -6739,13 +6739,10 @@
       ],
       "torchlens/_utils/_tensor_hook_install.py": [
         "tests/test_backward_hook_install.py",
-        "tests/test_capability_probe_lifecycle.py",
-        "tests/test_distributed_c0_core.py",
-        "tests/test_foreign_kernel_boundary.py",
-        "tests/test_lazy_torch_module_reads.py",
+        "tests/test_backward_p1_triggers.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_torch_compat.py",
-        "tests/test_torch_compat_table.py"
+        "tests/test_sdpa_probe_forced_backend.py",
+        "tests/test_torch_compat.py"
       ],
       "torchlens/_utils/_tensor_label.py": [
         "tests/test_deepcopy_capture_identity.py",
