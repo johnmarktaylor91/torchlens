@@ -900,6 +900,14 @@ _PROCESS_CACHES = frozenset(
         # field names and a getter; re-planned whenever the class's field table is a
         # different object, so an entry never goes stale.
         ("torchlens/_utils/_dataclass_replace.py", "_PLANS"),
+        # OpColumns read plan per field name: the facade binding, the class attribute
+        # and its slow-cell types; reused only while the facade binding and the class
+        # attribute are the very same objects, so an entry never goes stale.
+        ("torchlens/_data_classes/_op_columns.py", "_READ_PLANS"),
+        # Row-ingest tables for the last layout (one slot): reused only while the
+        # layout, its names and its field-id map are the very same objects; per-plan
+        # mutable state is built fresh, so an entry never goes stale.
+        ("torchlens/_postprocess/_row_ingest.py", "_LAYOUT_TABLES"),
         # The last trace asked for its payload-window state and that state (one tuple,
         # the trace held by weakref): a one-entry front for _COW_STATE_PTRS_CACHE.
         ("torchlens/backends/torch/wrappers.py", "_COW_LAST_TRACE"),

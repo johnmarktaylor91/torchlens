@@ -144,6 +144,49 @@ def _is_relation_write(name: str, attribute: Any) -> bool:
     return kind in {"relation", "group", "dataflow"} or name in OP_BITSET_VIEW_FIELDS
 
 
+def _stored_attribute(name: str) -> Any:
+    """Return the ``Op`` class attribute serving stored field ``name`` (see ``OpColumns``)."""
+
+    _op_class, op_vars, stored_names, _module = _bound_facade()
+    attr = op_attr(name)
+    if attr not in stored_names:
+        raise ValueError(f"{name!r} is not a stored Op field")
+    return op_vars[attr]
+
+
+#: Stored field name -> ``(facade binding, attribute name, class attribute, slow
+#: classes, sentinel)`` for a field served by a generated descriptor, whose slow cells
+#: its class fixes (``_slow_cell_types``). An entry is used only while the bound
+#: facade and the class attribute are the very objects it was built from; any other
+#: attribute (a property, a ``COLUMN_SLOW_CELLS`` descriptor) is planned on every call.
+_READ_PLANS: dict[str, tuple[Any, str, Any, tuple[type, ...], Any]] = {}
+
+
+def _planned_attribute(name: str) -> tuple[Any, tuple[Any, ...] | None]:
+    """Return ``(class attribute, live plan entry or None)`` for stored field ``name``."""
+
+    entry = _READ_PLANS.get(name)
+    if entry is not None and _OP_FACADE:
+        binding = entry[0]
+        if binding is _OP_FACADE[0] and binding[1].get(entry[1]) is entry[2]:
+            return entry[2], entry
+    return _stored_attribute(name), None
+
+
+def _read_plan(name: str) -> tuple[Any, tuple[type, ...], Any]:
+    """Return ``(class attribute, slow classes, sentinel)`` for stored field ``name``."""
+
+    attribute, entry = _planned_attribute(name)
+    if entry is not None:
+        return attribute, entry[3], entry[4]
+    slow_types, sentinel = _slow_cell_types(name, attribute)
+    binding = _OP_FACADE[0]
+    attribute_type = type(attribute)
+    if attribute_type in binding[3] and attribute_type.__name__ in _DESCRIPTOR_KINDS:
+        _READ_PLANS[name] = (binding, op_attr(name), attribute, slow_types, sentinel)
+    return attribute, slow_types, sentinel
+
+
 class OpColumns:
     """Bound per-field accessors over one ``Op`` row store.
 
@@ -168,11 +211,7 @@ class OpColumns:
         (``has_output_descendant`` by ``_graph_has_output_descendant``).
         """
 
-        _op_class, op_vars, stored_names, _module = _bound_facade()
-        attr = op_attr(name)
-        if attr not in stored_names:
-            raise ValueError(f"{name!r} is not a stored Op field")
-        return op_vars[attr]
+        return _stored_attribute(name)
 
     def _shell(self, row: int) -> Any:
         """Return an ``Op`` facade over ``(self.store, row)`` for exact delegation."""
@@ -208,8 +247,7 @@ class OpColumns:
         op_class, _op_vars, _names, op_module = _bound_facade()
         if name in op_module._INTERCEPTED_READ_FIELDS:
             raise ValueError(f"Op.{name} reads are intercepted by the facade; read the facade")
-        attribute = self._attribute(name)
-        slow_types, sentinel = _slow_cell_types(name, attribute)
+        attribute, slow_types, sentinel = _read_plan(name)
         store = self.store
         fid = store.layout.fid_by_name[name]
         facade_get = attribute.__get__
@@ -265,7 +303,7 @@ class OpColumns:
         raw = _raw_column(self.store, self.store.layout.fid_by_name[name], rows)
         if raw is None:
             return [get(row) for row in rows]
-        slow_types, sentinel = _slow_cell_types(name, self._attribute(name))
+        _attribute, slow_types, sentinel = _read_plan(name)
         # The classes present, then the slow ones among them: one subclass test per
         # class, not per cell (the facade's ``isinstance`` on each cell).
         classes = {value.__class__ for value in raw}
@@ -299,7 +337,7 @@ class OpColumns:
             name in op_module._INTERCEPTED_READ_FIELDS
         ):
             raise ValueError(f"Op.{name} writes are guarded by the facade; write the facade")
-        attribute = self._attribute(name)
+        attribute = _planned_attribute(name)[0]
         relation = _is_relation_write(name, attribute)
         store = self.store
         fid = store.layout.fid_by_name[name]

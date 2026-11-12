@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1838 modules, 726701 lines, 0 modules without a docstring.
+85 packages, 1838 modules, 726797 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26872 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4778 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 145 | 49993 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 145 | 50039 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 64 | 23713 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 64 | 23763 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15068 |
@@ -315,7 +315,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (145 modules, 49993 lines)
+Core data structures for representing a logged forward pass. (145 modules, 50039 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -368,7 +368,7 @@ Core data structures for representing a logged forward pass. (145 modules, 49993
 | `_op_aten` | Per-op ATen-operation accessor for ''Op'' (''CaptureOptions(aten_ops=True)''). | 46 |
 | `_op_bytes` | Theoretical read-once/write-once byte traffic of one operation record. | 197 |
 | `_op_column_scan` | Call-free scans of the ''Op'' row store for passes that act on few ops. | 200 |
-| `_op_columns` | Private row-indexed column view over the ''Op'' row store. | 390 |
+| `_op_columns` | Private row-indexed column view over the ''Op'' row store. | 428 |
 | `_op_container_census` | Alias counts for container-cell pooling: the registry read and the census oracle. | 261 |
 | `_op_copy` | Selective-depth Op clones (''Op._copy_with_shallow_fields'') and the output-node field sets. | 232 |
 | `_op_cost` | Cost derivations for ''Op'': compute record, MACs, FLOPs, arithmetic intensity. | 124 |
@@ -377,7 +377,7 @@ Core data structures for representing a logged forward pass. (145 modules, 49993
 | `_op_grad_fn_link` | The ''Op'' cells that link an op to its ''GradFn'' record, held as keys. | 95 |
 | `_op_grad_stream` | Grad-blob streaming for ''Op._log_tensor_grad''. | 41 |
 | `_op_out_read` | Helpers behind the ''Op.out'' read path: absent-value refusals, the mutation-check state and the synthesized-read warning. | 104 |
-| `_op_output_copy` | The output-node copy: build a synthetic output node from its parent op's row. | 250 |
+| `_op_output_copy` | The output-node copy: build a synthetic output node from its parent op's row. | 258 |
 | `_op_relations` | Relation views for ''Op'': parents, children, siblings, containers, modules. | 321 |
 | `_op_row_containers` | Trace-side op containers that hold row keys instead of ''Op'' records. | 697 |
 | `_op_row_release` | Direct row release for op removal (the facade-husk shortcut). | 109 |
@@ -749,7 +749,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (64 modules, 23713 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (64 modules, 23763 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -791,13 +791,13 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (6
 | `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 150 |
 | `_output_payload` | Whether a model-output row rides its producer's retained payload (HONESTY 13-R1). | 153 |
 | `_parent_params_clear` | Clear the Parameter tensor references ops hold once param finalization is done. | 59 |
-| `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 621 |
+| `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 637 |
 | `_pre_hook_provenance` | Pre-hook provenance of one module call, with raw producer labels finalized. | 70 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 400 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 407 |
 | `_replay_template_cells` | Replay argument templates as a derived on-read family. | 320 |
 | `_root_module_log` | Module-build-data readers for the root module's calls. | 86 |
-| `_row_ingest` | Step-0 ingest of the exhaustive capture rows (capture C2c). | 353 |
+| `_row_ingest` | Step-0 ingest of the exhaustive capture rows (capture C2c). | 387 |
 | `_saved_summary_scan` | Raw row scan behind the saved-output summary refresh. | 254 |
 | `_seal_columns` | Seal-pass column algorithms over the raw row cells of the op store. | 206 |
 | `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 344 |
