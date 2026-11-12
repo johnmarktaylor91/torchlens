@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..._data_classes._site_key import SiteKeyMinter
 from ..._utils._record_group_table import record_member
+from ._source_path_components import _normalize_jax_source_path_component
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -24,8 +25,6 @@ if TYPE_CHECKING:
 
 def _jax_site_components(op_log: Any) -> tuple[tuple[str, ...], str]:
     """Return (iteration-stripped site axis, iteration-qualified instance)."""
-
-    from .jaxpr import _normalize_jax_source_path_component
 
     raw_path = str((getattr(op_log, "annotations", {}) or {}).get("jax_source_path", "") or "")
     containing = tuple(raw_path.split("/")[:-1]) if raw_path else ()
