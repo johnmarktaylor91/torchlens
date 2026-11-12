@@ -19,6 +19,7 @@ import pytest
 
 import torchlens as tl
 from torchlens._data_classes._value_state import payload_facts, value_words
+from torchlens.options import CaptureOptions
 
 _X = np.arange(8, dtype=np.float32).reshape(2, 4) / 8.0 - 0.3
 _W1 = (np.arange(20, dtype=np.float32).reshape(5, 4) / 10.0 - 1.0).astype(np.float32)
@@ -230,12 +231,12 @@ def test_s2_value_dependent_save_keeps_what_torch_keeps(
         pytest.param(tl.preceded_by(tl.where(_hidden_shape)), None, id="preceded_by"),
         pytest.param(
             tl.preceded_by(tl.where(_hidden_shape)),
-            tl.CaptureOptions(lookback=2),
+            CaptureOptions(lookback=2),
             id="preceded_by_lookback",
         ),
         pytest.param(
             tl.where(_hidden_shape) & tl.followed_by(tl.where(_output_shape)),
-            tl.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
+            CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
             id="followed_by",
         ),
     ],
@@ -281,7 +282,7 @@ def test_s4_save_shaping_matches_torch(
 ) -> None:
     """S4: save shaping yields the torch twin's raw and transformed payloads."""
 
-    trace, reference = _run(capture, monkeypatch, capture=tl.CaptureOptions(**options))
+    trace, reference = _run(capture, monkeypatch, capture=CaptureOptions(**options))
     for field in ("out", "transformed_out"):
         assert _kept(trace, field) == _kept(reference, field), field
     assert trace._options_save_raw_activations == reference._options_save_raw_activations
@@ -310,8 +311,8 @@ def test_s4_layer_visualizers_render_the_torch_payloads(
     monkeypatch.setenv("DEV", "PYTHON")
     monkeypatch.chdir(tmp_path)
     selector = tl.where(lambda op: tuple(op.shape or ()) == _OUTPUT)
-    capture(capture=tl.CaptureOptions(layer_visualizers={selector: visualizer(seen["twin"])}))
-    _torch_trace(capture=tl.CaptureOptions(layer_visualizers={selector: visualizer(seen["torch"])}))
+    capture(capture=CaptureOptions(layer_visualizers={selector: visualizer(seen["twin"])}))
+    _torch_trace(capture=CaptureOptions(layer_visualizers={selector: visualizer(seen["torch"])}))
     assert seen["torch"]
     assert set(seen["twin"]) == set(seen["torch"])
 
@@ -326,7 +327,7 @@ def test_s4_save_args_keeps_typed_refusal(capture: Callable[..., Any], monkeypat
 
     monkeypatch.setenv("DEV", "PYTHON")
     with pytest.raises(BackendUnsupportedError):
-        capture(capture=tl.CaptureOptions(save_args=True))
+        capture(capture=CaptureOptions(save_args=True))
 
 
 @pytest.mark.rare
