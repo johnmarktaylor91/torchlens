@@ -31,6 +31,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._capture import gc_hold
 from torchlens._save_budget import SaveBudgetExceededError
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 
 State = tuple[bool, tuple[int, ...], int]
@@ -131,8 +132,13 @@ def test_completed_capture_restores_state_and_holds_inside() -> None:
 )
 def test_failed_and_interrupted_captures_restore_state(exc: BaseException) -> None:
     before = _collector_state()
-    with pytest.raises(type(exc)):
+    # A model's own exception reaches the caller as a TraceCaptureError chained
+    # from it; KeyboardInterrupt propagates as itself.
+    expected = TraceCaptureError if isinstance(exc, Exception) else type(exc)
+    with pytest.raises(expected) as info:
         tl.trace(_Probe(_raise(exc)), torch.randn(2, 4))
+    if expected is TraceCaptureError:
+        assert isinstance(info.value.__cause__, type(exc))
     _assert_restored(before, _collector_state())
     assert _SEEN and _SEEN[0][2] > 10_000
 
