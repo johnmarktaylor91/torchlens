@@ -131,7 +131,7 @@
       "torchlens/_capture/__init__.py": [
         "tests/behaviour/test_hook_passes_restore.py",
         "tests/oracles/test_legacy_peak_memory_bounds.py",
-        "tests/test_capture_int_param_and_storage.py",
+        "tests/oracles/test_legacy_peak_rss_units.py",
         "tests/test_episode_capture.py",
         "tests/test_host_peak_without_vmhwm_reset.py",
         "tests/test_peak_memory_counter_lag.py",
@@ -10771,7 +10771,6 @@
         "tests/test_arg_hash_determinism.py",
         "tests/test_backward.py",
         "tests/test_backward_grad_integrity.py",
-        "tests/test_capture_int_param_and_storage.py",
         "tests/test_implicit_boundary_tightening.py",
         "tests/test_param_ref_pairing.py",
         "tests/test_parameter_inplace_mutation.py"
