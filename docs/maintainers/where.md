@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1839 modules, 727214 lines, 0 modules without a docstring.
+85 packages, 1839 modules, 727297 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64652 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64735 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1540,7 +1540,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (161 modules, 64652 lines)
+Torch backend implementation package for TorchLens capture. (161 modules, 64735 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1618,7 +1618,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `_ops_arg_slots` | One per-op snapshot of the tensor argument slots the shared-fields derivations read. | 294 |
 | `_ops_argument_fields` | Argument family of the shared op fields: argument scan, slot snapshot and templates. | 401 |
 | `_ops_arguments` | Argument templates, edge uses, and tensor provenance. | 799 |
-| `_ops_autograd` | Autograd saved-tensor statistics and container snapshots. | 680 |
+| `_ops_autograd` | Autograd saved-tensor statistics and container snapshots. | 763 |
 | `_ops_call_site_fields` | Call-site family of the shared op fields: the code context and the call-site chain. | 404 |
 | `_ops_capture_records` | Ancestor storage, producer policy, and exhaustive record freezing. | 570 |
 | `_ops_container_base` | Exhaustive drafts and foundational output-container helpers. | 509 |
