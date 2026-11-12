@@ -529,59 +529,6 @@ def witness_from_slots(
         retire_arg_slots(trace)
 
 
-def _planned_witness(
-    trace: Trace,
-    call: _SlotCall,
-    parent_arg_positions: dict[str, dict[Any, str]],
-    recorded_parent_params: list[torch.nn.Parameter],
-) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
-    """Return the witness of a flat call whose every slot is attributed, else ``None``.
-
-    On a flat layout the witness's tree walk visits exactly the planned tensor
-    slots, so each slot gets the checks ``visit_tensor`` applies, read from the
-    same snapshot facts. The verdict is ``((), ())`` only when no slot would be
-    appended; any slot that would be (or has no snapshot fact) returns ``None`` and
-    the caller runs the full witness. A call that mutates its receiver always runs
-    the full witness (its receiver check reads more than the slot facts).
-    """
-
-    layout = call.layout
-    if layout.mutates_receiver is None:
-        func_name = call.func_name
-        layout.mutates_receiver = (
-            _is_inplace_augmented_assignment_dunder(func_name)
-            or func_name in _SETTER_MUTATION_FUNC_NAMES
-            or (func_name.endswith("_") and not func_name.startswith("__"))
-        )
-    if layout.mutates_receiver:
-        return None
-    args, kwargs = call.args, call.kwargs
-    facts = arg_slot_facts(trace, args, kwargs)
-    recorded_parent_labels: set[str] | None = None
-    for slot in layout.tensor_slots:
-        value = args[slot[1]] if slot[0] == "args" else kwargs[slot[1]]
-        fact = facts.get(slot)  # ``slot_fact`` inline: the snapshot slot of this very value
-        if fact is None or fact.value_id != id(value) or not fact.known_provenance:
-            return None
-        if fact.param_unmutated:
-            if fact.param_validated and not any(value is p for p in recorded_parent_params):
-                return None
-            continue
-        provenance_labels = fact.session_parent_labels
-        if not provenance_labels:
-            continue
-        if recorded_parent_labels is None:
-            recorded_parent_labels = {
-                *parent_arg_positions["args"].values(),
-                *parent_arg_positions["kwargs"].values(),
-            }
-        if _dropped_edge_at_slot(
-            provenance_labels, slot, parent_arg_positions, recorded_parent_labels
-        ):
-            return None
-    return (), ()
-
-
 #: Returned by :func:`commit_admitted` when the call needs the general post-call body.
 DECLINED = object()
 _TENSOR = torch.Tensor
@@ -766,6 +713,7 @@ def _propagate_mutation_label_to_storage_aliases(
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from . import _call_plan  # noqa: E402
+from ._arg_observation import _planned_witness  # noqa: E402
 from ._completeness_origins import internal_scalar_read  # noqa: E402
 from ._ops_arguments import (  # noqa: E402
     _session_validated_parameter,

@@ -6,7 +6,6 @@ changing how a call's arguments are scanned edits this module alone.
 :func:`_scan_call_arguments` runs inside the shared-fields builder's alias binding.
 """
 
-import operator
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -31,6 +30,7 @@ from ..._utils._tensor_label import (
 )
 from ..._utils._tl_collective import _async_collective_elem
 from ..._utils.introspection import get_arg_tensors_for_resolution
+from ._arg_observation import slot_parent_labels, snapshot_flat_slots
 from ._call_layout import planned_tensor_items
 from ._ops_arg_slots import (
     _ArgSlot,
@@ -43,7 +43,6 @@ from ._ops_arg_slots import (
     _SnapshotScope,
     _storage_intact,
     _tensor_items,
-    parents_from_slots,
     templates_requested,
 )
 from .buffer_writes import (
@@ -72,8 +71,6 @@ _PARAMETER = torch.nn.Parameter
 _TENSOR = torch.Tensor
 #: Exact types that are never an ``AsyncCollectiveTensor`` (a strict Tensor subclass).
 _PLAIN_TENSOR_TYPES = frozenset({_TENSOR, _PARAMETER})
-#: The tensor of a ``(kind, key, tensor, template_visited)`` slot item.
-_ITEM_VALUE = operator.itemgetter(2)
 
 
 def _scan_call_arguments(
@@ -100,19 +97,23 @@ def _scan_call_arguments(
         tensors_to_resolve = get_arg_tensors_for_resolution(args, kwargs)
     else:
         arg_tensors, arg_parameters, tensors_to_resolve = scanned
+    # The gated labels read here, handed to the snapshot while no source is logged.
+    reads: dict[int, str] | None = {}
     # Inline, not a helper: once per op (tests/test_capture_row_commit_cost.py pins calls).
     for tensor in tensors_to_resolve:
         kind = type(tensor)
-        if (
-            kind is _PARAMETER
-            or (
-                getattr(tensor, "_is_param", False)
-                if kind is _TENSOR
-                else isinstance(tensor, _PARAMETER)
-            )
-            or get_tensor_label(tensor) is not None
+        if kind is _PARAMETER or (
+            getattr(tensor, "_is_param", False)
+            if kind is _TENSOR
+            else isinstance(tensor, _PARAMETER)
         ):
             continue
+        label = get_tensor_label(tensor)
+        if label is not None:
+            if reads is not None:
+                reads[id(tensor)] = label
+            continue
+        reads = None
         if func_name in _RECEIVER_REBIND_NAMES and _repin_rebound_receiver(self, args, tensor):
             continue
         # Never source-log a "buffer" off a raw static stamp (stale cross-capture, or
@@ -123,9 +124,13 @@ def _scan_call_arguments(
         else:
             log_closure_constant_if_known(self, tensor)
 
-    slots = snapshot_arg_slots(self, call, arg_tensors)
-    parent_layer_labels = list(dict.fromkeys(parents_from_slots(self, slots, arg_tensors)))
-    return arg_tensors, arg_parameters, parent_layer_labels
+    slots = snapshot_arg_slots(self, call, arg_tensors, reads)
+    parents = slot_parent_labels(self, slots, arg_tensors)
+    return (
+        arg_tensors,
+        arg_parameters,
+        parents if len(parents) < 2 else list(dict.fromkeys(parents)),
+    )
 
 
 #: ``(normalized name, argument types, keyword names, keyword types) -> spec`` of the
@@ -287,12 +292,16 @@ def _object_facts(trace: "Trace", value: Any, scope: _SnapshotScope) -> tuple[An
 
 
 def snapshot_arg_slots(
-    trace: "Trace", call: _SlotCall, arg_tensors: list[torch.Tensor]
+    trace: "Trace",
+    call: _SlotCall,
+    arg_tensors: list[torch.Tensor],
+    reads: dict[int, str] | None = None,
 ) -> tuple[_ArgSlot, ...]:
     """Walk the call's arguments once and record every tensor slot's derivation reads.
 
     Records the slots as the current op's context (read by the parent-position
-    recorder and the witness) and returns them in walk order.
+    recorder and the witness) and returns them in walk order. ``reads`` holds gated
+    labels the caller read with no source logged since (flat calls reuse them).
     """
 
     layout = call.layout
@@ -300,18 +309,17 @@ def snapshot_arg_slots(
     workspace = _peek_raw_graph_workspace(trace)
     if not items or workspace is None:
         return ()
+    if layout is not None:
+        flat = snapshot_flat_slots(
+            trace, workspace, call, (items, arg_tensors, reads), _object_facts
+        )
+        if flat is not None:
+            return flat
     # Built with C-level set and map calls, not comprehensions: once per op.
-    clear_ids = set(map(id, arg_tensors))
-    # A flat layout without an ``out`` keyword has no ``out=`` destination.
-    if layout is None or layout.has_out:
-        clear_ids |= _out_destination_ids(call.kwargs)
-    if not templates_requested(trace):
-        visited_ids: set[int] = set()
-    elif layout is None:
-        visited_ids = {id(value) for _, _, value, seen in items if seen}
-    else:
-        # Every tensor of a flat call is a top-level value the template walk reaches.
-        visited_ids = set(map(id, map(_ITEM_VALUE, items)))
+    clear_ids = set(map(id, arg_tensors)) | _out_destination_ids(call.kwargs)
+    visited_ids = (
+        {id(value) for _, _, value, seen in items if seen} if templates_requested(trace) else set()
+    )
     scope = _SnapshotScope(trace.capture_events.live_index.by_raw_label, clear_ids, visited_ids)
     facts: dict[int, tuple[Any, ...]] = {}
     slot_list = []
