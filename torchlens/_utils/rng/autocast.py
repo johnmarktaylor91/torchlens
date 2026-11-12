@@ -43,28 +43,23 @@ def log_current_autocast_state(trace: Any = None) -> dict[str, dict[str, Any]]:
             their tokens are, and the freeze's container pooling keys the
             snapshot by it instead of walking it (``_trace_core.pools.ContainerTokens``).
             Nothing registers without a trace, on the torch 2.1 to 2.3 path, or
-            once the trace's freeze has taken the table.
+            once the trace's freeze has taken the table. A snapshot equal to one
+            already registered under the same trace is that registered object
+            (the freeze pools equal snapshots into one object anyway); the state
+            itself is read live on every call.
 
     Returns:
         Dict mapping device name to ``{"enabled": bool, "dtype": torch.dtype}``.
     """
-    state: dict[str, dict[str, Any]] = {}
-    # record the grad/inference execution mode alongside autocast in the
-    # same per-op KEEP field, under a reserved non-device key. ``enabled`` stays False
-    # so every autocast consumer (AutocastRestore) skips it structurally.
-    state["__execution__"] = {
-        "enabled": False,
-        "dtype": None,
-        "grad_enabled": bool(torch.is_grad_enabled()),
-        "inference_mode": bool(torch.is_inference_mode_enabled()),
-    }
+    grad_enabled = bool(torch.is_grad_enabled())
+    inference_mode = bool(torch.is_inference_mode_enabled())
     is_enabled = _IS_ENABLED
     if is_enabled is None:
+        state = _execution_only_state(grad_enabled, inference_mode)
         _legacy_device_states(state)
         return state
     get_dtype = _GET_DTYPE
-    execution = state["__execution__"]
-    token: tuple[Any, ...] = (execution["grad_enabled"], execution["inference_mode"])
+    token: tuple[Any, ...] = (grad_enabled, inference_mode)
     for device in _AUTOCAST_DEVICES:
         try:
             # torch>=2.4: the same two calls the version-neutral shim makes.
@@ -73,20 +68,65 @@ def log_current_autocast_state(trace: Any = None) -> dict[str, dict[str, Any]]:
         except (RuntimeError, TypeError):
             # Device doesn't support autocast queries (e.g. no CUDA).
             continue
-        state[device] = {"enabled": enabled, "dtype": dtype}
         token += (device, enabled, dtype)
-    if trace is not None:
-        try:
-            workspace = trace._wrapper_runtime_ws
-        except AttributeError:
-            return state
-        table = workspace.container_tokens
-        if table is None:
-            table = workspace.container_tokens = {}
-        elif table is False:
-            return state
+    table = _token_table(trace)
+    if table is not None:
+        # The trace already holds a snapshot with this content: hand it out again. The
+        # table entry proves the remembered snapshot was registered under THIS trace
+        # (the table holds it, so its id is not reused while the entry exists).
+        kept = _KEPT_SNAPSHOTS.get(token)
+        if kept is not None:
+            entry = table.get(id(kept))
+            if entry is not None and entry[0] is kept:
+                return kept
+    state = _execution_only_state(grad_enabled, inference_mode)
+    for index in range(2, len(token), 3):
+        state[token[index]] = {"enabled": token[index + 1], "dtype": token[index + 2]}
+    if table is not None:
         table[id(state)] = (state, token, TOKEN_INERT)
+        _KEPT_SNAPSHOTS[token] = state
     return state
+
+
+#: The latest registered snapshot per content token. A snapshot is only handed out again
+#: under the trace whose token table holds it; the tokens are few (execution mode and the
+#: per-device autocast settings), so the map stays small.
+_KEPT_SNAPSHOTS: dict[tuple[Any, ...], dict[str, dict[str, Any]]] = {}
+
+
+def _execution_only_state(grad_enabled: bool, inference_mode: bool) -> dict[str, dict[str, Any]]:
+    """Return a snapshot holding only the reserved ``__execution__`` entry.
+
+    The grad/inference execution mode rides in the same per-op KEEP field as autocast,
+    under a reserved non-device key. ``enabled`` stays False so every autocast consumer
+    (AutocastRestore) skips it structurally.
+    """
+
+    return {
+        "__execution__": {
+            "enabled": False,
+            "dtype": None,
+            "grad_enabled": grad_enabled,
+            "inference_mode": inference_mode,
+        }
+    }
+
+
+def _token_table(trace: Any) -> dict[int, Any] | None:
+    """Return ``trace``'s container-token table, creating it; ``None`` when nothing registers."""
+
+    if trace is None:
+        return None
+    try:
+        workspace = trace._wrapper_runtime_ws
+    except AttributeError:
+        return None
+    table = workspace.container_tokens
+    if table is None:
+        table = workspace.container_tokens = {}
+    elif table is False:
+        return None
+    return table
 
 
 def _legacy_device_states(state: dict[str, dict[str, Any]]) -> None:
