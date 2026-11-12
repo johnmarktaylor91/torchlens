@@ -42,7 +42,8 @@ LITERAL_PRODUCER_OPS: frozenset[str] = frozenset(
 _MAX_WALK_DEPTH = 4
 
 #: Layer attributes the walk never treats as constant sources: parameters are
-#: their own leaf kind, buffers belong to the module tree (left as before),
+#: their own leaf kind, registered buffers are recorded as ``buffer`` sources
+#: (``source_leaves``),
 #: and sublayers are walked as layers.
 _SKIPPED_LAYER_ATTRIBUTES = frozenset({"_parameters", "_buffers", "_sub_layers"})
 
