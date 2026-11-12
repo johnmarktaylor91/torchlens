@@ -53,6 +53,9 @@ class _CounterfactualStateGuard:
         ]
         self._rng: dict[str, Any] = _snapshot_rng()
         self._fork: Any = None
+        # Forward keyword inputs of the baselines; every patched rerun reuses them so the
+        # counterfactual runs the same code path (set by ``patching._baseline_traces``).
+        self.forward_kwargs: dict[Any, Any] | None = None
 
     def open(self) -> None:
         """Enter a forked-RNG scope so the caller's global RNG is preserved."""

@@ -12,9 +12,8 @@ from torch import nn
 from .. import _user_public_impls
 from .._selection.selectors import facet
 from ..errors._base import TorchLensError, TorchLensWarning
-from ..intervention._trace_run import rerun_in_place
 from ..options import _CAPTURE_FIELDS, CaptureOptions
-from ._input_patching import _model_input_home_role, _patch_input_leaf
+from ._input_patching import _model_input_home_role, _patch_input_leaf, _rerun_with_inputs
 from ._state_guard import _CounterfactualStateGuard, _teardown
 from .facets import Facet, MissingGrad
 from .recipes._helpers import modules_with_facet as _modules_with_facet
@@ -460,6 +459,7 @@ def _baseline_traces(
     """
 
     kwargs = _trace_kwargs(trace_kwargs, save_grads=save_grads)
+    guard.forward_kwargs = kwargs.get("input_kwargs")
 
     def _capture(inputs: Any) -> Callable[[], Any]:
         """Return a zero-argument capture that traces ``model`` on ``inputs``."""
@@ -841,7 +841,7 @@ def _run_patch(
         log = corrupted_log.fork(name)
         log._attach_hooks(selector, tracked_hook)
         guard.reset()
-        return rerun_in_place(log, model, corrupted_input)
+        return _rerun_with_inputs(log, model, corrupted_input, guard.forward_kwargs)
 
     patched_log = _capture_by_reference(model, guard, _capture)
     try:
@@ -903,7 +903,7 @@ def _run_input_patch(
         """Fork the corrupted trace and rerun it on the patched input from the pristine state."""
         log = corrupted_log.fork(name)
         guard.reset()
-        return rerun_in_place(log, model, patched_input)
+        return _rerun_with_inputs(log, model, patched_input, guard.forward_kwargs)
 
     return _capture_by_reference(model, guard, _capture)
 

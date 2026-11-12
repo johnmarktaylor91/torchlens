@@ -5,6 +5,10 @@ model input is patched by rebuilding the input tree with the leaf at the
 capture-recorded input address (``Op.io_role``) replaced, then rerunning.
 :mod:`torchlens._semantic.patching` calls ``_model_input_home_role`` to detect
 such a facet and ``_patch_input_leaf`` to rebuild the input.
+
+Every patched rerun (hook path or input path) goes through ``_rerun_with_inputs``,
+which hands the rerun the same forward keyword inputs (``trace_kwargs["input_kwargs"]``)
+the clean and corrupted baselines were traced with.
 """
 
 from __future__ import annotations
@@ -16,11 +20,51 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._input_coerce import _coerce_inputs
+from .._input_route import _RoutedInputs
 from .._record_type import record_type
 from .._utils._record_group_table import record_member
 from .._utils.arg_handling import normalize_input_args
 from .._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
 from ..backends.torch.backend import _get_input_arg_names
+from ..intervention._trace_run import rerun_in_place
+
+
+def _rerun_with_inputs(
+    log: Any, model: nn.Module, inputs: Any, input_kwargs: dict[Any, Any] | None
+) -> Any:
+    """Rerun ``log`` in place on ``inputs`` with the baselines' forward keyword inputs.
+
+    The rerun entry takes one input slot and coerces it with no keyword inputs, so a
+    patched rerun used to drop the ``input_kwargs`` the baselines were traced with
+    (``use_cache=False`` on a Hugging Face LM): the forward took another code path,
+    diverged from the corrupted graph, and the patch hook resolved to no site. When
+    keyword inputs are present they ride a :class:`_RoutedInputs` carrier, coerced as
+    the capture door coerces them; ``log.input`` keeps the caller's input as before.
+
+    Parameters
+    ----------
+    log:
+        Fork of the corrupted baseline, rerun in place.
+    model:
+        Model to execute.
+    inputs:
+        The (possibly patched) positional input of the corrupted run.
+    input_kwargs:
+        Forward keyword inputs of the baselines, or ``None``.
+
+    Returns
+    -------
+    Any
+        The rerun trace.
+    """
+
+    if not input_kwargs:
+        return rerun_in_place(log, model, inputs)
+    routed = _RoutedInputs(*_coerce_inputs(model, inputs, dict(input_kwargs)))
+    result = rerun_in_place(log, model, routed)
+    result.input = inputs
+    return result
 
 
 def _input_op_by_label(log: Any, label: str) -> Any | None:
