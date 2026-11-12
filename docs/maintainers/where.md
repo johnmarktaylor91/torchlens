@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1828 modules, 725092 lines, 0 modules without a docstring.
+85 packages, 1830 modules, 725437 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 58 | 22712 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 60 | 23057 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15068 |
@@ -749,7 +749,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (58 modules, 22712 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (60 modules, 23057 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -758,6 +758,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `_branch_attribution` | Frame-level conditional branch attribution for one op's call stack. | 157 |
 | `_branch_source` | Source text readers and source-range predicates for the conditional AST indexer. | 187 |
 | `_buffer_addresses` | Buffer-address resolution for postprocess step 0. | 297 |
+| `_buffer_fixup` | Step 6 body: connect buffer sources, merge re-logged reads, number buffer passes. | 181 |
 | `_buffer_source_wiring` | Step 6 buffer-source wiring and buffer value comparison for ''control_flow''. | 124 |
 | `_call_site_contract` | The call-site grouping contract (''callsite_v1'', ''callsite_v2'') and its in-memory evidence. | 133 |
 | `_column_passes` | Postprocess pass bodies that read and write ''Op'' fields through column views. | 76 |
@@ -796,15 +797,16 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (5
 | `_root_module_log` | Module-build-data readers for the root module's calls. | 86 |
 | `_row_ingest` | Step-0 ingest of the exhaustive capture rows (capture C2c). | 353 |
 | `_saved_summary_scan` | Raw row scan behind the saved-output summary refresh. | 254 |
+| `_seal_columns` | Seal-pass column algorithms over the raw row cells of the op store. | 202 |
 | `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 344 |
 | `_site_join` | Site-key JOIN (guarded, witness-corroborated, verdict-tiered) and the | 294 |
 | `_site_key` | Re-export shim: the site-key minter moved to :mod:'torchlens._data_classes._site_key'. | 34 |
 | `_step7_rows` | Step 7 over op rows: site keys, call-site grouping, pass numbers and the contract. | 385 |
 | `_streamed_tensor_types` | Wire tensor identity and dtype lookup for streamed-reference finalization. | 51 |
 | `ast_branches` | AST indexing for boolean-context classification and branch attribution. | 2202 |
-| `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 1045 |
+| `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 1002 |
 | `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1427 |
-| `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 739 |
+| `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 744 |
 | `incremental` | Opt-in incremental enrichments for fastlog recordings. | 87 |
 | `labeling` | Steps 8, 9 and 11: Label mapping, final info logging, renaming, and lookup keys. | 866 |
 | `loop_detection` | Step 7: Adapt Trace state to the backend-neutral recurrence grouper. | 509 |
