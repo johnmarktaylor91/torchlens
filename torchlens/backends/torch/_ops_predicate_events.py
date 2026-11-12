@@ -399,6 +399,14 @@ def _parent_arg_positions(
     slots = current_arg_slots(self, args, kwargs) if parent_records else None
     if slots is None:
         return _locate_parent_tensors_in_args(self, parent_records, args, kwargs)
+    if len(parent_records) == 1:
+        # ``slot_positions_by_label`` for one label: its slots in slot order.
+        label = parent_records[0].label_raw
+        positions: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
+        for slot in slots:
+            if slot.label == label:
+                positions[slot.kind][slot.key] = label
+        return positions
     return slot_positions_by_label(slots, [record.label_raw for record in parent_records])
 
 

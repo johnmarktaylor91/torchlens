@@ -55,8 +55,23 @@ ANCESTRY_NAMES = frozenset(
 def defer_ancestry(fields: dict[str, Any], parent_records: list[Any]) -> None:
     """Record ``parent_records`` for a later resolve and set the call-time input bit."""
 
-    fields[ANCESTRY_PARENTS] = tuple(parent_records)
-    fields[HAS_INPUT_ANCESTOR] = any(map(has_input_ancestor, parent_records))
+    parents = tuple(parent_records)
+    fields[ANCESTRY_PARENTS] = parents
+    # ``has_input_ancestor`` inlined: this runs at every op's call.
+    for parent in parents:
+        pending = parent._pending if type(parent) is _RowOpRecord else None
+        if pending is not None and parent._record is None:
+            parent_fields = pending.fields
+            if ANCESTRY_PARENTS in parent_fields:
+                if parent_fields[HAS_INPUT_ANCESTOR]:
+                    break
+                continue
+        if parent.input_ancestors:
+            break
+    else:
+        fields[HAS_INPUT_ANCESTOR] = False
+        return
+    fields[HAS_INPUT_ANCESTOR] = True
 
 
 def is_deferred(fields: Mapping[str, Any]) -> bool:
