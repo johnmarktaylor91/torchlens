@@ -201,7 +201,7 @@ def test_capture_started_with_the_collector_disabled_leaves_it_alone() -> None:
     ("user", "inside"),
     [
         ((123, 5, 7), (gc_hold.HOLD_GEN0_THRESHOLD, 5, 7)),
-        ((50_000, 4, 3), (50_000, 4, 3)),
+        ((200_000, 4, 3), (200_000, 4, 3)),
         ((0, 10, 10), (0, 10, 10)),
     ],
     ids=["low_raised", "high_kept", "zero_kept"],
@@ -235,12 +235,14 @@ def test_release_without_hold_is_harmless() -> None:
 # Cyclic garbage stays bounded during a capture
 # ---------------------------------------------------------------------------
 
-_JUNK_BYTES = 64 * 1024
-_CYCLIC_OPS = 3000
-#: Stated peak: at most this many garbage cycles (64 KiB each, 64 MiB in all)
-#: alive at once during a 3000-op capture. Without collections during the
-#: capture all 3000 (188 MiB) would be alive at its end.
-_CYCLIC_PEAK = 1000
+_JUNK_BYTES = 16 * 1024
+_CYCLIC_OPS = 6000
+#: Stated peak: at most this many garbage cycles (16 KiB each, 40 MiB in all)
+#: alive at once during a 6000-op capture. Without collections during the
+#: capture all 6000 (94 MiB) would be alive at its end. A capture makes about
+#: 50 tracked objects per op, so the hold's threshold runs a collection about
+#: every 2000 ops.
+_CYCLIC_PEAK = 2500
 
 
 class _Junk:

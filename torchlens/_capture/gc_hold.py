@@ -43,10 +43,13 @@ from __future__ import annotations
 import gc
 import threading
 
-#: Generation-0 threshold while a capture runs (CPython's default is 700).
-#: Applied only when the collector is enabled and the user's own threshold is
-#: lower and nonzero (zero means automatic collection is off).
-HOLD_GEN0_THRESHOLD = 10_000
+#: Generation-0 threshold while a capture runs (CPython's default is 700); the
+#: same value the stats fast loop uses. A capture makes about 50 tracked
+#: objects per op, so a collection runs about every 2000 ops: small captures
+#: see none, and a model that makes cyclic garbage on every op still has it
+#: collected. Applied only when the collector is enabled and the user's own
+#: threshold is lower and nonzero (zero means automatic collection is off).
+HOLD_GEN0_THRESHOLD = 100_000
 
 
 class _HoldState:
