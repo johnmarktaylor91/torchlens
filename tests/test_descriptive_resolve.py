@@ -158,7 +158,9 @@ def test_resolvers_on_recorded_inputs_give_the_call_time_values(spied) -> None:
     tokens = torch.tensor([[1, 2, 3]])
     trace = tl.trace(model, (x, tokens))
     stored_flops = sorted(
-        (op.func_name, op.flops_forward) for op in trace._layer_list if op.flops_forward is not None
+        (op.func_name, op.cost.flops_forward)
+        for op in trace._layer_list
+        if op.cost.flops_forward is not None
     )
     # Mutate and free everything the call saw.
     model.size[0] = 99
