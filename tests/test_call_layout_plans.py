@@ -213,7 +213,7 @@ def _fields(model_cls: type[nn.Module]) -> list[tuple[Any, ...]]:
             _norm_template(op.call.kwargs_template),
             op.graph.equivalence_class,
             [tuple(param.shape) for param in op.graph.parent_params],
-            repr(op.func_config),
+            repr(op.call.config),
         )
         for index, op in enumerate(trace.ops)
     ]
