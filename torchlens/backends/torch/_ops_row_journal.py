@@ -44,7 +44,7 @@ from ._ops_freeze_refs import (
     _tensor_ref_from_facts,
 )
 from ._ops_row_cells import _ANCESTRY_DEFAULT
-from ._relations_resolve import ANCESTRY_NAMES, is_deferred, resolve_fields
+from ._relations_resolve import ANCESTRY_NAMES, ANCESTRY_PARENTS, is_deferred, resolve_fields
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -330,7 +330,7 @@ def _fill_items(pending: _PendingRow, fields: dict[str, Any]) -> None:
     pending["raw_index"] = fields["raw_index"]
     pending["func_call_id"] = fields["func_call_id"]
     pending["kind"] = "source" if fields["is_input"] or fields["is_buffer"] else "op"
-    if not is_deferred(fields):
+    if ANCESTRY_PARENTS not in fields:  # ``is_deferred`` inlined: no call in the commit
         _fill_ancestry(pending, fields)
     if "backend_semantics" in fields:
         semantics = fields["backend_semantics"]
