@@ -9860,6 +9860,15 @@
         "tests/test_torch_func_transforms.py",
         "tests/test_wrap_torch_warm_cache.py"
       ],
+      "torchlens/backends/torch/_arg_hash.py": [
+        "tests/test_arg_hash_determinism.py",
+        "tests/test_backward.py",
+        "tests/test_backward_grad_integrity.py",
+        "tests/test_capture_int_param_and_storage.py",
+        "tests/test_implicit_boundary_tightening.py",
+        "tests/test_param_ref_pairing.py",
+        "tests/test_parameter_inplace_mutation.py"
+      ],
       "torchlens/backends/torch/_args_template_cache.py": [
         "tests/test_args_template_plans.py",
         "tests/test_capture_unification_p3a.py",
@@ -10563,12 +10572,12 @@
         "tests/test_validation.py"
       ],
       "torchlens/backends/torch/_ops_descriptive_fields.py": [
-        "tests/test_argpos_hardening.py",
         "tests/test_capture_unification_p3a.py",
-        "tests/test_distributed_honesty.py",
         "tests/test_livecheck_module_exit_only.py",
+        "tests/test_op_row_cells.py",
         "tests/test_r28_validation_identity_witness.py",
         "tests/test_r29_capval_hardening.py",
+        "tests/test_scaling_ladder.py",
         "tests/test_valmem5_saved_value_aliases.py",
         "tests/test_view_write_call_alias_edges.py"
       ],
@@ -10629,6 +10638,16 @@
         "tests/test_fresh_payload_path.py",
         "tests/test_loop_boundary_hardening.py",
         "tests/test_loop_grouping_adapter.py"
+      ],
+      "torchlens/backends/torch/_ops_function_family.py": [
+        "tests/test_argpos_hardening.py",
+        "tests/test_capture_targets.py",
+        "tests/test_distributed_honesty.py",
+        "tests/test_fresh_payload_path.py",
+        "tests/test_livecheck_module_exit_only.py",
+        "tests/test_r28_validation_identity_witness.py",
+        "tests/test_r29_capval_hardening.py",
+        "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/backends/torch/_ops_interventions.py": [
         "tests/test_argpos_hardening.py",
