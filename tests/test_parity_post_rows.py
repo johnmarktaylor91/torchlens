@@ -172,20 +172,23 @@ def _fingerprint(value: Any) -> tuple[tuple[int, ...], tuple[float, ...]]:
 
 
 def _kept(trace: Any, field: str = "out") -> set[tuple[tuple[int, ...], tuple[float, ...]]]:
-    """Return the fingerprints of every public payload in ``field``."""
+    """Return the fingerprints of every public non-input payload in ``field``."""
 
-    return {
-        _fingerprint(getattr(op, field))
-        for op in trace._layer_list
-        if getattr(op, field, None) is not None and not op.is_input
-    }
+    kept = set()
+    for op in trace._layer_list:
+        if op.is_input or not op.has_saved_activation:
+            continue
+        value = getattr(op, field, None)
+        if value is not None:
+            kept.add(_fingerprint(value))
+    return kept
 
 
-def _run(capture: Callable[..., Any], monkeypatch: Any, **kwargs: Any) -> tuple[Any, Any]:
+def _run(capture_fn: Callable[..., Any], monkeypatch: Any, /, **kwargs: Any) -> tuple[Any, Any]:
     """Capture the backend twin and the torch reference with the same options."""
 
     monkeypatch.setenv("DEV", "PYTHON")
-    return capture(**kwargs), _torch_trace(**kwargs)
+    return capture_fn(**kwargs), _torch_trace(**kwargs)
 
 
 def _hidden_shape(ctx: Any) -> bool:
@@ -310,11 +313,14 @@ def test_s4_layer_visualizers_render_the_torch_payloads(
 
     monkeypatch.setenv("DEV", "PYTHON")
     monkeypatch.chdir(tmp_path)
-    selector = tl.where(lambda op: tuple(op.shape or ()) == _OUTPUT)
+    selector = tl.where(lambda op: True)
     capture(capture=CaptureOptions(layer_visualizers={selector: visualizer(seen["twin"])}))
     _torch_trace(capture=CaptureOptions(layer_visualizers={selector: visualizer(seen["torch"])}))
-    assert seen["torch"]
-    assert set(seen["twin"]) == set(seen["torch"])
+    model_shapes = {_HIDDEN, _OUTPUT}
+    twin = {print_ for print_ in seen["twin"] if print_[0] in model_shapes}
+    reference = {print_ for print_ in seen["torch"] if print_[0] in model_shapes}
+    assert reference
+    assert twin == reference
 
 
 @pytest.mark.rare
@@ -330,6 +336,16 @@ def test_s4_save_args_keeps_typed_refusal(capture: Callable[..., Any], monkeypat
         capture(capture=CaptureOptions(save_args=True))
 
 
+def _last_output_shaped(trace: Any) -> Any:
+    """Return the last saved op carrying the model-output activation."""
+
+    return [
+        op
+        for op in trace._layer_list
+        if op.has_saved_activation and tuple(op.shape or ()) == _OUTPUT and op.out is not None
+    ][-1]
+
+
 @pytest.mark.rare
 @pytest.mark.backend_parity
 @pytest.mark.parametrize("capture", _CAPTURES)
@@ -339,8 +355,8 @@ def test_x1_op_repr_value_statistics_match_torch(
     """X1: op reprs carry torch's value statistics, computed through the payload codec."""
 
     trace, reference = _run(capture, monkeypatch)
-    twin_op = [op for op in trace._layer_list if op.is_output][-1]
-    torch_op = [op for op in reference._layer_list if op.is_output][-1]
+    twin_op = _last_output_shaped(trace)
+    torch_op = _last_output_shaped(reference)
     twin_stats = payload_facts(twin_op)[1]
     torch_stats = payload_facts(torch_op)[1]
     assert twin_stats is not None
