@@ -506,14 +506,6 @@ PIPELINE: tuple[PipelineStep, ...] = (
         postcondition=ex._hash_graph_shape_violation,
     ),
     PipelineStep(
-        name="mark_tracing_finished",
-        module="_postprocess.finalization",
-        run=ex._run_mark_tracing_finished,
-        reads=("_layer_dict_main_keys",),
-        writes=("_layer_list", "_tracing_finished"),
-        postcondition=ex._mark_tracing_finished_violation,
-    ),
-    PipelineStep(
         name="adopt_containers_and_drop_workspaces",
         module="_postprocess._executor",
         run=ex._run_adopt_containers_and_drop_workspaces,
@@ -526,6 +518,21 @@ PIPELINE: tuple[PipelineStep, ...] = (
             "_raw_graph_ws",
             "_wrapper_runtime_ws",
         ),
+    ),
+    PipelineStep(
+        name="seal_op_store",
+        module="_postprocess",
+        run=ex._run_seal_op_store,
+        reads=("_layer_list", "_trace_core"),
+        writes=("_trace_core",),
+    ),
+    PipelineStep(
+        name="mark_tracing_finished",
+        module="_postprocess.finalization",
+        run=ex._run_mark_tracing_finished,
+        reads=("_layer_dict_main_keys",),
+        writes=("_layer_list", "_tracing_finished"),
+        postcondition=ex._mark_tracing_finished_violation,
     ),
     PipelineStep(
         name="finalize_streamed_bundle",

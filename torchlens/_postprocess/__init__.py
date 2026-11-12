@@ -12,7 +12,8 @@ stable contract steps 0-20, split into thematic submodules:
 - labeling (Steps 8-11): Generate final human-readable labels, rename all internal
   references, trim/reorder fields, build lookup keys, and finalize retained layer lists.
 - finalization (Steps 12-20): Undecorate saved tensors, log timing, finalize
-  ParamLogs, build Layer/Module aggregates, mark pass as finished, then
+  ParamLogs, build Layer/Module aggregates, seal the Op store (step
+  ``seal_op_store``, body ``_seal_op_store`` here), mark pass as finished, then
   finalize any streamed bundle, optionally evict in-memory outs, and release
   live parameter references.
 
@@ -44,6 +45,7 @@ from ..backends.torch._ops_capture_records import _compact_ancestor_sets
 from . import ast_branches
 from ._executor import StepContext
 from ._materialize import materialize_from_events
+from ._op_seal import fold_object_overlay
 from ._pipeline import run_pipeline
 from ._primitive_profile import _finalize_forward_primitive_profile
 from ._row_ingest import hand_off_capture_rows
@@ -145,6 +147,37 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         )
     for field_name in field_names:
         self.__dict__.pop(field_name, None)
+
+
+def _seal_op_store(self: "Trace") -> None:
+    """Pipeline step ``seal_op_store``: compact, then seal the Op row store.
+
+    Runs after ``adopt_containers_and_drop_workspaces`` (compaction pools the
+    container tokens that step hands to the core) and before
+    ``mark_tracing_finished``. Ancestor closures intern into shared bitmaps,
+    repeated immutable Op metadata pools onto shared instances, and primitive
+    rows adopt into the core. Then the relation conversion runs (trace_core_design.md
+    section 3.3): parents/children project into the core's canonical dataflow
+    edge table and the other relation families become interned immutable views,
+    the group and shared-fact conversions follow, and the Op row store seals
+    (columnar transpose on large traces). Later public writes land in the
+    store's sparse overlay; facade behavior is otherwise unchanged. The body
+    resolves each pass through this package's globals at call time.
+    """
+
+    _compact_ancestor_sets(self)
+    _compact_op_metadata(self)
+    _finalize_forward_primitive_profile(self)
+    core = self.__dict__.get("_trace_core")
+    if core is None or core.ops is None:
+        return
+    _freeze_relation_views(self)
+    core.ops.freeze()
+    # Payload-lifetime owner: when the LAST owning core (this one plus any
+    # fork cores viewing the sealed base) is garbage-collected, the store
+    # evicts tensor payload cells so a retained Op facade stops pinning every
+    # captured activation.
+    core.ops.adopt_payload_owner(core)
 
 
 def postprocess(
@@ -275,33 +308,13 @@ def _postprocess_body(
         )
     )
 
-    # The compaction passes belong to the freeze: ancestor
-    # closures intern into shared bitmaps and repeated immutable Op metadata
-    # pools onto shared instances, right before the physical seal.
-    _compact_ancestor_sets(self)
-    _compact_op_metadata(self)
-    _finalize_forward_primitive_profile(self)
-
-    # The core freeze point (trace_core_design.md section 3.3): forward
-    # topology froze logically at step 17, the payload plane settled through
-    # step 20, and the ancestor closures were just interned. The relation
-    # conversion runs here — parents/children project into the core's
-    # canonical dataflow edge table (differentially verified before the
-    # staging cells die) and the remaining relation families become interned
-    # immutable views — the group and shared-fact conversions follow
-    # (equivalence/recurrence GroupRefs, FunctionCall/ParamAlias fact
-    # blocks) — then the Op row store seals (columnar transpose on large
-    # traces). Later public writes land in the store's sparse overlay;
-    # facade behavior is otherwise unchanged.
+    # The op store sealed inside the pipeline (step ``seal_op_store``, ahead of
+    # the finished mark). Post-seal writes of the steps after it (streamed
+    # refs, evicted outs) fold back into the store's object columns, so an
+    # evicted payload is not kept alive under its overlay entry.
     _core = self.__dict__.get("_trace_core")
     if _core is not None and _core.ops is not None:
-        _freeze_relation_views(self)
-        _core.ops.freeze()
-        # Payload-lifetime owner: when the LAST owning core
-        # (this one plus any fork cores viewing the sealed base) is
-        # garbage-collected, the store evicts tensor payload cells so a
-        # retained Op facade stops pinning every captured activation.
-        _core.ops.adopt_payload_owner(_core)
+        fold_object_overlay(_core.ops)
         # Adopt the trace-scoped FuncCallLocation records (cached per call
         # site in _code_context_cache) into their kind table before sealing.
         # Cache entries mix FuncCallLocation records with plain metadata, so

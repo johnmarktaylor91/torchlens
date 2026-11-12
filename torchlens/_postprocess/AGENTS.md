@@ -84,8 +84,9 @@ step 17.5 (the contracted container-adoption + workspace-drop seam).
 | 15.5 | `build_layer_logs` | `_build_layer_logs` (body in `_column_passes_finalize.build_layer_logs`) | Group ops into aggregate LayerLogs, each built on first lookup |
 | 16 | `build_module_logs` | `_build_module_logs` | Build ModuleLogs |
 | 16.5 | `hash_graph_shape` | `compute_graph_shape_hash` | Hash graph shape before pass-finished behavior changes |
-| 17 | `mark_tracing_finished` | `_set_tracing_finished` (body in `_finished_marks.mark_ops_finished`) | Switch Trace to user-facing behavior |
-| 17.5 | `adopt_containers_and_drop_workspaces` | executor `_run_adopt_containers_and_drop_workspaces` | Adopt container records; drop the three per-phase workspaces |
+| 17.5 | `adopt_containers_and_drop_workspaces` | executor `_run_adopt_containers_and_drop_workspaces` | Adopt container records; drop the three per-phase workspaces (runs before 17) |
+| (none) | `seal_op_store` | package `_seal_op_store` | Compaction, primitive-row adoption, relation freeze, Op store freeze and payload owner (untimed) |
+| 17 | `mark_tracing_finished` | `_set_tracing_finished` (body in `_finished_marks.mark_ops_finished`: one write per sealed column) | Switch Trace to user-facing behavior |
 | 18 | `finalize_streamed_bundle` | `_finalize_streamed_bundle` | Finalize streamed out bundle |
 | 19 | `evict_streamed_outs` | `_evict_streamed_outs` | Optional in-memory out eviction |
 | 20 | `release_param_refs` | `_release_param_refs` | Drop live parameter references after finalization |
@@ -149,7 +150,10 @@ retained op list.
 ## Executor
 
 `postprocess()` keeps the prologue (pre-0 + step-0 materialize block), the
-no-layers early exit, and the freeze epilogue; the named steps run through
+no-layers early exit, and the epilogue (the overlay fold of `_op_seal`, FuncCallLocation
+adoption, kind-table freezes); the Op store seals inside the pipeline, in step `seal_op_store`,
+whose body is the package's `_seal_op_store` (so tests patch its passes on the package);
+the named steps run through
 `_pipeline.run_pipeline` over `PIPELINE`, each through its `_executor` adapter. Every adapter calls its
 function through the function's home module (`graph_traversal`, `labeling`,
 `finalization`, ...), so a test that replaces a step replaces it on that home

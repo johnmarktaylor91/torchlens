@@ -1,9 +1,10 @@
 """Step 17 body: mark every final op finished.
 
-The step sets ``_tracing_finished`` on each op of the trace's main lookup. Two
-bodies give the same stored result: the column body writes the flag into the
-raw row of a plain building ``OpRowStore``; any other trace takes the facade
-body. The template display keys this step used to bind are bound by the replay
+The step sets ``_tracing_finished`` on each op of the trace's main lookup. It
+runs after ``seal_op_store``, and two bodies give the same stored result: the
+sealed body writes the flag for every main row at once, into the sealed store's
+packed or object column (or in place into the rows of a sealed row-major
+store); any other trace takes the facade body. The template display keys this step used to bind are bound by the replay
 template family when a template is first read
 (``_replay_template_cells.resolve_template``).
 """
@@ -12,15 +13,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._data_classes._op_columns import column_rows_by_label
-from .._trace_core.op_store import OpRowStore
+import numpy as np
+
+from .._trace_core.op_store import OpRowStore, _SealedRowMajorOpRowStore
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 __all__ = ("mark_ops_finished",)
 
-#: The stored field the column body writes.
+#: The stored field the sealed body writes.
 _FLAG = "_tracing_finished"
 
 
@@ -28,38 +30,67 @@ def mark_ops_finished(trace: Trace) -> None:
     """Mark the trace's final ops finished."""
 
     ops = trace._layer_dict_main_keys
-    plan = _column_plan(ops, trace._layer_dict_all_keys)
-    if plan is None:
-        for layer_label in ops:
-            ops[layer_label]._tracing_finished = True
+    records = trace._layer_dict_all_keys
+    if _mark_sealed_rows(ops, records, trace):
         return
-    raw_rows, rows, flag_fid = plan
-    for label in dict.keys(ops):
-        raw_rows[rows[label]][flag_fid] = True
+    for layer_label in ops:
+        ops[layer_label]._tracing_finished = True
 
 
-def _column_plan(ops: dict[str, Any], records: Any) -> tuple[list[Any], dict[str, int], int] | None:
-    """Return ``(raw rows, label -> row, flag field id)`` when the column body applies.
+def _mark_sealed_rows(ops: Any, records: Any, trace: Trace) -> bool:
+    """Write the flag for every main row of a sealed store at once; return whether it did.
 
-    It applies when every op is a plain ``Op`` of one building row store, the
-    all-keys lookup resolves each main label to that same op, and the column
-    view serves the flag under its public name.
+    It applies when both lookups are row-key maps of one owner bound to the
+    trace's sealed Op store, every main key is a store row, and no fork has
+    viewed the store. Every other case returns ``False`` for the other bodies.
     """
 
-    lookup = column_rows_by_label(ops) if isinstance(records, dict) else None
-    if lookup is None:
-        return None
-    columns, rows = lookup
-    store = columns.store
-    if store.__class__ is not OpRowStore or store._rows is None:
-        return None
-    if not _same_records(ops, records):
-        return None
-    try:
-        columns.setter(_FLAG)
-    except ValueError:
-        return None
-    return store._rows, rows, store.layout.fid_by_name[_FLAG]
+    owner = getattr(ops, "_owner", None)
+    if owner is None or not ops or getattr(records, "_owner", None) is not owner:
+        return False
+    core = trace.__dict__.get("_trace_core")
+    store = core.ops if core is not None else None
+    if store is None or owner._store is not store or not store._sealed:
+        return False
+    if store._cow_shared or store._mutable_keys is not None:
+        return False
+    keys = dict.values(ops)
+    if min(keys) < 0 or not _same_records(ops, records):
+        return False
+    fid = store.layout.fid_by_name[_FLAG]
+    rows = store._rows
+    if rows is not None:
+        if store.__class__ is not _SealedRowMajorOpRowStore:
+            return False
+        for row in keys:
+            rows[row][fid] = True
+        return True
+    if store.__class__ is not OpRowStore:
+        return False
+    return _write_sealed_column(store, fid, keys)
+
+
+def _write_sealed_column(store: Any, fid: int, keys: Any) -> bool:
+    """Write ``True`` into one columnar store's flag column at ``keys``; return whether it did.
+
+    A packed column must be boolean, and no overlay entry may shadow a cell.
+    """
+
+    if store._overlay:
+        return False
+    column = store._columns[fid]
+    index = np.fromiter(keys, dtype=np.intp, count=len(keys))
+    if column.packed:
+        if column.values.dtype != np.bool_:
+            return False
+        column.values[index] = True
+    else:
+        values = column.values
+        for row in keys:
+            values[row] = True
+    if column.present is not None:
+        np.frombuffer(column.present, dtype=np.uint8)[index] = 1
+    return True
 
 
 def _same_records(ops: Any, records: Any) -> bool:

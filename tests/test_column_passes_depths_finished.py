@@ -6,7 +6,8 @@ set for step 4; every finished flag and bound template display key for step
 17) on models with several inputs and outputs, a buffer, a skip connection, a
 loop, a tensor created inside ``forward`` and keyword and nested call
 arguments. The counter contract: the column body really runs on an ordinary
-trace and makes far fewer Python calls than the facade body it replaces.
+trace and makes far fewer Python calls than the facade body it replaces. Step
+17 runs on the sealed store, so its column body is the sealed-store body.
 """
 
 from __future__ import annotations
@@ -153,8 +154,8 @@ _STEPS = {
         finalization,
         "_set_tracing_finished",
         _finished_marks,
-        "column_rows_by_label",
-        lambda _ops: None,
+        "_mark_sealed_rows",
+        lambda *_args: False,
         _finished_snapshot,
     ),
 }
