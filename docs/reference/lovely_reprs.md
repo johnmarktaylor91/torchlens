@@ -60,7 +60,7 @@ and Unicode equivalence contract.
 
 `(not saved)` distinguishes an absent capture from saved-and-boring;
 `(freed)`, `(disk-backed: metadata only until read)`,
-`(preview backend: shape/dtype only)`, and `(edited)` retain their meanings.
+and `(edited)` retain their meanings.
 Value words preserve nonfinite counts, magnitude-based complex statistics,
 and `(~sampled)` even when sampled moments no longer fit.
 
