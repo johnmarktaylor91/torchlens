@@ -54,12 +54,17 @@ def _out_reads_inert(trace: Trace) -> bool:
     postprocess flag set (no reference re-validation) and no quickstart
     warning owed, the read only returns the tensor, so skipping it for a
     one-member group changes nothing.
+
+    ``_predicate_save_options`` exists only when a predicate is configured, so
+    it is read from the instance dict; ``_postprocessing_active`` is always set
+    by ``Trace._postprocess``, the only entry to this step, so it is read
+    directly.
     """
 
     return (
-        getattr(trace, "_predicate_save_options", None) is None
+        trace.__dict__.get("_predicate_save_options") is None
         and getattr(trace, "payload_load_status", None) != "loaded_lazy"
-        and bool(getattr(trace, "_postprocessing_active", False))
+        and bool(trace._postprocessing_active)
         and not _synthesized_out_read_due(trace)
     )
 
