@@ -118,7 +118,7 @@ class _CallSiteMemo:
         self.entries: dict[int, tuple[Any, int, int, tuple[int, ...]]] = {}
         #: Remainder content -> small int.
         self.interns: dict[Any, int] = {}
-        #: Plain remainder number -> module entry's code context (``_module_entry_site``).
+        #: Plain remainder number -> ``(named, code context)`` of module entry (``_module_entry_site``).
         self.entry_contexts: dict[int, tuple[Any, ...]] = {}
         #: ``id(ModuleStackFrame)`` -> upper part above that module call (miss path).
         self.uppers: dict[int, Any] = {}
