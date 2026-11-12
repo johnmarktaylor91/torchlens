@@ -268,6 +268,23 @@ def _layer_classes() -> dict[str, Any]:
             context = jnp.einsum("bhqk,bkhd->bqhd", probs, split(self.value(hidden)))
             return context.reshape(batch, length, width)
 
+    class Lookup(nnx.Module):
+        """An embedding table read by indexing (checkpoint key ``embedding``).
+
+        ``nnx.Embed`` reads through ``jnp.take``, which JAX wraps in a ``jit``
+        call that the JAX backend refuses inside an attributed module (the X8
+        gap); indexing, the spelling ``eqx.nn.Embedding`` uses, lowers to the
+        same ``gather`` without the wrapper.
+        """
+
+        def __init__(self, rows: int, width: int) -> None:
+            self.embedding = nnx.Param(jnp.zeros((rows, width), jnp.float32))
+
+        def __call__(self, ids: Any) -> Any:
+            """The table rows at ``ids``."""
+
+            return self.embedding.value[ids]
+
     class Dense(nnx.Module):
         """One affine map under the checkpoint key ``dense``."""
 
@@ -294,6 +311,7 @@ def _layer_classes() -> dict[str, Any]:
         "layer_norm": layer_norm,
         "Indexed": Indexed,
         "QKV": QKV,
+        "Lookup": Lookup,
         "Dense": Dense,
         "Pooler": Pooler,
     }
@@ -314,9 +332,9 @@ def _bert_class() -> type:
         """Word, position and token-type embeddings, summed and normalised."""
 
         def __init__(self, rngs: Any) -> None:
-            self.word_embeddings = nnx.Embed(30522, 256, rngs=rngs)
-            self.position_embeddings = nnx.Embed(512, 256, rngs=rngs)
-            self.token_type_embeddings = nnx.Embed(2, 256, rngs=rngs)
+            self.word_embeddings = blocks["Lookup"](30522, 256)
+            self.position_embeddings = blocks["Lookup"](512, 256)
+            self.token_type_embeddings = blocks["Lookup"](2, 256)
             self.LayerNorm = layer_norm(256, rngs)
 
         def __call__(self, ids: Any) -> Any:
