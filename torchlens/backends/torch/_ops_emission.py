@@ -628,8 +628,9 @@ def commit_admitted(
     if _call_plan.output_admitted(out, args, call[3]):
         if snapshots and type(out) is not _TENSOR:
             return DECLINED
+        thin = _BOUND_THIN["thin"] if "thin" in _BOUND_THIN else bound_thin_emit()  # no call
         result = _call_plan.commit_fast_call(
-            (log_function_output_tensors, bound_thin_emit()), trace, call, func_call_id, window
+            (log_function_output_tensors, thin), trace, call, func_call_id, window
         )
         if snapshots:
             record_op_buffer_writes(trace, call[1], snapshots, get_tensor_label(out))
@@ -662,7 +663,8 @@ def _commit_same_object(
     logged = same_object_logging_copy(receiver, trace, was_inplace)
     _stamp_same_object(logged, receiver, was_inplace)
     copy_call = (*call[:6], logged, call[7])
-    emits = (log_function_output_tensors, bound_thin_emit())
+    thin = _BOUND_THIN["thin"] if "thin" in _BOUND_THIN else bound_thin_emit()  # no call
+    emits = (log_function_output_tensors, thin)
     _call_plan.commit_fast_call(emits, trace, copy_call, func_call_id, window)
     out_label = get_tensor_label(logged)
     if out_label is not None:
@@ -777,7 +779,7 @@ from ._ops_capture_records import (  # noqa: E402
     _stamp_same_object,
     get_capture_producer_policy,
 )
-from ._ops_exhaustive import bound_thin_emit  # noqa: E402
+from ._ops_exhaustive import _BOUND_THIN, bound_thin_emit  # noqa: E402
 from ._ops_interventions import (  # noqa: E402
     _apply_live_hooks_to_outputs_legacy,
     _hook_plan_reaches_op_door,
