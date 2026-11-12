@@ -86,16 +86,25 @@ def _refreshed_fields(trace: Trace) -> Iterator[tuple[str, Any]]:
                 yield f"layer[{label}].{name}", value
 
 
-def _mutable_objects(value: Any, found: dict[int, str], where: str, seen: set[int]) -> None:
-    """Record every mutable container and record object reachable through builtin containers."""
+def _mutable_objects(
+    value: Any, found: dict[int, tuple[str, Any]], where: str, seen: dict[int, Any]
+) -> None:
+    """Record every mutable container and record object reachable through builtin containers.
+
+    ``seen`` and ``found`` hold each object as well as its id: a state stream
+    may hand out a fresh object per read (an unread side-column cell), and an
+    id is unique only while its object lives. Without the reference, a freed
+    object's id could come back on a different object later in the walk (or
+    in the other trace's walk) and read as the same object.
+    """
 
     if id(value) in seen or _trace_rerun_state._hands_over(value):
         return
-    seen.add(id(value))
+    seen[id(value)] = value
     if isinstance(value, _OPAQUE_SHARED) or callable(value):
         return  # graph records, the live model and callables are shared by design
     if isinstance(value, (list, dict, set)) or not isinstance(value, (tuple, frozenset)):
-        found.setdefault(id(value), f"{where}:{type(value).__name__}")
+        found.setdefault(id(value), (f"{where}:{type(value).__name__}", value))
     if isinstance(value, dict):
         members: Any = [*value.keys(), *value.values()]
     elif isinstance(value, (list, tuple, set, frozenset)):
@@ -106,11 +115,11 @@ def _mutable_objects(value: Any, found: dict[int, str], where: str, seen: set[in
         _mutable_objects(member, found, where, seen)
 
 
-def _reach(trace: Trace) -> dict[int, str]:
-    """Map id to location for every mutable object in ``trace``'s refreshed fields."""
+def _reach(trace: Trace) -> dict[int, tuple[str, Any]]:
+    """Map id to (location, object) for every mutable object in ``trace``'s refreshed fields."""
 
-    found: dict[int, str] = {}
-    seen: set[int] = set()
+    found: dict[int, tuple[str, Any]] = {}
+    seen: dict[int, Any] = {}
     for where, value in _refreshed_fields(trace):
         _mutable_objects(value, found, where, seen)
     return found
@@ -121,7 +130,11 @@ def test_run_result_shares_no_mutable_object_with_its_source() -> None:
 
     _model, source, result = _run_pair()
     source_reach = _reach(source)
-    shared = [where for key, where in _reach(result).items() if key in source_reach]
+    shared = [
+        where
+        for key, (where, value) in _reach(result).items()
+        if key in source_reach and source_reach[key][1] is value
+    ]
     assert shared == []
 
 

@@ -6070,6 +6070,14 @@ recorded: 2026-11-11T18:32:27Z
 ---
 generator: scripts/regen_ledgers.py (producer static half)
 flag: none (deterministic ledger step)
+reason: T4a: seal-pass column modules for steps 2 and 6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 23c2f3c44ea0d3edee2f36f4826a7e2c5733f3fd
+recorded: 2026-11-12T03:34:48Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
 reason: ledger-owner regen at f5fc076d7: static-scan moved
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu

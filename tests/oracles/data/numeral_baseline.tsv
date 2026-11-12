@@ -3368,6 +3368,7 @@ docs-md	docs/maintainers/where.md	1.3
 docs-md	docs/maintainers/where.md	10
 docs-md	docs/maintainers/where.md	10,
 docs-md	docs/maintainers/where.md	100
+docs-md	docs/maintainers/where.md	1002
 docs-md	docs/maintainers/where.md	1005
 docs-md	docs/maintainers/where.md	101
 docs-md	docs/maintainers/where.md	1012
@@ -3475,6 +3476,7 @@ docs-md	docs/maintainers/where.md	144
 docs-md	docs/maintainers/where.md	1440
 docs-md	docs/maintainers/where.md	145
 docs-md	docs/maintainers/where.md	146
+docs-md	docs/maintainers/where.md	1463
 docs-md	docs/maintainers/where.md	14666
 docs-md	docs/maintainers/where.md	1467
 docs-md	docs/maintainers/where.md	147
@@ -3509,7 +3511,6 @@ docs-md	docs/maintainers/where.md	1579
 docs-md	docs/maintainers/where.md	158
 docs-md	docs/maintainers/where.md	1589
 docs-md	docs/maintainers/where.md	159
-docs-md	docs/maintainers/where.md	1595
 docs-md	docs/maintainers/where.md	16
 docs-md	docs/maintainers/where.md	160
 docs-md	docs/maintainers/where.md	161
@@ -3552,6 +3553,7 @@ docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1825
 docs-md	docs/maintainers/where.md	183
 docs-md	docs/maintainers/where.md	1830
+docs-md	docs/maintainers/where.md	1832
 docs-md	docs/maintainers/where.md	1838
 docs-md	docs/maintainers/where.md	184
 docs-md	docs/maintainers/where.md	185
@@ -3636,6 +3638,7 @@ docs-md	docs/maintainers/where.md	228
 docs-md	docs/maintainers/where.md	229
 docs-md	docs/maintainers/where.md	23
 docs-md	docs/maintainers/where.md	230
+docs-md	docs/maintainers/where.md	23088
 docs-md	docs/maintainers/where.md	231
 docs-md	docs/maintainers/where.md	23101
 docs-md	docs/maintainers/where.md	232
@@ -4035,7 +4038,6 @@ docs-md	docs/maintainers/where.md	622
 docs-md	docs/maintainers/where.md	623
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	628
-docs-md	docs/maintainers/where.md	629
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	631
@@ -4044,8 +4046,8 @@ docs-md	docs/maintainers/where.md	634
 docs-md	docs/maintainers/where.md	635
 docs-md	docs/maintainers/where.md	638
 docs-md	docs/maintainers/where.md	639
-docs-md	docs/maintainers/where.md	63935
 docs-md	docs/maintainers/where.md	64
+docs-md	docs/maintainers/where.md	64077
 docs-md	docs/maintainers/where.md	642
 docs-md	docs/maintainers/where.md	644
 docs-md	docs/maintainers/where.md	647
@@ -4104,13 +4106,13 @@ docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	725
 docs-md	docs/maintainers/where.md	725505
+docs-md	docs/maintainers/where.md	725634
 docs-md	docs/maintainers/where.md	728
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
 docs-md	docs/maintainers/where.md	731
 docs-md	docs/maintainers/where.md	735
 docs-md	docs/maintainers/where.md	738
-docs-md	docs/maintainers/where.md	739
 docs-md	docs/maintainers/where.md	74
 docs-md	docs/maintainers/where.md	740
 docs-md	docs/maintainers/where.md	7408
@@ -6514,6 +6516,7 @@ package-docstrings	torchlens/_postprocess/_module_pending.py	16.
 package-docstrings	torchlens/_postprocess/_multipass_params.py	14
 package-docstrings	torchlens/_postprocess/_output_payload.py	13
 package-docstrings	torchlens/_postprocess/_replay_template_cells.py	17
+package-docstrings	torchlens/_postprocess/_seal_columns.py	11
 package-docstrings	torchlens/_postprocess/_site_join.py	1,3
 package-docstrings	torchlens/_postprocess/_site_join.py	3,1
 package-docstrings	torchlens/_postprocess/ast_branches.py	3.11
@@ -7372,6 +7375,7 @@ package-docstrings	torchlens/backends/tinygrad/_rules.py	1.3
 package-docstrings	torchlens/backends/tinygrad/_rules.py	4.3
 package-docstrings	torchlens/backends/tinygrad/backend.py	0.13
 package-docstrings	torchlens/backends/tinygrad/backend.py	0.13.0
+package-docstrings	torchlens/backends/torch/_arg_hash.py	10
 package-docstrings	torchlens/backends/torch/_aten_capture.py	256
 package-docstrings	torchlens/backends/torch/_completeness_cross_thread.py	2.1
 package-docstrings	torchlens/backends/torch/_completeness_cross_thread.py	2.12
@@ -7449,7 +7453,6 @@ package-docstrings	torchlens/backends/torch/rescue.py	27
 package-docstrings	torchlens/backends/torch/rescue.py	67
 package-docstrings	torchlens/backends/torch/structure_only_belt.py	2.3
 package-docstrings	torchlens/backends/torch/structure_only_belt.py	3.10
-package-docstrings	torchlens/backends/torch/tensor_tracking.py	10
 package-docstrings	torchlens/backends/torch/tensor_tracking.py	123_
 package-docstrings	torchlens/backends/torch/tensor_tracking.py	3_47_
 package-docstrings	torchlens/backends/torch/tensor_tracking.py	456

@@ -44,7 +44,7 @@ def test_int_dtype_parameter_traces_without_crash():
 def test_storage_arg_hash_is_summarized_not_walked():
     """Hashing a torch Storage argument must summarize by size/dtype, never
     iterate its elements (which would re-enter logging)."""
-    from torchlens.backends.torch.tensor_tracking import _append_arg_hash
+    from torchlens.backends.torch._arg_hash import _append_arg_hash
 
     storage = torch.arange(5, dtype=torch.float32).untyped_storage()
     out: list = []
