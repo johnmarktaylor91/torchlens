@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1839 modules, 727209 lines, 0 modules without a docstring.
+85 packages, 1839 modules, 727214 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 57 | 26986 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4778 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 145 | 50039 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 145 | 50044 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -316,7 +316,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (145 modules, 50039 lines)
+Core data structures for representing a logged forward pass. (145 modules, 50044 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -369,7 +369,7 @@ Core data structures for representing a logged forward pass. (145 modules, 50039
 | `_op_aten` | Per-op ATen-operation accessor for ''Op'' (''CaptureOptions(aten_ops=True)''). | 46 |
 | `_op_bytes` | Theoretical read-once/write-once byte traffic of one operation record. | 197 |
 | `_op_column_scan` | Call-free scans of the ''Op'' row store for passes that act on few ops. | 200 |
-| `_op_columns` | Private row-indexed column view over the ''Op'' row store. | 428 |
+| `_op_columns` | Private row-indexed column view over the ''Op'' row store. | 433 |
 | `_op_container_census` | Alias counts for container-cell pooling: the registry read and the census oracle. | 261 |
 | `_op_copy` | Selective-depth Op clones (''Op._copy_with_shallow_fields'') and the output-node field sets. | 232 |
 | `_op_cost` | Cost derivations for ''Op'': compute record, MACs, FLOPs, arithmetic intensity. | 124 |
