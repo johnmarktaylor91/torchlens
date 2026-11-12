@@ -69,7 +69,7 @@ def classify_terminal_bools(
     memo: dict[Any, tuple[ast_branches.BoolClassification, list[Any]]] = {}
     pinned: list[Any] = []  # keeps every keyed frame alive, so no id is reused
     for label, frames in bools:
-        locations = consumer_locations[label] if label in consumer_locations else ()
+        locations = consumer_locations.get(label, ())
         key = (locations, tuple(map(id, frames)))
         if key in memo:
             primary, branch = memo[key]

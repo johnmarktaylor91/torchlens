@@ -114,7 +114,7 @@ class StepColumns:
             # The bulk read tests each cell class once, not each cell, and reads
             # every slow or unset cell through the getter (an unset cell raises).
             row_list = list(self.rows.values())
-            for row, value in zip(row_list, self.columns.column(name, row_list)):
+            for row, value in zip(row_list, self.columns.column(name, row_list), strict=True):
                 column[row] = value
             return column
         get = self.columns.getter(name, False)
@@ -416,7 +416,7 @@ def _gained_edges(trace: Trace, plan: StepColumns) -> list[tuple[int, int, str, 
             if not child_stack or child_stack == parent_stack:
                 continue
             shared = 0
-            for parent_entry, child_entry in zip(parent_stack, child_stack):
+            for parent_entry, child_entry in zip(parent_stack, child_stack, strict=False):
                 if parent_entry != child_entry:
                     break
                 shared += 1
