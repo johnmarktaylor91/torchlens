@@ -97,6 +97,7 @@ from .._validation_shared import float_replay_tolerances
 from . import _module_return_probe as return_probe
 from ._closure_consts import _readable_closure_consts
 from ._converted_grads import attach_jax_derived_grads
+from ._edits import append_session_event, open_equation_session, replay_with_edits
 from ._host_state import _reject_closed_over_host_state
 from ._input_kwargs import bind_input_kwargs
 from ._module_frames import jax_event_module_frames
@@ -401,7 +402,7 @@ def _validate_one_jax_equation(
         return False
     try:
         inputs = _inputs_from_trace_graph(capture, op, ops_by_label, hidden_outputs_by_label)
-        replayed = replay_equation(capture, inputs)
+        replayed, raw = replay_with_edits(capture, op, replay_equation(capture, inputs))
         saved_outputs = _saved_op_outputs(
             op,
             len(replayed),
@@ -421,9 +422,10 @@ def _validate_one_jax_equation(
             log, op_label, func_name, _JaxVerdict("replay", "failed", "replay_mismatch")
         )
         return False
-    if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
+    reference = saved_outputs if raw is None else raw  # edits: sensitivity of the raw replay
+    if not _parent_perturbations_change_output(capture, op, inputs, reference):
         return _record_insensitive_outcome(
-            log, (op_label, func_name), capture, op, (inputs, saved_outputs)
+            log, (op_label, func_name), capture, op, (inputs, reference)
         )
     _record_jax_decision(
         log, op_label, func_name, _JaxVerdict("replay", "validated", "replay_match")
@@ -573,6 +575,7 @@ class JAXBackend:
 
         save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="JAX")
         facet_recipes = pop_facet_recipes(kwargs)
+        intervene = kwargs.pop("intervene", None)
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
         # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
@@ -718,13 +721,16 @@ class JAXBackend:
         tree = module_tree if use_pytree_module else None
         closed_jaxpr, closure_consts, output = _derive_and_run(call_fn, args, static_argnums, tree)
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
+        session_capture = (args, closure_consts, grad_options, save_code_context)
+        session = open_equation_session(self, trace, intervene, session_capture)
         result = interpret_closed_jaxpr_with_inlining(
             return_probe.jaxpr_to_interpret(tree, closed_jaxpr),
             flat_args,
             jax_control_flow=cast(str, jax_control_flow),
             jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
+            equation_hook=session.hook,
         )
-        result = return_probe.split_outputs(result, tree)
+        result, output = session.finish(return_probe.split_outputs(result, tree), output)
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
@@ -1526,8 +1532,7 @@ class JAXBackend:
             record_context=self._record_context(reserved, output, func_name),
             capture_spec=CaptureSpec(save_out=True, save_metadata=True),
         )
-        trace.capture_events.append(event)
-        return event
+        return cast(OpEvent, append_session_event(self, trace, event))
 
     def _tensor_ref(self, value: object, label_raw: str) -> TensorRef:
         """Build a tensor reference for a JAX payload.
