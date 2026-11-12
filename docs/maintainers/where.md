@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1840 modules, 727486 lines, 0 modules without a docstring.
+85 packages, 1841 modules, 727720 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64768 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 162 | 65002 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1541,7 +1541,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (161 modules, 64768 lines)
+Torch backend implementation package for TorchLens capture. (162 modules, 65002 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1668,6 +1668,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64768 
 | `_state_bytes` | Byte views of tensor state: the whole-storage snapshot and the byte-exact state compare. | 102 |
 | `_storage_exports` | Copy out pending payload aliases before a tensor's storage is handed to the host zero-copy. | 291 |
 | `_storage_overlap` | Storage-overlap geometry for mutation-label propagation (pure, no capture state). | 191 |
+| `_tensor_grad_hook` | Register TorchLens's tensor gradient hooks with torch. | 266 |
 | `_tl` | Compatibility path for the tensor-label metadata helpers (now ''torchlens._utils._tensor_label''). | 77 |
 | `_tl_collective` | Compatibility re-export; the helper lives in ''torchlens._utils._tl_collective''. | 6 |
 | `_torch_ops_calls` | Record direct ''torch.ops.*'' calls made by user code as ordinary logged ops. | 571 |
@@ -1704,7 +1705,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64768 
 | `rescue` | Rescue re-run: recover escaped ops with a TorchFunctionMode net. | 933 |
 | `sources` | Log torch capture source tensors. | 782 |
 | `structure_only_belt` | Structure-only teaching-refusal belts. | 656 |
-| `tensor_tracking` | Track torch tensor provenance, family links, and equivalence classes. | 1463 |
+| `tensor_tracking` | Track torch tensor provenance, family links, and equivalence classes. | 1431 |
 | `wrappers` | Lazy torch function wrapping for capture-time operation interception. | 2722 |
 
 ### `torchlens.bridge`
