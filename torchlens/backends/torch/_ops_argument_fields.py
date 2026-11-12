@@ -350,11 +350,13 @@ def _set_arg_template_fields(
     # A capture that saves arguments is replay-ready either way: its identity lets
     # replay validation resolve the callable on a loaded bundle
     # (``validation/_loaded_callables.py``), which carries no callables.
+    # The parts are read at the call: ``_ops_arguments`` defines them after its own late imports.
+    parts = _ops_arguments._TEMPLATE_PARTS
     replayable = getattr(self, "is_replayable", False)
     if replayable or self._options_save_arg_templates:
         args, kwargs = call.args, call.kwargs
         facts = observe_template(
-            _ops_arguments._TEMPLATE_PARTS,
+            parts,
             (call.func, call.func_name, args, kwargs),
             self,
             arg_slot_labels(self, args, kwargs),
@@ -368,8 +370,7 @@ def _set_arg_template_fields(
             else None
         )
         observed = (None, False, False, key)
-    # The parts are read at the call: ``_ops_arguments`` defines them after its own late imports.
-    resolve_arg_template_fields(fields_dict, observed, _ops_arguments._TEMPLATE_PARTS)
+    resolve_arg_template_fields(fields_dict, observed, parts)
 
 
 def _repin_rebound_receiver(self: "Trace", args: tuple[Any, ...], tensor: torch.Tensor) -> bool:

@@ -175,30 +175,6 @@ def _plan_of(
     return plan
 
 
-def _planned_facts(
-    parts: TemplateParts,
-    plan: tuple[Any, ...],
-    call: tuple[Callable[..., Any], str | None, tuple[Any, ...], dict[str, Any]],
-    scope: tuple["Trace", dict[int, str | None] | None],
-) -> tuple[Any, ...]:
-    """Return the recorded template facts of a call along its layout plan."""
-
-    func, func_name, args, kwargs = call
-    _, fields, arg_branches, _, kwarg_branches = plan
-    notes: list[str] = []
-    arg_facts = _observed_facts(parts, arg_branches, args, notes, scope)
-    kwarg_facts = (
-        _observed_facts(parts, kwarg_branches, kwargs.values(), notes, scope) if kwargs else ()
-    )
-    return (
-        plan,
-        arg_facts,
-        kwarg_facts,
-        parts.registry_key(func, func_name, scope[0]) if fields is None else None,
-        tuple(notes),
-    )
-
-
 def observe_template(
     parts: TemplateParts,
     call: tuple[Callable[..., Any], str | None, tuple[Any, ...], dict[str, Any]],
@@ -215,10 +191,23 @@ def observe_template(
     """
 
     plan = _plan_of(parts, call, trace, holder)
-    if plan is not None:
-        return _planned_facts(parts, plan, call, (trace, known))  # type: ignore[arg-type]
     func, func_name, args, kwargs = call
     notes: list[str] = []
+    if plan is not None:
+        # The planned branch, inlined: this runs once per captured call.
+        _, fields, arg_branches, _, kwarg_branches = plan
+        scope = (trace, known)
+        return (
+            plan,
+            _observed_facts(parts, arg_branches, args, notes, scope),  # type: ignore[arg-type]
+            (
+                _observed_facts(parts, kwarg_branches, kwargs.values(), notes, scope)  # type: ignore[arg-type]
+                if kwargs
+                else ()
+            ),
+            parts.registry_key(func, func_name, trace) if fields is None else None,
+            tuple(notes),
+        )
     arg_facts = tuple([parts.classify(arg, notes, trace, known) for arg in args])
     kwarg_facts = tuple(
         [(str(key), parts.classify(value, notes, trace, known)) for key, value in kwargs.items()]
@@ -241,10 +230,10 @@ def planned_args_template(
     ``CallLayout`` (``holder``) keeps the plan: its guard is the plan's key.
     """
 
-    plan = _plan_of(parts, call, trace, holder)
-    if plan is None:
+    if _plan_of(parts, call, trace, holder) is None:
         return None
-    return resolve_arg_template(parts, _planned_facts(parts, plan, call, (trace, known)))  # type: ignore[arg-type]
+    # The plan is made now, so the observation finds the same one.
+    return resolve_arg_template(parts, observe_template(parts, call, trace, known, holder))
 
 
 def capture_layout(value: Any) -> CaptureLayout | None:

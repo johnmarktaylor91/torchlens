@@ -62,27 +62,16 @@ def _resolved_components(
             append(fact)
         else:
             label, detail = fact
-            append(detail if label is None else parent_ref(label, _capture_layout=detail))
+            append(detail if label is None else parent_ref(label, detail))
     return tuple(out)
 
 
 def resolve_arg_template(parts: "TemplateParts", facts: tuple[Any, ...]) -> Any:
     """Return the ``CapturedArgTemplate`` of one call's recorded template facts."""
 
-    plan, arg_facts, kwarg_facts, key, notes = facts
-    if plan is None:
-        return parts.template(args=arg_facts, kwargs=kwarg_facts, func_id=key, notes=notes)
-    _, fields, arg_branches, names, kwarg_branches = plan
-    return parts.template(
-        args=_resolved_components(parts, arg_branches, arg_facts),
-        kwargs=(
-            tuple(zip(names, _resolved_components(parts, kwarg_branches, kwarg_facts), strict=True))
-            if names
-            else ()
-        ),
-        func_id=key if fields is None else parts.key_type(*fields),
-        notes=notes,
-    )
+    fields: dict[str, Any] = {}
+    resolve_arg_template_fields(fields, (facts, False, True, None), parts)
+    return fields["args_template"]
 
 
 def resolve_arg_template_fields(
@@ -101,7 +90,28 @@ def resolve_arg_template_fields(
         fields_dict["kwargs_template"] = None
         fields_dict["func_id"] = key
         return
-    template = resolve_arg_template(parts, template_facts)
+    plan, arg_facts, kwarg_facts, key, notes = template_facts
+    if plan is None:
+        template = parts.template(arg_facts, kwarg_facts, key, notes)
+    else:
+        # Positional: ``CapturedArgTemplate(args, kwargs, func_id, notes)``.
+        _, fields, arg_branches, names, kwarg_branches = plan
+        template = parts.template(
+            _resolved_components(parts, arg_branches, arg_facts),
+            (
+                tuple(
+                    zip(
+                        names,
+                        _resolved_components(parts, kwarg_branches, kwarg_facts),
+                        strict=True,
+                    )
+                )
+                if names
+                else ()
+            ),
+            key if fields is None else parts.key_type(*fields),
+            notes,
+        )
     fields_dict["args_template"] = template
     fields_dict["kwargs_template"] = template if has_kwargs else None
     fields_dict["func_id"] = template.func_id if keep_func_id else None
