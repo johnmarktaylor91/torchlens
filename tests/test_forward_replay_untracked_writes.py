@@ -348,7 +348,10 @@ def _swapping_slot_snapshot(real: Any) -> Any:
         workspace = _argument_fields._peek_raw_graph_workspace(trace)
         context = workspace._pending_arg_slots
         by_key = {(slot.kind, slot.key): slot for slot in swapped}
-        workspace._pending_arg_slots = type(context)(call.args, call.kwargs, tuple(swapped), by_key)
+        labels = {slot.value_id: slot.label for slot in swapped}
+        workspace._pending_arg_slots = type(context)(
+            call.args, call.kwargs, tuple(swapped), by_key, labels
+        )
         return tuple(swapped)
 
     return snapshot
