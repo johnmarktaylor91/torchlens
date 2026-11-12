@@ -46,7 +46,7 @@ class _Block(nn.Module):
 
 
 class _Model(nn.Module):
-    """Two blocks and a head; the head can be told to raise."""
+    """Two blocks and a head; notes the head's ``forward`` object on each call; can raise."""
 
     def __init__(self) -> None:
         """Build the model."""
@@ -56,10 +56,12 @@ class _Model(nn.Module):
         self.b = _Block()
         self.head = nn.Linear(4, 2)
         self.fail = False
+        self.seen: list[Any] = []
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run both blocks and the head, or raise mid-forward when asked."""
 
+        self.seen.append(self.head.__dict__.get("forward"))
         hidden = self.b(self.a(x))
         if self.fail:
             raise RuntimeError("planned failure")
@@ -77,6 +79,12 @@ def _forwards(model: nn.Module) -> dict[str, Any]:
     """Return each module's instance ``forward`` (``None`` when there is none), by name."""
 
     return {name: module.__dict__.get("forward") for name, module in model.named_modules()}
+
+
+def _bare(model: nn.Module) -> bool:
+    """Return whether no module of ``model`` holds an instance ``forward``."""
+
+    return all(fwd is None for fwd in _forwards(model).values())
 
 
 def _record(trace: Any) -> list[Any]:
@@ -114,36 +122,58 @@ def _same_records(left: list[Any], right: list[Any]) -> bool:
     return True
 
 
-def _assert_untouched(model: nn.Module) -> None:
-    """Assert ``model`` holds no TorchLens callable or kept state and copies cleanly."""
+def _footprint(model: nn.Module) -> tuple[Any, ...]:
+    """Return, by name, what TorchLens leaves on or about ``model`` between captures."""
 
-    assert all(fwd is None for fwd in _forwards(model).values())
+    tensors = [*model.named_parameters(), *model.named_buffers()]
+    return (
+        sorted(name for name, fwd in _forwards(model).items() if fwd is not None),
+        sorted(name for name, tensor in tensors if hasattr(tensor, "_tl")),
+        sorted(name for name, p in model.named_parameters() if p in _tensor_label._PARAM_REGISTRY),
+        sorted(name for name, m in model.named_modules() if m in _tensor_label._MODULE_REGISTRY),
+    )
+
+
+def _assert_untouched(model: nn.Module) -> None:
+    """Assert ``model`` is left as a capture outside any block leaves its twin.
+
+    The twin is a fresh ``_Model`` captured twice outside a block; ``model`` must
+    match its footprint, hold no kept state, and deep-copy and pickle cleanly.
+    """
+
+    if isinstance(model, _Model):
+        model.seen.clear()
+    twin, x = _model()
+    tl.trace(twin, x)
+    tl.trace(twin, x)
+    assert _footprint(model) == _footprint(twin)
+    assert _bare(model)
     assert id(model) not in cache_mod._KEPT
-    for tensor in [*model.parameters(), *model.buffers()]:
-        assert not hasattr(tensor, "_tl")
-        assert tensor not in _tensor_label._PARAM_REGISTRY
-    assert not any(module in _tensor_label._MODULE_REGISTRY for module in model.modules())
-    clone = copy.deepcopy(model)
-    assert all(fwd is None for fwd in _forwards(clone).values())
+    assert _bare(copy.deepcopy(model))
     pickle.loads(pickle.dumps(model))
 
 
-def test_second_capture_reuses_the_kept_wrappers() -> None:
-    """Between captures in the block the wrappers stay; the next capture reuses them."""
+def test_captures_in_the_block_reuse_one_wrapper_object() -> None:
+    """Captures in the block install the same wrapper; captures outside build a new one."""
 
     model, x = _model()
+    tl.trace(model, x)
+    tl.trace(model, x)
+    assert model.seen[0] is not None and model.seen[0] is not model.seen[1]
+    model.seen.clear()
     with kept_prepared(model):
         tl.trace(model, x)
-        kept = _forwards(model)
-        assert kept[""] is None
-        assert all(kept[name] is not None for name in ("a", "a.fc", "b.act", "head"))
+        assert _bare(model)
         tl.trace(model, x)
-        assert _forwards(model) == kept
+        tl.trace(model, x)
+        assert model.seen[0] is not None
+        assert model.seen[0] is model.seen[1] is model.seen[2]
+        assert _bare(model)
     _assert_untouched(model)
 
 
-def test_replaced_submodule_re_prepares() -> None:
-    """A submodule replaced between captures is wrapped; the old one is put back."""
+def test_replaced_submodule_gets_fresh_wrappers() -> None:
+    """A submodule replaced between captures is wrapped afresh; the old one stays bare."""
 
     model, x = _model()
     with kept_prepared(model):
@@ -151,49 +181,48 @@ def test_replaced_submodule_re_prepares() -> None:
         old_head = model.head
         model.head = nn.Linear(4, 2)
         trace = tl.trace(model, x)
+        tl.trace(model, x)
+        assert model.seen[1] is not model.seen[0]
+        assert model.seen[2] is model.seen[1]
         assert "forward" not in old_head.__dict__
-        assert model.head.__dict__.get("forward") is not None
-        assert any(module.address == "head" for module in trace.modules)
+        assert torch.equal(trace.ops[-1].out, model.head(model.b(model.a(x))))
     _assert_untouched(model)
-    assert "forward" not in old_head.__dict__
 
 
-def test_added_and_removed_submodules_re_prepare() -> None:
+def test_added_and_removed_submodules_are_seen() -> None:
     """A submodule added to or removed from the tree is seen by the next capture."""
 
     model, x = _model()
     with kept_prepared(model):
         tl.trace(model, x)
-        before = _forwards(model)
         model.a.extra = nn.Identity()
-        tl.trace(model, x)
-        after = _forwards(model)
-        assert after["a.extra"] is not None
-        assert after["a.fc"] is not before["a.fc"]
-        removed = model.a.extra
+        model.a.forward = lambda inp: model.a.extra(_Block.forward(model.a, inp))  # type: ignore[method-assign]
+        added = tl.trace(model, x)
+        assert any(module.address == "a.extra" for module in added.modules)
+        assert model.seen[1] is not model.seen[0]
+        del model.a.forward
         del model.a.extra
-        tl.trace(model, x)
-        assert "forward" not in removed.__dict__
+        removed = tl.trace(model, x)
+        assert not any(module.address == "a.extra" for module in removed.modules)
     _assert_untouched(model)
 
 
-def test_replaced_parameter_re_prepares() -> None:
-    """A parameter object swapped between captures makes the next capture prepare afresh."""
+def test_replaced_parameter_gets_fresh_wrappers() -> None:
+    """A parameter object swapped between captures makes the next capture build afresh."""
 
     model, x = _model()
     with kept_prepared(model):
         tl.trace(model, x)
-        before = _forwards(model)
         model.head.weight = nn.Parameter(torch.ones(2, 4))
         trace = tl.trace(model, x)
-        assert _forwards(model)["head"] is not before["head"]
-        head_out = model.head(model.b(model.a(x)))
-        assert torch.equal(trace.ops[-1].out, head_out)
+        assert model.seen[1] is not model.seen[0]
+        assert torch.equal(trace.ops[-1].out, model.head(model.b(model.a(x))))
+        assert any(p.address == "head.weight" for p in trace.params)
     _assert_untouched(model)
 
 
 def test_user_forward_set_between_captures_is_respected() -> None:
-    """An instance ``forward`` the user sets between captures replaces the kept wrapper."""
+    """An instance ``forward`` the user sets between captures is wrapped and called."""
 
     model, x = _model()
     calls: list[int] = []
@@ -207,11 +236,37 @@ def test_user_forward_set_between_captures_is_respected() -> None:
             calls.append(1)
             return plain(inp)
 
-        model.head.forward = counted
+        model.head.forward = counted  # type: ignore[method-assign]
         tl.trace(model, x)
         assert calls == [1]
-    assert model.head.__dict__.get("forward") is counted
-    del model.head.forward
+        assert model.seen[1] is not model.seen[0]
+        assert model.head.__dict__.get("forward") is counted
+        del model.head.forward
+        tl.trace(model, x)
+        assert calls == [1]
+        assert model.seen[2] is not model.seen[1]
+    _assert_untouched(model)
+
+
+class _Head(nn.Linear):
+    """A head whose class ``forward`` one test swaps mid-block (and puts back)."""
+
+
+def test_changed_class_forward_gets_fresh_wrappers() -> None:
+    """A class ``forward`` replaced between captures is the one the next capture runs."""
+
+    model, x = _model()
+    model.head = _Head(4, 2)
+    try:
+        with kept_prepared(model):
+            tl.trace(model, x)
+            _Head.forward = lambda self, inp: nn.Linear.forward(self, inp) * 2  # type: ignore[method-assign]
+            trace = tl.trace(model, x)
+            assert model.seen[1] is not model.seen[0]
+            expected = nn.Linear.forward(model.head, model.b(model.a(x))) * 2
+            assert torch.equal(trace.ops[-1].out, expected)
+    finally:
+        del _Head.forward
     _assert_untouched(model)
 
 
@@ -264,6 +319,7 @@ def test_a_failed_capture_in_the_block_keeps_the_block_sound() -> None:
         with pytest.raises(RuntimeError, match="planned failure"):
             tl.trace(model, x)
         model.fail = False
+        assert _bare(model)
         assert _same_records(reference, _record(tl.trace(model, x)))
     _assert_untouched(model)
 
@@ -275,8 +331,9 @@ def test_nested_blocks_put_back_at_the_outermost_exit() -> None:
     with kept_prepared(model):
         with kept_prepared(model):
             tl.trace(model, x)
-        assert _forwards(model)["head"] is not None
+        assert id(model) in cache_mod._KEPT
         tl.trace(model, x)
+        assert model.seen[0] is model.seen[1]
     _assert_untouched(model)
 
 
@@ -288,7 +345,9 @@ def test_other_models_are_unaffected_by_a_block() -> None:
     with kept_prepared(model):
         tl.trace(model, x)
         tl.trace(other, y)
-        assert all(fwd is None for fwd in _forwards(other).values())
+        tl.trace(other, y)
+        assert other.seen[0] is not other.seen[1]
+        assert id(other) not in cache_mod._KEPT
     _assert_untouched(model)
     _assert_untouched(other)
 

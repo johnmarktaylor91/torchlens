@@ -103,6 +103,7 @@ from ._session_cleanup import (  # noqa: F401  (re-exported for tests and siblin
     method_index,
 )
 from ._session_forwards import (
+    _NO_INSTANCE_FORWARD,
     install_session_forward_wrappers as _install_session_forward_wrappers,
     restore_session_forward_wrappers as _restore_session_forward_wrappers,
     restore_undecorated_forward as _restore_undecorated_forward,
@@ -424,9 +425,7 @@ def _prepare_model_session(
     begin_label_session()
     _state._dir_cache.clear()
     trace._module_capture_ws.exhaustive_module_stack = []
-    _install_forwards(
-        trace, model, _install_session_forward_wrappers, _restore_session_forward_wrappers
-    )
+    _install_forwards(trace, model, _install_session_forward_wrappers, _NO_INSTANCE_FORWARD)
     record_model_identity(trace, model)
 
     _seen_module_ids: dict[int, str] = {}  # finds a module shared at several addresses

@@ -917,12 +917,12 @@ torchlens/backends/torch/identity_shims.py	955
 torchlens/backends/torch/identity_shims.py::_install_causal_bias_shim	81
 torchlens/backends/torch/identity_shims.py::_install_expanded_weights_shims	70
 torchlens/backends/torch/identity_shims.py::_install_overrides_membership_shims	70
-torchlens/backends/torch/model_prep.py	2016
+torchlens/backends/torch/model_prep.py	2015
 torchlens/backends/torch/model_prep.py::_capture_module_metadata	81
 torchlens/backends/torch/model_prep.py::_ensure_module_output_tensor_logged	314
 torchlens/backends/torch/model_prep.py::_make_user_forward_hook_wrapper	101
 torchlens/backends/torch/model_prep.py::_make_user_forward_hook_wrapper.wrapped_hook	79
-torchlens/backends/torch/model_prep.py::_prepare_model_session	125
+torchlens/backends/torch/model_prep.py::_prepare_model_session	123
 torchlens/backends/torch/model_prep.py::_record_module_entry_metadata	138
 torchlens/backends/torch/model_prep.py::_record_module_exit_metadata	169
 torchlens/backends/torch/model_prep.py::module_forward_decorator	123

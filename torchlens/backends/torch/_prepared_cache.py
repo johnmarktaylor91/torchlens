@@ -1,24 +1,25 @@
-"""Opt-in prepared-model cache: a model keeps its session preparation between captures.
+"""Opt-in prepared-model cache: a model keeps its built ``forward`` wrappers between captures.
 
-Outside :func:`kept_prepared` nothing changes: every capture installs its
-session ``forward`` wrappers on the model's submodules at entry and puts them
-back at cleanup, so a model between captures holds no TorchLens callable.
+Outside :func:`kept_prepared` nothing changes: every capture builds its session
+``forward`` wrappers for the model's submodules at entry and puts the prior
+``forward`` back at cleanup.
 
-Inside ``with kept_prepared(model):`` the wrappers one capture installed stay on
-the model until the next capture of the same model, which reuses them only
-after an identity check: the module tree record (which modules, under which
-names, of which classes), every parameter object, and, per wrapped module, that
-its ``forward`` is still the kept wrapper and its class ``forward`` is the one
-wrapped. Any mismatch puts the kept wrappers back and prepares afresh. Every
-other part of preparation and cleanup (parameter stamps and ``requires_grad``
-restore, buffer stamps, tensor-label clearing, module metadata) still runs on
-every capture. When the block exits, on every path, the kept wrappers are put
-back, so the model is left exactly as after a capture outside the block.
+Inside ``with kept_prepared(model):`` the wrapper objects the first capture
+built are kept aside (never on the model) and the next capture of the same
+model installs those same objects instead of building new ones, after an
+identity check: the module tree record (which modules, under which names, of
+which classes), every parameter object, and, per wrapped module, that its
+instance ``forward`` is still the one the wrapper was built over and its class
+``forward`` is the one wrapped. Any mismatch builds fresh wrappers, which the
+block keeps from then on. Session cleanup still puts every prior ``forward``
+back after each capture, on every path, so between captures and after the block
+the model holds no TorchLens callable, exactly as outside the block. Every other
+part of preparation and cleanup (parameter stamps and ``requires_grad`` restore,
+buffer stamps, tensor-label clearing, module metadata) runs on every capture.
 
-The wrappers read the active capture at call time, so a call between captures
-passes straight through to the original ``forward``, and a deep copy or pickle
-taken between captures reduces to the prior ``forward`` exactly as it does
-during a capture (:class:`._session_forwards._SessionForward`).
+The wrappers read the active capture at call time
+(:func:`.model_prep.module_forward_decorator`), so one wrapper object serves any
+number of captures.
 """
 
 from __future__ import annotations
@@ -28,7 +29,6 @@ import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from torch import nn
@@ -44,7 +44,7 @@ __all__ = ["kept_prepared", "install_session_forwards"]
 
 @dataclass(slots=True)
 class _KeptPreparation:
-    """The preparation one model keeps between the captures of one block.
+    """The wrappers one model keeps between the captures of one block.
 
     ``installed`` holds ``(module, prior, wrapper, class_forward)`` per wrapped
     submodule, as the session install recorded them plus the class ``forward``
@@ -56,7 +56,7 @@ class _KeptPreparation:
     tree_record: Any = None
     params: tuple[nn.Parameter, ...] = ()
     installed: list[tuple[nn.Module, Any, Any, Any]] = field(default_factory=list)
-    restore: Callable[[Any], None] | None = None
+    no_instance: Any = None
 
 
 #: ``id(model) -> kept preparation`` for every model inside a ``kept_prepared`` block.
@@ -89,58 +89,43 @@ def _kept_still_valid(kept: _KeptPreparation, model: nn.Module) -> bool:
         return False
     if not _same_params(kept.params, model_parameters(model)):
         return False
-    for module, _prior, wrapper, class_forward in kept.installed:
-        if module.__dict__.get("forward") is not wrapper:
+    for module, prior, _wrapper, class_forward in kept.installed:
+        if module.__dict__.get("forward", kept.no_instance) is not prior:
             return False
         if _class_forward(module) is not class_forward:
             return False
     return True
 
 
-def _put_back(kept: _KeptPreparation) -> None:
-    """Put back every ``forward`` the kept wrappers replaced, as the session cleanup does.
-
-    The session's own restore runs over the kept install record, so a module
-    whose ``forward`` no longer holds the kept wrapper keeps the newer value.
-    """
-
-    installed, kept.installed = kept.installed, []
-    kept.tree_record = None
-    kept.params = ()
-    if not installed or kept.restore is None:
-        return
-    record = [(module, prior, wrapper) for module, prior, wrapper, _cls in installed]
-    kept.restore(
-        SimpleNamespace(_module_capture_ws=SimpleNamespace(session_forward_wrappers=record))
-    )
-
-
-def _rearm_session(trace: Trace, model: nn.Module) -> None:
-    """Run the per-capture part of the wrapper install for reused wrappers.
+def _reinstall(trace: Trace, model: nn.Module, kept: _KeptPreparation) -> None:
+    """Install the kept wrappers for this capture, as the session install would.
 
     The wrappers' module boundary was registered, process-wide, by the install
-    that built them.
+    that built them. The install record goes to the session as usual, so its
+    cleanup puts every prior ``forward`` back.
     """
 
     workspace = trace._module_capture_ws
     workspace.stateful_module_ids, workspace.stateful_module_addresses = cached_scope_facts(model)
-    workspace.session_forward_wrappers = []
+    record = workspace.session_forward_wrappers
+    for module, prior, wrapper, _class in kept.installed:
+        module.__dict__["forward"] = wrapper
+        record.append((module, prior, wrapper))
 
 
 def install_session_forwards(
     trace: Trace,
     model: nn.Module,
     install: Callable[[Trace, nn.Module], None],
-    restore: Callable[[Any], None],
+    no_instance: Any,
 ) -> None:
     """Install this capture's submodule ``forward`` wrappers, reusing kept ones in a block.
 
-    Outside a :func:`kept_prepared` block this is ``install(trace, model)``.
-    ``restore`` is the session cleanup's wrapper restore; the block uses it to
-    put the kept wrappers back.
-    Inside one, valid kept wrappers are reused; otherwise the kept ones are put
-    back, ``install`` runs, and the block takes the new wrappers over from the
-    session (the session's cleanup then has nothing of them to restore).
+    Outside a :func:`kept_prepared` block this is ``install(trace, model)``, the
+    session install. Inside one, valid kept wrappers are installed again;
+    otherwise fresh ones are built and kept for the captures that follow.
+    ``no_instance`` is the install record's marker for a module that had no
+    instance ``forward``.
     """
 
     kept = _KEPT.get(id(model))
@@ -148,31 +133,29 @@ def install_session_forwards(
         install(trace, model)
         return
     if kept.installed and _kept_still_valid(kept, model):
-        _rearm_session(trace, model)
+        _reinstall(trace, model, kept)
         return
-    _put_back(kept)
-    kept.restore = restore
+    kept.installed, kept.tree_record, kept.params = [], None, ()
     install(trace, model)
-    workspace = trace._module_capture_ws
     record = current_tree_record(model)
     if record is None:
-        return  # an undescribable tree is prepared afresh every capture
+        return  # an undescribable tree gets fresh wrappers every capture
     kept.installed = [
         (module, prior, wrapper, _class_forward(module))
-        for module, prior, wrapper in workspace.session_forward_wrappers
+        for module, prior, wrapper in trace._module_capture_ws.session_forward_wrappers
     ]
     kept.tree_record = record
     kept.params = model_parameters(model)
-    workspace.session_forward_wrappers = []
+    kept.no_instance = no_instance
 
 
 @contextmanager
 def kept_prepared(model: nn.Module) -> Iterator[nn.Module]:
-    """Keep ``model``'s capture preparation between the captures made inside the block.
+    """Keep ``model``'s built ``forward`` wrappers for the captures made inside the block.
 
-    Re-entering the block for the same model nests; the outermost exit puts the
-    kept wrappers back. ``requires_grad`` and every per-capture observation are
-    restored or re-read on every capture, inside the block as outside it.
+    Re-entering the block for the same model nests; the outermost exit drops
+    the kept wrappers. The model itself is left as after any capture: the
+    session cleanup has already put every prior ``forward`` back.
 
     Parameters
     ----------
@@ -196,9 +179,5 @@ def kept_prepared(model: nn.Module) -> Iterator[nn.Module]:
         yield model
     finally:
         kept.depth -= 1
-        if kept.depth == 0:
-            try:
-                _put_back(kept)
-            finally:
-                if _KEPT.get(id(model)) is kept:
-                    del _KEPT[id(model)]
+        if kept.depth == 0 and _KEPT.get(id(model)) is kept:
+            del _KEPT[id(model)]
