@@ -107,7 +107,9 @@ class TFSourceContext:
         if loading:
             location._ensure_source_loaded()
         else:
-            location._linecache_entry = FuncCallLocation._cached_source_fingerprint(
+            # ``_linecache_entry`` is a runtime-only row cell with no declared annotation.
+            row: Any = location
+            row._linecache_entry = FuncCallLocation._cached_source_fingerprint(
                 code.co_filename, self.num_context_lines, self._cache
             )
         return location

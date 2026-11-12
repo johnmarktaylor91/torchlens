@@ -46,7 +46,7 @@ from ...intervention._predicates import as_intervention_decision
 from ...intervention._types import Edit, InterventionDecision
 from ...recording._exceptions import PredicateError
 from ..registry import BackendUnsupportedError
-from ._halt import TFHaltRuntime, apply_halt_outcome, chain_output_hooks
+from ._halt import CallbackAbort, TFHaltRuntime, apply_halt_outcome, chain_output_hooks
 from ._intervention_hooks import (
     _producer_label,
     _selector_kinds,
@@ -730,10 +730,14 @@ def run_wired_session(tf: Any, session: Any, wiring: TFEagerWiring) -> Any:
         The session result (``stop_signal`` set when ``stop_after`` halted).
     """
 
-    if wiring.plan is None:
-        return session.run()
-    with tf_intervention_wrap(tf, wiring.plan, session):
-        result = session.run()
+    try:
+        if wiring.plan is None:
+            return session.run()
+        with tf_intervention_wrap(tf, wiring.plan, session):
+            result = session.run()
+    except CallbackAbort as abort:
+        # A typed refusal raised by an observer inside the op callback.
+        raise abort.error.with_traceback(abort.error.__traceback__) from None
     cut = wiring.halt.cut_labels if wiring.halt is not None else frozenset()
     audit_tf_site_reachability(wiring.plan, session, exempt=cut)
     return result

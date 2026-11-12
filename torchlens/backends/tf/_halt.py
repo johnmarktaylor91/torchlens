@@ -30,6 +30,22 @@ from ..registry import BackendUnsupportedError
 RecordedBatch = list[tuple[str, RecordContext, Any]]
 
 
+class CallbackAbort(BaseException):
+    """Carry an observer's exception out of an op callback unchanged.
+
+    Keras re-creates an ``Exception`` raised inside a layer call with an amended
+    message, which drops typed fields such as ``code``. A ``BaseException`` passes
+    through Keras and the eager executor untouched (as the halt signal does), and the
+    capture entry re-raises the original error.
+    """
+
+    def __init__(self, error: Exception) -> None:
+        """Store the original observer exception."""
+
+        super().__init__(error)
+        self.error = error
+
+
 class TFHaltRuntime:
     """Session-scoped ``stop_after`` state for one TensorFlow eager capture."""
 
@@ -152,14 +168,15 @@ def chain_output_hooks(
     present = [hook for hook in hooks if hook is not None]
     if not present:
         return None
-    if len(present) == 1:
-        return present[0]
 
     def chained(recorded: RecordedBatch) -> None:
-        """Run every observer on one recorded batch."""
+        """Run every observer on one recorded batch; carry errors out as ``CallbackAbort``."""
 
-        for hook in present:
-            hook(recorded)
+        try:
+            for hook in present:
+                hook(recorded)
+        except Exception as error:
+            raise CallbackAbort(error) from error
 
     return chained
 
@@ -204,6 +221,7 @@ def refuse_static_halt(halt: Any, reason: str) -> None:
 
 
 __all__ = [
+    "CallbackAbort",
     "TFHaltRuntime",
     "apply_halt_outcome",
     "chain_output_hooks",
