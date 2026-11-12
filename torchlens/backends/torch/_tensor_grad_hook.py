@@ -64,6 +64,7 @@ __all__ = (
 _TENSORBASE_CLS = require_tensorbase_class(get_tensorbase_class())
 raw_grad_fn = _TENSORBASE_CLS.grad_fn.__get__
 raw_requires_grad = _TENSORBASE_CLS.requires_grad.__get__
+_TENSOR = torch.Tensor
 
 
 @contextmanager
