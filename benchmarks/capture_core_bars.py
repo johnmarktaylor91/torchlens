@@ -113,6 +113,13 @@ def lane_bars() -> tuple[Bar, ...]:
             "trace plus to_pandas() not above baseline",
         ),
         _fraction("T1", "c1.chain1000.emit_total_per_op", 80, emit_today, "emit total to 80"),
+        _fraction(
+            "T1B",
+            _phase("wrapper.emit.commit_op"),
+            104.1 - 90,
+            104.1,
+            "commit_op cut by at least 90 calls per op (104.1 to 14.1)",
+        ),
         _fraction("T2", _phase("post.map_final_labels"), 5, 75, "map final labels 75 to 5"),
         _fraction("T3", _phase("post"), 150, 563, "postprocess other 420 to 150"),
         Bar("T4a", _phase("post.find_output_ancestors"), "fraction", 0.10, "to 10% of baseline"),

@@ -750,6 +750,7 @@
   "c1.chain1000.phase.post.mark_tracing_finished": 0.04925149700598802,
   "c1.chain1000.phase.post.remove_orphan_nodes": 14.840419161676648,
   "c1.chain1000.phase.wrapper": 57.8747005988024,
+  "c1.chain1000.phase.wrapper.emit.commit_op": 13.645808383233533,
   "c1.chain1000.phase.wrapper.emit.shared_fields": 220.3931137724551,
   "c1.chain1000.total_per_op": 1721.7778443113773,
   "c1.gpt2_tiny4.phase.forward.other": 190.0,
@@ -1438,6 +1439,16 @@
     "fraction": 0.065466,
     "baseline": 1222.064870259481,
     "bar": 80.00424682549794
+   }
+  ],
+  "T1B": [
+   {
+    "counter": "c1.chain1000.phase.wrapper.emit.commit_op",
+    "kind": "fraction",
+    "plan": "commit_op cut by at least 90 calls per op (104.1 to 14.1)",
+    "fraction": 0.135447,
+    "baseline": 103.88522954091816,
+    "bar": 14.070910053092657
    }
   ],
   "T2": [
