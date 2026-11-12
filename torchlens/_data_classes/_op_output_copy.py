@@ -27,9 +27,11 @@ import torch
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._quantities import Bytes, Duration, Flops
 from .._trace_core.alias_registry import register_shared_cells
-from .._trace_core.op_store import _MISSING, row_clone_scope
+from .._trace_core.cell_states import LazyCell
+from .._trace_core.op_store import _MISSING, OpRowStore, PooledCell, row_clone_scope
 from .._utils._record_group_table import op_attr
 from . import _op_copy
+from ._op_row_release import _OP_FACADE
 
 if TYPE_CHECKING:
     from .op import Op
@@ -81,6 +83,9 @@ _ALWAYS_SHARED_FIELDS = frozenset(
 #: pinned equal by the tests); they keep going through ``getattr``.
 _INTERCEPTED_READ_FIELDS = frozenset({"grad", "out"})
 
+#: Raw cells a plain field descriptor transforms on read (lazy answer, pooled hydrate).
+_TRANSFORMED_CELLS = frozenset({LazyCell, PooledCell})
+
 #: ``(op class, shared fields, unread fields)`` -> per-field read plan.
 _PLANS: dict[tuple[type, frozenset[str], frozenset[str]], tuple[tuple[Any, ...], ...]] = {}
 
@@ -100,12 +105,14 @@ def _class_attribute(cls: type, name: str) -> Any:
 def _field_plan(
     cls: type, shared: frozenset[str], unread: frozenset[str]
 ) -> tuple[tuple[Any, ...], ...]:
-    """Return ``(field, data descriptor or None, attribute, shared)`` per copied field.
+    """Return ``(field, data descriptor or None, attribute, shared, fid)`` per copied field.
 
     A field whose attribute is a data descriptor on ``cls`` (and not an
     intercepted read) is read by calling the descriptor, which is what
     ``getattr`` does for it after ``Op.__getattribute__``; every other field
-    is read with ``getattr``.
+    is read with ``getattr``. ``fid`` is the column id of a plain generated
+    row-cell descriptor (whose read is the raw cell unless that cell is unset,
+    lazy or pooled), else ``None``.
     """
 
     key = (cls, shared, unread)
@@ -124,7 +131,9 @@ def _field_plan(
         )
         if not is_data_descriptor or field in _INTERCEPTED_READ_FIELDS:
             descriptor = None
-        rows.append((field, descriptor, attr, field in shared))
+        plain = descriptor_type.__name__ == "_OpField" and descriptor_type in _OP_FACADE[0][3]
+        fid = descriptor._fid if descriptor is not None and plain else None
+        rows.append((field, descriptor, attr, field in shared, fid))
     plan = tuple(rows)
     _PLANS[key] = plan
     return plan
@@ -163,20 +172,50 @@ def _independent_value(value: Any) -> Any:
     return _op_copy._copy_op_field_value(value)
 
 
+def _plain_cells(op: Op) -> list[Any] | None:
+    """Return ``op``'s raw row cells when its store is a plain row-major ``OpRowStore``.
+
+    Only there is a plain descriptor's read exactly the raw cell (audited and
+    sealed stores are subclasses and keep the descriptor read).
+    """
+
+    store = _GET(op, "_core")
+    if store.__class__ is not OpRowStore or store._rows is None:
+        return None
+    return store._rows[_GET(op, "_row")]
+
+
+def _descriptor_read(descriptor: Any, op: Op, cls: type) -> Any:
+    """Return ``descriptor``'s read of ``op``, or ``None`` when it raises ``AttributeError``."""
+
+    try:
+        return descriptor.__get__(op, cls)
+    except AttributeError:
+        return None
+
+
 def _read_parent_fields(op: Op, plan: tuple[tuple[Any, ...], ...]) -> dict[str, Any]:
     """Read every planned field from ``op``'s row, copied by the copy policy."""
 
     cls = type(op)
+    cells = _plain_cells(op)
+    shared_classes = _SHARED_CLASSES
     fields_dict: dict[str, Any] = {}
-    for field, descriptor, attr, shared in plan:
-        if descriptor is None:
+    for field, descriptor, attr, shared, fid in plan:
+        if cells is not None and fid is not None:
+            value = cells[fid]
+            if value is _MISSING:
+                value = None
+            elif value.__class__ in _TRANSFORMED_CELLS:
+                value = _descriptor_read(descriptor, op, cls)
+        elif descriptor is None:
             value = getattr(op, attr, None)
         else:
-            try:
-                value = descriptor.__get__(op, cls)
-            except AttributeError:
-                value = None
-        fields_dict[field] = value if shared else _independent_value(value)
+            value = _descriptor_read(descriptor, op, cls)
+        if shared or value.__class__ in shared_classes:
+            fields_dict[field] = value
+        else:
+            fields_dict[field] = _independent_value(value)
     return fields_dict
 
 
