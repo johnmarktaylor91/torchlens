@@ -13,9 +13,9 @@ from typing import Any
 
 import numpy as np
 import pytest
-from conftest import tensorflow_backend_modules
 
 import torchlens as tl
+from tests.backends.conftest import tensorflow_backend_modules
 from torchlens._capture.outcome import CaptureStatus
 from torchlens.backends.tf.backend import TFBackend
 from torchlens.errors import BackendUnsupportedError, InvalidArgumentError, TorchLensWarning

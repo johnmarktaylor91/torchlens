@@ -12,9 +12,9 @@ import inspect
 from typing import Any
 
 import pytest
-from conftest import tensorflow_backend_modules
 
 import torchlens as tl
+from tests.backends.conftest import tensorflow_backend_modules
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 
