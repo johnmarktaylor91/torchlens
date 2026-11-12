@@ -42,6 +42,7 @@ from ..backends.registry import (
 )
 from ..recording._halt import StopSignal
 from ._lazy_contexts import lazy_history_of
+from .gc_hold import hold_collector, release_collector
 from .outcome import (
     CapturePhase,
     demote_outcome,
@@ -721,7 +722,39 @@ def run_and_log_inputs_through_model(
 
     The RUN stage's control skeleton; the step order is documented in the
     module docstring. Returns the forward's output (or the halted output).
+    The whole run, postprocess included, is under the collector hold
+    (:mod:`torchlens._capture.gc_hold`), released on every exit.
     """
+
+    hold_collector()
+    try:
+        return _run_held(
+            self,
+            model,
+            input_args,
+            input_kwargs,
+            layers_to_save,
+            grad_layers_to_save,
+            seed,
+            postprocess,
+            reservation_resume,
+        )
+    finally:
+        release_collector()
+
+
+def _run_held(
+    self: "Trace",
+    model: object,
+    input_args: Any | list[Any],
+    input_kwargs: dict[Any, Any] | None,
+    layers_to_save: str | list[str | int] | None,
+    grad_layers_to_save: str | list[str | int] | None,
+    seed: int | None,
+    postprocess: bool,
+    reservation_resume: object | None,
+) -> Any:
+    """The RUN skeleton itself, called with the collector held."""
 
     backend, seed = _begin_capture(self, model, input_args, input_kwargs, seed)
     _resolve_save_selectors(self, layers_to_save, grad_layers_to_save)
