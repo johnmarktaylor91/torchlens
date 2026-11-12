@@ -20,6 +20,7 @@ from torchlens._utils.hashing import make_short_barcode_from_input
 from torchlens.backends.torch import _arg_hash
 from torchlens.backends.torch._equivalence_resolve import (
     observe_call_site_key,
+    pending_chain,
     resolve_call_site_class,
     resolve_equivalence_class,
 )
@@ -172,10 +173,10 @@ def test_call_site_key_observed_then_resolved_in_op_order() -> None:
     stateful = frozenset({"enc"})
     modules = [("enc", 1), ("enc.act", 1)]
     keys = [
-        observe_call_site_key((7, chain), 7, modules, stateful, "relu", None),
-        observe_call_site_key((8, other), 8, modules, stateful, "relu", None),
-        observe_call_site_key((9, chain), 9, modules, stateful, "relu", 1),
-        observe_call_site_key((10, chain), 10, modules, stateful, "relu", None),
+        observe_call_site_key(pending_chain((7, chain), 7), modules, stateful, "relu", None),
+        observe_call_site_key(pending_chain((8, other), 8), modules, stateful, "relu", None),
+        observe_call_site_key(pending_chain((9, chain), 9), modules, stateful, "relu", 1),
+        observe_call_site_key(pending_chain((10, chain), 10), modules, stateful, "relu", None),
     ]
     assert keys[0] == ("enc", chain, "relu", None)
     index: dict[Any, int] = {}
@@ -183,9 +184,11 @@ def test_call_site_key_observed_then_resolved_in_op_order() -> None:
     fused: dict[Any, int] = {}
     expected = [call_site_class(fused, key, "relu", key[3]) for key in keys if key is not None]
     assert resolved == expected == ["relu@cs1", "relu@cs2", "relu@cs3_outindex1", "relu@cs1"]
-    assert observe_call_site_key((7, chain), 8, modules, stateful, "relu", None) is None
-    assert observe_call_site_key((7, ()), 7, modules, stateful, "relu", None) is None
-    assert observe_call_site_key(None, 7, modules, stateful, "relu", None) is None
+    assert (
+        observe_call_site_key(pending_chain((7, chain), 8), modules, stateful, "relu", None) is None
+    )
+    assert observe_call_site_key(pending_chain((7, ()), 7), modules, stateful, "relu", None) is None
+    assert observe_call_site_key(pending_chain(None, 7), modules, stateful, "relu", None) is None
 
 
 class _MutatesPadAfterCall(nn.Module):

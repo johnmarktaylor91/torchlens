@@ -38,7 +38,11 @@ from ..._utils.tensor_utils import (
 )
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
-from ._equivalence_resolve import observe_call_site_key, resolve_call_site_class
+from ._equivalence_resolve import (
+    observe_call_site_key,
+    pending_chain,
+    resolve_call_site_class,
+)
 from ._ops_fresh_payload import fresh_plain_payload_eligible, save_fresh_plain_activation
 from ._ops_function_family import NAME_FAMILY, name_family
 from ._same_object_handoff import pop_same_object_mutation, reference_payload_source
@@ -81,8 +85,7 @@ def _call_site_equivalence_class(
 
     ws = trace._raw_graph_ws
     key = observe_call_site_key(
-        ws._pending_call_site,
-        fields_dict["func_call_id"],
+        pending_chain(ws._pending_call_site, fields_dict["func_call_id"]),
         fields_dict["modules"],
         trace._module_capture_ws.stateful_module_addresses,
         fields_dict["func_name"],
