@@ -84,7 +84,7 @@ from ._ops_containers import _walk_output_tensors_with_paths
 from ._ops_finalize import _make_layer_log_entry
 from ._ops_interventions import _pop_tensor_live_fire_results
 from ._predicate_forward import _predicate_module_forward
-from ._prepared_cache import install_session_forwards as _install_forwards
+from ._prepared_cache import _KEPT, install_session_forwards as _install_forwards
 from ._quantized_flops import estimate_quantized_module_forward_flops
 from ._replacement_op_fields import _next_untagged_tensor_label
 from ._replacement_template import _replacement_template_fields
@@ -416,16 +416,16 @@ def _prepare_model_session(
 
     All session-scoped state is cleaned up by ``_cleanup_model_session``.
     """
-    # install this capture's label-anchoring session FIRST, before any
-    # path can stamp a label. A previously installed session is dropped here,
-    # so a label issued by an earlier capture resolves against nothing. The
-    # registry is module-level state in ``_tl`` (not a Trace field): it must be
-    # reachable from ``set_tensor_label`` itself, which is the choke point every
-    # label stamp flows through and which has no Trace in scope.
+    # Install this capture's label-anchoring session first, before any path can stamp a label;
+    # an earlier capture's labels then resolve against nothing. It is module state in ``_tl``
+    # because ``set_tensor_label``, which every label stamp flows through, has no Trace.
     begin_label_session()
     _state._dir_cache.clear()
     trace._module_capture_ws.exhaustive_module_stack = []
-    _install_forwards(trace, model, _install_session_forward_wrappers, _NO_INSTANCE_FORWARD)
+    if _KEPT:  # a kept_prepared block is open; the default path makes no extra call
+        _install_forwards(trace, model, _install_session_forward_wrappers, _NO_INSTANCE_FORWARD)
+    else:
+        _install_session_forward_wrappers(trace, model)
     record_model_identity(trace, model)
 
     _seen_module_ids: dict[int, str] = {}  # finds a module shared at several addresses
