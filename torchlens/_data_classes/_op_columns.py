@@ -337,7 +337,12 @@ class OpColumns:
             name in op_module._INTERCEPTED_READ_FIELDS
         ):
             raise ValueError(f"Op.{name} writes are guarded by the facade; write the facade")
-        attribute = _planned_attribute(name)[0]
+        # A field with no read plan takes the direct lookup: the plan probe would add
+        # two calls to every unplanned write (``mark_tracing_finished``'s flag).
+        if name in _READ_PLANS:
+            attribute = _planned_attribute(name)[0]
+        else:
+            attribute = _stored_attribute(name)
         relation = _is_relation_write(name, attribute)
         store = self.store
         fid = store.layout.fid_by_name[name]
