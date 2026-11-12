@@ -14,6 +14,10 @@ obvious from the name.
 
 _SCOPED_CAPTURE_STATE = frozenset(
     {
+        # Opt-in prepared-model cache: an entry exists only while its model is inside
+        # a ``kept_prepared`` block and is removed in the block's finally, after the
+        # kept forward wrappers are put back.
+        ("torchlens/backends/torch/_prepared_cache.py", "_KEPT"),
         # Capture observer's attribute rewind (AGT-2360): set by
         # capture_observer_bracket for the capture it wraps and restored to the
         # enclosing value in its finally; the escape-rescue re-run calls it. A
@@ -1282,6 +1286,7 @@ failures.
 
 _STATIC_EXPORT_LISTS = frozenset(
     {
+        ("torchlens/backends/torch/_prepared_cache.py", "__all__"),
         ("torchlens/backends/torch/_graph_pins.py", "__all__"),
         ("torchlens/errors/_quiet.py", "__all__"),
         ("torchlens/__init__.py", "__all__"),
