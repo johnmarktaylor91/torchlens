@@ -2,7 +2,7 @@
 
 import weakref
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -114,11 +114,7 @@ def _emit_exhaustive_operation_events(
         event_index=int(fields_dict.get("raw_index") or func_call_id),
     )
     expected_output_count = len(output_entries)
-    loggable_output_count = sum(
-        1
-        for output_entry in output_entries
-        if _output_should_be_logged(output_entry.value, is_bottom_level_func)
-    )
+    loggable_output_count, single_verdict = _loggable_outputs(output_entries, is_bottom_level_func)
     use_single_output_fields = (
         loggable_output_count == 1
         and len(output_entries) == 1
@@ -150,7 +146,7 @@ def _emit_exhaustive_operation_events(
     # entry against a minted safe copy so the live input keeps its label.
     # out= destinations are excluded -- the op genuinely WROTE into them, so
     # the live destination must keep advancing to this op's label.
-    out_destination_ids = _out_destination_ids(kwargs)
+    out_destination_ids = _out_destination_ids(kwargs) if kwargs else _NO_IDS
 
     # ``torch._foreach_*`` semantics are ZIPPED: output ``i`` is computed from
     # member ``i`` of each tensor-list argument (plus any whole-call scalar or
@@ -182,11 +178,15 @@ def _emit_exhaustive_operation_events(
     # output parks the frozen ref here and every sibling reuses it.
     call_ref_box: list[FunctionCallRef] = []
 
+    keep_alias_contract = _should_keep_alias_mutation_contract(self)
     for i, output_entry in enumerate(output_entries):
         out = output_entry.value
-        if not _output_should_be_logged(out, is_bottom_level_func):
+        if single_verdict is None:
+            if not _output_should_be_logged(out, is_bottom_level_func):
+                continue
+        elif not single_verdict:
             continue
-        out_tensor = cast(torch.Tensor, out)
+        out_tensor: torch.Tensor = out
         if (
             output_entry.container_spec is not None
             and id(out_tensor) not in out_destination_ids
@@ -229,6 +229,7 @@ def _emit_exhaustive_operation_events(
             parent_param_ops,
             fields_dict_onetensor,
             output_entry.autograd_stats,
+            keep_alias_contract,
         )
         if i == 0 and getattr(self, "track_device_memory", False):
             # Re-key the call-level device-memory sample (observe item 15) to
@@ -248,7 +249,7 @@ def _emit_exhaustive_operation_events(
                     fields_dict_onetensor["bytes_peak_at_call"] = peak_value
         detect_backend_semantics = (
             detect_torch_alias_contract
-            if _should_keep_alias_mutation_contract(self)
+            if keep_alias_contract
             else detect_torch_output_alias_contract
         )
         # Mutation/alias detection (``tensor_nanequal`` -> ``torch.equal`` /
@@ -286,18 +287,15 @@ def _emit_exhaustive_operation_events(
             self.__dict__.setdefault("_autograd_saved_bands", {})[
                 fields_dict_onetensor["_label_raw"]
             ] = output_entry.autograd_band
-        new_layer_entry = cast(
-            Op,
-            _make_layer_log_entry(
-                self,
-                out_tensor,
-                fields_dict=fields_dict_onetensor,
-                t_args=arg_copies,
-                t_kwargs=kwarg_copies,
-                activation_transform=self._options_activation_transform,
-                event_module_stack=event_module_stack,
-                call_ref_box=call_ref_box,
-            ),
+        new_layer_entry: Op = _make_layer_log_entry(
+            self,
+            out_tensor,
+            fields_dict=fields_dict_onetensor,
+            t_args=arg_copies,
+            t_kwargs=kwarg_copies,
+            activation_transform=self._options_activation_transform,
+            event_module_stack=event_module_stack,
+            call_ref_box=call_ref_box,
         )
         # The committed record backs the returned view; its reads go to the record directly.
         new_record = object.__getattribute__(new_layer_entry, "_record")
@@ -338,6 +336,27 @@ def _emit_exhaustive_operation_events(
         if options is not None and options.halt is not None:
             halt_ctx = _build_trace_predicate_context(self, fields_dict_onetensor, out_tensor)
             evaluate_halt_stop(self, halt_ctx, options, frontier_output=out_tensor)
+
+
+def _loggable_outputs(output_entries: Any, is_bottom_level_func: bool) -> tuple[int, bool | None]:
+    """Return the loggable output count and, for a single output, its verdict.
+
+    The emit loop reuses a single output's verdict (nothing labels a tensor between the
+    count and the loop). With several outputs the verdict is ``None`` and the loop asks
+    again per entry, since logging an earlier entry labels a duplicated tensor.
+    """
+
+    if len(output_entries) == 1:
+        verdict = _output_should_be_logged(output_entries[0].value, is_bottom_level_func)
+        return int(verdict), verdict
+    count = sum(
+        1 for entry in output_entries if _output_should_be_logged(entry.value, is_bottom_level_func)
+    )
+    return count, None
+
+
+_NO_IDS: frozenset[int] = frozenset()
+"""The ``out=`` destination ids of a call without keyword arguments."""
 
 
 def _out_destination_ids(kwargs: Any) -> frozenset[int]:

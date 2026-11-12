@@ -1,14 +1,11 @@
 """Shared operation fields and tensor variation tracking."""
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import torch
 
 from ..._capture._arg_snapshot import split_non_tensor_args
-from ..._capture.arg_positions import (
-    _normalize_func_name,
-)
 from ..._capture.salient_args import extract_salient_args
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._ir.events import (
@@ -22,6 +19,7 @@ from ..._utils.tensor_utils import (
 )
 from ._completeness_origins import internal_scalar_read
 from ._ops_arg_slots import _SlotCall
+from ._ops_function_family import NAME_FAMILY, name_family
 from ._storage_exports import note_alias_rebound_snapshot, note_foreign_written_snapshot
 from .aliasing import (
     get_parent_contents_for_contract_position,
@@ -67,7 +65,7 @@ def _build_shared_fields_dict(
     are the parents' indexed journal records (no live views: their reads go to the record).
     """
     # Canonical layer_type: lowercase with underscores stripped (e.g. "conv2d").
-    layer_type = _normalize_func_name(func_name)
+    layer_type = (NAME_FAMILY.get(func_name) or name_family(func_name))[0]
     # Non-tensor args (metadata, equivalence hashing) are op-time snapshots.
     non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
     bound_aliases = _bind_call_alias_labels(args, kwargs) if _VIEW_MUTATION_RELABELS else ()
@@ -89,9 +87,8 @@ def _build_shared_fields_dict(
         _set_arg_template_fields(self, fields_dict, call)
         fields_dict["container_path"] = ()
         fields_dict["container_spec"] = None
-        # Whether this op saves gradients. The per-gradient placeholders (``grad``,
-        # ``grad_shape``, ``gradient_memory`` and their ``transformed_`` forms) are not
-        # written: the freeze never reads them and the op defaults supply them.
+        # Whether this op saves gradients; the per-gradient placeholders come from the op
+        # defaults (the freeze never reads them).
         fields_dict["save_grads"] = self._options_save_grads not in (None, False)
 
         # Function call info
@@ -102,9 +99,11 @@ def _build_shared_fields_dict(
         fields_dict["func_duration"] = exec_ctx.time_elapsed
         fields_dict["func_rng_states"] = exec_ctx.rng_states
         fields_dict["func_autocast_state"] = exec_ctx.autocast_state
-        fields_dict["num_args_total"] = len(args) + len(kwargs)
-        fields_dict["num_pos_args"] = len(args)
-        fields_dict["num_kwargs"] = len(kwargs)
+        num_pos_args = len(args)
+        num_kwargs = len(kwargs)
+        fields_dict["num_args_total"] = num_pos_args + num_kwargs
+        fields_dict["num_pos_args"] = num_pos_args
+        fields_dict["num_kwargs"] = num_kwargs
         fields_dict["non_tensor_pos_args"] = non_tensor_args
         fields_dict["non_tensor_kwargs"] = non_tensor_kwargs
         fields_dict["func_non_tensor_args"] = non_tensor_args + list(non_tensor_kwargs.values())
@@ -113,9 +112,8 @@ def _build_shared_fields_dict(
             self, fields_dict, parent_layer_labels, parent_records, args, kwargs, out_orig
         )
         parent_param_ops = _build_param_fields(self, fields_dict, arg_parameters)
-        # Module nesting. The module-I/O placeholders (``module_call_stack``,
-        # ``input_to_module_calls``, ``output_of_modules`` and the rest) are not written:
-        # the freeze never reads them and postprocess derives them from the records.
+        # Module nesting; the module-I/O placeholders are not written: the freeze never
+        # reads them and postprocess derives them from the records.
         modules = _snapshot_exhaustive_module_stack(self)
         fields_dict["module"] = modules[-1] if modules else None
         fields_dict["modules"] = modules
@@ -128,7 +126,7 @@ def _build_shared_fields_dict(
         )
 
         # Function config — lightweight hyperparameter extraction, always on.
-        param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("param_shapes"))
+        param_shapes: list[tuple[int, ...]] | None = fields_dict.get("param_shapes")
         fields_dict["func_config"] = extract_salient_args(
             layer_type, func_name, args, kwargs, param_shapes
         )
@@ -167,13 +165,11 @@ def _tag_tensor_and_track_variations(
 ) -> None:
     """Tag the output tensor with its label, add backward hook, and track parent content variations.
 
-    Parent content variation tracking detects in-place mutations: if a parent
-    tensor's value at function-call time (from arg_copies) differs from its
-    saved out, the pre-mutation value is recorded in
-    ``out_versions_by_child``.  This is critical for validation replay,
-    which needs the actual input values each child operation saw; ``live_args`` and ``live_kwargs`` feed its foreign-write marks.
-    ``child_record`` is the op's committed journal record; its fields are read off the record
-    with the expressions the live view's getters use, so no view is built.
+    Parent content variation tracking detects in-place mutations: if a parent tensor's
+    value at call time (from arg_copies) differs from its saved out, the pre-mutation
+    value is recorded in ``out_versions_by_child`` for validation replay; ``live_args``
+    and ``live_kwargs`` feed its foreign-write marks. ``child_record`` is the op's
+    committed journal record, read with the expressions the live view's getters use.
     """
     out_label = fields_dict_onetensor["_label_raw"]
     set_tensor_label(out, out_label)
@@ -182,6 +178,10 @@ def _tag_tensor_and_track_variations(
     # non-mutating identity return that reuses the same object (see is_inplace at capture).
     _record_label_version_snapshot(out)
     _add_tensor_backward_hook(self, out, out_label)
+    if not self._options_save_args:
+        # Every parent's version snapshot is None without saved arguments (its first
+        # test), so the loop appends nothing; its record reads are skipped.
+        return
 
     require_event = self.capture_events.live_index.require_event
     child_event = require_event(child_record.label_raw)

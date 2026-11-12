@@ -1004,6 +1004,15 @@ _PROCESS_CACHES = frozenset(
         # the call shapes a process sees, holds no tensors; a dynamic-spec verdict
         # is re-proved when ``_state._dynamic_arg_specs`` replaces its spec.
         ("torchlens/backends/torch/_ops_argument_fields.py", "_FAST_SHAPES"),
+        # Function-family resolutions (lane T1C): layer type and in-place name test per
+        # function name (pure functions of a string), and the qualname and transform
+        # descriptors per unbound builtin callable (module or type members, never user
+        # objects; a hit is checked by identity). Bounded by the names a process wraps.
+        ("torchlens/backends/torch/_ops_function_family.py", "CALLABLE_FAMILY"),
+        ("torchlens/backends/torch/_ops_function_family.py", "NAME_FAMILY"),
+        # Argument-hash digest per token tuple (exact strings, a pure function of the
+        # tokens); holds no tensors and is cleared when it reaches its bound.
+        ("torchlens/backends/torch/_arg_hash.py", "_ARG_HASH_DIGESTS"),
         ("torchlens/backends/torch/_graph_pins.py", "_BACKWARD_GRAD_FN_REGISTRY"),
         # Model-state root-matching boundaries, same lifecycle as the registry
         # above: evicted by the owning trace's slot callback and by cleanup().

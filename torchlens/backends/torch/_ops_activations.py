@@ -40,6 +40,7 @@ from ..._utils.tensor_utils import (
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
 from ._ops_fresh_payload import fresh_plain_payload_eligible, save_fresh_plain_activation
+from ._ops_function_family import NAME_FAMILY, name_family
 from ._same_object_handoff import pop_same_object_mutation, reference_payload_source
 from ._user_grad_fn import pop_op_grad_fn
 from .tensor_tracking import (
@@ -201,15 +202,13 @@ def _log_output_tensor_info(
     parent_param_ops: dict[str, int],
     fields_dict: dict[str, Any],
     autograd_saved_stats: tuple[int | None, int | None],
+    keep_alias_contract: bool,
 ) -> None:
     """Populate per-tensor fields that differ across outputs of a single function call.
 
-    This includes:
-      - Counter-based label generation (``_label_raw``).
-      - Operation equivalence type assignment (used by loop detection to
-        identify structurally identical operations across forward-pass iterations).
-      - FLOPs computation.
-      - Shape, dtype, and memory size.
+    This includes the counter-based label (``_label_raw``), the operation equivalence type
+    (loop detection uses it to match structurally identical operations across passes),
+    FLOPs, and shape, dtype and memory size.
 
     Label format: ``"{layer_type}_{type_num}_{realtime_num}_raw"``
       - ``layer_type``: normalized function name (e.g. "conv2d")
@@ -223,6 +222,7 @@ def _log_output_tensor_info(
         kwargs: Keyword args to the function.
         parent_param_ops: Dict mapping param barcodes to their current pass number.
         fields_dict: Per-tensor fields dict to populate (mutated in place).
+        keep_alias_contract: ``_should_keep_alias_mutation_contract(self)``, read once per call.
     """
     layer_type = fields_dict["type"]
     indiv_param_barcodes = list(parent_param_ops.keys())
@@ -256,9 +256,7 @@ def _log_output_tensor_info(
         # non-tensor args, output index, and containing module.  Each unique
         # non-param operation is seen only once (pass_index=1).
         logged_func_name = fields_dict["func_name"]
-        is_inplace_output = _is_inplace_augmented_assignment_dunder(logged_func_name) or (
-            logged_func_name.endswith("_") and not logged_func_name.startswith("__")
-        )
+        is_inplace_output = (NAME_FAMILY.get(logged_func_name) or name_family(logged_func_name))[1]
         equivalence_layer_type = f"{layer_type}_inplace" if is_inplace_output else layer_type
         equivalence_class = _get_equivalence_class(
             args, kwargs, i, equivalence_layer_type, fields_dict
@@ -307,7 +305,7 @@ def _log_output_tensor_info(
     # call's mutation verdict on it (signature incl. ``inplace=True``, refined by the
     # live receiver's version counter). Consume it so it never leaks onto the copy.
     same_object_mutation = pop_same_object_mutation(t)
-    if not _should_keep_alias_mutation_contract(self):
+    if not keep_alias_contract:  # _should_keep_alias_mutation_contract(self), once per call
         # Default forward-only capture: preserve the historical label-based flag exactly (no
         # runnable replay consumes it, so identity returns are harmless and goldens stay unchanged).
         fields_dict["is_inplace"] = prior_label is not None
@@ -781,7 +779,6 @@ def _retention_device(tensor: torch.Tensor, configured: Any) -> torch.device:
 from ._ops_capture_records import (  # noqa: E402
     _is_inplace_augmented_assignment_dunder,
     _label_version_baseline,
-    _should_keep_alias_mutation_contract,
 )
 from ._ops_retention import (  # noqa: E402
     _admit_save_budget,
