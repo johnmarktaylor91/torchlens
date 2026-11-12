@@ -160,9 +160,7 @@ def plain_facts(
 
     kind = value.__class__
     meta = getattr(value, "_tl", None)
-    if kind is _PARAMETER:
-        if meta is not None:
-            return None
+    if kind is _PARAMETER and meta is None:
         ok = validated_parameter(trace, value, frame[3])
         return (None, ok, (), False, True, ok)
     if kind is not _TENSOR or getattr(value, "_is_param", False):
@@ -183,9 +181,10 @@ def plain_facts(
     if label is None or label not in live:
         return _stale_stamped_facts(trace, value, meta, label, frame)
     source = meta.buffer_source
-    if source is None or source == label or source not in live:
-        return (label, True, (label,), bool(meta.data_alias), False, False)
-    return (label, True, (label, source), bool(meta.data_alias), False, False)
+    parents = (
+        (label,) if source is None or source == label or source not in live else (label, source)
+    )
+    return (label, True, parents, bool(meta.data_alias), False, False)
 
 
 def snapshot_flat_slots(

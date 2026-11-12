@@ -47,7 +47,7 @@ class _Varied(nn.Module):
         """Build six differently sized linear layers."""
         super().__init__()
         sizes = (6, 7, 5, 8, 4, 6, 3)
-        self.layers = nn.ModuleList(nn.Linear(a, b) for a, b in zip(sizes, sizes[1:]))
+        self.layers = nn.ModuleList(nn.Linear(a, b) for a, b in zip(sizes, sizes[1:], strict=False))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run the layers with a nonlinearity between them."""
@@ -321,7 +321,9 @@ def test_planned_observation_equals_reference(
     with _reference(monkeypatch):
         reference = _observe(monkeypatch, model_cls, shape, replayable)
     assert len(shipped[0]) == len(reference[0]), name
-    slot_diffs = [i for i, (a, b) in enumerate(zip(shipped[0], reference[0])) if a != b]
+    slot_diffs = [
+        i for i, (a, b) in enumerate(zip(shipped[0], reference[0], strict=True)) if a != b
+    ]
     assert slot_diffs == [], f"{name}: snapshot slots differ at ops {slot_diffs[:6]}"
     field_diffs = [a[0] for a, b in zip(shipped[1], reference[1], strict=True) if a != b]
     assert len(shipped[1]) == len(reference[1]) and field_diffs == [], f"{name}: {field_diffs[:6]}"
