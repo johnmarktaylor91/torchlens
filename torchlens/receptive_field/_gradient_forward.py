@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from torchlens.backends.registry import BackendUnsupportedError
-
 from .._record_type import record_type
 from ..backends.registry import get_backend_spec
 from ._engine_forward import solve_projective
@@ -475,7 +473,7 @@ def projective_gradient_for_unit(
     Raises
     ------
     BackendUnsupportedError
-        If the trace backend does not support true backward capture.
+        If the backend supports neither backward capture nor cone replay.
     ReceptiveFieldUnavailableError
         If saved-graph probing or cotangent linearization is unavailable.
     ReceptiveFieldError
@@ -485,11 +483,10 @@ def projective_gradient_for_unit(
     if atol < 0 or rtol < 0:
         raise ValueError("atol and rtol must be non-negative.")
     trace: Trace = source.source_trace
-    spec = get_backend_spec(str(trace._provenance_backend))
-    if not spec.capabilities.backward_capture:
-        raise BackendUnsupportedError(
-            f"Backend {spec.name!r} does not support projective gradient probes."
-        )
+    if not get_backend_spec(str(trace._provenance_backend)).capabilities.backward_capture:
+        from ._gradient_provider import projective_for_unit  # deferred: cycle receptive_field
+
+        return projective_for_unit(source, unit, target=target, atol=atol, rtol=rtol)
     if not trace._options_backward_ready:
         raise ReceptiveFieldUnavailableError(
             "Projective gradient fields require backward_ready=True and saved payloads. "
