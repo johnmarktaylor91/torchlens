@@ -10303,14 +10303,14 @@
         "tests/test_sanctioned_empty_omission.py"
       ],
       "torchlens/backends/torch/_functorch_check.py": [
+        "tests/test_autograd_saved_bytes.py",
+        "tests/test_autograd_saved_reader_soundness.py",
         "tests/test_capopts_truth_failed_capture_release.py",
         "tests/test_fastlog/test_dispatch_smoke.py",
         "tests/test_model_prep_hardening.py",
         "tests/test_module_entry_search_cuts.py",
         "tests/test_perf_gate.py",
-        "tests/test_release_model.py",
-        "tests/test_tl_lifecycle.py",
-        "tests/test_validation_hardening.py"
+        "tests/test_release_model.py"
       ],
       "torchlens/backends/torch/_fused_norm_writes.py": [
         "tests/test_capture_guard_transactionality.py",
