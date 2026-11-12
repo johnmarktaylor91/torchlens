@@ -140,6 +140,37 @@ def test_raising_adapter_recipe_is_recorded_and_named(tmp_path: Path, adapter: A
     assert "cannot describe y" in status.decisions[0]["detail"]
 
 
+def test_recipe_of_a_session_refused_op_is_kept_for_the_validator(
+    tmp_path: Path, adapter: Any
+) -> None:
+    def recipe(trace: Any, op: Any) -> Any:
+        if op.label == "o":
+            return fake.OpRecipe(
+                backend="fake",
+                op_identity="opaque",
+                inputs=(fake.InputOccurrence("s", (0,)),),
+                output_slots=("o",),
+            )
+        return fake.recipe(trace, op)
+
+    document = _section(_adapter(recipe=recipe))
+    assert document["not_replayable"] == []
+    loaded = _load(tmp_path, document)
+    assert codec.loaded_replay_recipe_status(loaded) is None
+    assert loaded.captures["o"].op_identity == "opaque"
+
+
+def test_raising_recipe_of_a_refused_op_stays_not_replayable(adapter: Any) -> None:
+    def recipe(trace: Any, op: Any) -> Any:
+        if op.label == "o":
+            raise RuntimeError("no capture")
+        return fake.recipe(trace, op)
+
+    document = _section(_adapter(recipe=recipe))
+    assert document["missing"] == []
+    assert document["not_replayable"] == [{"op_label": "o", "detail": "opaque region"}]
+
+
 def test_framework_version_mismatch_is_unavailable(
     tmp_path: Path, adapter: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

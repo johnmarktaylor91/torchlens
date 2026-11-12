@@ -151,19 +151,24 @@ def _op_label(op: Any) -> str:
 def _describe_op(trace: Any, op: Any, adapter: Any) -> tuple[str, Any]:
     """``("recipe", OpRecipe)``, ``("not_replayable", reason)`` or ``("missing", cause)``."""
 
-    # Complexity: an adapter is framework code run inside a save; any failure
-    # becomes this op's recorded cause and is reported by name after load.
+    # A recipe is saved whenever the adapter gives one, also for an op the
+    # replay session refuses: the backend validator judges that op after load
+    # exactly as it did live. Without a recipe, a refused op is recorded as not
+    # replayable and any other op as missing. Complexity: adapter code runs
+    # inside a save; any failure becomes this op's recorded cause, named after load.
+    try:
+        recipe = adapter.recipe(trace, op)
+        if recipe is not None:
+            validate_recipe(recipe)
+            return "recipe", recipe
+        cause = "the adapter returned no recipe for a replayable op"
+    except Exception as exc:  # noqa: BLE001 - recorded in the section and named after load
+        cause = f"{type(exc).__name__}: {exc}"
     try:
         reason = adapter.can_replay(trace, op)
-        if reason is not None:
-            return "not_replayable", str(reason)
-        recipe = adapter.recipe(trace, op)
-        if recipe is None:
-            return "missing", "the adapter returned no recipe for a replayable op"
-        validate_recipe(recipe)
-        return "recipe", recipe
     except Exception as exc:  # noqa: BLE001 - recorded in the section and named after load
-        return "missing", f"{type(exc).__name__}: {exc}"
+        return "missing", f"{cause}; can_replay raised {type(exc).__name__}: {exc}"
+    return ("missing", cause) if reason is None else ("not_replayable", str(reason))
 
 
 def build_section(trace: Any, adapter: Any, backend: str) -> dict[str, Any]:
