@@ -28,7 +28,8 @@ from torchlens._utils._torch_compat import (
     dynamo_is_compiling,
 )
 from torchlens._utils.rng import autocast as autocast_mod
-from torchlens.backends.torch import _tracing_pass, wrappers
+from torchlens.backends.torch import _tracing_pass, _wrapper_session, wrappers
+from torchlens.backends.torch._completeness_origins import internal_scalar_read
 
 
 def _new_session() -> Any:
@@ -367,21 +368,21 @@ def test_payload_window_slot_returns_each_traces_own_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Alternating traces each get their cached state; a dead trace's slot is never reused."""
-    monkeypatch.setattr(wrappers, "_COW_ENABLED", True)
+    monkeypatch.setattr(_wrapper_session, "_COW_ENABLED", True)
     model_a, model_b, model_c = _Owner(), _Owner(), _Owner()
     trace_a, trace_b = _TraceStub(model_a), _TraceStub(model_b)
-    first_a = wrappers._cow_payload_state_ptrs(trace_a)
-    first_b = wrappers._cow_payload_state_ptrs(trace_b)
+    first_a = _wrapper_session._cow_payload_state_ptrs(trace_a, internal_scalar_read)
+    first_b = _wrapper_session._cow_payload_state_ptrs(trace_b, internal_scalar_read)
     for _ in range(2):
-        assert wrappers._cow_payload_state_ptrs(trace_a) is first_a
-        assert wrappers._cow_payload_state_ptrs(trace_b) is first_b
-    assert first_a == wrappers._COW_STATE_PTRS_CACHE[trace_a]
-    assert first_b == wrappers._COW_STATE_PTRS_CACHE[trace_b]
-    wrappers._cow_payload_state_ptrs(trace_a)
+        assert _wrapper_session._cow_payload_state_ptrs(trace_a, internal_scalar_read) is first_a
+        assert _wrapper_session._cow_payload_state_ptrs(trace_b, internal_scalar_read) is first_b
+    assert first_a == _wrapper_session._COW_STATE_PTRS_CACHE[trace_a]
+    assert first_b == _wrapper_session._COW_STATE_PTRS_CACHE[trace_b]
+    _wrapper_session._cow_payload_state_ptrs(trace_a, internal_scalar_read)
     del trace_a
     gc.collect()
     trace_c = _TraceStub(model_c)
-    fresh = wrappers._cow_payload_state_ptrs(trace_c)
-    assert fresh == wrappers._COW_STATE_PTRS_CACHE[trace_c]
+    fresh = _wrapper_session._cow_payload_state_ptrs(trace_c, internal_scalar_read)
+    assert fresh == _wrapper_session._COW_STATE_PTRS_CACHE[trace_c]
     if first_a is not None:
         assert fresh != first_a

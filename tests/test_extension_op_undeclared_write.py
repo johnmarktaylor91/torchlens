@@ -20,7 +20,7 @@ import torch.nn as nn
 
 import torchlens as tl
 import torchlens.backends.torch._torch_ops_calls as _ops_calls
-import torchlens.backends.torch.wrappers as _wrappers
+import torchlens.backends.torch._wrapper_session as _wrapper_session
 from torchlens._utils import tensor_utils as _tu
 from torchlens.validation import last_validation_failure, validate_forward_pass
 
@@ -49,14 +49,14 @@ _LIB.impl("fill_out", _fill_out_impl, "CompositeExplicitAutograd")
 def _deferred_payload_clones() -> Iterator[None]:
     """Force deferred (clone-on-write) payload clones inside the block."""
 
-    prev_tu, prev_w = _tu._DEFER_ENABLED, _wrappers._COW_ENABLED
+    prev_tu, prev_w = _tu._DEFER_ENABLED, _wrapper_session._COW_ENABLED
     _tu._DEFER_ENABLED = True
-    _wrappers._COW_ENABLED = True
+    _wrapper_session._COW_ENABLED = True
     try:
         yield
     finally:
         _tu._DEFER_ENABLED = prev_tu
-        _wrappers._COW_ENABLED = prev_w
+        _wrapper_session._COW_ENABLED = prev_w
 
 
 class _ScatterIntoZeros(nn.Module):
