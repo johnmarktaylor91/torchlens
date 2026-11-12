@@ -3473,7 +3473,7 @@ docs-md	docs/maintainers/where.md	144
 docs-md	docs/maintainers/where.md	1440
 docs-md	docs/maintainers/where.md	145
 docs-md	docs/maintainers/where.md	146
-docs-md	docs/maintainers/where.md	1463
+docs-md	docs/maintainers/where.md	1460
 docs-md	docs/maintainers/where.md	14666
 docs-md	docs/maintainers/where.md	1467
 docs-md	docs/maintainers/where.md	147
@@ -3552,7 +3552,7 @@ docs-md	docs/maintainers/where.md	1825
 docs-md	docs/maintainers/where.md	183
 docs-md	docs/maintainers/where.md	1838
 docs-md	docs/maintainers/where.md	184
-docs-md	docs/maintainers/where.md	1840
+docs-md	docs/maintainers/where.md	1841
 docs-md	docs/maintainers/where.md	185
 docs-md	docs/maintainers/where.md	1858
 docs-md	docs/maintainers/where.md	186
@@ -4049,9 +4049,9 @@ docs-md	docs/maintainers/where.md	64
 docs-md	docs/maintainers/where.md	642
 docs-md	docs/maintainers/where.md	644
 docs-md	docs/maintainers/where.md	647
-docs-md	docs/maintainers/where.md	64768
 docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	649
+docs-md	docs/maintainers/where.md	64917
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
 docs-md	docs/maintainers/where.md	653
@@ -4104,7 +4104,7 @@ docs-md	docs/maintainers/where.md	72
 docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	725
-docs-md	docs/maintainers/where.md	727486
+docs-md	docs/maintainers/where.md	727635
 docs-md	docs/maintainers/where.md	728
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
@@ -9007,6 +9007,7 @@ test-docstrings	tests/test_episode_truth_refusals.py	13
 test-docstrings	tests/test_episode_truth_refusals.py	40
 test-docstrings	tests/test_episode_truth_refusals.py	42
 test-docstrings	tests/test_episode_truth_travel_policy.py	11
+test-docstrings	tests/test_equivalence_resolve.py	1.0
 test-docstrings	tests/test_error_code_coverage.py	25
 test-docstrings	tests/test_error_code_coverage.py	900
 test-docstrings	tests/test_escape_disclosure_persistence.py	16
