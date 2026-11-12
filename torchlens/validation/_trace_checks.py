@@ -15,6 +15,7 @@ from .._capture.finalize.settle import save_new_outs as _save_new_outs_impl
 from .._capture.outcome import require_capture_capability
 from .._capture.structure_only import require_structure_only_capability
 from .._capture_state_helpers import unwrap_compiled_model
+from .._io._replay_recipe_codec import loaded_replay_recipe_status
 from .._runnable import refuse_poisoned_trace
 from .._utils.rng import restores_rng_streams
 from ..backends.registry import get_backend_spec
@@ -50,7 +51,7 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
     -------
     bool
         True for loaded non-torch traces whose backend runtime replay
-        capture lists were stripped by portable save.
+        capture lists were stripped by save and not rebuilt from replay recipes.
     """
     try:
         loaded_from_bundle = bool(trace._loaded_from_bundle)
@@ -60,7 +61,7 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
         return False
     backend = str(trace._provenance_backend)
     if backend == _MLX_VALIDATION_REPLAY_BACKEND:
-        return True
+        return not bool(getattr(trace, "_mlx_op_captures", ()))
     if backend == _JAX_VALIDATION_REPLAY_BACKEND:
         return not bool(getattr(trace, "jax_equation_captures", ()))
     if backend == _TINYGRAD_VALIDATION_REPLAY_BACKEND:
@@ -162,6 +163,10 @@ def validation_replay_status(trace: Trace) -> ValidationStatus:
     if isinstance(cached_status, ValidationStatus):
         return cached_status
     backend = str(trace._provenance_backend)
+    # A loaded trace saved with replay recipes binds them here (or names why it cannot).
+    recipe_status = loaded_replay_recipe_status(trace)
+    if recipe_status is not None:
+        return recipe_status
     if _loaded_non_torch_validation_replay_unavailable(trace):
         return ValidationStatus.unavailable_loaded_runtime_stripped(
             backend=backend,
