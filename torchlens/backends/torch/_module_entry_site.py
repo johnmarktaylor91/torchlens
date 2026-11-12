@@ -55,14 +55,6 @@ if TYPE_CHECKING:
 
 __all__ = ("module_entry_code_context",)
 
-#: Key of the per-capture table of module calls' entry sites in the code-context
-#: cache: a list whose item ``k`` is ``(record, id(wrapper frame), wrapper code,
-#: named, context)`` for the last module call entered at module stack position
-#: ``k``, so it holds at most one entry per nesting level. Its value is a list of
-#: tuples, never locations, so the cache's sweeps for location records
-#: (postprocess, fork) skip it.
-_ENTRY_SITES_KEY = "__torchlens_module_entry_sites__"
-
 
 def _walk(trace: Trace, cache: dict[Any, Any], named_out: list[Any]) -> list[Any]:
     """The full code-context walk module entry has always run."""
@@ -169,10 +161,12 @@ def module_entry_code_context(trace: Trace) -> list[Any]:
     if cache is None:
         cache = {}
         trace._code_context_cache = cache
-    sites = cache.get(_ENTRY_SITES_KEY)
-    if sites is None:
-        sites = []
-        cache[_ENTRY_SITES_KEY] = sites
+    workspace = trace._raw_graph_ws
+    held = workspace._module_entry_sites
+    if held is None or held[0] is not cache:
+        held = (cache, [])
+        workspace._module_entry_sites = held
+    sites = held[1]
     stack = trace._module_capture_ws.exhaustive_module_stack
     wrapper = _wrapper_frame(sys._getframe(1))
     found = None if wrapper is None else _nested(trace, cache, sites, stack, wrapper)

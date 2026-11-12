@@ -116,8 +116,6 @@ def _cache_projection(cache: dict[Any, Any]) -> dict[Any, Any]:
 
     projected: dict[Any, Any] = {}
     for key, value in cache.items():
-        if key == entry_module._ENTRY_SITES_KEY:
-            continue  # module calls' entry sites: records and frame ids, per run
         if key == _CODE_CONTEXT_ANCHOR_KEY:
             projected[key] = value[1:]
         elif isinstance(value, tuple) and all(hasattr(v, "line_number") for v in value):

@@ -83,6 +83,12 @@ class RawGraphWorkspace:
     #: site key -> code context and chain, plus the interned remainder of each
     #: module call. Internal and never persisted: it goes away with the workspace.
     _call_site_memo: Any = None
+    #: ``(code-context cache, sites)`` for module entry's incremental call-site
+    #: lookup (``backends.torch._module_entry_site``): item ``k`` of ``sites`` is
+    #: ``(record, id(wrapper frame), wrapper code, named, context)`` for the last
+    #: module call entered at module stack position ``k``. Internal and never
+    #: persisted: it goes away with the workspace.
+    _module_entry_sites: Any = None
     #: The wrapped call's argument slot snapshot (``backends.torch._ops_arg_slots``),
     #: written by the shared-fields builder and retired by its witness step.
     _pending_arg_slots: Any = None

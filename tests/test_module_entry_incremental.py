@@ -272,8 +272,6 @@ def _named(obj: Any, modules: dict[int, str]) -> Any:
 def _cache(cache: dict[Any, Any], modules: dict[int, str]) -> dict[Any, Any]:
     projected: dict[Any, Any] = {}
     for key, value in cache.items():
-        if key == entry_module._ENTRY_SITES_KEY:
-            continue
         if key == _CODE_CONTEXT_ANCHOR_KEY:
             projected[key] = value[1:]
         elif isinstance(value, tuple) and all(hasattr(v, "line_number") for v in value):
