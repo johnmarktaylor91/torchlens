@@ -200,6 +200,11 @@ def _fields(model_cls: type[nn.Module]) -> list[tuple[Any, ...]]:
     model = model_cls()
     x = torch.randn(4, 4)
     trace = tl.trace(model, x)
+    # A parameterized op's class holds a barcode drawn per trace; compare the
+    # pattern (which ops share a class, numbered by first appearance) instead.
+    classes: dict[str, int] = {}
+    for op in trace.ops:
+        classes.setdefault(op.graph.equivalence_class, len(classes))
     return [
         (
             index,
@@ -211,7 +216,7 @@ def _fields(model_cls: type[nn.Module]) -> list[tuple[Any, ...]]:
             _norm(op.call.non_tensor_kwargs),
             _norm_template(op.call.args_template),
             _norm_template(op.call.kwargs_template),
-            op.graph.equivalence_class,
+            classes[op.graph.equivalence_class],
             [tuple(param.shape) for param in op.graph.parent_params],
             repr(op.call.config),
         )
