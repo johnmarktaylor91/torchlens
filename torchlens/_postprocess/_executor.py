@@ -246,6 +246,12 @@ def _run_hash_graph_shape(ctx: StepContext) -> None:
     trace = ctx.trace
     ops = trace._layer_list
     bound = _step_views.bind_ops(ops)
+    if bound is None:  # a short trace or ops on several stores: read the facade
+        _hashing.populate_normalized_layer_addresses(trace)
+        trace._provenance_fingerprint = _hashing.compute_graph_shape_hash(
+            trace, include_module_address=False
+        )
+        return
     views = _step_views.row_views(ops, _HASH_FIELDS, bound)
     normalize = _hashing.normalize_address_for_hash
     addresses = [normalize(getattr(view, "module", None)) for view in views]

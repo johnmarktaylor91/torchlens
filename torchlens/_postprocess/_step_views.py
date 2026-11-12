@@ -20,7 +20,15 @@ from typing import Any
 from .._data_classes._op_columns import column_rows_by_label
 from .._utils._record_group_table import op_attr
 
-__all__ = ("ABSENT", "Bound", "bind_ops", "read_field", "row_views", "write_field")
+__all__ = (
+    "ABSENT",
+    "MIN_COLUMN_OPS",
+    "Bound",
+    "bind_ops",
+    "read_field",
+    "row_views",
+    "write_field",
+)
 
 #: Marker for an attribute the op does not have (``getattr`` would raise).
 ABSENT: Any = object()
@@ -28,10 +36,18 @@ ABSENT: Any = object()
 #: ``(OpColumns, store row per op)`` for ops sharing one store, else ``None``.
 Bound = tuple[Any, list[int]] | None
 
+#: Fewest ops worth binding a column view for. Binding and each column read
+#: cost a fixed number of calls that the per-op facade reads they replace only
+#: repay on longer traces; below this both paths return the same values, so
+#: small traces keep the facade.
+MIN_COLUMN_OPS = 32
+
 
 def bind_ops(ops: Sequence[Any]) -> Bound:
     """Return the ops' column view and store rows, or ``None`` for the facade path."""
 
+    if len(ops) < MIN_COLUMN_OPS:
+        return None
     lookup = column_rows_by_label(dict(enumerate(ops)))
     if lookup is None:
         return None
