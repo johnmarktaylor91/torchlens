@@ -1540,7 +1540,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (162 modules, 64999 lines)
+Torch backend implementation package for TorchLens capture. (162 modules, 64998 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
