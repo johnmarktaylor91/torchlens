@@ -379,11 +379,12 @@ def _clear_container_tree_tensor_metadata(
     # and a full call costs more than the check. EXACT type() membership and
     # ``issubclass(type(item), type)`` read the real type slot: isinstance()
     # reads ``__class__``, which the reduce_op shim answers with a
-    # FutureWarning; subclasses fall through to the guarded recursion.
-    for item in items:
-        item_type = type(item)
-        if item_type in _NAMESPACE_INERT_TYPES or issubclass(item_type, type):
-            continue
+    # FutureWarning; subclasses fall through to the guarded recursion. Decided
+    # once per distinct type, applied in C, kept items visited in their order.
+    live = {k for k in set(map(type, items)) - _NAMESPACE_INERT_TYPES if not issubclass(k, type)}
+    if not live:
+        return
+    for item in compress(items, map(live.__contains__, map(type, items))):
         _clear_container_tree_tensor_metadata(item, seen, depth + 1, visit)
 
 
