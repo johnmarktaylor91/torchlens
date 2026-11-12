@@ -13,6 +13,7 @@ from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from .. import _state
+from ._id_key_registry import IdKeyRegistry
 from ._internal_read import internal_scalar_read
 from ._torch_compat import get_tensorbase_class
 
@@ -255,8 +256,9 @@ class TorchLensTLCollisionError(AttributeError):
 # --------------------------------------------------------------------------- #
 # Values are ModuleMeta / ParamMeta respectively (WeakIdKeyDictionary is not
 # typing-subscriptable, so the value type is documented rather than annotated).
-_MODULE_REGISTRY: WeakIdKeyDictionary = WeakIdKeyDictionary()
-_PARAM_REGISTRY: WeakIdKeyDictionary = WeakIdKeyDictionary()
+# ``IdKeyRegistry`` is that dictionary with an identity-checked read cache.
+_MODULE_REGISTRY: WeakIdKeyDictionary = IdKeyRegistry()
+_PARAM_REGISTRY: WeakIdKeyDictionary = IdKeyRegistry()
 
 
 # --------------------------------------------------------------------------- #
