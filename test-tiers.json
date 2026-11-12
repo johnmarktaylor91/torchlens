@@ -3689,12 +3689,12 @@
       ],
       "torchlens/_ir/intervention.py": [
         "tests/producer_parity/test_tier_walker.py",
+        "tests/test_alias_pointer_reads.py",
         "tests/test_capture_unification_p8.py",
         "tests/test_intervention_phase3.py",
         "tests/test_intervention_phase4b.py",
         "tests/test_ir_basic.py",
         "tests/test_out_versions_by_child.py",
-        "tests/test_plain_emit_soundness.py",
         "tests/test_r20i_ir_livelane.py"
       ],
       "torchlens/_ir/live_index.py": [
@@ -3762,9 +3762,9 @@
         "tests/test_selector_semantics_matrix.py"
       ],
       "torchlens/_ir/semantics.py": [
-        "tests/producer_parity/test_p1_record_types.py",
         "tests/producer_parity/test_p4_amendments.py",
         "tests/producer_parity/test_tier_walker.py",
+        "tests/test_alias_pointer_reads.py",
         "tests/test_append_semantics.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_ir_basic.py",
@@ -6797,10 +6797,10 @@
         "tests/test_torch_compat_table.py"
       ],
       "torchlens/_utils/_torch_symbols.py": [
+        "tests/test_alias_pointer_reads.py",
         "tests/test_format3_linalg_recipe_keys.py",
         "tests/test_ignored_torch_capture.py",
         "tests/test_internal_call_fastpath.py",
-        "tests/test_per_backend_seed.py",
         "tests/test_r36_cuda_hygiene.py",
         "tests/test_sec_load_sweep.py",
         "tests/test_sec_raw_pointer_family.py",
@@ -6883,9 +6883,9 @@
         "tests/test_tuple_subclass_ctor_guard.py"
       ],
       "torchlens/_utils/collections.py": [
+        "tests/test_alias_pointer_reads.py",
         "tests/test_autograd_grad_view_write_replay.py",
         "tests/test_capture_unification_p3a.py",
-        "tests/test_internals.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_plain_emit_soundness.py",
         "tests/test_w051_episode_binding.py",
@@ -11162,14 +11162,14 @@
         "tests/test_wrap_state_compat.py"
       ],
       "torchlens/backends/torch/aliasing.py": [
+        "tests/test_alias_pointer_reads.py",
         "tests/test_fp8_guard.py",
         "tests/test_internals.py",
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_out_versions_by_child.py",
         "tests/test_plain_emit_soundness.py",
         "tests/test_tlspec_runnable_r29_aliasing.py",
-        "tests/test_validation.py",
-        "tests/test_wrap_state_compat.py"
+        "tests/test_validation.py"
       ],
       "torchlens/backends/torch/arg_names.py": [
         "tests/test_capture_guard_transactionality.py",
