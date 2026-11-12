@@ -3615,7 +3615,7 @@
         "tests/test_global_state_inventory.py",
         "tests/test_hon_crash_notes.py",
         "tests/test_live_op_view_surface.py",
-        "tests/test_treescope_cards_bridge.py"
+        "tests/test_relations_resolve.py"
       ],
       "torchlens/_ir/_selector_nodes.py": [
         "tests/test_fork_shared_label_index.py",
@@ -10797,6 +10797,7 @@
         "tests/test_capture_row_journal.py",
         "tests/test_omitted_empty_cell_defaults.py",
         "tests/test_op_row_cells.py",
+        "tests/test_relations_resolve.py",
         "tests/test_row_direct_import_cycle.py",
         "tests/test_sanctioned_empty_omission.py"
       ],
@@ -10807,8 +10808,8 @@
         "tests/test_capture_unification_p3a.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_plain_emit_soundness.py",
-        "tests/test_row_direct_import_cycle.py",
-        "tests/test_w3_capture_hardening.py"
+        "tests/test_relations_resolve.py",
+        "tests/test_row_direct_import_cycle.py"
       ],
       "torchlens/backends/torch/_ops_saved_arg_copies.py": [
         "tests/test_capture_guard_transactionality.py",
@@ -10928,6 +10929,16 @@
         "tests/test_robustness_pr2.py",
         "tests/test_validation.py",
         "tests/test_validation_hardening.py"
+      ],
+      "torchlens/backends/torch/_relations_resolve.py": [
+        "tests/test_argpos_hardening.py",
+        "tests/test_capture_fields_dict_prune.py",
+        "tests/test_capture_row_ingest.py",
+        "tests/test_capture_row_journal.py",
+        "tests/test_op_row_cells.py",
+        "tests/test_relations_resolve.py",
+        "tests/test_sanctioned_empty_omission.py",
+        "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/backends/torch/_replacement_op_fields.py": [
         "tests/test_capopts_truth_failed_capture_release.py",
@@ -11121,6 +11132,7 @@
         "tests/test_call_layout_plans.py",
         "tests/test_capture_core_floor_shadow.py",
         "tests/test_ops_arg_slots.py",
+        "tests/test_relations_resolve.py",
         "tests/test_valmem5_saved_value_aliases.py",
         "tests/test_view_sibling_slice_mutation.py"
       ],
@@ -11148,6 +11160,7 @@
         "tests/test_call_layout_plans.py",
         "tests/test_capture_core_floor_shadow.py",
         "tests/test_ops_arg_slots.py",
+        "tests/test_relations_resolve.py",
         "tests/test_valmem5_saved_value_aliases.py",
         "tests/test_w051_gate_plan_check.py"
       ],

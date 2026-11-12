@@ -44,6 +44,7 @@ from ._ops_freeze_refs import (
     _tensor_ref_from_facts,
 )
 from ._ops_row_cells import _ANCESTRY_DEFAULT
+from ._relations_resolve import ANCESTRY_NAMES, is_deferred, resolve_fields
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -192,8 +193,20 @@ class _PendingRow(dict[str, Any]):
         if name == "function":
             value = self[name] = self.function_ref()
             return value
+        if name in ANCESTRY_NAMES:
+            self.resolve_ancestry()
+            return self[name]
         self.settle(handle)
         return getattr(handle, name)
+
+    def resolve_ancestry(self) -> None:
+        """Build deferred ancestry from the recorded parent records and answer it as items."""
+
+        fields = self.fields
+        if is_deferred(fields):
+            resolve_fields(fields)
+        if "input_ancestors" not in self:
+            _fill_ancestry(self, fields)
 
     def settle(self, handle: _RowOpRecord) -> None:
         """Write the row and residual once, then bind them to ``handle``."""
@@ -209,6 +222,7 @@ class _PendingRow(dict[str, Any]):
 
         trace = self.trace_ref()
         fields = self.fields
+        self.resolve_ancestry()
         journal = self.journal
         function = self.function_ref()
         edge_uses = self.edge_uses
@@ -308,14 +322,29 @@ def commit_row_record(
 def _fill_items(pending: _PendingRow, fields: dict[str, Any]) -> None:
     """Store the hot reads' values as ``pending``'s items, as the row would answer them.
 
-    The ancestry sets become frozensets here, so a later in-place change to a
-    field set reaches neither the answers nor the row written from the snapshot.
+    Deferred ancestry (an op with parents) is not an item until its first read
+    (:meth:`_PendingRow.read`) or the settle resolves it.
     """
 
     pending["label_raw"] = fields["_label_raw"]
     pending["raw_index"] = fields["raw_index"]
     pending["func_call_id"] = fields["func_call_id"]
     pending["kind"] = "source" if fields["is_input"] or fields["is_buffer"] else "op"
+    if not is_deferred(fields):
+        _fill_ancestry(pending, fields)
+    if "backend_semantics" in fields:
+        semantics = fields["backend_semantics"]
+        if semantics is not None:
+            pending["backend_semantics"] = semantics
+
+
+def _fill_ancestry(pending: _PendingRow, fields: dict[str, Any]) -> None:
+    """Store the resolved ancestry as ``pending``'s items, as the row would answer them.
+
+    The sets become frozensets here, so a later in-place change to a field set
+    reaches neither the answers nor the row written from the snapshot.
+    """
+
     inputs = fields["input_ancestors"] = frozenset(fields["input_ancestors"])
     internal = fields["internal_source_ancestors"] = frozenset(fields["internal_source_ancestors"])
     roots = fields["root_ancestors"] = frozenset(fields["root_ancestors"])
@@ -329,7 +358,3 @@ def _fill_items(pending: _PendingRow, fields: dict[str, Any]) -> None:
     pending["internal_source_ancestors"] = internal
     pending["root_ancestors"] = roots
     pending["has_internal_source_ancestor"] = has_internal
-    if "backend_semantics" in fields:
-        semantics = fields["backend_semantics"]
-        if semantics is not None:
-            pending["backend_semantics"] = semantics

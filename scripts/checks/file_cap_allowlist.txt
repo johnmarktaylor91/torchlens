@@ -842,7 +842,7 @@ torchlens/backends/torch/_ops_activations.py::_save_activation_fields	193
 torchlens/backends/torch/_ops_arguments.py::_build_edge_use_records	68
 torchlens/backends/torch/_ops_arguments.py::_tensor_has_known_provenance	106
 torchlens/backends/torch/_ops_autograd.py::_partition_output_entries_with_autograd_stats	72
-torchlens/backends/torch/_ops_container_base.py::_op_record_from_log	164
+torchlens/backends/torch/_ops_container_base.py::_op_record_from_log	163
 torchlens/backends/torch/_ops_containers.py::_build_container_spec_unguarded	177
 torchlens/backends/torch/_ops_containers.py::_prove_runnable_output_lossless_unguarded	85
 torchlens/backends/torch/_ops_containers.py::_walk_supported_output_container	81
