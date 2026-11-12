@@ -141,7 +141,7 @@ def test_fake_adapter_fills_the_protocol() -> None:
 )
 def test_corrupt_recipes_are_refused(mutate: Any, reason: str) -> None:
     tree = mutate(ra.encode_recipe(_recipe()))
-    with pytest.raises(ra.ReplayRecipeError) as info:
+    with pytest.raises(ra.ReplayRefusal) as info:
         _decode(tree)
     assert info.value.reason == reason
 
@@ -149,12 +149,12 @@ def test_corrupt_recipes_are_refused(mutate: Any, reason: str) -> None:
 def test_non_data_leaves_are_refused_by_the_bounds_walk() -> None:
     for leaf in (object(), print, b"raw", np.float32(1.0), np.zeros(2)):
         tree = {**ra.encode_recipe(_recipe()), "framework_version": leaf}
-        with pytest.raises(ra.ReplayRecipeError) as info:
+        with pytest.raises(ra.ReplayRefusal) as info:
             _decode(tree)
         assert info.value.reason == "type"
     tree = ra.encode_recipe(_recipe())
     tree["attrs"] = {"$dict": {1: 2}}
-    with pytest.raises(ra.ReplayRecipeError):
+    with pytest.raises(ra.ReplayRefusal):
         _decode(tree)
 
 
@@ -162,7 +162,7 @@ def test_non_data_leaves_are_refused_by_the_bounds_walk() -> None:
     "bad_value", [print, object(), np.zeros(2), np.float64(1.0), {1: "x"}, {"a": {3}}]
 )
 def test_encoding_refuses_non_data_values(bad_value: Any) -> None:
-    with pytest.raises(ra.ReplayRecipeError) as info:
+    with pytest.raises(ra.ReplayRefusal) as info:
         ra.encode_recipe(_recipe(attrs={"bad": bad_value}))
     assert info.value.reason == "type"
 
@@ -178,14 +178,14 @@ def test_bounds_refuse_oversized_trees() -> None:
     ]
     for case, limits, reason in cases:
         _decode(tree, limits=RecipeLimits())  # the unmodified tree fits the defaults
-        with pytest.raises(ra.ReplayRecipeError) as info:
+        with pytest.raises(ra.ReplayRefusal) as info:
             _decode(case, limits=limits)
         assert info.value.reason == reason
 
 
 def test_default_bounds_refuse_a_deep_tree_without_recursing() -> None:
     tree = {**ra.encode_recipe(_recipe()), "attrs": _nest(100_000)}
-    with pytest.raises(ra.ReplayRecipeError) as info:
+    with pytest.raises(ra.ReplayRefusal) as info:
         _decode(tree)
     assert info.value.reason == "bounds"
 
@@ -206,30 +206,30 @@ def test_refusal_happens_before_any_adapter_call() -> None:
             raise AssertionError(name)
 
     tree = {**ra.encode_recipe(_recipe()), "op_identity": "unlisted"}
-    with pytest.raises(ra.ReplayRecipeError):
+    with pytest.raises(ra.ReplayRefusal):
         recipe = _decode(tree)
         Spy().bind_recipes(None, {"y_1": recipe})
     assert calls == []
 
 
 def test_validate_recipe_refuses_bad_shapes() -> None:
-    with pytest.raises(ra.ReplayRecipeError):
+    with pytest.raises(ra.ReplayRefusal):
         ra.validate_recipe(_recipe(output_slots=()))
-    with pytest.raises(ra.ReplayRecipeError):
+    with pytest.raises(ra.ReplayRefusal):
         ra.validate_recipe(_recipe(op_identity=""))
-    with pytest.raises(ra.ReplayRecipeError):
+    with pytest.raises(ra.ReplayRefusal):
         ra.validate_recipe(_recipe(inputs=(("x", (0,)),)))
 
 
 def test_lookup_is_closed_and_honest() -> None:
     for name in ("torch", "fake", "os", "../x", ""):
         assert not ra.has_adapter(name)
-        with pytest.raises(ra.ReplayAdapterUnavailable):
+        with pytest.raises(ra.ReplayRefusal):
             ra.get_adapter(name)
     for name in sorted(ra.ADAPTER_BACKENDS):
         try:
             module = ra.get_adapter(name)
-        except ra.ReplayAdapterUnavailable:
+        except ra.ReplayRefusal:
             continue
         assert isinstance(module, ra.ReplayAdapter)
 
@@ -282,7 +282,7 @@ def test_lookup_requires_every_function_and_the_allowlist(
     if drop is None:
         assert ra.get_adapter("paddle") is module
         return
-    with pytest.raises(ra.ReplayAdapterUnavailable, match=drop):
+    with pytest.raises(ra.ReplayRefusal, match=drop):
         ra.get_adapter("paddle")
 
 
@@ -292,5 +292,5 @@ def test_lookup_refuses_a_mutable_allowlist(monkeypatch: pytest.MonkeyPatch) -> 
     module = _module_like_fake()
     module.ALLOWLIST = set(fake.ALLOWLIST)
     monkeypatch.setitem(sys.modules, module.__name__, module)
-    with pytest.raises(ra.ReplayAdapterUnavailable, match="ALLOWLIST"):
+    with pytest.raises(ra.ReplayRefusal, match="ALLOWLIST"):
         ra.get_adapter("paddle")

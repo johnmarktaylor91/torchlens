@@ -3,7 +3,7 @@
 A :class:`ReplaySession` replays an ordered list of :class:`ReplayStep`
 through one replay adapter. It checks the whole plan before the first
 framework call (every op replayable, every parent available, no output slot
-produced twice) and refuses with :class:`ReplaySessionError`; nothing runs
+produced twice) and refuses with :class:`ReplayRefusal`; nothing runs
 on a refused plan.
 
 During the run it
@@ -28,24 +28,9 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from ._contract import InputOccurrence, OpRecipe, ReplayAdapter
+from ._contract import InputOccurrence, OpRecipe, ReplayAdapter, ReplayRefusal
 
-__all__ = ["ReplaySession", "ReplaySessionError", "ReplayStep", "pullback_step"]
-
-
-class ReplaySessionError(RuntimeError):
-    """A replay plan was refused, or a replayed op broke the contract.
-
-    ``reason`` is a short tag (``cannot_replay``, ``missing_parent``,
-    ``duplicate_slot``, ``arity``, ``closed``, ``unknown_label``,
-    ``substitution``); ``op_label`` names the op when known.
-    """
-
-    def __init__(self, reason: str, detail: str, *, op_label: str | None = None) -> None:
-        self.reason = reason
-        self.op_label = op_label
-        where = f" (op {op_label})" if op_label else ""
-        super().__init__(f"replay refused [{reason}]{where}: {detail}")
+__all__ = ("ReplaySession", "ReplayStep", "pullback_step")
 
 
 @dataclass(frozen=True)
@@ -93,7 +78,7 @@ class ReplaySession:
 
     Raises
     ------
-    ReplaySessionError
+    ReplayRefusal
         When the plan is refused; raised before any adapter call other than
         ``can_replay``.
     """
@@ -130,29 +115,29 @@ class ReplaySession:
             self._check_step(step, available, produced)
             produced.update(step.output_slots)
             available.update(step.output_slots)
-        stray = set(self._subs) - available
+        stray = set(self._subs) - set(self._values) - produced
         if stray:
-            raise ReplaySessionError(
+            raise ReplayRefusal(
                 "substitution", f"substituted labels not in the plan: {sorted(stray)}"
             )
 
     def _check_step(self, step: ReplayStep, available: set[str], produced: set[str]) -> None:
         if not step.output_slots:
-            raise ReplaySessionError("arity", "step has no output slots")
+            raise ReplayRefusal("arity", "step has no output slots")
         label = step.label
         clash = (set(step.output_slots) & produced) or (set(step.output_slots) & set(self._values))
         if clash or len(set(step.output_slots)) != len(step.output_slots):
-            raise ReplaySessionError(
+            raise ReplayRefusal(
                 "duplicate_slot", f"output slots produced twice: {sorted(clash)}", op_label=label
             )
         missing = [o.parent_label for o in step.inputs if o.parent_label not in available]
         if missing:
-            raise ReplaySessionError(
+            raise ReplayRefusal(
                 "missing_parent", f"parents not available: {missing}", op_label=label
             )
         reason = self._adapter.can_replay(self._trace, step.op)
         if reason is not None:
-            raise ReplaySessionError("cannot_replay", reason, op_label=label)
+            raise ReplayRefusal("cannot_replay", reason, op_label=label)
 
     # --- running ----------------------------------------------------------
 
@@ -187,7 +172,7 @@ class ReplaySession:
         parents = [self.value(occ.parent_label) for occ in step.inputs]
         result = tuple(self._adapter.forward(self._trace, step.op, parents))
         if len(result) != len(step.output_slots):
-            raise ReplaySessionError(
+            raise ReplayRefusal(
                 "arity",
                 f"replay produced {len(result)} values for {len(step.output_slots)} slots",
                 op_label=step.label,
@@ -221,7 +206,7 @@ class ReplaySession:
         try:
             return self._values[label]
         except KeyError:
-            raise ReplaySessionError(
+            raise ReplayRefusal(
                 "unknown_label", f"no live value for {label!r}", op_label=label
             ) from None
 
@@ -253,7 +238,7 @@ class ReplaySession:
 
     def _require_open(self) -> None:
         if self._closed:
-            raise ReplaySessionError("closed", "the replay session is closed")
+            raise ReplayRefusal("closed", "the replay session is closed")
 
 
 def pullback_step(
@@ -272,13 +257,13 @@ def pullback_step(
 
     Raises
     ------
-    ReplaySessionError
+    ReplayRefusal
         When ``vjp`` returns a count other than one per parent occurrence.
     """
 
     result = tuple(adapter.vjp(trace, step.op, parent_values, cotangents))
     if len(result) != len(step.inputs):
-        raise ReplaySessionError(
+        raise ReplayRefusal(
             "arity",
             f"vjp produced {len(result)} cotangents for {len(step.inputs)} parents",
             op_label=step.label,
