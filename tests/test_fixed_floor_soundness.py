@@ -41,8 +41,9 @@ from torchlens._utils._record_group_table import op_attr
 from torchlens._utils.display import _record_phase_timing
 
 _ADDRESS = re.compile(r"0x[0-9a-fA-F]+")
-#: Fields that differ between two separate traces by design.
-_PER_TRACE_FIELDS = frozenset({"source_trace"})
+#: Fields that differ between two separate traces by design: the owning trace, the
+#: measured wall time of each call and the id of each autograd node.
+_PER_TRACE_FIELDS = frozenset({"source_trace", "func_duration", "grad_fn_object_id"})
 
 
 class _Chain(nn.Module):
@@ -316,11 +317,14 @@ def test_read_plan_is_rebuilt_when_the_class_attribute_or_facade_changes(
     assert _op_columns._read_plan(name)[0] is attribute
     assert _op_columns._READ_PLANS[name][2] is attribute
 
-    with monkeypatch.context() as patch:
-        rebound = tuple(_OP_FACADE[0])
-        patch.setitem(_OP_FACADE, 0, rebound)
+    bound = _OP_FACADE[0]
+    rebound = tuple(bound)
+    _OP_FACADE[0] = rebound
+    try:
         assert _op_columns._read_plan(name) == (attribute, slow_types, sentinel)
         assert _op_columns._READ_PLANS[name][0] is rebound
+    finally:
+        _OP_FACADE[0] = bound
     _op_columns._read_plan(name)
     assert _op_columns._READ_PLANS[name][0] is _OP_FACADE[0]
 
