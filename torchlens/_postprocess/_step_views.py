@@ -13,9 +13,9 @@ read through the facade for every op.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from .._data_classes._op_columns import column_rows_by_label
 from .._utils._record_group_table import op_attr
@@ -48,7 +48,9 @@ def bind_ops(ops: Sequence[Any]) -> Bound:
 
     if len(ops) < MIN_COLUMN_OPS:
         return None
-    lookup = column_rows_by_label(dict(enumerate(ops)))
+    # The keys only name the rows; positions keep the ops' order without a
+    # per-op ``str`` call.
+    lookup = column_rows_by_label(cast("Mapping[str, Any]", dict(enumerate(ops))))
     if lookup is None:
         return None
     columns, rows = lookup
@@ -91,16 +93,18 @@ def write_field(ops: Sequence[Any], name: str, values: Sequence[Any], bound: Bou
     """
 
     put = None
+    rows: list[int] = []
     if bound is not None and op_attr(name) == name:
+        columns, rows = bound
         try:
-            put = bound[0].setter(name)
+            put = columns.setter(name)
         except ValueError:
             put = None  # a field only the facade may write
     if put is None:
         for op, value in zip(ops, values, strict=True):
             setattr(op, name, value)
         return
-    for row, value in zip(bound[1], values, strict=True):
+    for row, value in zip(rows, values, strict=True):
         put(row, value)
 
 
