@@ -313,7 +313,7 @@ def _run(
             for module in trace.modules
             for index, call in enumerate(module.ops.values())
         ],
-        "ops": [(op.label, _frames(op.code_context)) for op in trace.ops.values()],
+        "ops": [(op.label, _frames(op.source.frames)) for op in trace.ops.values()],
         "layers": [layer.label for layer in trace.layers.values()],
         "cache": _cache(cache),
         "sharing": _sharing(cache),
