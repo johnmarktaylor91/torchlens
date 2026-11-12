@@ -269,8 +269,8 @@ def test_generic_contracts_match_the_reference(
     reference = _ref_contract(full)
     for args, kwargs, out in cases:
         event = _event(args, kwargs, out)
-        ref = _draws(monkeypatch, logging_enabled, lambda: reference(event, **_FACTS))
-        new = _draws(monkeypatch, logging_enabled, lambda: contract(event, **_FACTS))
+        ref = _draws(monkeypatch, logging_enabled, lambda event=event: reference(event, **_FACTS))
+        new = _draws(monkeypatch, logging_enabled, lambda event=event: contract(event, **_FACTS))
         assert new == ref, (args, kwargs, out)
 
 
