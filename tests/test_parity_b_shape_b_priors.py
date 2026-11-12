@@ -68,14 +68,23 @@ def _working_example(priors: Any, model: Any, candidate: ShapeCandidate) -> Any:
 
 
 def _validation_state(model: Any, example: Any, backend: str) -> str:
-    """Replay-validation state of a fresh capture of ``model`` on ``example``."""
+    """Replay-validation state of a fresh capture of ``model`` on ``example``.
+
+    Validation runs through the backend protocol against the model's direct
+    outputs, as the conformance suite's ``c1_validation_passes`` cell does.
+    """
 
     import torchlens as tl
+    from torchlens.backends.registry import get_backend_spec
 
+    args = example if isinstance(example, tuple) else (example,)
+    reference = model(*args)
+    outputs = list(reference) if isinstance(reference, (tuple, list)) else [reference]
+    protocol = get_backend_spec(backend).protocol()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(model, example, backend=backend)
-        return str(trace.validation_replay_status.state)
+        return str(protocol.validate(trace, outputs).state)
 
 
 def _check_row(row: Any, backend: str) -> None:
@@ -213,14 +222,21 @@ def test_jax_nnx_state_and_modes_restored() -> None:
 
             return self.drop(self.lin(v))
 
+    def host(leaf: Any) -> Any:
+        """A host copy of one state leaf (PRNG keys as their key data)."""
+
+        if jax.dtypes.issubdtype(leaf.dtype, jax.dtypes.prng_key):
+            leaf = jax.random.key_data(leaf)
+        return np.asarray(leaf)
+
     model = Dropper(nnx.Rngs(0))
-    before = [np.asarray(leaf) for leaf in jax.tree_util.tree_leaves(nnx.state(model))]
+    before = [host(leaf) for leaf in jax.tree_util.tree_leaves(nnx.state(model))]
     deterministic = model.drop.deterministic
     _, priors = resolve_priors(model) or ("", None)
     assert priors is not None
     with priors.state_scope(model):
         model(jnp.ones((2, 4)))  # a real call advances the dropout stream
-    after = [np.asarray(leaf) for leaf in jax.tree_util.tree_leaves(nnx.state(model))]
+    after = [host(leaf) for leaf in jax.tree_util.tree_leaves(nnx.state(model))]
     assert all(np.array_equal(a, b) for a, b in zip(before, after, strict=True))
     assert model.drop.deterministic == deterministic
 
