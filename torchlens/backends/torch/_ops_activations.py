@@ -40,6 +40,7 @@ from ..._utils.tensor_utils import (
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
 from ._ops_fresh_payload import fresh_plain_payload_eligible, save_fresh_plain_activation
+from ._ops_function_family import NAME_FAMILY, name_family
 from ._same_object_handoff import pop_same_object_mutation, reference_payload_source
 from ._user_grad_fn import pop_op_grad_fn
 from .tensor_tracking import (
@@ -256,9 +257,7 @@ def _log_output_tensor_info(
         # non-tensor args, output index, and containing module.  Each unique
         # non-param operation is seen only once (pass_index=1).
         logged_func_name = fields_dict["func_name"]
-        is_inplace_output = _is_inplace_augmented_assignment_dunder(logged_func_name) or (
-            logged_func_name.endswith("_") and not logged_func_name.startswith("__")
-        )
+        is_inplace_output = (NAME_FAMILY.get(logged_func_name) or name_family(logged_func_name))[1]
         equivalence_layer_type = f"{layer_type}_inplace" if is_inplace_output else layer_type
         equivalence_class = _get_equivalence_class(
             args, kwargs, i, equivalence_layer_type, fields_dict

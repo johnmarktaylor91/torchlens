@@ -6,9 +6,6 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ..._capture._arg_snapshot import split_non_tensor_args
-from ..._capture.arg_positions import (
-    _normalize_func_name,
-)
 from ..._capture.salient_args import extract_salient_args
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._ir.events import (
@@ -22,6 +19,7 @@ from ..._utils.tensor_utils import (
 )
 from ._completeness_origins import internal_scalar_read
 from ._ops_arg_slots import _SlotCall
+from ._ops_function_family import NAME_FAMILY, name_family
 from ._storage_exports import note_alias_rebound_snapshot, note_foreign_written_snapshot
 from .aliasing import (
     get_parent_contents_for_contract_position,
@@ -67,7 +65,7 @@ def _build_shared_fields_dict(
     are the parents' indexed journal records (no live views: their reads go to the record).
     """
     # Canonical layer_type: lowercase with underscores stripped (e.g. "conv2d").
-    layer_type = _normalize_func_name(func_name)
+    layer_type = (NAME_FAMILY.get(func_name) or name_family(func_name))[0]
     # Non-tensor args (metadata, equivalence hashing) are op-time snapshots.
     non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
     bound_aliases = _bind_call_alias_labels(args, kwargs) if _VIEW_MUTATION_RELABELS else ()
@@ -167,13 +165,11 @@ def _tag_tensor_and_track_variations(
 ) -> None:
     """Tag the output tensor with its label, add backward hook, and track parent content variations.
 
-    Parent content variation tracking detects in-place mutations: if a parent
-    tensor's value at function-call time (from arg_copies) differs from its
-    saved out, the pre-mutation value is recorded in
-    ``out_versions_by_child``.  This is critical for validation replay,
-    which needs the actual input values each child operation saw; ``live_args`` and ``live_kwargs`` feed its foreign-write marks.
-    ``child_record`` is the op's committed journal record; its fields are read off the record
-    with the expressions the live view's getters use, so no view is built.
+    Parent content variation tracking detects in-place mutations: if a parent tensor's
+    value at call time (from arg_copies) differs from its saved out, the pre-mutation
+    value is recorded in ``out_versions_by_child`` for validation replay; ``live_args``
+    and ``live_kwargs`` feed its foreign-write marks. ``child_record`` is the op's
+    committed journal record, read with the expressions the live view's getters use.
     """
     out_label = fields_dict_onetensor["_label_raw"]
     set_tensor_label(out, out_label)
@@ -182,6 +178,10 @@ def _tag_tensor_and_track_variations(
     # non-mutating identity return that reuses the same object (see is_inplace at capture).
     _record_label_version_snapshot(out)
     _add_tensor_backward_hook(self, out, out_label)
+    if not self._options_save_args:
+        # Every parent's version snapshot is None without saved arguments (its first
+        # test), so the loop appends nothing; its record reads are skipped.
+        return
 
     require_event = self.capture_events.live_index.require_event
     child_event = require_event(child_record.label_raw)

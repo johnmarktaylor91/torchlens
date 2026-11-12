@@ -114,11 +114,7 @@ def _emit_exhaustive_operation_events(
         event_index=int(fields_dict.get("raw_index") or func_call_id),
     )
     expected_output_count = len(output_entries)
-    loggable_output_count = sum(
-        1
-        for output_entry in output_entries
-        if _output_should_be_logged(output_entry.value, is_bottom_level_func)
-    )
+    loggable_output_count, single_verdict = _loggable_outputs(output_entries, is_bottom_level_func)
     use_single_output_fields = (
         loggable_output_count == 1
         and len(output_entries) == 1
@@ -150,7 +146,7 @@ def _emit_exhaustive_operation_events(
     # entry against a minted safe copy so the live input keeps its label.
     # out= destinations are excluded -- the op genuinely WROTE into them, so
     # the live destination must keep advancing to this op's label.
-    out_destination_ids = _out_destination_ids(kwargs)
+    out_destination_ids = _out_destination_ids(kwargs) if kwargs else _NO_IDS
 
     # ``torch._foreach_*`` semantics are ZIPPED: output ``i`` is computed from
     # member ``i`` of each tensor-list argument (plus any whole-call scalar or
@@ -184,7 +180,10 @@ def _emit_exhaustive_operation_events(
 
     for i, output_entry in enumerate(output_entries):
         out = output_entry.value
-        if not _output_should_be_logged(out, is_bottom_level_func):
+        if single_verdict is None:
+            if not _output_should_be_logged(out, is_bottom_level_func):
+                continue
+        elif not single_verdict:
             continue
         out_tensor = cast(torch.Tensor, out)
         if (
@@ -338,6 +337,27 @@ def _emit_exhaustive_operation_events(
         if options is not None and options.halt is not None:
             halt_ctx = _build_trace_predicate_context(self, fields_dict_onetensor, out_tensor)
             evaluate_halt_stop(self, halt_ctx, options, frontier_output=out_tensor)
+
+
+def _loggable_outputs(output_entries: Any, is_bottom_level_func: bool) -> tuple[int, bool | None]:
+    """Return the loggable output count and, for a single output, its verdict.
+
+    The emit loop reuses a single output's verdict (nothing labels a tensor between the
+    count and the loop). With several outputs the verdict is ``None`` and the loop asks
+    again per entry, since logging an earlier entry labels a duplicated tensor.
+    """
+
+    if len(output_entries) == 1:
+        verdict = _output_should_be_logged(output_entries[0].value, is_bottom_level_func)
+        return int(verdict), verdict
+    count = sum(
+        1 for entry in output_entries if _output_should_be_logged(entry.value, is_bottom_level_func)
+    )
+    return count, None
+
+
+_NO_IDS: frozenset[int] = frozenset()
+"""The ``out=`` destination ids of a call without keyword arguments."""
 
 
 def _out_destination_ids(kwargs: Any) -> frozenset[int]:

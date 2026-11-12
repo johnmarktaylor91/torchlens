@@ -838,7 +838,7 @@ torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrappe
 torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	146
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	68
 torchlens/backends/torch/_module_class_metadata.py::_get_class_metadata	97
-torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	298
+torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	296
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
 torchlens/backends/torch/_ops_activations.py::_save_activation_fields	193
 torchlens/backends/torch/_ops_arguments.py::_build_edge_use_records	68
@@ -853,7 +853,7 @@ torchlens/backends/torch/_ops_emission.py::_emit_operation_events	62
 torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions	170
 torchlens/backends/torch/_ops_emission.py::apply_live_hooks_to_outputs	78
 torchlens/backends/torch/_ops_emission.py::log_function_output_tensors	68
-torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	284
+torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	283
 torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	72
 torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	114
@@ -941,7 +941,7 @@ torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
 torchlens/backends/torch/sources.py::log_source_tensor_predicate	120
 torchlens/backends/torch/structure_only_belt.py::structure_only_forward_boundary	129
-torchlens/backends/torch/tensor_tracking.py	1595
+torchlens/backends/torch/tensor_tracking.py	1463
 torchlens/backends/torch/tensor_tracking.py::_add_tensor_backward_hook	83
 torchlens/backends/torch/tensor_tracking.py::_build_grad_payloads	61
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
