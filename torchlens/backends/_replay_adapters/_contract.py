@@ -16,7 +16,7 @@ bool, an int, a float, a complex, a str, or a tuple or str-keyed mapping of
 those. :func:`encode_recipe` and :func:`decode_recipe` move a recipe to and
 from a versioned, bounded, JSON-safe tree; :func:`decode_recipe` refuses a
 corrupt tree or an op identity outside the backend's closed allowlist with
-:class:`ReplayRecipeError` before anything executes.
+:class:`ReplayRefusal` before anything executes.
 """
 
 from __future__ import annotations
@@ -25,9 +25,9 @@ import math
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
-__all__ = [
+__all__ = (
     "RECIPE_FORMAT_VERSION",
     "RECIPE_LIMITS",
     "ArgPath",
@@ -35,11 +35,11 @@ __all__ = [
     "OpRecipe",
     "RecipeLimits",
     "ReplayAdapter",
-    "ReplayRecipeError",
+    "ReplayRefusal",
     "decode_recipe",
     "encode_recipe",
     "validate_recipe",
-]
+)
 
 RECIPE_FORMAT_VERSION = 1
 """Version of the encoded recipe tree. A decoder refuses any other version."""
@@ -62,21 +62,32 @@ _RECIPE_FIELDS = (
 )
 
 
-class ReplayRecipeError(ValueError):
-    """A recipe is corrupt, too large, from another format, or names an op
-    outside the backend's closed allowlist.
+class ReplayRefusal(Exception):
+    """Internal signal: the replay layer refused a recipe, a plan or a lookup.
 
-    Raised before any framework call. ``reason`` is a short machine-readable
-    tag (``format_version``, ``shape``, ``type``, ``bounds``, ``backend``,
-    ``unknown_op``, ``slots``); ``op_label`` names the first output slot when
-    it is known.
+    It is raised before any framework call and never reaches a user directly:
+    the callers (loading a saved trace, editing a finished trace, the reverse
+    engine) catch it and raise their own contracted, coded error naming
+    ``op_label``. It is deliberately not an ``*Error`` class and has no error
+    code of its own.
+
+    Attributes
+    ----------
+    reason:
+        Short tag. Recipes: ``format_version``, ``shape``, ``type``,
+        ``bounds``, ``backend``, ``unknown_op``, ``slots``. Sessions:
+        ``cannot_replay``, ``missing_parent``, ``duplicate_slot``, ``arity``,
+        ``closed``, ``unknown_label``, ``substitution``. Lookup:
+        ``no_adapter``.
+    op_label:
+        The op's label (first output slot) when known, else ``None``.
     """
 
     def __init__(self, reason: str, detail: str, *, op_label: str | None = None) -> None:
         self.reason = reason
         self.op_label = op_label
         where = f" (op {op_label})" if op_label else ""
-        super().__init__(f"replay recipe refused [{reason}]{where}: {detail}")
+        super().__init__(f"replay refused [{reason}]{where}: {detail}")
 
 
 @dataclass(frozen=True)
@@ -214,7 +225,7 @@ def encode_recipe(recipe: OpRecipe) -> dict[str, Any]:
 
     Raises
     ------
-    ReplayRecipeError
+    ReplayRefusal
         When a field holds a non-data value (callable, array, object).
     """
 
@@ -258,28 +269,28 @@ def decode_recipe(
 
     Raises
     ------
-    ReplayRecipeError
+    ReplayRefusal
         On any structural, type, bound, backend or allowlist failure.
     """
 
     _check_bounds(data, limits)
     if not isinstance(data, Mapping):
-        raise ReplayRecipeError("shape", "recipe is not a mapping")
+        raise ReplayRefusal("shape", "recipe is not a mapping")
     version = data.get("format_version")
     if type(version) is not int or version != RECIPE_FORMAT_VERSION:
-        raise ReplayRecipeError("format_version", f"unsupported format version {version!r}")
+        raise ReplayRefusal("format_version", f"unsupported format version {version!r}")
     expected = {"format_version", *_RECIPE_FIELDS}
     if set(data) != expected:
         diff = sorted(map(str, set(data) ^ expected))
-        raise ReplayRecipeError("shape", f"recipe keys differ from the contract: {diff}")
+        raise ReplayRefusal("shape", f"recipe keys differ from the contract: {diff}")
     recipe = _build_recipe(data, limits)
     label = recipe.output_slots[0] if recipe.output_slots else None
     if recipe.backend != backend:
-        raise ReplayRecipeError(
+        raise ReplayRefusal(
             "backend", f"recipe is for {recipe.backend!r}, loading {backend!r}", op_label=label
         )
     if recipe.op_identity not in allowlist:
-        raise ReplayRecipeError(
+        raise ReplayRefusal(
             "unknown_op",
             f"op identity {recipe.op_identity!r} is not in the {backend} allowlist",
             op_label=label,
@@ -318,22 +329,20 @@ def validate_recipe(recipe: OpRecipe) -> None:
 
     Raises
     ------
-    ReplayRecipeError
+    ReplayRefusal
         On a non-data leaf, an empty or repeated output slot, or an empty
         backend or op identity.
     """
 
     label = recipe.output_slots[0] if recipe.output_slots else None
     if not recipe.backend or not recipe.op_identity:
-        raise ReplayRecipeError(
-            "shape", "backend and op_identity must be non-empty", op_label=label
-        )
+        raise ReplayRefusal("shape", "backend and op_identity must be non-empty", op_label=label)
     if not recipe.output_slots:
-        raise ReplayRecipeError("slots", "recipe has no output slots")
+        raise ReplayRefusal("slots", "recipe has no output slots")
     if len(set(recipe.output_slots)) != len(recipe.output_slots):
-        raise ReplayRecipeError("slots", "output slots repeat", op_label=label)
+        raise ReplayRefusal("slots", "output slots repeat", op_label=label)
     if any(not isinstance(occ, InputOccurrence) for occ in recipe.inputs):
-        raise ReplayRecipeError("type", "inputs must be InputOccurrence items", op_label=label)
+        raise ReplayRefusal("type", "inputs must be InputOccurrence items", op_label=label)
     for _path, value in recipe.literals:
         _encode_value(value, label)
     _encode_value(dict(recipe.attrs), label)
@@ -363,14 +372,14 @@ def _encode_value(value: Any, label: str | None) -> Any:
         return [_encode_value(v, label) for v in value]
     if type(value) in (dict, MappingProxyType):
         return {"$dict": {_key(k, label): _encode_value(v, label) for k, v in value.items()}}
-    raise ReplayRecipeError(
+    raise ReplayRefusal(
         "type", f"non-data value of type {type(value).__name__} in recipe", op_label=label
     )
 
 
 def _key(key: Any, label: str | None) -> str:
     if type(key) is not str:
-        raise ReplayRecipeError("type", f"mapping key {key!r} is not a str", op_label=label)
+        raise ReplayRefusal("type", f"mapping key {key!r} is not a str", op_label=label)
     return key
 
 
@@ -381,15 +390,15 @@ def _decode_value(node: Any, label: str | None) -> Any:
         return node
     if type(node) is float:
         if not math.isfinite(node):
-            raise ReplayRecipeError("type", "untagged non-finite float", op_label=label)
+            raise ReplayRefusal("type", "untagged non-finite float", op_label=label)
         return node
     if isinstance(node, list):
         return [_decode_value(v, label) for v in node]
     if not isinstance(node, Mapping) or len(node) != 1:
-        raise ReplayRecipeError("type", f"bad recipe value {type(node).__name__}", op_label=label)
+        raise ReplayRefusal("type", f"bad recipe value {type(node).__name__}", op_label=label)
     ((tag, body),) = node.items()
     if tag not in _TAGS:
-        raise ReplayRecipeError("type", f"unknown value tag {tag!r}", op_label=label)
+        raise ReplayRefusal("type", f"unknown value tag {tag!r}", op_label=label)
     return _decode_tagged(tag, body, label)
 
 
@@ -404,13 +413,13 @@ def _decode_tagged(tag: str, body: Any, label: str | None) -> Any:
         real, imag = (_decode_value(v, label) for v in body)
         if type(real) is float and type(imag) is float:
             return complex(real, imag)
-    raise ReplayRecipeError("type", f"malformed {tag} value", op_label=label)
+    raise ReplayRefusal("type", f"malformed {tag} value", op_label=label)
 
 
 def _decode_mapping(node: Any, name: str, label: str | None) -> dict[str, Any]:
     value = _decode_value(node, label)
     if not isinstance(value, dict):
-        raise ReplayRecipeError("type", f"{name} is not a mapping", op_label=label)
+        raise ReplayRefusal("type", f"{name} is not a mapping", op_label=label)
     return value
 
 
@@ -423,37 +432,35 @@ def _encode_path(path: ArgPath) -> list[str | int]:
 
 def _decode_path(node: Any, label: str | None) -> ArgPath:
     if not isinstance(node, (list, tuple)) or not node:
-        raise ReplayRecipeError("type", "argument path must be a non-empty list", op_label=label)
+        raise ReplayRefusal("type", "argument path must be a non-empty list", op_label=label)
     return tuple(_path_part(p, label) for p in node)
 
 
 def _path_part(part: Any, label: str | None) -> str | int:
     if type(part) is int and part >= 0 or type(part) is str:
-        return part  # type: ignore[no-any-return]
-    raise ReplayRecipeError("type", f"bad argument path part {part!r}", op_label=label)
+        return cast("str | int", part)
+    raise ReplayRefusal("type", f"bad argument path part {part!r}", op_label=label)
 
 
 def _req_str(value: Any, name: str, label: str | None) -> str:
     if type(value) is not str:
-        raise ReplayRecipeError("type", f"{name} must be a str", op_label=label)
+        raise ReplayRefusal("type", f"{name} must be a str", op_label=label)
     return value
 
 
 def _str_list(node: Any, name: str, limit: int) -> list[str]:
     if not isinstance(node, (list, tuple)) or len(node) > limit:
-        raise ReplayRecipeError("shape", f"{name} must be a list of at most {limit}")
+        raise ReplayRefusal("shape", f"{name} must be a list of at most {limit}")
     return [_req_str(v, name, None) for v in node]
 
 
 def _pairs(node: Any, name: str, limit: int, label: str | None) -> list[tuple[Any, Any]]:
     if not isinstance(node, (list, tuple)) or len(node) > limit:
-        raise ReplayRecipeError(
-            "shape", f"{name} must be a list of at most {limit}", op_label=label
-        )
+        raise ReplayRefusal("shape", f"{name} must be a list of at most {limit}", op_label=label)
     pairs = []
     for item in node:
         if not isinstance(item, (list, tuple)) or len(item) != 2:
-            raise ReplayRecipeError("shape", f"{name} entries must be pairs", op_label=label)
+            raise ReplayRefusal("shape", f"{name} entries must be pairs", op_label=label)
         pairs.append((item[0], item[1]))
     return pairs
 
@@ -477,20 +484,20 @@ def _check_bounds(data: Any, limits: RecipeLimits) -> None:
         node, depth = stack.pop()
         nodes += 1
         if nodes > limits.max_nodes or depth > limits.max_depth:
-            raise ReplayRecipeError("bounds", "recipe tree exceeds the size or depth bound")
+            raise ReplayRefusal("bounds", "recipe tree exceeds the size or depth bound")
         if isinstance(node, str):
             if len(node) > limits.max_str_len:
-                raise ReplayRecipeError("bounds", "recipe string exceeds the length bound")
+                raise ReplayRefusal("bounds", "recipe string exceeds the length bound")
         elif type(node) is int:
             if node.bit_length() > limits.max_int_bits:
-                raise ReplayRecipeError("bounds", "recipe integer exceeds the size bound")
+                raise ReplayRefusal("bounds", "recipe integer exceeds the size bound")
         elif isinstance(node, Mapping):
             for key, value in node.items():
                 if type(key) is not str:
-                    raise ReplayRecipeError("type", "recipe mapping key is not a str")
+                    raise ReplayRefusal("type", "recipe mapping key is not a str")
                 stack.append((key, depth + 1))
                 stack.append((value, depth + 1))
         elif isinstance(node, (list, tuple)):
             stack.extend((v, depth + 1) for v in node)
         elif node is not None and type(node) not in (bool, float):
-            raise ReplayRecipeError("type", f"non-data leaf {type(node).__name__} in recipe")
+            raise ReplayRefusal("type", f"non-data leaf {type(node).__name__} in recipe")
