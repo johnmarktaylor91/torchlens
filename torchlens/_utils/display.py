@@ -14,7 +14,7 @@ import tempfile
 import time
 import weakref
 from collections.abc import Iterable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
@@ -614,21 +614,27 @@ def _phase_bucket(description: str) -> str:
     return re.sub(r"[^0-9a-z]+", "_", text.lower()).strip("_")
 
 
-@contextmanager
-def _vtimed(trace: "Trace", description: str, *, bucket: str | None = None) -> Iterator[None]:
+def _vtimed(
+    trace: "Trace", description: str, *, bucket: str | None = None
+) -> AbstractContextManager[None]:
     """Context manager that prints a timed progress message if verbose mode is enabled.
 
     Prints ``[torchlens] description...`` on entry, then appends `` done (X.XXs)``
     on exit. The elapsed time lands in ``trace._phase_timings`` under
     ``bucket``: a postprocess step passes its
     ``torchlens._postprocess._pipeline.PIPELINE`` step name; a stage outside the
-    pipeline keeps its description as a snake_case key.
+    pipeline keeps its description as a snake_case key. Without verbose mode it
+    is the slotted phase timer itself (no generator per entry).
     """
     bucket = bucket or _phase_bucket(description)
     if not trace._options_verbose:
-        with _timed_phase(trace, bucket):
-            yield
-        return
+        return _timed_phase(trace, bucket)
+    return _verbose_timed(trace, description, bucket)
+
+
+@contextmanager
+def _verbose_timed(trace: "Trace", description: str, bucket: str) -> Iterator[None]:
+    """Print ``description`` on entry and its elapsed time on exit; record the sample."""
     print(f"[torchlens] {description}...", end="", flush=True)
     start = time.perf_counter()
     try:
