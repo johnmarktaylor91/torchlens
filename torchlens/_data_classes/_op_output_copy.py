@@ -131,7 +131,8 @@ def _field_plan(
         )
         if not is_data_descriptor or field in _INTERCEPTED_READ_FIELDS:
             descriptor = None
-        plain = descriptor_type.__name__ == "_OpField" and descriptor_type in _OP_FACADE[0][3]
+        plain = descriptor_type.__name__ == "_OpField" and bool(_OP_FACADE)
+        plain = plain and descriptor_type in _OP_FACADE[0][3]
         fid = descriptor._fid if descriptor is not None and plain else None
         rows.append((field, descriptor, attr, field in shared, fid))
     plan = tuple(rows)
@@ -179,10 +180,15 @@ def _plain_cells(op: Op) -> list[Any] | None:
     sealed stores are subclasses and keep the descriptor read).
     """
 
-    store = _GET(op, "_core")
-    if store.__class__ is not OpRowStore or store._rows is None:
+    # An unbound slot or out-of-range row falls back to the descriptor reads, which
+    # handle it field by field exactly as before.
+    try:
+        store = _GET(op, "_core")
+        if store.__class__ is not OpRowStore or store._rows is None:
+            return None
+        return store._rows[_GET(op, "_row")]
+    except (AttributeError, IndexError):
         return None
-    return store._rows[_GET(op, "_row")]
 
 
 def _descriptor_read(descriptor: Any, op: Op, cls: type) -> Any:
