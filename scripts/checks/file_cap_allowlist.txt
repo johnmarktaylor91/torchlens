@@ -876,7 +876,6 @@ torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator.wrap
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator	112
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wrapped_builder	90
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wrapped_builder.wrapped_transform	62
-torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
 torchlens/backends/torch/backward.py	3795
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65

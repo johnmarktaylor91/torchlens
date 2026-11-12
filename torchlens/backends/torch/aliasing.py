@@ -61,11 +61,7 @@ def detect_torch_alias_contract(
         for position, tensor in input_tensors
         if _position_was_mutated(position, tensor, copied_inputs)
     )
-    aliased_positions = tuple(
-        position
-        for position, tensor in input_tensors
-        if _output_aliases_input(func_event_input.raw_output, tensor)
-    )
+    aliased_positions = _aliased_input_positions(func_event_input.raw_output, input_tensors)
     return BackendSemantics(
         backend_grad_handle=backend_grad_handle,
         grad_fn_class_name=grad_fn_class_name,
@@ -115,11 +111,7 @@ def detect_torch_output_alias_contract(
     """
 
     input_tensors = _flatten_input_tensors(func_event_input.args, func_event_input.kwargs)
-    aliased_positions = tuple(
-        position
-        for position, tensor in input_tensors
-        if _output_aliases_input(func_event_input.raw_output, tensor)
-    )
+    aliased_positions = _aliased_input_positions(func_event_input.raw_output, input_tensors)
     return BackendSemantics(
         backend_grad_handle=backend_grad_handle,
         grad_fn_class_name=grad_fn_class_name,
@@ -156,11 +148,12 @@ def plain_output_alias_semantics(
             positions.append((index, value))
         elif isinstance(value, (Mapping, list, tuple)):
             positions.extend(_iter_tensor_positions(index, value))
-    for key, value in kwargs.items():
-        if isinstance(value, torch.Tensor):
-            positions.append((key, value))
-        elif isinstance(value, (Mapping, list, tuple)):
-            positions.extend(_iter_tensor_positions(key, value))
+    if kwargs:
+        for key, value in kwargs.items():
+            if isinstance(value, torch.Tensor):
+                positions.append((key, value))
+            elif isinstance(value, (Mapping, list, tuple)):
+                positions.extend(_iter_tensor_positions(key, value))
     return BackendSemantics(
         backend_grad_handle=fields["grad_fn_handle"],
         grad_fn_class_name=fields["grad_fn_class_name"],
@@ -177,38 +170,109 @@ def plain_output_alias_semantics(
 def _bare_output_aliases(
     raw_output: torch.Tensor, positions: list[tuple[object, torch.Tensor]]
 ) -> tuple[object, ...]:
-    """Return the positions whose tensor is ``raw_output`` or shares its storage pointer."""
+    """Return the positions whose tensor is ``raw_output`` or shares its storage pointer.
 
-    aliased: list[object] = []
+    The output's storage pointer is read once and each input's once, under one logging
+    pause, and compared as integers; the function-call ids are drawn exactly as the
+    per-pair check draws them (none for the same object, one when the output's storage
+    read fails, else two). The routed storage read resolved for the output serves every
+    input of the same class (the resolution cannot change inside the pause).
+    """
+
+    aliased: tuple[object, ...] = ()
     logging_enabled = _state.active_capture()[1]
+    draw = _state.next_func_call_id
     output_ptr: Any = None
+    output_class = raw_output.__class__
     with _state.pause_logging():
+        read = tensor_read(raw_output, "untyped_storage")
         for position, tensor in positions:
             if tensor is raw_output:
-                aliased.append(position)
+                aliased += (position,)
                 continue
             if logging_enabled:
-                _state.next_func_call_id()
+                draw()
             if output_ptr is None:
                 try:
-                    output_ptr = tensor_read(raw_output, "untyped_storage")(raw_output).data_ptr()
+                    output_ptr = read(raw_output).data_ptr()
                 except RuntimeError:
                     output_ptr = _NO_POINTER
             if output_ptr is _NO_POINTER:
                 continue
             if logging_enabled:
-                _state.next_func_call_id()
+                draw()
             try:
-                input_ptr = tensor_read(tensor, "untyped_storage")(tensor).data_ptr()
+                if tensor.__class__ is output_class:
+                    input_ptr = read(tensor).data_ptr()
+                else:
+                    input_ptr = tensor_read(tensor, "untyped_storage")(tensor).data_ptr()
             except RuntimeError:
                 continue
             if input_ptr == output_ptr:
-                aliased.append(position)
+                aliased += (position,)
+    return aliased
+
+
+def _aliased_input_positions(
+    raw_output: object, input_tensors: tuple[tuple[object, torch.Tensor], ...]
+) -> tuple[object, ...]:
+    """Return the input positions whose tensor aliases any tensor of ``raw_output``.
+
+    The same answer, and the same function-call ids drawn in the same order, as testing
+    each input against each output tensor with :func:`_tensors_alias` and stopping at the
+    first output that aliases it; each tensor's storage pointer is read at most once.
+    """
+
+    if not input_tensors:
+        return ()
+    outputs = tuple(_iter_output_tensors(raw_output))
+    if not outputs:
+        return ()
+    aliased: list[object] = []
+    logging_enabled = _state.active_capture()[1]
+    draw = _state.next_func_call_id
+    pointers: dict[int, Any] = {}
+    with _state.pause_logging():
+        for position, tensor in input_tensors:
+            for output in outputs:
+                if output is tensor:
+                    aliased.append(position)
+                    break
+                if logging_enabled:
+                    draw()
+                output_ptr = pointers.get(id(output))
+                if output_ptr is None:
+                    output_ptr = pointers[id(output)] = _storage_pointer(output, None)
+                if output_ptr is _NO_POINTER:
+                    continue
+                if logging_enabled:
+                    draw()
+                input_ptr = pointers.get(id(tensor))
+                if input_ptr is None:
+                    input_ptr = pointers[id(tensor)] = _storage_pointer(tensor, None)
+                if input_ptr == output_ptr:
+                    aliased.append(position)
+                    break
     return tuple(aliased)
 
 
+def _storage_pointer(tensor: torch.Tensor, read: Any) -> Any:
+    """Return ``tensor``'s storage data pointer, or ``_NO_POINTER`` when the read raises.
+
+    ``read`` is the routed ``untyped_storage`` read already resolved for a tensor of the
+    same class in the same pause, or ``None`` to resolve it here.
+    """
+
+    try:
+        if read is None:
+            read = tensor_read(tensor, "untyped_storage")
+        return read(tensor).data_ptr()
+    except RuntimeError:
+        return _NO_POINTER
+
+
 _NO_POINTER = object()
-"""The output pointer of a bare output whose storage read raised (no input aliases it)."""
+"""The pointer of a tensor whose storage read raised (it aliases nothing)."""
 
 
 def _flatten_input_tensors(
@@ -355,28 +419,6 @@ def _position_was_mutated(
         # by content comparison — report "not mutated".
         return False
     return not tensor_nanequal(copied, tensor)
-
-
-def _output_aliases_input(raw_output: object, input_tensor: torch.Tensor) -> bool:
-    """Return whether any raw output tensor aliases an input tensor.
-
-    Parameters
-    ----------
-    raw_output
-        Function raw output object.
-    input_tensor
-        Candidate input tensor.
-
-    Returns
-    -------
-    bool
-        True when an output tensor shares storage with ``input_tensor``.
-    """
-
-    for output_tensor in _iter_output_tensors(raw_output):
-        if _tensors_alias(output_tensor, input_tensor):
-            return True
-    return False
 
 
 def _iter_output_tensors(raw_output: object) -> Iterable[torch.Tensor]:
