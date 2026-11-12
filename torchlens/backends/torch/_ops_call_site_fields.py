@@ -50,7 +50,7 @@ from ._call_site_parts import (
     module_record,
     stateful as _stateful,
 )
-from ._call_site_runs import RUN_BUDGET, pin_codes, skip_run
+from ._call_site_runs import RUN_BUDGET, pin_codes
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -300,7 +300,7 @@ def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
             except KeyError:
                 internal = _is_internal(code)
             if internal:
-                frame = skip_run(memo, frame, code)
+                frame = frame.f_back
                 continue
             key = (key, id(code), filename, frame.f_lasti)
         frame = frame.f_back
