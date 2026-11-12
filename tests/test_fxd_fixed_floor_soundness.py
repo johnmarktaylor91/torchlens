@@ -421,7 +421,7 @@ def test_repeated_captures_with_changing_options_match_fresh_captures() -> None:
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2))
     x = torch.randn(3, 4)
-    for kwargs in ({}, {"layers_to_save": "all"}, {"layers_to_save": None}, {}):
+    for kwargs in ({}, {"save": "all"}, {"save": None}, {}):
         a = tl.trace(model, x, **kwargs)
         b = tl.trace(model, x, **kwargs)
         assert list(a.layer_labels) == list(b.layer_labels)
@@ -571,10 +571,11 @@ def test_seeded_captures_repeat_after_an_accelerator_module_is_reloaded_entry(
 
     name = "torch.mps"
     module = importlib.import_module(name)
+    # The re-import rebinds ``torch.mps`` too; restore both so later tests see one module.
+    monkeypatch.setattr(torch, "mps", module)
     monkeypatch.delitem(sys.modules, name)
     torch.manual_seed(3)
     expected = torch.random.get_rng_state()
     seed_backends.manual_seed_compiled_backends(3)
     assert torch.equal(torch.random.get_rng_state(), expected)
     assert sys.modules.get(name) is not None
-    sys.modules[name] = module

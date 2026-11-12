@@ -261,7 +261,9 @@ def _clear_module_namespace_tensor_metadata(
         live = {k for k in set(value_types) - _NAMESPACE_INERT_TYPES if not issubclass(k, type)}
         slot_names = tuple(
             name
-            for name, item in compress(zip(names, values), map(live.__contains__, value_types))
+            for name, item in compress(
+                zip(names, values, strict=True), map(live.__contains__, value_types)
+            )
             # Shim test inline by name first: it is the check's first conjunct.
             if (
                 type(item).__name__ != "_reduce_op"

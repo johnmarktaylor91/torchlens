@@ -18,7 +18,7 @@ import dataclasses
 from operator import attrgetter
 from typing import Any, TypeVar
 
-__all__ = ["replace_fields"]
+__all__ = ("replace_fields",)
 
 _T = TypeVar("_T")
 
