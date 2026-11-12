@@ -13,8 +13,7 @@ from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from .. import _state
-from ._id_key_registry import IdKeyRegistry
-from ._internal_read import internal_scalar_read
+from ._internal_read import IdKeyRegistry, internal_scalar_read
 from ._torch_compat import get_tensorbase_class
 
 __all__ = [
