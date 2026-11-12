@@ -311,7 +311,7 @@ class _Fixed(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.lin = nn.Linear(6, 6)
-        self.norm = nn.LayerNorm(6)
+        self.norm = nn.LayerNorm(9)
         self.register_buffer("count", torch.zeros(6))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -325,7 +325,7 @@ class _Fixed(nn.Module):
         self.count.add_(1.0)
         parts = torch.split(w, 2, dim=1)
         s = torch.stack([parts[0], parts[1], parts[0]], dim=0).sum(0)
-        r = torch.relu(self.norm(w)) * x
+        r = torch.relu(self.norm(w))[:, :6] * x
         r = r.transpose(0, 1).transpose(0, 1)
         return r.sum() + s.mean() + z.mean() + v[0].sum()
 
