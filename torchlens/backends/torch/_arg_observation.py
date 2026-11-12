@@ -38,6 +38,8 @@ from ._ops_arg_slots import (
     _SlotCall,
     _SlotContext,
     _SnapshotScope,
+    new_arg_slot,
+    new_slot_context,
     parents_from_slots,
 )
 
@@ -186,6 +188,7 @@ def snapshot_flat_slots(
     token = None if session is None else session.token
     frame = (call, arg_tensors, live)
     facts: dict[int, tuple[Any, ...]] = {}
+    labels: dict[int, str | None] = {}
     scope: _SnapshotScope | None = None
     slot_list = []
     by_key = {}
@@ -201,12 +204,12 @@ def snapshot_flat_slots(
                     scope = _general_scope(trace, call, arg_tensors, live)
                 value_facts = object_facts(trace, value, scope)
             facts[value_id] = value_facts
-        slot = _ArgSlot(kind, key, value_id, *value_facts)
+            labels[value_id] = value_facts[0]
+        slot = new_arg_slot(kind, key, value_id, value_facts)
         slot_list.append(slot)
         by_key[slot_key] = slot
     slots = tuple(slot_list)
-    labels = {value_id: value_facts[0] for value_id, value_facts in facts.items()}
-    workspace._pending_arg_slots = _SlotContext(args, kwargs, slots, by_key, labels)
+    workspace._pending_arg_slots = new_slot_context(args, kwargs, slots, by_key, labels)
     return slots
 
 

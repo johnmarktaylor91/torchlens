@@ -18,6 +18,7 @@ repeated tensor and one callable at changing argument layouts.
 
 from __future__ import annotations
 
+import dataclasses
 import warnings
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -369,3 +370,17 @@ def test_flat_calls_take_the_planned_snapshot(monkeypatch: pytest.MonkeyPatch) -
         warnings.simplefilter("ignore")  # the flagged tensor has no provenance
         tl.trace(_Unusual(), torch.randn(2, 4))
     assert any(left)
+
+
+def test_record_builders_equal_the_dataclass_constructors() -> None:
+    """The one-step builders make the records the generated constructors make, frozen."""
+
+    facts = ("op_1", True, ("op_1", "buffer_2"), False, False, False)
+    slot = _ops_arg_slots.new_arg_slot("kwargs", "mask", 7, facts)
+    assert slot == _ops_arg_slots._ArgSlot("kwargs", "mask", 7, *facts)
+    assert dataclasses.replace(slot, label=None).label is None
+    context = _ops_arg_slots.new_slot_context((1,), {}, (slot,), {("kwargs", "mask"): slot}, {})
+    assert context == _ops_arg_slots._SlotContext((1,), {}, (slot,), {("kwargs", "mask"): slot}, {})
+    for record, field in ((slot, "label"), (context, "labels")):
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            setattr(record, field, None)

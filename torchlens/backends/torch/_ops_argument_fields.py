@@ -39,10 +39,11 @@ from ._ops_arg_slots import (
     _peek_raw_graph_workspace,
     _session_parent_labels,
     _SlotCall,
-    _SlotContext,
     _SnapshotScope,
     _storage_intact,
     _tensor_items,
+    new_arg_slot,
+    new_slot_context,
     templates_requested,
 )
 from .buffer_writes import (
@@ -332,11 +333,11 @@ def snapshot_arg_slots(
         if value_facts is None:
             value_facts = facts[id(value)] = _object_facts(trace, value, scope)
             labels[id(value)] = value_facts[0]
-        slot = _ArgSlot(kind, key, id(value), *value_facts)
+        slot = new_arg_slot(kind, key, id(value), value_facts)
         slot_list.append(slot)
         by_key[(kind, key)] = slot
     slots = tuple(slot_list)
-    workspace._pending_arg_slots = _SlotContext(call.args, call.kwargs, slots, by_key, labels)
+    workspace._pending_arg_slots = new_slot_context(call.args, call.kwargs, slots, by_key, labels)
     return slots
 
 

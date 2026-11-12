@@ -55,9 +55,12 @@ class _SlotCall:
     layout: Any = None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class _ArgSlot:
     """What the shared-fields derivations read about one tensor argument slot.
+
+    No ``__slots__``: :func:`new_arg_slot` writes a record's fields into its instance
+    dict in one step (the generated frozen ``__init__`` sets them one by one).
 
     ``key`` is the recorder position key (``0``, ``"mask"``, ``(1, 0)``). ``label`` is
     the tensor's live current-session label after any stale-label clear, else ``None``.
@@ -77,9 +80,12 @@ class _ArgSlot:
     param_validated: bool
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class _SlotContext:
-    """The current op's slots, keyed for the derivations that cannot take them directly."""
+    """The current op's slots, keyed for the derivations that cannot take them directly.
+
+    Built by :func:`new_slot_context` (no ``__slots__``, as :class:`_ArgSlot`).
+    """
 
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
@@ -87,6 +93,45 @@ class _SlotContext:
     by_key: dict[SlotKey, _ArgSlot]
     #: Each slot tensor's ``label`` by object id (read-only for its readers).
     labels: dict[int, str | None]
+
+
+_NEW = object.__new__
+
+
+def new_arg_slot(kind: str, key: Any, value_id: int, facts: tuple[Any, ...]) -> _ArgSlot:
+    """Return ``_ArgSlot(kind, key, value_id, *facts)``, its fields written at once."""
+
+    slot = _NEW(_ArgSlot)
+    slot.__dict__.update(
+        {
+            "kind": kind,
+            "key": key,
+            "value_id": value_id,
+            "label": facts[0],
+            "known_provenance": facts[1],
+            "session_parent_labels": facts[2],
+            "data_alias": facts[3],
+            "param_unmutated": facts[4],
+            "param_validated": facts[5],
+        }
+    )
+    return slot
+
+
+def new_slot_context(
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    slots: tuple[_ArgSlot, ...],
+    by_key: dict[SlotKey, _ArgSlot],
+    labels: dict[int, str | None],
+) -> _SlotContext:
+    """Return ``_SlotContext(args, kwargs, slots, by_key, labels)``, written at once."""
+
+    context = _NEW(_SlotContext)
+    context.__dict__.update(
+        {"args": args, "kwargs": kwargs, "slots": slots, "by_key": by_key, "labels": labels}
+    )
+    return context
 
 
 @dataclass(frozen=True, slots=True)
