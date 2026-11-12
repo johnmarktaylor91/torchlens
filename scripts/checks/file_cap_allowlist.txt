@@ -330,7 +330,7 @@ torchlens/_plots/node_plots.py::heatmap	141
 torchlens/_plots/node_plots.py::image_scatter	106
 torchlens/_plots/node_plots.py::lineplot	173
 torchlens/_postprocess/__init__.py::_drop_transient_capture_state	72
-torchlens/_postprocess/__init__.py::_postprocess_body	133
+torchlens/_postprocess/__init__.py::_postprocess_body	113
 torchlens/_postprocess/_buffer_addresses.py::_buffer_addresses_by_label	119
 torchlens/_postprocess/_materialize.py	1623
 torchlens/_postprocess/_materialize.py::_apply_join_cells	201
