@@ -17,6 +17,7 @@ import sys
 import types
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from itertools import compress
 from types import ModuleType
 from typing import Any, TypeAlias
 
@@ -246,22 +247,25 @@ def _clear_module_namespace_tensor_metadata(
     seen.add(obj_id)
     namespace = getattr(value, "__dict__", None)
     if isinstance(namespace, dict):
-        # No slot memo: a memo invalidated on ``len(namespace)`` only would
-        # miss REPLACING a value at a constant length (``mod.stash = 5``
-        # becoming ``mod.stash = tensor``), keep the stale slot list, and let
-        # the stamped tensor escape the session clear -- provenance laundering across
-        # sessions. No cheaper
-        # invalidation is sound: detecting a new tensor/container slot
-        # requires type-inspecting every item, which IS the rebuild, so
-        # the filter runs fresh each walk (one isinstance pass per
-        # reachable module namespace per session end).
+        # No slot memo: one invalidated on ``len(namespace)`` misses REPLACING a value
+        # at constant length (``mod.stash = 5`` becoming ``mod.stash = tensor``) and
+        # lets the stamped tensor escape the clear, so every walk type-inspects every
+        # item afresh. The inert-type and class tests are decided once per distinct
+        # ``type(item)`` and applied in C; only items of the remaining types reach Python.
+        # Two flat snapshots (no pair per item); a size change between them re-pairs.
+        names, values = tuple(namespace), tuple(namespace.values())
+        if len(names) != len(values):
+            pairs = tuple(namespace.items())
+            names, values = tuple(k for k, _ in pairs), tuple(v for _, v in pairs)
+        value_types = tuple(map(type, values))
+        live = {k for k in set(value_types) - _NAMESPACE_INERT_TYPES if not issubclass(k, type)}
         slot_names = tuple(
             name
-            for name, item in namespace.items()
-            if type(item) not in _NAMESPACE_INERT_TYPES
-            and not issubclass(type(item), type)
+            for name, item in compress(
+                zip(names, values, strict=True), map(live.__contains__, value_types)
+            )
             # Shim test inline by name first: it is the check's first conjunct.
-            and (
+            if (
                 type(item).__name__ != "_reduce_op"
                 or not _is_isinstance_hostile_deprecation_shim(item)
             )
@@ -378,11 +382,12 @@ def _clear_container_tree_tensor_metadata(
     # and a full call costs more than the check. EXACT type() membership and
     # ``issubclass(type(item), type)`` read the real type slot: isinstance()
     # reads ``__class__``, which the reduce_op shim answers with a
-    # FutureWarning; subclasses fall through to the guarded recursion.
-    for item in items:
-        item_type = type(item)
-        if item_type in _NAMESPACE_INERT_TYPES or issubclass(item_type, type):
-            continue
+    # FutureWarning; subclasses fall through to the guarded recursion. Decided
+    # once per distinct type, applied in C, kept items visited in their order.
+    live = {k for k in set(map(type, items)) - _NAMESPACE_INERT_TYPES if not issubclass(k, type)}
+    if not live:
+        return
+    for item in compress(items, map(live.__contains__, map(type, items))):
         _clear_container_tree_tensor_metadata(item, seen, depth + 1, visit)
 
 

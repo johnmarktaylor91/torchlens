@@ -3732,7 +3732,7 @@
   "field": "raw_index",
   "file": "torchlens/_postprocess/labeling.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -4525,6 +4525,14 @@
   "file": "torchlens/_utils/_torch_compat.py",
   "has_default": false,
   "sites": 19,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_utils/_torch_seed_backends.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {

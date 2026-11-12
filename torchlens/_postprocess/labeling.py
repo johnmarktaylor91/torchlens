@@ -607,28 +607,15 @@ def _add_lookup_keys_for_layer_entry(
         num_tensors_to_keep: Total number of retained tensors (for negative indices).
     """
     # The "default" keys: including the pass if multiple ops, excluding if one pass.
-    lookup_keys_for_tensor = [
-        layer_entry._label_raw,
-        layer_entry.raw_label,
-        layer_entry.layer_label,
-        layer_entry.short_layer_label,
-        layer_entry.label,
-        layer_entry.short_label,
-        tensor_index,
-        tensor_index - num_tensors_to_keep,
-    ]
+    # Each label is read once (every read goes through ``Op.__getattribute__``).
+    label_raw, raw_label = layer_entry._label_raw, layer_entry.raw_label
+    layer_label, short_layer_label = layer_entry.layer_label, layer_entry.short_layer_label
+    label, short_label = layer_entry.label, layer_entry.short_label
+    lookup_keys_for_tensor = [label_raw, raw_label, layer_label, short_layer_label, label]
+    lookup_keys_for_tensor += [short_label, tensor_index, tensor_index - num_tensors_to_keep]
     layer_entry.ordinal_index = tensor_index
-    primary_label_keys = {
-        layer_entry.layer_label,
-        layer_entry.short_layer_label,
-        layer_entry.label,
-        layer_entry.short_label,
-    }
-    exact_op_keys = {
-        layer_entry._label_raw,
-        layer_entry.raw_label,
-        layer_entry.label,
-    }
+    primary_label_keys = {layer_label, short_layer_label, label, short_label}
+    exact_op_keys = {label_raw, raw_label, label}
 
     # Relabel the module ops if this pass built module metadata:
     if self._options_mode in {"exhaustive", "predicate"}:
@@ -666,11 +653,12 @@ def _add_lookup_keys_for_layer_entry(
 
     # Log in both the tensor and in the Trace object.
     layer_entry.lookup_keys = lookup_keys_for_tensor
+    raw_index = layer_entry.raw_index
     for lookup_key in lookup_keys_for_tensor:
         if lookup_key not in self._lookup_keys_to_layer_num_dict:
-            self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
+            self._lookup_keys_to_layer_num_dict[lookup_key] = raw_index
             self._layer_dict_all_keys[lookup_key] = layer_entry
-        elif self._lookup_keys_to_layer_num_dict[lookup_key] != layer_entry.raw_index:
+        elif self._lookup_keys_to_layer_num_dict[lookup_key] != raw_index:
             if lookup_key in exact_op_keys:
                 existing = self._layer_dict_all_keys[lookup_key]
                 raise AmbiguousOpLookupError(
@@ -681,12 +669,12 @@ def _add_lookup_keys_for_layer_entry(
                 lookup_key,
                 [self._lookup_keys_to_layer_num_dict[lookup_key]],
             )
-            if layer_entry.raw_index not in raw_indices:
-                raw_indices.append(layer_entry.raw_index)
+            if raw_index not in raw_indices:
+                raw_indices.append(raw_index)
             if lookup_key in primary_label_keys:
-                self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
+                self._lookup_keys_to_layer_num_dict[lookup_key] = raw_index
                 self._layer_dict_all_keys[lookup_key] = layer_entry
-        self._layer_num_to_lookup_keys_dict[layer_entry.raw_index].append(lookup_key)
+        self._layer_num_to_lookup_keys_dict[raw_index].append(lookup_key)
 
 
 def _relabel_module_calls(layer_entry: Op) -> None:

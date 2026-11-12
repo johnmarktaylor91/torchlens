@@ -11,7 +11,6 @@ import collections.abc
 import os
 import warnings
 from collections.abc import Callable
-from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -55,6 +54,7 @@ from ..._training_validation import (
     effective_inference_only,
     validate_training_compatibility,
 )
+from ..._utils._dataclass_replace import replace_fields as replace
 from ..._utils.display import warn_parallel
 from ..._utils.tensor_utils import SaveMode
 from ...backends.torch import model_prep as _model_prep, rescue as _rescue

@@ -21,6 +21,7 @@ code names anything the probe does not know, or a privateuse1 seed call with no 
 from __future__ import annotations
 
 import importlib
+import sys
 from types import ModuleType
 
 import torch
@@ -57,6 +58,21 @@ def _backend_compiled(name: str, module: ModuleType) -> bool:
     return verdict
 
 
+def _loaded_module(name: str) -> ModuleType | None:
+    """Return ``sys.modules[name]`` when ``importlib.import_module(name)`` would return it.
+
+    ``import_module`` returns an already-imported module straight from
+    ``sys.modules`` unless the entry is ``None`` (it then raises) or the module
+    is still initializing (it then takes the import lock); both cases, and a
+    missing entry, return ``None`` so the caller runs ``import_module`` itself.
+    """
+
+    module = sys.modules.get(name)
+    if module is None or getattr(getattr(module, "__spec__", None), "_initializing", False):
+        return None
+    return module
+
+
 def manual_seed_compiled_backends(seed: int) -> None:
     """Seed torch like ``torch.manual_seed``, skipping lazy seeds for uncompiled backends.
 
@@ -73,10 +89,12 @@ def manual_seed_compiled_backends(seed: int) -> None:
     seed = int(seed)
     accelerators, seeds_custom_device = _SEED_PLAN
     for name in accelerators:
-        try:
-            module = importlib.import_module(f"torch.{name}")
-        except ImportError:  # torch's ``hasattr(torch, name)`` guard: nothing to seed
-            continue
+        module = _loaded_module(f"torch.{name}")
+        if module is None:
+            try:
+                module = importlib.import_module(f"torch.{name}")
+            except ImportError:  # torch's ``hasattr(torch, name)`` guard: nothing to seed
+                continue
         if _backend_compiled(name, module) and not module._is_in_bad_fork():
             getattr(module, _SEED_CALLS[name])(seed)
     if seeds_custom_device:

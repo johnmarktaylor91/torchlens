@@ -24,8 +24,9 @@ from typing import Any
 from .._trace_core.view_tables import OP_CLASS
 
 #: The bound facade, set once by ``op.py``: ``(Op class, its live class
-#: namespace, stored field names, generated field descriptor classes)``.
-_OP_FACADE: list[tuple[type, Any, tuple[str, ...], frozenset[type]]] = []
+#: namespace, stored field names, generated field descriptor classes, the
+#: stored field names as a set)``.
+_OP_FACADE: list[tuple[type, Any, tuple[str, ...], frozenset[type], frozenset[str]]] = []
 
 #: Class-level ``Op`` properties declared plain stored-cell facades (see
 #: :func:`register_row_release_property`).
@@ -47,7 +48,8 @@ def bind_op_facade(
         Generated field descriptor classes that share ``_OpField.__delete__``.
     """
 
-    _OP_FACADE[:] = [(op_class, vars(op_class), tuple(slot_names), field_classes)]
+    names = tuple(slot_names)
+    _OP_FACADE[:] = [(op_class, vars(op_class), names, field_classes, frozenset(names))]
     OP_CLASS[:] = [op_class]
 
 
@@ -91,7 +93,7 @@ def release_op_row(op: Any, store: Any, row: int) -> bool:
         Whether the row was released here.
     """
 
-    op_class, namespace, slot_names, field_classes = _OP_FACADE[0]
+    op_class, namespace, slot_names, field_classes, _slot_set = _OP_FACADE[0]
     if op.__class__ is not op_class:
         return False
     release_row = getattr(store.__class__, "release_row", None)
