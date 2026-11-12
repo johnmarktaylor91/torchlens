@@ -6758,10 +6758,10 @@
         "tests/test_r18h_introspect_hash.py"
       ],
       "torchlens/_utils/_tl_collective.py": [
+        "tests/test_arg_observation_plans.py",
         "tests/test_deepcopy_capture_identity.py",
         "tests/test_internals.py",
         "tests/test_label_plain_path.py",
-        "tests/test_ops_arg_slots.py",
         "tests/test_release_model.py",
         "tests/test_tl_lifecycle.py",
         "tests/test_tl_meta.py",
@@ -9954,7 +9954,17 @@
         "tests/test_parameter_inplace_mutation.py",
         "tests/test_plain_emit_soundness.py"
       ],
+      "torchlens/backends/torch/_arg_observation.py": [
+        "tests/test_arg_observation_plans.py",
+        "tests/test_arg_scan_reference_paths.py",
+        "tests/test_call_layout_plans.py",
+        "tests/test_capture_core_floor_shadow.py",
+        "tests/test_forward_replay_untracked_writes.py",
+        "tests/test_ops_arg_slots.py",
+        "tests/test_valmem5_saved_value_aliases.py"
+      ],
       "torchlens/backends/torch/_args_template_cache.py": [
+        "tests/test_arg_observation_plans.py",
         "tests/test_arg_scan_reference_paths.py",
         "tests/test_args_template_plans.py",
         "tests/test_capture_unification_p3a.py",
@@ -10046,9 +10056,9 @@
         "tests/test_validation_script_threshold_ladder.py"
       ],
       "torchlens/backends/torch/_call_layout.py": [
+        "tests/test_arg_observation_plans.py",
         "tests/test_arg_scan_reference_paths.py",
         "tests/test_call_layout_plans.py",
-        "tests/test_capture_unification_p4.py",
         "tests/test_forward_replay_untracked_writes.py",
         "tests/test_ops_arg_slots.py",
         "tests/test_r28_validation_identity_witness.py",
@@ -10588,22 +10598,22 @@
         "tests/test_w3_capture_hardening.py"
       ],
       "torchlens/backends/torch/_ops_arg_slots.py": [
+        "tests/test_arg_observation_plans.py",
         "tests/test_arg_scan_reference_paths.py",
         "tests/test_argpos_hardening.py",
         "tests/test_args_template_plans.py",
         "tests/test_call_layout_plans.py",
         "tests/test_forward_replay_untracked_writes.py",
-        "tests/test_implicit_boundary_tightening.py",
         "tests/test_ops_arg_slots.py",
         "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/backends/torch/_ops_argument_fields.py": [
+        "tests/test_arg_observation_plans.py",
         "tests/test_arg_scan_reference_paths.py",
         "tests/test_call_layout_plans.py",
         "tests/test_completeness_witness.py",
         "tests/test_forward_replay_untracked_writes.py",
         "tests/test_ops_arg_slots.py",
-        "tests/test_r28_validation_identity_witness.py",
         "tests/test_set_buffer_provenance.py",
         "tests/test_valmem5_saved_value_aliases.py"
       ],
@@ -10851,14 +10861,14 @@
         "tests/test_tlspec_runnable_output_honesty.py"
       ],
       "torchlens/backends/torch/_param_fingerprint.py": [
+        "tests/test_arg_observation_plans.py",
         "tests/test_arg_scan_reference_paths.py",
         "tests/test_args_template_plans.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_gc.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_op_row_cells.py",
-        "tests/test_scaling_ladder.py",
-        "tests/test_view_write_call_alias_edges.py"
+        "tests/test_scaling_ladder.py"
       ],
       "torchlens/backends/torch/_param_prep_plan.py": [
         "tests/test_prep_keyed_caches.py"
@@ -11118,6 +11128,7 @@
         "tests/test_w3_capture_hardening.py"
       ],
       "torchlens/backends/torch/_view_writeback.py": [
+        "tests/test_arg_observation_plans.py",
         "tests/test_call_layout_plans.py",
         "tests/test_capture_core_floor_shadow.py",
         "tests/test_ops_arg_slots.py",
@@ -11145,6 +11156,7 @@
         "tests/test_wrap_state_compat.py"
       ],
       "torchlens/backends/torch/_weightsfree_transparency.py": [
+        "tests/test_arg_observation_plans.py",
         "tests/test_call_layout_plans.py",
         "tests/test_capture_core_floor_shadow.py",
         "tests/test_ops_arg_slots.py",
