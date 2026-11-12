@@ -343,7 +343,10 @@ def test_incremental_module_entry_equals_the_earlier_paths(
     assert any(frames for _address, _index, frames in served["module_calls"])
 
 
-@pytest.mark.parametrize("name", ["loop_cell", "recursive", "twice_one_line", "deep", "buffers"])
+# Models whose nested sites repeat within one trace (a loop): a first-time site is a
+# code-context cache miss and takes the full walk, so recursion and a line calling one
+# module twice (each call a new site) serve nothing incrementally in a single trace.
+@pytest.mark.parametrize("name", ["loop_cell", "deep", "buffers"])
 def test_nested_entries_take_the_incremental_path(
     name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
