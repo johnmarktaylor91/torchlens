@@ -18,6 +18,7 @@ capture made. These tests pin what the hold must keep:
 
 from __future__ import annotations
 
+import contextlib
 import gc
 import weakref
 from collections.abc import Callable, Iterator
@@ -175,10 +176,8 @@ def test_nested_entry_is_a_no_op_and_the_outer_exit_restores() -> None:
         assert _collector_state()[2] > outer[2] // 2
         # A real nested capture: whether it is admitted or refused, it must not
         # release the outer hold.
-        try:
+        with contextlib.suppress(Exception):  # refusal or success are both fine here
             tl.trace(nn.Linear(4, 4), torch.randn(2, 4))
-        except Exception:  # noqa: BLE001 - refusal or success are both fine here
-            pass
         assert _collector_state()[:2] == outer[:2]
         assert _collector_state()[2] > outer[2] // 2
 
@@ -335,7 +334,10 @@ def _recorded(trace: Any) -> list[tuple[Any, ...]]:
 def _same(a: list[tuple[Any, ...]], b: list[tuple[Any, ...]]) -> bool:
     if [r[:2] for r in a] != [r[:2] for r in b]:
         return False
-    return all((x[2] is None and y[2] is None) or torch.equal(x[2], y[2]) for x, y in zip(a, b))
+    return all(
+        (x[2] is None and y[2] is None) or torch.equal(x[2], y[2])
+        for x, y in zip(a, b, strict=True)
+    )
 
 
 def test_recorded_values_do_not_depend_on_collection_timing() -> None:
