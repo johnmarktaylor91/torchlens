@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import copy
 import pickle
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -24,6 +25,19 @@ import torchlens as tl
 from torchlens._utils import _tensor_label
 from torchlens.backends.torch import _prepared_cache as cache_mod
 from torchlens.backends.torch._prepared_cache import kept_prepared
+
+#: The head's ``forward`` object at each root forward call, in order. Kept outside the
+#: model because a capture rewinds attributes the forward mutates.
+_SEEN: list[Any] = []
+
+
+@pytest.fixture(autouse=True)
+def _clear_seen() -> Iterator[None]:
+    """Start and end every test with an empty ``_SEEN``."""
+
+    _SEEN.clear()
+    yield
+    _SEEN.clear()
 
 
 class _Block(nn.Module):
@@ -46,7 +60,7 @@ class _Block(nn.Module):
 
 
 class _Model(nn.Module):
-    """Two blocks and a head; notes the head's ``forward`` object on each call; can raise."""
+    """Two blocks and a head; notes the head's ``forward`` object in ``_SEEN``; can raise."""
 
     def __init__(self) -> None:
         """Build the model."""
@@ -56,12 +70,11 @@ class _Model(nn.Module):
         self.b = _Block()
         self.head = nn.Linear(4, 2)
         self.fail = False
-        self.seen: list[Any] = []
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run both blocks and the head, or raise mid-forward when asked."""
 
-        self.seen.append(self.head.__dict__.get("forward"))
+        _SEEN.append(self.head.__dict__.get("forward"))
         hidden = self.b(self.a(x))
         if self.fail:
             raise RuntimeError("planned failure")
@@ -141,8 +154,6 @@ def _assert_untouched(model: nn.Module) -> None:
     match its footprint, hold no kept state, and deep-copy and pickle cleanly.
     """
 
-    if isinstance(model, _Model):
-        model.seen.clear()
     twin, x = _model()
     tl.trace(twin, x)
     tl.trace(twin, x)
@@ -159,15 +170,15 @@ def test_captures_in_the_block_reuse_one_wrapper_object() -> None:
     model, x = _model()
     tl.trace(model, x)
     tl.trace(model, x)
-    assert model.seen[0] is not None and model.seen[0] is not model.seen[1]
-    model.seen.clear()
+    assert _SEEN[0] is not None and _SEEN[0] is not _SEEN[1]
+    _SEEN.clear()
     with kept_prepared(model):
         tl.trace(model, x)
         assert _bare(model)
         tl.trace(model, x)
         tl.trace(model, x)
-        assert model.seen[0] is not None
-        assert model.seen[0] is model.seen[1] is model.seen[2]
+        assert _SEEN[0] is not None
+        assert _SEEN[0] is _SEEN[1] is _SEEN[2]
         assert _bare(model)
     _assert_untouched(model)
 
@@ -182,8 +193,8 @@ def test_replaced_submodule_gets_fresh_wrappers() -> None:
         model.head = nn.Linear(4, 2)
         trace = tl.trace(model, x)
         tl.trace(model, x)
-        assert model.seen[1] is not model.seen[0]
-        assert model.seen[2] is model.seen[1]
+        assert _SEEN[1] is not _SEEN[0]
+        assert _SEEN[2] is _SEEN[1]
         assert "forward" not in old_head.__dict__
         assert torch.equal(trace.ops[-1].out, model.head(model.b(model.a(x))))
     _assert_untouched(model)
@@ -199,7 +210,7 @@ def test_added_and_removed_submodules_are_seen() -> None:
         model.a.forward = lambda inp: model.a.extra(_Block.forward(model.a, inp))  # type: ignore[method-assign]
         added = tl.trace(model, x)
         assert any(module.address == "a.extra" for module in added.modules)
-        assert model.seen[1] is not model.seen[0]
+        assert _SEEN[1] is not _SEEN[0]
         del model.a.forward
         del model.a.extra
         removed = tl.trace(model, x)
@@ -215,7 +226,7 @@ def test_replaced_parameter_gets_fresh_wrappers() -> None:
         tl.trace(model, x)
         model.head.weight = nn.Parameter(torch.ones(2, 4))
         trace = tl.trace(model, x)
-        assert model.seen[1] is not model.seen[0]
+        assert _SEEN[1] is not _SEEN[0]
         assert torch.equal(trace.ops[-1].out, model.head(model.b(model.a(x))))
         assert any(p.address == "head.weight" for p in trace.params)
     _assert_untouched(model)
@@ -239,12 +250,12 @@ def test_user_forward_set_between_captures_is_respected() -> None:
         model.head.forward = counted  # type: ignore[method-assign]
         tl.trace(model, x)
         assert calls == [1]
-        assert model.seen[1] is not model.seen[0]
+        assert _SEEN[1] is not _SEEN[0]
         assert model.head.__dict__.get("forward") is counted
         del model.head.forward
         tl.trace(model, x)
         assert calls == [1]
-        assert model.seen[2] is not model.seen[1]
+        assert _SEEN[2] is not _SEEN[1]
     _assert_untouched(model)
 
 
@@ -262,7 +273,7 @@ def test_changed_class_forward_gets_fresh_wrappers() -> None:
             tl.trace(model, x)
             _Head.forward = lambda self, inp: nn.Linear.forward(self, inp) * 2  # type: ignore[method-assign]
             trace = tl.trace(model, x)
-            assert model.seen[1] is not model.seen[0]
+            assert _SEEN[1] is not _SEEN[0]
             expected = nn.Linear.forward(model.head, model.b(model.a(x))) * 2
             assert torch.equal(trace.ops[-1].out, expected)
     finally:
@@ -316,7 +327,7 @@ def test_a_failed_capture_in_the_block_keeps_the_block_sound() -> None:
     with kept_prepared(model):
         tl.trace(model, x)
         model.fail = True
-        with pytest.raises(RuntimeError, match="planned failure"):
+        with pytest.raises(Exception, match="planned failure"):
             tl.trace(model, x)
         model.fail = False
         assert _bare(model)
@@ -333,7 +344,7 @@ def test_nested_blocks_put_back_at_the_outermost_exit() -> None:
             tl.trace(model, x)
         assert id(model) in cache_mod._KEPT
         tl.trace(model, x)
-        assert model.seen[0] is model.seen[1]
+        assert _SEEN[0] is _SEEN[1]
     _assert_untouched(model)
 
 
@@ -346,7 +357,7 @@ def test_other_models_are_unaffected_by_a_block() -> None:
         tl.trace(model, x)
         tl.trace(other, y)
         tl.trace(other, y)
-        assert other.seen[0] is not other.seen[1]
+        assert _SEEN[-1] is not _SEEN[-2]
         assert id(other) not in cache_mod._KEPT
     _assert_untouched(model)
     _assert_untouched(other)

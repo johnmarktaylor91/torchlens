@@ -24,7 +24,6 @@ number of captures.
 
 from __future__ import annotations
 
-import inspect
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -64,9 +63,9 @@ _KEPT: dict[int, _KeptPreparation] = {}
 
 
 def _class_forward(module: nn.Module) -> Any:
-    """Return the ``forward`` the module's class defines, without binding it."""
+    """Return the ``forward`` the module's class defines (a plain function, unbound)."""
 
-    return inspect.getattr_static(type(module), "forward", None)
+    return getattr(type(module), "forward", None)
 
 
 def _same_params(kept: tuple[nn.Parameter, ...], live: tuple[nn.Parameter, ...]) -> bool:
