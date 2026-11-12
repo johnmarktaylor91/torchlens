@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1839 modules, 727209 lines, 0 modules without a docstring.
+85 packages, 1840 modules, 727415 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64652 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 162 | 64858 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1540,7 +1540,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (161 modules, 64652 lines)
+Torch backend implementation package for TorchLens capture. (162 modules, 64858 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1650,6 +1650,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `_predicate_boundary_replacements` | Sparse replacement ops for module-boundary edits on the predicate path. | 151 |
 | `_predicate_forward` | Predicate-mode module forward: the cold arm of ''decorated_forward''. | 439 |
 | `_prehook_state` | Pre-hook input state: metadata observation, transition comparison and tensor snapshots. | 312 |
+| `_prepared_cache` | Opt-in prepared-model cache: a model keeps its built ''forward'' wrappers between captures. | 210 |
 | `_prepared_tree` | Proof that a model's module tree is the one its one-time preparation saw. | 55 |
 | `_protocol_redispatch` | Declined-protocol redispatch: offer a handler the WRAPPER identity it keyed on. | 381 |
 | `_quantized_flops` | FLOPs estimation for PyTorch quantized modules logged as internal sources. | 149 |
@@ -1694,7 +1695,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `identity_shims` | Wrap-state identity shims: keep torch-internal identity checks truthful. | 955 |
 | `instrument` | Model instrumentation entry for the WRAP stage. | 161 |
 | `legacy_ctors` | Capture of legacy tensor constructors: ''torch.<dtype>Tensor(...)'' and ''Variable(t)''. | 396 |
-| `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 2019 |
+| `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 2015 |
 | `module_stack` | Manage the torch capture module-call stack. | 102 |
 | `offload_hooks` | Accelerate offload/dispatch hook shims for eager capture. | 215 |
 | `ops` | Log tensors produced by decorated torch operations. | 584 |

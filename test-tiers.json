@@ -576,10 +576,10 @@
       "torchlens/_capture/prepare/cache.py": [
         "tests/test_capopts_truth_cache_key.py",
         "tests/test_capture_cache_atomic_commit.py",
-        "tests/test_capture_cache_impl_fingerprint.py",
         "tests/test_grind_b4_lane_p.py",
         "tests/test_leverage_div_preflight_cache.py",
         "tests/test_prep_keyed_caches.py",
+        "tests/test_prepared_cache.py",
         "tests/test_r19c_cache_capability.py",
         "tests/test_r58_capture_cache_rce.py"
       ],
@@ -2627,7 +2627,7 @@
       "torchlens/_input_coerce.py": [
         "tests/test_buffer_datamodel.py",
         "tests/test_gc.py",
-        "tests/test_postprocess_executor.py",
+        "tests/test_prepared_cache.py",
         "tests/test_release_model.py",
         "tests/test_string_positional_arg.py",
         "tests/test_trace_image_path_input.py",
@@ -5004,7 +5004,7 @@
       ],
       "torchlens/_quickstart/_ladder.py": [
         "tests/test_collapse_power_ladder.py",
-        "tests/test_gc.py",
+        "tests/test_prepared_cache.py",
         "tests/test_quickstart_ladder.py",
         "tests/test_release_model.py",
         "tests/test_scaling_ladder.py",
@@ -5080,9 +5080,9 @@
         "tests/test_gc.py",
         "tests/test_postprocess_executor.py",
         "tests/test_prep_keyed_caches.py",
+        "tests/test_prepared_cache.py",
         "tests/test_registry_facet_snapshot.py",
         "tests/test_release_model.py",
-        "tests/test_state_hygiene_oracles.py",
         "tests/test_validation.py"
       ],
       "torchlens/_registry/kernel.py": [
@@ -6140,8 +6140,8 @@
         "tests/test_capture_unification_p3b.py",
         "tests/test_gc.py",
         "tests/test_grind_b4_lane_p.py",
-        "tests/test_postprocess_executor.py",
         "tests/test_prep_keyed_caches.py",
+        "tests/test_prepared_cache.py",
         "tests/test_release_model.py",
         "tests/test_validation.py"
       ],
@@ -6190,8 +6190,8 @@
         "tests/test_gc.py",
         "tests/test_postprocess_executor.py",
         "tests/test_prep_keyed_caches.py",
+        "tests/test_prepared_cache.py",
         "tests/test_release_model.py",
-        "tests/test_schema_lockstep.py",
         "tests/test_state_hygiene_oracles.py",
         "tests/test_validation.py"
       ],
@@ -6200,8 +6200,8 @@
         "tests/test_gc.py",
         "tests/test_postprocess_executor.py",
         "tests/test_prep_keyed_caches.py",
+        "tests/test_prepared_cache.py",
         "tests/test_release_model.py",
-        "tests/test_schema_lockstep.py",
         "tests/test_state_hygiene_oracles.py",
         "tests/test_validation.py"
       ],
@@ -6510,8 +6510,8 @@
         "tests/test_model_walk_reuse.py",
         "tests/test_per_trace_cost_model_changes.py",
         "tests/test_prep_keyed_caches.py",
+        "tests/test_prepared_cache.py",
         "tests/test_robustness_pr2.py",
-        "tests/test_robustness_pr4.py",
         "tests/test_session_prep_cost_cuts.py"
       ],
       "torchlens/_utils/_module_call_dispatch.py": [
@@ -10899,6 +10899,16 @@
         "tests/test_error_code_provocations.py",
         "tests/test_prehook_provenance.py"
       ],
+      "torchlens/backends/torch/_prepared_cache.py": [
+        "tests/test_capopts_truth_failed_capture_release.py",
+        "tests/test_fastlog/test_dispatch_smoke.py",
+        "tests/test_model_prep_hardening.py",
+        "tests/test_perf_gate.py",
+        "tests/test_prepared_cache.py",
+        "tests/test_release_model.py",
+        "tests/test_tl_lifecycle.py",
+        "tests/test_validation_hardening.py"
+      ],
       "torchlens/backends/torch/_prepared_tree.py": [
         "tests/test_capture_failure_reporting.py",
         "tests/test_capture_outcome_characterization.py",
@@ -10970,7 +10980,8 @@
         "tests/test_w3_capture_hardening.py"
       ],
       "torchlens/backends/torch/_scope_facts_cache.py": [
-        "tests/test_prep_keyed_caches.py"
+        "tests/test_prep_keyed_caches.py",
+        "tests/test_prepared_cache.py"
       ],
       "torchlens/backends/torch/_script_boundary.py": [
         "tests/test_decoration.py",
@@ -11215,7 +11226,7 @@
         "tests/test_bound_method_root_contract.py",
         "tests/test_buffer_datamodel.py",
         "tests/test_episode_capture.py",
-        "tests/test_gc.py",
+        "tests/test_prepared_cache.py",
         "tests/test_quickstart_lazy_acceptance.py",
         "tests/test_release_model.py",
         "tests/test_trace_bound_method_text.py",
@@ -13165,8 +13176,8 @@
         "tests/test_gc.py",
         "tests/test_postprocess_executor.py",
         "tests/test_prep_keyed_caches.py",
+        "tests/test_prepared_cache.py",
         "tests/test_release_model.py",
-        "tests/test_state_hygiene_oracles.py",
         "tests/test_surgery_live_bind.py",
         "tests/test_validation.py"
       ],
@@ -13638,11 +13649,11 @@
         "tests/test_tlspec_runnable_resolver.py"
       ],
       "torchlens/intervention/_zero_fire.py": [
-        "tests/test_buffer_datamodel.py",
         "tests/test_distribution_outputs.py",
         "tests/test_gc.py",
         "tests/test_hon2_zero_fire_policy.py",
         "tests/test_prep_keyed_caches.py",
+        "tests/test_prepared_cache.py",
         "tests/test_release_model.py",
         "tests/test_rerun_folded_input_zero_fire.py",
         "tests/test_validation.py"
