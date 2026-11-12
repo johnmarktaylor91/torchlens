@@ -21,7 +21,7 @@ import weakref as _weakref_module
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from types import CodeType, FrameType
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import torch
@@ -49,7 +49,13 @@ from .inventory_types import (
     _torchlens_module_globals_ids,
     _untrusted_rng_override,
 )
-from .monitor_state import _PATCH_STACKS, _PatchStackEntry, _retired_hook_event, _skip_retired_hooks
+from .monitor_state import (
+    _PATCH_STACKS,
+    _install_spawned_thread_hook,
+    _PatchStackEntry,
+    _retired_hook_event,
+    _skip_retired_hooks,
+)
 from .registry import (
     _CLOCK_COUNTER_NAMES,
     _CLOCK_IMPLICIT_NOW,
@@ -470,7 +476,7 @@ class host_nondeterminism_monitor:
         ``threading.Thread`` one. Everything else passes through untouched.
         """
 
-        monitor = self
+        owner = _weakref_module.ref(self)  # a running raw thread never keeps the window
 
         def wrapper(function: Any, *rest: Any, **spawn_kwargs: Any) -> Any:
             """Spawn with the target wrapped to self-install the profile hook."""
@@ -478,12 +484,7 @@ class host_nondeterminism_monitor:
             def hooked_target(*fargs: Any, **fkwargs: Any) -> Any:
                 """Install the in-window threading hook, then run the target."""
 
-                hook = monitor._threading_hook
-                if hook is not None and not monitor._torn_down:
-                    # Held original: the module attr may hold a (this or a
-                    # later) window's swap-detection wrapper.
-                    setter = monitor._orig_sys_setprofile or _sys_module.setprofile
-                    setter(hook)
+                _install_spawned_thread_hook(owner)
                 return function(*fargs, **fkwargs)
 
             return original(hooked_target, *rest, **spawn_kwargs)
@@ -923,8 +924,8 @@ class host_nondeterminism_monitor:
     def _sys_hook(self) -> Any:
         """The owner-thread profile hook, held WEAKLY: the ``sys`` slot owns it in-window.
 
-        Hooks hold the monitor (closure and ``_tl_owner``), never the reverse, so a torn-down
-        window is freed by refcount; a thread still carrying a retired hook keeps it alive."""
+        Hooks hold the monitor weakly too (``_tl_owner_ref``), so a torn-down window is freed
+        by refcount even while an in-window thread still carries its hook."""
         return None if self._sys_hook_ref is None else self._sys_hook_ref()
 
     @_sys_hook.setter
@@ -945,22 +946,21 @@ class host_nondeterminism_monitor:
     def _make_profile_hook(self, predecessor: Any, *, records_thread_ident: bool = False) -> Any:
         """Build the ``sys``/``threading`` profile hook, chained ahead of ``predecessor``.
 
-        The hook classifies ``c_call`` events against the held-builtin registry and
-        ``call`` events against the held torch-RNG code registry, and snapshots
-        numpy generator state per frame. ``records_thread_ident`` is set for the
-        ``threading`` copy so every hooked thread registers its ident during
-        bootstrap, before its first user statement, making the escape belt's
-        in-window classification race-free. Any classifier error degrades
-        completeness rather than propagating into the traced program.
+        The hook classifies ``c_call`` (held builtins) and ``call`` (held torch-RNG code) events
+        and snapshots numpy generator state per frame; the ``threading`` copy
+        (``records_thread_ident``) registers each hooked thread's ident during bootstrap, before
+        its first user statement (race-free escape belt). Classifier errors degrade completeness.
         """
+
+        owner = _weakref_module.ref(self)  # weak: a thread carrying this hook keeps no window
+        setter = self._orig_sys_setprofile or _sys_module.setprofile
 
         def hook(frame: Any, event: str, arg: Any) -> Any:
             """Classify one profile event, then chain to the predecessor hook."""
 
-            if self._hooks_retired:
-                return _retired_hook_event(
-                    self, records_thread_ident, predecessor, frame, event, arg
-                )
+            self = owner()  # a strong reference for this one event only
+            if self is None or self._hooks_retired:
+                return _retired_hook_event(own, setter, predecessor, frame, event, arg)
             if records_thread_ident:
                 # The threading hook registers every hooked thread's ident
                 # (idempotent set.add, GIL-atomic) during thread bootstrap -- BEFORE the
@@ -1024,7 +1024,8 @@ class host_nondeterminism_monitor:
                 except Exception:
                     self._flag_uncertain("profile_predecessor_error")
 
-        cast(Any, hook)._tl_owner = self  # dead-chain restore walks use this (non-LIFO fix).
+        own = _weakref_module.ref(hook)  # the hook names itself weakly too (no self-cycle)
+        vars(hook).update(_tl_owner_ref=owner, _tl_predecessor=predecessor)  # dead-chain walks
         return hook
 
     def _digest_rng_witnessable(self, holder: Any) -> str:
@@ -1257,11 +1258,7 @@ class host_nondeterminism_monitor:
                     # the module attr at this point (its _patch_attr restore
                     # unwinds after this method returns).
                     setter = self._orig_threading_setprofile or _threading_module.setprofile
-                    setter(
-                        _skip_retired_hooks(
-                            self._previous_threading_profile, "_previous_threading_profile"
-                        )
-                    )
+                    setter(_skip_retired_hooks(self._previous_threading_profile))
             except Exception:
                 self._flag_uncertain("threading_profile_restore_failed")
         if self._sys_profile_installed:
@@ -1270,7 +1267,7 @@ class host_nondeterminism_monitor:
                     self._flag_uncertain("sys_profile_replaced")
                 else:
                     setter = self._orig_sys_setprofile or _sys_module.setprofile
-                    setter(_skip_retired_hooks(self._previous_sys_profile, "_previous_sys_profile"))
+                    setter(_skip_retired_hooks(self._previous_sys_profile))
             except Exception:
                 self._flag_uncertain("sys_profile_restore_failed")
 

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1830 modules, 725437 lines, 0 modules without a docstring.
+85 packages, 1830 modules, 725487 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 60 | 23057 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 60 | 23083 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15068 |
@@ -41,7 +41,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 23 | 6911 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 83 | 25133 |
-| `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6609 |
+| `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6633 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 757 |
@@ -749,7 +749,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (60 modules, 23057 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (60 modules, 23083 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -758,7 +758,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (6
 | `_branch_attribution` | Frame-level conditional branch attribution for one op's call stack. | 157 |
 | `_branch_source` | Source text readers and source-range predicates for the conditional AST indexer. | 187 |
 | `_buffer_addresses` | Buffer-address resolution for postprocess step 0. | 297 |
-| `_buffer_fixup` | Step 6 body: connect buffer sources, merge re-logged reads, number buffer passes. | 181 |
+| `_buffer_fixup` | Step 6 body: connect buffer sources, merge re-logged reads, number buffer passes. | 203 |
 | `_buffer_source_wiring` | Step 6 buffer-source wiring and buffer value comparison for ''control_flow''. | 124 |
 | `_call_site_contract` | The call-site grouping contract (''callsite_v1'', ''callsite_v2'') and its in-memory evidence. | 133 |
 | `_column_passes` | Postprocess pass bodies that read and write ''Op'' fields through column views. | 76 |
@@ -797,7 +797,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (6
 | `_root_module_log` | Module-build-data readers for the root module's calls. | 86 |
 | `_row_ingest` | Step-0 ingest of the exhaustive capture rows (capture C2c). | 353 |
 | `_saved_summary_scan` | Raw row scan behind the saved-output summary refresh. | 254 |
-| `_seal_columns` | Seal-pass column algorithms over the raw row cells of the op store. | 202 |
+| `_seal_columns` | Seal-pass column algorithms over the raw row cells of the op store. | 206 |
 | `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 344 |
 | `_site_join` | Site-key JOIN (guarded, witness-corroborated, verdict-tiered) and the | 294 |
 | `_site_key` | Re-export shim: the site-key minter moved to :mod:'torchlens._data_classes._site_key'. | 34 |
@@ -1076,14 +1076,14 @@ Shared helpers used by two or more TorchLens packages. (83 modules, 25133 lines)
 
 ### `torchlens._utils.rng`
 
-RNG state for reproducible capture and replay, and the host-nondeterminism monitor. (19 modules, 6609 lines)
+RNG state for reproducible capture and replay, and the host-nondeterminism monitor. (19 modules, 6633 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 64 |
 | `autocast` | Autocast (and grad/inference mode) state capture and re-entry for replay. | 230 |
 | `call_sites` | Bytecode decoding of a held-reference clock call site (explicit-time argument proofs). | 149 |
-| `channels` | Thread routing and owner-join settlement of monitor channel touches. | 707 |
+| `channels` | Thread routing and owner-join settlement of monitor channel touches. | 728 |
 | `deep_inventory` | Frame-reachable deep inventory of RNG instances at capture entry. | 360 |
 | `digest` | Exact state digests of witnessed RNG instances (NumPy generators, bit generators, ''random''). | 133 |
 | `engine_state` | Python and NumPy global-engine STATE rows (''getstate''/''setstate''/''seed'' surface). | 138 |
@@ -1091,8 +1091,8 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 | `generator_sweep` | Model-held torch generator sweep: digests every generator a model can reach. | 382 |
 | `inventory_types` | Receiver, holder and leaf type tables for the monitor's RNG instance inventory. | 563 |
 | `inventory_walk` | Holder, leaf and namespace walk rules of the monitor's RNG instance inventory. | 516 |
-| `monitor` | The host-nondeterminism monitor: the capture-window context manager. | 1560 |
-| `monitor_state` | Process-wide slots of the host-nondeterminism monitor: the active window and patch stacks. | 170 |
+| `monitor` | The host-nondeterminism monitor: the capture-window context manager. | 1557 |
+| `monitor_state` | Process-wide slots of the host-nondeterminism monitor: the active window and patch stacks. | 176 |
 | `numpy_frames` | Candidate children of a NumPy frame for the frame-local RNG snapshot. | 199 |
 | `registry` | The frozen host-nondeterminism channel registry and the torch RNG surface tables. | 750 |
 | `restore` | The one door for preserving the user's global RNG streams across TorchLens work. | 126 |
