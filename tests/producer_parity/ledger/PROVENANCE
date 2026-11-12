@@ -6091,3 +6091,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 35753ac31564517d0e5c9125ee331ac71f76afab
 recorded: 2026-11-12T09:28:02Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: fixed-floor soundness tests and replace helper
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7eeda69d5c7d8dd7ffd92b9dd3f463623f0010c5
+recorded: 2026-11-12T12:41:35+00:00

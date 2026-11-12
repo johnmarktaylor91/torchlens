@@ -47,10 +47,8 @@ from .._io.format3.writer import settle_live_side
 from .._io.lazy import LazyActivationRef
 from .._io.scrub import BlobSpec, scrub_for_save
 from .._io.streaming import BundleStreamWriter
-from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
 from .._utils._record_group_table import layer_attr, op_attr, record_member, record_storage_attr
-from .._utils._tensor_label import clear_meta
 from .._utils.hashing import sha256_file
 from . import _column_passes_finalize
 from ._conditional_records import (
@@ -82,6 +80,7 @@ from ._root_module_log import (
     _root_call_children,
 )
 from ._streamed_tensor_types import _dtype_from_manifest_string, _streamed_entry
+from ._undecorate import undecorate_all_saved_tensors
 from .saved_summary import _has_retained_gradient_payloads
 
 if TYPE_CHECKING:
@@ -90,27 +89,9 @@ if TYPE_CHECKING:
 
 
 def _undecorate_all_saved_tensors(self: "Trace") -> None:
-    """Step 12: Remove TorchLens metadata from all saved tensors.
+    """Step 12: Remove TorchLens metadata from all saved tensors (``_undecorate``)."""
 
-    During logging, tensors are tagged with private ``_tl`` metadata for
-    tracking. This function strips that metadata from saved outs and any
-    tensors embedded in saved_args/saved_kwargs, so tensors returned to the
-    user are clean.
-    """
-    tensors_to_undecorate = []
-    for layer_entry in [*self._layer_list, *self.graph.orphans.values()]:
-        if layer_entry.has_saved_activation and layer_entry.out is not None:
-            tensors_to_undecorate.append(layer_entry.out)
-        if record_member(layer_entry, "transformed_out", None) is not None:
-            tensors_to_undecorate.append(layer_entry._payload_transformed_out)
-
-        if layer_entry._call_saved_args:
-            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry._call_saved_args))
-        if layer_entry._call_saved_kwargs:
-            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry._call_saved_kwargs))
-
-    for t in tensors_to_undecorate:
-        clear_meta(t)
+    undecorate_all_saved_tensors(self)
 
 
 def _log_time_elapsed(self: "Trace") -> None:

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Collection
-from dataclasses import replace
 from typing import Any
 
 from torchlens._data_classes.trace import Trace
@@ -42,6 +41,7 @@ from ..._trace_selector_helpers import (
     _is_selective_label_save,
     _make_layers_to_save_predicate,
 )
+from ..._utils._dataclass_replace import replace_fields as replace
 from ...intervention._predicates import InterventionPredicate
 from ...intervention._spec import Recipe, Rule
 from ...intervention._types import InterventionDecision, InterventionSpec, TargetSpec
