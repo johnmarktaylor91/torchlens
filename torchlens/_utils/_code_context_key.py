@@ -5,17 +5,32 @@ frames as ``(code, lineno, lasti)`` triples and keys the per-capture
 code-context cache on them plus its options. Module entry's incremental lookup
 (``backends/torch/_module_entry_site``) builds the same name without the walk
 and must look it up exactly as the walk does, so both use this function.
+Module entry also needs the name the walk selected when it does run the walk:
+:func:`record_selections` makes this thread's lookups append their names to a
+list for the length of one walk.
 """
 
 from __future__ import annotations
 
+import threading
 from types import CodeType
 from typing import Any
 
-__all__ = ("context_cache_lookup",)
+__all__ = ("context_cache_lookup", "record_selections")
 
 #: One kept frame as the cache key names it.
 Named = tuple[CodeType, int, int]
+
+#: Per thread: the list this thread's lookups append their names to, or ``None``.
+_selections = threading.local()
+
+
+def record_selections(out: list[Any] | None) -> list[Any] | None:
+    """Make this thread's lookups append their names to ``out`` (``None`` stops); return the previous list."""
+
+    previous: list[Any] | None = getattr(_selections, "out", None)
+    _selections.out = out
+    return previous
 
 
 def context_cache_lookup(
@@ -29,6 +44,9 @@ def context_cache_lookup(
     differ from ``named``'s moves the key to one that also names the files.
     """
 
+    out = getattr(_selections, "out", None)
+    if out is not None:
+        out.append(named)
     cache_key: tuple[Any, ...] = (*options, named)
     cached = context_cache.get(cache_key)
     if cached is None:

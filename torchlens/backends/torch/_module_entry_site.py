@@ -42,7 +42,7 @@ import sys
 from typing import TYPE_CHECKING, Any
 
 from ..._utils._call_site import _BOUNDARY_CODES, _BOUNDARY_PUSHED
-from ..._utils._code_context_key import context_cache_lookup
+from ..._utils._code_context_key import context_cache_lookup, record_selections
 from ..._utils._package_frames import _VERDICTS
 from ..._utils.introspection import _get_code_context
 from ._call_site_parts import is_internal
@@ -57,14 +57,17 @@ __all__ = ("module_entry_code_context",)
 
 
 def _walk(trace: Trace, cache: dict[Any, Any], named_out: list[Any]) -> list[Any]:
-    """The full code-context walk module entry has always run."""
+    """The full code-context walk module entry has always run; its cache key's name goes to ``named_out``."""
 
-    return _get_code_context(
-        num_context_lines=trace.num_context_lines,
-        source_loading_enabled=trace._options_save_source_context,
-        context_cache=cache,
-        selected_out=named_out,
-    )
+    previous = record_selections(named_out)
+    try:
+        return _get_code_context(
+            num_context_lines=trace.num_context_lines,
+            source_loading_enabled=trace._options_save_source_context,
+            context_cache=cache,
+        )
+    finally:
+        record_selections(previous)
 
 
 def _pushed(wrapper: FrameType) -> bool:
@@ -78,17 +81,9 @@ def _pushed(wrapper: FrameType) -> bool:
     return False
 
 
-def _nested(
-    trace: Trace, cache: dict[Any, Any], sites: list[Any], stack: list[Any], wrapper: FrameType
-) -> tuple[tuple[Any, ...], list[Any]] | None:
-    """``(named, context)`` from the parent module call's entry site, or ``None`` (fall back)."""
+def _kept_between(wrapper: FrameType, parent: tuple[Any, ...]) -> list[tuple[Any, int, int]] | None:
+    """The frames kept between ``wrapper`` and the parent call's wrapper, innermost last, or ``None`` (fall back)."""
 
-    depth = len(stack)
-    if depth < 2 or len(sites) < depth - 1:
-        return None
-    parent = sites[depth - 2]
-    if parent is None or parent[0] is not stack[-2] or not parent[4]:
-        return None
     kept: list[tuple[Any, int, int]] = []
     frame = wrapper.f_back
     while frame is not None:
@@ -110,6 +105,23 @@ def _nested(
     if not _pushed(frame):
         return None
     kept.reverse()
+    return kept
+
+
+def _nested(
+    trace: Trace, cache: dict[Any, Any], sites: list[Any], stack: list[Any], wrapper: FrameType
+) -> tuple[tuple[Any, ...], list[Any]] | None:
+    """``(named, context)`` from the parent module call's entry site, or ``None`` (fall back)."""
+
+    depth = len(stack)
+    if depth < 2 or len(sites) < depth - 1:
+        return None
+    parent = sites[depth - 2]
+    if parent is None or parent[0] is not stack[-2] or not parent[4]:
+        return None
+    kept = _kept_between(wrapper, parent)
+    if kept is None:
+        return None
     named = (*parent[3], *kept)
     options = (trace.num_context_lines, trace._options_save_source_context, False)
     _key, cached = context_cache_lookup(named, options, cache)

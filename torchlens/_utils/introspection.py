@@ -879,7 +879,6 @@ def _get_code_context(
     disable_col_offset: bool = False,
     context_cache: _CodeContextCache | None = None,
     call_site_out: list[Any] | None = None,
-    selected_out: list[Any] | None = None,
 ) -> list[Any]:
     """Build a list of FuncCallLocation objects for the current call stack.
 
@@ -924,8 +923,6 @@ def _get_code_context(
             inside it. Grouping (step 7) keys layers on it. An item already in it is the
             per-capture location table (``build_locations``'s ``known``); read the chain
             as the last item.
-        selected_out: When supplied with a ``context_cache``, receives the cache key's
-            name of the selected frames (``(code, lineno, lasti)`` each, outermost first).
 
     Returns:
         List[FuncCallLocation] ordered outermost to innermost; the last entry is the
@@ -1004,8 +1001,6 @@ def _get_code_context(
     cache_key: _CodeContextCacheKey | None = None
     if context_cache is not None:
         named = tuple((code, lineno, lasti) for _frame, code, lineno, lasti in selected)
-        if selected_out is not None:
-            selected_out.append(named)
         cache_key, cached = context_cache_lookup(named, options, context_cache)
         if cached is not None:
             return list(cached)
