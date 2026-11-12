@@ -25,6 +25,7 @@ import torch.nn.functional as F
 import torchlens as tl
 from torchlens.backends.torch import _call_layout, _ops_emission, _ops_shared_fields
 from torchlens.backends.torch._ops_arg_slots import _SlotCall
+from torchlens.intervention._types import CapturedArgTemplate, LiteralTensor, ParentRef
 
 
 def _add_at_one_site(y: torch.Tensor, other: Any, **kwargs: Any) -> torch.Tensor:
@@ -157,6 +158,41 @@ def _norm(value: Any) -> Any:
     return repr(value)
 
 
+def _norm_component(component: Any) -> Any:
+    """Return a comparable form of one template component (tensors by value)."""
+
+    if isinstance(component, ParentRef):
+        layout = component._capture_layout
+        return ("parent", component.parent_label, None if layout is None else repr(layout))
+    if isinstance(component, LiteralTensor):
+        value = component.value
+        return (
+            "tensor",
+            tuple(value.shape),
+            str(value.dtype),
+            value.detach().flatten().tolist(),
+            component.param_barcode is None,
+            component._capture_param_fingerprint is None,
+        )
+    if isinstance(component, tuple):
+        return tuple(_norm_component(item) for item in component)
+    return (type(component).__name__, repr(component))
+
+
+def _norm_template(template: Any) -> Any:
+    """Return a comparable form of a captured argument template (or ``None``)."""
+
+    if template is None:
+        return None
+    assert isinstance(template, CapturedArgTemplate)
+    return (
+        _norm_component(template.args),
+        tuple((key, _norm_component(value)) for key, value in template.kwargs),
+        template.notes,
+        repr(template.func_id),
+    )
+
+
 def _fields(model_cls: type[nn.Module]) -> list[tuple[Any, ...]]:
     """Trace ``model_cls`` (fixed seed) and return each op's fields."""
 
@@ -173,8 +209,8 @@ def _fields(model_cls: type[nn.Module]) -> list[tuple[Any, ...]]:
             tuple(op.call.dropped_edge_tensor_args),
             _norm(op.call.non_tensor_pos_args),
             _norm(op.call.non_tensor_kwargs),
-            repr(op.call.args_template),
-            repr(op.call.kwargs_template),
+            _norm_template(op.call.args_template),
+            _norm_template(op.call.kwargs_template),
             op.graph.equivalence_class,
             [tuple(param.shape) for param in op.graph.parent_params],
             repr(op.func_config),

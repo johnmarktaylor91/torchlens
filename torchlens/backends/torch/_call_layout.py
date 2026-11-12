@@ -87,7 +87,9 @@ def _new_layout(
     if not all(_is_flat_type(type(value)) for value in values):
         return CallLayout(func, False)
     tensor = torch.Tensor
-    slots = [("args", i) for i, value in enumerate(args) if isinstance(value, tensor)]
+    slots: list[tuple[str, Any]] = [
+        ("args", i) for i, value in enumerate(args) if isinstance(value, tensor)
+    ]
     slots += [("kwargs", key) for key, value in kwargs.items() if isinstance(value, tensor)]
     return CallLayout(
         func,
