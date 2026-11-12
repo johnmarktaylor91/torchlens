@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1839 modules, 727209 lines, 0 modules without a docstring.
+85 packages, 1840 modules, 727402 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64652 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 162 | 64845 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1540,7 +1540,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (161 modules, 64652 lines)
+Torch backend implementation package for TorchLens capture. (162 modules, 64845 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1624,7 +1624,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `_ops_container_base` | Exhaustive drafts and foundational output-container helpers. | 509 |
 | `_ops_containers` | Output-container contracts, reconstruction, and tensor walking. | 776 |
 | `_ops_descriptive_fields` | Descriptive family of the shared op fields: names and transform descriptors of the callable. | 60 |
-| `_ops_emission` | Output logging, event emission, and live-hook dispatch. | 792 |
+| `_ops_emission` | Output logging, event emission, and live-hook dispatch. | 793 |
 | `_ops_exhaustive` | Exhaustive event emission and autograd candidate collection. | 760 |
 | `_ops_finalize` | Predicate context evaluation and layer-entry finalization. | 549 |
 | `_ops_freeze_refs` | Exhaustive freeze ref builders, outside the package's largest import cycle. | 376 |
@@ -1634,11 +1634,11 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `_ops_function_family` | Function family resolvers: the op fields derived from the function name or the callable. | 116 |
 | `_ops_interventions` | Legacy and predicate-mode live interventions. | 806 |
 | `_ops_payload_stream` | Forward-time disk streaming of predicate-selected op payloads. | 46 |
-| `_ops_predicate_events` | Predicate event records and graph relationship fields. | 782 |
+| `_ops_predicate_events` | Predicate event records and graph relationship fields. | 783 |
 | `_ops_predicates` | Predicate output replacement and backend semantics. | 549 |
 | `_ops_retention` | Save budgets, predicate payloads, and lookback retention. | 755 |
-| `_ops_row_cells` | Row-direct op cells: the exhaustive draft straight to store cells (capture C2a). | 630 |
-| `_ops_row_journal` | Exhaustive commit into the row-backed capture journal (capture C2b). | 335 |
+| `_ops_row_cells` | Row-direct op cells: the exhaustive draft straight to store cells (capture C2a). | 633 |
+| `_ops_row_journal` | Exhaustive commit into the row-backed capture journal (capture C2b). | 360 |
 | `_ops_saved_arg_copies` | Saved-argument copies for ''save_args'' captures, and validation's by-reference aliases. | 219 |
 | `_ops_shared_fields` | Shared operation fields and tensor variation tracking. | 424 |
 | `_output_tensors` | Output tensor extraction shared by the torch wrapper families. | 42 |
@@ -1653,6 +1653,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `_prepared_tree` | Proof that a model's module tree is the one its one-time preparation saw. | 55 |
 | `_protocol_redispatch` | Declined-protocol redispatch: offer a handler the WRAPPER identity it keyed on. | 381 |
 | `_quantized_flops` | FLOPs estimation for PyTorch quantized modules logged as internal sources. | 149 |
+| `_relations_resolve` | An op's ancestry as a function of its parent records, resolved on demand. | 163 |
 | `_replacement_op_fields` | Label minting and field copying for synthesized untagged-tensor boundary ops. | 65 |
 | `_replacement_template` | Template field copies for a synthesized untagged-tensor boundary op. | 34 |
 | `_root_prep` | Root-module preparation: the root's identity and the bound-method owner. | 104 |
