@@ -2385,7 +2385,7 @@ capture seam; it is not the backend interface.
 
 **BackendSpec.protocol**: The lazy factory (`Callable[[], BackendProtocol] | None`) that returns
 the backend's protocol object. No backend carries a maturity label (the `preview`/`stable` label
-and `BackendSpec.maturity` were removed): what a backend supports is stated by the feature
+and its spec field were removed): what a backend supports is stated by the feature
 table in `docs/backends.md`, its page and its shipped scorecard.
 
 **materialization** (`"eager"` | `"lazy"`): Whether a backend's op outputs are concrete values when the wrapped call returns (`"eager"`:

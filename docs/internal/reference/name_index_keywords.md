@@ -1236,7 +1236,6 @@ and have no row.
 | `matching=` | keyword of `Population.mean` (keyword-only; default `None`): Subject datum selecting the eligible agreement class; keyword of `Population.std` (keyword-only; default `None`); constructor keyword of `tl.intervention.SamplingPlan` (required); keyword of `tl.intervention.resample_rows_from` (keyword-only; default `None`): Subject datums: `PerRowDatums` (one per batch row) or `OneDatum`; keyword of `tl.intervention.sample_from` (keyword-only; default `None`): The subject's datum: a bare value or `OneDatum` for whole-event donors (`PerRowDatums` belongs to `resample_rows_from`) |
 | `matching_value=` | keyword of `Population.eligible_indices` (required): The subject's datum for this event or row (already unwrapped) |
 | `materialize_nested=` | keyword of `tl.load` (keyword-only; default `True`): Whether nested blob refs in captured args and RNG states should be materialized when `lazy=True` |
-| `maturity=` | constructor keyword of `tl.backends.BackendSpec` (default `'preview'`): Launch label, `"preview"` or `"stable"`; only a recorded maintainer decision changes it |
 | `max_activation=` | keyword of `tl.debug.dead_neurons` (keyword-only; default `0.0`): Largest output magnitude a dead unit may reach at any position: absolute, on the layer's output, `0.0` means exactly zero |
 | `max_array_bytes=` | constructor keyword of `tl.options.HtmlReportOptions` (default `524288`) |
 | `max_array_sites=` | constructor keyword of `tl.options.HtmlReportOptions` (default `8`) |

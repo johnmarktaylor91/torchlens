@@ -513,8 +513,8 @@ expert contributions from routing indices alone.
   `backend_address`, and `resolver_status`.
 - BACKEND PROTOCOL: every backend, torch included, fills `tl.backends.BackendProtocol`
   (`BackendSpec.protocol()` returns it; `torchlens/backends/_protocols/<name>.py`). Members:
-  `name` (no backend carries a maturity label; `BackendSpec.maturity` was removed and the
-  feature table in `docs/backends.md` states what each supports), `framework` (`tl.backends.FrameworkRequirement`:
+  `name` (no backend carries a maturity label; the spec field was removed and the feature
+  table in `docs/backends.md` states what each supports), `framework` (`tl.backends.FrameworkRequirement`:
   distributions, `[minimum, below)`, `tested_through`, CI `pinned`, install `extra`),
   `materialization` (`"eager"` or `"lazy"`; lazy backends realize once), `capabilities()`,
   `runtime_available()`, `can_handle`, `capture`, `reference_output` (no TorchLens wrapper

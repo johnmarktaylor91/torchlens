@@ -2494,7 +2494,6 @@ The sections above describe each surface in depth.
 | `AmbiguousBackendError.default_remedy` | The remedy the error names when none is passed |
 | `BackendCapabilities.can_intervene` | Whether live intervention capture is supported (was `interventions`) |
 | `BackendCapabilities.has_validation_replay` | Whether the backend can perform replay validation |
-| `BackendSpec.maturity` | The backend's launch label, `"preview"` or `"stable"` |
 | `BackendSpec.protocol` | Lazy factory returning the backend's `BackendProtocol` object |
 | `BackwardEstimate.is_freeze_pattern_captured` | Whether the parameter freeze pattern was captured |
 | `BackwardEstimate.is_grad_disabled_at_capture` | Whether grad was disabled when the forward was captured |

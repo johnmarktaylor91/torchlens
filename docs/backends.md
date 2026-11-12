@@ -80,8 +80,8 @@ not the backend contract.
 | `tinygrad` | lazy | [tinygrad](backends/tinygrad.md) |
 
 No backend carries a maturity label: what each one supports is stated by the feature table above,
-its page and its shipped scorecard. Each page has a runnable tutorial, a can and cannot table and the backend's framework
-requirement (supported version range, the version the per-change CI leg pins, and the install
+its page and its shipped scorecard. Each page has a runnable tutorial, a can and cannot table and
+the backend's framework requirement (supported version range, the version the per-change CI leg pins, and the install
 extra). The repository check `scripts/checks/backend_docs_lockstep.py` holds this table to the
 registry and each page's can and cannot table to the backend's shipped capability summary.
 
