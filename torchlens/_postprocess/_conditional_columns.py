@@ -108,11 +108,18 @@ class StepColumns:
     def _read(self, name: str) -> list[Any]:
         """Return field ``name`` per store row (``None`` for rows outside the trace)."""
 
-        get = self.columns.getter(name, False) if name == "is_orphan" else self.columns.getter(name)
-        fid = self.fid[name]
         cells = self.cells
-        plain = _PLAIN
         column: list[Any] = [None] * len(cells)
+        if name != "is_orphan":
+            # The bulk read tests each cell class once, not each cell, and reads
+            # every slow or unset cell through the getter (an unset cell raises).
+            row_list = list(self.rows.values())
+            for row, value in zip(row_list, self.columns.column(name, row_list)):
+                column[row] = value
+            return column
+        get = self.columns.getter(name, False)
+        fid = self.fid[name]
+        plain = _PLAIN
         for row in self.rows.values():
             value = cells[row][fid]
             column[row] = value if value.__class__ in plain else get(row)
