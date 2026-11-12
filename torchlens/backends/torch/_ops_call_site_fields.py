@@ -30,6 +30,10 @@ module call. A hit with the cached op's modules returns its value; a hit with
 other modules joins the cached chain with them (``_call_site_join``). So a hit
 returns exactly what the walk would return, and a module model whose ops run
 in distinct module instances from one code path hits the table.
+
+The key walk skips runs of TorchLens frames it has met before by code identity
+(``_call_site_runs``), and names codes by ``id``, with every code a stored key
+names held by the table; both leave the key what the walk made before.
 """
 
 import sys
@@ -46,6 +50,7 @@ from ._call_site_parts import (
     module_record,
     stateful as _stateful,
 )
+from ._call_site_runs import RUN_BUDGET, pin_codes, skip_run
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -84,6 +89,10 @@ class _CallSiteMemo:
         "locations",
         "module_ws",
         "mods",
+        "pinned",
+        "run_boundaries",
+        "run_budget",
+        "runs",
         "sites",
         "uppers",
     )
@@ -127,6 +136,13 @@ class _CallSiteMemo:
         self.chain_key: Any = None
         #: ``(id, code, f_lasti, f_lineno)`` of the anchor frame, or ``None``.
         self.anchor: tuple[int, CodeType, int, int] | None = cache.get(_CODE_CONTEXT_ANCHOR_KEY)
+        #: ``id(first code)`` -> ``[(first code, later codes)]``: runs of frames the key
+        #: walk skips (``_call_site_runs``), at most ``run_budget`` more of them.
+        self.runs: dict[int, list[tuple[CodeType, tuple[CodeType, ...]]]] = {}
+        self.run_budget = RUN_BUDGET
+        self.run_boundaries = len(_BOUNDARY_CODES)
+        #: ``id(code)`` -> code for every code a stored site key names by id.
+        self.pinned: dict[int, CodeType] = {}
 
 
 def _intern(memo: _CallSiteMemo, content: Any) -> int:
@@ -236,8 +252,7 @@ def _remainder_walk(
 
 
 def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
-    """The op's site key from ``frame`` up: frames by code, file and offset (equal codes
-    from two files never share a site), modules by slot (ids in ``memo.mods``); ``None``: full walk."""
+    """The op's site key from ``frame`` up (code ids, files, offsets, module slots); ``None``: full walk."""
 
     anchor = memo.anchor
     anchor_code = anchor[1] if anchor is not None else None
@@ -276,7 +291,7 @@ def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
             tail = _AT_ANCHOR
             break
         if name == "_call_impl":
-            key = (key, code, code.co_filename, frame.f_lasti)
+            key = (key, id(code), code.co_filename, frame.f_lasti)
             lower = (*(lower or ()), id(frame.f_locals["self"]))
         else:
             filename = code.co_filename
@@ -284,8 +299,10 @@ def _site_key(memo: _CallSiteMemo, frame: FrameType | None) -> Any:
                 internal = _VERDICTS[filename]
             except KeyError:
                 internal = _is_internal(code)
-            if not internal:
-                key = (key, code, filename, frame.f_lasti)
+            if internal:
+                frame = skip_run(memo, frame, code)
+                continue
+            key = (key, id(code), filename, frame.f_lasti)
         frame = frame.f_back
     if lower is None:
         memo.mods = upper
@@ -347,7 +364,8 @@ def _set_call_site_fields(self: "Trace", fields_dict: dict[str, Any], func_call_
         code_context, chain = _full_walk(self, memo)
         if memo.anchor is None:
             memo.anchor = cache.get(_CODE_CONTEXT_ANCHOR_KEY)
-        key = _site_key(memo, sys._getframe(1))
+        frame = sys._getframe(1)
+        key = _site_key(memo, frame)
     else:
         frame = sys._getframe(1)
         key = _site_key(memo, frame)
@@ -375,6 +393,7 @@ def _set_call_site_fields(self: "Trace", fields_dict: dict[str, Any], func_call_
             if memo.mods:
                 template = make_template(chain, memo.mods, memo.chain_key)
     if key is not None:
+        pin_codes(memo, frame)
         memo.sites[key] = (code_context, chain, memo.mods, template)
     fields_dict["code_context"] = [*code_context]
     workspace._pending_call_site = (func_call_id, chain)
