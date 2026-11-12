@@ -20,6 +20,7 @@ from ._contract import (
     encode_recipe,
     validate_recipe,
 )
+from ._session import ReplaySession, ReplaySessionError, ReplayStep, pullback_step
 
 __all__ = [
     "ADAPTER_BACKENDS",
@@ -29,10 +30,14 @@ __all__ = [
     "ReplayAdapter",
     "ReplayAdapterUnavailable",
     "ReplayRecipeError",
+    "ReplaySession",
+    "ReplaySessionError",
+    "ReplayStep",
     "decode_recipe",
     "encode_recipe",
     "get_adapter",
     "has_adapter",
+    "pullback_step",
     "validate_recipe",
 ]
 
@@ -75,7 +80,8 @@ def get_adapter(name: str) -> ModuleType:
     ------
     ReplayAdapterUnavailable
         When ``name`` is not in :data:`ADAPTER_BACKENDS`, its module is not
-        present yet, or the module lacks a contract function.
+        present yet, or the module lacks a contract function or its
+        ``ALLOWLIST`` frozenset.
     """
 
     if name not in ADAPTER_BACKENDS:
@@ -88,6 +94,9 @@ def get_adapter(name: str) -> ModuleType:
             raise
         raise ReplayAdapterUnavailable(f"replay adapter for {name!r} is not built") from exc
     missing = [fn for fn in _ADAPTER_FUNCTIONS if not callable(getattr(module, fn, None))]
+    allowlist = getattr(module, "ALLOWLIST", None)
+    if not isinstance(allowlist, frozenset) or not all(type(k) is str for k in allowlist):
+        missing.append("ALLOWLIST (a frozenset of str)")
     if missing:
         raise ReplayAdapterUnavailable(f"replay adapter for {name!r} lacks {', '.join(missing)}")
     return module

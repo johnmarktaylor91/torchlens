@@ -162,7 +162,13 @@ class ReplayAdapter(Protocol):
     ``op`` is the recorded :class:`~torchlens.data_classes.Op` (or the
     backend's runtime capture for it); ``parent_values`` holds one framework
     array per :attr:`OpRecipe.inputs` occurrence, repeats kept.
+
+    ``ALLOWLIST`` is a module-level ``frozenset[str]``: the closed set of
+    :attr:`OpRecipe.op_identity` values the adapter replays.
+    :func:`decode_recipe` takes it as ``allowlist``.
     """
+
+    ALLOWLIST: frozenset[str]
 
     def can_replay(self, trace: Any, op: Any) -> str | None:
         """``None``, or why this op cannot be replayed (opaque region,
