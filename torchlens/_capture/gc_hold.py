@@ -1,19 +1,20 @@
-"""Hold the cyclic garbage collector's old-object scans for the length of one capture.
+"""Hold off the cyclic garbage collector's automatic runs for the length of one capture.
 
 A capture allocates many container objects (records, rows, dicts) that live
-until the trace is dropped. Each automatic collection those allocations
-trigger rescans whatever the collector tracks, and once the trace grows the
-older generations hold the whole model, torch's own registries and the trace
-built so far. On ``gpt2_tiny4`` that work was 46 to 48 us per output of the
-capture forward (lane PW, row G), finding almost nothing.
+until the trace is dropped. At CPython's default generation-0 threshold
+those allocations trigger a young-generation collection every few dozen ops,
+and each one traverses everything allocated since the last, tensors
+included, while finding almost nothing to free. On a small transformer that
+work was a measurable share of the capture forward.
 
 The hold does two things for the outermost capture in the process:
 
-- ``gc.freeze()`` moves every object tracked before the capture into the
-  permanent generation, so the automatic collections that still run during
-  the capture scan only objects the capture (and the model) made;
 - the generation-0 threshold is raised to :data:`HOLD_GEN0_THRESHOLD` (never
-  lowered), so those collections run less often.
+  lowered), so collections during the capture run rarely;
+- ``gc.freeze()`` moves every object tracked before the capture into the
+  permanent generation, so a full collection that a long capture still
+  triggers scans only objects the capture (and the model) made, not the
+  whole program.
 
 The collector stays enabled: a model that makes cyclic garbage on every op
 still has it collected during the capture, so its memory stays bounded. On
