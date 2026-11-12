@@ -17,11 +17,7 @@ from ..._errors import PayloadUnavailableError
 from ..._trace_state import is_stats_capture
 from ...errors import RunCapabilityUnavailableError
 from .._backend_protocol import refuse_backward_capture_unsupported
-from ..registry import get_backend_spec
-from .backward import (
-    recording_backward as _recording_backward_impl,
-    trace_backward as _trace_backward_impl,
-)
+from ..registry import get_backend_spec, require_capability_implementation
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -109,7 +105,8 @@ def backward(trace: Trace, loss: torch.Tensor, **backward_kwargs: Any) -> Trace:
     _refuse_loaded_backward_capture(trace, "backward")
     spec = get_backend_spec(trace._provenance_backend)
     refuse_backward_capture_unsupported(spec)
-    return cast("Trace", _trace_backward_impl(trace, loss, **backward_kwargs))
+    surface = cast(Any, require_capability_implementation(spec, "backward_capture"))
+    return cast("Trace", surface.trace_backward(trace, loss, **backward_kwargs))
 
 
 def capture_backward(trace: Trace) -> Any:
@@ -120,7 +117,8 @@ def capture_backward(trace: Trace) -> Any:
     _refuse_loaded_backward_capture(trace, "recording_backward")
     spec = get_backend_spec(trace._provenance_backend)
     refuse_backward_capture_unsupported(spec)
-    return _recording_backward_impl(trace)
+    surface = cast(Any, require_capability_implementation(spec, "backward_capture"))
+    return surface.recording_backward(trace)
 
 
 def sync_backward_projection_if_needed(trace: Trace) -> None:
@@ -129,6 +127,14 @@ def sync_backward_projection_if_needed(trace: Trace) -> None:
     if trace.__dict__.get("_tl_active_backward_bracket", False):
         return
     if not getattr(trace, "backward_events", ()):
+        return
+    backend = getattr(trace, "_provenance_backend", None) or "torch"
+    if backend != "torch":
+        # Another backend's events project through its own backward surface.
+        spec = get_backend_spec(backend)
+        cast(Any, require_capability_implementation(spec, "backward_capture")).sync_projection(
+            trace
+        )
         return
     from .backward import (
         _backward_finalize_pending,
