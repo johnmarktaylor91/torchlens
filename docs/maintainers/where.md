@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1769 modules, 708519 lines, 0 modules without a docstring.
+85 packages, 1769 modules, 708478 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -54,8 +54,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7552 |
-| `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7517 |
+| `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 922 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9645 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
@@ -1332,15 +1332,15 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7552 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7517 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Backend Protocol and public registry exports for TorchLens adapters. | 84 |
 | `_backend_names` | The canonical default-backend name, split out of :mod:'torchlens.backends.registry'. | 20 |
-| `_backend_protocol` | The one backend protocol every TorchLens backend fills, torch included. | 521 |
+| `_backend_protocol` | The one backend protocol every TorchLens backend fills, torch included. | 507 |
 | `_constants` | The shared constants rule every preview backend's finalize step applies. | 589 |
-| `_default_specs` | Default public backend specs registered by TorchLens. | 1291 |
+| `_default_specs` | Default public backend specs registered by TorchLens. | 1285 |
 | `_default_specs_tf` | TensorFlow / Keras runtime probes used by the default backend specs. | 102 |
 | `_entry_refusals` | Typed, coded refusals raised by the framework backends' public entry points. | 197 |
 | `_errors` | Backend registry error hierarchy (leaf module: no registry import). | 251 |
@@ -1356,25 +1356,25 @@ Backend Protocol and public registry exports for TorchLens adapters. (24 modules
 | `_options` | Shared backend trace-option defaulting and rejection helpers. | 790 |
 | `_protocol` | Backend Protocol for unified TorchLens capture. | 354 |
 | `_root_frames` | The root call's frame in preview op module stacks. | 76 |
-| `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 206 |
+| `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 210 |
 | `_trace_options` | Per-backend trace-option vocabularies (leaf module: no registry import). | 191 |
 | `_validation_shared` | Backend-neutral helpers shared by the preview backends' validation modules. | 171 |
-| `registry` | Public backend registry for TorchLens capture and validation. | 638 |
+| `registry` | Public backend registry for TorchLens capture and validation. | 619 |
 
 ### `torchlens.backends._protocols`
 
-Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 lines)
+Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 922 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 |
-| `jax` | JAX preview ''BackendProtocol'' (delegating; jaxpr-first, eager values). | 125 |
-| `mlx` | MLX preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 146 |
+| `jax` | JAX ''BackendProtocol'' (delegating; jaxpr-first, eager values). | 124 |
+| `mlx` | MLX ''BackendProtocol'' shell (delegating; lazy, realize-once). | 145 |
 | `mlx_wrapped_state` | Import-light probe of the MLX wrapper state for the protocol shell. | 19 |
-| `paddle` | Paddle preview ''BackendProtocol'' shell (delegating; eager dygraph). | 154 |
-| `tf` | TensorFlow preview ''BackendProtocol'' (delegating; eager). | 130 |
-| `tinygrad` | tinygrad preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 137 |
-| `torch` | Torch's ''BackendProtocol'' object: the reference, by delegation. | 209 |
+| `paddle` | Paddle ''BackendProtocol'' shell (delegating; eager dygraph). | 153 |
+| `tf` | TensorFlow ''BackendProtocol'' (delegating; eager). | 129 |
+| `tinygrad` | tinygrad ''BackendProtocol'' shell (delegating; lazy, realize-once). | 136 |
+| `torch` | Torch's ''BackendProtocol'' object: the reference, by delegation. | 208 |
 
 ### `torchlens.backends.jax`
 
