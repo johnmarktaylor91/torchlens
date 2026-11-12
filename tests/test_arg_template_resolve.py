@@ -112,7 +112,7 @@ def _record(
 ) -> list[tuple[Any, tuple[Any, ...], tuple[Any, ...]]]:
     """Trace ``model`` and return ``(observed facts, stored fields, first-resolve norm)`` per op."""
 
-    records: list[tuple[Any, tuple[Any, ...], tuple[Any, ...]]] = []
+    captured: list[tuple[Any, dict[str, Any]]] = []
     real = _ops_argument_fields.resolve_arg_template_fields
 
     def recording(fields_dict: dict[str, Any], observed: Any, parts: Any) -> None:
@@ -121,13 +121,15 @@ def _record(
         stored = {
             name: fields_dict[name] for name in ("args_template", "kwargs_template", "func_id")
         }
-        records.append((observed, stored, _norm_fields(stored)))
+        captured.append((observed, stored))
 
     with monkeypatch.context() as patch:
         patch.setattr(_ops_argument_fields, "resolve_arg_template_fields", recording)
         tl.trace(model, x)
-    assert records, "the capture never observed a template"
-    return records
+    assert captured, "the capture never observed a template"
+    # Normalised after the capture: ``_norm`` runs torch functions, which the capture
+    # would log (and template again) if they ran inside it. Nothing has been mutated yet.
+    return [(observed, stored, _norm_fields(stored)) for observed, stored in captured]
 
 
 def _resolve(observed: Any) -> tuple[Any, ...]:
