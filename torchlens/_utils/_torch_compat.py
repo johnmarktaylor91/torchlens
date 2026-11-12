@@ -51,7 +51,6 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning, transparent_contextmanager
-from . import _tensor_hook_install  # defines only; probed at first capture
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import TORCH_SEED_CODE_PLAN, shadowed_torch_submodule, torch_attr
@@ -1062,7 +1061,7 @@ def get_direct_tensor_hook_install(
     if not _DIRECT_TENSOR_HOOK_PROBED or force_probe:
         slots = vars(get_tensorbase_class() or object)
         with guard():
-            _DIRECT_TENSOR_HOOK_FNS = _tensor_hook_install.detect(
+            _DIRECT_TENSOR_HOOK_FNS = _real_op_probe_leaf().detect_direct_tensor_hook_install(
                 (slots.get("_backward_hooks"), slots.get("grad_fn"), slots.get("requires_grad")),
                 _resolve_attribute_path("torch:_C._has_torch_function_unary"),
                 _resolve_attribute_path("torch.utils.hooks:RemovableHandle"),

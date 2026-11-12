@@ -1,4 +1,4 @@
-"""Direct tensor gradient-hook install, admitted by a probe (a torch-only leaf of ``_torch_compat``).
+"""Direct tensor gradient-hook install, admitted by a probe (a torch-only leaf).
 
 ``torch.Tensor.register_hook`` is Python, and during capture its reads of
 ``requires_grad``, ``_backward_hooks`` and ``grad_fn`` go through names capture
@@ -6,7 +6,7 @@ shadows on ``torch.Tensor``, so each read runs a TorchLens frame. The functions
 :func:`detect` builds take the same steps through the C class's getsets.
 
 ``_torch_compat.get_direct_tensor_hook_install`` resolves torch's private parts,
-passes them in and latches ``HAS_DIRECT_TENSOR_HOOK_INSTALL`` at first use, never
+passes them in (reaching :func:`detect` through ``_kernel_probes``) and latches ``HAS_DIRECT_TENSOR_HOOK_INSTALL`` at first use, never
 at import. :func:`detect` admits the direct install only when every part is the
 expected kind, torch's ``register_hook`` body is :data:`REGISTER_HOOK_BODY`, and a
 probe on scratch tensors shows both routes leave one hook dict per tensor, register
