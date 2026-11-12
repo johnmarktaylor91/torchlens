@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1839 modules, 727209 lines, 0 modules without a docstring.
+85 packages, 1842 modules, 727660 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 161 | 64652 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 164 | 65103 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1540,7 +1540,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (161 modules, 64652 lines)
+Torch backend implementation package for TorchLens capture. (164 modules, 65103 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1557,7 +1557,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `_bool_check_records` | One capture record per conditional test of a reused bool tensor. | 155 |
 | `_boundary_types` | Plain data records of one ''autograd.Function'' boundary call. | 51 |
 | `_call_layout` | Per-call argument layout plans: what a call's argument walks decide from types alone. | 165 |
-| `_call_plan` | Wrapper fast lane, first version: call plans, per-call admission and the fast commit. | 561 |
+| `_call_plan` | Wrapper fast lane, first version: call plans, per-call admission and the fast commit. | 568 |
 | `_call_site_join` | Join a cached call site's code part with the current op's modules. | 102 |
 | `_call_site_parts` | Build a first-time call site from the module call's upper part plus the op's own frames. | 457 |
 | `_callable_location` | Lazy source location of the user callable a transform boundary op wraps. | 50 |
@@ -1614,7 +1614,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `_module_state` | Which modules own state, the fact call-site grouping (''callsite_v2'') scopes on. | 56 |
 | `_op_markers` | Per-call op markers: NVTX ranges + join markers. | 250 |
 | `_opaque_call_advisory` | Name the opaque call behind a completeness-witness gap. | 366 |
-| `_ops_activations` | Output tensor metadata and activation persistence. | 789 |
+| `_ops_activations` | Output tensor metadata and activation persistence. | 772 |
 | `_ops_arg_slots` | One per-op snapshot of the tensor argument slots the shared-fields derivations read. | 294 |
 | `_ops_argument_fields` | Argument family of the shared op fields: argument scan, slot snapshot and templates. | 401 |
 | `_ops_arguments` | Argument templates, edge uses, and tensor provenance. | 799 |
@@ -1624,8 +1624,8 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `_ops_container_base` | Exhaustive drafts and foundational output-container helpers. | 509 |
 | `_ops_containers` | Output-container contracts, reconstruction, and tensor walking. | 776 |
 | `_ops_descriptive_fields` | Descriptive family of the shared op fields: names and transform descriptors of the callable. | 60 |
-| `_ops_emission` | Output logging, event emission, and live-hook dispatch. | 792 |
-| `_ops_exhaustive` | Exhaustive event emission and autograd candidate collection. | 760 |
+| `_ops_emission` | Output logging, event emission, and live-hook dispatch. | 793 |
+| `_ops_exhaustive` | Exhaustive event emission and autograd candidate collection. | 792 |
 | `_ops_finalize` | Predicate context evaluation and layer-entry finalization. | 549 |
 | `_ops_freeze_refs` | Exhaustive freeze ref builders, outside the package's largest import cycle. | 376 |
 | `_ops_fresh_alias` | The payload of a fresh plain output on the direct path: the deferred alias or the eager copy. | 179 |
@@ -1640,7 +1640,7 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `_ops_row_cells` | Row-direct op cells: the exhaustive draft straight to store cells (capture C2a). | 630 |
 | `_ops_row_journal` | Exhaustive commit into the row-backed capture journal (capture C2b). | 335 |
 | `_ops_saved_arg_copies` | Saved-argument copies for ''save_args'' captures, and validation's by-reference aliases. | 219 |
-| `_ops_shared_fields` | Shared operation fields and tensor variation tracking. | 424 |
+| `_ops_shared_fields` | Shared operation fields and tensor variation tracking. | 421 |
 | `_output_tensors` | Output tensor extraction shared by the torch wrapper families. | 42 |
 | `_outputs` | Torch output decoding and marking for the FINALIZE stage. | 794 |
 | `_param_fingerprint` | Capture-time parameter fingerprints for the replay changed-parameter check. | 69 |
@@ -1667,6 +1667,9 @@ Torch backend implementation package for TorchLens capture. (161 modules, 64652 
 | `_state_bytes` | Byte views of tensor state: the whole-storage snapshot and the byte-exact state compare. | 102 |
 | `_storage_exports` | Copy out pending payload aliases before a tensor's storage is handed to the host zero-copy. | 291 |
 | `_storage_overlap` | Storage-overlap geometry for mutation-label propagation (pure, no capture state). | 191 |
+| `_thin_emit` | The thin emit: one plain admitted call, its observations, its tensor effects, one append. | 183 |
+| `_thin_record` | The thin record: one plain admitted call's commit as a deferred journal row. | 169 |
+| `_thin_settle` | The thin record path's settle side: the per-call defaults table and the plain-session facts. | 79 |
 | `_tl` | Compatibility path for the tensor-label metadata helpers (now ''torchlens._utils._tensor_label''). | 77 |
 | `_tl_collective` | Compatibility re-export; the helper lives in ''torchlens._utils._tl_collective''. | 6 |
 | `_torch_ops_calls` | Record direct ''torch.ops.*'' calls made by user code as ordinary logged ops. | 571 |

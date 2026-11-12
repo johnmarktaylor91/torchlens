@@ -3551,8 +3551,8 @@ docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1825
 docs-md	docs/maintainers/where.md	183
 docs-md	docs/maintainers/where.md	1838
-docs-md	docs/maintainers/where.md	1839
 docs-md	docs/maintainers/where.md	184
+docs-md	docs/maintainers/where.md	1842
 docs-md	docs/maintainers/where.md	185
 docs-md	docs/maintainers/where.md	1858
 docs-md	docs/maintainers/where.md	186
@@ -3984,12 +3984,12 @@ docs-md	docs/maintainers/where.md	556
 docs-md	docs/maintainers/where.md	557
 docs-md	docs/maintainers/where.md	56
 docs-md	docs/maintainers/where.md	560
-docs-md	docs/maintainers/where.md	561
 docs-md	docs/maintainers/where.md	563
 docs-md	docs/maintainers/where.md	564
 docs-md	docs/maintainers/where.md	565
 docs-md	docs/maintainers/where.md	566
 docs-md	docs/maintainers/where.md	567
+docs-md	docs/maintainers/where.md	568
 docs-md	docs/maintainers/where.md	569
 docs-md	docs/maintainers/where.md	5690
 docs-md	docs/maintainers/where.md	57
@@ -4047,12 +4047,12 @@ docs-md	docs/maintainers/where.md	639
 docs-md	docs/maintainers/where.md	64
 docs-md	docs/maintainers/where.md	642
 docs-md	docs/maintainers/where.md	644
-docs-md	docs/maintainers/where.md	64652
 docs-md	docs/maintainers/where.md	647
 docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	649
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
+docs-md	docs/maintainers/where.md	65103
 docs-md	docs/maintainers/where.md	653
 docs-md	docs/maintainers/where.md	6537
 docs-md	docs/maintainers/where.md	656
@@ -4103,7 +4103,7 @@ docs-md	docs/maintainers/where.md	72
 docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	725
-docs-md	docs/maintainers/where.md	727209
+docs-md	docs/maintainers/where.md	727660
 docs-md	docs/maintainers/where.md	728
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
@@ -10781,6 +10781,7 @@ test-names	tests/test_stoch_edits_population.py	32
 test-names	tests/test_surgery_live_bind.py	68
 test-names	tests/test_surgery_live_regions.py	50_
 test-names	tests/test_surgery_visuals_realism.py	50_
+test-names	tests/test_thin_emit_soundness.py	100
 test-names	tests/test_tlspec_envelope_state_contract.py	3_0_
 test-names	tests/test_tlspec_runnable_escape_matrix.py	14_
 test-names	tests/test_tlspec_runnable_escape_witness.py	10_
