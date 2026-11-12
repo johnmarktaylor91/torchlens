@@ -23,9 +23,9 @@ from ..backends.torch._completeness_escape_state import (
     host_escape_bool_consumer_locations,
     host_escape_bool_source_labels,
 )
-from . import _column_passes_graph, ast_branches
+from . import _buffer_fixup, _column_passes_graph, ast_branches
 from ._branch_attribution import _translate_conditional_stack
-from ._buffer_source_wiring import _buffer_values_identical, _wire_buffer_to_source
+from ._buffer_source_wiring import _buffer_values_identical
 
 if TYPE_CHECKING:
     from .._data_classes.trace import ConditionalEvent, Trace
@@ -663,62 +663,19 @@ def _merge_same_version_buffers(
 def _fix_buffer_layers(self: Trace) -> None:
     """Step 6: Connect buffer sources, merge duplicates, and assign pass numbers.
 
-    Buffer tensors (nn.Module registered buffers) are logged as source tensors
-    during the forward pass but may lack proper parent connections. This function:
-
-    1. Connects each buffer to its buffer_source (the tensor that produced the
-       buffer's value), updating parent/child links and ancestry.
-    2. Merges re-logged reads of one buffer version: within a group sharing the
-       hash (modules + buffer_source + address), a node merges into an earlier
-       node only when capture recorded the same buffer version for both (see
-       ``_merge_same_version_buffers``). Values never decide it.
-    3. Assigns sequential buffer_pass numbers per address.
+    The body is ``_buffer_fixup.fix_buffer_layers``: a column pass over the raw
+    row cells when no buffer needs wiring or merging, else the per-buffer body.
     """
-    buffer_counter: dict[str, int] = defaultdict(lambda: 1)
-    buffer_hash_groups: dict[str, list[str]] = defaultdict(list)
-    # Buffer rows whose edges this step changes; their descendant cones need ancestry
-    # re-derived (see _repropagate_ancestry_after_buffer_wiring).
-    rewired_buffers: list[str] = []
 
-    for layer_label in self.buffer_layers:
-        layer = self[layer_label]
-        if layer._graph_buffer_source is not None:
-            rewired_buffers.append(layer._label_raw)
-            _wire_buffer_to_source(self, layer, layer_label)
-
-        if layer.buffer_address is None:
-            equivalence_class = str(getattr(layer, "_graph_equivalence_class", ""))
-            if equivalence_class.startswith("buffer_"):
-                recovered_address = equivalence_class.removeprefix("buffer_")
-                if recovered_address and recovered_address != "None":
-                    layer.buffer_address = recovered_address
-        if layer.buffer_address is None:
-            layer.buffer_address = f"anonymous_buffer_{layer._label_raw}"
-        buffer_hash = str(layer.modules) + str(layer._graph_buffer_source) + layer.buffer_address
-        buffer_hash_groups[buffer_hash].append(layer_label)
-
-    deferred_buffer_removals: dict[str, tuple[Op, Op]] = {}
-    # Per-survivor membership sets shared across the whole sweep: the
-    # membership guards in _merge_buffer_entries otherwise rescan the
-    # survivor's growing edge lists once per merged duplicate.
-    survivor_edge_shadows: dict[str, dict[str, set[str]]] = {}
-    for buffers_orig in buffer_hash_groups.values():
-        _merge_same_version_buffers(
-            self, buffers_orig, deferred_buffer_removals, survivor_edge_shadows, rewired_buffers
-        )
-    _finish_deferred_buffer_removals(self, deferred_buffer_removals)
-
-    _repropagate_ancestry_after_buffer_wiring(self, rewired_buffers)
-    _repropagate_descendants_after_buffer_wiring(self, rewired_buffers)
-
-    # And relabel the buffer ops.
-
-    for layer_label in self.buffer_layers:
-        layer = self[layer_label]
-        address = layer.buffer_address
-        layer._internal_set("buffer_pass", buffer_counter[address])
-        self._buffer_num_calls[address] = buffer_counter[address]
-        buffer_counter[address] += 1
+    _buffer_fixup.fix_buffer_layers(
+        self,
+        _buffer_fixup.MergeHelpers(
+            _merge_same_version_buffers,
+            _finish_deferred_buffer_removals,
+            _repropagate_ancestry_after_buffer_wiring,
+            _repropagate_descendants_after_buffer_wiring,
+        ),
+    )
 
 
 def _repropagate_ancestry_after_buffer_wiring(self: Trace, rewired: list[str]) -> None:

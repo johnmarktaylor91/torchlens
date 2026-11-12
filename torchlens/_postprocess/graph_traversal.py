@@ -38,7 +38,7 @@ from ..backends.torch._completeness_escape_state import (
 )
 from ..backends.torch._storage_exports import mark_alias_rebound_output
 from ..backends.torch.sources import log_source_tensor
-from . import _column_passes, _column_passes_graph
+from . import _column_passes, _column_passes_graph, _seal_columns
 from ._buffer_addresses import _recorded_buffer_address
 from ._orphan_predicates import (
     _orphan_is_uninit_alloc_source,
@@ -548,9 +548,14 @@ def _record_output_variation(
 
 
 def _find_output_ancestors(self: "Trace") -> None:
-    """Step 2: Mark every output ancestor (column-view body in ``_column_passes``)."""
+    """Step 2: Mark every output ancestor.
 
-    _column_passes.find_output_ancestors(self)
+    The raw-cell body in ``_seal_columns`` runs when it applies; otherwise the
+    column-view (or facade) body in ``_column_passes``.
+    """
+
+    if not _seal_columns.find_output_ancestors(self):
+        _column_passes.find_output_ancestors(self)
 
 
 def _remove_foreign_kernel_interiors(self: "Trace") -> None:

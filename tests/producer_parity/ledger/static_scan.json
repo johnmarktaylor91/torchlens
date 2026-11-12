@@ -3160,6 +3160,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_postprocess/_buffer_fixup.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "input_ancestors",
   "file": "torchlens/_postprocess/_buffer_source_wiring.py",
@@ -3613,14 +3621,6 @@
   "file": "torchlens/_postprocess/control_flow.py",
   "has_default": false,
   "sites": 6,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_postprocess/control_flow.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {
