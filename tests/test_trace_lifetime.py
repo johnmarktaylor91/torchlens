@@ -17,6 +17,8 @@ import inspect
 import subprocess
 import sys
 import textwrap
+import threading
+import time
 import weakref
 from typing import Any
 
@@ -122,6 +124,68 @@ def test_rng_monitor_window_is_freed_by_refcount() -> None:
         assert ref() is None, "the monitor window survived its last reference (held by a cycle)"
     finally:
         gc.enable()
+
+
+def _hooked_waiter(ready: threading.Event, release: threading.Event, observed: list[bool]) -> None:
+    """In-window worker: report whether the window's profile hook rides it, then block."""
+
+    observed.append(sys.getprofile() is not None)
+    ready.set()
+    release.wait()
+
+
+def _wait_until_blocked(release: threading.Event) -> None:
+    """Return once a thread is parked in ``release.wait()`` (on the condition's waiter list).
+
+    A helper frame on purpose: on CPython 3.10 every profile event copies its frame's
+    locals into a cached dict, so a builtin call made in-window by the frame that holds
+    the monitor would leave a stale reference to it there (an interpreter artifact).
+    """
+
+    while not release._cond._waiters:
+        time.sleep(0.001)
+
+
+def test_rng_monitor_window_is_freed_with_an_in_window_thread() -> None:
+    """A thread started inside the window is observed, then keeps no monitor alive.
+
+    The thread carries the window's threading profile hook and is blocked inside a
+    class-patched ``Event.wait`` when the last reference goes; neither may hold the
+    monitor, while the thread runs or after it exits. Ordering is explicit (events and the
+    condition's waiter list), so no scheduler timing is involved. The window's body makes no
+    builtin call in this frame (see :func:`_wait_until_blocked`).
+    """
+
+    model = _Stack().eval()
+    x = torch.randn(2, 6)
+    _replayable_capture()
+    ready, release = threading.Event(), threading.Event()
+    observed: list[bool] = []
+    worker = threading.Thread(target=_hooked_waiter, args=(ready, release, observed), daemon=True)
+    monitor = host_nondeterminism_monitor(model)
+    try:
+        with monitor:
+            worker.start()
+            ready.wait()
+            _wait_until_blocked(release)  # the worker is parked in the patched wait
+            model(x)
+        assert observed == [True], "the in-window thread did not carry the window's hook"
+        assert worker.ident in monitor._in_window_thread_idents
+        ref = weakref.ref(monitor)
+        gc.collect()
+        gc.disable()
+        try:
+            del monitor
+            alive_while_running = ref() is not None
+            release.set()
+            worker.join()
+            alive_after_exit = ref() is not None
+        finally:
+            gc.enable()
+    finally:
+        release.set()
+    assert not alive_while_running, "a running in-window thread kept the monitor alive"
+    assert not alive_after_exit, "the monitor outlived its in-window thread"
 
 
 def test_dead_trace_is_freed_by_refcount() -> None:
