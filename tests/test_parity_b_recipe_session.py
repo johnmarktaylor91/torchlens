@@ -91,7 +91,7 @@ def test_multi_output_group_commits_atomically() -> None:
     session = _session(trace, adapter)
     session.step()  # sq
     before = session.values()
-    with pytest.raises(ra.ReplaySessionError) as info:
+    with pytest.raises(ra.ReplayRefusal) as info:
         session.step()  # split2 returns one value for two slots
     assert info.value.reason == "arity"
     assert info.value.op_label == "lo"
@@ -159,7 +159,7 @@ def test_substituted_source_reads_everywhere() -> None:
 def test_bad_plans_are_refused_before_any_forward(kwargs: dict[str, Any], reason: str) -> None:
     trace = _trace()
     adapter = CountingAdapter()
-    with pytest.raises(ra.ReplaySessionError) as info:
+    with pytest.raises(ra.ReplayRefusal) as info:
         _session(trace, adapter, **kwargs)
     assert info.value.reason == reason
     assert adapter.forward_calls == []
@@ -168,10 +168,9 @@ def test_bad_plans_are_refused_before_any_forward(kwargs: dict[str, Any], reason
 def test_unreplayable_op_late_in_the_plan_refuses_before_any_forward() -> None:
     trace = _trace()
     opaque = fake.FakeOp("z", "opaque", ("u",), ("z",))
-    trace.ops["z"] = opaque
-    steps = _steps(trace)[:-1] + [ra.ReplayStep(opaque, (ra.InputOccurrence("u", (0,)),), ("z",))]
+    steps = _steps(trace) + [ra.ReplayStep(opaque, (ra.InputOccurrence("u", (0,)),), ("z",))]
     adapter = CountingAdapter()
-    with pytest.raises(ra.ReplaySessionError) as info:
+    with pytest.raises(ra.ReplayRefusal) as info:
         ra.ReplaySession(adapter, trace, steps, initial={"x": trace.payloads["x"]})
     assert info.value.reason == "cannot_replay"
     assert info.value.op_label == "z"
@@ -182,7 +181,7 @@ def test_out_of_order_plan_is_refused() -> None:
     trace = _trace()
     steps = _steps(trace)
     steps[0], steps[1] = steps[1], steps[0]
-    with pytest.raises(ra.ReplaySessionError) as info:
+    with pytest.raises(ra.ReplayRefusal) as info:
         ra.ReplaySession(fake, trace, steps, initial={"x": trace.payloads["x"]})
     assert info.value.reason == "missing_parent"
 
@@ -192,10 +191,10 @@ def test_close_drops_values_and_refuses_reads() -> None:
     with _session(trace) as session:
         session.run()
         assert session.values()
-    with pytest.raises(ra.ReplaySessionError) as info:
+    with pytest.raises(ra.ReplayRefusal) as info:
         session.value("u")
     assert info.value.reason == "closed"
-    with pytest.raises(ra.ReplaySessionError):
+    with pytest.raises(ra.ReplayRefusal):
         session.step()
 
 
@@ -226,6 +225,6 @@ def test_pullback_refuses_a_wrong_cotangent_count() -> None:
         def vjp(self, *args: Any) -> tuple[Any, ...]:
             return (np.ones(5),)
 
-    with pytest.raises(ra.ReplaySessionError) as info:
+    with pytest.raises(ra.ReplayRefusal) as info:
         ra.pullback_step(Bad(), trace, step, [np.ones(5)] * 2, [np.ones(5)], {})
     assert info.value.reason == "arity"
