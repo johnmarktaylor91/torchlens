@@ -353,6 +353,7 @@ def _set_arg_template_fields(
     # The parts are read at the call: ``_ops_arguments`` defines them after its own late imports.
     parts = _ops_arguments._TEMPLATE_PARTS
     replayable = getattr(self, "is_replayable", False)
+    observed: tuple[Any, bool, bool, Any]
     if replayable or self._options_save_arg_templates:
         args, kwargs = call.args, call.kwargs
         facts = observe_template(
