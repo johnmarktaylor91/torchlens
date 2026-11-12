@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1755 modules, 706054 lines, 0 modules without a docstring.
+85 packages, 1755 modules, 706101 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -36,7 +36,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 23 | 10600 |
-| `torchlens._semantic` | Semantic facet views for TorchLens records. | 16 | 7432 |
+| `torchlens._semantic` | Semantic facet views for TorchLens records. | 16 | 7479 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4635 |
@@ -860,7 +860,7 @@ Selection: naming sites and resolving them on a trace. (23 modules, 10600 lines)
 
 ### `torchlens._semantic`
 
-Semantic facet views for TorchLens records. (16 modules, 7432 lines)
+Semantic facet views for TorchLens records. (16 modules, 7479 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -869,10 +869,10 @@ Semantic facet views for TorchLens records. (16 modules, 7432 lines)
 | `_facet_tensor_ops` | Tensor-level helpers behind facet primitives (head geometry, scatter-back). | 107 |
 | `_families` | Facet families: facets a registered codec (an SAE's latents) serves on its home op. | 100 |
 | `_hops` | Hop rule: grammar proposes, payload identity verifies. | 432 |
-| `_input_patching` | Patching a model input leaf: the prebuilt patching helpers' path for input-homed facets. | 201 |
+| `_input_patching` | Patching a model input leaf: the prebuilt patching helpers' path for input-homed facets. | 245 |
 | `_norm_reconstruction` | Shared, validated norm linearization record. | 358 |
 | `_sdpa_call_args` | Recover a fused SDPA call's exact arguments from what a capture recorded. | 129 |
-| `_state_guard` | Model-state and global-RNG guard shared by the facet patching helpers. | 195 |
+| `_state_guard` | Model-state and global-RNG guard shared by the facet patching helpers. | 198 |
 | `_structural_names` | Structural output names (''out0'', ''out1.key'') for facet records. | 76 |
 | `coverage` | Facet-coverage reporting for the recipe-maintenance pipeline. | 226 |
 | `facets` | Derived semantic facet views for TorchLens records. | 2043 |

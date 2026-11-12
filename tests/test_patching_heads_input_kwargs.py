@@ -24,6 +24,9 @@ from torchlens.errors import ControlFlowDivergenceWarning
 
 transformers = pytest.importorskip("transformers")
 
+# Each test runs one or two full patching campaigns (2 baselines + 8 reruns): 5-20 s.
+pytestmark = pytest.mark.heavy
+
 _NO_CACHE = {"input_kwargs": {"use_cache": False}}
 _VOCAB = 64
 
@@ -176,34 +179,41 @@ def test_input_kwargs_and_a_cache_off_config_give_the_same_grid(
     torch.testing.assert_close(via_kwargs, via_config, atol=0, rtol=0)
 
 
-def test_whole_module_helpers_and_head_grid_carry_input_kwargs_on_gpt2() -> None:
+def test_attention_output_helper_carries_input_kwargs_on_gpt2() -> None:
     clean, corrupt = _prompts()
-    model = _gpt2()
-    attn = _without_divergence(
+    patched = _without_divergence(
         lambda: tl.facets.patching.activation_patch_attention_output(
-            model, clean, corrupt, _metric, trace_kwargs=_NO_CACHE
+            _gpt2(), clean, corrupt, _metric, trace_kwargs=_NO_CACHE
         )
     )
-    resid = _without_divergence(
+    reference = tl.facets.patching.activation_patch_attention_output(
+        _gpt2(use_cache=False), clean, corrupt, _metric
+    )
+    torch.testing.assert_close(patched, reference, atol=0, rtol=0)
+
+
+def test_residual_stream_helper_carries_input_kwargs_on_gpt2() -> None:
+    clean, corrupt = _prompts()
+    patched = _without_divergence(
         lambda: tl.facets.patching.activation_patch_residual_stream(
-            model, clean, corrupt, _metric, patch_positions=False, trace_kwargs=_NO_CACHE
+            _gpt2(), clean, corrupt, _metric, patch_positions=False, trace_kwargs=_NO_CACHE
         )
     )
+    reference = tl.facets.patching.activation_patch_residual_stream(
+        _gpt2(use_cache=False), clean, corrupt, _metric, patch_positions=False
+    )
+    torch.testing.assert_close(patched, reference, atol=0, rtol=0)
+
+
+def test_mechinterp_head_grid_carries_input_kwargs_on_gpt2() -> None:
+    model = _gpt2()
+    clean, corrupt = _prompts()
     grid = _without_divergence(
-        lambda: tl.mechinterp.patch_heads_grid(
-            model, clean, corrupt, _metric, trace_kwargs=_NO_CACHE
+        lambda: (
+            tl.mechinterp.patch_heads_grid(
+                model, clean, corrupt, _metric, trace_kwargs=_NO_CACHE
+            ).values
         )
     )
-    reference = _gpt2(use_cache=False)
-    torch.testing.assert_close(
-        attn,
-        tl.facets.patching.activation_patch_attention_output(reference, clean, corrupt, _metric),
-    )
-    torch.testing.assert_close(
-        resid,
-        tl.facets.patching.activation_patch_residual_stream(
-            reference, clean, corrupt, _metric, patch_positions=False
-        ),
-    )
-    heads = tl.facets.patching.activation_patch_attention_heads(reference, clean, corrupt, _metric)
-    torch.testing.assert_close(grid.values, heads.to(grid.values.dtype), atol=1e-5, rtol=0)
+    oracle = _head_oracle(model, _gpt2_out_projections(model), clean, corrupt)
+    torch.testing.assert_close(grid, oracle.to(grid.dtype), atol=1e-5, rtol=0)
