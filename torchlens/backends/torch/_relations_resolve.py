@@ -5,7 +5,7 @@ and ``internal_source_ancestors`` are the unions, ``root_ancestors`` is their
 union and ``has_internal_source_ancestor`` says whether the internal-source set
 is non-empty. An op with parents does not build them at the call. The emit
 records the parent records the builder read (the same edges, out destinations
-included) under ``ANCESTRY_PARENTS`` and one call-time bit, ``has_input_ancestor``
+included) under ``ANCESTRY_PARENTS`` and one call-time bit under ``INPUT_ROOTED``
 (true when any parent is input-rooted), which the call-site witness reads. The
 sets are built from those recorded parent records on the first read of any of
 them (a live-view read, the input-layout observer, the row write at settle),
@@ -27,7 +27,7 @@ from ..._ir._row_journal import _RowOpRecord
 __all__ = (
     "ANCESTRY_NAMES",
     "ANCESTRY_PARENTS",
-    "HAS_INPUT_ANCESTOR",
+    "INPUT_ROOTED",
     "defer_ancestry",
     "frozen_ancestry",
     "has_input_ancestor",
@@ -38,7 +38,7 @@ __all__ = (
 ANCESTRY_PARENTS = "_ancestry_parents"
 """Fields key: the parent records the call-time builder read, until the sets resolve."""
 
-HAS_INPUT_ANCESTOR = "has_input_ancestor"
+INPUT_ROOTED = "_input_rooted"
 """Fields key: the call-time bit, ``bool(input_ancestors)`` without building the set."""
 
 ANCESTRY_NAMES = frozenset(
@@ -63,15 +63,15 @@ def defer_ancestry(fields: dict[str, Any], parent_records: list[Any]) -> None:
         if pending is not None and parent._record is None:
             parent_fields = pending.fields
             if ANCESTRY_PARENTS in parent_fields:
-                if parent_fields[HAS_INPUT_ANCESTOR]:
+                if parent_fields[INPUT_ROOTED]:
                     break
                 continue
         if parent.input_ancestors:
             break
     else:
-        fields[HAS_INPUT_ANCESTOR] = False
+        fields[INPUT_ROOTED] = False
         return
-    fields[HAS_INPUT_ANCESTOR] = True
+    fields[INPUT_ROOTED] = True
 
 
 def is_deferred(fields: Mapping[str, Any]) -> bool:
@@ -97,7 +97,7 @@ def has_input_ancestor(event: Any) -> bool:
 
     fields = _deferred_fields(event)
     if fields is not None:
-        return bool(fields[HAS_INPUT_ANCESTOR])
+        return bool(fields[INPUT_ROOTED])
     return bool(event.input_ancestors)
 
 

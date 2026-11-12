@@ -119,7 +119,7 @@ class _Shadow:
             assert set(fields["internal_source_ancestors"]) == internal
             assert set(fields["root_ancestors"]) == inputs | internal
             assert fields["has_internal_source_ancestor"] is bool(internal)
-            assert fields[rr.HAS_INPUT_ANCESTOR] is bool(inputs)
+            assert fields[rr.INPUT_ROOTED] is bool(inputs)
             assert set(pending["input_ancestors"]) == inputs
             again = dict(frozen)
             rr.resolve_fields(again)
@@ -224,7 +224,7 @@ def _out_destination(m: nn.Module, x: torch.Tensor) -> torch.Tensor:
     """``out=`` destinations are parents of the op that writes them."""
 
     dest = torch.empty(2, 3)
-    torch.add(x, m.weight, out=dest)
+    torch.add(x, m.weight.detach(), out=dest)
     values = torch.empty(2, 3)
     indices = torch.empty(2, 3, dtype=torch.long)
     torch.sort(dest, dim=1, out=(values, indices))
@@ -312,9 +312,11 @@ def test_the_witness_reads_the_bit(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def body(m: nn.Module, x: torch.Tensor) -> torch.Tensor:
         y = x * 2
-        d = y.detach()
-        d.add_(x)
-        return y + d
+        y.data.add_(x)
+        z = x + 1
+        alias = z.data
+        alias.mul_(y)
+        return y + z
 
     shadow = _Shadow(monkeypatch)
     _trace(lambda: _Body(body), _x())
