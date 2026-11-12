@@ -56,6 +56,7 @@ __all__ = (
     "_literal_value_supported",
     "_classify_arg_component",
     "_build_args_template",
+    "_args_template_of",
     "_arg_location_to_path",
     "_build_edge_use_records",
     "_session_validated_parameter",
@@ -274,7 +275,6 @@ def _build_args_template(
     trace: "Trace | None" = None,
     *,
     func_name: str | None = None,
-    layout: Any = None,
 ) -> CapturedArgTemplate:
     """Build a replay template from original function args and kwargs.
 
@@ -290,10 +290,6 @@ def _build_args_template(
         Original keyword args.
     trace
         Active trace used to reject stale parent labels.
-    layout
-        The call's flat ``CallLayout`` (selected for this callable, name and exact
-        argument types), which then holds the template plan; ``None`` looks the
-        plan up by the call's layout key.
 
     Returns
     -------
@@ -301,8 +297,17 @@ def _build_args_template(
         Replay template for the function call.
     """
 
+    return _args_template_of((func, func_name, args, kwargs), trace)
+
+
+def _args_template_of(call: Any, trace: "Trace | None", layout: Any = None) -> CapturedArgTemplate:
+    """``_build_args_template`` of ``call``, ``(func, func_name, args, kwargs)``.
+
+    ``layout`` is the call's flat ``CallLayout`` (selected for this callable, name and exact
+    argument types), which holds the template plan; ``None`` looks it up by layout key.
+    """
+    func, func_name, args, kwargs = call
     known = arg_slot_labels(trace, args, kwargs)
-    call = (func, func_name, args, kwargs)
     planned = planned_args_template(_TEMPLATE_PARTS, call, trace, known, layout)
     if planned is not None:
         return planned

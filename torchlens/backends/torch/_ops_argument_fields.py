@@ -337,8 +337,8 @@ def _set_arg_template_fields(
 ) -> None:
     """Seed the replay argument templates and the portable function identity of one call."""
     if templates_requested(self):
-        captured_template = _build_args_template(
-            call.func, call.args, call.kwargs, self, func_name=call.func_name, layout=call.layout
+        captured_template = _args_template_of(
+            (call.func, call.func_name, call.args, call.kwargs), self, call.layout
         )
         fields_dict["args_template"] = captured_template
         fields_dict["kwargs_template"] = captured_template if call.kwargs else None
@@ -391,7 +391,7 @@ def _repin_rebound_receiver(self: "Trace", args: tuple[Any, ...], tensor: torch.
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from ._ops_arguments import (  # noqa: E402
-    _build_args_template,
+    _args_template_of,
     _function_registry_key,
     _session_validated_parameter,
     _tensor_has_known_provenance,
