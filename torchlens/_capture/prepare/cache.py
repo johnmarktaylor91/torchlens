@@ -11,7 +11,7 @@ import tempfile
 import time
 import warnings
 from collections.abc import Mapping
-from dataclasses import fields as dataclass_fields, replace
+from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from typing import Any, cast
 
@@ -31,6 +31,7 @@ from ..._trace_selector_helpers import (
     _predicate_cache_key,
     _stable_cache_fragment,
 )
+from ..._utils._dataclass_replace import replace_fields as replace
 from ...backends.torch.bound_root import TLBoundMethodRoot
 from ._cache_pickle import capture_cache_dispatch_table
 from .chunked import normalize_chunk_paths
