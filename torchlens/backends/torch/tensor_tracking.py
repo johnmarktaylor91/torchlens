@@ -4,7 +4,6 @@ This module owns tensor backward hooks, parent argument positions, parameter pas
 tracking, and structural fingerprints used by loop detection.
 """
 
-import functools
 import time
 import warnings
 import weakref
@@ -202,7 +201,7 @@ def _add_tensor_backward_hook(
 ) -> None:
     """Register a backward hook on ``t`` that captures its grad into Trace.
 
-    The hook is one shared fire function bound to a ``weakref`` to Trace and to
+    The hook is a small function holding a ``weakref`` to Trace and the
     ``tensor_label`` (never the tensor), so it keeps neither alive.
 
     Only tensors that participate in autograd (have grad_fn_handle or require_grad)
@@ -438,21 +437,22 @@ def _install_tensor_grad_hook(
     if hook_key in hooked_tensors:
         return
     hooked_tensors.add(hook_key)
-    # One shared fire function bound to this registration's label (a label moves on with
-    # in-place ops) and a weak reference to Trace (no Trace -> tensor -> hook cycle).
-    hook = functools.partial(
-        _record_hooked_gradient,
-        weakref.ref(trace),
-        tensor_label,
-        hooked_tensor_id,
-        owning_backward_only,
-    )
+    # Kept by name: torch's "hook will not be serialized" warning prints its repr. It holds
+    # a weak Trace reference (no Trace -> tensor -> hook cycle) and this registration's
+    # label (a label moves on with in-place ops); the work is in _record_hooked_gradient.
+    trace_ref = weakref.ref(trace)
+
+    def log_grad_to_model_history(grad: torch.Tensor | None) -> torch.Tensor | None:
+        return _record_hooked_gradient(
+            trace_ref, tensor_label, hooked_tensor_id, owning_backward_only, grad
+        )
+
     slot_prehook = _backward_module._register_slot_gradient_prehook
     if owning_backward_only:
-        handle = register_tensor_grad_hook(site, hook, slot_prehook)
+        handle = register_tensor_grad_hook(site, log_grad_to_model_history, slot_prehook)
         _OWNED_STATE_GRAD_HOOK_HANDLES.setdefault(trace, []).append(handle)
-    elif not add_plain_tensor_hook(site, hook):
-        register_tensor_grad_hook(site, hook, slot_prehook)
+    elif not add_plain_tensor_hook(site, log_grad_to_model_history):
+        register_tensor_grad_hook(site, log_grad_to_model_history, slot_prehook)
 
 
 def _record_hooked_gradient(

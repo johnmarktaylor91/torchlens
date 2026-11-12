@@ -1,7 +1,7 @@
 """Register TorchLens's tensor gradient hooks with torch.
 
-``tensor_tracking._install_tensor_grad_hook`` decides what is hooked and binds
-the one shared fire function; :func:`register_tensor_grad_hook` puts it on the
+``tensor_tracking._install_tensor_grad_hook`` decides what is hooked and builds
+the small hook that calls the shared fire function; :func:`register_tensor_grad_hook` puts it on the
 tensor (or, for a tensor written in place again since its op, on that op's node).
 
 A plain ``torch.Tensor`` with no ``__torch_function__`` override active takes
