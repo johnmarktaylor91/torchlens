@@ -751,7 +751,6 @@
   "c1.chain1000.phase.post.mark_layer_depths": 0.18547904191616768,
   "c1.chain1000.phase.post.mark_tracing_finished": 0.03038922155688623,
   "c1.chain1000.phase.post.remove_orphan_nodes": 14.821556886227546,
-  "c1.chain1000.phase.post.undecorate_saved_tensors": 49.51556886227545,
   "c1.chain1000.phase.wrapper": 57.8747005988024,
   "c1.chain1000.phase.wrapper.emit.commit_op": 13.645808383233533,
   "c1.chain1000.phase.wrapper.emit.shared_fields": 181.6615269461078,
