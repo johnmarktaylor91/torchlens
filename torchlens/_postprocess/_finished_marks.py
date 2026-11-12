@@ -38,36 +38,46 @@ def mark_ops_finished(trace: Trace) -> None:
 
 
 def _mark_sealed_rows(ops: Any, records: Any, trace: Trace) -> bool:
-    """Write the flag for every main row of a sealed store at once; return whether it did.
+    """Write the flag for every main row of a sealed store at once; return whether it did."""
 
-    It applies when both lookups are row-key maps of one owner bound to the
-    trace's sealed Op store, every main key is a store row, and no fork has
-    viewed the store. Every other case returns ``False`` for the other bodies.
-    """
-
-    owner = getattr(ops, "_owner", None)
-    if owner is None or not ops or getattr(records, "_owner", None) is not owner:
-        return False
-    core = trace.__dict__.get("_trace_core")
-    store = core.ops if core is not None else None
-    if store is None or owner._store is not store or not store._sealed:
-        return False
-    if store._cow_shared or store._mutable_keys is not None:
+    store = _sealed_store(ops, records, trace)
+    if store is None:
         return False
     keys = dict.values(ops)
-    if min(keys) < 0 or not _same_records(ops, records):
-        return False
     fid = store.layout.fid_by_name[_FLAG]
     rows = store._rows
-    if rows is not None:
-        if store.__class__ is not _SealedRowMajorOpRowStore:
-            return False
-        for row in keys:
-            rows[row][fid] = True
-        return True
-    if store.__class__ is not OpRowStore:
-        return False
-    return _write_sealed_column(store, fid, keys)
+    if rows is None:
+        return _write_sealed_column(store, fid, keys)
+    for row in keys:
+        rows[row][fid] = True
+    return True
+
+
+def _sealed_store(ops: Any, records: Any, trace: Trace) -> Any:
+    """Return the trace's Op store when the sealed body applies, else ``None``.
+
+    It applies when both lookups are row-key maps of one owner bound to the
+    trace's sealed Op store (plain columnar or sealed row-major), every main key
+    is a store row, and no fork has viewed the store.
+    """
+
+    owner: Any = getattr(ops, "_owner", None)
+    core = trace.__dict__.get("_trace_core")
+    store: Any = core.ops if core is not None else None
+    if owner is None or store is None or not ops:
+        return None
+    plain = OpRowStore if store._rows is None else _SealedRowMajorOpRowStore
+    applies = (
+        getattr(records, "_owner", None) is owner
+        and owner._store is store
+        and store._sealed
+        and store.__class__ is plain
+        and not store._cow_shared
+        and store._mutable_keys is None
+        and min(dict.values(ops)) >= 0
+        and _same_records(ops, records)
+    )
+    return store if applies else None
 
 
 def _write_sealed_column(store: Any, fid: int, keys: Any) -> bool:
