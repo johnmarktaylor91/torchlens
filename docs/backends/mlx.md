@@ -1,10 +1,9 @@
-# MLX backend (preview)
+# MLX backend
 
 TorchLens captures [MLX](https://github.com/ml-explore/mlx) forwards with eager wrappers
 over `mlx.core`, `mlx.core.fast`, the `mx.array` operators and methods, and the `mlx.nn`
-layer classes. The backend is a **preview**: its scorecard ships in the wheel and shows in
-`tl.report.doctor()` under `backend_scorecard:mlx`; only a maintainer decision flips the
-label to `stable`.
+layer classes. Its scorecard ships in the wheel and shows in `tl.report.doctor()` under
+`backend_scorecard:mlx`.
 
 | Requirement | Value |
 |---|---|
@@ -56,6 +55,40 @@ with unwrapped_policy("refuse"):
     tl.trace(model, x, backend="mlx")  # raises BackendUnsupportedError, code unwrapped_op_in_capture
 ```
 
+## Source lines
+
+Each op records the user source lines that ran it, as on PyTorch. `op.source.frames` runs
+outermost to innermost: the first frame is the line that called `tl.trace`, the last is the
+line in your model (or in the `mlx.nn` layer it called) that ran the op. MLX modules are called
+through `__call__` and a model may be a plain function, so the model boundary is the call into
+the model rather than a `forward` method. `CaptureOptions(save_source_context=True)` snapshots
+the source text at capture time and `source_context_lines` sets how many lines each frame
+keeps; both behave as on PyTorch and survive `save` / `load`.
+
+## Value-dependent conditions
+
+`intervene=tl.when(condition, action)` and `stop_after=` accept a static selector (`tl.func`,
+`tl.label`, `tl.module`, `tl.in_module` and their `&`, `|`, `~` composites), a `tl.where`
+predicate, or a callable taking the op context:
+
+```python
+def gate_is_true(ctx):
+    return ctx.is_scalar_bool and ctx.bool_value is True
+
+trace = tl.trace(model, x, backend="mlx", intervene=tl.when(gate_is_true, tl.zero_ablate()))
+partial = tl.trace(model, x, backend="mlx", stop_after=lambda ctx: ctx.is_scalar_bool)
+```
+
+MLX is lazy, so the context's value fields are filled only when a condition reads values. When
+a `tl.where` predicate or a callable is present, a 0-d boolean output is evaluated at the op to
+give `bool_value`; that run loses MLX graph fusion at those ops and stays realize-once
+everywhere else. A static selector, and a plain capture, evaluate nothing during the forward.
+`ctx.tensor_requires_grad` has no MLX value (arrays carry no gradient flag; gradients come
+from function transforms), so reading it raises `MLXValueUnavailableError`. An exploratory
+callable `stop_after` that never fires warns with `stop_after_never_fired_callable` and
+records the site in `trace.annotations`; a selector that never fires refuses with
+`stop_after_never_fired`, as on PyTorch.
+
 ## Can and cannot
 
 The rows are the backend's capability table in the scorecard's vocabulary: `supported` (the
@@ -67,7 +100,8 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | Forward capture (`tl.trace`) | supported | |
 | Replay validation (`has_validation_replay`; `validate_trace`, status object with per-op reasons) | supported | |
 | Payload materialization (`payload_materialization`; `save` / `load` with array payloads) | supported | |
-| Static-label interventions (`can_intervene`; `intervene=`, `stop_after=`) | supported | |
+| Interventions and stop sites (`can_intervene`; `intervene=tl.when(...)`, `stop_after=`), static or value-dependent | supported | |
+| Source lines (`op.source.frames`, `save_source_context`) | supported | |
 | Intermediate derived gradients (`intermediate_derived_grads`; `grad_options=`) | supported | |
 | Backward capture (`backward_capture`; `save_grads`, `backward_ready`) | unsupported | `backward_capture_unsupported` |
 | Fastlog (`fastlog`) | unsupported | `fastlog_unsupported` |
@@ -79,6 +113,9 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | `mx.compile` / `mx.grad` / `mx.vmap` wrappers as the traced entry | unsupported | `traced_transform_entry_unsupported` |
 | `grad_options=` together with `intervene=` or `stop_after=` | unsupported (capture them in separate calls) | `intervention_with_derived_grads_unsupported` |
 | An intervention that returns a non-`mx.array` or changes shape or dtype | unsupported | `intervention_result_invalid` |
+| `intervene=` as a raw decision callable (not `tl.when`) | unsupported | `backend_unsupported` |
+| A module selector combined with a non-module condition | unsupported | `interventions_unsupported` |
+| `ctx.tensor_requires_grad` in a condition | no MLX value | raises `MLXValueUnavailableError` |
 | Ops outside the wrapped surface | flagged (`unwrapped_op_in_capture`) or refused under `unwrapped_policy("refuse")` | `unwrapped_op_in_capture` |
 | Arrays constructed inside the forward (`mx.array(...)`) | flagged as unwrapped (build constants outside the forward) | `unwrapped_op_in_capture` |
 
