@@ -3552,7 +3552,7 @@ docs-md	docs/maintainers/where.md	1825
 docs-md	docs/maintainers/where.md	183
 docs-md	docs/maintainers/where.md	1838
 docs-md	docs/maintainers/where.md	184
-docs-md	docs/maintainers/where.md	1841
+docs-md	docs/maintainers/where.md	1842
 docs-md	docs/maintainers/where.md	185
 docs-md	docs/maintainers/where.md	1858
 docs-md	docs/maintainers/where.md	186
@@ -3665,11 +3665,11 @@ docs-md	docs/maintainers/where.md	250
 docs-md	docs/maintainers/where.md	251
 docs-md	docs/maintainers/where.md	252
 docs-md	docs/maintainers/where.md	253
-docs-md	docs/maintainers/where.md	25396
 docs-md	docs/maintainers/where.md	254
 docs-md	docs/maintainers/where.md	255
 docs-md	docs/maintainers/where.md	2550
 docs-md	docs/maintainers/where.md	256
+docs-md	docs/maintainers/where.md	25697
 docs-md	docs/maintainers/where.md	257
 docs-md	docs/maintainers/where.md	258
 docs-md	docs/maintainers/where.md	259
@@ -3866,7 +3866,7 @@ docs-md	docs/maintainers/where.md	421
 docs-md	docs/maintainers/where.md	422
 docs-md	docs/maintainers/where.md	423
 docs-md	docs/maintainers/where.md	424
-docs-md	docs/maintainers/where.md	4271
+docs-md	docs/maintainers/where.md	4270
 docs-md	docs/maintainers/where.md	428
 docs-md	docs/maintainers/where.md	4286
 docs-md	docs/maintainers/where.md	429
@@ -4051,8 +4051,8 @@ docs-md	docs/maintainers/where.md	644
 docs-md	docs/maintainers/where.md	647
 docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	649
+docs-md	docs/maintainers/where.md	64998
 docs-md	docs/maintainers/where.md	65
-docs-md	docs/maintainers/where.md	65002
 docs-md	docs/maintainers/where.md	651
 docs-md	docs/maintainers/where.md	653
 docs-md	docs/maintainers/where.md	6537
@@ -4104,8 +4104,8 @@ docs-md	docs/maintainers/where.md	72
 docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	725
-docs-md	docs/maintainers/where.md	727720
 docs-md	docs/maintainers/where.md	728
+docs-md	docs/maintainers/where.md	728017
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
 docs-md	docs/maintainers/where.md	731
@@ -6779,8 +6779,10 @@ package-docstrings	torchlens/_utils/_kernel_probes.py	2.8
 package-docstrings	torchlens/_utils/_kernel_probes.py	2.9
 package-docstrings	torchlens/_utils/_kernel_probes.py	2025
 package-docstrings	torchlens/_utils/_kernel_probes.py	2026
+package-docstrings	torchlens/_utils/_kernel_probes.py	3.11
 package-docstrings	torchlens/_utils/_kernel_probes.py	31
 package-docstrings	torchlens/_utils/_kernel_probes.py	32434
+package-docstrings	torchlens/_utils/_kernel_probes.py	657
 package-docstrings	torchlens/_utils/_kernel_probes.py	86
 package-docstrings	torchlens/_utils/_kernel_probes.py	9.3
 package-docstrings	torchlens/_utils/_log_mute.py	380
@@ -6826,13 +6828,11 @@ package-docstrings	torchlens/_utils/_torch_compat.py	2.9
 package-docstrings	torchlens/_utils/_torch_compat.py	2.9,
 package-docstrings	torchlens/_utils/_torch_compat.py	2025
 package-docstrings	torchlens/_utils/_torch_compat.py	2026
-package-docstrings	torchlens/_utils/_torch_compat.py	3.11
 package-docstrings	torchlens/_utils/_torch_compat.py	32
 package-docstrings	torchlens/_utils/_torch_compat.py	32,
 package-docstrings	torchlens/_utils/_torch_compat.py	32434
 package-docstrings	torchlens/_utils/_torch_compat.py	32_
 package-docstrings	torchlens/_utils/_torch_compat.py	43508
-package-docstrings	torchlens/_utils/_torch_compat.py	657
 package-docstrings	torchlens/_utils/_torch_compat.py	953
 package-docstrings	torchlens/_utils/_torch_compat_table.py	2.1
 package-docstrings	torchlens/_utils/_torch_symbols.py	32
@@ -8740,6 +8740,7 @@ test-docstrings	tests/test_backward.py	63
 test-docstrings	tests/test_backward_grad_integrity.py	34
 test-docstrings	tests/test_backward_grad_integrity.py	35
 test-docstrings	tests/test_backward_grad_integrity.py	36
+test-docstrings	tests/test_backward_hook_install.py	2.1
 test-docstrings	tests/test_backward_intervention.py	2289
 test-docstrings	tests/test_backward_intervention.py	56
 test-docstrings	tests/test_backward_p2_projections.py	1485

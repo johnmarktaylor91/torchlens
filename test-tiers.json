@@ -6491,9 +6491,9 @@
         "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/_utils/_kernel_probes.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
-        "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
         "tests/test_sdpa_probe_forced_backend.py",
@@ -6501,12 +6501,12 @@
         "tests/test_torch_compat_table.py"
       ],
       "torchlens/_utils/_lazy_import_warm.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -6525,12 +6525,12 @@
         "tests/test_session_prep_cost_cuts.py"
       ],
       "torchlens/_utils/_module_call_dispatch.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -6661,12 +6661,12 @@
         "tests/test_tlspec_runnable_resolver.py"
       ],
       "torchlens/_utils/_script_call_slot.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -6737,6 +6737,16 @@
         "tests/test_vizfix_skin_ink_and_legend.py",
         "tests/visualization/test_rolled_loop_route_fallback.py"
       ],
+      "torchlens/_utils/_tensor_hook_install.py": [
+        "tests/test_backward_hook_install.py",
+        "tests/test_capability_probe_lifecycle.py",
+        "tests/test_distributed_c0_core.py",
+        "tests/test_foreign_kernel_boundary.py",
+        "tests/test_lazy_torch_module_reads.py",
+        "tests/test_numpy_bridge_compat.py",
+        "tests/test_torch_compat.py",
+        "tests/test_torch_compat_table.py"
+      ],
       "torchlens/_utils/_tensor_label.py": [
         "tests/test_deepcopy_capture_identity.py",
         "tests/test_id_key_registry.py",
@@ -6778,12 +6788,12 @@
         "tests/test_tlspec_runnable_r83_label_anchoring.py"
       ],
       "torchlens/_utils/_torch_compat.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -6797,10 +6807,10 @@
         "tests/test_tlspec_runnable_r65_torch_rng.py"
       ],
       "torchlens/_utils/_torch_structseq.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_lazy_torch_module_reads.py",
-        "tests/test_livecheck_module_exit_only.py",
         "tests/test_numpy_bridge_compat.py",
         "tests/test_tlspec_runnable_r35_exact_semantics.py",
         "tests/test_torch_compat.py",
@@ -6827,12 +6837,12 @@
         "tests/test_wrap_torch_warm_cache.py"
       ],
       "torchlens/_utils/_type_sequence_slot.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -9165,8 +9175,8 @@
         "tests/backend_conformance/test_capability_truth.py",
         "tests/test_backend_maturity.py",
         "tests/test_backend_protocol.py",
-        "tests/test_backward_hook_install.py",
         "tests/test_doctor_backend_rows.py",
+        "tests/test_inplace_view_grad_fn_rebase.py",
         "tests/test_inplace_view_sibling_rebind_guards.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_public_entry_refusal_codes.py"
