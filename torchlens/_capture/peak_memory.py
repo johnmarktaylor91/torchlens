@@ -44,7 +44,8 @@ def process_rss_bytes() -> int:
     psutil = optional_psutil()
     if psutil is None:
         try:
-            with open("/proc/self/statm") as handle:
+            # Binary and unbuffered: a text handle built a decoder on every read.
+            with open("/proc/self/statm", "rb", buffering=0) as handle:
                 return int(handle.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
         except (OSError, ValueError, IndexError):
             return 0

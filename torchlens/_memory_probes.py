@@ -28,10 +28,13 @@ def _available_host_bytes() -> int | None:
     """
 
     try:
-        with open("/proc/meminfo", encoding="ascii") as meminfo:
-            for line in meminfo:
-                if line.startswith("MemAvailable:"):
-                    return int(line.split()[1]) * 1024
+        # One unbuffered binary read: a text-mode line loop built a decoder and a str per
+        # line on every capture (the ledger asks once per capture, CPU device).
+        with open("/proc/meminfo", "rb", buffering=0) as meminfo:
+            text = meminfo.read()
+        for line in text.split(b"\n"):
+            if line.startswith(b"MemAvailable:"):
+                return int(line.split()[1]) * 1024
     except Exception:
         pass
     try:
