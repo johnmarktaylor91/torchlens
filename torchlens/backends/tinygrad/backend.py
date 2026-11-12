@@ -8,12 +8,17 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 from typing import Any, cast
 
 from torchlens.backends.registry import BackendUnsupportedError
 
 from ..._capture.outcome import stamp_backend_finalized
-from ..._data_classes.derived_grad import DerivedGradAccessor, IntermediateDerivedGradAccessor
+from ..._data_classes.derived_grad import (
+    DerivedGradAccessor,
+    IntermediateDerivedGradAccessor,
+    set_intermediate_derived_grads,
+)
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
@@ -21,7 +26,6 @@ from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
-    ModuleFrame,
     OpEvent,
     OutputRef,
     ParentEdge,
@@ -68,11 +72,13 @@ from .._options import (
     TINYGRAD_PREVIEW_TRACE_OPTION_POLICY,
     default_if_missing as _default_if_missing,
     is_missing as _is_missing,
+    pop_stop_directive,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from .._validation_shared import float_replay_tolerances_for_dtype_name, scalar_replay_close
+from ._capture_state import begin_capture, event_module_frames, mark_edit, realize_with_state
 from ._captures import TinygradIntermediateCandidate, TinygradUOpCapture
 from ._derived_grads import (
     _differentiated_input_leaves,
@@ -82,11 +88,20 @@ from ._derived_grads import (
     _restore_tinygrad_grads,
     _snapshot_tinygrad_grads,
     _tree_leaves_with_paths,
+    call_input_leaves,
 )
+from ._edits import TinygradEditSession, capture_with_edits
 from ._execution_guard import _reject_mid_capture_execution
-from ._module_tree import TinygradModuleFrame, TinygradModuleTree, note_return, record_returns
+from ._module_tree import (
+    _ACTIVE_TINYGRAD_MODULE_STACK,
+    TinygradModuleFrame,
+    TinygradModuleTree,
+    note_return,
+    record_returns,
+)
+from ._observer import _observe_tensor_ops
 from ._raw_labels import _final_to_raw_labels
-from ._realize_once import RealizedCapture, live_tensor_uops, realize_capture, recorded_values
+from ._realize_once import RealizedCapture, live_tensor_uops, recorded_values
 from ._rules import (
     CONSTANT_KIND_ANNOTATION,
     CONSTANT_UNREALIZABLE_CODE,
@@ -96,9 +111,8 @@ from ._rules import (
     constant_kind_for_uop,
     refuse_constant_unrealizable,
 )
+from ._source_lines import SourceLineRecorder
 from ._uop_graph import _data_flow_uops, _op_func_name, _unique_uops, _uop_name
-
-_ACTIVE_TINYGRAD_MODULE_STACK: list[TinygradModuleFrame] = []
 
 
 @dataclass(frozen=True)
@@ -196,10 +210,18 @@ def _stamp_param_logs(trace: Trace, module_tree: TinygradModuleTree | None) -> N
         trace._provenance_param_source = "none"
 
 
+_EDIT_RUN_EXCLUDED = frozenset({"self", "kwargs", "intervene", "halt"})
+"""``capture_trace`` locals that are not arguments of the runs an edited capture makes."""
+
+
 class TinygradBackend:
     """tinygrad adapter that captures forward graphs from pre-realization UOps."""
 
     name = "tinygrad"
+    # Per-capture state, set by ``_begin_capture`` and by ``_edits`` around an edited run.
+    _call_kwargs: Mapping[str, Any] = MappingProxyType({})
+    _source_lines: SourceLineRecorder | None = None
+    _edit_session: TinygradEditSession | None = None
 
     def capture_trace(
         self,
@@ -248,7 +270,7 @@ class TinygradBackend:
         input_args
             Positional arguments for ``model``.
         input_kwargs
-            Keyword arguments. Unsupported in this preview.
+            Keyword arguments for ``model``; their tensor leaves are inputs.
         save
             ``"all"``, omitted, or a static ``tl.trace(save=)`` selector of ops to keep.
         keep_orphans
@@ -270,7 +292,7 @@ class TinygradBackend:
         save_arg_values
             Must be false.
         save_code_context
-            Must be false.
+            Whether each op's source text is snapshotted at capture.
         save_rng_states
             Must be false.
         recurrence_detection
@@ -318,6 +340,11 @@ class TinygradBackend:
             Captured tinygrad trace.
         """
 
+        intervene = _default_if_missing(kwargs.pop("intervene", None), None)
+        halt = pop_stop_directive(kwargs)
+        if intervene is not None or halt is not None:
+            call = {k: v for k, v in dict(locals()).items() if k not in _EDIT_RUN_EXCLUDED}
+            return cast(Trace, capture_with_edits(self, {**call, **kwargs}, intervene, halt))
         save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="tinygrad")
         facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
@@ -400,7 +427,7 @@ class TinygradBackend:
                 "state through the model/input surface instead.",
                 code="explicit_seed_unsupported",
             )
-        args = self._normalize_input_args(input_args)
+        args = begin_capture(self, input_args, input_kwargs, num_context_lines, save_code_context)
         module_tree = discover_tinygrad_module_tree(model)
         use_object_module = _resolve_tinygrad_module_identity_mode(
             cast(str | None, module_identity_mode), module_tree
@@ -439,8 +466,6 @@ class TinygradBackend:
             output_transform=output_transform,
             save_transformed_output=cast(str | bool, save_transformed_output),
         )
-        trace.capture_events = CaptureEvents()
-        trace._provenance_start_time = time.time()
         preexisting_uops = live_tensor_uops()  # model state, not forward values
         output, observed_ops, observed_module_stacks, _pinned_uops = self._run_observed_forward(
             model, args, module_tree if use_object_module else None
@@ -453,7 +478,7 @@ class TinygradBackend:
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
 
         trace._output_slot = returned(output)
-        realized = realize_capture(args, outputs, preexisting_uops, self.is_tensor)
+        realized = realize_with_state(self, args, outputs, preexisting_uops)
         trace.transformed_output = output_transform(output) if callable(output_transform) else None
         uop_labels = self._emit_input_sources(trace, realized)
         tree = module_tree if use_object_module else None
@@ -462,9 +487,6 @@ class TinygradBackend:
         )
         self._mark_output_events(trace, outputs, uop_labels, captures, realized.output_uops)
         _stamp_param_logs(trace, module_tree if use_object_module else None)
-        materialize_from_events(trace, trace.capture_events)
-        delattr(trace, "capture_events")
-        trace._num_layers_with_params = 0
         self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_uop_captures = captures
         trace.tinygrad_payload_policy = REALIZE_ONCE_PAYLOAD_POLICY
@@ -522,12 +544,15 @@ class TinygradBackend:
             if module_tree is not None
             else _null_context()
         )
-        with (
-            module_call_context,
-            _observe_tensor_ops(observed_ops, observed_module_stacks, pinned_uops=pinned_uops),
-            _reject_mid_capture_execution(),
-        ):
-            output = model(*args)
+        observer = _observe_tensor_ops(
+            observed_ops,
+            observed_module_stacks,
+            pinned_uops=pinned_uops,
+            source_lines=self._source_lines,
+            edits=self._edit_session,
+        )
+        with module_call_context, observer, _reject_mid_capture_execution():
+            output = model(*args, **self._call_kwargs)
         if self._input_identities(args) != input_identities:
             raise BackendUnsupportedError(
                 "tinygrad backend preview cannot capture Tensor.assign(), Tensor.replace(), "
@@ -695,7 +720,7 @@ class TinygradBackend:
     ) -> Trace:
         """Construct an empty trace shell via the shared preview constructor."""
 
-        return new_preview_function_trace(
+        trace = new_preview_function_trace(
             backend_name=self.name,
             model=model,
             keep_orphans=keep_orphans,
@@ -711,6 +736,9 @@ class TinygradBackend:
             param_source="none",
             compute_input_output_distances=compute_input_output_distances,
         )
+        trace.capture_events = CaptureEvents()
+        trace._provenance_start_time = time.time()
+        return trace
 
     def _emit_input_sources(self, trace: Trace, capture: RealizedCapture) -> dict[int, str]:
         """Emit source events for positional tinygrad tensor inputs.
@@ -782,6 +810,7 @@ class TinygradBackend:
             for uop, tensor, model_uop, owned in recorded_values(capture)
         )
         record_returns(observed[2], uop_labels)
+        self._source_lines = None  # the recorder's work ends with the last event
         return captures
 
     def _emit_uop(
@@ -834,9 +863,11 @@ class TinygradBackend:
             params=param_refs,
             container_path=(),
             annotations=_uop_annotations(uop, op_name, tensor, names, constant_kind),
+            code_context=self._source_lines.context_for(model_uop) if self._source_lines else (),
         )
         uop_labels[id(uop)] = uop_labels[id(model_uop)] = event.label_raw
-        return _uop_capture(event.label_raw, uop, op_name, parents, payload)
+        capture = _uop_capture(event.label_raw, uop, op_name, parents, payload)
+        return mark_edit(self, trace, event, model_uop, capture)
 
     def _append_event(
         self,
@@ -852,6 +883,7 @@ class TinygradBackend:
         params: tuple[ParamRef, ...],
         container_path: tuple[object, ...],
         annotations: Mapping[str, object],
+        code_context: tuple[Any, ...] = (),
     ) -> OpEvent:
         """Append one tinygrad event to the trace event stream.
 
@@ -879,6 +911,8 @@ class TinygradBackend:
             Output container path.
         annotations
             Extra annotations.
+        code_context
+            User source lines of the op, outermost first (``_source_lines``).
 
         Returns
         -------
@@ -894,18 +928,7 @@ class TinygradBackend:
             save_grad=False,
         )
         tensor_ref = self._tensor_ref(output, reserved.label_raw)
-        event_module_stack = tuple(
-            ModuleFrame(
-                address=frame.address,
-                address_normalized=frame.address,
-                module_type=frame.module_type,
-                call_index=frame.call_index,
-                fx_qualpath=None,
-                entry_argnames=(),
-            )
-            for frame in module_stack
-        )
-        event_modules = tuple((frame.address, frame.call_index) for frame in module_stack)
+        event_module_stack, event_modules = event_module_frames(module_stack)
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )
@@ -926,7 +949,7 @@ class TinygradBackend:
                 func_name=func_name,
                 func_qualname=func_name,
                 func_call_id=func_call_id,
-                code_context=(),
+                code_context=code_context,
                 func_duration=None,
                 flops_forward=None,
                 flops_backward=None,
@@ -1182,6 +1205,9 @@ class TinygradBackend:
             Trace accessors are populated.
         """
 
+        materialize_from_events(trace, trace.capture_events)
+        delattr(trace, "capture_events")
+        trace._num_layers_with_params = 0
         # The tinygrad validation sidecar (trace.tinygrad_uop_captures) speaks
         # RAW label space and the replay resolver is raw-keyed; op-side labels
         # are resolved back to raw space at comparison time, so no relabel
@@ -1269,8 +1295,6 @@ class TinygradBackend:
         snapshots = _snapshot_tinygrad_grads(self, leaves)
         try:
             if grad_options.intermediate_grads:
-                from ..._data_classes.derived_grad import set_intermediate_derived_grads
-
                 set_intermediate_derived_grads(
                     trace,
                     (
@@ -1286,7 +1310,7 @@ class TinygradBackend:
                 )
                 _restore_tinygrad_grads(snapshots)
                 snapshots = _snapshot_tinygrad_grads(self, leaves)
-            derived_output = model(*args)
+            derived_output = model(*args, **self._call_kwargs)
             loss = grad_options.loss_fn(derived_output) if grad_options.loss_fn else derived_output
             if not self.is_tensor(loss) or not _is_scalar_tinygrad_value(loss):
                 raise ValueError(
@@ -1351,7 +1375,7 @@ class TinygradBackend:
         observed_ops: dict[int, list[str]] = {}
         observed_tensors: dict[int, list[Any]] = {}
         with _observe_tensor_ops(observed_ops, observed_tensors=observed_tensors):
-            derived_output = model(*args)
+            derived_output = model(*args, **self._call_kwargs)
         outputs = tuple(self._tensor_leaves(derived_output))
         loss = grad_options.loss_fn(derived_output) if grad_options.loss_fn else derived_output
         if not self.is_tensor(loss) or not _is_scalar_tinygrad_value(loss):
@@ -1452,6 +1476,9 @@ class TinygradBackend:
             )
         except (KeyError, ValueError) as error:
             return ReplayVerdict.fail(label, "replay_mismatch", str(error), index)
+        raw_output = saved_output
+        if capture.edit is not None:  # the payload is the edit applied to the replayed op
+            raw_output, replayed = replayed, self._realized_copy(capture.edit(replayed))
         if not _payloads_close(replayed, saved_output):
             return ReplayVerdict.fail(
                 label,
@@ -1465,7 +1492,7 @@ class TinygradBackend:
             op=op,
             ops_by_raw_label=ops_by_raw_label,
             hidden_outputs_by_label=hidden_outputs_by_label,
-            saved_output=saved_output,
+            saved_output=raw_output,
         ):
             return ReplayVerdict.fail(
                 label,
@@ -1548,7 +1575,7 @@ class TinygradBackend:
         return self._realized_copy(self._tensor_from_uop(replay_uop))
 
     def _input_identities(self, args: Sequence[Any]) -> tuple[str, ...]:
-        """Return tinygrad identities for positional tensor inputs.
+        """Return tinygrad identities for the call's tensor inputs.
 
         Parameters
         ----------
@@ -1563,7 +1590,7 @@ class TinygradBackend:
 
         return tuple(
             _identity(leaf)
-            for _path, leaf in _tree_leaves_with_paths(tuple(args))
+            for _path, leaf in call_input_leaves(args, self._call_kwargs)
             if self.is_tensor(leaf)
         )
 
@@ -1691,9 +1718,10 @@ class TinygradBackend:
             Returns when at least one tinygrad tensor leaf is present.
         """
 
-        if not any(self.is_tensor(leaf) for _path, leaf in _tree_leaves_with_paths(tuple(args))):
+        leaves = call_input_leaves(args, self._call_kwargs)
+        if not any(self.is_tensor(leaf) for _path, leaf in leaves):
             raise BackendUnsupportedError(
-                "tinygrad backend preview requires positional tinygrad Tensor inputs.",
+                "tinygrad backend preview requires tinygrad Tensor inputs.",
                 code="tinygrad_input_required",
             )
 
@@ -2438,98 +2466,6 @@ def _resolve_tinygrad_module_identity_mode(
     if value == "function_root":
         return False
     return module_tree is not None
-
-
-class _observe_tensor_ops:
-    """Context manager observing tinygrad Tensor API UOp results."""
-
-    def __init__(
-        self,
-        observed_ops: dict[int, list[str]],
-        observed_module_stacks: dict[int, tuple[TinygradModuleFrame, ...]] | None = None,
-        observed_tensors: dict[int, list[Any]] | None = None,
-        pinned_uops: list[Any] | None = None,
-    ) -> None:
-        """Initialize the observation context.
-
-        Parameters
-        ----------
-        observed_ops
-            Mutable mapping receiving Tensor API names by returned UOp id.
-        observed_module_stacks
-            Optional mutable mapping receiving first-observed module stacks by
-            returned UOp id.
-        observed_tensors
-            Optional mutable mapping receiving live result tensors by returned
-            UOp id.
-        pinned_uops
-            Optional list receiving every returned UOp. The mappings above are
-            keyed by ``id()``; a UOp tinygrad drops mid-forward frees its id
-            for a later UOp, which would then inherit the dropped one's names.
-            Holding the returned UOps for the capture keeps every key unique.
-        """
-
-        self.observed_ops = observed_ops
-        self.observed_module_stacks = observed_module_stacks
-        self.observed_tensors = observed_tensors
-        self.pinned_uops = pinned_uops
-        self.original: Any = None
-
-    def __enter__(self) -> _observe_tensor_ops:
-        """Install the Tensor._apply_uop observer.
-
-        Returns
-        -------
-        _observe_tensor_ops
-            This context manager.
-        """
-
-        from tinygrad import Tensor
-
-        self.original = Tensor._apply_uop
-
-        def wrapped(tensor: Any, fxn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-            """Observe one Tensor API operation returning a UOp-backed Tensor."""
-
-            result = self.original(tensor, fxn, *args, **kwargs)
-            name = getattr(fxn, "__name__", _uop_name(result.uop).lower())
-            if self.pinned_uops is not None:
-                self.pinned_uops.append(result.uop)
-            self.observed_ops.setdefault(id(result.uop), []).append(str(name))
-            if self.observed_module_stacks is not None:
-                self.observed_module_stacks.setdefault(
-                    id(result.uop), tuple(_ACTIVE_TINYGRAD_MODULE_STACK)
-                )
-            if self.observed_tensors is not None:
-                self.observed_tensors.setdefault(id(result.uop), []).append(result)
-            return result
-
-        # tinygrad deliberately exposes this as a method; preview capture replaces it temporarily.
-        setattr(Tensor, "_apply_uop", wrapped)
-        return self
-
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
-        """Restore the original Tensor._apply_uop implementation.
-
-        Parameters
-        ----------
-        exc_type
-            Exception type, if any.
-        exc
-            Exception value, if any.
-        tb
-            Traceback, if any.
-
-        Returns
-        -------
-        None
-            The monkeypatch is removed.
-        """
-
-        from tinygrad import Tensor
-
-        # Restore the deliberately replaced tinygrad method after preview capture.
-        setattr(Tensor, "_apply_uop", self.original)
 
 
 def _uop_signature(uop: Any) -> str:

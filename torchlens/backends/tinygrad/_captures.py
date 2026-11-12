@@ -5,6 +5,7 @@ Extracted from ``backend`` so that module stays under its size ceiling.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -29,6 +30,10 @@ class TinygradUOpCapture:
         UOp source positions for each raw parent label.
     payload_snapshot
         Realized tinygrad tensor copy saved during capture.
+    edit
+        For an op a ``trace(intervene=...)`` edit replaced, the edit's lazy
+        ``tensor -> tensor`` application: ``uop`` is the unedited op and the
+        payload is the edit applied to its value. ``None`` for every other op.
     """
 
     label_raw: str
@@ -37,6 +42,7 @@ class TinygradUOpCapture:
     parent_labels: tuple[str, ...]
     parent_arg_positions: tuple[tuple[int, str], ...]
     payload_snapshot: Any
+    edit: Callable[[Any], Any] | None = None
 
 
 @dataclass(frozen=True)

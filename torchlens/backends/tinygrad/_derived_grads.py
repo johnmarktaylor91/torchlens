@@ -54,6 +54,18 @@ def _tree_leaves_with_paths(value: object, prefix: str = "") -> list[tuple[str, 
     return [(prefix, value)]
 
 
+def call_input_leaves(
+    args: Sequence[Any], kwargs: Mapping[str, Any] | None
+) -> list[tuple[str, Any]]:
+    """Leaves of a call's positional, then keyword, arguments with dotted paths.
+
+    A positional leaf's path starts with its argument index, a keyword leaf's
+    with its keyword name.
+    """
+
+    return _tree_leaves_with_paths(tuple(args)) + _tree_leaves_with_paths(dict(kwargs or {}))
+
+
 def _normalize_tinygrad_input_grad_argnums(
     value: Sequence[int] | None, num_inputs: int
 ) -> tuple[int, ...]:

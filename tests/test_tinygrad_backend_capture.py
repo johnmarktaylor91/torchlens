@@ -613,13 +613,9 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
         ({"save": tl.where(lambda op: op.out is not None)}, "concrete activation values"),
         ({"save": ["relu"]}, "full-save only.*save shaping"),
         ({"lookback": 1}, "full-save only.*save-window"),
-        # Gated options refuse through the central capability gate, whose
-        # canonical message names the owning flag and the refused option.
-        (
-            {"intervene": tl.when(tl.func("relu"), tl.zero_ablate())},
-            "can_intervene=False.*intervene",
-        ),
-        ({"stop_after": tl.func("relu")}, "can_intervene=False.*stop_after"),
+        # stop_after passes the can_intervene gate and refuses in the edit
+        # resolver; save_grads refuses through the central capability gate.
+        ({"stop_after": tl.func("where")}, "stop_after"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )

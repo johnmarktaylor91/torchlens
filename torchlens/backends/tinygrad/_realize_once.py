@@ -24,11 +24,11 @@ change if anything evaluated it again, so the capture refuses
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 from .._protocols.tinygrad import TinygradProtocol
-from ._derived_grads import _tree_leaves_with_paths
+from ._derived_grads import call_input_leaves
 from ._rules import (
     CONSTANT_UNREALIZABLE_CODE,
     RNG_STATE_IN_GRAPH_CODE,
@@ -36,7 +36,7 @@ from ._rules import (
     refuse_constant_unrealizable,
     refuse_rng_state_in_graph,
 )
-from ._uop_graph import _data_flow_uops, _unique_uops, _uop_name
+from ._uop_graph import _data_flow_uops, _unique_uops, _uop_name, edited_unique_uops
 
 __tl_layer__ = "L2"
 
@@ -54,11 +54,15 @@ class RealizeOncePlan:
         (recorded parentless; their generator subgraph is not walked).
     pinned
         Every UOp the plan's ``id()`` keys refer to, held so no key is reused.
+    edit_sites
+        For an edited capture, ``id(replacement UOp) -> replaced result UOp``:
+        each replacement is recorded as the op it replaced (``_edits``).
     """
 
     recorded: tuple[Any, ...]
     random_values: frozenset[int]
     pinned: tuple[Any, ...]
+    edit_sites: Mapping[int, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -78,7 +82,7 @@ class RealizedCapture:
         random-init weight the model now holds) shares its buffer and is
         copied for the payload.
     input_leaves
-        ``(container_path, tensor, uop)`` per positional tensor input, the UOp
+        ``(container_path, tensor, uop)`` per tensor input leaf, the UOp
         read before realization (it matches the forward graph's sources).
     output_uops
         Output UOps read before realization, parallel to the flat outputs
@@ -156,6 +160,7 @@ def plan_capture(
     outputs: Sequence[Any],
     source_uops: Sequence[Any],
     preexisting_uops: Iterable[Any],
+    edit_sites: Mapping[int, Any] | None = None,
 ) -> RealizeOncePlan:
     """Decide the recorded UOps of a capture without realizing anything.
 
@@ -167,6 +172,8 @@ def plan_capture(
         UOps of the traced input leaves, read before any realization.
     preexisting_uops
         UOps live tensors held before the forward ran (:func:`live_tensor_uops`).
+    edit_sites
+        ``id(replacement UOp) -> replaced result UOp`` of an edited capture.
 
     Returns
     -------
@@ -180,12 +187,13 @@ def plan_capture(
         itself drew; nothing has been realized at that point.
     """
 
-    uops = _unique_uops(outputs)
+    edits = dict(edit_sites or {})
+    uops = edited_unique_uops(outputs, edits) if edits else _unique_uops(outputs)
     source_ids = frozenset(id(uop) for uop in source_uops)
     preexisting_ids = frozenset(id(uop) for uop in preexisting_uops)
     rng = _rng_flags(uops, source_ids)
     candidates = frozenset(key for key, flag in rng.items() if flag and key in preexisting_ids)
-    recorded = _data_flow_uops(uops, outputs, source_ids, boundary_ids=candidates)
+    recorded = _data_flow_uops(uops, outputs, source_ids, boundary_ids=candidates, edit_sites=edits)
     random_values = candidates & frozenset(id(uop) for uop in recorded)
     remaining = _rng_flags(uops, source_ids | random_values)
     if any(remaining.get(id(cast(Any, output).uop), False) for output in outputs):
@@ -196,7 +204,8 @@ def plan_capture(
     return RealizeOncePlan(
         recorded=recorded,
         random_values=random_values,
-        pinned=(*uops, *source_uops),
+        pinned=(*uops, *source_uops, *edits.values()),
+        edit_sites=edits,
     )
 
 
@@ -306,6 +315,9 @@ def realize_capture(
     outputs: Sequence[Any],
     preexisting_uops: Iterable[Any],
     is_tensor: Callable[[Any], bool],
+    *,
+    kwargs: Mapping[str, Any] | None = None,
+    edit_sites: Mapping[int, Any] | None = None,
 ) -> RealizedCapture:
     """Read the forward's graph, plan the capture, and realize it once.
 
@@ -321,7 +333,11 @@ def realize_capture(
     preexisting_uops
         UOps live tensors held before the forward ran (:func:`live_tensor_uops`).
     is_tensor
-        Predicate selecting tinygrad tensor leaves of ``args``.
+        Predicate selecting tinygrad tensor leaves of ``args`` and ``kwargs``.
+    kwargs
+        Keyword call arguments; their tensor leaves are inputs too.
+    edit_sites
+        ``id(replacement UOp) -> replaced result UOp`` of an edited capture.
 
     Returns
     -------
@@ -331,12 +347,12 @@ def realize_capture(
 
     input_leaves = tuple(
         (path, value, cast(Any, value).uop)
-        for path, value in _tree_leaves_with_paths(tuple(args))
+        for path, value in call_input_leaves(args, kwargs)
         if is_tensor(value)
     )
     source_uops = tuple(uop for _path, _value, uop in input_leaves)
     output_uops = tuple(cast(Any, output).uop for output in outputs)
-    plan = plan_capture(outputs, source_uops, preexisting_uops)
+    plan = plan_capture(outputs, source_uops, preexisting_uops, edit_sites)
     realized, owned = realize_recorded_values(plan, source_uops, outputs)
     return RealizedCapture(plan, realized, owned, input_leaves, output_uops)
 
@@ -344,7 +360,9 @@ def realize_capture(
 def recorded_values(capture: RealizedCapture) -> Iterator[tuple[Any, Any, Any, bool]]:
     """The ops a capture records, each with its realized value, in record order.
 
-    A forward value is recorded as its own UOp. A pre-forward random value is
+    A forward value is recorded as its own UOp; an edit's replacement is
+    recorded as the result it replaced (parents from that result, value from
+    the replacement, model UOp the replacement). A pre-forward random value is
     recorded as the buffer ops tinygrad realized it into
     (:func:`realized_value_uops`); the last of them stands for the weight, so
     its model UOp is the pre-realization weight UOp the model and the
@@ -368,6 +386,9 @@ def recorded_values(capture: RealizedCapture) -> Iterator[tuple[Any, Any, Any, b
 
     for uop in capture.plan.recorded:
         tensor = capture.realized[id(uop)]
+        if id(uop) in capture.plan.edit_sites:
+            yield capture.plan.edit_sites[id(uop)], tensor, uop, id(uop) in capture.owned
+            continue
         if id(uop) not in capture.plan.random_values:
             yield uop, tensor, uop, id(uop) in capture.owned
             continue
