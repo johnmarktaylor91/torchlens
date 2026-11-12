@@ -443,12 +443,17 @@ def _call_counter() -> Iterator[dict[str, int]]:
         wrapper = counting(name)
         for module in modules:
             setattr(module, name, wrapper)
+    bound_thin = _ops_exhaustive._BOUND_THIN[0]
+    _ops_exhaustive._BOUND_THIN[0] = (
+        None  # the thin emit binds its helpers once: rebind the counters
+    )
     try:
         yield counts
     finally:
         for name, modules in _COUNTED.items():
             for module in modules:
                 setattr(module, name, originals[name])
+        _ops_exhaustive._BOUND_THIN[0] = bound_thin
 
 
 def _trace_counts(spec_name: str | None) -> tuple[dict[str, int], int]:

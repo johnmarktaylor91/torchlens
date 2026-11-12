@@ -21,7 +21,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from types import FrameType
 from typing import Any
 
@@ -32,7 +32,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._postprocess as postprocess_pkg
-from torchlens.backends.torch import _ops_row_journal
+from torchlens.backends.torch import _ops_row_journal, _thin_emit
 
 # Keys the per-op build wrote that nothing reads before or at the freeze.
 _UNREAD_KEYS = frozenset(
@@ -132,6 +132,19 @@ _MAX_TORCHLENS_CALLS_PER_OP = 1078.01
 # and all-scalar tuples).
 _MAX_TEARDOWN_CALLS_PER_OP = 7973 / 416
 _TORCHLENS_ROOT = os.path.dirname(tl.__file__)
+
+
+@pytest.fixture(autouse=True)
+def _thin_emit_off() -> Iterator[None]:
+    """Pin today's emit: these tests spy on its commit (``commit_row_record``).
+
+    The thin emit appends its rows without that commit; its rows are checked
+    against today's in ``tests/test_thin_emit_soundness.py``.
+    """
+
+    previous = _thin_emit.set_thin_emit_enabled(False)
+    yield
+    _thin_emit.set_thin_emit_enabled(previous)
 
 
 class _InPlaceMlp(nn.Module):

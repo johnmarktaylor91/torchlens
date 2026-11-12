@@ -24,6 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._postprocess as postprocess_module
 from tests.test_plain_emit_soundness import (
     _Body,
     _Buffers,
@@ -34,6 +35,7 @@ from tests.test_plain_emit_soundness import (
     _Raises,
     _x,
 )
+from torchlens._ir import _row_journal
 from torchlens._postprocess._step_views import MIN_COLUMN_OPS
 from torchlens.backends.torch import _call_plan, _ops_exhaustive, _thin_emit, _thin_settle
 
@@ -260,6 +262,80 @@ def test_save_and_load(thin: dict[str, int], tmp_path: Path) -> None:
         path = tmp_path / f"thin-{on}.tlspec"
         trace.save(str(path))
         dumps.append(_dump(tl.load(str(path))))
+    assert diff(dumps[1], dumps[0]) == []
+
+
+def _at_ingest(monkeypatch: pytest.MonkeyPatch, hook: Callable[[], None]) -> None:
+    """Run ``hook`` once per capture, before the hand-off to ingest builds anything."""
+
+    real_hand_off = postprocess_module.hand_off_capture_rows
+
+    def hand_off(*args: Any) -> Any:
+        hook()
+        return real_hand_off(*args)
+
+    monkeypatch.setattr(postprocess_module, "hand_off_capture_rows", hand_off)
+
+
+def test_thin_rows_build_no_record_before_ingest_and_each_once(
+    thin: dict[str, int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A thin row builds its record only after capture, and each record once."""
+
+    builds = [0]
+    real_build = _row_journal._record_from_row
+
+    def counting_build(handle: Any) -> Any:
+        builds[0] += 1
+        return real_build(handle)
+
+    seen: list[int] = []
+    monkeypatch.setattr(_row_journal, "_record_from_row", counting_build)
+    _at_ingest(monkeypatch, lambda: seen.append(builds[0]))
+    _thin_emit.set_thin_emit_enabled(True)
+    trace = tl.trace(_Nested(), _x())
+    try:
+        assert thin["thin"] > 0
+        assert seen == [0]
+        built = builds[0]
+        events = trace.op_events
+        assert builds[0] == built
+        assert built == len(events)
+    finally:
+        trace.cleanup()
+
+
+def test_requires_grad_flip_before_the_record_build(
+    thin: dict[str, int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Flipping params and outputs before ingest reaches thin rows no more than today's rows."""
+
+    outputs: list[torch.Tensor] = []
+    real_thin = _ops_exhaustive._BOUND_THIN[0]
+
+    def keeping_thin(trace: Any, call: tuple[Any, ...], func_call_id: int) -> bool:
+        outputs.append(call[6])
+        return real_thin(trace, call, func_call_id)
+
+    monkeypatch.setitem(_ops_exhaustive._BOUND_THIN, 0, keeping_thin)
+    models: list[nn.Module] = []
+
+    def flip() -> None:
+        for param in models[-1].parameters():
+            param.requires_grad_(False)
+        for tensor in outputs:
+            tensor.detach_()
+
+    _at_ingest(monkeypatch, flip)
+    dumps = []
+    for on in (True, False):
+        outputs.clear()
+        _thin_emit.set_thin_emit_enabled(on)
+        torch.manual_seed(SEED)
+        models.append(nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2)))
+        x = torch.randn(2, 3)
+        dumps.append(_dump(tl.trace(models[-1], x, capture=tl.options.CaptureOptions(seed=SEED))))
+        assert outputs  # the bound emit sees every fast commit, served or not
     assert diff(dumps[1], dumps[0]) == []
 
 
