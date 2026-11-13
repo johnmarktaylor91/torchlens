@@ -3,8 +3,8 @@
 This is the ``can_intervene`` capability implementation of the tinygrad
 backend: it checks that the intervention is a static selector with a supported
 action and returns the selector with a lazy ``tensor -> tensor`` edit
-(``zeros_like``, ``* s``, ``+ c``, ``clip``, a given tensor, or a user
-transform). ``_edits`` applies the edit during capture.
+(the ``_helper_edits`` table: ``zero_ablate``, ``scale``, ``add``, ``clamp``,
+``mean_ablate``, ``replace_with``; or a user transform). ``_edits`` applies the edit during capture.
 
 Only static selectors are supported. A value-dependent predicate needs a
 concrete value at predicate time, which a lazy tinygrad forward does not have
@@ -23,10 +23,10 @@ from ...intervention._types import Edit, InterventionDecision
 from ...intervention.hooks import make_hook_context, normalize_hook, split_site_branches
 from .._backend_protocol import refusal_code_for_capability
 from ._edits import EDIT_REFUSAL, TinygradEdit, TinygradEditPlan, refuse_edit
+from ._helper_edits import helper_application
 
 __tl_layer__ = "L4"
 
-_SUPPORTED_HELPERS = ("zero_ablate", "scale", "add", "clamp", "replace_with")
 _EDIT_SELECTOR_KINDS = _STATIC_INTERVENTION_SELECTOR_KINDS - frozenset({"module"})
 
 
@@ -111,26 +111,6 @@ def _resolve_decision(decision: InterventionDecision) -> TinygradEdit:
 
 
 def _resolve_helper(spec: Edit) -> TinygradEdit:
-    """Resolve a built-in helper to its lazy tinygrad application."""
+    """Resolve a built-in helper to its lazy tinygrad application (``_helper_edits``)."""
 
-    identity = f"helper:{spec.name}"
-    kwargs = dict(spec.kwargs)
-    if spec.name == "zero_ablate":
-        return TinygradEdit(identity, lambda out: out.zeros_like())
-    if spec.name == "scale":
-        factor = spec.args[0]
-        return TinygradEdit(identity, lambda out: out * factor)
-    if spec.name == "add":
-        delta = spec.args[0]
-        return TinygradEdit(identity, lambda out: out + delta)
-    if spec.name == "clamp":
-        low, high = kwargs.get("low"), kwargs.get("high")
-        return TinygradEdit(identity, lambda out: out.clip(low, high))
-    if spec.name == "replace_with":
-        value = spec.args[0]
-        return TinygradEdit(identity, lambda out: value() if callable(value) else value)
-    raise refuse_edit(
-        f"no tinygrad application for helper {spec.name!r}; supported helpers are "
-        f"{', '.join(_SUPPORTED_HELPERS)}, plus callable transforms over tinygrad Tensors.",
-        code=EDIT_REFUSAL,
-    )
+    return TinygradEdit(f"helper:{spec.name}", helper_application(spec))
