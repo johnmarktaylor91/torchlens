@@ -335,15 +335,16 @@ def test_mlx_raw_decision_intervene_refuses_typed() -> None:
 
 
 def test_mlx_backward_direction_intervene_refuses_typed() -> None:
-    """Backward-direction decisions refuse: MLX has no backward capture."""
+    """A tl.grad site without grad_options refuses: MLX edits gradients only in the derived run."""
 
-    with pytest.raises(BackendUnsupportedError, match="forward"):
+    with pytest.raises(BackendUnsupportedError, match="grad_options") as info:
         tl.trace(
             _TwoLayerMLP(),
             _input(),
             backend="mlx",
             intervene=tl.when(tl.grad(tl.func("relu")), tl.zero_ablate()),
         )
+    assert info.value.code == "intervention_with_derived_grads_unsupported"
 
 
 def test_mlx_unsupported_helper_refuses_typed() -> None:
@@ -400,8 +401,12 @@ def test_mlx_halt_non_selector_refuses_typed() -> None:
         tl.trace(_TwoLayerMLP(), _input(), backend="mlx", stop_after=object())
 
 
-def test_mlx_grad_options_with_intervene_refuses_typed() -> None:
-    """grad_options cannot combine with interventions (divergent replay)."""
+def test_mlx_grad_options_with_module_exit_intervene_refuses_typed() -> None:
+    """grad_options cannot combine with a tl.module edit (applied outside any wrapped call).
+
+    Op-level edits with grad_options are covered by
+    ``test_parity_b_mlx_int_edit_grads.py``.
+    """
 
     from torchlens.backends.mlx import GradOptions
 
@@ -411,7 +416,7 @@ def test_mlx_grad_options_with_intervene_refuses_typed() -> None:
             model,
             _input(),
             grad_options=GradOptions(loss_fn=lambda out: out.sum()),
-            intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
+            intervene=tl.when(tl.module("l1"), tl.zero_ablate()),
         )
     assert info.value.code == "intervention_with_derived_grads_unsupported"
 

@@ -206,6 +206,29 @@ def zeros_like(value: Any) -> Any:
     return mx.zeros_like(value)
 
 
+def apply_helper(trace: Any, helper: Any, value: Any) -> Any:
+    """Apply a built-in edit helper to an MLX value (the capture's own MLX table).
+
+    A helper outside the table refuses as the fork driver does for an adapter
+    without ``apply_helper`` (``backend_replay_helper_unsupported``).
+    """
+
+    import mlx.core as mx
+
+    from ...intervention._backend_replay import refuse
+    from ..mlx._mlx_helpers import MLX_SUPPORTED_HELPER_NAMES, mlx_helper_apply
+
+    del trace
+    if helper.name not in MLX_SUPPORTED_HELPER_NAMES:
+        raise refuse(
+            f"the {helper.name!r} helper has no replay application on the mlx backend yet",
+            code="backend_replay_helper_unsupported",
+            remedy="write the edit as a callable on the backend's arrays: "
+            "fork.do(site, lambda out, ctx: ...)",
+        )
+    return mlx_helper_apply(helper, mx)(value)
+
+
 def add(left: Any, right: Any) -> Any:
     """MLX elementwise sum (gradient accumulation)."""
 
