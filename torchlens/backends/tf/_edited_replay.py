@@ -16,7 +16,7 @@ sees a second call.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -61,20 +61,13 @@ def preserved_module_counts(module_tree: TFModuleTree | None) -> Iterator[None]:
 
 
 def run_tf_gradient_replay(
-    session: Any,
-    *,
-    trace: Any,
-    intervene: Any,
-    halt: Any,
-    wire: Callable[[Any, Any, Any, Any], Any],
-    wrap: Callable[[Any, Any, Any], Any],
+    session: Any, *, trace: Any, intervene: Any, halt: Any, runtime: Any
 ) -> Any:
     """Run one payload-free replay session with the capture's edits and halt.
 
-    Call it inside the active ``tf.GradientTape`` context. The wiring functions
-    are passed in (``interventions.wire_eager_session`` and
-    ``interventions.tf_intervention_wrap``) so this module stays outside the
-    backend package's import cycle.
+    Call it inside the active ``tf.GradientTape`` context. ``tl.grad`` clauses
+    in ``intervene`` become identity edits whose custom gradient applies the
+    clause's edit, so the tape propagates the edited gradient upstream.
 
     Parameters
     ----------
@@ -86,10 +79,9 @@ def run_tf_gradient_replay(
         The capture's ``intervene=`` value, re-applied to the replay.
     halt
         The capture's ``stop_after=`` value, re-applied to the replay.
-    wire
-        Installs the intervention and halt hooks on the session.
-    wrap
-        Context manager installing the writable wrap layer for a plan.
+    runtime
+        The TensorFlow intervention module (``tf.interventions``), passed in so
+        this module stays outside the backend package's import cycle.
 
     Returns
     -------
@@ -97,14 +89,16 @@ def run_tf_gradient_replay(
         The replay result; with a halt its ``output`` is the halted boundary.
     """
 
+    if intervene is not None:
+        intervene = runtime.tf_gradient_replay_intervene(trace, session.tf, intervene)
     if intervene is None and halt is None:
         return session.run()
-    wiring = wire(trace, session, intervene, halt)
+    wiring = runtime.wire_eager_session(trace, session, intervene, halt)
     try:
         with _restored_stop_latch(trace):
             if wiring.plan is None:
                 return session.run()
-            with wrap(session.tf, wiring.plan, session):
+            with runtime.tf_intervention_wrap(session.tf, wiring.plan, session):
                 return session.run()
     except CallbackAbort as abort:
         raise abort.error.with_traceback(abort.error.__traceback__) from None
@@ -124,4 +118,4 @@ def _restored_stop_latch(trace: Any) -> Iterator[None]:
             trace.__dict__[_STOP_LATCH] = latch
 
 
-__all__ = ["preserved_module_counts", "run_tf_gradient_replay"]
+__all__ = ("preserved_module_counts", "run_tf_gradient_replay")

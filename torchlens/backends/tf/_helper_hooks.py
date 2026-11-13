@@ -70,7 +70,17 @@ def _zero_ablate(spec: Any, tf: Any) -> Callable[[Any], Any]:
     """``tl.zero_ablate``: zeros with the output's shape and dtype."""
 
     del spec
-    return lambda out: tf.zeros_like(out)
+    return lambda out: tf.fill(_static_shape(out, tf), tf.constant(out.dtype.as_numpy_dtype(0)))
+
+
+def _static_shape(out: Any, tf: Any) -> Any:
+    """``out``'s shape as a host list when fully known, else its runtime shape.
+
+    A host-list shape keeps the replacement a literal producer (``Fill`` with no
+    graph parents) that replay validation classifies, unlike ``ZerosLike``.
+    """
+
+    return out.shape.as_list() if out.shape.is_fully_defined() else tf.shape(out)
 
 
 def _scale(spec: Any, tf: Any) -> Callable[[Any], Any]:
@@ -133,9 +143,9 @@ def _mean_ablate(spec: Any, tf: Any) -> Callable[[Any], Any]:
 
         values = out if native_source is None else tf.cast(native_source, out.dtype)
         if axes is None:
-            return tf.zeros_like(out) + tf.reduce_mean(values)
+            return tf.broadcast_to(tf.reduce_mean(values), _static_shape(out, tf))
         reduced = tf.reduce_mean(values, axis=list(_axes_tuple(axes)), keepdims=True)
-        return tf.zeros_like(out) + reduced
+        return tf.broadcast_to(reduced, _static_shape(out, tf))
 
     return _apply
 
@@ -205,4 +215,4 @@ _BUILDERS: dict[str, Callable[[Any, Any], Callable[[Any], Any]]] = {
 }
 
 
-__all__ = ["TF_SUPPORTED_HELPER_NAMES", "tf_helper_hook"]
+__all__ = ("TF_SUPPORTED_HELPER_NAMES", "tf_helper_hook")

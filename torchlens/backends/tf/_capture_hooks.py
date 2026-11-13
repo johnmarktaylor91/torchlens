@@ -95,4 +95,4 @@ def after_forward(trace: Any, session: Any, state: dict[str, Any], *, backward_r
         backward.retain_backward_state(trace, session)
 
 
-__all__ = ["after_forward", "forward_hooks"]
+__all__ = ("after_forward", "forward_hooks")

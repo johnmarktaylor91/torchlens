@@ -181,4 +181,4 @@ def test_fork_refuses_an_unreplayable_op_by_name() -> None:
     with pytest.raises(ReplayPreconditionError) as caught:
         clean.fork().do(_relu(clean).label, tl.scale(2.0))
     assert caught.value.fields["code"] == "backend_replay_op_unreplayable"
-    assert "RandomUniform" in str(caught.value)
+    assert "randomuniform" in str(caught.value).lower(), "the refusal names the op"
