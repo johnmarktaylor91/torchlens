@@ -45,6 +45,7 @@ __all__ = (
     "GradSiteCall",
     "GradSiteEdit",
     "GradSiteFire",
+    "GradSitePass",
     "GradSiteResult",
     "Operands",
     "arm_grad_sites",
@@ -130,6 +131,22 @@ class GradSiteFire:
 
 
 @dataclass(frozen=True)
+class GradSitePass:
+    """One backward pass to run: its seed cotangents, extra edits and its number.
+
+    ``seeds`` maps output-slot labels to cotangents (ones at a scalar loss op).
+    ``edits`` apply in declared order; :func:`run_armed_grad_sites` runs the
+    trace's armed edits first, then these. ``index`` is the backward pass
+    number (1 for the first), which ``tl.in_backward_pass(n)`` qualifiers and
+    :class:`GradSiteCall` read.
+    """
+
+    seeds: Mapping[str, Any]
+    edits: Sequence[GradSiteEdit] = ()
+    index: int = 1
+
+
+@dataclass(frozen=True)
 class GradSiteResult:
     """Gradient per reached label (edited at sites) and the fires that produced it."""
 
@@ -137,12 +154,12 @@ class GradSiteResult:
     fires: tuple[GradSiteFire, ...]
 
 
-def _refuse(message: str) -> RunCapabilityUnavailableError:
-    """Build this module's typed refusal."""
+def _grad_site_refusal(message: str, *, code: str) -> RunCapabilityUnavailableError:
+    """Build this module's typed refusal (every site passes ``code=_CODE``)."""
 
     return RunCapabilityUnavailableError(
         f"tl.grad edit sites are unavailable: {message}",
-        code=_CODE,
+        code=code,
         detection_stage=_DETECTION_STAGE,
     )
 
@@ -176,9 +193,10 @@ def grad_site_targets(site: Any, operands: Operands) -> tuple[tuple[Any, int | N
         return tuple(found for child in children for found in grad_site_targets(child, operands))
     if operator == "and":
         return _qualified_targets(children, operands)
-    raise _refuse(
+    raise _grad_site_refusal(
         f"{site!r} is not a tl.grad(...) address; autograd-node selectors need a "
-        "recorded backward pass"
+        "recorded backward pass",
+        code=_CODE,
     )
 
 
@@ -190,11 +208,15 @@ def _qualified_targets(
     passes = [c for c in children if getattr(c, "selector_kind", None) == "backward_pass"]
     rest = [c for c in children if getattr(c, "selector_kind", None) != "backward_pass"]
     if len(passes) > 1 or not rest:
-        raise _refuse("a gradient site takes at most one tl.in_backward_pass(n) qualifier")
+        raise _grad_site_refusal(
+            "a gradient site takes at most one tl.in_backward_pass(n) qualifier", code=_CODE
+        )
     pass_index = int(passes[0].selector_value) if passes else None
     targets = [found for child in rest for found in grad_site_targets(child, operands)]
     if any(qualifier is not None for _inner, qualifier in targets):
-        raise _refuse("a gradient site takes at most one tl.in_backward_pass(n) qualifier")
+        raise _grad_site_refusal(
+            "a gradient site takes at most one tl.in_backward_pass(n) qualifier", code=_CODE
+        )
     return tuple((inner, pass_index) for inner, _none in targets)
 
 
@@ -220,7 +242,9 @@ class _Firing:
             self._calls[key] = call.call_index + 1
             edited = edit.apply(current, call)
             if edited is None:
-                raise _refuse(f"edit {edit.name!r} at {label!r} returned None")
+                raise _grad_site_refusal(
+                    f"edit {edit.name!r} at {label!r} returned None", code=_CODE
+                )
             self.fires.append(
                 GradSiteFire(label, edit.name, len(self.fires), edited is not current)
             )
@@ -234,28 +258,22 @@ def _check_sites_exist(graph: ReplayGraph, firing: _Firing) -> None:
     known = {slot for node in graph.nodes for slot in (*node.outputs, *node.parents)}
     missing = sorted(label for label in firing.by_label if label not in known)
     if missing:
-        raise _refuse(f"no recorded op has the output {missing[0]!r}")
+        raise _grad_site_refusal(f"no recorded op has the output {missing[0]!r}", code=_CODE)
 
 
 def edited_gradients(
-    trace: Any,
-    adapter: Any,
-    graph: ReplayGraph,
-    seeds: Mapping[str, Any],
-    edits: Sequence[GradSiteEdit],
-    *,
-    pass_index: int = 1,
+    trace: Any, adapter: Any, graph: ReplayGraph, backward: GradSitePass
 ) -> GradSiteResult:
-    """Propagate ``seeds`` backward over ``graph`` with the gradient edits applied.
+    """Propagate ``backward.seeds`` over ``graph`` with ``backward.edits`` applied.
 
     Parameters
     ----------
-    trace, adapter, graph, seeds:
+    trace, adapter, graph:
         As :func:`torchlens.backends._reverse_engine.reverse_gradients` takes them.
-    edits:
-        Edits on output-slot gradients; several on one label fire in this order.
-    pass_index:
-        Number of the backward pass being computed (for ``pass_index``-qualified edits).
+    backward:
+        The pass's seeds, edits and number (:class:`GradSitePass`). Several
+        edits on one label fire in declared order; an edit qualified with a
+        pass number fires only when it equals ``backward.index``.
 
     Returns
     -------
@@ -273,10 +291,10 @@ def edited_gradients(
     """
 
     _check_forward_order(graph)
-    firing = _Firing(edits, pass_index)
+    firing = _Firing(backward.edits, backward.index)
     _check_sites_exist(graph, firing)
     cotangents: dict[str, Any] = {}
-    for label, seed in seeds.items():
+    for label, seed in backward.seeds.items():
         _accumulate(adapter, cotangents, label, seed)
     produced: set[str] = set()
     for node in reversed(graph.nodes):
@@ -312,10 +330,7 @@ def edited_gradients_for_backend(
     backend: str,
     ops: Iterable[Any],
     value: Callable[[str], Any],
-    seeds: Mapping[str, Any],
-    edits: Sequence[GradSiteEdit],
-    *,
-    pass_index: int = 1,
+    backward: GradSitePass,
 ) -> GradSiteResult:
     """Build the graph from the backend adapter's recipes, then run :func:`edited_gradients`.
 
@@ -330,8 +345,8 @@ def edited_gradients_for_backend(
         records repeating a multi-output op's recipe are folded into one node.
     value:
         Saved value of an output-slot label.
-    seeds, edits, pass_index:
-        As :func:`edited_gradients` takes them.
+    backward:
+        As :func:`edited_gradients` takes it.
 
     Raises
     ------
@@ -344,9 +359,9 @@ def edited_gradients_for_backend(
     try:
         adapter = get_adapter(backend)
     except ReplayRefusal as exc:
-        raise _refuse(str(exc)) from exc
+        raise _grad_site_refusal(str(exc), code=_CODE) from exc
     graph = _one_node_per_op(graph_from_recipes(trace, adapter, ops, value))
-    return edited_gradients(trace, adapter, graph, seeds, edits, pass_index=pass_index)
+    return edited_gradients(trace, adapter, graph, backward)
 
 
 def _one_node_per_op(graph: ReplayGraph) -> ReplayGraph:
@@ -388,12 +403,8 @@ def disagreeing_labels(
     )
 
 
-_ARMED: dict[int, tuple[weakref.ref[Any], tuple[GradSiteEdit, ...]]] = {}
-"""Edits armed per trace object (keyed by identity, held weakly) until a backward applies them.
-
-Keyed by ``id`` with a weak reference rather than a ``WeakKeyDictionary``
-because a trace need not be hashable.
-"""
+_ARMED: weakref.WeakKeyDictionary[Any, tuple[GradSiteEdit, ...]] = weakref.WeakKeyDictionary()
+"""Edits armed per trace object until a backward computation applies them (dies with the trace)."""
 
 
 def build_grad_site_edits(
@@ -432,36 +443,45 @@ def build_grad_site_edits(
     for inner, pass_index in grad_site_targets(site, operands):
         labels = tuple(resolve_labels(inner))
         if not labels:
-            raise _refuse(f"tl.grad({inner!r}) names no recorded op")
+            raise _grad_site_refusal(f"tl.grad({inner!r}) names no recorded op", code=_CODE)
         edits.extend(GradSiteEdit(lbl, apply, name, pass_index) for lbl in labels)
     return tuple(edits)
 
 
 def arm_grad_sites(trace: Any, edits: Sequence[GradSiteEdit]) -> None:
-    """Arm ``edits`` on ``trace`` after any already armed (declared order is kept)."""
+    """Arm ``edits`` on ``trace`` after any already armed (declared order is kept).
 
-    key = id(trace)
+    Raises
+    ------
+    RunCapabilityUnavailableError
+        When ``trace`` cannot key a weak table (unhashable or not weakly
+        referenceable); a ``Trace`` always can.
+    """
+
     try:
-        ref = weakref.ref(trace, lambda _dead, key=key: _ARMED.pop(key, None))
+        _ARMED[trace] = (*_ARMED.get(trace, ()), *edits)
     except TypeError as exc:
-        raise _refuse(f"a {type(trace).__name__} cannot hold armed gradient edits") from exc
-    _ARMED[key] = (ref, (*armed_grad_sites(trace), *edits))
+        raise _grad_site_refusal(
+            f"a {type(trace).__name__} cannot hold armed gradient edits", code=_CODE
+        ) from exc
 
 
 def armed_grad_sites(trace: Any) -> tuple[GradSiteEdit, ...]:
     """The edits armed on ``trace``, in declared order."""
 
-    entry = _ARMED.get(id(trace))
-    if entry is None or entry[0]() is not trace:
+    try:
+        return _ARMED.get(trace, ())
+    except TypeError:
         return ()
-    return entry[1]
 
 
 def clear_grad_sites(trace: Any) -> None:
     """Disarm every edit on ``trace``."""
 
-    if armed_grad_sites(trace):
-        del _ARMED[id(trace)]
+    try:
+        _ARMED.pop(trace, None)
+    except TypeError:
+        return
 
 
 def run_armed_grad_sites(
@@ -469,19 +489,18 @@ def run_armed_grad_sites(
     backend: str,
     ops: Iterable[Any],
     value: Callable[[str], Any],
-    seeds: Mapping[str, Any],
-    *,
-    pass_index: int = 1,
+    backward: GradSitePass,
 ) -> GradSiteResult:
     """Compute one backward pass's gradients with the edits armed on ``trace`` applied.
 
-    The arguments are those of :func:`edited_gradients_for_backend`; the edits
-    stay armed, so a second pass applies them again, as torch's armed hooks do.
+    The arguments are those of :func:`edited_gradients_for_backend`. The armed
+    edits run first, then ``backward.edits``; they stay armed, so a second pass
+    applies them again, as torch's armed hooks do.
     """
 
-    return edited_gradients_for_backend(
-        trace, backend, ops, value, seeds, armed_grad_sites(trace), pass_index=pass_index
-    )
+    armed = (*armed_grad_sites(trace), *backward.edits)
+    run = GradSitePass(backward.seeds, armed, backward.index)
+    return edited_gradients_for_backend(trace, backend, ops, value, run)
 
 
 def do_signal_plan_off_torch(trace: Any, plan: Any, request: Any, backend: str) -> Any:
@@ -509,5 +528,7 @@ def do_signal_plan_off_torch(trace: Any, plan: Any, request: Any, backend: str) 
     except ModuleNotFoundError as exc:
         if exc.name not in (name, name.rpartition(".")[0]):
             raise
-        raise _refuse(f"Trace.do with a tl.grad site is not open on the {backend} backend") from exc
+        raise _grad_site_refusal(
+            f"Trace.do with a tl.grad site is not open on the {backend} backend", code=_CODE
+        ) from exc
     return door.do_signal_plan(trace, plan, request)
