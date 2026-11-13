@@ -46,11 +46,13 @@ __all__ = (
     "GradSiteEdit",
     "GradSiteFire",
     "GradSiteResult",
+    "Operands",
     "arm_grad_sites",
     "armed_grad_sites",
     "build_grad_site_edits",
     "clear_grad_sites",
     "disagreeing_labels",
+    "do_signal_plan_off_torch",
     "edited_gradients",
     "edited_gradients_for_backend",
     "grad_site_targets",
@@ -58,7 +60,14 @@ __all__ = (
 )
 
 _CODE = "run_capability_unavailable"  # RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
+_GRAD_KIND = "grad"
+_DOOR_MODULE = "torchlens.backends.{backend}._grad_site_door"
+"""Where a backend's ``-int`` lane puts ``do_signal_plan(trace, plan, request)``."""
 _DETECTION_STAGE = "grad_site_neutral"
+
+
+Operands = Callable[[Any], tuple[str | None, Sequence[Any]]]
+"""Reader of a composite target: ``(connective, children)``, ``(None, ())`` for a leaf."""
 
 
 @dataclass(frozen=True)
@@ -138,13 +147,20 @@ def _refuse(message: str) -> RunCapabilityUnavailableError:
     )
 
 
-def grad_site_targets(site: Any) -> tuple[tuple[Any, int | None], ...]:
+def grad_site_targets(site: Any, operands: Operands) -> tuple[tuple[Any, int | None], ...]:
     """Return ``(forward selector, pass qualifier)`` per ``tl.grad`` leaf of ``site``.
 
     ``tl.grad(a) | tl.grad(b)`` gives two entries; ``tl.grad(a) &
     tl.in_backward_pass(2)`` gives ``(a, 2)``. Autograd-node selectors
     (``tl.grad_fn``, ``tl.grad_input``, ...) address backward records, which
     this module does not build, so they are refused.
+
+    ``operands`` is the caller's reader of a composite target: it returns
+    ``("and" | "or" | "not", children)`` for a composite and ``(None, ())``
+    for a leaf (the torch side passes ``intervention.hooks._target_operands``).
+    The caller supplies it so this module stays out of the selector and hook
+    import cycle. A ``tl.grad`` leaf is read by its selector kind ``"grad"``
+    (live selector or stored ``TargetSpec`` alike).
 
     Raises
     ------
@@ -153,24 +169,22 @@ def grad_site_targets(site: Any) -> tuple[tuple[Any, int | None], ...]:
         a backward-pass qualifier.
     """
 
-    from ._hooks_support import gradient_inner
-    from .hooks import _target_operands
-
-    inner = gradient_inner(site)
-    if inner is not None:
-        return ((inner, None),)
-    operator, children = _target_operands(site)
+    if getattr(site, "selector_kind", None) == _GRAD_KIND:
+        return ((getattr(site, "selector_value", None), None),)
+    operator, children = operands(site)
     if operator == "or":
-        return tuple(found for child in children for found in grad_site_targets(child))
+        return tuple(found for child in children for found in grad_site_targets(child, operands))
     if operator == "and":
-        return _qualified_targets(children)
+        return _qualified_targets(children, operands)
     raise _refuse(
         f"{site!r} is not a tl.grad(...) address; autograd-node selectors need a "
         "recorded backward pass"
     )
 
 
-def _qualified_targets(children: Sequence[Any]) -> tuple[tuple[Any, int | None], ...]:
+def _qualified_targets(
+    children: Sequence[Any], operands: Operands
+) -> tuple[tuple[Any, int | None], ...]:
     """Targets of an ``&`` of ``tl.grad`` addresses and one backward-pass qualifier."""
 
     passes = [c for c in children if getattr(c, "selector_kind", None) == "backward_pass"]
@@ -178,7 +192,7 @@ def _qualified_targets(children: Sequence[Any]) -> tuple[tuple[Any, int | None],
     if len(passes) > 1 or not rest:
         raise _refuse("a gradient site takes at most one tl.in_backward_pass(n) qualifier")
     pass_index = int(passes[0].selector_value) if passes else None
-    targets = [found for child in rest for found in grad_site_targets(child)]
+    targets = [found for child in rest for found in grad_site_targets(child, operands)]
     if any(qualifier is not None for _inner, qualifier in targets):
         raise _refuse("a gradient site takes at most one tl.in_backward_pass(n) qualifier")
     return tuple((inner, pass_index) for inner, _none in targets)
@@ -312,7 +326,8 @@ def edited_gradients_for_backend(
     backend:
         Registered backend name with a replay adapter.
     ops:
-        The trace's ops in forward order, graph inputs left out so they are leaves.
+        The trace's ops in forward order, graph inputs left out so they are leaves;
+        records repeating a multi-output op's recipe are folded into one node.
     value:
         Saved value of an output-slot label.
     seeds, edits, pass_index:
@@ -330,8 +345,26 @@ def edited_gradients_for_backend(
         adapter = get_adapter(backend)
     except ReplayRefusal as exc:
         raise _refuse(str(exc)) from exc
-    graph = graph_from_recipes(trace, adapter, ops, value)
+    graph = _one_node_per_op(graph_from_recipes(trace, adapter, ops, value))
     return edited_gradients(trace, adapter, graph, seeds, edits, pass_index=pass_index)
+
+
+def _one_node_per_op(graph: ReplayGraph) -> ReplayGraph:
+    """Keep the first node of each output-slot tuple.
+
+    Backends that list each output of a multi-output op as its own record give
+    every record the op's whole recipe; one node per op keeps the op's
+    derivative from being counted once per output.
+    """
+
+    seen: set[tuple[str, ...]] = set()
+    nodes = []
+    for node in graph.nodes:
+        if node.outputs in seen:
+            continue
+        seen.add(node.outputs)
+        nodes.append(node)
+    return ReplayGraph(nodes=tuple(nodes), value=graph.value)
 
 
 def disagreeing_labels(
@@ -364,6 +397,7 @@ def build_grad_site_edits(
     apply: Callable[[Any, GradSiteCall], Any],
     resolve_labels: Callable[[Any], Sequence[str]],
     *,
+    operands: Operands,
     name: str = "edit",
 ) -> tuple[GradSiteEdit, ...]:
     """Lower one ``tl.when(site, edit)`` clause to one :class:`GradSiteEdit` per label.
@@ -378,6 +412,8 @@ def build_grad_site_edits(
     resolve_labels:
         The backend's resolution of a forward selector to the graph labels
         (output slots) it names on this trace.
+    operands:
+        The caller's composite-target reader (see :func:`grad_site_targets`).
     name:
         Display name for fire records.
 
@@ -389,7 +425,7 @@ def build_grad_site_edits(
     """
 
     edits: list[GradSiteEdit] = []
-    for inner, pass_index in grad_site_targets(site):
+    for inner, pass_index in grad_site_targets(site, operands):
         labels = tuple(resolve_labels(inner))
         if not labels:
             raise _refuse(f"tl.grad({inner!r}) names no recorded op")
@@ -433,3 +469,32 @@ def run_armed_grad_sites(
     return edited_gradients_for_backend(
         trace, backend, ops, value, seeds, armed_grad_sites(trace), pass_index=pass_index
     )
+
+
+def do_signal_plan_off_torch(trace: Any, plan: Any, request: Any, backend: str) -> Any:
+    """Run ``Trace.do`` with a ``tl.grad`` site on a non-torch trace.
+
+    ``intervention._grad_site_plan.do_signal_plan`` routes here before any
+    torch-only step. The backend's door module
+    (``torchlens/backends/<backend>/_grad_site_door.py``, owned by its
+    ``-int`` lane) takes the whole plan: it lowers the activation half the way
+    its finished-trace edits do, arms the gradient half with
+    :func:`build_grad_site_edits` and :func:`arm_grad_sites`, runs
+    ``request.loss`` when given, and returns the armed trace.
+
+    Raises
+    ------
+    RunCapabilityUnavailableError
+        When the backend has no door module yet.
+    """
+
+    from importlib import import_module
+
+    name = _DOOR_MODULE.format(backend=backend)
+    try:
+        door = import_module(name)
+    except ModuleNotFoundError as exc:
+        if exc.name not in (name, name.rpartition(".")[0]):
+            raise
+        raise _refuse(f"Trace.do with a tl.grad site is not open on the {backend} backend") from exc
+    return door.do_signal_plan(trace, plan, request)

@@ -16,6 +16,7 @@ fused kernels' internals). The reachability audit refuses a site that matched on
 
 from __future__ import annotations
 
+import importlib
 import inspect
 from collections.abc import Iterable, Iterator
 from typing import Any
@@ -80,8 +81,23 @@ _CURATED_WRAP_ENTRIES: tuple[tuple[str, str], ...] = (
     ("math", "minimum"),
     ("math", "erf"),
     ("linalg", "matmul"),
+    ("Tensor", "__neg__"),
 )
-"""Curated (submodule, name) public entry points wrapped for op-level sites."""
+"""Curated (submodule, name) public entry points wrapped for op-level sites.
+
+``Tensor.__neg__`` is TensorFlow's direct reference to the generated ``neg``
+wrapper (bound when operators are installed), so unary minus needs its own entry.
+"""
+
+_EXTRA_GENERATED_ENTRIES: tuple[tuple[str, str], ...] = (
+    ("tensorflow.python.ops.gen_resource_variable_ops", "read_variable_op"),
+)
+"""Single generated wrappers outside the wrapped ``gen_*_ops`` modules.
+
+``read_variable_op`` presents each variable read (``ReadVariableOp``), so a
+parameter's value can be edited where the forward reads it. The rest of that
+module (variable creation, assignment) records no forward values and stays out.
+"""
 
 #: Public namespaces scanned for direct bindings to generated wrappers.
 _PUBLIC_NAMESPACES = ("nn", "math", "linalg", "image")
@@ -114,11 +130,9 @@ def iter_wrap_targets(
         if original is not None and callable(original):
             yield owner, attr_name, original
     generated: dict[int, Any] = {}
-    for module in get_tf_gen_op_modules():
-        for attr_name, value in list(vars(module).items()):
-            if _is_generated_wrapper(module, attr_name, value):
-                generated[id(value)] = value
-                yield module, attr_name, value
+    for module, attr_name, value in _generated_wrappers():
+        generated[id(value)] = value
+        yield module, attr_name, value
     if not generated:
         return
     owners = (*get_tf_op_namespace_modules(), tf, *_public_namespaces(tf))
@@ -126,6 +140,23 @@ def iter_wrap_targets(
         for attr_name, value in list(getattr(owner, "__dict__", {}).items()):
             if id(value) in generated and generated[id(value)] is value:
                 yield owner, attr_name, value
+
+
+def _generated_wrappers() -> Iterator[tuple[Any, str, Any]]:
+    """Yield ``(module, attribute, wrapper)`` for every generated op wrapper to wrap."""
+
+    for module in get_tf_gen_op_modules():
+        for attr_name, value in list(vars(module).items()):
+            if _is_generated_wrapper(module, attr_name, value):
+                yield module, attr_name, value
+    for module_name, attr_name in _EXTRA_GENERATED_ENTRIES:
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:  # feature detection: this TensorFlow lays it out differently
+            continue
+        value = getattr(module, attr_name, None)
+        if _is_generated_wrapper(module, attr_name, value):
+            yield module, attr_name, value
 
 
 def _public_namespaces(tf: Any) -> tuple[Any, ...]:

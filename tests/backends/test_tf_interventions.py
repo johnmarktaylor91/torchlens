@@ -105,7 +105,7 @@ def test_tf_intervention_graph_stays_honest_by_construction() -> None:
     )
 
     add_op = next(op for op in trace._layer_list if op.func_name == "AddV2")
-    zeros_op = next(op for op in trace._layer_list if op.func_name == "ZerosLike")
+    zeros_op = next(op for op in trace._layer_list if op.func_name == "Fill")
     # Torch parity: parents resolves through the CONDITIONAL label map -- a
     # single-pass referenced op (zeros_op, here) by its bare layer_label, a
     # multi-pass one by its pass-qualified label.
@@ -317,13 +317,13 @@ def test_tf_module_sites_without_module_tree_refuse_typed() -> None:
 
 
 def test_tf_backward_direction_refuses_typed() -> None:
-    """Backward-direction decisions refuse on the forward-only preview."""
+    """A clause mixing a gradient address with an activation address refuses typed."""
 
     x = tf.constant([1.0, -1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="forward-only"):
+    with pytest.raises(BackendUnsupportedError, match="Split it into separate clauses"):
         tl.trace(
             _relu_plus_ten,
             x,
             backend="tf",
-            intervene=tl.when(tl.grad(tl.func("relu")), tl.zero_ablate()),
+            intervene=tl.when(tl.grad(tl.func("relu")) | tl.func("relu"), tl.zero_ablate()),
         )
