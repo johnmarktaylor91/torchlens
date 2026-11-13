@@ -35,6 +35,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from ..._deprecations import MISSING
+from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     BackwardPassEnd,
     BackwardPassStart,
@@ -220,7 +221,10 @@ class TFBackwardState:
 
 
 def retain_backward_state(trace: Any, session: Any) -> None:
-    """Keep the forward's tape and source tensors on ``trace`` (no-op without a tape)."""
+    """Keep the forward's tape, source tensors and an event stream on ``trace``.
+
+    A no-op when the forward ran without :func:`backward_ready_scope`.
+    """
 
     tape = getattr(session, _SESSION_TAPE, None)
     if tape is None:
@@ -231,6 +235,11 @@ def retain_backward_state(trace: Any, session: Any) -> None:
         if getattr(record, "label_raw", None)
     }
     trace.__dict__[_STATE_KEY] = TFBackwardState(tf=session.tf, tape=tape, sources=sources)
+    if getattr(trace, "_capture_events", None) is None:
+        # The capture releases its forward stream after materializing; backward
+        # passes journal into the live one, or a fresh stream extending the projection.
+        live = getattr(trace, "capture_events", None)
+        trace._capture_events = live if live is not None else CaptureEvents.detached_from(trace)
 
 
 def _state_of(trace: Any) -> TFBackwardState:
